@@ -1,0 +1,152 @@
+{
+ "status": "success",
+ "data": [
+  {
+   "_id": "6ad892cd4454dca35d0309ba",
+   "id": "a6ad892cd96ba1",
+   "parent_company_id": "",
+   "designation": "a68491e07b99cb",
+   "department_id": "5e5cd32716344",
+   "designation_display_name": "",
+   "internal_job_code": "AE5512",
+   "employee_type": "5b39c73e0f864",
+   "employee_sub_type": "",
+   "experience_from": "5",
+   "experience_to": "10",
+   "experience": "5 - 10 Years",
+   "salary_currency": "",
+   "salary_min": "",
+   "salary_max": "",
+   "salary_range": "",
+   "salary_timeframe": "Annual",
+   "jd": "&lt;span id=&quot;docs-internal-guid-63452a0a-7fff-8460-217d-c1176c293127&quot;&gt;&lt;/span&gt;&lt;p dir=&quot;ltr&quot; style=&quot;line-height:1.2;margin-top:0pt;margin-bottom:0pt;&quot;&gt;&lt;span style=&quot;font-size:11pt;font-family:Calibri, sans-serif;color:rgb(0,0,0);background-color:transparent;font-weight:700;font-variant:normal;vertical-align:baseline;white-space:pre-wrap;&quot;&gt;Role: &lt;/span&gt;&lt;span style=&quot;font-size:12pt;font-family:Calibri, sans-serif;color:rgb(32,32,32);background-color:transparent;font-variant:normal;vertical-align:baseline;white-space:pre-wrap;&quot;&gt;International Business Operations Manager&lt;/span&gt;&lt;/p&gt;&lt;br /&gt;&lt;p dir=&quot;ltr&quot; style=&quot;line-height:1.2;margin-top:0pt;margin-bottom:0pt;&quot;&gt;&lt;span style=&quot;font-size:11pt;font-family:Calibri, sans-serif;color:rgb(0,0,0);background-color:transparent;font-weight:700;font-variant:normal;vertical-align:baseline;white-space:pre-wrap;&quot;&gt;Location:&lt;/span&gt;&lt;span style=&quot;font-size:11pt;font-family:Calibri, sans-serif;color:rgb(0,0,0);background-color:transparent;font-variant:normal;vertical-align:baseline;white-space:pre-wrap;&quot;&gt; Bengaluru&lt;/span&gt;&lt;/p&gt;&lt;br /&gt;&lt;p dir=&quot;ltr&quot; style=&quot;line-height:1.2;margin-top:0pt;margin-bottom:0pt;&quot;&gt;&lt;span style=&quot;font-size:11pt;font-family:Calibri, sans-serif;color:rgb(0,0,0);background-color:transparent;font-weight:700;font-variant:normal;vertical-a",
+   "officelocation_arr": [
+    "5b43484a85a98"
+   ],
+   "officelocation_show_arr": "Bengaluru, Karnataka\r, India (HO_IBC)",
+   "officelocations_area": [
+    "Bengaluru, Karnataka\r, India"
+   ],
+   "officelocations_without_area": [
+    "Bengaluru, Karnataka\r, India"
+   ],
+   "country": "India",
+   "designation_title": "",
+   "created_on": "2026-10-21T10:24:13.000Z",
+   "job_posting": {
+    "careers": {
+     "source": "careers",
+     "from": 1792607400,
+     "to": 1798741799
+    },
+    "refer": {
+     "source": "refer",
+     "from": 1792607400,
+     "to": 1798741799
+    },
+    "ijp": {
+     "source": "ijp",
+     "from": 1792607400,
+     "to": 1795372199
+    }
+   },
+   "is_remote": 0,
+   "designation_name": "International Business Operations Manager",
+   "department_name": "International Business",
+   "department_name_only": "International Business",
+   "emp_type_name": "Permanent",
+   "emp_sub_type_name": "",
+   "functional_area_name": "Business Development Strategy & Planning (SPBD)",
+   "functional_area": "a69d4cf80dd284879053761",
+   "job_tags": [],
+   "jd_summary": "",
+   "legal_entity_ids": [],
+   "posted_on": 1792607400,
+   "designation_name_id": "a68491d87ecb2e",
+   "capability": [],
+   "officelocation_show_arr_list": [
+    "Bengaluru, Karnataka, India "
+   ],
+   "locations": "Bengaluru, Karnataka\r, India",
+   "tool_tip_locations": [
+    "Bengaluru, Karnataka, India"
+   ],
+   "designation_title_name": "",
+   "title": "International Business Operations Manager"
+  },
+  {
+   "_id": "6ad22f8c7691bbd86f02be21",
+   "id": "a6ad22f8c40508",
+   "parent_company_id": "",
+   "designation": "a635a177ea0587",
+   "department_id": "a6a61e304097bf493363664",
+   "designation_display_name": "",
+   "internal_job_code": "AE5496",
+   "employee_type": "5b39c73e0f864",
+   "employee_sub_type": "",
+   "experience_from": "2",
+   "experience_to": "5",
+   "experience": "2 - 5 Years",
+   "salary_currency": "",
+   "salary_min": "",
+   "salary_max": "",
+   "salary_range": "",
+   "salary_timeframe": "Annual",
+   "jd": "&lt;p&gt;&lt;b style=&quot;font-family:Helvetica;color:rgb(31,31,31);font-size:11px;&quot;&gt;Role: &lt;/b&gt;&lt;span style=&quot;font-family:Helvetica;color:rgb(31,31,31);font-size:11px;&quot;&gt;Area vehicle service manager&lt;/span&gt;&lt;span class=&quot;Apple-converted-space&quot; style=&quot;font-family:Helvetica;color:rgb(31,31,31);font-size:11px;&quot;&gt; &lt;/span&gt;&lt;/p&gt;&lt;p class=&quot;p2&quot; style=&quot;margin:0px;font-style:normal;font-variant:normal;font-size:11px;line-height:normal;font-family:Helvetica;color:rgb(31,31,31);&quot;&gt;&lt;b&gt;Location: &lt;/b&gt;Zonal office - Kerala&lt;/p&gt;&lt;p class=&quot;p2&quot; style=&quot;margin:0px;font-style:normal;font-variant:normal;font-size:11px;line-height:normal;font-family:Helvetica;color:rgb(31,31,31);&quot;&gt;&lt;b&gt;Reporting Structure: &lt;/b&gt;Zonal Vehicle service manager&lt;span class=&quot;Apple-converted-space&quot;&gt; &lt;/span&gt;&lt;/p&gt;&lt;p class=&quot;p2&quot; style=&quot;margin:0px;font-style:normal;font-variant:normal;font-size:11px;line-height:normal;font-family:Helvetica;color:rgb(31,31,31);&quot;&gt;&lt;b&gt;Team name: &lt;/b&gt;Service delivery team&lt;span class=&quot;Apple-converted-space&quot;&gt; &lt;/span&gt;&lt;/p&gt;&lt;p class=&quot;p2&quot; style=&quot;margin:0px;font-style:normal;font-variant:normal;font-size:11px;line-height:normal;font-family:Helvetica;color:rgb(31,31,31);&quot;&gt;&lt;b&gt;About the Team and the Role:&lt;span class=&quot;Apple-converted-space&q",
+   "officelocation_arr": [
+    "5c76527ebd9ff"
+   ],
+   "officelocation_show_arr": "Chennai, Tamil Nadu\r, India (EC3)",
+   "officelocations_area": [
+    "Chennai, Tamil Nadu\r, India"
+   ],
+   "officelocations_without_area": [
+    "Chennai, Tamil Nadu\r, India"
+   ],
+   "country": "India",
+   "designation_title": "",
+   "created_on": "2026-10-16T14:07:08.000Z",
+   "job_posting": {
+    "careers": {
+     "source": "careers",
+     "from": 1792607400,
+     "to": 1798741799
+    },
+    "refer": {
+     "source": "refer",
+     "from": 1792607400,
+     "to": 1798741799
+    },
+    "ijp": {
+     "source": "ijp",
+     "from": 1792607400,
+     "to": 1794767399
+    }
+   },
+   "is_remote": 0,
+   "designation_name": "Area Vehicle Service Manager",
+   "department_name": "Vehicle Service",
+   "department_name_only": "Vehicle Service",
+   "emp_type_name": "Permanent",
+   "emp_sub_type_name": "",
+   "functional_area_name": "Dealer Post-Sale Service Support (Auto Manufacturers) (SEDP)",
+   "functional_area": "a69d4cf863c2a9082022749",
+   "job_tags": [],
+   "jd_summary": "",
+   "legal_entity_ids": [],
+   "posted_on": 1792607400,
+   "designation_name_id": "a610bb154761ff",
+   "capability": [],
+   "officelocation_show_arr_list": [
+    "Chennai, Tamil Nadu, India "
+   ],
+   "locations": "Chennai, Tamil Nadu\r, India",
+   "tool_tip_locations": [
+    "Chennai, Tamil Nadu, India"
+   ],
+   "designation_title_name": "",
+   "title": "Area Vehicle Service Manager"
+  }
+ ],
+ "job_counts": 2
+}

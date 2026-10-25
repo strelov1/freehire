@@ -46,17 +46,16 @@ describe('stageImplication', () => {
   });
 
   // The "chip already says it" check compares against the ENGLISH label on purpose (see
-  // the function doc comment) — a Russian chip must not grow a redundant `→ Interview`
-  // just because its own translated label no longer matches the (deliberately untranslated)
-  // stage name byte-for-byte.
+  // the function doc comment) — a Russian chip must not grow a redundant arrow just
+  // because its translator and the stage label's translator picked different words.
   it('still recognises a self-explaining signal when the chip is translated', () => {
     expect(statusLabel('interview_invitation', 'ru')).toBe('Собеседование');
     expect(stageImplication('interview_invitation', 'ru')).toBe('');
   });
 
-  it('translates "does not move the stage" and keeps the English stage name in the arrow', () => {
+  it('translates "does not move the stage" and the stage name in the arrow', () => {
     expect(stageImplication('rejection', 'ru')).toBe('не меняет этап');
-    expect(stageImplication('acknowledgement', 'ru')).toBe('→ Applied');
+    expect(stageImplication('acknowledgement', 'ru')).toBe('→ Отклик отправлен');
   });
 
   // Every signal is accounted for: either the chip's own label already says what the stage

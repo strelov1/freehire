@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick, untrack, type Snippet } from 'svelte';
-  import { AlertTriangle, ArrowDown, FileText, MessagesSquare, PanelLeft, Phone, Plus, Trash2, WandSparkles, X } from '@lucide/svelte';
+  import { AlertTriangle, ArrowDown, FileText, MessagesSquare, PanelLeft, Phone, Plus, Rocket, Trash2, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import {
     createSession,
@@ -437,16 +437,48 @@
   // asking the host to change it. That distinction is the guard's whole life: raising it
   // when no navigation will follow leaves it raised forever, and the pane then ignores
   // every later address change, which is Forward appearing to do nothing.
-  async function openSession(id: string, fromAddress = false) {
+  // The switch openSession deferred to the discard dialog, replayed when it is confirmed.
+  let pendingSwitch = $state<{ id: string; fromAddress: boolean } | null>(null);
+  let confirmSwitchOpen = $state(false);
+
+  async function confirmSwitch() {
+    const target = pendingSwitch;
+    pendingSwitch = null;
+    if (!target) return;
+    await openSession(target.id, target.fromAddress, true).catch((err: unknown) => report(err, s.openChatFailed));
+  }
+
+  // The dialog closed without confirming (confirmSwitch clears `pendingSwitch` before it
+  // resolves, so a target still set here was declined). A switch that came from the
+  // address — Back, Forward, a link — has already moved the URL to the declined chat, so
+  // put it back on the one still on screen; otherwise the address and the pane disagree.
+  $effect(() => {
+    if (confirmSwitchOpen) return;
+    untrack(() => {
+      const declined = pendingSwitch;
+      if (!declined) return;
+      pendingSwitch = null;
+      // The guard is raised only when a navigation will follow, or it outlives it (see
+      // followAddress).
+      if (declined.fromAddress && activeId && onSessionChange) {
+        navigatingTo = activeId;
+        onSessionChange(activeId);
+      }
+      // A turn may have finished while the dialog held the queue; send what waited.
+      drainQueue();
+    });
+  });
+
+  async function openSession(id: string, fromAddress = false, discardQueued = false) {
     if (activeId === id && chat.messages.length > 0) return;
     // A message typed while the current turn was streaming sits in `queue`, waiting
     // for the turn to finish so endTurn() can drain it — cancelTurn() below stops the
     // turn but never drains the queue, so switching here would otherwise wipe out
-    // whatever the user just typed with no trace and no way back.
-    if (
-      queue.length > 0 &&
-      !confirm(s.unsentMessageConfirm)
-    ) {
+    // whatever the user just typed with no trace and no way back. The switch waits on
+    // the dialog: this call returns as a refusal would, and confirming re-enters it.
+    if (queue.length > 0 && !discardQueued) {
+      pendingSwitch = { id, fromAddress };
+      confirmSwitchOpen = true;
       return;
     }
     switching = true;
@@ -598,11 +630,18 @@
     }
     // A completed turn may have edited an artifact (e.g. the tailored CV) — let the host refresh.
     onTurnComplete?.();
-    if (queue.length > 0) {
-      const [next, ...rest] = queue;
-      queue = rest;
-      if (next) void dispatch({ kind: 'message', text: next.text, attachments: next.attachments });
-    }
+    drainQueue();
+  }
+
+  // Send the next queued message — but not while the "switch and discard?" dialog is up:
+  // the visitor is deciding whether that queue should exist at all, and a message sent in
+  // the meantime could start work that confirming the switch can no longer take back.
+  // Declining the switch drains it (see the effect beside confirmSwitch).
+  function drainQueue() {
+    if (confirmSwitchOpen || turnActive || queue.length === 0) return;
+    const [next, ...rest] = queue;
+    queue = rest;
+    if (next) void dispatch({ kind: 'message', text: next.text, attachments: next.attachments });
   }
 
   /** Stop an in-flight turn: ask the server to stop the work, and stop reading it here. The
@@ -1022,7 +1061,7 @@
                      travel through one. The two kinds are the two rhythms — the unattended run
                      and the conversation — so the mapping is complete by construction. -->
                 {#each openingActions as action (action.label)}
-                  {@const Icon = action.kind === 'autopilot' ? WandSparkles : MessagesSquare}
+                  {@const Icon = action.kind === 'autopilot' ? Rocket : MessagesSquare}
                   <button
                     type="button"
                     class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
@@ -1214,6 +1253,14 @@
   </div>
 {/if}
 </div>
+
+<ConfirmDialog
+  bind:open={confirmSwitchOpen}
+  title={s.unsentMessageConfirm}
+  confirmLabel={s.switchAndDiscard}
+  variant="destructive"
+  onConfirm={confirmSwitch}
+/>
 
 <ConfirmDialog
   bind:open={confirmRemoveChatOpen}

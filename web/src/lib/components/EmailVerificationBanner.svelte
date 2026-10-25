@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
+  import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { currentUser } from '#lib/auth.svelte.js';
   import { Button } from '#lib/ui/index.js';
@@ -39,8 +40,10 @@
       await api.requestEmailVerification();
       sent = true;
       open = true;
+      announce('We sent a code to your inbox. It expires in 15 minutes.');
     } catch (e) {
       error = messageFor(e);
+      announce(error, 'assertive');
       open = true;
     } finally {
       busy = false;
@@ -55,8 +58,10 @@
       await api.confirmEmailVerification(code.trim());
       // Re-resolve the user so the banner disappears on the spot.
       await invalidateAll();
+      announce('Email address confirmed');
     } catch (err) {
       error = messageFor(err);
+      announce(error, 'assertive');
     } finally {
       busy = false;
     }

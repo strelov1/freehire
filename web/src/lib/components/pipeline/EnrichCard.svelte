@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Sparkles } from '@lucide/svelte';
+  import { Bot } from '@lucide/svelte';
   // The same posting, with the two facts nothing in this title could have told a
   // dictionary — pulled from the body text an LLM actually read, and marked as such
   // rather than blended in beside the derived facets.
@@ -11,11 +11,11 @@
   </div>
   <div class="flex flex-col gap-1 pl-1 text-[11px] text-muted-foreground">
     <div class="flex items-center gap-1.5">
-      <Sparkles class="size-3 shrink-0 text-brand" />
+      <Bot class="size-3 shrink-0 text-brand" />
       Team size: ~12 engineers
     </div>
     <div class="flex items-center gap-1.5">
-      <Sparkles class="size-3 shrink-0 text-brand" />
+      <Bot class="size-3 shrink-0 text-brand" />
       Visa sponsorship: not mentioned
     </div>
   </div>

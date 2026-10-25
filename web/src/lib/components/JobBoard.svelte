@@ -23,7 +23,7 @@
   } from '#lib/board.js';
   import { createRehearsal, createDebrief } from '#lib/assistant/api.js';
   import { assertNever } from '#lib/utils.js';
-  import { humanizeStage } from '#lib/stages.js';
+  import { humanizeStage, stageGroupLabel } from '#lib/stages.js';
   import BoardColumn from './BoardColumn.svelte';
   import BoardList from './BoardList.svelte';
   import JobDrawer from './JobDrawer.svelte';
@@ -51,11 +51,11 @@
   let openedInitial = false;
 
   const s = $derived(t(messages, locale()));
-  // The stage groups' labels are the generated vocabulary, which stays English for now
-  // (see JobBoard.messages.ts); the inbox is ours, and reads as the "No stage" option
-  // every stage picker already offers.
+  // The stage groups' labels are the generated vocabulary, translated in
+  // `stages.messages.ts`; the inbox is ours, and reads as the "No stage" option every
+  // stage picker already offers.
   const columnLabel = (col: { id: BoardColumnId; label: string }) =>
-    col.id === 'unstaged' ? s.noStage : col.label;
+    col.id === 'unstaged' ? s.noStage : stageGroupLabel(col.id, locale());
 
   function emptyColumns(): Record<BoardColumnId, BoardItem[]> {
     return { unstaged: [], preparing: [], applied: [], interview: [], offer: [], closed: [] };
@@ -238,7 +238,7 @@
     return col ? columnLabel(col) : id;
   };
 
-  const stageName = (stage: string | null) => (stage ? humanizeStage(stage) : s.noStage);
+  const stageName = (stage: string | null) => (stage ? humanizeStage(stage, locale()) : s.noStage);
 
   // Polite confirmation of a stage change, for whoever cannot see the card move.
   function announceMove(item: MyJob, where: string) {
@@ -645,7 +645,7 @@
 
 {#if actionError}
   <!-- Pinned above everything, the drawer included: a stage picked there fails there. -->
-  <div class="fixed inset-x-0 bottom-4 z-toast flex justify-center px-4">
+  <div class="fixed inset-x-0 bottom-safe z-toast flex justify-center px-4">
     <div class={cn(alertVariants({ variant: 'destructive' }), 'w-full max-w-md items-center bg-background shadow-lg')}>
       <p class="flex-1">{actionError}</p>
       <button

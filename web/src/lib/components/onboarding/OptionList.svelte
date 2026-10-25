@@ -15,16 +15,56 @@
   }
 
   let { options, value, onSelect, label }: Props = $props();
+
+  // A radiogroup is ONE tab stop, the platform's own radio behaviour: Tab lands on the
+  // checked option (or the first, when none is), and the arrows move between options and
+  // select as they go. Selecting here only records the answer — the wizard never advances
+  // on it — so selection following focus costs nothing.
+  const tabbable = $derived(options.some((o) => o.value === value) ? value : (options[0]?.value ?? null));
+
+  let group: HTMLDivElement | undefined = $state();
+
+  function onkeydown(e: KeyboardEvent) {
+    const current = options.findIndex((o) => o.value === (e.currentTarget as HTMLElement).dataset.value);
+    if (current < 0) return;
+    let next: number;
+    switch (e.key) {
+      case 'ArrowDown':
+      case 'ArrowRight':
+        next = (current + 1) % options.length;
+        break;
+      case 'ArrowUp':
+      case 'ArrowLeft':
+        next = (current - 1 + options.length) % options.length;
+        break;
+      case 'Home':
+        next = 0;
+        break;
+      case 'End':
+        next = options.length - 1;
+        break;
+      default:
+        return;
+    }
+    const target = options[next];
+    if (!target) return;
+    e.preventDefault();
+    onSelect(target.value);
+    group?.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
+  }
 </script>
 
-<div class="flex flex-col gap-2" role="radiogroup" aria-label={label}>
+<div class="flex flex-col gap-2" role="radiogroup" aria-label={label} bind:this={group}>
   {#each options as o (o.value)}
     {@const selected = value === o.value}
     <button
       type="button"
       role="radio"
       aria-checked={selected}
+      tabindex={o.value === tabbable ? 0 : -1}
+      data-value={o.value}
       onclick={() => onSelect(o.value)}
+      {onkeydown}
       class={[
         'flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3.5 text-left text-sm transition-colors',
         selected

@@ -76,6 +76,13 @@
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+/* Offset for a toast or banner fixed to the screen's bottom edge: 1rem (bottom-4), or
+   clear of the phone's home indicator where that is taller. Same viewport-fit=cover
+   dependency as pb-safe. */
+@utility bottom-safe {
+  bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {

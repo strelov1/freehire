@@ -460,9 +460,10 @@ func All(c HTTPClient) map[string]Source {
 		NewConcludis(c),
 		NewKenjo(c),
 		NewEasyCruit(c),
-		// Concurrency-limited: one origin serves every Homerun vacancy page (see homerunMaxInFlight).
-		NewHomerun(limitedHomerunGetter(c)),
+		// Rate-paced: one origin serves every Homerun feed and vacancy page (see homerunRequestInterval).
+		NewHomerun(pacedHomerunGetter(c)),
 		NewHROffice(c),
+		NewGreytHR(c),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
 		NewHelixjobs(limitedHelixjobsGetter(c)),
 		NewTalentstorm(c),
@@ -806,15 +807,25 @@ func All(c HTTPClient) map[string]Source {
 	} else {
 		registry["instahyre"] = pacedInstahyre(c, c)
 	}
+	// hirist.tech and iimjobs.com: one Indian job platform on two sites, enumerated by category
+	// (board) through the API their web app calls, hydrating each new posting's body from the
+	// posting API. Every request of a run is paced to one a second. See hirist.go.
+	if c == nil {
+		registry["hirist"] = NewHirist(nil)
+		registry["iimjobs"] = NewIIMJobs(nil)
+	} else {
+		registry["hirist"] = NewHirist(pacedHiristGetter(c))
+		registry["iimjobs"] = NewIIMJobs(pacedHiristGetter(c))
+	}
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the
 	// bayt/gulftalent aggregators, by jobleads — whose search edge rejects the plain Go
 	// fingerprint the same way and serves a Chrome one 200, keyless — and by startupjobs' and
-	// gradcracker's Cloudflare-challenged pages). Build it only when there
+	// gradcracker's Cloudflare-challenged pages, and by darwinbox's careers API). Build it only when there
 	// is a real client to serve (the c == nil marker/listing path — e.g. FilterableProviders —
 	// must stay transport-free, so these register with a nil client there; Provider()/boardless()
-	// never touch it). If the deterministic transport build ever fails, all eight are left
+	// never touch it). If the deterministic transport build ever fails, all nine are left
 	// unregistered so config validation fails fast on their board entries, rather than
 	// registering a client guaranteed to be rejected by the edge.
 	if c == nil {
@@ -830,6 +841,7 @@ func All(c HTTPClient) map[string]Source {
 		// startupjobs likewise: it is an aggregator, and the dedup pass must know it as one.
 		registry["startupjobs"] = NewStartupJobs(nil, nil, nil, 0)
 		registry["gradcracker"] = NewGradcracker(nil, 0)
+		registry["darwinbox"] = NewDarwinbox(nil)
 	} else if fp, err := newFingerprintHTTP(); err == nil {
 		registry["meta"] = NewMetaCareers(fp)
 		registry["bayt"] = NewBayt(fp)
@@ -847,6 +859,8 @@ func All(c HTTPClient) map[string]Source {
 		// Every gradcracker request, listing and posting page alike, shares one limiter: the
 		// edge counts requests per IP (see gradcrackerRequestInterval).
 		registry["gradcracker"] = NewGradcracker(pacedGradcracker(fp), 0)
+		// Darwinbox's careers API sits behind Cloudflare, which 403s the plain Go fingerprint.
+		registry["darwinbox"] = NewDarwinbox(fp)
 	}
 	return registry
 }

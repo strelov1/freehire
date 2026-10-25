@@ -28,4 +28,8 @@
   --warning-foreground: oklch(0.279 0.077 45.635); /** Text on the caution fill. */
   --warning-strong: oklch(0.828 0.189 84.429); /** Caution text and borders on the page background, where the fill is not legible. */
   --warning-muted: oklch(0.279 0.077 45.635); /** Soft caution tint. A background that carries the meaning without the weight. */
+  --success: oklch(0.72 0.16 155); /** Success fill: a gain, a pass, a connected state. The solid block. */
+  --success-foreground: oklch(0.2 0.05 155); /** Text on the success fill. */
+  --success-strong: oklch(0.8 0.15 155); /** Success text and borders on the page background and on the success tint. */
+  --success-muted: oklch(0.3 0.06 155); /** Soft success tint behind success-strong text. */
 }

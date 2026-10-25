@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Pause, Play } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { Button } from '#lib/ui/index.js';
   import HomeFunnel from '#lib/components/HomeFunnel.svelte';
@@ -76,6 +77,11 @@
   // Repeated to over-fill the row (the names are short) so the marquee never
   // shows a gap; the -50% loop stays seamless because the copies are identical.
   const sourcesMarquee = [...sources, ...sources, ...sources, ...sources];
+
+  // The feed and the marquee move forever, so a visitor has to be able to stop them
+  // (WCAG 2.2.2): hover alone excludes keyboard and touch. One state drives both, and a
+  // control sits beside each so it is found where the motion is.
+  let paused = $state(false);
 
   // Illustrative application-pipeline snapshot for the funnel below — decorative,
   // not live data. Counts sum to `applications`, and the keys are the product's own
@@ -191,33 +197,37 @@
       </div>
 
       <!-- Vertical job feed. Hidden below lg to keep the mobile hero focused. -->
-      <div class="reveal feed-viewport hidden h-[480px] lg:block" style="--d:320ms">
-        <div class="feed-track">
-          {#each feedLoop as job, i (i)}
-            <article
-              class="feed-card flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors"
-              aria-hidden={i >= feed.length}
-            >
-              <div
-                class="grid size-9 shrink-0 place-items-center rounded-lg border border-border font-mono text-sm font-medium"
+      <div class="reveal relative hidden lg:block" style="--d:320ms">
+        <div class={['feed-viewport h-[480px]', paused && 'is-paused']}>
+          <div class="feed-track">
+            {#each feedLoop as job, i (i)}
+              <article
+                class="feed-card flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors"
+                aria-hidden={i >= feed.length}
               >
-                {job.company.charAt(0)}
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium">{job.title}</p>
-                <p class="truncate text-xs text-muted-foreground">{job.company}</p>
-              </div>
-              <div class="shrink-0 text-right">
-                <p class="font-mono text-xs text-muted-foreground">{job.meta}</p>
-                <span
-                  class="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                <div
+                  class="grid size-9 shrink-0 place-items-center rounded-lg border border-border font-mono text-sm font-medium"
                 >
-                  {job.tag}
-                </span>
-              </div>
-            </article>
-          {/each}
+                  {job.company.charAt(0)}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium">{job.title}</p>
+                  <p class="truncate text-xs text-muted-foreground">{job.company}</p>
+                </div>
+                <div class="shrink-0 text-right">
+                  <p class="font-mono text-xs text-muted-foreground">{job.meta}</p>
+                  <span
+                    class="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                  >
+                    {job.tag}
+                  </span>
+                </div>
+              </article>
+            {/each}
+          </div>
         </div>
+        <!-- Below the feed, not over it: laid on the feed's corner it covered the last card. -->
+        {@render motionToggle('ml-auto mt-2')}
       </div>
     </div>
   </section>
@@ -245,11 +255,11 @@
   </section>
 
   <!-- Sourced-from marquee: the real adapters, scrolling. Honest list only. -->
-  <section class="marquee-band flex items-center gap-6 overflow-hidden border-y border-border py-4">
+  <section class="flex items-center gap-6 overflow-hidden border-y border-border py-4">
     <span class="shrink-0 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
       sourced from
     </span>
-    <div class="marquee-viewport flex-1 overflow-hidden">
+    <div class={['marquee-viewport flex-1 overflow-hidden', paused && 'is-paused']}>
       <div class="marquee-track flex items-center gap-8 whitespace-nowrap">
         {#each sourcesMarquee as src, i (i)}
           <span class="text-sm text-muted-foreground">{src}</span>
@@ -257,6 +267,7 @@
         {/each}
       </div>
     </div>
+    {@render motionToggle('shrink-0')}
   </section>
 
   <!-- Mission. A single large statement carries this section. -->
@@ -453,6 +464,29 @@ freehire save <span class="text-foreground">&lt;slug&gt;</span></pre>
   </section>
 </div>
 
+<!-- A fixed name with aria-pressed, so the state is spoken once rather than both by the
+     name and by the pressed flag; the icon and tooltip show what a press will do. Hidden
+     under reduced motion, where nothing moves to pause. -->
+{#snippet motionToggle(className: string)}
+  <button
+    type="button"
+    aria-label="Pause animation"
+    aria-pressed={paused}
+    title={paused ? 'Play animation' : 'Pause animation'}
+    onclick={() => (paused = !paused)}
+    class={[
+      'grid size-8 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground motion-reduce:hidden',
+      className,
+    ]}
+  >
+    {#if paused}
+      <Play class="size-4" aria-hidden="true" />
+    {:else}
+      <Pause class="size-4" aria-hidden="true" />
+    {/if}
+  </button>
+{/snippet}
+
 <style>
   /* Dotted background, faded toward the edges with a radial mask so it frames
      the hero without competing with the copy. --muted-foreground at low opacity
@@ -486,7 +520,9 @@ freehire save <span class="text-foreground">&lt;slug&gt;</span></pre>
   .feed-card:hover {
     border-color: color-mix(in oklch, var(--foreground) 25%, transparent);
   }
-  .feed-viewport:hover .feed-track {
+  .feed-viewport:hover .feed-track,
+  .feed-viewport:focus-within .feed-track,
+  .feed-viewport.is-paused .feed-track {
     animation-play-state: paused;
   }
   @keyframes feed-scroll {
@@ -504,7 +540,9 @@ freehire save <span class="text-foreground">&lt;slug&gt;</span></pre>
     width: max-content;
     animation: marquee 30s linear infinite;
   }
-  .marquee-band:hover .marquee-track {
+  .marquee-viewport:hover .marquee-track,
+  .marquee-viewport:focus-within .marquee-track,
+  .marquee-viewport.is-paused .marquee-track {
     animation-play-state: paused;
   }
   @keyframes marquee {

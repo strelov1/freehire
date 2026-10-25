@@ -11,7 +11,7 @@
     Banknote,
     FileText,
     CheckCircle2,
-    Sparkles,
+    ScanSearch,
   } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { tablist } from '#lib/actions/tablist.js';
@@ -326,7 +326,7 @@
                 disabled={url.trim() === '' || prefilling}
                 onclick={prefillFromURL}
               >
-                <Sparkles class="size-3.5" />
+                <ScanSearch class="size-3.5" aria-hidden="true" />
                 {prefilling ? 'Filling in…' : 'Fill in from this link'}
               </Button>
             </div>

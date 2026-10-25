@@ -20,7 +20,7 @@
 
   const toneClass: Record<AtsDeltaTone, string> = {
     down: 'text-warning-strong',
-    up: 'text-emerald-600 dark:text-emerald-400',
+    up: 'text-success-strong',
     flat: 'text-muted-foreground',
   };
   const overallTone = $derived(view ? toneOf(view.overall.change, view.regressed) : 'flat');

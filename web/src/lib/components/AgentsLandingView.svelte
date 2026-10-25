@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { announce } from '#lib/announce.svelte.js';
   import { AGENTS_FAQ } from '#lib/agentsFaq.js';
   import { CLI_REPO, MCP_REPO } from '#lib/cliLinks.js';
   import { Button, SectionLabel } from '#lib/ui/index.js';
@@ -103,6 +104,7 @@ and \`freehire --help\` for the commands.`;
     try {
       await navigator.clipboard.writeText(HANDOFF);
       copied = true;
+      announce('Copied to the clipboard');
       clearTimeout(copyTimer);
       copyTimer = setTimeout(() => (copied = false), 1800);
     } catch {

@@ -15,7 +15,7 @@
   // status → a coloured pill. The three review states map to warning/green/red.
   const statusClass: Record<Submission['status'], string> = {
     pending: 'bg-warning-muted text-warning-strong bg-warning-muted/40 text-warning-strong',
-    approved: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+    approved: 'bg-success-muted text-success-strong',
     rejected: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
   };
 

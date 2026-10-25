@@ -151,15 +151,15 @@
             <p class="text-2xl font-semibold tabular-nums">78%</p>
             <p class="text-[11px] text-muted-foreground">profile match</p>
             <div class="mt-3 space-y-1.5">
-              <div class="h-1.5 w-full rounded bg-emerald-500/40"></div>
-              <div class="h-1.5 w-4/5 rounded bg-emerald-500/40"></div>
+              <div class="h-1.5 w-full rounded bg-success/40"></div>
+              <div class="h-1.5 w-4/5 rounded bg-success/40"></div>
               <div class="h-1.5 w-1/3 rounded bg-warning/40"></div>
             </div>
             <div class="mt-4 flex flex-wrap gap-1.5">
-              <span class="rounded border border-emerald-400/50 px-1.5 py-0.5 font-mono text-xs text-emerald-700 dark:text-emerald-400">
+              <span class="rounded border border-success-strong/50 px-1.5 py-0.5 font-mono text-xs text-success-strong">
                 Kafka
               </span>
-              <span class="rounded border border-emerald-400/50 px-1.5 py-0.5 font-mono text-xs text-emerald-700 dark:text-emerald-400">
+              <span class="rounded border border-success-strong/50 px-1.5 py-0.5 font-mono text-xs text-success-strong">
                 Postgres
               </span>
               <span class="rounded border border-warning/50 px-1.5 py-0.5 font-mono text-xs text-warning-strong">
@@ -220,7 +220,7 @@
             <SectionLabel text="you have" />
             <div class="mt-2.5 flex flex-wrap gap-1.5">
               {#each ['Distributed systems', 'Kafka', 'Postgres', 'AWS', 'Go'] as skill (skill)}
-                <span class="rounded-md border border-emerald-400/50 px-2 py-0.5 font-mono text-xs text-emerald-700 dark:text-emerald-400">
+                <span class="rounded-md border border-success-strong/50 px-2 py-0.5 font-mono text-xs text-success-strong">
                   {skill}
                 </span>
               {/each}
@@ -269,7 +269,7 @@
         <ul class="divide-y divide-border text-sm">
           {#each [['Full name', 'Alex Moreau'], ['Email', 'alex@example.com'], ['Years of experience', '8'], ['Work authorisation', 'EU citizen'], ['Notice period', '1 month']] as [label, value] (label)}
             <li class="flex items-baseline gap-3 px-4 py-2.5">
-              <span class="text-emerald-700 dark:text-emerald-400">✓</span>
+              <span class="text-success-strong">✓</span>
               <span class="w-40 shrink-0 text-muted-foreground">{label}</span>
               <span class="truncate">{value}</span>
             </li>

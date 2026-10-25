@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Check, FileUp, Paperclip, Sparkles } from '@lucide/svelte';
+  import { Check, FilePen, FileUp, Paperclip } from '@lucide/svelte';
   import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
   import type { ReferralCvOptions, ReferralRequestInput } from '#lib/types.js';
   import { Button, Dialog, FormField } from '#lib/ui/index.js';
@@ -220,7 +220,7 @@
               {/if}
               {#if onTailor}
                 <Button type="button" variant="primary" class="gap-1.5" onclick={onTailor}>
-                  <Sparkles class="size-4" aria-hidden="true" /> Tailor my CV for this vacancy
+                  <FilePen class="size-4" aria-hidden="true" /> Tailor my CV for this vacancy
                 </Button>
               {/if}
             </div>

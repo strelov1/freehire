@@ -3,7 +3,7 @@
   import { api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import type { EmployerAccount } from '#lib/types.js';
-  import { Button } from '#lib/ui/index.js';
+  import { Button, ConfirmDialog } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { timeAgo } from '#lib/utils.js';
   import States from './States.svelte';
@@ -28,8 +28,16 @@
     }
   }
 
+  // The claim awaiting the reject confirmation; the dialog is open while it is set.
+  let rejectTarget = $state<EmployerAccount | null>(null);
+  let confirmRejectOpen = $state(false);
+
+  function askReject(acc: EmployerAccount) {
+    rejectTarget = acc;
+    confirmRejectOpen = true;
+  }
+
   async function reject(acc: EmployerAccount) {
-    if (!window.confirm(`Reject the claim on "${acc.company_name}"? This frees the company slug for a future claim.`)) return;
     busy = acc.user_id;
     try {
       await api.rejectEmployerClaim(acc.user_id);
@@ -62,7 +70,7 @@
           <Button variant="primary" size="sm" disabled={busy === acc.user_id} onclick={() => approve(acc)}>
             Approve
           </Button>
-          <Button variant="ghost" size="sm" disabled={busy === acc.user_id} onclick={() => reject(acc)}>
+          <Button variant="ghost" size="sm" disabled={busy === acc.user_id} onclick={() => askReject(acc)}>
             Reject
           </Button>
         </div>
@@ -74,3 +82,12 @@
     website was unknown, records the confirmed domain.
   </p>
 {/if}
+
+<ConfirmDialog
+  bind:open={confirmRejectOpen}
+  title={`Reject the claim on "${rejectTarget?.company_name ?? ''}"?`}
+  description="This frees the company slug for a future claim."
+  confirmLabel="Reject"
+  variant="destructive"
+  onConfirm={() => (rejectTarget ? reject(rejectTarget) : undefined)}
+/>

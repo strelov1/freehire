@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -53,6 +54,7 @@
     } else {
       formErrorKind = kind;
     }
+    if (formError) announce(formError, 'assertive');
   }
 
   $effect(() => {
@@ -83,6 +85,7 @@
     try {
       webhookData.value = await api.testWebhook();
       testPassed = true;
+      announce(s.testPassed);
     } catch (error) {
       showError('updateFailed', error);
     } finally {
@@ -96,6 +99,7 @@
       webhookData.value = await api.setWebhookEnabled(!webhook.enabled);
     } catch {
       formErrorKind = 'updateFailed';
+      announce(s.updateFailed, 'assertive');
     }
   }
 

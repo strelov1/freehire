@@ -20,8 +20,8 @@
   const STATUS_META: Record<HealthStatus, { label: string; dot: string; pill: string }> = {
     operational: {
       label: 'Operational',
-      dot: 'bg-emerald-500',
-      pill: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+      dot: 'bg-success',
+      pill: 'border-success/40 bg-success/10 text-success-strong',
     },
     degraded: {
       label: 'Degraded',

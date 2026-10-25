@@ -31,7 +31,7 @@
   const expandable = $derived(items.length > 0);
 
   const itemTone: Record<string, string> = {
-    pass: 'text-emerald-600 dark:text-emerald-400',
+    pass: 'text-success-strong',
     warn: 'text-warning-strong',
     fail: 'text-destructive',
   };

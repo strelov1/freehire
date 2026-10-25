@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { STAGE_GROUPS, STAGE_LABELS, STAGE_VALUES } from './generated/contracts';
-import { groupedStages, offersDebrief } from './stages';
+import { TRANSLATED_LOCALES } from './locale';
+import { groupedStages, humanizeStage, offersDebrief, stageGroupLabel } from './stages';
 import { must } from './utils';
 
 // The debrief reviews an interview that has already happened, so the offer follows the
@@ -63,5 +64,46 @@ describe('groupedStages', () => {
     expect(closed?.options.map((o) => o.label)).toEqual(
       generated.stages.map((s) => STAGE_LABELS[s]),
     );
+  });
+});
+
+// The labels are shown wherever a stage is — the board's badge, the drawer's selector, the
+// history ("Moved to …"). A stage added in Go reaches English through generation at once;
+// this is what stops it reaching a translated UI as an English word in a Russian sentence.
+describe('stage labels per locale', () => {
+  const groupIds = STAGE_GROUPS.map((g) => g.id);
+
+  it('keeps English as the generated table', () => {
+    for (const stage of STAGE_VALUES) expect(humanizeStage(stage, 'en')).toBe(STAGE_LABELS[stage]);
+    expect(groupedStages('en').map((g) => g.label)).toEqual(STAGE_GROUPS.map((g) => g.label));
+  });
+
+  for (const locale of TRANSLATED_LOCALES.filter((l) => l !== 'en')) {
+    it(`translates every stage and group into ${locale}`, () => {
+      for (const stage of STAGE_VALUES) {
+        const label = humanizeStage(stage, locale);
+        expect(label, `${locale}:${stage}`).toBeTruthy();
+        // The catalog falls back to English per key, so an untranslated stage would come
+        // back as the English label rather than as nothing.
+        expect(label, `${locale}:${stage} is still English`).not.toBe(STAGE_LABELS[stage]);
+      }
+      const groups = groupedStages(locale);
+      expect(groups.map((g) => g.id)).toEqual(groupIds);
+      for (const g of groups) {
+        const english = must(STAGE_GROUPS.find((x) => x.id === g.id)).label;
+        expect(g.label, `${locale}:group ${g.id} is still English`).not.toBe(english);
+      }
+    });
+  }
+
+  it('labels a group id the way the selector heads it, in every locale', () => {
+    for (const locale of TRANSLATED_LOCALES) {
+      for (const g of groupedStages(locale)) expect(stageGroupLabel(g.id, locale)).toBe(g.label);
+    }
+    expect(stageGroupLabel('unknown-group', 'ru')).toBe('unknown-group');
+  });
+
+  it('title-cases a stage it does not know, in every locale', () => {
+    expect(humanizeStage('negotiating', 'ru')).toBe('Negotiating');
   });
 });

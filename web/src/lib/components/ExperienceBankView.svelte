@@ -13,7 +13,7 @@
    * and can span achievements from different employments (see specs/experience-bank).
    */
   import { onDestroy, tick } from 'svelte';
-  import { Briefcase, FolderKanban, Plus, Sparkles, X } from '@lucide/svelte';
+  import { Bot, Briefcase, FolderKanban, Plus, X } from '@lucide/svelte';
   import type { Component } from 'svelte';
   import { api } from '#lib/api.js';
   import { Alert, Button, ConfirmDialog, FormField, Input } from '#lib/ui/index.js';
@@ -707,7 +707,7 @@
               disabled={turnActive}
               onclick={() => launchInterview(selected)}
             >
-              <Sparkles class="size-3.5" />Tailor with assistant
+              <Bot class="size-3.5" />Tailor with assistant
             </Button>
             <Button size="sm" variant="ghost" onclick={() => (selected = [])}>
               Clear
@@ -910,6 +910,6 @@
      about, and leaving it to reach the agent is what this replaced. -->
 {#snippet interviewEntry()}
   <Button size="sm" variant="secondary" disabled={turnActive} onclick={() => launchInterview([])}>
-    <Sparkles class="size-3.5" />Tailor your experience
+    <Bot class="size-3.5" />Tailor your experience
   </Button>
 {/snippet}

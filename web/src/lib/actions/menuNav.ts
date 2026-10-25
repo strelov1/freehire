@@ -32,7 +32,9 @@ const ITEM = '[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]
  *
  * - on mount, focus moves to the first item (if the items render later — a menu
  *   that loads its contents — focus parks on the container and moves to the first
- *   item as soon as one appears);
+ *   item as soon as one appears). A menu that mounts LATE, after its contents load,
+ *   passes `autofocus: false` when the user has already moved on, so focus is not
+ *   pulled back from wherever they Tabbed to;
  * - Down/Up move between items (wrapping), Home/End jump to the ends;
  * - Tab/Shift+Tab close the menu and carry on through the page from the trigger, rather
  *   than walking the items one by one;
@@ -40,10 +42,16 @@ const ITEM = '[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]
  *   returns to whatever was focused when the menu opened, usually the trigger, unless
  *   the app already moved it elsewhere (see `restoreFocus`).
  *
- * Keys pressed inside an inline form in the menu (AddToList's "new list") are left to
+ * Keys pressed inside a form placed in a menu are left to
  * the form, so arrows and Home/End move the caret and Tab reaches its submit button.
  */
-export function menuNav({ onclose }: { onclose: () => void }): Attachment<HTMLElement> {
+export function menuNav({
+  onclose,
+  autofocus = true,
+}: {
+  onclose: () => void;
+  autofocus?: boolean;
+}): Attachment<HTMLElement> {
   return (node) => {
     const opener = openerOf(document.activeElement);
 
@@ -54,9 +62,11 @@ export function menuNav({ onclose }: { onclose: () => void }): Attachment<HTMLEl
 
     let observer: MutationObserver | null = null;
     const first = items()[0];
-    if (first) {
+    // With `autofocus: false` the user is elsewhere: focus is left alone, and the keys
+    // still work once they come back.
+    if (autofocus && first) {
       first.focus();
-    } else {
+    } else if (autofocus) {
       if (!node.hasAttribute('tabindex')) node.setAttribute('tabindex', '-1');
       node.focus();
       observer = new MutationObserver(() => {
@@ -72,7 +82,7 @@ export function menuNav({ onclose }: { onclose: () => void }): Attachment<HTMLEl
 
     const onKeydown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      // An inline form in the menu (AddToList's "new list") keeps its own keys: arrows
+      // A form inside a menu keeps its own keys: arrows
       // move the caret and Tab walks from the field to its submit button.
       if (target?.closest('input, textarea, form')) return;
       if (e.key === 'Tab') {

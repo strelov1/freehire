@@ -83,18 +83,11 @@
     const to = atEnd ? 'black 100%' : 'black calc(100% - 1.5rem), transparent 100%';
     return `linear-gradient(to right, ${from}, ${to})`;
   });
-  // Bring the active section into view on arrival and on every navigation. The strip is
-  // scrolled itself rather than through scrollIntoView, which would also drag the page.
+  // Bring the active section into view on arrival and on every navigation.
   $effect(() => {
     void path;
-    const el = strip;
-    if (!el) return;
-    const link = el.querySelector<HTMLElement>('[aria-current="page"]');
-    if (!link) return;
-    const item = link.getBoundingClientRect();
-    const view = el.getBoundingClientRect();
-    if (item.right > view.right) el.scrollLeft += item.right - view.right + 24;
-    else if (item.left < view.left) el.scrollLeft -= view.left - item.left + 24;
+    const link = strip?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (link) stripEdges.reveal(link);
   });
 
   // Shared item treatment for both nav forms; active matches the tracking tabs.

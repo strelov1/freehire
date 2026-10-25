@@ -93,5 +93,21 @@
   "warning-muted": {
     "$value": "oklch(0.279 0.077 45.635)",
     "$description": "Soft caution tint. A background that carries the meaning without the weight."
+  },
+  "success": {
+    "$value": "oklch(0.72 0.16 155)",
+    "$description": "Success fill: a gain, a pass, a connected state. The solid block."
+  },
+  "success-foreground": {
+    "$value": "oklch(0.2 0.05 155)",
+    "$description": "Text on the success fill."
+  },
+  "success-strong": {
+    "$value": "oklch(0.8 0.15 155)",
+    "$description": "Success text and borders on the page background and on the success tint."
+  },
+  "success-muted": {
+    "$value": "oklch(0.3 0.06 155)",
+    "$description": "Soft success tint behind success-strong text."
   }
 }

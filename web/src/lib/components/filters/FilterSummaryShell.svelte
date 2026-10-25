@@ -94,7 +94,7 @@
            removed itself and no chip is left (see `removeThenRefocus`). -->
       <h2 bind:this={heading} tabindex="-1" class="text-base font-semibold tracking-tight outline-none">Filters</h2>
       {#if active > 0}
-        <button type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" onclick={() => removeThenRefocus(onReset, null)}>Clear all</button>
+        <button type="button" class="relative text-xs text-muted-foreground transition-colors after:absolute after:-inset-1 hover:text-foreground" onclick={() => removeThenRefocus(onReset, null)}>Clear all</button>
       {/if}
     </div>
     {#if description}

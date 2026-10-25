@@ -3,9 +3,13 @@
 // from internal/userjob via cmd/gen-contracts — this module reads them and adds
 // no vocabulary of its own. It used to hold a second copy of the labels, which is
 // how the board, the funnel and this file came to disagree about what to call a
-// settled application.
+// settled application. The English labels ARE the generated ones; the translations
+// beside them live in `stages.messages.ts`, keyed by the same stage and group ids.
 
-import { STAGE_GROUPS, STAGE_LABELS, type Stage } from './generated/contracts';
+import { STAGE_GROUPS, type Stage } from './generated/contracts';
+import { t } from './i18n/t';
+import type { Locale } from './locale';
+import { messages } from './stages.messages';
 
 interface StageOption {
   value: string;
@@ -34,22 +38,25 @@ type GroupedStage = (typeof STAGE_GROUPS)[number]['stages'][number];
 /** @public */
 export type StagesAreFullyGrouped = Assert<Eq<Stage, GroupedStage>>;
 
-/** A human label for a stage value; the value itself (title-cased fallback) when
- *  not in the known vocabulary. */
-export function humanizeStage(stage: string): string {
-  return (
-    (STAGE_LABELS as Record<string, string>)[stage] ??
-    stage.charAt(0).toUpperCase() + stage.slice(1)
-  );
+/** A human label for a stage value in `locale` (English — the generated label — by
+ *  default); the value itself, title-cased, when not in the known vocabulary. */
+export function humanizeStage(stage: string, locale: Locale = 'en'): string {
+  return t(messages, locale).stages[stage] ?? stage.charAt(0).toUpperCase() + stage.slice(1);
+}
+
+/** A human label for a stage GROUP id (a board column, a funnel band) in `locale`;
+ *  the id itself when not in the known vocabulary. */
+export function stageGroupLabel(id: string, locale: Locale = 'en'): string {
+  return t(messages, locale).groups[id] ?? id;
 }
 
 /** The stages grouped as the selector shows them, in generated pipeline order, so
  *  `Closed` reads as a heading over its three outcomes rather than as a fifth state. */
-export function groupedStages(): StageOptionGroup[] {
+export function groupedStages(locale: Locale = 'en'): StageOptionGroup[] {
   return STAGE_GROUPS.map((g) => ({
     id: g.id,
-    label: g.label,
-    options: g.stages.map((value) => ({ value, label: humanizeStage(value) })),
+    label: stageGroupLabel(g.id, locale),
+    options: g.stages.map((value) => ({ value, label: humanizeStage(value, locale) })),
   }));
 }
 

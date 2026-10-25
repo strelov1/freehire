@@ -34,6 +34,9 @@
     id: string;
     label: string;
     domain: string;
+    // Our own copy of the mark, where the logo proxy resolves the wrong one: for Grok it
+    // returns xAI's wordmark rather than Grok Bot's round mark.
+    logo?: string;
     directory?: { url: string; brand: SimpleIcon; note: string };
     steps: string[];
     file?: string;
@@ -69,9 +72,36 @@
       ],
     },
     {
+      id: 'gemini',
+      label: 'Gemini',
+      domain: 'gemini.google.com',
+      // Google's own help page (support.google.com/gemini/answer/17209137); custom apps are
+      // US-only, personal Google accounts, web and mobile apps.
+      steps: [
+        'On gemini.google.com, open Settings, then Connected Apps.',
+        'Under Custom apps, choose Add a custom app, paste the address, and choose Next.',
+        'Follow the on-screen steps to finish connecting.',
+        'In a chat, type @, pick freehire, and ask a job question.',
+      ],
+    },
+    {
+      // Meta's Muse has no connector settings page: it adds a server when asked to in a
+      // chat, so the setup is a message to send rather than a form to fill.
+      id: 'muse',
+      label: 'Muse',
+      domain: 'muse.ai',
+      steps: [
+        'There is no settings page: send Muse the message below in a chat.',
+        'Tap Approve when Muse tests the connection, then ask a job question in the same chat.',
+      ],
+      file: 'message to Muse',
+      snippet: (u) => `Connect to my freehire MCP: ${u}`,
+    },
+    {
       id: 'grok',
       label: 'Grok Bot',
       domain: 'grok.com',
+      logo: '/brands/grok.png',
       steps: [
         'Open Connect apps in the sidebar.',
         'Add a custom app, name it freehire, and paste the address.',
@@ -218,7 +248,7 @@
           host === h.id ? 'border-foreground bg-secondary/60' : 'border-border bg-background hover:bg-secondary/40',
         ]}
       >
-        <EntityLogo name={h.label} src={sourceLogoUrl(h.label, h.domain) ?? undefined} size="lg" shape="square" />
+        <EntityLogo name={h.label} src={h.logo ?? sourceLogoUrl(h.label, h.domain) ?? undefined} size="lg" shape="square" />
         <span class="text-base font-medium text-foreground">{h.label}</span>
       </button>
     {/each}

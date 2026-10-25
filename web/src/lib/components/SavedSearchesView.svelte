@@ -2,6 +2,7 @@
   import { Pencil, Trash2, Check } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
+  import { announce } from '#lib/announce.svelte.js';
   import { ApiError } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { signinUrl } from '#lib/signin.js';
@@ -9,7 +10,7 @@
   import { notifications } from '#lib/notifications.svelte.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import type { SavedSearch } from '#lib/types.js';
-  import { Button, ConfirmDialog } from '#lib/ui/index.js';
+  import { Button, ConfirmDialog, Dialog, FormField, Input } from '#lib/ui/index.js';
   import { toSearchString } from '#lib/urlSearchString.js';
   import { ProviderIcon } from '#lib/ui/index.js';
   import AlertChannels from './filters/AlertChannels.svelte';
@@ -67,14 +68,45 @@
     return `/jobs?${toSearchString(new URLSearchParams(query))}`;
   }
 
-  async function rename(s: SavedSearch) {
-    const next = window.prompt('Rename saved search', s.name)?.trim();
-    if (!next || next === s.name) return;
-    error = null;
+  let renameTarget = $state<SavedSearch | null>(null);
+  let renameOpen = $state(false);
+  let renameName = $state('');
+  let renameInvalid = $state(false);
+  let renameBusy = $state(false);
+  let renameError = $state<string | null>(null);
+
+  function requestRename(s: SavedSearch) {
+    renameTarget = s;
+    renameName = s.name;
+    renameInvalid = false;
+    renameError = null;
+    renameOpen = true;
+  }
+
+  async function rename(e: SubmitEvent) {
+    e.preventDefault();
+    const s = renameTarget;
+    if (!s || renameBusy) return;
+    const next = renameName.trim();
+    if (!next) {
+      renameInvalid = true;
+      return;
+    }
+    if (next === s.name) {
+      renameOpen = false;
+      return;
+    }
+    renameBusy = true;
+    renameError = null;
     try {
       await savedSearches.update(s.id, { name: next });
+      renameOpen = false;
+      announce(`Renamed to “${next}”`);
     } catch (err) {
-      error = err instanceof ApiError ? err.message : 'Could not rename this search. Please try again.';
+      renameError = err instanceof ApiError ? err.message : 'Could not rename this search. Please try again.';
+      announce(renameError, 'assertive');
+    } finally {
+      renameBusy = false;
     }
   }
 
@@ -94,6 +126,7 @@
       await savedSearches.remove(s.id);
     } catch {
       error = 'Could not delete this search. Please try again.';
+      announce(error, 'assertive');
     }
   }
 </script>
@@ -170,7 +203,7 @@
                   type="button"
                   aria-label="Rename “{s.name}”"
                   title="Rename"
-                  onclick={() => rename(s)}
+                  onclick={() => requestRename(s)}
                   class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                   <Pencil class="size-4" />
@@ -197,6 +230,41 @@
       {/if}
     {/if}
   </div>
+
+  <Dialog bind:open={renameOpen} title="Rename saved search" dismissible={!renameBusy}>
+    <!-- `{#if}` because Dialog renders its children unconditionally. -->
+    {#if renameOpen}
+      <form class="flex flex-col gap-4" onsubmit={rename} novalidate>
+        <FormField label="Name" required error={renameInvalid ? 'Enter a name.' : undefined}>
+          {#snippet children({ id, describedBy, invalid })}
+            <Input
+              {id}
+              name="name"
+              aria-describedby={describedBy}
+              aria-invalid={invalid || undefined}
+              required
+              maxlength={100}
+              class="w-full"
+              bind:value={renameName}
+              oninput={() => {
+                renameInvalid = false;
+                renameError = null;
+              }}
+            />
+          {/snippet}
+        </FormField>
+        {#if renameError}
+          <p class="text-sm text-destructive">{renameError}</p>
+        {/if}
+        <div class="flex items-center justify-end gap-2">
+          <Button variant="ghost" size="sm" disabled={renameBusy} onclick={() => (renameOpen = false)}>Cancel</Button>
+          <Button type="submit" variant="primary" size="sm" disabled={renameBusy}>
+            {renameBusy ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </form>
+    {/if}
+  </Dialog>
 
   <ConfirmDialog
     bind:open={confirmRemoveOpen}

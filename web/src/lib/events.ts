@@ -13,6 +13,7 @@ import type { TimelineEvent } from './types';
 import { format, t } from './i18n/t';
 import type { Locale } from './locale';
 import { messages } from './events.messages';
+import { humanizeStage } from './stages';
 
 /** Sentence-case an unknown kind so a new one reads as words, not as a column name. */
 function humanKind(kind: string): string {
@@ -29,7 +30,9 @@ export const KIND_LABEL: Record<string, (e: TimelineEvent, locale: Locale) => st
   follow_up_sent: (_e, locale) => t(messages, locale).followedUp,
   stage_set: (e, locale) => {
     const s = t(messages, locale);
-    return e.signal ? format(s.movedTo, { signal: e.signal }) : s.stageChanged;
+    // A stage_set's signal is a stage key, so it reads through the stage vocabulary —
+    // left raw it put `preparing` into a Russian sentence.
+    return e.signal ? format(s.movedTo, { stage: humanizeStage(e.signal, locale) }) : s.stageChanged;
   },
   interview_scheduled: (_e, locale) => t(messages, locale).interviewScheduled,
 };

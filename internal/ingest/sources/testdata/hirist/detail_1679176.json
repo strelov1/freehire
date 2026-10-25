@@ -1,0 +1,35 @@
+{
+ "data": {
+  "id": 1679176,
+  "title": "Hartford - Senior Director ",
+  "introText": "<p><b>Position Overview:</b><br/><br/>We are seeking a visionary and technically accomplished Sr. Director - Engineering to lead Full Stack engineering along with AI and Agentic AI platform teams at our The Hartford India.<br/><br/>This executive leadership role will be responsible for building and scaling global specialty engineering teams delivering enterprise-grade digital platforms, shared services, and AI-powered solutions, including agentic AI systems, across multiple business domains globally.<br/><br/>The ideal leader brings deep full-stack engineering expertise, a strong AI-first mindset, and hands-on experience leading AI and autonomous agent teams.<br/><br/>The role partners closely with U.S.-based Engineering, Architecture, Product, and AI leadership to embed AI into the software delivery lifecycle, improve developer productivity, and accelerate intelligent automation at scale.<br/><br/><b>Key Responsibilities:</b><br/><br/><b>Strategic Leadership, AI Vision & Platform Direction:</b><br/><br/>- Partner with U.S.-based engineering, platform, and AI leaders to align Global Specialty and AI delivery with enterprise technology and AI strategies.<br/><br/>- Define and own the Global Specialty Engineering and AI vision, including agentic AI architecture patterns, governance, and operating models.<br/><br/>- Establish a scalable India-based global specialty model integrating:<br/><br/>1. Full Stack Engineering (Java or .NET).<br/><br/>2. AI / ML Engineering.<br/><br/>3. Agentic AI & Autonomous Systems.<br/><br/>- Drive AI-first engineering strategies, embedding intelligence into customer-facing applications, internal platforms, and SDLC processes.<br/><br/>- Champion responsible AI, explainability, governance, and enterprise-grade AI controls.<br/><br/><b>Technology Delivery & Engineering Excellence:</b><br/><br/>- Own end-to-end delivery of enterprise platforms, AI-powered applications, APIs, and microservices.<br/><br/>- Ensure consistent execution across architecture, development, testing, deployment, support, and AI lifecycle management.<br/><br/>- Drive cloud-native architectures, event-driven systems, and API-first design integrated with AI services.<br/><br/>- Lead platform modernization, AI-driven re-engineering, and legacy transformation initiatives.<br/><br/>- Embed AI into application monitoring, incident management, testing, and code quality processes.<br/><br/><b>AI & Agentic AI Leadership (Core Accountability):</b><br/><br/>- Build, lead, and scale AI and Agentic AI engineering teams delivering:<br/><br/>1. Autonomous agents.<br/><br/>2. Workflow orchestration agents.<br/><br/>3. Multi-agent systems.<br/><br/>4. Decisioning and reasoning-based solutions.<br/><br/>- Oversee design and delivery of agentic AI systems integrated with enterprise applications, APIs, data platforms, and cloud services.<br/><br/>- Drive adoption of LLMs, RAG architectures, tool-using agents, and orchestration frameworks.<br/><br/>- Ensure AI solutions are:<br/><br/>1. Secure.<br/><br/>2. Scalable.<br/><br/>3. Auditable.<br/><br/>4. Aligned with enterprise risk and compliance standards.<br/><br/>- Lead AI platform enablement for use cases across product engineering, operations, developer productivity, and business automation.<br/><br/><b>People Leadership & Talent Strategy:</b><br/><br/>- Build, mentor, and retain high-performing global specialty engineers and AI professionals.<br/><br/>- Create strong leadership benches including Engineering Managers, Architects, Principal Engineers, and AI Lead roles.<br/><br/>- Develop structured talent paths for:<br/><br/>1. Full Stack Engineers.<br/><br/>2. AI / ML Engineers.<br/><br/>3. Agentic AI Engineers.<br/><br/>- Foster a culture of innovation, experimentation, accountability, and continuous learning.<br/><br/>- Promote cross-pollination between core engineering and AI teams.<br/><br/><b>Operational Excellence & Governance:</b><br/><br/>- Own delivery governance including capacity planning, budgeting, risk management, and AI governance processes.<br/><br/>- Lead effective incident and problem management, including AI system failures and model performance issues.<br/><br/>- Contribute to monthly operating reviews, AI scorecards, productivity dashboards, and executive metrics.<br/><br/>- Ensure adherence to enterprise security, compliance, data privacy, and responsible AI standards.<br/><br/><b>Stakeholder Engagement & Global Collaboration:</b><br/><br/>- Act as a strategic partner to global business, product, platform, and AI leadership.<br/><br/>- Serve as the primary bridge between India-based engineering & AI teams and global stakeholders.<br/><br/>- Drive transparency, alignment, and execution consistency across geographies.<br/><br/><b>Required Skills & Experience:</b><br/><br/>- 14 - 18 years of progressive experience in software engineering and senior technology leadership roles.<br/><br/>- Demonstrated experience leading large-scale Java Full Stack or .NET Full Stack engineering organizations in global environments.<br/><br/>- Proven experience building and managing AI and Agentic AI teams in enterprise settings.<br/><br/>- Experience scaling Global Capability Centres (GCCs) or shared engineering hubs.<br/><br/><b>Technical Expertise (Expert Level):</b><br/><br/>- Full Stack Engineering:<br/><br/>1. Java Track: Java, Spring Boot, Microservices, Angular / React, Kafka, event-driven systems.<br/><br/>2. NET Track: NET Core, ASP, Angular / React.<br/><br/>- Cloud & Platforms:<br/><br/>1. AWS (EKS, ECS, EC2, RDS, S3) or Azure.<br/><br/>2. Docker, Kubernetes.<br/><br/>3. API platforms and integration services.<br/><br/>- AI & Agentic AI (Mandatory):<br/><br/>1. Agentic AI frameworks and orchestration patterns.<br/><br/>2. LLMs, RAG architectures, prompt engineering.<br/><br/>3. Autonomous agents and tool-using AI systems.<br/><br/>4. AI governance, evaluation, and monitoring.<br/><br/>5. AI developer tools (Copilot, LLM-powered SDLC).<br/><br/><b>What We Offer:</b><br/><br/>- Highly collaborative, AI-led innovation environment.<br/><br/>- Competitive compensation (Max 2Cr) and comprehensive benefits.<br/><br/>- Continuous learning, global exposure, and leadership growth opportunities.</p>",
+  "min": 18,
+  "max": 20,
+  "minSal": 0,
+  "maxSal": 0,
+  "hideSal": 1,
+  "confidential": 0,
+  "workFromHome": 0,
+  "jobDetailUrl": "https://www.hirist.tech/j/hartford-senior-director-1679176",
+  "createdTimeMs": 1792385495193,
+  "locations": [
+   {
+    "id": 4,
+    "name": "Hyderabad"
+   },
+   {
+    "id": 35,
+    "name": "Telangana"
+   }
+  ],
+  "companyData": {
+   "companyName": "The Hartford"
+  },
+  "hasExpired": false,
+  "permanentlyRemoved": false,
+  "state": 1,
+  "status": 1,
+  "crawled": 1,
+  "ats": 1
+ }
+}

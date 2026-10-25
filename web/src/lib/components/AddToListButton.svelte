@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { Check, ListPlus, Plus } from '@lucide/svelte';
+  import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
@@ -27,6 +29,7 @@
   let error = $state<string | null>(null);
   let busyId = $state<number | null>(null);
 
+  let menu = $state<HTMLElement | null>(null);
   let creating = $state(false);
   let newName = $state('');
   let createBusy = $state(false);
@@ -47,6 +50,7 @@
       status = 'ready';
     } catch {
       status = 'error';
+      announce("Couldn't load your lists.", 'assertive');
     }
   }
 
@@ -75,6 +79,7 @@
     } catch (err) {
       membership = membership.map((x) => (x.id === m.id ? { ...x, in_list: wasIn } : x));
       error = err instanceof ApiError ? err.message : 'Could not update this list.';
+      announce(error, 'assertive');
     } finally {
       busyId = null;
     }
@@ -96,8 +101,15 @@
       await jobLists.addJob(list.id, jobSlug);
       membership = [{ id: list.id, name: list.name, in_list: true }, ...membership];
       creating = false;
+      announce(`Added to ${list.name}`);
+      // The form held focus and is gone; the new list's item is where it belongs now —
+      // unless the visitor moved on while the request ran, in which case focus stays put.
+      const focusWasHere = root?.contains(document.activeElement) ?? false;
+      await tick();
+      if (focusWasHere) menu?.querySelector<HTMLElement>('[role="menuitemcheckbox"]')?.focus();
     } catch (err) {
       error = err instanceof ApiError ? err.message : 'Could not create this list.';
+      announce(error, 'assertive');
     } finally {
       createBusy = false;
     }
@@ -132,12 +144,14 @@
   </button>
 
   {#if open}
-    <div
-      role="menu"
-      aria-label="Job lists"
-      {@attach menuNav({ onclose: () => (open = false) })}
-      class="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-border bg-card p-1.5 text-left shadow-lg"
-    >
+    <!-- The popover holds three things and only the middle one is the menu: a role="menu"
+         may contain menu items and nothing else, so the status lines sit above it (spoken
+         through announce(), not by the menu) and the "new list" form below it. The menu
+         itself mounts once the lists have loaded, so menuNav lands on the first list —
+         but only if focus is still in this control: a user who Tabbed on while the lists
+         loaded keeps their place. With no lists and the form open the menu has no items,
+         and an empty role="menu" is not rendered at all. -->
+    <div class="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-border bg-card p-1.5 text-left shadow-lg">
       {#if error}
         <p class="px-2 py-1 text-xs text-destructive">{error}</p>
       {/if}
@@ -145,69 +159,79 @@
         <p class="px-2 py-1.5 text-xs text-muted-foreground">Loading…</p>
       {:else if status === 'error'}
         <p class="px-2 py-1.5 text-xs text-muted-foreground">Couldn't load your lists.</p>
-      {:else}
+      {:else if status === 'ready'}
         {#if membership.length === 0}
           <p class="px-2 py-1.5 text-xs text-muted-foreground">No lists yet.</p>
-        {:else}
-          {#each membership as m (m.id)}
-            <button
-              type="button"
-              role="menuitemcheckbox"
-              aria-checked={m.in_list}
-              disabled={busyId === m.id}
-              onclick={() => toggle(m)}
-              class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-50"
-            >
-              <span
+        {/if}
+        {#if membership.length > 0 || !creating}
+          <div
+            role="menu"
+            aria-label="Job lists"
+            bind:this={menu}
+            {@attach menuNav({ onclose: () => (open = false), autofocus: root?.contains(document.activeElement) ?? false })}
+          >
+            {#each membership as m (m.id)}
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={m.in_list}
+                disabled={busyId === m.id}
+                onclick={() => toggle(m)}
+                class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-50"
+              >
+                <span
+                  class={[
+                    'flex size-4 shrink-0 items-center justify-center rounded border',
+                    m.in_list ? 'border-brand bg-brand text-brand-foreground' : 'border-border',
+                  ]}
+                >
+                  {#if m.in_list}<Check class="size-3" aria-hidden="true" />{/if}
+                </span>
+                <span class="min-w-0 flex-1 truncate">{m.name}</span>
+              </button>
+            {/each}
+            {#if !creating}
+              <button
+                type="button"
+                role="menuitem"
+                onclick={startCreate}
                 class={[
-                  'flex size-4 shrink-0 items-center justify-center rounded border',
-                  m.in_list ? 'border-brand bg-brand text-brand-foreground' : 'border-border',
+                  'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent',
+                  membership.length > 0 && 'mt-1 border-t border-border pt-1.5',
                 ]}
               >
-                {#if m.in_list}<Check class="size-3" aria-hidden="true" />{/if}
-              </span>
-              <span class="min-w-0 flex-1 truncate">{m.name}</span>
-            </button>
-          {/each}
-        {/if}
-        <div class="mt-1 border-t border-border pt-1">
-          {#if creating}
-            <form
-              class="flex items-center gap-1 px-1 py-1"
-              onsubmit={(e) => {
-                e.preventDefault();
-                void confirmCreate();
-              }}
-            >
-              <!-- Focused on mount: "New list" replaced the focused menuitem with this form,
-                   and without it a keyboard user's focus would fall to the page. -->
-              <input
-                {@attach (el) => el.focus()}
-                bind:value={newName}
-                placeholder="New list name"
-                aria-label="New list name"
-                maxlength={100}
-                class="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
-              />
-              <button
-                type="submit"
-                disabled={createBusy || !newName.trim()}
-                class="shrink-0 rounded-md px-1.5 py-1 text-xs font-medium text-brand disabled:opacity-50"
-              >
-                {createBusy ? '…' : 'Add'}
+                <Plus class="size-4" aria-hidden="true" /> New list
               </button>
-            </form>
-          {:else}
+            {/if}
+          </div>
+        {/if}
+        {#if creating}
+          <form
+            class="mt-1 flex items-center gap-1 border-t border-border px-1 pb-1 pt-2"
+            onsubmit={(e) => {
+              e.preventDefault();
+              void confirmCreate();
+            }}
+          >
+            <!-- Focused on mount: "New list" was replaced by this form, and without it a
+                 keyboard user's focus would fall to the page. -->
+            <input
+              {@attach (el) => el.focus()}
+              bind:value={newName}
+              placeholder="New list name"
+              aria-label="New list name"
+              maxlength={100}
+              class="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand"
+            />
             <button
-              type="button"
-              role="menuitem"
-              onclick={startCreate}
-              class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent"
+              type="submit"
+              disabled={createBusy || !newName.trim()}
+              class="shrink-0 rounded-md px-1.5 py-1 text-xs font-medium text-brand disabled:opacity-50"
             >
-              <Plus class="size-4" aria-hidden="true" /> New list
+              {createBusy ? '…' : 'Add'}
             </button>
-          {/if}
-        </div>
+          </form>
+        {/if}
       {/if}
     </div>
   {/if}

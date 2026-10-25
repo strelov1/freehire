@@ -69,6 +69,7 @@
   let offerSlug = $state('');
   const uid = $props.id();
   const offerCompanyId = `${uid}-offer-company`;
+  const offerFormId = `${uid}-offer-form`;
   let offerLinkedin = $state('');
   let offerFile = $state<FileList | null>(null);
   let offerBusy = $state(false);
@@ -225,13 +226,19 @@
 {:else if tab === 'offers'}
   <div class="mt-4 flex items-center justify-between">
     <p class="text-sm text-muted-foreground">{s.offers.lead}</p>
-    <Button variant="primary" size="sm" onclick={() => (offerOpen = !offerOpen)}>
+    <Button
+      variant="primary"
+      size="sm"
+      aria-expanded={offerOpen}
+      aria-controls={offerFormId}
+      onclick={() => (offerOpen = !offerOpen)}
+    >
       {s.offers.openForm}
     </Button>
   </div>
 
   {#if offerOpen}
-    <form onsubmit={submitOffer} class="mt-3 flex flex-col gap-3 rounded-lg border border-border p-4">
+    <form id={offerFormId} onsubmit={submitOffer} class="mt-3 flex flex-col gap-3 rounded-lg border border-border p-4">
       <div class="flex flex-col gap-1.5 text-sm">
         <label for={offerCompanyId} class="font-medium">{s.offers.companyLabel}</label>
         <CompanyPicker

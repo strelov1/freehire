@@ -11,6 +11,7 @@
   // checkable — every sentence about the candidate's experience traces to something they
   // themselves asserted — so it renders even when it is empty, saying so.
   import { Copy, Check, FileText, Loader2 } from '@lucide/svelte';
+  import { announce } from '#lib/announce.svelte.js';
   import { api, trackPlanRefusal } from '#lib/api.js';
   import type { CoverLetterView } from '#lib/cv.js';
 
@@ -47,6 +48,7 @@
       view = await api.getCoverLetter(cvId);
     } catch (e) {
       error = e instanceof Error ? e.message : 'Could not read the letter.';
+      announce(error, 'assertive');
     } finally {
       loading = false;
     }
@@ -80,6 +82,7 @@
         // the refusal — see trackPlanRefusal.
         trackPlanRefusal(res.status, body);
         error = body?.error ?? 'The letter could not be drafted.';
+        announce(error, 'assertive');
         return;
       }
       await readStream(res.body);
@@ -89,6 +92,7 @@
       // connection is not a lost letter. Saying "try again" would spend a second allowance on
       // work that may already be done.
       error = 'The connection dropped while writing. Your letter may still have been saved — reopen this tab to check.';
+      announce(error, 'assertive');
     } finally {
       drafting = false;
       stage = '';
@@ -133,8 +137,10 @@
       if (!d.done) stage = d.stage;
     } else if (name === 'letter') {
       view = data as CoverLetterView;
+      announce('Your cover letter is ready');
     } else if (name === 'stream_error') {
       error = (data as { error: string }).error;
+      announce(error, 'assertive');
     }
   }
 
@@ -142,6 +148,7 @@
     if (!letter?.body) return;
     await navigator.clipboard.writeText(letter.body);
     copied = true;
+    announce('Cover letter copied to the clipboard');
     setTimeout(() => (copied = false), 1500);
   }
 

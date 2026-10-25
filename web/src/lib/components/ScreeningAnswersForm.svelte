@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Answers } from '#lib/generated/contracts.js';
+  import { announce } from '#lib/announce.svelte.js';
   import { api } from '#lib/api.js';
   import { Button, Input } from '#lib/ui/index.js';
   import { messages } from './ScreeningAnswersForm.messages';
@@ -113,9 +114,11 @@
 
       await api.updateScreeningAnswers(patch);
       note = s.saved;
+      announce(s.saved);
       onSaved?.();
     } catch (e) {
       error = e instanceof Error ? e.message : s.saveFailed;
+      announce(error, 'assertive');
       // The save never landed — these values are still unsaved and must stay protected.
       dirty = true;
     } finally {

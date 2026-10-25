@@ -120,7 +120,7 @@
             <p class="text-2xl font-semibold tabular-nums">72</p>
             <p class="text-[11px] text-muted-foreground">worth applying</p>
             <div class="mt-3 space-y-1.5">
-              <div class="h-1.5 w-full rounded bg-emerald-500/40"></div>
+              <div class="h-1.5 w-full rounded bg-success/40"></div>
               <div class="h-1.5 w-2/3 rounded bg-warning/40"></div>
               <div class="h-1.5 w-1/3 rounded bg-destructive/40"></div>
             </div>
@@ -153,7 +153,7 @@
             {#each s.sample as item (item)}
               <span
                 class="rounded-md border px-2 py-0.5 font-mono text-xs {s.key === 'have'
-                  ? 'border-emerald-400/50 text-emerald-700 dark:text-emerald-400'
+                  ? 'border-success-strong/50 text-success-strong'
                   : 'border-warning/50 text-warning-strong'}"
               >
                 {item}

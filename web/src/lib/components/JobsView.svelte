@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { ArrowRight, ChevronDown, Layers, Map as MapIcon, Sparkles } from '@lucide/svelte';
+  import { ArrowRight, ChevronDown, Layers, Map as MapIcon, Target } from '@lucide/svelte';
   import { browser } from '$app/env';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -842,7 +842,7 @@
       >
         <div class="flex min-w-0 flex-1 items-start gap-3">
           <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-muted text-brand-strong" aria-hidden="true">
-            <Sparkles class="size-5" />
+            <Target class="size-5" />
           </span>
           <div class="min-w-0">
             <p class="font-semibold text-foreground">See your best matches first</p>

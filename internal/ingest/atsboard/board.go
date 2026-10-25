@@ -478,6 +478,15 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"phenompro.com", "phenom", modeTenantHost},
 	{"phenompeople.net", "phenom", modeTenantHost},
 	{"phenompeople.com", "phenom", modeTenantHost},
+	// Darwinbox career portals: <tenant>.darwinbox.in or <tenant>.darwinbox.com, the TLD being the
+	// tenant's data region, so the board is the whole host the adapter posts its listing to. The
+	// same host is also the tenant's employee HRMS login, hence the "careers" segment below.
+	{"darwinbox.in", "darwinbox", modeTenantHost},
+	{"darwinbox.com", "darwinbox", modeTenantHost},
+	// greytHR Hire: <tenant>.greythr.com/hire/jobs/, the board being the whole host the adapter
+	// reads /hire/api/ on. The same host is the tenant's payroll/HRMS login, hence the "hire"
+	// segment below.
+	{"greythr.com", "greythr", modeTenantHost},
 
 	// --- keyedsegment: board = the shaped segment after a fixed key segment ---
 	{"workstream.us", "workstream", modeKeyedSegment},
@@ -604,6 +613,12 @@ var tenantHostPostingSegments = map[string]string{
 	"phenompro.com":    "job",
 	"phenompeople.net": "job",
 	"phenompeople.com": "job",
+	// Every Darwinbox portal URL carries it (/ms/candidatev2/main/careers/jobDetails/<id>,
+	// /ms/candidate/careers/<id>); the tenant's HRMS pages on the same host do not.
+	"darwinbox.in":  "careers",
+	"darwinbox.com": "careers",
+	// Every greytHR Hire URL sits under /hire/ (/hire/jobs/, /hire/jobs/<slug>); the HRMS does not.
+	"greythr.com": "hire",
 }
 
 // keyedSegmentBoards holds, per modeKeyedSegment host entry, the key segment the board follows
@@ -1420,6 +1435,11 @@ var platformLabelsByApex = map[string][]string{
 	"homerun.co":     {"www", "try", "404", "feed", "static", "cdn"},
 	"easycruit.com":  {"www"},         // Visma's EasyCruit product site
 	"inhroffice.com": {"www", "link"}, // link.inhroffice.com is the vendor's link shortener
+	// Darwinbox's marketing site, its content hub and its events site.
+	"darwinbox.com": {"www", "explore", "lighthouse"},
+	"darwinbox.in":  {"www"},
+	// greytHR's marketing site, community forum, help centres, status page and campaign pages.
+	"greythr.com": {"www", "community", "admin-help", "ess-help", "status", "campaign"},
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —

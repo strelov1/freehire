@@ -1,0 +1,32 @@
+{
+ "cat_extfield": {
+  "designation": "6",
+  "location": "1",
+  "department": "2",
+  "zone": "10",
+  "costcentrecode": "14",
+  "costcentre": "5",
+  "corporate": "8",
+  "worklocation": "16"
+ },
+ "cat": {
+  "6": "Designation",
+  "1": "Location",
+  "2": "Department",
+  "10": "Zone",
+  "14": "Cost Centre Code",
+  "5": "Cost Centre",
+  "8": "CORPORATE",
+  "16": "Work Location"
+ },
+ "value": {
+  "4": {
+   "cat_id": "1",
+   "name": "BANGALORE"
+  },
+  "519": {
+   "cat_id": "1",
+   "name": "KARAIKUDI"
+  }
+ }
+}

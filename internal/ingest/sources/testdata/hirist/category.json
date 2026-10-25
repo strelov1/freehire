@@ -1,0 +1,162 @@
+{
+ "data": [
+  {
+   "id": 1679176,
+   "title": "Hartford - Senior Director",
+   "min": 18,
+   "max": 20,
+   "jobdesignation": "Senior Director",
+   "status": 1,
+   "femaleCandidate": 0,
+   "differentlyAbled": 0,
+   "exDefence": 0,
+   "workFromHome": 0,
+   "femaleBackWorkForce": 0,
+   "confidential": 0,
+   "premium": 1,
+   "brandedJd": 0,
+   "createdTimeMs": 1792385495193,
+   "createdTime": 1792348200000,
+   "tagIdString": "2640 898 2472 240195 5 7 1612",
+   "locations": [
+    {
+     "id": 4,
+     "name": "Hyderabad"
+    },
+    {
+     "id": 35,
+     "name": "Telangana"
+    }
+   ],
+   "createdByAlias": "Hyderabad/Telangana",
+   "assessmentFlags": 0,
+   "minSal": 0,
+   "maxSal": 0,
+   "hideSal": 1,
+   "brandJobFlag": 2,
+   "companyData": {
+    "companyName": "The Hartford"
+   },
+   "refCode": "cl_br_prm",
+   "latitude": null,
+   "longitude": null,
+   "refJobId": 1679176,
+   "location": [
+    {
+     "id": 4,
+     "name": "Hyderabad"
+    },
+    {
+     "id": 35,
+     "name": "Telangana"
+    }
+   ],
+   "minRatingAb": 3.8
+  },
+  {
+   "id": 1679150,
+   "title": "Manager/Senior Manager - Full Stack & Generative AI",
+   "min": 4,
+   "max": 12,
+   "jobdesignation": "Manager/Senior Manager",
+   "status": 1,
+   "femaleCandidate": 0,
+   "differentlyAbled": 0,
+   "exDefence": 0,
+   "workFromHome": 0,
+   "femaleBackWorkForce": 0,
+   "confidential": 0,
+   "premium": 1,
+   "brandedJd": 1,
+   "createdTimeMs": 1792238292162,
+   "createdTime": 1792175400000,
+   "tagIdString": "9 135480 1612 50 1895 2043 131480 13059 26 2510",
+   "locations": [
+    {
+     "id": 37,
+     "name": "Gurgaon/Gurugram"
+    },
+    {
+     "id": 3,
+     "name": "Bangalore"
+    }
+   ],
+   "createdByAlias": "Gurgaon/Gurugram/Bangalore",
+   "assessmentFlags": 1,
+   "minSal": 0,
+   "maxSal": 0,
+   "hideSal": 1,
+   "brandJobFlag": 2,
+   "companyData": {
+    "companyName": "EXL Services"
+   },
+   "refCode": "cl_br_prm",
+   "latitude": null,
+   "longitude": null,
+   "refJobId": 1679150,
+   "location": [
+    {
+     "id": 37,
+     "name": "Gurgaon/Gurugram"
+    },
+    {
+     "id": 3,
+     "name": "Bangalore"
+    }
+   ],
+   "minRatingAb": 3.8
+  },
+  {
+   "id": 1678906,
+   "title": "PTC Software - Technical Lead - Full Stack Development",
+   "min": 8,
+   "max": 12,
+   "jobdesignation": "Technical Lead",
+   "status": 1,
+   "femaleCandidate": 0,
+   "differentlyAbled": 0,
+   "exDefence": 0,
+   "workFromHome": 0,
+   "femaleBackWorkForce": 0,
+   "confidential": 0,
+   "premium": 1,
+   "brandedJd": 1,
+   "createdTimeMs": 1792133297043,
+   "createdTime": 1792089000000,
+   "tagIdString": "1612 2349 58 2496 2267 5 2850 115882 1372 2510 2944",
+   "locations": [
+    {
+     "id": 7,
+     "name": "Pune"
+    }
+   ],
+   "createdByAlias": "Pune",
+   "assessmentFlags": 0,
+   "minSal": 0,
+   "maxSal": 0,
+   "hideSal": 1,
+   "brandJobFlag": 2,
+   "companyData": {
+    "companyName": "PTC"
+   },
+   "refCode": "cl_br_prm",
+   "latitude": null,
+   "longitude": null,
+   "refJobId": 1678906,
+   "location": [
+    {
+     "id": 7,
+     "name": "Pune"
+    }
+   ],
+   "minRatingAb": 3.8
+  }
+ ],
+ "page": "0",
+ "limit": 3,
+ "count": 3,
+ "totalJobs": 2490,
+ "count1Year": 7044,
+ "totalPages": 830,
+ "hasMore": true
+}

@@ -43,32 +43,42 @@
   // in the root layout's server load, so the server leaves the strip out of the markup.
   const agentConnected = $derived(currentUser()?.agent_connected ?? false);
 
-  const agents = [
+  // `logo` overrides the proxy where it resolves the wrong mark: by name and domain it
+  // returns xAI's wordmark for Grok, so Grok Bot ships its own round mark.
+  const agents: { name: string; domain: string; logo?: string }[] = [
     { name: 'Claude', domain: 'claude.ai' },
     { name: 'ChatGPT', domain: 'chatgpt.com' },
     { name: 'Cursor', domain: 'cursor.com' },
+    { name: 'Grok Bot', domain: 'grok.com', logo: '/brands/grok.png' },
   ];
 </script>
 
 {#if !inAccountArea && !agentConnected && !cliBannerDismissed()}
   <div data-cli-banner class="border-b border-border bg-brand/5">
     <div class="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2 text-sm">
-      <!-- The names live in the stack's label, so the sentence can stay short. -->
-      <span role="img" aria-label="Claude, ChatGPT and Cursor" class="flex shrink-0 items-center">
-        {#each agents as agent, i (agent.domain)}
-          <span
-            class={['inline-flex rounded-full ring-2 ring-background', i > 0 && '-ml-1']}
-            style:z-index={agents.length - i}
-          >
-            <EntityLogo name={agent.name} src={sourceLogoUrl(agent.name, agent.domain) ?? undefined} size="xs" />
-          </span>
-        {/each}
-      </span>
-
       <!-- Wraps to a second line on a phone rather than truncating the one sentence that
-           says what the strip is for. -->
+           says what the strip is for. The agents' marks follow the sentence that names
+           them; their names live in the stack's label, so the sentence can stay short. -->
       <p class="line-clamp-2 min-w-0 flex-1 leading-snug text-muted-foreground">
         <span class="font-medium text-foreground">Search jobs inside your AI agent.</span>
+        <span
+          role="img"
+          aria-label="Claude, ChatGPT, Cursor and Grok"
+          class="mx-1 inline-flex items-center align-middle"
+        >
+          {#each agents as agent, i (agent.domain)}
+            <span
+              class={['inline-flex rounded-full ring-2 ring-background', i > 0 && '-ml-1']}
+              style:z-index={agents.length - i}
+            >
+              <EntityLogo
+                name={agent.name}
+                src={agent.logo ?? sourceLogoUrl(agent.name, agent.domain) ?? undefined}
+                size="xs"
+              />
+            </span>
+          {/each}
+        </span>
         <span class="hidden md:inline">Connect over MCP — free, no account needed to search.</span>
       </p>
 

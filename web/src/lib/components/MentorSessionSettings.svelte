@@ -4,6 +4,7 @@
   // once. Saved through the same whole-object PUT the profile form uses:
   // `profileInputFromProfile` reads every other field back from the stored profile so
   // this save can never silently reset something this screen does not show.
+  import { announce } from '#lib/announce.svelte.js';
   import { api } from '#lib/api.js';
   import { profileInputFromProfile } from '#lib/mentorship.js';
   import { errorMessage } from '#lib/utils.js';
@@ -26,8 +27,10 @@
         timezone,
         session_minutes: sessionMinutes,
       });
+      announce('Session settings saved');
     } catch (e) {
       error = errorMessage(e, 'Could not save your session settings.');
+      announce(error, 'assertive');
     } finally {
       saving = false;
     }

@@ -6,9 +6,9 @@ import (
 	"golang.org/x/net/html"
 )
 
-// pageTitle returns the document's <title> text, or "". Three probers read it: opencats for
-// the portal's own name, and jazzhr and trakstar because their platforms publish the employer
-// nowhere else the prober looks.
+// pageTitle returns the document's <title> text, or "". Five probers read it: opencats for
+// the portal's own name, and jazzhr, trakstar, darwinbox and pyjamahr because their platforms
+// publish the employer nowhere else the prober looks.
 func pageTitle(root *html.Node) string {
 	var title string
 	var walk func(*html.Node)
@@ -29,7 +29,8 @@ func pageTitle(root *html.Node) string {
 }
 
 // metaProperty returns the content of <meta property="..."> (e.g. og:site_name), or "".
-// Teamtailor reads it: the platform names the employer there and nowhere else on the listing.
+// Teamtailor and Zoho Recruit read it: the platform names the employer there and nowhere else
+// on the listing.
 func metaProperty(root *html.Node, property string) string {
 	var content string
 	var walk func(*html.Node)

@@ -203,13 +203,16 @@
             aria-controls={selectedKey === day.key ? 'calendar-day-panel' : undefined}
             aria-label={cellLabel(day)}
             class="flex min-h-16 flex-col items-start gap-1 rounded-md border p-1.5 text-left transition-colors
-                   {day.inMonth ? '' : 'opacity-45'}
                    {selectedKey === day.key ? 'border-primary bg-accent' : 'hover:bg-accent'}"
           >
+            <!-- Out-of-month days read as secondary by colour and weight, not opacity:
+                 dimming the whole cell took muted-foreground to ~2.2:1 on the card. -->
             <span
               class="text-xs {day.isToday
                 ? 'flex h-5 w-5 items-center justify-center rounded-full bg-primary font-medium text-primary-foreground'
-                : 'text-muted-foreground'}">{day.dayOfMonth}</span
+                : day.inMonth
+                  ? 'font-medium text-foreground'
+                  : 'text-muted-foreground'}">{day.dayOfMonth}</span
             >
             <span class="flex flex-wrap items-center gap-0.5">
               {#each day.interviews as iv (iv.id)}

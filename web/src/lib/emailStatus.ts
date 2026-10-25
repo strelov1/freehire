@@ -51,9 +51,9 @@ const prose = defineMessages(
 const STATUS_CLASSES: Record<EmailStatusSignal, string> = {
   acknowledgement: 'border-border text-muted-foreground',
   screening: 'border-blue-400/40 text-blue-600 dark:text-blue-400',
-  interview_invitation: 'border-emerald-400/50 text-emerald-700 dark:text-emerald-400',
+  interview_invitation: 'border-success-strong/50 text-success-strong',
   assessment: 'border-indigo-400/40 text-indigo-600 dark:text-indigo-400',
-  offer: 'border-emerald-500/60 font-semibold text-emerald-700 dark:text-emerald-300',
+  offer: 'border-success/60 font-semibold text-success-strong',
   rejection: 'border-destructive/40 text-destructive',
   info_request: 'border-warning/50 text-warning-strong',
   incomplete_application: 'border-orange-400/50 text-orange-700 dark:text-orange-400',
@@ -95,20 +95,17 @@ export function statusClass(signal?: string): string {
  * `''` also for an unclassified message, for `other`, and for a signal from a server ahead
  * of this build: silence is the honest answer where we have no meaning to report.
  *
- * `stage` itself (`humanizeStage`) stays English in every locale — the pipeline-stage
- * vocabulary is generated from `internal/userjob` and shared with the tracking board and
- * funnel; translating it is that surface's own change, not this one's. Because of that,
- * the "chip already says it" check below compares against the ENGLISH label on purpose:
- * whether `Interview` the signal and `Interview` the stage name are the same concept is a
- * fact about the vocabulary, not about which language is on screen — comparing a Russian
- * label to an English stage name would never match, and every translated chip would grow
- * a redundant-looking `→ Interview` it does not need.
+ * The stage name is shown in `locale`, like the stage badge beside it. The "chip already
+ * says it" check still compares the ENGLISH labels on purpose: whether `Interview` the
+ * signal and `Interview` the stage are the same concept is a fact about the vocabulary,
+ * not about which language is on screen — comparing a translated chip to a translated
+ * stage would hang the answer on two translators happening to pick the same word.
  */
 export function stageImplication(signal?: string, locale: Locale = 'en'): string {
   if (!signal) return '';
   const implication = SIGNAL_STAGE[signal as EmailStatusSignal];
   if (!implication) return '';
   if (!implication.advances) return t(prose, locale).doesNotMoveStage;
-  const stage = humanizeStage(implication.stage);
-  return statusLabel(signal) === stage ? '' : `→ ${stage}`;
+  if (statusLabel(signal) === humanizeStage(implication.stage)) return '';
+  return `→ ${humanizeStage(implication.stage, locale)}`;
 }

@@ -754,29 +754,43 @@ func limitedCovetoGetter(c covetoGetter) covetoGetter {
 	return limitedCoveto{covetoGetter: c, pages: concurrencyLimitedHTMLGetter{inner: c, sem: make(chan struct{}, covetoMaxInFlight)}}
 }
 
-// Homerun serves every tenant's vacancy pages from one origin, its own *.homerun.co hosts and
-// the employer domains that point at it alike. Measured 2026-10-25, a sweep of 2,499 pages at 4
-// in flight drew 392 refusals (429) once it had run for a few minutes, while short bursts of 24
-// at 4 all answered — so it is the sustained provider-wide rate that is refused, and the whole
-// provider's page requests share 2 slots. A refused page costs only the vacancy's address (the
-// feed carries the body), but it is never asked again once the vacancy is stored. The feed
-// requests, one per board, are not capped.
-const homerunMaxInFlight = 2
+// Homerun answers every tenant's feed AND vacancy pages from one AWS origin (feed.homerun.co, its
+// own *.homerun.co hosts and the employer domains that point at it), and it refuses by RATE, not
+// by concurrency. Measured 2026-10-25: a harvest probing 893 feeds at 4 in flight from fsn drew
+// 429s within 8 seconds and then a 403 on every request from that address for over an hour, while
+// the same 874 feeds at 4 in flight from a laptop (~0.5s round trips, so ~8/s) all answered; a
+// sweep of 2,499 vacancy pages at 4 in flight drew 392 refusals once it had run a few minutes.
+// So every request the adapter makes, feed and page alike, draws on one provider-wide budget of 2
+// a second: a first crawl of ~500 feeds and ~2,500 pages is ~25 minutes, and a refresh run, which
+// only reads the feeds and the few new pages, a few minutes.
+const (
+	homerunRequestInterval = 500 * time.Millisecond
+	homerunRequestBurst    = 2
+)
 
-// limitedHomerun routes Homerun's vacancy-page requests through one shared semaphore and passes
-// its feed requests through untouched.
-type limitedHomerun struct {
+// pacedHomerun routes both of Homerun's request kinds through one shared limiter.
+type pacedHomerun struct {
 	homerunGetter
-	pages HTMLGetter
+	limiter waiter
 }
 
-func (g limitedHomerun) GetHTML(ctx context.Context, url string) (*html.Node, error) {
-	return g.pages.GetHTML(ctx, url)
+func (g pacedHomerun) GetXML(ctx context.Context, url string, v any) error {
+	if err := g.limiter.Wait(ctx); err != nil {
+		return err
+	}
+	return g.homerunGetter.GetXML(ctx, url, v)
 }
 
-// limitedHomerunGetter wraps a getter with a fresh semaphore shared across one registry build.
-func limitedHomerunGetter(c homerunGetter) homerunGetter {
-	return limitedHomerun{homerunGetter: c, pages: concurrencyLimitedHTMLGetter{inner: c, sem: make(chan struct{}, homerunMaxInFlight)}}
+func (g pacedHomerun) GetHTML(ctx context.Context, url string) (*html.Node, error) {
+	if err := g.limiter.Wait(ctx); err != nil {
+		return nil, err
+	}
+	return g.homerunGetter.GetHTML(ctx, url)
+}
+
+// pacedHomerunGetter wraps a getter with a fresh limiter shared across one registry build.
+func pacedHomerunGetter(c homerunGetter) homerunGetter {
+	return pacedHomerun{homerunGetter: c, limiter: rate.NewLimiter(rate.Every(homerunRequestInterval), homerunRequestBurst)}
 }
 
 // helixjobs.com serves every iid's list and posting pages from one origin — 590 iids and 25,021
