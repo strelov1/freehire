@@ -1,0 +1,187 @@
+## ADDED Requirements
+
+### Requirement: Opt-in buddy membership
+The system SHALL let a signed-in account join and leave the buddy network explicitly. An account that has not joined SHALL NOT appear in any buddy list, feed or search, and SHALL NOT be able to read buddy lists, the feed or other members' profiles.
+
+#### Scenario: Joining creates a membership with a handle
+- **WHEN** a signed-in account that is not a member joins
+- **THEN** the system creates a membership with a newly minted anonymous buddy handle and the account can read similar members and the feed
+
+#### Scenario: Non-member is refused buddy reads
+- **WHEN** a signed-in account that has not joined requests similar members, the feed or a buddy profile
+- **THEN** the system responds 403 and returns no member data
+
+#### Scenario: Leaving hides the member and closes conversations
+- **WHEN** a member leaves the network
+- **THEN** the member no longer appears in any other member's similar list or feed, and every conversation they are part of becomes closed
+
+#### Scenario: Rejoining keeps the handle
+- **WHEN** a member who left joins again
+- **THEN** the membership is restored with the same buddy handle it had before
+
+#### Scenario: Unauthenticated access is refused
+- **WHEN** a request without a session reaches any buddy endpoint
+- **THEN** the system responds 401
+
+### Requirement: Anonymous buddy profile
+A buddy profile SHALL publish only values a dictionary resolved, numbers or dates, plus role titles verbatim, using the same projection as the Talent Network card. It SHALL NOT include the account's name, email, username, employer names, or any free text from the CV. The buddy handle SHALL be distinct from the account's Talent Network handle and username. Buddy pages SHALL NOT be listed in any sitemap and SHALL be marked non-indexable.
+
+#### Scenario: Card carries no free text
+- **WHEN** a member whose CV summary and role highlights name their employer is projected into a buddy card
+- **THEN** the card contains none of the summary text, the highlights text or the employer name
+
+#### Scenario: Handle differs from Talent Network handle
+- **WHEN** an account is both a Talent Network member and a buddy member
+- **THEN** its buddy handle is not equal to its Talent Network handle
+
+#### Scenario: Member without a CV
+- **WHEN** an account with no structured CV joins
+- **THEN** the membership is created with an empty card and the profile response says the card is empty
+
+### Requirement: Similar members ranking
+The system SHALL list other active members ranked by a similarity score that adds points for the same category as the viewer, the same country, the same region, and each company both members applied to within the last 90 days. The list SHALL exclude the viewer, members who left, and any member either side has blocked. Each entry SHALL show the shared companies.
+
+#### Scenario: Closer member ranks first
+- **WHEN** member A shares category, country and two applied companies with the viewer, and member B shares only the category
+- **THEN** A is listed before B
+
+#### Scenario: Members with no overlap still appear
+- **WHEN** a member shares nothing with the viewer
+- **THEN** the member still appears, after every member with a positive score
+
+#### Scenario: Blocked member is excluded both ways
+- **WHEN** the viewer has blocked member C, or C has blocked the viewer
+- **THEN** C does not appear in the viewer's similar list and the viewer does not appear in C's
+
+#### Scenario: Old applications do not count
+- **WHEN** the only company both members applied to was applied to more than 90 days ago by one of them
+- **THEN** that company adds no points and is not shown as shared
+
+### Requirement: Buddy feed of applications and stage moves
+The system SHALL show members a feed of other active members' application events: an application, and a move into the interview or offer stage. Events for rejected, withdrawn, expired or accepted stages SHALL NOT appear. Each feed entry SHALL show the author's buddy card summary, the company, the job title when the posting still exists, the event type and the day it happened (no time of day). The feed SHALL offer a "similar" order (by the author's similarity to the viewer, then recency) and an "all" order (recency). The viewer's own events and events of members either side has blocked SHALL NOT appear.
+
+#### Scenario: Application appears in the feed
+- **WHEN** an active member applies to a job
+- **THEN** another member's "all" feed contains an entry for that company with the type "applied" and the day only
+
+#### Scenario: Interview move appears
+- **WHEN** an active member's application moves to the interview stage
+- **THEN** the feed contains an entry with the type "interview" for that company
+
+#### Scenario: Rejection never appears
+- **WHEN** a member's application moves to the rejected stage
+- **THEN** no feed entry is produced for that move
+
+#### Scenario: Events from before joining are included
+- **WHEN** a member joins after having applied to jobs
+- **THEN** their earlier applications that are not hidden appear in the feed
+
+#### Scenario: Left member disappears from the feed
+- **WHEN** a member leaves
+- **THEN** none of their events appear in any feed
+
+### Requirement: Per-application feed visibility
+Every application SHALL be shown in the buddy feed by default. A member SHALL be able to hide a single application from the feed and show it again. Hiding SHALL remove all of that application's events from every feed immediately.
+
+#### Scenario: Hiding removes the entries
+- **WHEN** a member hides their application to a job
+- **THEN** no feed contains any event of that application
+
+#### Scenario: Showing again restores the entries
+- **WHEN** the member shows the application again
+- **THEN** its events appear in the feed again
+
+### Requirement: Invitations
+A member SHALL be able to invite another active member by sending a first message of 1 to 500 characters. There SHALL be at most one conversation per pair of members. A member SHALL be able to send at most 10 invitations per rolling 24 hours. The recipient SHALL be able to accept or decline. A declined invitation SHALL NOT notify the sender; the sender SHALL see the invitation as unanswered.
+
+#### Scenario: Invitation creates a pending conversation
+- **WHEN** member A invites member B with a message
+- **THEN** a pending conversation exists between A and B holding that message, and B sees it as an incoming invitation
+
+#### Scenario: Second invitation to the same member is refused
+- **WHEN** A invites B while any conversation between them already exists
+- **THEN** the system responds 409 and creates nothing
+
+#### Scenario: Daily invitation limit
+- **WHEN** A has sent 10 invitations in the last 24 hours and sends another
+- **THEN** the system responds 429 with a message saying when the next invitation is possible
+
+#### Scenario: Empty or oversized message is refused
+- **WHEN** the invitation message is empty or longer than 500 characters
+- **THEN** the system responds 400
+
+#### Scenario: Inviting a non-member, a left member or a blocking member is refused
+- **WHEN** A invites an account that is not an active member, or that has blocked A, or that A has blocked
+- **THEN** the system responds 403 and creates nothing
+
+#### Scenario: Accepting opens the chat
+- **WHEN** B accepts A's invitation
+- **THEN** the conversation becomes open and both can send messages
+
+#### Scenario: Declining is silent
+- **WHEN** B declines A's invitation
+- **THEN** the conversation becomes declined, A receives no notification, and A sees the invitation as unanswered
+
+### Requirement: In-app chat
+Members of an open conversation SHALL be able to send text messages of 1 to 4000 characters and read the conversation's messages in order. Only the two members SHALL be able to read a conversation. Sending into a pending (by the inviter), declined or closed conversation SHALL be refused. The system SHALL track per member which messages they have read and report unread counts per conversation.
+
+#### Scenario: Message is delivered
+- **WHEN** A sends a message in an open conversation with B
+- **THEN** B's next read of the conversation includes the message and B's unread count for it increases by one
+
+#### Scenario: Outsider cannot read
+- **WHEN** a third member requests the messages of A and B's conversation
+- **THEN** the system responds 404
+
+#### Scenario: Inviter cannot send before acceptance
+- **WHEN** A sends a second message while the invitation is still pending
+- **THEN** the system responds 409
+
+#### Scenario: Reading marks messages read
+- **WHEN** B reads the conversation
+- **THEN** B's unread count for it becomes zero
+
+#### Scenario: New messages since a cursor
+- **WHEN** the client asks for messages after a given message id
+- **THEN** only newer messages are returned, oldest first
+
+### Requirement: Block and report
+A member SHALL be able to block the other member of any conversation, and to report a conversation with a reason from a closed list and an optional note. A block SHALL close the conversation permanently and hide the two members from each other in lists, feeds and invitations. A report SHALL be visible to moderators together with the reported conversation's messages.
+
+#### Scenario: Block closes and hides
+- **WHEN** A blocks B
+- **THEN** their conversation is closed, neither can send into it, neither appears in the other's similar list or feed, and neither can invite the other
+
+#### Scenario: Report reaches moderation
+- **WHEN** A reports the conversation with B
+- **THEN** a moderator listing buddy reports sees the report, its reason and the conversation's messages
+
+#### Scenario: Non-moderator cannot list reports
+- **WHEN** an account without the moderator role lists buddy reports
+- **THEN** the system responds 403
+
+### Requirement: Unread message notifications
+A worker SHALL notify a member about a conversation that has a message from the other member that has stayed unread for at least 5 minutes, at most once per conversation until the member reads it, over the member's enabled notification channels. A pending invitation SHALL be notified the same way. A conversation that is declined or closed SHALL NOT be notified.
+
+#### Scenario: One notification for many messages
+- **WHEN** B has three unread messages from A in one conversation, the oldest older than 5 minutes, and the worker runs twice
+- **THEN** B receives exactly one notification for that conversation
+
+#### Scenario: Recent messages wait
+- **WHEN** B's only unread message from A is 2 minutes old
+- **THEN** the worker sends nothing for it on this run
+
+#### Scenario: Notified again after reading and a new message
+- **WHEN** B reads the conversation and later a new message from A stays unread for 5 minutes
+- **THEN** the worker notifies B again
+
+#### Scenario: Notification carries no message text
+- **WHEN** a notification is sent
+- **THEN** it names neither the sender's account nor the message body, and links to the conversation
+
+### Requirement: Account deletion removes buddy data
+Deleting an account SHALL delete its membership, its conversations, all messages in them, its blocks and its hidden-application marks.
+
+#### Scenario: Deleted account's conversation is gone
+- **WHEN** A deletes their account
+- **THEN** B no longer sees the conversation with A or any of its messages
