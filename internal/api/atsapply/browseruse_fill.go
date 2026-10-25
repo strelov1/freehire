@@ -17,7 +17,8 @@ import (
 // browserUseProviders are the ATS platforms this fallback executes for — the ones whose
 // schema-only Reconcile (mergedFromAPIOnly) already produces a fully-resolvable Plan
 // today, but which fillProviders excludes because no chromedp DOM-fill path exists for
-// their live page. Greenhouse is deliberately absent: it already has a fill path.
+// their live page — and, since 2026-10-25, Greenhouse, which has one (see fillProviders for
+// why it no longer submits through it).
 // White-label (unrecognized-layout) postings are absent too, for a structural reason, not
 // a policy one — see openspec/changes/add-browseruse-atsapply-fallback/design.md: there
 // is no MergedField schema to build a Plan from when chromedp's own DOM scan failed, so
@@ -33,6 +34,12 @@ import (
 var browserUseProviders = map[string]bool{
 	"ashby":    true,
 	"workable": true,
+	// Greenhouse, like Lever below, has a working Chrome path and is routed here anyway: that
+	// Chrome submitted from this host's own address and lost the invisible reCAPTCHA as often
+	// as not, while the cloud agent runs behind residential proxies and solves it. Its DOM is
+	// still scanned by this package first, so a field the API never declares (`country`)
+	// reaches the plan the agent is handed.
+	"greenhouse": true,
 	// Lever is here for a different reason than the other two: it HAS a working fill
 	// path, and that path mostly cannot finish. Its forms carry an invisible hCaptcha —
 	// 10 of 12 live postings sampled on 2026-09-10 — and this package's own Chrome

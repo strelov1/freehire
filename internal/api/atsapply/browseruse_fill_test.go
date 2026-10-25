@@ -193,7 +193,9 @@ func TestBrowserUseEligible(t *testing.T) {
 	}{
 		{"ashby with no file field", "ashby", Plan{Fields: []ResolvedField{{ID: "email", Kind: "text"}}}, true},
 		{"workable with no file field", "workable", Plan{}, true},
-		{"greenhouse is never eligible", "greenhouse", Plan{}, false},
+		// Greenhouse moved here on 2026-10-25: its own Chrome submitted from this host's
+		// address and lost the invisible reCAPTCHA as often as not. See browserUseProviders.
+		{"greenhouse, whose own Chrome exposed the host and lost the captcha", "greenhouse", Plan{}, true},
 		// Lever moved here on 2026-09-10: it has a working fill path that loses the
 		// invisible-hCaptcha coin toss seven attempts in eight, and the cloud browser
 		// solves supported captchas itself. See browserUseProviders.

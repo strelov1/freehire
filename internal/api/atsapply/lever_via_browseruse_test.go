@@ -38,3 +38,27 @@ func TestCloudAgentTargetIsUnchangedWhereTheFormLivesOnThePosting(t *testing.T) 
 		t.Errorf("agentTargetURL = %q, want it unchanged", got)
 	}
 }
+
+// Greenhouse is sent by the cloud agent too: this host's own Chrome submitted every
+// candidate's application from the host's address, and lost the invisible reCAPTCHA as
+// often as it passed it.
+func TestGreenhouseGoesThroughTheCloudAgent(t *testing.T) {
+	if fillProviders["greenhouse"] {
+		t.Error("greenhouse is still a fill provider, submitting from this host's own address")
+	}
+	if !browserUseProviders["greenhouse"] {
+		t.Error("greenhouse is not routed to the cloud agent, so it would park instead of being submitted")
+	}
+}
+
+// What an external agent is told can be completed without a person covers both paths.
+// It read fillProviders alone, so Lever stopped being advertised the day it moved to the
+// cloud agent — and Greenhouse would have followed.
+func TestSubmittableProvidersCoversTheCloudAgent(t *testing.T) {
+	got := SubmittableProviders()
+	for _, p := range []string{"greenhouse", "lever", "ashby", "workable"} {
+		if !got[p] {
+			t.Errorf("SubmittableProviders() lacks %q", p)
+		}
+	}
+}

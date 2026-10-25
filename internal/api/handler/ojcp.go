@@ -61,8 +61,8 @@ type ojcpHandlers struct {
 // is what `supports_agent_submission` is published from. Callers pass
 // atsapply.SubmittableProviders() rather than a list, because this repo already holds three
 // sets that are easy to mistake for one: jobview.AutoApplyProviders (four ATSs a fill may be
-// ATTEMPTED on), the enqueue set (five that may be QUEUED), and the fill set — which is the
-// only one that means "submitted", and is Greenhouse alone today. A fourth hand-written copy
+// ATTEMPTED on), the enqueue set (five that may be QUEUED), and the submittable set — the
+// only one that means "submitted". A fourth hand-written copy
 // would be the one that goes stale, and the field it feeds is the one an agent plans around.
 func newOJCPHandlers(s searcher, store ojcpStore, origin string, submittable map[string]bool) *ojcpHandlers {
 	h := &ojcpHandlers{

@@ -19,8 +19,8 @@ func TestSubmits_FollowsEveryPathThatCompletesAnApplication(t *testing.T) {
 	if !(&Client{browserUse: executor}).submits("workable") {
 		t.Error("workable with an enforcing browser-use executor: submits = false")
 	}
-	if !(&Client{}).submits("greenhouse") {
-		t.Error("greenhouse: submits = false")
+	if !(&Client{browserUse: executor}).submits("greenhouse") {
+		t.Error("greenhouse with an enforcing browser-use executor: submits = false")
 	}
 	if (&Client{}).submits("workable") {
 		t.Error("workable with no executor: submits = true — a draft nothing will send")

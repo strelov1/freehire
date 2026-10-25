@@ -14,13 +14,16 @@ at the cost of no second language, process, or deploy artifact. See
 `openspec/changes/auto-apply-worker/design.md`'s "chromedp, not a Python/Patchright sidecar"
 decision for the measurements and its caveats.
 
-**A second, narrower backend exists for two providers chromedp cannot fill/submit for at
-all: Ashby and Workable, via the browser-use.com cloud agent API** (`browseruse_fill.go`,
+**Every submission now goes through a second backend, the browser-use.com cloud agent API** (`browseruse_fill.go`,
 `openspec/changes/add-browseruse-atsapply-fallback`). This does not reopen the decision
 above — it is a plain HTTP client (`internal/platform/browseruse`), no second language or
 process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
-- **Only Ashby and Workable** (`browserUseProviders`) — Greenhouse and Lever already have a
-  fill path and never reach this branch; a white-label (unrecognized-layout) Greenhouse posting has
+- **`browserUseProviders` is Ashby, Workable, Lever and Greenhouse; `fillProviders` is
+  empty.** Ashby and Workable have no chromedp fill path at all. Lever (2026-09-10) and
+  Greenhouse (2026-10-25) have one and were moved anyway: this host's Chrome lost their
+  invisible captchas most of the time, and it submitted every candidate's application from
+  the host's own address. Their DOM is still scanned here first, so a field the platform API
+  never declares (Greenhouse's `country`) reaches the plan the agent is handed. A white-label (unrecognized-layout) Greenhouse posting has
   no `MergedField` schema to build a `Plan` from in the first place, since chromedp's own
   DOM scan is what failed there; a captcha-protected posting (Lever, or
   `reasonCaptchaProtected`) is never routed here — that would be an attempt to bypass a

@@ -234,8 +234,10 @@ func TestClientResolve_RefusesToDraftForALapsedCandidate(t *testing.T) {
 	fields := []MergedField{{ID: "q1", Label: "Why do you want to work here?", Kind: "textarea", Required: true}}
 	claimed := autoapply.Claimed{Provider: "greenhouse", UserID: 42}
 
+	t.Setenv("AUTO_APPLY_BROWSERUSE_ENFORCE", "1")
 	lapsed := &fakeEntitlement{err: aiplan.ErrPaymentRequired}
-	c := &Client{atoms: &recordingAtomReader{}, entitlement: lapsed}
+	agent := &BrowserUseExecutor{spend: &runSpendGuard{}}
+	c := &Client{atoms: &recordingAtomReader{}, entitlement: lapsed, browserUse: agent}
 	if _, err := c.resolve(context.Background(), claimed, fields, map[string]string{}); !errors.Is(err, aiplan.ErrPaymentRequired) {
 		t.Fatalf("resolve for a lapsed candidate: err = %v, want ErrPaymentRequired", err)
 	}
@@ -246,13 +248,13 @@ func TestClientResolve_RefusesToDraftForALapsedCandidate(t *testing.T) {
 	// A plan that could not be read is not a yes: the attempt fails (and retries) rather
 	// than drafting on an entitlement nobody could read.
 	unreadable := &fakeEntitlement{err: errors.New("database is down")}
-	c = &Client{atoms: &recordingAtomReader{}, entitlement: unreadable}
+	c = &Client{atoms: &recordingAtomReader{}, entitlement: unreadable, browserUse: agent}
 	if _, err := c.resolve(context.Background(), claimed, fields, map[string]string{}); err == nil || errors.Is(err, aiplan.ErrPaymentRequired) {
 		t.Fatalf("resolve on an unreadable plan: err = %v, want the read's own error", err)
 	}
 
 	// And a client wired with no entitlement at all refuses to draft rather than spending.
-	c = &Client{atoms: &recordingAtomReader{}}
+	c = &Client{atoms: &recordingAtomReader{}, browserUse: agent}
 	if _, err := c.resolve(context.Background(), claimed, fields, map[string]string{}); err == nil {
 		t.Fatal("resolve with no entitlement configured drafted anyway")
 	}
