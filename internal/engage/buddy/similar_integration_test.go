@@ -97,6 +97,23 @@ func TestSimilarRanksCloserFirstAndKeepsZeroOverlap(t *testing.T) {
 	}
 }
 
+// A viewer with no resolved category must still be ranked: a NULL comparison must not
+// turn the whole score NULL (it would sort first and fail the int scan).
+func TestSimilarViewerWithoutCategory(t *testing.T) {
+	pool, svc := setup(t)
+	viewer, a, b := seedUser(t, pool, "v@example.test"), seedUser(t, pool, "a@example.test"), seedUser(t, pool, "b@example.test")
+	joinWith(t, pool, svc, viewer, "", []string{"de"}, nil)
+	hA := joinWith(t, pool, svc, a, "backend", []string{"de"}, nil)
+	hB := joinWith(t, pool, svc, b, "backend", []string{"fr"}, nil)
+	got, err := svc.Similar(context.Background(), viewer, 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{hA, hB}; !slices.Equal(handles(got), want) || got[0].Score != 2 || got[1].Score != 0 {
+		t.Fatalf("list = %v scores %d %d", handles(got), got[0].Score, got[1].Score)
+	}
+}
+
 func TestSimilarTieBreaksOnNewestJoinAndPages(t *testing.T) {
 	pool, svc := setup(t)
 	ctx := context.Background()

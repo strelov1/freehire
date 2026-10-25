@@ -110,7 +110,7 @@ shared_counts AS (
 ),
 scored AS (
     SELECT c.user_id, c.handle, c.countries, c.joined_at,
-           (sqlc.arg(w_category)::int * (c.category IS NOT NULL AND c.category = v.category)::int
+           (sqlc.arg(w_category)::int * coalesce(c.category = v.category, false)::int
           + sqlc.arg(w_countries)::int * (c.countries && v.countries)::int
           + sqlc.arg(w_regions)::int * (c.regions && v.regions)::int
           + sqlc.arg(w_company)::int * least(coalesce(sc.n, 0), sqlc.arg(company_cap)::int))::int AS score

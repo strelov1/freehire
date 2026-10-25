@@ -177,7 +177,7 @@ shared_counts AS (
 ),
 scored AS (
     SELECT c.user_id, c.handle, c.countries, c.joined_at,
-           ($3::int * (c.category IS NOT NULL AND c.category = v.category)::int
+           ($3::int * coalesce(c.category = v.category, false)::int
           + $4::int * (c.countries && v.countries)::int
           + $5::int * (c.regions && v.regions)::int
           + $6::int * least(coalesce(sc.n, 0), $1::int))::int AS score

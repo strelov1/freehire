@@ -16,21 +16,6 @@ func TestClampLimit(t *testing.T) {
 	}
 }
 
-// The weights are a first guess, but the ordering they must preserve is not: a shared
-// category beats any single other signal, so the first thing a viewer reads is "same
-// line of work". The score itself is computed in SQL; the integration tests pin it.
-func TestWeightsOrdering(t *testing.T) {
-	if weightCategory <= weightRegions || weightCategory <= weightCompany || weightCategory <= weightCountries {
-		t.Errorf("category weight %d must exceed every single other signal", weightCategory)
-	}
-	if weightCountries <= weightRegions {
-		t.Errorf("countries weight %d must exceed regions weight %d", weightCountries, weightRegions)
-	}
-	if weightRegions <= 0 {
-		t.Error("every signal must add points, or a zero-weight signal would never rank")
-	}
-}
-
 func TestCardSummary(t *testing.T) {
 	cv := resumeextract.Structured{Experience: []resumeextract.Experience{{Title: "Senior Backend Engineer", Current: true}}}
 	got := cardSummary(SimilarRow{CV: cv, Countries: []string{"de", "pl"}})

@@ -125,6 +125,9 @@ func (r *QueriesRepository) Similar(ctx context.Context, userID int64, limit, of
 				out[i].CV = s
 			}
 		}
+		if len(row.SharedNames) != len(row.SharedSlugs) {
+			return nil, errors.New("buddy: shared company slugs and names differ in length")
+		}
 		for j, slug := range row.SharedSlugs {
 			out[i].Shared = append(out[i].Shared, Company{Slug: slug, Name: row.SharedNames[j]})
 		}
