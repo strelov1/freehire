@@ -132,7 +132,8 @@ export interface ActivityDay {
   /** The reader's own calendar date, YYYY-MM-DD — the grouping key, and stable to compare. */
   key: string;
   date: Date;
-  /** How many of that day's events were the candidate's own work. */
+  /** How many counted actions the day holds — for the reader's own grid, the events that were
+   *  their own work. */
   count: number;
   /** The shade, 0 for a day with no counting actions. */
   level: number;
@@ -241,13 +242,6 @@ function streaksFor(days: ActivityDay[]): { current: number; longest: number } {
  *  anything outside it is simply not placed. `today` is injected so the arithmetic is
  *  testable without freezing a clock. */
 export function buildActivityGrid(events: TimelineEvent[], today: Date = new Date()): ActivityGrid {
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const windowStart = addDays(todayStart, -(WINDOW_DAYS - 1));
-  // Whole weeks: back to the Monday on or before the window's first day, forward to the
-  // Sunday on or after today.
-  const first = addDays(windowStart, -mondayIndex(windowStart));
-  const last = addDays(todayStart, 6 - mondayIndex(todayStart));
-
   const byDay = new Map<string, TimelineEvent[]>();
   for (const event of events) {
     const key = dayKey(new Date(event.occurred_at));
@@ -262,6 +256,39 @@ export function buildActivityGrid(events: TimelineEvent[], today: Date = new Dat
     bucket.sort((a, b) => Date.parse(a.occurred_at) - Date.parse(b.occurred_at));
   }
 
+  return assembleGrid(today, (key) => {
+    const dayEvents = byDay.get(key) ?? [];
+    return { count: dayEvents.filter(countsAsCandidateAction).length, events: dayEvents };
+  });
+}
+
+/** buildActivityGridFromCounts draws a year from counts that were decided elsewhere — pairs
+ *  of calendar date (YYYY-MM-DD) and count, a date that repeats summed — for a grid whose
+ *  events the reader never holds, such as another member's. Every square's `events` is
+ *  empty: what a day held is the caller's to fetch. Dates outside the window are simply not
+ *  placed. */
+export function buildActivityGridFromCounts(
+  counts: Iterable<readonly [string, number]>,
+  today: Date = new Date(),
+): ActivityGrid {
+  const byDay = new Map<string, number>();
+  for (const [day, count] of counts) byDay.set(day, (byDay.get(day) ?? 0) + count);
+  return assembleGrid(today, (key) => ({ count: byDay.get(key) ?? 0, events: [] }));
+}
+
+/** The shared half of both builders: the window, the whole weeks, the shades, the month
+ *  captions and the streaks, given what one in-window day holds. */
+function assembleGrid(
+  today: Date,
+  dayContent: (key: string) => { count: number; events: TimelineEvent[] },
+): ActivityGrid {
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const windowStart = addDays(todayStart, -(WINDOW_DAYS - 1));
+  // Whole weeks: back to the Monday on or before the window's first day, forward to the
+  // Sunday on or after today.
+  const first = addDays(windowStart, -mondayIndex(windowStart));
+  const last = addDays(todayStart, 6 - mondayIndex(todayStart));
+
   const todayKey = dayKey(todayStart);
   const windowStartKey = dayKey(windowStart);
 
@@ -269,13 +296,13 @@ export function buildActivityGrid(events: TimelineEvent[], today: Date = new Dat
   for (let date = first; date <= last; date = addDays(date, 1)) {
     const key = dayKey(date);
     const inWindow = key >= windowStartKey && key <= todayKey;
-    const dayEvents = inWindow ? (byDay.get(key) ?? []) : [];
+    const content = inWindow ? dayContent(key) : { count: 0, events: [] };
     days.push({
       key,
       date,
-      count: dayEvents.filter(countsAsCandidateAction).length,
+      count: content.count,
       level: 0, // filled below, once the busiest day is known
-      events: dayEvents,
+      events: content.events,
       isToday: key === todayKey,
       inWindow,
     });

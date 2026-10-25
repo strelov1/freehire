@@ -1146,6 +1146,8 @@ export interface BuddyStatus { member: boolean; handle?: string; card_empty: boo
 export interface BuddySimilar { handle: string; card_summary: BuddySummary; score: number; shared_companies: BuddyCompany[] }
 export interface BuddyFeedPage { data: BuddyFeedItem[]; meta: { next_cursor: string | null } }
 export interface BuddyProfile { handle: string; card: CandidateCard; card_empty: boolean }
+/** One member's feed events per UTC day over the last year; only days with an event. */
+export interface BuddyActivity { days: { day: string; count: number }[] }
 export interface BuddyFeedItem { id: number; handle: string; card_summary: BuddySummary; company: BuddyCompany; job_title: string | null; type: 'applied' | 'interview' | 'offer'; day: string }
 export interface BuddyConversation { id: number; other: { handle: string; card_summary: BuddySummary }; former_member: boolean; status_for_me: 'incoming' | 'outgoing' | 'open' | 'closed'; unread: number; last_message_at: string | null; created_at: string }
 export interface BuddyMessage { id: number; mine: boolean; body: string; created_at: string }

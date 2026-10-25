@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { APPLICATION_EVENT_KINDS, APPLICATION_EVENT_SOURCES } from './generated/contracts';
 import {
   buildActivityGrid,
+  buildActivityGridFromCounts,
   countsAsCandidateAction,
   KIND_VERDICT,
   LEVELS,
@@ -379,5 +380,40 @@ describe('buildActivityGrid streaks', () => {
     expect(grid.currentStreak).toBe(0);
     expect(grid.longestStreak).toBe(0);
     expect(grid.days.every((d) => d.level === 0)).toBe(true);
+  });
+});
+
+// Another member's grid arrives as counts the server already decided, and must be drawn by
+// exactly the same arithmetic as the reader's own.
+describe('buildActivityGridFromCounts', () => {
+  it('draws the same year as the event builder for the same counted days', () => {
+    const days = ['2026-03-01', '2026-03-02', '2026-09-15', '2026-09-15', '2026-09-16'];
+
+    // A repeated date is summed, so 2026-09-15 arrives as two pairs.
+    const fromCounts = buildActivityGridFromCounts(
+      days.map((d) => [d, 1] as const),
+      TODAY,
+    );
+    const fromEvents = buildActivityGrid(days.map((d) => on(d)), TODAY);
+
+    expect(fromCounts.total).toBe(5);
+    expect(fromCounts.currentStreak).toBe(fromEvents.currentStreak);
+    expect(fromCounts.longestStreak).toBe(fromEvents.longestStreak);
+    expect(fromCounts.days.map((d) => [d.key, d.count, d.level])).toEqual(
+      fromEvents.days.map((d) => [d.key, d.count, d.level]),
+    );
+    expect(fromCounts.days.every((d) => d.events.length === 0)).toBe(true);
+  });
+
+  it('does not place a day outside the window', () => {
+    const grid = buildActivityGridFromCounts(
+      [
+        ['2020-01-01', 3],
+        ['2026-09-17', 2],
+      ],
+      TODAY,
+    );
+
+    expect(grid.total).toBe(0);
   });
 });

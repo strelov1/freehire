@@ -153,6 +153,7 @@ import type {
   BuddySimilar,
   BuddyFeedPage,
   BuddyProfile,
+  BuddyActivity,
   BuddyConversation,
   BuddyMessage,
   BuddyReport,
@@ -2429,6 +2430,9 @@ export function createApi(
   async function getBuddyProfile(handle: string): Promise<BuddyProfile> {
     return requestData(`/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}`);
   }
+  async function getBuddyActivity(handle: string): Promise<BuddyActivity> {
+    return requestData(`/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}/activity`);
+  }
   async function listBuddyHiddenApplications(): Promise<number[]> { return requestData('/api/v1/me/buddies/hidden-applications'); }
   async function setBuddyApplicationHidden(id: string, hidden: boolean): Promise<void> {
     await call(`/api/v1/me/buddies/hidden-applications/${encodeURIComponent(id)}`, { method: hidden ? 'PUT' : 'DELETE' });
@@ -3445,6 +3449,7 @@ export function createApi(
     listBuddyFeed,
     listBuddyMemberFeed,
     getBuddyProfile,
+    getBuddyActivity,
     listBuddyHiddenApplications,
     setBuddyApplicationHidden,
     listBuddyConversations,
