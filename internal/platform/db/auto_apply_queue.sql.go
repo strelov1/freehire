@@ -42,7 +42,7 @@ WITH deleted AS (
                AND q.blocked_at IS NULL
                AND q.failed_at IS NULL
                AND q.claimed_at IS NOT NULL
-               AND q.claimed_at > now() - make_interval(secs => $3::int))
+               AND q.claimed_at > now() - make_interval(secs => $3::bigint))
     RETURNING q.id, q.user_id, q.job_id
 ), recorded AS (
     INSERT INTO auto_apply_events (user_id, job_id, queue_id, kind)
@@ -54,7 +54,7 @@ SELECT id FROM deleted
 type CancelAutoApplyEntryParams struct {
 	ID           int64 `json:"id"`
 	UserID       int64 `json:"user_id"`
-	LeaseSeconds int32 `json:"lease_seconds"`
+	LeaseSeconds int64 `json:"lease_seconds"`
 }
 
 // Withdraws one of the caller's attempts by deleting it, unless the submit pass may be

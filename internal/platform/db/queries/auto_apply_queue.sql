@@ -419,7 +419,7 @@ WITH deleted AS (
                AND q.blocked_at IS NULL
                AND q.failed_at IS NULL
                AND q.claimed_at IS NOT NULL
-               AND q.claimed_at > now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
+               AND q.claimed_at > now() - make_interval(secs => sqlc.arg(lease_seconds)::bigint))
     RETURNING q.id, q.user_id, q.job_id
 ), recorded AS (
     INSERT INTO auto_apply_events (user_id, job_id, queue_id, kind)
