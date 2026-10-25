@@ -11,6 +11,7 @@
   import { isFullBleedRoute } from '#lib/shellLayout.js';
   import { safeRedirect } from '#lib/safeRedirect.js';
   import { resetUserStores } from '#lib/userResource.svelte.js';
+  import { buddyDock } from '#lib/buddyDock.svelte.js';
   import {
     capturePageview,
     syncReplayForRoute,
@@ -55,6 +56,19 @@
       confirmTailorModule = null;
       settleConfirmTailorDialog(false);
     });
+  });
+
+  // The interview-buddies messaging dock. Its one probe is the conversation list (a
+  // non-member gets a 403 and nothing else happens), made once a session is known; a guest
+  // makes no request at all. The component itself is fetched only for a member, so nobody
+  // else ships its chat code. A chunk that fails to load leaves the dock out for this page
+  // load rather than retrying in a loop.
+  let buddyDockModule = $state<Promise<typeof import('#lib/components/BuddyMessagingDock.svelte')> | null>(null);
+  $effect(() => {
+    if (isAuthenticated()) void buddyDock.ensureLoaded();
+  });
+  $effect(() => {
+    if (buddyDock.member && !buddyDockModule) buddyDockModule = import('#lib/components/BuddyMessagingDock.svelte');
   });
 
   // The account area (/my/*) is an app-like surface with its own sidebar nav — the
@@ -252,6 +266,14 @@
 <SupportToast />
 
 <CvRefreshDialog />
+
+{#if buddyDockModule && buddyDock.member}
+  {#await buddyDockModule then { default: BuddyMessagingDock }}
+    <BuddyMessagingDock />
+  {:catch}
+    <!-- Left out for this page load; see the effect above. -->
+  {/await}
+{/if}
 
 {#if confirmTailorModule}
   {#await confirmTailorModule then { default: ConfirmTailorDialog }}

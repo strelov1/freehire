@@ -1,15 +1,14 @@
 <script lang="ts">
   import { ArrowLeft } from '@lucide/svelte';
-  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ApiError, api } from '#lib/api.js';
+  import { buddyDock } from '#lib/buddyDock.svelte.js';
   import BuddyFeedEntry from '#lib/components/BuddyFeedEntry.svelte';
-  import BuddyInviteDialog from '#lib/components/BuddyInviteDialog.svelte';
   import BuddyMessageButton from '#lib/components/BuddyMessageButton.svelte';
   import CandidateCardView from '#lib/components/CandidateCardView.svelte';
   import States from '#lib/components/States.svelte';
-  import type { BuddyConversation, BuddyFeedItem, BuddyProfile } from '#lib/types.js';
+  import type { BuddyFeedItem, BuddyProfile } from '#lib/types.js';
   import { Button } from '#lib/ui/index.js';
 
   // One interview buddy: their anonymous card and, under it, their own activity — the
@@ -21,12 +20,10 @@
 
   let view = $state<'loading' | 'ready' | 'unavailable' | 'not-member' | 'error'>('loading');
   let profile = $state<BuddyProfile | null>(null);
-  let conversations = $state<BuddyConversation[]>([]);
   let feed = $state<BuddyFeedItem[]>([]);
   let cursor = $state<string | null>(null);
   let feedBusy = $state(false);
   let feedError = $state('');
-  let inviteOpen = $state(false);
 
   $effect(() => {
     const current = handle;
@@ -34,13 +31,15 @@
     view = 'loading'; profile = null; feed = []; cursor = null; feedError = '';
     void (async () => {
       try {
-        const [p, first, convs] = await Promise.all([
+        // The conversation list is the shared one the messaging dock reads, so "Message"
+        // here and the dock agree on whether a conversation with this member exists.
+        const [p, first] = await Promise.all([
           api.getBuddyProfile(current),
           api.listBuddyMemberFeed(current),
-          api.listBuddyConversations(),
+          buddyDock.refresh(),
         ]);
         if (cancelled) return;
-        profile = p; feed = first.data; cursor = first.meta.next_cursor; conversations = convs;
+        profile = p; feed = first.data; cursor = first.meta.next_cursor;
         view = 'ready';
       } catch (err) {
         if (cancelled) return;
@@ -67,11 +66,6 @@
     } finally { feedBusy = false; }
   }
 
-  function openConversation(id: number) {
-    // The Chats tab opens the conversation named by ?c=, the same link a notification carries.
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() applied to the path; the rule can't see through the appended query string
-    void goto(resolve('/my/buddies') + `?c=${id}`);
-  }
 </script>
 
 <svelte:head><title>{handle} · Interview buddies</title></svelte:head>
@@ -96,10 +90,10 @@
       {#snippet actions()}
         <BuddyMessageButton
           handle={profile?.handle ?? ''}
-          {conversations}
+          conversations={buddyDock.conversations}
           size="md"
-          oninvite={() => (inviteOpen = true)}
-          onconversation={openConversation}
+          oninvite={(h) => buddyDock.openNew(h)}
+          onconversation={(id) => buddyDock.openConversation(id)}
         />
       {/snippet}
       <section class="flex flex-col gap-2">
@@ -113,6 +107,5 @@
         {/if}
       </section>
     </CandidateCardView>
-    <BuddyInviteDialog bind:open={inviteOpen} handle={profile.handle} onsent={(conversation) => openConversation(conversation.id)} />
   {/if}
 </div>

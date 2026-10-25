@@ -5,7 +5,8 @@
 
   // "Message" for one member. What it does depends on the conversation already held with
   // them: none opens the first-message dialog (`oninvite`), an open or pending one goes to
-  // it in Chats (`onconversation`), and a closed one shows nothing.
+  // it (`onconversation` — the Chats tab on the buddies page, a dock window elsewhere), and
+  // a closed one shows nothing.
   let {
     handle,
     conversations,
