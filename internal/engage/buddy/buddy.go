@@ -107,6 +107,19 @@ type Repository interface {
 	MarkRead(ctx context.Context, userID, conversationID, upTo int64) error
 	// Conversations lists every conversation userID may see, newest message first.
 	Conversations(ctx context.Context, userID int64) ([]ConversationListRow, error)
+	// Block records that blocker blocked the other party and closes the conversation, in
+	// one statement. It returns ErrNotFound when blocker is not a party.
+	Block(ctx context.Context, blocker, conversationID int64) error
+	// Report stores a report. It returns ErrNotFound when reporter is not a party and
+	// ErrAlreadyReported when they already filed one.
+	Report(ctx context.Context, reporter, conversationID int64, reason, note string) error
+	// Reports is one page of reports, newest first.
+	Reports(ctx context.Context, limit, offset int, includeResolved bool) ([]ReportRow, error)
+	// ReportMessages is every message of the given conversations, oldest first.
+	ReportMessages(ctx context.Context, conversationIDs []int64) ([]ReportMessageRow, error)
+	// ResolveReport stamps a report resolved, keeping an earlier resolution. It returns
+	// ErrNotFound for an unknown id.
+	ResolveReport(ctx context.Context, moderatorID, reportID int64) error
 }
 
 // Service is the membership and profile use cases.
@@ -207,6 +220,14 @@ func (s *Service) Profile(ctx context.Context, viewerID int64, handle string) (P
 		return Profile{}, err
 	}
 	if !ok || !target.Active {
+		return Profile{}, ErrNotFound
+	}
+	// A blocked pair reads as an unknown handle, so a block is not revealed.
+	blocked, err := s.repo.Blocked(ctx, viewerID, target.UserID)
+	if err != nil {
+		return Profile{}, err
+	}
+	if blocked {
 		return Profile{}, ErrNotFound
 	}
 	in, err := s.repo.Inputs(ctx, target.UserID)

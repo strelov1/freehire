@@ -50,6 +50,37 @@ func (q *Queries) AnswerBuddyInvitation(ctx context.Context, arg AnswerBuddyInvi
 	return i, err
 }
 
+const blockBuddyConversation = `-- name: BlockBuddyConversation :one
+WITH c AS (
+    UPDATE buddy_conversations
+    SET status = 'closed', closed_at = coalesce(closed_at, now())
+    WHERE id = $1
+      AND $2::bigint IN (user_low, user_high)
+    RETURNING id, CASE WHEN user_low = $2 THEN user_high ELSE user_low END AS other_id
+), b AS (
+    INSERT INTO buddy_blocks (blocker_id, blocked_id)
+    SELECT $2::bigint, c.other_id FROM c
+    ON CONFLICT DO NOTHING
+)
+SELECT id FROM c
+`
+
+type BlockBuddyConversationParams struct {
+	ConversationID int64 `json:"conversation_id"`
+	BlockerID      int64 `json:"blocker_id"`
+}
+
+// Block the other party of a conversation and close it, in one statement so neither half
+// can land alone. Only a party matches; no row means the caller must say the conversation
+// is not theirs. Closing is allowed from any status, and a conversation that was already
+// closed keeps its original closed_at. Blocking twice writes nothing the second time.
+func (q *Queries) BlockBuddyConversation(ctx context.Context, arg BlockBuddyConversationParams) (int64, error) {
+	row := q.db.QueryRow(ctx, blockBuddyConversation, arg.ConversationID, arg.BlockerID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const buddyPairBlocked = `-- name: BuddyPairBlocked :one
 SELECT EXISTS (
     SELECT 1 FROM buddy_blocks
@@ -324,6 +355,38 @@ func (q *Queries) InsertBuddyMessage(ctx context.Context, arg InsertBuddyMessage
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const insertBuddyReport = `-- name: InsertBuddyReport :one
+INSERT INTO buddy_reports (conversation_id, reporter_id, reason, note)
+SELECT c.id, $1::bigint, $2::text, $3::text
+FROM buddy_conversations c
+WHERE c.id = $4
+  AND $1::bigint IN (c.user_low, c.user_high)
+ON CONFLICT (conversation_id, reporter_id) DO NOTHING
+RETURNING id
+`
+
+type InsertBuddyReportParams struct {
+	ReporterID     int64       `json:"reporter_id"`
+	Reason         string      `json:"reason"`
+	Note           pgtype.Text `json:"note"`
+	ConversationID int64       `json:"conversation_id"`
+}
+
+// A report of a conversation by one of its parties. No row means either the reporter is
+// not a party or they already reported it; the caller looks the conversation up to say
+// which.
+func (q *Queries) InsertBuddyReport(ctx context.Context, arg InsertBuddyReportParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertBuddyReport,
+		arg.ReporterID,
+		arg.Reason,
+		arg.Note,
+		arg.ConversationID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const joinBuddyMember = `-- name: JoinBuddyMember :one
@@ -649,6 +712,114 @@ func (q *Queries) ListBuddyMessages(ctx context.Context, arg ListBuddyMessagesPa
 	return items, nil
 }
 
+const listBuddyMessagesForConversations = `-- name: ListBuddyMessagesForConversations :many
+SELECT msg.conversation_id, m.handle AS sender_handle, msg.body, msg.created_at
+FROM buddy_messages msg
+JOIN buddy_members m ON m.user_id = msg.sender_id
+WHERE msg.conversation_id = ANY($1::bigint[])
+ORDER BY msg.conversation_id, msg.id
+`
+
+type ListBuddyMessagesForConversationsRow struct {
+	ConversationID int64              `json:"conversation_id"`
+	SenderHandle   string             `json:"sender_handle"`
+	Body           string             `json:"body"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+// Every message of the given conversations, oldest first within each, with the sender's
+// handle. One read for a whole page of reports.
+func (q *Queries) ListBuddyMessagesForConversations(ctx context.Context, conversationIds []int64) ([]ListBuddyMessagesForConversationsRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyMessagesForConversations, conversationIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyMessagesForConversationsRow{}
+	for rows.Next() {
+		var i ListBuddyMessagesForConversationsRow
+		if err := rows.Scan(
+			&i.ConversationID,
+			&i.SenderHandle,
+			&i.Body,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBuddyReports = `-- name: ListBuddyReports :many
+SELECT r.id,
+       r.conversation_id,
+       r.reason,
+       r.note,
+       r.created_at,
+       r.resolved_at,
+       reporter.handle AS reporter_handle,
+       other.handle    AS reported_handle
+FROM buddy_reports r
+JOIN buddy_conversations c ON c.id = r.conversation_id
+JOIN buddy_members reporter ON reporter.user_id = r.reporter_id
+JOIN buddy_members other ON other.user_id = CASE WHEN c.user_low = r.reporter_id THEN c.user_high ELSE c.user_low END
+WHERE $1::boolean OR r.resolved_at IS NULL
+ORDER BY r.id DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListBuddyReportsParams struct {
+	IncludeResolved bool  `json:"include_resolved"`
+	PageOffset      int32 `json:"page_offset"`
+	PageLimit       int32 `json:"page_limit"`
+}
+
+type ListBuddyReportsRow struct {
+	ID             int64              `json:"id"`
+	ConversationID int64              `json:"conversation_id"`
+	Reason         string             `json:"reason"`
+	Note           pgtype.Text        `json:"note"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ResolvedAt     pgtype.Timestamptz `json:"resolved_at"`
+	ReporterHandle string             `json:"reporter_handle"`
+	ReportedHandle string             `json:"reported_handle"`
+}
+
+// A page of reports, newest first, with the handles of the reporter and of the member
+// they reported. Handles only: a moderator reads the conversation by what the members saw.
+func (q *Queries) ListBuddyReports(ctx context.Context, arg ListBuddyReportsParams) ([]ListBuddyReportsRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyReports, arg.IncludeResolved, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyReportsRow{}
+	for rows.Next() {
+		var i ListBuddyReportsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.Reason,
+			&i.Note,
+			&i.CreatedAt,
+			&i.ResolvedAt,
+			&i.ReporterHandle,
+			&i.ReportedHandle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listHiddenBuddyApplications = `-- name: ListHiddenBuddyApplications :many
 SELECT application_id FROM buddy_hidden_applications
 WHERE user_id = $1
@@ -849,6 +1020,27 @@ type MarkBuddyConversationReadParams struct {
 // conversation's newest message. No row means the caller is not a party.
 func (q *Queries) MarkBuddyConversationRead(ctx context.Context, arg MarkBuddyConversationReadParams) (int64, error) {
 	row := q.db.QueryRow(ctx, markBuddyConversationRead, arg.UserID, arg.UpTo, arg.ConversationID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const resolveBuddyReport = `-- name: ResolveBuddyReport :one
+UPDATE buddy_reports
+SET resolved_at = coalesce(resolved_at, now()),
+    resolved_by = coalesce(resolved_by, $1::bigint)
+WHERE id = $2
+RETURNING id
+`
+
+type ResolveBuddyReportParams struct {
+	ModeratorID int64 `json:"moderator_id"`
+	ID          int64 `json:"id"`
+}
+
+// Mark a report handled. An already resolved report keeps its first resolver and time.
+func (q *Queries) ResolveBuddyReport(ctx context.Context, arg ResolveBuddyReportParams) (int64, error) {
+	row := q.db.QueryRow(ctx, resolveBuddyReport, arg.ModeratorID, arg.ID)
 	var id int64
 	err := row.Scan(&id)
 	return id, err

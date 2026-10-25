@@ -331,6 +331,11 @@ type Querier interface {
 	//
 	// Guarded on IS NULL, so a re-run writes nothing and stopping mid-way is free.
 	BackfillSemanticInputHashChunk(ctx context.Context, arg BackfillSemanticInputHashChunkParams) (int64, error)
+	// Block the other party of a conversation and close it, in one statement so neither half
+	// can land alone. Only a party matches; no row means the caller must say the conversation
+	// is not theirs. Closing is allowed from any status, and a conversation that was already
+	// closed keeps its original closed_at. Blocking twice writes nothing the second time.
+	BlockBuddyConversation(ctx context.Context, arg BlockBuddyConversationParams) (int64, error)
 	// Add a host to the blocklist, attributed to the blocking moderator. ON CONFLICT DO NOTHING
 	// makes blocking an already-blocked host a no-op rather than an error (submission.Service.Reject
 	// calls this every time block_domain is set, whether or not the host is new).
@@ -3165,6 +3170,10 @@ type Querier interface {
 	// no message lands after it. No row means the caller must look the conversation up to say
 	// why.
 	InsertBuddyMessage(ctx context.Context, arg InsertBuddyMessageParams) (InsertBuddyMessageRow, error)
+	// A report of a conversation by one of its parties. No row means either the reporter is
+	// not a party or they already reported it; the caller looks the conversation up to say
+	// which.
+	InsertBuddyReport(ctx context.Context, arg InsertBuddyReportParams) (int64, error)
 	// Record one change: what it did (ops), what would undo it (inverse), who made it and through
 	// which entry point, and the document version it was computed against. Written in the same
 	// transaction as the document it changed — a change without its revision, or a revision
@@ -3671,6 +3680,12 @@ type Querier interface {
 	ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([]ListBuddyFeedRow, error)
 	// Messages after a given id, oldest first. Readability is the caller's check.
 	ListBuddyMessages(ctx context.Context, arg ListBuddyMessagesParams) ([]ListBuddyMessagesRow, error)
+	// Every message of the given conversations, oldest first within each, with the sender's
+	// handle. One read for a whole page of reports.
+	ListBuddyMessagesForConversations(ctx context.Context, conversationIds []int64) ([]ListBuddyMessagesForConversationsRow, error)
+	// A page of reports, newest first, with the handles of the reporter and of the member
+	// they reported. Handles only: a moderator reads the conversation by what the members saw.
+	ListBuddyReports(ctx context.Context, arg ListBuddyReportsParams) ([]ListBuddyReportsRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
 	// Every revision of one agent turn or autopilot run that is still standing, newest first —
@@ -6471,6 +6486,8 @@ type Querier interface {
 	// AuthenticateAPIKey it does NOT touch last_used_at, because it runs on the hottest reads on
 	// the site and its answer is cached. No row means unknown, revoked or expired.
 	ResolveAPIKeyTier(ctx context.Context, tokenHash string) (ResolveAPIKeyTierRow, error)
+	// Mark a report handled. An already resolved report keeps its first resolver and time.
+	ResolveBuddyReport(ctx context.Context, arg ResolveBuddyReportParams) (int64, error)
 	// The canonical slug for each folded key in the batch — one round trip per board run, not
 	// one per posting. pipeline.Runner folds the run's distinct company slugs, asks this once,
 	// and hands the ONE resulting map to both the aggregator-coverage gate and the upsert, so

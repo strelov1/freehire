@@ -343,3 +343,69 @@ CROSS JOIN LATERAL (
 WHERE sqlc.arg(viewer_id) IN (c.user_low, c.user_high)
   AND NOT (c.status = 'declined' AND c.initiator_id <> sqlc.arg(viewer_id))
 ORDER BY last_message_at DESC, c.id DESC;
+
+-- name: BlockBuddyConversation :one
+-- Block the other party of a conversation and close it, in one statement so neither half
+-- can land alone. Only a party matches; no row means the caller must say the conversation
+-- is not theirs. Closing is allowed from any status, and a conversation that was already
+-- closed keeps its original closed_at. Blocking twice writes nothing the second time.
+WITH c AS (
+    UPDATE buddy_conversations
+    SET status = 'closed', closed_at = coalesce(closed_at, now())
+    WHERE id = sqlc.arg(conversation_id)
+      AND sqlc.arg(blocker_id)::bigint IN (user_low, user_high)
+    RETURNING id, CASE WHEN user_low = sqlc.arg(blocker_id) THEN user_high ELSE user_low END AS other_id
+), b AS (
+    INSERT INTO buddy_blocks (blocker_id, blocked_id)
+    SELECT sqlc.arg(blocker_id)::bigint, c.other_id FROM c
+    ON CONFLICT DO NOTHING
+)
+SELECT id FROM c;
+
+-- name: InsertBuddyReport :one
+-- A report of a conversation by one of its parties. No row means either the reporter is
+-- not a party or they already reported it; the caller looks the conversation up to say
+-- which.
+INSERT INTO buddy_reports (conversation_id, reporter_id, reason, note)
+SELECT c.id, sqlc.arg(reporter_id)::bigint, sqlc.arg(reason)::text, sqlc.narg(note)::text
+FROM buddy_conversations c
+WHERE c.id = sqlc.arg(conversation_id)
+  AND sqlc.arg(reporter_id)::bigint IN (c.user_low, c.user_high)
+ON CONFLICT (conversation_id, reporter_id) DO NOTHING
+RETURNING id;
+
+-- name: ListBuddyReports :many
+-- A page of reports, newest first, with the handles of the reporter and of the member
+-- they reported. Handles only: a moderator reads the conversation by what the members saw.
+SELECT r.id,
+       r.conversation_id,
+       r.reason,
+       r.note,
+       r.created_at,
+       r.resolved_at,
+       reporter.handle AS reporter_handle,
+       other.handle    AS reported_handle
+FROM buddy_reports r
+JOIN buddy_conversations c ON c.id = r.conversation_id
+JOIN buddy_members reporter ON reporter.user_id = r.reporter_id
+JOIN buddy_members other ON other.user_id = CASE WHEN c.user_low = r.reporter_id THEN c.user_high ELSE c.user_low END
+WHERE sqlc.arg(include_resolved)::boolean OR r.resolved_at IS NULL
+ORDER BY r.id DESC
+LIMIT sqlc.arg(page_limit) OFFSET sqlc.arg(page_offset);
+
+-- name: ListBuddyMessagesForConversations :many
+-- Every message of the given conversations, oldest first within each, with the sender's
+-- handle. One read for a whole page of reports.
+SELECT msg.conversation_id, m.handle AS sender_handle, msg.body, msg.created_at
+FROM buddy_messages msg
+JOIN buddy_members m ON m.user_id = msg.sender_id
+WHERE msg.conversation_id = ANY(sqlc.arg(conversation_ids)::bigint[])
+ORDER BY msg.conversation_id, msg.id;
+
+-- name: ResolveBuddyReport :one
+-- Mark a report handled. An already resolved report keeps its first resolver and time.
+UPDATE buddy_reports
+SET resolved_at = coalesce(resolved_at, now()),
+    resolved_by = coalesce(resolved_by, sqlc.arg(moderator_id)::bigint)
+WHERE id = sqlc.arg(id)
+RETURNING id;

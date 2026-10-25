@@ -26,7 +26,7 @@
 - [x] 5.1 `Invite`: 1..500 chars, one conversation per pair, 10 per 24h, refuses non-member/left/blocked either way; conversation + first message in one tx (integration tests per scenario)
 - [x] 5.2 `Accept`/`Decline` by the recipient only; declined shown to the initiator as outgoing/unanswered
 - [x] 5.3 `Send` (1..4000, open only; pending refuses the inviter), `Messages(after)`, `MarkRead`, `ListConversations` with unread counts and `status_for_me`; outsider → not found
-- [ ] 5.4 `Block` (closes conversation, hides pair everywhere) and `Report` (closed reasons, unique per reporter) + moderator `ListReports`/`Resolve`
+- [x] 5.4 `Block` (closes conversation, hides pair everywhere) and `Report` (closed reasons, unique per reporter) + moderator `ListReports`/`Resolve`
 
 ## 6. HTTP API
 
