@@ -1,10 +1,6 @@
 package atsdetect
 
-import (
-	"testing"
-
-	"github.com/strelov1/freehire/internal/ingest/atsboard"
-)
+import "testing"
 
 func TestFromURL(t *testing.T) {
 	cases := []struct {
@@ -450,38 +446,6 @@ func TestFromURL(t *testing.T) {
 			}
 			if ok && (p != tc.provider || b != tc.board) {
 				t.Errorf("got (%q, %q), want (%q, %q)", p, b, tc.provider, tc.board)
-			}
-		})
-	}
-}
-
-// TestLocalShapesStayOutsideTheSharedTable guards the split that remains.
-//
-// FromURL delegates to atsboard.Recognize and keeps only the two shapes atsboard has not taken
-// in. The split once guarded a money-affecting accept-set — internal/ingest/contribution paid for
-// onboarded boards — and since that reward was retired, shapes have moved into the shared table
-// one by one (iCIMS, then NEOGOV, Paycom and Comeet), each now covered by that package's own
-// TestRecognize and deleted here.
-//
-// The two sets must still stay disjoint in both directions. If a shape here starts being
-// recognised by the shared table, this package's case for it is dead code silently shadowed by
-// the delegation above it — delete it here in the same change, as those four were.
-func TestLocalShapesStayOutsideTheSharedTable(t *testing.T) {
-	local := map[string]string{
-		"oracle": "https://eeho.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/1234",
-		"taleo":  "https://valero.taleo.net/careersection/2/jobsearch.ftl",
-	}
-	for provider, rawurl := range local {
-		t.Run(provider, func(t *testing.T) {
-			if src, board, _, ok := atsboard.Recognize(rawurl); ok {
-				t.Errorf("atsboard now recognises the %s shape as (%q, %q). Either this package's "+
-					"case is dead code shadowed by the delegation — delete it here in the same change.",
-					provider, src, board)
-			}
-			got, _, ok := FromURL(rawurl)
-			if !ok || got != provider {
-				t.Errorf("FromURL(%q) = (%q, ok=%v), want %q — this package still owns the shape",
-					rawurl, got, ok, provider)
 			}
 		})
 	}

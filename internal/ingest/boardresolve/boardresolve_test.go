@@ -83,8 +83,9 @@ func TestResolveDetectsWorkdayLinkOnPage(t *testing.T) {
 }
 
 func TestResolveRejectsUnsupportedAts(t *testing.T) {
-	// Taleo isn't in the recognizer — a page exposing only a Taleo link resolves nothing.
-	html := `<a href="https://acme.taleo.net/careersection/x/jobdetail.ftl?job=123">Apply</a>`
+	// Eightfold's board needs a tenant domain no careers link spells out — a page exposing only
+	// such a link resolves nothing.
+	html := `<a href="https://acme.eightfold.ai/careers">Apply</a>`
 	if _, _, _, ok := resolver(html, nil).Resolve(context.Background(), "https://acme.com/jobs"); ok {
 		t.Error("ok=true for an unsupported ATS, want false")
 	}

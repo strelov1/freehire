@@ -82,4 +82,8 @@ nothing but the URL. No network, no database.
   nothing — the largest category in the review queue. `internal/ingest/boardresolve` fetches the page
   and detects the embedded board; this package stays network-free.
 - Custom-domain ATS (Taleo, SuccessFactors, Oracle, Workday tenants on their own domain) are
-  absent on purpose: their board cannot be derived from a URL at all.
+  absent on purpose: their board cannot be derived from a URL at all. Their VENDOR-hosted
+  forms are recognised — `<tenant>.taleo.net/careersection/<section>/…`,
+  `<pod host>.oraclecloud.com/hcmUI/CandidateExperience/…/sites/<site>`,
+  `wdN.myworkdaysite.com/recruiting/<tenant>/<site>` — through `pathpattern`'s `tenantHost`,
+  which prefixes the capture with the link's own host because that host names the tenant.

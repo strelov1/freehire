@@ -164,7 +164,8 @@ const (
 // URL. A wrong/missing entry is fail-safe: the link simply isn't recognized (422), never a
 // false board. Single-company brands, aggregators, and custom-domain ATS (Taleo, SuccessFactors,
 // Oracle, and Workday tenants on their own domain) are absent — their board can't be derived
-// from a URL. Workday's standard *.myworkdayjobs.com hosts ARE derivable (host + site).
+// from a URL. The vendor-hosted forms ARE derivable: Workday's *.myworkdayjobs.com (host + site)
+// and *.myworkdaysite.com, *.taleo.net and *.oraclecloud.com (see pathPatternBoards).
 var atsBoards = []struct{ host, source, mode string }{
 	// --- path: board = first path segment on a fixed host ---
 	{"greenhouse.io", "greenhouse", modePath},
@@ -194,15 +195,19 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"careers.pageuppeople.com", "pageup", modePathNumeric},
 	{"oportunidades.mindsight.com.br", "mindsight", modePath},
 	{"careers.hireology.com", "hireology", modePath},
+	// Hireology's newer career-site host, <tenant>.hireology.careers: the label is the same tenant
+	// slug the adapter's api.hireology.com/v1/careers/<slug> takes (verified live).
+	{"hireology.careers", "hireology", modeSubdomain},
 	// ADP MyJobs: myjobs.adp.com/<board>/cx/…. A different ADP product from Workforce Now
 	// (modeQueryPair below) — its board is the career site's own slug, which the adpmyjobs
 	// adapter resolves to the orgoid its listing needs; neither id derives from the other.
 	{"myjobs.adp.com", "adpmyjobs", modePath},
 	// AppliTrack serves every district from one host: www.applitrack.com/<board>/onlineapp/….
 	{"applitrack.com", "applitrack", modePath},
-	// Manatal's hosted career-page domain is PATH-based (careers-page.com/<tenant>/job/<id>),
-	// not a tenant subdomain, and its source is manatal: careerspage.yml is deliberately empty
-	// because every careers-page.com tenant is served by the Manatal adapter.
+	// Manatal's hosted career-page domain serves a tenant at careers-page.com/<tenant>/job/<id>
+	// AND at <tenant>.careers-page.com (pathTenantSubdomains), and its source is manatal:
+	// careerspage.yml is deliberately empty because every careers-page.com tenant is served by
+	// the Manatal adapter.
 	{"careers-page.com", "manatal", modePath},
 	// Gusto Hiring serves a board at /boards/<board>, where the board is the WHOLE
 	// "<company-slug>-<company-uuid>" segment — neither half resolves alone. "boards" is the
@@ -487,6 +492,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	// reads /hire/api/ on. The same host is the tenant's payroll/HRMS login, hence the "hire"
 	// segment below.
 	{"greythr.com", "greythr", modeTenantHost},
+	// Jibe career sites on the vendor's own domain, <tenant>.jibeapply.com: the adapter's board
+	// is the site's whole public host (internal/ingest/sources/jibe.go reads https://<board>/api/jobs,
+	// verified live on this domain too).
+	{"jibeapply.com", "jibe", modeTenantHost},
 
 	// --- keyedsegment: board = the shaped segment after a fixed key segment ---
 	{"workstream.us", "workstream", modeKeyedSegment},
@@ -508,13 +517,26 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"careers.flatchr.io", "flatchr", modePathPattern},
 	{"app.trinethire.com", "trinethire", modePathPattern},
 	{"jobs.gohire.io", "gohire", modePathPattern},
+	// The rows below carry the tenant in the HOST as well as the path (tenantHost), so the
+	// board is "<host>/<capture>". Each was read off the adapter's own board parser.
+	{"taleo.net", "taleo", modePathPattern}, // after tbe.taleo.net (taleobe) above, which wins first
+	{"oraclecloud.com", "oracle", modePathPattern},
+	{"myworkdaysite.com", "workday", modePathPattern},
+	{"app.loxo.co", "loxo", modePathPattern},
+	{"recruiterflow.com", "recruiterflow", modePathPattern},
 }
+
+// pathTenantSubdomains names the path-mode hosts that ALSO serve a tenant on its own subdomain
+// with the same board id: Manatal answers <tenant>.careers-page.com beside
+// careers-page.com/<tenant>, and its posting links there (/job/<hash>, /jobs/<uuid>) would
+// otherwise be read as a board called "job".
+var pathTenantSubdomains = map[string]bool{"careers-page.com": true}
 
 // pathPattern is one pathPatternBoards entry; see there.
 type pathPattern struct {
 	path, reject, paramPattern *regexp.Regexp
 	param, listing             string
-	hostBoard                  bool
+	hostBoard, tenantHost      bool
 }
 
 // pathPatternBoards holds, per modePathPattern host entry, the path pattern whose one capture
@@ -527,6 +549,9 @@ type pathPattern struct {
 //     cannot exclude on its own.
 //   - hostBoard prefixes the board with the entry's host, for an adapter whose board names the
 //     domain too (NEOGOV: "<domain>/<agency>", two domains being separate tenant spaces).
+//   - tenantHost prefixes the board with the link's OWN host instead, for an adapter whose board
+//     names the tenant's host (Taleo's "<tenant>.taleo.net/<section>", Oracle's
+//     "<pod host>/<site>"): the entry's host is only the domain those hosts share.
 //   - param names a query parameter that carries the board on the paths the pattern does not
 //     match, held to paramPattern after folding to lower case.
 var pathPatternBoards = map[string]pathPattern{
@@ -586,6 +611,50 @@ var pathPatternBoards = map[string]pathPattern{
 	"jobs.gohire.io": {
 		path:    regexp.MustCompile(`^/([a-z0-9][a-z0-9-]*-[a-z0-9]{8})(?:/|$)`),
 		listing: "/%s/",
+	},
+	// Taleo Enterprise on the vendor's own domain: <tenant>.taleo.net/careersection/<section>/
+	// <page>.ftl, and the adapter's board is "<host>/<section>" (internal/ingest/sources/taleo.go).
+	// reject names the platform's own trees beside the sections (/careersection/rest/…,
+	// /careersection/iam/…). A Taleo career site on the employer's own domain stays underivable.
+	"taleo.net": {
+		path:       regexp.MustCompile(`^/careersection/([A-Za-z0-9_]+)(?:/|$)`),
+		reject:     regexp.MustCompile(`^(?i:rest|iam)$`),
+		listing:    "/careersection/%s/jobsearch.ftl",
+		tenantHost: true,
+	},
+	// Oracle Recruiting Cloud on the vendor's pod hosts (<tenant>.fa.<pod>.oraclecloud.com):
+	// /hcmUI/CandidateExperience/<lang>/sites/<site>/…, board "<host>/<site>"
+	// (internal/ingest/sources/oracle.go). The fixed words match in any case (links spell them
+	// both ways); the site keeps its own, since the REST finder takes it as spelled.
+	"oraclecloud.com": {
+		path:       regexp.MustCompile(`^/(?i:hcmui/candidateexperience/[a-z_-]+/sites)/([A-Za-z0-9_]+)(?:/|$)`),
+		listing:    "/hcmUI/CandidateExperience/en/sites/%s",
+		tenantHost: true,
+	},
+	// Workday's shared-host career sites, wdN.myworkdaysite.com/[<locale>/]recruiting/<tenant>/
+	// <site>: the adapter's board spells the tenant out as "<host>/<tenant>/<site>"
+	// (internal/ingest/sources/workday.go), because the host names no tenant.
+	"myworkdaysite.com": {
+		path:       regexp.MustCompile(`^/(?:[a-z]{2}-[A-Za-z]{2}/)?recruiting/([A-Za-z0-9_-]+/[A-Za-z0-9_-]+)(?:/|$)`),
+		listing:    "/recruiting/%s",
+		tenantHost: true,
+	},
+	// Loxo agency boards: <host>/<slug>, the host being app.loxo.co, a regional pod or the
+	// agency's own label under it, and the board "<host>/<slug>" (internal/ingest/sources/loxo.go).
+	// A posting (/job/<token>) names no agency, and the app's own single-segment routes are
+	// rejected by name.
+	"app.loxo.co": {
+		path:       regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9_-]*)/?$`),
+		reject:     regexp.MustCompile(`^(?i:job|jobs|login|logout|signin|signup|sign_in|sign_up|register|users|password|dashboard|settings|admin|api|help|support|privacy|terms)$`),
+		listing:    "/%s",
+		tenantHost: true,
+	},
+	// RecruiterFlow agency career pages: recruiterflow.com/<board>/jobs[/<posting id>]
+	// (internal/ingest/sources/recruiterflow.go). The trailing "jobs" is what proves the segment
+	// is an agency; the vendor's own pages on the same host carry none.
+	"recruiterflow.com": {
+		path:    regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9_-]*)/jobs(?:/|$)`),
+		listing: "/%s/jobs",
 	},
 }
 
@@ -1068,8 +1137,11 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		}
 		u.RawQuery, u.Fragment = "", ""
 		u.Path = fmt.Sprintf(p.listing, board)
-		if p.hostBoard {
+		switch {
+		case p.hostBoard:
 			board = apex + "/" + board
+		case p.tenantHost:
+			board = host + "/" + board
 		}
 		return src, board, u.String(), true
 
@@ -1254,6 +1326,14 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		return src, string(decoded), u.String(), true
 
 	case modePath, modePathNumeric:
+		// A tenant on its own subdomain of a path-based host is named by that label, whatever
+		// its path says: reading the path would take a posting's "job" segment for the board.
+		if pathTenantSubdomains[apex] && !platformHost(host, apex) {
+			if label := subdomainLabel(host, apex); label != "" {
+				u.RawQuery, u.Fragment, u.Path = "", "", ""
+				return src, label, u.String(), true
+			}
+		}
 		// The board is the first path segment that isn't platform machinery — declined
 		// outright when the path leads with a segment that carries no board.
 		if leadsWithNoBoard(u, noBoardFirstSegments[apex]) {
