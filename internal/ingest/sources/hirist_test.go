@@ -9,6 +9,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -54,8 +55,10 @@ func (f *hiristFake) GetJSONWithHeaders(_ context.Context, u string, headers map
 		if err := f.fail["page"+m[1]]; err != nil {
 			return err
 		}
-		var page int
-		fmt.Sscan(m[1], &page)
+		page, err := strconv.Atoi(m[1])
+		if err != nil {
+			return err
+		}
 		raw, ok := f.pages[page]
 		if !ok {
 			return fmt.Errorf("hiristFake: no category page %d", page)
