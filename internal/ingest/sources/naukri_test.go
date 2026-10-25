@@ -457,8 +457,9 @@ func naukriRecaptcha() error {
 	return &StatusError{Method: "GET", Code: http.StatusNotAcceptable, URL: "naukri detail"}
 }
 
-// A refused posting API must stop the run's hydration at the first refusal: on 2026-10-19 each
-// run sent 1,500 refused detail requests through the shared proxy, every one answered 406.
+// A refused posting API must stop the run's hydration after naukriRefusalLimit refusals: on
+// 2026-10-19 each run sent 1,500 refused detail requests through the shared proxy, every one
+// answered 406.
 func TestNaukriRecaptchaRefusalStopsTheRunsHydration(t *testing.T) {
 	f := naukriBacklogFake(t, naukriDetailBudget)
 	for id := range f.details {
@@ -469,9 +470,9 @@ func TestNaukriRecaptchaRefusalStopsTheRunsHydration(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "refused") {
 		t.Fatalf("Fetch error = %v, want the board failed as refused", err)
 	}
-	// Only requests already in flight when the first refusal lands may still go out.
-	if n := len(f.detailCalls()); n > naukriDetailWorkers {
-		t.Errorf("sent %d detail requests after a refusal, want at most the %d in flight", n, naukriDetailWorkers)
+	// Only requests already in flight when the last allowed refusal lands may still go out.
+	if n := len(f.detailCalls()); n > naukriRefusalLimit+naukriDetailWorkers {
+		t.Errorf("sent %d detail requests, want at most the %d refusals allowed plus the %d in flight", n, naukriRefusalLimit, naukriDetailWorkers)
 	}
 	// The refusal is the egress IP's, so a later board of the same run asks nothing.
 	before := len(f.detailCalls())
@@ -534,5 +535,61 @@ func TestWithUserAgentOverridesOnlyTheCopy(t *testing.T) {
 	}
 	if withUserAgent(nil, naukriUserAgent) != nil {
 		t.Error("the taxonomy path's nil client must stay nil")
+	}
+}
+
+// A posting whose employer is already covered, or whose title the catalogue filter rejects, is
+// yielded body-less without a detail request. Without the gate the budget went to exactly those
+// postings: never stored, so never seen, so bought again every run (2026-10-25).
+func TestNaukriGateSkipsTheDetailOfADiscardedPosting(t *testing.T) {
+	f := naukriFixtures(t)
+	keep := naukriFixtureIDs[0]
+	gate := DetailGate{
+		Covered:  func(cs []string) map[string]bool { return map[string]bool{} },
+		Rejected: func(j Job) bool { return j.ExternalID != keep },
+	}
+	jobs, err := NewNaukri(f).(CoverageGated).FetchNewGated(context.Background(), CompanyEntry{Board: "5"}, func(string) bool { return false }, gate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.detailCalls(); !slices.Equal(got, []string{keep}) {
+		t.Fatalf("detail calls = %v, want only %s", got, keep)
+	}
+	if len(jobs) != len(naukriFixtureIDs) {
+		t.Fatalf("got %d jobs, want every listed posting yielded", len(jobs))
+	}
+	for _, j := range jobs {
+		if (j.Description != "") != (j.ExternalID == keep) {
+			t.Errorf("%s: body %d chars", j.ExternalID, len(j.Description))
+		}
+	}
+
+	f = naukriFixtures(t)
+	all := DetailGate{Covered: func(cs []string) map[string]bool {
+		out := map[string]bool{}
+		for _, c := range cs {
+			out[c] = true
+		}
+		return out
+	}}
+	if _, err := NewNaukri(f).(CoverageGated).FetchNewGated(context.Background(), CompanyEntry{Board: "5"}, func(string) bool { return false }, all); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(f.detailCalls()); n != 0 {
+		t.Errorf("covered employers cost %d detail requests", n)
+	}
+}
+
+// Through the rotating gateway a refusal is one bad exit: fewer than naukriRefusalLimit of them
+// must not end the run's hydration (on 2026-10-25 a single 406 ended two runs' hydration).
+func TestNaukriFewRefusalsDoNotEndTheRun(t *testing.T) {
+	f := naukriFixtures(t)
+	f.fail[naukriFixtureIDs[0]] = naukriRecaptcha()
+	src := NewNaukri(f)
+	if _, err := src.Fetch(context.Background(), CompanyEntry{Board: "5"}); err != nil {
+		t.Fatal(err)
+	}
+	if src.(naukri).refused() {
+		t.Error("one refusal ended the run's hydration")
 	}
 }

@@ -35,9 +35,10 @@ type naukri struct {
 	// spent counts the detail requests claimed across every board of the run, shared by the
 	// adapter's copies (boards may be crawled concurrently, hence atomic).
 	spent *atomic.Int64
-	// refused is set by the first posting-API refusal of the run (naukriRefusal). The refusal
-	// belongs to the egress IP, not to a posting, so it ends hydration for every board.
-	refused *atomic.Bool
+	// refusals counts the run's posting-API refusals (naukriRefusal). At naukriRefusalLimit the
+	// egress is taken to be refused rather than one exit unlucky, and hydration ends for every
+	// board of the run.
+	refusals *atomic.Int64
 }
 
 const (
@@ -102,7 +103,7 @@ var naukriBoardRE = regexp.MustCompile(`^[0-9]+$`)
 // adapter per process and cmd/ingest crawls one provider per process, so the adapter's detail
 // counter is the run's.
 func NewNaukri(c HeaderJSONGetter) Source {
-	return naukri{http: c, spent: new(atomic.Int64), refused: new(atomic.Bool)}
+	return naukri{http: c, spent: new(atomic.Int64), refusals: new(atomic.Int64)}
 }
 
 // pacedNaukriGetter holds every request of a run — search and posting — to one limiter.
@@ -165,6 +166,15 @@ func (s naukri) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 func (s naukri) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	return s.FetchNewGated(ctx, e, seen, DetailGate{})
+}
+
+// FetchNewGated is FetchNew that buys no body for a posting the pipeline will discard anyway.
+// Without it the budget went to exactly those postings: a discarded posting is never stored, so
+// it stays unseen, and newest-first hydration bought the same covered postings every run —
+// measured 2026-10-25, every one of a board's 500 details a run was skipped as "company already
+// covered", and the catalogue sat at ~4k open postings for four days.
+func (s naukri) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	if !naukriBoardRE.MatchString(e.Board) {
 		return nil, fmt.Errorf("naukri: board %q is not a functional area id", e.Board)
 	}
@@ -172,7 +182,7 @@ func (s naukri) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 	if err != nil {
 		return nil, err
 	}
-	return s.hydrate(ctx, rows, naukriTechAreas[e.Board], seen)
+	return s.hydrate(ctx, rows, naukriTechAreas[e.Board], seen, gate)
 }
 
 // list walks the area's freshness window newest first. The first page failing fails the board;
@@ -225,8 +235,16 @@ func (s naukri) list(ctx context.Context, area string) ([]naukriListing, error) 
 // every other posting costs one detail request, up to the board's share of the run's budget
 // (claimDetail). A detail that could not be read, or that the budget did not reach, defers its
 // posting to a later run rather than storing it body-less, which would never be hydrated again.
-func (s naukri) hydrate(ctx context.Context, rows []naukriListing, tech bool, seen func(string) bool) ([]Job, error) {
-	var board, asked, answered, deferred atomic.Int64
+func (s naukri) hydrate(ctx context.Context, rows []naukriListing, tech bool, seen func(string) bool, gate DetailGate) ([]Job, error) {
+	var covered map[string]bool
+	if gate.Covered != nil {
+		companies := make([]string, 0, len(rows))
+		for _, r := range rows {
+			companies = append(companies, strings.TrimSpace(r.CompanyName))
+		}
+		covered = gate.Covered(companies)
+	}
+	var board, asked, answered, deferred, refusedHere atomic.Int64
 	jobs := fetchDetails(rows, naukriDetailWorkers, func(r naukriListing) (Job, bool) {
 		base, ok := r.toJob(tech)
 		if !ok {
@@ -236,7 +254,11 @@ func (s naukri) hydrate(ctx context.Context, rows []naukriListing, tech bool, se
 			base.SeenRefresh = true
 			return base, true
 		}
-		if s.refused.Load() || !s.claimDetail(&board) {
+		// A posting the pipeline will discard is yielded body-less, for it to count.
+		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+			return base, true
+		}
+		if s.refused() || !s.claimDetail(&board) {
 			deferred.Add(1)
 			return Job{}, false
 		}
@@ -244,8 +266,9 @@ func (s naukri) hydrate(ctx context.Context, rows []naukriListing, tech bool, se
 		job, ok, err := s.withDetail(ctx, base)
 		if err != nil {
 			if naukriRefusal(err) {
-				if s.refused.CompareAndSwap(false, true) {
-					log.Printf("naukri: posting API refused the egress IP (%v); no more details this run", err)
+				refusedHere.Add(1)
+				if s.refusals.Add(1) == naukriRefusalLimit {
+					log.Printf("naukri: posting API refused %d requests (last: %v); no more details this run", naukriRefusalLimit, err)
 				}
 				return Job{}, false
 			}
@@ -255,10 +278,11 @@ func (s naukri) hydrate(ctx context.Context, rows []naukriListing, tech bool, se
 		answered.Add(1)
 		return job, ok
 	})
-	// A refused run fails each board that yielded nothing, naming the refusal: from the outside
+	// A refused run — or a board whose every answer was a refusal — fails each board that yielded
+	// nothing, naming the refusal: from the outside
 	// it is the same outage as "none answered", but the fix is an egress, not the adapter. A
 	// board that still refreshed stored postings keeps them.
-	if s.refused.Load() {
+	if s.refused() || (refusedHere.Load() > 0 && answered.Load() == 0) {
 		pending := deferred.Load() + asked.Load() - answered.Load()
 		if len(jobs) == 0 && pending > 0 {
 			return nil, fmt.Errorf("naukri: posting API refused the egress IP (HTTP 406 \"recaptcha required\"); %d new postings deferred", pending)
@@ -287,10 +311,21 @@ func (s naukri) claimDetail(board *atomic.Int64) bool {
 	return s.spent.Add(1) <= naukriDetailBudget
 }
 
+// naukriRefusalLimit is how many refusals end a run's hydration. Through the fixed proxy exit
+// the first refusal was the IP's verdict and every later request was refused too (2026-10-19);
+// through the rotating gateway each request leaves from a different exit, and a refusal is one
+// bad exit: on 2026-10-25 two of four runs met a single 406 that ended the whole run's
+// hydration, one of them after 30 seconds. Ten refusals is still nothing beside a run's budget
+// when the egress really is refused, and no longer a coin toss when it is not.
+const naukriRefusalLimit = 10
+
+// refused reports whether the run has met naukriRefusalLimit refusals.
+func (s naukri) refused() bool { return s.refusals.Load() >= naukriRefusalLimit }
+
 // naukriRefusal reports whether a posting-API error is the edge refusing the client rather than
 // failing one request: 406 is its "recaptcha required" answer, 403 its Access Denied, 429 a rate
-// limit. Repeating a refused request answers nothing and may hold the refusal up, so the first
-// one ends the run's hydration.
+// limit. A refused posting is deferred, never stored body-less; naukriRefusalLimit of them end
+// the run's hydration.
 func naukriRefusal(err error) bool {
 	var se *StatusError
 	if !errors.As(err, &se) {
