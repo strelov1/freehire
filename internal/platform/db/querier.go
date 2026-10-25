@@ -3679,8 +3679,10 @@ type Querier interface {
 	// either direction, events on a private (user-pasted) posting, and applications their author hid. The author's earlier events count
 	// from before they joined: only left_at gates, never joined_at.
 	//
-	// similar_only restricts to author_handles, the viewer's top similar members, which the
-	// caller takes from ListSimilarBuddies so the scoring formula lives in one place. The day
+	// authors_only restricts to author_handles: the viewer's top similar members, which the
+	// caller takes from ListSimilarBuddies so the scoring formula lives in one place, or the
+	// one member whose page the viewer is reading. Either way the author still passes every
+	// predicate above, so naming a handle never widens what the viewer may see. The day
 	// is the UTC calendar date; the timestamp itself never leaves this query except as the
 	// cursor key. cursor_id is NULL for the first page. Otherwise it names the last event of
 	// the previous page and the page is read INCLUSIVE of it: the keyset position is resolved

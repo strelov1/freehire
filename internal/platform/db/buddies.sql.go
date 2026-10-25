@@ -655,7 +655,7 @@ LIMIT $5
 
 type ListBuddyFeedParams struct {
 	ViewerID      int64       `json:"viewer_id"`
-	SimilarOnly   bool        `json:"similar_only"`
+	AuthorsOnly   bool        `json:"authors_only"`
 	AuthorHandles []string    `json:"author_handles"`
 	CursorID      pgtype.Int8 `json:"cursor_id"`
 	PageLimit     int32       `json:"page_limit"`
@@ -685,8 +685,10 @@ type ListBuddyFeedRow struct {
 // either direction, events on a private (user-pasted) posting, and applications their author hid. The author's earlier events count
 // from before they joined: only left_at gates, never joined_at.
 //
-// similar_only restricts to author_handles, the viewer's top similar members, which the
-// caller takes from ListSimilarBuddies so the scoring formula lives in one place. The day
+// authors_only restricts to author_handles: the viewer's top similar members, which the
+// caller takes from ListSimilarBuddies so the scoring formula lives in one place, or the
+// one member whose page the viewer is reading. Either way the author still passes every
+// predicate above, so naming a handle never widens what the viewer may see. The day
 // is the UTC calendar date; the timestamp itself never leaves this query except as the
 // cursor key. cursor_id is NULL for the first page. Otherwise it names the last event of
 // the previous page and the page is read INCLUSIVE of it: the keyset position is resolved
@@ -697,7 +699,7 @@ type ListBuddyFeedRow struct {
 func (q *Queries) ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([]ListBuddyFeedRow, error) {
 	rows, err := q.db.Query(ctx, listBuddyFeed,
 		arg.ViewerID,
-		arg.SimilarOnly,
+		arg.AuthorsOnly,
 		arg.AuthorHandles,
 		arg.CursorID,
 		arg.PageLimit,

@@ -139,9 +139,9 @@ func decodeCV(raw []byte) resumeextract.Structured {
 	return s
 }
 
-func (r *QueriesRepository) Feed(ctx context.Context, viewerID int64, authors []string, similarOnly bool, cursorID int64, limit int) ([]FeedRow, error) {
+func (r *QueriesRepository) Feed(ctx context.Context, viewerID int64, authors []string, authorsOnly bool, cursorID int64, limit int) ([]FeedRow, error) {
 	p := db.ListBuddyFeedParams{
-		ViewerID: viewerID, SimilarOnly: similarOnly, AuthorHandles: authors, PageLimit: int32(limit),
+		ViewerID: viewerID, AuthorsOnly: authorsOnly, AuthorHandles: authors, PageLimit: int32(limit),
 	}
 	if cursorID != 0 {
 		p.CursorID = pgtype.Int8{Int64: cursorID, Valid: true}

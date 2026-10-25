@@ -182,14 +182,20 @@ type buddyFeedEntryResponse struct {
 	Day         string                   `json:"day"`
 }
 
-// Feed reads one page of other members' search progress.
+// Feed reads one page of other members' search progress. With ?handle= it reads that one
+// member's events instead (their page's activity), and mode is not read.
 func (h *buddyHandlers) Feed(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
-	mode := buddy.FeedMode(c.Query("mode", string(buddy.FeedSimilar)))
-	page, err := h.buddy.Feed(c.Context(), userID, mode, c.Query("cursor"), c.QueryInt("limit"))
+	var page buddy.FeedPage
+	if handle := c.Query("handle"); handle != "" {
+		page, err = h.buddy.MemberFeed(c.Context(), userID, handle, c.Query("cursor"), c.QueryInt("limit"))
+	} else {
+		mode := buddy.FeedMode(c.Query("mode", string(buddy.FeedSimilar)))
+		page, err = h.buddy.Feed(c.Context(), userID, mode, c.Query("cursor"), c.QueryInt("limit"))
+	}
 	if err != nil {
 		return buddyError(err)
 	}

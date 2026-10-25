@@ -390,3 +390,113 @@ func TestPrivateJobEventsNeverReachAnotherMember(t *testing.T) {
 		t.Fatalf("similar = %+v, %v", sim, err)
 	}
 }
+
+// A member's page reads the same feed narrowed to them: only their events, and only the
+// ones every other viewer of the feed could see.
+func TestMemberFeedIsOneAuthorUnderTheSameRules(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	viewer, author, other := seedUser(t, pool, "v@example.test"), seedUser(t, pool, "a@example.test"), seedUser(t, pool, "o@example.test")
+	joinWith(t, pool, svc, viewer, "", nil, nil)
+	hA := joinWith(t, pool, svc, author, "", nil, nil)
+	joinWith(t, pool, svc, other, "", nil, nil)
+	var privateJob int64
+	if err := pool.QueryRow(ctx, `INSERT INTO jobs (source, external_id, title, company, url, description, public_slug, is_private)
+		VALUES ('test', 'p1', 'Secret Role', 'Hush', 'https://example.test/p1', 'd', 'secret-p1', true) RETURNING id`).Scan(&privateJob); err != nil {
+		t.Fatalf("seed job: %v", err)
+	}
+
+	app := newApp(t, pool, author, "acme")
+	hiddenApp := newApp(t, pool, author, "globex")
+	applied := event(t, pool, author, app, "acme", "applied", "", 5)
+	interview := event(t, pool, author, app, "acme", "stage_set", "interview", 4)
+	event(t, pool, author, app, "acme", "stage_set", "rejected", 3)
+	event(t, pool, author, hiddenApp, "globex", "applied", "", 2)
+	private := event(t, pool, author, newApp(t, pool, author, "hush"), "hush", "applied", "", 1)
+	if _, err := pool.Exec(ctx, `UPDATE application_events SET job_id = $2 WHERE id = $1`, private, privateJob); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.HideApplication(ctx, author, hiddenApp); err != nil {
+		t.Fatal(err)
+	}
+	event(t, pool, other, newApp(t, pool, other, "acme"), "acme", "applied", "", 1)
+
+	got, err := svc.MemberFeed(ctx, viewer, hA, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int64{interview, applied}; !slices.Equal(feedIDs(got), want) {
+		t.Fatalf("member feed = %v, want %v", feedIDs(got), want)
+	}
+	for _, e := range got.Entries {
+		if e.Handle != hA {
+			t.Fatalf("entry from %q on %q's page", e.Handle, hA)
+		}
+	}
+}
+
+func TestMemberFeedPagesWithTheCursor(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	viewer, author, other := seedUser(t, pool, "v@example.test"), seedUser(t, pool, "a@example.test"), seedUser(t, pool, "o@example.test")
+	joinWith(t, pool, svc, viewer, "", nil, nil)
+	hA := joinWith(t, pool, svc, author, "", nil, nil)
+	joinWith(t, pool, svc, other, "", nil, nil)
+	app := newApp(t, pool, author, "acme")
+	otherApp := newApp(t, pool, other, "acme")
+	var want []int64
+	for h := 1; h <= 5; h++ { // newest first, interleaved with another author's events
+		want = append(want, event(t, pool, author, app, "acme", "applied", "", 2*h))
+		event(t, pool, other, otherApp, "acme", "applied", "", 2*h+1)
+	}
+	var seen []int64
+	cursor := ""
+	for range 10 {
+		p, err := svc.MemberFeed(ctx, viewer, hA, cursor, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen = append(seen, feedIDs(p)...)
+		if p.NextCursor == "" {
+			break
+		}
+		cursor = p.NextCursor
+	}
+	if !slices.Equal(seen, want) {
+		t.Fatalf("paged = %v, want %v", seen, want)
+	}
+	// Another author's event is not a position on this page.
+	otherEv := event(t, pool, other, otherApp, "acme", "applied", "", 20)
+	if _, err := svc.MemberFeed(ctx, viewer, hA, strconv.FormatInt(otherEv, 10), 2); !errors.Is(err, buddy.ErrBadFeedRequest) {
+		t.Fatalf("foreign cursor: err = %v", err)
+	}
+}
+
+// A handle the viewer may not see answers exactly as Profile does: not found.
+func TestMemberFeedUnavailableHandles(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	viewer, left, byMe, meBy, stranger := seedUser(t, pool, "v@example.test"), seedUser(t, pool, "l@example.test"),
+		seedUser(t, pool, "b1@example.test"), seedUser(t, pool, "b2@example.test"), seedUser(t, pool, "s@example.test")
+	hV := joinWith(t, pool, svc, viewer, "", nil, nil)
+	hL := joinWith(t, pool, svc, left, "", nil, nil)
+	hB1 := joinWith(t, pool, svc, byMe, "", nil, nil)
+	hB2 := joinWith(t, pool, svc, meBy, "", nil, nil)
+	if err := svc.Leave(ctx, left); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO buddy_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($3, $1)`, viewer, byMe, meBy); err != nil {
+		t.Fatal(err)
+	}
+	for name, h := range map[string]string{"unknown": "no-such-handle-00", "left": hL, "blocked by me": hB1, "blocked me": hB2, "own": hV} {
+		if _, err := svc.MemberFeed(ctx, viewer, h, "", 10); !errors.Is(err, buddy.ErrNotFound) {
+			t.Errorf("%s: member feed err = %v", name, err)
+		}
+		if _, err := svc.Profile(ctx, viewer, h); !errors.Is(err, buddy.ErrNotFound) {
+			t.Errorf("%s: profile err = %v", name, err)
+		}
+	}
+	if _, err := svc.MemberFeed(ctx, stranger, hV, "", 10); !errors.Is(err, buddy.ErrNotMember) {
+		t.Fatalf("non-member: err = %v", err)
+	}
+}

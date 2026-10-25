@@ -152,8 +152,10 @@ ORDER BY p.score DESC, p.joined_at DESC, p.user_id;
 -- either direction, events on a private (user-pasted) posting, and applications their author hid. The author's earlier events count
 -- from before they joined: only left_at gates, never joined_at.
 --
--- similar_only restricts to author_handles, the viewer's top similar members, which the
--- caller takes from ListSimilarBuddies so the scoring formula lives in one place. The day
+-- authors_only restricts to author_handles: the viewer's top similar members, which the
+-- caller takes from ListSimilarBuddies so the scoring formula lives in one place, or the
+-- one member whose page the viewer is reading. Either way the author still passes every
+-- predicate above, so naming a handle never widens what the viewer may see. The day
 -- is the UTC calendar date; the timestamp itself never leaves this query except as the
 -- cursor key. cursor_id is NULL for the first page. Otherwise it names the last event of
 -- the previous page and the page is read INCLUSIVE of it: the keyset position is resolved
@@ -181,7 +183,7 @@ WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
   -- A privately pasted posting is visible to its creator only: its event never reaches the feed.
   AND (j.id IS NULL OR NOT j.is_private)
   AND e.user_id <> sqlc.arg(viewer_id)
-  AND (NOT sqlc.arg(similar_only)::bool OR m.handle = ANY(sqlc.arg(author_handles)::text[]))
+  AND (NOT sqlc.arg(authors_only)::bool OR m.handle = ANY(sqlc.arg(author_handles)::text[]))
   AND (sqlc.narg(cursor_id)::bigint IS NULL
        OR (e.occurred_at, e.id) <= (SELECT c.occurred_at, c.id FROM application_events c WHERE c.id = sqlc.narg(cursor_id)::bigint))
   AND NOT EXISTS (

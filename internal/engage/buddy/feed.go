@@ -78,7 +78,6 @@ func (s *Service) Feed(ctx context.Context, viewerID int64, mode FeedMode, curso
 	if err := s.requireActive(ctx, viewerID); err != nil {
 		return FeedPage{}, err
 	}
-	limit = clampFeedLimit(limit)
 
 	var authors []string
 	if mode == FeedSimilar {
@@ -95,13 +94,34 @@ func (s *Service) Feed(ctx context.Context, viewerID int64, mode FeedMode, curso
 			return FeedPage{}, nil
 		}
 	}
+	return s.feedPage(ctx, viewerID, authors, mode == FeedSimilar, after, clampFeedLimit(limit))
+}
+
+// MemberFeed reads one page of a single member's events, for that member's page. It is
+// the same query as Feed narrowed to one author, so every visibility rule still applies;
+// a handle the viewer may not see is ErrNotFound, exactly as Profile answers it.
+func (s *Service) MemberFeed(ctx context.Context, viewerID int64, handle, cursor string, limit int) (FeedPage, error) {
+	after, err := decodeFeedCursor(cursor)
+	if err != nil {
+		return FeedPage{}, err
+	}
+	target, err := s.visibleMember(ctx, viewerID, handle)
+	if err != nil {
+		return FeedPage{}, err
+	}
+	return s.feedPage(ctx, viewerID, []string{target.Handle}, true, after, clampFeedLimit(limit))
+}
+
+// feedPage reads the page after the event `after` (0 for the first page), restricted to
+// authors when authorsOnly is set.
+func (s *Service) feedPage(ctx context.Context, viewerID int64, authors []string, authorsOnly bool, after int64, limit int) (FeedPage, error) {
 	// One extra row says whether another page exists. A continuation also reads the
 	// cursor's own event, which the repository returns first.
 	want := limit + 1
 	if after != 0 {
 		want++
 	}
-	rows, err := s.repo.Feed(ctx, viewerID, authors, mode == FeedSimilar, after, want)
+	rows, err := s.repo.Feed(ctx, viewerID, authors, authorsOnly, after, want)
 	if err != nil {
 		return FeedPage{}, err
 	}

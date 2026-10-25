@@ -72,8 +72,8 @@ type Repository interface {
 	Similar(ctx context.Context, userID int64, limit, offset int) ([]SimilarRow, error)
 	// Feed is up to limit rows, newest first, starting at the event cursorID (0 for the
 	// first page; the cursor's own event is included when the viewer may see it). When
-	// similarOnly is set only the authors named by handle are read.
-	Feed(ctx context.Context, viewerID int64, authors []string, similarOnly bool, cursorID int64, limit int) ([]FeedRow, error)
+	// authorsOnly is set only the authors named by handle are read.
+	Feed(ctx context.Context, viewerID int64, authors []string, authorsOnly bool, cursorID int64, limit int) ([]FeedRow, error)
 	// HideApplication reports false when the application is not the user's.
 	HideApplication(ctx context.Context, userID, applicationID int64) (bool, error)
 	ShowApplication(ctx context.Context, userID, applicationID int64) error
@@ -208,27 +208,9 @@ func (s *Service) Touch(ctx context.Context, userID int64) error {
 
 // Profile returns the anonymous profile behind handle for an active member viewing it.
 func (s *Service) Profile(ctx context.Context, viewerID int64, handle string) (Profile, error) {
-	viewer, ok, err := s.repo.Member(ctx, viewerID)
+	target, err := s.visibleMember(ctx, viewerID, handle)
 	if err != nil {
 		return Profile{}, err
-	}
-	if !ok || !viewer.Active {
-		return Profile{}, ErrNotMember
-	}
-	target, ok, err := s.repo.MemberByHandle(ctx, handle)
-	if err != nil {
-		return Profile{}, err
-	}
-	if !ok || !target.Active {
-		return Profile{}, ErrNotFound
-	}
-	// A blocked pair reads as an unknown handle, so a block is not revealed.
-	blocked, err := s.repo.Blocked(ctx, viewerID, target.UserID)
-	if err != nil {
-		return Profile{}, err
-	}
-	if blocked {
-		return Profile{}, ErrNotFound
 	}
 	in, err := s.repo.Inputs(ctx, target.UserID)
 	if err != nil {
@@ -236,6 +218,30 @@ func (s *Service) Profile(ctx context.Context, viewerID int64, handle string) (P
 	}
 	card := talentnetwork.ProjectCard(in.CV)
 	return Profile{Handle: target.Handle, Card: card, EmptyCard: cardIsEmpty(card)}, nil
+}
+
+// visibleMember resolves the member behind handle for an active viewer. An unknown
+// handle, a member who left, a blocked pair in either direction and the viewer's own
+// handle all read as ErrNotFound, so none of them can be told apart from outside.
+func (s *Service) visibleMember(ctx context.Context, viewerID int64, handle string) (Member, error) {
+	if err := s.requireActive(ctx, viewerID); err != nil {
+		return Member{}, err
+	}
+	target, ok, err := s.repo.MemberByHandle(ctx, handle)
+	if err != nil {
+		return Member{}, err
+	}
+	if !ok || !target.Active || target.UserID == viewerID {
+		return Member{}, ErrNotFound
+	}
+	blocked, err := s.repo.Blocked(ctx, viewerID, target.UserID)
+	if err != nil {
+		return Member{}, err
+	}
+	if blocked {
+		return Member{}, ErrNotFound
+	}
+	return target, nil
 }
 
 // rankingKeys derives the similarity keys. Category is what the primary role title

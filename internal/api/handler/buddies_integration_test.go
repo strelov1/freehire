@@ -172,6 +172,15 @@ func TestBuddyMembershipSimilarFeedProfile(t *testing.T) {
 	env.want(http.StatusBadRequest, http.MethodGet, "/api/v1/me/buddies/feed?mode=nope", "a", nil)
 	env.want(http.StatusBadRequest, http.MethodGet, "/api/v1/me/buddies/feed?mode=all&cursor=garbage", "a", nil)
 
+	// ?handle= reads one member's activity; mode is not read beside it.
+	member := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/buddies/feed?handle="+hb+"&mode=nope", "a", nil)
+	if data, ok := member["data"].([]any); !ok || len(data) != 0 || member["meta"].(map[string]any)["next_cursor"] != nil {
+		t.Fatalf("member feed = %v", member)
+	}
+	env.want(http.StatusNotFound, http.MethodGet, "/api/v1/me/buddies/feed?handle=nobody-here", "a", nil)
+	env.want(http.StatusNotFound, http.MethodGet, "/api/v1/me/buddies/feed?handle="+ha, "a", nil)
+	env.want(http.StatusBadRequest, http.MethodGet, "/api/v1/me/buddies/feed?handle="+hb+"&cursor=garbage", "a", nil)
+
 	env.want(http.StatusNoContent, http.MethodDelete, "/api/v1/me/buddies", "b", nil)
 	if env.want(http.StatusOK, http.MethodGet, "/api/v1/me/buddies", "b", nil)["data"].(map[string]any)["member"] != false {
 		t.Fatal("left member still reports as member")
