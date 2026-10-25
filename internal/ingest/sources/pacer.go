@@ -729,6 +729,31 @@ func limitedPotokGetter(c HTMLGetter) HTMLGetter {
 	return concurrencyLimitedHTMLGetter{inner: c, sem: make(chan struct{}, potokMaxInFlight)}
 }
 
+// coveto serves every tenant from one platform — 850 live tenants and 66,443 open postings
+// measured 2026-10-25, a white-labelled tenant's pages included — and each posting's body is its
+// own page, so a first crawl is tens of thousands of page requests to one origin. 80 posting
+// pages at 8 in flight all answered 200 (~0.9s each); nothing wider was measured, and the
+// pipeline's board workers would each fan out defaultDetailWorkers on top of one another. So the
+// whole provider's posting pages share the measured 8 — Teamtailor's bulk 403 is the shape of
+// what an unbounded per-posting fan-out earns. The feed requests, one per board, are not capped.
+const covetoMaxInFlight = 8
+
+// limitedCoveto routes coveto's posting-page requests through one shared semaphore and passes
+// its feed requests through untouched.
+type limitedCoveto struct {
+	covetoGetter
+	pages HTMLGetter
+}
+
+func (g limitedCoveto) GetHTML(ctx context.Context, url string) (*html.Node, error) {
+	return g.pages.GetHTML(ctx, url)
+}
+
+// limitedCovetoGetter wraps a getter with a fresh semaphore shared across one registry build.
+func limitedCovetoGetter(c covetoGetter) covetoGetter {
+	return limitedCoveto{covetoGetter: c, pages: concurrencyLimitedHTMLGetter{inner: c, sem: make(chan struct{}, covetoMaxInFlight)}}
+}
+
 // FriendWork's API meters simultaneity AND rate: two parallel workers drew 429s, while sequential
 // requests at ~2/s were clean (2026-10-14). So its requests run one at a time AND no faster than
 // that measured pace — a single listing can be ~2 MB, and a rate limit alone would let the next

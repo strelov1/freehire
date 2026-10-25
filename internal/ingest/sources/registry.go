@@ -445,6 +445,9 @@ func All(c HTTPClient) map[string]Source {
 		NewFlatchr(c),
 		NewDvinci(c),
 		NewRexx(c),
+		NewCoveto(limitedCovetoGetter(c)),
+		NewConcludis(c),
+		NewKenjo(c),
 		NewMicro1(c, os.Getenv("MICRO1_REFERRAL_CODE")),
 		NewBairesDev(c, os.Getenv("BAIRESDEV_REFERRER_CODE")),
 		// RU federal open-data aggregator: board-based, sharded per region (board = OKATO code).

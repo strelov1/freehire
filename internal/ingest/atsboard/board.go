@@ -302,6 +302,12 @@ var atsBoards = []struct{ host, source, mode string }{
 	// softgarden.io alone, a .de tenant hid behind a second DNS label and was declined.
 	{"career.softgarden.de", "softgarden", modeSubdomain},
 	{"careers.hibob.com", "hibob", modeSubdomain}, // HiBob's careers module: <tenant>.careers.hibob.com
+	// German ATSs whose tenants are a label on the vendor's domain. coveto's label is the
+	// customer number (k60360.coveto.de); concludis's and Kenjo's are a name
+	// (hhla.concludis.de, ict-ds.kenjo.io). The vendors' own hosts are in platformLabelsByApex.
+	{"coveto.de", "coveto", modeSubdomain},
+	{"concludis.de", "concludis", modeSubdomain},
+	{"kenjo.io", "kenjo", modeSubdomain},
 	// Emply: <tenant>.career.emply.com. A site on the customer's own domain (midtjob.dk) is a
 	// vanity host and stays unrecognised here.
 	{"career.emply.com", "emply", modeSubdomain},
@@ -1356,6 +1362,11 @@ var platformLabelsByApex = map[string][]string{
 	"pandape.catho.com.br":     {"www", "empregos"},
 	"pandape.com.br":           {"www", "empregos"},
 	"pandape.computrabajo.com": {"www", "empleos"},
+	"coveto.de":                {"www"}, // the vendor's marketing site and blog
+	"concludis.de":             {"www"},
+	// Kenjo's marketing site, its HR-templates hub, and the host signed URLs to tenant files
+	// are served from; help, blog and app are platformLabels already.
+	"kenjo.io": {"www", "hr", "files"},
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —
