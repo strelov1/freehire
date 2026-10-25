@@ -7,7 +7,7 @@ import "testing"
 // screen promised exactly that, and an approved application parked on fourteen undrafted
 // answers when they were not.
 func TestSubmits_FollowsEveryPathThatCompletesAnApplication(t *testing.T) {
-	executor := &BrowserUseExecutor{}
+	executor := &BrowserUseExecutor{spend: &runSpendGuard{}}
 
 	t.Setenv("AUTO_APPLY_BROWSERUSE_ENFORCE", "1")
 	if !(&Client{browserUse: executor}).submits("workable") {
@@ -40,5 +40,16 @@ func TestResolve_WorkableNameFields(t *testing.T) {
 	}
 	if plan.Fields[0].Value != "Ilya" || plan.Fields[1].Value != "Strelov" {
 		t.Errorf("fields = %+v", plan.Fields)
+	}
+}
+
+// A run whose browser-use budget is spent cannot send a Workable application, so it does not
+// pay to draft one either.
+func TestSubmits_NotOnceTheBrowserUseBudgetIsSpent(t *testing.T) {
+	t.Setenv("AUTO_APPLY_BROWSERUSE_ENFORCE", "1")
+	spent := &BrowserUseExecutor{spend: &runSpendGuard{limitUSD: 1, spentUSD: 1}}
+
+	if (&Client{browserUse: spent}).submits("workable") {
+		t.Error("submits = true with the day's browser-use budget spent")
 	}
 }

@@ -391,8 +391,10 @@ func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged 
 
 // submits reports whether Submit can complete an application on provider — through this
 // package's own browser (fillProviders) or through the browser-use executor when it is wired
-// and enforcing. resolve drafts only for these, so a draft is never paid for that nothing will
-// send, and never withheld from one that will be sent.
+// and enforcing with budget left today. resolve drafts only for these, so a draft is never
+// paid for that nothing will send, and never withheld from one that will be sent. The budget
+// is asked again at submission (BrowserUseExecutor.submit): another attempt may spend what was
+// left in between, and that refusal parks the attempt as before.
 //
 // It used to read fillProviders alone, from before browser-use submitted anything: on
 // 2026-10-25 an approved Workable application whose review screen said fourteen answers
@@ -402,7 +404,7 @@ func (c *Client) submits(provider string) bool {
 	if fillProviders[provider] {
 		return true
 	}
-	return c.browserUse != nil && browserUseProviders[provider] && browserUseEnforce()
+	return c.browserUse != nil && browserUseProviders[provider] && browserUseEnforce() && c.browserUse.spend.allow(true)
 }
 
 // requirePaid asks the entitlement, failing closed when none is configured.
