@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +41,7 @@ func TestApplySessionIsOnePerApplication(t *testing.T) {
 	open := func() (int, applySessionView) {
 		resp := assistantRequest(t, app, fiber.MethodPost,
 			"/api/v1/assistant/sessions?preset=apply&job=go-developer-apply-1", cookie, nil)
+		defer resp.Body.Close()
 		var got applySessionView
 		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
 			t.Fatalf("decode: %v", err)
@@ -80,6 +80,7 @@ func TestApplySessionNeedsTheCallersApplication(t *testing.T) {
 
 	resp := assistantRequest(t, app, fiber.MethodPost,
 		"/api/v1/assistant/sessions?preset=apply&job=go-developer-apply-2", cookie, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("apply session on another candidate's application: status %d, want 404", resp.StatusCode)
 	}
@@ -127,12 +128,15 @@ func TestApplySyncNarratesNewEventsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	sync := func() *http.Response {
-		return assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions/"+sess.ID.String()+"/sync", cookie, nil)
+	sync := func() (int, string) {
+		resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions/"+sess.ID.String()+"/sync", cookie, nil)
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(body)
 	}
 
-	if resp := sync(); resp.StatusCode != fiber.StatusNoContent {
-		t.Fatalf("sync with no attempt: status %d, want 204", resp.StatusCode)
+	if status, _ := sync(); status != fiber.StatusNoContent {
+		t.Fatalf("sync with no attempt: status %d, want 204", status)
 	}
 	if model.calls != 0 {
 		t.Fatalf("nothing to narrate cost %d model calls", model.calls)
@@ -144,12 +148,11 @@ func TestApplySyncNarratesNewEventsOnce(t *testing.T) {
 		t.Fatalf("queue attempt: %v", err)
 	}
 
-	resp := sync()
-	if resp.StatusCode != fiber.StatusOK {
-		t.Fatalf("sync with a new event: status %d, want 200", resp.StatusCode)
+	status, body := sync()
+	if status != fiber.StatusOK {
+		t.Fatalf("sync with a new event: status %d, want 200", status)
 	}
-	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "waiting for two answers") {
+	if !strings.Contains(body, "waiting for two answers") {
 		t.Errorf("the narration did not reach the stream: %s", body)
 	}
 	if model.calls != 1 {
@@ -159,8 +162,8 @@ func TestApplySyncNarratesNewEventsOnce(t *testing.T) {
 		t.Error("the cursor did not advance past the narrated event")
 	}
 
-	if resp := sync(); resp.StatusCode != fiber.StatusNoContent {
-		t.Errorf("second sync: status %d, want 204 — the event was already narrated", resp.StatusCode)
+	if status, _ := sync(); status != fiber.StatusNoContent {
+		t.Errorf("second sync: status %d, want 204 — the event was already narrated", status)
 	}
 	if model.calls != 1 {
 		t.Errorf("the same event was narrated twice (model calls = %d)", model.calls)
@@ -194,6 +197,7 @@ func TestApplySyncKeepsTheCursorWhenTheTurnFails(t *testing.T) {
 	}
 
 	resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions/"+sess.ID.String()+"/sync", cookie, nil)
+	defer resp.Body.Close()
 	_, _ = io.ReadAll(resp.Body)
 	if cur := narratedCursor(t, pool, sess.ID.String()); cur != nil {
 		t.Errorf("the cursor advanced to %d past a narration that failed", *cur)
@@ -211,6 +215,7 @@ func TestSyncRefusesOtherPresets(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 	resp := assistantRequest(t, app, fiber.MethodPost, "/api/v1/assistant/sessions/"+sess.ID.String()+"/sync", cookie, nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusConflict {
 		t.Errorf("sync on a chat session: status %d, want 409", resp.StatusCode)
 	}
