@@ -379,6 +379,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   applicantpro: 'ApplicantPro', '4dayweek': '4 Day Week',
   isolvedhire: 'isolved Hire', hrmdirect: 'HRM Direct', hireclick: 'HireClick', catsone: 'CATS',
   alfabank: 'Alfa-Bank', aijobs: 'AI Jobs', remotedotcom: 'Remote.com',
+  sitemapldjson: 'Sitemap JSON-LD',
   ptsecurity: 'Positive Technologies', tochka: 'Tochka Bank',
   sber: 'Sber', uzum: 'Uzum', megafon: 'MegaFon', freshteam: 'Freshteam', startupjobs: 'startup.jobs',
   wttj: 'Welcome to the Jungle',

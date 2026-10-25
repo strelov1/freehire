@@ -1,8 +1,12 @@
 package sources
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -62,4 +66,47 @@ func resolveSubSitemap(ctx context.Context, c XMLGetter, indexURL, needle string
 		}
 	}
 	return "", nil
+}
+
+const sitemapMaxUncompressed = 32 << 20
+
+func decodeSitemapBody(body []byte) (sitemapDoc, error) {
+	raw, err := sitemapBytes(body)
+	if err != nil {
+		return sitemapDoc{}, err
+	}
+	var doc struct {
+		XMLName  xml.Name
+		URLs     []sitemapLoc `xml:"url"`
+		Sitemaps []sitemapLoc `xml:"sitemap"`
+	}
+	if err := xml.Unmarshal(raw, &doc); err != nil {
+		return sitemapDoc{}, err
+	}
+	switch strings.ToLower(doc.XMLName.Local) {
+	case "urlset", "sitemapindex":
+	default:
+		return sitemapDoc{}, fmt.Errorf("sitemap root %q", doc.XMLName.Local)
+	}
+	return sitemapDoc{URLs: doc.URLs, Sitemaps: doc.Sitemaps}, nil
+}
+
+func sitemapBytes(body []byte) ([]byte, error) {
+	if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
+		zr, err := gzip.NewReader(bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("gzip: %w", err)
+		}
+		defer func() { _ = zr.Close() }()
+		raw, err := io.ReadAll(io.LimitReader(zr, sitemapMaxUncompressed+1))
+		if err != nil {
+			return nil, fmt.Errorf("gzip: %w", err)
+		}
+		if len(raw) > sitemapMaxUncompressed {
+			return nil, fmt.Errorf("gzip sitemap exceeds %d bytes", sitemapMaxUncompressed)
+		}
+		body = raw
+	}
+	body = bytes.TrimSpace(body)
+	return bytes.TrimPrefix(body, []byte("\xef\xbb\xbf")), nil
 }

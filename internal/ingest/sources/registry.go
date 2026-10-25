@@ -492,6 +492,10 @@ func All(c HTTPClient) map[string]Source {
 		// Japan Dev: curated Japan technology aggregator. One public sitemap lists posting URLs;
 		// detail pages carry structured Nuxt SSR state and official ATS apply links when available.
 		NewJapanDev(c),
+		// sitemapldjson: board is a sitemap URL (plain XML or .xml.gz, index walked
+		// to a fixed depth). Region is an optional URL glob. Pages with no JobPosting
+		// are skipped. Hydrating, with a per-run cap on new detail fetches.
+		NewSitemapLDJSON(c),
 		// ITviec: Vietnam's IT-only board. One server-rendered listing names the whole
 		// catalogue; posting pages carry a schema.org JobPosting. Paced, see itviecRequestInterval.
 		NewITviec(pacedHTMLGetter(c, itviecRequestInterval, itviecRequestBurst)),
