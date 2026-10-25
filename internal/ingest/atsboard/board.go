@@ -614,11 +614,11 @@ var pathPatternBoards = map[string]pathPattern{
 	},
 	// Taleo Enterprise on the vendor's own domain: <tenant>.taleo.net/careersection/<section>/
 	// <page>.ftl, and the adapter's board is "<host>/<section>" (internal/ingest/sources/taleo.go).
-	// reject names the platform's own trees beside the sections (/careersection/rest/…,
-	// /careersection/iam/…). A Taleo career site on the employer's own domain stays underivable.
+	// A section is named freely ("2", "ex", ".nexcom_ext_prof_cs", "rstrcs1.1"); reject names the
+	// platform's own trees beside them (/careersection/rest/…, /careersection/iam/…). A Taleo career site on the employer's own domain stays underivable.
 	"taleo.net": {
-		path:       regexp.MustCompile(`^/careersection/([A-Za-z0-9_]+)(?:/|$)`),
-		reject:     regexp.MustCompile(`^(?i:rest|iam)$`),
+		path:       regexp.MustCompile(`^/careersection/([A-Za-z0-9_.-]+)(?:/|$)`),
+		reject:     regexp.MustCompile(`^(?:(?i:rest|iam)|\.+)$`),
 		listing:    "/careersection/%s/jobsearch.ftl",
 		tenantHost: true,
 	},

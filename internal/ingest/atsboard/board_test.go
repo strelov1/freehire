@@ -227,6 +227,7 @@ func TestRecognize(t *testing.T) {
 		{"jibe on the vendor domain", "https://cipd.jibeapply.com/jobs", "jibe", "cipd.jibeapply.com", "https://cipd.jibeapply.com", true},
 		{"taleo careersection", "https://aa020.taleo.net/careersection/cuhkmc/jobsearch.ftl?lang=en", "taleo", "aa020.taleo.net/cuhkmc", "https://aa020.taleo.net/careersection/cuhkmc/jobsearch.ftl", true},
 		{"taleo posting", "https://etisalatmisr.taleo.net/careersection/ex/jobdetail.ftl?job=12345", "taleo", "etisalatmisr.taleo.net/ex", "https://etisalatmisr.taleo.net/careersection/ex/jobsearch.ftl", true},
+		{"taleo section with dots and dashes", "https://nexcom.taleo.net/careersection/.nexcom_ext_prof_cs/jobsearch.ftl", "taleo", "nexcom.taleo.net/.nexcom_ext_prof_cs", "https://nexcom.taleo.net/careersection/.nexcom_ext_prof_cs/jobsearch.ftl", true},
 		{"taleo rest tree is not a section", "https://acme.taleo.net/careersection/rest/jobboard/searchjobs", "", "", "", false},
 		{"oracle candidate experience site", "https://epwk.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/jobs", "oracle", "epwk.fa.us2.oraclecloud.com/CX", "https://epwk.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX", true},
 		{"oracle posting", "https://ekcm.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en-GB/sites/CX_1001/job/42", "oracle", "ekcm.fa.us6.oraclecloud.com/CX_1001", "https://ekcm.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001", true},
