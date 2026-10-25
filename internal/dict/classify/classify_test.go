@@ -807,6 +807,25 @@ func TestParse_DesignSplit(t *testing.T) {
 		{"Silicon Design Engineer", "hardware"},
 		{"Memory Design Engineer", "hardware"},
 
+		// "Digital design" names three crafts. The chip side is stated by a second
+		// word — ASIC, verification, an engineering grade — and goes to `hardware`;
+		// a building discipline goes to draughting; the bare phrase stays design.
+		// Real open titles, 2026-10-25.
+		{"ASIC Digital Design, Sr Staff Engineer - 18568", "hardware"},
+		{"ASIC Digital Design, Architect - 18388", "hardware"}, // ahead of bare "architect"
+		{"Digital Design Architect", "hardware"},
+		{"Digital Design Verification Engineer", "hardware"},
+		{"Staff Engineer, Digital Design Engineering", "hardware"},
+		{"Principal Engineer - Digital Design", "hardware"},
+		{"IC Digital Design Intern", "hardware"},
+		{"Senior ASIC Research Engineer – Front-end Digital Design", "hardware"}, // not web frontend
+		{"Digital Design Specialist (Electrical)", "engineering_design"},
+		{"Electrical Digital Design Lead (Buildings)", "engineering_design"},
+		{"Structural BIM-Digital Design Team Lead", "engineering_design"},
+		{"Digital Design Manager", "design"},
+		{"Graphic/Digital Design Intern", "design"},
+		{"Werkstudent (m/w/d) Digital Design / UI-Design", "design"},
+
 		// precision — the neighbours of the inserted block must not shift
 		{"Hardware Design Engineer", "hardware"},        // hardware precedes the design block
 		{"Content Designer", "technical_writing"},       // technical_writing still wins
