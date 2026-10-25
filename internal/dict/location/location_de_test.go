@@ -24,6 +24,11 @@ func TestParseGermanLocations(t *testing.T) {
 		// A small place never states a country on its own: the same name is a village in
 		// more than one country, and this table is evidence of a NAME, not of a place.
 		{"small town alone states nothing", "Hasbergen", nil, nil},
+		// Nor does a country another CITY implies: Recife places the line in Brazil only by
+		// the long-tail fallback, which a small place may not lean on (synthetic).
+		{"small town beside an inferring city", "Recife, São João do Triunfo", []string{"br"}, []string{"Recife"}},
+		// French "Canton" is a US city, not an area word (synthetic).
+		{"Canton MA stays American", "Canton MA", []string{"us"}, nil},
 
 		// Austrian Länder and Swiss cantons.
 		{"Austrian Land alone", "Oberösterreich", []string{"at"}, nil},

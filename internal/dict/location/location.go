@@ -219,6 +219,10 @@ func Parse(location string) Geo {
 		}
 	}
 
+	// Before the long-tail fallback below, never after: a pending city waits for a country
+	// the line STATED, and a country inferred from another city is not that.
+	resolvePending(pending, countrySet, citySet)
+
 	// Nothing in the line stated a country, so the long-tail cities get to — but only
 	// with one voice. Two guards, and the change is wrong without either:
 	//
@@ -239,8 +243,6 @@ func Parse(location string) Geo {
 			}
 		}
 	}
-
-	resolvePending(pending, countrySet, citySet)
 
 	// A metro needs one stated country: a line naming two cannot place a city in either
 	// without guessing.
@@ -378,13 +380,14 @@ func stripWorkmodeWords(tok string) string {
 
 // areaPrefixes name the area AROUND a place ("Großraum Hannover", "Region Stuttgart",
 // "Raum München", "Standort Erkheim", "Kanton Bern"); areaSuffixes do the same from the
-// other side ("Stuttgart und Umgebung"). The place is what remains. English "Greater" is
+// other side ("Stuttgart und Umgebung"). The place is what remains. French "Canton" is
+// not here: it is a city in Massachusetts and Ohio ("Canton MA"). English "Greater" is
 // deliberately not here: "Greater London" and "Greater Manchester" are subdivision names in
 // their own right (foreignSubdivisionNames), and stripping would hand "Manchester" to the
 // contested city table.
 var (
 	areaPrefixes = []string{"großraum ", "grossraum ", "metropolregion ", "region ", "raum ",
-		"umkreis ", "standort ", "kanton ", "canton "}
+		"umkreis ", "standort ", "kanton "}
 	areaSuffixes = []string{" und umgebung", " und umland"}
 )
 
