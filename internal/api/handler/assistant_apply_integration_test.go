@@ -85,14 +85,14 @@ func TestApplySessionNeedsTheCallersApplication(t *testing.T) {
 	}
 }
 
-// countingModel answers with one line and counts how often it was asked; fail makes every
+// narrationModel answers with one line and counts how often it was asked; fail makes every
 // call an upstream error.
-type countingModel struct {
+type narrationModel struct {
 	calls int
 	fail  bool
 }
 
-func (m *countingModel) Chat(_ context.Context, _ []llms.MessageContent, _ []llms.Tool, s llm.ChatStream) (*llms.ContentChoice, error) {
+func (m *narrationModel) Chat(_ context.Context, _ []llms.MessageContent, _ []llms.Tool, s llm.ChatStream) (*llms.ContentChoice, error) {
 	m.calls++
 	if m.fail {
 		return nil, errors.New("upstream is down")
@@ -119,7 +119,7 @@ func narratedCursor(t *testing.T, pool *pgxpool.Pool, sessionID string) *int64 {
 func TestApplySyncNarratesNewEventsOnce(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	model := &countingModel{}
+	model := &narrationModel{}
 	app, h := newAssistantApp(pool, iss, model)
 	userID, cookie := assistantUser(t, pool, iss, "apply-sync@example.test", true)
 	jobID := seedApplication(t, pool, userID, "apply-sync-1", "applied")
@@ -180,7 +180,7 @@ func TestApplySyncNarratesNewEventsOnce(t *testing.T) {
 func TestApplySyncKeepsTheCursorWhenTheTurnFails(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	model := &countingModel{fail: true}
+	model := &narrationModel{fail: true}
 	app, h := newAssistantApp(pool, iss, model)
 	userID, cookie := assistantUser(t, pool, iss, "apply-sync-2@example.test", true)
 	jobID := seedApplication(t, pool, userID, "apply-sync-2", "applied")
@@ -204,7 +204,7 @@ func TestApplySyncKeepsTheCursorWhenTheTurnFails(t *testing.T) {
 func TestSyncRefusesOtherPresets(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	app, h := newAssistantApp(pool, iss, &countingModel{})
+	app, h := newAssistantApp(pool, iss, &narrationModel{})
 	userID, cookie := assistantUser(t, pool, iss, "apply-sync-3@example.test", true)
 	sess, err := h.store.CreateSession(context.Background(), userID, "chat", nil, nil)
 	if err != nil {
