@@ -323,7 +323,7 @@ func ExtractUKGBrandName(alt string) string {
 type taleoResolver struct{ http textGetter }
 
 var (
-	taleoCopyrightLine = regexp.MustCompile(`(?:&copy;|©)\s*([^<"]{2,120})`)
+	taleoCopyrightLine = regexp.MustCompile(`(?i)(?:&copy;|&#169;|&#xa9;|©)\s*([^<"]{2,120})`)
 	taleoLogo          = regexp.MustCompile(`<img[^>]*class="[^"]*logo[^"]*"[^>]*>`)
 )
 
@@ -336,7 +336,9 @@ func (r taleoResolver) Name(ctx context.Context, board string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if m := taleoCopyrightLine.FindStringSubmatch(body); m != nil {
+	// Every copyright line is read, not only the first: a page may also carry the platform's own
+	// ("© Oracle"), which ExtractTaleoCopyright refuses.
+	for _, m := range taleoCopyrightLine.FindAllStringSubmatch(body, -1) {
 		if name := ExtractTaleoCopyright(html.UnescapeString(m[1])); name != "" {
 			return name, nil
 		}
@@ -367,24 +369,26 @@ var (
 func ExtractTaleoCopyright(line string) string {
 	s := strings.Join(strings.Fields(line), " ")
 	s = taleoCopyrightLead.ReplaceAllString(s, "")
-	low, cut := strings.ToLower(s), len(s)
+	// Searched with a leading space so a statement with no holder before it ("2025 All rights
+	// reserved.") cuts to nothing rather than becoming the name.
+	low, cut := " "+strings.ToLower(s), len(s)
 	for _, m := range taleoRightsMarkers {
 		if i := strings.Index(low, m); i >= 0 && i < cut {
-			cut = i
+			cut = max(i-1, 0)
 		}
 	}
 	s = s[:cut]
-	parts := strings.Split(s, "|")
-	s = ""
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if taleoAddress.MatchString(part) {
-			return "" // a footer that carries an address is not naming the holder in this part
-		}
-		if part != "" && s == "" {
-			s = part
+	first := ""
+	for _, part := range strings.Split(s, "|") {
+		if part = strings.TrimSpace(part); part != "" {
+			first = part
+			break
 		}
 	}
+	if taleoAddress.MatchString(first) {
+		return "" // "2016 | 8000 York Road | Towson, MD": the footer names a place, not a holder
+	}
+	s = first
 	// "West Virginia University. West Virginia University" — the holder, then a sentence that
 	// repeats it.
 	if before, after, ok := strings.Cut(s, ". "); ok && strings.HasPrefix(after, before) {
@@ -396,6 +400,11 @@ func ExtractTaleoCopyright(line string) string {
 	}
 	if !strings.ContainsFunc(s, unicode.IsLetter) {
 		return ""
+	}
+	for _, w := range words.FindAllString(s, -1) {
+		if w := strings.ToLower(w); w == "oracle" || w == "taleo" {
+			return "" // the platform's copyright, not the employer's
+		}
 	}
 	return s
 }

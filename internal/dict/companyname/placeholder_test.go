@@ -248,7 +248,10 @@ func TestExtractTaleoCopyright(t *testing.T) {
 		"City of St. Louis":                                                   "City of St. Louis",
 		"Southern Methodist University, PO Box 750100, Dallas, TX 75275":      "Southern Methodist University",
 		"2025 West Virginia University. West Virginia University is an Equal": "West Virginia University",
-		"2020": "",
+		"2020":                                       "",
+		"2025 All rights reserved.":                  "",
+		"2025 Oracle Corporation":                    "",
+		"2025 Acme Inc. | 100 Main Street":           "Acme Inc.",
 		"2016 | 8000 York Road | Towson, MD 21252 |": "",
 		"": "",
 	}
@@ -284,7 +287,7 @@ func TestExtractTaleoLogoAlt(t *testing.T) {
 func TestPlaceholderTaleoPrefersTheFooter(t *testing.T) {
 	const page = "https://hyatt.taleo.net/careersection/10780/jobsearch.ftl?lang=en"
 	getter := fakeHTTP{
-		page: `<img class="logo_img" alt="Hyatt Taleo" src="/x.png"><div>&copy; 2018 by Hyatt Corporation</div>`,
+		page: `<img class="logo_img" alt="Hyatt Taleo" src="/x.png"><p>&#169; 2025 Oracle Corporation</p><div>&copy; 2018 by Hyatt Corporation</div>`,
 		"https://hdr.taleo.net/careersection/hdr_mobile/jobsearch.ftl?lang=en": `<img class="logo_img" alt="Marcus Careers">`,
 		"https://none.taleo.net/careersection/2/jobsearch.ftl?lang=en":         `<title>Job Search</title>`,
 	}
