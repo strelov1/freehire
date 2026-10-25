@@ -116,12 +116,14 @@ func capProvider(rows []db.ListPlaceholderCompanyBoardsRow, provider string, n, 
 	if int64(len(mine)) <= n {
 		return rows
 	}
-	keep := make(map[int]bool, n)
+	// Indexes stay int64 throughout: n arrived as a 64-bit knob, and narrowing it to int is a
+	// conversion nothing here needs.
+	keep := make(map[int]bool)
 	start := offset % int64(len(mine))
 	for k := int64(0); k < n; k++ {
 		keep[mine[(start+k)%int64(len(mine))]] = true
 	}
-	out := make([]db.ListPlaceholderCompanyBoardsRow, 0, len(rows)-len(mine)+int(n))
+	out := make([]db.ListPlaceholderCompanyBoardsRow, 0, len(rows))
 	for i, row := range rows {
 		if row.Provider != provider || keep[i] {
 			out = append(out, row)
