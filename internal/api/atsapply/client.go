@@ -369,6 +369,11 @@ func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged 
 	if c.atoms == nil || !c.submits(claimed.Provider) {
 		return Resolve(merged, answers, hasApprovedCV), nil
 	}
+	// Nothing left to draft needs no model, and so no paid plan: a candidate whose answers
+	// already cover the form is not parked over an entitlement this attempt never uses.
+	if plan := Resolve(merged, answers, hasApprovedCV); plan.FullyResolved() {
+		return plan, nil
+	}
 
 	grounding, err := buildGroundingContext(ctx, c.atoms, claimed.UserID)
 	if err != nil {

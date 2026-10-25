@@ -1,6 +1,12 @@
 package atsapply
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	aiplan "github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/application/autoapply"
+)
 
 // Drafting follows what can actually be sent. A Workable application is sent by the
 // browser-use executor, so with it wired and enforcing its answers are drafted — the review
@@ -52,5 +58,22 @@ func TestSubmits_NotOnceTheBrowserUseBudgetIsSpent(t *testing.T) {
 
 	if (&Client{browserUse: spent}).submits("workable") {
 		t.Error("submits = true with the day's browser-use budget spent")
+	}
+}
+
+// A form the candidate's own answers already cover drafts nothing, so it is not refused over
+// a lapsed plan it would never have used.
+func TestClientResolve_AFullyAnsweredFormNeedsNoPaidPlan(t *testing.T) {
+	t.Setenv("AUTO_APPLY_BROWSERUSE_ENFORCE", "1")
+	lapsed := &fakeEntitlement{err: aiplan.ErrPaymentRequired}
+	c := &Client{atoms: &recordingAtomReader{}, entitlement: lapsed, browserUse: &BrowserUseExecutor{spend: &runSpendGuard{}}}
+	fields := []MergedField{{ID: "email", Label: "Email", Kind: "text", Required: true}}
+
+	plan, err := c.resolve(context.Background(), autoapply.Claimed{Provider: "workable", UserID: 42}, fields, map[string]string{"email": "a@b.c"})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if !plan.FullyResolved() || lapsed.asked != 0 {
+		t.Errorf("plan = %+v, plan asked %d times — want resolved without asking", plan, lapsed.asked)
 	}
 }
