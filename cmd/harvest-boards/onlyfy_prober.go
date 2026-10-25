@@ -32,7 +32,13 @@ func (onlyfyProber) probe(ctx context.Context, c httpClient, board string) (stri
 		return "", 0, nil
 	}
 	site := "https://" + board + ".onlyfy.jobs"
-	root, err := c.GetHTML(ctx, site+"/candidate/job/ajax_list?display_length=1&page=1&sort=date&sort_dir=DESC")
+	root, final, err := onlyfyGetResolved(ctx, c, site+"/candidate/job/ajax_list?display_length=1&page=1&sort=date&sort_dir=DESC")
+	if err == nil && !strings.HasPrefix(final, site+"/") {
+		// A renamed site (and every <board>.jobbase.io) redirects to another site name. That
+		// name is the board; this one would store the same site a second time, so it is a
+		// skip, and the destination stands as a candidate of its own.
+		return "", 0, nil
+	}
 	if err != nil {
 		var se *sources.StatusError
 		if errors.As(err, &se) && se.Code == http.StatusNotFound {
@@ -75,6 +81,16 @@ func (onlyfyProber) probe(ctx context.Context, c httpClient, board string) (stri
 	}
 	sources.LDJobPosting(detail, &posting)
 	return strings.TrimSpace(posting.HiringOrganization.Name), total, nil
+}
+
+// onlyfyGetResolved fetches a page and reports the URL it landed on after redirects. A client
+// that cannot say (no test fake needs to) reports the requested URL.
+func onlyfyGetResolved(ctx context.Context, c httpClient, url string) (*html.Node, string, error) {
+	if r, ok := c.(sources.HTMLResolvedGetter); ok {
+		return r.GetHTMLResolved(ctx, url)
+	}
+	root, err := c.GetHTML(ctx, url)
+	return root, url, err
 }
 
 // discover enumerates candidate sites from Common Crawl's index of both domains.
