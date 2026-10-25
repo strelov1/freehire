@@ -126,12 +126,16 @@
 
   const maxCount = $derived(Math.max(1, ...places.slice(0, 10).map((p) => p.count)));
   // The dialog's subtitle: how much is on the map, for the place in focus when there is one.
+  // Hidden while the map catches up with a click, like the button's count: the old figure
+  // would be labelled with the newly selected place.
   const summary = $derived.by(() => {
-    if (total === null) return undefined;
+    if (total === null || loading || failed) return undefined;
     if (focusCountry) {
       return format(plural(loc, total, s.summaryIn), { count: fmt(total), country: dynamicLabel('countries', focusCountry) });
     }
-    return format(plural(loc, total, s.summary), { count: fmt(total), places: fmt(countryPlaces.length) });
+    const n = countryPlaces.length;
+    const places = format(plural(loc, n, s.countries), { count: fmt(n) });
+    return format(plural(loc, total, s.summary), { count: fmt(total), places });
   });
 
   function pick(place: MapPlace) {

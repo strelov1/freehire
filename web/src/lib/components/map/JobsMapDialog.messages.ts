@@ -4,7 +4,9 @@ export const messages = defineMessages(
   {
     title: 'Jobs on the map',
     mapAria: 'Map of where the matching jobs are',
-    summary: plurals({ one: '{count} job in {places} countries', other: '{count} jobs in {places} countries' }),
+    // {places} is a whole phrase from `countries`, so the noun agrees with its own number.
+    summary: plurals({ one: '{count} job in {places}', other: '{count} jobs in {places}' }),
+    countries: plurals({ one: '{count} country', other: '{count} countries' }),
     summaryIn: plurals({ one: '{count} job in {country}', other: '{count} jobs in {country}' }),
     showJobs: plurals({ one: 'Show {count} job', other: 'Show {count} jobs' }),
     showJobsPending: 'Show jobs',
@@ -21,11 +23,12 @@ export const messages = defineMessages(
       title: 'Вакансии на карте',
       mapAria: 'Карта мест, где находятся подходящие вакансии',
       summary: plurals({
-        one: '{count} вакансия в {places} странах',
-        few: '{count} вакансии в {places} странах',
-        many: '{count} вакансий в {places} странах',
-        other: '{count} вакансии в {places} странах',
+        one: '{count} вакансия в {places}',
+        few: '{count} вакансии в {places}',
+        many: '{count} вакансий в {places}',
+        other: '{count} вакансии в {places}',
       }),
+      countries: plurals({ one: '{count} стране', few: '{count} странах', many: '{count} странах', other: '{count} странах' }),
       summaryIn: plurals({
         one: '{count} вакансия: {country}',
         few: '{count} вакансии: {country}',

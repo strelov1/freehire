@@ -618,7 +618,7 @@
         {#if applyJob}
           <Button
             variant="outline"
-            href={applyJob.url}
+            href={isAuthenticated() ? applyJob.url : undefined}
             target="_blank"
             rel="nofollow noopener noreferrer"
             onclick={onApplyClick}
