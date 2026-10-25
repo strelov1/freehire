@@ -128,6 +128,17 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   buitenland") and is passed over. Bare `hybride` (cloud, infrastructure), `op afstand` and
   `niet remote` (remote support) are deliberately absent. Measured 2026-10-25 over 42k open
   Dutch postings: work mode 3.5% → 16.4%.
+- **Dutch and Flemish location lines** (`location_nl.go`, the Dutch block of `nameToCountry`
+  and of `foreignSubdivisionNames`). Recruitee writes the country in the posting's language,
+  and "Nederland" was read as the Colorado town: 10,801 open rows had no country (2026-10-25).
+  The provinces state the country and no city; `limburg` is in `regionNotCity` and states no
+  country either (Dutch AND Belgian, and a German town). A province named after its capital
+  (`provinceCapitals`: Utrecht, Groningen, Antwerpen…) is the province when a town precedes
+  it. eures writes a province code after the town ("Hengelo OV", "Hoorn NH");
+  `stripDutchProvince` cuts it, and a code shared with a US state or an ISO country (NH, NB,
+  UT, FR…) only when the town is Dutch. Also: the "1012 AB" postcode, "regio X", "X en
+  omgeving", and Recruitee's translated remote label ("Werken op afstand", "Homeoffice",
+  "Poste à distance") as a remote marker.
 - `work_mode` is dict-only — `jobview` serves the `jobs` column alone, the LLM's `enrichment.work_mode` is never merged in (it stays raw in the JSONB).
 - `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`): the dictionary wins when it pins a place, and the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket, so a dictionary-silent remote role still gets a geographic reach rather than none. This is the one deliberate exception to dict-only among the facets.
 

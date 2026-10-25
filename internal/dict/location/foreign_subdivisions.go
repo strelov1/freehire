@@ -134,6 +134,19 @@ var foreignSubdivisionNames = map[string]string{
 	"odisha": "in", "bihar": "in", "assam": "in", "jharkhand": "in",
 	"chhattisgarh": "in", "uttarakhand": "in", "himachal pradesh": "in", "goa": "in",
 	"bangalore urban": "in", "bengaluru urban": "in",
+	// The Netherlands — the provinces a location line names after its town ("Tilburg,
+	// Noord-Brabant, Nederland"), and the Randstad conurbation. Utrecht and Groningen are
+	// absent: each shares its name with its own capital, which the city tables already
+	// place. Limburg is absent too: it is a Dutch AND a Belgian province (regionNotCity).
+	"noord-holland": "nl", "zuid-holland": "nl", "noord-brabant": "nl", "gelderland": "nl",
+	"overijssel": "nl", "flevoland": "nl", "drenthe": "nl", "friesland": "nl",
+	"fryslân": "nl", "zeeland": "nl", "randstad": "nl",
+	// Belgium — the Flemish and Walloon provinces and regions, in Dutch and French.
+	// Antwerpen, Namen/Namur and Luik/Liège share their names with their capitals.
+	"oost-vlaanderen": "be", "west-vlaanderen": "be", "vlaams-brabant": "be",
+	"waals-brabant": "be", "brabant wallon": "be", "flandre-orientale": "be",
+	"flandre-occidentale": "be", "vlaanderen": "be", "wallonië": "be", "wallonie": "be",
+	"henegouwen": "be", "hainaut": "be",
 }
 
 // regionNotCity are the subdivision names the city table ALSO lists as an alias of a
@@ -148,6 +161,9 @@ var regionNotCity = map[string]bool{
 	"goa":                 true, // Mormugao
 	"bihar":               true, // Bihār Sharīf
 	"воронежская область": true, // Voronezh
+	// A Dutch and a Belgian province, and Limburg an der Lahn in Hesse: it states no
+	// city, and — being two countries' province — no country either.
+	"limburg": true,
 }
 
 // init merges the table into nameToCountry. A name already there is a programming

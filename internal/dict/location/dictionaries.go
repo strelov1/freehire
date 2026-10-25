@@ -240,6 +240,20 @@ var nameToCountry = map[string]string{
 	"dänemark": "dk", "finnland": "fi", "irland": "ie", "norwegen": "no",
 	"tschechien": "cz", "bulgarien": "bg", "saudi-arabien": "sa",
 	"vereinigte arabische emirate": "ae", "bundesweit": "de",
+	// Dutch — Recruitee writes the country in the posting's language, and "Nederland"
+	// is otherwise read as the Colorado town of that name (10,801 open rows, 2026-10-25).
+	"nederland": "nl", "belgië": "be", "belgie": "be", "duitsland": "de",
+	"frankrijk": "fr", "spanje": "es", "italië": "it", "verenigd koninkrijk": "gb",
+	"verenigde staten": "us", "oostenrijk": "at", "zwitserland": "ch", "zweden": "se",
+	"denemarken": "dk", "noorwegen": "no", "ierland": "ie", "griekenland": "gr",
+	"tsjechië": "cz", "hongarije": "hu", "roemenië": "ro", "luxemburg": "lu",
+	// French, for the Belgian postings written in it.
+	"belgique": "be", "pays-bas": "nl", "royaume-uni": "gb", "allemagne": "de",
+	"suisse": "ch", "espagne": "es",
+	// Endonyms the same field carries for the rest of Europe (Recruitee, 2026-10-25).
+	"noreg": "no", "polska": "pl", "svizzera": "ch", "eesti": "ee", "slovenija": "si",
+	"slovensko": "sk", "česko": "cz", "česká republika": "cz", "éire": "ie",
+	"lietuva": "lt", "latvija": "lv", "hrvatska": "hr", "românia": "ro", "ελλάδα": "gr",
 
 	// --- Beacon cities (high-frequency, unambiguous), region falls out of the code.
 	// North America (US).

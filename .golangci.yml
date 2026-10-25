@@ -217,6 +217,7 @@ linters:
         - psycholoog
         - economisch
         - defensie
+        - ierland
 
 formatters:
   enable:

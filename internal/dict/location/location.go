@@ -119,6 +119,13 @@ func Parse(location string) Geo {
 			regionSet[countryToRegion["au"]] = struct{}{}
 			tok = rest
 		}
+		// A Dutch province code closing the token ("hengelo ov", "hoorn nh") states the
+		// country and is cut off, so the town before it resolves (see stripDutchProvince).
+		if rest, ok := stripDutchProvince(tok); ok {
+			countrySet["nl"] = struct{}{}
+			regionSet[countryToRegion["nl"]] = struct{}{}
+			tok = rest
+		}
 		// Curated geography first, into the scratch sets (authoritative for country/region).
 		clear(tokCountry)
 		clear(tokRegion)
@@ -140,7 +147,7 @@ func Parse(location string) Geo {
 		// ("Birmingham") can never *guess* a geography here; the country/region stay the
 		// curated dictionaries' job (and the LLM's, at serve time). This keeps the parser's
 		// "never guesses" contract while still populating the cities facet broadly.
-		if ce, ok := cityDict[tok]; ok && !regionNotCity[tok] {
+		if ce, ok := cityDict[tok]; ok && !regionNotCity[tok] && !provinceAfterCity(tok, citySet) {
 			if resolved {
 				// The token is a curated place: emit the city name only when cityDict agrees
 				// on its country, so a country/region token ("usa") never emits the unrelated
@@ -387,8 +394,8 @@ func stripWorkmodeWords(tok string) string {
 // contested city table.
 var (
 	areaPrefixes = []string{"großraum ", "grossraum ", "metropolregion ", "region ", "raum ",
-		"umkreis ", "standort ", "kanton "}
-	areaSuffixes = []string{" und umgebung", " und umland"}
+		"umkreis ", "standort ", "kanton ", "regio ", "omgeving "}
+	areaSuffixes = []string{" und umgebung", " und umland", " en omgeving", " e.o."}
 )
 
 // stripAreaWords removes one areaPrefixes word and one areaSuffixes phrase from a token.
@@ -414,8 +421,17 @@ func stripAreaWords(tok string) string {
 // to resolve. A US ZIP comes after its state and is untouched (isUSZip).
 var postalPrefixRE = regexp.MustCompile(`^(?:[a-z]{1,2}-)?\d{4,5}\s+(\pL.*)$`)
 
+// dutchPostcodeRE matches the Dutch postcode before its town: four digits and two
+// letters ("1012 AB Amsterdam", "3011AA Rotterdam"). Like postalPrefixRE it states no
+// country; it is cut away so the town resolves.
+var dutchPostcodeRE = regexp.MustCompile(`^\d{4}\s?[a-z]{2}\s+(\pL.*)$`)
+
 // stripPostalPrefix returns the town after a leading postal code, or the token unchanged.
 func stripPostalPrefix(tok string) string {
+	// The Dutch form first: postalPrefixRE would take its letters for the town.
+	if m := dutchPostcodeRE.FindStringSubmatch(tok); m != nil {
+		return m[1]
+	}
 	if m := postalPrefixRE.FindStringSubmatch(tok); m != nil {
 		return m[1]
 	}
@@ -648,7 +664,10 @@ var workModeMarkers = []struct {
 	markers []string
 }{
 	{"hybrid", []string{"hybrid", "гибрид"}},
-	{"remote", []string{"remote", "work from home", "wfh", "anywhere", "worldwide", "distributed", "удал"}},
+	// The second line is the remote label Recruitee writes in the posting's language
+	// IN PLACE of a location ("Werken op afstand", "Homeoffice", "Poste à distance").
+	{"remote", []string{"remote", "work from home", "wfh", "anywhere", "worldwide", "distributed", "удал",
+		"op afstand", "homeoffice", "à distance", "a distancia", "zdalna", "remoto", "hjemmefra"}},
 	{"onsite", []string{"on-site", "onsite", "on site", "in office", "in-office"}},
 }
 
