@@ -23,6 +23,8 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
+	"github.com/strelov1/freehire/internal/candidate/resume"
+	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -36,6 +38,9 @@ func newAutoApplyEnqueueApp(pool *pgxpool.Pool, iss *auth.Issuer, events autoApp
 	queries := db.New(pool)
 	_, h, _ := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "", nil)
 	h.events = events
+	// Production always wires the résumé store (newCVHandlers); without it the résumé-only
+	// path below would be untestable. Storage disabled: the seed reads Postgres alone.
+	h.cv.resume = resume.New(nil, resume.NewQueriesRepository(queries))
 
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
@@ -196,6 +201,66 @@ func TestPostJobAutoApply_RefusesNoBaseCV(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusConflict {
 		t.Fatalf("status = %d, want 409 for no base CV", resp.StatusCode)
+	}
+}
+
+// seedStructuredResume gives the caller what a Profile-page upload leaves behind — a parsed
+// résumé on the users row — and no cvs row. Both stamps share one now(), so it reads as
+// current.
+func seedStructuredResume(t *testing.T, pool *pgxpool.Pool, userID int64) {
+	t.Helper()
+	blob, _ := json.Marshal(resumeextract.Structured{FullName: "Ada Lovelace", Headline: "Backend Engineer"})
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE users SET resume_structured = $2, resume_structured_uploaded_at = now(), resume_uploaded_at = now() WHERE id = $1`,
+		userID, blob); err != nil {
+		t.Fatalf("seed structured résumé: %v", err)
+	}
+}
+
+// An uploaded résumé is enough: the tailoring step seeds the base CV from it, so requiring
+// the cvs row up front refused a candidate who had never opened the CV builder.
+func TestPostJobAutoApply_QueuesWithOnlyAnUploadedResume(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyEnqueueTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyEnqueueApp(pool, iss, nil)
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "resumeonly@example.test")
+	seedStructuredResume(t, pool, userID)
+	seedEnqueueJob(t, pool, "greenhouse", "resumeonly-job")
+
+	resp := enqueueRequest(t, app, "resumeonly-job", cookie)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 200 queued for a caller with an uploaded résumé: %s", resp.StatusCode, body)
+	}
+}
+
+// A free caller with an uploaded résumé must hear about their plan, not be told to add the
+// résumé they already have — the résumé gate sits ahead of the allowance.
+func TestPostJobAutoApply_FreeCallerWithOnlyAResumeIsToldTheirPlan(t *testing.T) {
+	pool := startPostgres(t)
+	truncateAutoApplyEnqueueTables(t, pool)
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	app, _ := newAutoApplyEnqueueApp(pool, iss, nil)
+
+	userID, cookie := autoApplyTailorUser(t, pool, iss, "freeresume@example.test")
+	endPro(t, pool, userID)
+	seedStructuredResume(t, pool, userID)
+	seedEnqueueJob(t, pool, "greenhouse", "freeresume-job")
+
+	resp := enqueueRequest(t, app, "freeresume-job", cookie)
+	defer resp.Body.Close()
+	var body struct {
+		Error string `json:"error"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&body)
+	if resp.StatusCode != fiber.StatusPaymentRequired {
+		t.Fatalf("status = %d (%q), want 402 for a free caller with a résumé", resp.StatusCode, body.Error)
+	}
+	if want := "Your plan doesn't include automatic applications."; body.Error != want {
+		t.Errorf("error = %q, want %q", body.Error, want)
 	}
 }
 

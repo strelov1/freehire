@@ -99,6 +99,8 @@ func featureNoun(feature plan.Feature) string {
 		return "assistant messages"
 	case plan.FeatureDictation:
 		return "dictation"
+	case plan.FeatureAutoApply:
+		return "automatic applications"
 	default:
 		return ""
 	}

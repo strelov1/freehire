@@ -171,10 +171,11 @@ func (r *autoApplyAllowanceRefusal) Error() string {
 // differ between them.
 //
 // Gates, in order: the job must be on an ATS auto-apply can queue against, the caller must
-// already have a base CV, the pair must not already be applied to, and the caller must have
-// auto-apply allowance left today. The allowance is LAST so that everything a request can be
-// refused for on other grounds costs nothing — and it is where the old "must be on the PRO
-// tier" check went, since free is configured to no allowance at all. A repeat request for a
+// have a base CV or a résumé to seed one from, the pair must not already be applied to, and
+// the caller must have auto-apply allowance left today. The allowance is LAST so that
+// everything a request can be refused for on other grounds costs nothing — and it is where
+// the old "must be on the PRO tier" check went, since free is configured to no allowance at
+// all. A repeat request for a
 // pair that already has a live, undecided entry succeeds without creating a second row; a
 // repeat for a pair whose entry was already declined by the candidate is refused permanently.
 //
@@ -191,10 +192,18 @@ func (h *assistantHandlers) startAutoApply(ctx context.Context, userID int64, sl
 	if h.cv == nil || h.cv.cvStore == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
+	// The base CV need not exist yet: the tailoring step seeds one from the extracted résumé
+	// (cvStore.Tailor), so this asks Tailor's own question. Requiring the cvs row refused a
+	// candidate who had uploaded a résumé but never opened the CV builder — and, sitting ahead
+	// of the allowance, answered a free caller with "add a résumé" instead of their plan.
 	if _, ok, err := h.cv.cvStore.BaseCV(ctx, userID); err != nil {
 		return err
 	} else if !ok {
-		return fiber.NewError(fiber.StatusConflict, "add a résumé before using auto-apply")
+		if _, hasResume, err := h.cv.seedSource().Structured(ctx, userID); err != nil {
+			return err
+		} else if !hasResume {
+			return fiber.NewError(fiber.StatusConflict, "add a résumé before using auto-apply")
+		}
 	}
 
 	// cmd/auto-apply/store.go's Submit deletes the queue row in the same transaction it
