@@ -1908,6 +1908,7 @@ var nonCorroboratingPhrases = func() map[string]bool {
 		// "SAP-Kenntnisse" and "Erfahrung mit DATEV" are what a Sachbearbeiter or a
 		// Steuerfachangestellte posting asks for, so the tool tags and does not vouch.
 		"sap":      true,
+		"sap-fico": true,
 		"datev":    true,
 		"erp":      true,
 		"crm":      true,

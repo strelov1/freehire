@@ -22,6 +22,8 @@ func TestParse_GermanMarket(t *testing.T) {
 		{"sap-systemen", "Erfahrung im Umgang mit SAP-Systemen", []string{"sap"}, nil},
 		{"sap modules", "Fundierte Kenntnisse in SAP FI/CO", []string{"sap-fico"}, nil},
 		{"sap r/3", "Anwenderkenntnisse in SAP R/3", []string{"sap"}, nil},
+		{"sap fi/co does not vouch", "Buchhalter mit SAP FI/CO; Montage (assembly) der Belegordner.",
+			[]string{"sap-fico"}, []string{"assembly"}},
 		{"bare sap still gated", "Clear vegetation and wash tree sap off the guard rails.", nil, []string{"sap"}},
 		// A German SAP clause names a tool an office clerk uses; it must not vouch.
 		{"sap does not vouch", "Sachbearbeiter Einkauf mit SAP-Kenntnissen; Montage (assembly) im Lager.",
