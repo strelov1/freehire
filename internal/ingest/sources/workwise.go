@@ -180,8 +180,11 @@ type workwiseLD struct {
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-	JobLocation []workwisePlace `json:"jobLocation"`
-	BaseSalary  *struct {
+	JobLocation                   []workwisePlace `json:"jobLocation"`
+	ApplicantLocationRequirements []struct {
+		Name string `json:"name"`
+	} `json:"applicantLocationRequirements"`
+	BaseSalary *struct {
 		Currency string `json:"currency"`
 		Value    struct {
 			Value    string `json:"value"`
@@ -212,6 +215,13 @@ func workwiseDetail(root *xhtml.Node, p workwisePosting) (Job, bool) {
 	var countries []string
 	for _, l := range ld.JobLocation {
 		countries = append(countries, l.Address.AddressCountry)
+	}
+	// A remote posting may name no place at all; the country it hires in is then stated only
+	// as applicantLocationRequirements.
+	if len(ld.JobLocation) == 0 {
+		for _, r := range ld.ApplicantLocationRequirements {
+			countries = append(countries, r.Name)
+		}
 	}
 	// addressRegion is deliberately not read: it is a German state abbreviation ("NRW", "BY")
 	// that the location dictionary would not resolve, and the cities already place the posting.

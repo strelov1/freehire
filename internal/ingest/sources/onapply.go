@@ -93,8 +93,9 @@ type onapplyPosting struct {
 func (s onapply) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	seen := make(map[int64]bool)
 	var jobs []Job
+	total := 0
 	for pass := 0; pass < s.maxPasses; pass++ {
-		total, err := s.walk(ctx, pass == 0, func(p onapplyPosting) {
+		stated, err := s.walk(ctx, pass == 0, func(p onapplyPosting) {
 			if p.ID <= 0 || seen[p.ID] {
 				return
 			}
@@ -105,6 +106,10 @@ func (s onapply) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 		})
 		if err != nil {
 			return nil, err
+		}
+		// A repeat walk whose first page failed states no total; the first walk's still holds.
+		if stated > 0 {
+			total = stated
 		}
 		if len(seen) >= total {
 			break

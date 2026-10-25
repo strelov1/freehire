@@ -23,7 +23,8 @@ func onapplyFixture(t *testing.T, name string) string {
 }
 
 // sequencedJSON answers each URL with its queued bodies in turn, repeating the last, so a test
-// can serve a page that changes between walks — the unstable ordering onapply's index shows.
+// can serve a page that changes between walks — the unstable ordering onapply's index shows. An
+// empty body is answered with a 502.
 type sequencedJSON struct {
 	mu     sync.Mutex
 	bodies map[string][]string
@@ -47,6 +48,9 @@ func (f *sequencedJSON) GetJSON(_ context.Context, url string, v any) error {
 		body := queue[0]
 		if len(queue) > 1 {
 			f.bodies[match] = queue[1:]
+		}
+		if body == "" {
+			return &StatusError{Code: 502}
 		}
 		return json.Unmarshal([]byte(body), v)
 	}
@@ -147,6 +151,22 @@ func TestOnapplyStopsAfterMaxPasses(t *testing.T) {
 	}
 	if len(jobs) != 2 || fake.calls != 2*onapplyMaxPasses {
 		t.Fatalf("jobs/requests = %d/%d, want 2 postings after %d walks", len(jobs), fake.calls, onapplyMaxPasses)
+	}
+}
+
+// A repeat walk whose first page fails states no total; the run keeps walking toward the first
+// walk's total rather than reading the failure as "nothing left to find".
+func TestOnapplyRepeatWalkFailureKeepsTheTotal(t *testing.T) {
+	fake := &sequencedJSON{bodies: map[string][]string{
+		"/search/0/2?": {onapplyFixture(t, "page_0.json"), "", onapplyFixture(t, "page_0.json")},
+		"/search/2/2?": {onapplyFixture(t, "page_2_repeat.json"), onapplyFixture(t, "page_2.json")},
+	}}
+	jobs, err := newTestOnapply(fake).Fetch(context.Background(), CompanyEntry{Provider: "onapply"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("jobs = %d, want all 3 after a third walk", len(jobs))
 	}
 }
 

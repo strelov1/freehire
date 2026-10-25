@@ -95,8 +95,8 @@ func TestWorkwiseHydratesUnseenPostings(t *testing.T) {
 		t.Errorf("129779 WorkMode = %q: \"Kein Homeoffice\" must not be read as onsite", intern.WorkMode)
 	}
 
-	if remote := got["125872"]; remote.WorkMode != "remote" {
-		t.Errorf("125872 WorkMode = %q, want remote", remote.WorkMode)
+	if remote := got["125872"]; remote.WorkMode != "remote" || len(remote.Countries) != 1 || remote.Countries[0] != "de" {
+		t.Errorf("125872 work mode/countries = %q %v, want remote in de (from applicantLocationRequirements)", remote.WorkMode, remote.Countries)
 	}
 }
 
