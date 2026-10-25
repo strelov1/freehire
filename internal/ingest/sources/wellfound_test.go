@@ -671,3 +671,31 @@ func TestWellfound_Fetch_ALaterUnparseablePageIsALoudFailure(t *testing.T) {
 		t.Fatal("Fetch: got nil error when a later page cannot be fetched/parsed, want an error")
 	}
 }
+
+func TestWellfoundToJob_ReadsARupeeRange(t *testing.T) {
+	tests := []struct {
+		comp     string
+		lo, hi   int
+		currency string
+	}{
+		{"₹25L – ₹30L • No equity", 2500000, 3000000, "INR"},
+		{"₹40L – ₹1 cr • 0.1% – 0.5%", 4000000, 10000000, "INR"},
+		// Dollars, plain rupees with no period, and prose stay display text.
+		{"$150k – $180k", 0, 0, ""},
+		{"₹10,000 – ₹15,000 • No equity", 0, 0, ""},
+		{"Competitive salary + ESOPs", 0, 0, ""},
+	}
+	for _, tc := range tests {
+		rj := wellfoundResolvedJob{Entry: wellfoundJobEntry{ID: "1", Slug: "x", Title: "Engineer", Compensation: tc.comp}, Company: "Acme"}
+		j, ok := rj.toJob()
+		if !ok {
+			t.Fatalf("toJob(%q) not ok", tc.comp)
+		}
+		if intOrZero(j.SalaryMin) != tc.lo || intOrZero(j.SalaryMax) != tc.hi || j.SalaryCurrency != tc.currency {
+			t.Errorf("toJob(%q) salary = %d-%d %q, want %d-%d %q", tc.comp, intOrZero(j.SalaryMin), intOrZero(j.SalaryMax), j.SalaryCurrency, tc.lo, tc.hi, tc.currency)
+		}
+		if tc.currency != "" && j.SalaryPeriod != "year" {
+			t.Errorf("toJob(%q) period = %q, want year", tc.comp, j.SalaryPeriod)
+		}
+	}
+}

@@ -287,7 +287,7 @@ func (rj wellfoundResolvedJob) toJob() (Job, bool) {
 	if e.ID == "" || company == "" {
 		return Job{}, false
 	}
-	return Job{
+	j := Job{
 		ExternalID:  e.ID,
 		URL:         fmt.Sprintf(wellfoundJobURL, e.ID, e.Slug),
 		Title:       strings.TrimSpace(e.Title),
@@ -295,7 +295,19 @@ func (rj wellfoundResolvedJob) toJob() (Job, bool) {
 		Location:    strings.Join(e.LocationNames, "; "),
 		Description: wellfoundDescription(e),
 		Remote:      e.Remote,
-	}, true
+	}
+	j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod = wellfoundSalary(e.Compensation)
+	return j, true
+}
+
+// wellfoundSalary reads the rupee range of a compensation label ("₹25L – ₹30L • No
+// equity") into the structured salary fields. The equity half after "•" is not pay. Only
+// a lakh or crore range, or a rupee figure with its period, is read (inrSalary); every
+// other label — a dollar range, "₹10,000 – ₹15,000" with no period, "Competitive" — stays
+// display text only.
+func wellfoundSalary(comp string) (lo, hi *int, currency, period string) {
+	pay, _, _ := strings.Cut(comp, "•")
+	return inrSalary(pay)
 }
 
 // wellfoundDescription folds the listing's free-text compensation range into the rendered
@@ -303,11 +315,10 @@ func (rj wellfoundResolvedJob) toJob() (Job, bool) {
 // (freehire.me/jobs/ai-engineer-co-founder-role-brandbrahma-pkuqoprb rendered a raw
 // "**bold**" before this fix) — so it goes through the same markdownToHTML (goldmark)
 // conversion join.go's Join.com adapter already established in this package for exactly
-// this shape of source, before sanitizing. The compensation range is a display string, never
-// a structured amount and currency, so it is carried as text rather than guessed into Job's
-// structured salary fields — the same treatment SEEK's salaryLabel and Workstream's pay line
-// already get in this catalogue, down to routing the whole constructed paragraph through
-// sanitizeHTML rather than hand-escaping it.
+// this shape of source, before sanitizing. The compensation range is a display string, so
+// it is carried as text — routed through sanitizeHTML rather than hand-escaped — and only
+// the rupee ranges whose unit and period are unambiguous also reach the structured salary
+// fields (wellfoundSalary).
 func wellfoundDescription(e wellfoundJobEntry) string {
 	body := sanitizeHTML(markdownToHTML(e.Description))
 	comp := strings.TrimSpace(e.Compensation)
