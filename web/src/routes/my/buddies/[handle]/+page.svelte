@@ -154,7 +154,7 @@
   {:else if view === 'error'}<States state="error" />
   {:else if profile}
     <!-- No photoSrc, ever: a buddy is drawn as the silhouette (see BuddyIdentity). -->
-    <CandidateCardView card={profile.card} subtitle={profile.handle} headingFallback={BUDDY_HEADING_FALLBACK} skillsSide="right" emptyMessage="This member has not added a profile card yet.">
+    <CandidateCardView card={profile.card} subtitle={profile.handle} headingFallback={BUDDY_HEADING_FALLBACK} skillsSide="inline" emptyMessage="This member has not added a profile card yet.">
       {#snippet actions()}
         <BuddyMessageButton
           handle={profile?.handle ?? ''}

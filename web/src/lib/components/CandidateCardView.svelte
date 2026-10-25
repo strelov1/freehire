@@ -39,8 +39,9 @@
     subtitle?: string;
     /** The heading when neither dictionary value resolves. */
     headingFallback?: string;
-    /** The catalogue keeps skills in a left rail; a buddy's page reads its main column first. */
-    skillsSide?: 'left' | 'right';
+    /** The catalogue keeps skills in a left rail; a buddy's page lists them as a section of
+     *  the main column, which keeps the page at full width. */
+    skillsSide?: 'left' | 'inline';
     actions?: Snippet;
     children?: Snippet;
   } = $props();
@@ -137,6 +138,17 @@ right. The panel follows the card in the DOM so a narrow screen reads the card f
       </section>
     {/if}
 
+    {#if skillsSide === 'inline' && card.skills.length}
+      <section class="flex flex-col gap-2">
+        <h2 class="text-sm font-medium">Skills</h2>
+        <div class="flex flex-wrap gap-1.5">
+          {#each card.skills as skill (skill)}
+            <Chip>{skillLabel(skill)}</Chip>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
     {#if card.roles.length}
       <section class="flex flex-col gap-2">
         <h2 class="text-sm font-medium">Experience</h2>
@@ -194,8 +206,8 @@ right. The panel follows the card in the DOM so a narrow screen reads the card f
     {@render children?.()}
   </div>
 
-  {#if card.skills.length}
-    <aside class="order-last w-full shrink-0 lg:w-80 {skillsSide === 'left' ? 'lg:order-first' : ''}">
+  {#if skillsSide === 'left' && card.skills.length}
+    <aside class="order-last w-full shrink-0 lg:order-first lg:w-80">
       <div class="sticky top-20 flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
         <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skills</p>
         <div class="flex flex-wrap gap-1.5">
