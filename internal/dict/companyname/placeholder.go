@@ -7,6 +7,7 @@ import (
 	"html"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // NewPlaceholderRegistry wires the resolvers for a board whose company is still its own board
@@ -31,10 +32,13 @@ import (
 //     named a department ("Human Resources") or nothing; ExtractDayforceClientName refuses those.
 //   - ukg (1,152): the job board's header logo carries the brand as its alt text, 11/15 — the
 //     others had no logo or the unconfigured "Default Brand"; ExtractUKGBrandName refuses those.
+//   - taleo (226, every one swept): the career section's footer copyright names the employer on
+//     83 ("© 2018 by Hyatt Corporation"), and the header logo's alt text on 59 more or the same
+//     ones ("Marcus Careers") — 113 boards between them. ExtractTaleoCopyright is preferred: a
+//     legal line, where the alt text is whatever a designer typed ("The black version of the
+//     Stantec logo"). The section's <title> is "Job Search" on every one.
 //
-// Deliberately absent, each having been tried against live boards: taleo (every sampled
-// career section titles itself "Job Search", and nothing else on the page names the employer),
-// adp (neither the listing nor the requisition detail names the client), and workday (the
+// Deliberately absent, each having been tried against live boards: adp (neither the listing nor the requisition detail names the client), and workday (the
 // detail's hiringOrganization is a per-posting legal entity — Dover's postings name
 // "Engineered Controls International, LLC" — so it would split one employer per subsidiary).
 func NewPlaceholderRegistry(http httpGetter) Registry {
@@ -46,6 +50,7 @@ func NewPlaceholderRegistry(http httpGetter) Registry {
 		"oracle":   oracleResolver{http: http},
 		"dayforce": dayforceResolver{http: http},
 		"ukg":      ukgResolver{http: http},
+		"taleo":    taleoResolver{http: http},
 	}
 }
 
@@ -313,4 +318,118 @@ func ExtractUKGBrandName(alt string) string {
 		return ""
 	}
 	return name
+}
+
+type taleoResolver struct{ http textGetter }
+
+var (
+	taleoCopyrightLine = regexp.MustCompile(`(?:&copy;|©)\s*([^<"]{2,120})`)
+	taleoLogo          = regexp.MustCompile(`<img[^>]*class="[^"]*logo[^"]*"[^>]*>`)
+)
+
+func (r taleoResolver) Name(ctx context.Context, board string) (string, error) {
+	host, section, ok := splitHostBoard(board) // "<host>/<section>", as the taleo adapter parses it
+	if !ok {
+		return "", nil
+	}
+	body, err := r.http.GetText(ctx, fmt.Sprintf("https://%s/careersection/%s/jobsearch.ftl?lang=en", host, section))
+	if err != nil {
+		return "", err
+	}
+	if m := taleoCopyrightLine.FindStringSubmatch(body); m != nil {
+		if name := ExtractTaleoCopyright(html.UnescapeString(m[1])); name != "" {
+			return name, nil
+		}
+	}
+	if img := taleoLogo.FindString(body); img != "" {
+		if m := ukgLogoAlt.FindStringSubmatch(img); m != nil {
+			return ExtractTaleoLogoAlt(m[1]), nil
+		}
+	}
+	return "", nil
+}
+
+var (
+	// taleoCopyrightLead is what precedes the holder: "Copyright", a year, a comma, "by".
+	taleoCopyrightLead = regexp.MustCompile(`(?i)^(?:copyright\s*)?(?:(?:19|20)\d\d\s*)?,?\s*(?:by\s+)?`)
+	taleoYearTail      = regexp.MustCompile(`\s+(?:19|20)\d\d$`)
+	taleoAddress       = regexp.MustCompile(`^\d+\s+\pL`)
+	// taleoRightsMarkers end the holder's name; the earliest one found wins.
+	taleoRightsMarkers = []string{" all right", " – all", " - all", ", po box", " is an equal opportunity"}
+	// taleoAbbreviations keep their trailing period — "Moxa Inc.", "D.R. Horton, Inc." — where
+	// any other final period is the end of a sentence.
+	taleoAbbreviations = map[string]bool{"inc.": true, "co.": true, "corp.": true, "ltd.": true, "st.": true}
+)
+
+// ExtractTaleoCopyright pulls the copyright holder out of a Taleo career section's footer
+// line: drop the "Copyright 2025, by" lead, cut at the rights statement or an address, keep the
+// first part of a piped line, and refuse a line that is only a year or an address.
+func ExtractTaleoCopyright(line string) string {
+	s := strings.Join(strings.Fields(line), " ")
+	s = taleoCopyrightLead.ReplaceAllString(s, "")
+	low, cut := strings.ToLower(s), len(s)
+	for _, m := range taleoRightsMarkers {
+		if i := strings.Index(low, m); i >= 0 && i < cut {
+			cut = i
+		}
+	}
+	s = s[:cut]
+	parts := strings.Split(s, "|")
+	s = ""
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if taleoAddress.MatchString(part) {
+			return "" // a footer that carries an address is not naming the holder in this part
+		}
+		if part != "" && s == "" {
+			s = part
+		}
+	}
+	// "West Virginia University. West Virginia University" — the holder, then a sentence that
+	// repeats it.
+	if before, after, ok := strings.Cut(s, ". "); ok && strings.HasPrefix(after, before) {
+		s = before
+	}
+	s = taleoYearTail.ReplaceAllString(strings.TrimRight(s, " ,-–"), "")
+	if f := strings.Fields(s); len(f) > 0 && strings.HasSuffix(s, ".") && !taleoAbbreviations[strings.ToLower(f[len(f)-1])] {
+		s = strings.TrimSuffix(s, ".")
+	}
+	if !strings.ContainsFunc(s, unicode.IsLetter) {
+		return ""
+	}
+	return s
+}
+
+var (
+	taleoAltLeads = []string{"Careers at ", "The black version of the ", "The white version of the "}
+	taleoAltTails = []string{" logo", " Taleo", " Careers", " Jobs"}
+	// taleoAltWords refuse an alt text naming the platform or the page rather than the employer.
+	taleoAltWords = map[string]bool{"taleo": true, "oracle": true, "staging": true, "search": true, "job": true, "jobs": true, "careers": true}
+)
+
+// ExtractTaleoLogoAlt turns a Taleo header logo's alt text into the employer's name: drop a
+// lead-in, cut stacked tails, refuse what names the platform or the page.
+func ExtractTaleoLogoAlt(alt string) string {
+	s := strings.Join(strings.Fields(html.UnescapeString(alt)), " ")
+	for _, lead := range taleoAltLeads {
+		if len(s) > len(lead) && strings.EqualFold(s[:len(lead)], lead) {
+			s = s[len(lead):]
+			break
+		}
+	}
+	for cut := true; cut; {
+		cut = false
+		for _, tail := range taleoAltTails {
+			if rest, ok := cutSuffixFold(s, tail); ok {
+				s, cut = rest, true
+				break
+			}
+		}
+	}
+	for _, w := range words.FindAllString(s, -1) {
+		if taleoAltWords[strings.ToLower(w)] {
+			return ""
+		}
+	}
+	return strings.TrimSpace(s)
 }

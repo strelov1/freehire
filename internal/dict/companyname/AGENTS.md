@@ -51,8 +51,9 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
   `og:site_name` through `ExtractOracleSiteName` (drops a lead-in, cuts at a careers or recruiting marker, refuses a site named for
   its purpose — "Student Casual"; a name split by "|" is read part by part), Dayforce's `candidateCorrespondenceClientName` in the
   careers page's Next.js data (a department such as "Human Resources" is refused), UKG's
-  header-logo alt text ("Default Brand" refused, a " Brand" tail cut). Taleo, ADP and Workday
-  were tried and are absent on purpose;
+  header-logo alt text ("Default Brand" refused, a " Brand" tail cut), Taleo's footer
+  copyright, falling back to its header-logo alt text. ADP and Workday were tried and are
+  absent on purpose;
   the constructor's comment says why for each.
 - **`AcceptPlaceholder`** — no confidence match: the lookup is by the exact board id, so there
   is no slug to compare against and nothing an unrelated page could slip through (join's

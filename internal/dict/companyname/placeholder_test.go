@@ -226,3 +226,76 @@ func TestExtractUKGBrandName(t *testing.T) {
 		}
 	}
 }
+
+// Every case is a footer the 2026-10-24 sweep of all 226 placeholder Taleo boards met.
+func TestExtractTaleoCopyright(t *testing.T) {
+	cases := map[string]string{
+		"2025 TTEC. All rights reserved.":                                     "TTEC",
+		"2018 by Hyatt Corporation":                                           "Hyatt Corporation",
+		"2017 The Marcus Corporation. All Rights Reserved.":                   "The Marcus Corporation",
+		"2025 D.R. Horton, Inc. All Right Reserved |":                         "D.R. Horton, Inc.",
+		"Moxa Inc. All rights reserved.":                                      "Moxa Inc.",
+		"2022 Mercedes-Benz Group AG. All Rights Reserved.":                   "Mercedes-Benz Group AG",
+		"2017  Commonwealth of Massachusetts.":                                "Commonwealth of Massachusetts",
+		"Copyright 2025, Cowan Systems LLC. All rights reserved.":             "Cowan Systems LLC",
+		"Copyright 2013 IEEE – All rights reserved. Use of this Web site":     "IEEE",
+		"2019 Navy Exchange Service Command all right reserved. Navy Exch":    "Navy Exchange Service Command",
+		"2026 Tampa General Hospital | Affiliated with the USF Health":        "Tampa General Hospital",
+		"2025 Children’s Hospitals and Clinics of Minnesota |":                "Children’s Hospitals and Clinics of Minnesota",
+		"2018, Schneider Electric":                                            "Schneider Electric",
+		"WSP 2023":                                                            "WSP",
+		"2016 3D Systems, Inc. All rights reserved.":                          "3D Systems, Inc.",
+		"City of St. Louis":                                                   "City of St. Louis",
+		"Southern Methodist University, PO Box 750100, Dallas, TX 75275":      "Southern Methodist University",
+		"2025 West Virginia University. West Virginia University is an Equal": "West Virginia University",
+		"2020": "",
+		"2016 | 8000 York Road | Towson, MD 21252 |": "",
+		"": "",
+	}
+	for in, want := range cases {
+		if got := ExtractTaleoCopyright(in); got != want {
+			t.Errorf("ExtractTaleoCopyright(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestExtractTaleoLogoAlt(t *testing.T) {
+	cases := map[string]string{
+		"Marcus Careers":                        "Marcus",
+		"Burns&amp;McDonnell logo":              "Burns&McDonnell",
+		"The black version of the Stantec logo": "Stantec",
+		"Hyatt Taleo":                           "Hyatt",
+		"Careers at Bealls Outlet":              "Bealls Outlet",
+		"CNH Jobs":                              "CNH",
+		"Tenet Healthcare":                      "Tenet Healthcare",
+		"Oracle Taleo":                          "",
+		"PHP Staging Mobile Taleo":              "",
+		"Job Search":                            "",
+		"":                                      "",
+	}
+	for in, want := range cases {
+		if got := ExtractTaleoLogoAlt(in); got != want {
+			t.Errorf("ExtractTaleoLogoAlt(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The footer wins over the logo; a page with neither names nothing.
+func TestPlaceholderTaleoPrefersTheFooter(t *testing.T) {
+	const page = "https://hyatt.taleo.net/careersection/10780/jobsearch.ftl?lang=en"
+	getter := fakeHTTP{
+		page: `<img class="logo_img" alt="Hyatt Taleo" src="/x.png"><div>&copy; 2018 by Hyatt Corporation</div>`,
+		"https://hdr.taleo.net/careersection/hdr_mobile/jobsearch.ftl?lang=en": `<img class="logo_img" alt="Marcus Careers">`,
+		"https://none.taleo.net/careersection/2/jobsearch.ftl?lang=en":         `<title>Job Search</title>`,
+	}
+	reg := NewPlaceholderRegistry(getter)
+	for board, want := range map[string]string{
+		"hyatt.taleo.net/10780":    "Hyatt Corporation",
+		"hdr.taleo.net/hdr_mobile": "Marcus",
+		"none.taleo.net/2":         "",
+	} {
+		if got, err := reg["taleo"].Name(context.Background(), board); err != nil || got != want {
+			t.Errorf("Name(%s) = %q, %v; want %q", board, got, err, want)
+		}
+	}
+}
