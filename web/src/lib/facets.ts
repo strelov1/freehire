@@ -437,6 +437,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   instahyre: 'Instahyre',
   hirist: 'Hirist',
   iimjobs: 'iimjobs',
+  shine: 'Shine.com',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),
