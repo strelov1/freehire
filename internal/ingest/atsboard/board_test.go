@@ -550,6 +550,10 @@ func TestRecognize(t *testing.T) {
 		// Phenom serves its CDN from the same domains; a career page links there on every load.
 		{"phenom cdn asset is not a board", "https://cdn.phenompeople.com/CareerConnectResources/pp/QUALUS/images/logo.png", "", "", "", false},
 		{"phenom vendor site is not a board", "https://www.phenompeople.com/", "", "", "", false},
+		{"darwinbox v2 posting", "https://atherenergy.darwinbox.in/ms/candidatev2/main/careers/jobDetails/a6ad892cd96ba1", "darwinbox", "atherenergy.darwinbox.in", "https://atherenergy.darwinbox.in", true},
+		{"darwinbox v1 careers on the .com region", "https://carsome.darwinbox.com/ms/candidate/careers/a665ee161adc9c", "darwinbox", "carsome.darwinbox.com", "https://carsome.darwinbox.com", true},
+		{"darwinbox HRMS login is not a careers board", "https://atherenergy.darwinbox.in/user/login", "", "", "", false},
+		{"darwinbox marketing site is not a board", "https://www.darwinbox.com/careers/open-roles", "", "", "", false},
 		{"phenom custom domain is not derivable", "https://careers.clearchoice.com/us/en/job/P-100864/Lead-Prosthodontist", "", "", "", false},
 
 		// keyedsegment: Workstream's 8-hex employer id after /j/; an employer slug is not the board.
