@@ -123,9 +123,21 @@ func TestRexxLaterPageFailureFailsBoard(t *testing.T) {
 	}
 }
 
+// A later page that is not a rexx listing (a maintenance page under HTTP 200) must not read as
+// the listing's end.
+func TestRexxForeignPageFailsBoard(t *testing.T) {
+	const listing = "zieglersche-portal.rexx-recruitment.com/stellenangebote.html?start="
+	fake := (&routedHTTP{}).
+		route(listing+"0", rexxFixture(t, "zieglersche_start0.html")).
+		route(listing+"100", "<html><body><h1>Wartungsarbeiten</h1></body></html>")
+	if _, err := NewRexx(fake).Fetch(context.Background(), CompanyEntry{Board: "zieglersche-portal.rexx-recruitment.com"}); err == nil {
+		t.Fatal("a maintenance page passed as the end of the listing")
+	}
+}
+
 func TestRexxBoardShapes(t *testing.T) {
 	// A portal under a path on the employer's own domain is listed beneath that path.
-	fake := (&routedHTTP{}).route("jobs.newyorker.de/karriere/stellenangebote.html?start=0", "<html><body></body></html>")
+	fake := (&routedHTTP{}).route("jobs.newyorker.de/karriere/stellenangebote.html?start=0", `<html><body><a href="https://www.rexx-systems.com">rexx</a></body></html>`)
 	if _, err := NewRexx(fake).Fetch(context.Background(), CompanyEntry{Board: "Jobs.NewYorker.de/karriere/"}); err != nil {
 		t.Errorf("host/path board: %v", err)
 	}

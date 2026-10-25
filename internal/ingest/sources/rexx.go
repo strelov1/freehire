@@ -73,11 +73,23 @@ func (s rexx) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 	listing := base.JoinPath("stellenangebote.html").String()
 	// Any page failing fails the board: a walk cut short would leave the postings past the
 	// failed page unseen, and the sweep would close them.
+	// A page that is not a rexx listing at all (a maintenance or challenge page under HTTP 200)
+	// yields no permalink and would read as the listing's natural end; every listing carries
+	// the vendor's footer link, so a page without one fails the board instead.
+	foreign := 0
 	urls, err := crawlAllPagedLinks(ctx, s.http, rexxMaxPages, func(page int) string {
 		return listing + "?start=" + strconv.Itoa((page-1)*rexxPageSize)
-	}, func(root *html.Node) []string { return rexxLinks(base, root) })
+	}, func(root *html.Node) []string {
+		if !rexxIsListing(root) {
+			foreign++
+		}
+		return rexxLinks(base, root)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("rexx: listing %s: %w", board, err)
+	}
+	if foreign > 0 {
+		return nil, fmt.Errorf("rexx: listing %s: %d page(s) are not a rexx listing", board, foreign)
 	}
 	links := rexxDedupe(urls)
 	return fetchDetails(links, defaultDetailWorkers, func(l rexxLink) (Job, bool) {
@@ -108,6 +120,23 @@ func rexxLinks(base *url.URL, root *html.Node) []string {
 		out = append(out, p.String())
 	}
 	return out
+}
+
+// rexxIsListing reports whether a page is a rexx portal page: every portal measured
+// (115 of the 115 serving a real listing, 2026-10-25) links the vendor in its footer.
+func rexxIsListing(root *html.Node) bool {
+	found := false
+	walk(root, func(n *html.Node) bool {
+		if found {
+			return false
+		}
+		if n.Type == html.ElementNode && n.Data == "a" && strings.Contains(Attr(n, "href"), "rexx-systems.com") {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
 }
 
 // rexxDedupe keys the walk's links by posting id: the slug and language are not part of a
