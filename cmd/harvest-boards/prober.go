@@ -908,6 +908,7 @@ var probers = map[string]prober{
 	"polymer":         polymerProber{},
 	"flatchr":         flatchrProber{},
 	"dvinci":          dvinciProber{},
+	"rexx":            rexxProber{},
 	// Not an ATS: its boards are the platform's own job categories, enumerated from its
 	// sitemap index rather than seeded. See profession_prober.go.
 	"profession":  newProfessionProber(),

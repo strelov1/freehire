@@ -345,6 +345,11 @@ var atsBoards = []struct{ host, source, mode string }{
 	// but is not derivable from a URL.
 	{"dvinci-hr", "dvinci", modeHost},
 	{"dvinci-easy", "dvinci", modeHost},
+	// rexx systems: <tenant>-portal.rexx-systems.com and <tenant>-portal.rexx-recruitment.com.
+	// The adapter lists <board>/stellenangebote.html, so the board is the whole host. A portal
+	// on an employer's own domain (jobs.newyorker.de/karriere) is not derivable from a URL.
+	{"rexx-systems", "rexx", modeHost},
+	{"rexx-recruitment", "rexx", modeHost},
 	// CatsOne's adapter fetches https://<board>/careers, so the board is the whole host, exactly
 	// as catsone.yml stores it. It was listed as a subdomain, which yields the bare label — a
 	// board no crawl can resolve. (Its custom-domain tenants, e.g. jobs.evoplay.com.ua, stay
@@ -1317,13 +1322,16 @@ var platformLabels = map[string]bool{
 // which a bare subdomain rule reads as a company called "apply", while apply.recruitee.com is a
 // board recruitee.yml actually tracks. Declining it everywhere would drop a board we crawl.
 var platformLabelsByApex = map[string][]string{
-	"hrmdirect.com":  {"apply"},
-	"potok.io":       {"www", "stages", "qa", "sentry"},
-	"eploy":          {"www"}, // www.eploy.com is the vendor's marketing site
-	"dvinci-hr":      {"www"},
-	"dvinci-easy":    {"www"},
-	"hiringroom.com": {"www", "ve", "api-ve", "contacto-comercial"},
-	"easyapply.co":   {"www"}, // www.easyapply.co 404s; every tenant is a bare label
+	"hrmdirect.com": {"apply"},
+	"potok.io":      {"www", "stages", "qa", "sentry"},
+	"eploy":         {"www"}, // www.eploy.com is the vendor's marketing site
+	"dvinci-hr":     {"www"},
+	"dvinci-easy":   {"www"},
+	// www is the vendor's marketing site; cdn serves every portal's shared assets.
+	"rexx-systems":     {"www", "cdn"},
+	"rexx-recruitment": {"www", "cdn"},
+	"hiringroom.com":   {"www", "ve", "api-ve", "contacto-comercial"},
+	"easyapply.co":     {"www"}, // www.easyapply.co 404s; every tenant is a bare label
 	// www is the vendor's marketing site; demo is its sample board for a fictional "Acme".
 	"jobspage.co": {"www", "demo"},
 	// www is the vendor's marketing site (an unknown tenant redirects to its "job-not-found"

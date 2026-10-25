@@ -397,6 +397,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   polymer: 'Polymer',
   flatchr: 'Flatchr',
   dvinci: 'd.vinci',
+  rexx: 'rexx systems',
   pandape: 'Pandapé',
   pandapelatam: 'Pandapé LatAm',
   pythonorg: 'Python.org',

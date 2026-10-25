@@ -346,6 +346,9 @@ func TestRecognize(t *testing.T) {
 		{"dvinci nested tenant", "https://karriere.hahngruppe.dvinci-hr.com/en/jobs/iframe", "dvinci", "karriere.hahngruppe.dvinci-hr.com", "https://karriere.hahngruppe.dvinci-hr.com", true},
 		{"dvinci easy", "https://weig.dvinci-easy.com/jobPublication/list.json", "dvinci", "weig.dvinci-easy.com", "https://weig.dvinci-easy.com", true},
 		{"dvinci vendor site not a tenant", "https://www.dvinci-hr.com/", "", "", "", false},
+		{"rexx posting", "https://karriere-hse24-portal.rexx-systems.com/Head-of-IT-de-j3700.html?sid=97d5fe5688cbbaae18e1e395144534e8", "rexx", "karriere-hse24-portal.rexx-systems.com", "https://karriere-hse24-portal.rexx-systems.com", true},
+		{"rexx recruitment listing", "https://horiba-portal.rexx-recruitment.com/stellenangebote.html", "rexx", "horiba-portal.rexx-recruitment.com", "https://horiba-portal.rexx-recruitment.com", true},
+		{"rexx asset host not a tenant", "https://cdn.rexx-systems.com/x.css", "", "", "", false},
 		{"factorial host it", "https://muffin.factorial.it/job/1", "factorial", "muffin.factorial.it", "https://muffin.factorial.it", true},
 		{"factorialhr base-domain variant", "https://9net.factorialhr.com.br/job/2", "factorial", "9net.factorialhr.com.br", "https://9net.factorialhr.com.br", true},
 		// gr8people: one vendor served under two marketing domains, confirmed live (identical
