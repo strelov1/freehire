@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -692,23 +694,33 @@ func (taleobeProber) probe(ctx context.Context, c httpClient, board string) (str
 	return strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(feed.Title), " Job Feed")), len(feed.Items), nil
 }
 
-// personioProber probes the Personio public XML feed on the .com host (the host the adapter
-// crawls). A non-empty positions list is a live board; a tenant served only on a regional
-// TLD (.de/.es) 404s here and is skipped — correctly, since the adapter could not crawl it
-// either. The feed carries no company name, so it falls back to the slug.
+// personioProber probes a Personio board the way the adapter lists it: the public XML feed
+// on the .com host, and — when the tenant has that feed switched off, which it answers with
+// a 404 — search.json, which keeps listing the same positions. A non-empty list on the path
+// the adapter would take is a live board; a feed that answers but is empty is not, since
+// the adapter does not fall back from it either. A tenant served only on a regional TLD
+// (.de/.es) 404s on both and is skipped — correctly, since the adapter could not crawl it.
+// Neither listing carries a company name, so it falls back to the slug.
 type personioProber struct{}
 
 func (personioProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
+	host := fmt.Sprintf("https://%s.jobs.personio.com", slug)
 	var resp struct {
 		Positions []struct{} `xml:"position"`
 	}
-	if err := c.GetXML(ctx, fmt.Sprintf("https://%s.jobs.personio.com/xml", slug), &resp); err != nil {
+	err := c.GetXML(ctx, host+"/xml", &resp)
+	if err == nil {
+		return "", len(resp.Positions), nil
+	}
+	var se *sources.StatusError
+	if !errors.As(err, &se) || se.Code != http.StatusNotFound {
 		return "", 0, nil
 	}
-	if len(resp.Positions) == 0 {
+	var jobs []struct{}
+	if err := c.GetJSON(ctx, host+"/search.json", &jobs); err != nil {
 		return "", 0, nil
 	}
-	return "", len(resp.Positions), nil
+	return "", len(jobs), nil
 }
 
 // gemProbeQuery is the minimal list query (extId only) the Gem prober uses for liveness — a

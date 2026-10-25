@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // errMissing is the sentinel the fake getter returns for an unmapped URL. In production the
@@ -528,5 +530,32 @@ func TestTeamtailorProbeSkipsAHostThatServesAnotherHostsBoard(t *testing.T) {
 	}
 	if name, n, err := (teamtailorProber{}).probe(context.Background(), getter, "acme.teamtailor.com"); err != nil || name != "Acme" || n != 1 {
 		t.Errorf("own host: got (%q,%d,%v), want (\"Acme\",1,nil)", name, n, err)
+	}
+}
+
+// personioFeedOff answers every Personio XML feed with the 404 a tenant serves once it has
+// switched the feed off, and everything else from the canned map.
+type personioFeedOff struct{ fakeGetter }
+
+func (personioFeedOff) GetXML(_ context.Context, url string, _ any) error {
+	return &sources.StatusError{Method: "GET", Code: 404, URL: url}
+}
+
+// A tenant with its XML feed switched off still lists its jobs over search.json, which the
+// adapter falls back to — so the prober must accept it on that evidence (measured
+// 2026-10-25: 120 of 146 German tenants were reachable only this way).
+func TestPersonioProberAcceptsABoardListedOnlyOverSearchJSON(t *testing.T) {
+	g := personioFeedOff{fakeGetter{
+		"https://acme.jobs.personio.com/search.json":  `[{"id":1,"name":"Engineer"},{"id":2,"name":"Designer"}]`,
+		"https://empty.jobs.personio.com/search.json": `[]`,
+	}}
+	if _, n, _ := (personioProber{}).probe(context.Background(), g, "acme"); n != 2 {
+		t.Errorf("acme: count = %d, want 2 from search.json", n)
+	}
+	if _, n, _ := (personioProber{}).probe(context.Background(), g, "empty"); n != 0 {
+		t.Errorf("empty: count = %d, want 0", n)
+	}
+	if _, n, _ := (personioProber{}).probe(context.Background(), g, "gone"); n != 0 {
+		t.Errorf("gone: count = %d, want 0 when neither listing answers", n)
 	}
 }

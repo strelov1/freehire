@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -206,5 +207,111 @@ func TestPersonioFetchEmptyFeed(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Fatalf("len(jobs) = %d, want 0 for an empty feed", len(jobs))
+	}
+}
+
+// The fixtures under testdata/personio were recorded from the live boards on 2026-10-25.
+// Both tenants answer /xml with 404 — their XML feed is switched off — while search.json
+// still lists every open position. search.json carries a body only when asked for a
+// locale the posting is published in: aconium's postings are German-only, factworks'
+// English-only, and the bare search.json carries no body for either.
+func personioFixture(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile("testdata/personio/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func personioXMLDisabled(board string) error {
+	return &StatusError{Method: "GET", Code: 404, URL: "https://" + board + ".jobs.personio.com/xml"}
+}
+
+func TestPersonioFetchFallsBackToSearchJSONWhenXMLFeedIsDisabled(t *testing.T) {
+	fake := (&routedHTTP{}).
+		routeErr("/xml", personioXMLDisabled("aconium")).
+		route("search.json?language=de", personioFixture(t, "aconium_search_de.json")).
+		route("search.json?language=en", personioFixture(t, "aconium_search_en.json"))
+
+	jobs, err := NewPersonio(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "aconium", Provider: "personio", Board: "aconium",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("len(jobs) = %d, want 2", len(jobs))
+	}
+	j := jobs[0]
+	// The same posting id the XML feed carries, so a tenant that turns its feed back on (or
+	// off) keeps the identity (source, external_id) of every posting it already has.
+	if j.ExternalID != "1589998" {
+		t.Errorf("ExternalID = %q, want the posting id", j.ExternalID)
+	}
+	if j.URL != "https://aconium.jobs.personio.com/job/1589998" {
+		t.Errorf("URL = %q, want the same constructed job URL as the XML path", j.URL)
+	}
+	if !strings.HasPrefix(j.Title, "Informationssicherheitsbeauftragte:r") {
+		t.Errorf("Title = %q", j.Title)
+	}
+	if j.Location != "Berlin - Invalidenstraße" {
+		t.Errorf("Location = %q, want the office", j.Location)
+	}
+	for _, want := range []string{"ISO 27001", "Für unser Berliner Büro"} {
+		if !strings.Contains(j.Description, want) {
+			t.Errorf("Description missing %q, got %q", want, j.Description)
+		}
+	}
+	if j.Remote {
+		t.Error("Remote = true for a Berlin office")
+	}
+}
+
+func TestPersonioSearchJSONFillsEnglishOnlyPostingsFromTheEnglishLocale(t *testing.T) {
+	fake := (&routedHTTP{}).
+		routeErr("/xml", personioXMLDisabled("factworks-gmbh")).
+		route("search.json?language=de", personioFixture(t, "factworks_search_de.json")).
+		route("search.json?language=en", personioFixture(t, "factworks_search_en.json"))
+
+	jobs, err := NewPersonio(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Factworks", Provider: "personio", Board: "factworks-gmbh",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("len(jobs) = %d, want 3", len(jobs))
+	}
+	for _, j := range jobs {
+		if j.Description == "" {
+			t.Errorf("job %s (%s) has no description; the English locale carries it", j.ExternalID, j.Title)
+		}
+	}
+	if jobs[2].ExternalID != "2826679" || jobs[2].Title != "Senior IT System Administrator (m/f/d)" {
+		t.Errorf("jobs[2] = %s %q", jobs[2].ExternalID, jobs[2].Title)
+	}
+}
+
+// The fallback listing is the board's only listing once the feed is off, so its failure
+// must fail the Fetch exactly as the XML feed's does — fullBoardListing rests on it.
+func TestPersonioSearchJSONListingErrorFailsTheFetch(t *testing.T) {
+	fake := (&routedHTTP{}).
+		routeErr("/xml", personioXMLDisabled("acme")).
+		routeErr("search.json", errors.New("boom"))
+	if _, err := NewPersonio(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded although both listings failed")
+	}
+}
+
+// Only a 404 means "the feed is switched off". A 5xx or a timeout on /xml is a transient
+// failure of the primary listing and must surface as one, not be papered over by a second
+// listing that would then be read as the board's whole state.
+func TestPersonioDoesNotFallBackOnATransientXMLFailure(t *testing.T) {
+	fake := (&routedHTTP{}).
+		routeErr("/xml", &StatusError{Method: "GET", Code: 503, URL: "https://acme.jobs.personio.com/xml"}).
+		route("search.json", `[{"id":1,"name":"x","office":"Berlin","description":""}]`)
+	if _, err := NewPersonio(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatal("Fetch succeeded on a 503 from the XML feed")
 	}
 }
