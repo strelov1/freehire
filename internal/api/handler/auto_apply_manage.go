@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"math"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
@@ -87,7 +88,7 @@ func (h *assistantHandlers) cancelAutoApply(ctx context.Context, userID int64, s
 		return err
 	}
 	_, err = h.queries.CancelAutoApplyEntry(ctx, db.CancelAutoApplyEntryParams{
-		ID: entry.ID, UserID: userID, LeaseSeconds: int32(config.LoadAutoApply().LeaseSeconds),
+		ID: entry.ID, UserID: userID, LeaseSeconds: int32(min(config.LoadAutoApply().LeaseSeconds, math.MaxInt32)),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		if entry.SubmitUncertainAt.Valid {
