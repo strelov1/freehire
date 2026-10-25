@@ -241,6 +241,46 @@ WITH c AS (
 )
 SELECT * FROM c;
 
+-- name: ReopenBuddyConversation :one
+-- A new invitation on a pair whose conversation was closed WITHOUT a block (a leave closes
+-- it; a block never reopens). The row is reused rather than replaced, so the history
+-- stays and the pair keeps exactly one conversation. It goes back to pending under the
+-- new inviter, created_at restarts so the invitation counts against the cap, and the old
+-- messages count as read for both sides so only the new first message is unread. The same
+-- guards as CreateBuddyInvitation apply; no row means closed-without-block did not hold.
+WITH c AS (
+    UPDATE buddy_conversations c
+    SET status = 'pending',
+        initiator_id = sqlc.arg(initiator_id)::bigint,
+        created_at = now(),
+        accepted_at = NULL,
+        closed_at = NULL,
+        notified_low_at = NULL,
+        notified_high_at = NULL,
+        last_read_low = newest.id,
+        last_read_high = newest.id
+    FROM (
+        SELECT coalesce(max(id), 0)::bigint AS id
+        FROM buddy_messages
+        WHERE conversation_id = (SELECT id FROM buddy_conversations
+                                 WHERE user_low = sqlc.arg(user_low) AND user_high = sqlc.arg(user_high))
+    ) newest
+    WHERE c.user_low = sqlc.arg(user_low)::bigint
+      AND c.user_high = sqlc.arg(user_high)::bigint
+      AND c.status = 'closed'
+      AND (SELECT count(*) FROM buddy_members
+           WHERE user_id IN (c.user_low, c.user_high) AND left_at IS NULL) = 2
+      AND NOT EXISTS (
+          SELECT 1 FROM buddy_blocks
+          WHERE (blocker_id = c.user_low AND blocked_id = c.user_high)
+             OR (blocker_id = c.user_high AND blocked_id = c.user_low))
+    RETURNING c.*
+), m AS (
+    INSERT INTO buddy_messages (conversation_id, sender_id, body)
+    SELECT c.id, c.initiator_id, sqlc.arg(body) FROM c
+)
+SELECT * FROM c;
+
 -- name: GetBuddyConversation :one
 SELECT * FROM buddy_conversations WHERE id = $1;
 

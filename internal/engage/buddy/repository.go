@@ -223,11 +223,13 @@ func (r *QueriesRepository) Blocked(ctx context.Context, a, b int64) (bool, erro
 
 func (r *QueriesRepository) PairHasConversation(ctx context.Context, a, b int64) (bool, error) {
 	low, high := orderedPair(a, b)
-	_, err := r.q.GetBuddyConversationByPair(ctx, db.GetBuddyConversationByPairParams{UserLow: low, UserHigh: high})
+	row, err := r.q.GetBuddyConversationByPair(ctx, db.GetBuddyConversationByPairParams{UserLow: low, UserHigh: high})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
-	return err == nil, err
+	// A closed conversation is not a barrier: CreateInvitation reopens it, or refuses when
+	// a block is the reason it is closed.
+	return err == nil && row.Status != StatusClosed, err
 }
 
 func (r *QueriesRepository) InvitationsSince(ctx context.Context, userID int64, since time.Time) (int, time.Time, error) {
@@ -247,7 +249,7 @@ func (r *QueriesRepository) CreateInvitation(ctx context.Context, from, to int64
 	})
 	if err != nil {
 		if pgerr.IsUniqueViolation(err) {
-			return ConversationRow{}, ErrConversationExists
+			return r.reopenInvitation(ctx, low, high, from, body)
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			// The statement guards both parties' membership and the block table itself.
@@ -256,6 +258,30 @@ func (r *QueriesRepository) CreateInvitation(ctx context.Context, from, to int64
 		return ConversationRow{}, err
 	}
 	return conversationFromRow(db.BuddyConversation(row)), nil
+}
+
+// reopenInvitation answers an invitation on a pair that already has a conversation: a
+// closed one without a block comes back as pending, anything else stays as it is.
+func (r *QueriesRepository) reopenInvitation(ctx context.Context, low, high, from int64, body string) (ConversationRow, error) {
+	row, err := r.q.ReopenBuddyConversation(ctx, db.ReopenBuddyConversationParams{
+		UserLow: low, UserHigh: high, InitiatorID: from, Body: body,
+	})
+	if err == nil {
+		return conversationFromRow(db.BuddyConversation(row)), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return ConversationRow{}, err
+	}
+	// Nothing matched: still closed means a block or a departed member (not revealed),
+	// any other status means the pair is already talking or declined.
+	cur, err := r.q.GetBuddyConversationByPair(ctx, db.GetBuddyConversationByPairParams{UserLow: low, UserHigh: high})
+	if err != nil {
+		return ConversationRow{}, err
+	}
+	if cur.Status == StatusClosed {
+		return ConversationRow{}, ErrRecipientUnavailable
+	}
+	return ConversationRow{}, ErrConversationExists
 }
 
 func (r *QueriesRepository) AnswerInvitation(ctx context.Context, userID, conversationID int64, status string) (ConversationRow, error) {

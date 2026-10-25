@@ -68,6 +68,7 @@ A new partial index `application_events (occurred_at DESC, id DESC) WHERE kind I
 - `buddy_messages (id bigint identity, conversation_id, sender_id, body, created_at)`, with an index on `(conversation_id, id)`. Body length is checked in Go and by a CHECK (1..4000).
 - An invitation inserts the conversation and its first message in one transaction. The 24-hour cap counts `buddy_conversations WHERE initiator_id=$1 AND created_at > now()-24h`, the same SQL-count pattern as `referral.DefaultDailyRequestCap`.
 - A declined invitation stays `declined`, so the pair cannot be re-invited. The sender's view maps `declined` to "unanswered", the same as `pending`.
+- A conversation closed WITHOUT a block between the pair (leaving closes it) is re-opened by a new invitation from either member: the invitation UPDATEs the existing row to `pending` (new `initiator_id`, `created_at = now()` so the cap counts it, `accepted_at`, `closed_at` and the notified stamps cleared) and inserts the new first message in the same statement, under the same guards as the insert (both active, no block). History stays, and both read cursors move to the newest old message so only the new one is unread. A block keeps the row closed for good and the refusal is the ordinary "recipient unavailable", which does not reveal it; `declined` stays terminal. Without this, two members who once talked could never talk again after one of them left and came back.
 - All foreign keys to `users` are `ON DELETE CASCADE`, which covers account deletion.
 
 ### D8. Polling, not a live channel

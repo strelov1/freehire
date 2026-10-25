@@ -110,6 +110,14 @@ A member SHALL be able to invite another active member by sending a first messag
 - **WHEN** A invites B while any conversation between them already exists
 - **THEN** the system responds 409 and creates nothing
 
+#### Scenario: Re-inviting after a conversation closed by leaving
+- **WHEN** a conversation between A and B was closed because one of them left, both are active members again with no block between them, and A invites B
+- **THEN** the same conversation becomes pending with A as the inviter, keeps its earlier messages as read, holds the new message as unread for B, and counts toward A's daily limit
+
+#### Scenario: A block keeps a closed conversation closed
+- **WHEN** a closed conversation's pair has a block in either direction and either member invites the other
+- **THEN** the system responds 403 without revealing the block, and the conversation stays closed
+
 #### Scenario: Daily invitation limit
 - **WHEN** A has sent 10 invitations in the last 24 hours and sends another
 - **THEN** the system responds 429 with a message saying when the next invitation is possible

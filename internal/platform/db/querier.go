@@ -6423,6 +6423,13 @@ type Querier interface {
 	// rather than silently writing over a fresher grant... which it cannot do anyway, the WHERE
 	// naming the access token this renewal was issued against.
 	RenewSocialToken(ctx context.Context, arg RenewSocialTokenParams) (int64, error)
+	// A new invitation on a pair whose conversation was closed WITHOUT a block (a leave closes
+	// it; a block never reopens). The row is reused rather than replaced, so the history
+	// stays and the pair keeps exactly one conversation. It goes back to pending under the
+	// new inviter, created_at restarts so the invitation counts against the cap, and the old
+	// messages count as read for both sides so only the new first message is unread. The same
+	// guards as CreateBuddyInvitation apply; no row means closed-without-block did not hold.
+	ReopenBuddyConversation(ctx context.Context, arg ReopenBuddyConversationParams) (ReopenBuddyConversationRow, error)
 	// Undoes CloseEmployerJob: the same actor, the same scope (created_by = actor_id AND
 	// source = 'employer'), and ONLY a close that actor made — closed_reason =
 	// 'employer_closed'. A posting another mechanism closed (a moderator, the liveness probe)

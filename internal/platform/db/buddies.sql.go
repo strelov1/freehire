@@ -1225,6 +1225,94 @@ func (q *Queries) ReleaseBuddyUnread(ctx context.Context, arg ReleaseBuddyUnread
 	return err
 }
 
+const reopenBuddyConversation = `-- name: ReopenBuddyConversation :one
+WITH c AS (
+    UPDATE buddy_conversations c
+    SET status = 'pending',
+        initiator_id = $1::bigint,
+        created_at = now(),
+        accepted_at = NULL,
+        closed_at = NULL,
+        notified_low_at = NULL,
+        notified_high_at = NULL,
+        last_read_low = newest.id,
+        last_read_high = newest.id
+    FROM (
+        SELECT coalesce(max(id), 0)::bigint AS id
+        FROM buddy_messages
+        WHERE conversation_id = (SELECT id FROM buddy_conversations
+                                 WHERE user_low = $2 AND user_high = $3)
+    ) newest
+    WHERE c.user_low = $2::bigint
+      AND c.user_high = $3::bigint
+      AND c.status = 'closed'
+      AND (SELECT count(*) FROM buddy_members
+           WHERE user_id IN (c.user_low, c.user_high) AND left_at IS NULL) = 2
+      AND NOT EXISTS (
+          SELECT 1 FROM buddy_blocks
+          WHERE (blocker_id = c.user_low AND blocked_id = c.user_high)
+             OR (blocker_id = c.user_high AND blocked_id = c.user_low))
+    RETURNING c.id, c.user_low, c.user_high, c.initiator_id, c.status, c.created_at, c.accepted_at, c.closed_at, c.last_read_low, c.last_read_high, c.notified_low_at, c.notified_high_at
+), m AS (
+    INSERT INTO buddy_messages (conversation_id, sender_id, body)
+    SELECT c.id, c.initiator_id, $4 FROM c
+)
+SELECT id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at FROM c
+`
+
+type ReopenBuddyConversationParams struct {
+	InitiatorID int64  `json:"initiator_id"`
+	UserLow     int64  `json:"user_low"`
+	UserHigh    int64  `json:"user_high"`
+	Body        string `json:"body"`
+}
+
+type ReopenBuddyConversationRow struct {
+	ID             int64              `json:"id"`
+	UserLow        int64              `json:"user_low"`
+	UserHigh       int64              `json:"user_high"`
+	InitiatorID    int64              `json:"initiator_id"`
+	Status         string             `json:"status"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	AcceptedAt     pgtype.Timestamptz `json:"accepted_at"`
+	ClosedAt       pgtype.Timestamptz `json:"closed_at"`
+	LastReadLow    pgtype.Int8        `json:"last_read_low"`
+	LastReadHigh   pgtype.Int8        `json:"last_read_high"`
+	NotifiedLowAt  pgtype.Timestamptz `json:"notified_low_at"`
+	NotifiedHighAt pgtype.Timestamptz `json:"notified_high_at"`
+}
+
+// A new invitation on a pair whose conversation was closed WITHOUT a block (a leave closes
+// it; a block never reopens). The row is reused rather than replaced, so the history
+// stays and the pair keeps exactly one conversation. It goes back to pending under the
+// new inviter, created_at restarts so the invitation counts against the cap, and the old
+// messages count as read for both sides so only the new first message is unread. The same
+// guards as CreateBuddyInvitation apply; no row means closed-without-block did not hold.
+func (q *Queries) ReopenBuddyConversation(ctx context.Context, arg ReopenBuddyConversationParams) (ReopenBuddyConversationRow, error) {
+	row := q.db.QueryRow(ctx, reopenBuddyConversation,
+		arg.InitiatorID,
+		arg.UserLow,
+		arg.UserHigh,
+		arg.Body,
+	)
+	var i ReopenBuddyConversationRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserLow,
+		&i.UserHigh,
+		&i.InitiatorID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.AcceptedAt,
+		&i.ClosedAt,
+		&i.LastReadLow,
+		&i.LastReadHigh,
+		&i.NotifiedLowAt,
+		&i.NotifiedHighAt,
+	)
+	return i, err
+}
+
 const resolveBuddyReport = `-- name: ResolveBuddyReport :one
 UPDATE buddy_reports
 SET resolved_at = coalesce(resolved_at, now()),

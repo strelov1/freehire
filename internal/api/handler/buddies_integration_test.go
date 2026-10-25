@@ -288,6 +288,24 @@ func TestBuddyDeclineIsNotRevealed(t *testing.T) {
 	}
 }
 
+func TestBuddyInviteReopensConversationClosedByLeaving(t *testing.T) {
+	env := newBuddyEnv(t, "a", "b")
+	env.join("a")
+	hb := env.join("b")
+	url := "/api/v1/me/buddies/conversations"
+	id := env.want(http.StatusCreated, http.MethodPost, url, "a",
+		map[string]any{"handle": hb, "body": "hi"})["data"].(map[string]any)["id"].(float64)
+	env.want(http.StatusOK, http.MethodPost, convPath(id, "/accept"), "b", nil)
+	env.want(http.StatusNoContent, http.MethodDelete, "/api/v1/me/buddies", "b", nil)
+	env.join("b")
+
+	again := env.want(http.StatusCreated, http.MethodPost, url, "a",
+		map[string]any{"handle": hb, "body": "back?"})["data"].(map[string]any)
+	if again["id"].(float64) != id || again["status_for_me"] != "outgoing" {
+		t.Fatalf("reopened = %v, want conversation %v outgoing", again, id)
+	}
+}
+
 func TestBuddyInviteErrors(t *testing.T) {
 	env := newBuddyEnv(t, "a", "b")
 	env.join("a")

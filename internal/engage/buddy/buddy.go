@@ -80,7 +80,8 @@ type Repository interface {
 	HiddenApplications(ctx context.Context, userID int64) ([]int64, error)
 	// Blocked reports a block between the two users in either direction.
 	Blocked(ctx context.Context, a, b int64) (bool, error)
-	// PairHasConversation reports a conversation between the two users in any status.
+	// PairHasConversation reports a conversation between the two users in any status but
+	// closed: a closed one is reopened by CreateInvitation.
 	PairHasConversation(ctx context.Context, a, b int64) (bool, error)
 	// InvitationsSince is how many invitations userID sent after since, and when the
 	// oldest of them was sent (the zero time when there are none).
