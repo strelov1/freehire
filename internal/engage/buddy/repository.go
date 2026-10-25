@@ -249,6 +249,10 @@ func (r *QueriesRepository) CreateInvitation(ctx context.Context, from, to int64
 		if pgerr.IsUniqueViolation(err) {
 			return ConversationRow{}, ErrConversationExists
 		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The statement guards both parties' membership and the block table itself.
+			return ConversationRow{}, ErrRecipientUnavailable
+		}
 		return ConversationRow{}, err
 	}
 	return conversationFromRow(db.BuddyConversation(row)), nil
@@ -340,6 +344,7 @@ func (r *QueriesRepository) Conversations(ctx context.Context, userID int64) ([]
 		out[i] = ConversationListRow{
 			ConversationRow: c,
 			Other:           SimilarRow{Handle: row.Handle, Countries: row.Countries, CV: decodeCV(row.ResumeStructured)},
+			OtherVisible:    row.OtherVisible.Bool,
 			Unread:          int(row.Unread), LastMessageAt: row.LastMessageAt.Time,
 		}
 	}

@@ -216,10 +216,18 @@ ORDER BY application_id;
 -- A pending conversation and its first message in ONE statement, so the pair never exists
 -- without the message that opened it. The caller passes the pair already ordered
 -- (user_low < user_high). A second conversation for the pair is the unique violation on
--- (user_low, user_high).
+-- (user_low, user_high). Both parties must still be active and unblocked, checked HERE and
+-- not in an earlier read, so a leave or block that commits in between cannot leave an
+-- invitation to someone who is gone; no row then means the pair is unavailable.
 WITH c AS (
     INSERT INTO buddy_conversations (user_low, user_high, initiator_id)
-    VALUES (sqlc.arg(user_low), sqlc.arg(user_high), sqlc.arg(initiator_id))
+    SELECT sqlc.arg(user_low)::bigint, sqlc.arg(user_high)::bigint, sqlc.arg(initiator_id)::bigint
+    WHERE (SELECT count(*) FROM buddy_members
+           WHERE user_id IN (sqlc.arg(user_low), sqlc.arg(user_high)) AND left_at IS NULL) = 2
+      AND NOT EXISTS (
+          SELECT 1 FROM buddy_blocks
+          WHERE (blocker_id = sqlc.arg(user_low) AND blocked_id = sqlc.arg(user_high))
+             OR (blocker_id = sqlc.arg(user_high) AND blocked_id = sqlc.arg(user_low)))
     RETURNING *
 ), m AS (
     INSERT INTO buddy_messages (conversation_id, sender_id, body)
@@ -249,8 +257,10 @@ SELECT EXISTS (
 ) AS blocked;
 
 -- name: AnswerBuddyInvitation :one
--- Accept or decline a pending invitation. Only the party who did not send it matches; no
--- row means the caller must look the conversation up to say why.
+-- Accept or decline a pending invitation. Only the party who did not send it matches, and
+-- both parties must still be active and unblocked (a leave or block closes the
+-- conversation, but one committing between the caller's read and this write would not be
+-- seen otherwise); no row means the caller must look the conversation up to say why.
 UPDATE buddy_conversations
 SET status = sqlc.arg(status)::text,
     accepted_at = CASE WHEN sqlc.arg(status)::text = 'open' THEN now() ELSE accepted_at END
@@ -258,6 +268,11 @@ WHERE id = sqlc.arg(id)
   AND status = 'pending'
   AND initiator_id <> sqlc.arg(user_id)
   AND (user_low = sqlc.arg(user_id) OR user_high = sqlc.arg(user_id))
+  AND (SELECT count(*) FROM buddy_members WHERE user_id IN (user_low, user_high) AND left_at IS NULL) = 2
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_blocks
+      WHERE (blocker_id = user_low AND blocked_id = user_high)
+         OR (blocker_id = user_high AND blocked_id = user_low))
 RETURNING *;
 
 -- name: InsertBuddyMessage :one
@@ -313,7 +328,10 @@ RETURNING c.id;
 -- name: ListBuddyConversations :many
 -- Every conversation of the viewer with the other member's card inputs, their unread count
 -- (the other side's messages past the viewer's read cursor) and the newest message time,
--- newest first. A declined invitation is hidden from the member who declined it. The
+-- newest first. A declined invitation is hidden from the member who declined it. The other
+-- member is visible only while they are active and the pair is not blocked in either
+-- direction; otherwise the row still lists (history is kept) but the caller must not serve
+-- their handle or card. The
 -- unread count and last time come from one pass over the conversation's messages, so
 -- the list costs one query however many conversations there are.
 SELECT c.id,
@@ -326,6 +344,11 @@ SELECT c.id,
        m.handle,
        m.countries,
        u.resume_structured,
+       (m.left_at IS NULL AND NOT EXISTS (
+           SELECT 1 FROM buddy_blocks b
+           WHERE (b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = m.user_id)
+              OR (b.blocker_id = m.user_id AND b.blocked_id = sqlc.arg(viewer_id))
+       )) AS other_visible,
        stats.unread::bigint AS unread,
        coalesce(stats.newest, c.created_at)::timestamptz AS last_message_at
 FROM buddy_conversations c

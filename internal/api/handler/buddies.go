@@ -284,6 +284,7 @@ type buddyOtherResponse struct {
 type buddyConversationResponse struct {
 	ID            int64              `json:"id"`
 	Other         buddyOtherResponse `json:"other"`
+	FormerMember  bool               `json:"former_member"`
 	StatusForMe   string             `json:"status_for_me"`
 	Unread        int                `json:"unread"`
 	LastMessageAt *time.Time         `json:"last_message_at"`
@@ -292,9 +293,9 @@ type buddyConversationResponse struct {
 
 func toBuddyConversation(cv buddy.Conversation) buddyConversationResponse {
 	out := buddyConversationResponse{
-		ID:          cv.ID,
-		Other:       buddyOtherResponse{Handle: cv.OtherHandle, CardSummary: toBuddyCardSummary(cv.Card)},
-		StatusForMe: cv.StatusForMe, Unread: cv.Unread, CreatedAt: cv.CreatedAt,
+		ID:           cv.ID,
+		Other:        buddyOtherResponse{Handle: cv.OtherHandle, CardSummary: toBuddyCardSummary(cv.Card)},
+		FormerMember: cv.FormerMember, StatusForMe: cv.StatusForMe, Unread: cv.Unread, CreatedAt: cv.CreatedAt,
 	}
 	if !cv.LastMessageAt.IsZero() {
 		out.LastMessageAt = &cv.LastMessageAt

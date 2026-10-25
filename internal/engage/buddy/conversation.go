@@ -91,6 +91,9 @@ type Conversation struct {
 	CreatedAt  time.Time
 	AcceptedAt *time.Time
 
+	// FormerMember marks a conversation whose other party left or is blocked; the handle
+	// and card are then empty.
+	FormerMember  bool
 	Card          CardSummary
 	Unread        int
 	LastMessageAt time.Time

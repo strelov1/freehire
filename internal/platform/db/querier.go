@@ -125,8 +125,10 @@ type Querier interface {
 	// back to the state before the first of the coalesced edits, which is what makes undo mean
 	// something for typed text.
 	AmendCVRevision(ctx context.Context, arg AmendCVRevisionParams) (CvRevision, error)
-	// Accept or decline a pending invitation. Only the party who did not send it matches; no
-	// row means the caller must look the conversation up to say why.
+	// Accept or decline a pending invitation. Only the party who did not send it matches, and
+	// both parties must still be active and unblocked (a leave or block closes the
+	// conversation, but one committing between the caller's read and this write would not be
+	// seen otherwise); no row means the caller must look the conversation up to say why.
 	AnswerBuddyInvitation(ctx context.Context, arg AnswerBuddyInvitationParams) (BuddyConversation, error)
 	// Append one message to a session's transcript, assigning the next sequence number in the
 	// same statement so concurrent writers cannot collide on (session_id, seq) — the primary
@@ -1366,7 +1368,9 @@ type Querier interface {
 	// A pending conversation and its first message in ONE statement, so the pair never exists
 	// without the message that opened it. The caller passes the pair already ordered
 	// (user_low < user_high). A second conversation for the pair is the unique violation on
-	// (user_low, user_high).
+	// (user_low, user_high). Both parties must still be active and unblocked, checked HERE and
+	// not in an earlier read, so a leave or block that commits in between cannot leave an
+	// invitation to someone who is gone; no row then means the pair is unavailable.
 	CreateBuddyInvitation(ctx context.Context, arg CreateBuddyInvitationParams) (CreateBuddyInvitationRow, error)
 	// Insert a new CV for a user. data is the sanitized structured document (JSON). This is the
 	// user's own CV, not a copy made for a vacancy, so is_tailored is stated false rather than left to
@@ -3657,7 +3661,10 @@ type Querier interface {
 	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
 	// Every conversation of the viewer with the other member's card inputs, their unread count
 	// (the other side's messages past the viewer's read cursor) and the newest message time,
-	// newest first. A declined invitation is hidden from the member who declined it. The
+	// newest first. A declined invitation is hidden from the member who declined it. The other
+	// member is visible only while they are active and the pair is not blocked in either
+	// direction; otherwise the row still lists (history is kept) but the caller must not serve
+	// their handle or card. The
 	// unread count and last time come from one pass over the conversation's messages, so
 	// the list costs one query however many conversations there are.
 	ListBuddyConversations(ctx context.Context, viewerID int64) ([]ListBuddyConversationsRow, error)

@@ -36,7 +36,9 @@ type MessageRow struct {
 type ConversationListRow struct {
 	ConversationRow
 	// Other is the other member: handle, countries and CV, for the card summary.
-	Other         SimilarRow
+	Other SimilarRow
+	// OtherVisible is false once the other member has left or the pair is blocked.
+	OtherVisible  bool
 	Unread        int
 	LastMessageAt time.Time
 }
@@ -102,7 +104,8 @@ func (s *Service) MarkRead(ctx context.Context, userID, conversationID, upTo int
 }
 
 // ListConversations lists the caller's conversations, newest message first. An invitation
-// the caller declined is not listed: they have dealt with it.
+// the caller declined is not listed: they have dealt with it. A conversation with a member
+// who left, or who is blocked either way, is listed as a former member: no handle, no card.
 func (s *Service) ListConversations(ctx context.Context, userID int64) ([]Conversation, error) {
 	if err := s.requireActive(ctx, userID); err != nil {
 		return nil, err
@@ -113,8 +116,15 @@ func (s *Service) ListConversations(ctx context.Context, userID int64) ([]Conver
 	}
 	out := make([]Conversation, len(rows))
 	for i, r := range rows {
-		c := viewConversation(userID, r.ConversationRow, r.Other.Handle)
-		c.Card, c.Unread, c.LastMessageAt = cardSummary(r.Other), r.Unread, r.LastMessageAt
+		// History stays listed, but a left or blocked member's identity is not served.
+		c := viewConversation(userID, r.ConversationRow, "")
+		if r.OtherVisible {
+			c = viewConversation(userID, r.ConversationRow, r.Other.Handle)
+			c.Card = cardSummary(r.Other)
+		} else {
+			c.FormerMember = true
+		}
+		c.Unread, c.LastMessageAt = r.Unread, r.LastMessageAt
 		out[i] = c
 	}
 	return out, nil

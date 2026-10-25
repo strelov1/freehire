@@ -19,6 +19,11 @@ WHERE id = $2
   AND status = 'pending'
   AND initiator_id <> $3
   AND (user_low = $3 OR user_high = $3)
+  AND (SELECT count(*) FROM buddy_members WHERE user_id IN (user_low, user_high) AND left_at IS NULL) = 2
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_blocks
+      WHERE (blocker_id = user_low AND blocked_id = user_high)
+         OR (blocker_id = user_high AND blocked_id = user_low))
 RETURNING id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at
 `
 
@@ -28,8 +33,10 @@ type AnswerBuddyInvitationParams struct {
 	UserID int64  `json:"user_id"`
 }
 
-// Accept or decline a pending invitation. Only the party who did not send it matches; no
-// row means the caller must look the conversation up to say why.
+// Accept or decline a pending invitation. Only the party who did not send it matches, and
+// both parties must still be active and unblocked (a leave or block closes the
+// conversation, but one committing between the caller's read and this write would not be
+// seen otherwise); no row means the caller must look the conversation up to say why.
 func (q *Queries) AnswerBuddyInvitation(ctx context.Context, arg AnswerBuddyInvitationParams) (BuddyConversation, error) {
 	row := q.db.QueryRow(ctx, answerBuddyInvitation, arg.Status, arg.ID, arg.UserID)
 	var i BuddyConversation
@@ -168,7 +175,13 @@ func (q *Queries) CountBuddyInvitationsSince(ctx context.Context, arg CountBuddy
 const createBuddyInvitation = `-- name: CreateBuddyInvitation :one
 WITH c AS (
     INSERT INTO buddy_conversations (user_low, user_high, initiator_id)
-    VALUES ($1, $2, $3)
+    SELECT $1::bigint, $2::bigint, $3::bigint
+    WHERE (SELECT count(*) FROM buddy_members
+           WHERE user_id IN ($1, $2) AND left_at IS NULL) = 2
+      AND NOT EXISTS (
+          SELECT 1 FROM buddy_blocks
+          WHERE (blocker_id = $1 AND blocked_id = $2)
+             OR (blocker_id = $2 AND blocked_id = $1))
     RETURNING id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at
 ), m AS (
     INSERT INTO buddy_messages (conversation_id, sender_id, body)
@@ -202,7 +215,9 @@ type CreateBuddyInvitationRow struct {
 // A pending conversation and its first message in ONE statement, so the pair never exists
 // without the message that opened it. The caller passes the pair already ordered
 // (user_low < user_high). A second conversation for the pair is the unique violation on
-// (user_low, user_high).
+// (user_low, user_high). Both parties must still be active and unblocked, checked HERE and
+// not in an earlier read, so a leave or block that commits in between cannot leave an
+// invitation to someone who is gone; no row then means the pair is unavailable.
 func (q *Queries) CreateBuddyInvitation(ctx context.Context, arg CreateBuddyInvitationParams) (CreateBuddyInvitationRow, error) {
 	row := q.db.QueryRow(ctx, createBuddyInvitation,
 		arg.UserLow,
@@ -521,6 +536,11 @@ SELECT c.id,
        m.handle,
        m.countries,
        u.resume_structured,
+       (m.left_at IS NULL AND NOT EXISTS (
+           SELECT 1 FROM buddy_blocks b
+           WHERE (b.blocker_id = $1 AND b.blocked_id = m.user_id)
+              OR (b.blocker_id = m.user_id AND b.blocked_id = $1)
+       )) AS other_visible,
        stats.unread::bigint AS unread,
        coalesce(stats.newest, c.created_at)::timestamptz AS last_message_at
 FROM buddy_conversations c
@@ -551,13 +571,17 @@ type ListBuddyConversationsRow struct {
 	Handle           string             `json:"handle"`
 	Countries        []string           `json:"countries"`
 	ResumeStructured []byte             `json:"resume_structured"`
+	OtherVisible     pgtype.Bool        `json:"other_visible"`
 	Unread           int64              `json:"unread"`
 	LastMessageAt    pgtype.Timestamptz `json:"last_message_at"`
 }
 
 // Every conversation of the viewer with the other member's card inputs, their unread count
 // (the other side's messages past the viewer's read cursor) and the newest message time,
-// newest first. A declined invitation is hidden from the member who declined it. The
+// newest first. A declined invitation is hidden from the member who declined it. The other
+// member is visible only while they are active and the pair is not blocked in either
+// direction; otherwise the row still lists (history is kept) but the caller must not serve
+// their handle or card. The
 // unread count and last time come from one pass over the conversation's messages, so
 // the list costs one query however many conversations there are.
 func (q *Queries) ListBuddyConversations(ctx context.Context, viewerID int64) ([]ListBuddyConversationsRow, error) {
@@ -580,6 +604,7 @@ func (q *Queries) ListBuddyConversations(ctx context.Context, viewerID int64) ([
 			&i.Handle,
 			&i.Countries,
 			&i.ResumeStructured,
+			&i.OtherVisible,
 			&i.Unread,
 			&i.LastMessageAt,
 		); err != nil {

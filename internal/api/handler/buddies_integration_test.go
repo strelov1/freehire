@@ -209,6 +209,9 @@ func TestBuddyConversationHappyPath(t *testing.T) {
 	if len(list) != 1 || list[0].(map[string]any)["status_for_me"] != "incoming" {
 		t.Fatalf("b list = %v", list)
 	}
+	if list[0].(map[string]any)["former_member"] != false {
+		t.Fatalf("active member listed as former: %v", list)
+	}
 
 	// A pending invitation takes no messages.
 	env.want(http.StatusConflict, http.MethodPost, convPath(id, "/messages"), "a", map[string]any{"body": "too early"})
@@ -256,6 +259,10 @@ func TestBuddyConversationHappyPath(t *testing.T) {
 	closed := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/buddies/conversations", "a", nil)["data"].([]any)
 	if len(closed) != 1 || closed[0].(map[string]any)["status_for_me"] != "closed" {
 		t.Fatalf("a list after block = %v", closed)
+	}
+	// A blocked pair stop being identified to each other.
+	if row := closed[0].(map[string]any); row["former_member"] != true || row["other"].(map[string]any)["handle"] != "" {
+		t.Fatalf("blocked member still identified: %v", row)
 	}
 }
 

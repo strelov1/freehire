@@ -94,7 +94,7 @@ Reading a conversation advances `last_read_side`, so the next unread message mak
 - The `/my/` layout is already noindex and absent from sitemaps.
 
 ### D12. Wire shapes
-The response conventions are `{"data": ...}` and `{"data": [...], "meta": {...}}`. Cards use `talentnetwork.CandidateCard` as-is plus `handle`. Feed entries are `{id, handle, card_summary:{category, seniority, country}, company:{slug,name}, job_title|null, type, day}`. Conversations are `{id, other:{handle, card_summary}, status_for_me, unread, last_message_at}`, where `status_for_me` maps `pending` to `incoming` or `outgoing` and maps `declined` to `outgoing` for the initiator.
+The response conventions are `{"data": ...}` and `{"data": [...], "meta": {...}}`. Cards use `talentnetwork.CandidateCard` as-is plus `handle`. Feed entries are `{id, handle, card_summary:{category, seniority, country}, company:{slug,name}, job_title|null, type, day}`. Conversations are `{id, other:{handle, card_summary}, former_member, status_for_me, unread, last_message_at}`, where `former_member` is true when the other party left or the pair is blocked in either direction (the conversation stays listed as history, but `other.handle` is empty and the card is blank, so neither a left nor a blocked member's identity keeps being served), where `status_for_me` maps `pending` to `incoming` or `outgoing` and maps `declined` to `outgoing` for the initiator.
 
 ## Risks / Trade-offs
 
