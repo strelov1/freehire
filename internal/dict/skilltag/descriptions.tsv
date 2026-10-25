@@ -1078,3 +1078,13 @@ workato	Workato is an enterprise integration and automation platform for connect
 xunit	xUnit.net is an open-source unit testing framework for .NET.
 yocto	The Yocto Project is an open-source toolkit for building custom Linux distributions for embedded devices.
 zscaler	Zscaler is a cloud security platform that inspects and secures internet and private-application traffic as a zero-trust service.
+allplan	Allplan is a BIM and CAD software suite from Nemetschek used by architects and civil engineers for design, detailing and construction drawings.
+archicad	ArchiCAD is a BIM software application from Graphisoft used by architects to design buildings and produce construction documentation.
+canopen	CANopen is a communication protocol and device profile standard built on CAN bus, used to connect devices in embedded and industrial automation systems.
+datev	DATEV is a German software suite for accounting, payroll and tax work, used by tax advisors and the finance departments of German companies.
+eplan	EPLAN is an electrical engineering CAD software used to design circuit diagrams, control cabinets and the documentation of electrical and automation systems.
+ethercat	EtherCAT is a real-time industrial Ethernet fieldbus used to connect controllers with drives, sensors and I/O in factory automation.
+itwo	iTWO is a construction software suite from RIB used for cost estimation, tendering, contract management and 5D BIM planning.
+knx	KNX is an open standard for building automation that controls lighting, heating, blinds and security over a shared bus.
+profibus	PROFIBUS is a fieldbus standard for communication between controllers and field devices in factory and process automation.
+sap-fico	SAP FICO is the pair of SAP modules for Financial Accounting (FI) and Controlling (CO), covering ledgers, payables, receivables and cost accounting.
