@@ -435,6 +435,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   academictransfer: 'AcademicTransfer',
   meincheckin: 'CHECK-IN',
   instahyre: 'Instahyre',
+  hirist: 'Hirist',
+  iimjobs: 'iimjobs',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

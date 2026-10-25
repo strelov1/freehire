@@ -1,0 +1,35 @@
+{
+ "data": {
+  "id": 1679150,
+  "title": "Manager/Senior Manager - Full Stack & Generative AI ",
+  "introText": "<p><b>Manager/Senior Manager, GenAI Full Stack - Immediate/early joiners only.</b><br/><br/><b>Location :</b> Gurgaon / Bangalore<br/><br/><b>Experience :</b> Manager (4 - 7 Years) | Senior Manager (8 - 12 Years)<br/><br/><b>Employment Type :</b> Full-Time<br/><br/><b>About the Role :</b><br/><br/>We are looking for highly skilled Manager / Senior Manager - GenAI Full Stack professionals to architect, develop, and scale enterprise-grade Generative AI applications. This role is responsible for integrating GenAI capabilities into user-facing applications, building robust backend APIs, and ensuring seamless user experiences powered by Large Language Models (LLMs). The ideal candidate will possess strong expertise in full-stack engineering, cloud-native development, AI application architecture, and modern frontend/backend technologies, with hands-on experience deploying AI-powered solutions in production environments.<br/><br/><b>Role Overview :</b><br/><br/>Architect and lead the development of the application layer for enterprise Generative AI solutions. Build scalable platforms that connect LLM backends with high-performance web applications while managing API gateways, cloud deployments, security, and observability. The role requires close collaboration with AI/ML engineers, product teams, architects, and business stakeholders to deliver innovative GenAI-powered products.<br/><br/><b>Key Responsibilities :</b><br/><br/><b>1. Application Architecture :</b><br/><br/>- Design and develop scalable microservices for AI-powered applications.<br/><br/>- Architect systems to handle LLM requests, conversation management, context orchestration, and streaming responses using Server-Sent Events (SSE) and WebSockets.<br/><br/>- Develop reusable frameworks and APIs for GenAI application development.<br/><br/>- Drive scalability, reliability, security, and performance optimization across applications.<br/><br/><b>2. Frontend & Backend Integration :</b><br/><br/>- Build and manage modern web applications using React.js and Next.js.<br/><br/>- Develop backend services using Python frameworks such as FastAPI and Django.<br/><br/>- Ensure seamless, low-latency integration between frontend applications and AI/ML services.<br/><br/>- Design and implement RESTful APIs, authentication mechanisms, and enterprise-grade integrations.<br/><br/><b>3. GenAI Integration :</b><br/><br/>- Integrate Large Language Models (OpenAI, Azure OpenAI, Claude, Gemini, Llama, etc.) into enterprise applications.<br/><br/>- Implement Retrieval-Augmented Generation (RAG) pipelines and conversational AI workflows.<br/><br/>- Optimize prompt engineering, context handling, memory management, and response quality.<br/><br/>- Collaborate with AI teams to deploy and operationalize models within production systems.<br/><br/><b>4. Cloud & DevOps :</b><br/><br/>- Lead deployment of AI applications on AWS, Microsoft Azure, or Google Cloud Platform.<br/><br/>- Implement containerization using Docker and orchestration using Kubernetes.<br/><br/>- Build and maintain CI/CD pipelines for application and AI service deployments.<br/><br/>- Monitor system health, performance, security, and cost optimization.<br/><br/><b>Required Skills & Qualifications :</b><br/><br/><b>1. Educational Qualification :</b><br/><br/>- Bachelor's or Master's Degree in Computer Science, Information Technology, Engineering, or related field.<br/><br/><b>2. Technical Skills :</b><br/><br/><b>Programming & Backend :</b><br/><br/>- Strong proficiency in Python.<br/><br/>- Experience with FastAPI and/or Django.<br/><br/>- Experience building scalable APIs and microservices.<br/><br/><b>Frontend Development :</b><br/><br/>- JavaScript and TypeScript expertise.<br/><br/>- React.js and Next.js development experience.<br/><br/>- Strong understanding of UI architecture and performance optimization.<br/><br/><b>Cloud & Infrastructure :</b><br/><br/>- Hands-on experience with AWS, Azure, or GCP.<br/><br/>- Knowledge of cloud-native application development.<br/><br/>- Experience with Docker, Kubernetes, and containerized deployments.<br/><br/>- CI/CD implementation and DevOps best practices.<br/><br/><b>Generative AI & Application Integration :</b><br/><br/>- Experience integrating AI/ML models into enterprise applications.<br/><br/>- Understanding of LLM-based application architecture.<br/><br/>- Knowledge of prompt engineering, conversational AI, and RAG implementations.<br/><br/>- Experience with AI APIs and model orchestration frameworks.<br/><br/><b>Software Engineering :</b><br/><br/>- System design and scalable application architecture.<br/><br/>- API gateway management.<br/><br/>- Observability, logging, monitoring, and security practices.<br/><br/>- Performance tuning and optimization.<br/><br/><b>Experience Requirements :</b><br/><br/><b>1. Manager GenAI Full Stack :</b><br/><br/>- 4 - 7 years of experience in Full Stack Development.<br/><br/>- Strong recent experience integrating AI/ML models into web applications.<br/><br/>- Hands-on expertise in React/Next.js and Python-based backend frameworks.<br/><br/>- Experience deploying cloud-native applications in production environments.<br/><br/><b>2. Senior Manager GenAI Full Stack :</b><br/><br/>- 8 - 12+ years of experience in Full Stack Engineering and Solution Architecture.<br/><br/>- Proven experience leading enterprise-scale application development teams.<br/><br/>- Demonstrated expertise in designing and deploying AI-powered applications.<br/><br/>- Strong stakeholder management and technical leadership capabilities.<br/><br/><b>Preferred Skills :</b><br/><br/>- Experience with Azure OpenAI, AWS Bedrock, Vertex AI, or similar AI platforms.<br/><br/>- Exposure to LangChain, LangGraph, LlamaIndex, or AI orchestration frameworks.<br/><br/>- Knowledge of vector databases and RAG architectures.<br/><br/>- Experience in enterprise digital transformation and AI product development.<br/><br/>- Understanding of AI governance, security, and compliance considerations.<br/><br/></p>",
+  "min": 4,
+  "max": 12,
+  "minSal": 0,
+  "maxSal": 0,
+  "hideSal": 1,
+  "confidential": 0,
+  "workFromHome": 0,
+  "jobDetailUrl": "https://www.hirist.tech/j/managersenior-manager-full-stack-generative-ai-1679150",
+  "createdTimeMs": 1792238292162,
+  "locations": [
+   {
+    "id": 37,
+    "name": "Gurgaon/Gurugram"
+   },
+   {
+    "id": 3,
+    "name": "Bangalore"
+   }
+  ],
+  "companyData": {
+   "companyName": "EXL Services"
+  },
+  "hasExpired": false,
+  "permanentlyRemoved": false,
+  "state": 1,
+  "status": 1,
+  "crawled": 0,
+  "ats": 1
+ }
+}
