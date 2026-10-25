@@ -106,6 +106,32 @@ func (r *QueriesRepository) Inputs(ctx context.Context, userID int64) (Inputs, e
 	return in, nil
 }
 
+func (r *QueriesRepository) Similar(ctx context.Context, userID int64, limit, offset int) ([]SimilarRow, error) {
+	rows, err := r.q.ListSimilarBuddies(ctx, db.ListSimilarBuddiesParams{
+		ViewerID: userID, WCategory: weightCategory, WCountries: weightCountries,
+		WRegions: weightRegions, WCompany: weightCompany, CompanyCap: SharedCompanyCap,
+		PageLimit: int32(limit), PageOffset: int32(offset),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SimilarRow, len(rows))
+	for i, row := range rows {
+		out[i] = SimilarRow{Handle: row.Handle, Countries: row.Countries, Score: int(row.Score)}
+		if len(row.ResumeStructured) > 0 {
+			// An unreadable CV leaves an empty card summary, as in Inputs.
+			var s resumeextract.Structured
+			if json.Unmarshal(row.ResumeStructured, &s) == nil {
+				out[i].CV = s
+			}
+		}
+		for j, slug := range row.SharedSlugs {
+			out[i].Shared = append(out[i].Shared, Company{Slug: slug, Name: row.SharedNames[j]})
+		}
+	}
+	return out, nil
+}
+
 func memberResult(row db.BuddyMember, err error) (Member, bool, error) {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Member{}, false, nil

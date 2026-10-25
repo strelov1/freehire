@@ -68,6 +68,8 @@ type Repository interface {
 	MemberByHandle(ctx context.Context, handle string) (Member, bool, error)
 	SetKeys(ctx context.Context, userID int64, keys Keys) error
 	Inputs(ctx context.Context, userID int64) (Inputs, error)
+	// Similar is one page of the viewer's similarity ranking, best first.
+	Similar(ctx context.Context, userID int64, limit, offset int) ([]SimilarRow, error)
 }
 
 // Service is the membership and profile use cases.

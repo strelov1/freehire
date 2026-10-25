@@ -133,6 +133,152 @@ func (q *Queries) LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMemb
 	return i, err
 }
 
+const listSimilarBuddies = `-- name: ListSimilarBuddies :many
+WITH viewer AS (
+    SELECT vm.category, vm.countries, vm.regions
+    FROM buddy_members vm
+    WHERE vm.user_id = $2 AND vm.left_at IS NULL
+),
+viewer_companies AS (
+    SELECT DISTINCT e.company_slug
+    FROM application_events e
+    WHERE e.user_id = $2
+      AND e.kind = 'applied' AND e.retracted_at IS NULL
+      AND e.company_slug <> ''
+      AND e.occurred_at > now() - interval '90 days'
+      AND NOT EXISTS (
+          SELECT 1 FROM buddy_hidden_applications h
+          WHERE h.user_id = e.user_id AND h.application_id = e.application_id)
+),
+candidates AS (
+    SELECT m.user_id, m.handle, m.category, m.countries, m.regions, m.joined_at
+    FROM buddy_members m
+    WHERE m.left_at IS NULL
+      AND m.user_id <> $2
+      AND NOT EXISTS (
+          SELECT 1 FROM buddy_blocks b
+          WHERE (b.blocker_id = $2 AND b.blocked_id = m.user_id)
+             OR (b.blocker_id = m.user_id AND b.blocked_id = $2))
+),
+shared AS (
+    SELECT c.user_id, e.company_slug
+    FROM candidates c
+    JOIN application_events e ON e.user_id = c.user_id
+    WHERE e.kind = 'applied' AND e.retracted_at IS NULL
+      AND e.occurred_at > now() - interval '90 days'
+      AND e.company_slug IN (SELECT company_slug FROM viewer_companies)
+      AND NOT EXISTS (
+          SELECT 1 FROM buddy_hidden_applications h
+          WHERE h.user_id = e.user_id AND h.application_id = e.application_id)
+    GROUP BY c.user_id, e.company_slug
+),
+shared_counts AS (
+    SELECT user_id, count(*)::int AS n FROM shared GROUP BY user_id
+),
+scored AS (
+    SELECT c.user_id, c.handle, c.countries, c.joined_at,
+           ($3::int * (c.category IS NOT NULL AND c.category = v.category)::int
+          + $4::int * (c.countries && v.countries)::int
+          + $5::int * (c.regions && v.regions)::int
+          + $6::int * least(coalesce(sc.n, 0), $1::int))::int AS score
+    FROM candidates c
+    CROSS JOIN viewer v
+    LEFT JOIN shared_counts sc ON sc.user_id = c.user_id
+),
+page AS (
+    SELECT user_id, handle, countries, joined_at, score FROM scored
+    ORDER BY score DESC, joined_at DESC, user_id
+    LIMIT $8 OFFSET $7
+)
+SELECT p.handle,
+       p.countries,
+       p.score,
+       u.resume_structured,
+       coalesce((SELECT array_agg(s.company_slug ORDER BY s.company_slug)
+                 FROM (SELECT company_slug FROM shared WHERE shared.user_id = p.user_id
+                       ORDER BY company_slug LIMIT $1::int) s), '{}')::text[] AS shared_slugs,
+       coalesce((SELECT array_agg(coalesce(co.name, s.company_slug) ORDER BY s.company_slug)
+                 FROM (SELECT company_slug FROM shared WHERE shared.user_id = p.user_id
+                       ORDER BY company_slug LIMIT $1::int) s
+                 LEFT JOIN companies co ON co.slug = s.company_slug), '{}')::text[] AS shared_names
+FROM page p
+JOIN users u ON u.id = p.user_id
+ORDER BY p.score DESC, p.joined_at DESC, p.user_id
+`
+
+type ListSimilarBuddiesParams struct {
+	CompanyCap int32 `json:"company_cap"`
+	ViewerID   int64 `json:"viewer_id"`
+	WCategory  int32 `json:"w_category"`
+	WCountries int32 `json:"w_countries"`
+	WRegions   int32 `json:"w_regions"`
+	WCompany   int32 `json:"w_company"`
+	PageOffset int32 `json:"page_offset"`
+	PageLimit  int32 `json:"page_limit"`
+}
+
+type ListSimilarBuddiesRow struct {
+	Handle           string   `json:"handle"`
+	Countries        []string `json:"countries"`
+	Score            int32    `json:"score"`
+	ResumeStructured []byte   `json:"resume_structured"`
+	SharedSlugs      []string `json:"shared_slugs"`
+	SharedNames      []string `json:"shared_names"`
+}
+
+// The active members most like the viewer, best first, one page. The score is
+//
+//	w_category*(same category) + w_countries*(countries overlap) + w_regions*(regions
+//	overlap) + w_company*(shared companies, at most company_cap counted)
+//
+// with the weights passed in by the caller (they are named constants in Go, a first guess,
+// and this is the only place the formula lives). Ties break on joined_at DESC, then user_id
+// so a page boundary is stable. A member who shares nothing still ranks, with score 0.
+//
+// A company is shared when BOTH sides applied to it (kind 'applied', not retracted) inside
+// the last 90 days, ignoring any application its own author has hidden from the buddy
+// feed: hiding an application takes it out of every buddy surface. The page's shared
+// companies come back as parallel slug / name arrays, at most company_cap, in slug order.
+//
+// Excluded: the viewer, members who left, and any pair in buddy_blocks in either
+// direction. A viewer who is not an active member yields no rows (the service checks first).
+// The CV is read for the page's rows only, to project the card summary.
+func (q *Queries) ListSimilarBuddies(ctx context.Context, arg ListSimilarBuddiesParams) ([]ListSimilarBuddiesRow, error) {
+	rows, err := q.db.Query(ctx, listSimilarBuddies,
+		arg.CompanyCap,
+		arg.ViewerID,
+		arg.WCategory,
+		arg.WCountries,
+		arg.WRegions,
+		arg.WCompany,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSimilarBuddiesRow{}
+	for rows.Next() {
+		var i ListSimilarBuddiesRow
+		if err := rows.Scan(
+			&i.Handle,
+			&i.Countries,
+			&i.Score,
+			&i.ResumeStructured,
+			&i.SharedSlugs,
+			&i.SharedNames,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateBuddyMemberRankingKeys = `-- name: UpdateBuddyMemberRankingKeys :exec
 UPDATE buddy_members
 SET category  = $1,

@@ -13,8 +13,8 @@
 
 ## 3. Similar members
 
-- [ ] 3.1 Score weights as named constants + Go unit test of the ordering rule (closer first, zero-score still listed)
-- [ ] 3.2 `ListSimilarBuddies` SQL (category, countries, regions, shared applied companies in 90 days, cap 5, excludes viewer/left/blocked both ways/hidden) + service method (integration tests per spec scenarios)
+- [x] 3.1 Score weights as named constants + Go unit test of the ordering rule (closer first, zero-score still listed)
+- [x] 3.2 `ListSimilarBuddies` SQL (category, countries, regions, shared applied companies in 90 days, cap 5, excludes viewer/left/blocked both ways/hidden) + service method (integration tests per spec scenarios)
 
 ## 4. Feed and hidden applications
 

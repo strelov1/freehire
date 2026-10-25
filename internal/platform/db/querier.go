@@ -4677,6 +4677,22 @@ type Querier interface {
 	// catalogue, and ~862k of those jobs carry chunks. Ordered so a caller can group rows by
 	// job without sorting, and so a job's vectors keep their chunk order.
 	ListSemanticChunksForJobs(ctx context.Context, jobIds []int64) ([]JobSemanticChunk, error)
+	// The active members most like the viewer, best first, one page. The score is
+	//   w_category*(same category) + w_countries*(countries overlap) + w_regions*(regions
+	//   overlap) + w_company*(shared companies, at most company_cap counted)
+	// with the weights passed in by the caller (they are named constants in Go, a first guess,
+	// and this is the only place the formula lives). Ties break on joined_at DESC, then user_id
+	// so a page boundary is stable. A member who shares nothing still ranks, with score 0.
+	//
+	// A company is shared when BOTH sides applied to it (kind 'applied', not retracted) inside
+	// the last 90 days, ignoring any application its own author has hidden from the buddy
+	// feed: hiding an application takes it out of every buddy surface. The page's shared
+	// companies come back as parallel slug / name arrays, at most company_cap, in slug order.
+	//
+	// Excluded: the viewer, members who left, and any pair in buddy_blocks in either
+	// direction. A viewer who is not an active member yields no rows (the service checks first).
+	// The CV is read for the page's rows only, to project the card summary.
+	ListSimilarBuddies(ctx context.Context, arg ListSimilarBuddiesParams) ([]ListSimilarBuddiesRow, error)
 	// Companies whose ingested name is still a squished slug (lowercase, no
 	// whitespace or uppercase) and that have at least one open job, with a
 	// representative open job's source and URL so the backfill worker can locate the
