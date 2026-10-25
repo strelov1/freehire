@@ -108,15 +108,37 @@ var germanRefusals = []string{"nicht möglich", "nicht vorgesehen", "nicht angeb
 	"ausgeschlossen", "leider nicht"}
 
 // germanRefusalWindow is how far past a phrase a refusal still governs it: a short
-// predicate ("ist in dieser Position leider nicht möglich"), not the next sentence.
+// predicate ("ist in dieser Position leider nicht möglich"). The window also stops at the
+// end of the sentence, so "Mobiles Arbeiten ist möglich. Homeoffice ist nicht möglich."
+// keeps its offer.
 const germanRefusalWindow = 40
+
+// refusedAfter reports whether a germanRefusals phrase follows end in the same sentence.
+// "nicht ausgeschlossen" (not ruled out) is an offer, not a refusal.
+func refusedAfter(text string, end int) bool {
+	tail := text[end:min(len(text), end+germanRefusalWindow)]
+	if i := strings.IndexAny(tail, ".;!?"); i >= 0 {
+		tail = tail[:i]
+	}
+	for _, r := range germanRefusals {
+		i := strings.Index(tail, r)
+		if i < 0 {
+			continue
+		}
+		if r == "ausgeschlossen" && strings.HasSuffix(tail[:i], "nicht ") {
+			continue
+		}
+		return true
+	}
+	return false
+}
 
 // germanWorkModeTriggers gate the fold: only a description carrying one of these stems
 // can match any phrase above, and foldMarkup is not free on the ~99% that carry none.
 // Each is ONE word, so neither a tag nor an entity can split it ("vor<br>Ort",
 // "Home&nbsp;Office"); the two-word phrases are only ever matched on the folded text.
-var germanWorkModeTriggers = []string{"home", "mobil", "hybrid", "remote", "telearbeit",
-	"ausschließlich"}
+var germanWorkModeTriggers = []string{"home", "hause", "mobil", "hybrid", "remote",
+	"telearbeit", "ausschließlich"}
 
 // germanWorkMode derives a work mode from German arrangement prose, "" when none of
 // germanWorkModePhrases is stated. lower is the description already lowercased.
@@ -167,7 +189,7 @@ func germanPhraseMatches(text, p, mode string) bool {
 		if !refusal && containsAny(text[max(0, start-germanNegationWindow):start], germanNegations) {
 			continue
 		}
-		if mode != "onsite" && containsAny(text[end:min(len(text), end+germanRefusalWindow)], germanRefusals) {
+		if mode != "onsite" && refusedAfter(text, end) {
 			continue
 		}
 		return true

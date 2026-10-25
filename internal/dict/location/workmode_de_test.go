@@ -63,6 +63,9 @@ func TestWorkModeFromDescription_German(t *testing.T) {
 		{"postposed refusal of a hybrid phrase", "Ein Homeoffice-Anteil ist leider nicht vorgesehen.", ""},
 		{"negated onsite-only", "Wir arbeiten nicht ausschließlich vor Ort.", ""},
 		{"no ban on home office", "Kein Homeoffice-Verbot, aber Präsenz im Team.", ""},
+		{"not ruled out is an offer", "Mobiles Arbeiten ist nicht ausgeschlossen und wird nach Absprache angeboten.", "hybrid"},
+		{"refusal in the next sentence", "Mobiles Arbeiten ist möglich. Homeoffice ist nicht möglich.", "hybrid"},
+		{"von zu hause needs no other trigger", "Wir arbeiten vollständig von zu Hause; keine Einsätze beim Kunden.", "remote"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
