@@ -293,3 +293,29 @@ func TestXingLanes(t *testing.T) {
 		t.Errorf("a short backlog must be taken whole, got %d", len(got))
 	}
 }
+
+// A sitemap whose gzip stream is cut short fails the crawl even when the XML it held so far
+// is complete: a short list would let the sweep close the postings it lost.
+func TestXingTruncatedSitemapFails(t *testing.T) {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write([]byte(xingFixture(t, "1-sitemap.xml"))); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cut := buf.Bytes()[:buf.Len()-4] // drop the trailing size field
+	s := newTestXing(truncatedStream(cut))
+	if _, err := s.sitemap(context.Background(), "https://www.xing.com/jobs/1-sitemap.xml.gz"); err == nil {
+		t.Fatal("want an error for a truncated gzip sitemap")
+	}
+}
+
+type truncatedStream []byte
+
+func (b truncatedStream) GetStream(_ context.Context, _, _ string, fn func(io.Reader) error) error {
+	return fn(bytes.NewReader(b))
+}
+
+func (truncatedStream) GetHTML(context.Context, string) (*html.Node, error) { return nil, nil }

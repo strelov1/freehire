@@ -217,7 +217,16 @@ func (s xing) sitemap(ctx context.Context, url string) (sitemapDoc, error) {
 			return err
 		}
 		defer func() { _ = zr.Close() }()
-		return xml.NewDecoder(io.LimitReader(zr, xingMaxSitemapBytes)).Decode(&doc)
+		// Read to EOF before decoding: gzip verifies its checksum only there, and a decoder
+		// that stops after the root element would accept a truncated file as a short list.
+		body, err := io.ReadAll(io.LimitReader(zr, xingMaxSitemapBytes+1))
+		if err != nil {
+			return err
+		}
+		if len(body) > xingMaxSitemapBytes {
+			return fmt.Errorf("sitemap exceeds %d bytes", xingMaxSitemapBytes)
+		}
+		return xml.Unmarshal(body, &doc)
 	})
 	return doc, err
 }
