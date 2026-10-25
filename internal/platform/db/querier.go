@@ -2311,6 +2311,10 @@ type Querier interface {
 	// One session owned by the caller. Owner-scoped: a foreign or missing id returns no row,
 	// which the handler maps to 404 — so a probe cannot tell the two apart.
 	GetAssistantSession(ctx context.Context, arg GetAssistantSessionParams) (GetAssistantSessionRow, error)
+	// The caller's most recent session of one preset bound to one vacancy. Used to reopen the
+	// one conversation an application holds instead of minting a second beside it. Owner-scoped:
+	// another user's session for the same vacancy is never returned.
+	GetAssistantSessionForJob(ctx context.Context, arg GetAssistantSessionForJobParams) (GetAssistantSessionForJobRow, error)
 	// The same read as GetAutoApplyQueueEntryForReview, but by id ALONE — no ownership
 	// predicate. This is for the trusted auto-apply orchestrator caller only
 	// (openspec/changes/auto-apply-inngest-orchestration): it authenticates as the

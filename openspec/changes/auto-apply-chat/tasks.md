@@ -1,8 +1,8 @@
 ## 1. Session and storage
 
-- [ ] 1.1 Migration: widen `assistant_sessions.preset` CHECK with `apply`; add nullable `narrated_event_id bigint`
-- [ ] 1.2 `internal/ai/assistant`: add `PresetApply` with its system prompt (narrate, one numbered list, site locale, translate answers to the form's language, never compose an answer)
-- [ ] 1.3 Handler: `apply` binds to an application like interview/debrief; reopening returns the live session for (user, job); refuse a job the user does not hold
+- [x] 1.1 Migration: widen `assistant_sessions.preset` CHECK with `apply`; add nullable `narrated_event_id bigint`
+- [x] 1.2 `internal/ai/assistant`: add `PresetApply` with its system prompt (narrate, one numbered list, site locale, translate answers to the form's language, never compose an answer)
+- [x] 1.3 Handler: `apply` binds to an application like interview/debrief; reopening returns the live session for (user, job); refuse a job the user does not hold
 
 ## 2. Tools
 

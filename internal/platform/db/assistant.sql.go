@@ -154,6 +154,50 @@ func (q *Queries) GetAssistantSession(ctx context.Context, arg GetAssistantSessi
 	return i, err
 }
 
+const getAssistantSessionForJob = `-- name: GetAssistantSessionForJob :one
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
+FROM assistant_sessions
+WHERE user_id = $1 AND preset = $2 AND job_id = $3
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetAssistantSessionForJobParams struct {
+	UserID int64  `json:"user_id"`
+	Preset string `json:"preset"`
+	JobID  *int64 `json:"job_id"`
+}
+
+type GetAssistantSessionForJobRow struct {
+	ID        uuid.UUID          `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Preset    string             `json:"preset"`
+	Label     pgtype.Text        `json:"label"`
+	CvID      *uuid.UUID         `json:"cv_id"`
+	JobID     *int64             `json:"job_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+// The caller's most recent session of one preset bound to one vacancy. Used to reopen the
+// one conversation an application holds instead of minting a second beside it. Owner-scoped:
+// another user's session for the same vacancy is never returned.
+func (q *Queries) GetAssistantSessionForJob(ctx context.Context, arg GetAssistantSessionForJobParams) (GetAssistantSessionForJobRow, error) {
+	row := q.db.QueryRow(ctx, getAssistantSessionForJob, arg.UserID, arg.Preset, arg.JobID)
+	var i GetAssistantSessionForJobRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Preset,
+		&i.Label,
+		&i.CvID,
+		&i.JobID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listAssistantChatSessions = `-- name: ListAssistantChatSessions :many
 SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
 FROM assistant_sessions

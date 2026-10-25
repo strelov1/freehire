@@ -161,14 +161,15 @@ type AssistantMessage struct {
 }
 
 type AssistantSession struct {
-	ID        uuid.UUID          `json:"id"`
-	UserID    int64              `json:"user_id"`
-	Preset    string             `json:"preset"`
-	Label     pgtype.Text        `json:"label"`
-	JobID     *int64             `json:"job_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
-	CvID      *uuid.UUID         `json:"cv_id"`
+	ID              uuid.UUID          `json:"id"`
+	UserID          int64              `json:"user_id"`
+	Preset          string             `json:"preset"`
+	Label           pgtype.Text        `json:"label"`
+	JobID           *int64             `json:"job_id"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	CvID            *uuid.UUID         `json:"cv_id"`
+	NarratedEventID pgtype.Int8        `json:"narrated_event_id"`
 }
 
 type AutoApplyEvent struct {

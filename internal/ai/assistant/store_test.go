@@ -65,6 +65,17 @@ func (f *fakeQueries) GetAssistantSession(_ context.Context, arg db.GetAssistant
 	}, nil
 }
 
+func (f *fakeQueries) GetAssistantSessionForJob(_ context.Context, arg db.GetAssistantSessionForJobParams) (db.GetAssistantSessionForJobRow, error) {
+	f.gotUserID = arg.UserID
+	s := f.session
+	if s.UserID != arg.UserID || s.Preset != arg.Preset || s.JobID == nil || arg.JobID == nil || *s.JobID != *arg.JobID {
+		return db.GetAssistantSessionForJobRow{}, pgx.ErrNoRows
+	}
+	return db.GetAssistantSessionForJobRow{
+		ID: s.ID, UserID: s.UserID, Preset: s.Preset, Label: s.Label, CvID: s.CvID, JobID: s.JobID,
+	}, nil
+}
+
 func (f *fakeQueries) DeleteAssistantSession(_ context.Context, _ db.DeleteAssistantSessionParams) (int64, error) {
 	return f.deleted, nil
 }

@@ -15,7 +15,7 @@ import (
 
 // Presets a session can run under. The preset selects the system prompt and the
 // registered tools, and nothing else — one chat surface serves all of them. The
-// vocabulary is also a CHECK on the column (0044, widened by 0048, 0049 and 0062), so
+// vocabulary is also a CHECK on the column (0044, widened by 0048, 0049, 0062, 0069 and 0199), so
 // a new preset is a migration and not only a constant.
 const (
 	PresetChat   = "chat"
@@ -39,6 +39,10 @@ const (
 	// differs is the prompt, and one rule inside it that inverts — a rehearsal guards
 	// against banking an improvisation, a debrief exists to bank a recollection.
 	PresetDebrief = "debrief"
+	// PresetApply is the conversation held against one automatic application: it narrates
+	// the attempt's progress and takes the candidate's answers and decisions in free text.
+	// Bound to a vacancy and no CV, like a rehearsal.
+	PresetApply = "apply"
 )
 
 // ErrNotFound is returned for a session the caller does not own and for one that
@@ -66,6 +70,7 @@ type Queries interface {
 	CreateAssistantSession(ctx context.Context, arg db.CreateAssistantSessionParams) (db.CreateAssistantSessionRow, error)
 	ListAssistantChatSessions(ctx context.Context, userID int64) ([]db.ListAssistantChatSessionsRow, error)
 	GetAssistantSession(ctx context.Context, arg db.GetAssistantSessionParams) (db.GetAssistantSessionRow, error)
+	GetAssistantSessionForJob(ctx context.Context, arg db.GetAssistantSessionForJobParams) (db.GetAssistantSessionForJobRow, error)
 	DeleteAssistantSession(ctx context.Context, arg db.DeleteAssistantSessionParams) (int64, error)
 	TouchAssistantSession(ctx context.Context, arg db.TouchAssistantSessionParams) error
 	SetAssistantSessionLabel(ctx context.Context, arg db.SetAssistantSessionLabelParams) error
@@ -121,6 +126,20 @@ func (s *Store) Session(ctx context.Context, id uuid.UUID, userID int64) (Sessio
 		return Session{}, fmt.Errorf("assistant: get session: %w", err)
 	}
 	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID), nil
+}
+
+// SessionForJob returns the caller's most recent session of preset bound to jobID, and
+// false when there is none — the one conversation an application holds, so reopening it
+// resumes instead of starting a second.
+func (s *Store) SessionForJob(ctx context.Context, userID int64, preset string, jobID int64) (Session, bool, error) {
+	row, err := s.q.GetAssistantSessionForJob(ctx, db.GetAssistantSessionForJobParams{UserID: userID, Preset: preset, JobID: &jobID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, false, nil
+	}
+	if err != nil {
+		return Session{}, false, fmt.Errorf("assistant: get session for job: %w", err)
+	}
+	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID), true, nil
 }
 
 // DeleteSession removes an owned conversation and its transcript.

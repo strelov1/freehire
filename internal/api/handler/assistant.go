@@ -318,6 +318,17 @@ func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 		}
 		vacancy, jobID = job, &job.ID
 	}
+	// An application holds ONE apply conversation: its numbered questions and the answers
+	// given to them must stay in one transcript, so opening it again resumes it.
+	if preset == assistant.PresetApply {
+		existing, ok, err := h.store.SessionForJob(c.Context(), userID, preset, *jobID)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return c.JSON(fiber.Map{"data": sessionView(existing)})
+		}
+	}
 	sess, err := h.store.CreateSession(c.Context(), userID, preset, nil, jobID)
 	if err != nil {
 		return err
@@ -353,6 +364,7 @@ var creatablePresets = []string{
 	assistant.PresetBrowse,
 	assistant.PresetInterview,
 	assistant.PresetDebrief,
+	assistant.PresetApply,
 }
 
 func creatablePreset(asked string) (string, error) {
@@ -376,7 +388,7 @@ func creatablePreset(asked string) (string, error) {
 // exactly who it is for; where the button appears is the client's judgement, and
 // refusing them here would be a bug wearing a rule's clothes.
 func bindsToApplication(preset string) bool {
-	return preset == assistant.PresetInterview || preset == assistant.PresetDebrief
+	return preset == assistant.PresetInterview || preset == assistant.PresetDebrief || preset == assistant.PresetApply
 }
 
 // applicationSessionLabel names such a session in the rail: what it is, the role, and
@@ -390,6 +402,8 @@ func applicationSessionLabel(preset string, job db.Job) string {
 		prefix = "Interview: "
 	case assistant.PresetDebrief:
 		prefix = "Debrief: "
+	case assistant.PresetApply:
+		prefix = "Application: "
 	default:
 		return ""
 	}

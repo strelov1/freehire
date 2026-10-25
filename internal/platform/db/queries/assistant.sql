@@ -39,6 +39,16 @@ SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
 FROM assistant_sessions
 WHERE id = $1 AND user_id = $2;
 
+-- name: GetAssistantSessionForJob :one
+-- The caller's most recent session of one preset bound to one vacancy. Used to reopen the
+-- one conversation an application holds instead of minting a second beside it. Owner-scoped:
+-- another user's session for the same vacancy is never returned.
+SELECT id, user_id, preset, label, cv_id, job_id, created_at, updated_at
+FROM assistant_sessions
+WHERE user_id = $1 AND preset = $2 AND job_id = $3
+ORDER BY created_at DESC
+LIMIT 1;
+
 -- name: DeleteAssistantSession :execrows
 -- Remove an owned session; its transcript goes with it (ON DELETE CASCADE). Returns 0
 -- affected rows for a foreign or missing id.
