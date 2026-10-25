@@ -17,6 +17,7 @@
   import type { Component } from 'svelte';
   import { api } from '#lib/api.js';
   import { Alert, Button, ConfirmDialog, FormField, Input } from '#lib/ui/index.js';
+  import { ActionError } from '#lib/actionError.svelte.js';
   import { announce } from '#lib/announce.svelte.js';
   import CompanyPicker from '#lib/components/CompanyPicker.svelte';
   import ExperienceAssistantPanel from '#lib/components/ExperienceAssistantPanel.svelte';
@@ -42,24 +43,13 @@
 
   let bank = $state<ExperienceBank | null>(null);
   let loading = $state(true);
-  // A failed LOAD leaves nothing to show, so it takes the view (with Retry). A failed
-  // MUTATION happens over a bank the candidate is in the middle of editing, so it is an
-  // inline notice: the list, and any editor still open in it, stay exactly as they were.
   let loadError = $state('');
-  let actionError = $state('');
+  const actionError = new ActionError();
   let busy = $state(false);
-
-  // The Alert that shows it carries role="alert", which already announces it; clearing it
-  // first re-inserts the text, so the same failure twice in a row is announced again.
-  function failAction(e: unknown, fallback: string) {
-    const message = errorMessage(e, fallback);
-    actionError = '';
-    void tick().then(() => (actionError = message));
-  }
 
   /** A mutation landed: say so, and clear a failure the candidate has now moved past. */
   function succeed(message: string) {
-    actionError = '';
+    actionError.clear();
     announce(message);
   }
   /** Selected achievement ids for merge / tailor. Order is click order. */
@@ -109,7 +99,7 @@
   async function load() {
     loading = true;
     loadError = '';
-    actionError = '';
+    actionError.clear();
     try {
       bank = await api.getExperience();
       selected = [];
@@ -317,7 +307,7 @@
       succeed('Saved');
       return true;
     } catch (e) {
-      failAction(e, 'Could not update.');
+      actionError.fail(e, 'Could not update.');
       return false;
     } finally {
       busy = false;
@@ -352,7 +342,7 @@
           heading,
         );
     } catch (e) {
-      failAction(e, 'Could not remove that entry.');
+      actionError.fail(e, 'Could not remove that entry.');
     } finally {
       busy = false;
     }
@@ -378,7 +368,7 @@
       onBankMutated?.();
       succeed('Project added');
     } catch (e) {
-      failAction(e, 'Could not create project.');
+      actionError.fail(e, 'Could not create project.');
     } finally {
       busy = false;
     }
@@ -408,7 +398,7 @@
       onBankMutated?.();
       succeed('Experience added');
     } catch (e) {
-      failAction(e, 'Could not create experience.');
+      actionError.fail(e, 'Could not create experience.');
     } finally {
       busy = false;
     }
@@ -446,7 +436,7 @@
       succeed('Saved');
       return true;
     } catch (e) {
-      failAction(e, 'Could not save that change.');
+      actionError.fail(e, 'Could not save that change.');
       return false;
     } finally {
       busy = false;
@@ -479,7 +469,7 @@
       onBankMutated?.();
       succeed('Merged');
     } catch (e) {
-      failAction(e, 'Could not merge those achievements.');
+      actionError.fail(e, 'Could not merge those achievements.');
     } finally {
       busy = false;
     }
@@ -502,7 +492,7 @@
       onBankMutated?.();
       succeed('Confirmed');
     } catch (e) {
-      failAction(e, 'Could not confirm that achievement.');
+      actionError.fail(e, 'Could not confirm that achievement.');
     } finally {
       busy = false;
     }
@@ -535,7 +525,7 @@
       succeed('Saved as project');
       return true;
     } catch (e) {
-      failAction(e, 'Could not save as project.');
+      actionError.fail(e, 'Could not save as project.');
       return false;
     } finally {
       busy = false;
@@ -576,7 +566,7 @@
           '#experience-section-project',
         );
     } catch (e) {
-      failAction(e, 'Could not remove that achievement.');
+      actionError.fail(e, 'Could not remove that achievement.');
     } finally {
       busy = false;
     }
@@ -645,12 +635,12 @@
            needs filling, and the assistant is a paid feature, so the manual "Add" buttons
            below are the only way in that every plan has. -->
       <div class="flex flex-col gap-6">
-        {#if actionError}
+        {#if actionError.message}
           <Alert variant="destructive" class="items-center py-2">
-            <span class="flex-1">{actionError}</span>
+            <span class="flex-1">{actionError.message}</span>
             <button
               type="button"
-              onclick={() => (actionError = '')}
+              onclick={() => actionError.clear()}
               aria-label="Dismiss error"
               class="-m-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-destructive/10"
             >

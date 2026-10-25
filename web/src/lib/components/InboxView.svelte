@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -31,6 +31,7 @@
     X,
   } from '@lucide/svelte';
   import { Alert, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { ActionError } from '#lib/actionError.svelte.js';
   import States from './States.svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -46,20 +47,8 @@
   let gmail = $state<GmailStatus | null>(null);
   let mailbox = $state<MailboxStatus | null>(null);
   let loading = $state(true);
-  // Two kinds of failure, rendered differently. A failed LOAD leaves nothing to show, so it
-  // takes the whole view (with a way to try again). A failed ACTION — delete, link, mark
-  // read — happens over a list the reader is in the middle of, so it is an inline notice
-  // beside the toolbar and the list stays where it was.
   let loadError = $state<string | null>(null);
-  let actionError = $state<string | null>(null);
-
-  // The Alert that shows it carries role="alert", which already announces it; clearing it
-  // first re-inserts the text, so the same failure twice in a row is announced again.
-  function failAction(e: unknown, fallback: string) {
-    const message = errorMessage(e, fallback);
-    actionError = '';
-    void tick().then(() => (actionError = message));
-  }
+  const actionError = new ActionError();
 
   // Account switcher: '' = all sources, 'gmail' | 'hosted' = one account.
   let source = $state<InboxSource>('');
@@ -170,7 +159,7 @@
   async function load() {
     loading = true;
     loadError = null;
-    actionError = null;
+    actionError.clear();
     try {
       const [gmailStatus, mailboxStatus, pushed] = await Promise.all([
         api.gmailStatus(),
@@ -212,7 +201,7 @@
     try {
       await fetchFirstPage(s.errors.loadInbox);
     } catch (e) {
-      failAction(e, s.errors.loadInbox);
+      actionError.fail(e, s.errors.loadInbox);
     }
   }
 
@@ -220,11 +209,11 @@
   async function refreshInbox() {
     if (refreshing) return;
     refreshing = true;
-    actionError = null;
+    actionError.clear();
     try {
       await fetchFirstPage(s.errors.refresh);
     } catch (e) {
-      failAction(e, s.errors.refresh);
+      actionError.fail(e, s.errors.refresh);
     } finally {
       refreshing = false;
     }
@@ -236,7 +225,7 @@
   // the list overflows its pane or the mailbox is exhausted.
   async function loadMore() {
     await pager.loadMore();
-    if (pager.loadMoreError) failAction(null, s.errors.loadMore);
+    if (pager.loadMoreError) actionError.fail(null, s.errors.loadMore);
   }
 
   function onSearchInput() {
@@ -261,7 +250,7 @@
   async function markAllRead() {
     if (markingAll) return;
     markingAll = true;
-    actionError = null;
+    actionError.clear();
     try {
       await api.markAllRead(source, label, search);
       if (unread) {
@@ -273,7 +262,7 @@
     } catch (e) {
       await reloadList();
       // After the reload, which would otherwise replace this message with its own.
-      failAction(e, s.errors.markAllRead);
+      actionError.fail(e, s.errors.markAllRead);
     } finally {
       markingAll = false;
     }
@@ -297,7 +286,7 @@
     } catch (e) {
       pager.items = prev; // put the row back
       pager.total += 1;
-      failAction(e, s.errors.deleteMessage);
+      actionError.fail(e, s.errors.deleteMessage);
     }
   }
 
@@ -310,7 +299,7 @@
       await api.restoreEmail(id);
       await reloadList();
     } catch (e) {
-      failAction(e, s.errors.restore);
+      actionError.fail(e, s.errors.restore);
     }
   }
 
@@ -335,7 +324,7 @@
       // the picker has the caller's applications ready.
       if (!selected.linked_slug && !selected.suggested_slug) void ensureTrackedApps();
     } catch (e) {
-      failAction(e, s.errors.loadMessage);
+      actionError.fail(e, s.errors.loadMessage);
     } finally {
       bodyLoading = false;
     }
@@ -385,7 +374,7 @@
     try {
       applyLinkUpdate(await api.confirmEmailLink(selected.id));
     } catch (e) {
-      failAction(e, s.errors.link);
+      actionError.fail(e, s.errors.link);
     }
   }
 
@@ -396,7 +385,7 @@
       // Dismissing the suggestion drops the email into the manual picker — load its data.
       void ensureTrackedApps();
     } catch (e) {
-      failAction(e, s.errors.dismiss);
+      actionError.fail(e, s.errors.dismiss);
     }
   }
 
@@ -411,7 +400,7 @@
       // The row now also offers the picker (to link elsewhere) — make sure it has data.
       void ensureTrackedApps();
     } catch (e) {
-      failAction(e, s.errors.unlink);
+      actionError.fail(e, s.errors.unlink);
     }
   }
 
@@ -422,7 +411,7 @@
       applyLinkUpdate(await api.linkEmail(selected.id, slug));
       lastUnlinked = null;
     } catch (e) {
-      failAction(e, s.errors.link);
+      actionError.fail(e, s.errors.link);
     }
   }
 
@@ -478,12 +467,12 @@
       aria-labelledby={tabStripId(PANEL_ID, tab)}
       class="flex flex-col gap-4"
     >
-      {#if actionError}
+      {#if actionError.message}
         <Alert variant="destructive" class="items-center py-2">
-          <span class="flex-1">{actionError}</span>
+          <span class="flex-1">{actionError.message}</span>
           <button
             type="button"
-            onclick={() => (actionError = null)}
+            onclick={() => actionError.clear()}
             aria-label={s.dismissError}
             class="-m-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-destructive/10"
           >
@@ -493,7 +482,7 @@
       {/if}
 
       {#if tab === 'settings'}
-        <InboxSettings {gmail} bind:mailbox onSourceChanged={onSourceChanged} onError={(m) => failAction(null, m)} />
+        <InboxSettings {gmail} bind:mailbox onSourceChanged={onSourceChanged} onError={(m) => actionError.fail(null, m)} />
       {:else if !hasAnySource}
         <p class="py-8 text-center text-sm text-muted-foreground">
           {s.noSource.lead}

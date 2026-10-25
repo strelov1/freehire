@@ -15,6 +15,7 @@
   import { accountNavIcons } from '#lib/accountNavIcons.js';
   import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import { dockOffset } from '#lib/assistantDock.svelte.js';
+  import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
 
   // The account shell: one source of truth for the `my/*` chrome — the width
   // container, the noindex tag, the auth gate, and the section navigation. Child
@@ -72,29 +73,11 @@
   // strip is a navigation landmark of links, not a tablist, so it does not borrow that
   // component's roles and arrow keys along with them.
   let strip = $state<HTMLElement | null>(null);
-  // Whether either end is out of view. Measured rather than assumed: an unconditional fade
-  // would paint a phantom edge on a row that already fits.
-  let atStart = $state(true);
-  let atEnd = $state(true);
-  function measureStrip() {
-    if (!strip) return;
-    atStart = strip.scrollLeft <= 1;
-    // 1px of slack — fractional widths leave scrollLeft just shy of its true maximum.
-    atEnd = strip.scrollLeft >= strip.scrollWidth - strip.clientWidth - 1;
-  }
-  $effect(() => {
-    const el = strip;
-    if (!el) return;
-    void navItems;
-    measureStrip();
-    const observer = new ResizeObserver(measureStrip);
-    observer.observe(el);
-    for (const child of el.children) observer.observe(child);
-    return () => observer.disconnect();
-  });
+  const stripEdges = new ScrollEdges();
   // A mask, not a gradient overlay, so the strip fades its own content to transparent and
   // needs no knowledge of the surface beneath it.
   const stripMask = $derived.by(() => {
+    const { atStart, atEnd } = stripEdges;
     if (atStart && atEnd) return undefined;
     const from = atStart ? 'black 0' : 'transparent 0, black 1.5rem';
     const to = atEnd ? 'black 100%' : 'black calc(100% - 1.5rem), transparent 100%';
@@ -164,7 +147,11 @@
     <!-- Below lg: a horizontal, scrollable strip above the content. -->
     <nav
       bind:this={strip}
-      onscroll={measureStrip}
+      {@attach (el) => {
+        // Re-attached when the items change, so the new links are observed too.
+        void navItems;
+        return stripEdges.attach(el);
+      }}
       aria-label={s.shell.accountSections}
       class="no-scrollbar mb-4 flex gap-1 overflow-x-auto lg:hidden"
       style:mask-image={stripMask}

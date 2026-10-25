@@ -7,6 +7,7 @@
   import { api } from '#lib/api.js';
   import { Button, EmptyState, alertVariants, cn } from '#lib/ui/index.js';
   import { announce } from '#lib/announce.svelte.js';
+  import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { UrlSyncedState, syncOnNavigation } from '#lib/urlSynced.svelte.js';
   import type { MyJob } from '#lib/types.js';
@@ -432,21 +433,7 @@
 
   // The row of columns is wider than a phone, and a hidden scrollbar leaves nothing saying
   // so: fade whichever edge still has columns beyond it.
-  let row = $state<HTMLDivElement>();
-  let moreBefore = $state(false);
-  let moreAfter = $state(false);
-  function measureRow() {
-    if (!row) return;
-    moreBefore = row.scrollLeft > 1;
-    moreAfter = row.scrollLeft + row.clientWidth < row.scrollWidth - 1;
-  }
-  $effect(() => {
-    if (!row) return;
-    measureRow();
-    const observer = new ResizeObserver(measureRow);
-    observer.observe(row);
-    return () => observer.disconnect();
-  });
+  const rowEdges = new ScrollEdges();
 
   // Close the drawer without touching the URL — Back has already moved it.
   function dismissDrawer() {
@@ -632,13 +619,12 @@
     <BoardList items={listItems} onopen={openDrawer} onsetstage={applyStage} />
   {:else}
     <div
-      bind:this={row}
-      onscroll={measureRow}
+      {@attach rowEdges.attach}
       class={cn(
         'no-scrollbar flex gap-3 overflow-x-auto pb-2',
         !dragging && 'snap-x snap-mandatory',
-        moreBefore && 'mask-l-from-90%',
-        moreAfter && 'mask-r-from-90%',
+        !rowEdges.atStart && 'mask-l-from-90%',
+        !rowEdges.atEnd && 'mask-r-from-90%',
       )}
     >
       {#each BOARD_COLUMNS as col (col.id)}
