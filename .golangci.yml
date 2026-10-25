@@ -198,6 +198,7 @@ linters:
         - informacion
         - confidencial
         - administr
+        - hybrides
         - instruktor
         - informatike
         - infrastrukture

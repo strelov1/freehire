@@ -80,6 +80,14 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
 - Region and work-mode values are drawn from the shared controlled vocabulary (`vocab.RegionValues`/`vocab.WorkModeValues`), so the parser, the enrichment payload, and the search facet all speak one set of values.
 - Geography is exposed as a Meilisearch facet (`regions`/`countries`/`work_mode` are filterable attributes), not a Postgres column filter.
 - A dictionary change needs a re-derive (`cmd/backfill-derive`) and a `cmd/reindex` to reach existing jobs.
+- **German work-arrangement prose is a second phrase list** (`workmode_de.go`), read only
+  when no English phrase matched. German lists home working as a BENEFIT ("Homeoffice
+  möglich", "2 Tage Homeoffice", "mobiles Arbeiten"), which is hybrid, and states remote only
+  with an explicit totality ("100% Homeoffice", "vollständig remote"). A remote phrase
+  therefore contains a hybrid one, so the German list checks remote FIRST — the reverse of the
+  English order. Matched on folded markup with a word boundary at the end ("mobile
+  Arbeitsmaschinen" is a trade) and a short negation window before ("kein Homeoffice
+  möglich"). Bare `remote`/`hybrid`, `vor Ort` and `deutschlandweit` are deliberately absent.
 - `work_mode` is dict-only — `jobview` serves the `jobs` column alone, the LLM's `enrichment.work_mode` is never merged in (it stays raw in the JSONB).
 - `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`): the dictionary wins when it pins a place, and the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket, so a dictionary-silent remote role still gets a geographic reach rather than none. This is the one deliberate exception to dict-only among the facets.
 
