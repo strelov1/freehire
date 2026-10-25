@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -26,6 +27,17 @@ import (
 type onlyfy struct {
 	http HTMLGetter
 }
+
+// onlyfyRequestInterval/onlyfyRequestBurst pace every request the adapter makes. All sites share
+// one platform edge, which answers 429 to the run's aggregate rate: the first unpaced production
+// crawl (2026-10-25, 125 boards, boards and posting pages fanned out concurrently) had 37 boards
+// fail their listing on 429 and 1,544 posting pages come back unreadable. A single client at
+// 8-way concurrency was never refused (300 posting pages, ~1.6 req/s, latency-bound), so the
+// pace sits at about twice that. Tune it as the other pacers are tuned: down while boards 429.
+const (
+	onlyfyRequestInterval = 333 * time.Millisecond // ~3 req/s
+	onlyfyRequestBurst    = 3
+)
 
 // NewOnlyfy builds the onlyfy adapter over the given HTTP client.
 func NewOnlyfy(c HTMLGetter) Source { return onlyfy{http: c} }

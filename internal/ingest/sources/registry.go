@@ -440,7 +440,9 @@ func All(c HTTPClient) map[string]Source {
 		NewAlignerr(c, os.Getenv("ALIGNERR_REFERRAL_CODE")),
 		NewTalentHR(c),
 		NewJobspage(c),
-		NewOnlyfy(c),
+		// Rate-paced: every onlyfy site shares one platform edge that 429s the run's aggregate rate
+		// (see onlyfyRequestInterval).
+		NewOnlyfy(pacedHTMLGetter(c, onlyfyRequestInterval, onlyfyRequestBurst)),
 		NewPolymer(c),
 		NewFlatchr(c),
 		NewDvinci(c),
