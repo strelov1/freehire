@@ -52,12 +52,23 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
   its purpose — "Student Casual"; a name split by "|" is read part by part), Dayforce's `candidateCorrespondenceClientName` in the
   careers page's Next.js data (a department such as "Human Resources" is refused), UKG's
   header-logo alt text ("Default Brand" refused, a " Brand" tail cut), Taleo's footer
-  copyright, falling back to its header-logo alt text. ADP and Workday were tried and are
-  absent on purpose;
+  copyright, falling back to its header-logo alt text. Workday was tried and is absent on
+  purpose; ADP is not in this registry either, because it states the employer nowhere but in
+  the posting text — see below;
   the constructor's comment says why for each.
 - **`AcceptPlaceholder`** — no confidence match: the lookup is by the exact board id, so there
   is no slug to compare against and nothing an unrelated page could slip through (join's
   argument in `Accept`). It refuses only what is no improvement — empty, junk, the placeholder.
+
+- **`GroundedName`** — the guard for the one resolver that uses a model. ADP's career center
+  names the client nowhere (checked 2026-10-25 in a headless browser, all six configuration
+  requests included), so `cmd/backfill-company-names` wires a resolver that has the model read
+  a board's postings (`postingTextResolver`, LLM_* configured, `COMPANY_NAMES_LLM_MAX` boards a
+  run). The model only READS: its answer is admitted when it appears verbatim, as whole words,
+  in the postings it was given, and the postings' own spelling is what gets written. A generic
+  phrase that really is in the text ("Our client", "The Company") is refused. Measured on 50
+  boards: 38 named, every one the employer the postings state; ~$0.0013 a board at Z.ai's
+  public price.
 
 `cmd/backfill-company-names` runs this as its second pass, driven by the BOARD
 (`ListPlaceholderCompanyBoards`), and renames the board and its stored jobs in one transaction:

@@ -247,6 +247,19 @@ WHERE source = sqlc.arg(source)
   AND external_id LIKE sqlc.arg(board_pattern)
   AND company = sqlc.arg(old_name);
 
+-- name: ListPlaceholderBoardDescriptions :many
+-- A few of one board's stored posting bodies, open ones first, for a placeholder whose ATS
+-- states the employer nowhere but in the posting text (adp; see cmd/backfill-company-names).
+-- board_pattern is externalid.BoardPattern(board). A board is small — the index behind
+-- (source, external_id LIKE) reaches its rows directly — so the sort is over one board only.
+SELECT description
+FROM jobs
+WHERE source = sqlc.arg(source)
+  AND external_id LIKE sqlc.arg(board_pattern)
+  AND description <> ''
+ORDER BY (closed_at IS NULL) DESC, id DESC
+LIMIT sqlc.arg(max_rows);
+
 -- name: DeleteOrphanCompanies :execrows
 -- Drop companies no longer referenced by any job — the stale rows left behind
 -- when a slug-builder change re-keys jobs onto new slugs. Reference rows imported

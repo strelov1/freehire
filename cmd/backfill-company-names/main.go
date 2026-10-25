@@ -41,7 +41,9 @@ import (
 	"github.com/strelov1/freehire/internal/dict/companyname"
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
@@ -100,11 +102,34 @@ func run() int {
 	sort.Slice(renames, func(i, j int) bool { return renames[i].oldSlug < renames[j].oldSlug })
 
 	placeholders := companyname.NewPlaceholderRegistry(client)
+	// adp states the employer nowhere but in the posting text, so it is resolved by a model
+	// reading that text (postingTextResolver) — only when LLM_* is configured, and at most
+	// COMPANY_NAMES_LLM_MAX boards a run (unset = all), since each board costs one call.
+	llmMax, err := worker.EnvInt64("COMPANY_NAMES_LLM_MAX", 0)
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
+	if lcfg := config.LoadLLM(); lcfg.Require() == nil {
+		model, flush, err := llm.NewClient(lcfg.Settings(lcfg.Model), "company-names")
+		if err != nil {
+			log.Printf("llm: %v", err)
+			return 1
+		}
+		defer flush()
+		// Service credential, filed under its own feature so this pass's spend reads apart from
+		// enrichment's in the gateway's log.
+		model = model.As("", nil, llm.Feature("company-names"))
+		placeholders["adp"] = postingTextResolver{q: queries, model: model, source: "adp"}
+	} else {
+		log.Printf("LLM_* not configured: adp placeholder boards are left for a run that has it")
+	}
 	boards, err := queries.ListPlaceholderCompanyBoards(ctx, slices.Sorted(maps.Keys(placeholders)))
 	if err != nil {
 		log.Printf("list placeholder boards: %v", err)
 		return 1
 	}
+	boards = capProvider(boards, "adp", llmMax)
 	boardRenames, unresolved := resolvePlaceholders(ctx, boards, placeholders)
 	sort.Slice(boardRenames, func(i, j int) bool {
 		a, b := boardRenames[i], boardRenames[j]

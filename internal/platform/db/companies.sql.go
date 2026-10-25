@@ -767,6 +767,46 @@ func (q *Queries) ListCompanySlugs(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
+const listPlaceholderBoardDescriptions = `-- name: ListPlaceholderBoardDescriptions :many
+SELECT description
+FROM jobs
+WHERE source = $1
+  AND external_id LIKE $2
+  AND description <> ''
+ORDER BY (closed_at IS NULL) DESC, id DESC
+LIMIT $3
+`
+
+type ListPlaceholderBoardDescriptionsParams struct {
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
+	MaxRows      int32  `json:"max_rows"`
+}
+
+// A few of one board's stored posting bodies, open ones first, for a placeholder whose ATS
+// states the employer nowhere but in the posting text (adp; see cmd/backfill-company-names).
+// board_pattern is externalid.BoardPattern(board). A board is small — the index behind
+// (source, external_id LIKE) reaches its rows directly — so the sort is over one board only.
+func (q *Queries) ListPlaceholderBoardDescriptions(ctx context.Context, arg ListPlaceholderBoardDescriptionsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listPlaceholderBoardDescriptions, arg.Source, arg.BoardPattern, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var description string
+		if err := rows.Scan(&description); err != nil {
+			return nil, err
+		}
+		items = append(items, description)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSlugLikeCompaniesForBackfill = `-- name: ListSlugLikeCompaniesForBackfill :many
 SELECT DISTINCT ON (company_slug)
        company_slug AS slug,

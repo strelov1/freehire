@@ -4516,6 +4516,11 @@ type Querier interface {
 	// unrelated to it, so the adapter maps it once (fromRow) rather than re-assembling it here
 	// (see mentorship.sql's ListBookingsByMentor for the same shape).
 	ListPendingSubmissions(ctx context.Context) ([]ListPendingSubmissionsRow, error)
+	// A few of one board's stored posting bodies, open ones first, for a placeholder whose ATS
+	// states the employer nowhere but in the posting text (adp; see cmd/backfill-company-names).
+	// board_pattern is externalid.BoardPattern(board). A board is small — the index behind
+	// (source, external_id LIKE) reaches its rows directly — so the sort is over one board only.
+	ListPlaceholderBoardDescriptions(ctx context.Context, arg ListPlaceholderBoardDescriptionsParams) ([]string, error)
 	// Live boards whose company is still the board id itself — what a harvest writes when it
 	// never resolved the tenant's display name, so the id ("<host>/<site>", a GUID) becomes the
 	// employer's public name on every posting. cmd/backfill-company-names resolves the real name
