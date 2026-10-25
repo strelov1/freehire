@@ -124,12 +124,15 @@ func run() int {
 	// The same HTTP client internal/applyform's own capture worker uses: the Greenhouse/Ashby
 	// endpoints internal/atsapply reuses via applyform.Fetchers are the platforms' own public
 	// job-board APIs, so the crawl's user agent, timeouts and size caps are exactly right here
-	// too — and a request the platform refuses is retried through the proxy, since Workable
-	// bans an exit IP for hours (sources.NewRefusalRetryClientFromEnv).
-	formClient, err := sources.NewRefusalRetryClientFromEnv()
+	// too. Every request egresses through the proxy, so the host's address is never the one a
+	// platform sees behind a candidate's application (sources.NewFormClientFromEnv).
+	formClient, proxied, err := sources.NewFormClientFromEnv()
 	if err != nil {
 		log.Printf("auto-apply: %v", err)
 		return 1
+	}
+	if !proxied {
+		log.Printf("auto-apply: WARNING no SOURCES_ROTATING_PROXY_URL or SOURCES_PROXY_URL — application forms are fetched from this host's own address")
 	}
 	// Drafting asks the plan, per attempt, whether the candidate is still on a paid plan
 	// before it spends a model call for them (atsapply.Client.resolve). Only the tier is

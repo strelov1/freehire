@@ -36,13 +36,16 @@ func run() int {
 	cfg := config.LoadApplyForm()
 
 	// The crawl's HTTP client: the endpoints are the platforms' own public job-board APIs, so
-	// its user agent, timeouts and size caps are exactly right here. A refused request is
-	// retried through the proxy — this worker is what drove Workable into banning the host's
-	// address for 23 hours on 2026-10-25 (sources.NewRefusalRetryClientFromEnv).
-	client, err := sources.NewRefusalRetryClientFromEnv()
+	// its user agent, timeouts and size caps are exactly right here. Every request egresses
+	// through the proxy — this worker is what drove Workable into banning the host's own
+	// address for 23 hours on 2026-10-25 (sources.NewFormClientFromEnv).
+	client, proxied, err := sources.NewFormClientFromEnv()
 	if err != nil {
 		log.Printf("capture-apply-form: %v", err)
 		return 1
+	}
+	if !proxied {
+		log.Printf("capture-apply-form: WARNING no SOURCES_ROTATING_PROXY_URL or SOURCES_PROXY_URL — forms are fetched from this host's own address")
 	}
 	stats, err := applyform.Run(ctx, newDBStore(pool), applyform.Fetchers(client), applyform.RunOptions{
 		BatchSize:    cfg.BatchSize,
