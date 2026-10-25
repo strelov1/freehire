@@ -29,6 +29,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
+	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
 // assistantHandlers is the in-app agent. It owns the conversation store and the
@@ -331,6 +332,17 @@ func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 		}
 	}
 	sess, err := h.store.CreateSession(c.Context(), userID, preset, nil, jobID)
+	if name, dup := pgerr.UniqueViolationConstraint(err); dup && name == "assistant_sessions_one_apply_per_job" {
+		// Another open of the same application won the race to create it; that one is the
+		// conversation, so return it rather than failing the second click.
+		existing, ok, err := h.store.SessionForJob(c.Context(), userID, preset, *jobID)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return c.JSON(fiber.Map{"data": sessionView(existing)})
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -659,6 +671,8 @@ func (h *assistantHandlers) streamSSE(
 	start func(context.Context, *assistant.Runner, *assistant.Registry, string, func(assistant.Event)) error,
 ) error {
 	asExtension := auth.IsExtensionBearer(c)
+	// Read here, while the request is ours: the turn runs on after the handler returns.
+	inBrowser := auth.ViaCookie(c)
 	turnSess := sess
 	turnSess.Preset = effectivePreset(sess.Preset, asExtension)
 
@@ -796,7 +810,11 @@ func (h *assistantHandlers) streamSSE(
 		}
 		defer h.turns.release(sess.ID, slot)
 
-		err = start(ctx, turnRunner, registry, system, func(e assistant.Event) {
+		turnCtx := ctx
+		if inBrowser {
+			turnCtx = withPersonInBrowser(ctx)
+		}
+		err = start(turnCtx, turnRunner, registry, system, func(e assistant.Event) {
 			// A write that fails means THIS reader is not listening: a phone froze its tab,
 			// a tunnel dropped, a laptop slept. It does not mean the work should stop, and
 			// treating it that way threw away live runs — a tailoring pass lost its report

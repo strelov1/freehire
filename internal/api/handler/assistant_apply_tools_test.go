@@ -117,3 +117,24 @@ func TestBindToJobAcceptsNullArguments(t *testing.T) {
 		t.Errorf("the tool ran on %q", got)
 	}
 }
+
+// Binding a tool to the session's job does not lift agents_may_apply: an API-key caller in an
+// apply session is an agent outside the browser, and the switch must hold for it. Only a turn
+// the person sent from the website, marked by streamSSE from the session cookie, lifts it.
+func TestTheSwitchIsLiftedByTheBrowserNotByTheBinding(t *testing.T) {
+	var waived bool
+	tool := assistant.Tool{Name: "t", Schema: jobSlugSchema, Run: func(ctx context.Context, _ int64, _ json.RawMessage) (any, error) {
+		waived = agentsMayApplyWaived(ctx)
+		return nil, nil
+	}}
+	bound := bindToJob(tool, func(context.Context) (string, error) { return "job", nil })
+
+	_, _ = bound.Run(context.Background(), 3, json.RawMessage(`{}`))
+	if waived {
+		t.Error("a bound tool lifted agents_may_apply on its own, so an API key would bypass it")
+	}
+	_, _ = bound.Run(withPersonInBrowser(context.Background()), 3, json.RawMessage(`{}`))
+	if !waived {
+		t.Error("a turn from the person's own browser still meets agents_may_apply")
+	}
+}

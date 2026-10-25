@@ -550,7 +550,10 @@
 
 
 <!-- The confirmation is stacked above the panel too: its Escape closes it, not both. -->
-<svelte:window onkeydown={(e) => e.key === 'Escape' && !blocked && !confirmRemoveOpen && close()} />
+<!-- Not while the application chat is open: Escape there belongs to the chat (the covering
+     panel closes itself on it), and closing the whole drawer under a half-typed answer would
+     throw the conversation away. -->
+<svelte:window onkeydown={(e) => e.key === 'Escape' && !blocked && !confirmRemoveOpen && !applyChatOpen && close()} />
 
 <!-- Fullscreen job panel (like the swipe deck): a centered column with a fixed
      header + pill tabs, a scrolling tab body, and a pinned View-job footer. It covers
@@ -1231,7 +1234,7 @@
         <AssistantChat
           session={applyChatId ?? undefined}
           showSessionRail={false}
-          syncApplication
+          syncApplication={applyChatOpen}
           onSessionChange={setSessionId}
           onTurnComplete={() => void loadEmails(true)}
         />

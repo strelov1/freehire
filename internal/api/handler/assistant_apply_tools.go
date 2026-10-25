@@ -18,9 +18,10 @@ import (
 // binding:
 //   - the session names the attempt, so the model is not asked for a job and cannot name
 //     another one;
-//   - the agents_may_apply switch does not apply. It exists because a connected agent acts
-//     outside the person's browser; this conversation IS their browser session, talking to
-//     their own application with the same authority as the drawer's buttons.
+//   - the agents_may_apply switch does not apply to a turn the person sends from their own
+//     browser (the session cookie): that is the same authority as the drawer's buttons. A
+//     turn sent with an API key is an agent acting outside the browser, and the switch holds
+//     for it exactly as on the MCP server — see withPersonInBrowser.
 func (h *assistantHandlers) assistantApplyTools(jobID int64) []assistant.Tool {
 	slugOf := func(ctx context.Context) (string, error) {
 		job, err := h.queries.GetJob(ctx, jobID)
@@ -40,13 +41,19 @@ func (h *assistantHandlers) assistantApplyTools(jobID int64) []assistant.Tool {
 	}
 }
 
-// agentsMayApplyWaivedKey marks a call made from the candidate's own apply conversation,
-// where requireAgentsMayApply has nothing to protect.
-type agentsMayApplyWaivedKey struct{}
+// personInBrowserKey marks an assistant turn the person sent from the website itself,
+// authenticated by its session cookie — where requireAgentsMayApply has nothing to protect,
+// since that switch exists for agents acting outside the person's browser. streamSSE sets it
+// from auth.ViaCookie; an API key or the MCP server never does.
+type personInBrowserKey struct{}
+
+func withPersonInBrowser(ctx context.Context) context.Context {
+	return context.WithValue(ctx, personInBrowserKey{}, true)
+}
 
 func agentsMayApplyWaived(ctx context.Context) bool {
-	waived, _ := ctx.Value(agentsMayApplyWaivedKey{}).(bool)
-	return waived
+	inBrowser, _ := ctx.Value(personInBrowserKey{}).(bool)
+	return inBrowser
 }
 
 // bindToJob fixes a job_slug tool to the session's job: job_slug leaves the schema, and the
@@ -74,7 +81,7 @@ func bindToJob(tool assistant.Tool, slugOf func(context.Context) (string, error)
 		if err != nil {
 			return nil, err
 		}
-		return run(context.WithValue(ctx, agentsMayApplyWaivedKey{}, true), userID, bound)
+		return run(ctx, userID, bound)
 	}
 	return tool
 }
