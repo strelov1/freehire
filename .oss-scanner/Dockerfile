@@ -36,6 +36,8 @@ ENV TYPST_BIN=/usr/local/bin/typst
 
 # Node 24 + pnpm for the SvelteKit app under web/ and the design-system package it links.
 ARG NODE_VERSION=24.11.0
+# A failed download still fails the build without pipefail: tar rejects the empty stream.
+# hadolint ignore=DL4006
 RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" | tar -xJ -C /usr/local --strip-components=1 \
  && npm install -g pnpm@11.7.0
 
@@ -51,12 +53,15 @@ RUN go mod download \
  && go test -run '^$' -tags=integration,llmlive ./... > /dev/null
 
 # The design system first: web/ links it and neither package manager installs a linked package's dependencies.
-RUN (cd design-system && pnpm install --frozen-lockfile && pnpm build) \
- && (cd web && pnpm install --frozen-lockfile && pnpm build)
+WORKDIR /src/design-system
+RUN pnpm install --frozen-lockfile && pnpm build
+WORKDIR /src/web
+RUN pnpm install --frozen-lockfile && pnpm build
 
 # Cheap tests so the log shows the image works; a failure here must not abort the build.
-RUN (timeout 1800 go test ./... > /tmp/go-test.log 2>&1 || echo "WARNING: go test reported failures, see /tmp/go-test.log") \
- && (cd web && timeout 900 pnpm test > /tmp/web-test.log 2>&1 || echo "WARNING: web tests reported failures, see /tmp/web-test.log")
+RUN timeout 900 pnpm test > /tmp/web-test.log 2>&1 || echo "WARNING: web tests reported failures, see /tmp/web-test.log"
+WORKDIR /src
+RUN timeout 1800 go test ./... > /tmp/go-test.log 2>&1 || echo "WARNING: go test reported failures, see /tmp/go-test.log"
 
 # Offline from here: the go command must not reach a proxy or download a toolchain.
 ENV GOPROXY=off \
