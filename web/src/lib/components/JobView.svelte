@@ -565,7 +565,7 @@
      a count in two places is a count that can disagree. -->
 {#snippet tailorCta(size: 'md' | 'lg', className: string)}
   {#if canTailor}
-    <Button variant="primary" {size} disabled={tailoring} onclick={onTailorClick} class={className}>
+    <Button variant="cta" {size} disabled={tailoring} onclick={onTailorClick} class={className}>
       Tailor my CV
       <SquarePen class="size-4" aria-hidden="true" />
     </Button>
@@ -793,6 +793,11 @@
       <h2 class="text-base font-semibold">Summary</h2>
       <p class="text-sm leading-relaxed text-muted-foreground">{e.summary}</p>
     </section>
+  {:else}
+    <!-- The description's own headings are demoted to h3 (descriptionHeadings.ts) to sit
+         under a section heading. Without the Summary there is none between them and the
+         page's h1, so name the section for the outline: h1 → h2 → h3. -->
+    <h2 class="sr-only">Description</h2>
   {/if}
 
   <!-- The Summary above is an LLM synopsis the enrichment prompt pins to English

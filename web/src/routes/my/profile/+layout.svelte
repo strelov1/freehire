@@ -123,7 +123,7 @@
 {#if status === 'loading'}
   <States state="loading" />
 {:else if status === 'error'}
-  <States state="error" message="Couldn't load your profile." />
+  <States state="error" message={s.loadError} onRetry={() => void load()} />
 {:else if profile === null}
   <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
   <div class="w-full">

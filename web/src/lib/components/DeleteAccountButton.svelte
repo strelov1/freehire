@@ -9,6 +9,7 @@
   import { Button, Dialog, Input } from '#lib/ui/index.js';
   import ConfirmIdentity from './ConfirmIdentity.svelte';
   import { messages } from './DeleteAccountButton.messages';
+  import { announce } from '#lib/announce.svelte.js';
 
   // Account deletion, stated plainly. This is the one action on the site that cannot
   // be undone on either side — there is no soft-delete, no grace period and no
@@ -35,6 +36,12 @@
   let password = $state('');
   let busy = $state(false);
   let error = $state<string | null>(null);
+  // Whether the server refused the typed address itself (its 400), as opposed to the
+  // identity check or an outage — only then is the confirmation field the thing at fault.
+  let confirmationInvalid = $state(false);
+  const uid = $props.id();
+  const confirmId = `${uid}-confirm`;
+  const errorId = `${uid}-error`;
   let identity = $state<ConfirmIdentity | null>(null);
 
   // Reopen on return from a provider. The draft carries nothing but its own name: the
@@ -82,6 +89,7 @@
     confirmation = '';
     password = '';
     error = null;
+    confirmationInvalid = false;
   });
 
   function messageFor(e: unknown): string {
@@ -95,6 +103,7 @@
     if (!matches || busy) return;
     busy = true;
     error = null;
+    confirmationInvalid = false;
     try {
       if (!(await identity?.prove())) {
         busy = false;
@@ -107,7 +116,10 @@
       await goto(resolve('/'));
     } catch (e) {
       // Identity refusals are worded once, by the component that asked for the proof.
-      error = identity?.handleRefusal(e) ?? messageFor(e);
+      const refusal = identity?.handleRefusal(e);
+      error = refusal ?? messageFor(e);
+      confirmationInvalid = !refusal && e instanceof ApiError && e.status === 400;
+      announce(error, 'assertive');
       busy = false;
     }
   }
@@ -144,12 +156,15 @@
     {/if}
   </p>
 
-  <label class="mt-4 block text-sm font-medium" for="delete-account-confirm">
+  <label class="mt-4 block text-sm font-medium" for={confirmId}>
     {s.confirmPrefix} <span class="font-mono">{email}</span> {s.confirmSuffix}
   </label>
   <Input
-    id="delete-account-confirm"
+    id={confirmId}
     class="mt-1.5"
+    aria-invalid={confirmationInvalid || undefined}
+    aria-describedby={confirmationInvalid ? errorId : undefined}
+    oninput={() => (confirmationInvalid = false)}
     autocomplete="off"
     bind:value={confirmation}
     placeholder={email}
@@ -169,7 +184,7 @@
   </div>
 
   {#if error}
-    <p class="mt-3 text-sm text-destructive">{error}</p>
+    <p id={errorId} class="mt-3 text-sm text-destructive">{error}</p>
   {/if}
 
   <div class="mt-5 flex items-center justify-end gap-2">

@@ -5,6 +5,7 @@
    * component only reports intent and holds the transient edit/promote drafts, which are
    * inherently per-row and were never meant to be shared across achievements.
    */
+  import { tick } from 'svelte';
   import { Trash2, Pencil, Check, X } from '@lucide/svelte';
   import { scrollBehavior } from '#lib/motion.js';
   import { Button, Chip, FormField, Input } from '#lib/ui/index.js';
@@ -69,19 +70,31 @@
   let draftContext = $state('');
   let draftMetrics = $state('');
 
+  // Opening a form swaps the row's buttons for its fields, and closing it swaps them back —
+  // either way the focused element leaves the page. So focus follows: into the first field
+  // on open, back to the button that opened the form on close.
+  async function focusIn(selector: string) {
+    await tick();
+    rowEl?.querySelector<HTMLElement>(selector)?.focus();
+  }
+
   function startEdit() {
     draftClaim = atom.claim;
     draftContext = atom.context ?? '';
     draftMetrics = (atom.metrics ?? []).join('\n');
     isEditing = true;
+    void focusIn('textarea, input');
+  }
+
+  function closeEdit() {
+    isEditing = false;
+    void focusIn('[data-row-action="edit"]');
   }
 
   async function saveEdit() {
     const claim = draftClaim.trim();
     if (!claim || busy) return;
-    if (await onSaveEdit(atom, claim, draftContext.trim(), draftMetrics)) {
-      isEditing = false;
-    }
+    if (await onSaveEdit(atom, claim, draftContext.trim(), draftMetrics)) closeEdit();
   }
 
   let isPromoting = $state(false);
@@ -93,6 +106,12 @@
     promoteName = (atom.context ?? '').trim().slice(0, 80);
     promoteLink = '';
     isPromoting = true;
+    void focusIn('input');
+  }
+
+  function cancelPromote() {
+    isPromoting = false;
+    void focusIn('[data-row-action="promote"]');
   }
 
   async function savePromote() {
@@ -114,6 +133,7 @@
 
 <li
   bind:this={rowEl}
+  data-atom-id={atom.id}
   tabindex="-1"
   class="rounded-md py-2 pl-1 pr-2 {rowBackground}"
 >
@@ -157,7 +177,7 @@
           <Check class="size-4" />
           Save — this makes it yours
         </Button>
-        <Button size="sm" variant="ghost" onclick={() => (isEditing = false)}>
+        <Button size="sm" variant="ghost" onclick={closeEdit}>
           <X class="size-4" />
           Cancel
         </Button>
@@ -181,7 +201,7 @@
           <Check class="size-4" />
           Save as project
         </Button>
-        <Button size="sm" variant="ghost" onclick={() => (isPromoting = false)}>
+        <Button size="sm" variant="ghost" onclick={cancelPromote}>
           <X class="size-4" />
           Cancel
         </Button>
@@ -233,7 +253,13 @@
         {/if}
         {#if !atom.employment_id}
           <div class="mt-2">
-            <Button size="sm" variant="secondary" onclick={startPromote} disabled={busy || turnActive}>
+            <Button
+              size="sm"
+              variant="secondary"
+              data-row-action="promote"
+              onclick={startPromote}
+              disabled={busy || turnActive}
+            >
               Save as project
             </Button>
           </div>
@@ -256,7 +282,13 @@
             <Check class="size-4" />
           </Button>
         {/if}
-        <Button size="icon" variant="ghost" onclick={startEdit} aria-label="Edit achievement">
+        <Button
+          size="icon"
+          variant="ghost"
+          data-row-action="edit"
+          onclick={startEdit}
+          aria-label="Edit achievement"
+        >
           <Pencil class="size-4" />
         </Button>
         <Button

@@ -12,6 +12,7 @@
   import { Badge, Button, ConfirmDialog } from '#lib/ui/index.js';
   import { Mail, AtSign, Copy } from '@lucide/svelte';
   import { errorMessage } from '#lib/utils.js';
+  import { announce } from '#lib/announce.svelte.js';
   import { messages } from './InboxSettings.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
@@ -57,8 +58,15 @@
     }
   }
 
-  function copyAddress() {
-    if (mailbox?.address) navigator.clipboard?.writeText(mailbox.address);
+  // The button is an icon, so the outcome has no visible text to rely on — it is spoken.
+  async function copyAddress() {
+    if (!mailbox?.address) return;
+    try {
+      await navigator.clipboard.writeText(mailbox.address);
+      announce(s.addressCopied);
+    } catch {
+      onError(s.copyFailed);
+    }
   }
 </script>
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompanyListItem, ExperienceEmploymentWithAtoms } from '#lib/types.js';
 import ExperienceEmploymentCard from './ExperienceEmploymentCard.svelte';
@@ -133,5 +133,44 @@ describe('ExperienceEmploymentCard edit form', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
     expect(screen.queryByLabelText('I currently work here')).toBeNull();
+  });
+});
+
+describe('ExperienceEmploymentCard focus', () => {
+  it('moves focus into the form on Edit and back to Edit on Cancel', async () => {
+    render(ExperienceEmploymentCard, { props: baseProps(projectEmployment) });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Project name')));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit' })));
+  });
+
+  it('returns focus to Edit once a save lands', async () => {
+    const onSaveEmployment = vi.fn().mockResolvedValue(true);
+    render(ExperienceEmploymentCard, { props: { ...baseProps(projectEmployment), onSaveEmployment } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit' })));
+  });
+
+  it('moves focus into an achievement editor and back to its Edit button', async () => {
+    const withAtom: ExperienceEmploymentWithAtoms = {
+      ...projectEmployment,
+      atoms: [{ id: 'a1', claim: 'Shipped things', provenance: 'manual' }],
+    };
+    render(ExperienceEmploymentCard, { props: baseProps(withAtom) });
+    await fireEvent.click(screen.getByRole('button', { name: /1 achievement/ }));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit achievement' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Achievement')));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit achievement' })),
+    );
   });
 });

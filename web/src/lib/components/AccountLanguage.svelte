@@ -8,6 +8,7 @@
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t, tokenLabel } from '#lib/i18n/t.js';
   import { messages } from './AccountLanguage.messages';
+  import { announce } from '#lib/announce.svelte.js';
 
   const s = $derived(t(messages, locale()));
   // Names the combobox after the visible heading — it has no <label> of its own.
@@ -113,6 +114,7 @@
     try {
       await updateLanguage(lang.code);
       saveState = 'saved';
+      announce(s.saved);
       clearTimeout(savedTimer);
       savedTimer = setTimeout(() => {
         if (saveState === 'saved') saveState = 'idle';
@@ -121,6 +123,7 @@
       selectedCode = previous;
       saveState = 'error';
       saveErrorMessage = e instanceof ApiError ? e.message : null;
+      announce(saveErrorMessage ?? s.saveFailed, 'assertive');
     }
   }
 

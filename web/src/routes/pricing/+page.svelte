@@ -7,7 +7,7 @@
   import { formatMinorUnits } from '#lib/money.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import Seo from '#lib/components/Seo.svelte';
-  import { ProviderIcon } from '#lib/ui/index.js';
+  import { ProviderIcon, buttonVariants, cn } from '#lib/ui/index.js';
   import type { PlanTierAllowance, PlansMatrix, PublicPrice } from '#lib/types.js';
   import { Check } from '@lucide/svelte';
   import type { PageData } from './$types';
@@ -431,7 +431,7 @@
           </div>
           <button
             type="button"
-            class="rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'disabled:opacity-60')}
             disabled={busy}
             onclick={buy}
           >
@@ -443,7 +443,7 @@
                rather than a route, because that is what signing in is on this site. -->
           <button
             type="button"
-            class="mt-auto rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground"
+            class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'mt-auto')}
             onclick={promptSignIn}>Sign in to upgrade</button
           >
         {/if}

@@ -11,7 +11,7 @@ const meta = {
     // derives this list from the component.
     variant: {
       control: 'select',
-      options: ['primary', 'secondary', 'outline', 'ghost', 'destructive'],
+      options: ['primary', 'cta', 'secondary', 'outline', 'ghost', 'destructive'],
     },
     size: { control: 'select', options: ['sm', 'md', 'lg', 'icon'] },
   },
@@ -22,6 +22,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = { args: { variant: 'secondary', size: 'md', children: text('Click me') } };
 export const Primary: Story = { args: { variant: 'primary', size: 'md', children: text('Primary') } };
+export const Cta: Story = { args: { variant: 'cta', size: 'md', children: text('Show 116 jobs') } };
 export const Outline: Story = { args: { variant: 'outline', size: 'md', children: text('Outline') } };
 export const Ghost: Story = { args: { variant: 'ghost', size: 'md', children: text('Ghost') } };
 export const Small: Story = { args: { variant: 'secondary', size: 'sm', children: text('Small') } };

@@ -79,7 +79,7 @@ rather than here — their census of `web/` was already off by a third.
   violation). See `docs/verification.md`.
 - **The same check has a second radius over `../web/src`, and it is not the same rule.** The
   package is held at zero (modulo the `ALLOWED` list above); web is held at its current count
-  *per file* in `scripts/web-token-baseline.json` (442 across 116 files), because a rule
+  *per file* in `scripts/web-token-baseline.json` (428 across 115 files), because a rule
   nobody can satisfy
   gets switched off rather than obeyed. Web also gets a third detector the package does not:
   `text-amber-600` is a well-formed utility off Tailwind's own palette — neither a literal nor

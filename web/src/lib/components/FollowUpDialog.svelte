@@ -4,6 +4,7 @@
   import { api } from '#lib/api.js';
   import { clipboardText, gmailHref, mailtoHref } from '#lib/followup.js';
   import { errorMessage } from '#lib/utils.js';
+  import { announce } from '#lib/announce.svelte.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import type { FollowUpDraft } from '#lib/types.js';
   import { messages } from './FollowUpDialog.messages';
@@ -37,11 +38,16 @@
     void load();
   });
 
+  function fail(e: unknown, fallback: string) {
+    error = errorMessage(e, fallback);
+    announce(error, 'assertive');
+  }
+
   async function load() {
     try {
       draft = await api.getFollowUpDraft(slug);
     } catch (e) {
-      error = errorMessage(e, s.loadFailed);
+      fail(e, s.loadFailed);
     }
   }
 
@@ -54,7 +60,7 @@
       await api.recordFollowUp(slug);
       onrecorded(new Date().toISOString());
     } catch (e) {
-      error = errorMessage(e, s.recordFailed);
+      fail(e, s.recordFailed);
     }
   }
 
@@ -63,10 +69,11 @@
     try {
       await navigator.clipboard.writeText(clipboardText(draft));
     } catch (e) {
-      error = errorMessage(e, s.copyFailed);
+      fail(e, s.copyFailed);
       return;
     }
     copied = true;
+    announce(s.copied);
     await record();
   }
 

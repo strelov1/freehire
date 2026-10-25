@@ -41,6 +41,8 @@
 
     <CompanyTabs slug={data.slug} active="closed">
       <div class="mt-6">
+        <!-- Names the list between the company's h1 and the job cards' h3s. -->
+        <h2 class="sr-only">Closed positions</h2>
         {#if !data.closed}
           <p class="py-16 text-center text-sm text-muted-foreground">Couldn't load closed positions.</p>
         {:else if data.closed.jobs.length === 0}

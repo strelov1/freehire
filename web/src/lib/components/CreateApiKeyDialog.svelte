@@ -7,6 +7,7 @@
   import { Button, Dialog, Input } from '#lib/ui/index.js';
   import ConfirmIdentity from './ConfirmIdentity.svelte';
   import { messages } from './CreateApiKeyDialog.messages';
+  import { announce } from '#lib/announce.svelte.js';
 
   // Minting a key, with the identity check as a step of the form rather than as a red error
   // raised after the server refuses. The check lives INSIDE the dialog because the dialog is
@@ -42,6 +43,12 @@
   let password = $state('');
   let creating = $state(false);
   let error = $state<string | null>(null);
+  // Whether `error` is about the name field, which is what ties the message to the field
+  // for a screen reader. Other failures (identity, the server) belong to the whole form.
+  let nameInvalid = $state(false);
+  const uid = $props.id();
+  const nameErrorId = `${uid}-error`;
+  let nameInput = $state<HTMLElement | null>(null);
   let identity = $state<ConfirmIdentity | null>(null);
 
   // Reopen where the member left off. Confirming through a provider is a full-page
@@ -68,6 +75,12 @@
     scope = '';
     password = '';
     error = null;
+    nameInvalid = false;
+  }
+
+  function fail(message: string): void {
+    error = message;
+    announce(message, 'assertive');
   }
 
   async function submit(e: SubmitEvent): Promise<void> {
@@ -75,11 +88,14 @@
     const trimmed = name.trim();
     if (creating) return;
     if (!trimmed) {
-      error = s.errors.nameRequired;
+      nameInvalid = true;
+      fail(s.errors.nameRequired);
+      nameInput?.querySelector('input')?.focus();
       return;
     }
     creating = true;
     error = null;
+    nameInvalid = false;
     try {
       // Holds a proof or buys one with the typed password — the component decides which,
       // and says so itself when the member has supplied neither.
@@ -92,7 +108,7 @@
     } catch (e) {
       // Identity refusals are worded once, by the component that asked for the proof;
       // anything else is this dialog's own to explain.
-      error = identity?.handleRefusal(e) ?? messageFor(e);
+      fail(identity?.handleRefusal(e) ?? messageFor(e));
     } finally {
       creating = false;
     }
@@ -109,13 +125,16 @@
        inputs would otherwise sit in the DOM of a page nobody opened it on. -->
   {#if open}
     <form onsubmit={submit} class="flex flex-col gap-4">
-      <label class="flex flex-col gap-1">
+      <label bind:this={nameInput} class="flex flex-col gap-1">
         <span class="text-sm font-medium">{s.nameLabel}</span>
         <Input
           bind:value={name}
           placeholder={s.namePlaceholder}
           maxlength={100}
           disabled={creating}
+          aria-invalid={nameInvalid || undefined}
+          aria-describedby={nameInvalid ? nameErrorId : undefined}
+          oninput={() => (nameInvalid = false)}
         />
       </label>
 
@@ -162,7 +181,7 @@
       />
 
       {#if error}
-        <p class="text-sm text-destructive">{error}</p>
+        <p id={nameErrorId} class="text-sm text-destructive">{error}</p>
       {/if}
 
       <div class="flex items-center justify-end gap-2">

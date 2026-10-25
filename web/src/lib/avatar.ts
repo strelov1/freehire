@@ -7,7 +7,13 @@ import { must } from './utils';
 // Muted, saturated-enough hues that read as white-on-colour on both the light
 // and dark card backgrounds. Deliberately not the brand olive — the avatar is a
 // per-sender accent, not a CTA.
-const PALETTE = [
+//
+// Every entry holds white initials at WCAG AA for small text (4.5:1) — the initials are
+// 12px semibold, well under the large-text threshold. avatar.test.ts measures each one,
+// so a new hue that reads fine on a bright screen and fails the ratio does not get in.
+// (The tenth slot was `#0d9488`, a lighter teal: 3.74:1, and barely distinct from the
+// teal above it.)
+export const PALETTE = [
   '#b45309', // amber
   '#0f766e', // teal
   '#7c3aed', // violet
@@ -17,7 +23,7 @@ const PALETTE = [
   '#c2410c', // orange
   '#0369a1', // sky
   '#9333ea', // purple
-  '#0d9488', // emerald-teal
+  '#15803d', // green
 ];
 
 /** One or two uppercase initials from the sender's display name, falling back to

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { AlignLeft, Pencil, Share2, Trash2 } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
@@ -7,7 +8,8 @@
   import { signinUrl } from '#lib/signin.js';
   import { jobLists } from '#lib/jobLists.svelte.js';
   import type { JobList } from '#lib/types.js';
-  import { Button, ConfirmDialog, Input } from '#lib/ui/index.js';
+  import { Button, ConfirmDialog, Dialog, FormField, Input } from '#lib/ui/index.js';
+  import { announce } from '#lib/announce.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, plural, t } from '#lib/i18n/t.js';
   import { messages } from './JobListsView.messages';
@@ -31,6 +33,12 @@
   let errorKind = $state<ErrorKind | null>(null);
   let errorMessage = $state<string | null>(null);
   const error = $derived(errorKind ? (errorMessage ?? s.errors[errorKind]) : null);
+
+  // The error line sits above the list, away from whichever card's button failed, so it is
+  // also spoken.
+  $effect(() => {
+    if (error) announce(error, 'assertive');
+  });
 
   async function load() {
     status = 'loading';
@@ -81,27 +89,68 @@
     }
   }
 
-  async function rename(l: JobList) {
-    const next = window.prompt(s.renamePromptMessage, l.name)?.trim();
-    if (!next || next === l.name) return;
-    errorKind = null;
-    try {
-      await jobLists.update(l.id, { name: next });
-    } catch (err) {
-      errorMessage = err instanceof ApiError ? err.message : null;
-      errorKind = 'rename';
-    }
+  // Edit flow: one dialog holding both fields, opened on whichever one its button names.
+  // It replaced two `window.prompt()`s, which offered no label a screen reader could tie
+  // to the field, a single line for a description of up to 2000 characters, and no way to
+  // say why an empty name was refused.
+  let editTarget = $state<JobList | null>(null);
+  let editOpen = $state(false);
+  let editName = $state('');
+  let editDescription = $state('');
+  let editBusy = $state(false);
+  let nameInvalid = $state(false);
+  // Same split as the page-level error: a key, so a shown message follows the locale.
+  let editFailed = $state(false);
+  let editFailMessage = $state<string | null>(null);
+  const editError = $derived(editFailed ? (editFailMessage ?? s.errors.update) : null);
+
+  function focusEditField(field: 'name' | 'description') {
+    document.querySelector<HTMLElement>(`[data-edit-field="${field}"]`)?.focus();
   }
 
-  async function editDescription(l: JobList) {
-    const next = window.prompt(s.editDescriptionPromptMessage, l.description);
-    if (next === null || next === l.description) return;
-    errorKind = null;
+  async function openEdit(l: JobList, field: 'name' | 'description') {
+    editTarget = l;
+    editName = l.name;
+    editDescription = l.description;
+    nameInvalid = false;
+    editFailed = false;
+    editOpen = true;
+    // After the dialog has opened, which focuses its own first control.
+    await tick();
+    focusEditField(field);
+  }
+
+  async function saveEdit(event: SubmitEvent) {
+    event.preventDefault();
+    const l = editTarget;
+    if (!l || editBusy) return;
+    const name = editName.trim();
+    if (!name) {
+      nameInvalid = true;
+      focusEditField('name');
+      return;
+    }
+    const description = editDescription.trim();
+    const patch: { name?: string; description?: string } = {};
+    if (name !== l.name) patch.name = name;
+    if (description !== l.description) patch.description = description;
+    if (Object.keys(patch).length === 0) {
+      editOpen = false;
+      return;
+    }
+    editBusy = true;
+    editFailed = false;
     try {
-      await jobLists.update(l.id, { description: next.trim() });
+      await jobLists.update(l.id, patch);
+      editBusy = false;
+      editOpen = false;
+      announce(s.saved);
     } catch (err) {
-      errorMessage = err instanceof ApiError ? err.message : null;
-      errorKind = 'description';
+      editFailMessage = err instanceof ApiError ? err.message : null;
+      editFailed = true;
+      announce(editFailMessage ?? s.errors.update, 'assertive');
+    } finally {
+      editBusy = false;
     }
   }
 
@@ -142,6 +191,7 @@
     try {
       await navigator.clipboard.writeText(listUrl(l.public_slug));
       copiedId = l.id;
+      announce(s.copied);
       setTimeout(() => {
         if (copiedId === l.id) copiedId = null;
       }, 1500);
@@ -232,7 +282,7 @@
                   type="button"
                   aria-label={format(s.renameAriaLabel, { name: l.name })}
                   title={s.renameTitle}
-                  onclick={() => rename(l)}
+                  onclick={() => openEdit(l, 'name')}
                   class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                   <Pencil class="size-4" />
@@ -241,7 +291,7 @@
                   type="button"
                   aria-label={format(s.editDescriptionAriaLabel, { name: l.name })}
                   title={s.editDescriptionTitle}
-                  onclick={() => editDescription(l)}
+                  onclick={() => openEdit(l, 'description')}
                   class="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                   <AlignLeft class="size-4" />
@@ -293,6 +343,51 @@
       {/if}
     {/if}
   </div>
+
+  <Dialog bind:open={editOpen} title={s.editDialogTitle} dismissible={!editBusy}>
+    <!-- `{#if}` because Dialog renders its children unconditionally: the form would
+         otherwise sit in the page whether or not anybody opened it. -->
+    {#if editOpen}
+    <form class="flex flex-col gap-4" onsubmit={saveEdit} novalidate>
+      <FormField label={s.nameLabel} required error={nameInvalid ? s.nameRequired : undefined}>
+        {#snippet children({ id, describedBy, invalid })}
+          <Input
+            {id}
+            data-edit-field="name"
+            aria-describedby={describedBy}
+            aria-invalid={invalid || undefined}
+            required
+            maxlength={100}
+            bind:value={editName}
+            oninput={() => (nameInvalid = false)}
+          />
+        {/snippet}
+      </FormField>
+      <FormField label={s.descriptionLabel} hint={s.descriptionHint}>
+        {#snippet children({ id, describedBy })}
+          <textarea
+            {id}
+            data-edit-field="description"
+            aria-describedby={describedBy}
+            rows="4"
+            maxlength={2000}
+            bind:value={editDescription}
+            class="w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          ></textarea>
+        {/snippet}
+      </FormField>
+      {#if editError}
+        <p class="text-sm text-destructive">{editError}</p>
+      {/if}
+      <div class="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" disabled={editBusy} onclick={() => (editOpen = false)}>{s.cancel}</Button>
+        <Button type="submit" variant="primary" size="sm" disabled={editBusy}>
+          {editBusy ? s.saving : s.save}
+        </Button>
+      </div>
+    </form>
+    {/if}
+  </Dialog>
 
   <ConfirmDialog
     bind:open={confirmRemoveOpen}

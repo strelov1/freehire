@@ -7,6 +7,7 @@
   import { format, t } from '#lib/i18n/t.js';
   import { messages } from './SkillsCard.messages';
   import SkillsPicker from './SkillsPicker.svelte';
+  import { announce } from '#lib/announce.svelte.js';
 
   const s = $derived(t(messages, locale()));
 
@@ -38,16 +39,20 @@
     if (pending) return;
     if (skills.includes(skill) && isOnlySkill(skill)) {
       lastSkillBlocked = true;
+      announce(s.lastSkillBlocked);
       return;
     }
     pending = true;
     failed = null;
     lastSkillBlocked = false;
+    const removing = skills.includes(skill);
     try {
-      await (skills.includes(skill) ? profileStore.removeSkill(skill) : profileStore.addSkill(skill));
+      await (removing ? profileStore.removeSkill(skill) : profileStore.addSkill(skill));
       onProfileChanged?.();
+      announce(format(removing ? s.removed : s.added, { skill }));
     } catch {
       failed = skill;
+      announce(format(s.saveFailed, { skill }), 'assertive');
     } finally {
       pending = false;
     }

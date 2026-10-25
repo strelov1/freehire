@@ -10,6 +10,7 @@
   import { messages } from './CvList.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
+  import { announce } from '#lib/announce.svelte.js';
 
   // The tailored-CV landing: one company card per CV the caller built for a vacancy, styled like
   // the saved-jobs cards. The card opens the tailoring workspace (which resumes the same agent
@@ -30,6 +31,7 @@
       status = 'ready';
     } catch (e) {
       error = e instanceof ApiError ? e.message : s.loadFailed;
+      announce(error, 'assertive');
       status = 'error';
     }
   }
@@ -48,8 +50,11 @@
     try {
       await api.deleteCv(cv.id);
       items = items.filter((i) => i.id !== cv.id);
+      error = null;
+      announce(s.deleted);
     } catch (e) {
       error = e instanceof ApiError ? e.message : s.deleteFailed;
+      announce(error, 'assertive');
     }
   }
 

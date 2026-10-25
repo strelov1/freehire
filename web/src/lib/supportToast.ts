@@ -17,10 +17,14 @@
 /** localStorage key holding the visitor's answer to the star request. */
 export const SUPPORT_DISMISSED_KEY = 'hire.support-toast-dismissed';
 
-/** Pages that make this exact case at length already, where a toast repeating it is
- *  noise. */
+/** Pages where the toast does not belong: the one that makes this exact case at length
+ *  already, where a toast repeating it is noise, and the whole account area. `/my/**` is
+ *  where a signed-in candidate works — the agent's composer and the board's controls sit
+ *  in the same bottom corner — and on a phone the card covered the last ~120px of a page
+ *  already pushed down by the account chrome. The ask still reaches the same visitor on
+ *  every public page. */
 export function suppressesToast(pathname: string): boolean {
-  return pathname === '/open';
+  return pathname === '/open' || pathname === '/my' || pathname.startsWith('/my/');
 }
 
 /**

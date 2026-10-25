@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
+  import { page } from '$app/state';
   import { ArrowRight, X } from '@lucide/svelte';
   import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '#lib/cliBanner.svelte.js';
   import { sourceLogoUrl } from '#lib/logo.js';
@@ -29,6 +30,12 @@
   // avatar-stack CountryFlagStack draws for flags) instead of a sentence that wrapped to
   // four lines on a phone. Resolved by domain, as on /mcp, because "Cursor" by name
   // alone is ambiguous to the logo proxy.
+  // Not inside the account area. Someone in /my/** has an account and came to work in it;
+  // an MCP pitch there is one more band between the header and their page, and on a phone
+  // that chrome had pushed the content halfway down the screen. Decided by the URL, which
+  // the server knows too, so the server-rendered markup and the hydrated one agree.
+  const inAccountArea = $derived(page.url.pathname === '/my' || page.url.pathname.startsWith('/my/'));
+
   const agents = [
     { name: 'Claude', domain: 'claude.ai' },
     { name: 'ChatGPT', domain: 'chatgpt.com' },
@@ -36,7 +43,7 @@
   ];
 </script>
 
-{#if !cliBannerDismissed()}
+{#if !inAccountArea && !cliBannerDismissed()}
   <div data-cli-banner class="border-b border-border bg-brand/5">
     <div class="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2 text-sm">
       <!-- The names live in the stack's label, so the sentence can stay short. -->

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from 'svelte';
+  import { onMount, tick, untrack, type Snippet } from 'svelte';
   import { AlertTriangle, ArrowDown, FileText, MessagesSquare, PanelLeft, Phone, Plus, Trash2, WandSparkles, X } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import {
@@ -29,7 +29,7 @@
   import { splitPresentingCalls } from '#lib/assistant/deck.js';
   import { atBottom } from '#lib/assistant/scrolling.js';
   import { renderMarkdown } from '#lib/markdown.js';
-  import { Chip, ConfirmDialog } from '#lib/ui/index.js';
+  import { Button, Chip, ConfirmDialog } from '#lib/ui/index.js';
   import JobDeck from '#lib/assistant/JobDeck.svelte';
   import SessionRail from '#lib/assistant/SessionRail.svelte';
   import ToolGroupList from '#lib/assistant/ToolGroupList.svelte';
@@ -82,6 +82,7 @@
     preset = 'chat',
     openingActions = undefined,
     autoRun = false,
+    navTrigger = undefined,
   }: {
     session?: string;
     kickoff?: string;
@@ -119,9 +120,27 @@
      *  once, the same guard `kickoff` already uses. A host that passes this should not also
      *  pass `openingActions`: there is nothing left to offer once the run is already starting. */
     autoRun?: boolean;
+    /** The host's own control for opening the account navigation below `lg`, where
+     *  `AccountNavRail collapsible` folds into a drawer the host has to open. Rendered at
+     *  the start of the chat's header row — the one row this surface has — so the host does
+     *  not stack a second bar above it. Only shown where a header row exists, which is
+     *  wherever `showSessionRail` is on. */
+    navTrigger?: Snippet;
   } = $props();
 
   const s = $derived(t(messages, locale()));
+
+  // What an empty plain chat offers to start from, so the first turn is a tap rather than a
+  // blank box. Sent as the candidate's own words, in the language they are reading — unlike
+  // `profileKickoff`, which is our text put in their mouth and so stays fixed, each of these
+  // is exactly the label they chose. Each one maps to a tool every chat session carries
+  // (search_jobs + get_profile, market_fit, my_jobs, inbox_overview).
+  const starters = $derived([
+    s.starters.findJobs,
+    s.starters.marketFit,
+    s.starters.applications,
+    s.starters.inbox,
+  ]);
 
   let phase = $state<Phase>('loading');
   // planLimitReached distinguishes a spent daily allowance (which offers a link to the
@@ -910,6 +929,7 @@
       <!-- Desktop: collapse/expand the session list (only when a rail exists). -->
       {#if showSessionRail}
         <div class="hidden items-center gap-1 border-b border-border px-2 py-1.5 md:flex">
+          {@render navTrigger?.()}
           <button
             type="button"
             onclick={() => (sidebarOpen = !sidebarOpen)}
@@ -934,50 +954,64 @@
       {/if}
       <!-- Mobile session switcher -->
       {#if showSessionRail}
-      <div class="flex items-center gap-2 border-b border-border p-2 md:hidden">
+      <!-- One compact bar, every control at the design system's h-8: it is chrome above the
+           conversation, and at 44px with a filled brand button it read as the page's main
+           action and took ~60px of a phone's height. "New" stays labelled rather than a
+           bare glyph. Delete is pushed away with a gap: an unlabelled trash icon flush
+           against the "new" control is a mis-tap that destroys a conversation. -->
+      <div class="flex items-center gap-2 border-b border-border px-2 py-1.5 md:hidden">
+        {@render navTrigger?.()}
         <select
           value={activeId}
           onchange={(e) => selectSession(e.currentTarget.value)}
           disabled={switching}
           aria-label={s.selectChat}
-          class="min-w-0 flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
+          class="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm"
         >
           {#each sessions as sess (sess.id)}
             <option value={sess.id}>{sess.label}</option>
           {/each}
         </select>
-        <!-- Starting a conversation is the primary action here and it is what people came
-             to do, so on mobile it is a labelled button rather than a bare glyph, and it is
-             a real 44px touch target. Delete is pushed to the far side with a gap: an
-             unlabelled trash icon sitting flush against the "new" control is a mis-tap that
-             destroys a conversation. -->
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
+          class="shrink-0 gap-1.5 px-2.5"
           onclick={newChat}
           disabled={creating || switching || phase !== 'ready'}
           title={s.newChat}
-          class="flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground disabled:opacity-50"
         >
-          <Plus class="size-4" />
+          <Plus class="size-4" aria-hidden="true" />
           {s.newChatShort}
-        </button>
+        </Button>
         {#if activeId}
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon"
+            class="ml-1 shrink-0 text-muted-foreground"
             onclick={() => requestRemoveChat(activeId as string)}
             aria-label={s.deleteChatAria}
             title={s.deleteChatAria}
-            class="ml-1 flex size-11 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted"
           >
-            <Trash2 class="size-4" />
-          </button>
+            <Trash2 class="size-4" aria-hidden="true" />
+          </Button>
         {/if}
       </div>
       {/if}
 
       <!-- Message list -->
       <div bind:this={scroller} onscroll={onPaneScroll} class="flex-1 overflow-y-auto p-4">
-        <div class="mx-auto flex max-w-3xl flex-col gap-3">
+        <!-- The transcript is a log, so a screen reader hears what arrives without moving
+             to it. Busy while a turn streams (and while a conversation loads): the reply is
+             re-rendered token by token, and announcing each re-render would read the same
+             sentence dozens of times — the finished message is read once the turn ends. -->
+        <div
+          class="mx-auto flex max-w-3xl flex-col gap-3"
+          role="log"
+          aria-label={s.transcript}
+          aria-live="polite"
+          aria-relevant="additions"
+          aria-busy={phase === 'loading' || switching || turnActive}
+        >
           {#if phase === 'loading'}
             <p class="text-sm text-muted-foreground">{s.connecting}</p>
           {:else if chat.messages.length === 0 && openingActions?.length}
@@ -1009,6 +1043,24 @@
                  yet, but the run has already started — inviting the candidate to type here
                  would contradict the "Crunching…" indicator already on screen. -->
             <p class="text-sm text-muted-foreground">{s.askAnything}</p>
+            <!-- Starters only in a plain chat: a profile interview opens with its own
+                 kickoff, and these questions belong to the job search, not to it. -->
+            {#if activePreset === 'chat'}
+              <ul class="flex flex-wrap gap-2" aria-label={s.startersLabel}>
+                {#each starters as starter (starter)}
+                  <li>
+                    <button
+                      type="button"
+                      class="rounded-lg border border-border bg-background px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                      disabled={!canStartTurn()}
+                      onclick={() => submitText(starter)}
+                    >
+                      {starter}
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
           {/if}
 
           {#each chat.messages as message, i (i)}

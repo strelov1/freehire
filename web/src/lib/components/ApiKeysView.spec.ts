@@ -110,7 +110,7 @@ describe('ApiKeysView — revoking', () => {
     render(ApiKeysView);
     await screen.findByText('CI bot');
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
 
     expect(within(openDialog()).getByLabelText('Password')).toBeTruthy();
   });
@@ -119,7 +119,7 @@ describe('ApiKeysView — revoking', () => {
     signedIn(true);
     render(ApiKeysView);
     await screen.findByText('CI bot');
-    await fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
     const dialog = openDialog();
 
     await fireEvent.input(within(dialog).getByLabelText('Password'), {
@@ -136,7 +136,7 @@ describe('ApiKeysView — revoking', () => {
     render(ApiKeysView);
     await screen.findByText('CI bot');
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
 
     expect(
       await within(openDialog()).findByRole('button', { name: 'Confirm with google' }),
@@ -147,7 +147,7 @@ describe('ApiKeysView — revoking', () => {
     signedIn(false);
     render(ApiKeysView);
     await screen.findByText('CI bot');
-    await fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
 
     await fireEvent.click(
       await within(openDialog()).findByRole('button', { name: 'Confirm with google' }),
@@ -178,7 +178,7 @@ describe('ApiKeysView — revoking', () => {
     revokeApiKey.mockRejectedValue(new StubApiError(428));
     render(ApiKeysView);
     await screen.findByText('CI bot');
-    await fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Revoke CI bot' }));
 
     await fireEvent.click(within(openDialog()).getByRole('button', { name: 'Revoke' }));
 
@@ -216,5 +216,41 @@ describe('ApiKeysView — creating', () => {
     await fireEvent.click(within(openDialog()).getByRole('button', { name: 'Create key' }));
 
     expect(await screen.findByText('plaintext-token-shown-once')).toBeTruthy();
+  });
+});
+
+describe('ApiKeysView — the one-time secret', () => {
+  async function createKey(): Promise<void> {
+    signedIn(true);
+    createApiKey.mockResolvedValue({ ...key, id: 8, name: 'deploy', token: 'plaintext-token-shown-once' });
+    render(ApiKeysView);
+    await screen.findByText('CI bot');
+    await fireEvent.click(screen.getByRole('button', { name: 'Create key' }));
+    await fireEvent.input(await screen.findByLabelText('Name'), { target: { value: 'deploy' } });
+    await fireEvent.input(await screen.findByLabelText('Password'), { target: { value: 'hunter2' } });
+    await fireEvent.click(within(openDialog()).getByRole('button', { name: 'Create key' }));
+    await screen.findByText('plaintext-token-shown-once');
+  }
+
+  it('says a failed copy failed and selects the token for a manual one', async () => {
+    await createKey();
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+    expect(await screen.findByText('Couldn’t copy — select and copy it manually.')).toBeTruthy();
+    expect(window.getSelection()?.toString()).toBe('plaintext-token-shown-once');
+  });
+
+  it('asks before dismissing a key nobody copied', async () => {
+    await createKey();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.getByText('plaintext-token-shown-once')).toBeTruthy();
+    expect(screen.getByText('Have you copied your key? You won’t see it again.')).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Yes, dismiss' }));
+    expect(screen.queryByText('plaintext-token-shown-once')).toBeNull();
   });
 });

@@ -66,6 +66,54 @@
     visibleAccountNav(currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false),
   );
 
+  // The phone strip. Past its width it scrolls, and nothing said so: the visible items
+  // ended flush at the edge, and the active section — anywhere past the fifth — opened
+  // off-screen. Both rules below are the ones the design system's TabStrip follows; this
+  // strip is a navigation landmark of links, not a tablist, so it does not borrow that
+  // component's roles and arrow keys along with them.
+  let strip = $state<HTMLElement | null>(null);
+  // Whether either end is out of view. Measured rather than assumed: an unconditional fade
+  // would paint a phantom edge on a row that already fits.
+  let atStart = $state(true);
+  let atEnd = $state(true);
+  function measureStrip() {
+    if (!strip) return;
+    atStart = strip.scrollLeft <= 1;
+    // 1px of slack — fractional widths leave scrollLeft just shy of its true maximum.
+    atEnd = strip.scrollLeft >= strip.scrollWidth - strip.clientWidth - 1;
+  }
+  $effect(() => {
+    const el = strip;
+    if (!el) return;
+    void navItems;
+    measureStrip();
+    const observer = new ResizeObserver(measureStrip);
+    observer.observe(el);
+    for (const child of el.children) observer.observe(child);
+    return () => observer.disconnect();
+  });
+  // A mask, not a gradient overlay, so the strip fades its own content to transparent and
+  // needs no knowledge of the surface beneath it.
+  const stripMask = $derived.by(() => {
+    if (atStart && atEnd) return undefined;
+    const from = atStart ? 'black 0' : 'transparent 0, black 1.5rem';
+    const to = atEnd ? 'black 100%' : 'black calc(100% - 1.5rem), transparent 100%';
+    return `linear-gradient(to right, ${from}, ${to})`;
+  });
+  // Bring the active section into view on arrival and on every navigation. The strip is
+  // scrolled itself rather than through scrollIntoView, which would also drag the page.
+  $effect(() => {
+    void path;
+    const el = strip;
+    if (!el) return;
+    const link = el.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!link) return;
+    const item = link.getBoundingClientRect();
+    const view = el.getBoundingClientRect();
+    if (item.right > view.right) el.scrollLeft += item.right - view.right + 24;
+    else if (item.left < view.left) el.scrollLeft -= view.left - item.left + 24;
+  });
+
   // Shared item treatment for both nav forms; active matches the tracking tabs.
   const itemClass = (active: boolean) =>
     cn(
@@ -115,16 +163,22 @@
 
     <!-- Below lg: a horizontal, scrollable strip above the content. -->
     <nav
+      bind:this={strip}
+      onscroll={measureStrip}
       aria-label={s.shell.accountSections}
       class="no-scrollbar mb-4 flex gap-1 overflow-x-auto lg:hidden"
+      style:mask-image={stripMask}
+      style:-webkit-mask-image={stripMask}
     >
       {@render navLinks('shrink-0 whitespace-nowrap')}
     </nav>
 
     <div class="lg:flex lg:gap-8">
-      <!-- lg and up: a collapsible vertical sidebar beside the content. -->
-      <aside
-        aria-label={s.shell.accountSections}
+      <!-- lg and up: a collapsible vertical sidebar beside the content. A plain box, not
+           an <aside>: a named complementary landmark wrapping a nav of the same name read
+           as two "Account sections" landmarks, one inside the other. The nav is the
+           landmark. -->
+      <div
         class={cn(
           'hidden shrink-0 transition-[width] duration-200 lg:block',
           collapsed ? 'lg:w-14' : 'lg:w-56',
@@ -151,13 +205,14 @@
             {@render navLinks('', collapsed)}
           </nav>
         </div>
-      </aside>
+      </div>
 
       <div class="min-w-0 flex-1">
         <!-- Above the section's own heading, and above every section rather than only
-             Profile's — the card itself argues why. All this layer decides is the one
-             page it must not appear on: a banner pointing at the page you are reading is
-             noise. Dismissal is the card's own business. -->
+             Profile's — the card itself argues why, and collapses to a single row on a
+             phone so it does not push that heading down. All this layer decides is the
+             one page it must not appear on: a banner pointing at the page you are reading
+             is noise. Dismissal is the card's own business. -->
         {#if !isSectionActive(path, '/my/talent-network')}
           <TalentNetworkInvite />
         {/if}

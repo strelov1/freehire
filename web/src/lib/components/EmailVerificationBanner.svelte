@@ -65,13 +65,19 @@
 
 {#if needsVerification}
   <div class="border-b border-border bg-secondary/50">
-    <div class="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-3 text-sm">
-      <div class="flex flex-wrap items-center gap-3">
-        <p class="text-muted-foreground">
-          Confirm <span class="font-medium text-foreground">{user?.email}</span> to secure your account.
+    <!-- One row on a phone: the short sentence and the button side by side. The full
+         sentence with the address wrapped to three lines there and put the button on a
+         fourth, in front of every page of a fresh account. -->
+    <div class="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-2 text-sm sm:py-3">
+      <div class="flex items-center justify-between gap-3 sm:flex-wrap sm:justify-start">
+        <p class="min-w-0 text-muted-foreground">
+          <span class="font-medium text-foreground sm:hidden">Confirm your email</span>
+          <span class="hidden sm:inline">
+            Confirm <span class="font-medium text-foreground">{user?.email}</span> to secure your account.
+          </span>
         </p>
         {#if !open}
-          <Button variant="outline" disabled={busy} onclick={sendCode}>
+          <Button variant="outline" size="sm" class="shrink-0" disabled={busy} onclick={sendCode}>
             {busy ? 'Sending…' : 'Send code'}
           </Button>
         {/if}

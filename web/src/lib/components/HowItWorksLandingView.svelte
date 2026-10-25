@@ -38,7 +38,7 @@
        facts stay the same specific example end to end (StageIllustration's five cards)
        so the sequence reads as one job's actual journey, not five unrelated icons. -->
   <section class="flex flex-col gap-6">
-    <SectionLabel text="the pipeline" />
+    <SectionLabel text="the pipeline" as="h2" />
     <p class="max-w-2xl text-sm leading-relaxed text-muted-foreground">
       Follow one posting below — the picture at each step is that same job, at that stage.
     </p>

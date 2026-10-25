@@ -5,6 +5,7 @@
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import { messages } from './AccountTimezone.messages';
+  import { announce } from '#lib/announce.svelte.js';
 
   const s = $derived(t(messages, locale()));
   // Names the <select> after the visible heading — it has no <label> of its own.
@@ -65,6 +66,27 @@
     }
   });
 
+  // A closed <select> on Windows changes its value on every arrow key, firing `change` each
+  // time — so a save per change wrote every zone the user stepped past. The save waits for
+  // the value to settle, and leaving the control commits whatever is pending at once.
+  const SAVE_DEBOUNCE_MS = 600;
+  let pendingSave: ReturnType<typeof setTimeout> | undefined;
+
+  function scheduleSave() {
+    clearTimeout(pendingSave);
+    pendingSave = setTimeout(commitSave, SAVE_DEBOUNCE_MS);
+  }
+
+  function commitSave() {
+    if (pendingSave === undefined) return;
+    clearTimeout(pendingSave);
+    pendingSave = undefined;
+    void save();
+  }
+
+  // A pick made just before navigating away still lands.
+  $effect(() => commitSave);
+
   async function save() {
     if (!value) return;
     saveState = 'saving';
@@ -72,6 +94,7 @@
     try {
       await updateTimezone(value);
       saveState = 'saved';
+      announce(s.saved);
       clearTimeout(savedTimer);
       savedTimer = setTimeout(() => {
         if (saveState === 'saved') saveState = 'idle';
@@ -79,6 +102,7 @@
     } catch (e) {
       saveState = 'error';
       saveErrorMessage = e instanceof ApiError ? e.message : null;
+      announce(saveErrorMessage ?? s.saveFailed, 'assertive');
     }
   }
 </script>
@@ -106,7 +130,8 @@
 
   <select
     bind:value
-    onchange={save}
+    onchange={scheduleSave}
+    onblur={commitSave}
     aria-labelledby={headingId}
     class="w-full max-w-sm rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
   >

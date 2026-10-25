@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { goto, pushState, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Search, X as XIcon } from '@lucide/svelte';
   import { api } from '#lib/api.js';
-  import { cn } from '#lib/ui/index.js';
+  import { Button, EmptyState, alertVariants, cn } from '#lib/ui/index.js';
+  import { announce } from '#lib/announce.svelte.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { UrlSyncedState, syncOnNavigation } from '#lib/urlSynced.svelte.js';
   import type { MyJob } from '#lib/types.js';
@@ -21,6 +22,7 @@
   } from '#lib/board.js';
   import { createRehearsal, createDebrief } from '#lib/assistant/api.js';
   import { assertNever } from '#lib/utils.js';
+  import { humanizeStage } from '#lib/stages.js';
   import BoardColumn from './BoardColumn.svelte';
   import BoardList from './BoardList.svelte';
   import JobDrawer from './JobDrawer.svelte';
@@ -84,6 +86,14 @@
   // they end in the same navigation, and only one of them can be underway.
   let startingSession = $state(false);
   let sessionError = $state<string | null>(null);
+  // A write that failed and was rolled back. Shown as a pinned alert rather than beside the
+  // board, because the drawer covers the viewport and a stage picked there fails there too.
+  let actionError = $state<string | null>(null);
+  // While a card is being dragged the columns must not snap: the library auto-scrolls the
+  // row toward the pointer, and a mandatory snap would keep yanking it back.
+  let dragging = $state(false);
+  let searchInput = $state<HTMLInputElement>();
+  let emptyState = $state<HTMLDivElement>();
 
   // Lay the fetched rows out into the columns and open the deep-linked drawer once.
   // The 'board' filter returns saved ∪ applied ∪ stage, and a saved-only row lands in
@@ -204,10 +214,12 @@
   const matched = $derived(Object.values(shown).flat().length);
 
   function onconsider(id: BoardColumnId, items: BoardItem[]) {
+    dragging = true;
     columns[id] = items; // live preview during the drag
   }
 
   function onfinalize(id: BoardColumnId, items: BoardItem[]) {
+    dragging = false;
     columns[id] = items;
     for (const item of items) {
       if (cardCol[item.id] !== id) {
@@ -217,8 +229,50 @@
     }
   }
 
-  // Map a drop target to the backend write. Optimistic: on failure reload to
-  // resync (simplest correct revert for a small board).
+  // The application's own name, the way the card shows it — the posting can be gone.
+  const jobName = (item: MyJob) => item.job?.title || item.role_title || s.untitledJob;
+
+  const columnName = (id: BoardColumnId) => {
+    const col = BOARD_COLUMNS.find((c) => c.id === id);
+    return col ? columnLabel(col) : id;
+  };
+
+  const stageName = (stage: string | null) => (stage ? humanizeStage(stage) : s.noStage);
+
+  // Polite confirmation of a stage change, for whoever cannot see the card move.
+  function announceMove(item: MyJob, where: string) {
+    actionError = null;
+    announce(format(s.movedTo, { job: jobName(item), stage: where }));
+  }
+
+  // The visible alert is mounted together with its text, which a screen reader usually
+  // does not read; the shared announcer's standing region carries the voice.
+  function showError(message: string) {
+    actionError = message;
+    announce(message, 'assertive');
+  }
+
+  // A rejected move: reload to resync (the simplest correct revert for a small board), then
+  // say so — naming where the card actually landed, which only the reload knows.
+  async function rollBack(item: MyJob) {
+    await load();
+    const col = cardCol[item.id];
+    showError(
+      col
+        ? format(s.moveFailed, { job: jobName(item), stage: columnName(col) })
+        : format(s.moveFailedNoStage, { job: jobName(item) }),
+    );
+    // The drawer still holds the object the reload replaced; point it at the fresh one so it
+    // shows the stage the server kept rather than the one that failed.
+    if (openItem?.id === item.id) {
+      const fresh = Object.values(columns)
+        .flat()
+        .find((i) => i.id === item.id);
+      if (fresh) openItem = fresh;
+    }
+  }
+
+  // Map a drop target to the backend write. Optimistic: on failure roll back and say so.
   async function persistMove(item: BoardItem, to: BoardColumnId) {
     try {
       switch (to) {
@@ -248,12 +302,13 @@
           // Outcome unknown until the user picks: open the drawer, require a choice.
           openItem = item;
           pendingOutcome = true;
-          break;
+          return;
         default:
           assertNever(to);
       }
+      announceMove(item, columnName(to));
     } catch {
-      await load();
+      await rollBack(item);
     }
   }
 
@@ -264,8 +319,9 @@
     pendingOutcome = false;
     try {
       await api.trackApplication(item.id, { stage: outcome });
+      announceMove(item, stageName(outcome));
     } catch {
-      await load();
+      await rollBack(item);
     }
   }
 
@@ -312,8 +368,9 @@
       } else {
         await clearStage(item);
       }
+      announceMove(item, stageName(stage || null));
     } catch {
-      await load();
+      await rollBack(item);
     }
   }
 
@@ -332,31 +389,64 @@
     await api.clearApplicationStage(item.id);
   }
 
+  // Rejects on failure: the editor reports it beside itself and keeps the text for a retry.
+  // The row is written only once the server has it — writing it first would push the old
+  // value back into the editor on a rollback and lose what the user typed.
   async function saveNotes(notes: string) {
     if (!openItem) return;
-    openItem.notes = notes;
+    const item = openItem;
     try {
-      await api.trackApplication(openItem.id, { notes });
-    } catch {
-      /* keep optimistic value; a transient failure shouldn't drop the edit */
+      await api.trackApplication(item.id, { notes });
+    } catch (e) {
+      // Saved on the way out (Escape, Back): the editor is gone, so the board says it.
+      if (openItem?.id !== item.id) showError(format(s.notesFailed, { job: jobName(item) }));
+      throw e;
     }
+    item.notes = notes;
   }
 
+  // Called from the drawer's confirmation. Not optimistic: untracking deletes the stage, the
+  // notes and the history, so the card leaves only once the server agrees, and a failure is
+  // thrown back for the dialog to show in place.
   async function remove() {
     if (!openItem) return;
     const item = openItem;
+    try {
+      await api.untrackApplication(item.id);
+    } catch {
+      throw new Error(s.removeFailed);
+    }
     const col = cardCol[item.id];
     if (col) {
       columns[col] = columns[col].filter((i) => i.id !== item.id);
       Reflect.deleteProperty(cardCol, item.id);
     }
     closeDrawer();
-    try {
-      await api.untrackApplication(item.id);
-    } catch {
-      await load();
-    }
+    announce(format(s.removed, { job: jobName(item) }));
+    // The card that opened the drawer is gone, so the drawer's own focus return would land
+    // on <body>. The search field is the board's first control and is there in both views.
+    // The last card going takes the field with it; the empty state stands in.
+    await tick();
+    (searchInput ?? emptyState)?.focus();
   }
+
+  // The row of columns is wider than a phone, and a hidden scrollbar leaves nothing saying
+  // so: fade whichever edge still has columns beyond it.
+  let row = $state<HTMLDivElement>();
+  let moreBefore = $state(false);
+  let moreAfter = $state(false);
+  function measureRow() {
+    if (!row) return;
+    moreBefore = row.scrollLeft > 1;
+    moreAfter = row.scrollLeft + row.clientWidth < row.scrollWidth - 1;
+  }
+  $effect(() => {
+    if (!row) return;
+    measureRow();
+    const observer = new ResizeObserver(measureRow);
+    observer.observe(row);
+    return () => observer.disconnect();
+  });
 
   // Close the drawer without touching the URL — Back has already moved it.
   function dismissDrawer() {
@@ -462,6 +552,19 @@
   <States state="loading" />
 {:else if status === 'error'}
   <States state="error" message={s.loadError} />
+{:else if total === 0}
+  <!-- A first visit, or every card removed. Empty columns with a 0 on each say nothing
+       about what the board is for or how anything gets onto it. -->
+  <div bind:this={emptyState} tabindex="-1" class="rounded-xl border border-dashed border-border outline-none">
+    <EmptyState title={s.emptyTitle} description={s.emptyDescription}>
+      {#snippet action()}
+        <div class="flex flex-wrap items-center justify-center gap-2">
+          <Button variant="primary" size="sm" href={resolve('/jobs')}>{s.emptyFindJobs}</Button>
+          <Button variant="outline" size="sm" href={resolve('/my/profile')}>{s.emptyUploadCv}</Button>
+        </div>
+      {/snippet}
+    </EmptyState>
+  </div>
 {:else}
   <!-- One field over both views. It narrows what is already loaded: the listing is
        bounded, and a request per keystroke would buy nothing. -->
@@ -472,6 +575,7 @@
         aria-hidden="true"
       />
       <input
+        bind:this={searchInput}
         type="search"
         value={query}
         oninput={(e) => filters.setNow({ ...filters.value, q: e.currentTarget.value })}
@@ -527,7 +631,16 @@
   {#if view === 'list'}
     <BoardList items={listItems} onopen={openDrawer} onsetstage={applyStage} />
   {:else}
-    <div class="no-scrollbar flex gap-3 overflow-x-auto pb-2">
+    <div
+      bind:this={row}
+      onscroll={measureRow}
+      class={cn(
+        'no-scrollbar flex gap-3 overflow-x-auto pb-2',
+        !dragging && 'snap-x snap-mandatory',
+        moreBefore && 'mask-l-from-90%',
+        moreAfter && 'mask-r-from-90%',
+      )}
+    >
       {#each BOARD_COLUMNS as col (col.id)}
         <BoardColumn
           id={col.id}
@@ -541,6 +654,23 @@
       {/each}
     </div>
   {/if}
+{/if}
+
+{#if actionError}
+  <!-- Pinned above everything, the drawer included: a stage picked there fails there. -->
+  <div class="fixed inset-x-0 bottom-4 z-toast flex justify-center px-4">
+    <div class={cn(alertVariants({ variant: 'destructive' }), 'w-full max-w-md items-center bg-background shadow-lg')}>
+      <p class="flex-1">{actionError}</p>
+      <button
+        type="button"
+        onclick={() => (actionError = null)}
+        aria-label={s.dismissError}
+        class="shrink-0 rounded p-1 transition-colors hover:bg-destructive/10"
+      >
+        <XIcon class="size-4" aria-hidden="true" />
+      </button>
+    </div>
+  </div>
 {/if}
 
 {#if openItem}

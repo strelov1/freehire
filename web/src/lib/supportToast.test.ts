@@ -13,10 +13,17 @@ describe('route rules', () => {
     expect(suppressesToast('/open')).toBe(true);
   });
 
+  it('suppresses the toast across the account area', () => {
+    expect(suppressesToast('/my')).toBe(true);
+    expect(suppressesToast('/my/profile')).toBe(true);
+    expect(suppressesToast('/my/assistant/0f0b1e3a')).toBe(true);
+  });
+
   it('allows the toast elsewhere', () => {
     expect(suppressesToast('/')).toBe(false);
     expect(suppressesToast('/jobs')).toBe(false);
     expect(suppressesToast('/openings')).toBe(false);
+    expect(suppressesToast('/mycompany')).toBe(false);
   });
 
   it('marks the job page as owning a sticky mobile call to action', () => {

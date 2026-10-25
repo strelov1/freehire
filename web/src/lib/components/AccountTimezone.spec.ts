@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AccountTimezone from './AccountTimezone.svelte';
 
@@ -70,7 +70,8 @@ describe('AccountTimezone — Russian locale', () => {
     render(AccountTimezone);
 
     const select = screen.getByRole('combobox') as HTMLSelectElement;
-    await select.dispatchEvent(new Event('change', { bubbles: true }));
+    await fireEvent.change(select);
+    await fireEvent.blur(select);
     expect(screen.getByText('Сохраняем…')).toBeTruthy();
 
     resolveSave();
@@ -82,9 +83,52 @@ describe('AccountTimezone — Russian locale', () => {
     render(AccountTimezone);
 
     const select = screen.getByRole('combobox') as HTMLSelectElement;
-    await select.dispatchEvent(new Event('change', { bubbles: true }));
+    await fireEvent.change(select);
+    await fireEvent.blur(select);
 
     await vi.waitFor(() => expect(screen.getByText('Не удалось сохранить.')).toBeTruthy());
+  });
+});
+
+describe('AccountTimezone — saving', () => {
+  beforeEach(() => {
+    updateTimezone.mockReset().mockResolvedValue(undefined);
+    user.current = { email: 'a@b.co', timezone: 'Europe/Moscow' };
+    localeRef.current = 'en';
+    // Only the timers: faking the microtask queue too would stall every awaited event.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('saves once the value settles, not on every change', async () => {
+    render(AccountTimezone);
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+
+    // Arrowing through a closed select on Windows: one change per keystroke.
+    for (const zone of ['Europe/Berlin', 'Europe/Paris', 'Europe/London']) {
+      select.value = zone;
+      await fireEvent.change(select);
+      vi.advanceTimersByTime(200);
+    }
+    expect(updateTimezone).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(600);
+    expect(updateTimezone).toHaveBeenCalledTimes(1);
+    expect(updateTimezone).toHaveBeenCalledWith('Europe/London');
+  });
+
+  it('commits a pending pick immediately when the control loses focus', async () => {
+    render(AccountTimezone);
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+
+    select.value = 'Europe/Paris';
+    await fireEvent.change(select);
+    await fireEvent.blur(select);
+
+    expect(updateTimezone).toHaveBeenCalledTimes(1);
+    expect(updateTimezone).toHaveBeenCalledWith('Europe/Paris');
+    vi.advanceTimersByTime(1000);
+    expect(updateTimezone).toHaveBeenCalledTimes(1);
   });
 });
 

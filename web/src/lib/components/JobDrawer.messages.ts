@@ -112,6 +112,12 @@ export const messages = defineMessages(
     noDescription: 'No description available.',
     skills: 'Skills',
     removeFromBoard: 'Remove from board',
+    removeDialogTitle: 'Remove {job} from your board?',
+    removeDialogDescription:
+      'Its stage, notes and history are deleted. The job itself stays in the catalogue, and you can save it again.',
+    removeConfirm: 'Remove',
+    removeCancel: 'Cancel',
+    removeUntitled: 'this application',
     errors: {
       loadEmails: 'Failed to load emails.',
       searchMail: 'Could not search your mail right now.',
@@ -222,6 +228,12 @@ export const messages = defineMessages(
       noDescription: 'Описание недоступно.',
       skills: 'Навыки',
       removeFromBoard: 'Убрать с доски',
+      removeDialogTitle: 'Убрать {job} с доски?',
+      removeDialogDescription:
+        'Этап, заметки и история будут удалены. Сама вакансия останется в каталоге, её можно сохранить снова.',
+      removeConfirm: 'Убрать',
+      removeCancel: 'Отмена',
+      removeUntitled: 'эту заявку',
       errors: {
         loadEmails: 'Не удалось загрузить письма.',
         searchMail: 'Не удалось выполнить поиск в почте сейчас.',

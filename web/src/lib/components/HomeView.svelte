@@ -208,9 +208,9 @@
                 <p class="truncate text-xs text-muted-foreground">{job.company}</p>
               </div>
               <div class="shrink-0 text-right">
-                <p class="font-mono text-[11px] text-muted-foreground">{job.meta}</p>
+                <p class="font-mono text-xs text-muted-foreground">{job.meta}</p>
                 <span
-                  class="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                  class="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground"
                 >
                   {job.tag}
                 </span>
@@ -240,7 +240,7 @@
 
   <!-- Straight from the source — what separates freehire from an aggregator. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="straight from the source" />
+    <SectionLabel text="straight from the source" as="h2" />
     <NumberedGrid items={sourced} class="mt-10 sm:grid-cols-3" />
   </section>
 
@@ -270,7 +270,7 @@
 
   <!-- How it works — three steps that mirror the actual ingest pipeline. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="how it works" />
+    <SectionLabel text="how it works" as="h2" />
     <NumberedGrid items={steps} class="mt-10 sm:grid-cols-3" />
   </section>
 
@@ -329,7 +329,7 @@
 
   <!-- The feature landings. Each has a page of its own; this is the doorway. -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="features" />
+    <SectionLabel text="features" as="h2" />
     <!-- An odd number of cards would leave the last row half empty, and in a hairline
          grid that empty half renders as a slab of border colour rather than as nothing.
          The last card fills the row instead when the count is odd. -->

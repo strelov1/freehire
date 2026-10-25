@@ -1,0 +1,86 @@
+[00:45:38.979] [INFO] storybook v10.6.3
+[00:45:41.475] [DEBUG] Getting package.json info for /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/package.json...
+[00:45:46.579] [DEBUG] Could not determine @babel/preset-env version in use. In case of runtime errors with @babel/preset-env, you may need to set the babelRemoveBugfixes feature flag in your `main.ts` file.
+[00:45:46.636] [DEBUG] Serving static files from design-system/static at /
+[00:45:46.880] [INFO] Starting...
+[00:45:49.138] [DEBUG] Starting preview..
+[00:45:51.600] [DEBUG] Change detection enabled.
+[00:45:51.614] [DEBUG] Change detection: snapshotting Vite resolve config (restart required if vite.config.ts changes)
+[00:45:51.723] [ERROR] [38;2;241;97;97mError: listen EADDRINUSE: address already in use 127.0.0.1:6006[39m
+    at Server.setupListenHandle [as _listen2] (node:net:1941:16)
+    at listenInCluster (node:net:1998:12)
+    at node:net:2207:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+[00:45:51.747] [WARN] Broken build, fix the error above.
+You may need to refresh the browser.
+[00:45:51.806] [DEBUG] Change detection: ignored 12 regex alias(es); related modules tracked as opaque-leaf.
+[00:45:51.806] [DEBUG] ChangeDetectionResolverFactory: skipped regex aliases [/^@storybook\/global$/, /^storybook\/test$/, /^storybook\/actions$/, /^storybook\/preview-api$/, /^storybook\/internal\/channels$/, /^storybook\/internal\/client-logger$/, /^storybook\/internal\/core-events$/, /^storybook\/internal\/preview-errors$/, /^storybook\/internal\/types$/, /^storybook\/internal\/preview-api$/, /^\/?@vite\/env/, /^\/?@vite\/client/]
+[00:45:52.259] [DEBUG] ChangeDetectionResolverFactory: './story-text.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/badge.stories.ts' unresolved (Cannot find module './story-text.js')
+[00:45:52.259] [DEBUG] Could not resolve ./story-text.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/badge.stories.ts
+[00:45:52.417] [DEBUG] ChangeDetectionResolverFactory: './story-text.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/chip.stories.ts' unresolved (Cannot find module './story-text.js')
+[00:45:52.417] [DEBUG] Could not resolve ./story-text.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/chip.stories.ts
+[00:45:52.417] [DEBUG] ChangeDetectionResolverFactory: './story-text.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/card.stories.ts' unresolved (Cannot find module './story-text.js')
+[00:45:52.417] [DEBUG] Could not resolve ./story-text.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/card.stories.ts
+[00:45:52.418] [DEBUG] ChangeDetectionResolverFactory: './story-text.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/button.stories.ts' unresolved (Cannot find module './story-text.js')
+[00:45:52.418] [DEBUG] Could not resolve ./story-text.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/button.stories.ts
+[00:45:52.475] [DEBUG] ChangeDetectionResolverFactory: './story-text.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/alert.stories.ts' unresolved (Cannot find module './story-text.js')
+[00:45:52.475] [DEBUG] Could not resolve ./story-text.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/alert.stories.ts
+[00:45:52.507] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/breadcrumbs.svelte' unresolved (Cannot find module './cn.js')
+[00:45:52.507] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/breadcrumbs.svelte
+[00:45:52.667] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/country-flag.svelte' unresolved (Cannot find module './cn.js')
+[00:45:52.667] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/country-flag.svelte
+[00:45:52.673] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/card.svelte' unresolved (Cannot find module './cn.js')
+[00:45:52.673] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/card.svelte
+[00:45:52.679] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/avatar.svelte' unresolved (Cannot find module './cn.js')
+[00:45:52.679] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/avatar.svelte
+[00:45:52.695] [DEBUG] ChangeDetectionResolverFactory: 'tailwind-variants' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/chip.svelte' unresolved ("." is not exported under the conditions ["storybook", "stories", "test", "module", "browser", "development|production", "svelte"] from package /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants (see exports field in /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants/package.json))
+[00:45:52.695] [DEBUG] Could not resolve tailwind-variants from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/chip.svelte
+[00:45:52.699] [DEBUG] ChangeDetectionResolverFactory: 'tailwind-variants' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/badge.svelte' unresolved ("." is not exported under the conditions ["storybook", "stories", "test", "module", "browser", "development|production", "svelte"] from package /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants (see exports field in /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants/package.json))
+[00:45:52.699] [DEBUG] Could not resolve tailwind-variants from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/badge.svelte
+[00:45:52.700] [DEBUG] ChangeDetectionResolverFactory: 'tailwind-variants' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/button.svelte' unresolved ("." is not exported under the conditions ["storybook", "stories", "test", "module", "browser", "development|production", "svelte"] from package /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants (see exports field in /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants/package.json))
+[00:45:52.700] [DEBUG] Could not resolve tailwind-variants from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/button.svelte
+[00:45:52.702] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/chip.svelte' unresolved (Cannot find module './cn.js')
+[00:45:52.702] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/chip.svelte
+[00:45:52.706] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/badge.svelte' unresolved (Cannot find module './cn.js')
+[00:45:52.706] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/badge.svelte
+[00:45:52.708] [DEBUG] ChangeDetectionResolverFactory: 'tailwind-variants' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/empty-state.svelte' unresolved ("." is not exported under the conditions ["storybook", "stories", "test", "module", "browser", "development|production", "svelte"] from package /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants (see exports field in /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants/package.json))
+[00:45:52.708] [DEBUG] Could not resolve tailwind-variants from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/empty-state.svelte
+[00:45:52.708] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/button.svelte' unresolved (Cannot find module './cn.js')
+[00:45:52.708] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/button.svelte
+[00:45:52.714] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/empty-state.svelte' unresolved (Cannot find module './cn.js')
+[00:45:52.714] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/empty-state.svelte
+[00:45:52.719] [DEBUG] ChangeDetectionResolverFactory: 'tailwind-variants' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/alert.svelte' unresolved ("." is not exported under the conditions ["storybook", "stories", "test", "module", "browser", "development|production", "svelte"] from package /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants (see exports field in /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants/package.json))
+[00:45:52.719] [DEBUG] Could not resolve tailwind-variants from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/alert.svelte
+[00:45:52.852] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/alert.svelte' unresolved (Cannot find module './cn.js')
+[00:45:52.852] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/alert.svelte
+[00:45:52.874] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/dialog.svelte' unresolved (Cannot find module './cn.js')
+[00:45:52.874] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/dialog.svelte
+[00:45:53.082] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/input.svelte' unresolved (Cannot find module './cn.js')
+[00:45:53.082] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/input.svelte
+[00:45:53.086] [DEBUG] ChangeDetectionResolverFactory: './story-text.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/tabs.stories.ts' unresolved (Cannot find module './story-text.js')
+[00:45:53.086] [DEBUG] Could not resolve ./story-text.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/tabs.stories.ts
+[00:45:53.086] [DEBUG] ChangeDetectionResolverFactory: './scroll-lock.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/dialog.svelte' unresolved (Cannot find module './scroll-lock.js')
+[00:45:53.086] [DEBUG] Could not resolve ./scroll-lock.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/dialog.svelte
+[00:45:53.086] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/pager.svelte' unresolved (Cannot find module './cn.js')
+[00:45:53.086] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/pager.svelte
+[00:45:53.086] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/numbered-grid.svelte' unresolved (Cannot find module './cn.js')
+[00:45:53.086] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/numbered-grid.svelte
+[00:45:53.088] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/section-label.svelte' unresolved (Cannot find module './cn.js')
+[00:45:53.088] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/section-label.svelte
+[00:45:53.118] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/skeleton.svelte' unresolved (Cannot find module './cn.js')
+[00:45:53.119] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/skeleton.svelte
+[00:45:53.238] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/form-field.svelte' unresolved (Cannot find module './cn.js')
+[00:45:53.238] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/form-field.svelte
+[00:45:53.259] [DEBUG] ChangeDetectionResolverFactory: 'tailwind-variants' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/tabs.svelte' unresolved ("." is not exported under the conditions ["storybook", "stories", "test", "module", "browser", "development|production", "svelte"] from package /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants (see exports field in /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants/package.json))
+[00:45:53.259] [DEBUG] Could not resolve tailwind-variants from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/tabs.svelte
+[00:45:53.277] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/tabs.svelte' unresolved (Cannot find module './cn.js')
+[00:45:53.277] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/tabs.svelte
+[00:45:53.304] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/tab-strip.svelte' unresolved (Cannot find module './cn.js')
+[00:45:53.304] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/tab-strip.svelte
+[00:45:53.304] [DEBUG] ChangeDetectionResolverFactory: 'tailwind-variants' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/table.svelte' unresolved ("." is not exported under the conditions ["storybook", "stories", "test", "module", "browser", "development|production", "svelte"] from package /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants (see exports field in /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/node_modules/tailwind-variants/package.json))
+[00:45:53.304] [DEBUG] Could not resolve tailwind-variants from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/table.svelte
+[00:45:53.333] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/table.svelte' unresolved (Cannot find module './cn.js')
+[00:45:53.333] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/table.svelte
+[00:45:53.414] [DEBUG] ChangeDetectionResolverFactory: './cn.js' from '/Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/tooltip.svelte' unresolved (Cannot find module './cn.js')
+[00:45:53.414] [DEBUG] Could not resolve ./cn.js from /Users/i_strelov/Projects/hire/.worktrees/ui-audit-fixes/design-system/src/tooltip.svelte
+[00:45:53.414] [DEBUG] Change detection graph built: 30 stories, 67 deps tracked, 1604ms

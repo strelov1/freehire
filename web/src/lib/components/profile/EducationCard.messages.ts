@@ -25,6 +25,7 @@ export const messages = defineMessages(
     save: 'Save',
     cancel: 'Cancel',
     saveFailed: 'Could not save.',
+    saved: 'Saved',
   },
   {
     ru: {
@@ -51,6 +52,7 @@ export const messages = defineMessages(
       save: 'Сохранить',
       cancel: 'Отмена',
       saveFailed: 'Не удалось сохранить.',
+      saved: 'Сохранено',
     },
   },
 );

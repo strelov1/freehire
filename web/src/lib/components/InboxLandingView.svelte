@@ -130,7 +130,7 @@
               </div>
               <p class="mt-0.5 truncate text-sm text-muted-foreground">{m.subject}</p>
               <span class="mt-2 inline-block">
-                <StatusChip signal={m.signal} class="text-[10px] leading-4" />
+                <StatusChip signal={m.signal} class="leading-4" />
               </span>
             </div>
           </li>
@@ -251,7 +251,7 @@
                 <p class="truncate text-sm">{m.from}</p>
                 <p class="truncate text-xs text-muted-foreground">{m.subject}</p>
               </div>
-              <span class="shrink-0"><StatusChip signal={m.signal} class="text-[10px] leading-4" /></span>
+              <span class="shrink-0"><StatusChip signal={m.signal} class="leading-4" /></span>
             </li>
           {/each}
         </ul>

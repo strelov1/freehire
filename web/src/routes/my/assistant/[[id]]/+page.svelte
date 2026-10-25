@@ -12,14 +12,42 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
+  import { Menu } from '@lucide/svelte';
   import AssistantChat from '#lib/assistant/AssistantChat.svelte';
   import AccountNavRail from '#lib/components/AccountNavRail.svelte';
   import { entryFromQuery, historyModeFor } from '#lib/assistant/presets.js';
   import { messages } from './messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
+  import { messages as shellMessages } from '#lib/i18n/shell.js';
 
   const s = $derived(t(messages, locale()));
+  const shell = $derived(t(shellMessages, locale()));
+  // Below lg the rail folds into a drawer (the same one the tailoring workspace opens), so
+  // a phone gets the chat's full width instead of a 56px column of icons beside it.
+  let navOpen = $state(false);
+
+  // Where this page starts. It fills the viewport from there down, so the composer at its
+  // foot is always on screen. Measured, not assumed: what stands above it is the header
+  // AND whichever self-gating bands the root layout shows (the email-verification prompt,
+  // whose height changes when its code form opens), and a fixed `100dvh - header` sized
+  // the page past the fold by exactly their height. The body is observed because any
+  // change above the page resizes it — and a page that then refits leaves it unchanged,
+  // so the measurement settles in one step. Starts at the header's h-14 so the server
+  // render matches what it always drew.
+  let shellEl = $state<HTMLDivElement | null>(null);
+  let top = $state(56);
+  $effect(() => {
+    const el = shellEl;
+    if (!el) return;
+    const measure = () => {
+      top = Math.max(0, el.getBoundingClientRect().top + window.scrollY);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(document.body);
+    return () => observer.disconnect();
+  });
   const session = $derived(page.params.id);
   // Read once, not reactively: the query says what this ARRIVAL asked for, and the
   // address is rewritten to the session's own URL — dropping the query — moments later.
@@ -34,13 +62,27 @@
 
 <svelte:head><title>{s.headTitle}</title></svelte:head>
 
-<div class="flex h-[calc(100dvh-3.5rem)]">
-  <AccountNavRail />
+<h1 class="sr-only">{s.heading}</h1>
+
+<div bind:this={shellEl} class="flex" style:height="calc(100dvh - {top}px)">
+  <AccountNavRail collapsible bind:open={navOpen} />
   <AssistantChat
     {session}
     preset={entry.preset}
     kickoff={entry.kickoff}
     {onSessionChange}
     showSessionRail
-  />
+  >
+    {#snippet navTrigger()}
+      <button
+        type="button"
+        onclick={() => (navOpen = true)}
+        aria-label={shell.rail.menu}
+        aria-expanded={navOpen}
+        class="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
+      >
+        <Menu class="size-4" aria-hidden="true" />
+      </button>
+    {/snippet}
+  </AssistantChat>
 </div>

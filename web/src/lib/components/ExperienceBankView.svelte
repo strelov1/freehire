@@ -12,11 +12,12 @@
    * (`selected`) stays here rather than in a card, so it survives any card's expand/collapse
    * and can span achievements from different employments (see specs/experience-bank).
    */
-  import { onDestroy } from 'svelte';
-  import { Briefcase, FolderKanban, Plus, Sparkles } from '@lucide/svelte';
+  import { onDestroy, tick } from 'svelte';
+  import { Briefcase, FolderKanban, Plus, Sparkles, X } from '@lucide/svelte';
   import type { Component } from 'svelte';
   import { api } from '#lib/api.js';
-  import { Button, ConfirmDialog, FormField, Input } from '#lib/ui/index.js';
+  import { Alert, Button, ConfirmDialog, FormField, Input } from '#lib/ui/index.js';
+  import { announce } from '#lib/announce.svelte.js';
   import CompanyPicker from '#lib/components/CompanyPicker.svelte';
   import ExperienceAssistantPanel from '#lib/components/ExperienceAssistantPanel.svelte';
   import ExperienceEmploymentCard from '#lib/components/ExperienceEmploymentCard.svelte';
@@ -33,7 +34,7 @@
     ExperienceEmploymentWithAtoms,
     PeriodDate,
   } from '#lib/types.js';
-  import { must } from '#lib/utils.js';
+  import { errorMessage, must } from '#lib/utils.js';
 
   /** Host-supplied: profile reseeds the base CV, tailor resets the open tailored copy.
    *  The bank itself never talks to the CV store. */
@@ -41,8 +42,26 @@
 
   let bank = $state<ExperienceBank | null>(null);
   let loading = $state(true);
-  let error = $state('');
+  // A failed LOAD leaves nothing to show, so it takes the view (with Retry). A failed
+  // MUTATION happens over a bank the candidate is in the middle of editing, so it is an
+  // inline notice: the list, and any editor still open in it, stay exactly as they were.
+  let loadError = $state('');
+  let actionError = $state('');
   let busy = $state(false);
+
+  // The Alert that shows it carries role="alert", which already announces it; clearing it
+  // first re-inserts the text, so the same failure twice in a row is announced again.
+  function failAction(e: unknown, fallback: string) {
+    const message = errorMessage(e, fallback);
+    actionError = '';
+    void tick().then(() => (actionError = message));
+  }
+
+  /** A mutation landed: say so, and clear a failure the candidate has now moved past. */
+  function succeed(message: string) {
+    actionError = '';
+    announce(message);
+  }
   /** Selected achievement ids for merge / tailor. Order is click order. */
   let selected = $state<string[]>([]);
   // Deliberately separate from the job form below: "Add project" and "Add experience" are
@@ -89,15 +108,62 @@
   /** A read the candidate asked for. Clears the selection, which their action consumed. */
   async function load() {
     loading = true;
-    error = '';
+    loadError = '';
+    actionError = '';
     try {
       bank = await api.getExperience();
       selected = [];
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not load your experience.';
+      loadError = errorMessage(e, 'Could not load your experience.');
     } finally {
       loading = false;
     }
+  }
+
+  /**
+   * The re-read after one of the candidate's own edits. Unlike `load` it never swaps the
+   * list for a spinner: that unmounted every card, which closed any other editor still open
+   * and left focus on a button that no longer existed. Throws, so the mutation that called
+   * it reports the failure.
+   */
+  async function reloadAfterMutation() {
+    const next = await api.getExperience();
+    bank = next;
+    const alive = new Set(
+      [...next.employments.flatMap((e) => e.atoms), ...next.unplaced].map((a) => a.id),
+    );
+    selected = selected.filter((id) => alive.has(id));
+  }
+
+  /**
+   * Where focus goes once a removal's confirmation dialog has closed. The dialog's own
+   * focus restore aims at the Remove button that opened it, which the removal just took
+   * out of the page; and nothing behind a modal dialog can take focus while it is open.
+   */
+  let afterDialog: (() => void) | null = null;
+  $effect(() => {
+    if (confirmRemoveOpen || confirmRemoveEmploymentOpen) return;
+    const run = afterDialog;
+    afterDialog = null;
+    if (run) void tick().then(run);
+  });
+
+  /** The first of `selectors` still in the page, focused. */
+  function focusFirst(...selectors: (string | null)[]) {
+    for (const selector of selectors) {
+      if (!selector) continue;
+      const el = document.querySelector<HTMLElement>(selector);
+      if (el) {
+        el.focus();
+        return;
+      }
+    }
+  }
+
+  /** The neighbour a removed item hands focus to: the next one, else the previous. */
+  function neighbours(el: Element | null, attr: string): [string | null, string | null] {
+    const read = (n: Element | null | undefined) => n?.getAttribute(attr) ?? null;
+    return [read(el?.nextElementSibling), read(el?.previousElementSibling)];
   }
 
   /**
@@ -246,11 +312,12 @@
     busy = true;
     try {
       await api.updateExperienceEmployment(employment.id, body);
-      await load();
+      await reloadAfterMutation();
       onBankMutated?.();
+      succeed('Saved');
       return true;
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not update.';
+      failAction(e, 'Could not update.');
       return false;
     } finally {
       busy = false;
@@ -269,13 +336,23 @@
   async function removeEmployment() {
     const employment = removeEmploymentTarget;
     if (!employment) return;
+    const card = document.querySelector(`[data-employment-id="${employment.id}"]`);
+    const [next, prev] = neighbours(card, 'data-employment-id');
+    const heading = `#experience-section-${employment.kind}`;
     busy = true;
     try {
       await api.deleteExperienceEmployment(employment.id);
-      await load();
+      await reloadAfterMutation();
       onBankMutated?.();
+      succeed('Removed');
+      afterDialog = () =>
+        focusFirst(
+          next && `[data-employment-id="${next}"] [data-row-action="edit"]`,
+          prev && `[data-employment-id="${prev}"] [data-row-action="edit"]`,
+          heading,
+        );
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not remove that entry.';
+      failAction(e, 'Could not remove that entry.');
     } finally {
       busy = false;
     }
@@ -297,10 +374,11 @@
       projLink = '';
       projStart = undefined;
       projEnd = undefined;
-      await load();
+      await reloadAfterMutation();
       onBankMutated?.();
+      succeed('Project added');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not create project.';
+      failAction(e, 'Could not create project.');
     } finally {
       busy = false;
     }
@@ -326,10 +404,11 @@
       jobStart = undefined;
       jobEnd = undefined;
       jobCurrent = false;
-      await load();
+      await reloadAfterMutation();
       onBankMutated?.();
+      succeed('Experience added');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not create experience.';
+      failAction(e, 'Could not create experience.');
     } finally {
       busy = false;
     }
@@ -362,11 +441,12 @@
         skills: atom.skills,
         employment_id: atom.employment_id,
       });
-      await load();
+      await reloadAfterMutation();
       onBankMutated?.();
+      succeed('Saved');
       return true;
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not save that change.';
+      failAction(e, 'Could not save that change.');
       return false;
     } finally {
       busy = false;
@@ -392,10 +472,14 @@
     busy = true;
     try {
       await api.mergeExperienceAtoms([must(selected[0]), must(selected[1])]);
-      await load();
+      await reloadAfterMutation();
+      // The merge consumed the selection; the survivor staying ticked would invite a
+      // second merge nobody asked for.
+      selected = [];
       onBankMutated?.();
+      succeed('Merged');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not merge those achievements.';
+      failAction(e, 'Could not merge those achievements.');
     } finally {
       busy = false;
     }
@@ -414,10 +498,11 @@
         skills: atom.skills,
         employment_id: atom.employment_id,
       });
-      await load();
+      await reloadAfterMutation();
       onBankMutated?.();
+      succeed('Confirmed');
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not confirm that achievement.';
+      failAction(e, 'Could not confirm that achievement.');
     } finally {
       busy = false;
     }
@@ -445,11 +530,12 @@
         skills: atom.skills,
         employment_id: created.id,
       });
-      await load();
+      await reloadAfterMutation();
       onBankMutated?.();
+      succeed('Saved as project');
       return true;
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not save as project.';
+      failAction(e, 'Could not save as project.');
       return false;
     } finally {
       busy = false;
@@ -468,13 +554,29 @@
   async function removeAtom() {
     const atom = removeTarget;
     if (!atom) return;
+    const row = document.querySelector(`[data-atom-id="${atom.id}"]`);
+    const [next, prev] = neighbours(row, 'data-atom-id');
+    // The list the row sat in is gone with its last achievement, so the fallback is the
+    // heading above it: the card's own, or for an untied achievement the Projects section
+    // it would be saved into.
+    const heading = atom.employment_id
+      ? `[data-employment-id="${atom.employment_id}"] [data-row-heading]`
+      : '#experience-section-unplaced';
     busy = true;
     try {
       await api.deleteExperienceAtom(atom.id);
-      await load();
+      await reloadAfterMutation();
       onBankMutated?.();
+      succeed('Removed');
+      afterDialog = () =>
+        focusFirst(
+          next && `[data-atom-id="${next}"] [data-row-action="edit"]`,
+          prev && `[data-atom-id="${prev}"] [data-row-action="edit"]`,
+          heading,
+          '#experience-section-project',
+        );
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Could not remove that achievement.';
+      failAction(e, 'Could not remove that achievement.');
     } finally {
       busy = false;
     }
@@ -524,25 +626,39 @@
            surfaced where a candidate actually manages experience, not only once at
            sign-up. -->
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/5 px-4 py-3 text-sm">
-        <p>Couldn't read your résumé — that may be why this looks empty.</p>
+        <p>Couldn't read your CV — that may be why this looks empty.</p>
         <Button size="sm" variant="outline" onclick={() => void retryResumeExtraction()}>
           Try again
         </Button>
       </div>
     {:else if resumeParse === 'waiting'}
       <div class="mb-4 rounded-lg bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-        Reading your résumé again…
+        Reading your CV again…
       </div>
     {/if}
     {#if loading}
       <States state="loading" />
-    {:else if error}
-      <States state="error" message={error} />
+    {:else if loadError}
+      <States state="error" message={loadError} onRetry={() => void load()} />
     {:else if bank}
       <!-- An empty bank renders the same sections as a full one: it is the one that most
            needs filling, and the assistant is a paid feature, so the manual "Add" buttons
            below are the only way in that every plan has. -->
       <div class="flex flex-col gap-6">
+        {#if actionError}
+          <Alert variant="destructive" class="items-center py-2">
+            <span class="flex-1">{actionError}</span>
+            <button
+              type="button"
+              onclick={() => (actionError = '')}
+              aria-label="Dismiss error"
+              class="-m-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-destructive/10"
+            >
+              <X class="size-4" aria-hidden="true" />
+            </button>
+          </Alert>
+        {/if}
+
         <!-- The header states what this page is FOR, because "experience bank" means nothing
              to someone meeting it for the first time. -->
         <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
@@ -615,7 +731,7 @@
         {/if}
 
         <div class="flex flex-col gap-4">
-          {@render sectionHeader(Briefcase, 'Work history', 'Add experience', () => {
+          {@render sectionHeader('job', Briefcase, 'Work history', 'Add experience', () => {
             addingJob = true;
             jobCompany = '';
             jobRole = '';
@@ -673,7 +789,7 @@
         </div>
 
         <div class="flex flex-col gap-4">
-          {@render sectionHeader(FolderKanban, 'Projects', 'Add project', () => {
+          {@render sectionHeader('project', FolderKanban, 'Projects', 'Add project', () => {
             addingProject = true;
             projName = '';
             projLink = '';
@@ -718,7 +834,9 @@
         {#if bank.unplaced.length > 0}
           <section class="flex flex-col gap-2">
             <div class="flex flex-col gap-0.5">
-              <h3 class="text-sm font-semibold text-foreground">Not tied to a role</h3>
+              <h3 id="experience-section-unplaced" tabindex="-1" class="text-sm font-semibold text-foreground focus:outline-none">
+                Not tied to a role
+              </h3>
               <p class="text-xs text-muted-foreground">
                 Achievements from chat with no job or project yet. Save one as a project when it belongs to portfolio work.
               </p>
@@ -764,10 +882,21 @@
   />
 {/snippet}
 
-{#snippet sectionHeader(icon: Component<{ class?: string }>, title: string, addLabel: string, onAdd: () => void)}
+{#snippet sectionHeader(
+  kind: 'job' | 'project',
+  icon: Component<{ class?: string }>,
+  title: string,
+  addLabel: string,
+  onAdd: () => void,
+)}
   {@const Icon = icon}
   <div class="flex items-center justify-between gap-2">
-    <h2 class="flex items-center gap-2 text-base font-semibold text-foreground">
+    <!-- Focusable from script only: where focus lands when the last entry under it goes. -->
+    <h2
+      id="experience-section-{kind}"
+      tabindex="-1"
+      class="flex items-center gap-2 text-base font-semibold text-foreground focus:outline-none"
+    >
       <Icon class="size-4.5" />{title}
     </h2>
     <Button

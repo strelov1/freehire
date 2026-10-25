@@ -16,6 +16,7 @@
   import { messages } from './EducationCard.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
+  import { announce } from '#lib/announce.svelte.js';
 
   let {
     structured,
@@ -77,8 +78,10 @@
       await api.putResumeContacts({ ...contacts, education: cleaned, education_set: true });
       editingEducation = false;
       onSaved?.();
+      announce(s.saved);
     } catch (e) {
       educationError = e instanceof Error ? e.message : s.saveFailed;
+      announce(educationError, 'assertive');
     } finally {
       educationBusy = false;
     }
@@ -115,8 +118,10 @@
       });
       editingLanguages = false;
       onSaved?.();
+      announce(s.saved);
     } catch (e) {
       languagesError = e instanceof Error ? e.message : s.saveFailed;
+      announce(languagesError, 'assertive');
     } finally {
       languagesBusy = false;
     }
@@ -153,8 +158,10 @@
       });
       editingCertifications = false;
       onSaved?.();
+      announce(s.saved);
     } catch (e) {
       certificationsError = e instanceof Error ? e.message : s.saveFailed;
+      announce(certificationsError, 'assertive');
     } finally {
       certificationsBusy = false;
     }

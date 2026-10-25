@@ -160,7 +160,7 @@
           <span class="inline-flex h-2.5 w-2.5 shrink-0 rounded-full {STATUS_META[site.status].dot}"></span>
           <div>
             <div class="text-base font-semibold tracking-tight">{SITE_HEADLINE[site.status]}</div>
-            <div class="text-sm opacity-80">
+            <div class="text-sm">
               Database {site.database} · {nfPercent.format(site.error_rate)} error rate over the last {site.window_minutes} min
             </div>
             <!-- Reported beside the error rate, never conditionally. The two answer
@@ -171,7 +171,7 @@
                  in ordinary bursts, so that phrasing cried wolf on a healthy site. A
                  sustained reading is what matters, and judging that needs history the
                  page does not have (the Grafana rule averages it over five minutes). -->
-            <div class="text-sm opacity-80">
+            <div class="text-sm">
               Database connections in use: {nfPercent.format(site.pool_pressure)}
             </div>
           </div>
@@ -207,7 +207,7 @@
         <span class="inline-flex h-2.5 w-2.5 shrink-0 rounded-full {STATUS_META[overall].dot}"></span>
         <div>
           <div class="text-base font-semibold tracking-tight">{OVERALL_HEADLINE[overall]}</div>
-          <div class="text-sm opacity-80">
+          <div class="text-sm">
             {providers.length} provider{providers.length === 1 ? '' : 's'} monitored
           </div>
         </div>

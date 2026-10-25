@@ -30,8 +30,12 @@ export const messages = defineMessages(
       newKeyPrefix: 'New key',
       copyNow: 'Copy it now — it won’t be shown again.',
       dismiss: 'Dismiss',
+      dismissConfirm: 'Have you copied your key? You won’t see it again.',
+      dismissConfirmYes: 'Yes, dismiss',
+      dismissConfirmNo: 'Keep it on screen',
       copy: 'Copy',
       copied: 'Copied',
+      copyFailed: 'Couldn’t copy — select and copy it manually.',
       newToCli: 'New to the CLI? See the',
       commandReferenceLink: 'command reference',
     },
@@ -53,6 +57,9 @@ export const messages = defineMessages(
       neverUsed: 'never used',
       expiresPrefix: 'expires',
       revoke: 'Revoke',
+      // The button's accessible name: a list of identical "Revoke" buttons says nothing
+      // about which key each one ends.
+      revokeAria: 'Revoke {name}',
     },
     revokeDialog: {
       // "Revoke "<name>"?" — the component supplies the quoted name.
@@ -80,8 +87,12 @@ export const messages = defineMessages(
         newKeyPrefix: 'Новый ключ',
         copyNow: 'Скопируйте сейчас — второй раз он показан не будет.',
         dismiss: 'Закрыть',
+        dismissConfirm: 'Вы скопировали ключ? Второй раз его не показать.',
+        dismissConfirmYes: 'Да, закрыть',
+        dismissConfirmNo: 'Оставить на экране',
         copy: 'Скопировать',
         copied: 'Скопировано',
+        copyFailed: 'Не удалось скопировать — выделите ключ и скопируйте вручную.',
         newToCli: 'Впервые работаете с CLI? Откройте',
         commandReferenceLink: 'справочник команд',
       },
@@ -100,6 +111,7 @@ export const messages = defineMessages(
         neverUsed: 'ни разу не использован',
         expiresPrefix: 'истекает',
         revoke: 'Отозвать',
+        revokeAria: 'Отозвать {name}',
       },
       revokeDialog: {
         titlePrefix: 'Отозвать',

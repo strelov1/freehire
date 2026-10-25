@@ -8,17 +8,31 @@ import ExperienceBankView from './ExperienceBankView.svelte';
 // accepting free text) and an "I currently work here" checkbox — see openspec change
 // experience-company-picker-present-checkbox.
 
-const { getExperience, listCompanies, createExperienceEmployment, getResume, retryResumeExtract } =
-  vi.hoisted(() => ({
-    getExperience: vi.fn(),
-    listCompanies: vi.fn(),
-    createExperienceEmployment: vi.fn(),
-    getResume: vi.fn(),
-    retryResumeExtract: vi.fn(),
-  }));
+const {
+  getExperience,
+  listCompanies,
+  createExperienceEmployment,
+  updateExperienceEmployment,
+  getResume,
+  retryResumeExtract,
+} = vi.hoisted(() => ({
+  getExperience: vi.fn(),
+  listCompanies: vi.fn(),
+  createExperienceEmployment: vi.fn(),
+  updateExperienceEmployment: vi.fn(),
+  getResume: vi.fn(),
+  retryResumeExtract: vi.fn(),
+}));
 
 vi.mock('#lib/api.js', () => ({
-  api: { getExperience, listCompanies, createExperienceEmployment, getResume, retryResumeExtract },
+  api: {
+    getExperience,
+    listCompanies,
+    createExperienceEmployment,
+    updateExperienceEmployment,
+    getResume,
+    retryResumeExtract,
+  },
   isPlanRefusal: () => false,
 }));
 
@@ -67,6 +81,7 @@ beforeEach(() => {
   getExperience.mockReset().mockResolvedValue(bankWithOneJob);
   listCompanies.mockReset().mockResolvedValue({ items: [ringCentral], hasMore: false });
   createExperienceEmployment.mockReset().mockResolvedValue(undefined);
+  updateExperienceEmployment.mockReset().mockResolvedValue(undefined);
   getResume.mockReset().mockResolvedValue(resumeOk);
   retryResumeExtract.mockReset().mockResolvedValue(undefined);
 });
@@ -228,13 +243,13 @@ describe('ExperienceBankView résumé-extraction banner', () => {
       getExperience.mockClear();
 
       await fireEvent.click(retry);
-      expect(screen.getByText(/reading your résumé again/i)).toBeTruthy();
+      expect(screen.getByText(/reading your CV again/i)).toBeTruthy();
 
       await vi.advanceTimersByTimeAsync(RESUME_POLL_BUDGET_MS);
 
       expect(getExperience).toHaveBeenCalled();
       expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
-      expect(screen.queryByText(/reading your résumé again/i)).toBeNull();
+      expect(screen.queryByText(/reading your CV again/i)).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -271,7 +286,7 @@ describe('ExperienceBankView résumé-extraction banner', () => {
       // Giving up is not the same as failing (onboardingResumeWait.ts's own documented
       // reasoning): the banner must not come back claiming a failure nothing confirmed.
       expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
-      expect(screen.queryByText(/reading your résumé again/i)).toBeNull();
+      expect(screen.queryByText(/reading your CV again/i)).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -280,4 +295,31 @@ describe('ExperienceBankView résumé-extraction banner', () => {
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe('ExperienceBankView failures', () => {
+  it('reports a failed save inline and keeps the bank and the open editor', async () => {
+    updateExperienceEmployment.mockRejectedValue(new Error('Server said no'));
+    render(ExperienceBankView, { props: {} });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Server said no');
+    // Still editing, still on the bank — nothing the candidate typed was thrown away.
+    expect(screen.getByLabelText('Company')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add experience' })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Dismiss error' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('offers a retry when the bank itself fails to load', async () => {
+    getExperience.mockRejectedValueOnce(new Error('Could not load your experience.'));
+    render(ExperienceBankView, { props: {} });
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('Acme')).toBeTruthy();
+  });
 });

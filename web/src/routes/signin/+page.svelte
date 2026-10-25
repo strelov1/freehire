@@ -28,7 +28,7 @@
   import { focusTrap } from '#lib/actions/focusTrap.js';
   import AuthBrandPanel from '#lib/components/AuthBrandPanel.svelte';
   import BrandMark from '#lib/components/BrandMark.svelte';
-  import { Button, ProviderIcon } from '#lib/ui/index.js';
+  import { Button, ProviderIcon, buttonVariants, cn } from '#lib/ui/index.js';
 
   // Validated the same way every other returnTo in the app is (safeRedirect:
   // same-origin relative path only), since it arrives as a query param a visitor's
@@ -315,10 +315,7 @@
         <button
           type="submit"
           disabled={submitting}
-          class={[
-            buttonSizeClass,
-            'mt-1 inline-flex items-center justify-center bg-brand font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-60',
-          ]}
+          class={cn(buttonVariants({ variant: 'cta' }), buttonSizeClass, 'mt-1 font-semibold disabled:opacity-60')}
         >
           {submitting ? 'Please wait…' : titles[mode]}
         </button>

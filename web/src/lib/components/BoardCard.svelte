@@ -6,6 +6,9 @@
   import { chasedLabel, cvOpenedLabel } from '#lib/followup.js';
   import { autoApplyNeedsReviewBadge } from '#lib/autoApplyReview.js';
   import type { MyJob } from '#lib/types.js';
+  import { messages } from './BoardCard.messages';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
 
   let {
     item,
@@ -18,6 +21,8 @@
   // The card's aria-label is its name and REPLACES its content, so the indicator row is
   // wired in as the description — otherwise stage/review/silence are never announced.
   const indicatorsId = $props.id();
+  const hintId = `${indicatorsId}-hint`;
+  const s = $derived(t(messages, locale()));
 
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
   // pending_review (a decision to make) or blocked (a submission attempt stopped) —
@@ -46,7 +51,9 @@
   // listeners are not delegated, so this one runs first and claims the key.
   //
   // Nothing is lost: the library's guard skips any target whose `disabled` is defined,
-  // so while this card was a <button> its keyboard drag never ran either.
+  // so while this card was a <button> its keyboard drag never ran either. The keyboard's
+  // way to move a card is the stage picker in the panel this opens, and the card's
+  // description says so (hintId) — otherwise nothing tells a keyboard user it exists.
   function openOnKey(e: KeyboardEvent) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     e.preventDefault(); // Space would otherwise scroll the column
@@ -77,7 +84,7 @@
   onclick={() => onopen(item)}
   onkeydowncapture={openOnKey}
   aria-label="Open {title} at {company || 'unknown company'}"
-  aria-describedby={indicatorsId}
+  aria-describedby="{indicatorsId} {hintId}"
   class="flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
   <span class="flex items-center gap-1.5 text-sm font-semibold">
@@ -158,4 +165,5 @@
       </svg>
     {/if}
   </span>
+  <span id={hintId} class="sr-only">{s.moveHint}</span>
 </div>

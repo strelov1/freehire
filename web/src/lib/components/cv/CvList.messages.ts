@@ -8,6 +8,7 @@ export const messages = defineMessages(
   {
     loadFailed: 'Could not load your CVs.',
     deleteFailed: 'Could not delete this CV.',
+    deleted: 'CV deleted',
     loading: 'Loading…',
     empty: {
       title: 'No tailored CVs yet',
@@ -34,6 +35,7 @@ export const messages = defineMessages(
     ru: {
       loadFailed: 'Не удалось загрузить ваши резюме.',
       deleteFailed: 'Не удалось удалить это резюме.',
+      deleted: 'Резюме удалено',
       loading: 'Загрузка…',
       empty: {
         title: 'Пока нет адаптированных резюме',

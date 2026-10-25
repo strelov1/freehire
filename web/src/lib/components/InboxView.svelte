@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -28,8 +28,11 @@
     Trash2,
     Inbox,
     Settings,
+    X,
   } from '@lucide/svelte';
-  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { Alert, TabStrip, tabStripId } from '#lib/ui/index.js';
+  import States from './States.svelte';
+  import { announce } from '#lib/announce.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { timeAgo, errorMessage, must } from '#lib/utils.js';
   import { avatarInitials, avatarColor } from '#lib/avatar.js';
@@ -43,7 +46,20 @@
   let gmail = $state<GmailStatus | null>(null);
   let mailbox = $state<MailboxStatus | null>(null);
   let loading = $state(true);
-  let error = $state<string | null>(null);
+  // Two kinds of failure, rendered differently. A failed LOAD leaves nothing to show, so it
+  // takes the whole view (with a way to try again). A failed ACTION — delete, link, mark
+  // read — happens over a list the reader is in the middle of, so it is an inline notice
+  // beside the toolbar and the list stays where it was.
+  let loadError = $state<string | null>(null);
+  let actionError = $state<string | null>(null);
+
+  // The Alert that shows it carries role="alert", which already announces it; clearing it
+  // first re-inserts the text, so the same failure twice in a row is announced again.
+  function failAction(e: unknown, fallback: string) {
+    const message = errorMessage(e, fallback);
+    actionError = '';
+    void tick().then(() => (actionError = message));
+  }
 
   // Account switcher: '' = all sources, 'gmail' | 'hosted' = one account.
   let source = $state<InboxSource>('');
@@ -153,7 +169,8 @@
 
   async function load() {
     loading = true;
-    error = null;
+    loadError = null;
+    actionError = null;
     try {
       const [gmailStatus, mailboxStatus, pushed] = await Promise.all([
         api.gmailStatus(),
@@ -167,7 +184,7 @@
       if (hasAnySource) await fetchFirstPage(s.errors.loadInbox);
       else tab = 'settings'; // nothing to read yet — land on setup
     } catch (e) {
-      error = errorMessage(e, s.errors.loadInbox);
+      loadError = errorMessage(e, s.errors.loadInbox);
     } finally {
       loading = false;
     }
@@ -195,7 +212,7 @@
     try {
       await fetchFirstPage(s.errors.loadInbox);
     } catch (e) {
-      error = errorMessage(e, s.errors.loadInbox);
+      failAction(e, s.errors.loadInbox);
     }
   }
 
@@ -203,11 +220,11 @@
   async function refreshInbox() {
     if (refreshing) return;
     refreshing = true;
-    error = null;
+    actionError = null;
     try {
       await fetchFirstPage(s.errors.refresh);
     } catch (e) {
-      error = errorMessage(e, s.errors.refresh);
+      failAction(e, s.errors.refresh);
     } finally {
       refreshing = false;
     }
@@ -219,7 +236,7 @@
   // the list overflows its pane or the mailbox is exhausted.
   async function loadMore() {
     await pager.loadMore();
-    if (pager.loadMoreError) error = s.errors.loadMore;
+    if (pager.loadMoreError) failAction(null, s.errors.loadMore);
   }
 
   function onSearchInput() {
@@ -244,7 +261,7 @@
   async function markAllRead() {
     if (markingAll) return;
     markingAll = true;
-    error = null;
+    actionError = null;
     try {
       await api.markAllRead(source, label, search);
       if (unread) {
@@ -254,8 +271,9 @@
         if (selected) selected = { ...selected, read: true };
       }
     } catch (e) {
-      error = errorMessage(e, s.errors.markAllRead);
       await reloadList();
+      // After the reload, which would otherwise replace this message with its own.
+      failAction(e, s.errors.markAllRead);
     } finally {
       markingAll = false;
     }
@@ -275,10 +293,11 @@
     try {
       await api.deleteEmail(id);
       lastDeleted = { id, subject };
+      announce(format(s.deletedToast, { subject: subject || s.noSubject }));
     } catch (e) {
       pager.items = prev; // put the row back
       pager.total += 1;
-      error = errorMessage(e, s.errors.deleteMessage);
+      failAction(e, s.errors.deleteMessage);
     }
   }
 
@@ -291,7 +310,7 @@
       await api.restoreEmail(id);
       await reloadList();
     } catch (e) {
-      error = errorMessage(e, s.errors.restore);
+      failAction(e, s.errors.restore);
     }
   }
 
@@ -316,7 +335,7 @@
       // the picker has the caller's applications ready.
       if (!selected.linked_slug && !selected.suggested_slug) void ensureTrackedApps();
     } catch (e) {
-      error = errorMessage(e, s.errors.loadMessage);
+      failAction(e, s.errors.loadMessage);
     } finally {
       bodyLoading = false;
     }
@@ -366,7 +385,7 @@
     try {
       applyLinkUpdate(await api.confirmEmailLink(selected.id));
     } catch (e) {
-      error = errorMessage(e, s.errors.link);
+      failAction(e, s.errors.link);
     }
   }
 
@@ -377,7 +396,7 @@
       // Dismissing the suggestion drops the email into the manual picker — load its data.
       void ensureTrackedApps();
     } catch (e) {
-      error = errorMessage(e, s.errors.dismiss);
+      failAction(e, s.errors.dismiss);
     }
   }
 
@@ -392,7 +411,7 @@
       // The row now also offers the picker (to link elsewhere) — make sure it has data.
       void ensureTrackedApps();
     } catch (e) {
-      error = errorMessage(e, s.errors.unlink);
+      failAction(e, s.errors.unlink);
     }
   }
 
@@ -403,7 +422,7 @@
       applyLinkUpdate(await api.linkEmail(selected.id, slug));
       lastUnlinked = null;
     } catch (e) {
-      error = errorMessage(e, s.errors.link);
+      failAction(e, s.errors.link);
     }
   }
 
@@ -441,8 +460,8 @@
 
 {#if loading}
   <p class="py-12 text-center text-sm text-muted-foreground">{s.loading}</p>
-{:else if error}
-  <p class="text-sm text-destructive">{error}</p>
+{:else if loadError}
+  <States state="error" message={loadError} onRetry={load} />
 {:else}
   <div class="flex flex-col gap-4">
     <TabStrip
@@ -459,8 +478,22 @@
       aria-labelledby={tabStripId(PANEL_ID, tab)}
       class="flex flex-col gap-4"
     >
+      {#if actionError}
+        <Alert variant="destructive" class="items-center py-2">
+          <span class="flex-1">{actionError}</span>
+          <button
+            type="button"
+            onclick={() => (actionError = null)}
+            aria-label={s.dismissError}
+            class="-m-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-destructive/10"
+          >
+            <X class="h-4 w-4" aria-hidden="true" />
+          </button>
+        </Alert>
+      {/if}
+
       {#if tab === 'settings'}
-        <InboxSettings {gmail} bind:mailbox onSourceChanged={onSourceChanged} onError={(m) => (error = m)} />
+        <InboxSettings {gmail} bind:mailbox onSourceChanged={onSourceChanged} onError={(m) => failAction(null, m)} />
       {:else if !hasAnySource}
         <p class="py-8 text-center text-sm text-muted-foreground">
           {s.noSource.lead}

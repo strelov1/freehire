@@ -58,6 +58,9 @@
   </div>
 
   <div class="mt-4">
+    <!-- The job cards are h3s under the company's h1; this names the list between them,
+         the way /jobs does, so the outline does not skip a level. -->
+    <h2 class="sr-only">Open positions</h2>
     {#if initial}
       <JobsView {initial} {currentPage} scope={{ company_slug: slug }} excludeFacets={['source']}>
         {#snippet sidebarTop()}

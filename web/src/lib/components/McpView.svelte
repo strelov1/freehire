@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { siClaude, siCursor, type SimpleIcon } from 'simple-icons';
   import { sourceLogoUrl } from '#lib/logo.js';
+  import { glyphColorFor } from '#lib/markColor.js';
   import { EntityLogo, SectionLabel } from '#lib/ui/index.js';
 
   // The two hosted MCP servers. They are separate on purpose: a host only offers
@@ -27,7 +28,8 @@
   // One tile per host. `domain` is what the logo proxy resolves the mark from — by
   // name alone "Cursor" or "Grok" is ambiguous. `directory` is a one-click install from the host's own directory, drawn in that
   // host's brand colour and mark (from simple-icons, like every other brand mark on the
-  // site) so the button reads as the host's install, not ours.
+  // site) so the button reads as the host's install, not ours. The label's ink is picked
+  // per fill: white on Claude's terracotta measured 3.1:1, the near-black it gets instead 5.7:1.
   type Host = {
     id: string;
     label: string;
@@ -233,8 +235,9 @@
               href={h.directory.url}
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              class="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
               style:background-color="#{h.directory.brand.hex}"
+              style:color={glyphColorFor(`#${h.directory.brand.hex}`)}
             >
               <svg viewBox="0 0 24 24" class="size-4 fill-current" aria-hidden="true"
                 ><path d={h.directory.brand.path} /></svg

@@ -3,6 +3,10 @@ import { defineMessages } from '#lib/i18n/t.js';
 export const messages = defineMessages(
   {
     defaultPlaceholder: 'Notes…',
+    saving: 'Saving…',
+    saved: 'Saved',
+    saveFailed: "Couldn't save — your text is still here.",
+    retry: 'Retry',
     toolbar: {
       bold: 'Bold',
       italic: 'Italic',
@@ -16,6 +20,10 @@ export const messages = defineMessages(
   {
     ru: {
       defaultPlaceholder: 'Заметки…',
+      saving: 'Сохраняем…',
+      saved: 'Сохранено',
+      saveFailed: 'Не удалось сохранить — текст остался здесь.',
+      retry: 'Повторить',
       toolbar: {
         bold: 'Жирный',
         italic: 'Курсив',

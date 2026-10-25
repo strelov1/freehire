@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
-  import { Button, cn, EntityLogo } from '#lib/ui/index.js';
+  import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
   import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen, Check } from '@lucide/svelte';
   import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
   import { groupedStages, humanizeStage, offersDebrief } from '#lib/stages.js';
@@ -63,7 +63,8 @@
     item: MyJob;
     pendingOutcome: boolean;
     onsetstage: (stage: string) => void;
-    onsavenotes: (notes: string) => void;
+    // Rejects when the write fails; the notes editor reports it and keeps the text.
+    onsavenotes: (notes: string) => Promise<void>;
     onchooseoutcome: (o: ClosedOutcome) => void;
     // Called after a successful approve/decline so the board's own item (which this
     // component only ever borrows through the `item` prop) gets its badge updated —
@@ -72,7 +73,8 @@
     // whichever component owns `item`'s reactivity, the same division of labor every other
     // mutation here already follows.
     onautoapplyreview: (status: 'approved' | 'declined') => void;
-    onremove: () => void;
+    // Runs behind a confirmation, and may throw: its message is shown in the dialog.
+    onremove: () => Promise<void>;
     onclose: () => void;
     // The actions the card used to carry. They live here because a card carries no
     // controls — one on its surface is what stopped it being dragged at all.
@@ -95,6 +97,11 @@
   } = $props();
 
   const s = $derived(t(messages, locale()));
+
+  // Removing untracks the application — its stage, notes and history go with it — so it is
+  // asked first, the way deleting a list is.
+  let confirmRemoveOpen = $state(false);
+  const jobLabel = $derived(item.job?.title || item.role_title || s.removeUntitled);
 
   // Tailoring navigates away, and /tailor/[slug] owns its own bootstrap — so the wait is
   // this component's to show.
@@ -498,7 +505,8 @@
 {/snippet}
 
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && !blocked && close()} />
+<!-- The confirmation is stacked above the panel too: its Escape closes it, not both. -->
+<svelte:window onkeydown={(e) => e.key === 'Escape' && !blocked && !confirmRemoveOpen && close()} />
 
 <!-- Fullscreen job panel (like the swipe deck): a centered column with a fixed
      header + pill tabs, a scrolling tab body, and a pinned View-job footer. It covers
@@ -697,7 +705,7 @@
 
           <div class="flex flex-col gap-1 text-sm">
             <span class="font-medium">{s.notes}</span>
-            <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} label={s.notes} />
+            <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} label={s.notes} showSaveState />
           </div>
         </div>
       {:else if tab === 'auto_apply'}
@@ -1129,8 +1137,8 @@
       <Button
         variant="ghost"
         size="sm"
-        onclick={onremove}
-        class="gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+        onclick={() => (confirmRemoveOpen = true)}
+        class="gap-1.5 text-destructive-strong hover:bg-destructive/10 hover:text-destructive-strong"
       >
         <Trash2 class="size-4" />
         {s.removeFromBoard}
@@ -1138,3 +1146,15 @@
     </div>
   </div>
 </div>
+
+<!-- Outside the panel's root on purpose: the panel's focus trap handles Tab on its own
+     subtree, and the native modal dialog already traps focus by itself. -->
+<ConfirmDialog
+  bind:open={confirmRemoveOpen}
+  title={format(s.removeDialogTitle, { job: jobLabel })}
+  description={s.removeDialogDescription}
+  confirmLabel={s.removeConfirm}
+  cancelLabel={s.removeCancel}
+  variant="destructive"
+  onConfirm={onremove}
+/>

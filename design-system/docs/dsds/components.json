@@ -16,6 +16,7 @@
           "default": "secondary",
           "values": [
             "primary",
+            "cta",
             "secondary",
             "outline",
             "ghost",

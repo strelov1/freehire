@@ -4,6 +4,7 @@
    * form, and its achievements collapsed behind a count by default — expanding is local,
    * in-place state, never a route change (specs/experience-bank).
    */
+  import { tick } from 'svelte';
   import { ChevronRight, Trash2, Pencil } from '@lucide/svelte';
   import { Button, Chip, EntityLogo, FormField, Input } from '#lib/ui/index.js';
   import CompanyPicker from '#lib/components/CompanyPicker.svelte';
@@ -100,6 +101,21 @@
     empEnd = employment.end;
     empCurrent = employment.current ?? false;
     isEditing = true;
+    void focusIn('input, textarea');
+  }
+
+  let cardEl = $state<HTMLDivElement>();
+
+  // The form replaces the header's buttons and the header replaces the form, so the
+  // focused element leaves the page both ways: focus follows it in, and back to Edit.
+  async function focusIn(selector: string) {
+    await tick();
+    cardEl?.querySelector<HTMLElement>(`header ${selector}`)?.focus();
+  }
+
+  function closeEdit() {
+    isEditing = false;
+    void focusIn('[data-row-action="edit"]');
   }
 
   function parseStack(raw: string): string[] | undefined {
@@ -129,13 +145,11 @@
       body.end = empCurrent ? undefined : empEnd;
       body.current = empCurrent;
     }
-    if (await onSaveEmployment(employment, body)) {
-      isEditing = false;
-    }
+    if (await onSaveEmployment(employment, body)) closeEdit();
   }
 </script>
 
-<div class="flex flex-col gap-2">
+<div bind:this={cardEl} data-employment-id={employment.id} class="flex flex-col gap-2">
   <section class="flex gap-3">
     {#if employment.kind === 'job' && !isEditing}
       <EntityLogo
@@ -213,15 +227,15 @@
             </FormField>
             <div class="flex gap-2">
               <Button size="sm" disabled={busy} onclick={saveEdit}>Save</Button>
-              <Button size="sm" variant="ghost" onclick={() => (isEditing = false)}>Cancel</Button>
+              <Button size="sm" variant="ghost" onclick={closeEdit}>Cancel</Button>
             </div>
           </div>
         {:else}
-          <h3 class="w-full text-base font-semibold text-foreground">
+          <h3 data-row-heading tabindex="-1" class="w-full text-base font-semibold text-foreground focus:outline-none">
             {placeLabel}
           </h3>
           <div class="ml-auto flex gap-1">
-            <Button size="sm" variant="ghost" onclick={startEdit}>
+            <Button size="sm" variant="ghost" data-row-action="edit" onclick={startEdit}>
               <Pencil class="size-3.5" />
               Edit
             </Button>

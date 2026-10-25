@@ -31,11 +31,18 @@
   // Neutral drop-target frame — overrides svelte-dnd-action's default yellow
   // outline, which clashes with the monochrome palette.
   const dropTargetStyle = { outline: '2px solid var(--ring)', borderRadius: 'var(--radius-md)' };
+
+  // A labelled <section> is a region landmark, so each column is reachable by its name.
+  const titleId = $props.id();
 </script>
 
-<section class="flex w-72 shrink-0 flex-col gap-2 rounded-xl bg-secondary/40 p-2">
+<!-- snap-start: the board's row snaps (JobBoard), so a swipe lands on a column, not between two. -->
+<section
+  aria-labelledby={titleId}
+  class="flex w-72 shrink-0 snap-start flex-col gap-2 rounded-xl bg-secondary/40 p-2"
+>
   <header class="flex items-center justify-between px-1 py-0.5 text-sm font-medium">
-    <span>{label}</span>
+    <h2 id={titleId}>{label}</h2>
     <span class="text-xs tabular-nums text-muted-foreground">{items.length}</span>
   </header>
   <!-- Each column's card list is its own bounded scroll container. svelte-dnd-action

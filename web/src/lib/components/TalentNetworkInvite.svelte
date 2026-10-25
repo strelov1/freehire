@@ -76,14 +76,21 @@
        around it: a wrapper is there whether or not this draws anything, and an empty
        block with a bottom margin is 16px of dead space above every section heading for
        everyone who dismissed this — and for everyone else until the fetch resolves. -->
-  <Card class="mb-4 flex flex-wrap items-center justify-between gap-4 p-5">
-    <div class="flex min-w-0 items-start gap-3">
-      <Radar class="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+  <!-- One row on a phone — the headline, the action and the close — because the shell
+       renders this above the section's own heading: as a wrapped card (description,
+       then the buttons on a line of their own) it cost ~200px of a 780px screen before
+       the page had begun. The description and the secondary View link come back from
+       `sm` up, where there is room for them beside the actions. -->
+  <Card
+    class="mb-4 flex items-center justify-between gap-3 p-3 sm:flex-wrap sm:gap-4 sm:p-5"
+  >
+    <div class="flex min-w-0 items-center gap-3 sm:items-start">
+      <Radar class="size-5 shrink-0 text-muted-foreground sm:mt-0.5" aria-hidden="true" />
       <div class="flex min-w-0 flex-col gap-0.5">
-        <span class="text-sm font-medium text-foreground">
+        <span class="text-sm font-medium leading-snug text-foreground">
           {isMember ? "You're in the Talent Network" : 'Get found without applying'}
         </span>
-        <span class="text-sm text-muted-foreground">
+        <span class="hidden text-sm text-muted-foreground sm:block">
           {#if !isMember}
             <!-- "employer" used to be in this list and no longer is: role titles are
                  published verbatim, so one that names an employer names it. The full
@@ -106,6 +113,7 @@
       {#if isMember && listed && handle}
         <Button
           variant="ghost"
+          class="hidden sm:inline-flex"
           href={resolve('/talent/[handle]', { handle })}
           target="_blank"
           rel="noopener noreferrer"

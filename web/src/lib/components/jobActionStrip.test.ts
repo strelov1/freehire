@@ -158,9 +158,12 @@ describe('the job page call-to-action row', () => {
   });
 
   it('gives the brand fill to tailorCta alone', () => {
-    expect(tailorCta).toContain('variant="primary"');
-    expect(applyCta).not.toContain('primary');
-    expect(autoApplyCta).not.toContain('primary');
+    // `cta` is the framed brand fill: the page's one call to action.
+    expect(tailorCta).toContain('variant="cta"');
+    for (const loud of ['primary', 'variant="cta"']) {
+      expect(applyCta).not.toContain(loud);
+      expect(autoApplyCta).not.toContain(loud);
+    }
   });
 
   it('renders the apply link as an outline button in every state', () => {

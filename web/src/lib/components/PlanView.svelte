@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { buttonVariants } from '#lib/ui/index.js';
   import { resolve } from '$app/paths';
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
@@ -140,8 +141,7 @@
 
   const money = formatMinorUnits;
 
-  $effect(() => {
-    if (!isAuthenticated()) return;
+  function load() {
     status = 'loading';
     Promise.all([api.myPlan(), api.myPlanHistory()])
       .then(([p, h]) => {
@@ -152,6 +152,11 @@
       .catch(() => {
         status = 'error';
       });
+  }
+
+  $effect(() => {
+    if (!isAuthenticated()) return;
+    load();
   });
 
   const fmtDate = (iso: string) =>
@@ -202,7 +207,7 @@
                  annual belongs on a page that can explain it, and sending someone to a payment
                  form without it silently sells them the monthly one. -->
             <a
-              class="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+              class={buttonVariants({ variant: 'cta', size: 'sm' })}
               href={resolve('/pricing')}
               >{plan.plan === 'free' ? s.planStrip.upgrade : s.planStrip.upgradeUltra}</a
             >
@@ -336,7 +341,7 @@
       {#if status === 'loading'}
         <States state="loading" />
       {:else if status === 'error'}
-        <States state="error" message={s.history.loadError} />
+        <States state="error" message={s.history.loadError} onRetry={load} />
       {:else if history.length === 0}
         <States state="empty" message={s.history.empty} />
       {:else}

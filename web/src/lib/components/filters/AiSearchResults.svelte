@@ -85,7 +85,7 @@
             {#if !isAuthenticated()}
               <Button variant="outline" href={signinUrl()}>{s.createAccount}</Button>
             {/if}
-            <Button variant="primary" disabled={overview.found === 0} onclick={onApply}>
+            <Button variant="cta" disabled={overview.found === 0} onclick={onApply}>
               {format(plural(loc, overview.found, s.show), { count: fmt(overview.found) })}
             </Button>
           </div>

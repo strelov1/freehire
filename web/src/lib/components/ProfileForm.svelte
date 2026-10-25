@@ -8,6 +8,7 @@
   import { withSkills } from '#lib/profileSkills.js';
   import type { LocationPreferences, UserProfile } from '#lib/types.js';
   import { Button, ConfirmDialog } from '#lib/ui/index.js';
+  import { announce } from '#lib/announce.svelte.js';
   import HeadshotField from './HeadshotField.svelte';
   import SearchSelect from './facets/SearchSelect.svelte';
   import LocationPreferencesFields from './profile/LocationPreferencesFields.svelte';
@@ -76,6 +77,18 @@
   let dragActive = $state(false);
 
   const canSubmit = $derived(specializations.length > 0 && skills.length > 0);
+
+  // Each message below appears where the action was, which a screen reader never visits on
+  // its own — so each is also spoken the moment it changes. Errors interrupt; notes wait.
+  $effect(() => {
+    if (resumeError) announce(resumeError, 'assertive');
+  });
+  $effect(() => {
+    if (resumeNote) announce(resumeNote);
+  });
+  $effect(() => {
+    if (formError) announce(formError, 'assertive');
+  });
 
   // Derive skills + specialization from a résumé PDF. Before a profile exists, both merge
   // into local fields the same way (a profile needs both up front, so Save persists them

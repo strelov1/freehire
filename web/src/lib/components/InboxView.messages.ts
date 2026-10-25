@@ -60,6 +60,7 @@ export const messages = defineMessages(
     unlinked: 'Unlinked',
     openInGmail: 'Open in Gmail',
     messageBodyTitle: 'Message body',
+    dismissError: 'Dismiss error',
     errors: {
       loadInbox: 'Failed to load the inbox.',
       refresh: 'Refresh failed.',
@@ -130,6 +131,7 @@ export const messages = defineMessages(
       unlinked: 'Отвязано',
       openInGmail: 'Открыть в Gmail',
       messageBodyTitle: 'Текст письма',
+      dismissError: 'Скрыть ошибку',
       errors: {
         loadInbox: 'Не удалось загрузить почту.',
         refresh: 'Не удалось обновить.',
