@@ -391,6 +391,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   feishujobs: 'Feishu Jobs',
   dassault: 'Dassault Systèmes',
   mokahr: 'MokaHR',
+  engage: 'engage',
   peoplesoft: 'PeopleSoft',
   onlyfy: 'onlyfy',
   beesite: 'BeeSite',

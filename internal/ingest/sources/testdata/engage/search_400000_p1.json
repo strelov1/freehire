@@ -1,0 +1,711 @@
+{
+ "result": "success",
+ "totalCount": 17152,
+ "fromCnt": 1,
+ "toCnt": 4,
+ "paginator": {
+  "total": 17152,
+  "hasPages": true,
+  "hasMorePages": true,
+  "onFirstPage": true,
+  "previousPageUrl": null,
+  "nextPageUrl": "https://en-gage.net/user/search/?job=400000&distanceIndex=&p_t=17152&f_t=0&page=2"
+ },
+ "invalid_paging_redirect": false,
+ "searchResult": [
+  {
+   "is_emp_work": false,
+   "is_kb_work": false,
+   "work_id": 6870203,
+   "company_id": 109823,
+   "employment_status": "正社員（無期雇用派遣）",
+   "employment_status_id": "9",
+   "occupation_experience": "1",
+   "other_offices": 167,
+   "is_temporary_staff": true,
+   "work_manage_no": "",
+   "work_kind": 0,
+   "description_of_business": "機械、電気・電子、情報、化学等の分野における技術者、およびＩＴエンジニアの派遣・紹介事業（常用型派遣）\r\n許可番号：派遣［派13-011061］ 紹介[13-ユ-010724]",
+   "company_info_location": "東京都千代田区神田練塀町85　JEBL秋葉原スクエア",
+   "record_way": "",
+   "record_place": "",
+   "company_treatment": "",
+   "feature_id_60080": true,
+   "feature_id_110080": true,
+   "past_days": "4",
+   "publish_start_datetime": "2026-10-22 00:00:00.000",
+   "first_copy": "【成長業界！今ならレア人材】未経験OKのITサポート◆土日祝休／残業ほぼ無／リモート実績・寮制度有",
+   "official_occupation_name": "ITサポート",
+   "occupation_category": "400000",
+   "occupation_detail_category": "405510",
+   "salary_type": "月給",
+   "completely_performance_based": false,
+   "salary_amount": "23万円 ～ 50万円",
+   "salary_note": "※経験や能力を考慮し、当社規定により優遇します\n※残業代全額支給\n\n【各種手当】\n通勤手当、就業手当、地域／住宅手当、役職手当、単身赴任手当\n【選べる給与制度】\n変動型人事制度の選択も可！年2回の希望者面談で決定し、就業先の評価で更に収入アップ♪",
+   "salary_feature": "交通費支給あり",
+   "salary_type_selected": "1",
+   "salary_amount_from": "3000000",
+   "salary_amount_to": "7000000",
+   "salary_amount_from_monthly": "230000",
+   "salary_amount_to_monthly": "500000",
+   "work_trial_period": "<試用期間中の給与（3ヶ月）>\n本採用時と同様です。",
+   "address_1": "長崎県長崎市",
+   "full_remote_office_address": "",
+   "foreign_address": "",
+   "station": "長崎（長崎）",
+   "map_info": {
+    "map_hidden_flg": 0,
+    "latitude": "32.7503334",
+    "longitude": "129.8778888"
+   },
+   "company_name": "スタッフサービス・エンジニアリング",
+   "usage_status": null,
+   "company_url_root_dir": "staffservice-engineering_saiyo",
+   "emp_company_id": "12989",
+   "homepage_url": "http://www.staffservice-engineering.jp/",
+   "official_corporate_name": "株式会社スタッフサービス　エンジニアリング事業本部",
+   "tsr_status": "0",
+   "company_logo_img": "1",
+   "company_logo_width": "337",
+   "company_logo_height": "22",
+   "office_hour_style": "固定時間制",
+   "office_hour": "09:00 ～ 18:00",
+   "work_office_hour": "実働時間：1日当たり最大8時間",
+   "office_hour_feature": "",
+   "joining_premium": true,
+   "is_engage_premium": false,
+   "img_url": "https://image.en-gage.net/image/work_picture/109823/17431609458843vvdr.jpg",
+   "img_url_min": "https://image.en-gage.net/image/work_picture/109823/17431609458843vvdr.jpg",
+   "main_panel_img_url": "https://image.en-gage.net/image/work_picture/109823/17431609458843vvdr.jpg",
+   "main_panel_min_img_url": "https://image.en-gage.net/image/work_picture/109823/17431609458843vvdr.jpg",
+   "main_panel_min_img_url_ex": "https://image.en-gage.net/image/work_picture/109823/17431609458843vvdr.jpg",
+   "main_panel_img_div": "2",
+   "work_picture": [
+    {
+     "url": "https://image.en-gage.net/image/work_picture/109823/17431609458843vvdr.jpg",
+     "text": "これからの時代、事務職だけでやっていくのは、不安だった。だから私は、スタッフサービス・エンジニアリングを選びました。"
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/109823/17431609573355wydu.jpg",
+     "text": "こんなモヤモヤありませんか？「”今”だけを考えたら、事務職でもいいけど、”将来”を考えたら不安・・・。」そんな不安を消したい方は、おすすめ！"
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/109823/17431609725732qlrx.jpg",
+     "text": "プロジェクトが約8万件もあって案件も豊富だし、カスタム研修だから安心！働きやすさとスキルアップできる環境があるから不安も消えたの！"
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/109823/17431609899685qbdg.jpg",
+     "text": "スキルアップをしていけば、バックアップ制度があるため、メーカーの正社員になる支援もしてくれる！"
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/109823/17431549967982stox.jpg",
+     "text": "ご応募から内定まで2週間以内のスピーディーな選考を心がけています。ご入社時期や面接日はご相談に応じます。お気軽にお問い合わせください。"
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/109823/17431550046804fdnx.jpg",
+     "text": "エンゲージ内ではなく、上記の連絡先から選考のご案内をしております。お間違いないようご注意くださいませ。"
+    }
+   ],
+   "work_contents": "◤　お任せするのはシンプルワーク。\nそれでもレア人材になれる理由とは？◢\n\n★成長業界の一員になれるから\n￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣\n今も成長を続け、安定収入も見込めるIT業界。\nだからこそ、お客様に寄り添う『テクニカルサポート』\nエンジニアを支える『エンジニアサポート』といった\n“サポート業務”も、とても貴重な存在です。\n\n★7，000社との取引実績があるから\n￣￣￣￣￣￣￣￣￣￣￣￣￣￣￣\n当社は大手・優良メーカーやIT企業など\n多くの企業様と取引させていただいております。\nプロジェクトの数だと、なんと約8万件！\nあなたの希望に合わせて業務をアサインするので\n取引の数だけ、キャリアを広げる選択肢があります。\n\n――――――\n仕事内容\n――――――\nシステムエンジニアや企業の情報システム部門を\n支える立場として、各種サポート業務をお任せします。\nIT事務、システム運用支援、ヘルプデスクなど\n8万件のプロジェクトの中から希望を踏まえ決定します。\n\n具体的には…\n■資料作成サポート（Excel、Word、Accessなど）\n■データ管理\n■PCの初期設定サポート\n■ホームページ更新、修正\n■備品管理\n※外出のない内勤業務です。\n\n例えば…\n＜ソフトウェア会社＞\nPC入替プロジェクト内の資料作成や文書管理など\n\n＜Web会社＞\nWebサービスの運用支援・ヘルプデスクや\n企画・デザインアシスタント\n\n＜大手自動車メーカー＞\n社内SEチームのサポートとして\nシステムの切替に伴うデータ移行作業\n\n＼＼PC初心者でもデビューできる／／\nお任せするのは資料作成サポートやデータ管理など\nシンプルな業務ばかりです！\n\nはじめはシンプルワークからですが\n「専門性を高め、ITエンジニアになりたい」\n「さまざまなプロジェクトに携わりたい」など\n成長に合わせ、目指すキャリアの実現をサポートします。",
+   "qualification": "未経験OK\n◎社会人経験、業界経験、資格は問いません！\n◎前職の雇用形態、転職回数も一切問いません！\n\n＼次のような方々を歓迎しています！／\n□IT業界の仕事でスキルを身につけたい方\n□ITやWebを通じて誰かの役にたちたい方\n□学校や独学で学んだIT知識を活かしたい方\n\n＼ライフイベントに合わせた働き方も相談可能！／\n当社の営業、キャリアカウンセラーはエンジニア想い。「彼女の転居に合わせて、勤務地を変えたい」「夫婦で一緒に、自動車関連の案件で働きたい」「双子の育児と両立できる働き方を実現したい」…そんな希望を叶えた人たちがたくさんいます。全国各地、年間8万件という膨大な案件を持つ当社だからこそ、その選択肢も豊富です。\n\n生活事情、挑戦したい仕事は、変わっていくもの。当社で変化し続ける環境・社会に向けて準備しましょう！",
+   "feature_id_list": [
+    "10060",
+    "10070",
+    "30010",
+    "60020",
+    "60070",
+    "60080",
+    "70010",
+    "70020",
+    "80020",
+    "90010",
+    "90020",
+    "90030",
+    "100010",
+    "100020",
+    "100030",
+    "100040",
+    "110010",
+    "110020",
+    "110030",
+    "110050",
+    "110080"
+   ],
+   "like_count": 68,
+   "occupation_name": "【成長業界！今ならレア人材】未経験OKのITサポート◆土日祝休／残業ほぼ無／リモート実績・寮制度有",
+   "work_contents_feature_text": "",
+   "qualification_feature_1": "未経験者、既卒・第二新卒、大歓迎！",
+   "qualification_feature_2": "★学歴は一切問いません！",
+   "qualification_feature_3": "",
+   "recruitment_bg_feature_text": "●募集背景：増員に伴う募集です\n●10名以上の採用を予定しています\n●急募のため、内定までの期間は2週間以内を予定しています",
+   "recruitment_bg": "▼2万人を超えるエンジニアが活躍！「100名以上」の積極採用！\n総合技術系アウトソーシング会社として、大手・優良企業などとさまざまな開発プロジェクトを手がけてきた私たち。今後とも多くの企業を支援していくため、ITサポート職として実務を通じてスキルを磨きたい方を育てていきます。",
+   "expected_annual_income": "＜想定年収＞\n300万円 ～ 700万円",
+   "annual_income_sample": "＜年収例＞\n●年収360万円／入社1年目／25歳\n●年収603万円／入社5年目／リーダー、35歳\n●年収709万円／入社10年目／47歳",
+   "salary": "",
+   "work_office_name": {},
+   "work_office_feature_text": "",
+   "work_location": "※スタッフサービス・エンジニアリングの正社員（無期雇用派遣）としてプロジェクト先での勤務となります。\n※最終的な就業先は、希望やスキル、経験を踏まえて決定します。\n\n▼あなたの希望するキャリアを目指せます。\n大手・優良メーカーやIT企業7，000社の取引実績があり、あなたらしい働き方が叶います。キャリアカウンセラーが必要なスキルを見極め、「専門性を高め、ITエンジニアになりたい」「さまざまなプロジェクトに携わりたい」など、目指すキャリアの実現をサポートします。\n在宅勤務・リモートワーク実績・案件もあり",
+   "address_2": {},
+   "access": "長崎本線「長崎」駅よりバス15分",
+   "office_hours": "（所定労働時間8時間00分、休憩60分）\n※勤務時間は就業先により異なります。\n※平均残業時間（休日出勤含む）は「9時間／月」です。（2024年度実績）",
+   "office_hour_convert_feature_text": "",
+   "office_hour_feature_text": "",
+   "holiday_feature_text": "●年間休日：120日以上あり\n●夏季休暇あり\n●年末年始休暇あり",
+   "holiday_feature": "完全週休2日制",
+   "holiday": "＜年間休日125日＞\n■完全週休2日制（土・日）\n■祝日\n■夏季休暇\n■年末年始休暇\n■有給休暇（10～20日）\n■産休・育休（取得率100％）◎2026年3月時点の利用者は219名\n\n※2025年度の有給休暇の平均取得日数は「11日／年」です。\n※夏季・年末年始休暇など、5日以上の連休が取得可能です。\n※就業先により異なる場合があります。",
+   "treatment_feature_text": "●交通費支給あり\n●資格取得支援・手当あり\n●寮・社宅・住宅手当あり\n●U・Iターン支援あり\n●テレワーク・在宅勤務OK\n●雇用保険\n●労災保険\n●厚生年金\n●健康保険",
+   "treatment": "■定期昇給（年1回）\n■社会保険完備\n\n＜手当＆補助＞\n■交通費全額\n■残業手当全額\n■就業手当\n■継続手当（最大1万円※規定あり）\n■地域／住宅手当（最大2万円※規定あり）\n■役職手当\n■単身赴任手当（1万円／単身赴任時に毎月支給※規定あり）\n■転任旅費（実費支給）\n■引越補助\n\n＜制度＞\n■寮・社宅（最寄り駅からの通勤が難しい場合に適用。家賃の20～50％、敷金・礼金は会社負担）\n■育児・介護休業（入社1年未満の社員は除く）\n■定年制度（満60歳※再雇用制度あり）\n■キックオフ（年2回）\n\n＜スキルアップ支援＞\n■資格取得奨励金制度（最大30万円）\n※ITパスポートや基本情報技術者など、約300種類の資格が対象\n■講座受講費・書籍購入費の補助\n■勉強会・講習会（所属組織やユニット単位で実施）\n■通信教育・eラーニング（提携先あり）\n■キャリア自己申告（職種や勤務地など実現したいキャリアを申告できる制度）",
+   "employment_feature_text": "●試用期間あり",
+   "work_trial_period_note": "試用期間の長さ：3ヶ月\n試用期間中の雇用形態、給与は本採用時と同様です。",
+   "left_apply": 3,
+   "work_office_addresses": "長崎県長崎市",
+   "company_info_iframe_url": "https://en-gage.net/recruit/?EngageCompanyID=109823&CompanyID=12989&dispForEs=1",
+   "company_recruit_url": "https://en-gage.net/staffservice-engineering_saiyo",
+   "kuchikomi_html_url": "",
+   "enjapan_company_code": 0,
+   "apply_done": "0",
+   "speedy_response_flg": "0",
+   "publish_grade": 0,
+   "selection_process_registered": true,
+   "selection_process_contents_list": {
+    "1": "書類選考（他社に提出した履歴書でもOKです！）",
+    "2": "Web面接1～2回（原則1回！キャリア相談の場なので、志望動機など事前準備は不要です♪）",
+    "3": "内定！"
+   },
+   "selection_process_contents_last_num": 3,
+   "selection_process_note": "◤ご確認のお願い◢\n \n★応募後は「0120‐938‐709」や「022022jouyou＠rpms.jp（送信用）」よりご連絡させて頂きます。\n★面接予約画面にない日程をご希望の方も気軽にご相談下さい。\n \n \n◤選考について◢\n \n★自分の推しポイントが見つかる！カジュアルなWeb面接♪\n￣V￣￣￣\n \n今後のキャリアを一緒に考えていく1対1の対話型面接。\n私服可・志望動機などの事前準備は不要です！お気軽にご応募下さい。\n \n★オリジナルツール「機会が見える君」でキャリアプランをサポート！\n￣V￣￣￣\n \nスタートのキャリアからステップアップの流れは、なかなかイメージがつきづらいもの。\n私たちは先輩キャリアの実例を紹介しながら、どんな学習をすれば、どんなキャリアを描けるか…\n具体的なキャリアの歩み方をお伝えできるよう「機会が見える君」を活用しています。\n \n★スピーディーな選考！\n￣V￣￣￣\n \nご応募から内定まで最短2日、長くても2週間以内！スピーディーな選考です。\nご応募から1ヶ月以内、もちろんそれ以降の入社も可能！在職中などご入社時期を相談されたい方も大歓迎です♪",
+   "grouping_key": "109823_405510",
+   "regulation_ids": [
+    {
+     "work_id": "6870203",
+     "regulation_id": "10010",
+     "regulation_category": "10"
+    },
+    {
+     "work_id": "6870203",
+     "regulation_id": "20010",
+     "regulation_category": "20"
+    },
+    {
+     "work_id": "6870203",
+     "regulation_id": "20020",
+     "regulation_category": "20"
+    },
+    {
+     "work_id": "6870203",
+     "regulation_id": "30010",
+     "regulation_category": "30"
+    },
+    {
+     "work_id": "6870203",
+     "regulation_id": "40010",
+     "regulation_category": "40"
+    },
+    {
+     "work_id": "6870203",
+     "regulation_id": "50010",
+     "regulation_category": "50"
+    }
+   ]
+  },
+  {
+   "is_emp_work": false,
+   "is_kb_work": false,
+   "work_id": 16313033,
+   "company_id": 748569,
+   "employment_status": "契約社員",
+   "employment_status_id": "2",
+   "occupation_experience": "2",
+   "other_offices": 1,
+   "is_temporary_staff": false,
+   "work_manage_no": "",
+   "work_kind": 0,
+   "description_of_business": "■セールスプロモーション\r\n■エデュケーション\r\n■エンターテインメント\r\n■アウトソーシング\r\n（ツーリズム/コンタクトセンター/ITソリューション/研修サービス/採用代行 等）\r\n\r\n【許可番号】\r\n※プライバシーマーク：10830449\r\n※労働者派遣事業：派13-303310\r\n※有料職業紹介事業：13-ユ-310374\r\n\r\n【提携校】\r\n専門学校マーキュリー情報コミュニケーションカレッジ\r\n\r\n【グループ会社】\r\n株式会社マーキュリーグローバル\r\n株式会社アルヴァスデザイン\r\n成幸日本語学校\r\n国際アカデミー日本語学院 池袋校\r\n国際アカデミー日本語学院 取手校\r\n株式会社Clarisse\r\n株式会社Ezo-Plat\r\n株式会社Yクリエイト\r\n\r\n【関連会社】\r\n株式会社Ring",
+   "company_info_location": "【南関東】\n■東京本社／東京都新宿区西新宿1-26-2\n■横浜採用センター／神奈川県横浜市神奈川区鶴屋町2-23-2\n■大宮採用センター／埼玉県さいたま市大宮区桜木町2-3\n■ビジネスセンター／東京都新宿区百人町1-22-17 \n■羽田空港オフィス／東京都大田区羽田空港3-3-2\n\n【北海道】\n■北海道支店／北海道札幌市中央区北一条西1-6\n■北北海道採用センター／北海道旭川市一条通8-542-4\n\n【東北】\n■東北支店／宮城県仙台市青葉区一番町4-6-1\n■福島採用センター／福島県郡山市駅前2-3-7\n\n【北関東】\n■水戸営業所／茨城県水戸市城南2-9-32 \n■高崎営業所／群馬県高崎市八島町274\n■宇都宮営業所／栃木県宇都宮市大通り4-1-18\n\n【中部】\n■中部支店／愛知県名古屋市西区則武新町3-1-17\n■静岡支店／静岡県静岡市葵区御幸町5-9\n■北陸支店／石川県金沢市此花町7-8\n■浜松営業所／静岡県浜松市中央区鍛冶町140-4\n■新潟営業所／新潟県新潟市中央区万代1-1-1\n■長野営業所／長野県長野市南石堂町1293\n■富山営業所／富山県富山市桜橋通り3-1\n■福井営業所／福井県福井市大手3-1-13\n\n【近畿】\n■大阪支店／大阪府大阪市北区梅田1-1-3\n■京都採用センター／京都府京都市下京区烏丸通仏光寺下ル大政所町680-1\n■なんば採用センター／大阪府大阪市中央区灘波5-1-60\n\n【中国】\n■中国支店／広島県広島市南区松原町2-62\n■岡山営業所／岡山県岡山市北区下石井1-2-1\n■鳥取営業所／鳥取県米子市末広町311\n\n【四国】\n■愛媛営業所／愛媛県松山市千舟町4-4-3\n■香川営業所／香川県高松市丸の内4-4\n■徳島営業所／徳島県徳島市東船場町1-6 \n\n【九州・沖縄】\n■九州支店／福岡県福岡市中央区天神1-1-1\n■沖縄支店／沖縄県浦添市城間1-32-7\n■熊本営業所／熊本県熊本市中央区下通1-3-8\n■宮崎営業所／宮崎県宮崎市橘通東4-1-4",
+   "record_way": "",
+   "record_place": "",
+   "company_treatment": "",
+   "feature_id_60080": true,
+   "feature_id_110080": false,
+   "past_days": "5",
+   "publish_start_datetime": "2026-10-21 00:00:00.000",
+   "first_copy": "【石川県金沢市】◇システムエンジニア◇テレワークOK！/hkse001g",
+   "official_occupation_name": "システムエンジニア",
+   "occupation_category": "400000",
+   "occupation_detail_category": "401015",
+   "salary_type": "時給",
+   "completely_performance_based": false,
+   "salary_amount": "1,750円 ～ 2,200円",
+   "salary_note": "※能力やスキルを考慮の上、当社規程により決定します",
+   "salary_feature": "交通費支給あり",
+   "salary_type_selected": "4",
+   "salary_amount_from": "1750",
+   "salary_amount_to": "2200",
+   "salary_amount_from_monthly": null,
+   "salary_amount_to_monthly": null,
+   "work_trial_period": "<試用期間中の給与（3ヶ月）>\n本採用時と同様です。",
+   "address_1": "石川県金沢市",
+   "full_remote_office_address": "",
+   "foreign_address": "",
+   "station": "金沢駅",
+   "map_info": {
+    "map_hidden_flg": 1
+   },
+   "company_name": "株式会社マーキュリー　セールスプロモーション事業",
+   "usage_status": null,
+   "company_url_root_dir": "mercury-group_career",
+   "emp_company_id": "93241",
+   "homepage_url": "https://mercury-group.co.jp/",
+   "official_corporate_name": "株式会社マーキュリー",
+   "tsr_status": "1",
+   "company_logo_img": "2",
+   "company_logo_width": "387",
+   "company_logo_height": "347",
+   "office_hour_style": "",
+   "office_hour": "",
+   "office_hour_feature": "夜勤・深夜・早朝（22時～7時）",
+   "joining_premium": true,
+   "is_engage_premium": false,
+   "img_url": "https://image.en-gage.net/image/work_picture/748569/17721963967948ppql.jpg",
+   "img_url_min": "https://image.en-gage.net/image/work_picture/748569/17721963967948ppql.jpg",
+   "main_panel_img_url": "https://image.en-gage.net/image/work_picture/748569/17721963967948ppql.jpg",
+   "main_panel_min_img_url": "https://image.en-gage.net/image/work_picture/748569/17721963967948ppql.jpg",
+   "main_panel_min_img_url_ex": "https://image.en-gage.net/image/work_picture/748569/17721963967948ppql.jpg",
+   "main_panel_img_div": "4",
+   "work_picture": [
+    {
+     "url": "https://image.en-gage.net/image/work_picture/748569/17721963967948ppql.jpg",
+     "text": "経験者のエンジニア募集になります。官公庁・自治体向け案件も多数。社会貢献を実感しながら、安定した環境でスキルアップが叶う職場です。"
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/748569/17721963969522rvhh.jpg",
+     "text": "JavaやC#など幅広い開発経験を積み、チームで協力しながらキャリア形成できる成長環境があります。あなたからのご応募をお待ちしています！"
+    }
+   ],
+   "work_contents": "システム開発に関わる幅広い業務をお任せします。\n\n具体的には、\n・システム設計・開発\n顧客や社内の要望をもとに、業務効率化や新サービス実現のためのシステムを企画・設計・開発。要件定義から詳細設計まで、スキルに応じて担当いただきます。\n\n・プログラミング実装\n使用言語：Java／JavaScript／C／C#\nWebアプリ、業務システム、機器制御ソフトなど多様な案件を担当。新規開発に加え、既存システムの改修や機能追加も行います。\n\n・チーム連携・課題解決\nプロジェクトマネージャーや他エンジニアと連携し、仕様確認や不具合調整、課題解決を推進します。\n\n・営業同行・顧客対応（必要に応じて）\n技術的な観点から営業をサポートし、導入後の運用支援にも携わります。\n\n☆業務に慣れてきたらテレワークも可能です！\n\n【お仕事のポイント】\n◆一流企業でのスタート\n　L安定した環境で経験を積みながら、自信をもって成長できるポジションです。\n\n◆自分の作ったものが形になる喜び\n　L開発したシステムやサービスが実際に動き、ユーザーの役に立つ達成感を味わえます。\n\n◆国や地域に貢献できる\n　L官公庁・自治体向けの開発に携わり、社会的に意義のある仕事を実感できます。\n\n◆経験を活かしてキャリアアップ\n　Lプログラミングスキルを活かし、さらに成長できる技術力を習得できます。\n\n◆スキルがあなたの資産に\n　L身につけた知識と経験は、将来のキャリアでも大きな強みとなります。\n\n【自由で働きやすい環境】\n1. 地元メンバー中心で安心\n　L北陸出身スタッフ中心で、共通の話題も多く馴染みやすい環境です。\n\n2. チームでプロジェクトを推進\n　L複数のメンバーと協力しながら、プロジェクトを進めるやりがいがあります。\n\n3. 自由なお昼休憩\n　L自分のペースで、リラックスできる時間を調整できます。",
+   "qualification": "【必須条件】\nシステム開発の経験がある方（業務経験・個人開発・学習経験いずれも可）\n\n【歓迎条件】 システム開発におけるさまざまなご経験を歓迎いたします。以下は一例です。\n◆開発言語 Java、JavaScript、.Net（VB、C#、ASP）、C、C++、PHP、Python、Perl、Rubyなど\n◆データベース Oracle、SQL Server、PostgreSQL、SQLite、MariaDBなど\n◆開発フレームワーク Struts、Spring、StaveWare、Seaser2、TERASOLUNAなど\n◆クラウド環境 Microsoft Azure、AWSなど\n◆ソリューション＆サービス Zabbix、Salesforce、Power Apps、UI/UXなど ※特化した業務知識を保有している方も大歓迎です。",
+   "feature_id_list": [
+    "10070",
+    "20010",
+    "20020",
+    "30010",
+    "30020",
+    "40100",
+    "60020",
+    "60080",
+    "70020",
+    "80020",
+    "100010",
+    "100020",
+    "100030",
+    "100040",
+    "110010",
+    "110020"
+   ],
+   "like_count": 2,
+   "occupation_name": "【石川県金沢市】◇システムエンジニア◇テレワークOK！/hkse001g",
+   "work_contents_feature_text": "",
+   "qualification_feature_1": "既卒・第二新卒、大歓迎！",
+   "qualification_feature_2": "★経験者のみの募集になります\n★学歴は一切問いません！",
+   "qualification_feature_3": "",
+   "recruitment_bg_feature_text": "●募集背景：増員に伴う募集です\n●急募のため、内定までの期間は2週間以内を予定しています",
+   "recruitment_bg": "＼業績好調につき、新メンバー募集！／\n家電量販店や携帯ショップなどでの販売に特化した、セールスプロモーション事業を展開している当社。これまで多くの店舗で、お客様と商品との“出会い”をサポートしてきました。\n\n私たちの強みは、現場での丁寧な接客はもちろん、売場づくりやイベント提案など、\n店舗ごとに合わせたご提案ができること。お客様にとっても、お取引先にとっても、「頼れる存在」を目指して取り組んでいます。\n\nたくさんの現場で、より多くの方に喜んでもらえるよう、今回新たな仲間をお迎えすることになりました。\n\n「人と話すのが好き」「誰かの役に立てる仕事がしたい」\nそんな気持ちをお持ちの方、ぜひ一度お話ししてみませんか？",
+   "expected_annual_income": "",
+   "annual_income_sample": "",
+   "salary": "",
+   "work_office_name": "大手ITエンジニア企業　北陸支店",
+   "work_office_feature_text": "★駅から徒歩5分以内です\n★転勤はありません",
+   "work_location": "",
+   "address_2": "広岡1丁目 1-35 金沢第二ビル",
+   "access": "金沢駅から徒歩約3分",
+   "office_hours": "夜勤を含む変形労働時間制です。\n（想定労働時間40時間/月）\n\n【シフト例】\n・9：00～18：00\n・10：00～19：00\n・12：00～21：00\n\n※勤務時間は、プロジェクト先のスケジュールに準じます。\n※休日は案件により異なり、土日祝休みの案件もあります。",
+   "office_hour_convert_feature_text": "",
+   "office_hour_feature_text": "＜勤務時間の特徴＞\n●夜勤・深夜・早朝のお仕事です（夜22時～朝7時）",
+   "holiday_feature_text": "",
+   "holiday_feature": "週休2日制",
+   "holiday": "■交通費別途支給（月5万円まで）\n■雇用保険\n■厚生年金\n■労災保険\n■健康保険\n（※上記社会保険は規定を満たした場合、ご加入いただきます）\n■不動産福利厚生サービス（仲介手数料半額）\n■社員登用制度あり",
+   "treatment_feature_text": "●交通費支給あり\n●資格取得支援・手当あり\n●正社員登用制度あり\n●雇用保険\n●労災保険\n●厚生年金\n●健康保険",
+   "treatment": "■昇給年2回（4月・10月）\n■賞与年2回（8月・1月）\n■決算賞与年1回 ※業績による\n■残業手当（超過分）\n■出張手当\n■職種手当\n■交通費（月5万円まで）\n■社会保険完備（雇用・労災・健康・厚生年金）\n■資格取得支援制度\n■確定拠出型年金（日本版401K）\n■マーキュリー健康保険組合\n■慶弔見舞金\n■マーキュリー福利厚生会（結婚お祝い金・出産お祝い金）\n■インフルエンザ予防接種補助\n■専任ファイナンシャルプランナー\n■福利厚生サービス「WELBOX」\n■不動産福利厚生サービス（仲介手数料半額）\n■育児に伴う時短勤務（3歳未満）\n■社内FA（社内転職）制度\n■Comeback制度（円満退職者の再雇用）\n■リファラル制度\n\n◎2024年3月「健康経営優良法人2024（大規模法人部門）」に認定！\n  健康相談窓口やメンタルヘルスチェックなど、各種サポートをしています。",
+   "employment_feature_text": "●正社員登用あり\n●試用期間あり",
+   "work_trial_period_note": "試用期間の長さ：3ヶ月\n試用期間中の雇用形態、給与は本採用時と同様です。",
+   "left_apply": 3,
+   "work_office_addresses": "石川県金沢市広岡1丁目 1-35 金沢第二ビル",
+   "company_info_iframe_url": "https://en-gage.net/recruit/?EngageCompanyID=748569&CompanyID=93241&dispForEs=1",
+   "company_recruit_url": "",
+   "kuchikomi_html_url": "api/company_top_html/EN2010259208/",
+   "enjapan_company_code": "EN2010259208",
+   "apply_done": "0",
+   "speedy_response_flg": "0",
+   "publish_grade": 0,
+   "selection_process_registered": true,
+   "selection_process_contents_list": {
+    "1": "Webレジュメによる書類選考\n★求人サイト登録時の情報（Webレジュメ）で選考します。",
+    "2": "面接（1～2回）",
+    "3": "内定"
+   },
+   "selection_process_contents_last_num": 3,
+   "selection_process_note": "【面接地】\n株式会社マーキュリーグローバル　北陸支店\n（石川県金沢市此花町7-8 カーニープレイス金沢第二ビル7階）\n\n※土日祝／オンライン面接も対応しております。お気軽にご相談ください。\n\nmercury_kb",
+   "grouping_key": "748569_401015",
+   "regulation_ids": [
+    {
+     "work_id": "16313033",
+     "regulation_id": "10010",
+     "regulation_category": "10"
+    },
+    {
+     "work_id": "16313033",
+     "regulation_id": "20010",
+     "regulation_category": "20"
+    },
+    {
+     "work_id": "16313033",
+     "regulation_id": "20020",
+     "regulation_category": "20"
+    },
+    {
+     "work_id": "16313033",
+     "regulation_id": "30010",
+     "regulation_category": "30"
+    },
+    {
+     "work_id": "16313033",
+     "regulation_id": "40010",
+     "regulation_category": "40"
+    },
+    {
+     "work_id": "16313033",
+     "regulation_id": "50010",
+     "regulation_category": "50"
+    },
+    {
+     "work_id": "16313033",
+     "regulation_id": "50020",
+     "regulation_category": "50"
+    }
+   ]
+  },
+  {
+   "is_emp_work": false,
+   "is_kb_work": false,
+   "work_id": 18443386,
+   "company_id": 791940,
+   "employment_status": "正社員",
+   "employment_status_id": "1",
+   "occupation_experience": "1",
+   "other_offices": 2,
+   "is_temporary_staff": false,
+   "work_manage_no": "",
+   "work_kind": 0,
+   "description_of_business": "クラウドアプリケーションの開発提供\r\n音声及び自然言語における人工知能の研究開発\r\n開発支援事業\r\n\r\n◆ーー自社プロダクトについてーー◆\r\nコンタクトセンター、コールセンターの他、\r\n様々な企業で活用される「Comdesk」は特許取得済の自社プロダクトです。\r\nリモートワークやフリーデスク環境でも、\r\nPCやスマホがあればどこでも使えるアプリのクラウドオフィス電話を開発・提供！\r\nAI技術も積極的に取り入れており、業績改善・業務効率をアップさせるサポートをしています。\r\n導入社数は900社以上！ユーザー数20000人超えの業界でも注目されるサービスです。",
+   "company_info_location": "東京都渋谷区東3-9-19VORT恵比寿maxim3F",
+   "record_way": "",
+   "record_place": "",
+   "company_treatment": "",
+   "feature_id_60080": false,
+   "feature_id_110080": false,
+   "past_days": "13",
+   "publish_start_datetime": "2026-10-13 00:00:00.000",
+   "first_copy": "✨未経験でもOK✨ITエンジニアへの第一歩をここから/研修制度充実/年間休日125日",
+   "official_occupation_name": "ITエンジニア",
+   "occupation_category": "400000",
+   "occupation_detail_category": "401015",
+   "salary_type": "月給",
+   "completely_performance_based": false,
+   "salary_amount": "26万円 ～ 50万円",
+   "salary_note": "※案件参画後はプロジェクト手当が支給されます。\r\n※想定年収には各種手当が含まれます。\r\n\r\n〈年収例〉\r\n1年目：年収400万円\r\n2年目：年収500万円\r\n3年目：年収600万円\r\n\r\n基本給は半年ごとの評価面談を通して変動します。\r\n昨年度実績では平均2万円の昇給を達成❗️頑張った分がきちんとお給料に反映される職場です✨",
+   "salary_feature": "交通費支給あり",
+   "salary_type_selected": "1",
+   "salary_amount_from": "4000000",
+   "salary_amount_to": "7000000",
+   "salary_amount_from_monthly": "260000",
+   "salary_amount_to_monthly": "500000",
+   "work_deemed_overtime": "上記にはみなし残業代（月20時間分、3万4575円～6万6490円）を含みます。みなし残業時間を超過した分は全額支給します。",
+   "work_trial_period": "<試用期間中の給与（3ヶ月）>\n月給：24万1000円～30万円\n\n上記にはみなし残業代（月20時間分、3万2048円～3万9894円）を含みます。みなし残業時間を超過した分は全額支給します。",
+   "address_1": "フルリモート（完全在宅）",
+   "full_remote_office_address": "東京都渋谷区東3-9-19VORT恵比寿maxim3F",
+   "foreign_address": "",
+   "station": "",
+   "map_info": {
+    "map_hidden_flg": 1
+   },
+   "company_name": "株式会社Widsley",
+   "usage_status": null,
+   "company_url_root_dir": "widsley_career",
+   "emp_company_id": "0",
+   "homepage_url": "https://widsley.com",
+   "official_corporate_name": "株式会社Ｗｉｄｓｌｅｙ",
+   "tsr_status": "0",
+   "company_logo_img": "4",
+   "company_logo_width": "800",
+   "company_logo_height": "177",
+   "office_hour_style": "固定時間制",
+   "office_hour": "10:00 ～ 19:00",
+   "work_office_hour": "実働時間：1日当たり最大8時間",
+   "office_hour_feature": "完全土日祝休み",
+   "joining_premium": true,
+   "is_engage_premium": false,
+   "img_url": "https://image.en-gage.net/image/work_picture/791940/17907628448246kfaz.jpg",
+   "img_url_min": "https://image.en-gage.net/image/work_picture/791940/17907628448246kfaz.jpg",
+   "main_panel_img_url": "https://image.en-gage.net/image/work_picture/791940/17907628448246kfaz.jpg",
+   "main_panel_min_img_url": "https://image.en-gage.net/image/work_picture/791940/17907628448246kfaz.jpg",
+   "main_panel_min_img_url_ex": "https://image.en-gage.net/image/work_picture/791940/17907628448246kfaz.jpg",
+   "main_panel_img_div": "2",
+   "work_picture": [
+    {
+     "url": "https://image.en-gage.net/image/work_picture/791940/17907628448246kfaz.jpg",
+     "text": ""
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/791940/17852100926360vaxz.jpg",
+     "text": "オフィスは恵比寿駅から徒歩5分♪ランチや業後もオシャレなお店や美味しいご飯屋さんには困りません！"
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/791940/17852101105940sgmm.jpg",
+     "text": "平均年齢は28歳　同年代が多い職場なのですぐに仲間ができますよ♪"
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/791940/17852100796516vozk.jpg",
+     "text": "研修は同期1～6名と一緒に行います 未経験の方ばかりなので切磋琢磨しながら頑張れます！"
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/791940/17896349307936wnwo.jpg",
+     "text": "自前のパソコンが無くても大丈夫！会社支給のパソコンがあるのでご安心ください"
+    },
+    {
+     "url": "https://image.en-gage.net/image/work_picture/791940/17858920341287ihyu.jpg",
+     "text": "オフィスのマスコット♪"
+    }
+   ],
+   "work_contents": "✅未経験だけどIT業界に挑戦したい方\r\n✅将来はリモートワークをしたい方\r\n✅頑張りに応じてお給料を上げていきたい方\r\nそんな方に見ていただきたい求人です❗️\r\n\r\n💡入社後は研修からスタート！\r\n1-2ヵ月の集中研修でIT・Web業界の基礎となる知識を学び、世界的にも通用する資格を取得します。\r\n研修後は実務で経験を積みながら、チームで業務の相談や資格取得の学びを実施しており、AI勉強会やeラーニングと合わせて継続的にスキルアップできる環境を用意しています。\r\n\r\n【お仕事内容】\r\n◎システムの動作チェック\r\n◎開発サポート業務\r\n◎Webシステムの品質保証\r\n\r\nまずは上記のような業務からスタート！\r\n実際の業務の前にしっかり研修を行うので、未経験者でも安心して実務に入れます。\r\n少しずつIT現場に慣れていただきながら、自分に合ったキャリアパスを選べますよ✨\r\n\r\n\r\n【キャリアパスの一例】\r\n・AWSエンジニアとして市場価値の高いサーバエンジニアへ進むコース\r\n・ソフトウェアテストエンジニアとして設計・PMと極めていくコース\r\n・Webプログラマーとしてアプリケーション開発へ進むコース\r\nなどなど、皆さんの「やりたい」を尊重してキャリアを考えていけます。\r\n\r\nプロジェクトを通して経験を積み、\r\n現在は自社プロダクトのエンジニアとして活躍されている先輩も居ます❗️\r\n未経験からでもエンジニアとして成長できるノウハウがあるので、やる気がある方ならどなたでも歓迎です🙌",
+   "qualification": "◇例外事由 3号 イ 長期勤続によるキャリア形成を図るため、35歳以下の人材を募集します",
+   "feature_id_list": [
+    "30010",
+    "40020",
+    "60070",
+    "70010",
+    "80020",
+    "90010",
+    "90030",
+    "100010",
+    "100020",
+    "100030",
+    "100040",
+    "110010",
+    "110020",
+    "110030",
+    "110080",
+    "110090"
+   ],
+   "like_count": 28,
+   "occupation_name": "✨未経験でもOK✨ITエンジニアへの第一歩をここから/研修制度充実/年間休日125日",
+   "work_contents_feature_text": "",
+   "qualification_feature_1": "未経験者、大歓迎！",
+   "qualification_feature_2": "",
+   "qualification_feature_3": "",
+   "recruitment_bg_feature_text": "●募集背景：増員に伴う募集です\n●10名以上の採用を予定しています",
+   "recruitment_bg": "",
+   "expected_annual_income": "＜想定年収＞\n400万円 ～ 700万円",
+   "annual_income_sample": "",
+   "salary": "",
+   "work_office_name": {},
+   "work_office_feature_text": "",
+   "work_location": "※転居を伴う異動はありません\r\n※案件参画後は勤務地が変わる可能性がございます\r\n※案件先によって出社となる場合がございます\r\n※研修は東京本社にて実施いたします",
+   "address_2": "",
+   "access": "",
+   "office_hours": "",
+   "office_hour_convert_feature_text": "",
+   "office_hour_feature_text": "",
+   "holiday_feature_text": "●完全土日祝休みです\n●年間休日：120日以上あり\n●年末年始休暇あり",
+   "holiday_feature": "完全週休2日制",
+   "holiday": "◇ 年間休日120日以上\r\n◇ 年末年始休暇\r\n◇GW休暇\r\n◇有給休暇\r\n◇産前産後休暇\r\n◇育児休暇\r\n◇慶弔休暇\r\n◇特別休暇（配偶者やお子様の誕生日に取得可）",
+   "treatment_feature_text": "●交通費支給あり\n●資格取得支援・手当あり\n●寮・社宅・住宅手当あり\n●テレワーク・在宅勤務OK\n●服装自由\n●雇用保険\n●労災保険\n●厚生年金\n●健康保険",
+   "treatment": "◇ 雇用保険\r\n◇ 厚生年金\r\n◇ 労災保険\r\n◇ 健康保険\r\n◇ 交通費支給あり\r\n◇ 資格取得支援・手当あり\r\n◇ 服装自由\r\n◇ パートナー/家族バースデー制度\r\n◇ 住宅手当あり（社内規定あり）",
+   "employment_feature_text": "●試用期間あり",
+   "work_trial_period_note": "試用期間の長さ：3ヶ月\n試用期間中の雇用形態：中途採用（契約）\n試用期間中の給与：月給 24万1000円～30万円\n\n上記にはみなし残業代（月20時間分、3万2048円～3万9894円）を含みます。みなし残業時間を超過した分は全額支給します。",
+   "left_apply": 3,
+   "work_office_addresses": "東京都渋谷区東3-9-19VORT恵比寿maxim3F",
+   "company_info_iframe_url": "https://en-gage.net/recruit/?EngageCompanyID=791940&CompanyID=0&dispForEs=1",
+   "company_recruit_url": "",
+   "kuchikomi_html_url": "",
+   "enjapan_company_code": 0,
+   "apply_done": "0",
+   "speedy_response_flg": "1",
+   "publish_grade": 0,
+   "selection_process_registered": true,
+   "selection_process_contents_list": {
+    "1": "一次面接\r\nまずはこれまでのご経歴や頑張りなど、皆さんのことを教えてください。気になることがあればなんでも聞いてくださいね！\r\nご希望の方は面接の前に【カジュアル面談】も受け付けております。",
+    "2": "最終面接\r\n今後の展望や、なりたい姿などぜひ「将来の夢」をお話しください。弊社でそれが叶えられるかどうか、皆さんの自己実現のお役に立てるかどうか忌憚なくお話しいたします。",
+    "3": "適性検査"
+   },
+   "selection_process_contents_last_num": 3,
+   "selection_process_note": "",
+   "grouping_key": "791940_401015",
+   "regulation_ids": [
+    {
+     "work_id": "18443386",
+     "regulation_id": "10010",
+     "regulation_category": "10"
+    },
+    {
+     "work_id": "18443386",
+     "regulation_id": "20010",
+     "regulation_category": "20"
+    },
+    {
+     "work_id": "18443386",
+     "regulation_id": "20020",
+     "regulation_category": "20"
+    },
+    {
+     "work_id": "18443386",
+     "regulation_id": "30010",
+     "regulation_category": "30"
+    },
+    {
+     "work_id": "18443386",
+     "regulation_id": "40010",
+     "regulation_category": "40"
+    },
+    {
+     "work_id": "18443386",
+     "regulation_id": "50010",
+     "regulation_category": "50"
+    },
+    {
+     "work_id": "18443386",
+     "regulation_id": "50020",
+     "regulation_category": "50"
+    }
+   ]
+  },
+  {
+   "is_kb_work": true,
+   "is_emp_work": false,
+   "company_id": 0,
+   "is_active": true,
+   "work_id": "l7e872f515b4524a7a6aa84f22722c98e",
+   "employment_status": "正社員",
+   "occupation_experience": 1,
+   "feature_id_60080": 1,
+   "company_name": "株式会社トライアンフ 東京オフィス",
+   "work_kind": 0,
+   "work_office_name": "",
+   "publish_start_datetime": "2026-10-24T12:52:54+09:00",
+   "past_days": 1,
+   "first_copy": "外回りや人と話すことが好きな方大歓迎!経験不問 若手活躍中 カスタマーエンジニア/PCの保守・点検",
+   "occupation_name": "システムエンジニア（Web・オープン系）",
+   "official_occupation_name": "システムエンジニア（Web・オープン系）",
+   "img_url": "https://kyujinbox.k-img.com/images/crawl/37057/l7e872f515b4524a7a6aa84f22722c98e/1/bacd01e88575de192eff06f621f9ffad.jpeg",
+   "salary_disp": "月給24万5,000円～",
+   "salary_type": "月給",
+   "minimum_salary": 245000,
+   "maximum_salary": 0,
+   "salary_feature": "交通費支給あり",
+   "seo_area_1st_layer": "東京都",
+   "seo_area_2nd_layer": "墨田区",
+   "seo_area_3rd_layer": "",
+   "area_disp": "東京都墨田区",
+   "lp_area_disp": "東京都墨田区 両国駅",
+   "station": "両国駅",
+   "feature_id_110080": 0,
+   "is_temporary_staff": 0,
+   "office_hour_feature_text": "固定時間制\n9:00～18:00(実働8時間・休憩あり)\n\n※業務の都合により、\n　勤務時間が変更になることもあります\n\n【勤務時間の変更例】\n10:00～19:00\n15:00～23:00\nなど\n\n★残業は、月平均20時間以下",
+   "work_contents": "プログラミング言語の知識も一切不要。\n「何もわからない」からスタート！\nIT業界に強くなりませんか？\n＜未経験歓迎！今からでも遅くない！＞\n需要拡大中！安定性の高いIT業界で\n新しい一歩を踏み出しませんか♪\n\n＼✨「外回り」や「人と話すこと」は好き。\nでもノルマには疲れた…という20代へ✨／\n\n「毎月の数字に追われるのは正直しんどい」\n「でも、ずっと社内にいるより、\n　外に出て人と関わる仕事がしたい」\n～そんな思いで転職活動をしているあなたへ～\n\n\nITと聞くと「難しそう…」と思うかもしれませんが、\n一番大切なのはITの知識よりも\n「お客様先での気持ちの良いコミュニケーション」です◎\nお客様先で作業を進めるからこそ、\nあなたのこれまでの経験が最大の武器になります！\n（★商品の売り込みやノルマは一切ありません）\n\nこれまでのコミュニケーション力を活かして、\nトライアンフで新しいスタートを切りませんか？\n\n\n\n⭐️ 直接「ありがとう！」と言ってもらえるやりがい\n自分が研修で身につけた技術を使って、\nお客様先を訪問し、IT環境を快適に整える。\nそれがこの仕事のミッションです！\n作業後、お客様からの感謝を一番近くで、\n直接受け取ることができる。\n誰かの役に立っていることを肌で感じられるお仕事です\n\n\n\n⭐️外回りの楽しさはそのまま！\n1日に回るお客様先は1〜2件程度。\n「今日はこのエリアだな」と、\n毎日違う場所で新鮮な気持ちで働ける、\n外回りならではのおもしろさもしっかり味わえます。\n\n\n\n⭐️ 知識ゼロでも安心のサポート体制\n「特別な資格もないし、プログラミングも分からない…」\nと立ち止まる必要はありません。\n活躍している先輩も、ほとんどが未経験スタート！\n入社後は約3ヶ月間の丁寧な研修やOJT、\n何でも相談できるメンター制度を用意しているため、\n専門知識はここでじっくり身につけていけば大丈夫です。\n　\n━…━…━…━…━…━…━\n\n　\n【✅️お仕事内容の詳細】\n\nPCや大型モニター、\nPOSレジ、プリンターなどの導入設定や\n保守・点検をお任せします！\n「フィールドエンジニア」や\n「カスタマーエンジニア」\nといわれるお仕事になります♪\n\n◇セットアップ作業(PC、プリンター、サーバー、周辺機器等)\n◇PCの入替作業(撤去、設置、設定)\n◇PC機器の移動、初期設定\n◇POSレジの設置や入替・移行\n◇ネットワーク機器の移動、初期設定\n◇キッティング作業(ソフトのインストールなど)\n◇個人のお客様向けスマートフォンの設定\n\n【✅️お客様は…】\n企業、学校、店舗、商業施設、民間企業、個人など…\nニーズは様々。直接出向きます！\n　\n━…━…━…━…━…━…━\n\n　\n【✅️安心のフォロー体制】\n\n初めは特別なPCスキルも\nプログラミングの知識も必要ありません。\n基礎からしっかり覚えられる\n段階を踏んだ研修を用意しています！\nこれからも需要が拡大していく\nITの知識をここで手に入れましょう♪\n\n▶▶ステップ1（基礎研修）\n社内ルールや作業時の心がけ、\nIT機器の基礎知識を学びます。\n\n▶▶ステップ2（OJT研修）\n先輩社員とともに現場へ向かいます！\n実践を通してお客様との関わり方や\n手順を習得します。\n\n▶▶ステップ3（メンター制度）\n業務の悩みからキャリアの相談まで、\n何でも話しやすい先輩メンターが伴走します。\n新人さんでも、どんどん仕事は任せていきます！\nもちろん、慣れない業務には周囲の先輩が\nすぐフォローに入る体制を整えているのでご安心を。\n\n　　\n【✅️数年先も見据える。キャリアパスもサポート】\nもちろん、現場に出向くスタイルのままでも良いですし\nあなたの希望に応じて、色々な働き方ができます。\n\n■技術特化型：お客様先に常駐し、専門性をより深める\n■マルチスキル型：全国各地の多彩な案件を経験！対応力を高める\n■マネジメント型：プロジェクトマネージャーや管理職への挑戦！\n\n\n【✅️将来的にはこんなこともチャレンジできます】\n◇事務所内で案件の受発注業務\n◇現場でのスタッフへの指示や管理\n◇勤怠管理などの事務業務、\n◇お客様との打合せ\n◇パートナー開拓　など\n\n　\n━…━…━…━…━…━…━",
+   "qualification_feature_list": [
+    60070,
+    60080,
+    60030
+   ],
+   "recruitment_bg": "",
+   "pay_title": "月給245,000円〜\n\n※一律で、地域手当1万5000円支給\n※入社後はスキル・貢献度に応じて\n　給与評価\n\n―――――各種手当―――――\n■残業手当\n■深夜手当\n■住宅手当\n(会社都合で転居を伴う場合のみ:月2万円)\n■通信手当(月5000円)\n■出張手当(規定あり)\n■車両手当(規定あり)\n■専任手当(規定あり)\n――――――――――――――",
+   "pay_data_list": [
+    {
+     "title": "待遇・福利厚生",
+     "content": "◆昇給あり（7月）\n◆決算賞与あり（6月末/業績による)\n※昇給・賞与は決算状況及び個人評価に準ずる\n◆交通費全額支給\n◆奨学金返済補助制度\n(中途入社でも返済中の奨学金があれば利用可)\n◆JASSO代理返還制度\n◆個人型確定拠出年金支援制度（iDeCo）\n◆資格取得支援制度\n※ITパスポートは受験料（最大5回分）＋合格お祝い金支給(取得時に支給)\n◆健康診断\n◆健康増進手当(規定あり)\n◆研修制度あり(eラーニング研修、メンター制度、メーカー研修など)\n◆Happy family Anniversary制度\n※社員を支えているご家族へ\n　日頃の感謝を込めて\n　誕生日に贈り物をします♪\n◆食事補助制度(規定あり)\n◆ベビーシッター制度"
+    },
+    {
+     "title": "加入保険",
+     "content": "健康保険,厚生年金,雇用保険,労災保険"
+    }
+   ],
+   "area_data_list": [
+    {
+     "title": "勤務地",
+     "content": "東京都墨田区両国1-1-5　パートナーズビル3F"
+    },
+    {
+     "title": "交通手段など",
+     "content": "◆JR中央・総武線「両国駅」\n　西口より徒歩約3分\n\n【転勤について】\n案件状況や拠点体制に応じて、\n転勤をお願いする場合があります。\n※会社都合で転勤が発生する場合、\n　住宅手当・引越費用補助を支給"
+    },
+    {
+     "title": "受動喫煙防止措置事項",
+     "content": "敷地内全て禁煙\n※いずれの拠点も社内は全面禁煙"
+    }
+   ],
+   "work_data_list": [
+    {
+     "title": "勤務時間",
+     "content": "固定時間制\n9:00～18:00(実働8時間・休憩あり)\n\n※業務の都合により、\n　勤務時間が変更になることもあります\n\n【勤務時間の変更例】\n10:00～19:00\n15:00～23:00\nなど\n\n★残業は、月平均20時間以下"
+    },
+    {
+     "title": "休日・休暇など",
+     "content": "◆完全週休2日制(土日休み)\n※休日出勤が発生した場合は、\n　当月内で振替休日を取れます\n\n◆年末年始休暇（3日）\n※有給休暇との組み合わせも可能\n◆有給休暇(入社後6ヶ月目から付与)\n※取得率は90%以上！\n　100％を目指しています。（平均10.8日）\n◆慶弔休暇\n◆育休制度\n※男女共に取得者増加中！\n　男性も半年の育休取得実績あり\n\n【年間休日110日】\n今後も休日数の増加を目指します！"
+    }
+   ],
+   "employ_title": "正社員",
+   "employ_data_list": [
+    {
+     "title": "試用期間",
+     "content": "【試用期間】\n期間: 3ヶ月\n試用期間中の給与：本採用時と同じ\n試用期間中の勤務時間：本採用時と同じ"
+    }
+   ],
+   "company_info": {
+    "company_logo_img_url": "",
+    "company_name": "株式会社トライアンフ　東京オフィス",
+    "company_detail_info": [
+     {
+      "title": "事業内容",
+      "content": "コンピュータシステムにおける企画・運用ーその他付随業務等\n\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿\n✨株式会社トライアンフは✨\n￣￣V￣￣￣￣￣￣￣￣￣￣￣￣\n証券会社に勤めていた日向氏が\n2003年に立ち上げた企業です。\n「PC環境のセットアップ事業」が持つ\n将来性やニーズの高さに着目し、\nその専門企業としてビジネスを展開。\n現在では愛知・東京・大阪・静岡・北陸・\n広島・東北・九州・四国・北海道まで拠点を広げ、\n着実な成長を続けています。\n\n　\n年商10億円という目標をクリアした同社が、\n次なるフェーズとして掲げるのは\n「10年で100億円」！\n事業規模の拡大はもちろん、\nそれを支える社内体制の強化にも\n並行して取り組んでいます。\n\nまた、公式HPやSNSを通じて、\n代表のメッセージや社員との対談、\n各拠点の紹介など、\n社内のリアルな雰囲気を積極的に公開中。\n急速に進化を遂げる環境のなかで、\n自分自身も成長していきたい方にとっても、\n大きなチャンスが広がっています！\n\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿\n✨当社YouTube・各種SNS✨\n￣￣V￣￣￣￣￣￣￣￣￣￣￣\n✅YouTube\nhttps://www.youtube.com/@trhyuga\n\n✅Instagram\nhttps://www.instagram.com/triumph_sns/\n\n✅TikTok\nhttps://www.tiktok.com/@masakinto"
+     }
+    ]
+   },
+   "movie_url": "",
+   "work_picture": [
+    [
+     "https://kyujinbox.k-img.com/images/crawl/37057/l7e872f515b4524a7a6aa84f22722c98e/1/bacd01e88575de192eff06f621f9ffad.jpeg",
+     "https://kyujinbox.k-img.com/images/crawl/37057/l7e872f515b4524a7a6aa84f22722c98e/1/8e5bfe0cc36420ad4dba6763e85f2f65.jpeg"
+    ]
+   ],
+   "job_appeal_text": "",
+   "workplace_atmosphere": [],
+   "job_style": [],
+   "strengths": [],
+   "member": [],
+   "interview": [],
+   "pr_fields": [],
+   "selection_info": "",
+   "pr_office_info": "健康経営優良法人2025に認定されました！\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿\n✨もっと働きやすい会社へ✨\n￣￣V￣￣￣￣￣￣￣￣￣￣￣￣\n健康増進手当は、ある社員が\nサハラマラソンへの挑戦を\n応援することをきっかけに始まりました。\nこの手当は、月3回運動の機会を作ると\n3000円の手当がもらえます♪\n\nその他にも\n◆食事補助制度\n◆奨学金返済制度、\n◆ベビーシッター制度の導入\n…などなど、ユニークな福利厚生が多数！\n\n「こんな制度があったらいいな」\n「こんな福利厚生があったら、もっと頑張れるかも」\nそんな社員の声に耳を傾けながら、\n様々な取り組みを検討していきます！\n\n＿＿＿＿＿＿＿＿＿＿＿＿＿＿\n✨繋げたいのは、想いと気持ち✨\n￣￣V￣￣￣￣￣￣￣￣￣￣￣￣\n■お客様に丁寧な打ち合わせと\n　迅速な対応をする\n■一緒に仕事をするスタッフとは、\n　良好な関係を構築する\nこのお仕事は、\nそんなヒューマンスキルが重要です。\nお客様からいただける\n「ありがとう、助かりました」という言葉や、\n仕事を通してスタッフから高まる信頼感。\n\n私たちが繋げたいのは\nIT機器やネットワークではなく、\n現場で得られる「気持ち」です。\nプロとしてお客様の要望に応える「プライド」。\nそして、困っているお客様に\n寄り添う「優しさ」を忘れずにいたい！\nそんな想いで日々業務に励んでいます\n\n選考フロー\n【応募後の流れ】\n「応募画面へ行く」よりエントリー\n　▼\n一次：WEB面接\n▼\n二次：WEB面接+適性検査\n　▼\n内定\n\n※応募から内定まで2週間を予定。\n応募から1ヶ月以内の入社も可能です。\nお電話での質問等も大歓迎です！\nお気軽にお問合せください｡",
+   "work_feature": "IT経験,システムエンジニア経験,データベース経験,テクニカルサポート,平日のみOK,POS,C,管理職・マネジメント経験,PCスキル,コールセンター経験,事務,接客,採用,普通自動車免許（オートマチック限定）,個人営業,営業経験,法人営業,ホテル経験,コールセンター,OJT,メンター制度あり,交通費全額支給,交通費支給,個人型確定拠出年金あり,昇給あり,研修あり,確定拠出年金あり,評価あり,資格取得支援あり,食事補助あり,U・Iターン歓迎,ブランクOK,フリーター歓迎,学歴不問,新卒歓迎,有資格者歓迎,未経験者歓迎,男女歓迎,異業種歓迎,第二新卒歓迎,経験浅め歓迎,経験者歓迎,友達と応募OK,大量募集,急募,転職回数不問,経験不問,残業手当あり,深夜手当あり,賞与あり,通信手当あり,メンテナンス",
+   "qualification_text": "★「売る」のではなく「環境を整えて感謝される」お仕事なので、\n　数字のプレッシャーはありません！\n\n＼PC・IT機器に少しでも興味があれば歓迎／\n＼応募のきっかけはなんでもOK！／\nプログラミング言語の知識も一切不問です！\n◆必須：普通自動車免許(AT限定可◎)\n\n◆経験・学歴不問！\n◆未経験者大歓迎\n◆業界・職種未経験OK！\n◆第二新卒歓迎\n◆U・Iターン歓迎\n◆転職回数不問\n◆ブランクありOK\n◆社会人経験の有無も不問\n◆20代・30代・40代の男女活躍中！\n\n\n＜異業種出身者活躍中&大歓迎♪＞\nITとは全く関係ない分野からの\n転職者も多数♪\n＊法人営業・個人営業\n＊ルート配送・宅配ドライバー\n＊自動販売機やOA機器などの補充・メンテナンススタッフ\n＊不動産賃貸のルームアドバイザー\n＊警備員\n＊携帯電話ショップ・家電量販店のスタッフ\n＊アパレル・雑貨などのショップ店員\n＊飲食店のホールスタッフ・店長\n＊ホテル・ブライダルなどのサービススタッフ\n＊コールセンターのオペレーター\n＊旅行代理店の窓口スタッフ\n\n━…━…━…━…━…━…━\n　\n＜こんな方にオススメ！＞\n・パソコンが好き､インターネットが好きな方\n・タブレット端末やスマホなど､\n　最新ガジェットに興味がある方\n・PCに強いと言われたことがある\n・友達や家族のスマホ、\n　PCの設定をやってあげたことがある\n・機械を組み立てることが好き\n・コツコツ丁寧に作業を進めることが得意\n・PCに関わる仕事に就きたい\n・人と関わることが好き\n・最新技術を学びながら働きたい\n\n＜こんな経験も活かせます！＞\n◇フィールドエンジニア、\n　カスタマーエンジニア、\n　テクニカルサポート、\n　システムエンジニアの経験\n◇機械メンテナンスや修理の経験\n◇IT関連の知識・資格（実務経験は不問！）\n◇接客・営業などサービス業務の経験\n◇情報系の専門学校・学部だった方\n\nIT関係有資格者、\nIT関連職経験者、\nPCやスマホの設定に詳しい方は\n知識を活かせます！\nもちろん経験の無い方も\nしっかりとした研修とマニュアルがあるので\n安心してください♪\n\n　\n━…━…━…━…━…━…━",
+   "bottom_label_feature_list": [
+    "急募！内定まで2週間"
+   ],
+   "is_favorite": false,
+   "like_count": [],
+   "other_offices": 0,
+   "grouping_key": "株式会社トライアンフ 東京オフィス_401015",
+   "sub_title": "",
+   "imp_url": "https://xn--pckua2a7gp15o89zb.com/api/am/v1/imp?p=DVRMPAx7rPvBywRjIRikq7uKU2sBbj8SchpMD7ddc3WXk2x9cnFn5ueJdVY8Lxcvpw4k5Cy08TfWJTceMnQDyu1kVVsonuAS3BLL4Uipwn8oe7oNvR7jZQmBTAiQ5la1DEQholXjnxBw4lWXrSDc4lUMcr6D0QXJ%2B1Qb%2FYcSBdAfYLq4s7F4fw3oZBMyyiumVIzgdYu27B7jZT500ZOWf%2Ffb7L2DtiFfPKPBvTfiOQCFq1Aux6mcacZ6WEiOsKy7YthbpFivHdFEdBj4XTaWYfa5tuqAt%2BMSOO5Du9rUdBF1s%2Bl9tz3fb%2FQg8vs%2BV%2Br5I9ic061WTbvXHaoGdPPLJVg3OhGwSH5J1GgDX1lcj9qzsnSZQqpKeU4Y69xL%2BvfrMIDnpxoYR%2Fx1GM6npA%2F9o88QnSDrpFgna%2BM5aiGw7Dnf9fWE%2Fcl5k5Sd%2BgnlleVjLMpZrrpTacsWyIG0ORC%2FhBBQc3t5%2BCaUnjMN2zFd7phDdJDoaXL4WxhMaM6i4OOf4CRwK9p9fUK0wkXgFmvi1jGKLUng7aRJ%2BLP%2FefiTTuK90P1QBXc0YuDs0ecxMRf4HSGE2vv08C2Ej1flExmBr4iFN7iA97SPN0IJ1xST2WY%3D",
+   "click_url": "https://xn--pckua2a7gp15o89zb.com/api/am/v1/click?p=htGto%2BfVwxu5BrQsygrkjxvIqHHhZQNdMe5kPiybYmsRQqZ3qDbXEQSsLEYUHLQk0mdt62WK36HdPeQDJCW%2B7zvkI5VWu1cT2n7B0zYKH2YWseUJ5pLUyP%2BOEVCkePTZeAzYZaJNM1dCVR8XZCctdso3%2Bz%2Bp4PHII1xpQITPdKHfkq5hfQzIGTjqXdrbG%2FldpT5uZDRTV1BxOlpG2cH%2FKMCxu3pPJjZgQ0gEiS43IMA%2B2C%2B8Wcoa5HbIMNy6tTrgBUFK8iXiQWw6%2BLkTf82d1Spmz76S7s%2FwQoI44EX5TEwyGI1XdmeYuVyYJ8wIcjmIbPgpPyNdtCRSHXsNj2Iadn43WwjL2rQw5X9XcFSvaNH1RplEFLzNns%2BqrUVaZb7E%2FOiLD2mkKXQ5q05xjbQ1pzcee9q055PX3NTYXt7ieN666sKMIYr0iFPb9BoPcfiIDo%2FUQT6f%2FMCPItBQJ4a%2BjYSCphh%2BNFHnASDwDHsGqqt8Cu9kGTSant%2BNtZVJfrUmZK4HfZmhS6FcYeQXMIBM2ahZkHOnfKEz%2BSXFfr5zJClM25zI64dGP4dC2kECh3PlGQ0A89CI4KDNiNreo4WN3mkcifHkK1M0M5CQmBdP4OMGaSyE9nUW%2Bzjjvh6jTb9CTW0oY%2BZOpdkcmODGVaFxfseA9AvCzSllSR4SZan%2FRws%3D",
+   "click_action_url": "",
+   "action_url": "https://xn--pckua2a7gp15o89zb.com/rd/am/v1/apply?u=l7e872f515b4524a7a6aa84f22722c98e&p=7eILgOanL6uYNBYZ36O%2FVs0Lwji%2FXmWBAJ3pUKLIrpvoCuvObNScrxXr9zKxNyq2Gsac26%2BY4FBI%2BR90jq9apuWJs%2BzuZwTYSmWD9Tov01hxY2Wl%2FMiLMkSk7zsaZc%2Bgi%2FRFevktURJ4%2FnElfJ5oKhtC9YUcl6ZGugYmuCWGaLqADhWKKhT1Z47dW02cCSJl8E4HGsPjnjBPohnQs4i5WxRprney3BjfYBihSDS0PNU%3D&ph=ec7f4e836a95&phv=1",
+   "map_info": {
+    "map_hidden_flg": 0,
+    "latitude": 35.6921121,
+    "longitude": 139.7904063
+   }
+  }
+ ],
+ "favoriteLayerData": [],
+ "descLayerData": []
+}
