@@ -33,10 +33,11 @@ export interface SessionSummary {
 }
 
 /** One stored transcript message. `content` is role-specific: a prompt, one model
- *  turn (text plus the tool calls it asked for), or one tool's result. */
+ *  turn (text plus the tool calls it asked for), one tool's result, or a status note
+ *  freehire handed the model (`system`) — which is never shown. */
 export interface StoredMessage {
   seq: number;
-  role: 'user' | 'assistant' | 'tool';
+  role: 'user' | 'assistant' | 'tool' | 'system';
   content: unknown;
 }
 
@@ -75,6 +76,12 @@ export function eventsFromTranscript(messages: StoredMessage[]): TurnEvent[] {
   };
 
   for (const message of messages) {
+    // A status note begins a turn the way a prompt does, but it is freehire's words, not the
+    // candidate's, so nothing of it is shown.
+    if (message.role === 'system') {
+      close();
+      continue;
+    }
     if (message.role === 'user') {
       close();
       const content = (message.content ?? {}) as UserContent;

@@ -18,10 +18,10 @@
 
 ## 4. Web
 
-- [ ] 4.1 Generalise `ExperienceAssistantPanel` into `AssistantPanel` (preset, binding, kickoff); experience bank unchanged
-- [ ] 4.2 `AssistantChat`: call sync on open and every ~15 s while mounted on an `apply` session; hide `system` notes
-- [ ] 4.3 `JobDrawer` auto-apply tab: "Answer in chat" for `blocked`/`pending_review`, opening the panel; keep the form
-- [ ] 4.4 Client API + i18n (en, ru) for the new action and sync
+- [x] 4.1 Generalise `ExperienceAssistantPanel` into `AssistantPanel` (preset, binding, kickoff); experience bank unchanged
+- [x] 4.2 `AssistantChat`: call sync on open and every ~15 s while mounted on an `apply` session; hide `system` notes
+- [x] 4.3 `JobDrawer` auto-apply tab: "Answer in chat" for `blocked`/`pending_review`, opening the panel; keep the form
+- [x] 4.4 Client API + i18n (en, ru) for the new action and sync
 
 ## 5. MCP and docs
 

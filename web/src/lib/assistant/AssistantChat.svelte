@@ -21,6 +21,7 @@
     TurnRefused,
     startAutopilot,
     StreamInterrupted,
+    syncApplication,
     type Attachment,
     type Turn,
   } from '#lib/assistant/client.js';
@@ -83,6 +84,7 @@
     openingActions = undefined,
     autoRun = false,
     navTrigger = undefined,
+    syncApplication: keepInSync = false,
   }: {
     session?: string;
     kickoff?: string;
@@ -126,6 +128,10 @@
      *  not stack a second bar above it. Only shown where a header row exists, which is
      *  wherever `showSessionRail` is on. */
     navTrigger?: Snippet;
+    /** The conversation is held against one automatic application: catch it up on what
+     *  happened to the application when it opens and every few seconds while it is shown.
+     *  A check with nothing new costs nothing and paints nothing. */
+    syncApplication?: boolean;
   } = $props();
 
   const s = $derived(t(messages, locale()));
@@ -833,6 +839,46 @@
 
   /** Re-read a session's stored transcript into the view. The server holds the truth about a
    *  turn whose stream we lost, so this is how a returning client catches up. */
+  // How often an open apply conversation asks whether its application moved. The worker that
+  // moves it runs every five minutes, so this only has to be prompt, not instant.
+  const SYNC_INTERVAL_MS = 15_000;
+
+  $effect(() => {
+    if (!keepInSync || phase !== 'ready' || !activeId) return;
+    const id = activeId;
+    const tick = () => {
+      if (!turnActive && !turn) void catchUp(id);
+    };
+    tick();
+    const timer = setInterval(tick, SYNC_INTERVAL_MS);
+    return () => clearInterval(timer);
+  });
+
+  /** One catch-up. It only becomes a turn once the server starts narrating: a check with
+   *  nothing new must not flash the "thinking" state every fifteen seconds. A failed check is
+   *  left for the next one — it is not something the candidate asked for or can act on. */
+  async function catchUp(id: string) {
+    let began = false;
+    const started = syncApplication(id, (event) => {
+      if (!began) {
+        began = true;
+        turnActive = true;
+        turn = started;
+        onTurnStateChange?.(true);
+      }
+      onEvent(id, event);
+    });
+    try {
+      await started.done;
+    } catch (err) {
+      if (err instanceof StreamInterrupted) await reloadTranscript(id);
+    }
+    if (began) {
+      endTurn();
+      void scrollToBottom(true);
+    }
+  }
+
   async function reloadTranscript(id: string) {
     if (id !== activeId) return;
     try {

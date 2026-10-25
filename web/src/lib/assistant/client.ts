@@ -139,6 +139,21 @@ export function openRehearsal(sessionId: string, onEvent: (e: TurnEvent) => void
 }
 
 /**
+ * Catch an apply conversation up on its application. The server streams a narration when
+ * the attempt has events the conversation has not told the candidate about, and answers 204
+ * — a turn that finished having done nothing — when it has none.
+ */
+export function syncApplication(sessionId: string, onEvent: (e: TurnEvent) => void): Turn {
+  return streamTurn(
+    sessionId,
+    `${BASE}/sessions/${encodeURIComponent(sessionId)}/sync`,
+    {},
+    'could not check the application',
+    onEvent,
+  );
+}
+
+/**
  * Resume after a failed turn without re-sending the user's message. The server continues
  * from the existing transcript (healing any dangling tool calls), so the model's context
  * is not polluted with a duplicate prompt.
@@ -246,6 +261,8 @@ function streamTurn(
     if (!res.ok) {
       throw await turnFailure(res, sessionId, failure);
     }
+    // No content: the server had nothing to run (a sync with nothing new to narrate).
+    if (res.status === 204) return;
     if (!res.body) {
       throw new Error('the assistant returned no stream');
     }

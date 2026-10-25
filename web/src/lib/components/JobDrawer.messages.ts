@@ -45,6 +45,12 @@ export const messages = defineMessages(
     pause: 'Pause',
     pausedNote:
       'Marked as paused — a reminder for you only. Auto-apply keeps working on it in the background regardless.',
+    applyChat: {
+      open: 'Answer in chat',
+      hint: 'Answer every question in one message, in your own words — the assistant sorts them out.',
+      title: 'Application assistant',
+      openFailed: 'Could not open the chat.',
+    },
     banners: {
       tailoring: 'Auto-apply is preparing a tailored CV for this job.',
       approved: "Auto-apply approved this application — it's queued for automatic submission.",
@@ -164,6 +170,12 @@ export const messages = defineMessages(
       pause: 'Приостановить',
       pausedNote:
         'Отмечено как приостановленное — напоминание только для вас. Автоотклик всё равно продолжает работать над этим в фоне.',
+      applyChat: {
+        open: 'Ответить в чате',
+        hint: 'Ответьте на все вопросы одним сообщением, своими словами — ассистент сам разберёт.',
+        title: 'Ассистент отклика',
+        openFailed: 'Не удалось открыть чат.',
+      },
       banners: {
         tailoring: 'Автоотклик готовит адаптированное CV для этой вакансии.',
         approved: 'Автоотклик одобрил эту заявку — она в очереди на автоматическую отправку.',

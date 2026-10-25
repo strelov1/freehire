@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
-import { sendTurn, StreamInterrupted } from './client';
+import { sendTurn, StreamInterrupted, syncApplication } from './client';
 
 /** A response whose body streams the given chunks and then does whatever `end` says. */
 function streamingResponse(chunks: string[], end: 'close' | 'fail' = 'close'): Response {
@@ -59,5 +59,31 @@ describe('sendTurn', () => {
     const turn = sendTurn('session-1', 'hello', () => {});
 
     await expect(turn.done).rejects.not.toBeInstanceOf(StreamInterrupted);
+  });
+});
+
+describe('syncApplication', () => {
+  it('treats nothing to narrate as a finished turn with no events', async () => {
+    // 204 is the server saying the application has nothing new; it must not read as a
+    // broken stream, which would send the chat to reload its transcript every 15 seconds.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+    const events: unknown[] = [];
+
+    const turn = syncApplication('session-1', (e) => events.push(e));
+
+    await expect(turn.done).resolves.toBeUndefined();
+    expect(events).toEqual([]);
+  });
+
+  it('streams a narration like any other turn', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(streamingResponse([frame({ type: 'assistant_text', text: 'two questions are open' })])),
+    );
+    const events: { type: string }[] = [];
+
+    await syncApplication('session-1', (e) => events.push(e)).done;
+
+    expect(events.map((e) => e.type)).toContain('assistant_text');
   });
 });

@@ -43,6 +43,9 @@
   import { isAutoApplyPaused, setAutoApplyPaused } from '#lib/autoApplyPauseStorage.js';
   import { hasVisibleRows, pendingRows, type PendingAnswerRow } from '#lib/answerBank.js';
   import { messages } from './JobDrawer.messages';
+  import AssistantChat from '#lib/assistant/AssistantChat.svelte';
+  import AssistantPanel from '#lib/components/AssistantPanel.svelte';
+  import { openApplyChat } from '#lib/assistant/api.js';
   import { format, plural, t } from '#lib/i18n/t.js';
 
   let {
@@ -151,6 +154,25 @@
   let autoApplyDeciding = $state(false);
   let autoApplyError = $state<string | null>(null);
   const autoApplyBanner = $derived(autoApplyReviewBanner(autoApply?.status));
+
+  // The application chat (openspec/changes/auto-apply-chat): the same questions and the same
+  // review as the form below, answered in free text. Offered exactly where the form is —
+  // while the attempt waits on the candidate.
+  const offersApplyChat = $derived(autoApplyBanner?.kind === 'blocked' || autoApplyBanner?.kind === 'pending_review');
+  let applyChatId = $state<string | null>(null);
+  let applyChatOpen = $state(false);
+  let applyChatError = $state<string | null>(null);
+
+  async function startApplyChat() {
+    if (!item.job) return;
+    applyChatError = null;
+    try {
+      applyChatId ??= (await openApplyChat(item.job.public_slug)).id;
+      applyChatOpen = true;
+    } catch (e) {
+      applyChatError = errorMessage(e, s.applyChat.openFailed);
+    }
+  }
 
   // The application's history, newest first, from the ledger — also loaded by
   // loadEmails() below. It replaces a strip that read as a timeline and was not one:
@@ -806,6 +828,16 @@
           <!-- Auto-apply's own "action needed"/status content (openspec/changes/
                auto-apply-progress-tab) — moved here from the Application tab so this is
                the one place it lives. -->
+          {#if offersApplyChat}
+            <div class="flex flex-col gap-1">
+              <Button variant="primary" size="sm" class="w-fit" onclick={startApplyChat}>{s.applyChat.open}</Button>
+              <p class="text-xs text-muted-foreground">{s.applyChat.hint}</p>
+              {#if applyChatError}
+                <p class="text-xs text-destructive">{applyChatError}</p>
+              {/if}
+            </div>
+          {/if}
+
           {#if autoApplyBanner?.kind === 'tailoring'}
             <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
               <p class="text-sm text-muted-foreground">{s.banners.tailoring}</p>
@@ -1189,6 +1221,23 @@
       </Button>
     </div>
   </div>
+
+  <!-- Inside the drawer's root on purpose: the drawer covers the screen at z-50, so a panel
+       docked outside it would sit underneath. Here it is drawn over the drawer's right edge,
+       or over the whole drawer where there is no room to dock. -->
+  {#if applyChatId}
+    <AssistantPanel open={applyChatOpen} title={s.applyChat.title} onClose={() => (applyChatOpen = false)}>
+      {#snippet children(setSessionId)}
+        <AssistantChat
+          session={applyChatId ?? undefined}
+          showSessionRail={false}
+          syncApplication
+          onSessionChange={setSessionId}
+          onTurnComplete={() => void loadEmails(true)}
+        />
+      {/snippet}
+    </AssistantPanel>
+  {/if}
 </div>
 
 <!-- Outside the panel's root on purpose: the panel's focus trap handles Tab on its own

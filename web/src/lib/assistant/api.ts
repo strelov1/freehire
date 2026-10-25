@@ -64,6 +64,13 @@ export function createRehearsal(slug: string): Promise<SessionSummary> {
   return createApplicationSession('interview', slug);
 }
 
+/** Open the conversation held against one automatic application. The server returns the
+ *  one an application already has rather than starting a second, so the numbered questions
+ *  and the answers given to them stay in one transcript. */
+export function openApplyChat(slug: string): Promise<SessionSummary> {
+  return createApplicationSession('apply', slug);
+}
+
 /** Review the interview that already happened. */
 export function createDebrief(slug: string): Promise<SessionSummary> {
   return createApplicationSession('debrief', slug);
