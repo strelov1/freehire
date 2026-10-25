@@ -22,7 +22,7 @@ func TestScraplingTierCarriesTheMeasuredProviders(t *testing.T) {
 		got = append(got, name)
 	}
 	sort.Strings(got)
-	want := []string{"bayt", "cleverstaff", "echojobs", "gulftalent", "hh", "infojobs", "kontur", "neogov", "occ", "startupjobs", "vagas", "wantapply", "wellfound", "wuzzuf"}
+	want := []string{"bayt", "cleverstaff", "echojobs", "gulftalent", "hh", "infojobs", "instahyre", "kontur", "neogov", "occ", "startupjobs", "vagas", "wantapply", "wellfound", "wuzzuf"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("scraplingProviders = %v, want %v", got, want)
 	}
@@ -87,6 +87,7 @@ func TestScraplingRoutesAreTheMeasuredOnes(t *testing.T) {
 		"wuzzuf":      {scraplingfetch.ModeBrowser, false},
 		"occ":         {scraplingfetch.ModeBrowser, false},
 		"vagas":       {scraplingfetch.ModeHTTP, true},
+		"instahyre":   {scraplingfetch.ModeHTTP, false},
 	}
 	for name, p := range scraplingProviders {
 		if p.route != want[name] {

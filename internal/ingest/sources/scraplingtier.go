@@ -116,6 +116,12 @@ var scraplingProviders = map[string]scraplingProvider{
 	"vagas": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewVagas(pacedHTMLGetter(f, vagasRequestInterval, vagasRequestBurst))
 	}},
+	// Only its posting pages: Cloudflare answers 403 to every plain request for them from the
+	// crawl host, and the impersonating fetcher from the crawl host's own IP is served (2026-10-25,
+	// ~0.4 s a page). The JSON search is not challenged and stays on a plain client.
+	"instahyre": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return pacedInstahyre(NewClient(), f)
+	}},
 }
 
 // A browser fetch that meets a challenge on its first page measured ~110 s, and the service

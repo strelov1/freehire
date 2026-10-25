@@ -432,6 +432,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   gemeentebanen: 'Gemeentebanen',
   academictransfer: 'AcademicTransfer',
   meincheckin: 'CHECK-IN',
+  instahyre: 'Instahyre',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

@@ -793,6 +793,15 @@ func All(c HTTPClient) map[string]Source {
 	} else {
 		registry["naukri"] = NewNaukri(pacedNaukriGetter(withUserAgent(c, naukriUserAgent)))
 	}
+	// Instahyre: an Indian technical-hiring platform, enumerated by company-size bucket (board)
+	// through its JSON search, each new posting's body read from its public page. The pages sit
+	// behind Cloudflare, so the crawl is really served once ApplyScraplingEgress rebuilds it over
+	// the fetch service (scraplingtier.go); this plain build is what runs without one.
+	if c == nil {
+		registry["instahyre"] = NewInstahyre(nil, nil)
+	} else {
+		registry["instahyre"] = pacedInstahyre(c, c)
+	}
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the

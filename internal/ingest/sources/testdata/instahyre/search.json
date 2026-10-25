@@ -1,0 +1,123 @@
+{
+ "objects": [
+  {
+   "resource_uri": "/api/v1/job_search/447488",
+   "employer": {
+    "resource_uri": "/api/v1/candidate_opportunity_employer/44470",
+    "profile_image_src": "https://media.instahyre.com/images/profile/base/employer/44470/66e7175715/roku.webp",
+    "id": 44470,
+    "company_name": "Roku",
+    "company_tagline": "#1 TV streaming platform in the US",
+    "company_founded": 2002,
+    "employee_count": 1000,
+    "show_diversity_employer_icon": false,
+    "show_featured_employer_icon": false
+   },
+   "interview_status": null,
+   "reviewed_at": null,
+   "public_url": "https://www.instahyre.com/job-447488-sr-manager-software-engineering-at-roku-bangalore/",
+   "is_strong_match": null,
+   "score": null,
+   "candidate_title": "Sr. Manager - Software Engineering",
+   "id": 447488,
+   "title": "Sr. Manager - Software Engineering",
+   "locations": "Bangalore",
+   "keywords": [
+    "APIs",
+    "Java",
+    "Kotlin",
+    "Scala",
+    "backend",
+    "cloud",
+    "distributed",
+    "engineering manager",
+    "microservices",
+    "software engineer"
+   ],
+   "accept_outstation": true,
+   "gender": 0,
+   "is_sourced": false
+  },
+  {
+   "resource_uri": "/api/v1/job_search/447892",
+   "employer": {
+    "resource_uri": "/api/v1/candidate_opportunity_employer/7911",
+    "profile_image_src": "https://media.instahyre.com/images/profile/base/employer/7911/02b12cc6f8/0_49.webp",
+    "id": 7911,
+    "company_name": "FourKites",
+    "company_tagline": "Enterprise Supply Chain Visibility Redefined",
+    "company_founded": 2014,
+    "employee_count": 200,
+    "show_diversity_employer_icon": false,
+    "show_featured_employer_icon": false
+   },
+   "interview_status": null,
+   "reviewed_at": null,
+   "public_url": "https://www.instahyre.com/job-447892-technical-lead-at-fourkites-chennai/",
+   "is_strong_match": null,
+   "score": null,
+   "candidate_title": "Technical Lead",
+   "id": 447892,
+   "title": "Technical Lead",
+   "locations": "Chennai",
+   "keywords": [
+    "AWS",
+    "Go",
+    "Golang",
+    "Java",
+    "Kafka",
+    "PostgreSQL",
+    "Redis",
+    "Spring Boot",
+    "event-driven",
+    "microservices"
+   ],
+   "accept_outstation": true,
+   "gender": 0,
+   "is_sourced": false
+  },
+  {
+   "resource_uri": "/api/v1/job_search/331759",
+   "employer": {
+    "resource_uri": "/api/v1/candidate_opportunity_employer/36312",
+    "profile_image_src": "https://media.instahyre.com/images/profile/base/employer/36312/7c56e4b1cd/1636357166114.webp",
+    "id": 36312,
+    "company_name": "Kotak811",
+    "company_tagline": "Neo-baking that you can trust",
+    "company_founded": 2016,
+    "employee_count": 1000,
+    "show_diversity_employer_icon": false,
+    "show_featured_employer_icon": false
+   },
+   "interview_status": null,
+   "reviewed_at": null,
+   "public_url": "https://www.instahyre.com/job-331759-sde-2-at-kotak811-bangalore/",
+   "is_strong_match": null,
+   "score": null,
+   "candidate_title": "SDE 2",
+   "id": 331759,
+   "title": "SDE 2",
+   "locations": "Bangalore",
+   "keywords": [
+    "DynamoDB",
+    "Java",
+    "MongoDB",
+    "MySQL",
+    "Node",
+    "PostgreSQL",
+    "RabbitMQ",
+    "Spring Boot",
+    "microservices"
+   ],
+   "accept_outstation": true,
+   "gender": 0,
+   "is_sourced": false
+  }
+ ],
+ "meta": {
+  "offset": 0,
+  "limit": 35,
+  "total_count": 3,
+  "next": null
+ }
+}
