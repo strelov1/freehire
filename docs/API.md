@@ -2149,7 +2149,8 @@ curl "https://freehire.me/api/v1/me/screening-answers" -H "Authorization: Bearer
     "desired_salary_period": "year",
     "notice_period_days": 30,
     "willing_to_relocate": true,
-    "age_18_or_older": true
+    "age_18_or_older": true,
+    "privacy_consent": true
   }
 }
 ```

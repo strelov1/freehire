@@ -2242,7 +2242,8 @@ data: {"type":"result","stop_reason":"completed"}
     "desired_salary_period": "year",
     "notice_period_days": 30,
     "willing_to_relocate": true,
-    "age_18_or_older": true
+    "age_18_or_older": true,
+    "privacy_consent": true
   }
 }`,
       },
@@ -2265,6 +2266,7 @@ data: {"type":"result","stop_reason":"completed"}
           { name: 'notice_period_days', type: 'integer', description: 'Notice period in days.', example: '30' },
           { name: 'willing_to_relocate', type: 'boolean', description: 'Whether you are willing to relocate.' },
           { name: 'age_18_or_older', type: 'boolean', description: 'Whether you are 18 or older.' },
+          { name: 'privacy_consent', type: 'boolean', description: "Whether auto-apply may accept an employer's privacy / personal-data terms for you. Never covers marketing, SMS, future-openings or diversity opt-ins." },
         ],
         curl: `curl -X PUT "${BASE_URL}/me/screening-answers" \\
   -b cookies.txt -H 'Content-Type: application/json' \\
@@ -2278,7 +2280,8 @@ data: {"type":"result","stop_reason":"completed"}
     "desired_salary_period": "year",
     "notice_period_days": 30,
     "willing_to_relocate": true,
-    "age_18_or_older": true
+    "age_18_or_older": true,
+    "privacy_consent": true
   }
 }`,
       },

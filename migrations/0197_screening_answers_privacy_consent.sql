@@ -1,0 +1,11 @@
+-- The candidate's standing consent to an employer's privacy / personal-data processing terms
+-- when freehire applies on their behalf. Measured 2026-10-25 over the captured apply_forms:
+-- 34k forms carry a REQUIRED consent checkbox (Workable's labelless `gdpr` field alone is on
+-- 23,835 of them), and with no stored answer every one of those applications parked on a
+-- question whose only possible answer is "yes" — an employer will not take an application
+-- without it.
+--
+-- Nullable like every other screening fact: null is "not stated", and the candidate turns it
+-- on themselves. It is never defaulted, because agreeing to a third party's terms is
+-- something the candidate does, not something we assume. A metadata-only ALTER.
+ALTER TABLE public.screening_answers ADD COLUMN privacy_consent boolean;

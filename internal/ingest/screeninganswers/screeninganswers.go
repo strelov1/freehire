@@ -2,7 +2,8 @@
 // questions that repeat across ATS application forms and no CV can supply: which
 // countries they are authorized to work in, whether they need visa sponsorship, their
 // desired salary, their notice period, whether they are willing to relocate, and whether
-// they are 18 or older.
+// they are 18 or older — plus one standing consent, to an employer's privacy / personal-data
+// processing terms, which the same forms ask for on every application.
 //
 // Not internal/identity/userprofile (search/targeting preferences, a different lifecycle), not
 // internal/candidate/experience (an accumulating evidence bank for CV content), not
@@ -31,6 +32,11 @@ type Answers struct {
 	NoticePeriodDays      *int     `json:"notice_period_days,omitempty"`
 	WillingToRelocate     *bool    `json:"willing_to_relocate,omitempty"`
 	Age18OrOlder          *bool    `json:"age_18_or_older,omitempty"`
+	// PrivacyConsent is the candidate's standing agreement to the privacy / personal-data
+	// processing terms an employer's form makes a condition of applying. Not a fact about
+	// the candidate like the fields above but a permission they grant: nil until they turn
+	// it on, and false is a refusal the resolver honours by asking them each time.
+	PrivacyConsent *bool `json:"privacy_consent,omitempty"`
 }
 
 // Sanitize normalizes the record in place: a country code the dictionary recognizes
@@ -105,6 +111,9 @@ func Merge(existing, update Answers) Answers {
 	}
 	if update.Age18OrOlder != nil {
 		merged.Age18OrOlder = update.Age18OrOlder
+	}
+	if update.PrivacyConsent != nil {
+		merged.PrivacyConsent = update.PrivacyConsent
 	}
 	return merged
 }

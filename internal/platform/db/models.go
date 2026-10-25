@@ -1257,6 +1257,7 @@ type ScreeningAnswer struct {
 	WillingToRelocate     pgtype.Bool        `json:"willing_to_relocate"`
 	Age18OrOlder          pgtype.Bool        `json:"age_18_or_older"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	PrivacyConsent        pgtype.Bool        `json:"privacy_consent"`
 }
 
 type ScreeningAnswerBank struct {

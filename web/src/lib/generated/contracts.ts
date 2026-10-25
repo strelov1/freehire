@@ -1375,6 +1375,13 @@ export interface Answers {
   notice_period_days?: number /* int */;
   willing_to_relocate?: boolean;
   age_18_or_older?: boolean;
+  /**
+   * PrivacyConsent is the candidate's standing agreement to the privacy / personal-data
+   * processing terms an employer's form makes a condition of applying. Not a fact about
+   * the candidate like the fields above but a permission they grant: nil until they turn
+   * it on, and false is a refusal the resolver honours by asking them each time.
+   */
+  privacy_consent?: boolean;
 }
 
 /**

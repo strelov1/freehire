@@ -241,6 +241,14 @@ func resolveOne(f MergedField, answers map[string]string, hasApprovedCV bool) (R
 		return ResolvedField{}, "file uploads other than the résumé are not resolved by this package", false
 	}
 
+	// Before the keyed sources, because a consent is not answered by TEXT: its value is
+	// whichever option agrees, which matchOption cannot find from a stored "yes" when the
+	// form words it "I acknowledge". A candidate who has not granted it falls through to the
+	// bank like any other question.
+	if resolved, ok := resolvePrivacyConsent(f, answers); ok {
+		return resolved, "", true
+	}
+
 	keys := answerKeysFor(f)
 	if len(keys) == 0 {
 		return ResolvedField{}, fmt.Sprintf("no known answer source for %q", f.ID), false

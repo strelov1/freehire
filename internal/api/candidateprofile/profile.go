@@ -42,6 +42,7 @@ type Profile struct {
 	NoticePeriod          string `json:"notice_period"`
 	WillingToRelocate     string `json:"willing_to_relocate"`
 	Age18OrOlder          string `json:"age_18_or_older"`
+	PrivacyConsent        string `json:"privacy_consent"`
 
 	// BankAnswers is topic → answer for the questions this candidate has answered on
 	// earlier applications. Not a fixed field like the ones above, because the questions
@@ -80,6 +81,7 @@ func (p Profile) Fields() map[string]string {
 		"notice_period":           p.NoticePeriod,
 		"willing_to_relocate":     p.WillingToRelocate,
 		"age_18_or_older":         p.Age18OrOlder,
+		"privacy_consent":         p.PrivacyConsent,
 	}
 }
 
@@ -295,5 +297,6 @@ func applyScreeningFields(ctx context.Context, p *Profile, reader ScreeningAnswe
 	p.NoticePeriod = fields["notice_period"]
 	p.WillingToRelocate = fields["willing_to_relocate"]
 	p.Age18OrOlder = fields["age_18_or_older"]
+	p.PrivacyConsent = fields["privacy_consent"]
 	return nil
 }

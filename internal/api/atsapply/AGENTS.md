@@ -244,6 +244,14 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   second real submission. A code review caught an earlier version of this that mapped the
   same situation to a plain retryable error — see `internal/application/autoapply/runner_test.go`'s
   `TestRunDeadLettersImmediatelyOnAnUnconfirmedSubmission`.
+- **A standing privacy consent ticks the condition of applying and nothing beside it**
+  (`consent.go`). Measured 2026-10-25: 34k captured forms carry a REQUIRED privacy /
+  personal-data consent (Workable's labelless `gdpr` boolean alone is on 23,835), and every
+  one parked. With `screening_answers.privacy_consent` granted, `resolveOne` answers such a
+  field before the keyed sources — by OPTION, not by text, since a stored "yes" matches no
+  "I acknowledge" option. The exclusions are what share those pages: future-openings talent
+  pools, SMS/marketing opt-ins, background checks and demographic disclosures. A field whose
+  agreeing option cannot be told apart (none, or two) parks rather than having one picked.
 
 ## How it works
 `Client.Submit`: captcha short-circuit → fetch the platform's schema via

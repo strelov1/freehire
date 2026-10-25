@@ -1003,6 +1003,7 @@ A field the body omits is left unchanged. An unrecognized country code, a curren
 | `notice_period_days` | integer | no | Notice period in days. (e.g. `30`) |
 | `willing_to_relocate` | boolean | no | Whether you are willing to relocate. |
 | `age_18_or_older` | boolean | no | Whether you are 18 or older. |
+| `privacy_consent` | boolean | no | Whether auto-apply may accept an employer's privacy / personal-data terms for you. Never covers marketing, SMS, future-openings or diversity opt-ins. |
 
 ```bash
 curl -X PUT "https://freehire.me/api/v1/me/screening-answers" \
@@ -1020,7 +1021,8 @@ curl -X PUT "https://freehire.me/api/v1/me/screening-answers" \
     "desired_salary_period": "year",
     "notice_period_days": 30,
     "willing_to_relocate": true,
-    "age_18_or_older": true
+    "age_18_or_older": true,
+    "privacy_consent": true
   }
 }
 ```

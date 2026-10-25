@@ -11,7 +11,7 @@ import (
 // stated is omitted rather than defaulted, so the agent's own "declining is correct" rule
 // still applies to it exactly as it did before this store existed.
 func (a Answers) AutofillFields() map[string]string {
-	fields := make(map[string]string, 6)
+	fields := make(map[string]string, 7)
 	if len(a.AuthorizedCountries) > 0 {
 		codes := make([]string, len(a.AuthorizedCountries))
 		for i, c := range a.AuthorizedCountries {
@@ -33,6 +33,12 @@ func (a Answers) AutofillFields() map[string]string {
 	}
 	if a.Age18OrOlder != nil {
 		fields["age_18_or_older"] = yesNo(*a.Age18OrOlder)
+	}
+	// Only a granted consent is projected. A refusal is not an answer any form can use — the
+	// checkbox it would fill is a condition of applying, so "no" submits nothing — and
+	// omitting it leaves the question with the candidate, which is what refusing means.
+	if a.PrivacyConsent != nil && *a.PrivacyConsent {
+		fields["privacy_consent"] = "yes"
 	}
 	return fields
 }

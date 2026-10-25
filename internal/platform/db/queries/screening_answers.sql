@@ -37,9 +37,9 @@ FOR UPDATE;
 INSERT INTO screening_answers (
     user_id, authorized_countries, visa_sponsorship_needed,
     desired_salary_amount, desired_salary_currency, desired_salary_period,
-    notice_period_days, willing_to_relocate, age_18_or_older
+    notice_period_days, willing_to_relocate, age_18_or_older, privacy_consent
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (user_id) DO UPDATE
 SET authorized_countries    = EXCLUDED.authorized_countries,
     visa_sponsorship_needed = EXCLUDED.visa_sponsorship_needed,
@@ -49,5 +49,6 @@ SET authorized_countries    = EXCLUDED.authorized_countries,
     notice_period_days      = EXCLUDED.notice_period_days,
     willing_to_relocate     = EXCLUDED.willing_to_relocate,
     age_18_or_older         = EXCLUDED.age_18_or_older,
+    privacy_consent         = EXCLUDED.privacy_consent,
     updated_at               = now()
 RETURNING *;

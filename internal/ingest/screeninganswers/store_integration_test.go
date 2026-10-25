@@ -145,6 +145,7 @@ func TestStore_ConcurrentUpdatesForTheSameUserDoNotLoseEachOthersFields(t *testi
 	relocate := true
 	visa := false
 	adult := true
+	consent := true
 	updates := []screeninganswers.Answers{
 		{AuthorizedCountries: []string{"us", "de"}},
 		{VisaSponsorshipNeeded: &visa},
@@ -154,6 +155,7 @@ func TestStore_ConcurrentUpdatesForTheSameUserDoNotLoseEachOthersFields(t *testi
 		{NoticePeriodDays: &days},
 		{WillingToRelocate: &relocate},
 		{Age18OrOlder: &adult},
+		{PrivacyConsent: &consent},
 	}
 
 	// A closed start channel released after every goroutine is parked on it lines up their
@@ -209,5 +211,8 @@ func TestStore_ConcurrentUpdatesForTheSameUserDoNotLoseEachOthersFields(t *testi
 	}
 	if got.Age18OrOlder == nil || *got.Age18OrOlder != adult {
 		t.Errorf("Age18OrOlder = %v, want %v", got.Age18OrOlder, adult)
+	}
+	if got.PrivacyConsent == nil || *got.PrivacyConsent != consent {
+		t.Errorf("PrivacyConsent = %v, want %v", got.PrivacyConsent, consent)
 	}
 }

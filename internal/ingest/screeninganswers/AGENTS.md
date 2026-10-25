@@ -39,6 +39,12 @@ OpenSpec change).
   bundled vocabulary — so currency is checked against the ISO 4217 shape (three uppercase
   letters) only. This is a narrower guarantee than the other two fields' validation, not an
   oversight.
+- **`privacy_consent` is a permission, not a fact — and only a granted one leaves this
+  package.** The seventh column (migration 0197) records whether the candidate lets
+  auto-apply accept an employer's privacy / personal-data terms for them. `AutofillFields`
+  projects it only when TRUE: a refusal answers no form (the box is a condition of applying,
+  so "no" submits nothing), and omitting it is what hands the question back to the candidate.
+  Never defaulted. Which fields it may answer is decided in `internal/api/atsapply/consent.go`.
 
 ## How it works
 ```

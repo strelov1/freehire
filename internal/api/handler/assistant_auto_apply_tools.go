@@ -467,7 +467,9 @@ func (h *assistantHandlers) screeningAnswersGetTool() assistant.Tool {
 		Title: "Read screening answers",
 		Description: "Read the person's answers to the six screening questions that repeat across " +
 			"application forms: countries they may work in, visa sponsorship, desired salary, notice " +
-			"period, relocation, and being 18 or older. A missing field has not been stated.",
+			"period, relocation, and being 18 or older — plus privacy_consent, whether they agree to an " +
+			"employer's privacy / personal-data terms being accepted for them on every application. A " +
+			"missing field has not been stated.",
 		Effect: assistant.EffectReads,
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {

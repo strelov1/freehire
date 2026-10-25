@@ -19,7 +19,8 @@ func (h *assistantHandlers) assistantScreeningTools() []assistant.Tool {
 
 // screeningAnswersSetTool records the candidate's own answers to the screening questions
 // that repeat across ATS application forms — work authorization, visa sponsorship, desired
-// salary, notice period, willingness to relocate, 18+ — so the browser extension's
+// salary, notice period, willingness to relocate, 18+ — and the standing privacy consent, so
+// the browser extension's
 // autofill agent can use them later. It decodes straight into screeninganswers.Answers:
 // the same wire shape the manual-edit endpoint accepts, so a field the call omits is a
 // field Update leaves untouched, identically on both write paths.
@@ -34,7 +35,9 @@ func (h *assistantHandlers) screeningAnswersSetTool() assistant.Tool {
 			"are willing to relocate, and whether they are 18 or older. Call this the moment the candidate " +
 			"states one of these facts, so it is available to fill their next application form. Only pass " +
 			"fields the candidate actually stated — never guess or infer one. A field you leave out keeps " +
-			"whatever was already recorded; it is not cleared.",
+			"whatever was already recorded; it is not cleared. privacy_consent is a permission, not a fact: " +
+			"set it only when the candidate says, in so many words, that they agree to employers' privacy " +
+			"and personal-data terms being accepted for them on every application.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -71,6 +74,12 @@ func (h *assistantHandlers) screeningAnswersSetTool() assistant.Tool {
 				"age_18_or_older": map[string]any{
 					"type":        "boolean",
 					"description": "Whether the candidate is 18 years of age or older.",
+				},
+				"privacy_consent": map[string]any{
+					"type": "boolean",
+					"description": "Whether the candidate agrees to the privacy / personal-data processing terms " +
+						"an employer's form requires being accepted for them. Ticks only that condition of " +
+						"applying — never a marketing, future-openings, SMS or diversity opt-in.",
 				},
 			},
 			"additionalProperties": false,

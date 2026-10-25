@@ -34,7 +34,7 @@ func (q *Queries) EnsureScreeningAnswersRow(ctx context.Context, userID int64) (
 }
 
 const getScreeningAnswers = `-- name: GetScreeningAnswers :one
-SELECT user_id, authorized_countries, visa_sponsorship_needed, desired_salary_amount, desired_salary_currency, desired_salary_period, notice_period_days, willing_to_relocate, age_18_or_older, updated_at FROM screening_answers
+SELECT user_id, authorized_countries, visa_sponsorship_needed, desired_salary_amount, desired_salary_currency, desired_salary_period, notice_period_days, willing_to_relocate, age_18_or_older, updated_at, privacy_consent FROM screening_answers
 WHERE user_id = $1
 `
 
@@ -54,12 +54,13 @@ func (q *Queries) GetScreeningAnswers(ctx context.Context, userID int64) (Screen
 		&i.WillingToRelocate,
 		&i.Age18OrOlder,
 		&i.UpdatedAt,
+		&i.PrivacyConsent,
 	)
 	return i, err
 }
 
 const getScreeningAnswersForUpdate = `-- name: GetScreeningAnswersForUpdate :one
-SELECT user_id, authorized_countries, visa_sponsorship_needed, desired_salary_amount, desired_salary_currency, desired_salary_period, notice_period_days, willing_to_relocate, age_18_or_older, updated_at FROM screening_answers
+SELECT user_id, authorized_countries, visa_sponsorship_needed, desired_salary_amount, desired_salary_currency, desired_salary_period, notice_period_days, willing_to_relocate, age_18_or_older, updated_at, privacy_consent FROM screening_answers
 WHERE user_id = $1
 FOR UPDATE
 `
@@ -84,6 +85,7 @@ func (q *Queries) GetScreeningAnswersForUpdate(ctx context.Context, userID int64
 		&i.WillingToRelocate,
 		&i.Age18OrOlder,
 		&i.UpdatedAt,
+		&i.PrivacyConsent,
 	)
 	return i, err
 }
@@ -92,9 +94,9 @@ const upsertScreeningAnswers = `-- name: UpsertScreeningAnswers :one
 INSERT INTO screening_answers (
     user_id, authorized_countries, visa_sponsorship_needed,
     desired_salary_amount, desired_salary_currency, desired_salary_period,
-    notice_period_days, willing_to_relocate, age_18_or_older
+    notice_period_days, willing_to_relocate, age_18_or_older, privacy_consent
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (user_id) DO UPDATE
 SET authorized_countries    = EXCLUDED.authorized_countries,
     visa_sponsorship_needed = EXCLUDED.visa_sponsorship_needed,
@@ -104,8 +106,9 @@ SET authorized_countries    = EXCLUDED.authorized_countries,
     notice_period_days      = EXCLUDED.notice_period_days,
     willing_to_relocate     = EXCLUDED.willing_to_relocate,
     age_18_or_older         = EXCLUDED.age_18_or_older,
+    privacy_consent         = EXCLUDED.privacy_consent,
     updated_at               = now()
-RETURNING user_id, authorized_countries, visa_sponsorship_needed, desired_salary_amount, desired_salary_currency, desired_salary_period, notice_period_days, willing_to_relocate, age_18_or_older, updated_at
+RETURNING user_id, authorized_countries, visa_sponsorship_needed, desired_salary_amount, desired_salary_currency, desired_salary_period, notice_period_days, willing_to_relocate, age_18_or_older, updated_at, privacy_consent
 `
 
 type UpsertScreeningAnswersParams struct {
@@ -118,6 +121,7 @@ type UpsertScreeningAnswersParams struct {
 	NoticePeriodDays      pgtype.Int4 `json:"notice_period_days"`
 	WillingToRelocate     pgtype.Bool `json:"willing_to_relocate"`
 	Age18OrOlder          pgtype.Bool `json:"age_18_or_older"`
+	PrivacyConsent        pgtype.Bool `json:"privacy_consent"`
 }
 
 // Create-or-replace the caller's one screening-answers record. Full-replace, mirroring
@@ -136,6 +140,7 @@ func (q *Queries) UpsertScreeningAnswers(ctx context.Context, arg UpsertScreenin
 		arg.NoticePeriodDays,
 		arg.WillingToRelocate,
 		arg.Age18OrOlder,
+		arg.PrivacyConsent,
 	)
 	var i ScreeningAnswer
 	err := row.Scan(
@@ -149,6 +154,7 @@ func (q *Queries) UpsertScreeningAnswers(ctx context.Context, arg UpsertScreenin
 		&i.WillingToRelocate,
 		&i.Age18OrOlder,
 		&i.UpdatedAt,
+		&i.PrivacyConsent,
 	)
 	return i, err
 }

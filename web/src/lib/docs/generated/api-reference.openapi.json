@@ -3410,7 +3410,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "{\n  \"data\": {\n    \"authorized_countries\": [\"DE\", \"NL\"],\n    \"visa_sponsorship_needed\": false,\n    \"desired_salary_amount\": 90000,\n    \"desired_salary_currency\": \"EUR\",\n    \"desired_salary_period\": \"year\",\n    \"notice_period_days\": 30,\n    \"willing_to_relocate\": true,\n    \"age_18_or_older\": true\n  }\n}"
+                "example": "{\n  \"data\": {\n    \"authorized_countries\": [\"DE\", \"NL\"],\n    \"visa_sponsorship_needed\": false,\n    \"desired_salary_amount\": 90000,\n    \"desired_salary_currency\": \"EUR\",\n    \"desired_salary_period\": \"year\",\n    \"notice_period_days\": 30,\n    \"willing_to_relocate\": true,\n    \"age_18_or_older\": true,\n    \"privacy_consent\": true\n  }\n}"
               }
             }
           }

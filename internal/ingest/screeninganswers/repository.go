@@ -83,6 +83,7 @@ func (r *QueriesRepository) UpdateLocked(ctx context.Context, userID int64, merg
 		NoticePeriodDays:      pgconv.Int4(merged.NoticePeriodDays),
 		WillingToRelocate:     pgconv.Bool(merged.WillingToRelocate),
 		Age18OrOlder:          pgconv.Bool(merged.Age18OrOlder),
+		PrivacyConsent:        pgconv.Bool(merged.PrivacyConsent),
 	})
 	if err != nil {
 		return Answers{}, err
@@ -104,6 +105,7 @@ func answersFromRow(row db.ScreeningAnswer) Answers {
 		NoticePeriodDays:      pgconv.IntPtr(row.NoticePeriodDays),
 		WillingToRelocate:     pgconv.BoolPtr(row.WillingToRelocate),
 		Age18OrOlder:          pgconv.BoolPtr(row.Age18OrOlder),
+		PrivacyConsent:        pgconv.BoolPtr(row.PrivacyConsent),
 	}
 }
 
