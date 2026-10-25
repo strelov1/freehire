@@ -406,8 +406,13 @@ func (h *assistantHandlers) registry(sess assistant.Session, batchID uuid.UUID) 
 	// Without the binding there is nothing to hold the conversation against, so both
 	// degrade to a plain chat rather than registering a context tool pointed at nothing —
 	// the same rule a CV-less tailoring session follows.
-	if bindsToApplication(preset) && sess.JobID != nil {
+	if (preset == assistant.PresetInterview || preset == assistant.PresetDebrief) && sess.JobID != nil {
 		tools = append(tools, h.assistantInterviewTools(*sess.JobID)...)
+	}
+	// The apply conversation acts on its one automatic application; unbound it has nothing
+	// to act on and stays a plain chat, like a CV-less tailoring session.
+	if preset == assistant.PresetApply && sess.JobID != nil {
+		tools = append(tools, h.assistantApplyTools(*sess.JobID)...)
 	}
 	// Only a browsing session has a browser on the other end of the relay. Offering
 	// the page tool anywhere else would give the model a call that can only fail.

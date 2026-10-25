@@ -54,6 +54,9 @@ const agentsMayApplyOff = "auto-apply by connected agents is turned off for this
 
 // requireAgentsMayApply refuses unless the account switched agents_may_apply on.
 func (h *assistantHandlers) requireAgentsMayApply(ctx context.Context, userID int64) error {
+	if agentsMayApplyWaived(ctx) {
+		return nil
+	}
 	allowed, err := h.queries.GetAgentsMayApply(ctx, userID)
 	if err != nil {
 		return err

@@ -6,8 +6,8 @@
 
 ## 2. Tools
 
-- [ ] 2.1 Register session-scoped auto-apply tools for `apply` (get, review, retry, cancel, answer_bank_save/list, screening_answers_get/set) reusing the MCP handlers, job from the session, no `agents_may_apply` gate
-- [ ] 2.2 Tests: tools take no slug, act only on the session's job, no switch check; `chat`/`profile` sessions do not list them
+- [x] 2.1 Register session-scoped auto-apply tools for `apply` (get, review, retry, cancel, answer_bank_save/list, screening_answers_get/set) reusing the MCP handlers, job from the session, no `agents_may_apply` gate
+- [x] 2.2 Tests: tools take no slug, act only on the session's job, no switch check; `chat`/`profile` sessions do not list them
 
 ## 3. Catch-up sync
 
