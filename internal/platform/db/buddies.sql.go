@@ -101,6 +101,45 @@ func (q *Queries) BuddyPairBlocked(ctx context.Context, arg BuddyPairBlockedPara
 	return blocked, err
 }
 
+const claimBuddyUnread = `-- name: ClaimBuddyUnread :one
+UPDATE buddy_conversations c
+SET notified_low_at  = CASE WHEN $1::boolean THEN $2::timestamptz ELSE c.notified_low_at END,
+    notified_high_at = CASE WHEN $1::boolean THEN c.notified_high_at ELSE $2::timestamptz END
+WHERE c.id = $3
+  AND c.status IN ('open', 'pending')
+  AND CASE WHEN $1::boolean
+        THEN c.notified_low_at IS NOT DISTINCT FROM $4::timestamptz
+         AND coalesce(c.last_read_low, 0) = $5::bigint
+        ELSE c.notified_high_at IS NOT DISTINCT FROM $4::timestamptz
+         AND coalesce(c.last_read_high, 0) = $5::bigint
+      END
+RETURNING c.id
+`
+
+type ClaimBuddyUnreadParams struct {
+	IsLow          bool               `json:"is_low"`
+	ClaimedAt      pgtype.Timestamptz `json:"claimed_at"`
+	ConversationID int64              `json:"conversation_id"`
+	PrevNotifiedAt pgtype.Timestamptz `json:"prev_notified_at"`
+	LastRead       int64              `json:"last_read"`
+}
+
+// Take the notice for one side before sending it: only the run that moves the stamp from
+// the value it read (and sees the same read cursor) gets a row back. A concurrent run, or
+// a read that landed in between, gets none and sends nothing.
+func (q *Queries) ClaimBuddyUnread(ctx context.Context, arg ClaimBuddyUnreadParams) (int64, error) {
+	row := q.db.QueryRow(ctx, claimBuddyUnread,
+		arg.IsLow,
+		arg.ClaimedAt,
+		arg.ConversationID,
+		arg.PrevNotifiedAt,
+		arg.LastRead,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const countBuddyInvitationsSince = `-- name: CountBuddyInvitationsSince :one
 SELECT count(*)::bigint AS sent, min(created_at)::timestamptz AS oldest
 FROM buddy_conversations
@@ -820,6 +859,106 @@ func (q *Queries) ListBuddyReports(ctx context.Context, arg ListBuddyReportsPara
 	return items, nil
 }
 
+const listBuddyUnreadDue = `-- name: ListBuddyUnreadDue :many
+SELECT s.conversation_id,
+       s.user_id,
+       s.is_low,
+       (s.status = 'pending')::boolean AS invitation,
+       s.notified_at AS prev_notified_at,
+       s.last_read,
+       u.oldest_id,
+       us.email,
+       tl.chat_id
+FROM (
+    SELECT c.id AS conversation_id, c.status, c.initiator_id,
+           c.user_low AS user_id, c.user_high AS other_id, true AS is_low,
+           c.last_read_low AS last_read, c.notified_low_at AS notified_at
+    FROM buddy_conversations c
+    WHERE c.status IN ('open', 'pending')
+    UNION ALL
+    SELECT c.id, c.status, c.initiator_id,
+           c.user_high, c.user_low, false,
+           c.last_read_high, c.notified_high_at
+    FROM buddy_conversations c
+    WHERE c.status IN ('open', 'pending')
+) s
+JOIN buddy_members bm ON bm.user_id = s.user_id AND bm.left_at IS NULL
+JOIN users us ON us.id = s.user_id
+LEFT JOIN telegram_links tl ON tl.user_id = s.user_id
+CROSS JOIN LATERAL (
+    SELECT msg.id AS oldest_id, msg.created_at AS oldest_at
+    FROM buddy_messages msg
+    WHERE msg.conversation_id = s.conversation_id
+      AND msg.sender_id = s.other_id
+      AND msg.id > coalesce(s.last_read, 0)
+    ORDER BY msg.id
+    LIMIT 1
+) u
+WHERE (s.status = 'open' OR s.initiator_id <> s.user_id)
+  AND u.oldest_at <= $1::timestamptz
+  AND (s.notified_at IS NULL OR s.notified_at < u.oldest_at)
+ORDER BY u.oldest_at
+LIMIT $2
+`
+
+type ListBuddyUnreadDueParams struct {
+	Cutoff  pgtype.Timestamptz `json:"cutoff"`
+	MaxRows int32              `json:"max_rows"`
+}
+
+type ListBuddyUnreadDueRow struct {
+	ConversationID int64              `json:"conversation_id"`
+	UserID         int64              `json:"user_id"`
+	IsLow          bool               `json:"is_low"`
+	Invitation     bool               `json:"invitation"`
+	PrevNotifiedAt pgtype.Timestamptz `json:"prev_notified_at"`
+	LastRead       pgtype.Int8        `json:"last_read"`
+	OldestID       int64              `json:"oldest_id"`
+	Email          string             `json:"email"`
+	ChatID         pgtype.Int8        `json:"chat_id"`
+}
+
+// The sides of conversations that are due an unread notice (design D9). One row per
+// (conversation, recipient side). A side is due when the other participant has written
+// something past this side's read cursor, the OLDEST such message is not newer than
+// sqlc.arg(cutoff), and the side was not already notified since that message — notified_*_at
+// is compared with the oldest unread message rather than cleared on read, so reading and a
+// later message re-arms it without the read path knowing the worker exists. Open
+// conversations notify both sides; a pending one only its recipient, so an initiator is
+// never told about their own invitation. Declined and closed are never due, and neither is
+// a member who has left.
+//
+// prev_notified_at and last_read are returned for the compare-and-set in ClaimBuddyUnread.
+func (q *Queries) ListBuddyUnreadDue(ctx context.Context, arg ListBuddyUnreadDueParams) ([]ListBuddyUnreadDueRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyUnreadDue, arg.Cutoff, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyUnreadDueRow{}
+	for rows.Next() {
+		var i ListBuddyUnreadDueRow
+		if err := rows.Scan(
+			&i.ConversationID,
+			&i.UserID,
+			&i.IsLow,
+			&i.Invitation,
+			&i.PrevNotifiedAt,
+			&i.LastRead,
+			&i.OldestID,
+			&i.Email,
+			&i.ChatID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listHiddenBuddyApplications = `-- name: ListHiddenBuddyApplications :many
 SELECT application_id FROM buddy_hidden_applications
 WHERE user_id = $1
@@ -1023,6 +1162,36 @@ func (q *Queries) MarkBuddyConversationRead(ctx context.Context, arg MarkBuddyCo
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const releaseBuddyUnread = `-- name: ReleaseBuddyUnread :exec
+UPDATE buddy_conversations c
+SET notified_low_at  = CASE WHEN $1::boolean THEN $2::timestamptz ELSE c.notified_low_at END,
+    notified_high_at = CASE WHEN $1::boolean THEN c.notified_high_at ELSE $2::timestamptz END
+WHERE c.id = $3
+  AND CASE WHEN $1::boolean
+        THEN c.notified_low_at = $4::timestamptz
+        ELSE c.notified_high_at = $4::timestamptz
+      END
+`
+
+type ReleaseBuddyUnreadParams struct {
+	IsLow          bool               `json:"is_low"`
+	PrevNotifiedAt pgtype.Timestamptz `json:"prev_notified_at"`
+	ConversationID int64              `json:"conversation_id"`
+	ClaimedAt      pgtype.Timestamptz `json:"claimed_at"`
+}
+
+// Give a claim back after every channel failed, so the next run retries. Guarded on the
+// stamp being the claim's own: a side that has since been re-notified keeps its newer one.
+func (q *Queries) ReleaseBuddyUnread(ctx context.Context, arg ReleaseBuddyUnreadParams) error {
+	_, err := q.db.Exec(ctx, releaseBuddyUnread,
+		arg.IsLow,
+		arg.PrevNotifiedAt,
+		arg.ConversationID,
+		arg.ClaimedAt,
+	)
+	return err
 }
 
 const resolveBuddyReport = `-- name: ResolveBuddyReport :one

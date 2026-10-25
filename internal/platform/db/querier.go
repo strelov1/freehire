@@ -485,6 +485,10 @@ type Querier interface {
 	// park during preview resolution (a captcha, an unscannable page) predicts the identical
 	// outcome the real submission would hit, so there is nothing a retry here would fix either.
 	ClaimAutoApplyPreviewBatch(ctx context.Context, arg ClaimAutoApplyPreviewBatchParams) ([]ClaimAutoApplyPreviewBatchRow, error)
+	// Take the notice for one side before sending it: only the run that moves the stamp from
+	// the value it read (and sees the same read cursor) gets a row back. A concurrent run, or
+	// a read that landed in between, gets none and sends nothing.
+	ClaimBuddyUnread(ctx context.Context, arg ClaimBuddyUnreadParams) (int64, error)
 	// The daily cap: claims one of a user's 20 writes for the UTC day, and returns no row
 	// once they are spent, which the caller turns into a 429.
 	ClaimDictionaryGapWrite(ctx context.Context, arg ClaimDictionaryGapWriteParams) (int32, error)
@@ -3686,6 +3690,18 @@ type Querier interface {
 	// A page of reports, newest first, with the handles of the reporter and of the member
 	// they reported. Handles only: a moderator reads the conversation by what the members saw.
 	ListBuddyReports(ctx context.Context, arg ListBuddyReportsParams) ([]ListBuddyReportsRow, error)
+	// The sides of conversations that are due an unread notice (design D9). One row per
+	// (conversation, recipient side). A side is due when the other participant has written
+	// something past this side's read cursor, the OLDEST such message is not newer than
+	// sqlc.arg(cutoff), and the side was not already notified since that message — notified_*_at
+	// is compared with the oldest unread message rather than cleared on read, so reading and a
+	// later message re-arms it without the read path knowing the worker exists. Open
+	// conversations notify both sides; a pending one only its recipient, so an initiator is
+	// never told about their own invitation. Declined and closed are never due, and neither is
+	// a member who has left.
+	//
+	// prev_notified_at and last_read are returned for the compare-and-set in ClaimBuddyUnread.
+	ListBuddyUnreadDue(ctx context.Context, arg ListBuddyUnreadDueParams) ([]ListBuddyUnreadDueRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
 	// Every revision of one agent turn or autopilot run that is still standing, newest first —
@@ -6327,6 +6343,9 @@ type Querier interface {
 	// The two parallel arrays are zipped WITH ORDINALITY because sqlc's analyzer does not resolve
 	// the two-array form of unnest (see companies.sql's domain_industry_map).
 	RekeyJobExternalIDs(ctx context.Context, arg RekeyJobExternalIDsParams) (int64, error)
+	// Give a claim back after every channel failed, so the next run retries. Guarded on the
+	// stamp being the claim's own: a side that has since been re-notified keeps its newer one.
+	ReleaseBuddyUnread(ctx context.Context, arg ReleaseBuddyUnreadParams) error
 	// Void a consumption taken as a RESERVATION for work that then produced nothing.
 	//
 	// It RESTAMPS the row rather than deleting it or adding a compensating entry, and the

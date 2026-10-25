@@ -36,9 +36,9 @@
 
 ## 7. Notifications worker
 
-- [ ] 7.1 `buddy.NotifyUnread`: eligibility query (unread from the other side older than 5 min, pending/open, not yet notified since), claim-then-send, release claim on failure (integration tests: one per conversation, recent waits, re-notify after read + new message, declined/closed skipped)
-- [ ] 7.2 Delivery: email via `emailnotify` honouring `emailprefs`, Telegram when linked, `RecordNotification` with dedup key; body carries no message text or account detail
-- [ ] 7.3 `cmd/buddy-notify` on `worker.Main`, no-op without mail config; document it in root AGENTS.md worker list
+- [x] 7.1 `buddy.NotifyUnread`: eligibility query (unread from the other side older than 5 min, pending/open, not yet notified since), claim-then-send, release claim on failure (integration tests: one per conversation, recent waits, re-notify after read + new message, declined/closed skipped)
+- [x] 7.2 Delivery: email via `emailnotify` honouring `emailprefs`, Telegram when linked, `RecordNotification` with dedup key; body carries no message text or account detail
+- [x] 7.3 `cmd/buddy-notify` on `worker.Main`, no-op without mail config; document it in root AGENTS.md worker list
 
 ## 8. Web
 
