@@ -3,11 +3,12 @@
   import { replaceState } from '$app/navigation';
   import { Briefcase, FileText, Flag, GraduationCap, Handshake, Star } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
+  import { announce } from '#lib/announce.svelte.js';
   import { api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import { currentUser } from '#lib/auth.svelte.js';
   import type { Submission } from '#lib/types.js';
-  import { Button, cn } from '#lib/ui/index.js';
+  import { Button, Dialog, FormField, cn } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { timeAgo } from '#lib/utils.js';
   import ReportQueue from './ReportQueue.svelte';
@@ -81,8 +82,10 @@
     try {
       await api.approveSubmission(s.id);
       drop(s.id);
+      announce(`Approved "${s.title}"`);
     } catch {
       actionError = `Could not approve "${s.title}". It may have already been decided.`;
+      announce(actionError, 'assertive');
     } finally {
       acting = null;
     }
@@ -99,18 +102,35 @@
     }
   }
 
-  async function reject(s: Submission) {
+  // Rejecting asks for an optional reason and, when the URL has a host, whether to block
+  // that host too — one dialog for both, so the moderator sees the whole decision at once.
+  let rejectTarget = $state<Submission | null>(null);
+  let rejectOpen = $state(false);
+  let rejectReason = $state('');
+  let rejectBlockDomain = $state(false);
+  const rejectHost = $derived(rejectTarget ? hostOf(rejectTarget.url) : null);
+
+  function openReject(s: Submission) {
     if (acting !== null) return;
-    const reason = window.prompt(`Reject "${s.title}"? Optional reason:`, '');
-    // A null return means the moderator cancelled the prompt; an empty string is a
-    // reasonless rejection, which is allowed.
-    if (reason === null) return;
-    const host = hostOf(s.url);
-    const blockDomain = host !== null && window.confirm(`Also block "${host}" and reject its other pending submissions?`);
+    rejectTarget = s;
+    rejectReason = '';
+    rejectBlockDomain = false;
+    actionError = null;
+    rejectOpen = true;
+  }
+
+  async function reject(e: SubmitEvent) {
+    e.preventDefault();
+    const s = rejectTarget;
+    if (!s || acting !== null) return;
+    // An empty reason is a reasonless rejection, which is allowed.
+    const reason = rejectReason.trim();
+    const blockDomain = rejectHost !== null && rejectBlockDomain;
     acting = s.id;
     actionError = null;
     try {
       await api.rejectSubmission(s.id, reason, blockDomain);
+      rejectOpen = false;
       if (blockDomain) {
         // block_domain may have rejected other pending rows too (on the same host); a
         // full re-fetch reflects that instead of only dropping the one id.
@@ -118,8 +138,10 @@
       } else {
         drop(s.id);
       }
+      announce(`Rejected "${s.title}"`);
     } catch {
       actionError = `Could not reject "${s.title}". It may have already been decided.`;
+      announce(actionError, 'assertive');
     } finally {
       acting = null;
     }
@@ -209,7 +231,7 @@
                   <Button variant="primary" size="sm" disabled={acting !== null} onclick={() => approve(s)}>
                     Approve
                   </Button>
-                  <Button variant="ghost" size="sm" disabled={acting !== null} onclick={() => reject(s)}>
+                  <Button variant="ghost" size="sm" disabled={acting !== null} onclick={() => openReject(s)}>
                     Reject
                   </Button>
                 </div>
@@ -243,4 +265,46 @@
       </div>
     </div>
   </div>
+
+  <Dialog
+    bind:open={rejectOpen}
+    title={rejectTarget ? `Reject "${rejectTarget.title}"?` : 'Reject submission?'}
+    dismissible={acting === null}
+  >
+    <!-- `{#if}` because Dialog renders its children unconditionally. -->
+    {#if rejectOpen && rejectTarget}
+      <form class="flex flex-col gap-4" onsubmit={reject}>
+        <FormField label="Reason (optional)">
+          {#snippet children({ id, describedBy })}
+            <textarea
+              {id}
+              name="reason"
+              aria-describedby={describedBy}
+              rows="3"
+              maxlength={1000}
+              bind:value={rejectReason}
+              class="w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            ></textarea>
+          {/snippet}
+        </FormField>
+        {#if rejectHost}
+          <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" class="mt-0.5" bind:checked={rejectBlockDomain} />
+            <span>Also block “{rejectHost}” and reject its other pending submissions</span>
+          </label>
+        {/if}
+        {#if actionError}
+          <p class="text-sm text-destructive">{actionError}</p>
+        {/if}
+        <div class="flex items-center justify-end gap-2">
+          <Button variant="ghost" size="sm" disabled={acting !== null} onclick={() => (rejectOpen = false)}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" size="sm" disabled={acting !== null}>
+            {acting !== null ? 'Rejecting…' : 'Reject'}
+          </Button>
+        </div>
+      </form>
+    {/if}
+  </Dialog>
 {/if}

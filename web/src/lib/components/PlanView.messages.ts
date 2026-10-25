@@ -1,16 +1,16 @@
 import { defineMessages, plurals } from '#lib/i18n/t.js';
 
 // `plan.allowances[].feature` and the invoice/subscription statuses are stable API
-// identifiers, so both are MAPPED here rather than printed — an untranslated map
-// entry falls through to the raw token, which is the same behaviour the English
-// source already had for a feature it did not know.
+// identifiers, so both are MAPPED here rather than printed. A feature the map does not
+// know yet is humanised by PlanView ("cover-letter" → "Cover letter") rather than printed
+// raw; PlanView.test.ts holds the map to every feature the backend declares.
 export const messages = defineMessages(
   {
     headTitle: 'Your plan — freehire',
     signedOut: 'Sign in to view your plan.',
     title: 'Your plan',
     description:
-      'Every AI feature is available on every plan. What changes is how much of each you can do in a day — and it starts over every night.',
+      'Free covers reading your CV and AI search. Pro unlocks every AI feature, each with a daily allowance that starts over every night.',
     planStrip: {
       pro: 'Pro',
       ultra: 'Ultra',
@@ -55,11 +55,16 @@ export const messages = defineMessages(
       heading: 'Today',
       resetsAtPrefix: 'Resets at',
       unlimited: 'Unlimited',
+      // A feature whose daily allowance on this plan is zero. "0 / 0" would read as a
+      // spent allowance, which is a different thing from one the plan does not include.
+      notOnPlan: 'Not on {plan}',
       features: {
         tailor: 'CV editing sessions',
         match: 'Job analyses',
         assistant: 'Assistant messages',
         dictation: 'Dictation',
+        'cover-letter': 'Cover letters',
+        'auto-apply': 'Automatic applications',
       },
     },
     usage: {
@@ -83,7 +88,7 @@ export const messages = defineMessages(
       signedOut: 'Войдите, чтобы посмотреть свой тариф.',
       title: 'Ваш тариф',
       description:
-        'Все AI-функции доступны на любом тарифе. Отличается только то, сколько каждой можно сделать за день — и каждую ночь счётчик обнуляется.',
+        'На Free доступны разбор CV и AI-поиск. Pro открывает все AI-функции — у каждой свой дневной лимит, и каждую ночь он обнуляется.',
       planStrip: {
         pro: 'Pro',
         ultra: 'Ultra',
@@ -117,11 +122,14 @@ export const messages = defineMessages(
         heading: 'Сегодня',
         resetsAtPrefix: 'Обнуляется в',
         unlimited: 'Без ограничений',
+        notOnPlan: 'Нет в тарифе {plan}',
         features: {
           tailor: 'Сессии редактирования CV',
           match: 'Анализы вакансий',
           assistant: 'Сообщения ассистенту',
           dictation: 'Диктовка',
+          'cover-letter': 'Сопроводительные письма',
+          'auto-apply': 'Автоматические отклики',
         },
       },
       usage: {

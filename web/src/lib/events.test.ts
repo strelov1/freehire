@@ -23,7 +23,7 @@ describe('KIND_LABEL', () => {
 describe('eventLabel', () => {
   it('reads the signal into the sentence where there is one', () => {
     expect(eventLabel(event('employer_reply', 'rejection'))).toBe('Employer replied — rejection');
-    expect(eventLabel(event('stage_set', 'interview'))).toBe('Moved to interview');
+    expect(eventLabel(event('stage_set', 'interview'))).toBe('Moved to Interview');
   });
 
   it('says the plain thing where there is no signal', () => {
@@ -40,9 +40,9 @@ describe('eventLabel', () => {
     expect(eventLabel(event('offer_withdrawn'))).toBe('Offer withdrawn');
   });
 
-  it('translates into Russian, keeping the raw signal untouched', () => {
+  it('translates into Russian, naming the stage in Russian too', () => {
     expect(eventLabel(event('employer_reply', 'rejection'), 'ru')).toBe('Работодатель ответил — rejection');
-    expect(eventLabel(event('stage_set', 'interview'), 'ru')).toBe('Переход на этап interview');
+    expect(eventLabel(event('stage_set', 'preparing'), 'ru')).toBe('Переход на этап «Подготовка»');
     expect(eventLabel(event('applied'), 'ru')).toBe('Отклик отправлен');
     expect(eventLabel(event('interview_scheduled'), 'ru')).toBe('Собеседование назначено');
   });

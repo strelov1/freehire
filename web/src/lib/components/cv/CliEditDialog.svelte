@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { Dialog } from '#lib/ui/index.js';
+  import { announce } from '#lib/announce.svelte.js';
 
   // Points a candidate's own coding agent at this CV, without teaching the reader
   // the CLI's flags — an agent with the freehire-tailor-cv skill installed (ships
@@ -22,6 +23,7 @@
     try {
       await navigator.clipboard.writeText(prompt);
       copied = true;
+      announce('Prompt copied to the clipboard');
       clearTimeout(copyTimer);
       copyTimer = setTimeout(() => (copied = false), 1600);
     } catch {

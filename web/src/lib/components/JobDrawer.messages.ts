@@ -1,8 +1,9 @@
 import { defineMessages, plurals } from '#lib/i18n/t.js';
 
-// `humanizeStage`/`groupedStages()`/`CLOSED_OUTCOMES` labels and `e.signal`/`f.label`/
-// `f.value`/`row.pending.label`/`u.label` are all generated vocabulary or server data —
-// out of scope here, the same boundary `emailStatus.ts` and `JobBoard.messages.ts` draw.
+// Stage names (`humanizeStage`/`groupedStages()`/`CLOSED_OUTCOMES`) are translated by
+// `#lib/stages.js` and called with the locale here. `e.signal`/`f.label`/`f.value`/
+// `row.pending.label`/`u.label` are server data — out of scope, the same boundary
+// `emailStatus.ts` and `JobBoard.messages.ts` draw.
 // `statusLabel`/`stageImplication` (from `#lib/emailStatus.js`) are called WITH locale here,
 // unlike the inbox PR's deferral of `JobDrawer` — this change translates the surrounding
 // prose too, so the chip's label must match it.
@@ -138,13 +139,13 @@ export const messages = defineMessages(
       followUp: 'Напомнить о себе',
       analyze: 'Анализ',
       preparing: 'Готовим…',
-      tailorCv: 'Адаптировать резюме',
+      tailorCv: 'Адаптировать CV',
       tabsAria: 'Вид информации о вакансии',
       tabs: {
         application: 'Заявка',
         progress: 'Прогресс',
         jobMatch: 'Соответствие',
-        jobDescription: 'Описание вакансии',
+        jobDescription: 'Описание',
         emails: 'Письма',
         emailsWithCount: 'Письма ({count})',
       },
@@ -164,22 +165,22 @@ export const messages = defineMessages(
       pausedNote:
         'Отмечено как приостановленное — напоминание только для вас. Автоотклик всё равно продолжает работать над этим в фоне.',
       banners: {
-        tailoring: 'Автоотклик готовит адаптированное резюме для этой вакансии.',
+        tailoring: 'Автоотклик готовит адаптированное CV для этой вакансии.',
         approved: 'Автоотклик одобрил эту заявку — она в очереди на автоматическую отправку.',
-        pendingReview: 'Автоотклик адаптировал резюме для этой вакансии и готов его отправить.',
+        pendingReview: 'Автоотклик адаптировал CV для этой вакансии и готов его отправить.',
         blocked: 'Автоотклик не смог завершить эту заявку.',
         blockedRetryHint: 'Ответьте на вопросы выше и попробуйте снова — ответы пригодятся и в следующих заявках.',
-        declined: 'Вы отклонили адаптированное резюме, подготовленное автооткликом. Эта попытка финальная.',
+        declined: 'Вы отклонили адаптированное CV, подготовленное автооткликом. Эта попытка финальная.',
         failed: 'Автоотклику не удалось отправить заявку после нескольких попыток.',
         failedUncertain:
           'Автоотклик нажал «Отправить», но не смог подтвердить, что работодатель получил заявку, поэтому повторно её не отправит. Уточните у работодателя, прежде чем откликаться другим способом.',
-        tailorFailed: 'Автоотклику не удалось подготовить резюме для этой вакансии.',
+        tailorFailed: 'Автоотклику не удалось подготовить CV для этой вакансии.',
         tailorFailedDetail:
-          'Ничего не отправлено, вакансия всё ещё на вашей доске. Вы можете адаптировать резюме сами и откликнуться как обычно.',
+          'Ничего не отправлено, вакансия всё ещё на вашей доске. Вы можете адаптировать CV сами и откликнуться как обычно.',
         autoApplied: 'Эта заявка была отправлена автоматически автооткликом.',
       },
-      viewTailoredCv: 'Открыть адаптированное резюме',
-      tailorACv: 'Адаптировать резюме',
+      viewTailoredCv: 'Открыть адаптированное CV',
+      tailorACv: 'Адаптировать CV',
       willBeFilledAutomatically: '{label} — будет заполнено автоматически',
       cannotAnswerForYou: '{label} — мы не можем ответить на это за вас; вам нужно будет заполнить это самостоятельно при отклике',
       answerPlaceholder: 'Ваш ответ — сохранится и на будущее',
@@ -197,7 +198,7 @@ export const messages = defineMessages(
       loading: 'Загрузка…',
       looksLike: 'Похоже на {signal}, но этап — {stage}.',
       stageUnset: 'не задан',
-      moveTo: 'Перевести на этап {stage}',
+      moveTo: 'Перевести на этап «{stage}»',
       dismiss: 'Отклонить',
       searchingMail: 'Ищем в вашей почте…',
       findMail: 'Найти письма по этой заявке',

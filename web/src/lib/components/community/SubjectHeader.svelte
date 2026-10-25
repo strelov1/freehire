@@ -10,6 +10,7 @@
     absence,
     subjectType,
     subjectSlug,
+    heading = false,
     class: className,
   }: {
     /** Null when the subject could not be read. The discussion still renders — it
@@ -21,6 +22,9 @@
     absence?: SubjectAbsence;
     subjectType: 'company' | 'job';
     subjectSlug: string;
+    /** Whether the subject's name is the page's heading. True on a discussion index,
+     *  where nothing else names the page; false under a thread, whose own title is. */
+    heading?: boolean;
     /** Spacing is the caller's: the company page seats this beside a button, the
      *  others give it a row of its own. */
     class?: string;
@@ -71,7 +75,9 @@
   >
     {@render mark(subject.company)}
     <div class="min-w-0 flex-1">
-      <div class="truncate font-semibold leading-snug">{subject.title}</div>
+      <svelte:element this={heading ? 'h1' : 'div'} class="truncate font-semibold leading-snug">
+        {subject.title}
+      </svelte:element>
       <div class="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
         <!-- For a company subject the name is already the title above; printing it
              again would just say the same thing twice. -->
@@ -89,7 +95,7 @@
   <div class={[box, className]}>
     {@render mark('')}
     <div class="min-w-0 flex-1">
-      <div class="truncate font-mono text-sm">{subjectSlug}</div>
+      <svelte:element this={heading ? 'h1' : 'div'} class="truncate font-mono text-sm">{subjectSlug}</svelte:element>
       <div class="mt-0.5 text-sm text-muted-foreground">{absentNote}</div>
     </div>
   </div>

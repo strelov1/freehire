@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Briefcase, Building2, Globe, MapPin, Plus } from '@lucide/svelte';
   import { tablist } from '#lib/actions/tablist.js';
+  import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import { EMPLOYMENT_TYPE_OPTIONS, SENIORITY_OPTIONS, WORK_MODE_OPTIONS } from '#lib/facets.js';
@@ -64,8 +65,10 @@
       const updated = await api.updateEmployerCompany(input);
       onProfileSaved(updated);
       profileSavedAt = Date.now();
+      announce(s.profileSaved);
     } catch (err) {
       profileError = err instanceof ApiError ? err.message : s.profileSaveError;
+      announce(profileError, 'assertive');
     } finally {
       savingProfile = false;
     }
@@ -152,7 +155,10 @@
       questions = form.questions.map(({ label, type, required, options }) => ({ label, type, required, options }));
       questionsLoaded = true;
     } catch {
-      if (editingSlug === slug) formError = s.questionsLoadError;
+      if (editingSlug === slug) {
+        formError = s.questionsLoadError;
+        announce(formError, 'assertive');
+      }
     }
   }
 
@@ -212,6 +218,7 @@
           : err instanceof ApiError
             ? err.message
             : s.vacancyError;
+      announce(formError, 'assertive');
     } finally {
       saving = false;
     }
@@ -243,6 +250,7 @@
       replaceInList({ ...job, closed_at: undefined });
     } catch (err) {
       reopenError = { slug: job.public_slug, message: err instanceof ApiError ? err.message : s.vacancyError };
+      announce(reopenError.message, 'assertive');
     } finally {
       reopeningSlug = null;
     }

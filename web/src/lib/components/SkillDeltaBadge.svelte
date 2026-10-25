@@ -24,7 +24,7 @@
   </span>
 {:else if rounded > 0}
   <span
-    class="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400"
+    class="inline-flex items-center gap-1 rounded-md bg-success/10 px-1.5 py-0.5 text-xs font-medium text-success-strong"
   >
     <TrendingUp class="size-3" />{fmtPct(rounded)}
   </span>

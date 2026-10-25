@@ -40,7 +40,7 @@ const ITEM = '[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]
  *   returns to whatever was focused when the menu opened, usually the trigger, unless
  *   the app already moved it elsewhere (see `restoreFocus`).
  *
- * Keys pressed inside an inline form in the menu (AddToList's "new list") are left to
+ * Keys pressed inside a form placed in a menu are left to
  * the form, so arrows and Home/End move the caret and Tab reaches its submit button.
  */
 export function menuNav({ onclose }: { onclose: () => void }): Attachment<HTMLElement> {
@@ -72,7 +72,7 @@ export function menuNav({ onclose }: { onclose: () => void }): Attachment<HTMLEl
 
     const onKeydown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      // An inline form in the menu (AddToList's "new list") keeps its own keys: arrows
+      // A form inside a menu keeps its own keys: arrows
       // move the caret and Tab walks from the field to its submit button.
       if (target?.closest('input, textarea, form')) return;
       if (e.key === 'Tab') {

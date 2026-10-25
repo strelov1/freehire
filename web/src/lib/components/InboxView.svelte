@@ -742,20 +742,20 @@
                     >
                       {format(s.linkedTo, { company: msg.linked_company || s.linkedFallback })} ↗
                     </a>
-                    <button type="button" onclick={unlink} class="text-xs text-muted-foreground hover:text-destructive">{s.unlink}</button>
+                    <button type="button" onclick={unlink} class="relative text-xs text-muted-foreground after:absolute after:-inset-1 hover:text-destructive">{s.unlink}</button>
                   {:else if linkState === 'suggested'}
                     <span class="inline-flex items-center gap-2 rounded-full border border-brand-ring/50 bg-brand-muted/40 px-2.5 py-0.5 text-xs">
                       {s.looksLike} <span class="font-medium">{msg.suggested_company || s.suggestedFallback}</span>
-                      <button type="button" onclick={confirmLink} class="font-medium text-brand-strong hover:underline">{s.link}</button>
+                      <button type="button" onclick={confirmLink} class="relative font-medium text-brand-strong after:absolute after:-inset-1 hover:underline">{s.link}</button>
                       <span aria-hidden="true">·</span>
-                      <button type="button" onclick={rejectLink} class="text-muted-foreground hover:text-foreground">{s.notThis}</button>
+                      <button type="button" onclick={rejectLink} class="relative text-muted-foreground after:absolute after:-inset-1 hover:text-foreground">{s.notThis}</button>
                     </span>
                   {:else}
                     {#if linkState === 'undo'}
                       <span class="inline-flex items-center gap-2 text-xs text-muted-foreground">
                         {s.unlinked}
                         <span aria-hidden="true">·</span>
-                        <button type="button" onclick={undoUnlink} class="font-medium text-brand-strong hover:underline">{s.undo}</button>
+                        <button type="button" onclick={undoUnlink} class="relative font-medium text-brand-strong after:absolute after:-inset-1 hover:underline">{s.undo}</button>
                       </span>
                     {/if}
                     <ApplicationLinkPicker applications={trackedApps} loading={trackedLoading} onpick={linkTo} />

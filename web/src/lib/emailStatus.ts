@@ -51,9 +51,9 @@ const prose = defineMessages(
 const STATUS_CLASSES: Record<EmailStatusSignal, string> = {
   acknowledgement: 'border-border text-muted-foreground',
   screening: 'border-blue-400/40 text-blue-600 dark:text-blue-400',
-  interview_invitation: 'border-emerald-400/50 text-emerald-700 dark:text-emerald-400',
+  interview_invitation: 'border-success-strong/50 text-success-strong',
   assessment: 'border-indigo-400/40 text-indigo-600 dark:text-indigo-400',
-  offer: 'border-emerald-500/60 font-semibold text-emerald-700 dark:text-emerald-300',
+  offer: 'border-success/60 font-semibold text-success-strong',
   rejection: 'border-destructive/40 text-destructive',
   info_request: 'border-warning/50 text-warning-strong',
   incomplete_application: 'border-orange-400/50 text-orange-700 dark:text-orange-400',

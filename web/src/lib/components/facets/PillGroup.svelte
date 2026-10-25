@@ -59,7 +59,7 @@
            decorative: the label right beside it says the same thing, so announcing
            the image too would only repeat it. -->
       {#if opt.icon}
-        <img src={opt.icon} alt="" class="size-4 shrink-0 rounded-sm object-contain" />
+        <img src={opt.icon} alt="" loading="lazy" decoding="async" class="size-4 shrink-0 rounded-sm object-contain" />
       {/if}
       {opt.label}<PillMeta {included} {excluded} count={opt.count?.toLocaleString()} />
     </button>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Bell } from '@lucide/svelte';
   import { resolve } from '$app/paths';
+  import { announce } from '#lib/announce.svelte.js';
   import { ApiError } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
@@ -59,11 +60,14 @@
     try {
       if (subscribed) {
         await unfollow();
+        announce(`Unsubscribed from ${companyName} updates`);
       } else {
         await follow();
+        announce(`Subscribed to ${companyName} updates`);
       }
     } catch (e) {
       error = e instanceof ApiError ? e.message : 'Could not update. Please try again.';
+      announce(error, 'assertive');
     } finally {
       busy = false;
     }

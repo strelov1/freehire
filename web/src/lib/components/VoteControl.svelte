@@ -83,7 +83,7 @@
       base,
       'thumb',
       mine === 1
-        ? 'border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-500'
+        ? 'border-success/40 bg-success/10 text-success-strong'
         : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
       { popping: popUp },
     ]}

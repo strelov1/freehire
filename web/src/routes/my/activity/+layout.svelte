@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { Bookmark, EyeOff, History, Sparkles } from '@lucide/svelte';
+  import { Bookmark, EyeOff, History, Target } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { TabStrip, tabStripId } from '#lib/ui/index.js';
@@ -24,7 +24,7 @@
   const SECTIONS = [
     { id: 'saved', href: '/my/activity', icon: Bookmark },
     { id: 'history', href: '/my/activity/history', icon: History },
-    { id: 'matches', href: '/my/activity/matches', icon: Sparkles },
+    { id: 'matches', href: '/my/activity/matches', icon: Target },
     { id: 'hidden', href: '/my/activity/hidden', icon: EyeOff },
   ] as const;
   const PANEL_ID = 'activity-tabpanel';

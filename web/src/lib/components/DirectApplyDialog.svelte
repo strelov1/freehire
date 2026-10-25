@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { FileUp, Paperclip, Sparkles } from '@lucide/svelte';
+  import { FilePen, FileUp, Paperclip } from '@lucide/svelte';
+  import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
   import type { DirectApplyForm } from '#lib/types.js';
   import { Button, Dialog, FormField } from '#lib/ui/index.js';
@@ -76,6 +77,7 @@
     } catch (err) {
       uploadError =
         err instanceof ApiError && err.status === 413 ? err.message : "Couldn't upload your CV. Please try again.";
+      announce(uploadError, 'assertive');
     } finally {
       uploading = false;
     }
@@ -103,6 +105,7 @@
       const choice = cv === 'tailored' && form.cvs.tailored ? { cv_id: form.cvs.tailored.id } : { resume: true as const };
       await api.sendDirectApplication(slug, { ...choice, answers, note: note.trim() || undefined });
       done = true;
+      announce(`Your application was sent to ${form.company_name}.`);
       onSent();
     } catch (err) {
       error = messageFor(err);
@@ -112,11 +115,14 @@
         const fresh = await api.getDirectApplyForm(slug).catch(() => null);
         if (fresh?.applied) {
           done = true;
+          error = null;
+          announce(`Your application was sent to ${form.company_name}.`);
           onSent();
         } else {
           error = 'Your application is being sent. Check back in a minute.';
         }
       }
+      if (error) announce(error, 'assertive');
     } finally {
       submitting = false;
     }
@@ -129,7 +135,10 @@
   {:else if !form}
     <p class="text-sm text-muted-foreground">Loading…</p>
   {:else if done}
-    <p class="text-sm">Your application was sent to {form.company_name}. They reply to you by email.</p>
+    <!-- The form this replaces held focus; without a new home it falls to the body. -->
+    <p class="text-sm outline-none" tabindex="-1" {@attach (el: HTMLElement) => el.focus()}>
+      Your application was sent to {form.company_name}. They reply to you by email.
+    </p>
     <div class="mt-4 flex justify-end"><Button onclick={() => (open = false)}>Close</Button></div>
   {:else if !form.open}
     <p class="text-sm text-muted-foreground">This vacancy no longer takes applications.</p>
@@ -184,7 +193,7 @@
               />
             {/if}
             <Button type="button" variant="primary" class="gap-1.5" onclick={onTailor}>
-              <Sparkles class="size-4" aria-hidden="true" /> Tailor my CV for this vacancy
+              <FilePen class="size-4" aria-hidden="true" /> Tailor my CV for this vacancy
             </Button>
           </div>
           {#if uploadError}

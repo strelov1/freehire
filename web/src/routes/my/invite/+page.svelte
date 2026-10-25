@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { announce } from '#lib/announce.svelte.js';
   import { api } from '#lib/api.js';
   import { formatMinorUnits } from '#lib/money.js';
   import type { InviteSummary } from '#lib/types.js';
@@ -24,6 +25,7 @@
     try {
       await navigator.clipboard.writeText(summary.link);
       copied = true;
+      announce('Invite link copied to the clipboard');
       setTimeout(() => (copied = false), 2000);
     } catch {
       copied = false;

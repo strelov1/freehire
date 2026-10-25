@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { t } from '#lib/i18n/t.js';
+import { messages } from './PlanView.messages';
 
 // A SOURCE-TEXT AUDIT, not a mounted-component test. Predates `web/`'s `components`
 // vitest project (real `.svelte` rendering via `@testing-library/svelte` + jsdom,
@@ -27,5 +29,24 @@ describe('PlanView upgrade CTA', () => {
 
   it('only fetches the prices list for a Pro account, not on every visit', () => {
     expect(SOURCE).toContain("if (plan?.plan !== 'pro') return;");
+  });
+});
+
+// Every metered feature the backend declares must have a label in both locales. The keys
+// are read from the Go source rather than listed here: a second hand-kept list would pass
+// exactly when both forgot the same new feature, which is how "cover-letter" and
+// "auto-apply" reached the page as raw keys.
+const PLAN_GO = readFileSync(join(import.meta.dirname, '../../../../internal/ai/plan/plan.go'), 'utf8');
+const FEATURES = [...PLAN_GO.matchAll(/^\s*Feature\w+\s+Feature\s*=\s*"([^"]+)"/gm)].flatMap((m) => (m[1] ? [m[1]] : []));
+
+describe('PlanView feature labels', () => {
+  it('reads the feature list from the backend', () => {
+    expect(FEATURES).toContain('tailor');
+    expect(FEATURES.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it.each(['en', 'ru'] as const)('labels every backend feature in %s', (loc) => {
+    const labels = t(messages, loc).today.features as Record<string, string>;
+    for (const f of FEATURES) expect(labels[f], f).toBeTruthy();
   });
 });

@@ -14,6 +14,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ZoomIn, ZoomOut, Download, Menu, PanelLeftClose, PanelLeftOpen, Terminal } from '@lucide/svelte';
+  import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '#lib/cvRefreshOffer.js';
   import { askCvRefresh } from '#lib/cvRefreshDialog.svelte.js';
@@ -397,8 +398,11 @@
           void refreshJobMatch();
         },
       });
+      announce('Changes reset');
     } catch (e) {
       resetError = e instanceof ApiError ? e.message : 'Could not reset changes.';
+      // Shown in two places (the History tab and the Experience tab), spoken once here.
+      announce(resetError, 'assertive');
     } finally {
       resetBusy = false;
     }
@@ -681,7 +685,6 @@
             {#if resetError}
               <p
                 class="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-strong"
-                role="alert"
               >
                 {resetError}
               </p>

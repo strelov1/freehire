@@ -16,5 +16,5 @@ export function fmtPct(rounded: number): string {
  *  still reads "0%". */
 export function trendDotClass(rounded: number | null): string {
   if (rounded === null || rounded === 0) return 'fill-foreground';
-  return rounded > 0 ? 'fill-emerald-500' : 'fill-rose-500';
+  return rounded > 0 ? 'fill-success' : 'fill-rose-500';
 }

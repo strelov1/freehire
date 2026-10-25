@@ -645,7 +645,7 @@
 
 {#if actionError}
   <!-- Pinned above everything, the drawer included: a stage picked there fails there. -->
-  <div class="fixed inset-x-0 bottom-4 z-toast flex justify-center px-4">
+  <div class="fixed inset-x-0 bottom-safe z-toast flex justify-center px-4">
     <div class={cn(alertVariants({ variant: 'destructive' }), 'w-full max-w-md items-center bg-background shadow-lg')}>
       <p class="flex-1">{actionError}</p>
       <button

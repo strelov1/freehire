@@ -59,6 +59,7 @@
         absence={data.absence}
         subjectType="company"
         subjectSlug={data.slug}
+        heading
         class="min-w-0 flex-1"
       />
       <Button variant="outline" class="shrink-0" onclick={openFeedback}>Leave feedback</Button>

@@ -27,7 +27,7 @@
   const rows = $derived(report ?? []);
 
   const toneClass: Record<string, string> = {
-    closed: 'text-emerald-600 dark:text-emerald-400',
+    closed: 'text-success-strong',
     open: 'text-warning-strong',
     skipped: 'text-muted-foreground',
   };

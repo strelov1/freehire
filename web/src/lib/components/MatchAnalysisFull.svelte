@@ -273,11 +273,11 @@
     poor: 'border-destructive/30 bg-destructive/10 text-destructive-strong',
   };
   const toneGlow: Record<Tone, string> = {
-    strong: 'rgba(120,140,21,0.16)',
-    good: 'rgba(120,140,21,0.16)',
-    moderate: 'rgba(245,158,11,0.10)',
-    weak: 'rgba(245,158,11,0.10)',
-    poor: 'rgba(239,68,68,0.10)',
+    strong: 'color-mix(in oklch, var(--brand) 16%, transparent)',
+    good: 'color-mix(in oklch, var(--brand) 16%, transparent)',
+    moderate: 'color-mix(in oklch, var(--warning) 10%, transparent)',
+    weak: 'color-mix(in oklch, var(--warning) 10%, transparent)',
+    poor: 'color-mix(in oklch, var(--destructive) 10%, transparent)',
   };
 
   // Section headings read as tiny wide-tracked uppercase labels on the full-width /match page;

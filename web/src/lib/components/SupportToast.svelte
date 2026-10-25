@@ -52,7 +52,7 @@
     role="complementary"
     aria-label="Support freehire.me"
     class={cn(
-      'fixed inset-x-4 bottom-4 z-30 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur sm:inset-x-auto sm:right-4 sm:max-w-md',
+      'fixed inset-x-4 bottom-safe z-30 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur sm:inset-x-auto sm:right-4 sm:max-w-md',
       // The job page anchors its Apply button to the same corner on the same layer below
       // `lg`. A promo never covers a page's own primary action, so here the toast waits
       // for the width at which that bar is gone.

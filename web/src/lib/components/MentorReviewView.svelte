@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { announce } from '#lib/announce.svelte.js';
   import { api } from '#lib/api.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { companyLabel } from '#lib/mentorship.js';
@@ -42,8 +43,10 @@
     try {
       await api.decideMentorProfile(profile.id, next);
       queueData.value = queue.filter((p) => p.id !== profile.id);
+      announce(next === 'approved' ? 'Profile approved' : 'Profile rejected');
     } catch (e) {
       error = errorMessage(e, 'That decision could not be recorded.');
+      announce(error, 'assertive');
     } finally {
       acting = null;
     }

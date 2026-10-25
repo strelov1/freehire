@@ -98,7 +98,7 @@
             y={bar.addedY}
             width={model.barW}
             height={bar.addedH}
-            class="fill-emerald-500"
+            class="fill-success"
           />
           <rect
             x={bar.removedX}
@@ -143,7 +143,7 @@
         >
           <div class="mb-1 font-medium text-foreground">{fullDate(hoveredBar.period)}</div>
           <div class="flex items-center gap-1.5 text-muted-foreground">
-            <span class="inline-block h-2 w-2 rounded-sm bg-emerald-500"></span>
+            <span class="inline-block h-2 w-2 rounded-sm bg-success"></span>
             Added <span class="ml-auto font-medium text-foreground">{hoveredBar.added.toLocaleString()}</span>
           </div>
           <div class="flex items-center gap-1.5 text-muted-foreground">
@@ -156,7 +156,7 @@
 
     <figcaption class="flex items-center justify-center gap-6 text-xs text-muted-foreground">
       <span class="flex items-center gap-1.5">
-        <span class="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500"></span>
+        <span class="inline-block h-2.5 w-2.5 rounded-sm bg-success"></span>
         Added
       </span>
       <span class="flex items-center gap-1.5">

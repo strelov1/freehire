@@ -3,7 +3,7 @@
      its rule. The list used to load behind five 64px bars standing in for ~220px cards,
      so the page grew to three times its height the moment the rows arrived. -->
 <div class="rounded-xl border border-border bg-card" aria-hidden="true">
-  <div class="animate-pulse p-4">
+  <div class="motion-safe:animate-pulse p-4">
     <div class="flex items-center justify-between gap-3 pr-11">
       <div class="flex items-center gap-2">
         <div class="size-6 rounded-md bg-muted"></div>
@@ -25,6 +25,6 @@
     </div>
   </div>
   <div class="flex items-center border-t border-border px-4 py-2.5">
-    <div class="h-9 w-32 animate-pulse rounded-lg bg-muted"></div>
+    <div class="h-9 w-32 motion-safe:animate-pulse rounded-lg bg-muted"></div>
   </div>
 </div>

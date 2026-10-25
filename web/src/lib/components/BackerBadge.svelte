@@ -39,7 +39,7 @@
         className,
       )}
     >
-      <img src={badge.mark} alt="" class="{size} shrink-0 rounded-sm object-contain" />
+      <img src={badge.mark} alt="" loading="lazy" decoding="async" class="{size} shrink-0 rounded-sm object-contain" />
       {badge.label}
       <!-- The visible label names the brand but not the relationship. A screen
            reader gets the whole sentence, so "Y Combinator" is never announced as
@@ -53,6 +53,7 @@
       title={badge.alt}
       class={cn(size, 'shrink-0 rounded-sm object-contain', className)}
       loading="lazy"
+      decoding="async"
     />
   {/if}
 {/each}

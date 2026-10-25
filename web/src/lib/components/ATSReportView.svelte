@@ -2,6 +2,7 @@
   import { Check, Copy, TriangleAlert, X } from '@lucide/svelte';
   import type { Snippet } from 'svelte';
   import type { ATSReport } from '#lib/types.js';
+  import { announce } from '#lib/announce.svelte.js';
 
   // The CV ATS-readiness report from the backend: an overall score out of 100 built
   // from five weighted categories, each with per-item point attribution, plus the
@@ -31,6 +32,7 @@
     try {
       await navigator.clipboard.writeText(text);
       copied = true;
+      announce('Suggestions copied to the clipboard');
       setTimeout(() => (copied = false), 1500);
     } catch {
       // Clipboard unavailable (e.g. insecure context) — silently skip.

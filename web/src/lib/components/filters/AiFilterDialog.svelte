@@ -325,7 +325,7 @@
           autofocus
           aria-label={s.describeAria}
           placeholder={s.describePlaceholder}
-          class="mt-4 w-full resize-none rounded-xl border border-border bg-background p-4 text-base leading-relaxed outline-none placeholder:text-muted-foreground focus:border-brand"
+          class="mt-4 w-full resize-none rounded-xl border border-border bg-background p-4 text-base leading-relaxed outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring"
           onkeydown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -352,7 +352,7 @@
                   {/if}
                 </span>
               </span>
-              <button type="button" aria-label={s.removeCv} class="text-muted-foreground hover:text-foreground" onclick={clearCv}>
+              <button type="button" aria-label={s.removeCv} class="relative text-muted-foreground after:absolute after:-inset-1 hover:text-foreground" onclick={clearCv}>
                 <X class="size-4" />
               </button>
             </div>

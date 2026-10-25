@@ -115,7 +115,10 @@
     margin: 0.15rem 0 0;
     white-space: pre-wrap;
   }
+  /* The text button is ~20px tall; the pseudo-element extends its hit area to
+     the 24px minimum without moving anything. */
   .node__reply-btn {
+    position: relative;
     background: none;
     border: none;
     padding: 0.15rem 0;
@@ -124,6 +127,11 @@
     cursor: pointer;
     font: inherit;
     font-size: 0.8rem;
+  }
+  .node__reply-btn::after {
+    content: '';
+    position: absolute;
+    inset: -0.25rem;
   }
   .node__reply-btn:hover {
     color: var(--primary, #2563eb);

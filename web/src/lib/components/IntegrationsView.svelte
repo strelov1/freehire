@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
+  import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import type { GmailStatus } from '#lib/api.js';
   import type { DiscordStatus } from '#lib/types.js';
@@ -55,8 +56,10 @@
     try {
       await api.syncGmail();
       syncStarted = true;
+      announce('Sync started — new mail will show up in the Inbox shortly.');
     } catch (e) {
       gmailError = errorMessage(e, 'Sync failed.');
+      announce(gmailError, 'assertive');
     } finally {
       syncing = false;
     }
@@ -68,6 +71,7 @@
       gmail = { connected: false, available: gmail?.available, calendar_connected: false };
     } catch (e) {
       gmailError = errorMessage(e, 'Failed to disconnect.');
+      announce(gmailError, 'assertive');
     }
   }
 
@@ -126,6 +130,7 @@
     } else {
       return;
     }
+    announce(googleNotice.text, googleNotice.ok ? 'polite' : 'assertive');
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
     replaceState(page.url.pathname, {});
   }
@@ -146,6 +151,7 @@
       tgConnecting = true;
     } catch (e) {
       tgError = e instanceof ApiError ? e.message : 'Could not start the Telegram connection. Please try again.';
+      announce(tgError, 'assertive');
     } finally {
       tgBusy = false;
     }
@@ -157,10 +163,16 @@
     tgError = null;
     try {
       await notifications.refreshTelegram();
-      if (notifications.telegram.linked) tgConnecting = false;
-      else tgError = 'Not connected yet — tap “Start” in Telegram, then retry.';
+      if (notifications.telegram.linked) {
+        tgConnecting = false;
+        announce('Telegram connected.');
+      } else {
+        tgError = 'Not connected yet — tap “Start” in Telegram, then retry.';
+        announce(tgError, 'assertive');
+      }
     } catch {
       tgError = 'Could not check the connection. Please try again.';
+      announce(tgError, 'assertive');
     } finally {
       tgBusy = false;
     }
@@ -174,6 +186,7 @@
       await notifications.unlink();
     } catch (e) {
       tgError = e instanceof ApiError ? e.message : 'Could not disconnect Telegram. Please try again.';
+      announce(tgError, 'assertive');
     } finally {
       tgBusy = false;
     }
@@ -220,6 +233,7 @@
       await loadDiscord();
     } catch (e) {
       discordError = errorMessage(e, 'Could not disconnect Discord. Please try again.');
+      announce(discordError, 'assertive');
     } finally {
       discordBusy = false;
     }
@@ -235,6 +249,7 @@
     } else {
       return;
     }
+    announce(discordNotice.text, discordNotice.ok ? 'polite' : 'assertive');
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- shallow same-page URL clean-up to the current pathname; nothing to resolve
     replaceState(page.url.pathname, {});
   }
