@@ -895,6 +895,12 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **`emp_type_name` is the tenant's own HR category** ("Permanent", "Probationary", "BRANCH RESOURCE", "P-P8-Probationer-HO Executive" — measured over 2,700 postings), so only a label that states the arrangement is mapped. `is_remote` is 0 by default on tenants that never set it, so only 1 is a statement. `country` is a structured country name.
 - **The API names no employer**; the portal page served to a non-browser client is a shell whose `<title>` is the legal entity ("Ather Energy Limited"), which is what `cmd/harvest-boards` stores.
 
+**greytHR Hire traps** (`greythr`, the recruiting module of the payroll/HRMS most Indian small and mid-sized employers run, at `<tenant>.greythr.com/hire/jobs/`; live-verified 2026-10-25 — 119 tenant hosts in Common Crawl, 57 with openings, 843 postings):
+
+- **Two open JSON endpoints on the tenant host, no key, plain client**: `POST /hire/api/career/published_jobs/` (body `{}`; every published opening in one unpaginated `data` array, description included) and `GET /hire/api/greythr/emp-category/` (the tenant's category values, which is where an opening's `locations` ids get their names — `"519"` is `KARAIKUDI`). The employer's name is `GET /hire/api/career/get_company_details/` → `company_name`, which `cmd/harvest-boards` stores.
+- **The board is the whole host**, and the same host is the tenant's payroll login (`/uas/portal/auth/login`), so `atsboard` reads it as a board only under `/hire/`. A label no tenant holds and a tenant without the Hire module both answer the listing with a 404 (`ErrBoardGone`).
+- **`job_type` is a fixed picklist** (Full-time, Part-time, Internship, Contract, Direct Contract); `is_remote` is false by default, so only true is a statement.
+
 **Keka note** (`keka`): Keka's DNS is a wildcard, and a label with no careers portal redirects to an HTML page under HTTP 200 — `/careers/Content/TenantNotFound.html` ("Invalid Tenant") for a label no organisation holds, `/careers/Content/403.html` ("Forbidden Access") for an organisation that runs Keka's HRMS without its hiring module (ebay, brisa). Both are "no board", not a refusal.
 
 **onapply traps** (`onapply`, a German ATS at `<tenant>.onapply.de`; live-verified 2026-10-25 — 4,131 postings from 553 employers, DE 92% / CH 4% / AT 3%, ~5% technical by title):

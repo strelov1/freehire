@@ -483,6 +483,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	// same host is also the tenant's employee HRMS login, hence the "careers" segment below.
 	{"darwinbox.in", "darwinbox", modeTenantHost},
 	{"darwinbox.com", "darwinbox", modeTenantHost},
+	// greytHR Hire: <tenant>.greythr.com/hire/jobs/, the board being the whole host the adapter
+	// reads /hire/api/ on. The same host is the tenant's payroll/HRMS login, hence the "hire"
+	// segment below.
+	{"greythr.com", "greythr", modeTenantHost},
 
 	// --- keyedsegment: board = the shaped segment after a fixed key segment ---
 	{"workstream.us", "workstream", modeKeyedSegment},
@@ -613,6 +617,8 @@ var tenantHostPostingSegments = map[string]string{
 	// /ms/candidate/careers/<id>); the tenant's HRMS pages on the same host do not.
 	"darwinbox.in":  "careers",
 	"darwinbox.com": "careers",
+	// Every greytHR Hire URL sits under /hire/ (/hire/jobs/, /hire/jobs/<slug>); the HRMS does not.
+	"greythr.com": "hire",
 }
 
 // keyedSegmentBoards holds, per modeKeyedSegment host entry, the key segment the board follows
@@ -1432,6 +1438,8 @@ var platformLabelsByApex = map[string][]string{
 	// Darwinbox's marketing site, its content hub and its events site.
 	"darwinbox.com": {"www", "explore", "lighthouse"},
 	"darwinbox.in":  {"www"},
+	// greytHR's marketing site, community forum, help centres, status page and campaign pages.
+	"greythr.com": {"www", "community", "admin-help", "ess-help", "status", "campaign"},
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —

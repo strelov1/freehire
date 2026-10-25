@@ -406,6 +406,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   easycruit: 'EasyCruit',
   hroffice: 'HR Office',
   darwinbox: 'Darwinbox',
+  greythr: 'greytHR',
   helixjobs: 'helixjobs',
   talentstorm: 'talentstorm',
   pandape: 'Pandapé',

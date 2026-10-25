@@ -932,6 +932,7 @@ var probers = map[string]prober{
 	"darwinbox":       darwinboxProber,
 	"zohorecruit":     zohoRecruitProber,
 	"pyjamahr":        pyjamahrProber,
+	"greythr":         greythrProber{},
 	"meincheckin":     meincheckinProber{},
 	"helixjobs":       helixjobsProber{},
 	"talentstorm":     talentstormProber{},

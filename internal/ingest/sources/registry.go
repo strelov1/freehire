@@ -463,6 +463,7 @@ func All(c HTTPClient) map[string]Source {
 		// Rate-paced: one origin serves every Homerun feed and vacancy page (see homerunRequestInterval).
 		NewHomerun(pacedHomerunGetter(c)),
 		NewHROffice(c),
+		NewGreytHR(c),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
 		NewHelixjobs(limitedHelixjobsGetter(c)),
 		NewTalentstorm(c),
