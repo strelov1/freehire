@@ -38,7 +38,9 @@ WITH deleted AS (
     WHERE q.id = $1
       AND q.user_id = $2
       AND q.submit_uncertain_at IS NULL
-      AND NOT (q.review_decision = 'approved'
+      -- IS NOT DISTINCT FROM, not =: an unreviewed row's NULL decision would make the whole
+      -- guard NULL while a preview claim holds the lease, and NOT NULL refuses the delete.
+      AND NOT (q.review_decision IS NOT DISTINCT FROM 'approved'
                AND q.blocked_at IS NULL
                AND q.failed_at IS NULL
                AND q.claimed_at IS NOT NULL

@@ -231,6 +231,19 @@ func TestCancelAutoApplyEntry(t *testing.T) {
 		}
 	})
 
+	t.Run("allowed while the preview pass holds the lease", func(t *testing.T) {
+		truncateAutoApplyQueue(t, pool)
+		user := insertUser(t, pool, "cancel-preview@example.test")
+		job := insertJob(t, pool, "cancel-preview")
+		id := insertTailoredAutoApplyQueueEntry(t, pool, user, job)
+		if _, err := q.ClaimAutoApplyPreviewBatch(ctx, ClaimAutoApplyPreviewBatchParams{LeaseSeconds: 3600, BatchSize: 10}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := q.CancelAutoApplyEntry(ctx, CancelAutoApplyEntryParams{ID: id, UserID: user, LeaseSeconds: 3600}); err != nil {
+			t.Fatalf("cancel during a preview claim: %v", err)
+		}
+	})
+
 	t.Run("never deletes an uncertain submission", func(t *testing.T) {
 		user, _, id := setup(t)
 		if err := q.MarkAutoApplySubmitUncertain(ctx, MarkAutoApplySubmitUncertainParams{ID: id, LastError: "unconfirmed"}); err != nil {

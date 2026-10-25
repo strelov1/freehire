@@ -187,7 +187,7 @@
   }
 
   async function decideAutoApply(decision: 'approved' | 'declined') {
-    if (!autoApply || autoApplyDeciding) return;
+    if (!autoApply || autoApplyDeciding || autoApplyActing) return;
     autoApplyDeciding = true;
     autoApplyError = null;
     try {
@@ -261,7 +261,9 @@
   // its next status — a retry can land on any of three, depending on where it stopped.
   let autoApplyActing = $state(false);
   async function actOnAutoApply(act: (slug: string) => Promise<unknown>, failed: string) {
-    if (!item.job || autoApplyActing) return;
+    // One action at a time across review, retry and cancel: a review answer landing after
+    // a cancel's refresh would restore the status the cancel just removed.
+    if (!item.job || autoApplyActing || autoApplyDeciding) return;
     autoApplyActing = true;
     autoApplyError = null;
     try {
@@ -739,7 +741,7 @@
                 <Button variant="outline" size="sm" class="w-fit" onclick={toggleAutoApplyPaused}>
                   {autoApplyPaused ? s.continue : s.pause}
                 </Button>
-                <Button variant="ghost" size="sm" class="w-fit" disabled={autoApplyActing} onclick={cancelAutoApply}>
+                <Button variant="ghost" size="sm" class="w-fit" disabled={autoApplyActing || autoApplyDeciding} onclick={cancelAutoApply}>
                   {s.cancelAutoApply}
                 </Button>
               </div>
@@ -814,10 +816,10 @@
                 </div>
               {/if}
               <div class="flex items-center gap-2">
-                <Button size="sm" disabled={autoApplyDeciding} onclick={() => decideAutoApply('approved')}>
+                <Button size="sm" disabled={autoApplyDeciding || autoApplyActing} onclick={() => decideAutoApply('approved')}>
                   {s.approveAndSend}
                 </Button>
-                <Button size="sm" variant="outline" disabled={autoApplyDeciding} onclick={() => decideAutoApply('declined')}>
+                <Button size="sm" variant="outline" disabled={autoApplyDeciding || autoApplyActing} onclick={() => decideAutoApply('declined')}>
                   {s.decline}
                 </Button>
               </div>

@@ -25,7 +25,13 @@ an attempt whose submission may already have reached the employer.
 - **THEN** retry is refused
 
 ### Requirement: An attempt can be cancelled
-An owner SHALL be able to cancel an attempt that is not currently being submitted.
+An owner SHALL be able to cancel an attempt that is not currently being submitted, except an
+attempt whose submission may already have reached the employer — its row is the only record
+that stops a fresh start from sending it twice.
+
+#### Scenario: Cancel an uncertain submission
+- **WHEN** the attempt was dead-lettered because its submission could not be confirmed
+- **THEN** cancel is refused
 
 #### Scenario: Cancel mid-submission
 - **WHEN** the attempt is approved and claimed within the worker lease

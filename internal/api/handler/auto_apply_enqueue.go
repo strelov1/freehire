@@ -262,6 +262,9 @@ func (h *assistantHandlers) startAutoApply(ctx context.Context, userID int64, sl
 		case autoApplyReviewDeclined:
 			return fiber.NewError(fiber.StatusConflict, autoApplyAlreadyDeclinedMessage)
 		case autoApplyStatusFailed:
+			if existing.SubmitUncertainAt.Valid {
+				return fiber.NewError(fiber.StatusConflict, autoApplyUncertainMessage)
+			}
 			// cmd/auto-apply gave up on this entry (dead-lettered or parked on an
 			// unresolvable form field) — reporting "queued" here would tell the
 			// candidate their attempt is still in flight when it is stuck. It is
