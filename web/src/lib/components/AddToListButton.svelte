@@ -102,9 +102,11 @@
       membership = [{ id: list.id, name: list.name, in_list: true }, ...membership];
       creating = false;
       announce(`Added to ${list.name}`);
-      // The form held focus and is gone; the new list's item is where it belongs now.
+      // The form held focus and is gone; the new list's item is where it belongs now —
+      // unless the visitor moved on while the request ran, in which case focus stays put.
+      const focusWasHere = root?.contains(document.activeElement) ?? false;
       await tick();
-      menu?.querySelector<HTMLElement>('[role="menuitemcheckbox"]')?.focus();
+      if (focusWasHere) menu?.querySelector<HTMLElement>('[role="menuitemcheckbox"]')?.focus();
     } catch (err) {
       error = err instanceof ApiError ? err.message : 'Could not create this list.';
       announce(error, 'assertive');

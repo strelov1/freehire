@@ -464,6 +464,8 @@
         navigatingTo = activeId;
         onSessionChange(activeId);
       }
+      // A turn may have finished while the dialog held the queue; send what waited.
+      drainQueue();
     });
   });
 
@@ -628,11 +630,18 @@
     }
     // A completed turn may have edited an artifact (e.g. the tailored CV) — let the host refresh.
     onTurnComplete?.();
-    if (queue.length > 0) {
-      const [next, ...rest] = queue;
-      queue = rest;
-      if (next) void dispatch({ kind: 'message', text: next.text, attachments: next.attachments });
-    }
+    drainQueue();
+  }
+
+  // Send the next queued message — but not while the "switch and discard?" dialog is up:
+  // the visitor is deciding whether that queue should exist at all, and a message sent in
+  // the meantime could start work that confirming the switch can no longer take back.
+  // Declining the switch drains it (see the effect beside confirmSwitch).
+  function drainQueue() {
+    if (confirmSwitchOpen || turnActive || queue.length === 0) return;
+    const [next, ...rest] = queue;
+    queue = rest;
+    if (next) void dispatch({ kind: 'message', text: next.text, attachments: next.attachments });
   }
 
   /** Stop an in-flight turn: ask the server to stop the work, and stop reading it here. The
