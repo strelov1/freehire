@@ -91,7 +91,8 @@ var germanWorkModePhrases = []struct {
 // germanNegations, found just before a remote or hybrid phrase, turn it into its
 // opposite ("kein Homeoffice möglich", "nicht 100% remote"). The onsite family carries
 // its own negations as whole phrases, so a negated match is simply skipped here and the
-// scan goes on to the onsite family.
+// scan goes on to the onsite family (see germanPhraseMatches for the one onsite phrase
+// negation does apply to).
 var germanNegations = []string{"kein ", "keine ", "nicht ", "ohne "}
 
 // germanNegationWindow is how far before a phrase a negation still governs it: one or
@@ -99,10 +100,23 @@ var germanNegations = []string{"kein ", "keine ", "nicht ", "ohne "}
 // cancel a statement that stood on its own.
 const germanNegationWindow = 12
 
+// germanRefusals, found just AFTER a remote or hybrid phrase, withdraw it ("Mobiles
+// Arbeiten ist in dieser Position nicht möglich"). The match is then passed over rather
+// than read as onsite: onsite is reserved for the explicit refusals in the onsite family,
+// which carry their own wording ("Homeoffice ist nicht möglich").
+var germanRefusals = []string{"nicht möglich", "nicht vorgesehen", "nicht angeboten",
+	"ausgeschlossen", "leider nicht"}
+
+// germanRefusalWindow is how far past a phrase a refusal still governs it: a short
+// predicate ("ist in dieser Position leider nicht möglich"), not the next sentence.
+const germanRefusalWindow = 40
+
 // germanWorkModeTriggers gate the fold: only a description carrying one of these stems
 // can match any phrase above, and foldMarkup is not free on the ~99% that carry none.
-var germanWorkModeTriggers = []string{"homeoffice", "home-office", "home office", "mobil",
-	"hybrid", "remote", "telearbeit", "vor ort"}
+// Each is ONE word, so neither a tag nor an entity can split it ("vor<br>Ort",
+// "Home&nbsp;Office"); the two-word phrases are only ever matched on the folded text.
+var germanWorkModeTriggers = []string{"home", "mobil", "hybrid", "remote", "telearbeit",
+	"ausschließlich"}
 
 // germanWorkMode derives a work mode from German arrangement prose, "" when none of
 // germanWorkModePhrases is stated. lower is the description already lowercased.
@@ -113,7 +127,7 @@ func germanWorkMode(desc, lower string) string {
 	text := foldMarkup(desc)
 	for _, wm := range germanWorkModePhrases {
 		for _, p := range wm.phrases {
-			if germanPhraseMatches(text, p, wm.mode != "onsite") {
+			if germanPhraseMatches(text, p, wm.mode) {
 				return wm.mode
 			}
 		}
@@ -121,11 +135,18 @@ func germanWorkMode(desc, lower string) string {
 	return ""
 }
 
-// germanPhraseMatches reports whether p occurs in text as a whole phrase: the rune after
-// it is not a letter. When negatable, an occurrence a germanNegations word precedes is
-// passed over and the scan continues, so a posting that refuses home working in one
+// germanPhraseMatches reports whether p occurs in text as a whole phrase (the rune after
+// it is not a letter), read for the family mode it belongs to. A remote or hybrid
+// occurrence is passed over when a germanNegations word precedes it or a germanRefusals
+// phrase follows it, and the scan continues, so a posting that refuses home working in one
 // sentence and offers it in another still reads the offer.
-func germanPhraseMatches(text, p string, negatable bool) bool {
+//
+// The onsite family IS the refusals ("kein Homeoffice"), so negation does not apply to it
+// — except to the one onsite phrase that is not itself a refusal, "ausschließlich vor Ort",
+// which "nicht ausschließlich vor Ort" turns around. And an onsite phrase must not run on
+// into a compound: "Kein Homeoffice-Verbot" says there is no ban.
+func germanPhraseMatches(text, p, mode string) bool {
+	refusal := mode == "onsite" && (strings.HasPrefix(p, "kein") || strings.Contains(p, "nicht"))
 	offset := 0
 	for {
 		i := strings.Index(text[offset:], p)
@@ -134,10 +155,19 @@ func germanPhraseMatches(text, p string, negatable bool) bool {
 		}
 		start, end := offset+i, offset+i+len(p)
 		offset = end
-		if r, _ := utf8.DecodeRuneInString(text[end:]); end < len(text) && unicode.IsLetter(r) {
+		r, size := utf8.DecodeRuneInString(text[end:])
+		if end < len(text) && unicode.IsLetter(r) {
 			continue
 		}
-		if negatable && containsAny(text[max(0, start-germanNegationWindow):start], germanNegations) {
+		if mode == "onsite" && r == '-' {
+			if next, _ := utf8.DecodeRuneInString(text[end+size:]); unicode.IsLetter(next) {
+				continue
+			}
+		}
+		if !refusal && containsAny(text[max(0, start-germanNegationWindow):start], germanNegations) {
+			continue
+		}
+		if mode != "onsite" && containsAny(text[end:min(len(text), end+germanRefusalWindow)], germanRefusals) {
 			continue
 		}
 		return true

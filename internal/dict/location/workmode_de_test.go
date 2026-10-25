@@ -56,6 +56,13 @@ func TestWorkModeFromDescription_German(t *testing.T) {
 		{"vor ort alone says nothing", "Unterstützung unserer Kunden vor Ort", ""},
 		{"deutschlandweit alone says nothing", "Wir sind deutschlandweit an 40 Standorten vertreten.", ""},
 		{"remote alone stays silent", "Fernwartung und Remote-Support für unsere Kunden", ""},
+
+		// Review follow-ups (freehire#3574), synthetic.
+		{"onsite split by markup", "Wir arbeiten ausschließlich vor<br>Ort.", "onsite"},
+		{"postposed refusal of mobile work", "Mobiles Arbeiten ist in dieser Position nicht möglich.", ""},
+		{"postposed refusal of a hybrid phrase", "Ein Homeoffice-Anteil ist leider nicht vorgesehen.", ""},
+		{"negated onsite-only", "Wir arbeiten nicht ausschließlich vor Ort.", ""},
+		{"no ban on home office", "Kein Homeoffice-Verbot, aber Präsenz im Team.", ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
