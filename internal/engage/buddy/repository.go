@@ -85,7 +85,13 @@ func (r *QueriesRepository) Inputs(ctx context.Context, userID int64) (Inputs, e
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Inputs{}, err
 	}
-	in.Countries, in.Regions = geo.ResumeCountries, geo.ResumeRegions
+	// Same freshness rule as resume.Store.Geography: a geography derived from a CV that
+	// has since been replaced reads as unknown, so the base-country fallback engages.
+	// (That Store needs a blob store this package has no use for.)
+	if geo.ResumeStructuredUploadedAt.Valid && geo.ResumeUploadedAt.Valid &&
+		geo.ResumeStructuredUploadedAt.Time.Equal(geo.ResumeUploadedAt.Time) {
+		in.Countries, in.Regions = geo.ResumeCountries, geo.ResumeRegions
+	}
 	prof, err := r.q.GetUserProfile(ctx, userID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Inputs{}, err

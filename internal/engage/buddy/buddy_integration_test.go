@@ -219,6 +219,26 @@ func TestBuddyHandleDiffersFromTalentHandle(t *testing.T) {
 	}
 }
 
+func TestStaleGeographyFallsBackToBaseCountry(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	u := seedUser(t, pool, "a@example.test")
+	if _, err := pool.Exec(ctx, `INSERT INTO user_profiles (user_id, skills, specializations, location_preferences) VALUES ($1, '{go}', '{backend}','{"base":{"country":"pl"}}')`, u); err != nil {
+		t.Fatal(err)
+	}
+	// The geography was derived from an earlier upload than the CV now stored.
+	if _, err := pool.Exec(ctx, `UPDATE users SET resume_countries = '{de}', resume_structured_uploaded_at = '2026-01-01', resume_uploaded_at = '2026-02-01' WHERE id = $1`, u); err != nil {
+		t.Fatal(err)
+	}
+	m, err := svc.Join(ctx, u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(m.Countries) != "[pl]" {
+		t.Fatalf("countries = %v, want [pl]", m.Countries)
+	}
+}
+
 func TestTouchRefreshesRankingKeys(t *testing.T) {
 	pool, svc := setup(t)
 	ctx := context.Background()
@@ -231,7 +251,7 @@ func TestTouchRefreshesRankingKeys(t *testing.T) {
 		t.Fatalf("category before CV = %q", m.Category)
 	}
 	seedCV(t, pool, u)
-	if _, err := pool.Exec(ctx, `UPDATE users SET resume_countries = '{de}' WHERE id = $1`, u); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE users SET resume_countries = '{de}', resume_uploaded_at = '2026-01-01', resume_structured_uploaded_at = '2026-01-01' WHERE id = $1`, u); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.Touch(ctx, u); err != nil {
