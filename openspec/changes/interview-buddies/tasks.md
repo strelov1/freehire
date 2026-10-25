@@ -7,9 +7,9 @@
 
 ## 2. Membership and profile
 
-- [ ] 2.1 Handle generation (adjective-noun-NN, unique, retry on collision) and `Join`/`Leave`/`Status`; leaving closes every conversation (integration tests: join mints, rejoin keeps handle, leave closes)
-- [ ] 2.2 Ranking keys from CV/profile (`category` via classify on `PrimaryTitle`, fallback to specializations; countries/regions from resume geography, fallback to base country) and `touch` refresh (unit test of the fallbacks)
-- [ ] 2.3 `Profile(viewer, handle)` projecting `talentnetwork.ProjectCard`; empty-card flag; non-member → `ErrNotMember` (test: card carries no summary/highlight/employer text; buddy handle ≠ talent handle)
+- [x] 2.1 Handle generation (adjective-noun-NN, unique, retry on collision) and `Join`/`Leave`/`Status`; leaving closes every conversation (integration tests: join mints, rejoin keeps handle, leave closes)
+- [x] 2.2 Ranking keys from CV/profile (`category` via classify on `PrimaryTitle`, fallback to specializations; countries/regions from resume geography, fallback to base country) and `touch` refresh (unit test of the fallbacks)
+- [x] 2.3 `Profile(viewer, handle)` projecting `talentnetwork.ProjectCard`; empty-card flag; non-member → `ErrNotMember` (test: card carries no summary/highlight/employer text; buddy handle ≠ talent handle)
 
 ## 3. Similar members
 
