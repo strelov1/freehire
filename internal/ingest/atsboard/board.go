@@ -176,6 +176,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"jobs.pyjamahr.com", "pyjamahr", modePath},
 	{"apply.workable.com", "workable", modePath},
 	{"jobs.deel.com", "deel", modePath},
+	// CHECK-IN (mein-check-in.de): a tenant is the first path segment on one of three branded
+	// hosts (www., sparkasse., vr.), /<tenant>/position-<id>.
+	{"mein-check-in.de", "meincheckin", modePath},
 	{"jobs.gem.com", "gem", modePath},
 	{"jobs.friend.work", "friendwork", modePath}, // FriendWork career portal: jobs.friend.work/<token>/<id>
 	{"jobs.jobvite.com", "jobvite", modePath},
@@ -797,6 +800,10 @@ var noBoardHosts = map[string]bool{
 // them. Workable's "/j/<id>" is a per-job shortlink: skipping "j" would take the JOB id as the
 // company slug, which is worse than declining.
 var noBoardFirstSegments = map[string][]string{
+	// CHECK-IN's own machinery on the tenant hosts (the login app, the minified assets), and
+	// "/detail/<uuid>", the posting path of "<name>-karriereportal.mein-check-in.de" — a different
+	// CHECK-IN product the meincheckin adapter cannot read.
+	"mein-check-in.de":   {"bm-login", "min", "detail"},
 	"apply.workable.com": {"j"},
 	// Gusto's "/postings/<company-slug>-<job-slug>-<posting-uuid>" names a posting, not a board:
 	// the uuid it ends with is the POSTING's, and the board is "<company-slug>-<company-uuid>",

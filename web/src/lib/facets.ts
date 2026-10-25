@@ -423,6 +423,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   xing: 'XING',
   onapply: 'onapply',
   workwise: 'Workwise',
+  meincheckin: 'CHECK-IN',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

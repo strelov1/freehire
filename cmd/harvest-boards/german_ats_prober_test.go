@@ -119,3 +119,28 @@ func TestKenjoProbe(t *testing.T) {
 		}
 	}
 }
+
+func TestMeinCheckInProbe(t *testing.T) {
+	g := textStatusGetter{
+		fakeGetter: fakeGetter{
+			// ksk-ratzeburg's start page as captured 2026-10-25, its menu trimmed to three entries.
+			"https://www.mein-check-in.de/ksk-ratzeburg": `<title>Kreissparkasse Herzogtum Lauenburg Onlinebewerbung</title>
+<a class="mainmenu_position_link" href="/ksk-ratzeburg/position-159">
+	Initiativbewerbung					         </a>
+<a class="mainmenu_position_link" href="/ksk-ratzeburg/position-60759">
+	(Junior-) Kreditanalyst (*gn) Groß- und Spezialgeschäft					         </a>
+<a class="mainmenu_position_link" href="/ksk-ratzeburg/position-156">
+	Betriebspraktikum					         </a>`,
+		},
+		status: map[string]int{"https://www.mein-check-in.de/no-such-tenant": http.StatusNotFound},
+	}
+	p := meincheckinProber{}
+	if name, n, err := p.probe(context.Background(), g, "ksk-ratzeburg"); err != nil || name != "Kreissparkasse Herzogtum Lauenburg" || n != 2 {
+		t.Errorf("live: got (%q,%d,%v), want (Kreissparkasse Herzogtum Lauenburg,2,nil)", name, n, err)
+	}
+	for _, board := range []string{"no-such-tenant", "Bad Board"} {
+		if _, n, err := p.probe(context.Background(), g, board); err != nil || n != 0 {
+			t.Errorf("%s: got n=%d err=%v, want a skip", board, n, err)
+		}
+	}
+}

@@ -871,6 +871,14 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **A closed posting answers 200** with "Dieser Job ist nicht mehr aktiv" and no JobPosting; a posting whose page carries none is dropped. Ids outside the sitemap resolve the same way — the sitemap is the open set.
 - **The work mode is read from the line the platform renders from its own form field** at the top of the description: "N - M Tage pro Woche Homeoffice" and "Remote möglich" are hybrid, `jobLocationType: TELECOMMUTE` with "Remote Job" is remote. "Kein Homeoffice" (70% of sampled postings) is NOT read as onsite — the form cannot tell a choice from an untouched field, the same reason XING's `NON_REMOTE` maps to nothing.
 - `addressRegion` is a German state abbreviation ("NRW", "BY") and is not used; `baseSalary` states one `value` or a `minValue`/`maxValue` pair with `unitText` YEAR, MONTH or HOUR.
+**CHECK-IN traps** (`meincheckin`, mein-check-in.de; live-verified 2026-10-25 across the 160 tenants named by links in the German board harvest — 157 with openings, 2,338 menu entries of which ~7% are open applications, ~7% technical by title; savings banks, cooperative banks, insurers, councils):
+
+- **Three branded hosts, and only two of them talk to each other.** www serves its own tenants (mostly councils) and redirects the sparkasse. ones to `sparkasse.mein-check-in.de/<tenant>`; the vr. tenants (cooperative banks, 25 of 40 keyed by their bank code, 85095004) are a 404 on www and on sparkasse. No slug was measured on two hosts, so the board is the bare slug and the start page is asked of www, then of vr.
+- **Position ids are numbered per HOST and the ranges overlap** (sparkasse 120473 beside vr 120315), so the external id is `<tenant>/<id>`.
+- **The posting is MICRODATA** (`itemtype="http://schema.org/JobPosting"`), not ld+json, and `name` occurs in the identifier, the organisation and the place — each property is read inside its own scope. The microdata `title` `<h2>` also holds the "Jetzt hier bewerben" button, so the title comes from `og:title` minus " | <tenant> Onlinebewerbung".
+- **`employmentType` is the tenant's menu SECTION** ("stellenangebote", "ausbildung", "praktika"), not an employment type; only "praktika" maps (internship). `addressRegion` is a key ("baden_württemberg") and is not read; some tenants put soft hyphens in `addressLocality`.
+- **The open application ("Initiativbewerbung") is listed among the positions** by most tenants and is skipped at the menu, costing no request. A closed position is a 404.
+- `<name>-karriereportal.mein-check-in.de/detail/<uuid>` is a DIFFERENT CHECK-IN product and is not read.
 
 **rexx traps** (`rexx`, rexx systems' recruiting portals; live-verified 2026-10-25 across the 152 portal hosts Common Crawl names — 119 answer a listing, 101 with postings, 3,126 postings, largely healthcare, retail and public sector):
 

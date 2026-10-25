@@ -925,6 +925,7 @@ var probers = map[string]prober{
 	"coveto":          covetoProber{},
 	"concludis":       concludisProber{},
 	"kenjo":           kenjoProber{},
+	"meincheckin":     meincheckinProber{},
 	// Not an ATS: its boards are the platform's own job categories, enumerated from its
 	// sitemap index rather than seeded. See profession_prober.go.
 	"profession":  newProfessionProber(),
