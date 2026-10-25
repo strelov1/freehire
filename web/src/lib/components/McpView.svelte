@@ -75,11 +75,13 @@
       id: 'gemini',
       label: 'Gemini',
       domain: 'gemini.google.com',
+      // Google's own help page (support.google.com/gemini/answer/17209137); custom apps are
+      // US-only, personal Google accounts, web and mobile apps.
       steps: [
-        'Open Customize, then Connectors.',
-        'Choose + Custom, name it freehire, and paste the address.',
-        'When Gemini asks you to authorize the connector, accept it.',
-        'In a new chat, type @freehire, pick it from the list, and ask a job question.',
+        'On gemini.google.com, open Settings, then Connected Apps.',
+        'Under Custom apps, choose Add a custom app, paste the address, and choose Next.',
+        'Follow the on-screen steps to finish connecting.',
+        'In a chat, type @, pick freehire, and ask a job question.',
       ],
     },
     {
