@@ -1033,6 +1033,16 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **Employment.** `正社員` and `正社員（無期雇用派遣）` (permanent dispatch) are full-time, `契約社員` contract, `アルバイト・パート` part-time; `派遣社員`, `業務委託（フリーランス）` and `新卒` are left to the pipeline.
 - **Tech hint on `400000` only.** `350000` mixes UI engineers with video and print staff.
 - **Not `fullBoardListing`.** A later page failing ends the walk with what was read.
+**Mynavi traps** (`mynavi`; live-verified 2026-10-25 from a residential IP, fsn and host2):
+
+- **The crawl hosts are refused at the origin.** Both fsn and host2 get `403 Forbidden` from Mynavi's own Apache behind CloudFront on every page, listing and detail alike; a residential IP and `SOURCES_PROXY_URL` are served 200 (~3.5 s a page through the proxy). The provider is in `proxiedProviders`, so without the proxy configured it cannot crawl at all.
+- **IT is in a separate edition.** The main `/list/` edition (~62k direct postings) redirects its IT (`o16`) and electrical/mechanical (`o17`) occupation codes to `/engineer/list/<code>/`, a different template ("エンジニア求人サーチ"). A board is one of those two codes; the main edition is not crawled, because a Japanese non-IT title mostly resolves no category and would be stored only to stay out of search.
+- **The engineer edition is 94% agency referrals.** Unfiltered, `o16` counts ~104.6k postings, ~98k of them employment type `e05` (人材紹介): cards that link off-site to `scouting.mynavi.jp`, with the employer hidden as `社名非公開`. The walk asks for `e01+e02+e03` (the site's direct postings) and skips any card that does not link a `/jobinfo-<a>-<b>-<c>-<d>/` page anyway. `o16` held 6,802 direct postings (137 pages of 50), `o17` 8,836.
+- **The end is an empty page.** A page past the last answers 200 with no cards. The first page must carry its `全N件中` counter or the walk fails — a page with cards and no counter is not the results template.
+- **A card is everything but the body.** The detail page carries a schema.org JobPosting (beside a BreadcrumbList): body, places (`addressRegion` prefecture, sometimes `addressLocality` ward, `addressCountry: JP`), salary (`JPY`/`YEAR` strings), `employmentType`. The body is `description` plus the requirements, hours and benefits fields as headed sections; its own line breaks arrive double-escaped (`&amp;lt;br&amp;gt;`) and are restored. An expired posting answers 404. New postings only, 800 a run and 600 a board, claimed before any request goes out; every request is paced to one a second.
+- **Places stay in Japanese.** The location dictionary knows no kanji place names, so the country comes from the structured `addressCountry` (`Countries: jp`), with Japan as every card's fallback country.
+- **Tech hint on `o16` only.** `o17` is hardware engineering. `リモートワーク可` on a card is "remote work possible", not a work arrangement, and is not read.
+- **Not `fullBoardListing`.** Nothing proves the walk saw every posting, and a later page failing ends the walk with what was read.
 
 **Golang Jobs traps** (`golangjobs`; live-verified 2026-10-18 from a residential IP and from fsn):
 

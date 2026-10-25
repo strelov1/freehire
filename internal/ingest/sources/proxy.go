@@ -92,6 +92,12 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// browser User-Agent, so it is IP reputation, not a bot tell), while the residential
 	// proxy IP is served 200. NewEnlizt takes an HTMLGetter, which HTTPClient satisfies.
 	"enlizt": func(c HTTPClient) Source { return NewEnlizt(c) },
+	// tenshoku.mynavi.jp's origin answers 403 to both crawl hosts' datacenter IPs (its own
+	// Apache, behind CloudFront, so IP reputation rather than a bot tell), while the proxy is
+	// served 200. Paced on the proxy as on the direct path.
+	"mynavi": func(c HTTPClient) Source {
+		return NewMynavi(pacedHTMLGetter(c, mynaviRequestInterval, mynaviRequestBurst))
+	},
 	// naukri.com's Akamai edge tarpits both of our datacenter IPs (HTTP/1.1 hangs, HTTP/2
 	// resets with INTERNAL_ERROR — a headless Chrome included), while the residential proxy is
 	// served in ~1-2s (measured 2026-10-18 from prod and the crawl host). The app User-Agent

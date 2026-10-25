@@ -821,6 +821,11 @@ func All(c HTTPClient) map[string]Source {
 	// cross-tenant search its own site runs on; a search row carries the whole posting, so no
 	// detail requests. Paced to one page a second. See engage.go.
 	registry["engage"] = NewEngage(pacedEngageGetter(c))
+	// マイナビ転職 (Mynavi): a Japanese job board, enumerated by engineer-edition occupation code
+	// (board), each new posting's body read from its page's schema.org JobPosting. The origin
+	// refuses datacenter IPs, so the crawl is really served once ApplyProxyEgress rebuilds it
+	// over the proxy (proxy.go). Paced either way. See mynavi.go.
+	registry["mynavi"] = NewMynavi(pacedHTMLGetter(c, mynaviRequestInterval, mynaviRequestBurst))
 	// Shine.com: an Indian general job board, enumerated from its job sitemaps, each new
 	// posting's facts read from its page's schema.org JobPosting. See shine.go.
 	registry["shine"] = NewShine(c)
