@@ -56,7 +56,7 @@ func TestPrivacyConsent_RecognisesTheConditionOfApplying(t *testing.T) {
 		"Ik heb de privacyverklaring van VolkerWessels gelezen en begrijp hoe mijn persoonsgegevens worden verwerkt.",
 		"Processing of Personal Data",
 	} {
-		if !isPrivacyConsentField(MergedField{ID: "q", Label: label, Kind: "select"}) {
+		if !isPrivacyConsentField(MergedField{ID: "q", Label: label, Kind: "select", Required: true}) {
 			t.Errorf("isPrivacyConsentField(%q) = false, want true", label)
 		}
 	}
@@ -75,7 +75,7 @@ func TestPrivacyConsent_LeavesOptInsAndDisclosuresAlone(t *testing.T) {
 		"Do you have any agreement with your current employer (such as a non-disclosure/confidentiality agreement)?",
 		"I consent to the processing of my personal data regarding my ethnic origin for diversity monitoring.",
 	} {
-		if isPrivacyConsentField(MergedField{ID: "q", Label: label, Kind: "select"}) {
+		if isPrivacyConsentField(MergedField{ID: "q", Label: label, Kind: "select", Required: true}) {
 			t.Errorf("isPrivacyConsentField(%q) = true, want false", label)
 		}
 	}
@@ -83,7 +83,7 @@ func TestPrivacyConsent_LeavesOptInsAndDisclosuresAlone(t *testing.T) {
 
 // A text field naming the privacy policy is asking for something other than agreement.
 func TestPrivacyConsent_OnlyCheckboxesAndSelects(t *testing.T) {
-	if isPrivacyConsentField(MergedField{ID: "q", Label: "Privacy Policy", Kind: "text"}) {
+	if isPrivacyConsentField(MergedField{ID: "q", Label: "Privacy Policy", Kind: "text", Required: true}) {
 		t.Error("a text field qualified as a consent")
 	}
 }
@@ -102,6 +102,8 @@ func TestAffirmativeOption(t *testing.T) {
 		{"agree beside do not agree", MergedField{Kind: "select", Options: opts("I do not agree", "I agree")}, "v1", true},
 		{"portuguese", MergedField{Kind: "select", Options: opts("Sim", "Não")}, "v0", true},
 		{"two agreeing options park", MergedField{Kind: "select", Options: opts("Yes", "I agree")}, "", false},
+		{"a lone checkbox that refuses parks", MergedField{Kind: "checkbox_group", Options: opts("I do not agree")}, "", false},
+		{"a select with no options parks", MergedField{Kind: "select"}, "", false},
 		{"no agreeing option parks", MergedField{Kind: "select", Options: opts("동의합니다", "동의하지 않습니다")}, "", false},
 	}
 	for _, c := range cases {
@@ -128,5 +130,18 @@ func TestResolve_ConsentWithUnreadableOptionsParks(t *testing.T) {
 
 	if plan.FullyResolved() {
 		t.Fatalf("fields = %+v, want the field to park", plan.Fields)
+	}
+}
+
+// The permission covers the condition of applying. An optional consent is an extra the form
+// offers, and a labelled gdpr field asking about marketing is a marketing opt-in.
+func TestPrivacyConsent_OnlyTheRequiredConditionOfApplying(t *testing.T) {
+	for name, f := range map[string]MergedField{
+		"optional":                 {ID: "q", Label: "Privacy Policy", Kind: "select"},
+		"gdpr id, marketing label": {ID: "gdpr", Label: "Send me marketing emails", Kind: "checkbox_group", Required: true},
+	} {
+		if isPrivacyConsentField(f) {
+			t.Errorf("%s: qualified as a consent", name)
+		}
 	}
 }
