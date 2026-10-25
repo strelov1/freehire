@@ -72,6 +72,30 @@
       ],
     },
     {
+      id: 'gemini',
+      label: 'Gemini',
+      domain: 'gemini.google.com',
+      steps: [
+        'Open Customize, then Connectors.',
+        'Choose + Custom, name it freehire, and paste the address.',
+        'When Gemini asks you to authorize the connector, accept it.',
+        'In a new chat, type @freehire, pick it from the list, and ask a job question.',
+      ],
+    },
+    {
+      // Meta's Muse has no connector settings page: it adds a server when asked to in a
+      // chat, so the setup is a message to send rather than a form to fill.
+      id: 'muse',
+      label: 'Muse',
+      domain: 'muse.ai',
+      steps: [
+        'There is no settings page: send Muse the message below in a chat.',
+        'Tap Approve when Muse tests the connection, then ask a job question in the same chat.',
+      ],
+      file: 'message to Muse',
+      snippet: (u) => `Connect to my freehire MCP: ${u}`,
+    },
+    {
       id: 'grok',
       label: 'Grok Bot',
       domain: 'grok.com',
