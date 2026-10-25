@@ -53,7 +53,7 @@
 
 ## 9. Ship
 
-- [ ] 9.1 Full checks: `gofmt -l .`, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`, tagged tests for `internal/engage/buddy` and `internal/api/handler` buddies, `pnpm run check` + web tests, `pnpm check:links`
+- [x] 9.1 Full checks: `gofmt -l .`, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`, tagged tests for `internal/engage/buddy` and `internal/api/handler` buddies, `pnpm run check` + web tests, `pnpm check:links`
 - [ ] 9.2 Build the 0198 index CONCURRENTLY on prod by hand before merge; PR, CI green, merge, deploy
 - [ ] 9.3 `freehire-ops`: `freehire-buddy-notify.{service,timer}` (5 min, `.env` + `.env.notify`), copy to host, `daemon-reload`, enable; verify one run in journal
 - [ ] 9.4 Verify on prod: join, invite between two test accounts, chat, notification arrives, feed shows an applied event, block hides

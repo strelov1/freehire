@@ -58,7 +58,7 @@ The system SHALL list other active members ranked by a similarity score that add
 - **THEN** that company adds no points and is not shown as shared
 
 ### Requirement: Buddy feed of applications and stage moves
-The system SHALL show members a feed of other active members' application events: an application, and a move into the interview or offer stage. Events for rejected, withdrawn, expired or accepted stages SHALL NOT appear. Each feed entry SHALL show the author's buddy card summary, the company, the job title when the posting still exists, the event type and the day it happened (no time of day). The feed SHALL offer a "similar" order (by the author's similarity to the viewer, then recency) and an "all" order (recency). The viewer's own events and events of members either side has blocked SHALL NOT appear.
+The system SHALL show members a feed of other active members' application events: an application, and a move into the interview or offer stage. Events for rejected, withdrawn, expired or accepted stages SHALL NOT appear. Each feed entry SHALL show the author's buddy card summary, the company, the job title when the posting still exists, the event type and the day it happened (no time of day). The feed SHALL offer a "similar" mode, which keeps recency order but restricts the feed to authors among the viewer's 200 most similar members, and an "all" mode, which is recency order over every active member. Events on a privately pasted posting SHALL NOT appear, and such a posting SHALL NOT count as a shared company. The viewer's own events and events of members either side has blocked SHALL NOT appear.
 
 #### Scenario: Application appears in the feed
 - **WHEN** an active member applies to a job
@@ -67,6 +67,14 @@ The system SHALL show members a feed of other active members' application events
 #### Scenario: Interview move appears
 - **WHEN** an active member's application moves to the interview stage
 - **THEN** the feed contains an entry with the type "interview" for that company
+
+#### Scenario: Similar mode restricts authors, not order
+- **WHEN** the viewer reads the "similar" feed
+- **THEN** it contains only events by the viewer's 200 most similar members, newest first, and the "all" feed adds the events of every other active member
+
+#### Scenario: Private posting never appears
+- **WHEN** a member marks a privately pasted posting as applied
+- **THEN** no other member's feed contains that event and its company is not counted as shared
 
 #### Scenario: Rejection never appears
 - **WHEN** a member's application moves to the rejected stage
