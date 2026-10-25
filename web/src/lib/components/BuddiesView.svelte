@@ -4,7 +4,7 @@
   import { ApiError, api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import type { BuddyFeedItem, BuddySimilar, BuddyStatus } from '#lib/types.js';
-  import { Button, Dialog, EntityLogo } from '#lib/ui/index.js';
+  import { Button, ConfirmDialog, Dialog, EntityLogo } from '#lib/ui/index.js';
   import { companyLogoUrl } from '#lib/logo.js';
   import BuddyChatView from './BuddyChatView.svelte';
   import States from './States.svelte';
@@ -24,6 +24,7 @@
   let inviteBody = $state('');
   let inviteError = $state('');
   let membershipError = $state('');
+  let confirmLeaveOpen = $state(false);
   let busy = $state(false);
   let selected = $state<BuddySimilar | null>(null);
   let inviteOpen = $state(false);
@@ -33,7 +34,6 @@
   onMount(() => { void status.run(() => api.buddyStatus()); });
   async function join() { await status.run(() => api.joinBuddies()); }
   async function leave() {
-    if (!window.confirm('Leave interview buddies? Your conversations will close.')) return;
     membershipError = '';
     try { await api.leaveBuddies(); await status.run(() => api.buddyStatus()); }
     catch (err) { membershipError = err instanceof Error ? err.message : 'Could not leave interview buddies.'; }
@@ -95,7 +95,7 @@
   <section class="flex flex-col gap-5">
     <header class="flex flex-wrap items-center justify-between gap-3">
       <div><h1 class="text-2xl font-semibold">Interview buddies</h1><p class="text-sm text-muted-foreground">Your handle: {status.value.handle}</p></div>
-      <Button variant="outline" size="sm" onclick={leave}>Leave</Button>
+      <Button variant="outline" size="sm" onclick={() => (confirmLeaveOpen = true)}>Leave</Button>
     </header>
     {#if membershipError}<p role="alert" class="text-sm text-destructive">{membershipError}</p>{/if}
     <nav class="flex gap-2 border-b border-border" aria-label="Buddy sections">
@@ -138,3 +138,11 @@
     <Button type="submit" variant="primary" disabled={busy || !inviteBody.trim()}>Send invitation</Button>
   </form>
 </Dialog>
+
+<ConfirmDialog
+  bind:open={confirmLeaveOpen}
+  title="Leave interview buddies?"
+  description="You disappear from other members' lists and feed, and every conversation closes. You can join again later with the same handle."
+  confirmLabel="Leave"
+  onConfirm={leave}
+/>

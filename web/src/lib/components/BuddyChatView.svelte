@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { ApiError, api } from '#lib/api.js';
   import type { BuddyConversation, BuddyMessage, BuddyReport } from '#lib/types.js';
-  import { Button } from '#lib/ui/index.js';
+  import { Button, ConfirmDialog } from '#lib/ui/index.js';
   import { buddyConversationName, buddyOutgoingLabel, mergeBuddyMessages } from '#lib/buddies.js';
   import States from './States.svelte';
 
@@ -19,6 +19,7 @@
   let body = $state('');
   let status = $state<'loading' | 'ready' | 'error'>('loading');
   let error = $state('');
+  let confirmBlockOpen = $state(false);
   let actionBusy = $state(false);
   let reportReason = $state<BuddyReport['reason']>('spam');
   let reportNote = $state('');
@@ -124,7 +125,7 @@
     finally { actionBusy = false; }
   }
   async function block() {
-    if (!selected || !window.confirm(`Block ${buddyConversationName(selected.former_member, selected.other.handle)}?`)) return;
+    if (!selected) return;
     error = '';
     try { await api.blockBuddyConversation(selected.id); clearSelection(); await refreshList(); }
     catch (err) { error = err instanceof Error ? err.message : 'Could not block this member.'; }
@@ -161,7 +162,7 @@
     <section class="flex min-h-80 flex-col rounded-lg border border-border p-4 md:col-span-2" aria-label="Chat">
       {#if !selected}<p class="m-auto text-sm text-muted-foreground">Choose a conversation to read.</p>
       {:else}
-        <header class="flex items-center justify-between border-b border-border pb-3"><strong>{buddyConversationName(selected.former_member, selected.other.handle)}</strong>{#if !selected.former_member && (selected.status_for_me === 'open' || selected.status_for_me === 'incoming')}<div class="flex gap-2"><Button variant="outline" size="sm" onclick={() => { reportOpen = !reportOpen; reportSuccess = false; }}>Report</Button><Button variant="outline" size="sm" onclick={block}>Block</Button></div>{/if}</header>
+        <header class="flex items-center justify-between border-b border-border pb-3"><strong>{buddyConversationName(selected.former_member, selected.other.handle)}</strong>{#if !selected.former_member && (selected.status_for_me === 'open' || selected.status_for_me === 'incoming')}<div class="flex gap-2"><Button variant="outline" size="sm" onclick={() => { reportOpen = !reportOpen; reportSuccess = false; }}>Report</Button><Button variant="outline" size="sm" onclick={() => (confirmBlockOpen = true)}>Block</Button></div>{/if}</header>
         {#if error}<p role="alert" class="py-2 text-sm text-destructive">{error}</p>{/if}
         {#if reportSuccess}<p role="status" class="py-2 text-sm text-muted-foreground">Report sent.</p>{/if}
         {#if reportOpen && !selected.former_member}<form class="flex flex-col gap-2 rounded-md border border-border p-3" onsubmit={(e) => { e.preventDefault(); void report(); }}>
@@ -177,3 +178,12 @@
     </section>
   </div>
 {/if}
+
+<ConfirmDialog
+  bind:open={confirmBlockOpen}
+  title={`Block ${selected ? buddyConversationName(selected.former_member, selected.other.handle) : 'this member'}?`}
+  description="The conversation closes for good, and you stop seeing each other in lists, the feed and invitations. This cannot be undone."
+  confirmLabel="Block"
+  variant="destructive"
+  onConfirm={block}
+/>
