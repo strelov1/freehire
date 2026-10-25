@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Opt-in buddy membership
-The system SHALL let a signed-in account join and leave the buddy network explicitly. An account that has not joined SHALL NOT appear in any buddy list, feed or search, and SHALL NOT be able to read buddy lists, the feed or other members' profiles.
+The system SHALL let a signed-in account join and leave the buddy network explicitly. An account that has not joined SHALL NOT appear in any buddy list, feed or search, and SHALL NOT be able to read buddy lists, the feed or other members' profiles. Leaving SHALL close the member's conversations only while they are away: after they rejoin, their former conversation partners SHALL see their handle on the old conversation history again and MAY invite them again; blocking SHALL be the only permanent way to end contact.
 
 #### Scenario: Joining creates a membership with a handle
 - **WHEN** a signed-in account that is not a member joins
@@ -18,6 +18,10 @@ The system SHALL let a signed-in account join and leave the buddy network explic
 #### Scenario: Rejoining keeps the handle
 - **WHEN** a member who left joins again
 - **THEN** the membership is restored with the same buddy handle it had before
+
+#### Scenario: Rejoining restores the handle on old conversations
+- **WHEN** member B left while in a conversation with A, with no block between them, and B joins again
+- **THEN** A's conversation list shows B's handle on that conversation's history again, and A may invite B again; only a block keeps B hidden from A for good
 
 #### Scenario: Unauthenticated access is refused
 - **WHEN** a request without a session reaches any buddy endpoint
@@ -118,7 +122,7 @@ A member SHALL be able to invite another active member by sending a first messag
 - **THEN** a pending conversation exists between A and B holding that message, and B sees it as an incoming invitation
 
 #### Scenario: Second invitation to the same member is refused
-- **WHEN** A invites B while any conversation between them already exists
+- **WHEN** A invites B while a conversation between them already exists that is pending, open or declined
 - **THEN** the system responds 409 and creates nothing
 
 #### Scenario: Re-inviting after a conversation closed by leaving

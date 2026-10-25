@@ -57,3 +57,16 @@
 - [ ] 9.2 Build the 0198 index CONCURRENTLY on prod by hand before merge; PR, CI green, merge, deploy
 - [ ] 9.3 `freehire-ops`: `freehire-buddy-notify.{service,timer}` (5 min, `.env` + `.env.notify`), copy to host, `daemon-reload`, enable; verify one run in journal
 - [ ] 9.4 Verify on prod: join, invite between two test accounts, chat, notification arrives, feed shows an applied event, block hides
+
+## 10. Owner review follow-ups
+
+- [x] 10.1 Leave and block confirm through the design-system `ConfirmDialog`
+- [x] 10.2 Member page `/my/buddies/<handle>` on a shared `CandidateCardView` (also used by `/talent/<handle>`), no photo (design D13)
+- [x] 10.3 A "Message" button on member cards and the member page that opens the existing conversation or the first-message dialog
+- [x] 10.4 Messaging dock in the root layout: list plus up to two windows, mobile sheet, hidden on `/my/buddies`, window ids only in sessionStorage, drafts in memory (D15)
+- [x] 10.5 Re-open a conversation closed by a leave with a new invitation; a block keeps it closed (D7)
+- [x] 10.6 Restyle buddies like the Talent Network: dictionary heading, silhouette, feed cards
+- [x] 10.7 Member's own feed (`?handle=`) and year activity grid, guarded by `TestMemberActivityMatchesMemberFeed` (D14)
+- [x] 10.8 UI audit fixes: message sides, drafts, focus return, loading/empty/error states
+- [x] 10.9 Skills listed inline on the buddy page instead of a side rail
+- [x] 10.10 Support toast suppressed on `/my/buddies`, where it covered the composer
