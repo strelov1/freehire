@@ -7,7 +7,9 @@ import (
 	"crypto/cipher"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,8 +19,11 @@ import (
 // mokahr adapts MokaHR (Moka), a Chinese multi-tenant ATS. A board is one tenant careers SITE,
 // "<orgId>/<siteId>" (DeepSeek is high-flyer/140576), on app.mokahr.com — or, with region
 // "r1", on hire-r1.mokahr.com, Moka's international deployment, where a tenant of the other
-// host is unknown. Every tenant site calls the same keyless JSON listing, and a row carries the
-// whole posting with its HTML body, so there is no hydration.
+// host is unknown. Every tenant site calls the same keyless JSON listing. On some tenants a row
+// carries the whole posting with its HTML body; on others (SHEIN, Tesla, Zhihu — 45 of 81 sites
+// checked on 2026-10-25) the row has no body and no job function, and the detail endpoint
+// supplies both. So the adapter is a HydratingSource: a body-less row is fetched only when the
+// catalogue does not hold it yet.
 //
 // app.mokahr.com answers that listing ENCRYPTED: {"data": base64 AES-128-CBC ciphertext,
 // "necromancer": the 16-byte key}, under an IV every tenant's own page publishes and every
@@ -38,7 +43,10 @@ type mokahr struct {
 }
 
 const (
-	mokahrPath = "/api/outer/ats-apply/website/jobs/v2"
+	mokahrPath       = "/api/outer/ats-apply/website/jobs/v2"
+	mokahrDetailPath = "/api/outer/ats-apply/website/job"
+	// mokahrJobGone is the detail endpoint's answer for a posting that is closed or unknown.
+	mokahrJobGone = 703015
 	// mokahrPageSize is the listing's hard ceiling: 51 and above answer code 102.
 	mokahrPageSize = 50
 	// mokahrMaxPages bounds a tenant at 5,000 postings; reaching it fails the crawl.
@@ -55,14 +63,26 @@ var mokahrBoardRE = regexp.MustCompile(`^([A-Za-z0-9_-]+)/([1-9][0-9]*)$`)
 var mokahrRobotsDisallowed = map[string]bool{"lingjuninvest/46355": true, "shopee/74378": true}
 
 // mokahrTechFunctions are tenant job-function (zhineng) names that state technical work outright,
-// as the tenants checked on 2026-10-15 spell them. A function not listed — "其它" (other), a data
-// or product function, a name not yet seen — sets no hint and leaves the posting to the title
-// dictionary. Adding a tenant means reading its function names first.
+// as the tenants checked on 2026-10-15 and 2026-10-25 spell them, whitespace removed. A function
+// not listed — "其它" (other), a bare "技术类"/"研发类" (technical, R&D: a pharma, a property or a
+// battery tenant files lab and building work there too), a data, product or hardware function, a
+// name not yet seen — sets no hint and leaves the posting to the title dictionary. The names are
+// one map across tenants, so a name earns a place only if it reads as software or IT wherever it
+// appears. Adding a tenant means reading its function names first.
 var mokahrTechFunctions = map[string]bool{
 	"技术类/Technical": true, "算法类/AI": true, // Moonshot
 	"工程研发": true, "算法研究": true, // Zhipu
 	"AI核心系统研发": true, "全栈开发/算法": true, "深度学习研究员": true, "运维": true, // DeepSeek
 	"Engineering": true, // RedotPay
+	"信息技术类":       true, "IT/互联网类": true, "社招-IT": true, "企业IT与软件开发": true, "信息科技/数智化": true,
+	"信息化": true, "信息类": true, "数字化建设": true, "信息安全": true, // IT departments
+	"软件": true, "软件类": true, "软件开发": true, "软件开发类": true, "SW/软件开发": true,
+	"技术研发-软件开发": true, "技术开发类": true, "嵌入式": true, "嵌入式开发类": true, // software
+	"算法": true, "算法类": true, "AI人工智能": true, "AI/人工智能": true, // algorithms, AI
+	"大前端": true, "服务端": true, "客户端": true, "服务器": true, "C++服务器端开发": true, "U3D客户端": true,
+	"程序类": true, "程序技术类": true, "游戏程序类": true, "互联网程序类": true, // engineering, games
+	"测试及测试开发": true, "自动化测试/白盒测试": true, "运维及运维开发": true, // QA, operations
+	"智能驾驶类": true, "智能智驾类": true, "智能网联类": true, // automotive software
 }
 
 // mokahrCities maps the city part of a location's administrative code (its first four digits)
@@ -89,6 +109,8 @@ func NewMokaHR(c JSONPoster) Source { return mokahr{http: c} }
 
 func (mokahr) Provider() string { return "mokahr" }
 
+var _ HydratingSource = mokahr{}
+
 // fullBoardListing: see the type comment and the fullBoardListing interface (source.go).
 func (mokahr) fullBoardListing() {}
 
@@ -107,12 +129,17 @@ type mokahrEnvelope struct {
 }
 
 type mokahrBody struct {
-	Success bool   `json:"success"`
-	Code    int    `json:"code"`
-	Msg     string `json:"msg"`
-	Data    *struct {
-		Jobs []mokahrJob `json:"jobs"`
-	} `json:"data"`
+	Success bool            `json:"success"`
+	Code    int             `json:"code"`
+	Msg     string          `json:"msg"`
+	Data    json.RawMessage `json:"data"`
+}
+
+type mokahrDetailQuery struct {
+	SiteID int    `json:"siteId"`
+	OrgID  string `json:"orgId"`
+	JobID  string `json:"jobId"`
+	Locale string `json:"locale"`
 }
 
 type mokahrJob struct {
@@ -133,83 +160,166 @@ type mokahrJob struct {
 	} `json:"locations"`
 }
 
+// mokahrSite is a parsed board: the host it lives on and its tenant and site ids.
+type mokahrSite struct {
+	host, board, org string
+	siteID           int
+}
+
 func (s mokahr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return s.FetchNew(ctx, e, func(string) bool { return false })
+}
+
+// FetchNew reads the whole listing, then maps each row: a row with a body is the posting; a
+// body-less row the catalogue already holds is a SeenRefresh; a new body-less row is hydrated.
+// A failed detail defers that posting rather than storing it body-less, which once seen would
+// never be hydrated again; the listing already proved the board, so it does not fail the crawl.
+func (s mokahr) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	site, err := parseMokahrBoard(e)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.list(ctx, site)
+	if err != nil {
+		return nil, err
+	}
+	return fetchDetails(rows, defaultDetailWorkers, func(r mokahrJob) (Job, bool) {
+		if strings.TrimSpace(r.Description) != "" {
+			return r.toJob(site.host, site.board, e.Company)
+		}
+		if r.Status != "open" {
+			return Job{}, false
+		}
+		if seen(r.ID) {
+			return Job{ExternalID: r.ID, URL: mokahrJobURL(site.host, site.board, r.ID), SeenRefresh: true}, true
+		}
+		d, err := s.detail(ctx, site, r.ID)
+		if err != nil {
+			log.Printf("mokahr: board %q, detail %s failed; deferring: %v", site.board, r.ID, err)
+			return Job{}, false
+		}
+		if d == nil {
+			return Job{}, false // closed between the listing and the detail
+		}
+		return d.toJob(site.host, site.board, e.Company)
+	}), nil
+}
+
+func parseMokahrBoard(e CompanyEntry) (mokahrSite, error) {
 	m := mokahrBoardRE.FindStringSubmatch(strings.TrimSpace(e.Board))
 	if m == nil {
-		return nil, fmt.Errorf("mokahr: board %q is not <orgId>/<siteId>", e.Board)
+		return mokahrSite{}, fmt.Errorf("mokahr: board %q is not <orgId>/<siteId>", e.Board)
 	}
-	board := m[0]
-	if mokahrRobotsDisallowed[board] {
-		return nil, fmt.Errorf("mokahr: board %q is disallowed by robots.txt", board)
+	if mokahrRobotsDisallowed[m[0]] {
+		return mokahrSite{}, fmt.Errorf("mokahr: board %q is disallowed by robots.txt", m[0])
 	}
-	host := "app.mokahr.com"
+	site := mokahrSite{host: "app.mokahr.com", board: m[0], org: m[1]}
 	switch e.Region {
 	case "":
 	case "r1":
-		host = "hire-r1.mokahr.com"
+		site.host = "hire-r1.mokahr.com"
 	default:
-		return nil, fmt.Errorf("mokahr: unknown region %q", e.Region)
+		return mokahrSite{}, fmt.Errorf("mokahr: unknown region %q", e.Region)
 	}
-	siteID, _ := strconv.Atoi(m[2])
+	site.siteID, _ = strconv.Atoi(m[2])
+	return site, nil
+}
+
+// list walks the listing to its natural end and returns every distinct row.
+func (s mokahr) list(ctx context.Context, site mokahrSite) ([]mokahrJob, error) {
 	var (
-		jobs []Job
+		rows []mokahrJob
 		seen = map[string]bool{}
 	)
 	for page := 0; ; page++ {
 		if page == mokahrMaxPages {
-			return nil, fmt.Errorf("mokahr: board %q: %d pages without reaching the end", board, mokahrMaxPages)
+			return nil, fmt.Errorf("mokahr: board %q: %d pages without reaching the end", site.board, mokahrMaxPages)
 		}
-		rows, err := s.page(ctx, host, mokahrQuery{SiteID: siteID, OrgID: m[1], Locale: "zh-CN",
-			Limit: mokahrPageSize, Offset: page * mokahrPageSize})
+		var data struct {
+			Jobs []mokahrJob `json:"jobs"`
+		}
+		err := s.call(ctx, site.host, mokahrPath, mokahrQuery{SiteID: site.siteID, OrgID: site.org, Locale: "zh-CN",
+			Limit: mokahrPageSize, Offset: page * mokahrPageSize}, &data)
 		if err != nil {
-			return nil, fmt.Errorf("mokahr: board %q, offset %d: %w", board, page*mokahrPageSize, err)
+			return nil, fmt.Errorf("mokahr: board %q, offset %d: %w", site.board, page*mokahrPageSize, err)
 		}
-		for _, r := range rows {
+		for _, r := range data.Jobs {
 			if r.ID == "" || seen[r.ID] {
 				continue
 			}
 			seen[r.ID] = true
-			if j, ok := r.toJob(host, board, e.Company); ok {
-				jobs = append(jobs, j)
-			}
+			rows = append(rows, r)
 		}
 		// The raw page length, not the kept count, decides the end: a dropped row must not
 		// read as the last page.
-		if len(rows) < mokahrPageSize {
+		if len(data.Jobs) < mokahrPageSize {
 			break
 		}
 	}
-	if len(seen) == 0 {
-		return nil, fmt.Errorf("mokahr: board %q lists no postings", board)
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("mokahr: board %q lists no postings", site.board)
 	}
-	return jobs, nil
+	return rows, nil
 }
 
-func (s mokahr) page(ctx context.Context, host string, q mokahrQuery) ([]mokahrJob, error) {
-	var raw json.RawMessage
-	if err := s.http.PostJSON(ctx, "https://"+host+mokahrPath, q, &raw); err != nil {
+// detail reads one posting. A nil posting with no error is the platform saying it is gone.
+func (s mokahr) detail(ctx context.Context, site mokahrSite, id string) (*mokahrJob, error) {
+	var j mokahrJob
+	err := s.call(ctx, site.host, mokahrDetailPath, mokahrDetailQuery{SiteID: site.siteID, OrgID: site.org, JobID: id, Locale: "zh-CN"}, &j)
+	var code mokahrCodeError
+	if errors.As(err, &code) && code.code == mokahrJobGone {
+		return nil, nil
+	}
+	if err != nil {
 		return nil, err
+	}
+	if j.ID != id {
+		return nil, fmt.Errorf("answered posting %q", j.ID)
+	}
+	return &j, nil
+}
+
+func mokahrJobURL(host, board, id string) string {
+	return "https://" + host + "/social-recruitment/" + board + "#/job/" + id
+}
+
+// mokahrCodeError is an unsuccessful answer: every MokaHR outcome is HTTP 200, told apart by code.
+type mokahrCodeError struct {
+	code int
+	msg  string
+}
+
+func (e mokahrCodeError) Error() string { return fmt.Sprintf("code %d %s", e.code, e.msg) }
+
+// call POSTs q to one of the tenant endpoints and decodes the successful answer's data into v.
+func (s mokahr) call(ctx context.Context, host, path string, q, v any) error {
+	var raw json.RawMessage
+	if err := s.http.PostJSON(ctx, "https://"+host+path, q, &raw); err != nil {
+		return err
 	}
 	var env mokahrEnvelope
 	if err := json.Unmarshal(raw, &env); err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
+		return fmt.Errorf("decode: %w", err)
 	}
 	// A string "data" is the ciphertext of the whole body; otherwise the answer IS the body.
 	plain := []byte(raw)
 	if len(env.Data) > 0 && env.Data[0] == '"' {
 		var err error
 		if plain, err = mokahrDecrypt(env); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	var body mokahrBody
 	if err := json.Unmarshal(plain, &body); err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
+		return fmt.Errorf("decode: %w", err)
 	}
-	if !body.Success || body.Data == nil {
-		return nil, fmt.Errorf("code %d %s", body.Code, body.Msg)
+	if !body.Success || len(body.Data) == 0 || string(body.Data) == "null" {
+		return mokahrCodeError{code: body.Code, msg: body.Msg}
 	}
-	return body.Data.Jobs, nil
+	if err := json.Unmarshal(body.Data, v); err != nil {
+		return fmt.Errorf("decode: %w", err)
+	}
+	return nil
 }
 
 // mokahrDecrypt opens app.mokahr.com's encrypted listing: AES-128-CBC under the response's own
@@ -250,11 +360,11 @@ func (r mokahrJob) toJob(host, board, company string) (Job, bool) {
 	}
 	job := Job{
 		ExternalID:  r.ID,
-		URL:         "https://" + host + "/social-recruitment/" + board + "#/job/" + r.ID,
+		URL:         mokahrJobURL(host, board, r.ID),
 		Title:       title,
 		Company:     company,
 		Description: sanitizeHTML(r.Description),
-		IsTechHint:  r.Zhineng != nil && mokahrTechFunctions[r.Zhineng.Name],
+		IsTechHint:  r.Zhineng != nil && mokahrTechFunctions[strings.Join(strings.Fields(r.Zhineng.Name), "")],
 	}
 	if t, err := time.ParseInLocation("2006-01-02T15:04", r.OpenedAt, mokahrChina); err == nil {
 		job.PostedAt = &t

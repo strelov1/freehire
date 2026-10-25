@@ -1,0 +1,84 @@
+{
+ "code": 0,
+ "codeType": 0,
+ "data": {
+  "jobs": [
+   {
+    "category2Id": "1.1.1",
+    "commitment": "全职",
+    "createdAt": "2026-07-22T11:14:49",
+    "deptId": 3663804,
+    "hireMode": 1,
+    "id": "dbfaafd3-eb13-4c30-9a37-acc2d94885b9",
+    "locations": [
+     {
+      "cityId": 320114,
+      "cityName": "雨花台区",
+      "country": "中国",
+      "id": 28648,
+      "provinceId": 320000,
+      "provinceName": "江苏"
+     }
+    ],
+    "maxSalary": 50,
+    "minSalary": 30,
+    "multiLocale": "{\"mainLocale\":\"zh-CN\",\"secondLocale\":\"\"}",
+    "openedAt": "2026-07-22T00:00",
+    "orgId": "shein",
+    "publishedAt": "2026-10-25T21:02:14",
+    "salaryUnit": 0,
+    "showIsCampus": false,
+    "status": "open",
+    "title": "资深JAVA工程师（识别治理）-南京",
+    "updatedAt": "2026-10-25T21:02:13",
+    "zhineng": {
+     "id": 15710,
+     "name": "信息技术类"
+    }
+   },
+   {
+    "category2Id": "1.1.1",
+    "commitment": "全职",
+    "createdAt": "2026-07-22T14:40:06",
+    "deptId": 3663804,
+    "hireMode": 1,
+    "id": "fe9db646-d2ca-4bf2-bc79-e55ee5ebe9af",
+    "locations": [
+     {
+      "cityId": 310105,
+      "cityName": "长宁区",
+      "country": "中国",
+      "id": 411721,
+      "provinceId": 310000,
+      "provinceName": "上海市"
+     },
+     {
+      "cityId": 320114,
+      "cityName": "雨花台区",
+      "country": "中国",
+      "id": 28648,
+      "provinceId": 320000,
+      "provinceName": "江苏"
+     }
+    ],
+    "maxSalary": 55,
+    "minSalary": 35,
+    "multiLocale": "{\"mainLocale\":\"zh-CN\",\"secondLocale\":\"\"}",
+    "openedAt": "2026-07-22T00:00",
+    "orgId": "shein",
+    "publishedAt": "2026-10-25T21:02:02",
+    "salaryUnit": 0,
+    "showIsCampus": false,
+    "status": "open",
+    "title": "资深JAVA工程师（平台治理处置-南京）",
+    "updatedAt": "2026-10-25T21:02:01",
+    "zhineng": {
+     "id": 15710,
+     "name": "信息技术类"
+    }
+   }
+  ]
+ },
+ "msg": "成功",
+ "success": true
+}

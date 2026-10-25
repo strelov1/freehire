@@ -200,3 +200,96 @@ func TestMokaHRRejectsAWrongKey(t *testing.T) {
 		t.Error("a wrong key must not decrypt")
 	}
 }
+
+// mokahrBodylessFake serves SHEIN's real listing (2026-10-25), whose rows carry no body and no
+// job function, and its real detail answers: the first posting's detail, and the platform's
+// "posting no longer exists" for the second. detailErr fails every detail request instead.
+type mokahrBodylessFake struct {
+	detailErr error
+	details   []string
+}
+
+func (f *mokahrBodylessFake) PostJSON(_ context.Context, u string, body, v any) error {
+	file := ""
+	switch q := body.(type) {
+	case mokahrQuery:
+		if u != "https://app.mokahr.com"+mokahrPath || q.OrgID != "shein" || q.SiteID != 2933 {
+			return errors.New("unexpected listing " + u)
+		}
+		file = "shein_list_bodyless.json"
+	case mokahrDetailQuery:
+		if u != "https://app.mokahr.com"+mokahrDetailPath || q.OrgID != "shein" || q.SiteID != 2933 {
+			return errors.New("unexpected detail " + u)
+		}
+		f.details = append(f.details, q.JobID)
+		if f.detailErr != nil {
+			return f.detailErr
+		}
+		file = "detail_gone.json"
+		if q.JobID == "dbfaafd3-eb13-4c30-9a37-acc2d94885b9" {
+			file = "shein_detail.json"
+		}
+	default:
+		return fmt.Errorf("unexpected body %T", body)
+	}
+	raw, err := os.ReadFile("testdata/mokahr/" + file)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, v)
+}
+
+func TestMokaHRHydratesABodylessRow(t *testing.T) {
+	f := &mokahrBodylessFake{}
+	jobs, err := NewMokaHR(f).(HydratingSource).FetchNew(context.Background(),
+		CompanyEntry{Board: "shein/2933", Company: "SHEIN"}, func(string) bool { return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.details) != 2 {
+		t.Fatalf("detail requests: %v", f.details)
+	}
+	// The second posting answered "gone" and is dropped; the first is the detail's posting.
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	j := jobs[0]
+	if j.ExternalID != "dbfaafd3-eb13-4c30-9a37-acc2d94885b9" || j.SeenRefresh || !strings.Contains(j.Description, "Java") ||
+		!j.IsTechHint || j.EmploymentType != "full_time" || j.Location != "Nanjing" || fmt.Sprint(j.Countries) != "[cn]" ||
+		j.URL != "https://app.mokahr.com/social-recruitment/shein/2933#/job/dbfaafd3-eb13-4c30-9a37-acc2d94885b9" {
+		t.Errorf("hydrated posting: %+v", j)
+	}
+}
+
+func TestMokaHRSeenBodylessRowCostsNoDetail(t *testing.T) {
+	f := &mokahrBodylessFake{}
+	jobs, err := NewMokaHR(f).(HydratingSource).FetchNew(context.Background(),
+		CompanyEntry{Board: "shein/2933", Company: "SHEIN"}, func(string) bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.details) != 0 || len(jobs) != 2 || !jobs[0].SeenRefresh || !jobs[1].SeenRefresh {
+		t.Fatalf("details %v, jobs %+v", f.details, jobs)
+	}
+}
+
+func TestMokaHRDefersAFailedDetail(t *testing.T) {
+	f := &mokahrBodylessFake{detailErr: errors.New("HTTP 502")}
+	jobs, err := NewMokaHR(f).Fetch(context.Background(), CompanyEntry{Board: "shein/2933", Company: "SHEIN"})
+	if err != nil {
+		t.Fatalf("a failed detail must not fail the board: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Errorf("a failed detail must defer the posting, got %+v", jobs)
+	}
+}
+
+func TestMokaHRTechFunctionIgnoresWhitespace(t *testing.T) {
+	r := mokahrJob{ID: "x", Title: "t", Status: "open", Description: "<p>d</p>"}
+	r.Zhineng = &struct {
+		Name string `json:"name"`
+	}{Name: "SW/ 软件开发"}
+	if j, ok := r.toJob("app.mokahr.com", "bosch/73873", "Bosch"); !ok || !j.IsTechHint {
+		t.Errorf("a spaced function name must still set the hint: %+v", j)
+	}
+}
