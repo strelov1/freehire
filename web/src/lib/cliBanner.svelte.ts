@@ -20,7 +20,7 @@ export function loadCliBannerDismissed(): void {
   dismissed = readDismissed();
 }
 
-/** Record the dismissal for this session and the next. */
+/** Record the dismissal for the rest of this browser session. */
 export function dismissCliBanner(): void {
   dismissed = true;
   writeDismissed();

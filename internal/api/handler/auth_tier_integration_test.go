@@ -17,15 +17,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // meResponse decodes only the fields this test cares about; toUserResponse's full contract
 // (no password hash, every other field present) is TestUserResponse_OmitsPasswordHash's job.
 type meResponse struct {
 	Data struct {
-		ID   int64  `json:"id"`
-		Tier string `json:"tier"`
+		ID             int64  `json:"id"`
+		Tier           string `json:"tier"`
+		AgentConnected bool   `json:"agent_connected"`
 	} `json:"data"`
 }
 
@@ -75,5 +78,84 @@ func TestMe_ReportsTier(t *testing.T) {
 
 	if got := fetchMe(t, app, proCookie); got.Data.Tier != "pro" {
 		t.Errorf("pro account tier = %q, want %q", got.Data.Tier, "pro")
+	}
+}
+
+// The "connect your agent" strip stops asking once agent_connected is true, so the field
+// must turn on for exactly the credentials an agent connects with: a key of any scope but
+// `embed`, or an OAuth grant the account's sessions have not revoked.
+func TestMe_ReportsAgentConnected(t *testing.T) {
+	app, _, queries, _ := recoveryApp(t)
+	ctx := context.Background()
+
+	resp := postAuthJSON(t, app, "/api/v1/auth/register",
+		`{"email":"agent-connected@example.test","password":"password123"}`, "")
+	defer resp.Body.Close()
+	cookie := sessionCookie(t, resp)
+	me := fetchMe(t, app, cookie)
+	if me.Data.AgentConnected {
+		t.Fatal("a fresh account reports agent_connected")
+	}
+	userID := me.Data.ID
+	// CreateAPIKey mints only for a verified address.
+	if err := queries.SetUserEmailVerified(ctx, userID); err != nil {
+		t.Fatalf("SetUserEmailVerified: %v", err)
+	}
+
+	createKey := func(hash, scope string) {
+		t.Helper()
+		if _, err := queries.CreateAPIKey(ctx, db.CreateAPIKeyParams{
+			UserID: userID, Name: scope, TokenHash: hash, TokenPrefix: "fh_test", Scope: scope,
+		}); err != nil {
+			t.Fatalf("CreateAPIKey(%s): %v", scope, err)
+		}
+	}
+
+	// An embed key grants nothing on this API, so it is not a connected agent.
+	createKey("hash-embed", auth.ScopeEmbed)
+	if fetchMe(t, app, cookie).Data.AgentConnected {
+		t.Error("an embed-only key reports agent_connected")
+	}
+
+	createKey("hash-full", auth.ScopeFull)
+	if !fetchMe(t, app, cookie).Data.AgentConnected {
+		t.Error("a full-scope key does not report agent_connected")
+	}
+
+	// A second account connected through MCP OAuth instead of a pasted key.
+	grantResp := postAuthJSON(t, app, "/api/v1/auth/register",
+		`{"email":"agent-grant@example.test","password":"password123"}`, "")
+	defer grantResp.Body.Close()
+	grantCookie := sessionCookie(t, grantResp)
+	grantUser := fetchMe(t, app, grantCookie).Data.ID
+
+	seedOAuthTestClient(t, queries, "client-agent-connected", []string{"http://127.0.0.1:9999/cb"})
+	version, err := queries.GetUserTokenVersion(ctx, grantUser)
+	if err != nil {
+		t.Fatalf("GetUserTokenVersion: %v", err)
+	}
+	expiresAt := time.Now().Add(30 * 24 * time.Hour)
+	if _, err := queries.CreateOAuthGrant(ctx, db.CreateOAuthGrantParams{
+		UserID: grantUser, ClientID: "client-agent-connected",
+		AccessTokenHash:    oauth2server.HashToken("fhm_agent-connected"),
+		IssuedTokenVersion: version, ExpiresAt: pgconv.Timestamptz(&expiresAt),
+	}); err != nil {
+		t.Fatalf("CreateOAuthGrant: %v", err)
+	}
+	if !fetchMe(t, app, grantCookie).Data.AgentConnected {
+		t.Error("a live OAuth grant does not report agent_connected")
+	}
+
+	// Signing out everywhere revokes the grant, so the strip may ask again. Read through
+	// the query: the bump also ends the session cookie fetchMe would present.
+	if _, err := queries.BumpUserTokenVersion(ctx, grantUser); err != nil {
+		t.Fatalf("BumpUserTokenVersion: %v", err)
+	}
+	connected, err := queries.UserHasAgentCredential(ctx, grantUser)
+	if err != nil {
+		t.Fatalf("UserHasAgentCredential: %v", err)
+	}
+	if connected {
+		t.Error("a grant revoked by a token-version bump still reports agent_connected")
 	}
 }

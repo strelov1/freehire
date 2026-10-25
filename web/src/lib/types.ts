@@ -480,6 +480,9 @@ export interface User {
   // this same response so the header's tier badge needs no second request to
   // GET /api/v1/me/plan just to learn what api.myPlan() would answer anyway.
   tier: 'free' | 'pro' | 'ultra';
+  // Whether the account holds a live API key or MCP grant. The "connect your agent" strip
+  // stops asking once it is true.
+  agent_connected: boolean;
 }
 
 /** A crowdsourced board contribution: a job link a user pasted for a company board we do

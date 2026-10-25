@@ -7756,6 +7756,12 @@ type Querier interface {
 	// address against the caller's own. A primitive so the handler needs no full user row
 	// (same shape as GetUserRole).
 	UserEmail(ctx context.Context, id int64) (string, error)
+	// Whether the account holds a live credential an agent connects with: an API key (any
+	// scope but `embed`, which grants nothing on this API) or an MCP OAuth grant the
+	// account's sessions have not revoked. Existence, not use: a key read only by the
+	// public-read limiter never touches last_used_at, so "used" would miss a CLI that only
+	// searches. Read by the site's "connect your agent" strip to stop asking.
+	UserHasAgentCredential(ctx context.Context, userID int64) (bool, error)
 	// Whether the account has at least one registered device — the precondition for
 	// choosing the push channel at all, since push delivers to nothing else.
 	UserHasPushToken(ctx context.Context, userID int64) (bool, error)

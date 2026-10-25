@@ -308,6 +308,10 @@ type userResponse struct {
 	// header's tier badge reads it from here rather than a second request to
 	// GET /api/v1/me/plan just to learn what api.myPlan() would answer anyway.
 	Tier plan.Tier `json:"tier"`
+	// AgentConnected is whether the account holds a live API key or MCP grant — see
+	// UserHasAgentCredential. The site's "connect your agent" strip stops asking once it
+	// is true; riding along here lets the server leave the strip out of the first paint.
+	AgentConnected bool `json:"agent_connected"`
 }
 
 type credentials struct {
@@ -330,12 +334,27 @@ func toUserResponse(u accounts.User) userResponse {
 }
 
 // toUserResponseWithTier is what every response handler calls: toUserResponse plus the
-// caller's resolved tier, riding along on the same request that already powers
-// currentUser() on every page — see resolveTier.
+// caller's resolved tier and agent connection, riding along on the same request that
+// already powers currentUser() on every page — see resolveTier.
 func (h *authHandlers) toUserResponseWithTier(ctx context.Context, u accounts.User) userResponse {
 	resp := toUserResponse(u)
 	resp.Tier = h.resolveTier(ctx, u.ID)
+	resp.AgentConnected = h.resolveAgentConnected(ctx, u.ID)
 	return resp
+}
+
+// resolveAgentConnected degrades to false on a read failure or unset queries, for the
+// reason resolveTier gives: the worst it costs is the strip asking once more.
+func (h *authHandlers) resolveAgentConnected(ctx context.Context, userID int64) bool {
+	if h.queries == nil {
+		return false
+	}
+	connected, err := h.queries.UserHasAgentCredential(ctx, userID)
+	if err != nil {
+		log.Printf("auth: resolving agent connection for user %d: %v", userID, err)
+		return false
+	}
+	return connected
 }
 
 // resolveTier reads one indexed row (the same read plan.Store.Tier performs on every

@@ -62,3 +62,23 @@ WHERE id = $1;
 -- caller's (the handler maps that to 404).
 DELETE FROM api_keys
 WHERE id = $1 AND user_id = $2;
+
+-- name: UserHasAgentCredential :one
+-- Whether the account holds a live credential an agent connects with: an API key (any
+-- scope but `embed`, which grants nothing on this API) or an MCP OAuth grant the
+-- account's sessions have not revoked. Existence, not use: a key read only by the
+-- public-read limiter never touches last_used_at, so "used" would miss a CLI that only
+-- searches. Read by the site's "connect your agent" strip to stop asking.
+SELECT (EXISTS (
+           SELECT 1 FROM api_keys k
+           WHERE k.user_id = $1
+             AND k.scope <> 'embed'
+             AND (k.expires_at IS NULL OR k.expires_at > now())
+       )
+    OR EXISTS (
+           SELECT 1 FROM oauth_grants g
+           JOIN users u ON u.id = g.user_id
+           WHERE g.user_id = $1
+             AND g.expires_at > now()
+             AND g.issued_token_version = u.token_version
+       ))::boolean AS connected;

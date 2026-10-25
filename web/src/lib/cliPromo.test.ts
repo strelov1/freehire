@@ -1,21 +1,28 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLI_BANNER_DISMISSED_KEY, readDismissed, writeDismissed } from './cliPromo';
+import { CLI_BANNER_DISMISSED_COOKIE, readDismissed, writeDismissed } from './cliPromo';
 
-// The node environment has no localStorage at all, so each test installs the one it
-// needs and removes it afterwards.
-function installStorage(store: Map<string, string>) {
-  Object.defineProperty(globalThis, 'localStorage', {
+// The node environment has no document at all, so each test installs a minimal cookie
+// jar and removes it afterwards. Like a browser's, a write sets one cookie (its
+// attributes dropped) and a read returns every cookie as "name=value; name=value".
+function installCookies(jar: Map<string, string>) {
+  Object.defineProperty(globalThis, 'document', {
     configurable: true,
     value: {
-      getItem: (k: string) => store.get(k) ?? null,
-      setItem: (k: string, v: string) => void store.set(k, v),
+      get cookie() {
+        return [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+      },
+      set cookie(raw: string) {
+        const pair = raw.split(';')[0] ?? '';
+        const eq = pair.indexOf('=');
+        jar.set(pair.slice(0, eq).trim(), pair.slice(eq + 1));
+      },
     },
   });
 }
 
-/** A blocked origin or Safari private mode: every access throws. */
-function installHostileStorage() {
-  Object.defineProperty(globalThis, 'localStorage', {
+/** A blocked origin: every access throws. */
+function installHostileCookies() {
+  Object.defineProperty(globalThis, 'document', {
     configurable: true,
     get() {
       throw new Error('access denied');
@@ -24,42 +31,54 @@ function installHostileStorage() {
 }
 
 afterEach(() => {
-  Reflect.deleteProperty(globalThis, 'localStorage');
+  Reflect.deleteProperty(globalThis, 'document');
 });
 
 describe('dismissal', () => {
-  it('round-trips through storage', () => {
-    installStorage(new Map());
+  it('round-trips through the cookie', () => {
+    installCookies(new Map());
 
     expect(readDismissed()).toBe(false);
     writeDismissed();
     expect(readDismissed()).toBe(true);
   });
 
-  it('does not inherit the retired Product Hunt strip’s dismissal', () => {
-    installStorage(new Map([['hire.ph-banner-dismissed', '1']]));
+  it('is not fooled by a cookie whose name merely ends the same way', () => {
+    installCookies(new Map([[`x${CLI_BANNER_DISMISSED_COOKIE}`, '1']]));
 
     expect(readDismissed()).toBe(false);
   });
 
-  it('writes the key the app.html no-flash script reads', () => {
-    const store = new Map<string, string>();
-    installStorage(store);
+  it('writes a session cookie under the name the app.html no-flash script reads', () => {
+    let written = '';
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        get cookie() {
+          return '';
+        },
+        set cookie(raw: string) {
+          written = raw;
+        },
+      },
+    });
 
     writeDismissed();
 
-    expect(store.get(CLI_BANNER_DISMISSED_KEY)).toBe('1');
-    expect(CLI_BANNER_DISMISSED_KEY).toBe('hire.cli-banner-dismissed');
+    expect(CLI_BANNER_DISMISSED_COOKIE).toBe('hire_cli_banner_dismissed');
+    expect(written.startsWith('hire_cli_banner_dismissed=1;')).toBe(true);
+    // No lifetime: the dismissal ends with the browser session, and the strip asks again.
+    expect(written).not.toMatch(/max-age|expires/i);
   });
 
-  it('reads as not dismissed when storage is unavailable', () => {
-    installHostileStorage();
+  it('reads as not dismissed when cookies are unavailable', () => {
+    installHostileCookies();
 
     expect(readDismissed()).toBe(false);
   });
 
   it('does not throw when the dismissal cannot be stored', () => {
-    installHostileStorage();
+    installHostileCookies();
 
     expect(() => writeDismissed()).not.toThrow();
   });

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLI_BANNER_DISMISSED_KEY } from './cliPromo';
 import {
   ownsMobileStickyCta,
   readDismissed,
@@ -69,16 +68,6 @@ describe('dismissal', () => {
     expect(readDismissed()).toBe(false);
     writeDismissed();
     expect(readDismissed()).toBe(true);
-  });
-
-  it('leaves the CLI strip’s own key alone', () => {
-    const store = new Map([[CLI_BANNER_DISMISSED_KEY, '1']]);
-    installStorage(store);
-
-    writeDismissed();
-
-    expect(store.get(CLI_BANNER_DISMISSED_KEY)).toBe('1');
-    expect(store.get(SUPPORT_DISMISSED_KEY)).toBe('1');
   });
 
   it('reads as unanswered when storage is unavailable', () => {

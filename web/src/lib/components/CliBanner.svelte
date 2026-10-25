@@ -3,13 +3,15 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ArrowRight, X } from '@lucide/svelte';
+  import { currentUser } from '#lib/auth.svelte.js';
   import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '#lib/cliBanner.svelte.js';
   import { sourceLogoUrl } from '#lib/logo.js';
   import { isAccountArea } from '#lib/shellLayout.js';
   import { EntityLogo } from '#lib/ui/index.js';
 
   // A strip under the header pointing at /mcp (it pointed at /cli until the hosted MCP
-  // connectors became the main way in), dismissible and remembered. Self-gating
+  // connectors became the main way in). It asks until the account connects an agent;
+  // closing it only quiets it for the browser session (see #lib/cliPromo.ts). Self-gating
   // like EmailVerificationBanner, so the layout mounts it unconditionally.
   //
   // It took the place of the Product Hunt launch strip and kept its arrangement, which
@@ -37,6 +39,10 @@
   // the server knows too, so the server-rendered markup and the hydrated one agree.
   const inAccountArea = $derived(isAccountArea(page.url.pathname));
 
+  // Gone for good once the account holds an API key or MCP grant. The user is resolved
+  // in the root layout's server load, so the server leaves the strip out of the markup.
+  const agentConnected = $derived(currentUser()?.agent_connected ?? false);
+
   const agents = [
     { name: 'Claude', domain: 'claude.ai' },
     { name: 'ChatGPT', domain: 'chatgpt.com' },
@@ -44,7 +50,7 @@
   ];
 </script>
 
-{#if !inAccountArea && !cliBannerDismissed()}
+{#if !inAccountArea && !agentConnected && !cliBannerDismissed()}
   <div data-cli-banner class="border-b border-border bg-brand/5">
     <div class="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2 text-sm">
       <!-- The names live in the stack's label, so the sentence can stay short. -->
