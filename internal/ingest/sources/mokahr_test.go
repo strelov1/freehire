@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -206,6 +207,7 @@ func TestMokaHRRejectsAWrongKey(t *testing.T) {
 // "posting no longer exists" for the second. detailErr fails every detail request instead.
 type mokahrBodylessFake struct {
 	detailErr error
+	mu        sync.Mutex
 	details   []string
 }
 
@@ -221,7 +223,9 @@ func (f *mokahrBodylessFake) PostJSON(_ context.Context, u string, body, v any) 
 		if u != "https://app.mokahr.com"+mokahrDetailPath || q.OrgID != "shein" || q.SiteID != 2933 {
 			return errors.New("unexpected detail " + u)
 		}
+		f.mu.Lock()
 		f.details = append(f.details, q.JobID)
+		f.mu.Unlock()
 		if f.detailErr != nil {
 			return f.detailErr
 		}
@@ -275,12 +279,22 @@ func TestMokaHRSeenBodylessRowCostsNoDetail(t *testing.T) {
 
 func TestMokaHRDefersAFailedDetail(t *testing.T) {
 	f := &mokahrBodylessFake{detailErr: errors.New("HTTP 502")}
-	jobs, err := NewMokaHR(f).Fetch(context.Background(), CompanyEntry{Board: "shein/2933", Company: "SHEIN"})
+	// One posting is stored, so the crawl still read the board: the failed one is deferred.
+	jobs, err := NewMokaHR(f).(HydratingSource).FetchNew(context.Background(),
+		CompanyEntry{Board: "shein/2933", Company: "SHEIN"},
+		func(id string) bool { return id == "fe9db646-d2ca-4bf2-bc79-e55ee5ebe9af" })
 	if err != nil {
 		t.Fatalf("a failed detail must not fail the board: %v", err)
 	}
-	if len(jobs) != 0 {
+	if len(jobs) != 1 || !jobs[0].SeenRefresh {
 		t.Errorf("a failed detail must defer the posting, got %+v", jobs)
+	}
+}
+
+func TestMokaHRFailsWhenEveryDetailFails(t *testing.T) {
+	f := &mokahrBodylessFake{detailErr: errors.New("HTTP 502")}
+	if _, err := NewMokaHR(f).Fetch(context.Background(), CompanyEntry{Board: "shein/2933", Company: "SHEIN"}); err == nil {
+		t.Error("a crawl whose every detail failed must not read as an empty, healthy board")
 	}
 }
 

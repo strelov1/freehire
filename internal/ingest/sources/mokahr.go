@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -173,7 +174,8 @@ func (s mokahr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // FetchNew reads the whole listing, then maps each row: a row with a body is the posting; a
 // body-less row the catalogue already holds is a SeenRefresh; a new body-less row is hydrated.
 // A failed detail defers that posting rather than storing it body-less, which once seen would
-// never be hydrated again; the listing already proved the board, so it does not fail the crawl.
+// never be hydrated again; the listing already proved the board, so it does not fail the crawl
+// unless nothing at all came of it.
 func (s mokahr) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	site, err := parseMokahrBoard(e)
 	if err != nil {
@@ -183,7 +185,8 @@ func (s mokahr) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 	if err != nil {
 		return nil, err
 	}
-	return fetchDetails(rows, defaultDetailWorkers, func(r mokahrJob) (Job, bool) {
+	var failed atomic.Int64
+	jobs := fetchDetails(rows, defaultDetailWorkers, func(r mokahrJob) (Job, bool) {
 		if strings.TrimSpace(r.Description) != "" {
 			return r.toJob(site.host, site.board, e.Company)
 		}
@@ -195,6 +198,7 @@ func (s mokahr) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 		}
 		d, err := s.detail(ctx, site, r.ID)
 		if err != nil {
+			failed.Add(1)
 			log.Printf("mokahr: board %q, detail %s failed; deferring: %v", site.board, r.ID, err)
 			return Job{}, false
 		}
@@ -202,7 +206,13 @@ func (s mokahr) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 			return Job{}, false // closed between the listing and the detail
 		}
 		return d.toJob(site.host, site.board, e.Company)
-	}), nil
+	})
+	// A crawl that yields nothing because every detail failed did not read the board; returning
+	// an empty board would record it healthy.
+	if len(jobs) == 0 && failed.Load() > 0 {
+		return nil, fmt.Errorf("mokahr: board %q: all %d detail requests failed", site.board, failed.Load())
+	}
+	return jobs, nil
 }
 
 func parseMokahrBoard(e CompanyEntry) (mokahrSite, error) {
