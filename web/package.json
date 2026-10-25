@@ -70,7 +70,7 @@
     "satori": "^0.62.0",
     "satori-html": "^0.3.2",
     "simple-icons": "^16.35.0",
-    "svelte-dnd-action": "^0.9.79",
+    "svelte-dnd-action": "^0.9.80",
     "three": "^0.186.1"
   },
   "imports": {
