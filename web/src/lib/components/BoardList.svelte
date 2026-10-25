@@ -81,7 +81,7 @@
             <!-- Grouped exactly as the drawer's selector is: two stage pickers in one
                  section that organise their options differently is the confusion this
                  change is removing, in miniature. -->
-            {#each groupedStages() as g (g.id)}
+            {#each groupedStages(locale()) as g (g.id)}
               <optgroup label={g.label}>
                 {#each g.options as s (s.value)}
                   <option value={s.value}>{s.label}</option>

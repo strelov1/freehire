@@ -1,9 +1,9 @@
 import { defineMessages } from '#lib/i18n/t.js';
 
-// `BOARD_COLUMNS`'s own labels (Preparing/Applied/Interview/Offer/Closed) come from
-// the generated pipeline-stage vocabulary (`#lib/board.ts` → `STAGE_GROUPS`), shared
-// with the funnel and `JobDrawer`'s stage picker — that vocabulary stays English
-// everywhere until it gets its own pass, the same boundary `emailStatus.ts` drew.
+// `BOARD_COLUMNS`'s own labels (Preparing/Applied/Interview/Offer/Closed) and the stage
+// names come from the generated pipeline-stage vocabulary (`#lib/board.ts` →
+// `STAGE_GROUPS`), shared with the funnel and `JobDrawer`'s stage picker; their
+// translations live in `#lib/stages.messages.ts`, not here.
 export const messages = defineMessages(
   {
     loadError: "Couldn't load your board.",

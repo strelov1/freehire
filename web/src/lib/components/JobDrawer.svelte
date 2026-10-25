@@ -452,19 +452,13 @@
 
   // The tab strip outgrows a phone ("Описание вакансии" was cut to "Описани" with nothing
   // saying the row scrolls), so it fades whichever edge has tabs beyond it and keeps the
-  // selected tab in view. The strip is scrolled itself rather than through scrollIntoView,
-  // which would also drag the panel — the same rule the account section's strip follows.
+  // selected tab in view.
   let tabStrip = $state<HTMLElement | null>(null);
   const tabEdges = new ScrollEdges();
   $effect(() => {
     void tab;
-    const el = tabStrip;
-    const active = el?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (!el || !active) return;
-    const item = active.getBoundingClientRect();
-    const view = el.getBoundingClientRect();
-    if (item.right > view.right) el.scrollLeft += item.right - view.right + 24;
-    else if (item.left < view.left) el.scrollLeft -= view.left - item.left + 24;
+    const active = tabStrip?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (active) tabEdges.reveal(active);
   });
 
   // One action block: a two-column grid of equal buttons on a phone, where a wrapping row
@@ -586,7 +580,7 @@
       <!-- What the candidate can do about this application, on every tab. The card used
            to carry Rehearse and Follow up in a strip beside its badges, which is both
            less room than they need and the reason the card could not be dragged. -->
-      {#if hasPosting || offersFollowUp}
+      {#if item.job || offersFollowUp}
         <div class="grid grid-cols-2 gap-2 *:last:odd:col-span-2 sm:flex sm:flex-wrap sm:items-center">
           {#if item.job}
             <Button
@@ -622,7 +616,7 @@
               <span class="truncate">{startingSession ? s.starting : s.debrief}</span>
             </Button>
           {/if}
-          {#if hasPosting}
+          {#if item.job}
             <!-- The analysis is already in this panel; sending the user to /tailor would
                  close the application to show them something it contains. -->
             <Button variant="outline" size="sm" onclick={() => (tab = 'fit')} class={actionClass}>

@@ -226,7 +226,8 @@
             {/each}
           </div>
         </div>
-        {@render motionToggle('absolute bottom-0 right-0')}
+        <!-- Below the feed, not over it: laid on the feed's corner it covered the last card. -->
+        {@render motionToggle('ml-auto mt-2')}
       </div>
     </div>
   </section>

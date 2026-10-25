@@ -145,7 +145,10 @@
     <!-- The popover holds three things and only the middle one is the menu: a role="menu"
          may contain menu items and nothing else, so the status lines sit above it (spoken
          through announce(), not by the menu) and the "new list" form below it. The menu
-         itself mounts once the lists have loaded, so menuNav lands on the first list. -->
+         itself mounts once the lists have loaded, so menuNav lands on the first list —
+         but only if focus is still in this control: a user who Tabbed on while the lists
+         loaded keeps their place. With no lists and the form open the menu has no items,
+         and an empty role="menu" is not rendered at all. -->
     <div class="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-border bg-card p-1.5 text-left shadow-lg">
       {#if error}
         <p class="px-2 py-1 text-xs text-destructive">{error}</p>
@@ -158,41 +161,48 @@
         {#if membership.length === 0}
           <p class="px-2 py-1.5 text-xs text-muted-foreground">No lists yet.</p>
         {/if}
-        <div role="menu" aria-label="Job lists" bind:this={menu} {@attach menuNav({ onclose: () => (open = false) })}>
-          {#each membership as m (m.id)}
-            <button
-              type="button"
-              role="menuitemcheckbox"
-              aria-checked={m.in_list}
-              disabled={busyId === m.id}
-              onclick={() => toggle(m)}
-              class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-50"
-            >
-              <span
+        {#if membership.length > 0 || !creating}
+          <div
+            role="menu"
+            aria-label="Job lists"
+            bind:this={menu}
+            {@attach menuNav({ onclose: () => (open = false), autofocus: root?.contains(document.activeElement) ?? false })}
+          >
+            {#each membership as m (m.id)}
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={m.in_list}
+                disabled={busyId === m.id}
+                onclick={() => toggle(m)}
+                class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-50"
+              >
+                <span
+                  class={[
+                    'flex size-4 shrink-0 items-center justify-center rounded border',
+                    m.in_list ? 'border-brand bg-brand text-brand-foreground' : 'border-border',
+                  ]}
+                >
+                  {#if m.in_list}<Check class="size-3" aria-hidden="true" />{/if}
+                </span>
+                <span class="min-w-0 flex-1 truncate">{m.name}</span>
+              </button>
+            {/each}
+            {#if !creating}
+              <button
+                type="button"
+                role="menuitem"
+                onclick={startCreate}
                 class={[
-                  'flex size-4 shrink-0 items-center justify-center rounded border',
-                  m.in_list ? 'border-brand bg-brand text-brand-foreground' : 'border-border',
+                  'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent',
+                  membership.length > 0 && 'mt-1 border-t border-border pt-1.5',
                 ]}
               >
-                {#if m.in_list}<Check class="size-3" aria-hidden="true" />{/if}
-              </span>
-              <span class="min-w-0 flex-1 truncate">{m.name}</span>
-            </button>
-          {/each}
-          {#if !creating}
-            <button
-              type="button"
-              role="menuitem"
-              onclick={startCreate}
-              class={[
-                'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent',
-                membership.length > 0 && 'mt-1 border-t border-border pt-1.5',
-              ]}
-            >
-              <Plus class="size-4" aria-hidden="true" /> New list
-            </button>
-          {/if}
-        </div>
+                <Plus class="size-4" aria-hidden="true" /> New list
+              </button>
+            {/if}
+          </div>
+        {/if}
         {#if creating}
           <form
             class="mt-1 flex items-center gap-1 border-t border-border px-1 pb-1 pt-2"

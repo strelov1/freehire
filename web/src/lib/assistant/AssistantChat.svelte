@@ -448,6 +448,25 @@
     await openSession(target.id, target.fromAddress, true).catch((err: unknown) => report(err, s.openChatFailed));
   }
 
+  // The dialog closed without confirming (confirmSwitch clears `pendingSwitch` before it
+  // resolves, so a target still set here was declined). A switch that came from the
+  // address — Back, Forward, a link — has already moved the URL to the declined chat, so
+  // put it back on the one still on screen; otherwise the address and the pane disagree.
+  $effect(() => {
+    if (confirmSwitchOpen) return;
+    untrack(() => {
+      const declined = pendingSwitch;
+      if (!declined) return;
+      pendingSwitch = null;
+      // The guard is raised only when a navigation will follow, or it outlives it (see
+      // followAddress).
+      if (declined.fromAddress && activeId && onSessionChange) {
+        navigatingTo = activeId;
+        onSessionChange(activeId);
+      }
+    });
+  });
+
   async function openSession(id: string, fromAddress = false, discardQueued = false) {
     if (activeId === id && chat.messages.length > 0) return;
     // A message typed while the current turn was streaming sits in `queue`, waiting

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { PIPELINE_BANDS, bandBreakdown, bandTotal } from '#lib/pipeline.js';
-  import { humanizeStage } from '#lib/stages.js';
+  import { humanizeStage, stageGroupLabel } from '#lib/stages.js';
   import type { PipelineStats } from '#lib/types.js';
   import { messages } from './PipelineFunnel.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -78,14 +78,14 @@
       right = ry1 + GAP;
       return {
         key: b.id,
-        label: b.label,
+        label: stageGroupLabel(b.id, locale()),
         color: b.color,
         count: b.count,
         // Rendered only when the band holds more than one kind of thing: "Offer · Offer 2"
         // says nothing the band label has not already said.
         breakdown:
           b.breakdown.length > 1
-            ? b.breakdown.map((bd) => `${humanizeStage(bd.stage)} ${bd.count}`).join(' · ')
+            ? b.breakdown.map((bd) => `${humanizeStage(bd.stage, locale())} ${bd.count}`).join(' · ')
             : '',
         path: `M ${LX + LW} ${ly0} C ${MID} ${ly0}, ${MID} ${ry0}, ${RX} ${ry0} L ${RX} ${ry1} C ${MID} ${ry1}, ${MID} ${ly1}, ${LX + LW} ${ly1} Z`,
         nodeY: ry0,

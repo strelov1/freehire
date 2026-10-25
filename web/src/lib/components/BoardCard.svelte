@@ -97,7 +97,7 @@
        up its controls, and the marker went back to reporting. -->
   <span id={indicatorsId} class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
     {#if item.stage}
-      <Badge variant="secondary">{humanizeStage(item.stage)}</Badge>
+      <Badge variant="secondary">{humanizeStage(item.stage, locale())}</Badge>
     {/if}
     {#if needsAutoApplyReview}
       <span

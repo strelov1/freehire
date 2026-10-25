@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { STAGE_GROUPS, STAGE_LABELS, STAGE_VALUES } from './generated/contracts';
 import { TRANSLATED_LOCALES } from './locale';
-import { groupedStages, humanizeStage, offersDebrief } from './stages';
+import { groupedStages, humanizeStage, offersDebrief, stageGroupLabel } from './stages';
 import { must } from './utils';
 
 // The debrief reviews an interview that has already happened, so the offer follows the
@@ -95,6 +95,13 @@ describe('stage labels per locale', () => {
       }
     });
   }
+
+  it('labels a group id the way the selector heads it, in every locale', () => {
+    for (const locale of TRANSLATED_LOCALES) {
+      for (const g of groupedStages(locale)) expect(stageGroupLabel(g.id, locale)).toBe(g.label);
+    }
+    expect(stageGroupLabel('unknown-group', 'ru')).toBe('unknown-group');
+  });
 
   it('title-cases a stage it does not know, in every locale', () => {
     expect(humanizeStage('negotiating', 'ru')).toBe('Negotiating');

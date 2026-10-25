@@ -44,13 +44,18 @@ export function humanizeStage(stage: string, locale: Locale = 'en'): string {
   return t(messages, locale).stages[stage] ?? stage.charAt(0).toUpperCase() + stage.slice(1);
 }
 
+/** A human label for a stage GROUP id (a board column, a funnel band) in `locale`;
+ *  the id itself when not in the known vocabulary. */
+export function stageGroupLabel(id: string, locale: Locale = 'en'): string {
+  return t(messages, locale).groups[id] ?? id;
+}
+
 /** The stages grouped as the selector shows them, in generated pipeline order, so
  *  `Closed` reads as a heading over its three outcomes rather than as a fifth state. */
 export function groupedStages(locale: Locale = 'en'): StageOptionGroup[] {
-  const s = t(messages, locale);
   return STAGE_GROUPS.map((g) => ({
     id: g.id,
-    label: s.groups[g.id] ?? g.label,
+    label: stageGroupLabel(g.id, locale),
     options: g.stages.map((value) => ({ value, label: humanizeStage(value, locale) })),
   }));
 }
