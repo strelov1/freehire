@@ -22,3 +22,7 @@ an invitation step. Layer 7 (`engage`); tables are `buddy_*` (migration 0197), q
 - **Account deletion** is the foreign keys: every reference to `users` cascades, and a
   new one must be indexed on the referencing side (`TestEveryUserForeignKeyIsIndexed`).
 - A conversation the caller is not part of is "not found", never "forbidden".
+- **Only entering the section touches.** `GET /me/buddies` runs `Touch`, which rewrites the
+  member's ranking keys; no other route may call it.
+- **A privately pasted posting (`jobs.is_private`) never reaches another member**: the feed and
+  the shared-company count both skip events whose job is private.

@@ -361,3 +361,20 @@ func TestListConversationsCarriesTheOtherCard(t *testing.T) {
 		t.Fatalf("card = %+v", list)
 	}
 }
+
+func TestRecipientReadsAPendingInvitation(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	a, _ := member(t, pool, svc, "a@example.test")
+	b, bHandle := member(t, pool, svc, "b@example.test")
+	c, err := svc.Invite(ctx, a, bHandle, "hello there")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, u := range map[string]int64{"inviter": a, "recipient": b} {
+		got, err := svc.Messages(ctx, u, c.ID, 0, 10)
+		if err != nil || len(got) != 1 || got[0].Body != "hello there" {
+			t.Fatalf("%s: %+v, %v", name, got, err)
+		}
+	}
+}

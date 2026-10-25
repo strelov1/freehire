@@ -361,3 +361,32 @@ func TestFeedQueryUsesTheFeedIndex(t *testing.T) {
 		t.Fatalf("plan does not use the feed index:\n%s", plan.String())
 	}
 }
+
+func TestPrivateJobEventsNeverReachAnotherMember(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	viewer, author := seedUser(t, pool, "v@example.test"), seedUser(t, pool, "a@example.test")
+	joinWith(t, pool, svc, viewer, "", nil, nil)
+	joinWith(t, pool, svc, author, "", nil, nil)
+	var jobID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO jobs (source, external_id, title, company, url, description, public_slug, is_private)
+		VALUES ('test', 'p1', 'Secret Role', 'Hush', 'https://example.test/p1', 'd', 'secret-p1', true) RETURNING id`).Scan(&jobID); err != nil {
+		t.Fatalf("seed job: %v", err)
+	}
+	// The viewer applied to the same employer slug, so a shared company would show if the
+	// private event counted.
+	applied(t, pool, viewer, "hush", 5)
+	app := newApp(t, pool, author, "hush")
+	ev := event(t, pool, author, app, "hush", "applied", "", 1)
+	if _, err := pool.Exec(ctx, `UPDATE application_events SET job_id = $2 WHERE id = $1`, ev, jobID); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.Feed(ctx, viewer, buddy.FeedAll, "", 10)
+	if err != nil || len(got.Entries) != 0 {
+		t.Fatalf("feed = %+v, %v", got, err)
+	}
+	sim, err := svc.Similar(ctx, viewer, 10, 0)
+	if err != nil || len(sim) != 1 || len(sim[0].Shared) != 0 {
+		t.Fatalf("similar = %+v, %v", sim, err)
+	}
+}

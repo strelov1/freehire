@@ -234,3 +234,26 @@ func TestModeratorListsReportsWithMessagesAndResolves(t *testing.T) {
 		t.Fatalf("all = %+v, %v", all, err)
 	}
 }
+
+func TestRecipientReportsThenBlocksAPendingInvitation(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	a, _ := member(t, pool, svc, "a@example.test")
+	b, bHandle := member(t, pool, svc, "b@example.test")
+	c, err := svc.Invite(ctx, a, bHandle, "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Report(ctx, b, c.ID, "spam", "unsolicited"); err != nil {
+		t.Fatal(err)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM buddy_reports`); n != 1 {
+		t.Fatalf("reports = %d, want 1", n)
+	}
+	if err := svc.Block(ctx, b, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM buddy_conversations WHERE status = 'closed'`); n != 1 {
+		t.Fatalf("closed conversations = %d, want 1", n)
+	}
+}

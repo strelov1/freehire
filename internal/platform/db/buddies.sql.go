@@ -636,6 +636,8 @@ LEFT JOIN jobs j ON j.id = e.job_id
 LEFT JOIN companies co ON co.slug = e.company_slug
 WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
   AND (e.kind = 'applied' OR e.signal IN ('interview', 'offer'))
+  -- A privately pasted posting is visible to its creator only: its event never reaches the feed.
+  AND (j.id IS NULL OR NOT j.is_private)
   AND e.user_id <> $1
   AND (NOT $2::bool OR m.handle = ANY($3::text[]))
   AND ($4::bigint IS NULL
@@ -680,7 +682,7 @@ type ListBuddyFeedRow struct {
 // it, which is what lets the planner use that index; the signal test only narrows it.
 //
 // Excluded: the viewer's own events, authors who are not active members, blocked pairs in
-// either direction, and applications their author hid. The author's earlier events count
+// either direction, events on a private (user-pasted) posting, and applications their author hid. The author's earlier events count
 // from before they joined: only left_at gates, never joined_at.
 //
 // similar_only restricts to author_handles, the viewer's top similar members, which the
@@ -1048,6 +1050,8 @@ shared AS (
       AND NOT EXISTS (
           SELECT 1 FROM buddy_hidden_applications h
           WHERE h.user_id = e.user_id AND h.application_id = e.application_id)
+      -- A privately pasted posting is its author's own: its employer does not count.
+      AND NOT EXISTS (SELECT 1 FROM jobs pj WHERE pj.id = e.job_id AND pj.is_private)
     GROUP BY c.user_id, e.company_slug
 ),
 shared_counts AS (

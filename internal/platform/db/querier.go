@@ -3676,7 +3676,7 @@ type Querier interface {
 	// it, which is what lets the planner use that index; the signal test only narrows it.
 	//
 	// Excluded: the viewer's own events, authors who are not active members, blocked pairs in
-	// either direction, and applications their author hid. The author's earlier events count
+	// either direction, events on a private (user-pasted) posting, and applications their author hid. The author's earlier events count
 	// from before they joined: only left_at gates, never joined_at.
 	//
 	// similar_only restricts to author_handles, the viewer's top similar members, which the
