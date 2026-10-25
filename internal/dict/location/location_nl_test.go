@@ -69,3 +69,19 @@ func TestParseRecruiteeRemoteLabels(t *testing.T) {
 		}
 	}
 }
+
+// TestNormalizeCountryExonyms pins the country names an adapter passes through
+// NormalizeCountry from a structured country field, written in the posting's language.
+func TestNormalizeCountryExonyms(t *testing.T) {
+	for name, want := range map[string]string{
+		"Nederland": "nl", "België": "be", "Belgie": "be", "Belgique": "be",
+		"Norge": "no", "Noreg": "no", "Deutschland": "de", "Österreich": "at",
+		"Schweiz": "ch", "Suisse": "ch", "Svizzera": "ch", "Danmark": "dk", "Sverige": "se",
+		"España": "es", "Italia": "it", "Polska": "pl", "Eesti": "ee", "Česko": "cz",
+		"Verenigd Koninkrijk": "gb", "Duitsland": "de",
+	} {
+		if got := NormalizeCountry(name); got != want {
+			t.Errorf("NormalizeCountry(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
