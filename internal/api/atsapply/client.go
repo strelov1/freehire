@@ -481,27 +481,48 @@ func (c *Client) renderResumeToTempFile(ctx context.Context, claimed autoapply.C
 // captured row for every provider cmd/capture-apply-form drains (Greenhouse, Ashby,
 // Workable, Lever — not only Recruitee, whose form arrives free with the crawl instead),
 // so preferring storage here too would risk a real submission reading a row captured for
-// the job page's own display, possibly stale, instead of a fresh fetch, for postings that
-// never needed this fallback at all. c.forms is therefore only ever reached as a fallback,
-// for the one case a live fetch cannot answer: no fetcher registered for the provider.
+// the job page's own display, possibly stale, when a fresh fetch was available.
+//
+// c.forms is therefore reached only when a live fetch cannot answer: no fetcher registered
+// for the provider, or a fetch that FAILED. The second is not hypothetical — on 2026-10-25
+// Workable answered this host's form requests with 429 and a Retry-After of 23 hours, after
+// cmd/capture-apply-form had read 3,369 of its forms from the same address that day, and
+// every approved Workable application failed before reaching the browser that would have
+// submitted it. The stored row is also the one the candidate reviewed (schemaFor reads it
+// first), and the fill itself still runs against the live page, which refuses a field the
+// form no longer has. With nothing stored, the live fetch's own error is returned, so a
+// transient failure stays an ordinary retryable one.
 func (c *Client) fetchSchema(ctx context.Context, claimed autoapply.Claimed) (applyform.Form, error) {
 	fetcher, ok := c.fetchers[claimed.Provider]
 	if !ok {
-		if c.forms != nil {
-			if form, storedOK, err := c.forms.GetStoredForm(ctx, claimed.JobID); err != nil {
-				return applyform.Form{}, err
-			} else if storedOK {
-				return form, nil
-			}
+		if form, storedOK, err := c.storedForm(ctx, claimed.JobID); err != nil || storedOK {
+			return form, err
 		}
 		return applyform.Form{}, fmt.Errorf("%w: %q", errNoSchemaFetcher, claimed.Provider)
 	}
-	return fetcher.Fetch(ctx, applyform.Claimed{
+	form, fetchErr := fetcher.Fetch(ctx, applyform.Claimed{
 		JobID:      claimed.JobID,
 		Provider:   claimed.Provider,
 		ExternalID: claimed.ExternalID,
 		URL:        claimed.JobURL,
 	})
+	if fetchErr == nil {
+		return form, nil
+	}
+	stored, storedOK, err := c.storedForm(ctx, claimed.JobID)
+	if err != nil || !storedOK {
+		return applyform.Form{}, fetchErr
+	}
+	log.Printf("atsapply: live %s form fetch for job %d failed (%v) — using the stored form", claimed.Provider, claimed.JobID, fetchErr)
+	return stored, nil
+}
+
+// storedForm reads the job's captured form, reporting false when no reader is wired.
+func (c *Client) storedForm(ctx context.Context, jobID int64) (applyform.Form, bool, error) {
+	if c.forms == nil {
+		return applyform.Form{}, false, nil
+	}
+	return c.forms.GetStoredForm(ctx, jobID)
 }
 
 // unscannableFormResult reports whether err is renderedHTML's classified outcome for a form

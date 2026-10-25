@@ -101,7 +101,9 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   Widening the live DOM-scan to another provider is a real gap to
   close, not a design decision to defend.
 - **`fetchSchema` falls back to a stored form ONLY when no live fetcher is registered for
-  the provider — not storage-first.** `Client.forms` (`WithStoredFormReader`, same
+  the provider, or the live fetch FAILED — never storage-first.** The failure case was added
+  on 2026-10-25, when Workable rate-limited this host for 23 hours and every approved
+  application died on the schema fetch before the browser ever ran. `Client.forms` (`WithStoredFormReader`, same
   `StoredFormReader` port `PreviewClient` uses) closes Recruitee's own schema-fetch gap:
   `internal/ingest/applyform.Fetchers` has no `Fetcher` for it (its form arrives free with
   the ingest crawl and is written directly to `apply_forms`), so before this it parked with
