@@ -25,9 +25,9 @@
 
 ## 5. MCP and docs
 
-- [ ] 5.1 MCP instructions and `auto_apply_get` `next_step`: one numbered list, translate to the form's language
-- [ ] 5.2 API docs for the `apply` preset and the sync endpoint; regenerate docs
-- [ ] 5.3 Package AGENTS.md notes (assistant, handler) for the new preset and the system-note turn
+- [x] 5.1 MCP instructions and `auto_apply_get` `next_step`: one numbered list, translate to the form's language
+- [x] 5.2 API docs for the `apply` preset and the sync endpoint; regenerate docs
+- [x] 5.3 Package AGENTS.md notes (assistant, handler) for the new preset and the system-note turn
 
 ## 6. Verify
 

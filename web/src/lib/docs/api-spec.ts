@@ -1571,8 +1571,10 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
       'rather than running alongside it. `preset` selects which conversation this is: ' +
       '`chat` (default), `profile` (the experience interviewer), `browse` (a browsing ' +
       'session held from the extension’s side panel), `interview` (a mock-interview ' +
-      'rehearsal) or `debrief` (after a real one) — the last two must name the vacancy via ' +
-      '`?job=<slug>`, an application you already hold. A `tailor` session cannot be created ' +
+      'rehearsal), `debrief` (after a real one) or `apply` (the conversation about one ' +
+      'automatic application) — the last three must name the vacancy via ' +
+      '`?job=<slug>`, an application you already hold. An application holds one `apply` ' +
+      'conversation: asking again returns it with `200` instead of creating a second. A `tailor` session cannot be created ' +
       'here; it is minted by the CV tailoring bootstrap, which knows the CV and vacancy to ' +
       'bind it to.',
     endpoints: [
@@ -1582,8 +1584,8 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
         auth: 'cookie-or-key',
         summary: 'Start a new conversation.',
         query: [
-          { name: 'preset', type: 'string', description: 'One of `chat` (default), `profile`, `browse`, `interview`, `debrief`.', example: 'chat' },
-          { name: 'job', type: 'string', description: 'Public slug of an application you hold. Required for `interview`/`debrief`, ignored otherwise.', example: 'senior-go-engineer-acme-1a2b' },
+          { name: 'preset', type: 'string', description: 'One of `chat` (default), `profile`, `browse`, `interview`, `debrief`, `apply`.', example: 'chat' },
+          { name: 'job', type: 'string', description: 'Public slug of an application you hold. Required for `interview`/`debrief`/`apply`, ignored otherwise.', example: 'senior-go-engineer-acme-1a2b' },
         ],
         curl: `curl -X POST "${BASE_URL}/assistant/sessions?preset=chat" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{ "data": { "id": "b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f", "preset": "chat", "label": "" } }`,
@@ -1678,6 +1680,20 @@ data: {"type":"result","stop_reason":"completed"}
           'already has an assistant message (an opening cannot be re-run).',
         pathParams: [{ name: 'id', type: 'string (UUID)', required: true, description: 'The session id.' }],
         curl: `curl -N -X POST "${BASE_URL}/assistant/sessions/<id>/opening" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+      },
+      {
+        method: 'POST',
+        path: '/assistant/sessions/{id}/sync',
+        auth: 'cookie-or-key',
+        summary: 'Catch an `apply` session up on its automatic application.',
+        description:
+          'When the application has events the conversation has not narrated, streams one turn ' +
+          'telling the candidate what changed (no body), the same SSE shape as `.../messages`; ' +
+          'otherwise `204` and nothing runs. Not charged to the assistant-message allowance. ' +
+          'A turn that fails is narrated again on the next call. `409` for a session that is ' +
+          'not an `apply` conversation.',
+        pathParams: [{ name: 'id', type: 'string (UUID)', required: true, description: 'The session id.' }],
+        curl: `curl -N -X POST "${BASE_URL}/assistant/sessions/<id>/sync" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
       },
       {
         method: 'POST',

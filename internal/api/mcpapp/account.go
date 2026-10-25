@@ -22,8 +22,9 @@ const accountServerInstructions = "This server acts as the signed-in freehire ac
 	"approved this connection. Tools read and change that account's own saved jobs, " +
 	"applications, and tracking board — never another account's. " +
 	"Automatic applications: auto_apply_start begins one; follow it with auto_apply_get, whose " +
-	"next_step says what to do. When it stops on questions, ask the person, save their answers " +
-	"with answer_bank_save or screening_answers_set, then call auto_apply_retry. When it reaches " +
+	"next_step says what to do. When it stops on questions, ask the person all of them as one " +
+	"numbered list, save their answers in the form's language with answer_bank_save or " +
+	"screening_answers_set, then call auto_apply_retry. When it reaches " +
 	"pending_review, show the person what will be sent and record their decision with " +
 	"auto_apply_review. Answers you save are sent to employers in the person's name — never " +
 	"invent one."

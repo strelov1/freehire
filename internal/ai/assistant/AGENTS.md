@@ -106,7 +106,7 @@ refuses a bullet with no `evidence_id`. The run accounts for itself through
 `tailor_report`, which replaces the whole report on the CV and returns a receipt
 rather than an echo (a tool result is replayed into context on every later turn).
 
-**Presets.** A session records `chat`, `tailor`, `profile`, `browse`, `interview` or `debrief`. The vocabulary
+**Presets.** A session records `chat`, `tailor`, `profile`, `browse`, `interview`, `debrief` or `apply`. The vocabulary
 is pinned by a CHECK constraint on `assistant_sessions.preset`, so adding one is a
 schema change and not just a Go constant. The preset selects the system prompt and the
 registered tools and nothing else, which is why one chat component serves
@@ -232,6 +232,21 @@ cannot read the interview it is reviewing.
 The stage governs where the client offers it (`offersDebrief` in `web/src/lib/stages.ts`:
 `interview`, `offer`, `accepted`, `rejected`), never what the endpoint accepts. Somebody
 who sat an interview and never moved their application's stage is exactly who it is for.
+
+**The application chat** (`apply`, openspec/changes/auto-apply-chat) is held against one
+automatic application, minted from `POST /assistant/sessions?preset=apply&job=<slug>` — and
+an application holds ONE: asking again returns it, so the numbered questions and the answers
+to them stay in one transcript. Its tools are the MCP server's auto-apply tools bound to the
+session's job (`internal/api/handler/assistant_apply_tools.go`): no `job_slug` for the model,
+and no `agents_may_apply` switch, which exists for agents acting outside the person's browser.
+
+It is the one preset whose turns do not all start with the candidate. `POST .../sync` narrates
+the application's `auto_apply_events` the conversation has not told them about, as a turn
+whose input is a **status note**: `RoleNote` (the transcript CHECK's old `system` value),
+replayed to the model as a human turn marked "not written by the candidate", never rendered,
+never labelling the session, never charged to the allowance. The cursor
+(`assistant_sessions.narrated_event_id`) moves only after the turn finished, so a failed
+narration is repeated rather than skipped.
 
 `browse` is the one preset whose prompt **overrides** the one it extends, rather
 than only adding to it. The chat playbook opens with `get_profile` and a question

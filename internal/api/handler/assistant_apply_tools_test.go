@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/application/autoapply"
 )
 
 // The apply conversation is about one attempt that already exists: it reads, answers,
@@ -82,5 +84,17 @@ func TestBindToJobOverridesTheModelsSlug(t *testing.T) {
 	}
 	if got != "the-session-job" {
 		t.Errorf("the tool ran on %q, want the session's job", got)
+	}
+}
+
+// An agent asked to relay fourteen questions one at a time gets one answer and a tired
+// person. One numbered list is what lets the person reply "1 …, 3 …" — and the form is in
+// the employer's language whatever language the person answers in.
+func TestBlockedNextStepAsksForOneNumberedList(t *testing.T) {
+	step := autoApplyNextStep(string(autoapply.StatusBlocked), false)
+	for _, want := range []string{"one numbered list", "language of the application form"} {
+		if !strings.Contains(step, want) {
+			t.Errorf("blocked next_step = %q, missing %q", step, want)
+		}
 	}
 }

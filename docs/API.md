@@ -1699,7 +1699,7 @@ curl "https://freehire.me/api/v1/me/interviews?from=2026-08-01T00:00:00Z&to=2026
 
 ## In-app assistant
 
-The same agent the web app and browser extension chat with, over HTTP: create a conversation, then post messages to it. All routes accept the session cookie or an API key (`autopilot` is cookie-only — see below) and act on a session you own; someone else’s session id answers `404`, same as one that never existed. Turns run one at a time per session — a message sent while one is already running queues rather than running alongside it. `preset` selects which conversation this is: `chat` (default), `profile` (the experience interviewer), `browse` (a browsing session held from the extension’s side panel), `interview` (a mock-interview rehearsal) or `debrief` (after a real one) — the last two must name the vacancy via `?job=<slug>`, an application you already hold. A `tailor` session cannot be created here; it is minted by the CV tailoring bootstrap, which knows the CV and vacancy to bind it to.
+The same agent the web app and browser extension chat with, over HTTP: create a conversation, then post messages to it. All routes accept the session cookie or an API key (`autopilot` is cookie-only — see below) and act on a session you own; someone else’s session id answers `404`, same as one that never existed. Turns run one at a time per session — a message sent while one is already running queues rather than running alongside it. `preset` selects which conversation this is: `chat` (default), `profile` (the experience interviewer), `browse` (a browsing session held from the extension’s side panel), `interview` (a mock-interview rehearsal), `debrief` (after a real one) or `apply` (the conversation about one automatic application) — the last three must name the vacancy via `?job=<slug>`, an application you already hold. An application holds one `apply` conversation: asking again returns it with `200` instead of creating a second. A `tailor` session cannot be created here; it is minted by the CV tailoring bootstrap, which knows the CV and vacancy to bind it to.
 
 ### `POST /assistant/sessions`
 
@@ -1711,8 +1711,8 @@ Start a new conversation.
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `preset` | string | no | One of `chat` (default), `profile`, `browse`, `interview`, `debrief`. (e.g. `chat`) |
-| `job` | string | no | Public slug of an application you hold. Required for `interview`/`debrief`, ignored otherwise. (e.g. `senior-go-engineer-acme-1a2b`) |
+| `preset` | string | no | One of `chat` (default), `profile`, `browse`, `interview`, `debrief`, `apply`. (e.g. `chat`) |
+| `job` | string | no | Public slug of an application you hold. Required for `interview`/`debrief`/`apply`, ignored otherwise. (e.g. `senior-go-engineer-acme-1a2b`) |
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/assistant/sessions?preset=chat" -H "Authorization: Bearer $FREEHIRE_API_KEY"
@@ -1862,6 +1862,24 @@ Streams one turn under a server-side brief (no body), the same SSE shape as `...
 
 ```bash
 curl -N -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/opening" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+### `POST /assistant/sessions/{id}/sync`
+
+**Auth:** Session or API key
+
+Catch an `apply` session up on its automatic application.
+
+When the application has events the conversation has not narrated, streams one turn telling the candidate what changed (no body), the same SSE shape as `.../messages`; otherwise `204` and nothing runs. Not charged to the assistant-message allowance. A turn that fails is narrated again on the next call. `409` for a session that is not an `apply` conversation.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (UUID) | yes | The session id. |
+
+```bash
+curl -N -X POST "https://freehire.me/api/v1/assistant/sessions/<id>/sync" -H "Authorization: Bearer $FREEHIRE_API_KEY"
 ```
 
 ### `POST /assistant/sessions/{id}/retry`
