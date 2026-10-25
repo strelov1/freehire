@@ -460,8 +460,8 @@ func All(c HTTPClient) map[string]Source {
 		NewConcludis(c),
 		NewKenjo(c),
 		NewEasyCruit(c),
-		// Concurrency-limited: one origin serves every Homerun vacancy page (see homerunMaxInFlight).
-		NewHomerun(limitedHomerunGetter(c)),
+		// Rate-paced: one origin serves every Homerun feed and vacancy page (see homerunRequestInterval).
+		NewHomerun(pacedHomerunGetter(c)),
 		NewHROffice(c),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
 		NewHelixjobs(limitedHelixjobsGetter(c)),

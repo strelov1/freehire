@@ -18,6 +18,9 @@ import (
 // The feed's title is the career site's, which is the employer's name or a heading built on it
 // ("Vacatures - Werken bij Douglas NL", "Werken bij Belsimpel"); the heading words are cut. An
 // unknown or switched-off tenant's feed redirects to 404.homerun.co, which answers 404: a skip.
+//
+// Homerun refuses by rate and then blocks the address (see homerunRequestInterval in
+// internal/ingest/sources/pacer.go): run it with -pace 2 or slower.
 type homerunProber struct{}
 
 var homerunBoardPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
