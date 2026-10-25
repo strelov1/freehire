@@ -92,3 +92,54 @@ export function dockCorner(shown: boolean, expanded: boolean, windows: readonly 
   if (!shown) return 'none';
   return expanded || windows.some((w) => !w.minimized) ? 'open' : 'bars';
 }
+
+/** On a narrow screen one chat at a time is a full-width sheet: the newest window that is
+ *  not minimized. Other open windows sit under it, minimized ones stack as bars above the
+ *  list. `null` when every window is minimized. */
+export function mobileSheetId(windows: readonly DockWindow[]): number | null {
+  for (let i = windows.length - 1; i >= 0; i--) {
+    const w = windows[i];
+    if (w && !w.minimized) return w.id;
+  }
+  return null;
+}
+
+/** The bottom padding the page reserves so the dock's bars never cover its last line: one
+ *  row on a wide screen (the bars sit side by side), and on a narrow one the list bar plus
+ *  a row per minimized window stacked above it. Empty when the dock is not shown;
+ *  `wideOnly` is a page whose own mobile sticky bar owns the corner, where the dock only
+ *  appears from `lg`. Literal class names, so Tailwind's scan finds every one. */
+export function dockReserveClass(shown: boolean, wideOnly: boolean, windows: readonly DockWindow[]): string {
+  if (!shown) return '';
+  if (wideOnly) return 'lg:pb-12';
+  const rows = 1 + windows.filter((w) => w.minimized).length;
+  if (rows >= 3) return 'pb-44 sm:pb-12';
+  if (rows === 2) return 'pb-28 sm:pb-12';
+  return 'pb-12';
+}
+
+/** How high the support toast rises to clear the dock's bars, by the same row count. */
+export function dockToastOffsetClass(windows: readonly DockWindow[]): string {
+  const rows = 1 + windows.filter((w) => w.minimized).length;
+  if (rows >= 3) return 'bottom-48 sm:bottom-16';
+  if (rows === 2) return 'bottom-32 sm:bottom-16';
+  return 'bottom-16';
+}
+
+/** Unsent composer text per conversation, for this page load only: held in memory and
+ *  never written to storage, since a draft is message text. It lives in the store rather
+ *  than the pane, so minimizing a window (which unmounts its pane), Escape, or moving
+ *  between conversations and surfaces does not throw it away. */
+export class DraftBook {
+  #drafts = new Map<number, string>();
+
+  get(id: number): string { return this.#drafts.get(id) ?? ''; }
+
+  /** A draft emptied (sent, or deleted by hand) is forgotten. */
+  set(id: number, text: string): void {
+    if (text) this.#drafts.set(id, text);
+    else this.#drafts.delete(id);
+  }
+
+  clear(): void { this.#drafts.clear(); }
+}

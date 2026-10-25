@@ -6,7 +6,7 @@
   import { buddyDock } from '#lib/buddyDock.svelte.js';
   import type { BuddyFeedItem, BuddySimilar, BuddyStatus } from '#lib/types.js';
   import { buddySharedCompanies } from '#lib/buddyPresent.js';
-  import { Button, Card, Chip, ConfirmDialog, EntityLogo, Tabs } from '#lib/ui/index.js';
+  import { Button, Card, Chip, ConfirmDialog, EntityLogo, LoadMore, Tabs, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { companyLogoUrl } from '#lib/logo.js';
   import BuddyChatView from './BuddyChatView.svelte';
   import BuddyFeedEntry from './BuddyFeedEntry.svelte';
@@ -16,6 +16,12 @@
   import States from './States.svelte';
 
   type Tab = 'similar' | 'feed' | 'chats';
+  const TABS: readonly { id: Tab; label: string }[] = [
+    { id: 'similar', label: 'Similar' },
+    { id: 'feed', label: 'Feed' },
+    { id: 'chats', label: 'Chats' },
+  ];
+  const PANEL_ID = 'buddy-sections';
   // The notification link /my/buddies?c=<id> names a conversation to open on the Chats tab.
   const linkedParam = Number(page.url.searchParams.get('c'));
   const linkedAtLoad = Number.isInteger(linkedParam) && linkedParam > 0 ? linkedParam : null;
@@ -28,6 +34,9 @@
   let feed = $state<BuddyFeedItem[]>([]);
   let cursor = $state<string | null>(null);
   let feedBusy = $state(false);
+  // Which read of the feed failed: the first page (shown in place of the list, with a
+  // retry) or a later one (shown under the list by LoadMore).
+  let feedError = $state<'first' | 'more' | null>(null);
   let inviteHandle = $state('');
   let inviteOpen = $state(false);
   let membershipError = $state('');
@@ -45,6 +54,7 @@
   async function loadFeed(next = false, requestedMode = mode) {
     if (feedBusy) return;
     feedBusy = true;
+    feedError = null;
     try {
       const page = await api.listBuddyFeed(requestedMode, next ? cursor ?? undefined : undefined);
       if (requestedMode !== mode) return;
@@ -52,12 +62,13 @@
       cursor = page.meta.next_cursor;
     } catch (err) {
       if (next && err instanceof ApiError && err.status === 400) {
-        cursor = null;
-        const firstPage = await api.listBuddyFeed(requestedMode);
-        if (requestedMode !== mode) return;
-        feed = firstPage.data;
-        cursor = firstPage.meta.next_cursor;
-      }
+        try {
+          const firstPage = await api.listBuddyFeed(requestedMode);
+          if (requestedMode !== mode) return;
+          feed = firstPage.data;
+          cursor = firstPage.meta.next_cursor;
+        } catch { if (requestedMode === mode) feedError = 'more'; }
+      } else if (requestedMode === mode) feedError = next ? 'more' : 'first';
     } finally {
       feedBusy = false;
       if (requestedMode !== mode && status.value?.member && tab === 'feed') {
@@ -96,11 +107,12 @@
       <Button variant="outline" size="sm" onclick={() => (confirmLeaveOpen = true)}>Leave</Button>
     </header>
     {#if membershipError}<p role="alert" class="text-sm text-destructive">{membershipError}</p>{/if}
-    <nav class="flex gap-2 border-b border-border" aria-label="Buddy sections">
-      {#each ['similar', 'feed', 'chats'] as item (item)}<button class="border-b-2 px-3 py-2 text-sm capitalize {tab === item ? 'border-brand font-semibold' : 'border-transparent text-muted-foreground'}" aria-pressed={tab === item} onclick={() => tab = item as Tab}>{item}</button>{/each}
-    </nav>
+    <TabStrip tabs={TABS} active={tab} onSelect={(next) => (tab = next)} label="Buddy sections" panelId={PANEL_ID} />
+    <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)}>
     {#if tab === 'similar'}
-      {#if similar.status === 'loading'}<States state="loading" />{:else if similar.value.length === 0}<States state="empty" message="No similar members yet." />{:else}
+      {#if similar.status === 'loading'}<States state="loading" />
+      {:else if similar.status === 'error'}<States state="error" message="Could not load similar members." onRetry={() => void loadSimilar()} />
+      {:else if similar.value.length === 0}<States state="empty" message="No similar members yet." />{:else}
         <ul class="flex flex-col gap-3">
           {#each similar.value as person (person.handle)}
             <li>
@@ -126,12 +138,16 @@
       {/if}
     {:else if tab === 'feed'}
       <Tabs bind:value={() => mode, (next) => (mode = next as 'similar' | 'all')} tabs={[{ value: 'similar', label: 'Similar to you' }, { value: 'all', label: 'Everyone' }]}>
-        {#if feed.length === 0 && !feedBusy}<States state="empty" message="No application updates yet." />{:else}
+        {#if feed.length === 0 && feedError === 'first'}<States state="error" message="Could not load the feed." onRetry={() => void loadFeed()} />
+        {:else if feed.length === 0 && feedBusy}<States state="loading" />
+        {:else if feed.length === 0}<States state="empty" message="No application updates yet." />
+        {:else}
           <ul class="flex flex-col gap-3">{#each feed as item (item.id)}<BuddyFeedEntry {item}>{#snippet actions()}<BuddyMessageButton handle={item.handle} conversations={buddyDock.conversations} oninvite={openInvite} onconversation={openConversation} />{/snippet}</BuddyFeedEntry>{/each}</ul>
-          {#if cursor}<Button variant="outline" class="mt-3 w-fit" onclick={() => loadFeed(true)} disabled={feedBusy}>Load more</Button>{/if}
+          {#if cursor}<LoadMore loading={feedBusy} error={feedError === 'more'} onclick={() => void loadFeed(true)} />{/if}
         {/if}
       </Tabs>
-    {:else}<BuddyChatView initialId={linkedConversation} />{/if}
+    {:else}<BuddyChatView initialId={linkedConversation} oninvite={openInvite} />{/if}
+    </div>
   </section>
 {/if}
 

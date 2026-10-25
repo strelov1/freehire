@@ -12,6 +12,8 @@
   import { safeRedirect } from '#lib/safeRedirect.js';
   import { resetUserStores } from '#lib/userResource.svelte.js';
   import { buddyDock } from '#lib/buddyDock.svelte.js';
+  import { dockReserveClass } from '#lib/buddyDock.js';
+  import { ownsMobileStickyCta } from '#lib/supportToast.js';
   import {
     capturePageview,
     syncReplayForRoute,
@@ -70,6 +72,13 @@
   $effect(() => {
     if (buddyDock.member && !buddyDockModule) buddyDockModule = import('#lib/components/BuddyMessagingDock.svelte');
   });
+  // Room under the page for the dock's bars, so they never sit over its last line. A
+  // full-bleed route sizes itself to the viewport, where padding would only add a scroll.
+  const dockReserve = $derived(
+    isFullBleedRoute(page.url.pathname)
+      ? ''
+      : dockReserveClass(buddyDock.shownOn(page.url.pathname), ownsMobileStickyCta(page.url.pathname), buddyDock.windows),
+  );
 
   // The account area (/my/*) is an app-like surface with its own sidebar nav — the
   // marketing footer's link columns don't belong there, but a compact one (just
@@ -237,7 +246,7 @@
 <!-- The live regions every announce() call speaks through. -->
 <Announcer />
 
-<div class="flex min-h-svh flex-col">
+<div class="flex min-h-svh flex-col {dockReserve}">
   <TopBar />
 
   <!-- Self-gating: renders only for a signed-in, unverified account. -->

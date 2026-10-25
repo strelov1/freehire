@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { buddyConversationName, buddyFeedEventLabel, buddyOutgoingLabel, buddyReportReasonLabel, mergeBuddyMessages, messageActionFor, messageActionLabel } from './buddies';
+import { buddyConversationName, buddyFeedEventLabel, buddyOutgoingLabel, buddyReportReasonLabel, followsNewMessages, isSendShortcut, mergeBuddyMessages, messageActionFor, messageActionLabel } from './buddies';
+
+describe('message list scrolling', () => {
+  it('follows new messages only while the reader is at the bottom', () => {
+    expect(followsNewMessages({ scrollTop: 600, scrollHeight: 1000, clientHeight: 400 })).toBe(true);
+    expect(followsNewMessages({ scrollTop: 560, scrollHeight: 1000, clientHeight: 400 })).toBe(true);
+    expect(followsNewMessages({ scrollTop: 500, scrollHeight: 1000, clientHeight: 400 })).toBe(false);
+    expect(followsNewMessages({ scrollTop: 0, scrollHeight: 300, clientHeight: 400 })).toBe(true);
+  });
+});
+
+describe('send shortcut', () => {
+  it('sends on Cmd or Ctrl+Enter, never a plain Enter or a composing key', () => {
+    expect(isSendShortcut({ key: 'Enter', metaKey: true, ctrlKey: false })).toBe(true);
+    expect(isSendShortcut({ key: 'Enter', metaKey: false, ctrlKey: true })).toBe(true);
+    expect(isSendShortcut({ key: 'Enter', metaKey: false, ctrlKey: false })).toBe(false);
+    expect(isSendShortcut({ key: 'Enter', metaKey: true, ctrlKey: false, isComposing: true })).toBe(false);
+    expect(isSendShortcut({ key: 'a', metaKey: true, ctrlKey: false })).toBe(false);
+  });
+});
 
 describe('buddy conversation presentation', () => {
   it('never reveals a declined invitation to its sender', () => {

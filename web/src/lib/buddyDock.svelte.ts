@@ -9,7 +9,8 @@
 //
 // SSR-safe (see UserResource): nothing loads on the server, and the window state is
 // only ever written from browser interactions. What survives a reload is which windows
-// are open, in sessionStorage — never a message body.
+// are open, in sessionStorage — never a message body. Unsent drafts live in memory only
+// and go with the session.
 
 import { browser } from '$app/env';
 import { ApiError, api } from '#lib/api.js';
@@ -21,6 +22,7 @@ import {
   dockHiddenOn,
   dockIntentFor,
   type DockWindow,
+  DraftBook,
   openDockWindow,
   parseDockWindows,
   pruneDockWindows,
@@ -44,6 +46,7 @@ class BuddyDockStore extends UserResource<Loaded> {
   #conversations = $state.raw<BuddyConversation[]>([]);
   #windows = $state.raw<DockWindow[]>(readWindows());
   #generation = 0;
+  #drafts = new DraftBook();
   /** Whether the dock's conversation list is unfolded. */
   expanded = $state(false);
   /** The member the first-message dialog is aimed at, or null when it is closed. */
@@ -75,6 +78,7 @@ class BuddyDockStore extends UserResource<Loaded> {
     this.#member = false;
     this.#conversations = [];
     this.#setWindows([]);
+    this.#drafts.clear();
     this.expanded = false;
     this.inviteHandle = null;
   }
@@ -121,6 +125,10 @@ class BuddyDockStore extends UserResource<Loaded> {
     this.openConversation(conversation.id);
     await this.refresh().catch(() => { /* the poll catches up */ });
   }
+
+  /** The composer text a conversation was left with, kept across minimize and remount. */
+  draft(id: number): string { return this.#drafts.get(id); }
+  setDraft(id: number, text: string): void { this.#drafts.set(id, text); }
 
   close(id: number): void { this.#setWindows(closeDockWindow(this.#windows, id)); }
 

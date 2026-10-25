@@ -5,6 +5,10 @@ import {
   dockCorner,
   dockHiddenOn,
   dockIntentFor,
+  dockReserveClass,
+  dockToastOffsetClass,
+  DraftBook,
+  mobileSheetId,
   openDockWindow,
   parseDockWindows,
   pruneDockWindows,
@@ -89,5 +93,46 @@ describe('dock placement', () => {
     expect(dockCorner(true, false, [{ id: 1, minimized: true }])).toBe('bars');
     expect(dockCorner(true, false, [{ id: 1, minimized: false }])).toBe('open');
     expect(dockCorner(true, true, [])).toBe('open');
+  });
+});
+
+describe('mobile sheet', () => {
+  it('is the newest window that is not minimized', () => {
+    expect(mobileSheetId([])).toBeNull();
+    expect(mobileSheetId([{ id: 1, minimized: false }, { id: 2, minimized: false }])).toBe(2);
+    expect(mobileSheetId([{ id: 1, minimized: false }, { id: 2, minimized: true }])).toBe(1);
+    expect(mobileSheetId([{ id: 1, minimized: true }, { id: 2, minimized: true }])).toBeNull();
+  });
+});
+
+describe('dock reserve', () => {
+  it('reserves one bar on a wide screen and a row per minimized window on a narrow one', () => {
+    expect(dockReserveClass(false, false, [])).toBe('');
+    expect(dockReserveClass(true, true, [{ id: 1, minimized: true }])).toBe('lg:pb-12');
+    expect(dockReserveClass(true, false, [])).toBe('pb-12');
+    expect(dockReserveClass(true, false, [{ id: 1, minimized: false }])).toBe('pb-12');
+    expect(dockReserveClass(true, false, [{ id: 1, minimized: true }])).toBe('pb-28 sm:pb-12');
+    expect(dockReserveClass(true, false, [{ id: 1, minimized: true }, { id: 2, minimized: true }])).toBe('pb-44 sm:pb-12');
+  });
+
+  it('lifts the support toast above every stacked bar', () => {
+    expect(dockToastOffsetClass([])).toBe('bottom-16');
+    expect(dockToastOffsetClass([{ id: 1, minimized: true }])).toBe('bottom-32 sm:bottom-16');
+    expect(dockToastOffsetClass([{ id: 1, minimized: true }, { id: 2, minimized: true }])).toBe('bottom-48 sm:bottom-16');
+  });
+});
+
+describe('drafts', () => {
+  it('keeps a draft per conversation and forgets an emptied one', () => {
+    const drafts = new DraftBook();
+    drafts.set(1, 'hello');
+    drafts.set(2, 'other');
+    expect(drafts.get(1)).toBe('hello');
+    expect(drafts.get(2)).toBe('other');
+    expect(drafts.get(3)).toBe('');
+    drafts.set(1, '');
+    expect(drafts.get(1)).toBe('');
+    drafts.clear();
+    expect(drafts.get(2)).toBe('');
   });
 });

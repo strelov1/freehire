@@ -9,7 +9,7 @@
   // list is the shared one in `buddyDock`, so the messaging dock on every other page shows
   // the same unread counts; the pane is the same component a dock window holds.
   const LIST_POLL_MS = 30000;
-  let { initialId = null }: { initialId?: number | null } = $props();
+  let { initialId = null, oninvite }: { initialId?: number | null; oninvite?: (handle: string) => void } = $props();
 
   let selectedId = $state<number | null>(untrack(() => initialId));
   let status = $state<'loading' | 'ready' | 'error'>('loading');
@@ -41,7 +41,7 @@
   });
 </script>
 
-{#if status === 'loading'}<States state="loading" />{:else if status === 'error'}<States state="error" />{:else}
+{#if status === 'loading'}<States state="loading" />{:else if status === 'error'}<States state="error" message="Could not load your conversations." onRetry={() => { status = 'loading'; void refreshList(); }} />{:else}
   <div class="grid gap-4 md:grid-cols-3">
     <section aria-label="Conversations" class="divide-y divide-border rounded-lg border border-border">
       {#if buddyDock.conversations.length === 0}<p class="p-4 text-sm text-muted-foreground">No conversations yet.</p>{/if}
@@ -51,7 +51,7 @@
       {#if !selected}<p class="m-auto text-sm text-muted-foreground">Choose a conversation to read.</p>
       {:else}
         {#key selected.id}
-          <BuddyConversationPane conversation={selected} onchange={(change) => { if (change !== 'accepted') selectedId = null; }} />
+          <BuddyConversationPane conversation={selected} {oninvite} onchange={(change) => { if (change !== 'accepted') selectedId = null; }} />
         {/key}
       {/if}
     </section>

@@ -11,7 +11,7 @@
   import ActivityYear from '#lib/components/ActivityYear.svelte';
   import { buildActivityGridFromCounts } from '#lib/activityGrid.js';
   import type { BuddyActivity, BuddyFeedItem, BuddyProfile } from '#lib/types.js';
-  import { Button } from '#lib/ui/index.js';
+  import { LoadMore } from '#lib/ui/index.js';
   import { BUDDY_HEADING_FALLBACK, localDay } from '#lib/buddyPresent.js';
 
   // One interview buddy: their anonymous card and, under it, their own activity — the
@@ -26,7 +26,7 @@
   let feed = $state<BuddyFeedItem[]>([]);
   let cursor = $state<string | null>(null);
   let feedBusy = $state(false);
-  let feedError = $state('');
+  let feedError = $state(false);
 
   // The year grid counts exactly what this member's feed lists (the server holds it to the
   // feed's own visibility rule), by UTC day. A failure to read it costs the grid, not the page.
@@ -90,7 +90,7 @@
   $effect(() => {
     const current = handle;
     let cancelled = false;
-    view = 'loading'; profile = null; feed = []; cursor = null; feedError = '';
+    view = 'loading'; profile = null; feed = []; cursor = null; feedError = false;
     activity = null; dayView = null;
     history = []; historyCursor = null; historyPages = 0; historyLoad = Promise.resolve();
     api.getBuddyActivity(current).then(
@@ -122,7 +122,7 @@
   async function loadMore() {
     if (feedBusy || !cursor) return;
     const current = handle;
-    feedBusy = true; feedError = '';
+    feedBusy = true; feedError = false;
     try {
       const next = await api.listBuddyMemberFeed(current, cursor);
       if (current !== handle) return;
@@ -130,7 +130,7 @@
       cursor = next.meta.next_cursor;
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) view = 'unavailable';
-      else feedError = 'Could not load more activity.';
+      else feedError = true;
     } finally { feedBusy = false; }
   }
 
@@ -199,8 +199,7 @@
           <p class="text-sm text-muted-foreground">No application updates yet.</p>
         {:else}
           <ul>{#each feed as item (item.id)}<BuddyFeedEntry {item} showHandle={false} />{/each}</ul>
-          {#if feedError}<p role="alert" class="text-sm text-destructive">{feedError}</p>{/if}
-          {#if cursor}<Button variant="outline" class="w-fit" onclick={loadMore} disabled={feedBusy}>Load more</Button>{/if}
+          {#if cursor}<LoadMore loading={feedBusy} error={feedError} onclick={() => void loadMore()} />{/if}
         {/if}
       </section>
     </CandidateCardView>

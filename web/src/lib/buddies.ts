@@ -79,3 +79,17 @@ const FEED_EVENT_LABELS = {
 export function buddyFeedEventLabel(type: keyof typeof FEED_EVENT_LABELS): string {
   return FEED_EVENT_LABELS[type];
 }
+
+/** How close to the bottom (px) the message list must be for new messages to keep it
+ *  pinned there. A reader scrolled further up is reading history and stays put. */
+const FOLLOW_SLACK_PX = 48;
+
+export function followsNewMessages(list: { scrollTop: number; scrollHeight: number; clientHeight: number }): boolean {
+  return list.scrollHeight - list.scrollTop - list.clientHeight <= FOLLOW_SLACK_PX;
+}
+
+/** Cmd+Enter or Ctrl+Enter sends; a plain Enter is a newline, and a key pressed while an
+ *  input method is composing belongs to the composition. */
+export function isSendShortcut(e: { key: string; metaKey: boolean; ctrlKey: boolean; isComposing?: boolean }): boolean {
+  return e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing;
+}
