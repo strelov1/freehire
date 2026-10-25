@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -56,5 +57,36 @@ func TestANoteReachesTheModelMarkedAsFreehires(t *testing.T) {
 	text := got.Parts[0].(llms.TextContent).Text
 	if !strings.Contains(text, "submitted to the employer") || !strings.Contains(text, "not written by the candidate") {
 		t.Errorf("decoded note = %q", text)
+	}
+}
+
+// The same narration retried after the model failed it is not stored again: during an outage
+// the client retries every fifteen seconds, and each copy would be replayed on every turn.
+func TestRunNoteDoesNotStoreTheSameNoteTwice(t *testing.T) {
+	model := &scriptedModel{err: errors.New("upstream is down")}
+	q := &fakeQueries{session: db.AssistantSession{ID: sessionID, UserID: 7, Preset: PresetApply}}
+	r := testRunner(model, q)
+	sess := Session{ID: sessionID, UserID: 7, Preset: PresetApply}
+
+	for range 3 {
+		_ = r.RunNote(context.Background(), sess, NewRegistry(), "system prompt", "blocked on 2 questions", TurnConfig{}, func(Event) {})
+	}
+
+	notes := 0
+	for _, m := range q.messages {
+		if m.Role == RoleNote {
+			notes++
+		}
+	}
+	if notes != 1 {
+		t.Errorf("stored %d copies of the same note, want 1", notes)
+	}
+}
+
+// A conversation whose only turn so far is a note can still be retried.
+func TestContinueAcceptsANoteStartedConversation(t *testing.T) {
+	msg, _ := EncodeNote("queued")
+	if !hasUserMessage([]Message{msg}) {
+		t.Error("a note-started transcript reports nothing to continue")
 	}
 }

@@ -204,15 +204,25 @@ func (r *Runner) RunWithAttachments(ctx context.Context, sess Session, reg *Regi
 // message from the candidate. The note is stored as RoleNote and nothing else about the
 // conversation changes: it does not name the session (a note is the server's words, the
 // same for every conversation) and the client is not told the candidate said it.
+//
+// A note identical to the transcript's last message is not stored again: that is the same
+// narration being retried after the model failed it, and storing it on every retry would
+// grow the conversation for as long as the model is down.
 func (r *Runner) RunNote(ctx context.Context, sess Session, reg *Registry, system, note string, turn TurnConfig, emit func(Event)) error {
 	msg, err := EncodeNote(note)
 	if err != nil {
 		return r.fail(emit, err)
 	}
+	stored, err := r.store.Transcript(ctx, sess.ID)
+	if err != nil {
+		return r.fail(emit, err)
+	}
 	writeCtx, cancel := persisting(ctx)
 	defer cancel()
-	if _, err := r.store.Append(writeCtx, sess.ID, msg); err != nil {
-		return r.fail(emit, err)
+	if n := len(stored); n == 0 || stored[n-1].Role != RoleNote || string(stored[n-1].Content) != string(msg.Content) {
+		if _, err := r.store.Append(writeCtx, sess.ID, msg); err != nil {
+			return r.fail(emit, err)
+		}
 	}
 	if err := r.store.Touch(writeCtx, sess.ID, sess.UserID); err != nil {
 		log.Printf("assistant: touch session %s: %v", sess.ID, err)
@@ -242,9 +252,11 @@ func (r *Runner) Continue(ctx context.Context, sess Session, reg *Registry, syst
 	return r.runFromHistory(ctx, sess, reg, system, turn, emit)
 }
 
+// hasUserMessage reports whether a transcript holds a turn to continue: a prompt, or a status
+// note — an apply conversation's first turn is one, before the candidate has typed anything.
 func hasUserMessage(msgs []Message) bool {
 	for _, m := range msgs {
-		if m.Role == RoleUser {
+		if m.Role == RoleUser || m.Role == RoleNote {
 			return true
 		}
 	}

@@ -98,3 +98,22 @@ func TestBlockedNextStepAsksForOneNumberedList(t *testing.T) {
 		}
 	}
 }
+
+// A tool with no arguments left is often called with "null"; that must not crash the turn.
+func TestBindToJobAcceptsNullArguments(t *testing.T) {
+	var got string
+	tool := assistant.Tool{Name: "t", Schema: jobSlugSchema, Run: func(_ context.Context, _ int64, raw json.RawMessage) (any, error) {
+		var in jobSlugArgs
+		_ = json.Unmarshal(raw, &in)
+		got = in.JobSlug
+		return nil, nil
+	}}
+	bound := bindToJob(tool, func(context.Context) (string, error) { return "the-session-job", nil })
+
+	if _, err := bound.Run(context.Background(), 3, json.RawMessage(`null`)); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got != "the-session-job" {
+		t.Errorf("the tool ran on %q", got)
+	}
+}

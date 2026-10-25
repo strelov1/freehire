@@ -465,6 +465,17 @@ WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id)
 ORDER BY id DESC
 LIMIT 100;
 
+-- name: ListAutoApplyEventsAfter :many
+-- One (user, job) pair's events newer than a cursor, OLDEST first, a page at a time: the
+-- apply conversation narrates them in order and moves its cursor to the last one it read,
+-- so a backlog longer than a page is narrated over several syncs rather than skipped.
+SELECT id, queue_id, kind, detail, created_at
+FROM auto_apply_events
+WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id)
+  AND id > sqlc.arg(after_id)
+ORDER BY id
+LIMIT 100;
+
 -- name: MarkStaleAutoApplyTailoringFailed :execrows
 -- Gives up on attempts whose tailoring nobody is doing: no CV, no failure recorded, no
 -- decision, and nothing has happened to the pair for stale_seconds. The orchestrator is

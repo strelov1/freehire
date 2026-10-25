@@ -3530,6 +3530,10 @@ type Querier interface {
 	ListAutoApplyEntries(ctx context.Context, userID int64) ([]ListAutoApplyEntriesRow, error)
 	// The most recent history of one (user, job) pair, newest first; the caller reverses it.
 	ListAutoApplyEvents(ctx context.Context, arg ListAutoApplyEventsParams) ([]ListAutoApplyEventsRow, error)
+	// One (user, job) pair's events newer than a cursor, OLDEST first, a page at a time: the
+	// apply conversation narrates them in order and moves its cursor to the last one it read,
+	// so a backlog longer than a page is narrated over several syncs rather than skipped.
+	ListAutoApplyEventsAfter(ctx context.Context, arg ListAutoApplyEventsAfterParams) ([]ListAutoApplyEventsAfterRow, error)
 	// Queue entries cmd/auto-apply dead-lettered: attempts exhausted the retry budget,
 	// or (Runner.deadLetterImmediately) the very first attempt already made the
 	// question moot — an unconfirmed submission or a lost post-submit record are both

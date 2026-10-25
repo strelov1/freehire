@@ -843,11 +843,17 @@
   // moves it runs every five minutes, so this only has to be prompt, not instant.
   const SYNC_INTERVAL_MS = 15_000;
 
+  // A check still waiting on the server, before it has painted anything. Without it a slow
+  // first token lets the next tick send a second check for the same events.
+  let catchingUp = false;
+  // The plan refused the check: every later one would be refused the same way.
+  let syncRefused = false;
+
   $effect(() => {
     if (!keepInSync || phase !== 'ready' || !activeId) return;
     const id = activeId;
     const tick = () => {
-      if (!turnActive && !turn) void catchUp(id);
+      if (!turnActive && !turn && !catchingUp && !syncRefused) void catchUp(id);
     };
     tick();
     const timer = setInterval(tick, SYNC_INTERVAL_MS);
@@ -858,6 +864,7 @@
    *  nothing new must not flash the "thinking" state every fifteen seconds. A failed check is
    *  left for the next one — it is not something the candidate asked for or can act on. */
   async function catchUp(id: string) {
+    catchingUp = true;
     let began = false;
     const started = syncApplication(id, (event) => {
       if (!began) {
@@ -872,6 +879,9 @@
       await started.done;
     } catch (err) {
       if (err instanceof StreamInterrupted) await reloadTranscript(id);
+      if (err instanceof TurnRefused) syncRefused = true;
+    } finally {
+      catchingUp = false;
     }
     if (began) {
       endTurn();

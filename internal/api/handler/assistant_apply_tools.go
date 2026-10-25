@@ -59,11 +59,15 @@ func bindToJob(tool assistant.Tool, slugOf func(context.Context) (string, error)
 		if err != nil {
 			return nil, toolError(err)
 		}
-		args := map[string]any{}
+		var args map[string]any
 		if len(raw) > 0 {
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return nil, err
 			}
+		}
+		// "null" decodes to a nil map, and a tool with no arguments left is often called so.
+		if args == nil {
+			args = map[string]any{}
 		}
 		args["job_slug"] = slug
 		bound, err := json.Marshal(args)

@@ -585,6 +585,58 @@ func (q *Queries) ListAutoApplyEvents(ctx context.Context, arg ListAutoApplyEven
 	return items, nil
 }
 
+const listAutoApplyEventsAfter = `-- name: ListAutoApplyEventsAfter :many
+SELECT id, queue_id, kind, detail, created_at
+FROM auto_apply_events
+WHERE user_id = $1 AND job_id = $2
+  AND id > $3
+ORDER BY id
+LIMIT 100
+`
+
+type ListAutoApplyEventsAfterParams struct {
+	UserID  int64 `json:"user_id"`
+	JobID   int64 `json:"job_id"`
+	AfterID int64 `json:"after_id"`
+}
+
+type ListAutoApplyEventsAfterRow struct {
+	ID        int64              `json:"id"`
+	QueueID   int64              `json:"queue_id"`
+	Kind      string             `json:"kind"`
+	Detail    []byte             `json:"detail"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// One (user, job) pair's events newer than a cursor, OLDEST first, a page at a time: the
+// apply conversation narrates them in order and moves its cursor to the last one it read,
+// so a backlog longer than a page is narrated over several syncs rather than skipped.
+func (q *Queries) ListAutoApplyEventsAfter(ctx context.Context, arg ListAutoApplyEventsAfterParams) ([]ListAutoApplyEventsAfterRow, error) {
+	rows, err := q.db.Query(ctx, listAutoApplyEventsAfter, arg.UserID, arg.JobID, arg.AfterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAutoApplyEventsAfterRow{}
+	for rows.Next() {
+		var i ListAutoApplyEventsAfterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.QueueID,
+			&i.Kind,
+			&i.Detail,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecentAutoApplySubmissions = `-- name: ListRecentAutoApplySubmissions :many
 SELECT DISTINCT ON (e.job_id) e.job_id, j.public_slug, j.title, j.company, e.created_at
 FROM auto_apply_events e
