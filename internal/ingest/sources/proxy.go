@@ -357,3 +357,38 @@ func redactProxy(raw string) string {
 	}
 	return raw
 }
+
+// NewRefusalRetryClientFromEnv builds the client for a caller that is not a registry crawl
+// but reads the same platforms: direct first, and through the proxy only for a request the
+// platform refused — the rotating gateway when SOURCES_ROTATING_PROXY_URL is set, else the
+// fixed SOURCES_PROXY_URL exit. With neither set it is NewClient.
+//
+// internal/ingest/applyform's fetchers are the reason it exists. They took NewClient, so the
+// workable ban rotatingProxyProviders describes — hours long, per exit IP — had nowhere to
+// go there either: on 2026-10-25 every approved Workable auto-apply attempt died on its form
+// fetch with a 429 and a 23-hour Retry-After, after cmd/capture-apply-form had read 3,369
+// Workable forms from the same address that day. The rotating gateway is preferred because
+// that ban is exactly the case a fresh exit per request answers; each form fetch is one
+// stateless GET, so nothing leans on a session.
+//
+// Like every proxied client, the retry relaxes the SSRF target check (the proxy resolves the
+// target), so this is for callers whose URLs come from a fixed platform API or a stored
+// posting URL — never for following an arbitrary link.
+func NewRefusalRetryClientFromEnv() (*Client, error) {
+	rotating, err := rotatingProxy()
+	if err != nil {
+		return nil, err
+	}
+	if rotating != nil {
+		return NewRefusalRetryClient(rotating), nil
+	}
+	raw := strings.TrimSpace(os.Getenv("SOURCES_PROXY_URL"))
+	if raw == "" {
+		return NewClient(), nil
+	}
+	fixed, err := url.Parse(raw)
+	if err != nil || fixed.Host == "" {
+		return nil, fmt.Errorf("sources: invalid SOURCES_PROXY_URL %q", redactProxy(raw))
+	}
+	return NewRefusalRetryClient(fixed), nil
+}

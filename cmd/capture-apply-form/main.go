@@ -35,9 +35,16 @@ func run() int {
 
 	cfg := config.LoadApplyForm()
 
-	// The same HTTP client the crawl uses: the endpoints are the platforms' own public
-	// job-board APIs, so its user agent, timeouts and size caps are exactly right here.
-	stats, err := applyform.Run(ctx, newDBStore(pool), applyform.Fetchers(sources.NewClient()), applyform.RunOptions{
+	// The crawl's HTTP client: the endpoints are the platforms' own public job-board APIs, so
+	// its user agent, timeouts and size caps are exactly right here. A refused request is
+	// retried through the proxy — this worker is what drove Workable into banning the host's
+	// address for 23 hours on 2026-10-25 (sources.NewRefusalRetryClientFromEnv).
+	client, err := sources.NewRefusalRetryClientFromEnv()
+	if err != nil {
+		log.Printf("capture-apply-form: %v", err)
+		return 1
+	}
+	stats, err := applyform.Run(ctx, newDBStore(pool), applyform.Fetchers(client), applyform.RunOptions{
 		BatchSize:    cfg.BatchSize,
 		LeaseSeconds: cfg.LeaseSeconds,
 		MaxAttempts:  cfg.MaxAttempts,
