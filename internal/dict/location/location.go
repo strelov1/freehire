@@ -30,6 +30,13 @@ type Geo struct {
 	Metros    []string // metro values ("Sacramento (US)"); dict-only, see metros.go
 }
 
+// parenMark prefixes a token that followed "(" in the location line. A parenthesis
+// qualifies the place before it — "Schönebeck (Elbe)", "Halle (Saale)", "Kempten
+// (Allgäu)" — and the qualifier is a river or a region that the small-places table may
+// also list as a village ("Elbe" is one, in Lower Saxony). Such a token still resolves
+// through the curated tables ("Berlin (Germany)"), but is never read as a small place.
+const parenMark = "\x01"
+
 // separatorReplacer normalizes every token separator to a comma in one pass so a
 // single Split yields the geography tokens. The multi-character forms (" - ",
 // " or ") and parentheses are included, so "Berlin (On-site)" -> "berlin",
@@ -51,7 +58,9 @@ var separatorReplacer = strings.NewReplacer(
 func Parse(location string) Geo {
 	lower := strings.ToLower(location)
 
-	s := separatorReplacer.Replace(lower)
+	// A token that opened a parenthesis is marked, so it can be told apart from a place
+	// in its own right once the separators are gone: see parenMark.
+	s := separatorReplacer.Replace(strings.ReplaceAll(lower, "(", "("+parenMark))
 
 	countrySet := map[string]struct{}{}
 	regionSet := map[string]struct{}{}
@@ -72,12 +81,19 @@ func Parse(location string) Geo {
 	// Subdivision codes the line states, and the cities it names, are collected over the
 	// whole line: the state usually FOLLOWS the city ("Roseville, CA").
 	statedSubdivisions := map[string]struct{}{}
+	// pending holds the tokens that name a city only in a country the line states, resolved
+	// once the whole line has been read (resolvePending).
+	var pending []pendingCity
 	for _, tok := range strings.Split(s, ",") {
+		tok = strings.TrimSpace(tok)
+		tok, parenthetical := strings.CutPrefix(tok, parenMark)
 		tok = strings.TrimSpace(tok)
 		if tok == "" {
 			continue
 		}
 		tok = stripCityPrefix(tok)
+		tok = stripAreaWords(tok)
+		tok = stripPostalPrefix(tok)
 		// Strip embedded work-mode words so the place still resolves ("US Remote" ->
 		// "us"); a token that is ONLY a work-mode marker ("Remote", "On-site") strips
 		// to "" and is skipped — its work mode is detected separately from the whole
@@ -124,7 +140,7 @@ func Parse(location string) Geo {
 		// ("Birmingham") can never *guess* a geography here; the country/region stay the
 		// curated dictionaries' job (and the LLM's, at serve time). This keeps the parser's
 		// "never guesses" contract while still populating the cities facet broadly.
-		if ce, ok := cityDict[tok]; ok {
+		if ce, ok := cityDict[tok]; ok && !regionNotCity[tok] {
 			if resolved {
 				// The token is a curated place: emit the city name only when cityDict agrees
 				// on its country, so a country/region token ("usa") never emits the unrelated
@@ -142,6 +158,13 @@ func Parse(location string) Geo {
 				if !ce.Contested && ce.Country != "" {
 					cityFallbackCountries[ce.Country] = struct{}{}
 				}
+			}
+		}
+		if !resolved && !parenthetical {
+			// Not a place either table states. It may still NAME one once the line has
+			// stated a country (a small town beside its Land, "Köln-Niehl"); see pendingFor.
+			if p := pendingFor(tok); p != nil {
+				pending = append(pending, p)
 			}
 		}
 		for c := range tokCountry {
@@ -216,6 +239,8 @@ func Parse(location string) Geo {
 			}
 		}
 	}
+
+	resolvePending(pending, countrySet, citySet)
 
 	// A metro needs one stated country: a line naming two cannot place a city in either
 	// without guessing.
@@ -349,6 +374,49 @@ func stripWorkmodeWords(tok string) string {
 		kept = append(kept, f)
 	}
 	return strings.Join(kept, " ")
+}
+
+// areaPrefixes name the area AROUND a place ("Großraum Hannover", "Region Stuttgart",
+// "Raum München", "Standort Erkheim", "Kanton Bern"); areaSuffixes do the same from the
+// other side ("Stuttgart und Umgebung"). The place is what remains. English "Greater" is
+// deliberately not here: "Greater London" and "Greater Manchester" are subdivision names in
+// their own right (foreignSubdivisionNames), and stripping would hand "Manchester" to the
+// contested city table.
+var (
+	areaPrefixes = []string{"großraum ", "grossraum ", "metropolregion ", "region ", "raum ",
+		"umkreis ", "standort ", "kanton ", "canton "}
+	areaSuffixes = []string{" und umgebung", " und umland"}
+)
+
+// stripAreaWords removes one areaPrefixes word and one areaSuffixes phrase from a token.
+func stripAreaWords(tok string) string {
+	for _, p := range areaPrefixes {
+		if rest, ok := strings.CutPrefix(tok, p); ok {
+			tok = strings.TrimSpace(rest)
+			break
+		}
+	}
+	for _, s := range areaSuffixes {
+		if rest, ok := strings.CutSuffix(tok, s); ok {
+			return strings.TrimSpace(rest)
+		}
+	}
+	return tok
+}
+
+// postalPrefixRE matches a continental postal code written BEFORE its town: German and
+// Austrian/Swiss style, optionally behind a country letter ("85462 Eitting", "CH-3400
+// Burgdorf", "A-1010 Wien", "D-80331 München"). The code states no country on its own —
+// four and five digits are half of Europe's formats — so it is only cut away for the town
+// to resolve. A US ZIP comes after its state and is untouched (isUSZip).
+var postalPrefixRE = regexp.MustCompile(`^(?:[a-z]{1,2}-)?\d{4,5}\s+(\pL.*)$`)
+
+// stripPostalPrefix returns the town after a leading postal code, or the token unchanged.
+func stripPostalPrefix(tok string) string {
+	if m := postalPrefixRE.FindStringSubmatch(tok); m != nil {
+		return m[1]
+	}
+	return tok
 }
 
 // stripCityPrefix removes a leading Russian city marker from an already-lowercased,

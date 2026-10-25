@@ -73,6 +73,9 @@ func loadMetros(tsv string) (map[metroKey]string, map[[2]string]string) {
 // metro, and gets nothing) and is never returned as a metro.
 func metroFor(cityName, country string, stated map[string]struct{}) (string, bool) {
 	name := strings.ToLower(cityName)
+	if from, ok := cityRenamedFrom[[2]string{name, country}]; ok {
+		name = from // the metro table speaks GeoNames names, not the curated display name
+	}
 	if len(stated) == 0 {
 		v := metroByName[[2]string{name, country}]
 		return v, v != ""

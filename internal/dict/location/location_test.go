@@ -36,10 +36,12 @@ func TestParse(t *testing.T) {
 		},
 		{
 			// JobTech/Platsbanken ads end in ", Sverige" with an unknown municipality; the
-			// native country word must resolve so they are not left geography-less.
-			name:     "swedish native country word with unknown city",
+			// native country word must resolve so they are not left geography-less. The
+			// municipality is below the main city table's floor, so it is named through the
+			// small-places table once the country word has placed the line.
+			name:     "swedish native country word with small municipality",
 			location: "Hallstahammar, Västmanlands län, Sverige",
-			want:     Geo{Countries: []string{"se"}, Regions: []string{"eu"}},
+			want:     Geo{Countries: []string{"se"}, Regions: []string{"eu"}, Cities: []string{"Hallstahammar"}},
 		},
 		{
 			name:     "multiple locations union and dedup",
@@ -116,7 +118,7 @@ func TestParse(t *testing.T) {
 		{
 			name:     "accented montreal resolves to CA",
 			location: "Montréal, QC",
-			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}, Cities: []string{"Montreal"}},
+			want:     Geo{Countries: []string{"ca"}, Regions: []string{"north_america"}, Cities: []string{"Montreal"}, Metros: []string{"Montréal (CA)"}},
 		},
 		{
 			name:     "australian beacon city",
@@ -725,10 +727,11 @@ func TestParseCityFacetExpansion(t *testing.T) {
 			want:     Geo{Regions: []string{"global"}, WorkMode: "remote"},
 		},
 		{
-			// The curated override pins the English facet spelling over GeoNames "Köln".
+			// The curated override pins the English facet spelling over GeoNames "Köln", and
+			// the metro table, keyed by the GeoNames name, still finds the city.
 			name:     "curated override spelling wins",
 			location: "Köln",
-			want:     Geo{Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"Cologne"}},
+			want:     Geo{Countries: []string{"de"}, Regions: []string{"eu"}, Cities: []string{"Cologne"}, Metros: []string{"Köln (DE)"}},
 		},
 	}
 	for _, tt := range tests {
@@ -875,9 +878,14 @@ func TestParseAustralianStateCodes(t *testing.T) {
 // matching nothing in the city dictionary.
 func TestParseAustralianStateKeepsTheCity(t *testing.T) {
 	want := Geo{Countries: []string{"au"}, Regions: []string{"apac"}, Cities: []string{"Perth"}, Metros: []string{"Perth (AU)"}}
-	for _, location := range []string{"Perth WA", "Osborne Park, Perth WA", "Perth, WA"} {
+	for _, location := range []string{"Perth WA", "Perth, WA"} {
 		if got := Parse(location); !reflect.DeepEqual(got, want) {
 			t.Errorf("Parse(%q) = %+v, want %+v", location, got, want)
 		}
+	}
+	// The suburb is a small place, named once Perth has placed the line in Australia.
+	want.Cities = []string{"Osborne Park", "Perth"}
+	if got := Parse("Osborne Park, Perth WA"); !reflect.DeepEqual(got, want) {
+		t.Errorf("Parse(%q) = %+v, want %+v", "Osborne Park, Perth WA", got, want)
 	}
 }

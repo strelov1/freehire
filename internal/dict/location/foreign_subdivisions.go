@@ -103,6 +103,29 @@ var foreignSubdivisionNames = map[string]string{
 	"schleswig-holstein": "de", "thüringen": "de", "thuringia": "de",
 	"mecklenburg-vorpommern": "de", "saarland": "de", "brandenburg": "de",
 
+	// Austria — Länder, in German and in English. Wien is a city name already, and
+	// "Salzburg" (Land and city) resolves through the city table.
+	"burgenland": "at", "kärnten": "at", "carinthia": "at",
+	"niederösterreich": "at", "lower austria": "at",
+	"oberösterreich": "at", "upper austria": "at",
+	"steiermark": "at", "styria": "at", "tirol": "at", "tyrol": "at", "vorarlberg": "at",
+
+	// Switzerland — cantons, in German, French and Italian where a location line uses
+	// them. Withheld for a second reading: "Freiburg" (Freiburg im Breisgau), "Neuenburg"
+	// (Neuenburg am Rhein), "Jura" (the French département and the mountains), "Uri" (a
+	// word in this catalogue's own vocabulary), and three the German crawl showed as
+	// German places: "Berne" (a town in Lower Saxony and a Hamburg district), "Zug" (in
+	// Baden-Württemberg) and "Tessin" (in Mecklenburg-Vorpommern). The canton names that
+	// are also their capital's ("Luzern", "Schaffhausen") are the city in either reading.
+	"aargau": "ch", "appenzell": "ch", "appenzell ausserrhoden": "ch",
+	"appenzell innerrhoden": "ch", "basel-landschaft": "ch", "basel-land": "ch",
+	"baselland": "ch", "basel-stadt": "ch", "graubünden": "ch", "grisons": "ch",
+	"glarus": "ch", "nidwalden": "ch", "obwalden": "ch", "schwyz": "ch",
+	"solothurn": "ch", "thurgau": "ch", "ticino": "ch",
+	"wallis": "ch", "valais": "ch", "waadt": "ch", "vaud": "ch",
+	"luzern": "ch", "lucerne": "ch", "schaffhausen": "ch", "fribourg": "ch",
+	"neuchâtel": "ch", "genf": "ch", "bern": "ch",
+
 	// India — states (Punjab withheld, see above), and the district form Indian
 	// ATSs emit for the Bengaluru metro.
 	"karnataka": "in", "maharashtra": "in", "tamil nadu": "in", "telangana": "in",
@@ -111,6 +134,20 @@ var foreignSubdivisionNames = map[string]string{
 	"odisha": "in", "bihar": "in", "assam": "in", "jharkhand": "in",
 	"chhattisgarh": "in", "uttarakhand": "in", "himachal pradesh": "in", "goa": "in",
 	"bangalore urban": "in", "bengaluru urban": "in",
+}
+
+// regionNotCity are the subdivision names the city table ALSO lists as an alias of a
+// DIFFERENT city: the Land Brandenburg is an alternate name of Brandenburg an der Havel,
+// so every "Schönefeld, Brandenburg" posting (hundreds in the German crawl) was named a
+// posting in that one city. Such a token states its country and no city. A subdivision
+// that shares its name with its own capital ("Bern", "Luzern", "Schaffhausen") is not
+// here: the city reading is the same place. TestSubdivisionCityAliasesAreDecided makes
+// every new overlap a decision rather than an accident.
+var regionNotCity = map[string]bool{
+	"brandenburg":         true, // Brandenburg an der Havel
+	"goa":                 true, // Mormugao
+	"bihar":               true, // Bihār Sharīf
+	"воронежская область": true, // Voronezh
 }
 
 // init merges the table into nameToCountry. A name already there is a programming

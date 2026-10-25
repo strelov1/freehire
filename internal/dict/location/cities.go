@@ -34,7 +34,7 @@ type cityEntry struct {
 
 // cityDict maps a lowercase city alias to its canonical name + country, built once
 // at init from the embedded dataset with the curated overrides layered on top.
-var cityDict = loadCityDict(citiesTSV, cityOverrides)
+var cityDict, cityRenamedFrom = loadCityDict(citiesTSV, cityOverrides)
 
 // contestMark suffixes an alias in the dataset when more than one country claims it.
 // cmd/gen-cities computes this across the WHOLE GeoNames dump — hamlets included, which
@@ -48,7 +48,18 @@ const contestMark = "*"
 // An alias carrying contestMark states no country. Comment/blank lines are skipped.
 // Overrides are applied last and win outright, uncontested — they are hand-pinned
 // spellings, so their country is asserted rather than inferred.
-func loadCityDict(tsv string, overrides map[string]cityEntry) map[string]cityEntry {
+//
+// An override renames the PLACE, not just its own alias: every alias that reached the
+// place the override's alias resolved to takes the curated name too. Renaming only the
+// one alias split a city across two facet values — measured 2026-10-25 over the German
+// crawl, "Frankfurt" 508 postings beside "Frankfurt am Main" 1,442, "Zurich" beside
+// "Zürich" — because "Frankfurt am Main, Hessen" reached the place by another alias.
+// The place is the one the override's alias resolves to first-wins (the most populous),
+// so Frankfurt (Oder), which also lists "frankfurt", keeps its own name.
+//
+// The second result maps each curated name (lowercased, with its country) back to the
+// GeoNames name it replaced, which is what the metro table is keyed by (metroFor).
+func loadCityDict(tsv string, overrides map[string]cityEntry) (map[string]cityEntry, map[[2]string]string) {
 	dict := map[string]cityEntry{}
 	sc := bufio.NewScanner(strings.NewReader(tsv))
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20) // the widest alias row (Shanghai) is a few KB
@@ -69,8 +80,22 @@ func loadCityDict(tsv string, overrides map[string]cityEntry) map[string]cityEnt
 			}
 		}
 	}
+	renamedFrom := map[[2]string]string{}
+	for alias, ov := range overrides {
+		base, ok := dict[alias]
+		if !ok || base.Country != ov.Country || base.Name == ov.Name {
+			continue
+		}
+		for a, e := range dict {
+			if e.Name == base.Name && e.Country == base.Country {
+				e.Name = ov.Name
+				dict[a] = e
+			}
+		}
+		renamedFrom[[2]string{strings.ToLower(ov.Name), ov.Country}] = strings.ToLower(base.Name)
+	}
 	for alias, e := range overrides {
 		dict[alias] = e
 	}
-	return dict
+	return dict, renamedFrom
 }

@@ -13,7 +13,7 @@ func TestLoadCityDict(t *testing.T) {
 	overrides := map[string]cityEntry{
 		"zurich": {Name: "Zurich", Country: "ch"}, // override wins even though absent from the TSV
 	}
-	dict := loadCityDict(tsv, overrides)
+	dict, _ := loadCityDict(tsv, overrides)
 
 	// A marked alias keeps its most-populous name and country — isRecognizedUSCACity
 	// still wants them — but Contested is what stops the country being stated.

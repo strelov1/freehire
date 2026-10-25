@@ -1,7 +1,9 @@
 package main
 
 import (
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -89,5 +91,31 @@ func TestAliasesWithContestMarks(t *testing.T) {
 	got := aliasesWithContestMarks([]string{"moscow", "москва"}, map[string]bool{"moscow": true})
 	if want := "moscow*|москва"; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestWriteSmallTSV checks the small-places table takes exactly the places the main one
+// drops, with their own names only.
+func TestWriteSmallTSV(t *testing.T) {
+	places := []place{
+		{name: "Munich", country: "de", pop: 1_500_000, aliases: []string{"munich", "münchen"}, own: []string{"munich"}},
+		{name: "Billerbeck", country: "de", pop: 11_000, aliases: []string{"billerbeck", "bilrebeke"}, own: []string{"billerbeck"}},
+	}
+	path := t.TempDir() + "/small.tsv"
+	if err := writeSmallTSV(path, places); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []string
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		if !strings.HasPrefix(line, "#") {
+			rows = append(rows, line)
+		}
+	}
+	if want := []string{"Billerbeck\tde\tbillerbeck"}; !reflect.DeepEqual(rows, want) {
+		t.Errorf("rows = %q, want %q", rows, want)
 	}
 }

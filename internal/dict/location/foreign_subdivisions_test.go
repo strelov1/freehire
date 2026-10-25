@@ -65,3 +65,24 @@ func TestForeignSubdivisionCountriesArePlaceable(t *testing.T) {
 		}
 	}
 }
+
+// TestSubdivisionCityAliasesAreDecided holds every subdivision name the city table also
+// knows to an explicit reading: either it states no city (regionNotCity), or the city it
+// names is the subdivision's namesake capital, listed here. A new entry in either table
+// that creates an overlap fails until someone decides which it is.
+func TestSubdivisionCityAliasesAreDecided(t *testing.T) {
+	namesakes := map[string]bool{
+		"bern": true, "fribourg": true, "genf": true, "lucerne": true, "luzern": true,
+		"neuchâtel": true, "schaffhausen": true, "schwyz": true, "solothurn": true,
+	}
+	for name := range foreignSubdivisionNames {
+		ce, ok := cityDict[name]
+		if !ok || regionNotCity[name] || namesakes[name] {
+			continue
+		}
+		t.Errorf("foreignSubdivisionNames[%q] is also the city table's alias of %q: add it to regionNotCity or to this test's namesakes", name, ce.Name)
+	}
+	if g := Parse("Schönefeld, Brandenburg"); len(g.Cities) != 1 || g.Cities[0] != "Schönefeld" {
+		t.Errorf("Parse(\"Schönefeld, Brandenburg\").Cities = %v, want [Schönefeld]", g.Cities)
+	}
+}
