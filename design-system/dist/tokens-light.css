@@ -17,7 +17,7 @@
   --destructive-foreground: oklch(0.985 0 0); /** Text/icon on a filled destructive surface. */
   --destructive-strong: oklch(0.52 0.22 27.325); /** Destructive text on the page background or a destructive tint, where the action color falls short of 4.5:1. */
   --border: oklch(0.92 0 0); /** Default border color. */
-  --input: oklch(0.93 0 0); /** Input border/fill color. */
+  --input: oklch(0.66 0 0); /** Input border/fill color. Dark enough (3.1:1 on the page and on cards) that a field's edge identifies it as a control (WCAG 1.4.11); at 0.93 it measured 1.2:1 and empty fields vanished into the page. */
   --ring: #5b6f00; /** Focus ring color: the brand fill, which clears 3:1 against every light surface (WCAG 1.4.11). brand-ring is too pale for a focus indicator on the page background (1.9:1). */
   --brand: #5b6f00; /** Brand CTA fill — oats green, dark olive (Granola palette). */
   --brand-foreground: #f3f6e2; /** Text/icon on brand surface. */

@@ -57,7 +57,7 @@
     "$value": "oklch(1 0 0 / 8%)"
   },
   "input": {
-    "$value": "oklch(1 0 0 / 12%)"
+    "$value": "oklch(1 0 0 / 35%)"
   },
   "ring": {
     "$value": "{brand-ring}"

@@ -17,7 +17,7 @@
   --destructive-foreground: oklch(0.16 0 0);
   --destructive-strong: oklch(0.704 0.191 22.216); /** Same as the action color: on the dark background it already clears 4.5:1. */
   --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 35%);
   --ring: oklch(0.6 0.09 118);
   --brand: oklch(0.72 0.095 121); /** Oats green on dark — calmer olive (not neon) with dark ink. */
   --brand-foreground: oklch(0.18 0.02 120);

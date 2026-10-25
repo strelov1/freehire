@@ -14,6 +14,13 @@
   * {
     @apply border-border outline-ring;
   }
+  /* Tailwind's preflight greys placeholders out to half the text colour, which measured
+     3.8:1 against the page. A placeholder is text a reader has to make out, so it takes
+     the muted token like any other secondary text. */
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-muted-foreground;
+  }
   html,
   body {
     height: 100%;

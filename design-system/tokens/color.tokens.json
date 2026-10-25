@@ -74,8 +74,8 @@
     "$description": "Default border color."
   },
   "input": {
-    "$value": "oklch(0.93 0 0)",
-    "$description": "Input border/fill color."
+    "$value": "oklch(0.66 0 0)",
+    "$description": "Input border/fill color. Dark enough (3.1:1 on the page and on cards) that a field's edge identifies it as a control (WCAG 1.4.11); at 0.93 it measured 1.2:1 and empty fields vanished into the page."
   },
   "ring": {
     "$value": "{brand}",
