@@ -30,9 +30,9 @@
 
 ## 6. HTTP API
 
-- [ ] 6.1 `internal/api/handler/buddies.go`: `/api/v1/me/buddies` routes (membership, profile, similar, feed, hidden jobs, conversations, messages, read, accept/decline, block, report), cookie-only `RequireAuth`, error mapping (400/403/404/409/429), response shapes (integration tests incl. 401 without session)
-- [ ] 6.2 Moderator routes `GET /moderation/buddy-reports`, `POST /moderation/buddy-reports/:id/resolve` behind the existing moderator gate (integration test: non-moderator 403)
-- [ ] 6.3 Update `web/static/openapi.yaml` only if these routes belong to the documented surface (check how referrals are treated; skip with a note otherwise)
+- [x] 6.1 `internal/api/handler/buddies.go`: `/api/v1/me/buddies` routes (membership, profile, similar, feed, hidden jobs, conversations, messages, read, accept/decline, block, report), cookie-only `RequireAuth`, error mapping (400/403/404/409/429), response shapes (integration tests incl. 401 without session)
+- [x] 6.2 Moderator routes `GET /moderation/buddy-reports`, `POST /moderation/buddy-reports/:id/resolve` behind the existing moderator gate (integration test: non-moderator 403)
+- [x] 6.3 Update `web/static/openapi.yaml` only if these routes belong to the documented surface (check how referrals are treated; skip with a note otherwise)
 
 ## 7. Notifications worker
 

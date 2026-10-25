@@ -39,7 +39,7 @@ The card is projected from `resume_structured` on every read with `talentnetwork
 Ranking needs the category and geography in SQL, so `buddy_members` stores `category text`, `countries text[]`, `regions text[]`:
 - `category` = `classify.Parse(talentnetwork.PrimaryTitle(cv)).Category`, falling back to the first `user_profiles.specializations` entry.
 - `countries`/`regions` = `users.resume_countries/regions`, falling back to the profile's base country.
-These are recomputed on join and whenever the member opens any buddy endpoint (`Service.touch`), which is cheap and keeps active members current. A member who never visits keeps older keys; they are also the member least affected.
+These are recomputed on join and whenever the member loads their buddy status (`GET /me/buddies`, the call the web client makes on entering the section; `Service.Touch`), which is cheap and keeps active members current. No other route touches: the chat polls every few seconds and a write per poll would be wrong. A member who never visits keeps older keys; they are also the member least affected.
 *Alternative:* compute everything in Go over all members. Rejected: it scans the whole membership on every request.
 
 ### D4. Similarity in one SQL query
