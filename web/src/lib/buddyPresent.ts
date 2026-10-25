@@ -4,14 +4,14 @@ import { talentHeading } from '#lib/talentCard.js';
 // members share. Pure and `$app`-free, so every surface showing a member (feed, similar
 // list, conversation rows, the member page) words them the same way.
 
+export const BUDDY_HEADING_FALLBACK = 'Member';
+
 /** A member's heading: the same dictionary heading the Talent Network shows ("Senior
  *  Backend"), never the handle. A member whose card resolves neither value reads as
  *  "Member" — the handle still sits beside it. */
 export function buddyHeading(summary: { seniority?: string; category?: string }): string {
   return talentHeading(summary.seniority || undefined, summary.category || undefined, BUDDY_HEADING_FALLBACK);
 }
-
-export const BUDDY_HEADING_FALLBACK = 'Member';
 
 /** Today's calendar day in the viewer's own zone, as YYYY-MM-DD. */
 export function localDay(now: Date = new Date()): string {

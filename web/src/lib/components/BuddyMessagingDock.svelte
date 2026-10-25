@@ -12,6 +12,7 @@
   import BuddyConversationRow from './BuddyConversationRow.svelte';
   import BuddyIdentity from './BuddyIdentity.svelte';
   import BuddyInviteDialog from './BuddyInviteDialog.svelte';
+  import BuddyUnreadBadge from './BuddyUnreadBadge.svelte';
 
   // The interview-buddies messaging dock: a bar in the bottom-right corner that unfolds
   // into the conversation list, with up to two chat windows beside it. Mounted once by the
@@ -186,7 +187,7 @@
               onclick={() => toggle(w)}
             >
               {#if c.former_member}<span class="truncate">{name}</span>{:else}<BuddyIdentity handle={c.other.handle} summary={c.other.card_summary} size="sm" link={false} />{/if}
-              {#if w.minimized && c.unread}<span class="shrink-0 rounded-full bg-brand px-2 text-xs text-brand-foreground">{c.unread}<span class="sr-only"> unread</span></span>{/if}
+              {#if w.minimized}<BuddyUnreadBadge count={c.unread} />{/if}
             </button>
             <button
               type="button"
@@ -231,7 +232,7 @@
         <span class="flex items-center gap-2">
           <MessageSquare class="size-4" aria-hidden="true" />
           Messaging
-          {#if unread}<span class="rounded-full bg-brand px-2 text-xs text-brand-foreground">{unread}<span class="sr-only"> unread</span></span>{/if}
+          <BuddyUnreadBadge count={unread} />
         </span>
         {#if buddyDock.expanded}<ChevronDown class="size-4" aria-hidden="true" />{:else}<ChevronUp class="size-4" aria-hidden="true" />{/if}
       </button>

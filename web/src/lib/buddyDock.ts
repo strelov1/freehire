@@ -104,6 +104,11 @@ export function mobileSheetId(windows: readonly DockWindow[]): number | null {
   return null;
 }
 
+/** Bars stacked in the corner on a narrow screen: the list bar plus one per minimized window. */
+function stackedBars(windows: readonly DockWindow[]): number {
+  return 1 + windows.filter((w) => w.minimized).length;
+}
+
 /** The bottom padding the page reserves so the dock's bars never cover its last line: one
  *  row on a wide screen (the bars sit side by side), and on a narrow one the list bar plus
  *  a row per minimized window stacked above it. Empty when the dock is not shown;
@@ -112,7 +117,7 @@ export function mobileSheetId(windows: readonly DockWindow[]): number | null {
 export function dockReserveClass(shown: boolean, wideOnly: boolean, windows: readonly DockWindow[]): string {
   if (!shown) return '';
   if (wideOnly) return 'lg:pb-12';
-  const rows = 1 + windows.filter((w) => w.minimized).length;
+  const rows = stackedBars(windows);
   if (rows >= 3) return 'pb-44 sm:pb-12';
   if (rows === 2) return 'pb-28 sm:pb-12';
   return 'pb-12';
@@ -120,7 +125,7 @@ export function dockReserveClass(shown: boolean, wideOnly: boolean, windows: rea
 
 /** How high the support toast rises to clear the dock's bars, by the same row count. */
 export function dockToastOffsetClass(windows: readonly DockWindow[]): string {
-  const rows = 1 + windows.filter((w) => w.minimized).length;
+  const rows = stackedBars(windows);
   if (rows >= 3) return 'bottom-48 sm:bottom-16';
   if (rows === 2) return 'bottom-32 sm:bottom-16';
   return 'bottom-16';
