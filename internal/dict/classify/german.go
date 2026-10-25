@@ -456,10 +456,10 @@ var germanFillerPhrases = []string{
 	"referentin der geschäftsführung",
 }
 
-// genderMarker is the bracketed gender notice German titles carry — "(m/w/d)",
-// "(w|m|d)", "(m/w)". It is cut before the German match so that it cannot split a
+// genderMarker is the bracketed gender notice German and Dutch titles carry —
+// "(m/w/d)", "(w|m|d)", "(m/v/x)", "(v/m)". It is cut before the German match so that it cannot split a
 // phrase: "Assistenz (m/w) der Geschäftsführung" is still that phrase.
-var genderMarker = regexp.MustCompile(`\(\s*[mwdfx](?:\s*[/|,·]\s*[mwdfx])+\s*\)`)
+var genderMarker = regexp.MustCompile(`\(\s*[mwdfxv](?:\s*[/|,·]\s*[mwdfxv])+\s*\)`)
 
 // assistantOfLead is the assistant OF a lead — "Assistenz der Lagerleitung",
 // "Assistent:in der Abteilungsleitung", "Assistenz Projektleitung" — which states no
@@ -477,11 +477,12 @@ func foldGermanSeniority(lower string) string {
 	return assistantOfLead.ReplaceAllString(lower, " ")
 }
 
-// matchGerman resolves an already-lowercased title against a German table: the first
+// matchHeads resolves an already-lowercased title against a head table (German, or
+// Dutch in dutch.go): the first
 // entry (in table order) that is a whole-word phrase of the title or the resolved head
 // of one of its words. A word resolves to the first head it ends in, so a veto entry
 // claims the word and contributes nothing. categoryNone is served as "".
-func matchGerman(lower string, table []aliasEntry) string {
+func matchHeads(lower string, table []aliasEntry) string {
 	lower = strings.Join(strings.Fields(genderMarker.ReplaceAllString(lower, " ")), " ")
 	resolved := map[int]bool{}
 	for _, w := range strings.FieldsFunc(lower, func(r rune) bool { return !unicode.IsLetter(r) && r != '-' }) {

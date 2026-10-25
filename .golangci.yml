@@ -205,6 +205,16 @@ linters:
         - manipulant
         - omre
         - proces
+        # Dutch title vocabulary (internal/dict/classify/dutch.go).
+        - administratief
+        - adviseur
+        - communicatie
+        - informatie
+        - infrastructuur
+        - productie
+        - produktion
+        - programmeur
+        - psycholoog
 
 formatters:
   enable:

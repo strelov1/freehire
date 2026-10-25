@@ -1,6 +1,6 @@
 // Package classify derives a job's seniority and role category deterministically
 // from its title. It is a curated dictionary, not a model: it resolves known
-// English, Russian and German title terms and emits nothing for what it cannot resolve
+// English, Russian, German and Dutch title terms and emits nothing for what it cannot resolve
 // (it never guesses). Canonical values are drawn from the same controlled
 // vocabularies the enrichment contract defines (vocab.SeniorityValues /
 // vocab.CategoryValues), so the parser, the enrichment payload, and the search
@@ -47,8 +47,12 @@ func matchCategory(lower string) string {
 	lower = ptGenderSuffix.Replace(lower)
 	c := matchOrdered(lower, categoryTable)
 	if c == "" {
-		// Nothing in the main table: try the German compound heads (german.go).
-		return matchGerman(lower, germanCategoryTable)
+		// Nothing in the main table: try the German compound heads (german.go),
+		// then the Dutch ones (dutch.go).
+		if c := matchHeads(lower, germanCategoryTable); c != "" {
+			return c
+		}
+		return matchHeads(lower, dutchCategoryTable)
 	}
 	if c == categoryNone {
 		return ""
@@ -73,8 +77,12 @@ func matchSeniority(lower string) string {
 	if s := matchOrdered(lower, seniorityTable); s != "" {
 		return s
 	}
-	// Nothing in the main table: try the German grade words and heads (german.go).
-	return matchGerman(foldGermanSeniority(lower), germanSeniorityTable)
+	// Nothing in the main table: try the German grade words and heads (german.go),
+	// then the Dutch ones (dutch.go).
+	if s := matchHeads(foldGermanSeniority(lower), germanSeniorityTable); s != "" {
+		return s
+	}
+	return matchHeads(foldDutchSeniority(lower), dutchSeniorityTable)
 }
 
 // Categories resolves every category the text mentions — each alias that occurs as a

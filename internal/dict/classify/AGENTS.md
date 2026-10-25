@@ -227,6 +227,28 @@ The title's invisible format characters (U+00AD soft hyphens above all) are cut 
 `normalize.CleanTitle` inside `jobderive.Derive`, for the dictionaries only — the
 stored title and the public slug keep what the source sent.
 
+## Dutch compound heads
+
+Dutch builds role names the same way (servicedesk|medewerker, wijk|verpleegkundige),
+so `dutch.go` holds `dutchCategoryTable` and `dutchSeniorityTable` with the same alias
+syntax and the same matcher (`matchHeads`). They run after the main AND the German
+tables resolved nothing. Generic heads that name no trade — `medewerker`, `adviseur`,
+`coördinator`, `specialist` — are absent; only the compound or phrase that names the
+trade resolves ("magazijnmedewerker", "HR adviseur"). `medior` is `middle`. A plain
+`directeur` states no grade, as the main table's "director" does; `algemeen directeur`,
+`directeur-bestuurder` and the CFO/CTO-style `financieel/technisch directeur` are
+`c_level`.
+
+Because the fallback also sees English, French and German titles, `stage` is a whole
+word only — as a tail it read German "Urlaubstage" and "Justage" — and its English uses
+(Stage Manager, Late Stage, Stage II, DataStage) are vetoed; `-kok` vetoes "Bangkok".
+
+Measured 2026-10-25 over 42,176 open Dutch postings (eures, recruitee, whatjobs-nl;
+`jobderive.Derive` on title, location and description only): category 54.9% → 72.8%,
+seniority 22.0% → 27.4%. Over 542k control titles (greenhouse, lever, smartrecruiters,
+workday, the German crawl) the Dutch tables resolved 2,814 categories and 2,149 grades,
+hand-checked: almost all are Dutch, Flemish or French postings read correctly.
+
 ## Serving: dict-only
 
 `jobview.FromRow` overwrites the nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM's value is never a fallback. They remain **nested under `enrichment`** so existing search facets, SPA, and generated contracts are unchanged.
