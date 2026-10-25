@@ -46,9 +46,11 @@ const (
 	instahyreRequestInterval = time.Second
 	instahyreRequestBurst    = 1
 	instahyreDetailWorkers   = 2
-	// instahyreDetailBudget bounds one run's page reads (~17 minutes at the pace above, beside
-	// the ~365 search pages of a full walk). A cold start is ~12.7k pages, ~13 runs.
-	instahyreDetailBudget = 1000
+	// instahyreDetailBudget bounds one run's page reads (~10 minutes at the pace above). The
+	// ~365 search pages of a full walk answer in ~3 s each (61 pages took 183 s), ~18 minutes, and
+	// both must fit the scheduler's default 2,400 s crawl budget. A cold start is ~12.7k pages,
+	// ~21 runs.
+	instahyreDetailBudget = 600
 )
 
 // instahyreBoards are the company-size buckets the search accepts; anything else answers 400
