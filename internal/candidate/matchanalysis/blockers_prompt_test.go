@@ -63,15 +63,15 @@ func TestStage1PromptCarriesUnmetBlockers(t *testing.T) {
 		JobTitle:       "Senior Engineer",
 		JobDescription: "desc",
 		Blockers: []hardconstraint.Blocker{
-			{Category: hardconstraint.CategoryExperience, Reason: "Requires 5+ years; résumé shows 3.", Met: false},
-			{Category: hardconstraint.CategoryEducation, Reason: "Requires a bachelor degree; résumé meets it.", Met: true},
+			{Category: hardconstraint.CategoryExperience, Reason: "Requires 5+ years; CV shows 3.", Met: false},
+			{Category: hardconstraint.CategoryEducation, Reason: "Requires a bachelor degree; CV meets it.", Met: true},
 		},
 	}
 	p := stage1UserPrompt(in, candidateContext(in.StructuredResume))
-	if !strings.Contains(p, "Requires 5+ years; résumé shows 3.") {
+	if !strings.Contains(p, "Requires 5+ years; CV shows 3.") {
 		t.Error("stage-1 prompt should carry the unmet experience blocker")
 	}
-	if strings.Contains(p, "résumé meets it") {
+	if strings.Contains(p, "CV meets it") {
 		t.Error("stage-1 prompt should NOT list a met constraint")
 	}
 }

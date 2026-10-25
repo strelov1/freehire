@@ -251,7 +251,7 @@
         {
           "name": "variant",
           "type": "ButtonVariant",
-          "default": "primary",
+          "default": "cta",
           "description": "Passed straight to the confirm button. Reserve 'destructive' the way Button itself does — the action that destroys something and cannot be undone, not every removal."
         },
         {

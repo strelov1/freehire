@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Globe, RotateCcw } from '@lucide/svelte';
-  import { Button, Chip, Dialog, SectionLabel } from '#lib/ui/index.js';
+  import { Button, Dialog } from '#lib/ui/index.js';
   import { api } from '#lib/api.js';
   import { dynamicLabel } from '#lib/facets.js';
   import { loadCityTable } from '#lib/geoCities.js';
@@ -124,6 +124,16 @@
   // A posting listing two cities counts in both, so the sum can pass the country's total.
   const placed = $derived(Math.min(countryTotal, cityPlaces.reduce((n, c) => n + c.count, 0)));
 
+  const maxCount = $derived(Math.max(1, ...places.slice(0, 10).map((p) => p.count)));
+  // The dialog's subtitle: how much is on the map, for the place in focus when there is one.
+  const summary = $derived.by(() => {
+    if (total === null) return undefined;
+    if (focusCountry) {
+      return format(plural(loc, total, s.summaryIn), { count: fmt(total), country: dynamicLabel('countries', focusCountry) });
+    }
+    return format(plural(loc, total, s.summary), { count: fmt(total), places: fmt(countryPlaces.length) });
+  });
+
   function pick(place: MapPlace) {
     // `kind:value`; a city name may itself hold a colon, so split at the first one only.
     const sep = place.key.indexOf(':');
@@ -161,25 +171,13 @@
   }
 </script>
 
-<Dialog bind:open title={s.title} class="sm:max-w-6xl">
+<Dialog bind:open title={s.title} description={summary} class="sm:max-w-6xl">
   {#if open}
-    <div class="flex flex-col gap-3">
-      <!-- The way back to the list sits in the header row on every width: the map below
-           takes whatever height is left, and nothing may push this out of view. -->
-      <div class="flex items-center justify-between gap-3">
-        <SectionLabel
-          class="min-w-0 truncate"
-          text={focusCountry ? format(s.jobsIn, { country: dynamicLabel('countries', focusCountry) }) : s.whereJobsAre}
-        />
-        <Button variant="primary" class="shrink-0" onclick={() => (open = false)}>
-          <!-- No figure while the map catches up with a click: the count from before it
-               would describe a list that is no longer the one behind the dialog. -->
-          {total === null || loading || failed
-            ? s.showJobsPending
-            : format(plural(loc, total, s.showJobs), { count: fmt(total) })}
-        </Button>
-      </div>
-
+    <!-- Top to bottom: the controls that change what is counted, the map, the busiest
+         places as a list (each a filter), and the way back to the list pinned to the
+         bottom edge so it never scrolls out of reach. On a phone the list is what fills
+         the sheet; centring a short map in it left the screen mostly empty. -->
+    <div class="flex flex-col gap-4">
       <div class="flex flex-wrap items-center gap-2">
         {#if countries.length || cities.length}
           <Button variant="outline" size="sm" onclick={worldView}>
@@ -211,17 +209,40 @@
         </span>
       </div>
 
-      <BubbleMap {places} label={s.mapAria} onpick={pick} busy={loading} class="max-h-96" />
+      <BubbleMap {places} label={s.mapAria} onpick={pick} busy={loading} class="sm:max-h-96" />
 
-      <!-- One line that scrolls sideways, so a long list never pushes the dialog into a
-           scroll. Built from what the map draws, so a city list holds only cities in the
-           focus country. -->
-      <div class="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" role="group" aria-label={s.busiestPlaces}>
-        {#each places.slice(0, 10) as place (place.key)}
-          <button type="button" class="shrink-0 rounded-full" onclick={() => pick(place)}>
-            <Chip class="whitespace-nowrap">{place.label} · {fmt(place.count)}</Chip>
-          </button>
-        {/each}
+      <!-- The busiest places as rows with their share drawn as a bar, built from what the
+           map draws, so a city list holds only cities in the focus country. Two columns
+           where there is room. -->
+      {#if places.length}
+        <ul class="grid gap-x-6 sm:grid-cols-2" aria-label={s.busiestPlaces}>
+          {#each places.slice(0, 10) as place (place.key)}
+            <li class="border-b border-border last:border-b-0 sm:[&:nth-last-child(2)]:border-b-0">
+              <button
+                type="button"
+                class="flex w-full items-center gap-3 py-2.5 text-left text-sm transition-colors hover:text-brand-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`${place.label} · ${fmt(place.count)}`}
+                onclick={() => pick(place)}
+              >
+                <span class="min-w-0 flex-1 truncate">{place.label}</span>
+                <span class="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                  <span class="block h-full rounded-full bg-brand" style:width="{(place.count / maxCount) * 100}%"></span>
+                </span>
+                <span class="w-14 shrink-0 text-right tabular-nums text-muted-foreground">{fmt(place.count)}</span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
+      <div class="sticky bottom-0 -mx-6 -mb-6 mt-2 border-t border-border bg-card px-6 py-4 pb-safe sm:flex sm:justify-end">
+        <Button variant="cta" size="lg" class="w-full sm:w-auto" onclick={() => (open = false)}>
+          <!-- No figure while the map catches up with a click: the count from before it
+               would describe a list that is no longer the one behind the dialog. -->
+          {total === null || loading || failed
+            ? s.showJobsPending
+            : format(plural(loc, total, s.showJobs), { count: fmt(total) })}
+        </Button>
       </div>
     </div>
   {/if}

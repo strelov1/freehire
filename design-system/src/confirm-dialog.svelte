@@ -11,8 +11,8 @@
     cancelLabel = 'Cancel',
     // 'destructive' is the filled red button — reserve it the way Button itself
     // does: the action that destroys something and cannot be undone, not every
-    // removal. A reversible one reads better as 'primary'.
-    variant = 'primary',
+    // removal. A reversible one gets the framed brand `cta`, the dialog's one action.
+    variant = 'cta',
     onConfirm,
     children,
   }: {
@@ -68,10 +68,12 @@
     <p class="mt-3 text-sm text-destructive">{error}</p>
   {/if}
   <div class="mt-5 flex items-center justify-end gap-2">
-    <Button variant="ghost" size="sm" disabled={busy} onclick={() => (open = false)}>
+    <!-- md, not sm: the two buttons are the whole point of the dialog, and a bare ghost
+         Cancel read as a stray word beside the confirm. -->
+    <Button variant="outline" disabled={busy} onclick={() => (open = false)}>
       {cancelLabel}
     </Button>
-    <Button {variant} size="sm" disabled={busy} onclick={confirm}>
+    <Button {variant} disabled={busy} onclick={confirm}>
       {busy ? `${confirmLabel}…` : confirmLabel}
     </Button>
   </div>

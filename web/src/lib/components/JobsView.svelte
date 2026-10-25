@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { ArrowRight, ChevronDown, Layers, Map as MapIcon } from '@lucide/svelte';
+  import { ArrowRight, ChevronDown, Layers, Map as MapIcon, Sparkles } from '@lucide/svelte';
   import { browser } from '$app/env';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -834,40 +834,39 @@
       <!-- `my-4`, not the nudges' `mt-3`: the feed below sets no top margin of its own,
            so a block sitting between the toolbar and the first job row has to carry the
            air on BOTH sides or it reads as glued to the list. -->
+      <!-- Laid out like the feed nudges above (icon tile, text, action), and worded as
+           what the visitor gets rather than what the sort is missing. -->
       <div
         role="status"
-        class="my-4 rounded-xl border border-brand/30 bg-brand/5 p-4 text-sm sm:p-5"
+        class="my-4 flex flex-col gap-4 rounded-xl border border-brand/30 bg-brand/5 p-4 sm:flex-row sm:items-center sm:p-5"
       >
-        <p class="font-medium text-foreground">Sorted by match needs to know about you</p>
-        <p class="mt-1 text-muted-foreground">
-          We rank these against your own skills, and we don't have them yet. Showing the
-          newest first for now.
-        </p>
-        <!-- The way out of this state is the whole point of the notice, so it is a
-             centred solid button rather than a link trailing the paragraph — the same
-             shape "Broaden search" uses below for the same kind of one-way-out. -->
-        <div class="mt-4 flex justify-center">
-          {#if isAuthenticated()}
-            <a
-              href={resolve('/my/profile')}
-              class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
-            >
-              Add your CV or skills
-              <ArrowRight class="size-4" aria-hidden="true" />
-            </a>
-          {:else}
-            <!-- Signed out there is no profile to fill in yet, so the first step is the
-                 account that would hold one. -->
-            <button
-              type="button"
-              onclick={() => promptSignIn()}
-              class="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
-            >
-              Sign in to add your CV
-              <ArrowRight class="size-4" aria-hidden="true" />
-            </button>
-          {/if}
+        <div class="flex min-w-0 flex-1 items-start gap-3">
+          <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-muted text-brand-strong" aria-hidden="true">
+            <Sparkles class="size-5" />
+          </span>
+          <div class="min-w-0">
+            <p class="font-semibold text-foreground">See your best matches first</p>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Add your skills or CV and every job is ranked by how well it fits you. Until
+              then, the newest jobs come first.
+            </p>
+          </div>
         </div>
+        <!-- The way out of this state is the whole point of the notice, so it is the
+             framed call to action rather than a link trailing the paragraph. -->
+        {#if isAuthenticated()}
+          <Button variant="cta" href={resolve('/my/profile')} class="w-full shrink-0 sm:w-auto">
+            Add your CV
+            <ArrowRight class="size-4" aria-hidden="true" />
+          </Button>
+        {:else}
+          <!-- Signed out there is no profile to fill in yet, so the first step is the
+               account that would hold one. -->
+          <Button variant="cta" onclick={() => promptSignIn()} class="w-full shrink-0 sm:w-auto">
+            Sign in to see your matches
+            <ArrowRight class="size-4" aria-hidden="true" />
+          </Button>
+        {/if}
       </div>
     {/if}
 

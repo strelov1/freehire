@@ -265,7 +265,15 @@
 
   // Apply-intent — fired regardless of auth, the same event and shape the job page's own
   // Apply button fires (JobView.svelte), so the funnel stays comparable across surfaces.
-  function onApplyClick() {
+  // Applying is for signed-in visitors, like saving: a signed-out click goes to sign-in
+  // (back to this list afterwards) instead of out to the employer's site, so the
+  // application lands on a board that can track it.
+  function onApplyClick(e: MouseEvent) {
+    if (!isAuthenticated()) {
+      e.preventDefault();
+      promptSignIn();
+      return;
+    }
     if (applyJob) track('job_apply', { slug: applyJob.public_slug, source: applyJob.source });
   }
 </script>
@@ -614,7 +622,9 @@
             target="_blank"
             rel="nofollow noopener noreferrer"
             onclick={onApplyClick}
-            aria-label="Apply to {job.title} on the employer's site (opens in a new tab)"
+            aria-label={isAuthenticated()
+              ? `Apply to ${job.title} on the employer's site (opens in a new tab)`
+              : `Sign in to apply to ${job.title}`}
             class="h-9 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
           >
             <ExternalLink class="size-4" aria-hidden="true" />

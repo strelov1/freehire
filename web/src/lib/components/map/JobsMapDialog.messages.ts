@@ -4,8 +4,8 @@ export const messages = defineMessages(
   {
     title: 'Jobs on the map',
     mapAria: 'Map of where the matching jobs are',
-    whereJobsAre: 'where the jobs are',
-    jobsIn: 'jobs in {country}',
+    summary: plurals({ one: '{count} job in {places} countries', other: '{count} jobs in {places} countries' }),
+    summaryIn: plurals({ one: '{count} job in {country}', other: '{count} jobs in {country}' }),
     showJobs: plurals({ one: 'Show {count} job', other: 'Show {count} jobs' }),
     showJobsPending: 'Show jobs',
     worldView: 'World view',
@@ -20,8 +20,18 @@ export const messages = defineMessages(
     ru: {
       title: 'Вакансии на карте',
       mapAria: 'Карта мест, где находятся подходящие вакансии',
-      whereJobsAre: 'где вакансии',
-      jobsIn: 'вакансии: {country}',
+      summary: plurals({
+        one: '{count} вакансия в {places} странах',
+        few: '{count} вакансии в {places} странах',
+        many: '{count} вакансий в {places} странах',
+        other: '{count} вакансии в {places} странах',
+      }),
+      summaryIn: plurals({
+        one: '{count} вакансия: {country}',
+        few: '{count} вакансии: {country}',
+        many: '{count} вакансий: {country}',
+        other: '{count} вакансии: {country}',
+      }),
       showJobs: plurals({
         one: 'Показать {count} вакансию',
         few: 'Показать {count} вакансии',

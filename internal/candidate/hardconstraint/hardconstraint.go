@@ -102,7 +102,7 @@ func appendExperience(out []Blocker, job JobRequirements, cv CVEvidence) []Block
 	}
 	need := *job.ExperienceYearsMin
 	met := cv.TotalYears >= need
-	reason := fmt.Sprintf("Requires %d+ years; résumé shows %d.", need, cv.TotalYears)
+	reason := fmt.Sprintf("Requires %d+ years; CV shows %d.", need, cv.TotalYears)
 	action := fmt.Sprintf("Confirm you have %d+ years of relevant experience before applying; do not overstate it.", need)
 	return append(out, blocker(CategoryExperience, met, reason, action))
 }
@@ -120,9 +120,9 @@ func appendEducation(out []Blocker, job JobRequirements, cv CVEvidence) []Blocke
 		return out
 	}
 	met := best >= needRank
-	reason := fmt.Sprintf("Requires a %s degree; résumé's highest is lower.", job.EducationLevel)
+	reason := fmt.Sprintf("Requires a %s degree; CV's highest is lower.", job.EducationLevel)
 	if met {
-		reason = fmt.Sprintf("Requires a %s degree; résumé meets it.", job.EducationLevel)
+		reason = fmt.Sprintf("Requires a %s degree; CV meets it.", job.EducationLevel)
 	}
 	action := fmt.Sprintf("Only claim a %s degree if you actually hold one.", job.EducationLevel)
 	return append(out, blocker(CategoryEducation, met, reason, action))
@@ -161,7 +161,7 @@ func appendLanguage(out []Blocker, job JobRequirements, cv CVEvidence) []Blocker
 	if job.EnglishLevel == "" || !mentionsEnglish(cv.Languages) {
 		return out
 	}
-	reason := fmt.Sprintf("Requires English (%s); résumé lists English.", job.EnglishLevel)
+	reason := fmt.Sprintf("Requires English (%s); CV lists English.", job.EnglishLevel)
 	action := "Be ready to demonstrate the required English level; do not overstate fluency."
 	return append(out, blocker(CategoryLanguage, true, reason, action))
 }
@@ -175,7 +175,7 @@ func appendWorkAuth(out []Blocker, job JobRequirements, cv CVEvidence) []Blocker
 	if containsCountry(job.Countries, cv.CountryCode) {
 		return out
 	}
-	reason := fmt.Sprintf("No visa sponsorship and the role is in %s; your résumé location is outside it.", strings.Join(job.Countries, ", "))
+	reason := fmt.Sprintf("No visa sponsorship and the role is in %s; your CV location is outside it.", strings.Join(job.Countries, ", "))
 	action := "Confirm you already have the right to work there; the role does not sponsor a visa."
 	return append(out, blocker(CategoryWorkAuth, false, reason, action))
 }
@@ -201,7 +201,7 @@ func appendLocationWorkMode(out []Blocker, job JobRequirements, cv CVEvidence) [
 	}
 	// A geographic mismatch needs both known country codes.
 	if onSite && len(job.Countries) > 0 && cv.CountryCode != "" && !containsCountry(job.Countries, cv.CountryCode) {
-		reason := fmt.Sprintf("%s in %s; your résumé location is elsewhere.", label, strings.Join(job.Countries, ", "))
+		reason := fmt.Sprintf("%s in %s; your CV location is elsewhere.", label, strings.Join(job.Countries, ", "))
 		action := "Confirm you can be on-site there (relocation or local presence)."
 		return append(out, blocker(CategoryLocationWorkMode, false, reason, action))
 	}

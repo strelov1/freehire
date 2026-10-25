@@ -89,7 +89,9 @@ describe('JobRow direct-apply button', () => {
   it('names the job it applies to, and which of the two destinations it is', () => {
     // A feed holds twenty "Apply" buttons; a name without the job is twenty identical
     // entries in a screen reader's control list.
-    expect(applyBlock).toContain(`aria-label="Apply to {job.title} on the employer's site (opens in a new tab)"`);
+    expect(applyBlock).toContain("`Apply to ${job.title} on the employer's site (opens in a new tab)`");
+    // Signed out, the same button leads to sign-in, and says so.
+    expect(applyBlock).toContain('`Sign in to apply to ${job.title}`');
     const i = actionRow.indexOf('{#if directApply}');
     const block = i === -1 ? '' : actionRow.slice(i, actionRow.indexOf('{/if}', i));
     expect(block).toContain('aria-label="Apply to {job.title}"');
