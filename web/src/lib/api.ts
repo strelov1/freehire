@@ -149,6 +149,12 @@ import type {
   ExperienceEmployment,
   ApiSuggestion,
   BankedAnswer,
+  BuddyStatus,
+  BuddySimilar,
+  BuddyFeedItem,
+  BuddyConversation,
+  BuddyMessage,
+  BuddyReport,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -2401,6 +2407,52 @@ export function createApi(
     await call(`/api/v1/me/referrals/offers/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
+  // ── Interview buddies ────────────────────────────────────────────────────
+  async function buddyStatus(): Promise<BuddyStatus> { return requestData('/api/v1/me/buddies'); }
+  async function joinBuddies(): Promise<BuddyStatus> { return requestData('/api/v1/me/buddies', { method: 'POST' }); }
+  async function leaveBuddies(): Promise<void> { await call('/api/v1/me/buddies', { method: 'DELETE' }); }
+  async function listBuddySimilar(limit = 20, offset = 0): Promise<BuddySimilar[]> {
+    return requestData(`/api/v1/me/buddies/similar?limit=${limit}&offset=${offset}`);
+  }
+  async function listBuddyFeed(mode: 'similar' | 'all', cursor?: string, limit = 30): Promise<{ data: BuddyFeedItem[]; meta: { next_cursor: string | null } }> {
+    const q = new URLSearchParams({ mode, limit: String(limit) });
+    if (cursor) q.set('cursor', cursor);
+    return request<{ data: BuddyFeedItem[]; meta: { next_cursor: string | null } }>(`/api/v1/me/buddies/feed?${q}`);
+  }
+  async function getBuddyProfile(handle: string): Promise<{ handle: string; card: Record<string, unknown>; card_empty: boolean }> {
+    return requestData(`/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}`);
+  }
+  async function listBuddyHiddenApplications(): Promise<number[]> { return requestData('/api/v1/me/buddies/hidden-applications'); }
+  async function setBuddyApplicationHidden(id: string, hidden: boolean): Promise<void> {
+    await call(`/api/v1/me/buddies/hidden-applications/${encodeURIComponent(id)}`, { method: hidden ? 'PUT' : 'DELETE' });
+  }
+  async function listBuddyConversations(): Promise<BuddyConversation[]> { return requestData('/api/v1/me/buddies/conversations'); }
+  async function inviteBuddy(handle: string, body: string): Promise<BuddyConversation> {
+    return requestData('/api/v1/me/buddies/conversations', jsonBody('POST', { handle, body }));
+  }
+  async function decideBuddyInvitation(id: number, action: 'accept' | 'decline'): Promise<BuddyConversation> {
+    return requestData(`/api/v1/me/buddies/conversations/${id}/${action}`, jsonBody('POST', {}));
+  }
+  async function blockBuddyConversation(id: number): Promise<void> { await call(`/api/v1/me/buddies/conversations/${id}/block`, { method: 'POST' }); }
+  async function reportBuddyConversation(id: number, reason: BuddyReport['reason'], note: string): Promise<void> {
+    await call(`/api/v1/me/buddies/conversations/${id}/report`, jsonBody('POST', { reason, note }));
+  }
+  async function listBuddyMessages(id: number, after?: number): Promise<BuddyMessage[]> {
+    const q = after ? `?after=${after}` : '';
+    return requestData(`/api/v1/me/buddies/conversations/${id}/messages${q}`);
+  }
+  async function sendBuddyMessage(id: number, body: string): Promise<BuddyMessage> {
+    return requestData(`/api/v1/me/buddies/conversations/${id}/messages`, jsonBody('POST', { body }));
+  }
+  async function markBuddyRead(id: number, upTo: number): Promise<void> {
+    await call(`/api/v1/me/buddies/conversations/${id}/read`, jsonBody('POST', { up_to: upTo }));
+  }
+  async function listBuddyReports(limit = 30, offset = 0, includeResolved = false): Promise<BuddyReport[]> {
+    const q = new URLSearchParams({ limit: String(limit), offset: String(offset), include_resolved: String(includeResolved) });
+    return requestData(`/api/v1/moderation/buddy-reports?${q}`);
+  }
+  async function resolveBuddyReport(id: number): Promise<void> { await call(`/api/v1/moderation/buddy-reports/${id}/resolve`, jsonBody('POST', {})); }
+
   /** The referrer inbox: open requests for the companies the caller is approved for. */
   async function listIncomingReferrals(): Promise<IncomingReferralRequest[]> {
     return requestData<IncomingReferralRequest[]>('/api/v1/me/referrals/incoming');
@@ -3376,6 +3428,24 @@ export function createApi(
     withdrawReferralOffer,
     listIncomingReferrals,
     resolveReferral,
+    buddyStatus,
+    joinBuddies,
+    leaveBuddies,
+    listBuddySimilar,
+    listBuddyFeed,
+    getBuddyProfile,
+    listBuddyHiddenApplications,
+    setBuddyApplicationHidden,
+    listBuddyConversations,
+    inviteBuddy,
+    decideBuddyInvitation,
+    blockBuddyConversation,
+    reportBuddyConversation,
+    listBuddyMessages,
+    sendBuddyMessage,
+    markBuddyRead,
+    listBuddyReports,
+    resolveBuddyReport,
     referralCvUrl,
     listPendingReferralOffers,
     decideReferralOffer,

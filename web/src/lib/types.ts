@@ -1139,6 +1139,15 @@ export interface TrackedApplication {
   auto_apply?: AutoApplyReviewInfo;
 }
 
+export interface BuddySummary { category: string; seniority: string; country: string }
+export interface BuddyCompany { slug: string; name: string }
+export interface BuddyStatus { member: boolean; handle?: string; card_empty: boolean }
+export interface BuddySimilar { handle: string; card_summary: BuddySummary; score: number; shared_companies: BuddyCompany[] }
+export interface BuddyFeedItem { id: number; handle: string; card_summary: BuddySummary; company: BuddyCompany; job_title: string | null; type: 'applied' | 'interview' | 'offer'; day: string }
+export interface BuddyConversation { id: number; other: { handle: string; card_summary: BuddySummary }; former_member: boolean; status_for_me: 'incoming' | 'outgoing' | 'open' | 'closed'; unread: number; last_message_at: string | null; created_at: string }
+export interface BuddyMessage { id: number; mine: boolean; body: string; created_at: string }
+export interface BuddyReport { id: number; conversation_id: number; reason: 'spam' | 'harassment' | 'scam' | 'other'; note: string; created_at: string; resolved_at: string | null; reporter_handle: string; reported_handle: string; messages: { id?: number; sender_handle: string; body: string; created_at: string }[] }
+
 /** The assembled follow-up message for a silent application. Deterministic and
  *  template-built server-side — no model, no allowance. `recipient` is present only
  *  when linked mail supplied an address; an unanswered application (the commonest

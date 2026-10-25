@@ -42,14 +42,14 @@
 
 ## 8. Web
 
-- [ ] 8.1 `api.ts` client methods + types for every buddy route
-- [ ] 8.2 `/my/buddies` page: join screen (explains companies are visible to members), tabs Similar / Feed / Chats, leave control; navigation entry
-- [ ] 8.3 Similar list cards (card summary, shared companies, Invite dialog with 500-char counter and 429 message)
-- [ ] 8.4 Feed with similar/all switch and cursor paging; entry opens profile
-- [ ] 8.5 Chats: incoming invitations (accept/decline), conversation view with 5 s polling while visible, composer, block and report actions; list polls unread every 30 s
-- [ ] 8.6 Tracker card switch "Show in buddy feed" (only for members)
-- [ ] 8.7 Moderation tab `buddies` in `ModerationView.svelte` with report queue and resolve
-- [ ] 8.8 `/privacy` section on stored buddy messages, moderator access via reports, deletion; `/terms` if conduct rules live there
+- [x] 8.1 `api.ts` client methods + types for every buddy route
+- [x] 8.2 `/my/buddies` page: join screen (explains companies are visible to members), tabs Similar / Feed / Chats, leave control; navigation entry
+- [x] 8.3 Similar list cards (card summary, shared companies, Invite dialog with 500-char counter and 429 message)
+- [x] 8.4 Feed with similar/all switch and cursor paging; entry opens profile
+- [x] 8.5 Chats: incoming invitations (accept/decline), conversation view with 5 s polling while visible, composer, block and report actions; list polls unread every 30 s
+- [x] 8.6 Tracker card switch "Show in buddy feed" (only for members)
+- [x] 8.7 Moderation tab `buddies` in `ModerationView.svelte` with report queue and resolve
+- [x] 8.8 `/privacy` section on stored buddy messages, moderator access via reports, deletion; `/terms` if conduct rules live there
 
 ## 9. Ship
 

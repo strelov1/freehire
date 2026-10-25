@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
@@ -184,6 +185,28 @@
   // Declared here (before TABS, which reads autoApplied) rather than nearer its own
   // rendering further down — the same ordering `emails`'s own comment already explains.
   let events = $state.raw<TimelineEvent[]>([]);
+  let buddyMember = $state(false);
+  let hiddenInBuddyFeed = $state(false);
+  let buddyVisibilityBusy = $state(false);
+  const buddyApplicationId = $derived(events.find((event) => event.application_id)?.application_id ?? null);
+  $effect(() => {
+    const id = buddyApplicationId;
+    const member = buddyMember;
+    if (member && id !== null) void api.listBuddyHiddenApplications().then((ids) => { hiddenInBuddyFeed = ids.includes(id); }).catch(() => {});
+  });
+  onMount(() => { void api.buddyStatus().then((result) => { buddyMember = result.member; }).catch(() => {}); });
+  async function toggleBuddyVisibility() {
+    if (buddyApplicationId === null || buddyVisibilityBusy) return;
+    buddyVisibilityBusy = true;
+    const previous = hiddenInBuddyFeed;
+    hiddenInBuddyFeed = !previous;
+    try {
+      await api.setBuddyApplicationHidden(String(buddyApplicationId), hiddenInBuddyFeed);
+    } catch (err) {
+      hiddenInBuddyFeed = previous;
+      sessionError = err instanceof Error ? err.message : 'Could not update buddy feed visibility.';
+    } finally { buddyVisibilityBusy = false; }
+  }
 
   // Once a successful submission retires the live attempt, `autoApply` goes back to null
   // and the job's stage looks like any other "applied" job. The ledger still knows better:
@@ -667,6 +690,12 @@
             </Button>
           {/if}
         </div>
+      {/if}
+      {#if buddyMember && buddyApplicationId !== null}
+        <label class="flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={!hiddenInBuddyFeed} disabled={buddyVisibilityBusy} onchange={toggleBuddyVisibility} />
+          Show in buddy feed
+        </label>
       {/if}
       {#if sessionError}
         <p class="text-sm text-warning-strong" role="alert">{sessionError}</p>

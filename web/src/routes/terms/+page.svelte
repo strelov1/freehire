@@ -70,6 +70,10 @@
         licence below), no attempting to bypass rate limits or authentication, no uploading unlawful content, and no using the service to
         harass or defraud anyone. We may suspend or terminate accounts that violate this.
       </p>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        In interview buddies, don't send spam, harass or threaten members, or use chat to scam
+        people. You can block or report a conversation.
+      </p>
     </section>
 
     <section class="flex flex-col gap-3">

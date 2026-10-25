@@ -39,6 +39,7 @@ export const accountNav = [
   // Employee referrals: request a referral, offer to refer (moderated), and — for
   // referrers — manage incoming requests. Open to every signed-in user.
   { href: '/my/referrals', label: 'Referrals' },
+  { href: '/my/buddies', label: 'Interview buddies' },
   // Booked mentorship sessions, upcoming and past. Beside referrals because it is the
   // same insider seen from the other end — but NOT folded into it: a referral offer is
   // anonymous on purpose and a mentor is named, which is the whole difference between

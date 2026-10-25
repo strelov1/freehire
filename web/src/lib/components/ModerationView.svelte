@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
-  import { Briefcase, FileText, Flag, GraduationCap, Handshake, Star } from '@lucide/svelte';
+  import { Briefcase, FileText, Flag, GraduationCap, Handshake, Star, UsersRound } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api } from '#lib/api.js';
@@ -16,11 +16,12 @@
   import ReferralReviewView from './ReferralReviewView.svelte';
   import MentorReviewView from './MentorReviewView.svelte';
   import EmployerClaimsQueue from './EmployerClaimsQueue.svelte';
+  import BuddyReportsQueue from './BuddyReportsQueue.svelte';
   import States from './States.svelte';
 
   const isModerator = $derived(currentUser()?.role === 'moderator');
 
-  type View = 'queue' | 'reports' | 'feedback' | 'referrals' | 'mentors' | 'employer';
+  type View = 'queue' | 'reports' | 'feedback' | 'referrals' | 'mentors' | 'employer' | 'buddies';
   const sections: { value: View; label: string; icon: LucideIcon }[] = [
     { value: 'queue', label: 'Moderation queue', icon: FileText },
     { value: 'reports', label: 'Reported jobs', icon: Flag },
@@ -33,6 +34,7 @@
     // internal/ingest/employer/AGENTS.md. Revocation is admin-only and has no UI here on
     // purpose (rare, one-off; done directly via the API) — this tab is approve/reject only.
     { value: 'employer', label: 'Employer claims', icon: Briefcase },
+    { value: 'buddies', label: 'Buddy reports', icon: UsersRound },
   ];
 
   // The active section is mirrored in `?tab=` so moderator deep-links (the
@@ -254,6 +256,8 @@
         </p>
         <EmployerClaimsQueue />
       </div>
+    {:else if view === 'buddies'}
+      <BuddyReportsQueue />
     {:else}
       <div class="flex flex-col gap-6">
         <p class="text-sm text-muted-foreground">
