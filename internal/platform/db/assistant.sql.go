@@ -13,6 +13,36 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const advanceAssistantNarratedEvent = `-- name: AdvanceAssistantNarratedEvent :execrows
+UPDATE assistant_sessions
+SET narrated_event_id = $1
+WHERE id = $2 AND user_id = $3
+  AND narrated_event_id IS NOT DISTINCT FROM $4
+`
+
+type AdvanceAssistantNarratedEventParams struct {
+	NarratedEventID pgtype.Int8 `json:"narrated_event_id"`
+	ID              uuid.UUID   `json:"id"`
+	UserID          int64       `json:"user_id"`
+	Previous        pgtype.Int8 `json:"previous"`
+}
+
+// Move the narrated-event cursor, but only from the value the caller read: two syncs racing
+// over the same events both narrate, and only the first to finish moves the cursor, so the
+// second neither rewinds it nor skips past an event it never saw.
+func (q *Queries) AdvanceAssistantNarratedEvent(ctx context.Context, arg AdvanceAssistantNarratedEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, advanceAssistantNarratedEvent,
+		arg.NarratedEventID,
+		arg.ID,
+		arg.UserID,
+		arg.Previous,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const appendAssistantMessage = `-- name: AppendAssistantMessage :one
 INSERT INTO assistant_messages (session_id, seq, role, content)
 VALUES (
@@ -112,6 +142,26 @@ func (q *Queries) DeleteAssistantSession(ctx context.Context, arg DeleteAssistan
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getAssistantNarratedEvent = `-- name: GetAssistantNarratedEvent :one
+SELECT narrated_event_id
+FROM assistant_sessions
+WHERE id = $1 AND user_id = $2
+`
+
+type GetAssistantNarratedEventParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
+}
+
+// The last auto_apply_events id an apply conversation has narrated; NULL when it has
+// narrated nothing. Owner-scoped like every other session read.
+func (q *Queries) GetAssistantNarratedEvent(ctx context.Context, arg GetAssistantNarratedEventParams) (pgtype.Int8, error) {
+	row := q.db.QueryRow(ctx, getAssistantNarratedEvent, arg.ID, arg.UserID)
+	var narrated_event_id pgtype.Int8
+	err := row.Scan(&narrated_event_id)
+	return narrated_event_id, err
 }
 
 const getAssistantSession = `-- name: GetAssistantSession :one

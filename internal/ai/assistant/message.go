@@ -19,7 +19,26 @@ const (
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
 	RoleTool      = "tool"
+	// RoleNote is a status note freehire hands the model — what happened to the application
+	// a conversation is held against — rather than anything the candidate said. Stored as
+	// the transcript CHECK's long-standing 'system' value; the client never renders it.
+	RoleNote = "system"
 )
+
+// notePreamble opens a note as the model reads it. A note travels as a human turn, the one
+// mid-conversation role every provider accepts, so the preamble is what keeps "the
+// application was submitted" from reading as the candidate asking for it.
+const notePreamble = "[Status update from freehire — not written by the candidate]\n"
+
+// noteContent is a status note's payload.
+type noteContent struct {
+	Text string `json:"text"`
+}
+
+// EncodeNote builds the stored message for a status note.
+func EncodeNote(text string) (Message, error) {
+	return encode(RoleNote, noteContent{Text: text})
+}
 
 // Message is one row of a session's transcript: the role plus a role-specific
 // JSON payload. It is both what the client replays and what the model's history is
@@ -130,6 +149,13 @@ func (m Message) Decode() (llms.MessageContent, error) {
 			})
 		}
 		return out, nil
+
+	case RoleNote:
+		var c noteContent
+		if err := json.Unmarshal(m.Content, &c); err != nil {
+			return llms.MessageContent{}, fmt.Errorf("assistant: decode note: %w", err)
+		}
+		return llms.TextParts(llms.ChatMessageTypeHuman, notePreamble+c.Text), nil
 
 	case RoleTool:
 		var c toolResultContent

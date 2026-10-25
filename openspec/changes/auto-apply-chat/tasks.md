@@ -11,10 +11,10 @@
 
 ## 3. Catch-up sync
 
-- [ ] 3.1 Runner support for a turn whose input is a stored, unrendered `system` note
-- [ ] 3.2 `POST /assistant/sessions/:id/sync`: unseen `auto_apply_events` → one turn; cursor advanced conditionally after the turn is stored; no events → no turn
-- [ ] 3.3 Catch-up turns skip the assistant-message allowance
-- [ ] 3.4 Tests: nothing new / new events / failed turn keeps cursor / not metered
+- [x] 3.1 Runner support for a turn whose input is a stored, unrendered `system` note
+- [x] 3.2 `POST /assistant/sessions/:id/sync`: unseen `auto_apply_events` → one turn; cursor advanced conditionally after the turn is stored; no events → no turn
+- [x] 3.3 Catch-up turns skip the assistant-message allowance
+- [x] 3.4 Tests: nothing new / new events / failed turn keeps cursor / not metered
 
 ## 4. Web
 

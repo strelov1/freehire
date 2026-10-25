@@ -23,6 +23,10 @@ type Querier interface {
 	ActivateCompanyAccount(ctx context.Context, userID int64) (CompanyAccount, error)
 	// Add a job to a list. Idempotent: re-adding an already-present job changes nothing.
 	AddJobListItem(ctx context.Context, arg AddJobListItemParams) error
+	// Move the narrated-event cursor, but only from the value the caller read: two syncs racing
+	// over the same events both narrate, and only the first to finish moves the cursor, so the
+	// second neither rewinds it nor skips past an event it never saw.
+	AdvanceAssistantNarratedEvent(ctx context.Context, arg AdvanceAssistantNarratedEventParams) (int64, error)
 	// Move an application forward to a new stage (the worker only calls this after
 	// checking the transition is strictly forward and high-confidence), and record the
 	// transition in the ledger under the same predicate that moves the column — exactly as
@@ -2308,6 +2312,9 @@ type Querier interface {
 	// is by primary key — the display surface asks for exactly one posting's form, never a
 	// page of them, which is also why nothing here joins jobs.
 	GetApplyFormByJobID(ctx context.Context, jobID int64) (GetApplyFormByJobIDRow, error)
+	// The last auto_apply_events id an apply conversation has narrated; NULL when it has
+	// narrated nothing. Owner-scoped like every other session read.
+	GetAssistantNarratedEvent(ctx context.Context, arg GetAssistantNarratedEventParams) (pgtype.Int8, error)
 	// One session owned by the caller. Owner-scoped: a foreign or missing id returns no row,
 	// which the handler maps to 404 — so a probe cannot tell the two apart.
 	GetAssistantSession(ctx context.Context, arg GetAssistantSessionParams) (GetAssistantSessionRow, error)

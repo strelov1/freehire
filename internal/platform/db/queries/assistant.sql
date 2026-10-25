@@ -115,3 +115,19 @@ FROM assistant_messages
 WHERE session_id = $1
 ORDER BY seq DESC
 LIMIT $2;
+
+-- name: GetAssistantNarratedEvent :one
+-- The last auto_apply_events id an apply conversation has narrated; NULL when it has
+-- narrated nothing. Owner-scoped like every other session read.
+SELECT narrated_event_id
+FROM assistant_sessions
+WHERE id = $1 AND user_id = $2;
+
+-- name: AdvanceAssistantNarratedEvent :execrows
+-- Move the narrated-event cursor, but only from the value the caller read: two syncs racing
+-- over the same events both narrate, and only the first to finish moves the cursor, so the
+-- second neither rewinds it nor skips past an event it never saw.
+UPDATE assistant_sessions
+SET narrated_event_id = sqlc.arg(narrated_event_id)
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
+  AND narrated_event_id IS NOT DISTINCT FROM sqlc.narg(previous);

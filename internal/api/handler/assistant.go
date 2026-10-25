@@ -210,6 +210,7 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	// now — they have seen the work so far and are choosing to spend more of the day on it.
 	api.Post("/assistant/sessions/:id/extend", mw.key, h.PostAssistantExtend)
 	api.Post("/assistant/sessions/:id/opening", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantOpening)
+	api.Post("/assistant/sessions/:id/sync", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantSync)
 	// Resume after a transport/model failure without appending another user message —
 	// re-sending the prompt would duplicate it in the model's context.
 	api.Post("/assistant/sessions/:id/retry", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantRetry)

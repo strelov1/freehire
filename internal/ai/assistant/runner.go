@@ -200,6 +200,26 @@ func (r *Runner) RunWithAttachments(ctx context.Context, sess Session, reg *Regi
 	return r.runFromHistory(ctx, sess, reg, system, turn, emit)
 }
 
+// RunNote executes one turn whose input is a status note from freehire rather than a
+// message from the candidate. The note is stored as RoleNote and nothing else about the
+// conversation changes: it does not name the session (a note is the server's words, the
+// same for every conversation) and the client is not told the candidate said it.
+func (r *Runner) RunNote(ctx context.Context, sess Session, reg *Registry, system, note string, turn TurnConfig, emit func(Event)) error {
+	msg, err := EncodeNote(note)
+	if err != nil {
+		return r.fail(emit, err)
+	}
+	writeCtx, cancel := persisting(ctx)
+	defer cancel()
+	if _, err := r.store.Append(writeCtx, sess.ID, msg); err != nil {
+		return r.fail(emit, err)
+	}
+	if err := r.store.Touch(writeCtx, sess.ID, sess.UserID); err != nil {
+		log.Printf("assistant: touch session %s: %v", sess.ID, err)
+	}
+	return r.runFromHistory(ctx, sess, reg, system, turn, emit)
+}
+
 // Continue resumes after a failed turn without appending another user message.
 // The transcript already holds the prompt (and any partial tool work); replaying
 // a second copy would duplicate the candidate's request in the model's context.
