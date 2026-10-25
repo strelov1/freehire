@@ -34,6 +34,9 @@
     id: string;
     label: string;
     domain: string;
+    // Our own copy of the mark, where the logo proxy resolves the wrong one: for Grok it
+    // returns xAI's wordmark rather than Grok Bot's round mark.
+    logo?: string;
     directory?: { url: string; brand: SimpleIcon; note: string };
     steps: string[];
     file?: string;
@@ -72,6 +75,7 @@
       id: 'grok',
       label: 'Grok Bot',
       domain: 'grok.com',
+      logo: '/brands/grok.png',
       steps: [
         'Open Connect apps in the sidebar.',
         'Add a custom app, name it freehire, and paste the address.',
@@ -218,7 +222,7 @@
           host === h.id ? 'border-foreground bg-secondary/60' : 'border-border bg-background hover:bg-secondary/40',
         ]}
       >
-        <EntityLogo name={h.label} src={sourceLogoUrl(h.label, h.domain) ?? undefined} size="lg" shape="square" />
+        <EntityLogo name={h.label} src={h.logo ?? sourceLogoUrl(h.label, h.domain) ?? undefined} size="lg" shape="square" />
         <span class="text-base font-medium text-foreground">{h.label}</span>
       </button>
     {/each}
