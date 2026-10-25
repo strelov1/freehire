@@ -587,6 +587,7 @@ const selectJobsNeedingSimilarBackfill = `-- name: SelectJobsNeedingSimilarBackf
 SELECT j.id AS job_id
 FROM jobs j
 WHERE j.similar_computed_at IS NULL
+  AND j.semantic_embedded_model IS NOT NULL
   AND EXISTS (SELECT 1 FROM job_semantic_chunks c WHERE c.job_id = j.id)
 ORDER BY COALESCE(j.posted_at, j.created_at) DESC, j.id DESC
 LIMIT $1::int
@@ -618,6 +619,17 @@ LIMIT $1::int
 // too would just duplicate that cleanup with a narrower race window, not add safety.
 // Ordered freshest-job-first (mirrors ClaimSemanticBatch's ordering) so newly-posted
 // jobs get a similar-jobs list before older backlog on a still-draining catalogue.
+//
+// semantic_embedded_model IS NOT NULL is what makes the freshest-first scan stop.
+// jobs_similar_backfill_idx is partial only on similar_computed_at IS NULL, which on
+// prod is most of the table (2026-10-25: null_frac 0.92, and one LIMIT 50 read ~1.5M
+// index entries, nearly all of them jobs with no chunks). The model is stamped in the
+// same transaction as the chunk replace (cmd/embed CompleteOpen). semantic_embedded_hash
+// is the wrong stand-in: StampSemanticEmbeddedBatch copies content_hash, so a job can
+// have chunks and a model while the hash stays NULL. EXISTS stays, because a short
+// description is stamped and then stored with zero chunk rows. The index that matches
+// this predicate is jobs_similar_backfill_embedded_idx (0196); the older index stays
+// until the previous binary is gone, since that binary's query cannot use the new one.
 func (q *Queries) SelectJobsNeedingSimilarBackfill(ctx context.Context, limitCount int32) ([]int64, error) {
 	rows, err := q.db.Query(ctx, selectJobsNeedingSimilarBackfill, limitCount)
 	if err != nil {

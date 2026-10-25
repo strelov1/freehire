@@ -11,8 +11,9 @@ Decisions 3/4/5 — read those before this file, this only covers what they don'
 
 ## Always true
 - **No outbox table, unlike `internal/ai/embed`'s `semantic_outbox`.** Finds work with a
-  direct `PendingJobIDs` query (`job_semantic_chunks` exists AND
-  `similar_computed_at IS NULL`) each round, not a claimed/leased queue — deliberate
+  direct `PendingJobIDs` query (`semantic_embedded_model` is set AND
+  `job_semantic_chunks` exists AND `similar_computed_at IS NULL`) each round,
+  not a claimed/leased queue — deliberate
   (design.md Decision 4), mirroring `../telagon`'s `cmd/similar-backfill`, this
   worker's direct ancestor. The predicate is idempotent and safe under a re-run or an
   overlapping manual invocation: a job processed twice just gets the same answer

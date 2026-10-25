@@ -51,7 +51,7 @@ func insertTestJob(t *testing.T, pool *pgxpool.Pool, externalID, companySlug str
 	return id
 }
 
-func insertTestChunks(t *testing.T, q *db.Queries, jobID int64, dims []int) {
+func insertTestChunks(t *testing.T, pool *pgxpool.Pool, q *db.Queries, jobID int64, dims []int) {
 	t.Helper()
 	jobIDs := make([]int64, len(dims))
 	indices := make([]int16, len(dims))
@@ -65,6 +65,10 @@ func insertTestChunks(t *testing.T, q *db.Queries, jobID int64, dims []int) {
 		JobIds: jobIDs, ChunkIndices: indices, Embeddings: embeddings,
 	}); err != nil {
 		t.Fatalf("insert chunks for job %d: %v", jobID, err)
+	}
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE jobs SET semantic_embedded_model = 'test' WHERE id = $1`, jobID); err != nil {
+		t.Fatalf("stamp embedded model for job %d: %v", jobID, err)
 	}
 }
 
@@ -94,15 +98,22 @@ func TestIntegration_SimilarBackfillExcludesSameCompany(t *testing.T) {
 	q := db.New(pool)
 
 	source := insertTestJob(t, pool, "source", "acme")
-	insertTestChunks(t, q, source, []int{0})
+	insertTestChunks(t, pool, q, source, []int{0})
 
 	// Same company, exact vector match — must be excluded purely on company_slug.
 	sameCompany := insertTestJob(t, pool, "same-company", "acme")
-	insertTestChunks(t, q, sameCompany, []int{0})
+	insertTestChunks(t, pool, q, sameCompany, []int{0})
 
 	// Different company, a real (non-exact) match — must appear.
 	otherCompany := insertTestJob(t, pool, "other-company", "beta")
-	insertTestChunks(t, q, otherCompany, []int{1})
+	insertTestChunks(t, pool, q, otherCompany, []int{1})
+
+	unstamped := insertTestJob(t, pool, "unstamped", "acme")
+	if err := q.InsertJobSemanticChunks(ctx, db.InsertJobSemanticChunksParams{
+		JobIds: []int64{unstamped}, ChunkIndices: []int16{0}, Embeddings: []string{unitVector768(2)},
+	}); err != nil {
+		t.Fatalf("insert unstamped chunks: %v", err)
+	}
 
 	runner := similarjobs.Runner{Store: newDBStore(pool)}
 	stats, err := runner.Run(ctx, runOpts())
@@ -111,6 +122,11 @@ func TestIntegration_SimilarBackfillExcludesSameCompany(t *testing.T) {
 	}
 	if stats.Processed != 3 || stats.Failed != 0 {
 		t.Fatalf("stats = %+v, want processed=3 failed=0 (source, same-company, and other-company all have chunks)", stats)
+	}
+
+	_, unstampedComputed := readSimilar(t, pool, unstamped)
+	if unstampedComputed {
+		t.Fatalf("unstamped job was backfilled; PendingJobIDs must require semantic_embedded_model")
 	}
 
 	ids, computed := readSimilar(t, pool, source)
@@ -131,12 +147,12 @@ func TestIntegration_SimilarBackfillEmptyWhenOnlySameCompanyMatches(t *testing.T
 	q := db.New(pool)
 
 	source := insertTestJob(t, pool, "lonely-source", "acme")
-	insertTestChunks(t, q, source, []int{5})
+	insertTestChunks(t, pool, q, source, []int{5})
 
 	// The only other job with chunks shares the source's company — no eligible
 	// candidate exists at all.
 	sameCompany := insertTestJob(t, pool, "lonely-same-company", "acme")
-	insertTestChunks(t, q, sameCompany, []int{5})
+	insertTestChunks(t, pool, q, sameCompany, []int{5})
 
 	runner := similarjobs.Runner{Store: newDBStore(pool)}
 	stats, err := runner.Run(ctx, runOpts())
@@ -166,9 +182,9 @@ func TestIntegration_SimilarBackfillRerunIsNoOp(t *testing.T) {
 	q := db.New(pool)
 
 	source := insertTestJob(t, pool, "rerun-source", "acme")
-	insertTestChunks(t, q, source, []int{0})
+	insertTestChunks(t, pool, q, source, []int{0})
 	other := insertTestJob(t, pool, "rerun-other", "beta")
-	insertTestChunks(t, q, other, []int{1})
+	insertTestChunks(t, pool, q, other, []int{1})
 
 	runner := similarjobs.Runner{Store: newDBStore(pool)}
 	first, err := runner.Run(ctx, runOpts())

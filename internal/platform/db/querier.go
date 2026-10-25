@@ -6501,6 +6501,17 @@ type Querier interface {
 	// too would just duplicate that cleanup with a narrower race window, not add safety.
 	// Ordered freshest-job-first (mirrors ClaimSemanticBatch's ordering) so newly-posted
 	// jobs get a similar-jobs list before older backlog on a still-draining catalogue.
+	//
+	// semantic_embedded_model IS NOT NULL is what makes the freshest-first scan stop.
+	// jobs_similar_backfill_idx is partial only on similar_computed_at IS NULL, which on
+	// prod is most of the table (2026-10-25: null_frac 0.92, and one LIMIT 50 read ~1.5M
+	// index entries, nearly all of them jobs with no chunks). The model is stamped in the
+	// same transaction as the chunk replace (cmd/embed CompleteOpen). semantic_embedded_hash
+	// is the wrong stand-in: StampSemanticEmbeddedBatch copies content_hash, so a job can
+	// have chunks and a model while the hash stays NULL. EXISTS stays, because a short
+	// description is stamped and then stored with zero chunk rows. The index that matches
+	// this predicate is jobs_similar_backfill_embedded_idx (0196); the older index stays
+	// until the previous binary is gone, since that binary's query cannot use the new one.
 	SelectJobsNeedingSimilarBackfill(ctx context.Context, limitCount int32) ([]int64, error)
 	// Orphan-job liveness (probe-orphan-job-liveness): open jobs whose source is NOT a
 	// registered ATS board provider — the sources no ingest run re-crawls and the sweep

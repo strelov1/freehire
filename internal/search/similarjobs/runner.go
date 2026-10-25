@@ -27,7 +27,8 @@ import (
 type Store interface {
 	// PendingJobIDs returns up to limit job ids that have at least one
 	// job_semantic_chunks row but no precomputed similar-jobs list yet
-	// (similar_computed_at IS NULL), ordered freshest-job-first (mirrors
+	// (similar_computed_at IS NULL and semantic_embedded_model IS NOT NULL),
+	// ordered freshest-job-first (mirrors
 	// cmd/embed's claim ordering — newly-posted jobs get a similar-jobs list
 	// before older backlog on a still-draining catalogue). cmd/embed nulls
 	// similar_computed_at on every re-embed (see its ClearSimilarComputedAtBatch
