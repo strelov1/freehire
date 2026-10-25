@@ -9,6 +9,7 @@
   import { ownsMobileStickyCta } from '#lib/supportToast.js';
   import BuddyConversationPane from './BuddyConversationPane.svelte';
   import BuddyConversationRow from './BuddyConversationRow.svelte';
+  import BuddyIdentity from './BuddyIdentity.svelte';
   import BuddyInviteDialog from './BuddyInviteDialog.svelte';
 
   // The interview-buddies messaging dock: a bar in the bottom-right corner that unfolds
@@ -110,7 +111,7 @@
               aria-expanded={!w.minimized}
               onclick={() => buddyDock.setMinimized(w.id, !w.minimized)}
             >
-              <span class="truncate">{name}</span>
+              {#if c.former_member}<span class="truncate">{name}</span>{:else}<BuddyIdentity handle={c.other.handle} summary={c.other.card_summary} size="sm" link={false} />{/if}
               {#if w.minimized && c.unread}<span class="shrink-0 rounded-full bg-brand px-2 text-xs text-brand-foreground">{c.unread}<span class="sr-only"> unread</span></span>{/if}
             </button>
             <button

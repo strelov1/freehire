@@ -21,7 +21,8 @@
     country,
     specializations = [],
     emptyMessage = 'This candidate has joined the network but has not published anything yet.',
-    title,
+    subtitle,
+    headingFallback = 'Candidate',
     skillsSide = 'left',
     actions,
     children,
@@ -33,16 +34,18 @@
     country?: string;
     specializations?: string[];
     emptyMessage?: string;
-    /** Replaces the dictionary heading as the h1 (a buddy's handle); the heading then
-     *  leads the line beneath it instead of disappearing. */
-    title?: string;
+    /** A small muted line under the heading (a buddy's handle). The heading itself stays
+     *  the dictionary one — a handle is how to address somebody, not what they do. */
+    subtitle?: string;
+    /** The heading when neither dictionary value resolves. */
+    headingFallback?: string;
     /** The catalogue keeps skills in a left rail; a buddy's page reads its main column first. */
     skillsSide?: 'left' | 'right';
     actions?: Snippet;
     children?: Snippet;
   } = $props();
 
-  const heading = $derived(talentHeading(card.seniority, card.category, 'Candidate'));
+  const heading = $derived(talentHeading(card.seniority, card.category, headingFallback));
 
   /** A role's period, from the two structured dates. "Present" for a role that has not
    *  ended — the backend reports an unset end as current, so an open-ended row here is a
@@ -90,11 +93,11 @@ right. The panel follows the card in the DOM so a narrow screen reads the card f
         <User class="size-6" aria-hidden="true" />
       {/snippet}
       <div class="flex min-w-0 flex-1 flex-col gap-1">
-        <h1 class="text-2xl font-semibold tracking-tight">{title ?? heading}</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">{heading}</h1>
+        {#if subtitle}
+          <p class="text-sm text-muted-foreground">{subtitle}</p>
+        {/if}
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-          {#if title}
-            <span class="font-medium text-foreground">{heading}</span>
-          {/if}
           {#if card.total_years}
             <span>{card.total_years} {card.total_years === 1 ? 'year' : 'years'} of experience</span>
           {/if}

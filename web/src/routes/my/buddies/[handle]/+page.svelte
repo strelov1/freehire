@@ -10,6 +10,7 @@
   import States from '#lib/components/States.svelte';
   import type { BuddyFeedItem, BuddyProfile } from '#lib/types.js';
   import { Button } from '#lib/ui/index.js';
+  import { BUDDY_HEADING_FALLBACK } from '#lib/buddyPresent.js';
 
   // One interview buddy: their anonymous card and, under it, their own activity — the
   // buddy feed narrowed to them, under every rule the feed keeps. A handle that is
@@ -85,7 +86,8 @@
     </section>
   {:else if view === 'error'}<States state="error" />
   {:else if profile}
-    <CandidateCardView card={profile.card} title={profile.handle} skillsSide="right" emptyMessage="This member has not added a profile card yet.">
+    <!-- No photoSrc, ever: a buddy is drawn as the silhouette (see BuddyIdentity). -->
+    <CandidateCardView card={profile.card} subtitle={profile.handle} headingFallback={BUDDY_HEADING_FALLBACK} skillsSide="right" emptyMessage="This member has not added a profile card yet.">
       {#snippet actions()}
         <BuddyMessageButton
           handle={profile?.handle ?? ''}

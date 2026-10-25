@@ -1,14 +1,14 @@
 {
   "Alert": 3,
-  "Avatar": 4,
+  "Avatar": 5,
   "Badge": 26,
   "BrandMark": 2,
   "Breadcrumbs": 6,
   "Button": 111,
-  "Card": 20,
-  "Chip": 15,
+  "Card": 22,
+  "Chip": 16,
   "ConfirmDialog": 22,
-  "CountryFlag": 12,
+  "CountryFlag": 13,
   "Dialog": 14,
   "EmptyState": 5,
   "EntityLogo": 32,
@@ -23,7 +23,7 @@
   "SettingRow": 3,
   "Skeleton": 4,
   "Table": 8,
-  "Tabs": 0,
+  "Tabs": 1,
   "TabStrip": 14,
   "Tooltip": 2
 }

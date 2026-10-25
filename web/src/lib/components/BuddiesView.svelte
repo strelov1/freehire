@@ -3,13 +3,14 @@
   import { page } from '$app/state';
   import { ApiError, api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
-  import { resolve } from '$app/paths';
   import { buddyDock } from '#lib/buddyDock.svelte.js';
   import type { BuddyFeedItem, BuddySimilar, BuddyStatus } from '#lib/types.js';
-  import { Button, ConfirmDialog, EntityLogo } from '#lib/ui/index.js';
+  import { buddySharedCompanies } from '#lib/buddyPresent.js';
+  import { Button, Card, Chip, ConfirmDialog, EntityLogo, Tabs } from '#lib/ui/index.js';
   import { companyLogoUrl } from '#lib/logo.js';
   import BuddyChatView from './BuddyChatView.svelte';
   import BuddyFeedEntry from './BuddyFeedEntry.svelte';
+  import BuddyIdentity from './BuddyIdentity.svelte';
   import BuddyInviteDialog from './BuddyInviteDialog.svelte';
   import BuddyMessageButton from './BuddyMessageButton.svelte';
   import States from './States.svelte';
@@ -100,15 +101,36 @@
     </nav>
     {#if tab === 'similar'}
       {#if similar.status === 'loading'}<States state="loading" />{:else if similar.value.length === 0}<States state="empty" message="No similar members yet." />{:else}
-        <ul class="flex flex-col gap-3">{#each similar.value as person (person.handle)}<li class="rounded-lg border border-border p-4">
-          <div class="flex items-center justify-between gap-3"><a href={resolve('/my/buddies/[handle]', { handle: person.handle })} class="font-semibold hover:underline">{person.handle}</a><BuddyMessageButton handle={person.handle} conversations={buddyDock.conversations} oninvite={openInvite} onconversation={openConversation} /></div>
-          <p class="mt-1 text-sm text-muted-foreground">{[person.card_summary.category, person.card_summary.seniority, person.card_summary.country].filter(Boolean).join(' · ')}</p>
-          {#if person.shared_companies.length}<div class="mt-3 flex flex-wrap gap-3">{#each person.shared_companies as company (company.slug)}<span class="flex items-center gap-1.5 text-xs"><EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="xs" />{company.name}</span>{/each}</div>{/if}
-        </li>{/each}</ul>
+        <ul class="flex flex-col gap-3">
+          {#each similar.value as person (person.handle)}
+            <li>
+              <Card class="flex flex-col gap-3 p-4">
+                <div class="flex items-start justify-between gap-3">
+                  <BuddyIdentity handle={person.handle} summary={person.card_summary} />
+                  <BuddyMessageButton handle={person.handle} conversations={buddyDock.conversations} oninvite={openInvite} onconversation={openConversation} />
+                </div>
+                {#if person.shared_companies.length}
+                  <div class="flex flex-col gap-1.5 sm:pl-13">
+                    <p class="text-xs text-muted-foreground">{buddySharedCompanies(person.shared_companies.length)}</p>
+                    <div class="flex flex-wrap gap-1.5">
+                      {#each person.shared_companies as company (company.slug)}
+                        <Chip class="gap-1.5 py-1 pl-1"><EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="xs" />{company.name}</Chip>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+              </Card>
+            </li>
+          {/each}
+        </ul>
       {/if}
     {:else if tab === 'feed'}
-      <div class="flex gap-2"><Button variant={mode === 'similar' ? 'primary' : 'outline'} size="sm" onclick={() => mode = 'similar'}>Similar</Button><Button variant={mode === 'all' ? 'primary' : 'outline'} size="sm" onclick={() => mode = 'all'}>All</Button></div>
-      {#if feed.length === 0 && !feedBusy}<States state="empty" message="No application updates yet." />{:else}<ul>{#each feed as item (item.id)}<BuddyFeedEntry {item}>{#snippet actions()}<BuddyMessageButton handle={item.handle} conversations={buddyDock.conversations} oninvite={openInvite} onconversation={openConversation} />{/snippet}</BuddyFeedEntry>{/each}</ul>{#if cursor}<Button variant="outline" onclick={() => loadFeed(true)} disabled={feedBusy}>Load more</Button>{/if}{/if}
+      <Tabs bind:value={() => mode, (next) => (mode = next as 'similar' | 'all')} tabs={[{ value: 'similar', label: 'Similar to you' }, { value: 'all', label: 'Everyone' }]}>
+        {#if feed.length === 0 && !feedBusy}<States state="empty" message="No application updates yet." />{:else}
+          <ul class="flex flex-col gap-3">{#each feed as item (item.id)}<BuddyFeedEntry {item}>{#snippet actions()}<BuddyMessageButton handle={item.handle} conversations={buddyDock.conversations} oninvite={openInvite} onconversation={openConversation} />{/snippet}</BuddyFeedEntry>{/each}</ul>
+          {#if cursor}<Button variant="outline" class="mt-3 w-fit" onclick={() => loadFeed(true)} disabled={feedBusy}>Load more</Button>{/if}
+        {/if}
+      </Tabs>
     {:else}<BuddyChatView initialId={linkedConversation} />{/if}
   </section>
 {/if}

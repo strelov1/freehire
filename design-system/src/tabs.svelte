@@ -2,7 +2,9 @@
   import { tv, type VariantProps } from 'tailwind-variants';
 
   export const tabsListVariants = tv({
-    base: 'inline-flex items-center justify-center gap-1 rounded-lg bg-muted p-1',
+    // `self-start`: the list sits in the column wrapper below, whose default stretch
+    // would otherwise widen a two-option control across the whole panel.
+    base: 'inline-flex items-center justify-center gap-1 self-start rounded-lg bg-muted p-1',
   });
 
   export const tabsTriggerVariants = tv({

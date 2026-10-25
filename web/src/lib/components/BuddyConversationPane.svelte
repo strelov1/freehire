@@ -5,6 +5,7 @@
   import { buddyDock } from '#lib/buddyDock.svelte.js';
   import type { BuddyConversation, BuddyMessage, BuddyReport } from '#lib/types.js';
   import { Button, ConfirmDialog } from '#lib/ui/index.js';
+  import BuddyIdentity from './BuddyIdentity.svelte';
 
   // One conversation: its messages, the invitation answer, the composer, block and
   // report. The one implementation behind both the Chats tab and a dock window — mount it
@@ -148,7 +149,9 @@
 <div class="flex min-h-0 flex-1 flex-col">
   {#if !compact || (live && (conversation.status_for_me === 'open' || conversation.status_for_me === 'incoming'))}
     <header class="flex items-center gap-2 border-b border-border {compact ? 'justify-end px-3 py-2' : 'justify-between pb-3'}">
-      {#if !compact}<strong>{name}</strong>{/if}
+      {#if !compact}
+        {#if live}<BuddyIdentity handle={conversation.other.handle} summary={conversation.other.card_summary} size="sm" />{:else}<strong>{name}</strong>{/if}
+      {/if}
       {#if live && (conversation.status_for_me === 'open' || conversation.status_for_me === 'incoming')}
         <div class="flex gap-2">
           <Button variant="outline" size="sm" onclick={() => { reportOpen = !reportOpen; reportSuccess = false; }}>Report</Button>
