@@ -50,7 +50,7 @@ Covers 3.1, 3.2. Design D4. Spec: "Similar members ranking".
 Covers 4.1, 4.2. Design D5, D6. Spec: "Buddy feed of applications and stage moves", "Per-application feed visibility".
 
 - A `ListBuddyFeed` keyset query, `Service.Feed(viewer, mode, cursor, limit)` with modes `all` and `similar` (top 200). Entry shape per design D12.
-- `HideJob`, `ShowJob`, `HiddenJobs(user)`.
+- `HideApplication`, `ShowApplication`, `HiddenApplications(user)`, keyed on `application_id`.
 - Integration tests for every scenario, plus: `accepted` never appears, retracted events never appear, the viewer's own events never appear.
 
 ## Task 5: Invitations

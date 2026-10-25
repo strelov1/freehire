@@ -14,7 +14,7 @@ an invitation step. Layer 7 (`engage`); tables are `buddy_*` (migration 0197), q
 - **Feed vocabulary.** The feed shows `applied`, and `stage_set` with signal `interview` or
   `offer`, at day precision, and nothing else. `accepted`, `rejected`, `withdrawn` and
   `expired` never appear: "took the offer" is the most identifying fact in the ledger. An
-  event is dropped when it is retracted, hidden by its owner (`buddy_hidden_jobs`), or the
+  event is dropped when it is retracted, hidden by its owner (`buddy_hidden_applications`), or the
   owner has left or is blocked in either direction.
 - **One conversation per pair**, stored as `user_low < user_high`. Leaving closes every
   pending or open conversation the member is in; the row and handle survive, so rejoining

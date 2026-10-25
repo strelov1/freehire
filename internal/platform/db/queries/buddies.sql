@@ -20,8 +20,9 @@ RETURNING *;
 -- name: LeaveBuddyMember :one
 -- Opt a member out: stamp left_at and close every pending or open conversation they are
 -- in, in one statement so a leave cannot half-apply. The row is kept, so rejoining
--- restores the handle. left_at IS NULL makes it a no-op (no row) for a member who is
--- not currently active.
+-- restores the handle. The member update is guarded by left_at IS NULL, so for a member
+-- who is not active it returns no row; the conversation close is not guarded, which is
+-- harmless because a left member has no pending or open conversation to close.
 WITH closed AS (
     UPDATE buddy_conversations
     SET status = 'closed', closed_at = now()

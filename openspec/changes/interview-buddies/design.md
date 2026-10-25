@@ -58,7 +58,7 @@ Mode `all` orders by `occurred_at DESC, id DESC` with a keyset cursor. Mode `sim
 A new partial index `application_events (occurred_at DESC, id DESC) WHERE kind IN ('applied','stage_set') AND retracted_at IS NULL` serves the keyset read. It is built `CONCURRENTLY` in its own no-transaction migration file, because the table is large and `ALTER` on hot tables hits the 5s lock timeout.
 
 ### D6. Hidden applications are buddy-owned
-`buddy_hidden_jobs (user_id, job_id)` with a primary key on both. The tracker shows the switch, but the tracker's own tables and the `user-job-tracking` requirements do not change. Hidden is keyed on `job_id`, the same key the ledger uses for an application.
+`buddy_hidden_applications (user_id, application_id)` with a primary key on both and no foreign key on `application_id`. The tracker shows the switch, but the tracker's own tables and the `user-job-tracking` requirements do not change. Hidden is keyed on the application, the id every ledger event carries in `application_events.application_id`. `job_id` would be wrong: `cmd/prune` clears it on events (SET NULL) while the event stays in the feed, so a job-keyed mark would be lost or unmatched. A mark left behind by a deleted application is harmless, since its events cascade away. The missing FK also avoids a lock on `applications` during the migration.
 
 ### D7. Conversations and messages
 - `buddy_conversations (id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at)`.

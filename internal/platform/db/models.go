@@ -291,10 +291,10 @@ type BuddyConversation struct {
 	NotifiedHighAt pgtype.Timestamptz `json:"notified_high_at"`
 }
 
-type BuddyHiddenJob struct {
-	UserID    int64              `json:"user_id"`
-	JobID     int64              `json:"job_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+type BuddyHiddenApplication struct {
+	UserID        int64              `json:"user_id"`
+	ApplicationID int64              `json:"application_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 type BuddyMember struct {

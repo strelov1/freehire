@@ -16,17 +16,18 @@ CREATE TABLE IF NOT EXISTS buddy_members (
     left_at   timestamptz
 );
 
--- Applications a member keeps out of the feed, keyed by job_id like the ledger.
--- job_id has its own index: cmd/prune hard-deletes jobs and the cascade would
--- otherwise scan this table once per deleted job.
-CREATE TABLE IF NOT EXISTS buddy_hidden_jobs (
-    user_id    bigint      NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    job_id     bigint      NOT NULL REFERENCES jobs (id) ON DELETE CASCADE,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    PRIMARY KEY (user_id, job_id)
+-- Applications a member keeps out of the feed, keyed on the application (the key every
+-- ledger event carries in application_events.application_id and which survives cmd/prune,
+-- unlike job_id). There is deliberately NO foreign key on application_id: a reference
+-- would take a lock on applications inside the migration transaction, and a mark left
+-- behind by a deleted application is harmless because that application's events cascade
+-- away with it.
+CREATE TABLE IF NOT EXISTS buddy_hidden_applications (
+    user_id        bigint      NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    application_id bigint      NOT NULL,
+    created_at     timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, application_id)
 );
-
-CREATE INDEX IF NOT EXISTS buddy_hidden_jobs_job_idx ON buddy_hidden_jobs (job_id);
 
 -- One conversation per pair: user_low < user_high plus the unique constraint makes the
 -- pair order-independent. The read cursors (last message id read) and the notified

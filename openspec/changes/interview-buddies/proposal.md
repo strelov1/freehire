@@ -27,7 +27,7 @@ People searching for the same kind of role in the same place, often at the same 
 ## Impact
 
 - **Backend:** new package `internal/engage/buddy` (layer 7, registered in `internal/platform/arch/layering/blocks.go`). It reads `internal/candidate/talentnetwork` (card projection), `application_events`, and `jobs`/companies.
-- **Database:** one new migration adding `buddy_members`, `buddy_hidden_jobs`, `buddy_conversations`, `buddy_messages`, `buddy_blocks`, `buddy_reports`. New sqlc queries in `internal/platform/db/queries/buddies.sql`.
+- **Database:** one new migration adding `buddy_members`, `buddy_hidden_applications`, `buddy_conversations`, `buddy_messages`, `buddy_blocks`, `buddy_reports`. New sqlc queries in `internal/platform/db/queries/buddies.sql`.
 - **API:** new authenticated routes under `/api/v1/me/buddies/...` (membership, similar, feed, conversations, messages, block, report, hidden jobs) and a moderation endpoint for buddy reports.
 - **Worker:** `cmd/buddy-notify` plus a systemd timer in the private `freehire-ops` repository, every 5 minutes.
 - **Web:** new `/buddies` page with three tabs (similar, feed, chats), a chat view, a feed switch on tracker cards, a moderation tab, and the `/privacy` text.
