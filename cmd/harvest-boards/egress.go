@@ -35,3 +35,22 @@ func egressFor(provider string, rotating bool) (*sources.Client, error) {
 	}
 	return sources.NewRotatingProxyClient(u), nil
 }
+
+// withProberClient lets a prober that needs a client of its own (probeClienter) replace the
+// egress. That client is built by the prober and knows nothing of the rotating gateway, so under
+// -rotating the swap would quietly send the probe somewhere the operator did not ask for; it is
+// refused instead.
+func withProberClient(p prober, egress *sources.Client, rotating bool) (*sources.Client, error) {
+	pc, ok := p.(probeClienter)
+	if !ok {
+		return egress, nil
+	}
+	c := pc.probeClient()
+	if c == nil {
+		return egress, nil
+	}
+	if rotating {
+		return nil, errors.New("-rotating is not supported: this prober probes through a client of its own")
+	}
+	return c, nil
+}

@@ -28,3 +28,18 @@ func TestEgressForRotatingBuildsAClientFromTheGateway(t *testing.T) {
 		t.Fatalf("egressFor = (%v, %v), want a client", c, err)
 	}
 }
+
+// pandapelatam probes through a client of its own; -rotating must refuse it rather than let that
+// client silently replace the rotating egress.
+func TestWithProberClientRefusesRotatingForAProberWithItsOwnClient(t *testing.T) {
+	p, ok := proberFor("pandapelatam")
+	if !ok {
+		t.Skip("pandapelatam prober not registered")
+	}
+	if _, err := withProberClient(p, nil, true); err == nil {
+		t.Fatal("withProberClient(-rotating) = nil error, want a refusal")
+	}
+	if c, err := withProberClient(p, nil, false); err != nil || c == nil {
+		t.Fatalf("withProberClient(no -rotating) = (%v, %v), want the prober's own client", c, err)
+	}
+}
