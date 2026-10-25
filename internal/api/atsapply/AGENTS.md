@@ -207,6 +207,16 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   live smoke check found: the ported `"work authoriz"` is fixed-order and never matches
   the real, common phrasing `"authorization to work"` (words reversed) — replaced with the
   standalone `"authoriz"`, which catches either ordering.
+  **The list is multilingual and covers document numbers**, since a production preview
+  (2026-10-25, a Brazilian Greenhouse form) marked "pretensão salarial", "pessoa com
+  deficiência", a D&I consent and "Qual é o seu CPF?" all for drafting — every stem was
+  English, and identifiers were not a category at all. A drafted CPF is a fabricated tax id
+  sent in the candidate's name. Identifiers come in two lists: spelled-out stems
+  (`identityTerms`) and acronyms matched as WHOLE words (`identityTokens`); an acronym that
+  is an ordinary word in a form language (`ein`, `sin`, `nie`, `pan`) stays out of the
+  second list and is caught by its spelled-out name. Not drafting such a field does not
+  park it forever: it stays a pending question the candidate answers once into the bank,
+  which `answertopic.Recallable` does not refuse.
 - **A draft is grounded only in `Provenance.Publishable()` experience-bank atoms — never
   raw CV text, never a system-inferred fact.** `buildGroundingContext` (`grounding.go`)
   filters `internal/candidate/experience.Store.ListAtoms` to `cv_import`/`stated_in_chat`/`manual`

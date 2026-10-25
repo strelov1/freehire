@@ -183,6 +183,8 @@ linters:
       # Real words in other languages (board-ingest dictionaries, non-English test
       # fixtures), not English typos.
       ignore-rules:
+        - pretens
+        - nationalit
         - administrativo
         - assistante
         - processos
