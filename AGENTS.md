@@ -277,6 +277,7 @@ Each is self-contained and can be read independently.
 | **On-site applications** (a candidate applying to an employer vacancy here, recorded once, emailed to the employer) | [internal/ingest/directapply/AGENTS.md](internal/ingest/directapply/AGENTS.md) |
 | **Telegram** (crawl + LLM vacancy extraction) | [internal/ingest/telegram/AGENTS.md](internal/ingest/telegram/AGENTS.md) |
 | **`internal/engage`** — the block itself: what it is, what it may import | [internal/engage/AGENTS.md](internal/engage/AGENTS.md) |
+| **Interview buddies** (anonymous peer network: handle, feed vocabulary, one conversation per pair) | [internal/engage/buddy/AGENTS.md](internal/engage/buddy/AGENTS.md) |
 | **Employee referrals** (offer/request marketplace, moderation, anonymity) | [internal/engage/referral/AGENTS.md](internal/engage/referral/AGENTS.md) |
 | **Mentorship marketplace** (the slot engine, the timezone rules, the non-overlap constraint) | [internal/engage/mentorship/AGENTS.md](internal/engage/mentorship/AGENTS.md) |
 | **Daily social digest** (the most-viewed list, the editorial rules, the publisher seam) | [internal/engage/socialdigest/AGENTS.md](internal/engage/socialdigest/AGENTS.md) |

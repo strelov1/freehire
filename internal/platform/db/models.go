@@ -270,6 +270,62 @@ type BroadcastEmail struct {
 	Error    string             `json:"error"`
 }
 
+type BuddyBlock struct {
+	BlockerID int64              `json:"blocker_id"`
+	BlockedID int64              `json:"blocked_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type BuddyConversation struct {
+	ID             int64              `json:"id"`
+	UserLow        int64              `json:"user_low"`
+	UserHigh       int64              `json:"user_high"`
+	InitiatorID    int64              `json:"initiator_id"`
+	Status         string             `json:"status"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	AcceptedAt     pgtype.Timestamptz `json:"accepted_at"`
+	ClosedAt       pgtype.Timestamptz `json:"closed_at"`
+	LastReadLow    pgtype.Int8        `json:"last_read_low"`
+	LastReadHigh   pgtype.Int8        `json:"last_read_high"`
+	NotifiedLowAt  pgtype.Timestamptz `json:"notified_low_at"`
+	NotifiedHighAt pgtype.Timestamptz `json:"notified_high_at"`
+}
+
+type BuddyHiddenJob struct {
+	UserID    int64              `json:"user_id"`
+	JobID     int64              `json:"job_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type BuddyMember struct {
+	UserID    int64              `json:"user_id"`
+	Handle    string             `json:"handle"`
+	Category  pgtype.Text        `json:"category"`
+	Countries []string           `json:"countries"`
+	Regions   []string           `json:"regions"`
+	JoinedAt  pgtype.Timestamptz `json:"joined_at"`
+	LeftAt    pgtype.Timestamptz `json:"left_at"`
+}
+
+type BuddyMessage struct {
+	ID             int64              `json:"id"`
+	ConversationID int64              `json:"conversation_id"`
+	SenderID       int64              `json:"sender_id"`
+	Body           string             `json:"body"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type BuddyReport struct {
+	ID             int64              `json:"id"`
+	ConversationID int64              `json:"conversation_id"`
+	ReporterID     int64              `json:"reporter_id"`
+	Reason         string             `json:"reason"`
+	Note           pgtype.Text        `json:"note"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ResolvedAt     pgtype.Timestamptz `json:"resolved_at"`
+	ResolvedBy     pgtype.Int8        `json:"resolved_by"`
+}
+
 type CandidateSurvey struct {
 	UserID                int64              `json:"user_id"`
 	JobSearchStage        pgtype.Text        `json:"job_search_stage"`

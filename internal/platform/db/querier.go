@@ -2383,6 +2383,10 @@ type Querier interface {
 	// answers both pauses: a second query per board would double the per-board round trips over
 	// the crawl host's link to the database.
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (GetBoardCooldownRow, error)
+	// The member behind a handle, active or left.
+	GetBuddyMemberByHandle(ctx context.Context, handle string) (BuddyMember, error)
+	// A member's own row, active or left. The caller decides what left_at means.
+	GetBuddyMemberByUser(ctx context.Context, userID int64) (BuddyMember, error)
 	// The user's saved CV appearance defaults, if any. No row means the user has never saved
 	// any — the caller falls back to the system defaults rather than treating this as an error.
 	GetCVAppearanceDefaults(ctx context.Context, userID int64) (CvAppearanceDefault, error)
@@ -3316,6 +3320,13 @@ type Querier interface {
 	// WHERE over `description` de-TOASTs the column for every row it examines, and the
 	// search index already holds the text.
 	JobsForWorkModeRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForWorkModeRecheckByIDsRow, error)
+	// Opt a member in to the interview-buddies network, or bring a returning one back. A first
+	// join stores the handle the caller minted; a rejoin (the user_id conflict) clears left_at
+	// and refreshes the ranking keys but leaves the stored handle alone, so the argument is
+	// only used on the insert path. A handle collision is a different unique violation (the
+	// handle column) that ON CONFLICT (user_id) does not absorb, so the caller can retry with
+	// a new handle.
+	JoinBuddyMember(ctx context.Context, arg JoinBuddyMemberParams) (BuddyMember, error)
 	// When the candidate last set this application's stage themselves, or NULL if never.
 	//
 	// This is what silences a mail-driven stage suggestion. A `stage_set` later than the message
@@ -3376,6 +3387,11 @@ type Querier interface {
 	// returns exactly one row — NULL for an empty catalogue — rather than the
 	// no-rows error a bare LIMIT 1 SELECT would give sqlc's :one on an empty table.
 	LatestOpenJobAddedAt(ctx context.Context) (pgtype.Timestamptz, error)
+	// Opt a member out: stamp left_at and close every pending or open conversation they are
+	// in, in one statement so a leave cannot half-apply. The row is kept, so rejoining
+	// restores the handle. left_at IS NULL makes it a no-op (no row) for a member who is
+	// not currently active.
+	LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMember, error)
 	// Bind a Discord account to a freehire account, or move an existing binding to a different
 	// Discord account.
 	//
@@ -7393,6 +7409,9 @@ type Querier interface {
 	// boardcatalog.PlaceholderCompany, once a curator knows the real one. Matches any status
 	// (a placeholder is worth fixing whether the board is still pending or already active).
 	UpdateBoardCompany(ctx context.Context, arg UpdateBoardCompanyParams) (int64, error)
+	// Refresh the category and geography similarity is scored on. Skips a left member: their
+	// keys are not read, and a write would only touch a row nobody is using.
+	UpdateBuddyMemberRankingKeys(ctx context.Context, arg UpdateBuddyMemberRankingKeysParams) error
 	// Replace a CV's editable fields, stamping updated_at. Owner-scoped: no row is updated
 	// for a foreign or missing id (the handler maps the resulting no-row error to 404).
 	UpdateCV(ctx context.Context, arg UpdateCVParams) (UpdateCVRow, error)

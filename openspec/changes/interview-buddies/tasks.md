@@ -1,9 +1,9 @@
 ## 1. Schema and queries
 
-- [ ] 1.1 Migration `0197_buddies.sql`: `buddy_members`, `buddy_hidden_jobs`, `buddy_conversations`, `buddy_messages`, `buddy_blocks`, `buddy_reports` with CHECKs, unique pair index, cascades (design D2, D6, D7, D10); passes `pnpm check:sql`
-- [ ] 1.2 Migration `0198_application_events_feed_idx.sql` (no-transaction, `CREATE INDEX CONCURRENTLY IF NOT EXISTS`) for the feed keyset read (D5)
-- [ ] 1.3 `internal/platform/db/queries/buddies.sql` membership queries (upsert join/rejoin keeping handle, leave, get, update ranking keys) + `make sqlc`
-- [ ] 1.4 Register `buddy` in `internal/platform/arch/layering/blocks.go` under `engage`; package skeleton `internal/engage/buddy` with `AGENTS.md`, linked from the root AGENTS.md table
+- [x] 1.1 Migration `0197_buddies.sql`: `buddy_members`, `buddy_hidden_jobs`, `buddy_conversations`, `buddy_messages`, `buddy_blocks`, `buddy_reports` with CHECKs, unique pair index, cascades (design D2, D6, D7, D10); passes `pnpm check:sql`
+- [x] 1.2 Migration `0198_application_events_feed_idx.sql` (no-transaction, `CREATE INDEX CONCURRENTLY IF NOT EXISTS`) for the feed keyset read (D5)
+- [x] 1.3 `internal/platform/db/queries/buddies.sql` membership queries (upsert join/rejoin keeping handle, leave, get, update ranking keys) + `make sqlc`
+- [x] 1.4 Register `buddy` in `internal/platform/arch/layering/blocks.go` under `engage`; package skeleton `internal/engage/buddy` with `AGENTS.md`, linked from the root AGENTS.md table
 
 ## 2. Membership and profile
 
