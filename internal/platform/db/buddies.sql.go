@@ -733,6 +733,67 @@ func (q *Queries) ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([
 	return items, nil
 }
 
+const listBuddyMemberActivity = `-- name: ListBuddyMemberActivity :many
+SELECT (e.occurred_at AT TIME ZONE 'UTC')::date AS day,
+       count(*)::int AS events
+FROM application_events e
+JOIN buddy_members m ON m.user_id = e.user_id AND m.left_at IS NULL
+LEFT JOIN jobs j ON j.id = e.job_id
+WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
+  AND (e.kind = 'applied' OR e.signal IN ('interview', 'offer'))
+  AND (j.id IS NULL OR NOT j.is_private)
+  AND e.user_id <> $1
+  AND e.user_id = $2
+  AND e.occurred_at >= $3::date::timestamp AT TIME ZONE 'UTC'
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_blocks b
+      WHERE (b.blocker_id = $1 AND b.blocked_id = e.user_id)
+         OR (b.blocker_id = e.user_id AND b.blocked_id = $1))
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_hidden_applications h
+      WHERE h.user_id = e.user_id AND h.application_id = e.application_id)
+GROUP BY day
+ORDER BY day
+`
+
+type ListBuddyMemberActivityParams struct {
+	ViewerID int64       `json:"viewer_id"`
+	AuthorID int64       `json:"author_id"`
+	SinceDay pgtype.Date `json:"since_day"`
+}
+
+type ListBuddyMemberActivityRow struct {
+	Day    pgtype.Date `json:"day"`
+	Events int32       `json:"events"`
+}
+
+// One member's feed events counted per UTC day since since_day, oldest first, for the year
+// grid on their page. It is ListBuddyFeed's visibility predicate RESTATED, narrowed to one
+// author and aggregated: sqlc cannot share a WHERE clause between two queries, and every
+// exclusion above must hold here too or the grid counts what the feed hides. The guard
+// against the two drifting is TestMemberActivityMatchesMemberFeed, which seeds every
+// exclusion and asserts the grid's total equals the author-filtered feed's length — change
+// one predicate and change the other. Only days with an event come back.
+func (q *Queries) ListBuddyMemberActivity(ctx context.Context, arg ListBuddyMemberActivityParams) ([]ListBuddyMemberActivityRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyMemberActivity, arg.ViewerID, arg.AuthorID, arg.SinceDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyMemberActivityRow{}
+	for rows.Next() {
+		var i ListBuddyMemberActivityRow
+		if err := rows.Scan(&i.Day, &i.Events); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBuddyMessages = `-- name: ListBuddyMessages :many
 SELECT id, sender_id, body, created_at
 FROM buddy_messages

@@ -16,6 +16,11 @@ an invitation step. Layer 7 (`engage`); tables are `buddy_*` (migration 0197), q
   `expired` never appear: "took the offer" is the most identifying fact in the ledger. An
   event is dropped when it is retracted, hidden by its owner (`buddy_hidden_applications`), or the
   owner has left or is blocked in either direction.
+- **The member page's year grid counts the feed, nothing else.** `ListBuddyMemberActivity`
+  restates `ListBuddyFeed`'s visibility predicate (sqlc cannot share a WHERE clause); change
+  one and change the other. `TestMemberActivityMatchesMemberFeed` seeds every exclusion and
+  holds the grid's total to the member feed's length. Never reuse the tracker's activity
+  query for another person: it counts follow-ups and every stage move.
 - **One conversation per pair**, stored as `user_low < user_high`. Leaving closes every
   pending or open conversation the member is in; the row and handle survive, so rejoining
   restores the handle.

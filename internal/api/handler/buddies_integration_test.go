@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/engage/buddy"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -27,6 +28,7 @@ type buddyEnv struct {
 	t     *testing.T
 	app   *fiber.App
 	iss   *auth.Issuer
+	pool  *pgxpool.Pool
 	users map[string]int64
 }
 
@@ -35,7 +37,7 @@ func newBuddyEnv(t *testing.T, names ...string) *buddyEnv {
 	pool := startPostgres(t)
 	queries := db.New(pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	env := &buddyEnv{t: t, iss: iss, users: map[string]int64{}}
+	env := &buddyEnv{t: t, iss: iss, pool: pool, users: map[string]int64{}}
 
 	cv, _ := json.Marshal(map[string]any{
 		"total_years": 7,
@@ -393,4 +395,44 @@ func TestBuddyReportAndModeration(t *testing.T) {
 func ha(env *buddyEnv, user string) string {
 	out := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/buddies", user, nil)
 	return out["data"].(map[string]any)["handle"].(string)
+}
+
+func TestBuddyMemberActivity(t *testing.T) {
+	env := newBuddyEnv(t, "a", "b")
+	handleA := env.join("a")
+	handleB := env.join("b")
+	ctx := context.Background()
+	var app int64
+	if err := env.pool.QueryRow(ctx, `INSERT INTO applications (user_id, company_slug, applied_at) VALUES ($1, 'acme', now()) RETURNING id`,
+		env.users["b"]).Scan(&app); err != nil {
+		t.Fatal(err)
+	}
+	// Two applications two days ago and a rejection, which the grid never counts.
+	for _, ev := range [][2]string{{"applied", ""}, {"applied", ""}, {"stage_set", "rejected"}} {
+		if _, err := env.pool.Exec(ctx, `INSERT INTO application_events
+			(user_id, application_id, company_slug, kind, signal, occurred_at, source)
+			VALUES ($1, $2, 'acme', $3, $4, (date_trunc('day', now() AT TIME ZONE 'UTC') - interval '2 days' + interval '12 hours') AT TIME ZONE 'UTC', 'user')`,
+			env.users["b"], app, ev[0], ev[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	path := "/api/v1/me/buddies/profiles/" + handleB + "/activity"
+	env.want(http.StatusUnauthorized, http.MethodGet, path, "", nil)
+	data := env.want(http.StatusOK, http.MethodGet, path, "a", nil)["data"].(map[string]any)
+	days := data["days"].([]any)
+	if len(days) != 1 {
+		t.Fatalf("days = %v", days)
+	}
+	day := days[0].(map[string]any)
+	if day["count"] != float64(2) || day["day"] != time.Now().UTC().AddDate(0, 0, -2).Format(time.DateOnly) {
+		t.Fatalf("day = %v", day)
+	}
+	// An empty year is an empty list, never null.
+	empty := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/buddies/profiles/"+handleA+"/activity", "b", nil)["data"].(map[string]any)
+	if l, ok := empty["days"].([]any); !ok || len(l) != 0 {
+		t.Fatalf("empty activity = %v", empty)
+	}
+	env.want(http.StatusNotFound, http.MethodGet, "/api/v1/me/buddies/profiles/"+handleA+"/activity", "a", nil)
+	env.want(http.StatusNotFound, http.MethodGet, "/api/v1/me/buddies/profiles/nobody-here/activity", "a", nil)
 }

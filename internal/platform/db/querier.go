@@ -3691,6 +3691,14 @@ type Querier interface {
 	// visibility predicate as every other row, a cursor naming an event the viewer may not
 	// see (rejected, hidden, blocked, retracted, unknown) comes back without it.
 	ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([]ListBuddyFeedRow, error)
+	// One member's feed events counted per UTC day since since_day, oldest first, for the year
+	// grid on their page. It is ListBuddyFeed's visibility predicate RESTATED, narrowed to one
+	// author and aggregated: sqlc cannot share a WHERE clause between two queries, and every
+	// exclusion above must hold here too or the grid counts what the feed hides. The guard
+	// against the two drifting is TestMemberActivityMatchesMemberFeed, which seeds every
+	// exclusion and asserts the grid's total equals the author-filtered feed's length — change
+	// one predicate and change the other. Only days with an event come back.
+	ListBuddyMemberActivity(ctx context.Context, arg ListBuddyMemberActivityParams) ([]ListBuddyMemberActivityRow, error)
 	// Messages after a given id, oldest first. Readability is the caller's check.
 	ListBuddyMessages(ctx context.Context, arg ListBuddyMessagesParams) ([]ListBuddyMessagesRow, error)
 	// Every message of the given conversations, oldest first within each, with the sender's

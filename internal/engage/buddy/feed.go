@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/strelov1/freehire/internal/application/appevent"
 )
@@ -110,6 +111,29 @@ func (s *Service) MemberFeed(ctx context.Context, viewerID int64, handle, cursor
 		return FeedPage{}, err
 	}
 	return s.feedPage(ctx, viewerID, []string{target.Handle}, true, after, clampFeedLimit(limit))
+}
+
+// ActivityDays is how far back a member's activity grid reaches, today included.
+const ActivityDays = 365
+
+// ActivityDay is how many feed events a member has on one UTC calendar date (YYYY-MM-DD).
+type ActivityDay struct {
+	Day   string
+	Count int
+}
+
+// MemberActivity counts one member's feed events per UTC day over the last ActivityDays
+// days, for the year grid on their page. It counts exactly what MemberFeed lists and
+// nothing else — never the tracker's own activity, which also counts follow-ups and every
+// stage move. A handle the viewer may not see is ErrNotFound, as Profile answers it.
+func (s *Service) MemberActivity(ctx context.Context, viewerID int64, handle string) ([]ActivityDay, error) {
+	target, err := s.visibleMember(ctx, viewerID, handle)
+	if err != nil {
+		return nil, err
+	}
+	now := s.now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	return s.repo.Activity(ctx, viewerID, target.UserID, today.AddDate(0, 0, -(ActivityDays-1)))
 }
 
 // feedPage reads the page after the event `after` (0 for the first page), restricted to

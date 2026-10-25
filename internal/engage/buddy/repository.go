@@ -165,6 +165,20 @@ func (r *QueriesRepository) Feed(ctx context.Context, viewerID int64, authors []
 	return out, nil
 }
 
+func (r *QueriesRepository) Activity(ctx context.Context, viewerID, authorID int64, since time.Time) ([]ActivityDay, error) {
+	rows, err := r.q.ListBuddyMemberActivity(ctx, db.ListBuddyMemberActivityParams{
+		ViewerID: viewerID, AuthorID: authorID, SinceDay: pgtype.Date{Time: since, Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ActivityDay, len(rows))
+	for i, row := range rows {
+		out[i] = ActivityDay{Day: row.Day.Time.Format(time.DateOnly), Count: int(row.Events)}
+	}
+	return out, nil
+}
+
 func (r *QueriesRepository) HideApplication(ctx context.Context, userID, applicationID int64) (bool, error) {
 	_, err := r.q.HideBuddyApplication(ctx, db.HideBuddyApplicationParams{UserID: userID, ApplicationID: applicationID})
 	if errors.Is(err, pgx.ErrNoRows) {

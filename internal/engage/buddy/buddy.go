@@ -74,6 +74,9 @@ type Repository interface {
 	// first page; the cursor's own event is included when the viewer may see it). When
 	// authorsOnly is set only the authors named by handle are read.
 	Feed(ctx context.Context, viewerID int64, authors []string, authorsOnly bool, cursorID int64, limit int) ([]FeedRow, error)
+	// Activity counts authorID's feed events per UTC day from since on, under the same
+	// visibility rules as Feed for viewerID. Days without an event are absent.
+	Activity(ctx context.Context, viewerID, authorID int64, since time.Time) ([]ActivityDay, error)
 	// HideApplication reports false when the application is not the user's.
 	HideApplication(ctx context.Context, userID, applicationID int64) (bool, error)
 	ShowApplication(ctx context.Context, userID, applicationID int64) error

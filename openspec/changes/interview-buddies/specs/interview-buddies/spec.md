@@ -88,6 +88,17 @@ The system SHALL show members a feed of other active members' application events
 - **WHEN** a member leaves
 - **THEN** none of their events appear in any feed
 
+### Requirement: Member activity grid
+A member's page SHALL show that member's last year as a per-day count, and SHALL count exactly the events the feed would list for that member to the viewer — nothing the feed excludes, and none of the tracker's own counted actions (follow-ups, other stage moves). Counts SHALL be at UTC day precision. A handle the viewer may not see SHALL answer not found, as the profile does.
+
+#### Scenario: The grid counts what the feed lists
+- **WHEN** a member has applications, interview and offer moves, rejections, follow-ups, a retracted event, a hidden application and an event on a private posting
+- **THEN** the grid's total equals the number of that member's feed entries, day by day
+
+#### Scenario: Blocked or own handle
+- **WHEN** a viewer requests the grid of a member on either side of a block, or of their own handle
+- **THEN** the response is not found
+
 ### Requirement: Per-application feed visibility
 Every application SHALL be shown in the buddy feed by default. A member SHALL be able to hide a single application from the feed and show it again. Hiding SHALL remove all of that application's events from every feed immediately.
 

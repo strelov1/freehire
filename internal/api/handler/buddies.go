@@ -32,6 +32,7 @@ func (h *buddyHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/buddies/similar", mw.cookie, h.Similar)
 	api.Get("/me/buddies/feed", mw.cookie, h.Feed)
 	api.Get("/me/buddies/profiles/:handle", mw.cookie, h.Profile)
+	api.Get("/me/buddies/profiles/:handle/activity", mw.cookie, h.Activity)
 	api.Get("/me/buddies/hidden-applications", mw.cookie, h.HiddenApplications)
 	api.Put("/me/buddies/hidden-applications/:id", mw.cookie, h.HideApplication)
 	api.Delete("/me/buddies/hidden-applications/:id", mw.cookie, h.ShowApplication)
@@ -231,6 +232,28 @@ func (h *buddyHandlers) Profile(c *fiber.Ctx) error {
 		return buddyError(err)
 	}
 	return c.JSON(fiber.Map{"data": buddyProfileResponse{Handle: p.Handle, Card: p.Card, CardEmpty: p.EmptyCard}})
+}
+
+type buddyActivityDayResponse struct {
+	Day   string `json:"day"`
+	Count int    `json:"count"`
+}
+
+// Activity is one member's feed events per day over the last year, for their page's grid.
+func (h *buddyHandlers) Activity(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	days, err := h.buddy.MemberActivity(c.Context(), userID, c.Params("handle"))
+	if err != nil {
+		return buddyError(err)
+	}
+	out := make([]buddyActivityDayResponse, len(days))
+	for i, d := range days {
+		out[i] = buddyActivityDayResponse{Day: d.Day, Count: d.Count}
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{"days": out}})
 }
 
 // HiddenApplications lists the caller's applications kept out of the feed.

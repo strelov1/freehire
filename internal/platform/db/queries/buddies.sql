@@ -196,6 +196,35 @@ WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
 ORDER BY e.occurred_at DESC, e.id DESC
 LIMIT sqlc.arg(page_limit);
 
+-- name: ListBuddyMemberActivity :many
+-- One member's feed events counted per UTC day since since_day, oldest first, for the year
+-- grid on their page. It is ListBuddyFeed's visibility predicate RESTATED, narrowed to one
+-- author and aggregated: sqlc cannot share a WHERE clause between two queries, and every
+-- exclusion above must hold here too or the grid counts what the feed hides. The guard
+-- against the two drifting is TestMemberActivityMatchesMemberFeed, which seeds every
+-- exclusion and asserts the grid's total equals the author-filtered feed's length — change
+-- one predicate and change the other. Only days with an event come back.
+SELECT (e.occurred_at AT TIME ZONE 'UTC')::date AS day,
+       count(*)::int AS events
+FROM application_events e
+JOIN buddy_members m ON m.user_id = e.user_id AND m.left_at IS NULL
+LEFT JOIN jobs j ON j.id = e.job_id
+WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
+  AND (e.kind = 'applied' OR e.signal IN ('interview', 'offer'))
+  AND (j.id IS NULL OR NOT j.is_private)
+  AND e.user_id <> sqlc.arg(viewer_id)
+  AND e.user_id = sqlc.arg(author_id)
+  AND e.occurred_at >= sqlc.arg(since_day)::date::timestamp AT TIME ZONE 'UTC'
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_blocks b
+      WHERE (b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = e.user_id)
+         OR (b.blocker_id = e.user_id AND b.blocked_id = sqlc.arg(viewer_id)))
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_hidden_applications h
+      WHERE h.user_id = e.user_id AND h.application_id = e.application_id)
+GROUP BY day
+ORDER BY day;
+
 -- name: HideBuddyApplication :one
 -- Mark one of the caller's own applications as hidden from the buddy feed and from the
 -- shared-company count. The SELECT is what proves ownership: for an application that is
