@@ -200,6 +200,33 @@ If you are tempted to widen this family, sample the phrase against live titles f
 every term here was admitted that way, and the whole exception depends on none of them
 being loose.
 
+## German compound heads
+
+German names a role in a compound whose LAST morpheme is the role — Kranken|pfleger,
+Stapler|fahrer — so whole-word aliases cannot keep up with the long tail. `german.go`
+holds two tables, `germanCategoryTable` and `germanSeniorityTable`, where an alias
+written `-pfleger` matches any word ending in it and an alias without the dash is a
+whole-word phrase. They run only when the main table resolved NOTHING, so they never
+change a title that already resolves.
+
+A head resolves per WORD: a word takes the first head it ends in, so a longer veto
+(`-begleiter` → `categoryNone`) claims "Alltagsbegleiter" before `-leiter` can read it
+as a lead, without blanking the rest of the title. The fused feminine endings
+(`-in`, `-innen`) are folded once per word; `(m/w/d)`-style notices are cut first so
+they cannot split a phrase. Trainee words outrank the `-leiter`/`-leitung` heads: a
+"Praktikant Bauleitung" is an intern.
+
+Measured 2026-10-25 over the 123,605 open postings of coveto, rexx, xing, dvinci,
+concludis, onlyfy and kenjo: category 15.4% → 75.3%, seniority 2.0% → 24.6% (most
+German titles state no grade). A hand-checked hold-out of 100 newly resolved titles
+found one debatable category and one debatable grade. Short or ambiguous words are
+deliberately absent — `maler` is whole-word only because "normaler" ends in it, and
+the acronyms `MFA`/`OTA`/`PTA` are out because English titles use them for other things.
+
+The title's invisible format characters (U+00AD soft hyphens above all) are cut by
+`normalize.CleanTitle` inside `jobderive.Derive`, for the dictionaries only — the
+stored title and the public slug keep what the source sent.
+
 ## Serving: dict-only
 
 `jobview.FromRow` overwrites the nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM's value is never a fallback. They remain **nested under `enrichment`** so existing search facets, SPA, and generated contracts are unchanged.

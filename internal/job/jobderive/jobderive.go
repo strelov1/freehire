@@ -138,6 +138,10 @@ type Derived struct {
 // description), category (structured → title), experience (structured → description),
 // and skills (structured ∪ dictionary).
 func Derive(in Input) Derived {
+	// The dictionaries read the title with its invisible format characters cut
+	// (normalize.CleanTitle); the public slug below is still minted from in.Title, so a
+	// stored row re-derived by backfill-derive keeps its published URL.
+	title := normalize.CleanTitle(in.Title)
 	geo := location.Parse(in.Location)
 	// Geography precedence: the location dictionary → a title-embedded restriction
 	// marker → an eligibility signal in the description → an explicit region-scoping
@@ -152,7 +156,7 @@ func Derive(in Input) Derived {
 		// A title-embedded restriction marker ("[Remote-US]", "(Location - Australia
 		// or New Zealand)") is a more literal, ATS-authored signal than prose, so it
 		// is tried before the description-based rescues below.
-		if c, r := location.RestrictionFromTitle(in.Title); len(r) > 0 {
+		if c, r := location.RestrictionFromTitle(title); len(r) > 0 {
 			countries, regions = c, r
 		}
 	}
@@ -220,7 +224,7 @@ func Derive(in Input) Derived {
 	if workMode == "remote" && location.RemoteContradicted(in.Description) {
 		workMode = "onsite"
 	}
-	class := classify.Parse(in.Title)
+	class := classify.Parse(title)
 	// Seniority precedence: structured source signal → title dictionary → description
 	// phrase. Each lower source only fills a grade the higher ones left empty.
 	seniority := in.Seniority
@@ -241,12 +245,12 @@ func Derive(in Input) Derived {
 	if category == "" {
 		category = classify.NonTechFromDescription(in.Description)
 	}
-	isTech := deriveIsTech(category, in.Title, in.IsTechHint)
+	isTech := deriveIsTech(category, title, in.IsTechHint)
 	// Employment-type precedence: structured source signal (an ATS timeType /
 	// typeOfEmployment enum) → free-text description parse. The source's own value wins.
 	employmentType := in.EmploymentType
 	if employmentType == "" {
-		employmentType = jobfacts.EmploymentType(in.Title, in.Description)
+		employmentType = jobfacts.EmploymentType(title, in.Description)
 	}
 	// Experience precedence: structured source signal → description text parse.
 	//
