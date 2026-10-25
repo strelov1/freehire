@@ -45,11 +45,13 @@
 
   // `logo` overrides the proxy where it resolves the wrong mark: by name and domain it
   // returns xAI's wordmark for Grok, so Grok Bot ships its own round mark.
-  const agents: { name: string; domain: string; logo?: string }[] = [
+  // `mono`: a black-on-transparent mark that disappears on the dark theme's background,
+  // so it is inverted there; coloured marks stay as their brands draw them.
+  const agents: { name: string; domain: string; logo?: string; mono?: boolean }[] = [
     { name: 'Claude', domain: 'claude.ai' },
-    { name: 'ChatGPT', domain: 'chatgpt.com' },
+    { name: 'ChatGPT', domain: 'chatgpt.com', mono: true },
     { name: 'Cursor', domain: 'cursor.com' },
-    { name: 'Grok Bot', domain: 'grok.com', logo: '/brands/grok.png' },
+    { name: 'Grok Bot', domain: 'grok.com', logo: '/brands/grok.png', mono: true },
   ];
 </script>
 
@@ -75,6 +77,7 @@
                 name={agent.name}
                 src={agent.logo ?? sourceLogoUrl(agent.name, agent.domain) ?? undefined}
                 size="xs"
+                class={agent.mono ? 'dark:invert' : undefined}
               />
             </span>
           {/each}

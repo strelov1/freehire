@@ -37,6 +37,8 @@
     // Our own copy of the mark, where the logo proxy resolves the wrong one: for Grok it
     // returns xAI's wordmark rather than Grok Bot's round mark.
     logo?: string;
+    // A black-on-transparent mark, inverted on the dark theme where it would vanish.
+    mono?: boolean;
     directory?: { url: string; brand: SimpleIcon; note: string };
     steps: string[];
     file?: string;
@@ -64,6 +66,7 @@
       id: 'chatgpt',
       label: 'ChatGPT',
       domain: 'chatgpt.com',
+      mono: true,
       steps: [
         'Open Settings, then Apps & Connectors.',
         'Under Advanced settings, turn on Developer mode.',
@@ -102,6 +105,7 @@
       label: 'Grok Bot',
       domain: 'grok.com',
       logo: '/brands/grok.png',
+      mono: true,
       steps: [
         'Open Connect apps in the sidebar.',
         'Add a custom app, name it freehire, and paste the address.',
@@ -248,7 +252,13 @@
           host === h.id ? 'border-foreground bg-secondary/60' : 'border-border bg-background hover:bg-secondary/40',
         ]}
       >
-        <EntityLogo name={h.label} src={h.logo ?? sourceLogoUrl(h.label, h.domain) ?? undefined} size="lg" shape="square" />
+        <EntityLogo
+          name={h.label}
+          src={h.logo ?? sourceLogoUrl(h.label, h.domain) ?? undefined}
+          size="lg"
+          shape="square"
+          class={h.mono ? 'dark:invert' : undefined}
+        />
         <span class="text-base font-medium text-foreground">{h.label}</span>
       </button>
     {/each}
