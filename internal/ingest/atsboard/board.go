@@ -806,6 +806,10 @@ var noBoardFirstSegments = map[string][]string{
 	// The AppOne portal SPA loads its own API, bundle assets and uploaded logos from the host its
 	// portals live on; none of them is an employer.
 	"jobs.appone.com": {"api", "assets", "company-images"},
+	// Rippling's "/jobs/<posting-uuid>" carries no tenant: it 308s to /rippling/jobs/<uuid> for
+	// ANY uuid, real or not (verified live 2026-10-25), so skipping "jobs" would take the POSTING
+	// id as the board and keeping it would file a board called "jobs".
+	"ats.rippling.com": {"jobs"},
 }
 
 // allowedFirstSegments lists, per matched host entry in modeAllowedFirstSegment, the ONLY leading
@@ -1085,7 +1089,7 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		// which the board API omits, and collapse the canonical to the board root so a
 		// locale-prefixed vacancy, a bare vacancy, and the listing all map to one board.
 		board = firstSegmentAfterLocale(u)
-		if board == "" {
+		if board == "" || slices.Contains(noBoardFirstSegments[apex], board) {
 			return "", "", "", false
 		}
 		u.RawQuery, u.Fragment = "", ""

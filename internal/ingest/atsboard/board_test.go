@@ -114,6 +114,9 @@ func TestRecognize(t *testing.T) {
 		{"rippling no locale vacancy", "https://ats.rippling.com/satomic/jobs/34aaf2aa", "rippling", "satomic", "https://ats.rippling.com/satomic", true},
 		{"rippling board listing", "https://ats.rippling.com/satomic", "rippling", "satomic", "https://ats.rippling.com/satomic", true},
 		{"rippling locale only no tenant", "https://ats.rippling.com/en-GB", "", "", "", false},
+		// "/jobs/<uuid>" names no tenant: it 308s to /rippling/jobs/<uuid> for ANY uuid, real or not.
+		{"rippling tenantless posting", "https://ats.rippling.com/jobs/379fed0e-d42d-4e77-a4ae-05f11ecb2281", "", "", "", false},
+		{"rippling locale tenantless posting", "https://ats.rippling.com/en-US/jobs/379fed0e-d42d-4e77-a4ae-05f11ecb2281", "", "", "", false},
 
 		// pathlocalepair — Dayforce: every career site is on one host under
 		// "<culture?>/<tenant>/<site>" and the board is the two segments after the culture. The
