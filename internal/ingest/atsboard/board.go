@@ -164,8 +164,11 @@ const (
 // URL. A wrong/missing entry is fail-safe: the link simply isn't recognized (422), never a
 // false board. Single-company brands, aggregators, and custom-domain ATS (Taleo, SuccessFactors,
 // Oracle, and Workday tenants on their own domain) are absent — their board can't be derived
-// from a URL. The vendor-hosted forms ARE derivable: Workday's *.myworkdayjobs.com (host + site)
-// and *.myworkdaysite.com, *.taleo.net and *.oraclecloud.com (see pathPatternBoards).
+// from a URL. The vendor-hosted forms ARE derivable: Workday's *.myworkdayjobs.com (host + site),
+// *.taleo.net and *.oraclecloud.com (see pathPatternBoards). Workday's shared
+// wdN.myworkdaysite.com host is left out on purpose: the same site also answers on the tenant's
+// own <tenant>.wdN.myworkdayjobs.com, which is how the catalogue mostly stores it, so reading
+// the shared spelling would file a board we already crawl as a new one.
 var atsBoards = []struct{ host, source, mode string }{
 	// --- path: board = first path segment on a fixed host ---
 	{"greenhouse.io", "greenhouse", modePath},
@@ -517,13 +520,12 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"careers.flatchr.io", "flatchr", modePathPattern},
 	{"app.trinethire.com", "trinethire", modePathPattern},
 	{"jobs.gohire.io", "gohire", modePathPattern},
+	{"recruiterflow.com", "recruiterflow", modePathPattern},
 	// The rows below carry the tenant in the HOST as well as the path (tenantHost), so the
 	// board is "<host>/<capture>". Each was read off the adapter's own board parser.
 	{"taleo.net", "taleo", modePathPattern}, // after tbe.taleo.net (taleobe) above, which wins first
 	{"oraclecloud.com", "oracle", modePathPattern},
-	{"myworkdaysite.com", "workday", modePathPattern},
 	{"app.loxo.co", "loxo", modePathPattern},
-	{"recruiterflow.com", "recruiterflow", modePathPattern},
 }
 
 // pathTenantSubdomains names the path-mode hosts that ALSO serve a tenant on its own subdomain
@@ -629,14 +631,6 @@ var pathPatternBoards = map[string]pathPattern{
 	"oraclecloud.com": {
 		path:       regexp.MustCompile(`^/(?i:hcmui/candidateexperience/[a-z_-]+/sites)/([A-Za-z0-9_]+)(?:/|$)`),
 		listing:    "/hcmUI/CandidateExperience/en/sites/%s",
-		tenantHost: true,
-	},
-	// Workday's shared-host career sites, wdN.myworkdaysite.com/[<locale>/]recruiting/<tenant>/
-	// <site>: the adapter's board spells the tenant out as "<host>/<tenant>/<site>"
-	// (internal/ingest/sources/workday.go), because the host names no tenant.
-	"myworkdaysite.com": {
-		path:       regexp.MustCompile(`^/(?:[a-z]{2}-[A-Za-z]{2}/)?recruiting/([A-Za-z0-9_-]+/[A-Za-z0-9_-]+)(?:/|$)`),
-		listing:    "/recruiting/%s",
 		tenantHost: true,
 	},
 	// Loxo agency boards: <host>/<slug>, the host being app.loxo.co, a regional pod or the

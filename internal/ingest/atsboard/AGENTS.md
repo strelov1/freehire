@@ -84,6 +84,8 @@ nothing but the URL. No network, no database.
 - Custom-domain ATS (Taleo, SuccessFactors, Oracle, Workday tenants on their own domain) are
   absent on purpose: their board cannot be derived from a URL at all. Their VENDOR-hosted
   forms are recognised — `<tenant>.taleo.net/careersection/<section>/…`,
-  `<pod host>.oraclecloud.com/hcmUI/CandidateExperience/…/sites/<site>`,
-  `wdN.myworkdaysite.com/recruiting/<tenant>/<site>` — through `pathpattern`'s `tenantHost`,
-  which prefixes the capture with the link's own host because that host names the tenant.
+  `<pod host>.oraclecloud.com/hcmUI/CandidateExperience/…/sites/<site>` — through
+  `pathpattern`'s `tenantHost`, which prefixes the capture with the link's own host because
+  that host names the tenant. Workday's shared `wdN.myworkdaysite.com` is NOT read: the same
+  site answers on `<tenant>.wdN.myworkdayjobs.com`, the spelling the catalogue holds, so the
+  shared one would file a crawled board as new.

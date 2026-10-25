@@ -232,8 +232,6 @@ func TestRecognize(t *testing.T) {
 		{"oracle candidate experience site", "https://epwk.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/jobs", "oracle", "epwk.fa.us2.oraclecloud.com/CX", "https://epwk.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX", true},
 		{"oracle posting", "https://ekcm.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en-GB/sites/CX_1001/job/42", "oracle", "ekcm.fa.us6.oraclecloud.com/CX_1001", "https://ekcm.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001", true},
 		{"oracle host outside candidate experience", "https://epwk.fa.us2.oraclecloud.com/fscmUI/faces/FuseWelcome", "", "", "", false},
-		{"workday shared host with locale", "https://wd1.myworkdaysite.com/en-US/recruiting/wf/WellsFargoJobs", "workday", "wd1.myworkdaysite.com/wf/WellsFargoJobs", "https://wd1.myworkdaysite.com/recruiting/wf/WellsFargoJobs", true},
-		{"workday shared host posting", "https://wd5.myworkdaysite.com/recruiting/snapchat/snap/job/Los-Angeles/Engineer_R1", "workday", "wd5.myworkdaysite.com/snapchat/snap", "https://wd5.myworkdaysite.com/recruiting/snapchat/snap", true},
 		{"loxo shared host board", "https://app.loxo.co/AKRE-Associates", "loxo", "app.loxo.co/AKRE-Associates", "https://app.loxo.co/AKRE-Associates", true},
 		{"loxo agency host board", "https://fitnext.app.loxo.co/fitnext", "loxo", "fitnext.app.loxo.co/fitnext", "https://fitnext.app.loxo.co/fitnext", true},
 		{"loxo posting names no agency", "https://app.loxo.co/job/MjgwMDctem15YTg1MTJ0eWQwbjhyNQ==", "", "", "", false},
