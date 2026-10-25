@@ -453,6 +453,7 @@ func All(c HTTPClient) map[string]Source {
 		NewEasyCruit(c),
 		// Concurrency-limited: one origin serves every Homerun vacancy page (see homerunMaxInFlight).
 		NewHomerun(limitedHomerunGetter(c)),
+		NewHROffice(c),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
 		NewHelixjobs(limitedHelixjobsGetter(c)),
 		NewTalentstorm(c),

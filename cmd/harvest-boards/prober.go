@@ -927,6 +927,7 @@ var probers = map[string]prober{
 	"kenjo":           kenjoProber{},
 	"homerun":         homerunProber{},
 	"easycruit":       easycruitProber{},
+	"hroffice":        hrofficeProber{},
 	"meincheckin":     meincheckinProber{},
 	"helixjobs":       helixjobsProber{},
 	"talentstorm":     talentstormProber{},

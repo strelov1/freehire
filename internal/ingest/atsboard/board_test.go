@@ -293,6 +293,8 @@ func TestRecognize(t *testing.T) {
 		{"easycruit vacancy", "https://lentis.easycruit.com/vacancy/3034563/140565", "easycruit", "lentis", "https://lentis.easycruit.com", true},
 		{"easycruit export", "https://kongsberg.easycruit.com/export/xml/vacancy/list.xml", "easycruit", "kongsberg", "https://kongsberg.easycruit.com", true},
 		{"easycruit product site is not a tenant", "https://www.easycruit.com/", "", "", "", false},
+		{"hroffice vacancy", "https://middendelfland.inhroffice.com/nl/job/391727", "hroffice", "middendelfland", "https://middendelfland.inhroffice.com", true},
+		{"hroffice link shortener is not a tenant", "https://link.inhroffice.com/abc123", "", "", "", false},
 		{"kenjo help center is not a tenant", "https://help.kenjo.io/de/articles/123", "", "", "", false},
 		{"kenjo templates hub is not a tenant", "https://hr.kenjo.io/de/stundennachweis", "", "", "", false},
 		{"keka subdomain", "https://100.keka.com/careers", "keka", "100", "https://100.keka.com", true},

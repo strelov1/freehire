@@ -318,6 +318,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	// platformLabelsByApex.
 	{"homerun.co", "homerun", modeSubdomain},
 	{"easycruit.com", "easycruit", modeSubdomain},
+	// HR Office (Dutch): the career site is a label on inhroffice.com. Employers that show the
+	// same vacancies on their own domain pull them from there, so those domains name no board.
+	{"inhroffice.com", "hroffice", modeSubdomain},
 	// helixjobs: the concludis portal, keyed by instance id (see queryBoards).
 	{"helixjobs.com", "helixjobs", modeQuery},
 	// Emply: <tenant>.career.emply.com. A site on the customer's own domain (midtjob.dk) is a
@@ -1414,8 +1417,9 @@ var platformLabelsByApex = map[string][]string{
 	"talentstorm.de": {"www", "api", "videos"},
 	// Homerun's marketing site and sign-up funnel, the host a gone tenant's pages redirect to, the
 	// one feed host every tenant's feed is served from, and its asset hosts.
-	"homerun.co":    {"www", "try", "404", "feed", "static", "cdn"},
-	"easycruit.com": {"www"}, // Visma's EasyCruit product site
+	"homerun.co":     {"www", "try", "404", "feed", "static", "cdn"},
+	"easycruit.com":  {"www"},         // Visma's EasyCruit product site
+	"inhroffice.com": {"www", "link"}, // link.inhroffice.com is the vendor's link shortener
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —

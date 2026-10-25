@@ -404,6 +404,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   kenjo: 'Kenjo',
   homerun: 'Homerun',
   easycruit: 'EasyCruit',
+  hroffice: 'HR Office',
   helixjobs: 'helixjobs',
   talentstorm: 'talentstorm',
   pandape: 'Pandapé',
