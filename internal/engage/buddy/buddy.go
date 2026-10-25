@@ -70,6 +70,13 @@ type Repository interface {
 	Inputs(ctx context.Context, userID int64) (Inputs, error)
 	// Similar is one page of the viewer's similarity ranking, best first.
 	Similar(ctx context.Context, userID int64, limit, offset int) ([]SimilarRow, error)
+	// Feed is one page (at most limit rows) of events after cursor, newest first. When
+	// similarOnly is set only the authors named by handle are read.
+	Feed(ctx context.Context, viewerID int64, authors []string, similarOnly bool, cursor *FeedCursor, limit int) ([]FeedRow, error)
+	// HideApplication reports false when the application is not the user's.
+	HideApplication(ctx context.Context, userID, applicationID int64) (bool, error)
+	ShowApplication(ctx context.Context, userID, applicationID int64) error
+	HiddenApplications(ctx context.Context, userID int64) ([]int64, error)
 }
 
 // Service is the membership and profile use cases.

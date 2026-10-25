@@ -18,8 +18,8 @@
 
 ## 4. Feed and hidden applications
 
-- [ ] 4.1 `ListBuddyFeed` SQL: applied + stage_set interview/offer only, day precision, keyset cursor, `all` and `similar` (top 200) modes, excludes viewer/left/blocked/hidden/retracted (integration tests: rejection and accepted never appear, pre-join events included, left member gone)
-- [ ] 4.2 Hide/show an application (`buddy_hidden_applications`) + list hidden application ids for the tracker (integration test: hide removes, show restores)
+- [x] 4.1 `ListBuddyFeed` SQL: applied + stage_set interview/offer only, day precision, keyset cursor, `all` and `similar` (top 200) modes, excludes viewer/left/blocked/hidden/retracted (integration tests: rejection and accepted never appear, pre-join events included, left member gone)
+- [x] 4.2 Hide/show an application (`buddy_hidden_applications`) + list hidden application ids for the tracker (integration test: hide removes, show restores)
 
 ## 5. Conversations and chat
 

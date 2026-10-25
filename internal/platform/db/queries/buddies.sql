@@ -137,3 +137,73 @@ SELECT p.handle,
 FROM page p
 JOIN users u ON u.id = p.user_id
 ORDER BY p.score DESC, p.joined_at DESC, p.user_id;
+
+-- name: ListBuddyFeed :many
+-- One page of the buddy feed, newest first, keyset-paged on (occurred_at, id). Three kinds
+-- of event qualify and nothing else: an application ('applied'), and a move into the
+-- 'interview' or 'offer' stage. 'accepted' is excluded on purpose (it says the person
+-- changed jobs) and so is every rejection, withdrawal and expiry. The kind / retracted_at
+-- predicate is written exactly as the partial index application_events_feed_idx declares
+-- it, which is what lets the planner use that index; the signal test only narrows it.
+--
+-- Excluded: the viewer's own events, authors who are not active members, blocked pairs in
+-- either direction, and applications their author hid. The author's earlier events count
+-- from before they joined: only left_at gates, never joined_at.
+--
+-- similar_only restricts to author_handles, the viewer's top similar members, which the
+-- caller takes from ListSimilarBuddies so the scoring formula lives in one place. The day
+-- is the UTC calendar date; the timestamp itself never leaves this query except as the
+-- cursor key. cursor_at / cursor_id are both NULL for the first page.
+SELECT e.id,
+       e.occurred_at,
+       (e.occurred_at AT TIME ZONE 'UTC')::date AS day,
+       e.kind,
+       e.signal,
+       e.company_slug,
+       coalesce(co.name, e.company_slug)::text AS company_name,
+       j.title AS job_title,
+       m.handle,
+       m.countries,
+       u.resume_structured
+FROM application_events e
+JOIN buddy_members m ON m.user_id = e.user_id AND m.left_at IS NULL
+JOIN users u ON u.id = e.user_id
+LEFT JOIN jobs j ON j.id = e.job_id
+LEFT JOIN companies co ON co.slug = e.company_slug
+WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
+  AND (e.kind = 'applied' OR e.signal IN ('interview', 'offer'))
+  AND e.user_id <> sqlc.arg(viewer_id)
+  AND (NOT sqlc.arg(similar_only)::bool OR m.handle = ANY(sqlc.arg(author_handles)::text[]))
+  AND (sqlc.narg(cursor_at)::timestamptz IS NULL
+       OR (e.occurred_at, e.id) < (sqlc.narg(cursor_at)::timestamptz, sqlc.narg(cursor_id)::bigint))
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_blocks b
+      WHERE (b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = e.user_id)
+         OR (b.blocker_id = e.user_id AND b.blocked_id = sqlc.arg(viewer_id)))
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_hidden_applications h
+      WHERE h.user_id = e.user_id AND h.application_id = e.application_id)
+ORDER BY e.occurred_at DESC, e.id DESC
+LIMIT sqlc.arg(page_limit);
+
+-- name: HideBuddyApplication :one
+-- Mark one of the caller's own applications as hidden from the buddy feed and from the
+-- shared-company count. The SELECT is what proves ownership: for an application that is
+-- not the caller's it yields nothing and no row comes back. Hiding twice is a no-op that
+-- still returns the id (the DO UPDATE touches nothing real, it only makes RETURNING fire).
+INSERT INTO buddy_hidden_applications (user_id, application_id)
+SELECT a.user_id, a.id FROM applications a
+WHERE a.id = sqlc.arg(application_id) AND a.user_id = sqlc.arg(user_id)
+ON CONFLICT (user_id, application_id) DO UPDATE SET created_at = buddy_hidden_applications.created_at
+RETURNING application_id;
+
+-- name: ShowBuddyApplication :exec
+-- Lift a hide. Keyed on the caller, so it can only ever remove the caller's own mark.
+DELETE FROM buddy_hidden_applications
+WHERE user_id = $1 AND application_id = $2;
+
+-- name: ListHiddenBuddyApplications :many
+-- The caller's hidden application ids, for the tracker's visibility switch.
+SELECT application_id FROM buddy_hidden_applications
+WHERE user_id = $1
+ORDER BY application_id;

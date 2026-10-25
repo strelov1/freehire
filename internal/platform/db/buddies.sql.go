@@ -51,6 +51,30 @@ func (q *Queries) GetBuddyMemberByUser(ctx context.Context, userID int64) (Buddy
 	return i, err
 }
 
+const hideBuddyApplication = `-- name: HideBuddyApplication :one
+INSERT INTO buddy_hidden_applications (user_id, application_id)
+SELECT a.user_id, a.id FROM applications a
+WHERE a.id = $1 AND a.user_id = $2
+ON CONFLICT (user_id, application_id) DO UPDATE SET created_at = buddy_hidden_applications.created_at
+RETURNING application_id
+`
+
+type HideBuddyApplicationParams struct {
+	ApplicationID int64 `json:"application_id"`
+	UserID        int64 `json:"user_id"`
+}
+
+// Mark one of the caller's own applications as hidden from the buddy feed and from the
+// shared-company count. The SELECT is what proves ownership: for an application that is
+// not the caller's it yields nothing and no row comes back. Hiding twice is a no-op that
+// still returns the id (the DO UPDATE touches nothing real, it only makes RETURNING fire).
+func (q *Queries) HideBuddyApplication(ctx context.Context, arg HideBuddyApplicationParams) (int64, error) {
+	row := q.db.QueryRow(ctx, hideBuddyApplication, arg.ApplicationID, arg.UserID)
+	var application_id int64
+	err := row.Scan(&application_id)
+	return application_id, err
+}
+
 const joinBuddyMember = `-- name: JoinBuddyMember :one
 INSERT INTO buddy_members (user_id, handle, category, countries, regions)
 VALUES (
@@ -131,6 +155,144 @@ func (q *Queries) LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMemb
 		&i.LeftAt,
 	)
 	return i, err
+}
+
+const listBuddyFeed = `-- name: ListBuddyFeed :many
+SELECT e.id,
+       e.occurred_at,
+       (e.occurred_at AT TIME ZONE 'UTC')::date AS day,
+       e.kind,
+       e.signal,
+       e.company_slug,
+       coalesce(co.name, e.company_slug)::text AS company_name,
+       j.title AS job_title,
+       m.handle,
+       m.countries,
+       u.resume_structured
+FROM application_events e
+JOIN buddy_members m ON m.user_id = e.user_id AND m.left_at IS NULL
+JOIN users u ON u.id = e.user_id
+LEFT JOIN jobs j ON j.id = e.job_id
+LEFT JOIN companies co ON co.slug = e.company_slug
+WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
+  AND (e.kind = 'applied' OR e.signal IN ('interview', 'offer'))
+  AND e.user_id <> $1
+  AND (NOT $2::bool OR m.handle = ANY($3::text[]))
+  AND ($4::timestamptz IS NULL
+       OR (e.occurred_at, e.id) < ($4::timestamptz, $5::bigint))
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_blocks b
+      WHERE (b.blocker_id = $1 AND b.blocked_id = e.user_id)
+         OR (b.blocker_id = e.user_id AND b.blocked_id = $1))
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_hidden_applications h
+      WHERE h.user_id = e.user_id AND h.application_id = e.application_id)
+ORDER BY e.occurred_at DESC, e.id DESC
+LIMIT $6
+`
+
+type ListBuddyFeedParams struct {
+	ViewerID      int64              `json:"viewer_id"`
+	SimilarOnly   bool               `json:"similar_only"`
+	AuthorHandles []string           `json:"author_handles"`
+	CursorAt      pgtype.Timestamptz `json:"cursor_at"`
+	CursorID      pgtype.Int8        `json:"cursor_id"`
+	PageLimit     int32              `json:"page_limit"`
+}
+
+type ListBuddyFeedRow struct {
+	ID               int64              `json:"id"`
+	OccurredAt       pgtype.Timestamptz `json:"occurred_at"`
+	Day              pgtype.Date        `json:"day"`
+	Kind             string             `json:"kind"`
+	Signal           string             `json:"signal"`
+	CompanySlug      string             `json:"company_slug"`
+	CompanyName      string             `json:"company_name"`
+	JobTitle         pgtype.Text        `json:"job_title"`
+	Handle           string             `json:"handle"`
+	Countries        []string           `json:"countries"`
+	ResumeStructured []byte             `json:"resume_structured"`
+}
+
+// One page of the buddy feed, newest first, keyset-paged on (occurred_at, id). Three kinds
+// of event qualify and nothing else: an application ('applied'), and a move into the
+// 'interview' or 'offer' stage. 'accepted' is excluded on purpose (it says the person
+// changed jobs) and so is every rejection, withdrawal and expiry. The kind / retracted_at
+// predicate is written exactly as the partial index application_events_feed_idx declares
+// it, which is what lets the planner use that index; the signal test only narrows it.
+//
+// Excluded: the viewer's own events, authors who are not active members, blocked pairs in
+// either direction, and applications their author hid. The author's earlier events count
+// from before they joined: only left_at gates, never joined_at.
+//
+// similar_only restricts to author_handles, the viewer's top similar members, which the
+// caller takes from ListSimilarBuddies so the scoring formula lives in one place. The day
+// is the UTC calendar date; the timestamp itself never leaves this query except as the
+// cursor key. cursor_at / cursor_id are both NULL for the first page.
+func (q *Queries) ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([]ListBuddyFeedRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyFeed,
+		arg.ViewerID,
+		arg.SimilarOnly,
+		arg.AuthorHandles,
+		arg.CursorAt,
+		arg.CursorID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyFeedRow{}
+	for rows.Next() {
+		var i ListBuddyFeedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OccurredAt,
+			&i.Day,
+			&i.Kind,
+			&i.Signal,
+			&i.CompanySlug,
+			&i.CompanyName,
+			&i.JobTitle,
+			&i.Handle,
+			&i.Countries,
+			&i.ResumeStructured,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHiddenBuddyApplications = `-- name: ListHiddenBuddyApplications :many
+SELECT application_id FROM buddy_hidden_applications
+WHERE user_id = $1
+ORDER BY application_id
+`
+
+// The caller's hidden application ids, for the tracker's visibility switch.
+func (q *Queries) ListHiddenBuddyApplications(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listHiddenBuddyApplications, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var application_id int64
+		if err := rows.Scan(&application_id); err != nil {
+			return nil, err
+		}
+		items = append(items, application_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listSimilarBuddies = `-- name: ListSimilarBuddies :many
@@ -277,6 +439,22 @@ func (q *Queries) ListSimilarBuddies(ctx context.Context, arg ListSimilarBuddies
 		return nil, err
 	}
 	return items, nil
+}
+
+const showBuddyApplication = `-- name: ShowBuddyApplication :exec
+DELETE FROM buddy_hidden_applications
+WHERE user_id = $1 AND application_id = $2
+`
+
+type ShowBuddyApplicationParams struct {
+	UserID        int64 `json:"user_id"`
+	ApplicationID int64 `json:"application_id"`
+}
+
+// Lift a hide. Keyed on the caller, so it can only ever remove the caller's own mark.
+func (q *Queries) ShowBuddyApplication(ctx context.Context, arg ShowBuddyApplicationParams) error {
+	_, err := q.db.Exec(ctx, showBuddyApplication, arg.UserID, arg.ApplicationID)
+	return err
 }
 
 const updateBuddyMemberRankingKeys = `-- name: UpdateBuddyMemberRankingKeys :exec

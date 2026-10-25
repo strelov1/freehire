@@ -3074,6 +3074,11 @@ type Querier interface {
 	// Two sources rather than one because they cover different moments: the event row exists from
 	// the first delivery onward, and the column survives even if events are ever pruned.
 	HasRevenueCatFootprint(ctx context.Context, userID int64) (pgtype.Bool, error)
+	// Mark one of the caller's own applications as hidden from the buddy feed and from the
+	// shared-company count. The SELECT is what proves ownership: for an application that is
+	// not the caller's it yields nothing and no row comes back. Hiding twice is a no-op that
+	// still returns the id (the DO UPDATE touches nothing real, it only makes RETURNING fire).
+	HideBuddyApplication(ctx context.Context, arg HideBuddyApplicationParams) (int64, error)
 	// The moderator lever: hide a specific review (idempotent — hiding an already-
 	// hidden row is a no-op). Returns the company_slug so the caller can recompute
 	// that company's counters in the same transaction. pgx.ErrNoRows on an unknown id.
@@ -3616,6 +3621,22 @@ type Querier interface {
 	// all, because the only thing that creates the row is a page behind the login.
 	// Migration 0153 split the two.
 	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
+	// One page of the buddy feed, newest first, keyset-paged on (occurred_at, id). Three kinds
+	// of event qualify and nothing else: an application ('applied'), and a move into the
+	// 'interview' or 'offer' stage. 'accepted' is excluded on purpose (it says the person
+	// changed jobs) and so is every rejection, withdrawal and expiry. The kind / retracted_at
+	// predicate is written exactly as the partial index application_events_feed_idx declares
+	// it, which is what lets the planner use that index; the signal test only narrows it.
+	//
+	// Excluded: the viewer's own events, authors who are not active members, blocked pairs in
+	// either direction, and applications their author hid. The author's earlier events count
+	// from before they joined: only left_at gates, never joined_at.
+	//
+	// similar_only restricts to author_handles, the viewer's top similar members, which the
+	// caller takes from ListSimilarBuddies so the scoring formula lives in one place. The day
+	// is the UTC calendar date; the timestamp itself never leaves this query except as the
+	// cursor key. cursor_at / cursor_id are both NULL for the first page.
+	ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([]ListBuddyFeedRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
 	// Every revision of one agent turn or autopilot run that is still standing, newest first —
@@ -4043,6 +4064,8 @@ type Querier interface {
 	// silence ladder it reads from, so both channels clear the same bar from the same
 	// source.
 	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
+	// The caller's hidden application ids, for the tracker's visibility switch.
+	ListHiddenBuddyApplications(ctx context.Context, userID int64) ([]int64, error)
 	// Every claimed HEAVY-pool run, with what the scheduler needs to ask the service manager
 	// about it. See ListInFlightLightRuns for the other pool, and ClaimDueHeavyRuns for what
 	// "heavy" means and why the two pools are counted apart: the budget each pool claims
@@ -7131,6 +7154,8 @@ type Querier interface {
 	// username means another account already holds it. The caller resolves either
 	// case by re-reading GetUsernameByUser.
 	SetUsernameIfAbsent(ctx context.Context, arg SetUsernameIfAbsentParams) (int64, error)
+	// Lift a hide. Keyed on the caller, so it can only ever remove the caller's own mark.
+	ShowBuddyApplication(ctx context.Context, arg ShowBuddyApplicationParams) error
 	// The trailing 90 UTC calendar days of recorded daily status (today and the 89
 	// days before it), oldest first. A day with no row (never sampled) is simply
 	// absent — the caller must not treat that as "operational". The `>` against a

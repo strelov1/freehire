@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -118,13 +119,7 @@ func (r *QueriesRepository) Similar(ctx context.Context, userID int64, limit, of
 	out := make([]SimilarRow, len(rows))
 	for i, row := range rows {
 		out[i] = SimilarRow{Handle: row.Handle, Countries: row.Countries, Score: int(row.Score)}
-		if len(row.ResumeStructured) > 0 {
-			// An unreadable CV leaves an empty card summary, as in Inputs.
-			var s resumeextract.Structured
-			if json.Unmarshal(row.ResumeStructured, &s) == nil {
-				out[i].CV = s
-			}
-		}
+		out[i].CV = decodeCV(row.ResumeStructured)
 		if len(row.SharedNames) != len(row.SharedSlugs) {
 			return nil, errors.New("buddy: shared company slugs and names differ in length")
 		}
@@ -133,6 +128,58 @@ func (r *QueriesRepository) Similar(ctx context.Context, userID int64, limit, of
 		}
 	}
 	return out, nil
+}
+
+// decodeCV reads a stored CV for a card summary. An unreadable one is an empty CV, as in Inputs.
+func decodeCV(raw []byte) resumeextract.Structured {
+	var s resumeextract.Structured
+	if len(raw) > 0 && json.Unmarshal(raw, &s) != nil {
+		return resumeextract.Structured{}
+	}
+	return s
+}
+
+func (r *QueriesRepository) Feed(ctx context.Context, viewerID int64, authors []string, similarOnly bool, cursor *FeedCursor, limit int) ([]FeedRow, error) {
+	p := db.ListBuddyFeedParams{
+		ViewerID: viewerID, SimilarOnly: similarOnly, AuthorHandles: authors, PageLimit: int32(limit),
+	}
+	if cursor != nil {
+		p.CursorAt = pgtype.Timestamptz{Time: cursor.At, Valid: true}
+		p.CursorID = pgtype.Int8{Int64: cursor.ID, Valid: true}
+	}
+	rows, err := r.q.ListBuddyFeed(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]FeedRow, len(rows))
+	for i, row := range rows {
+		out[i] = FeedRow{
+			ID: row.ID, OccurredAt: row.OccurredAt.Time, Day: row.Day.Time.Format(time.DateOnly),
+			Kind: row.Kind, Signal: row.Signal,
+			Company: Company{Slug: row.CompanySlug, Name: row.CompanyName},
+			Author:  SimilarRow{Handle: row.Handle, Countries: row.Countries, CV: decodeCV(row.ResumeStructured)},
+		}
+		if row.JobTitle.Valid {
+			out[i].JobTitle = &row.JobTitle.String
+		}
+	}
+	return out, nil
+}
+
+func (r *QueriesRepository) HideApplication(ctx context.Context, userID, applicationID int64) (bool, error) {
+	_, err := r.q.HideBuddyApplication(ctx, db.HideBuddyApplicationParams{UserID: userID, ApplicationID: applicationID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (r *QueriesRepository) ShowApplication(ctx context.Context, userID, applicationID int64) error {
+	return r.q.ShowBuddyApplication(ctx, db.ShowBuddyApplicationParams{UserID: userID, ApplicationID: applicationID})
+}
+
+func (r *QueriesRepository) HiddenApplications(ctx context.Context, userID int64) ([]int64, error) {
+	return r.q.ListHiddenBuddyApplications(ctx, userID)
 }
 
 func memberResult(row db.BuddyMember, err error) (Member, bool, error) {
