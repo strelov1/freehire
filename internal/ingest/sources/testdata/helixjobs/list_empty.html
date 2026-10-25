@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="de"
+      data-hxj-unique-board-identifier="1bb70b6c9ba4f155642b7c094137da2c876ccbbc"
+      data-video-cmp="none"
+      data-po-theme="light"
+      data-po-theme-switchable="1">
+<head>
+    <meta charset="utf-8">
+
+        <style>
+        html {
+            filter: opacity(0.1);
+        }
+        html.unblocked {
+            filter: none;
+        }
+        .frame-info-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #ffffffee;
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 2147483636;
+
+            display: -webkit-box;
+            display: -ms-flexbox;
+            display: -webkit-flex;
+            display: flex;
+            flex-direction: column;
+            -webkit-box-pack: center;
+            -ms-flex-pack: center;
+            -webkit-justify-content: flex-start;
+            justify-content: flex-start;
+            -webkit-box-align: center;
+            -ms-flex-align: center;
+            -webkit-align-items: center;
+            align-items: center;
+        }
+        .frame-info-overlay h4 {
+            margin-top: 10%;
+            line-height: 1.4em;
+        }
+    </style>
+        <script>
+        (function() {
+            const htmlElement = document.documentElement;
+
+                        // iFrame Info
+            // If this website is embedded in an iFrame, browsers that block third-party cookies
+            // (Safari, Brave, Incognito Mode, explicit user preferences etc.) will not be able
+            // to save the session cookie. This will cause all applications and file uploads to fail.
+            htmlElement.className += ' unblocked';
+            if (self !== top) {
+                htmlElement.insertAdjacentHTML('beforeend', '' +
+                    '<div class="frame-info-overlay">' +
+                    '<h4>Diese Seite darf nicht in einem Frame geladen werden.<br />Bitte öffnen Sie die Seite in einem neuen Fenster:</h4>' +
+                    '<p><a href="https://helixjobs.com/_/joblist?iid=1" target="_blank" class="btn btn-primary">' +
+                    '<svg class="svg-icon hx-share" aria-hidden="true"><use xlink:href="#hx-share"></use></svg>' +
+                    'Seite öffnen</a></p>' +
+                    '</div>'
+                );
+            }
+            
+            const uniqueBoardIdentifier = htmlElement.getAttribute('data-hxj-unique-board-identifier');
+            const localStorageKey = 'appearance_' + (uniqueBoardIdentifier || 'default');
+            const savedTheme = localStorage.getItem(localStorageKey);
+            const appearanceDefault = htmlElement.getAttribute('data-po-theme')
+                || htmlElement.getAttribute('data-bs-theme')
+                || 'light';
+            const appearanceSwitchable = parseInt(
+                htmlElement.getAttribute('data-po-theme-switchable')
+                    || htmlElement.getAttribute('data-bs-theme-switchable')
+                    || '0'
+            ) > 0;
+
+            let selectedAppearance = null;
+            if (!appearanceSwitchable) {
+                selectedAppearance = appearanceDefault;
+            } else if (savedTheme && (savedTheme === 'dark' || savedTheme === 'light')) {
+                selectedAppearance = savedTheme;
+            } else if (appearanceDefault === 'dark' || appearanceDefault === 'light') {
+                selectedAppearance = appearanceDefault;
+            } else if (appearanceDefault === 'auto') {
+                selectedAppearance = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            if (selectedAppearance) {
+                htmlElement.setAttribute('data-po-theme', selectedAppearance);
+            }
+            if (localStorage.getItem('accessibility-mode') === 'true') {
+                htmlElement.setAttribute('data-po-accessibility-mode', 'true');
+            }
+        })();
+    </script>
+
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<meta name="referrer" content="same-origin">
+	<meta name="robots" content="noindex, nofollow, noarchive">
+
+    <title>Stellenangebote bei Perbility GmbH – Jobs</title>
+
+    <meta property="og:title" content="Stellenangebote bei Perbility GmbH – Jobs">
+        <meta property="og:site_name" content="Perbility GmbH">
+    
+    <script type="application/ld+json">
+        {
+            "@context" : "https://schema.org",
+            "@type" : "WebSite",
+            "name" : "Perbility GmbH",
+            "url" : ""
+        }
+    </script>
+
+    <link rel="icon" type="image/png" href="/assets/global-portal-themes/images/favicon.png">
+<link rel="shortcut icon" type="image/x-icon" href="/assets/global-portal-themes/images/favicon.ico">
+<link rel="icon" type="image/x-icon" href="/assets/global-portal-themes/images/favicon.ico">
+<link rel="icon" type="image/png" sizes="48x48" href="/assets/global-portal-themes/images/favicon_48x48.png">
+<link rel="icon" type="image/png" sizes="96x96" href="/assets/global-portal-themes/images/favicon_96x96.png">
+<link rel="apple-touch-icon" sizes="144x144" href="/assets/global-portal-themes/images/favicon_144x144.png">
+<!-- Assetmanager CSS Output /-->
+<link href="/assets/global-portal-themes/fonts/poppins.css?v=1792685924" rel="stylesheet" type="text/css">
+<link href="/assets/global-portal-themes/cool.css?v=1792685923" rel="stylesheet" type="text/css">
+<link href="/assets/concludis/fonts/concludis/concludis.min.css?v=1792685923" rel="stylesheet" type="text/css">
+<!-- End of Assetmanager CSS Output /-->
+
+
+<!-- Assetmanager JS Output /-->
+<script src="/assets/jquery/js/jquery-3.7.0.min.js?v=1792685924" ></script>
+<script src="/assets/global-portal/js/common.min.js?v=1792685924" ></script>
+<script src="/assets/global-portal-themes/js/base.js?v=1792685924" ></script>
+<script src="/assets/global-portal/js/jobletter.js?v=1792685924" ></script>
+<script src="/assets/global-portal/js/portal.js?v=1792685924" ></script>
+<script src="/assets/concludis/js/concludis.modal.min.js?v=1792685923" ></script>
+<!-- End of Assetmanager JS Output /-->
+
+<style>
+    :root,
+
+    div[data-po-theme=light],
+    section[data-po-theme=light],
+    footer[data-po-theme=light],
+    html[data-po-theme=light],
+
+    div[data-po-theme=dark],
+    section[data-po-theme=dark],
+    footer[data-po-theme=dark],
+    html[data-po-theme=dark] {
+
+            --po-primary-color: #101010;
+        --po-primary-color-hover-bg-color: #0e0e0e;
+        --po-primary-color-hover-border-color: #0e0e0e;
+        --po-primary-color-active-bg-color: #0d0d0d;
+        --po-primary-color-active-border-color: #0c0c0c;
+
+        --po-primary-color-alpha-strong: #10101099;
+        --po-primary-color-alpha-medium: #10101080;
+        --po-primary-color-alpha-weak: #10101066;
+
+        --po-input-border-color: #101010;
+        --po-input-highlight-bg: #101010;
+                --po-secondary-color: #337ab7;
+        --po-secondary-color-hover-bg-color: #2b689c;
+        --po-secondary-color-hover-border-color: #2b689c;
+        --po-secondary-color-active-bg-color: #296292;
+        --po-secondary-color-active-border-color: #265c89;
+        
+            --brand-color-light: #528ec2;
+        --brand-color-lighter: #ebf2f8;
+        --brand-color: #337ab7;
+        --brand-color-darker: #2b689c;
+        --brand-color-dark: #050c12;
+                --primary-color: #101010;
+                --secondary-color: #337ab7 ;
+                --button-primary-background: #337ab7;
+        --button-primary-hover-background: #2b689c;
+        --button-primary-border: #337ab7;
+        --button-primary-hover-border: #2b689c;
+        --button-primary-color: #ffffff;
+        --button-primary-hover-color: #ffffff;
+		                --button-secondary-background: #ced1d5;
+        --button-secondary-hover-background: #afb2b5;
+        --button-secondary-border: #ced1d5;
+        --button-secondary-hover-border: #afb2b5;
+        --button-secondary-color: #444444;
+        --button-secondary-hover-color: #444444;
+    
+    }
+
+</style>
+
+    <style>
+        :root {
+            --primary-font: 'Poppins', sans-serif;
+            --secondary-font: 'Poppins', sans-serif;
+            --third-font: 'Poppins', serif;
+            --po-body-font-family: var(--primary-font);
+            --font-size-header: 6rem;
+            --font-size-large: 1.3125rem;
+            --font-size-normal: 1.0625rem;
+            --font-size-small: 0.89375rem;
+            --font-size-tiny: 0.6875rem;
+			--branding_hero_image_position_x: center;
+			--branding_hero_image_position_y: center;
+			--joblist_hero_image_position_x: center;
+			--joblist_hero_image_position_y: center;
+        }
+
+            </style>
+</head>
+
+<body class="page-joblist">
+
+    <script type="text/javascript">
+    $(function () {
+        CONCLUDIS.common.loadSvg(
+            '/assets/global-portal-themes/images/icons/helix-set.svg'
+        );
+        CONCLUDIS.common.loadSvg(
+            '/assets/global-portal-themes/images/icons/helixjobs-set.svg'
+        );
+    });
+</script>
+
+    <div class="site-wrapper">
+        <nav id="skiplinks" class="sr-only keyboard-accessible" aria-label="Sprunglinks">
+    <ul>
+        <li><a href="#main">Zum Inhalt springen</a></li>
+        <li><a href="#navigation" class="open-mobile-nav">Zur Navigation springen</a></li>
+        <li><a href="#footer">Zum Footer springen</a></li>
+    </ul>
+</nav>
+
+<header class="no-hero" aria-label="Titelzeile">
+    <div class="wrapper">
+        <nav class="navbar navbar-default" aria-label="Hauptnavigation">
+            <div class="portal-logo">
+                <a class="navbar-brand" id="navigation" href="/_/joblist" aria-label="Startseite">
+                                            <svg class="logo-header-svg" aria-hidden="true">
+                            <use xlink:href="#logo-header">Logo</use>
+                        </svg>
+                                        <span style="display:none;">Logo</span>
+                </a>
+            </div>
+
+            <div class="h-spacer"></div>
+
+            <button type="button" class="burger-menu" aria-haspopup="true" aria-expanded="false"
+     aria-label="Navigationsmenü öffnen">
+    <span id="bm-icon" class="conicon-burger-menu"></span>
+</button>
+
+<div class="nav-wrapper">
+
+	<div class="nav-header">
+		<div class="portal-logo">
+			<div class="navbar-brand">
+                					<svg class="logo-header-svg" aria-hidden="true">
+						<use xlink:href="#logo-header">Logo</use>
+					</svg>
+                			</div>
+		</div>
+		<button type="button" class="close-mobile-nav" aria-label="Navigationsmenü schließen">
+			<span class="conicon-cancel"></span>
+		</button>
+	</div>
+
+	
+    <button type="button" class="po-nav-switch appearance-switch"
+        aria-labelledby="appearance-label"
+        data-label-light="Aktuell: Helle Ansicht. Zu dunkler Ansicht wechseln"
+        data-label-dark="Aktuell: Dunkle Ansicht. Zu heller Ansicht wechseln">
+	<span class="svg-icon sun-bright-wrapper">
+		<svg class="hx-sun-bright" aria-hidden="true">
+			<use xlink:href="#hx-sun-bright"></use>
+		</svg>
+	</span>
+	<span id="appearance-label" class="appearance-label label sr-only">
+        Wechseln zwischen heller und dunkler Ansicht    </span>
+</button>
+
+    <button type="button" class="po-nav-switch accessibility-switch" aria-pressed="false">
+    <span class="svg-icon universal-access-wrapper">
+        <svg class="hx-universal-access" aria-hidden="true">
+            <use xlink:href="#hx-universal-access"></use>
+        </svg>
+    </span>
+    <span class="accessibility-label label sr-only">Barrierefreien Modus umschalten</span>
+</button>
+
+    
+	<div class="mobile-footer">
+		<div class="footer-legal">
+			<ul class="footer-menu" aria-label="Navigation Rechtliches">
+				<li><a href="/_/index/imprint">Impressum</a></li>
+				<li><a href="/_/index/dataprotection">Datenschutz</a></li>
+				<li><a href="/_/index/accessibility">Barrierefreiheit</a></li>
+			</ul>
+		</div>
+	</div>
+
+</div>
+
+
+                    </nav>
+    </div>
+</header>
+<!-- View begin index.php -->
+
+
+
+    <section id="joblist-search" class="section-search">
+        <div class="wrapper">
+            <div class="joblist-features">
+                <form class="joblist-search" id="jobboard-search" data-url="/_/joblist" data-bookmark="joblist-search" method="get" role="search">
+                                            <input type="hidden" id="ipt-iid" name="iid" value="1" />
+                                        <div class="joblist-features-wrapper">
+                        <div class="fields-wrapper">
+                            <div class="input-wrapper">
+                                <fieldset class="with-clearbutton">
+                                    <legend hidden></legend>
+                                    <label id="ipt-fulltext-label" class="sr-only" for="ipt-fulltext">
+                                        Jobtitel oder Stichwort eingeben                                    </label>
+                                    <input type="text" class="form-control input-lg  " id="ipt-fulltext"
+                                           name="fulltext"
+                                           value=""
+                                           placeholder="Jobtitel oder Stichwort eingeben"
+                                           aria-labelledby="ipt-fulltext-label">
+
+                                        <button type="button" class="clearbutton" data-submit="jobboard-search"
+                                              title="Suchbegriff löschen" aria-label="Suchbegriff löschen">
+                                            <svg class="icon-circle-xmark" aria-hidden="true">
+                                                <use xlink:href="#circle-xmark"></use>
+                                            </svg>
+                                        </button>
+                                </fieldset>
+                                                                <label for="ipt-circlesearch" class="sr-only">Ort oder Postleitzahl (Umkreis-Suche)</label>
+                                <input type="search" id="ipt-circlesearch" class="form-control input-lg"
+                                       value=""
+                                       data-distance="30"
+                                       data-po-circle-label="Umkreis wählen"
+                                       placeholder="Ort oder Postleitzahl"
+                                       autocomplete="off"
+                                       spellcheck="false"
+                                       data-url="/_/joblist/find?type=zip">
+                                                            </div>
+                                                            <input type="hidden" class="conditional-filter" name="schedule"
+               id="hidden-schedule"
+               value=""
+               autocomplete="off">
+            <input type="hidden" class="conditional-filter" name="classification"
+               id="hidden-classification"
+               value=""
+               autocomplete="off">
+                                                        </div>
+
+                        <div class="button-wrapper">
+                            <button class="btn btn-search btn-form-submit" type="submit">
+                                <span class="svg-icon">
+                                    <svg class="hx-search" aria-hidden="true">
+                                        <use xlink:href="#hx-search"></use>
+                                    </svg>
+                                </span>
+                                Jobs finden                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
+<div id="joblist" class="section-joblist">
+    <div class="wrapper">
+        <div class="main-wrapper">
+                            <aside>
+                    <section class="sidebar-item jobfilter disabled"
+             aria-labelledby="jobfilter-hl">
+		<h3 id="jobfilter-hl" class="sr-only">Filtern Sie die Suchergebnisse</h3>
+        <div class="jobfilter-wrapper">
+			            <fieldset class="jobfilter-group disabled">
+                <legend class="jobfilter-group-title">
+                    Arbeitszeit                                            <span aria-label="0 Treffer"> (0)</span>
+                                    </legend>
+                            </fieldset>
+			            <fieldset class="jobfilter-group disabled">
+                <legend class="jobfilter-group-title">
+                    Anstellungsart                                            <span aria-label="0 Treffer"> (0)</span>
+                                    </legend>
+                            </fieldset>
+						<div class="jobfilter-buttons">
+									<!--button class="btn btn-secondary btn-sm disabled"></button-->
+								<button type="button" class="jobfilter-reset" aria-label="Filter zurücksetzen">
+                    Zurücksetzen                </button>
+			</div>
+		</div>
+	</section>
+<section class="sidebar-item jobletter">
+    <h3>Keine passende Stelle gefunden?</h3>
+    <div class="unsolicited-wrapper">
+        <p></p>
+        <a class="btn btn-primary btn-sm" style="width:100%"
+           href="/_/unsolicited-applications">Jetzt initiativ bewerben</a>
+    </div>
+</section><section class="sidebar-item jobletter">
+    <div class="jobletter-wrapper">
+        <form method="POST" id="jobletter-form" class="requires-validation" novalidate
+			  data-successmsg="Email wurde versendet"
+              data-url="/_/jobletter" data-sendmail-url="/_/jobletter/sendemail">
+            <h3>Neue Jobangebote per E-Mail erhalten</h3>
+            <p>Wir informieren gerne per E-Mail über neue Jobangebote, die den Suchkriterien entsprechen. Dieser Service ist kostenfrei und kann jederzeit abbestellt werden.</p>
+            <div class="form-group">
+                <input type="hidden" id="ipt-filter" name="filter" value="W10=">
+                <label for="ipt-email" class="sr-only">Bitte E-Mail eingeben</label>
+                <input class="form-control" type="email" name="email" id="ipt-email"
+                      placeholder="Bitte E-Mail eingeben"
+                      aria-label="Bitte E-Mail eingeben"
+                      autocomplete="email"
+                      spellcheck="false"
+                      required="required">
+            </div>
+            <button type="submit" class="btn btn-primary btn-jobletter2"
+                    style="width: 100%;"> Registrieren            </button>
+        </form>
+    </div>
+</section>
+
+<div class="modal fade" id="modal-jobletter-success" role="dialog" aria-modal="true" tabindex="-1"
+     aria-labelledby="modal-jobletter-success-hl" aria-describedby="modal-jobletter-success-text">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h3 class="h5 modal-title">Jobangebote per E-Mail</h3>
+				<button type="button" class="btn btn-link modal-btn-close" data-po-dismiss="modal" aria-label="Fenster schließen">
+                    <span class="svg-icon">
+                        <svg class="icon-xmark" aria-hidden="true">
+                            <use xlink:href="#xmark"></use>
+                        </svg>
+                    </span>
+				</button>
+			</div>
+			<div class="modal-body">
+				<h4 class="h3" id="modal-jobletter-success-hl">Fast geschafft!</h4>
+				<p id="modal-jobletter-success-text">
+                    Eine E-Mail mit einem Bestätigungslink ist unterwegs, um sicherzustellen, dass Sie unseren Jobletter wirklich erhalten möchten. Und falls Sie sich später anders entscheiden - Sie können sich jederzeit mit nur einem Klick abmelden.</p>
+				<span id="email-send-to"></span>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" name="close" data-po-dismiss="modal">
+                    Schließen				</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="modal-jobletter-resend" role="dialog" aria-modal="true" tabindex="-1"
+     aria-labelledby="modal-jobletter-hl" aria-describedby="modal-jobletter-text">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h3 class="h5 modal-title" id="modal-jobletter-hl">Jobangebote per E-Mail</h3>
+				<button type="button" class="btn btn-link modal-btn-close" data-po-dismiss="modal" aria-label="Fenster schließen">
+                    <span class="svg-icon">
+                        <svg class="icon-xmark" aria-hidden="true">
+                            <use xlink:href="#xmark"></use>
+                        </svg>
+                    </span>
+				</button>
+			</div>
+			<div class="modal-body"></div>
+			<div id="modal-jobletter-text" class="modal-footer">
+				<button type="button" class="btn btn-primary" name="resend" id="resend">
+                    Bestätigungs-E-Mail versenden				</button>
+				<button type="button" class="btn btn-secondary" name="close" data-po-dismiss="modal">
+                    Abbrechen				</button>
+			</div>
+		</div>
+	</div>
+</div>
+                </aside>
+            
+            <main id="main" class="">
+                <div class="no-result" role="alert" aria-live="assertive" aria-current="true">
+        <span>Keine Ergebnisse gefunden. Bitte ändern Sie die Suchkriterien.</span>
+    </div>
+            </main>
+
+        </div>
+    </div>
+</div>
+
+<!-- View end index.php -->
+<footer id="footer">
+    <div class="wrapper">
+        <div class="footer-wrapper">
+
+            
+            <div class="footer-content">
+                <div class="inner-wrapper">
+					<div class="footer-row">
+
+													<div class="footer-copyright">
+								&copy; 2026 Perbility GmbH							</div>
+						
+						
+                    <nav id="footer-legal" class="footer-legal" aria-label="Navigation Rechtliches">
+                        <ul class="footer-menu">
+                            <li><a href="/_/index/imprint">Impressum</a></li>
+                            <li><a href="/_/index/dataprotection">Datenschutz</a></li>
+							<li><a href="/_/index/accessibility">Barrierefreiheit</a></li>
+							                        </ul>
+                    </nav>
+
+                    					</div>
+                </div>
+            </div>
+        </div>
+    </div>
+	</footer>
+    </div>
+	
+</body>
+</html>

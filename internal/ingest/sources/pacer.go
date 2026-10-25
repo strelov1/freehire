@@ -754,6 +754,35 @@ func limitedCovetoGetter(c covetoGetter) covetoGetter {
 	return limitedCoveto{covetoGetter: c, pages: concurrencyLimitedHTMLGetter{inner: c, sem: make(chan struct{}, covetoMaxInFlight)}}
 }
 
+// helixjobs.com serves every iid's list and posting pages from one origin — 590 iids and 25,021
+// postings measured 2026-10-25 — so a first crawl is tens of thousands of page requests to it.
+// A walk of all 1,001 portal list pages and 120 posting pages at 4 in flight all answered (one
+// connect timeout, gone on retry); nothing wider was measured. So the whole provider shares the
+// measured 4, its list pages included: unlike coveto's single feed, a large iid's list is itself
+// a hundred-page walk.
+const helixjobsMaxInFlight = 4
+
+// limitedHelixjobs routes every helixjobs request through one shared semaphore.
+type limitedHelixjobs struct {
+	inner HTMLResolvedGetter
+	sem   chan struct{}
+}
+
+func (g limitedHelixjobs) GetHTMLResolved(ctx context.Context, url string) (*html.Node, string, error) {
+	select {
+	case g.sem <- struct{}{}:
+	case <-ctx.Done():
+		return nil, "", ctx.Err()
+	}
+	defer func() { <-g.sem }()
+	return g.inner.GetHTMLResolved(ctx, url)
+}
+
+// limitedHelixjobsGetter wraps a getter with a fresh semaphore shared across one registry build.
+func limitedHelixjobsGetter(c HTMLResolvedGetter) HTMLResolvedGetter {
+	return limitedHelixjobs{inner: c, sem: make(chan struct{}, helixjobsMaxInFlight)}
+}
+
 // FriendWork's API meters simultaneity AND rate: two parallel workers drew 429s, while sequential
 // requests at ~2/s were clean (2026-10-14). So its requests run one at a time AND no faster than
 // that measured pace — a single listing can be ~2 MB, and a rate limit alone would let the next

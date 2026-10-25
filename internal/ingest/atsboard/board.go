@@ -311,6 +311,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"coveto.de", "coveto", modeSubdomain},
 	{"concludis.de", "concludis", modeSubdomain},
 	{"kenjo.io", "kenjo", modeSubdomain},
+	{"talentstorm.de", "talentstorm", modeSubdomain},
+	// helixjobs: the concludis portal, keyed by instance id (see queryBoards).
+	{"helixjobs.com", "helixjobs", modeQuery},
 	// Emply: <tenant>.career.emply.com. A site on the customer's own domain (midtjob.dk) is a
 	// vanity host and stays unrecognised here.
 	{"career.emply.com", "emply", modeSubdomain},
@@ -628,6 +631,11 @@ var queryBoards = map[string]struct {
 	keepCase           bool
 	tenantHost         bool
 	listingQuery       url.Values
+	// altParam names a second parameter that carries the board inside a longer value, for a
+	// platform whose posting links name the posting rather than the board; altPattern's first
+	// capture group is the board. It is read only when param is absent or not a board.
+	altParam   string
+	altPattern *regexp.Regexp
 }{
 	// Paycor Recruiting addresses an employer's portal by a 32-hex clientId: the listing is
 	// /career/CareerHome.action?clientId=<board> and a posting is
@@ -682,6 +690,19 @@ var queryBoards = map[string]struct {
 		listingPath:  "/careers",
 		boardPattern: regexp.MustCompile(`^[a-z0-9-]+(?:\.[a-z0-9-]+)+$`),
 		tenantHost:   true,
+	},
+	// helixjobs.com, the portal Perbility runs for its concludis employers, names an employer
+	// by its numeric instance id: the listing is /_/joblist?iid=<board>, while a posting
+	// (/_/jobad?prj=<board>P<position>) and its apply form (/_/apply/form?prj=…) name only the
+	// posting, whose prefix is the iid (internal/ingest/sources/helixjobs.go). The portal serves
+	// both spellings of the separator. An employer's vanity label (apetito-ag.helixjobs.com)
+	// names the same pages, so the host is not the board.
+	"helixjobs.com": {
+		param:        "iid",
+		listingPath:  "/_/joblist",
+		boardPattern: regexp.MustCompile(`^[1-9][0-9]*$`),
+		altParam:     "prj",
+		altPattern:   regexp.MustCompile(`^([1-9][0-9]*)p[0-9]+$`),
 	},
 }
 
@@ -978,7 +999,14 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		// The pattern rejects an absent or empty parameter along with a malformed one, so a link
 		// on the host that names no board is declined rather than turned into one.
 		if !q.boardPattern.MatchString(value) {
-			return "", "", "", false
+			if q.altParam == "" || q.altPattern == nil {
+				return "", "", "", false
+			}
+			m := q.altPattern.FindStringSubmatch(strings.ToLower(u.Query().Get(q.altParam)))
+			if len(m) < 2 || !q.boardPattern.MatchString(m[1]) {
+				return "", "", "", false
+			}
+			value = m[1]
 		}
 		board = value
 		if q.tenantHost {
@@ -1376,6 +1404,8 @@ var platformLabelsByApex = map[string][]string{
 	// Kenjo's marketing site, its HR-templates hub, and the host signed URLs to tenant files
 	// are served from; help, blog and app are platformLabels already.
 	"kenjo.io": {"www", "hr", "files"},
+	// talentstorm's marketing site, its API, and the host its tutorial videos are served from.
+	"talentstorm.de": {"www", "api", "videos"},
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —

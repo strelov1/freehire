@@ -450,6 +450,9 @@ func All(c HTTPClient) map[string]Source {
 		NewCoveto(limitedCovetoGetter(c)),
 		NewConcludis(c),
 		NewKenjo(c),
+		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
+		NewHelixjobs(limitedHelixjobsGetter(c)),
+		NewTalentstorm(c),
 		NewMicro1(c, os.Getenv("MICRO1_REFERRAL_CODE")),
 		NewBairesDev(c, os.Getenv("BAIRESDEV_REFERRER_CODE")),
 		// RU federal open-data aggregator: board-based, sharded per region (board = OKATO code).
