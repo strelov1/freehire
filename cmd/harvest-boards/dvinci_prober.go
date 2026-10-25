@@ -56,10 +56,10 @@ func (dvinciProber) probe(ctx context.Context, c httpClient, board string) (stri
 	return name, len(*doc), nil
 }
 
-// discover enumerates candidate boards from Common Crawl's index of both vendor domains.
+// discover enumerates candidate boards from Common Crawl's index of the vendor's three domains.
 func (dvinciProber) discover(ctx context.Context, c httpClient) ([]string, error) {
 	var out []string
-	for _, pattern := range []string{"*.dvinci-hr.com", "*.dvinci-easy.com"} {
+	for _, pattern := range []string{"*.dvinci-hr.com", "*.dvinci-easy.com", "*.dvinci.de"} {
 		boards, err := commonCrawlCandidates(ctx, c, pattern, recognizedBoard("dvinci"))
 		if err != nil {
 			return nil, err

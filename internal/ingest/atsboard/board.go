@@ -345,6 +345,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	// but is not derivable from a URL.
 	{"dvinci-hr", "dvinci", modeHost},
 	{"dvinci-easy", "dvinci", modeHost},
+	{"dvinci", "dvinci", modeHost}, // <tenant>.dvinci.de, the vendor's third domain (bomag.dvinci.de)
 	// rexx systems: <tenant>-portal.rexx-systems.com and <tenant>-portal.rexx-recruitment.com.
 	// The adapter lists <board>/stellenangebote.html, so the board is the whole host. A portal
 	// on an employer's own domain (jobs.newyorker.de/karriere) is not derivable from a URL.
@@ -1327,6 +1328,7 @@ var platformLabelsByApex = map[string][]string{
 	"eploy":         {"www"}, // www.eploy.com is the vendor's marketing site
 	"dvinci-hr":     {"www"},
 	"dvinci-easy":   {"www"},
+	"dvinci":        {"www"}, // www.dvinci.de is the vendor\'s marketing site
 	// www is the vendor's marketing site; cdn serves every portal's shared assets.
 	"rexx-systems":     {"www", "cdn"},
 	"rexx-recruitment": {"www", "cdn"},

@@ -346,6 +346,8 @@ func TestRecognize(t *testing.T) {
 		{"dvinci nested tenant", "https://karriere.hahngruppe.dvinci-hr.com/en/jobs/iframe", "dvinci", "karriere.hahngruppe.dvinci-hr.com", "https://karriere.hahngruppe.dvinci-hr.com", true},
 		{"dvinci easy", "https://weig.dvinci-easy.com/jobPublication/list.json", "dvinci", "weig.dvinci-easy.com", "https://weig.dvinci-easy.com", true},
 		{"dvinci vendor site not a tenant", "https://www.dvinci-hr.com/", "", "", "", false},
+		{"dvinci third domain", "https://bomag.dvinci.de/de/jobs/123/x", "dvinci", "bomag.dvinci.de", "https://bomag.dvinci.de", true},
+		{"dvinci marketing site not a tenant", "https://www.dvinci.de/", "", "", "", false},
 		{"rexx posting", "https://karriere-hse24-portal.rexx-systems.com/Head-of-IT-de-j3700.html?sid=97d5fe5688cbbaae18e1e395144534e8", "rexx", "karriere-hse24-portal.rexx-systems.com", "https://karriere-hse24-portal.rexx-systems.com", true},
 		{"rexx recruitment listing", "https://horiba-portal.rexx-recruitment.com/stellenangebote.html", "rexx", "horiba-portal.rexx-recruitment.com", "https://horiba-portal.rexx-recruitment.com", true},
 		{"rexx asset host not a tenant", "https://cdn.rexx-systems.com/x.css", "", "", "", false},
