@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
@@ -189,12 +188,24 @@
   let hiddenInBuddyFeed = $state(false);
   let buddyVisibilityBusy = $state(false);
   const buddyApplicationId = $derived(events.find((event) => event.application_id)?.application_id ?? null);
+  // One request answers both questions: the hidden list is a member-only route (403 for
+  // anybody else), so its answer is the membership too. Never GET /me/buddies from here —
+  // that one refreshes the member's ranking keys and belongs to entering the section.
+  // Nothing is asked until the drawer holds an application, so a posting never applied to
+  // costs no request.
   $effect(() => {
     const id = buddyApplicationId;
-    const member = buddyMember;
-    if (member && id !== null) void api.listBuddyHiddenApplications().then((ids) => { hiddenInBuddyFeed = ids.includes(id); }).catch(() => {});
+    if (id !== null) void loadBuddyVisibility(id);
   });
-  onMount(() => { void api.buddyStatus().then((result) => { buddyMember = result.member; }).catch(() => {}); });
+  async function loadBuddyVisibility(id: number) {
+    try {
+      const ids = await api.listBuddyHiddenApplications();
+      buddyMember = true;
+      hiddenInBuddyFeed = ids.includes(id);
+    } catch {
+      buddyMember = false;
+    }
+  }
   async function toggleBuddyVisibility() {
     if (buddyApplicationId === null || buddyVisibilityBusy) return;
     buddyVisibilityBusy = true;
