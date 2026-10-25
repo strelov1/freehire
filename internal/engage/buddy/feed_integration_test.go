@@ -9,6 +9,7 @@ import (
 	"errors"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -201,6 +202,50 @@ func TestFeedKeysetPaging(t *testing.T) {
 	if _, err := svc.Feed(ctx, viewer, buddy.FeedAll, "garbage", 2); !errors.Is(err, buddy.ErrBadFeedRequest) {
 		t.Fatalf("bad cursor: %v", err)
 	}
+	// The cursor is the last entry's id and carries no time.
+	first, err := svc.Feed(ctx, viewer, buddy.FeedAll, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := strconv.FormatInt(first.Entries[1].ID, 10); first.NextCursor != want {
+		t.Fatalf("cursor = %q, want the bare id %q", first.NextCursor, want)
+	}
+}
+
+// A cursor naming an event the viewer may not see must be refused, not answered: the
+// position it resolves to would reveal that event's time.
+func TestFeedForgedCursorsAreRefused(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	viewer, author, blocked := seedUser(t, pool, "v@example.test"), seedUser(t, pool, "a@example.test"), seedUser(t, pool, "b@example.test")
+	joinWith(t, pool, svc, viewer, "", nil, nil)
+	joinWith(t, pool, svc, author, "", nil, nil)
+	joinWith(t, pool, svc, blocked, "", nil, nil)
+	if _, err := pool.Exec(ctx, `INSERT INTO buddy_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, viewer, blocked); err != nil {
+		t.Fatal(err)
+	}
+	app := newApp(t, pool, author, "acme")
+	hiddenApp := newApp(t, pool, author, "globex")
+	visible := event(t, pool, author, app, "acme", "applied", "", 5)
+	forged := map[string]int64{
+		"rejection":      event(t, pool, author, app, "acme", "stage_set", "rejected", 4),
+		"hidden":         event(t, pool, author, hiddenApp, "globex", "applied", "", 3),
+		"blocked author": event(t, pool, blocked, newApp(t, pool, blocked, "acme"), "acme", "applied", "", 2),
+		"viewer's own":   event(t, pool, viewer, newApp(t, pool, viewer, "acme"), "acme", "applied", "", 2),
+		"unknown":        999999,
+	}
+	if err := svc.HideApplication(ctx, author, hiddenApp); err != nil {
+		t.Fatal(err)
+	}
+	for name, id := range forged {
+		if _, err := svc.Feed(ctx, viewer, buddy.FeedAll, strconv.FormatInt(id, 10), 10); !errors.Is(err, buddy.ErrBadFeedRequest) {
+			t.Errorf("%s cursor: err = %v", name, err)
+		}
+	}
+	// A genuine cursor on the same data still works.
+	if p, err := svc.Feed(ctx, viewer, buddy.FeedAll, strconv.FormatInt(visible, 10), 10); err != nil || len(p.Entries) != 0 {
+		t.Fatalf("real cursor = %+v, %v", p, err)
+	}
 }
 
 func TestFeedSimilarModeRestrictsToTopMembers(t *testing.T) {
@@ -298,6 +343,7 @@ func TestFeedQueryUsesTheFeedIndex(t *testing.T) {
 	rows, err := conn.Query(ctx, `EXPLAIN SELECT e.id FROM application_events e
 		WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
 		  AND (e.kind = 'applied' OR e.signal IN ('interview', 'offer'))
+		  AND (e.occurred_at, e.id) <= (SELECT c.occurred_at, c.id FROM application_events c WHERE c.id = 5)
 		ORDER BY e.occurred_at DESC, e.id DESC LIMIT 21`)
 	if err != nil {
 		t.Fatal(err)

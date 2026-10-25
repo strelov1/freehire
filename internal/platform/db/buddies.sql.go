@@ -159,7 +159,6 @@ func (q *Queries) LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMemb
 
 const listBuddyFeed = `-- name: ListBuddyFeed :many
 SELECT e.id,
-       e.occurred_at,
        (e.occurred_at AT TIME ZONE 'UTC')::date AS day,
        e.kind,
        e.signal,
@@ -178,8 +177,8 @@ WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
   AND (e.kind = 'applied' OR e.signal IN ('interview', 'offer'))
   AND e.user_id <> $1
   AND (NOT $2::bool OR m.handle = ANY($3::text[]))
-  AND ($4::timestamptz IS NULL
-       OR (e.occurred_at, e.id) < ($4::timestamptz, $5::bigint))
+  AND ($4::bigint IS NULL
+       OR (e.occurred_at, e.id) <= (SELECT c.occurred_at, c.id FROM application_events c WHERE c.id = $4::bigint))
   AND NOT EXISTS (
       SELECT 1 FROM buddy_blocks b
       WHERE (b.blocker_id = $1 AND b.blocked_id = e.user_id)
@@ -188,30 +187,28 @@ WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
       SELECT 1 FROM buddy_hidden_applications h
       WHERE h.user_id = e.user_id AND h.application_id = e.application_id)
 ORDER BY e.occurred_at DESC, e.id DESC
-LIMIT $6
+LIMIT $5
 `
 
 type ListBuddyFeedParams struct {
-	ViewerID      int64              `json:"viewer_id"`
-	SimilarOnly   bool               `json:"similar_only"`
-	AuthorHandles []string           `json:"author_handles"`
-	CursorAt      pgtype.Timestamptz `json:"cursor_at"`
-	CursorID      pgtype.Int8        `json:"cursor_id"`
-	PageLimit     int32              `json:"page_limit"`
+	ViewerID      int64       `json:"viewer_id"`
+	SimilarOnly   bool        `json:"similar_only"`
+	AuthorHandles []string    `json:"author_handles"`
+	CursorID      pgtype.Int8 `json:"cursor_id"`
+	PageLimit     int32       `json:"page_limit"`
 }
 
 type ListBuddyFeedRow struct {
-	ID               int64              `json:"id"`
-	OccurredAt       pgtype.Timestamptz `json:"occurred_at"`
-	Day              pgtype.Date        `json:"day"`
-	Kind             string             `json:"kind"`
-	Signal           string             `json:"signal"`
-	CompanySlug      string             `json:"company_slug"`
-	CompanyName      string             `json:"company_name"`
-	JobTitle         pgtype.Text        `json:"job_title"`
-	Handle           string             `json:"handle"`
-	Countries        []string           `json:"countries"`
-	ResumeStructured []byte             `json:"resume_structured"`
+	ID               int64       `json:"id"`
+	Day              pgtype.Date `json:"day"`
+	Kind             string      `json:"kind"`
+	Signal           string      `json:"signal"`
+	CompanySlug      string      `json:"company_slug"`
+	CompanyName      string      `json:"company_name"`
+	JobTitle         pgtype.Text `json:"job_title"`
+	Handle           string      `json:"handle"`
+	Countries        []string    `json:"countries"`
+	ResumeStructured []byte      `json:"resume_structured"`
 }
 
 // One page of the buddy feed, newest first, keyset-paged on (occurred_at, id). Three kinds
@@ -228,13 +225,17 @@ type ListBuddyFeedRow struct {
 // similar_only restricts to author_handles, the viewer's top similar members, which the
 // caller takes from ListSimilarBuddies so the scoring formula lives in one place. The day
 // is the UTC calendar date; the timestamp itself never leaves this query except as the
-// cursor key. cursor_at / cursor_id are both NULL for the first page.
+// cursor key. cursor_id is NULL for the first page. Otherwise it names the last event of
+// the previous page and the page is read INCLUSIVE of it: the keyset position is resolved
+// here, from the event itself, so the client never holds a timestamp, and the caller
+// checks the first row is that event. Because the event passes through the same
+// visibility predicate as every other row, a cursor naming an event the viewer may not
+// see (rejected, hidden, blocked, retracted, unknown) comes back without it.
 func (q *Queries) ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([]ListBuddyFeedRow, error) {
 	rows, err := q.db.Query(ctx, listBuddyFeed,
 		arg.ViewerID,
 		arg.SimilarOnly,
 		arg.AuthorHandles,
-		arg.CursorAt,
 		arg.CursorID,
 		arg.PageLimit,
 	)
@@ -247,7 +248,6 @@ func (q *Queries) ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([
 		var i ListBuddyFeedRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OccurredAt,
 			&i.Day,
 			&i.Kind,
 			&i.Signal,

@@ -139,13 +139,12 @@ func decodeCV(raw []byte) resumeextract.Structured {
 	return s
 }
 
-func (r *QueriesRepository) Feed(ctx context.Context, viewerID int64, authors []string, similarOnly bool, cursor *FeedCursor, limit int) ([]FeedRow, error) {
+func (r *QueriesRepository) Feed(ctx context.Context, viewerID int64, authors []string, similarOnly bool, cursorID int64, limit int) ([]FeedRow, error) {
 	p := db.ListBuddyFeedParams{
 		ViewerID: viewerID, SimilarOnly: similarOnly, AuthorHandles: authors, PageLimit: int32(limit),
 	}
-	if cursor != nil {
-		p.CursorAt = pgtype.Timestamptz{Time: cursor.At, Valid: true}
-		p.CursorID = pgtype.Int8{Int64: cursor.ID, Valid: true}
+	if cursorID != 0 {
+		p.CursorID = pgtype.Int8{Int64: cursorID, Valid: true}
 	}
 	rows, err := r.q.ListBuddyFeed(ctx, p)
 	if err != nil {
@@ -154,7 +153,7 @@ func (r *QueriesRepository) Feed(ctx context.Context, viewerID int64, authors []
 	out := make([]FeedRow, len(rows))
 	for i, row := range rows {
 		out[i] = FeedRow{
-			ID: row.ID, OccurredAt: row.OccurredAt.Time, Day: row.Day.Time.Format(time.DateOnly),
+			ID: row.ID, Day: row.Day.Time.Format(time.DateOnly),
 			Kind: row.Kind, Signal: row.Signal,
 			Company: Company{Slug: row.CompanySlug, Name: row.CompanyName},
 			Author:  SimilarRow{Handle: row.Handle, Countries: row.Countries, CV: decodeCV(row.ResumeStructured)},

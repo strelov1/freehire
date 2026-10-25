@@ -3635,7 +3635,12 @@ type Querier interface {
 	// similar_only restricts to author_handles, the viewer's top similar members, which the
 	// caller takes from ListSimilarBuddies so the scoring formula lives in one place. The day
 	// is the UTC calendar date; the timestamp itself never leaves this query except as the
-	// cursor key. cursor_at / cursor_id are both NULL for the first page.
+	// cursor key. cursor_id is NULL for the first page. Otherwise it names the last event of
+	// the previous page and the page is read INCLUSIVE of it: the keyset position is resolved
+	// here, from the event itself, so the client never holds a timestamp, and the caller
+	// checks the first row is that event. Because the event passes through the same
+	// visibility predicate as every other row, a cursor naming an event the viewer may not
+	// see (rejected, hidden, blocked, retracted, unknown) comes back without it.
 	ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([]ListBuddyFeedRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)

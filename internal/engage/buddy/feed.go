@@ -2,12 +2,8 @@ package buddy
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
-	"fmt"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/strelov1/freehire/internal/application/appevent"
 )
@@ -58,22 +54,15 @@ type FeedPage struct {
 	NextCursor string
 }
 
-// FeedCursor is the keyset position: the last entry a page returned.
-type FeedCursor struct {
-	At time.Time
-	ID int64
-}
-
-// FeedRow is a Repository's raw answer for one event. OccurredAt only feeds the cursor.
+// FeedRow is a Repository's raw answer for one event.
 type FeedRow struct {
-	ID         int64
-	OccurredAt time.Time
-	Day        string
-	Kind       string
-	Signal     string
-	Company    Company
-	JobTitle   *string
-	Author     SimilarRow
+	ID       int64
+	Day      string
+	Kind     string
+	Signal   string
+	Company  Company
+	JobTitle *string
+	Author   SimilarRow
 }
 
 // Feed reads one page of the viewer's buddy feed, newest first. limit is clamped to
@@ -82,7 +71,7 @@ func (s *Service) Feed(ctx context.Context, viewerID int64, mode FeedMode, curso
 	if mode != FeedAll && mode != FeedSimilar {
 		return FeedPage{}, ErrBadFeedRequest
 	}
-	pos, err := decodeFeedCursor(cursor)
+	after, err := decodeFeedCursor(cursor)
 	if err != nil {
 		return FeedPage{}, err
 	}
@@ -106,16 +95,29 @@ func (s *Service) Feed(ctx context.Context, viewerID int64, mode FeedMode, curso
 			return FeedPage{}, nil
 		}
 	}
-	// One extra row says whether another page exists.
-	rows, err := s.repo.Feed(ctx, viewerID, authors, mode == FeedSimilar, pos, limit+1)
+	// One extra row says whether another page exists. A continuation also reads the
+	// cursor's own event, which the repository returns first.
+	want := limit + 1
+	if after != 0 {
+		want++
+	}
+	rows, err := s.repo.Feed(ctx, viewerID, authors, mode == FeedSimilar, after, want)
 	if err != nil {
 		return FeedPage{}, err
+	}
+	if after != 0 {
+		// The cursor must name an event this viewer can see in this feed: otherwise it
+		// is forged, or the event has since been hidden, and its position is not ours
+		// to reveal.
+		if len(rows) == 0 || rows[0].ID != after {
+			return FeedPage{}, ErrBadFeedRequest
+		}
+		rows = rows[1:]
 	}
 	var page FeedPage
 	if len(rows) > limit {
 		rows = rows[:limit]
-		last := rows[limit-1]
-		page.NextCursor = encodeFeedCursor(FeedCursor{At: last.OccurredAt, ID: last.ID})
+		page.NextCursor = encodeFeedCursor(rows[limit-1].ID)
 	}
 	page.Entries = make([]FeedEntry, len(rows))
 	for i, r := range rows {
@@ -188,28 +190,18 @@ func feedType(kind, signal string) string {
 	return signal
 }
 
-// The cursor is opaque to clients: "<unix micros>_<id>", base64url. Microseconds are
-// the precision Postgres stores, so a round trip loses nothing.
-func encodeFeedCursor(c FeedCursor) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%d_%d", c.At.UnixMicro(), c.ID)))
-}
+// The cursor is the id of the last entry of the page and nothing else. The server
+// resolves the keyset position from that event itself, so no time ever leaves it.
+func encodeFeedCursor(id int64) string { return strconv.FormatInt(id, 10) }
 
-func decodeFeedCursor(s string) (*FeedCursor, error) {
+// decodeFeedCursor returns 0 for the first page.
+func decodeFeedCursor(s string) (int64, error) {
 	if s == "" {
-		return nil, nil
+		return 0, nil
 	}
-	raw, err := base64.RawURLEncoding.DecodeString(s)
-	if err != nil {
-		return nil, ErrBadFeedRequest
+	id, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || id <= 0 {
+		return 0, ErrBadFeedRequest
 	}
-	micros, id, ok := strings.Cut(string(raw), "_")
-	if !ok {
-		return nil, ErrBadFeedRequest
-	}
-	us, err1 := strconv.ParseInt(micros, 10, 64)
-	n, err2 := strconv.ParseInt(id, 10, 64)
-	if err1 != nil || err2 != nil {
-		return nil, ErrBadFeedRequest
-	}
-	return &FeedCursor{At: time.UnixMicro(us).UTC(), ID: n}, nil
+	return id, nil
 }

@@ -3,20 +3,22 @@ package buddy
 import (
 	"context"
 	"errors"
+	"slices"
+	"strconv"
 	"testing"
-	"time"
 )
 
-func TestFeedCursorRoundTrip(t *testing.T) {
-	in := FeedCursor{At: time.UnixMicro(1_700_000_000_123_456).UTC(), ID: 42}
-	got, err := decodeFeedCursor(encodeFeedCursor(in))
-	if err != nil || got == nil || !got.At.Equal(in.At) || got.ID != in.ID {
-		t.Fatalf("round trip = %+v, %v", got, err)
+func TestFeedCursorIsTheBareEventID(t *testing.T) {
+	if got := encodeFeedCursor(42); got != strconv.Itoa(42) {
+		t.Fatalf("cursor = %q", got)
 	}
-	if c, err := decodeFeedCursor(""); c != nil || err != nil {
-		t.Fatalf("empty cursor = %+v, %v", c, err)
+	if id, err := decodeFeedCursor("42"); id != 42 || err != nil {
+		t.Fatalf("decode = %d, %v", id, err)
 	}
-	for _, bad := range []string{"!!", "bm9wZQ", "YV9i"} {
+	if id, err := decodeFeedCursor(""); id != 0 || err != nil {
+		t.Fatalf("empty cursor = %d, %v", id, err)
+	}
+	for _, bad := range []string{"!!", "0", "-5", "1_2", "1700000000123456_42", "4x"} {
 		if _, err := decodeFeedCursor(bad); !errors.Is(err, ErrBadFeedRequest) {
 			t.Errorf("cursor %q: err = %v", bad, err)
 		}
@@ -38,5 +40,59 @@ func TestFeedRefusesBadModeAndNonMember(t *testing.T) {
 	}
 	if err := New(stubRepo{}).HideApplication(context.Background(), 1, 2); !errors.Is(err, ErrNotMember) {
 		t.Errorf("hide by non-member: %v", err)
+	}
+}
+
+// feedRepo answers Similar with a fixed top set and records what Feed was asked for.
+type feedRepo struct {
+	Repository
+	top     []SimilarRow
+	rows    []FeedRow
+	authors []string
+	similar bool
+}
+
+func (f *feedRepo) Member(context.Context, int64) (Member, bool, error) {
+	return Member{Active: true}, true, nil
+}
+
+func (f *feedRepo) Similar(_ context.Context, _ int64, limit, _ int) ([]SimilarRow, error) {
+	if limit != SimilarFeedMembers {
+		return nil, errors.New("similar feed must ask for the top SimilarFeedMembers")
+	}
+	return f.top, nil
+}
+
+func (f *feedRepo) Feed(_ context.Context, _ int64, authors []string, similarOnly bool, _ int64, _ int) ([]FeedRow, error) {
+	f.authors, f.similar = authors, similarOnly
+	return f.rows, nil
+}
+
+func TestFeedSimilarModeHandsOnlyTheTopMembersToTheQuery(t *testing.T) {
+	r := &feedRepo{top: []SimilarRow{{Handle: "a"}, {Handle: "b"}}}
+	if _, err := New(r).Feed(context.Background(), 1, FeedSimilar, "", 10); err != nil {
+		t.Fatal(err)
+	}
+	if !r.similar || !slices.Equal(r.authors, []string{"a", "b"}) {
+		t.Fatalf("query got similar=%v authors=%v", r.similar, r.authors)
+	}
+	// No similar members at all is an empty feed, not a fall back to everyone.
+	empty := &feedRepo{}
+	page, err := New(empty).Feed(context.Background(), 1, FeedSimilar, "", 10)
+	if err != nil || len(page.Entries) != 0 || empty.authors != nil {
+		t.Fatalf("empty top: %+v, %v, authors %v", page, err, empty.authors)
+	}
+}
+
+func TestFeedContinuationMustStartAtTheCursorEvent(t *testing.T) {
+	// The cursor event is missing from the answer (not visible to this viewer).
+	r := &feedRepo{rows: []FeedRow{{ID: 7}, {ID: 6}}}
+	if _, err := New(r).Feed(context.Background(), 1, FeedAll, "9", 10); !errors.Is(err, ErrBadFeedRequest) {
+		t.Fatalf("foreign cursor: %v", err)
+	}
+	r = &feedRepo{rows: []FeedRow{{ID: 9}, {ID: 7}, {ID: 6}}}
+	page, err := New(r).Feed(context.Background(), 1, FeedAll, "9", 10)
+	if err != nil || len(page.Entries) != 2 || page.Entries[0].ID != 7 || page.NextCursor != "" {
+		t.Fatalf("page = %+v, %v", page, err)
 	}
 }
