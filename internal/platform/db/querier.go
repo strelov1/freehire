@@ -930,6 +930,10 @@ type Querier interface {
 	// as the bulk sweep, one id at a time, so a single row's error (e.g. corrupted index
 	// entry) can be caught and skipped by the caller without losing the rest of the batch.
 	CloseUnseenJobByID(ctx context.Context, id int64) (int64, error)
+	// skipped_board_patterns (externalid.BoardPattern of every board the run SKIPPED — in quiet pause
+	// or failure cooldown) are excluded: a skipped board was not looked at, so its rows' age since
+	// last seen says nothing about them, and a quiet pause outlasts the 48h window. COALESCE because a
+	// NULL array would make NOT (LIKE ANY(NULL)) NULL and silently close nothing at all.
 	// Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 	// seen since the cutoff, scoped to the company slugs the run actually crawled. Scoped
 	// by source because ingest runs per provider (a greenhouse run must not close jobs
@@ -949,6 +953,7 @@ type Querier interface {
 	// count(*) over the closed rows is the same int64 the caller already had, so no call site
 	// changes.
 	CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error)
+	// skipped_board_patterns: the boards the run skipped are excluded, as in CloseUnseenJobs.
 	//
 	// The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
 	// search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
@@ -2362,7 +2367,11 @@ type Querier interface {
 	// which the caller treats as "never seen, eligible". region disambiguates a board id that
 	// repeats across independent regional slices (e.g. Adzuna's "it-jobs" once per country); every
 	// other provider passes '' here, matching the column's default.
-	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error)
+	//
+	// quiet_until rides along (migration 0198) so the one lookup a crawl already makes per board
+	// answers both pauses: a second query per board would double the per-board round trips over
+	// the crawl host's link to the database.
+	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (GetBoardCooldownRow, error)
 	// The user's saved CV appearance defaults, if any. No row means the user has never saved
 	// any — the caller falls back to the system defaults rather than treating this as an error.
 	GetCVAppearanceDefaults(ctx context.Context, userID int64) (CvAppearanceDefault, error)
@@ -5757,7 +5766,15 @@ type Querier interface {
 	//
 	// On a run that did NOT reach a posting the column is left exactly as it was, rather than
 	// cleared: it is a high-water mark, and how long ago it was set is the whole measurement.
-	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) error
+	//
+	// `fingerprint` drives the quiet-board backoff (migration 0198, pipeline.QuietFor). NULL means
+	// this crawl cannot vouch for the board's whole listing (interrupted, partly failed, or a
+	// self-closing provider whose emissions are changes, not a listing) and leaves all three quiet
+	// columns exactly as they were. Equal to the stored fingerprint: one more quiet crawl, and the
+	// caller sets the longer pause from the returned streak (SetBoardQuietUntil). Anything else —
+	// a posting appeared or disappeared, or no fingerprint was stored yet — records the new one and
+	// ends the quiet state. Every board_health.* reference below reads the row BEFORE this update.
+	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) (int32, error)
 	// Closes out one (user, campaign) whether or not the send worked.
 	RecordBroadcastEmail(ctx context.Context, arg RecordBroadcastEmailParams) error
 	// Record that this company page was announced to this engine. Idempotent, for the same
@@ -6683,6 +6700,12 @@ type Querier interface {
 	// newer writer already moved consecutive_failures past what this cooldown was computed from —
 	// expected under the race, not an error, and the caller applies nothing further.
 	SetBoardCooldown(ctx context.Context, arg SetBoardCooldownParams) (int64, error)
+	// Apply the Go-computed quiet pause (pipeline.QuietFor) to a board whose listing was just found
+	// unchanged again. Guarded by the quiet_streak the pause was computed FROM, for the race
+	// SetBoardCooldown documents: the worker pool can record the same board twice in one run, and a
+	// stale writer must not set a pause over a streak a newer RecordBoardSuccess already reset.
+	// Zero rows affected is that race, not an error.
+	SetBoardQuietUntil(ctx context.Context, arg SetBoardQuietUntilParams) (int64, error)
 	// Replace the run report on an owned CV. The agent writes the WHOLE report on every call —
 	// there is no partial update, so a requirement closed later from the candidate's own words
 	// arrives as the same list with one entry changed. Owner-scoped: 0 rows for a foreign id.
@@ -7320,6 +7343,10 @@ type Querier interface {
 	// apply history survive unsaving. No interaction row -> pgx.ErrNoRows; the
 	// handler treats that as "already not saved", never as a failure.
 	UnsaveJob(ctx context.Context, arg UnsaveJobParams) (UnsaveJobRow, error)
+	// skipped_board_patterns (externalid.BoardPattern of every board the run SKIPPED — in quiet pause
+	// or failure cooldown) are excluded: a skipped board was not looked at, so its rows' age since
+	// last seen says nothing about them, and a quiet pause outlasts the 48h window. COALESCE because a
+	// NULL array would make NOT (LIKE ANY(NULL)) NULL and silently close nothing at all.
 	// Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path
 	// (see CloseUnseenJobByID) uses this to close row by row when the single bulk UPDATE
 	// fails — e.g. a heap/index-corrupted row aborts the whole batch (2026-08-11 incident:
@@ -7327,6 +7354,7 @@ type Querier interface {
 	// fetched separately and closed one at a time, letting one bad id be skipped without
 	// blocking the rest.
 	UnseenJobIDs(ctx context.Context, arg UnseenJobIDsParams) ([]int64, error)
+	// skipped_board_patterns: the boards the run skipped are excluded, as in CloseUnseenJobs.
 	// Row-by-row fallback candidate set for CloseUnseenJobsBySource — see UnseenJobIDs.
 	UnseenJobIDsBySource(ctx context.Context, arg UnseenJobIDsBySourceParams) ([]int64, error)
 	// Take an application off the board outright, naming the application itself.

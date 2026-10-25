@@ -19,6 +19,15 @@ func SelfClosingProviders(reg map[string]Source) []string {
 	return out
 }
 
+// SelfCloses reports whether src manages its own closes from a change stream (see selfClosing).
+// Such a source emits CHANGES rather than its listing, so nothing derived from one crawl's
+// emissions — the quiet-board backoff's listing fingerprint, for one — describes what the board
+// still lists.
+func SelfCloses(src Source) bool {
+	_, ok := src.(selfClosing)
+	return ok
+}
+
 // FullCatalogProviders returns the provider names in reg that list their whole catalogue each
 // run and so may be swept by source rather than by crawled company (see fullCatalog).
 func FullCatalogProviders(reg map[string]Source) []string {

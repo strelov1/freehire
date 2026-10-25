@@ -243,8 +243,8 @@ func run() int {
 	}
 
 	total := runStats.Total()
-	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d interrupted=%d truncated=%t",
-		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected, total.Unreadable, total.Interrupted, truncated)
+	log.Printf("ingest done: provider=%s providers=%d ingested=%d failed=%d skipped=%d rejected=%d unreadable=%d interrupted=%d cooled=%d quiet=%d truncated=%t",
+		provider, len(runStats), total.Ingested, total.Failed, total.Skipped, total.Rejected, total.Unreadable, total.Interrupted, total.Cooled, total.Quiet, truncated)
 
 	// A provider at 0% took the cheap write for nothing all run — a hashed field is churning
 	// between crawls, which costs a full row rewrite AND a pointless index push every pass.
@@ -340,7 +340,7 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 		if !truncated {
 			bySource := sweepBySource(runStats[provider], fullCatalog[provider])
 			companySlugs := sweepableCompanies(crawled.slugs(provider), runStats[provider])
-			closed, skipped, err := sweepProvider(ctx, queries, provider, cutoff, companySlugs, bySource)
+			closed, skipped, err := sweepProvider(ctx, queries, provider, cutoff, companySlugs, runStats[provider].SkippedBoards, bySource)
 			if err != nil {
 				// Count and continue: one provider's sweep failure must not skip the rest,
 				// but the run still exits non-zero.
@@ -740,24 +740,28 @@ func refetchAllFor(env string) (bool, error) {
 // CloseUnseenJobsBySource) is the fast path, and on error it falls back to sweepRowByRow
 // so a single row Postgres can't write doesn't block the rest of the provider — see
 // sweepRowByRow for why that happens. skipped is always 0 unless the fallback ran.
-func sweepProvider(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, companySlugs []string, bySource bool) (closed int64, skipped int, err error) {
+// skippedBoards (pipeline.Stats.SkippedBoards) are left out of either scope: the run did not look
+// at them, so their rows' age says nothing about whether they are still listed.
+func sweepProvider(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, companySlugs, skippedBoards []string, bySource bool) (closed int64, skipped int, err error) {
 	if bySource {
 		closed, err = queries.CloseUnseenJobsBySource(ctx, db.CloseUnseenJobsBySourceParams{
-			Source: provider,
-			Cutoff: cutoff,
+			Source:               provider,
+			Cutoff:               cutoff,
+			SkippedBoardPatterns: skippedBoards,
 		})
 	} else {
 		closed, err = queries.CloseUnseenJobs(ctx, db.CloseUnseenJobsParams{
-			Source:       provider,
-			Cutoff:       cutoff,
-			CompanySlugs: companySlugs,
+			Source:               provider,
+			Cutoff:               cutoff,
+			CompanySlugs:         companySlugs,
+			SkippedBoardPatterns: skippedBoards,
 		})
 	}
 	if err == nil {
 		return closed, 0, nil
 	}
 	log.Printf("close stale jobs (%s): bulk close failed (%v), falling back to row-by-row", provider, err)
-	closed, skipped, err = sweepRowByRow(ctx, queries, provider, cutoff, companySlugs, bySource)
+	closed, skipped, err = sweepRowByRow(ctx, queries, provider, cutoff, companySlugs, skippedBoards, bySource)
 	if err != nil {
 		return 0, 0, fmt.Errorf("row-by-row fallback failed: %w", err)
 	}
@@ -770,12 +774,12 @@ func sweepProvider(ctx context.Context, queries *db.Queries, provider string, cu
 // incident, where one such row blocked greenhouse's sweep on every run) is skipped by
 // itself instead of aborting every other closeable row in the provider. Slower than the
 // bulk path by design: it only runs once the fast path has already failed.
-func sweepRowByRow(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, companySlugs []string, bySource bool) (closed int64, skipped int, err error) {
+func sweepRowByRow(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, companySlugs, skippedBoards []string, bySource bool) (closed int64, skipped int, err error) {
 	var ids []int64
 	if bySource {
-		ids, err = queries.UnseenJobIDsBySource(ctx, db.UnseenJobIDsBySourceParams{Source: provider, Cutoff: cutoff})
+		ids, err = queries.UnseenJobIDsBySource(ctx, db.UnseenJobIDsBySourceParams{Source: provider, Cutoff: cutoff, SkippedBoardPatterns: skippedBoards})
 	} else {
-		ids, err = queries.UnseenJobIDs(ctx, db.UnseenJobIDsParams{Source: provider, Cutoff: cutoff, CompanySlugs: companySlugs})
+		ids, err = queries.UnseenJobIDs(ctx, db.UnseenJobIDsParams{Source: provider, Cutoff: cutoff, CompanySlugs: companySlugs, SkippedBoardPatterns: skippedBoards})
 	}
 	if err != nil {
 		return 0, 0, fmt.Errorf("list candidates: %w", err)

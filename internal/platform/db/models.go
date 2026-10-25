@@ -246,7 +246,10 @@ type BoardHealth struct {
 	Region              string             `json:"region"`
 	FirstSeenAt         pgtype.Timestamptz `json:"first_seen_at"`
 	// When this board last yielded at least one posting. Distinct from last_success_at, which an empty-but-reachable feed refreshes on every run. NULL means no yield has been observed since the column was added; consumers must not read that as an empty feed.
-	LastYieldAt pgtype.Timestamptz `json:"last_yield_at"`
+	LastYieldAt        pgtype.Timestamptz `json:"last_yield_at"`
+	ListingFingerprint pgtype.Text        `json:"listing_fingerprint"`
+	QuietStreak        int32              `json:"quiet_streak"`
+	QuietUntil         pgtype.Timestamptz `json:"quiet_until"`
 }
 
 // Unclassified-URL triage inbox (the link_contributions "review" case). A row is deleted once triage resolves its (provider, board) and inserts into boards.

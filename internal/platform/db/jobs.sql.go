@@ -830,6 +830,7 @@ WITH closed AS (
       AND source = $1
       AND last_seen_at < $2
       AND company_slug = ANY($3::text[])
+      AND NOT (external_id LIKE ANY(COALESCE($4::text[], '{}')))
     RETURNING id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
@@ -840,11 +841,16 @@ SELECT count(*) FROM closed
 `
 
 type CloseUnseenJobsParams struct {
-	Source       string             `json:"source"`
-	Cutoff       pgtype.Timestamptz `json:"cutoff"`
-	CompanySlugs []string           `json:"company_slugs"`
+	Source               string             `json:"source"`
+	Cutoff               pgtype.Timestamptz `json:"cutoff"`
+	CompanySlugs         []string           `json:"company_slugs"`
+	SkippedBoardPatterns []string           `json:"skipped_board_patterns"`
 }
 
+// skipped_board_patterns (externalid.BoardPattern of every board the run SKIPPED — in quiet pause
+// or failure cooldown) are excluded: a skipped board was not looked at, so its rows' age since
+// last seen says nothing about them, and a quiet pause outlasts the 48h window. COALESCE because a
+// NULL array would make NOT (LIKE ANY(NULL)) NULL and silently close nothing at all.
 // Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 // seen since the cutoff, scoped to the company slugs the run actually crawled. Scoped
 // by source because ingest runs per provider (a greenhouse run must not close jobs
@@ -864,7 +870,12 @@ type CloseUnseenJobsParams struct {
 // count(*) over the closed rows is the same int64 the caller already had, so no call site
 // changes.
 func (q *Queries) CloseUnseenJobs(ctx context.Context, arg CloseUnseenJobsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, closeUnseenJobs, arg.Source, arg.Cutoff, arg.CompanySlugs)
+	row := q.db.QueryRow(ctx, closeUnseenJobs,
+		arg.Source,
+		arg.Cutoff,
+		arg.CompanySlugs,
+		arg.SkippedBoardPatterns,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -879,6 +890,7 @@ WITH closed AS (
     WHERE closed_at IS NULL
       AND source = $1
       AND last_seen_at < $2
+      AND NOT (external_id LIKE ANY(COALESCE($3::text[], '{}')))
     RETURNING id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
@@ -889,10 +901,13 @@ SELECT count(*) FROM closed
 `
 
 type CloseUnseenJobsBySourceParams struct {
-	Source string             `json:"source"`
-	Cutoff pgtype.Timestamptz `json:"cutoff"`
+	Source               string             `json:"source"`
+	Cutoff               pgtype.Timestamptz `json:"cutoff"`
+	SkippedBoardPatterns []string           `json:"skipped_board_patterns"`
 }
 
+// skipped_board_patterns: the boards the run skipped are excluded, as in CloseUnseenJobs.
+//
 // The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
 // search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
 // exact — only rows that actually closed are queued, and a rolled-back close queues nothing.
@@ -907,7 +922,7 @@ type CloseUnseenJobsBySourceParams struct {
 // of a fullCatalog provider (a truncated crawl, which such adapters surface as an error, would
 // otherwise mass-close everything it never reached); a partial run falls back to CloseUnseenJobs.
 func (q *Queries) CloseUnseenJobsBySource(ctx context.Context, arg CloseUnseenJobsBySourceParams) (int64, error) {
-	row := q.db.QueryRow(ctx, closeUnseenJobsBySource, arg.Source, arg.Cutoff)
+	row := q.db.QueryRow(ctx, closeUnseenJobsBySource, arg.Source, arg.Cutoff, arg.SkippedBoardPatterns)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -5925,14 +5940,20 @@ WHERE closed_at IS NULL
   AND source = $1
   AND last_seen_at < $2
   AND company_slug = ANY($3::text[])
+  AND NOT (external_id LIKE ANY(COALESCE($4::text[], '{}')))
 `
 
 type UnseenJobIDsParams struct {
-	Source       string             `json:"source"`
-	Cutoff       pgtype.Timestamptz `json:"cutoff"`
-	CompanySlugs []string           `json:"company_slugs"`
+	Source               string             `json:"source"`
+	Cutoff               pgtype.Timestamptz `json:"cutoff"`
+	CompanySlugs         []string           `json:"company_slugs"`
+	SkippedBoardPatterns []string           `json:"skipped_board_patterns"`
 }
 
+// skipped_board_patterns (externalid.BoardPattern of every board the run SKIPPED — in quiet pause
+// or failure cooldown) are excluded: a skipped board was not looked at, so its rows' age since
+// last seen says nothing about them, and a quiet pause outlasts the 48h window. COALESCE because a
+// NULL array would make NOT (LIKE ANY(NULL)) NULL and silently close nothing at all.
 // Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path
 // (see CloseUnseenJobByID) uses this to close row by row when the single bulk UPDATE
 // fails — e.g. a heap/index-corrupted row aborts the whole batch (2026-08-11 incident:
@@ -5940,7 +5961,12 @@ type UnseenJobIDsParams struct {
 // fetched separately and closed one at a time, letting one bad id be skipped without
 // blocking the rest.
 func (q *Queries) UnseenJobIDs(ctx context.Context, arg UnseenJobIDsParams) ([]int64, error) {
-	rows, err := q.db.Query(ctx, unseenJobIDs, arg.Source, arg.Cutoff, arg.CompanySlugs)
+	rows, err := q.db.Query(ctx, unseenJobIDs,
+		arg.Source,
+		arg.Cutoff,
+		arg.CompanySlugs,
+		arg.SkippedBoardPatterns,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -5964,16 +5990,19 @@ SELECT id FROM jobs
 WHERE closed_at IS NULL
   AND source = $1
   AND last_seen_at < $2
+  AND NOT (external_id LIKE ANY(COALESCE($3::text[], '{}')))
 `
 
 type UnseenJobIDsBySourceParams struct {
-	Source string             `json:"source"`
-	Cutoff pgtype.Timestamptz `json:"cutoff"`
+	Source               string             `json:"source"`
+	Cutoff               pgtype.Timestamptz `json:"cutoff"`
+	SkippedBoardPatterns []string           `json:"skipped_board_patterns"`
 }
 
+// skipped_board_patterns: the boards the run skipped are excluded, as in CloseUnseenJobs.
 // Row-by-row fallback candidate set for CloseUnseenJobsBySource — see UnseenJobIDs.
 func (q *Queries) UnseenJobIDsBySource(ctx context.Context, arg UnseenJobIDsBySourceParams) ([]int64, error) {
-	rows, err := q.db.Query(ctx, unseenJobIDsBySource, arg.Source, arg.Cutoff)
+	rows, err := q.db.Query(ctx, unseenJobIDsBySource, arg.Source, arg.Cutoff, arg.SkippedBoardPatterns)
 	if err != nil {
 		return nil, err
 	}

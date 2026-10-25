@@ -233,7 +233,7 @@ func TestCloseChronicBoardJobsDoesNotCloseARecoveredBoard(t *testing.T) {
 
 	// The board recovers AFTER a caller would have read it as chronic but BEFORE the close
 	// statement actually runs.
-	if err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
+	if _, err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
 		Provider: "greenhouse", Board: "dead-board", Region: "",
 		LastIngestedCount: pgtype.Int4{Int32: 3, Valid: true},
 	}); err != nil {
@@ -279,7 +279,7 @@ func TestCloseChronicProviderJobsDoesNotCloseARecoveredProvider(t *testing.T) {
 		t.Fatalf("upsert: %v", err)
 	}
 
-	if err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
+	if _, err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
 		Provider: "uber", Board: "", Region: "",
 		LastIngestedCount: pgtype.Int4{Int32: 5, Valid: true},
 	}); err != nil {

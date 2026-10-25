@@ -29,8 +29,14 @@ the new fingerprint, reset the quiet streak to zero and clear the quiet pause.
 - **THEN** the fingerprint is unchanged and the crawl counts as quiet
 
 ### Requirement: An incomplete crawl leaves the quiet state untouched
-A crawl that did not read the board's whole listing — interrupted by the run's deadline, failed, or cut
-short by the context ending — SHALL NOT change the board's fingerprint, quiet streak or quiet pause.
+A crawl that did not read the board's whole listing SHALL NOT change the board's fingerprint, quiet streak
+or quiet pause. That covers a crawl interrupted by the run's deadline, one that failed, one cut short by the
+context ending, one where a listed posting could not be read or failed to save, and one where a hydrating
+adapter left a NEW posting it listed un-hydrated (detail budget spent or detail failed).
+
+#### Scenario: Deferred new postings
+- **WHEN** a hydrating adapter lists three new postings but hydrates only one before its detail budget runs out
+- **THEN** the board's quiet state is unchanged
 
 #### Scenario: Interrupted crawl
 - **WHEN** a board's crawl is interrupted by the run's crawl deadline
@@ -64,3 +70,26 @@ fingerprint or apply a quiet pause, because its emissions are changes, not a lis
 #### Scenario: Self-closing provider crawl
 - **WHEN** a self-closing provider's board completes a crawl that emits nothing
 - **THEN** its quiet streak stays 0 and it has no quiet pause
+
+### Requirement: A board the run skipped is never swept by the company or source scope
+The post-run unseen sweep SHALL exclude every posting of a board the run skipped — in quiet pause or in
+failure cooldown — from its company-scoped and source-scoped closes. A skipped board's postings were
+not looked at, so their age since last seen says nothing about them. Without this, a quiet pause longer
+than the sweep window (48h) would close the live postings of a company whose other board the run did crawl.
+
+#### Scenario: Quiet board of a company the run crawled elsewhere
+- **WHEN** a company has two boards on one provider, the run crawls one and skips the other as quiet, and the skipped board's postings were last seen 60h ago
+- **THEN** the company-scoped close leaves the skipped board's postings open
+
+#### Scenario: Cooled board under a source-scoped close
+- **WHEN** a full-catalogue provider's run skips one of its boards in failure cooldown
+- **THEN** the source-scoped close leaves that board's postings open
+
+### Requirement: A quiet board reads as fresh in health rollups
+While a board's quiet pause holds, the provider health rollups that back the public status page and the
+silence alerts SHALL treat the board as freshly successful. The board skips crawls on purpose for longer
+than their 48h freshness window, and the pause is only ever set by a success.
+
+#### Scenario: All of a provider's boards are quiet
+- **WHEN** every board of a provider is in its quiet pause and their last success was 60h ago
+- **THEN** the status page and the silence alert report the provider as fresh

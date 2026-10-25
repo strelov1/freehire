@@ -137,17 +137,19 @@ const HydrationRetryWindow = 14 * 24 * time.Hour
 // (the Runner behaves exactly as before), so unit tests and non-DB callers are
 // unaffected — the same shape as the optional Closer.
 type BoardHealth interface {
-	// Cooldown reports the board's cooldown_until and whether it is set. The Runner
-	// skips the board when it is set and in the future.
-	Cooldown(ctx context.Context, provider, board, region string) (time.Time, bool, error)
+	// Pauses reports the board's two independent pauses — the failure cooldown and the quiet
+	// pause (QuietFor) — in one lookup. The Runner skips the board while either is in the future.
+	Pauses(ctx context.Context, provider, board, region string) (BoardPauses, error)
 	// RecordSuccess clears the board's failure state and stamps freshness. reached reports
 	// whether the board's LISTING named any posting at all (boardListedAnyPosting) — a
 	// separate question from ingested, which counts only the ones that became rows, and the
 	// one an empty feed answers differently from a live board whose every posting we already
 	// hold, or cannot read, or failed to save. See board_health.last_yield_at (migration
 	// 0158) for what it feeds, and boardListedAnyPosting for why it is deliberately the most
-	// generous reading available.
-	RecordSuccess(ctx context.Context, provider, board, region string, ingested int, reached bool) error
+	// generous reading available. fingerprint is the board's listingFingerprint from a COMPLETE
+	// crawl, or "" when this crawl cannot vouch for the whole listing, which leaves the quiet
+	// state untouched (migration 0198).
+	RecordSuccess(ctx context.Context, provider, board, region string, ingested int, reached bool, fingerprint string) error
 	// RecordFailure counts a failed crawl and cools the board down per the backoff policy.
 	RecordFailure(ctx context.Context, provider, board, region, errMsg string) error
 	// CooledBoards returns up to limit (board, region) pairs of the provider currently in
@@ -197,6 +199,15 @@ type CoverageLookup interface {
 // company at a time as postings are emitted.
 type aggregatorCoverage func(companySlug string) bool
 
+// BoardPauses is a board's two pauses; a zero time means that pause is not set. Cooldown
+// backs off a FAILING board (CooldownFor), Quiet a board whose listing keeps coming back
+// unchanged (QuietFor). They are kept apart so the recovery probe, which clears every cooldown
+// of a provider at once, never erases a quiet pause.
+type BoardPauses struct {
+	Cooldown time.Time
+	Quiet    time.Time
+}
+
 // CooledBoard identifies one board currently in an active cooldown. Region disambiguates a
 // board id that repeats across independent regional slices of one provider (e.g. Adzuna's
 // "it-jobs" once per country) — without it, every region's health/cooldown state would
@@ -218,10 +229,13 @@ type CooledBoard struct {
 // is the filter working as intended, a skip is something broken. Folded together, a board
 // whose every save fails would read as a board full of non-technical postings.
 type Stats struct {
-	Ingested   int
-	Failed     int
-	Skipped    int
-	Cooled     int
+	Ingested int
+	Failed   int
+	Skipped  int
+	Cooled   int
+	// Quiet counts boards skipped because their listing kept coming back unchanged (QuietFor) —
+	// kept apart from Cooled, which means a FAILING board.
+	Quiet      int
 	Rejected   int
 	ATSCovered int // aggregator postings skipped: company already covered by a non-aggregator source
 	// Unreadable counts postings the board's listing NAMED but whose detail this crawl could
@@ -253,6 +267,11 @@ type Stats struct {
 	// that failed, since a board that could not read part of itself has proved nothing about
 	// any of the employers on it.
 	UnprovenCompanies []string
+	// SkippedBoards is the externalid.BoardPattern of every board this run skipped — in quiet
+	// pause or in failure cooldown. The company- and source-scoped unseen closes exclude them: a
+	// skipped board was not looked at, so its rows' age since last seen says nothing about them,
+	// and a quiet pause lasts longer than the sweep's 48h window.
+	SkippedBoards []string
 }
 
 // add accumulates another Stats into s, so the per-board and per-provider merges cannot
@@ -262,12 +281,14 @@ func (s *Stats) add(o Stats) {
 	s.Failed += o.Failed
 	s.Skipped += o.Skipped
 	s.Cooled += o.Cooled
+	s.Quiet += o.Quiet
 	s.Rejected += o.Rejected
 	s.ATSCovered += o.ATSCovered
 	s.Unreadable += o.Unreadable
 	s.Interrupted += o.Interrupted
 	s.QualifyingBoards = append(s.QualifyingBoards, o.QualifyingBoards...)
 	s.UnprovenCompanies = append(s.UnprovenCompanies, o.UnprovenCompanies...)
+	s.SkippedBoards = append(s.SkippedBoards, o.SkippedBoards...)
 }
 
 // RunStats is a run's outcome broken down by provider. A run may cover several providers
@@ -497,14 +518,14 @@ func (r Runner) probeProvider(ctx context.Context, src sources.Source, boards []
 		if !ok {
 			continue
 		}
-		raw, seen, err := r.fetchBoard(ctx, candidate, src)
+		raw, seen, deferred, err := r.fetchBoard(ctx, candidate, src)
 		if err != nil {
 			continue
 		}
 		if streaming {
 			return candidate, Stats{}, false, true
 		}
-		return candidate, r.ingestFetched(ctx, candidate, raw, seen), true, true
+		return candidate, r.ingestFetched(ctx, candidate, raw, seen, deferred), true, true
 	}
 	return sources.CompanyEntry{}, Stats{}, false, false
 }
@@ -549,10 +570,15 @@ func sortedProviders(byProvider map[string]map[entryKey]sources.CompanyEntry) []
 // silently swallowed. A board in cooldown is skipped before its adapter is touched, and
 // each crawl's board-level outcome is recorded to BoardHealth.
 func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
-	// Cooldown gate — before the adapter lookup, so a backed-off board costs nothing.
-	if r.cooledDown(ctx, e) {
+	// Pause gate (failure cooldown or quiet pause) — before the adapter lookup, so a backed-off
+	// board costs nothing. A quiet skip is not logged per board: it is the common case once the
+	// backoff settles, and the run's summary line counts them.
+	switch r.paused(ctx, e) {
+	case pausedCooldown:
 		log.Printf("ingest: %s board %q (%s) in cooldown — skipping", e.Provider, e.Board, e.Company)
-		return Stats{Cooled: 1}
+		return Stats{Cooled: 1, SkippedBoards: skippedBoard(e)}
+	case pausedQuiet:
+		return Stats{Quiet: 1, SkippedBoards: skippedBoard(e)}
 	}
 
 	src, ok := r.Registry[e.Provider]
@@ -570,7 +596,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 	// progress is saved incrementally (and survives an interrupted run) rather than buffered
 	// until the whole board finishes.
 	if ss, streaming := src.(sources.StreamingSource); streaming {
-		st := r.ingestStream(ctx, e, ss)
+		st, listed := r.ingestStream(ctx, e, ss)
 		// A streaming board that made no progress at all AND failed is a true outage;
 		// partial progress is a success signal, not a board failure. A rejected posting is
 		// progress: the crawl reached it and the filter turned it away. Without that, a
@@ -583,12 +609,12 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		if st.Failed > 0 && st.Ingested == 0 && st.Rejected == 0 && st.ATSCovered == 0 {
 			r.recordFailure(ctx, e, "streaming board failed with no progress")
 		} else {
-			r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st))
+			r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st), r.completeListingFingerprint(ctx, src, listed, st))
 		}
 		return st
 	}
 
-	raw, seen, err := r.fetchBoard(ctx, e, src)
+	raw, seen, deferred, err := r.fetchBoard(ctx, e, src)
 	if err != nil {
 		// Log the cause so a failed board is diagnosable (the source error carries
 		// the HTTP status / timeout); the run still isolates and continues.
@@ -596,7 +622,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		r.recordFailure(ctx, e, err.Error())
 		return Stats{Failed: 1}
 	}
-	return r.ingestFetched(ctx, e, raw, seen)
+	return r.ingestFetched(ctx, e, raw, seen, deferred)
 }
 
 // fillCompanyDescription calls a CompanyDescriber adapter at most once per board, and only
@@ -644,7 +670,11 @@ func (r Runner) fillCompanyDescription(ctx context.Context, e sources.CompanyEnt
 // probe — which must fetch a board through the adapter to answer it — can finish that
 // same fetch into a full ingest (see probeProvider) instead of discarding the result and
 // having the main loop fetch the board a second time.
-func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool) Stats {
+//
+// deferred reports that a hydrating adapter left a NEW posting it listed un-hydrated (its detail
+// budget ran out, or the detail failed): the board has work pending, so this crawl does not
+// count as quiet.
+func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool, deferred bool) Stats {
 	canon := r.resolveCompanyAliases(ctx, e, raw)
 	covered := r.aggregatorCoverageForBatch(ctx, e, raw, canon)
 	st, rej, firstErr := r.writeBoard(ctx, e, raw, seen, covered, canon)
@@ -670,7 +700,15 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 	// which on a national feed heavy with non-tech postings is the ordinary outcome, not an
 	// empty feed. The whole board would then age into the empty-feed net and have its jobs
 	// closed under a diagnosis that was never true of it.
-	r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st))
+	listed := make([]string, len(raw))
+	for i, j := range raw {
+		listed[i] = j.ExternalID
+	}
+	fingerprint := ""
+	if !deferred {
+		fingerprint = r.completeListingFingerprint(ctx, r.Registry[e.Provider], listed, st)
+	}
+	r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st), fingerprint)
 	// Too much of the board went unread for its crawl to be evidence of what is still on it,
 	// so this run's close scopes are withheld for every employer the board carries — the board
 	// scope through boardQualifies, the company scope through these slugs. Announced because
@@ -1046,12 +1084,12 @@ func (r Runner) save(ctx context.Context, dj job.Job, form *applyform.Form) erro
 // tech evidence, which the caller needs to judge a liveness refresh against the same rule as a
 // write. A non-hydrating board has no seen-set and returns nil, which reads as "no evidence" for
 // every lookup — harmless, because such a board yields no refreshes.
-func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) ([]sources.Job, map[string]bool, error) {
+func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) ([]sources.Job, map[string]bool, bool, error) {
 	hs, hydrating := src.(sources.HydratingSource)
 	sl, canLookUp := r.Store.(SeenLookup)
 	if !hydrating || !canLookUp {
 		jobs, err := src.Fetch(ctx, e)
-		return jobs, nil, err
+		return jobs, nil, false, err
 	}
 	set, err := sl.ExistingExternalIDs(ctx, e.Provider, e.Board)
 	if err != nil {
@@ -1059,9 +1097,33 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 			e.Provider, e.Board, err)
 		set = nil
 	}
+	// askedNew records every posting the adapter asked about that the catalogue does not hold
+	// yet. A detail-budgeted adapter skips the new ones it cannot afford without a word, so this
+	// is the only way the run can tell a quiet board from one whose backlog is waiting.
+	var askedMu sync.Mutex
+	askedNew := map[string]bool{}
 	seen := func(externalID string) bool {
 		_, ok := set[externalid.Namespace(e.Board, externalID)]
+		if !ok {
+			askedMu.Lock()
+			askedNew[externalID] = true
+			askedMu.Unlock()
+		}
 		return ok
+	}
+	deferredAny := func(jobs []sources.Job) bool {
+		askedMu.Lock()
+		defer askedMu.Unlock()
+		returned := make(map[string]bool, len(jobs))
+		for _, j := range jobs {
+			returned[j.ExternalID] = true
+		}
+		for id := range askedNew {
+			if !returned[id] {
+				return true
+			}
+		}
+		return false
 	}
 	// An adapter that can spend its hydration budget better when it knows which postings the
 	// run will discard gets the gate, but only when the coverage gate actually applies to this
@@ -1070,11 +1132,11 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 		if covered := r.coverageProbe(ctx, e); covered != nil {
 			gate := sources.DetailGate{Covered: covered, Rejected: listingRejected(e)}
 			jobs, err := cg.FetchNewGated(ctx, e, seen, gate)
-			return jobs, set, err
+			return jobs, set, deferredAny(jobs), err
 		}
 	}
 	jobs, err := hs.FetchNew(ctx, e, seen)
-	return jobs, set, err
+	return jobs, set, deferredAny(jobs), err
 }
 
 // coverageProbe builds the resolver a CoverageGated adapter consults mid-crawl: given the
@@ -1130,19 +1192,47 @@ func (r Runner) touch(ctx context.Context, e sources.CompanyEntry, j sources.Job
 	return t.Touch(ctx, source, externalID)
 }
 
-// cooledDown reports whether a board is currently backed off. It fails OPEN: a health
-// lookup error is logged and the board is crawled anyway, so a health-store hiccup never
-// stalls ingest. Always false when no BoardHealth port is wired.
-func (r Runner) cooledDown(ctx context.Context, e sources.CompanyEntry) bool {
-	if r.BoardHealth == nil {
-		return false
+// skippedBoard is the sweep exclusion for a board the run skipped. A boardless entry has no
+// namespace of its own — skipping it skips the whole provider, which then ingests nothing and
+// is not swept at all — so it contributes no pattern.
+func skippedBoard(e sources.CompanyEntry) []string {
+	if e.Board == "" {
+		return nil
 	}
-	until, set, err := r.BoardHealth.Cooldown(ctx, e.Provider, e.Board, e.Region)
+	return []string{externalid.BoardPattern(e.Board)}
+}
+
+// pause is which of a board's pauses, if any, holds it back this run.
+type pause int
+
+const (
+	notPaused pause = iota
+	pausedCooldown
+	pausedQuiet
+)
+
+// paused reports whether a board is currently backed off — in failure cooldown, or in the
+// quiet pause of a board whose listing keeps coming back unchanged. A cooldown wins when both
+// apply, since a failing board is the one an operator needs to see. It fails OPEN: a health
+// lookup error is logged and the board is crawled anyway, so a health-store hiccup never stalls
+// ingest. Always notPaused when no BoardHealth port is wired.
+func (r Runner) paused(ctx context.Context, e sources.CompanyEntry) pause {
+	if r.BoardHealth == nil {
+		return notPaused
+	}
+	p, err := r.BoardHealth.Pauses(ctx, e.Provider, e.Board, e.Region)
 	if err != nil {
 		log.Printf("ingest: cooldown check %s/%s: %v", e.Provider, e.Board, err)
-		return false
+		return notPaused
 	}
-	return set && until.After(time.Now())
+	now := time.Now()
+	switch {
+	case p.Cooldown.After(now):
+		return pausedCooldown
+	case p.Quiet.After(now):
+		return pausedQuiet
+	}
+	return notPaused
 }
 
 // boardHealthTimeout bounds one board-health write. The write runs on a context detached from
@@ -1171,13 +1261,13 @@ func healthContext(ctx context.Context) (context.Context, context.CancelFunc) {
 // short — and counting it would cool a healthy board (CooldownFor, from the third in a row) and
 // cool every board in flight at once on a provider whose run regularly meets its deadline.
 // Recording nothing leaves the row as it was, which is what the board earned this run.
-func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, ingested int, reached bool) {
+func (r Runner) recordSuccess(ctx context.Context, e sources.CompanyEntry, ingested int, reached bool, fingerprint string) {
 	if r.BoardHealth == nil {
 		return
 	}
 	hctx, cancel := healthContext(ctx)
 	defer cancel()
-	if err := r.BoardHealth.RecordSuccess(hctx, e.Provider, e.Board, e.Region, ingested, reached); err != nil {
+	if err := r.BoardHealth.RecordSuccess(hctx, e.Provider, e.Board, e.Region, ingested, reached, fingerprint); err != nil {
 		log.Printf("ingest: record board success %s/%s: %v", e.Provider, e.Board, err)
 	}
 }
@@ -1202,13 +1292,14 @@ func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, msg s
 // (the adapter may emit concurrently) and tallies the same ingested/skipped counts as the
 // buffered path; a board-level FetchStream error counts the board failed but keeps whatever was
 // already saved (the 48h unseen-sweep guards against a short crawl closing the un-reached tail).
-func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sources.StreamingSource) Stats {
+func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sources.StreamingSource) (Stats, []string) {
 	var (
 		mu       sync.Mutex
 		st       Stats
 		rej      rejections
 		firstErr error
 		total    int
+		listed   []string // every posting the stream named, for the listing fingerprint
 	)
 	// The buffered path resolves a whole board's companies in one batched call because it
 	// already has every posting in hand; a streaming source (jobtech is the one aggregator on
@@ -1221,6 +1312,9 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 		mu.Lock()
 		defer mu.Unlock()
 		total++
+		if !j.Removed {
+			listed = append(listed, j.ExternalID)
+		}
 		// A self-closing source emits removed postings: close by identity instead of
 		// upserting. The Store must implement Closer (the ingest dbStore does); a Store
 		// without it simply drops the removal (e.g. a test fake that never sees them).
@@ -1260,7 +1354,21 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			e.Provider, e.Board, e.Company, st.Ingested, err)
 		st.Failed = 1
 	}
-	return st
+	return st, listed
+}
+
+// completeListingFingerprint is the listingFingerprint of a board's crawl when that crawl read
+// the whole listing, and "" — which leaves the quiet-board backoff's state untouched — when it
+// cannot vouch for that: the board failed, the run's deadline interrupted it, the context ended,
+// a posting it listed could not be read (Unreadable) or saved (Skipped) — both are retried by
+// the next crawl, which a quiet pause would postpone — or the source is self-closing and emits
+// changes rather than its listing.
+func (r Runner) completeListingFingerprint(ctx context.Context, src sources.Source, listed []string, st Stats) string {
+	if ctx.Err() != nil || st.Failed > 0 || st.Interrupted > 0 || st.Unreadable > 0 || st.Skipped > 0 ||
+		src == nil || sources.SelfCloses(src) {
+		return ""
+	}
+	return listingFingerprint(listed)
 }
 
 // jobIdentity is the dedup key a posting persists under: the provider is the source, and the

@@ -25,18 +25,33 @@ type fakeHealth struct {
 	failures  []string
 	cleared   []string        // providers passed to ClearCooldowns, in call order
 	reached   map[string]bool // "provider/board/region" → the last RecordSuccess's reached flag
+	// quiet holds canned quiet pauses, served by Pauses beside the cooldown and never touched by
+	// ClearCooldowns — the separation the real board_health columns keep.
+	quiet map[string]time.Time
+	// fingerprints is every RecordSuccess's fingerprint argument per board, in call order ("" =
+	// a crawl that could not vouch for its whole listing).
+	fingerprints map[string][]string
+	// pausesErr, when set, is what every Pauses lookup fails with.
+	pausesErr error
 }
 
 func healthKey(provider, board, region string) string { return provider + "/" + board + "/" + region }
 
-func (f *fakeHealth) Cooldown(_ context.Context, provider, board, region string) (time.Time, bool, error) {
-	t, ok := f.cooldowns[healthKey(provider, board, region)]
-	return t, ok, nil
+func (f *fakeHealth) Pauses(_ context.Context, provider, board, region string) (BoardPauses, error) {
+	if f.pausesErr != nil {
+		return BoardPauses{}, f.pausesErr
+	}
+	key := healthKey(provider, board, region)
+	return BoardPauses{Cooldown: f.cooldowns[key], Quiet: f.quiet[key]}, nil
 }
 
-func (f *fakeHealth) RecordSuccess(_ context.Context, provider, board, region string, _ int, reached bool) error {
+func (f *fakeHealth) RecordSuccess(_ context.Context, provider, board, region string, _ int, reached bool, fingerprint string) error {
 	key := healthKey(provider, board, region)
 	f.successes = append(f.successes, key)
+	if f.fingerprints == nil {
+		f.fingerprints = make(map[string][]string)
+	}
+	f.fingerprints[key] = append(f.fingerprints[key], fingerprint)
 	if f.reached == nil {
 		f.reached = make(map[string]bool)
 	}

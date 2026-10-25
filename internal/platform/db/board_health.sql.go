@@ -80,7 +80,7 @@ func (q *Queries) DeleteBoardHealth(ctx context.Context, arg DeleteBoardHealthPa
 }
 
 const getBoardCooldown = `-- name: GetBoardCooldown :one
-SELECT cooldown_until
+SELECT cooldown_until, quiet_until
 FROM board_health
 WHERE provider = $1 AND board = $2 AND region = $3
 `
@@ -91,15 +91,24 @@ type GetBoardCooldownParams struct {
 	Region   string `json:"region"`
 }
 
+type GetBoardCooldownRow struct {
+	CooldownUntil pgtype.Timestamptz `json:"cooldown_until"`
+	QuietUntil    pgtype.Timestamptz `json:"quiet_until"`
+}
+
 // The board's current cooldown_until (NULL = eligible). Absent row → pgx.ErrNoRows,
 // which the caller treats as "never seen, eligible". region disambiguates a board id that
 // repeats across independent regional slices (e.g. Adzuna's "it-jobs" once per country); every
 // other provider passes ” here, matching the column's default.
-func (q *Queries) GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (pgtype.Timestamptz, error) {
+//
+// quiet_until rides along (migration 0198) so the one lookup a crawl already makes per board
+// answers both pauses: a second query per board would double the per-board round trips over
+// the crawl host's link to the database.
+func (q *Queries) GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (GetBoardCooldownRow, error) {
 	row := q.db.QueryRow(ctx, getBoardCooldown, arg.Provider, arg.Board, arg.Region)
-	var cooldown_until pgtype.Timestamptz
-	err := row.Scan(&cooldown_until)
-	return cooldown_until, err
+	var i GetBoardCooldownRow
+	err := row.Scan(&i.CooldownUntil, &i.QuietUntil)
+	return i, err
 }
 
 const listBoardLastRuns = `-- name: ListBoardLastRuns :many
@@ -398,7 +407,10 @@ SELECT
     count(*) FILTER (WHERE cooldown_until IS NULL OR cooldown_until <= now()) AS healthy_boards,
     count(*) FILTER (WHERE cooldown_until IS NOT NULL AND cooldown_until > now()) AS cooled_boards,
     max(last_run_at)::timestamptz                                    AS last_run_at,
-    max(last_success_at)::timestamptz                                AS last_success_at,
+    -- A board in its quiet pause (migration 0198) is not crawled for up to 72h on purpose, which
+    -- outlasts the page's 48h freshness; it reads as fresh while the pause holds, since the pause
+    -- is only ever set by a success.
+    max(CASE WHEN quiet_until > now() THEN now() ELSE last_success_at END)::timestamptz AS last_success_at,
     coalesce(sum(last_ingested_count) FILTER (WHERE consecutive_failures = 0), 0)::bigint AS ingested_total
 FROM board_health
 WHERE EXISTS (
@@ -494,11 +506,13 @@ func (q *Queries) RecordBoardFailure(ctx context.Context, arg RecordBoardFailure
 	return consecutive_failures, err
 }
 
-const recordBoardSuccess = `-- name: RecordBoardSuccess :exec
+const recordBoardSuccess = `-- name: RecordBoardSuccess :one
 INSERT INTO board_health (provider, board, region, consecutive_failures, cooldown_until,
-                          last_success_at, last_ingested_count, last_run_at, last_yield_at)
+                          last_success_at, last_ingested_count, last_run_at, last_yield_at,
+                          listing_fingerprint)
 VALUES ($1, $2, $3, 0, NULL, now(), $4, now(),
-        CASE WHEN $5::boolean THEN now() END)
+        CASE WHEN $5::boolean THEN now() END,
+        $6::text)
 ON CONFLICT (provider, lower(board), region) DO UPDATE SET
     board                = EXCLUDED.board,
     consecutive_failures = 0,
@@ -507,7 +521,17 @@ ON CONFLICT (provider, lower(board), region) DO UPDATE SET
     last_ingested_count  = EXCLUDED.last_ingested_count,
     last_run_at          = now(),
     last_yield_at        = CASE WHEN $5::boolean THEN now()
-                                ELSE board_health.last_yield_at END
+                                ELSE board_health.last_yield_at END,
+    quiet_streak         = CASE WHEN $6::text IS NULL THEN board_health.quiet_streak
+                                WHEN board_health.listing_fingerprint = $6::text
+                                    THEN board_health.quiet_streak + 1
+                                ELSE 0 END,
+    quiet_until          = CASE WHEN $6::text IS NULL
+                                  OR board_health.listing_fingerprint = $6::text
+                                    THEN board_health.quiet_until
+                                ELSE NULL END,
+    listing_fingerprint  = COALESCE($6::text, board_health.listing_fingerprint)
+RETURNING quiet_streak
 `
 
 type RecordBoardSuccessParams struct {
@@ -516,6 +540,7 @@ type RecordBoardSuccessParams struct {
 	Region            string      `json:"region"`
 	LastIngestedCount pgtype.Int4 `json:"last_ingested_count"`
 	Reached           bool        `json:"reached"`
+	Fingerprint       pgtype.Text `json:"fingerprint"`
 }
 
 // A successful crawl clears the failure state and stamps freshness. Upsert so a
@@ -541,15 +566,26 @@ type RecordBoardSuccessParams struct {
 //
 // On a run that did NOT reach a posting the column is left exactly as it was, rather than
 // cleared: it is a high-water mark, and how long ago it was set is the whole measurement.
-func (q *Queries) RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) error {
-	_, err := q.db.Exec(ctx, recordBoardSuccess,
+//
+// `fingerprint` drives the quiet-board backoff (migration 0198, pipeline.QuietFor). NULL means
+// this crawl cannot vouch for the board's whole listing (interrupted, partly failed, or a
+// self-closing provider whose emissions are changes, not a listing) and leaves all three quiet
+// columns exactly as they were. Equal to the stored fingerprint: one more quiet crawl, and the
+// caller sets the longer pause from the returned streak (SetBoardQuietUntil). Anything else —
+// a posting appeared or disappeared, or no fingerprint was stored yet — records the new one and
+// ends the quiet state. Every board_health.* reference below reads the row BEFORE this update.
+func (q *Queries) RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) (int32, error) {
+	row := q.db.QueryRow(ctx, recordBoardSuccess,
 		arg.Provider,
 		arg.Board,
 		arg.Region,
 		arg.LastIngestedCount,
 		arg.Reached,
+		arg.Fingerprint,
 	)
-	return err
+	var quiet_streak int32
+	err := row.Scan(&quiet_streak)
+	return quiet_streak, err
 }
 
 const setBoardCooldown = `-- name: SetBoardCooldown :execrows
@@ -585,6 +621,39 @@ func (q *Queries) SetBoardCooldown(ctx context.Context, arg SetBoardCooldownPara
 		arg.Region,
 		arg.CooldownUntil,
 		arg.ConsecutiveFailures,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setBoardQuietUntil = `-- name: SetBoardQuietUntil :execrows
+UPDATE board_health
+SET quiet_until = $4
+WHERE provider = $1 AND board = $2 AND region = $3 AND quiet_streak = $5
+`
+
+type SetBoardQuietUntilParams struct {
+	Provider    string             `json:"provider"`
+	Board       string             `json:"board"`
+	Region      string             `json:"region"`
+	QuietUntil  pgtype.Timestamptz `json:"quiet_until"`
+	QuietStreak int32              `json:"quiet_streak"`
+}
+
+// Apply the Go-computed quiet pause (pipeline.QuietFor) to a board whose listing was just found
+// unchanged again. Guarded by the quiet_streak the pause was computed FROM, for the race
+// SetBoardCooldown documents: the worker pool can record the same board twice in one run, and a
+// stale writer must not set a pause over a streak a newer RecordBoardSuccess already reset.
+// Zero rows affected is that race, not an error.
+func (q *Queries) SetBoardQuietUntil(ctx context.Context, arg SetBoardQuietUntilParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setBoardQuietUntil,
+		arg.Provider,
+		arg.Board,
+		arg.Region,
+		arg.QuietUntil,
+		arg.QuietStreak,
 	)
 	if err != nil {
 		return 0, err

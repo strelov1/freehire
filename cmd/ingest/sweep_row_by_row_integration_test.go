@@ -105,7 +105,7 @@ func TestSweepRowByRow_SkipsOneUnclosableRowWithoutBlockingTheRest(t *testing.T)
 	blockCloseFor(t, pool, blocked.ID)
 
 	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-48 * time.Hour), Valid: true}
-	closed, skipped, err := sweepRowByRow(ctx, q, "greenhouse", cutoff, []string{blocked.CompanySlug}, false)
+	closed, skipped, err := sweepRowByRow(ctx, q, "greenhouse", cutoff, []string{blocked.CompanySlug}, nil, false)
 	if err != nil {
 		t.Fatalf("sweepRowByRow returned an error (it must skip bad rows, not fail): %v", err)
 	}

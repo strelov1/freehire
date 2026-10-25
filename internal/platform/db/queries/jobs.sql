@@ -1602,6 +1602,10 @@ WITH reopened AS (
 SELECT count(*) FROM reopened;
 
 -- name: CloseUnseenJobs :one
+-- skipped_board_patterns (externalid.BoardPattern of every board the run SKIPPED — in quiet pause
+-- or failure cooldown) are excluded: a skipped board was not looked at, so its rows' age since
+-- last seen says nothing about them, and a quiet pause outlasts the 48h window. COALESCE because a
+-- NULL array would make NOT (LIKE ANY(NULL)) NULL and silently close nothing at all.
 -- Post-ingest sweep (see job-lifecycle spec): close every open job of ONE source not
 -- seen since the cutoff, scoped to the company slugs the run actually crawled. Scoped
 -- by source because ingest runs per provider (a greenhouse run must not close jobs
@@ -1629,6 +1633,7 @@ WITH closed AS (
       AND source = sqlc.arg(source)
       AND last_seen_at < sqlc.arg(cutoff)
       AND company_slug = ANY(sqlc.arg(company_slugs)::text[])
+      AND NOT (external_id LIKE ANY(COALESCE(sqlc.arg(skipped_board_patterns)::text[], '{}')))
     RETURNING id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
@@ -1939,6 +1944,10 @@ WHERE closed_at IS NULL
   );
 
 -- name: UnseenJobIDs :many
+-- skipped_board_patterns (externalid.BoardPattern of every board the run SKIPPED — in quiet pause
+-- or failure cooldown) are excluded: a skipped board was not looked at, so its rows' age since
+-- last seen says nothing about them, and a quiet pause outlasts the 48h window. COALESCE because a
+-- NULL array would make NOT (LIKE ANY(NULL)) NULL and silently close nothing at all.
 -- Same candidate set as CloseUnseenJobs, unmaterialized. The sweep's fallback path
 -- (see CloseUnseenJobByID) uses this to close row by row when the single bulk UPDATE
 -- fails — e.g. a heap/index-corrupted row aborts the whole batch (2026-08-11 incident:
@@ -1949,14 +1958,17 @@ SELECT id FROM jobs
 WHERE closed_at IS NULL
   AND source = sqlc.arg(source)
   AND last_seen_at < sqlc.arg(cutoff)
-  AND company_slug = ANY(sqlc.arg(company_slugs)::text[]);
+  AND company_slug = ANY(sqlc.arg(company_slugs)::text[])
+  AND NOT (external_id LIKE ANY(COALESCE(sqlc.arg(skipped_board_patterns)::text[], '{}')));
 
 -- name: UnseenJobIDsBySource :many
+-- skipped_board_patterns: the boards the run skipped are excluded, as in CloseUnseenJobs.
 -- Row-by-row fallback candidate set for CloseUnseenJobsBySource — see UnseenJobIDs.
 SELECT id FROM jobs
 WHERE closed_at IS NULL
   AND source = sqlc.arg(source)
-  AND last_seen_at < sqlc.arg(cutoff);
+  AND last_seen_at < sqlc.arg(cutoff)
+  AND NOT (external_id LIKE ANY(COALESCE(sqlc.arg(skipped_board_patterns)::text[], '{}')));
 
 -- name: CloseUnseenJobByID :one
 --
@@ -1984,6 +1996,7 @@ WITH closed AS (
 SELECT count(*) FROM closed;
 
 -- name: CloseUnseenJobsBySource :one
+-- skipped_board_patterns: the boards the run skipped are excluded, as in CloseUnseenJobs.
 --
 -- The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding
 -- search_delete_outbox from the UPDATE's own RETURNING keeps it atomic with the close and
@@ -2006,6 +2019,7 @@ WITH closed AS (
     WHERE closed_at IS NULL
       AND source = sqlc.arg(source)
       AND last_seen_at < sqlc.arg(cutoff)
+      AND NOT (external_id LIKE ANY(COALESCE(sqlc.arg(skipped_board_patterns)::text[], '{}')))
     RETURNING id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)

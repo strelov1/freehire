@@ -10,6 +10,7 @@ The open/closed state of a job row, the six mechanisms that write `closed_at`, a
 - List, search, and company surfaces filter `closed_at IS NULL`. Detail still serves a closed job (with `closed_at`) so links and history don't break.
 - The ingest write stamps `last_seen_at` on every crawl — `RefreshUnchangedJob` when the posting is unchanged, `UpsertJob` otherwise; the post-run sweep closes a provider's jobs unseen for 48h.
 - A reappearing posting reopens via the upsert.
+- A board the run SKIPPED — in failure cooldown, or in the quiet pause of a board whose listing keeps coming back unchanged (up to 72h, see `internal/ingest/pipeline/AGENTS.md`) — is excluded from the company- and source-scoped sweeps (`Stats.SkippedBoards`). Its rows were not looked at, so their age since last seen proves nothing. The board-scoped close never reaches it anyway, since it acts only on boards the run finished.
 - Self-closing sources (`jobtech`, etc.) are excluded from the unseen sweep — the feed's `removed` events are the authoritative close signal.
 - The liveness worker closes only on positive evidence (two consecutive `expired` reads) and never reopens.
 - A source carrying no close signal at all — no re-crawl, no feed, and a URL that outlives the vacancy — is closed by age instead: `telegram` today, at 45 days. It is the only close that rests on a guess.

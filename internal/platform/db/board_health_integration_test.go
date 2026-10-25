@@ -65,7 +65,7 @@ func TestRecordBoardSuccessSetsFirstSeenAtOnce(t *testing.T) {
 	ctx := context.Background()
 	truncateBoardHealth(t, pool)
 
-	if err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
+	if _, err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
 		Provider: "acme", Board: "b1", Region: "",
 		LastIngestedCount: pgtype.Int4{Int32: 5, Valid: true},
 	}); err != nil {
@@ -73,7 +73,7 @@ func TestRecordBoardSuccessSetsFirstSeenAtOnce(t *testing.T) {
 	}
 	first := boardHealthFirstSeenAt(t, pool, "acme", "b1")
 
-	if err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
+	if _, err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
 		Provider: "acme", Board: "b1", Region: "",
 		LastIngestedCount: pgtype.Int4{Int32: 9, Valid: true},
 	}); err != nil {
@@ -216,7 +216,7 @@ func TestRecordBoardSuccessConvergesOnAnExistingRowUnderANewCasing(t *testing.T)
 		t.Fatalf("record failure under the old casing: %v", err)
 	}
 
-	if err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
+	if _, err := q.RecordBoardSuccess(ctx, RecordBoardSuccessParams{
 		Provider: "smartrecruiters", Board: "ATLAS4", Region: "",
 		LastIngestedCount: pgtype.Int4{Int32: 5, Valid: true},
 	}); err != nil {
@@ -341,10 +341,11 @@ func TestSetBoardCooldownGuardsOnConsecutiveFailures(t *testing.T) {
 }
 
 func getCooldown(ctx context.Context, q *Queries, provider, board string) (time.Time, bool, error) {
-	ts, err := q.GetBoardCooldown(ctx, GetBoardCooldownParams{Provider: provider, Board: board, Region: ""})
+	row, err := q.GetBoardCooldown(ctx, GetBoardCooldownParams{Provider: provider, Board: board, Region: ""})
 	if err != nil {
 		return time.Time{}, false, err
 	}
+	ts := row.CooldownUntil
 	if !ts.Valid {
 		return time.Time{}, false, nil
 	}

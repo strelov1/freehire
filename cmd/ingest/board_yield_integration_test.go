@@ -36,7 +36,7 @@ func TestRecordSuccessStampsYieldOnlyWhenTheCrawlReachedAPosting(t *testing.T) {
 	h := newBoardHealth(pool)
 	ctx := context.Background()
 
-	if err := h.RecordSuccess(ctx, "whatjobs-hu", "empty-keyword", "", 0, false); err != nil {
+	if err := h.RecordSuccess(ctx, "whatjobs-hu", "empty-keyword", "", 0, false, ""); err != nil {
 		t.Fatalf("RecordSuccess (empty): %v", err)
 	}
 	if _, ok := lastYieldAt(t, pool, "whatjobs-hu", "empty-keyword"); ok {
@@ -44,7 +44,7 @@ func TestRecordSuccessStampsYieldOnlyWhenTheCrawlReachedAPosting(t *testing.T) {
 			"then be indistinguishable from a live one, which is the bug this column exists for")
 	}
 
-	if err := h.RecordSuccess(ctx, "whatjobs-at", "softwareentwickler", "", 0, true); err != nil {
+	if err := h.RecordSuccess(ctx, "whatjobs-at", "softwareentwickler", "", 0, true, ""); err != nil {
 		t.Fatalf("RecordSuccess (reached): %v", err)
 	}
 	// ingested = 0 deliberately: on an aggregator board whose employers we already crawl
@@ -63,7 +63,7 @@ func TestRecordSuccessKeepsAnEarlierYieldThroughALaterEmptyRun(t *testing.T) {
 	h := newBoardHealth(pool)
 	ctx := context.Background()
 
-	if err := h.RecordSuccess(ctx, "greenhouse", "acme-yield", "", 3, true); err != nil {
+	if err := h.RecordSuccess(ctx, "greenhouse", "acme-yield", "", 3, true, ""); err != nil {
 		t.Fatalf("RecordSuccess (reached): %v", err)
 	}
 	stamped, ok := lastYieldAt(t, pool, "greenhouse", "acme-yield")
@@ -71,7 +71,7 @@ func TestRecordSuccessKeepsAnEarlierYieldThroughALaterEmptyRun(t *testing.T) {
 		t.Fatal("fixture: the first run should have stamped a yield")
 	}
 
-	if err := h.RecordSuccess(ctx, "greenhouse", "acme-yield", "", 0, false); err != nil {
+	if err := h.RecordSuccess(ctx, "greenhouse", "acme-yield", "", 0, false, ""); err != nil {
 		t.Fatalf("RecordSuccess (empty): %v", err)
 	}
 	after, ok := lastYieldAt(t, pool, "greenhouse", "acme-yield")

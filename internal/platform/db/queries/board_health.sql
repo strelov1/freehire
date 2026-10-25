@@ -3,11 +3,15 @@
 -- which the caller treats as "never seen, eligible". region disambiguates a board id that
 -- repeats across independent regional slices (e.g. Adzuna's "it-jobs" once per country); every
 -- other provider passes '' here, matching the column's default.
-SELECT cooldown_until
+--
+-- quiet_until rides along (migration 0198) so the one lookup a crawl already makes per board
+-- answers both pauses: a second query per board would double the per-board round trips over
+-- the crawl host's link to the database.
+SELECT cooldown_until, quiet_until
 FROM board_health
 WHERE provider = $1 AND board = $2 AND region = $3;
 
--- name: RecordBoardSuccess :exec
+-- name: RecordBoardSuccess :one
 -- A successful crawl clears the failure state and stamps freshness. Upsert so a
 -- first-ever crawl creates the row.
 --
@@ -31,10 +35,20 @@ WHERE provider = $1 AND board = $2 AND region = $3;
 --
 -- On a run that did NOT reach a posting the column is left exactly as it was, rather than
 -- cleared: it is a high-water mark, and how long ago it was set is the whole measurement.
+--
+-- `fingerprint` drives the quiet-board backoff (migration 0198, pipeline.QuietFor). NULL means
+-- this crawl cannot vouch for the board's whole listing (interrupted, partly failed, or a
+-- self-closing provider whose emissions are changes, not a listing) and leaves all three quiet
+-- columns exactly as they were. Equal to the stored fingerprint: one more quiet crawl, and the
+-- caller sets the longer pause from the returned streak (SetBoardQuietUntil). Anything else —
+-- a posting appeared or disappeared, or no fingerprint was stored yet — records the new one and
+-- ends the quiet state. Every board_health.* reference below reads the row BEFORE this update.
 INSERT INTO board_health (provider, board, region, consecutive_failures, cooldown_until,
-                          last_success_at, last_ingested_count, last_run_at, last_yield_at)
+                          last_success_at, last_ingested_count, last_run_at, last_yield_at,
+                          listing_fingerprint)
 VALUES ($1, $2, $3, 0, NULL, now(), $4, now(),
-        CASE WHEN sqlc.arg(reached)::boolean THEN now() END)
+        CASE WHEN sqlc.arg(reached)::boolean THEN now() END,
+        sqlc.narg(fingerprint)::text)
 ON CONFLICT (provider, lower(board), region) DO UPDATE SET
     board                = EXCLUDED.board,
     consecutive_failures = 0,
@@ -43,7 +57,17 @@ ON CONFLICT (provider, lower(board), region) DO UPDATE SET
     last_ingested_count  = EXCLUDED.last_ingested_count,
     last_run_at          = now(),
     last_yield_at        = CASE WHEN sqlc.arg(reached)::boolean THEN now()
-                                ELSE board_health.last_yield_at END;
+                                ELSE board_health.last_yield_at END,
+    quiet_streak         = CASE WHEN sqlc.narg(fingerprint)::text IS NULL THEN board_health.quiet_streak
+                                WHEN board_health.listing_fingerprint = sqlc.narg(fingerprint)::text
+                                    THEN board_health.quiet_streak + 1
+                                ELSE 0 END,
+    quiet_until          = CASE WHEN sqlc.narg(fingerprint)::text IS NULL
+                                  OR board_health.listing_fingerprint = sqlc.narg(fingerprint)::text
+                                    THEN board_health.quiet_until
+                                ELSE NULL END,
+    listing_fingerprint  = COALESCE(sqlc.narg(fingerprint)::text, board_health.listing_fingerprint)
+RETURNING quiet_streak;
 
 -- name: RecordBoardFailure :one
 -- Count a failed crawl: bump consecutive_failures, record the error, stamp the run,
@@ -77,6 +101,16 @@ RETURNING consecutive_failures;
 UPDATE board_health
 SET cooldown_until = $4
 WHERE provider = $1 AND board = $2 AND region = $3 AND consecutive_failures = $5;
+
+-- name: SetBoardQuietUntil :execrows
+-- Apply the Go-computed quiet pause (pipeline.QuietFor) to a board whose listing was just found
+-- unchanged again. Guarded by the quiet_streak the pause was computed FROM, for the race
+-- SetBoardCooldown documents: the worker pool can record the same board twice in one run, and a
+-- stale writer must not set a pause over a streak a newer RecordBoardSuccess already reset.
+-- Zero rows affected is that race, not an error.
+UPDATE board_health
+SET quiet_until = $4
+WHERE provider = $1 AND board = $2 AND region = $3 AND quiet_streak = $5;
 
 -- name: DeleteBoardHealth :execrows
 -- Drop a board's health row entirely, for a board just retired from the catalog: it will
@@ -215,7 +249,10 @@ SELECT
     count(*) FILTER (WHERE cooldown_until IS NULL OR cooldown_until <= now()) AS healthy_boards,
     count(*) FILTER (WHERE cooldown_until IS NOT NULL AND cooldown_until > now()) AS cooled_boards,
     max(last_run_at)::timestamptz                                    AS last_run_at,
-    max(last_success_at)::timestamptz                                AS last_success_at,
+    -- A board in its quiet pause (migration 0198) is not crawled for up to 72h on purpose, which
+    -- outlasts the page's 48h freshness; it reads as fresh while the pause holds, since the pause
+    -- is only ever set by a success.
+    max(CASE WHEN quiet_until > now() THEN now() ELSE last_success_at END)::timestamptz AS last_success_at,
     coalesce(sum(last_ingested_count) FILTER (WHERE consecutive_failures = 0), 0)::bigint AS ingested_total
 FROM board_health
 WHERE EXISTS (

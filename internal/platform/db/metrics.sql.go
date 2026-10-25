@@ -430,7 +430,10 @@ func (q *Queries) NotifyBacklogMetrics(ctx context.Context) ([]NotifyBacklogMetr
 const providerIngestHealth = `-- name: ProviderIngestHealth :many
 SELECT
     b.provider,
-    max(h.last_success_at)::timestamptz AS last_success_at,
+    -- A board in its quiet pause (migration 0198) skips crawls on purpose for up to 72h; it reads
+    -- as fresh while the pause holds, or a provider whose boards are all quiet would trip the
+    -- silence alert part of every cycle. The pause is only ever set by a success.
+    max(CASE WHEN h.quiet_until > now() THEN now() ELSE h.last_success_at END)::timestamptz AS last_success_at,
     min(b.created_at)::timestamptz      AS first_listed_at,
     count(*) FILTER (
         WHERE h.provider IS NULL

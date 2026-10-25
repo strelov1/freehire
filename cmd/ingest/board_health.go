@@ -36,37 +36,61 @@ func newBoardHealth(pool *pgxpool.Pool) *boardHealth {
 	return &boardHealth{q: q, catalog: boardcatalog.NewQueriesRepository(q)}
 }
 
-// Cooldown returns the board's cooldown_until; an absent row or a NULL cooldown means
-// eligible.
-func (h *boardHealth) Cooldown(ctx context.Context, provider, board, region string) (time.Time, bool, error) {
-	ts, err := h.q.GetBoardCooldown(ctx, db.GetBoardCooldownParams{Provider: provider, Board: board, Region: region})
+// Pauses returns the board's failure cooldown and quiet pause in one lookup; an absent row or a
+// NULL column means that pause is not set.
+func (h *boardHealth) Pauses(ctx context.Context, provider, board, region string) (pipeline.BoardPauses, error) {
+	row, err := h.q.GetBoardCooldown(ctx, db.GetBoardCooldownParams{Provider: provider, Board: board, Region: region})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return time.Time{}, false, nil
+		return pipeline.BoardPauses{}, nil
 	}
 	if err != nil {
-		return time.Time{}, false, err
+		return pipeline.BoardPauses{}, err
 	}
-	if !ts.Valid {
-		return time.Time{}, false, nil
+	var p pipeline.BoardPauses
+	if row.CooldownUntil.Valid {
+		p.Cooldown = row.CooldownUntil.Time
 	}
-	return ts.Time, true, nil
+	if row.QuietUntil.Valid {
+		p.Quiet = row.QuietUntil.Time
+	}
+	return p, nil
 }
 
 // RecordSuccess clears the board's failure state and stamps freshness. It also flips a
 // pending boards row to active on this, its first successful crawl (a no-op — found=false,
 // no error — for a board that is already active, or that has no boards row at all, e.g.
 // one crawled before this migration).
-func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board, region string, ingested int, reached bool) error {
-	if err := h.q.RecordBoardSuccess(ctx, db.RecordBoardSuccessParams{
+//
+// A non-empty fingerprint feeds the quiet-board backoff: the query compares it with the stored
+// one and returns the resulting quiet streak, and an unchanged listing gets the Go-owned pause
+// (pipeline.QuietFor) applied the way RecordFailure applies a cooldown — CAS-guarded on the
+// streak it was computed from, so a stale writer cannot pause a board a newer crawl just reset.
+func (h *boardHealth) RecordSuccess(ctx context.Context, provider, board, region string, ingested int, reached bool, fingerprint string) error {
+	streak, err := h.q.RecordBoardSuccess(ctx, db.RecordBoardSuccessParams{
 		Provider:          provider,
 		Board:             board,
 		Region:            region,
 		LastIngestedCount: pgtype.Int4{Int32: int32(ingested), Valid: true},
 		Reached:           reached,
-	}); err != nil {
+		Fingerprint:       pgtype.Text{String: fingerprint, Valid: fingerprint != ""},
+	})
+	if err != nil {
 		return err
 	}
-	_, err := h.catalog.Activate(ctx, provider, board, region)
+	if fingerprint != "" {
+		if d, quiet := pipeline.QuietFor(int(streak)); quiet {
+			if _, err := h.q.SetBoardQuietUntil(ctx, db.SetBoardQuietUntilParams{
+				Provider:    provider,
+				Board:       board,
+				Region:      region,
+				QuietUntil:  pgtype.Timestamptz{Time: time.Now().Add(d), Valid: true},
+				QuietStreak: streak,
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	_, err = h.catalog.Activate(ctx, provider, board, region)
 	return err
 }
 

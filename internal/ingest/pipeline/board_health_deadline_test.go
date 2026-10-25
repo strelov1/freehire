@@ -15,11 +15,11 @@ type ctxHealth struct {
 	failureAttempts int
 }
 
-func (h *ctxHealth) RecordSuccess(ctx context.Context, provider, board, region string, ingested int, reached bool) error {
+func (h *ctxHealth) RecordSuccess(ctx context.Context, provider, board, region string, ingested int, reached bool, fingerprint string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return h.fakeHealth.RecordSuccess(ctx, provider, board, region, ingested, reached)
+	return h.fakeHealth.RecordSuccess(ctx, provider, board, region, ingested, reached, fingerprint)
 }
 
 func (h *ctxHealth) RecordFailure(ctx context.Context, provider, board, region, msg string) error {
