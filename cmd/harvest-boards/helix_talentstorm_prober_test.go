@@ -69,6 +69,7 @@ func TestTalentstormProbe(t *testing.T) {
 {"isPublished":true,"idJobtype":4,"jobofferLocations":[]},
 {"isPublished":true,"idJobtype":6,"jobofferLocations":[]}]`,
 			api("empty"): `[]`,
+			api("null"):  `null`,
 		},
 		status: map[string]int{
 			api("nosuchsite"): http.StatusUnauthorized,
@@ -79,12 +80,15 @@ func TestTalentstormProbe(t *testing.T) {
 	if name, n, err := p.probe(context.Background(), g, "advades"); err != nil || name != "advades GmbH" || n != 2 {
 		t.Errorf("live: got (%q,%d,%v), want (advades GmbH,2,nil) — the open application not counted", name, n, err)
 	}
-	for _, board := range []string{"empty", "nosuchsite", "Bad/Label"} {
+	for _, board := range []string{"empty", "Bad/Label"} {
 		if _, n, err := p.probe(context.Background(), g, board); err != nil || n != 0 {
 			t.Errorf("%s: got n=%d err=%v, want a skip", board, n, err)
 		}
 	}
-	if _, _, err := p.probe(context.Background(), g, "refused"); err == nil {
-		t.Error("a refusal must be surfaced, not read as an absent board")
+	// 401 answers an unknown label and a refused Origin alike, so it is surfaced, as is null.
+	for _, board := range []string{"refused", "nosuchsite", "null"} {
+		if _, _, err := p.probe(context.Background(), g, board); err == nil {
+			t.Errorf("%s: must be surfaced, not read as an absent board", board)
+		}
 	}
 }
