@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ownsMobileStickyCta,
   readDismissed,
-  SUPPORT_DISMISSED_KEY,
   suppressesToast,
   writeDismissed,
 } from './supportToast';

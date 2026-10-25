@@ -17,7 +17,7 @@
 import { isAccountArea } from './shellLayout';
 
 /** localStorage key holding the visitor's answer to the star request. */
-export const SUPPORT_DISMISSED_KEY = 'hire.support-toast-dismissed';
+const SUPPORT_DISMISSED_KEY = 'hire.support-toast-dismissed';
 
 /** Pages where the toast does not belong: the one that makes this exact case at length
  *  already, where a toast repeating it is noise, and the whole account area. `/my/**` is
