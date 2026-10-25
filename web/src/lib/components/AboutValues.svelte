@@ -33,17 +33,19 @@
   ];
 </script>
 
+<!-- Each value is a heading, so the five promises are reachable by heading navigation; a
+     <dl> could not carry that, since a <dt> may not contain one. -->
 <section class="border-t border-border py-16 sm:py-20">
-  <SectionLabel text="values" />
-  <dl class="mt-10 divide-y divide-border border-y border-border">
+  <SectionLabel as="h2" text="values" />
+  <ol class="mt-10 divide-y divide-border border-y border-border">
     {#each values as v (v.n)}
-      <div class="grid gap-2 py-6 sm:grid-cols-[auto_1fr] sm:gap-8">
-        <span class="font-mono text-sm text-muted-foreground">{v.n}</span>
+      <li class="grid gap-2 py-6 sm:grid-cols-[auto_1fr] sm:gap-8">
+        <span class="font-mono text-sm text-muted-foreground" aria-hidden="true">{v.n}</span>
         <div>
-          <dt class="text-lg font-semibold tracking-tight">{v.title}</dt>
-          <dd class="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">{v.body}</dd>
+          <h3 class="text-lg font-semibold tracking-tight">{v.title}</h3>
+          <p class="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">{v.body}</p>
         </div>
-      </div>
+      </li>
     {/each}
-  </dl>
+  </ol>
 </section>

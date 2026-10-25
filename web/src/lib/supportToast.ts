@@ -14,6 +14,8 @@
 // corner, and they do not overlap. What the toast still yields to is the consent banner,
 // which shares its corner, and a page's own sticky call to action; both rules are below.
 
+import { isAccountArea } from './shellLayout';
+
 /** localStorage key holding the visitor's answer to the star request. */
 export const SUPPORT_DISMISSED_KEY = 'hire.support-toast-dismissed';
 
@@ -24,7 +26,7 @@ export const SUPPORT_DISMISSED_KEY = 'hire.support-toast-dismissed';
  *  already pushed down by the account chrome. The ask still reaches the same visitor on
  *  every public page. */
 export function suppressesToast(pathname: string): boolean {
-  return pathname === '/open' || pathname === '/my' || pathname.startsWith('/my/');
+  return pathname === '/open' || isAccountArea(pathname);
 }
 
 /**

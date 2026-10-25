@@ -393,9 +393,10 @@
   // Rejects on failure: the editor reports it beside itself and keeps the text for a retry.
   // The row is written only once the server has it — writing it first would push the old
   // value back into the editor on a rollback and lose what the user typed.
-  async function saveNotes(notes: string) {
-    if (!openItem) return;
-    const item = openItem;
+  //
+  // Bound to the item rather than read from openItem: the editor also saves on teardown,
+  // which on a close runs after openItem is already null.
+  async function saveNotes(item: BoardItem, notes: string) {
     try {
       await api.trackApplication(item.id, { notes });
     } catch (e) {
@@ -661,11 +662,12 @@
 
 {#if openItem}
   {#key openItem.id}
+    {@const item = openItem}
     <JobDrawer
-      item={openItem}
+      {item}
       {pendingOutcome}
       onsetstage={setStage}
-      onsavenotes={saveNotes}
+      onsavenotes={(notes) => saveNotes(item, notes)}
       onchooseoutcome={chooseOutcome}
       onautoapplyreview={applyAutoApplyReview}
       onremove={remove}

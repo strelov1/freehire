@@ -68,27 +68,34 @@
   // last persisted value so an untouched open/close doesn't fire a redundant save.
   //
   // `lastSaved` moves only once the save resolves, so a failed one is retried by the next
-  // blur (or the Retry button) instead of being taken for done; `inFlight` keeps a blur
-  // during a slow save from sending the same text twice.
+  // blur (or the Retry button) instead of being taken for done. `inFlight` holds every
+  // unsettled save: it keeps a blur during a slow save from sending the same text twice,
+  // and marks their echoes as ours. Each save takes a number, and only the newest one's
+  // outcome is reported — an older save settling late must not say "Saved" (or clear the
+  // newer one) about text that is no longer the editor's.
   let lastSaved = untrack(() => value);
-  let inFlight: string | null = null;
+  const inFlight: { seq: number; text: string }[] = [];
+  let lastSeq = 0;
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const persist = async () => {
     if (!editor) return;
     const current = editor.value();
-    if (current === lastSaved || current === inFlight) return;
-    inFlight = current;
+    if (current === lastSaved || current === inFlight.at(-1)?.text) return;
+    const seq = ++lastSeq;
+    inFlight.push({ seq, text: current });
     saveState = 'saving';
     try {
       await onsave(current);
+      if (seq !== lastSeq) return;
       lastSaved = current;
       saveState = 'saved';
       if (showSaveState) announce(s.saved);
     } catch {
+      if (seq !== lastSeq) return;
       saveState = 'error';
       if (showSaveState) announce(s.saveFailed, 'assertive');
     } finally {
-      inFlight = null;
+      inFlight.splice(inFlight.findIndex((f) => f.seq === seq), 1);
     }
   };
 
@@ -110,7 +117,7 @@
     const v = value;
     // The echo of our own save (the parent writes the row once the server has it) is not
     // an external change: re-applying it would overwrite whatever was typed meanwhile.
-    if (v === inFlight || v === lastSaved) return;
+    if (v === lastSaved || inFlight.some((f) => f.text === v)) return;
     if (editor && v !== editor.value()) {
       editor.value(v);
       lastSaved = v;

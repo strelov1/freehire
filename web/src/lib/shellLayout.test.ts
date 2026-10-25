@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isApiReferenceRoute, isFullBleedRoute, isWideHeaderRoute } from './shellLayout';
+import { isAccountArea, isApiReferenceRoute, isFullBleedRoute, isWideHeaderRoute } from './shellLayout';
 
 describe('isFullBleedRoute', () => {
   it('covers the agent, with and without a session id', () => {
@@ -65,5 +65,17 @@ describe('isWideHeaderRoute', () => {
   it('leaves the rest of the account shell centered', () => {
     expect(isWideHeaderRoute('/my')).toBe(false);
     expect(isWideHeaderRoute('/my/cvs')).toBe(false);
+  });
+});
+
+describe('isAccountArea', () => {
+  it('covers /my and everything under it', () => {
+    expect(isAccountArea('/my')).toBe(true);
+    expect(isAccountArea('/my/tracking')).toBe(true);
+  });
+
+  it('does not match on a prefix that only looks like it', () => {
+    expect(isAccountArea('/mystery')).toBe(false);
+    expect(isAccountArea('/jobs')).toBe(false);
   });
 });

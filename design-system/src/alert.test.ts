@@ -7,8 +7,8 @@ import { must } from './test-utils';
 
 const slot = (html: string) => createRawSnippet(() => ({ render: () => html }));
 
-function setup(variant?: AlertVariant) {
-  const { container } = render(Alert, { variant, children: slot('<span>Heads up</span>') });
+function setup(variant?: AlertVariant, live?: boolean) {
+  const { container } = render(Alert, { variant, live, children: slot('<span>Heads up</span>') });
   return must(container.querySelector('div'));
 }
 
@@ -23,6 +23,13 @@ describe('Alert', () => {
     expect(setup().getAttribute('role')).toBeNull();
     expect(setup('default').getAttribute('role')).toBeNull();
     expect(setup('brand').getAttribute('role')).toBeNull();
+  });
+
+  // A caller that announces the failure itself must not have it read twice.
+  it('stays quiet when the caller voices the failure itself', () => {
+    const alert = setup('destructive', false);
+    expect(alert.getAttribute('role')).toBeNull();
+    expect(alert.textContent).toContain('Heads up');
   });
 
   it('renders what it was given either way', () => {

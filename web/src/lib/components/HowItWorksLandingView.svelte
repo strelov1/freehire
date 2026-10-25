@@ -83,7 +83,7 @@
   <!-- FAQ; shares PIPELINE_FAQ with the page's JSON-LD. Collapsed with <details>, so every
        answer is still in the served HTML and the structured data cannot disagree with it. -->
   <section class="flex flex-col gap-4">
-    <SectionLabel text="questions" />
+    <SectionLabel as="h2" text="questions" />
     <div class="flex flex-col divide-y divide-border border-y border-border">
       {#each PIPELINE_FAQ as item (item.question)}
         <Disclosure summary={item.question} class="py-3">

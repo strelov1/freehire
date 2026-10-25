@@ -31,21 +31,27 @@
   // foot is always on screen. Measured, not assumed: what stands above it is the header
   // AND whichever self-gating bands the root layout shows (the email-verification prompt,
   // whose height changes when its code form opens), and a fixed `100dvh - header` sized
-  // the page past the fold by exactly their height. The body is observed because any
-  // change above the page resizes it — and a page that then refits leaves it unchanged,
-  // so the measurement settles in one step. Starts at the header's h-14 so the server
-  // render matches what it always drew.
+  // the page past the fold by exactly their height. Neither the body nor the page itself
+  // can tell when a band changes — html and body are pinned at 100% — so the two boxes
+  // observed are the root layout's `min-h-svh` column and its <main>: a band that grows
+  // pushes the column past the viewport, and one that shrinks or goes away hands the
+  // freed height to <main> (it is `flex-1`, and the column cannot shrink below the
+  // viewport). A page that then refits moves neither back out of step, so the measurement
+  // settles in one step. Starts at the header's h-14 so the server render matches what it
+  // always drew.
   let shellEl = $state<HTMLDivElement | null>(null);
   let top = $state(56);
   $effect(() => {
     const el = shellEl;
-    if (!el) return;
+    const main = el?.closest('main');
+    if (!el || !main) return;
     const measure = () => {
       top = Math.max(0, el.getBoundingClientRect().top + window.scrollY);
     };
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(document.body);
+    observer.observe(main);
+    if (main.parentElement) observer.observe(main.parentElement);
     return () => observer.disconnect();
   });
   const session = $derived(page.params.id);

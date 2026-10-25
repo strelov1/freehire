@@ -400,6 +400,12 @@
           ]
         },
         {
+          "name": "live",
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the destructive variant is an assertive live region (role=\"alert\"). False for a caller that already voices the failure through a shared announcer, so it is not read twice; the box stays readable in browse mode."
+        },
+        {
           "name": "class",
           "type": "string"
         },

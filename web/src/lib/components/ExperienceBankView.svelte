@@ -636,7 +636,7 @@
            below are the only way in that every plan has. -->
       <div class="flex flex-col gap-6">
         {#if actionError.message}
-          <Alert variant="destructive" class="items-center py-2">
+          <Alert variant="destructive" live={false} class="items-center py-2">
             <span class="flex-1">{actionError.message}</span>
             <button
               type="button"

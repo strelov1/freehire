@@ -250,7 +250,26 @@ describe('ApiKeysView — the one-time secret', () => {
     expect(screen.getByText('plaintext-token-shown-once')).toBeTruthy();
     expect(screen.getByText('Have you copied your key? You won’t see it again.')).toBeTruthy();
 
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Yes, dismiss' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Yes, dismiss' }));
     expect(screen.queryByText('plaintext-token-shown-once')).toBeNull();
+    // The panel took the focused control with it; focus lands on the nearest one left.
+    expect(document.activeElement?.textContent?.trim()).toBe('Create key');
+  });
+
+  it('returns focus to the dismiss button when the key is kept, by button or Escape', async () => {
+    await createKey();
+    const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+
+    await fireEvent.click(dismiss);
+    await fireEvent.click(screen.getByRole('button', { name: 'Keep it on screen' }));
+    expect(screen.queryByText('Have you copied your key? You won’t see it again.')).toBeNull();
+    expect(document.activeElement).toBe(dismiss);
+
+    await fireEvent.click(dismiss);
+    await fireEvent.keyDown(screen.getByRole('button', { name: 'Yes, dismiss' }), { key: 'Escape' });
+    expect(screen.queryByText('Have you copied your key? You won’t see it again.')).toBeNull();
+    expect(screen.getByText('plaintext-token-shown-once')).toBeTruthy();
+    expect(document.activeElement).toBe(dismiss);
   });
 });

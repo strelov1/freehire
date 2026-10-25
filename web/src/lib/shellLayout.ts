@@ -38,3 +38,10 @@ export function isApiReferenceRoute(pathname: string): boolean {
 export function isWideHeaderRoute(pathname: string): boolean {
   return isFullBleedRoute(pathname) || isApiReferenceRoute(pathname);
 }
+
+/** True anywhere in the signed-in account area, `/my` and everything under it. The
+ *  promos that stay out of a candidate's workspace (the CLI banner, the support toast)
+ *  ask this one question, so "the account area" cannot mean two things. */
+export function isAccountArea(pathname: string): boolean {
+  return pathname === '/my' || pathname.startsWith('/my/');
+}

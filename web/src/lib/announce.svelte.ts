@@ -20,6 +20,9 @@ export type Politeness = 'polite' | 'assertive';
 export const ANNOUNCE_DELAY_MS = 100;
 
 const regions = $state<Record<Politeness, string>>({ polite: '', assertive: '' });
+// Messages waiting out the delay. A second call inside it joins the first rather than
+// replacing it: "Saved" followed at once by "Moved to Interview" must say both.
+const pending: Record<Politeness, string[]> = { polite: [], assertive: [] };
 const timers: Record<Politeness, ReturnType<typeof setTimeout> | undefined> = {
   polite: undefined,
   assertive: undefined,
@@ -30,14 +33,22 @@ export function announcement(politeness: Politeness): string {
   return regions[politeness];
 }
 
+// One sentence per message, so two of them read as two rather than run together.
+const asSentence = (m: string) => (/[.!?…]$/.test(m) ? m : `${m}.`);
+
 /**
  * Speak `message` to assistive technology. Errors are `assertive` — they interrupt; every
  * confirmation is `polite`. The visible text stays where it is: this only adds a voice.
  */
 export function announce(message: string, politeness: Politeness = 'polite'): void {
-  clearTimeout(timers[politeness]);
+  pending[politeness].push(message);
+  if (timers[politeness] !== undefined) return;
   regions[politeness] = '';
   timers[politeness] = setTimeout(() => {
-    regions[politeness] = message;
+    const queued = pending[politeness];
+    pending[politeness] = [];
+    timers[politeness] = undefined;
+    // `message` is the first queued: only the call that found no timer scheduled one.
+    regions[politeness] = queued.length > 1 ? queued.map(asSentence).join(' ') : message;
   }, ANNOUNCE_DELAY_MS);
 }

@@ -27,7 +27,7 @@
   // assistant conversation, an analysis — and Stripe returns a finished checkout to
   // /my/plan, not to where the candidate started. The task stays open in its own tab
   // for them to come back to once they've paid.
-  let { variant = 'primary' }: { variant?: ButtonVariant } = $props();
+  let { variant = 'cta' }: { variant?: ButtonVariant } = $props();
 
   const isFree = $derived((currentUser()?.tier ?? 'free') === 'free');
   const planHref = resolve('/my/plan');

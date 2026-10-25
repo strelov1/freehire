@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { buttonVariants, cn } from '#lib/ui/index.js';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -103,7 +104,7 @@
           {#if isAuthenticated()}
             <button
               type="button"
-              class="mt-auto rounded-md border border-primary px-4 py-2.5 text-sm font-medium disabled:opacity-60"
+              class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'mt-auto disabled:opacity-60')}
               disabled={busyId !== null}
               onclick={() => buy(card.price)}
             >
@@ -112,7 +113,7 @@
           {:else}
             <button
               type="button"
-              class="mt-auto rounded-md border border-primary px-4 py-2.5 text-sm font-medium"
+              class={cn(buttonVariants({ variant: 'cta', size: 'lg' }), 'mt-auto')}
               onclick={promptSignIn}>Sign in to subscribe</button
             >
           {/if}

@@ -153,7 +153,7 @@
             {#each s.sample as item (item)}
               <span
                 class="rounded-md border px-2 py-0.5 font-mono text-xs {s.key === 'have'
-                  ? 'border-emerald-400/50 text-emerald-600 dark:text-emerald-400'
+                  ? 'border-emerald-400/50 text-emerald-700 dark:text-emerald-400'
                   : 'border-warning/50 text-warning-strong'}"
               >
                 {item}

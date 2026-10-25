@@ -15,6 +15,22 @@ vi.mock('$app/navigation', () => ({
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true, currentUser: () => null }));
 vi.mock('#lib/assistant/api.js', () => ({ createRehearsal: vi.fn(), createDebrief: vi.fn() }));
 
+// EasyMDE stands in as a plain text holder: what is under test is when the board persists
+// the notes, not the markdown editor. `typed` is what the next editor will hold.
+const editorText = vi.hoisted(() => ({ typed: '' }));
+vi.mock('easymde', () => ({
+  default: class {
+    codemirror = {
+      on: () => {},
+      getInputField: () => document.createElement('textarea'),
+    };
+    value() {
+      return editorText.typed;
+    }
+    toTextArea() {}
+  },
+}));
+
 const { untrackApplication, listMyJobs, trackApplication, saveJob, clearApplicationStage } =
   vi.hoisted(() => ({
     untrackApplication: vi.fn(),
@@ -52,6 +68,7 @@ beforeEach(() => {
   untrackApplication.mockReset().mockResolvedValue(undefined);
   listMyJobs.mockReset();
   trackApplication.mockReset();
+  editorText.typed = '';
 });
 
 describe('JobBoard — empty board', () => {
@@ -127,6 +144,25 @@ describe('JobBoard — a failed stage change', () => {
       expect(
         screen.getByText("Couldn't move Backend Engineer — it's back in Applied. Try again."),
       ).toBeTruthy(),
+    );
+  });
+});
+
+describe('JobBoard — notes', () => {
+  it('saves what was typed when the drawer closes without the editor blurring', async () => {
+    trackApplication.mockResolvedValue(undefined);
+    render(JobBoard, { initial: [application], initialId: 'app-1' });
+    // Let the editor's dynamic import settle before typing into it.
+    await waitFor(() => expect(document.querySelector('textarea')).toBeTruthy());
+    await new Promise((r) => setTimeout(r, 0));
+    editorText.typed = 'Ask about the on-call rota';
+
+    await fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() =>
+      expect(trackApplication).toHaveBeenCalledWith('app-1', {
+        notes: 'Ask about the on-call rota',
+      }),
     );
   });
 });

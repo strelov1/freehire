@@ -438,8 +438,8 @@
   });
 
   // Close the panel, first blurring whatever is focused so a pending notes edit is
-  // flushed (the editor saves on blur) while the parent's openItem is still set —
-  // onclose clears it, and the deferred save reads openItem, so it must run first.
+  // flushed (the editor saves on blur) while the panel and its "Saving…" are still
+  // on screen; the editor's teardown save would catch it too, but out of sight.
   function close() {
     (document.activeElement as HTMLElement | null)?.blur();
     onclose();

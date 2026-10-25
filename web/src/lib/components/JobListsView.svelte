@@ -35,10 +35,13 @@
   const error = $derived(errorKind ? (errorMessage ?? s.errors[errorKind]) : null);
 
   // The error line sits above the list, away from whichever card's button failed, so it is
-  // also spoken.
-  $effect(() => {
-    if (error) announce(error, 'assertive');
-  });
+  // also spoken — at the failure, not from an effect, which a later locale change would
+  // re-run and so re-announce an old error.
+  function fail(kind: ErrorKind, message: string | null) {
+    errorMessage = message;
+    errorKind = kind;
+    announce(message ?? s.errors[kind], 'assertive');
+  }
 
   async function load() {
     status = 'loading';
@@ -82,8 +85,7 @@
       await jobLists.create(name, newDescription.trim());
       creating = false;
     } catch (err) {
-      errorMessage = err instanceof ApiError ? err.message : null;
-      errorKind = 'create';
+      fail('create', err instanceof ApiError ? err.message : null);
     } finally {
       createBusy = false;
     }
@@ -104,8 +106,11 @@
   let editFailMessage = $state<string | null>(null);
   const editError = $derived(editFailed ? (editFailMessage ?? s.errors.update) : null);
 
+  // The form, not each field: the name field is the design system's Input, which hands
+  // out no element, and both fields are reachable by name from here.
+  let editForm = $state<HTMLFormElement | null>(null);
   function focusEditField(field: 'name' | 'description') {
-    document.querySelector<HTMLElement>(`[data-edit-field="${field}"]`)?.focus();
+    (editForm?.elements.namedItem(field) as HTMLElement | null)?.focus();
   }
 
   async function openEdit(l: JobList, field: 'name' | 'description') {
@@ -142,7 +147,6 @@
     editFailed = false;
     try {
       await jobLists.update(l.id, patch);
-      editBusy = false;
       editOpen = false;
       announce(s.saved);
     } catch (err) {
@@ -167,8 +171,7 @@
     try {
       await jobLists.share(id);
     } catch (err) {
-      errorMessage = err instanceof ApiError ? err.message : null;
-      errorKind = 'share';
+      fail('share', err instanceof ApiError ? err.message : null);
     } finally {
       busyId = null;
     }
@@ -180,8 +183,7 @@
     try {
       await jobLists.unshare(id);
     } catch {
-      errorMessage = null;
-      errorKind = 'unshare';
+      fail('unshare', null);
     } finally {
       busyId = null;
     }
@@ -196,8 +198,7 @@
         if (copiedId === l.id) copiedId = null;
       }, 1500);
     } catch {
-      errorMessage = null;
-      errorKind = 'copyLink';
+      fail('copyLink', null);
     }
   }
 
@@ -216,8 +217,7 @@
     try {
       await jobLists.remove(l.id);
     } catch {
-      errorMessage = null;
-      errorKind = 'delete';
+      fail('delete', null);
     }
   }
 </script>
@@ -348,18 +348,21 @@
     <!-- `{#if}` because Dialog renders its children unconditionally: the form would
          otherwise sit in the page whether or not anybody opened it. -->
     {#if editOpen}
-    <form class="flex flex-col gap-4" onsubmit={saveEdit} novalidate>
+    <form bind:this={editForm} class="flex flex-col gap-4" onsubmit={saveEdit} novalidate>
       <FormField label={s.nameLabel} required error={nameInvalid ? s.nameRequired : undefined}>
         {#snippet children({ id, describedBy, invalid })}
           <Input
             {id}
-            data-edit-field="name"
+            name="name"
             aria-describedby={describedBy}
             aria-invalid={invalid || undefined}
             required
             maxlength={100}
             bind:value={editName}
-            oninput={() => (nameInvalid = false)}
+            oninput={() => {
+              nameInvalid = false;
+              editFailed = false;
+            }}
           />
         {/snippet}
       </FormField>
@@ -367,11 +370,12 @@
         {#snippet children({ id, describedBy })}
           <textarea
             {id}
-            data-edit-field="description"
+            name="description"
             aria-describedby={describedBy}
             rows="4"
             maxlength={2000}
             bind:value={editDescription}
+            oninput={() => (editFailed = false)}
             class="w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           ></textarea>
         {/snippet}

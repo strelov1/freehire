@@ -5,6 +5,7 @@
   import { ArrowRight, X } from '@lucide/svelte';
   import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '#lib/cliBanner.svelte.js';
   import { sourceLogoUrl } from '#lib/logo.js';
+  import { isAccountArea } from '#lib/shellLayout.js';
   import { EntityLogo } from '#lib/ui/index.js';
 
   // A strip under the header pointing at /mcp (it pointed at /cli until the hosted MCP
@@ -34,7 +35,7 @@
   // an MCP pitch there is one more band between the header and their page, and on a phone
   // that chrome had pushed the content halfway down the screen. Decided by the URL, which
   // the server knows too, so the server-rendered markup and the hydrated one agree.
-  const inAccountArea = $derived(page.url.pathname === '/my' || page.url.pathname.startsWith('/my/'));
+  const inAccountArea = $derived(isAccountArea(page.url.pathname));
 
   const agents = [
     { name: 'Claude', domain: 'claude.ai' },

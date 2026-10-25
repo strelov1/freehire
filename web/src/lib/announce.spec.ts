@@ -50,11 +50,21 @@ describe('announce', () => {
     expect(polite.textContent).toBe('Copied');
   });
 
-  it('lets the latest message win when two arrive inside the delay', () => {
+  it('speaks every message that arrives inside the delay, none dropped', () => {
+    const { polite } = regions();
+    announce('Saved');
+    announce('Moved to Interview');
+    settle();
+    expect(polite.textContent).toBe('Saved. Moved to Interview.');
+  });
+
+  it('starts afresh once the joined message has landed', () => {
     const { polite } = regions();
     announce('First');
     announce('Second');
     settle();
-    expect(polite.textContent).toBe('Second');
+    announce('Third');
+    settle();
+    expect(polite.textContent).toBe('Third');
   });
 });

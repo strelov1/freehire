@@ -305,13 +305,16 @@ describe('ExperienceBankView failures', () => {
     await fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect((await screen.findByRole('alert')).textContent).toContain('Server said no');
+    // Shown inline, voiced through the shared announcer — the box itself is not a live
+    // region, or the failure would be read twice.
+    expect(await screen.findByText('Server said no')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
     // Still editing, still on the bank — nothing the candidate typed was thrown away.
     expect(screen.getByLabelText('Company')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add experience' })).toBeTruthy();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Dismiss error' }));
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Server said no')).toBeNull();
   });
 
   it('offers a retry when the bank itself fails to load', async () => {

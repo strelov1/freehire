@@ -84,8 +84,14 @@
     void save();
   }
 
-  // A pick made just before navigating away still lands.
-  $effect(() => commitSave);
+  // A pick made just before navigating away still lands — quietly: the row that would
+  // show its outcome is gone, and a "Saved" spoken over the next page belongs to nothing
+  // on it.
+  let destroyed = false;
+  $effect(() => () => {
+    destroyed = true;
+    commitSave();
+  });
 
   async function save() {
     if (!value) return;
@@ -93,6 +99,7 @@
     saveErrorMessage = null;
     try {
       await updateTimezone(value);
+      if (destroyed) return;
       saveState = 'saved';
       announce(s.saved);
       clearTimeout(savedTimer);
@@ -100,6 +107,7 @@
         if (saveState === 'saved') saveState = 'idle';
       }, 1500);
     } catch (e) {
+      if (destroyed) return;
       saveState = 'error';
       saveErrorMessage = e instanceof ApiError ? e.message : null;
       announce(saveErrorMessage ?? s.saveFailed, 'assertive');

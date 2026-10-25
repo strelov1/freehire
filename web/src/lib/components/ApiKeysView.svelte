@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { tick } from 'svelte';
   import { resolve } from '$app/paths';
   import { X } from '@lucide/svelte';
   import { api } from '#lib/api.js';
@@ -34,7 +33,11 @@
   // dismissal asks first — unless the key was already copied, which is the answer.
   let confirmingDismiss = $state(false);
   let tokenEl = $state<HTMLElement>();
-  let revealEl = $state<HTMLElement>();
+  // Where focus goes when the confirmation ends: back to the ✕ that asked, or — once the
+  // panel holding both is gone — to "Create key", the nearest control that is still there.
+  let dismissButton = $state<HTMLButtonElement>();
+  let createButton = $state<HTMLElement>();
+  const confirmTextId = $props.id();
 
   // Show the fastest path to actually using the key: hand it to the CLI and
   // search. The raw Bearer-header call still works (noted in the page intro),
@@ -83,14 +86,29 @@
     }
   }
 
-  async function requestDismiss(): Promise<void> {
+  function requestDismiss(): void {
     if (copied) {
-      revealed = null;
+      dismiss();
       return;
     }
+    // The confirmation's "Yes" takes focus as it mounts (see its attachment).
     confirmingDismiss = true;
-    await tick();
-    revealEl?.querySelector<HTMLElement>('[data-dismiss-confirm]')?.focus();
+  }
+
+  function dismiss(): void {
+    revealed = null;
+    createButton?.focus();
+  }
+
+  function keepRevealed(): void {
+    confirmingDismiss = false;
+    dismissButton?.focus();
+  }
+
+  // Escape answers "keep it": the safe choice, the same one leaving the question unanswered
+  // makes. On the bar's two buttons, which are the only places focus can be inside it.
+  function cancelOnEscape(e: KeyboardEvent): void {
+    if (e.key === 'Escape') keepRevealed();
   }
 
   let revokeTarget = $state<ApiKey | null>(null);
@@ -160,17 +178,26 @@
           {s.intro.apiReferenceTail}
         </p>
       </div>
-      <Button variant="primary" onclick={() => (createOpen = true)}>{s.form.create}</Button>
+      <Button
+        variant="primary"
+        onclick={() => (createOpen = true)}
+        {@attach (el: HTMLElement) => {
+          createButton = el;
+        }}
+      >
+        {s.form.create}
+      </Button>
     </div>
 
     {#if revealed}
-      <div bind:this={revealEl} class="flex flex-col gap-3 rounded-lg border border-border bg-secondary/40 p-4">
+      <div class="flex flex-col gap-3 rounded-lg border border-border bg-secondary/40 p-4">
         <div class="flex items-start justify-between gap-3">
           <div class="flex flex-col gap-0.5">
             <p class="text-sm font-medium">{s.reveal.newKeyPrefix} “{revealed.name}”</p>
             <p class="text-xs text-muted-foreground">{s.reveal.copyNow}</p>
           </div>
           <button
+            bind:this={dismissButton}
             type="button"
             onclick={requestDismiss}
             aria-label={s.reveal.dismiss}
@@ -180,12 +207,22 @@
           </button>
         </div>
         {#if confirmingDismiss}
-          <div class="flex flex-wrap items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-sm">
-            <p class="flex-1">{s.reveal.dismissConfirm}</p>
-            <Button variant="secondary" size="sm" data-dismiss-confirm onclick={() => (revealed = null)}>
+          <div
+            role="group"
+            aria-labelledby={confirmTextId}
+            class="flex flex-wrap items-center gap-2 rounded-md bg-warning/10 px-3 py-2 text-sm"
+          >
+            <p id={confirmTextId} class="flex-1">{s.reveal.dismissConfirm}</p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onclick={dismiss}
+              onkeydown={cancelOnEscape}
+              {@attach (el: HTMLElement) => el.focus()}
+            >
               {s.reveal.dismissConfirmYes}
             </Button>
-            <Button variant="ghost" size="sm" onclick={() => (confirmingDismiss = false)}>
+            <Button variant="ghost" size="sm" onclick={keepRevealed} onkeydown={cancelOnEscape}>
               {s.reveal.dismissConfirmNo}
             </Button>
           </div>

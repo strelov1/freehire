@@ -67,11 +67,15 @@
   <div class="border-b border-border bg-secondary/50">
     <!-- One row on a phone: the short sentence and the button side by side. The full
          sentence with the address wrapped to three lines there and put the button on a
-         fourth, in front of every page of a fresh account. -->
+         fourth, in front of every page of a fresh account. The address stays, truncated —
+         without it nobody with two inboxes knows where the code is going. -->
     <div class="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-2 text-sm sm:py-3">
       <div class="flex items-center justify-between gap-3 sm:flex-wrap sm:justify-start">
         <p class="min-w-0 text-muted-foreground">
-          <span class="font-medium text-foreground sm:hidden">Confirm your email</span>
+          <span class="flex min-w-0 gap-1 sm:hidden">
+            <span class="shrink-0">Confirm</span>
+            <span class="truncate font-medium text-foreground">{user?.email}</span>
+          </span>
           <span class="hidden sm:inline">
             Confirm <span class="font-medium text-foreground">{user?.email}</span> to secure your account.
           </span>

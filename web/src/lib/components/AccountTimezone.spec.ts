@@ -21,6 +21,9 @@ const { updateTimezone, user } = vi.hoisted(() => ({
   user: { current: { email: 'a@b.co', timezone: 'Europe/Moscow' } as { email: string; timezone?: string } },
 }));
 
+const { announce } = vi.hoisted(() => ({ announce: vi.fn() }));
+vi.mock('#lib/announce.svelte.js', () => ({ announce }));
+
 vi.mock('#lib/auth.svelte.js', () => ({
   currentUser: () => user.current,
   updateTimezone,
@@ -129,6 +132,21 @@ describe('AccountTimezone — saving', () => {
     expect(updateTimezone).toHaveBeenCalledWith('Europe/Paris');
     vi.advanceTimersByTime(1000);
     expect(updateTimezone).toHaveBeenCalledTimes(1);
+  });
+
+  it('still saves a pending pick on unmount, without speaking over the next page', async () => {
+    updateTimezone.mockResolvedValue(undefined);
+    announce.mockReset();
+    const { unmount } = render(AccountTimezone);
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+
+    select.value = 'Europe/Paris';
+    await fireEvent.change(select);
+    unmount();
+
+    expect(updateTimezone).toHaveBeenCalledWith('Europe/Paris');
+    await vi.runAllTimersAsync();
+    expect(announce).not.toHaveBeenCalled();
   });
 });
 
