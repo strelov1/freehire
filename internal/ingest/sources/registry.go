@@ -511,6 +511,12 @@ func All(c HTTPClient) map[string]Source {
 		// Workwise: a German recruiting platform whose one posting sitemap names the whole
 		// catalogue; each new posting is hydrated from its page's ld+json. See workwise.go.
 		NewWorkwise(c),
+		// Dutch public boards: the central government (werkenvoornederland), the municipalities
+		// (gemeentebanen) and the universities and research institutes (academictransfer). Each
+		// is one posting sitemap; every new posting is hydrated from its page's ld+json.
+		NewWerkenVoorNederland(c),
+		NewGemeentebanen(c),
+		NewAcademicTransfer(c),
 		// CHECK-IN (mein-check-in.de): a German applicant portal of savings banks, cooperative
 		// banks and councils; a board is the tenant slug and each new position is hydrated from
 		// its page's microdata. See meincheckin.go.

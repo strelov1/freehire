@@ -3,6 +3,7 @@ package sources
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"strings"
 )
 
@@ -27,6 +28,34 @@ func schemaEmploymentType(t string) string {
 	default:
 		return ""
 	}
+}
+
+// schemaScheduleType maps an employmentType that may be a string or a list, for the Dutch public
+// boards whose TEMPORARY is NOT contract work: a government or university appointment starts as a
+// fixed-term contract, so TEMPORARY is what most of their postings state (53 of 60 sampled on
+// werkenvoornederland, every PhD position on academictransfer). Only an internship and a single
+// full- or part-time schedule are stated losslessly; anything else yields "".
+func schemaScheduleType(v any) string {
+	var types []string
+	switch t := v.(type) {
+	case string:
+		types = []string{t}
+	case []any:
+		for _, e := range t {
+			if s, ok := e.(string); ok {
+				types = append(types, s)
+			}
+		}
+	}
+	for _, t := range types {
+		if t == "INTERN" || t == "INTERNSHIP" {
+			return "internship"
+		}
+	}
+	if len(types) == 1 && (types[0] == "FULL_TIME" || types[0] == "PART_TIME") {
+		return schemaEmploymentType(types[0])
+	}
+	return ""
 }
 
 // schemaSalaryPeriods maps a schema.org QuantitativeValue unitText onto the freehire salary
@@ -130,4 +159,41 @@ func (a schemaNamedAreas) Names() []string {
 		names = append(names, n.Name)
 	}
 	return names
+}
+
+// schemaMonetaryAmount is a JobPosting baseSalary whose figures are JSON numbers: one value, or a
+// minValue/maxValue pair, per unitText.
+type schemaMonetaryAmount struct {
+	Currency string `json:"currency"`
+	Value    struct {
+		Value    float64 `json:"value"`
+		MinValue float64 `json:"minValue"`
+		MaxValue float64 `json:"maxValue"`
+		UnitText string  `json:"unitText"`
+	} `json:"value"`
+}
+
+// apply sets the job's salary when the amount is in currency and names a period the vocabulary
+// knows. A lone value is both ends of the range.
+func (a *schemaMonetaryAmount) apply(j *Job, currency string) {
+	if a == nil || !strings.EqualFold(strings.TrimSpace(a.Currency), currency) {
+		return
+	}
+	period := schemaSalaryPeriod(a.Value.UnitText)
+	lo, hi := roundedAmount(a.Value.MinValue, a.Value.Value), roundedAmount(a.Value.MaxValue, a.Value.Value)
+	if period == "" || (lo == nil && hi == nil) {
+		return
+	}
+	j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod = lo, hi, currency, period
+}
+
+// roundedAmount rounds the first positive figure, or nil when none is.
+func roundedAmount(vals ...float64) *int {
+	for _, v := range vals {
+		if v > 0 {
+			r := int(math.Round(v))
+			return &r
+		}
+	}
+	return nil
 }

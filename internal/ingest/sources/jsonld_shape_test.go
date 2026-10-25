@@ -17,9 +17,10 @@ func ldPage(body string) *html.Node {
 func TestLDJobPostingShapes(t *testing.T) {
 	posting := `{"@type":"JobPosting","title":"Role","identifier":{"value":"x1"}}`
 	cases := map[string]string{
-		"bare object":    posting,
-		"array of nodes": `[{"@type":"Organization","name":"Co"},` + posting + `]`,
-		"graph wrapper":  `{"@context":"https://schema.org","@graph":[{"@type":"WebSite"},` + posting + `]}`,
+		"bare object":     posting,
+		"array of nodes":  `[{"@type":"Organization","name":"Co"},` + posting + `]`,
+		"graph wrapper":   `{"@context":"https://schema.org","@graph":[{"@type":"WebSite"},` + posting + `]}`,
+		"page mainEntity": `{"@context":"https://schema.org","@type":"WebPage","mainEntity":` + posting + `}`,
 	}
 	for name, body := range cases {
 		var got struct {
@@ -40,5 +41,8 @@ func TestLDJobPostingShapes(t *testing.T) {
 	var sink struct{}
 	if ldJobPosting(ldPage(`[{"@type":"Organization"}]`), &sink) {
 		t.Error("ldJobPosting on non-JobPosting array = true, want false")
+	}
+	if ldJobPosting(ldPage(`{"@type":"WebPage","mainEntity":{"@type":"Article"}}`), &sink) {
+		t.Error("ldJobPosting on a page whose mainEntity is no JobPosting = true, want false")
 	}
 }

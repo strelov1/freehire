@@ -215,6 +215,8 @@ linters:
         - produktion
         - programmeur
         - psycholoog
+        - economisch
+        - defensie
 
 formatters:
   enable:

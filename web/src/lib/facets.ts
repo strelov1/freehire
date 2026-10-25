@@ -425,6 +425,9 @@ export const SOURCE_LABELS: Record<string, string> = {
   xing: 'XING',
   onapply: 'onapply',
   workwise: 'Workwise',
+  werkenvoornederland: 'Werken voor Nederland',
+  gemeentebanen: 'Gemeentebanen',
+  academictransfer: 'AcademicTransfer',
   meincheckin: 'CHECK-IN',
 };
 
