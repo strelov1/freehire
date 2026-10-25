@@ -12,7 +12,7 @@
 
 # --- design-system build stage ---
 # Must build before web — web's file:../design-system dependency links here.
-FROM node:22-alpine AS ds-build
+FROM node:24-alpine AS ds-build
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /design-system
 COPY design-system/package.json design-system/pnpm-lock.yaml design-system/pnpm-workspace.yaml ./
@@ -21,7 +21,7 @@ COPY design-system/ ./
 RUN pnpm build
 
 # --- web build stage ---
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /src
 # The file:../design-system dependency resolves to /design-system from WORKDIR /src.
@@ -59,7 +59,7 @@ RUN pnpm run build
 RUN pnpm prune --prod
 
 # --- runtime stage ---
-FROM node:22-alpine
+FROM node:24-alpine
 # nginx-mod-http-brotli brings ngx_brotli (filter + static). Alpine's nginx.conf
 # includes /etc/nginx/modules/*.conf, so installing the package is all the wiring
 # the load_module lines need. Without it, `brotli`/`brotli_static` in nginx.conf

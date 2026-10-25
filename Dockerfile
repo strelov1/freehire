@@ -26,7 +26,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/hire ./cmd/server
 # PDFs (internal/cv). The musl build is fully static, so it runs on distroless/static;
 # Libertinus Serif is embedded in the binary, so no fonts are bundled separately. Pinned
 # to match the version verified against the ATS extraction test (local == prod output). ---
-FROM alpine:3.20 AS typst
+FROM alpine:3.24 AS typst
 ARG TYPST_VERSION=0.15.0
 # hadolint ignore=DL3018
 RUN apk add --no-cache curl xz \

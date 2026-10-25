@@ -42,7 +42,7 @@ services:
   # an optional one like Meili — no volume, since rate-limit counters are
   # ephemeral/TTL'd and losing them on restart is a fail-open no-op, not data loss.
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -83,7 +83,7 @@ services:
       - "${S3_HOST_PORT:-9000}:9090"
 
   s3-init:
-    image: curlimages/curl:8.22.0
+    image: curlimages/curl:8.23.0
     depends_on:
       - s3
     entrypoint: >

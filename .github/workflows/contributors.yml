@@ -92,7 +92,7 @@ jobs:
         if: steps.token.outputs.present == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 24
 
       # No install step: the collector uses only Node built-ins, which is why it is a
       # plain .mjs rather than TypeScript. Its assembly is unit-tested in the web
