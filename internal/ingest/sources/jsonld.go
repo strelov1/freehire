@@ -93,8 +93,8 @@ func jobPostingNodes(raw []byte) []json.RawMessage {
 	if json.Unmarshal(trimmed, &wrapper) != nil {
 		return nil
 	}
-	if len(wrapper.Graph) > 0 {
-		return filterJobPostings(wrapper.Graph)
+	if postings := filterJobPostings(wrapper.Graph); len(postings) > 0 {
+		return postings
 	}
 	if len(wrapper.MainEntity) > 0 && isJobPosting(wrapper.MainEntity) {
 		return []json.RawMessage{wrapper.MainEntity}

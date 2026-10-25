@@ -21,6 +21,7 @@ func TestLDJobPostingShapes(t *testing.T) {
 		"array of nodes":  `[{"@type":"Organization","name":"Co"},` + posting + `]`,
 		"graph wrapper":   `{"@context":"https://schema.org","@graph":[{"@type":"WebSite"},` + posting + `]}`,
 		"page mainEntity": `{"@context":"https://schema.org","@type":"WebPage","mainEntity":` + posting + `}`,
+		"graph without a posting beside mainEntity": `{"@graph":[{"@type":"WebSite"}],"mainEntity":` + posting + `}`,
 	}
 	for name, body := range cases {
 		var got struct {
