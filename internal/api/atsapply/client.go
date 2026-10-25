@@ -366,7 +366,7 @@ func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged 
 	// one place that couples them regardless — found by code review. Not reachable today
 	// (cmd/auto-apply/main.go always wires both together), so left as a plain deterministic
 	// Resolve rather than special-cased for a configuration nothing constructs yet.
-	if c.atoms == nil || !fillProviders[claimed.Provider] {
+	if c.atoms == nil || !c.submits(claimed.Provider) {
 		return Resolve(merged, answers, hasApprovedCV), nil
 	}
 
@@ -387,6 +387,22 @@ func (c *Client) resolve(ctx context.Context, claimed autoapply.Claimed, merged 
 	bound := llmkey.Bind(ctx, c.llmKeys, c.llmClient, claimed.UserID, llm.Feature(tagAutoApplyDrafting))
 	drafter := NewJevSelectDrafter(NewLLMDrafter(bound), c.typesafeAPIKey)
 	return ResolveWithDrafting(ctx, merged, answers, drafter, grounding, hasApprovedCV, c.letters, claimed.UserID, claimed.JobID)
+}
+
+// submits reports whether Submit can complete an application on provider — through this
+// package's own browser (fillProviders) or through the browser-use executor when it is wired
+// and enforcing. resolve drafts only for these, so a draft is never paid for that nothing will
+// send, and never withheld from one that will be sent.
+//
+// It used to read fillProviders alone, from before browser-use submitted anything: on
+// 2026-10-25 an approved Workable application whose review screen said fourteen answers
+// "will be drafted at submission" reached submission with none drafted and parked on all of
+// them.
+func (c *Client) submits(provider string) bool {
+	if fillProviders[provider] {
+		return true
+	}
+	return c.browserUse != nil && browserUseProviders[provider] && browserUseEnforce()
 }
 
 // requirePaid asks the entitlement, failing closed when none is configured.

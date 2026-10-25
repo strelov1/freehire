@@ -1,0 +1,44 @@
+package atsapply
+
+import "testing"
+
+// Drafting follows what can actually be sent. A Workable application is sent by the
+// browser-use executor, so with it wired and enforcing its answers are drafted — the review
+// screen promised exactly that, and an approved application parked on fourteen undrafted
+// answers when they were not.
+func TestSubmits_FollowsEveryPathThatCompletesAnApplication(t *testing.T) {
+	executor := &BrowserUseExecutor{}
+
+	t.Setenv("AUTO_APPLY_BROWSERUSE_ENFORCE", "1")
+	if !(&Client{browserUse: executor}).submits("workable") {
+		t.Error("workable with an enforcing browser-use executor: submits = false")
+	}
+	if !(&Client{}).submits("greenhouse") {
+		t.Error("greenhouse: submits = false")
+	}
+	if (&Client{}).submits("workable") {
+		t.Error("workable with no executor: submits = true — a draft nothing will send")
+	}
+
+	t.Setenv("AUTO_APPLY_BROWSERUSE_ENFORCE", "")
+	if (&Client{browserUse: executor}).submits("workable") {
+		t.Error("workable in shadow mode: submits = true — shadow mode sends nothing")
+	}
+}
+
+// Workable names its name fields firstname/lastname, not first_name/last_name.
+func TestResolve_WorkableNameFields(t *testing.T) {
+	fields := []MergedField{
+		{ID: "firstname", Label: "First name", Kind: "text", Required: true},
+		{ID: "lastname", Label: "Last name", Kind: "text", Required: true},
+	}
+
+	plan := Resolve(fields, map[string]string{"first_name": "Ilya", "last_name": "Strelov"}, false)
+
+	if !plan.FullyResolved() {
+		t.Fatalf("unmapped = %+v", plan.Unmapped)
+	}
+	if plan.Fields[0].Value != "Ilya" || plan.Fields[1].Value != "Strelov" {
+		t.Errorf("fields = %+v", plan.Fields)
+	}
+}

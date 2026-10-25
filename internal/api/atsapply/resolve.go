@@ -51,7 +51,12 @@ func (p Plan) FullyResolved() bool {
 var answerKeyFor = map[string]string{
 	"first_name": "first_name",
 	"last_name":  "last_name",
-	"full_name":  "full_name",
+	// Workable's own control names for the same two fields. Measured on production
+	// 2026-10-25: an approved Workable application parked on `firstname` and `lastname` for a
+	// candidate whose name the profile had all along.
+	"firstname": "first_name",
+	"lastname":  "last_name",
+	"full_name": "full_name",
 	// Recruitee's own control name for the same field. Measured on production 2026-09-09:
 	// a queued Recruitee application parked on `{"id": "name", "label": "Full name"}` for
 	// a candidate whose full name the profile had all along.

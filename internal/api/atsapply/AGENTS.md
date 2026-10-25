@@ -184,7 +184,8 @@ process, called only via `Client.WithBrowserUse`. Scope is deliberately narrow:
   the ordinary generic-drafter path, logged the same way `buildGroundingContext`'s own read
   failure degrades in `client.go`'s `resolve`. This does not make Recruitee-shaped gaps in
   drafting go away — it only ever runs where `resolve` reaches `ResolveWithDrafting` at all
-  (today: Greenhouse only, per `fillProviders`), same as `LLMDrafter` itself. See
+  (every provider `Client.submits` names: `fillProviders`, plus the browser-use
+  providers while that executor is wired and enforcing), same as `LLMDrafter` itself. See
   `openspec/changes/autoapply-reuse-cover-letter`.
 - **A geography/residency question (`geography.go`) parks before drafting too, for a
   different reason than the sensitive gate.** `sensitiveTerms` (`sensitive.go`) parks a
