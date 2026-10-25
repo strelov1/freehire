@@ -340,13 +340,23 @@ func (h *assistantHandlers) PostAutoApplyReview(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	if in.Decision != autoApplyReviewApproved && in.Decision != autoApplyReviewDeclined {
-		return fiber.NewError(fiber.StatusBadRequest, `decision must be "approved" or "declined"`)
-	}
-
 	entry, err := h.resolveAutoApplyEntry(c, queueID)
 	if err != nil {
 		return err // foreign or missing → pgx.ErrNoRows → 404
+	}
+	if err := h.decideAutoApplyReview(c.Context(), entry, in.Decision); err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{"decision": in.Decision}})
+}
+
+// decideAutoApplyReview records decision ("approved" or "declined") for an entry the caller
+// has already resolved and owns, then wakes the orchestrator. The route and the MCP tool both
+// call it. A decision may be recorded only once; a second attempt is refused as 409 and the
+// existing decision is unchanged.
+func (h *assistantHandlers) decideAutoApplyReview(ctx context.Context, entry autoApplyEntry, decision string) error {
+	if decision != autoApplyReviewApproved && decision != autoApplyReviewDeclined {
+		return fiber.NewError(fiber.StatusBadRequest, `decision must be "approved" or "declined"`)
 	}
 	if entry.TailoredCvID == nil {
 		return fiber.NewError(fiber.StatusConflict, "this entry has no tailored cv to review yet")
@@ -356,24 +366,24 @@ func (h *assistantHandlers) PostAutoApplyReview(c *fiber.Ctx) error {
 	}
 
 	var affected int64
-	if in.Decision == autoApplyReviewApproved {
-		affected, err = h.queries.ApproveAutoApplyReview(c.Context(), queueID)
+	var err error
+	if decision == autoApplyReviewApproved {
+		affected, err = h.queries.ApproveAutoApplyReview(ctx, entry.ID)
 	} else {
-		affected, err = h.queries.DeclineAutoApplyReview(c.Context(), db.DeclineAutoApplyReviewParams{
-			ID: queueID, LastError: autoApplyDeclineReason,
+		affected, err = h.queries.DeclineAutoApplyReview(ctx, db.DeclineAutoApplyReviewParams{
+			ID: entry.ID, LastError: autoApplyDeclineReason,
 		})
 	}
 	if err != nil {
 		return err
 	}
 	if affected == 0 {
-		// The read above already ruled out "not found" and "already reviewed" for the row
+		// The caller's read already ruled out "not found" and "already reviewed" for the row
 		// it saw — zero rows here means a concurrent decision on this same entry won the
 		// race between that read and this write.
 		return fiber.NewError(fiber.StatusConflict, "this entry has already been reviewed")
 	}
 
-	h.publishReviewDecided(c.Context(), queueID, in.Decision)
-
-	return c.JSON(fiber.Map{"data": fiber.Map{"decision": in.Decision}})
+	h.publishReviewDecided(ctx, entry.ID, decision)
+	return nil
 }

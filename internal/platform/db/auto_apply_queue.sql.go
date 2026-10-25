@@ -32,6 +32,47 @@ func (q *Queries) ApproveAutoApplyReview(ctx context.Context, id int64) (int64, 
 	return result.RowsAffected(), nil
 }
 
+const cancelAutoApplyEntry = `-- name: CancelAutoApplyEntry :one
+WITH deleted AS (
+    DELETE FROM auto_apply_queue q
+    WHERE q.id = $1
+      AND q.user_id = $2
+      AND q.submit_uncertain_at IS NULL
+      AND NOT (q.review_decision = 'approved'
+               AND q.blocked_at IS NULL
+               AND q.failed_at IS NULL
+               AND q.claimed_at IS NOT NULL
+               AND q.claimed_at > now() - make_interval(secs => $3::int))
+    RETURNING q.id, q.user_id, q.job_id
+), recorded AS (
+    INSERT INTO auto_apply_events (user_id, job_id, queue_id, kind)
+    SELECT user_id, job_id, id, 'cancelled' FROM deleted
+)
+SELECT id FROM deleted
+`
+
+type CancelAutoApplyEntryParams struct {
+	ID           int64 `json:"id"`
+	UserID       int64 `json:"user_id"`
+	LeaseSeconds int32 `json:"lease_seconds"`
+}
+
+// Withdraws one of the caller's attempts by deleting it, unless the submit pass may be
+// pressing submit right now: an approved, live row claimed within the worker's lease. That
+// window is refused rather than raced — the browser driver cannot be called back. Records
+// `cancelled` in the same statement. pgx.ErrNoRows means not owned, not found,
+// mid-submission, or uncertain; the caller reads the row first to say which.
+//
+// An uncertain submission (submit_uncertain_at) is never deleted: the row is the only record
+// that the employer may hold the application, and without it a fresh start for the same job
+// would find nothing to stop it sending a second one.
+func (q *Queries) CancelAutoApplyEntry(ctx context.Context, arg CancelAutoApplyEntryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, cancelAutoApplyEntry, arg.ID, arg.UserID, arg.LeaseSeconds)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const claimAutoApplyBatch = `-- name: ClaimAutoApplyBatch :many
 WITH claimable AS (
     SELECT q.id, q.user_id, q.job_id
@@ -222,13 +263,21 @@ func (q *Queries) DeclineAutoApplyReview(ctx context.Context, arg DeclineAutoApp
 }
 
 const deleteAutoApplyEntry = `-- name: DeleteAutoApplyEntry :exec
-DELETE FROM auto_apply_queue
-WHERE id = $1
+WITH deleted AS (
+    DELETE FROM auto_apply_queue q
+    WHERE q.id = $1
+    RETURNING q.id, q.user_id, q.job_id
+)
+INSERT INTO auto_apply_events (user_id, job_id, queue_id, kind)
+SELECT d.user_id, d.job_id, d.id, 'submitted' FROM deleted d
 `
 
 // Retire an attempt that submitted successfully. jobtracking's MarkJobApplied (called in
 // the same transaction, alongside LockJobForApply) is the durable record; the queue entry
 // has nothing left to say. Mirrors DeleteApplyFormEntry.
+//
+// Records the attempt's `submitted` event in the same statement (migration 0196): the
+// history trigger does not handle DELETE, since it cannot tell a submission from a cancel.
 func (q *Queries) DeleteAutoApplyEntry(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteAutoApplyEntry, id)
 	return err
@@ -320,7 +369,7 @@ func (q *Queries) GetAutoApplyQueueEntryByID(ctx context.Context, id int64) (Get
 
 const getAutoApplyQueueEntryForJob = `-- name: GetAutoApplyQueueEntryForJob :one
 SELECT id, review_decision, failed_at, blocked_at, tailored_cv_id, unmapped, resolved_preview,
-       preview_failed_at, tailor_failed_at
+       preview_failed_at, tailor_failed_at, submit_uncertain_at, claimed_at
 FROM auto_apply_queue
 WHERE user_id = $1 AND job_id = $2
 `
@@ -331,15 +380,17 @@ type GetAutoApplyQueueEntryForJobParams struct {
 }
 
 type GetAutoApplyQueueEntryForJobRow struct {
-	ID              int64              `json:"id"`
-	ReviewDecision  pgtype.Text        `json:"review_decision"`
-	FailedAt        pgtype.Timestamptz `json:"failed_at"`
-	BlockedAt       pgtype.Timestamptz `json:"blocked_at"`
-	TailoredCvID    *uuid.UUID         `json:"tailored_cv_id"`
-	Unmapped        []byte             `json:"unmapped"`
-	ResolvedPreview []byte             `json:"resolved_preview"`
-	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
-	TailorFailedAt  pgtype.Timestamptz `json:"tailor_failed_at"`
+	ID                int64              `json:"id"`
+	ReviewDecision    pgtype.Text        `json:"review_decision"`
+	FailedAt          pgtype.Timestamptz `json:"failed_at"`
+	BlockedAt         pgtype.Timestamptz `json:"blocked_at"`
+	TailoredCvID      *uuid.UUID         `json:"tailored_cv_id"`
+	Unmapped          []byte             `json:"unmapped"`
+	ResolvedPreview   []byte             `json:"resolved_preview"`
+	PreviewFailedAt   pgtype.Timestamptz `json:"preview_failed_at"`
+	TailorFailedAt    pgtype.Timestamptz `json:"tailor_failed_at"`
+	SubmitUncertainAt pgtype.Timestamptz `json:"submit_uncertain_at"`
+	ClaimedAt         pgtype.Timestamptz `json:"claimed_at"`
 }
 
 // The caller's own existing auto-apply entry for one job, if any — the conflict-read path
@@ -374,6 +425,8 @@ func (q *Queries) GetAutoApplyQueueEntryForJob(ctx context.Context, arg GetAutoA
 		&i.ResolvedPreview,
 		&i.PreviewFailedAt,
 		&i.TailorFailedAt,
+		&i.SubmitUncertainAt,
+		&i.ClaimedAt,
 	)
 	return i, err
 }
@@ -416,6 +469,168 @@ func (q *Queries) GetAutoApplyQueueEntryForReview(ctx context.Context, arg GetAu
 	return i, err
 }
 
+const listAutoApplyEntries = `-- name: ListAutoApplyEntries :many
+SELECT q.id, j.public_slug, j.title, j.company, q.review_decision, q.failed_at, q.blocked_at,
+       q.tailored_cv_id, (q.resolved_preview IS NOT NULL)::boolean AS has_preview,
+       q.preview_failed_at, q.tailor_failed_at, q.created_at,
+       (SELECT max(e.created_at) FROM auto_apply_events e
+        WHERE e.user_id = q.user_id AND e.job_id = q.job_id)::timestamptz AS last_event_at
+FROM auto_apply_queue q
+JOIN jobs j ON j.id = q.job_id
+WHERE q.user_id = $1
+ORDER BY q.id DESC
+LIMIT 200
+`
+
+type ListAutoApplyEntriesRow struct {
+	ID              int64              `json:"id"`
+	PublicSlug      string             `json:"public_slug"`
+	Title           string             `json:"title"`
+	Company         string             `json:"company"`
+	ReviewDecision  pgtype.Text        `json:"review_decision"`
+	FailedAt        pgtype.Timestamptz `json:"failed_at"`
+	BlockedAt       pgtype.Timestamptz `json:"blocked_at"`
+	TailoredCvID    *uuid.UUID         `json:"tailored_cv_id"`
+	HasPreview      bool               `json:"has_preview"`
+	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
+	TailorFailedAt  pgtype.Timestamptz `json:"tailor_failed_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	LastEventAt     pgtype.Timestamptz `json:"last_event_at"`
+}
+
+// The caller's live attempts, newest first, with what a status derivation and a list row
+// need. last_event_at is when anything last happened to the pair, which is what an agent
+// polling for progress compares.
+func (q *Queries) ListAutoApplyEntries(ctx context.Context, userID int64) ([]ListAutoApplyEntriesRow, error) {
+	rows, err := q.db.Query(ctx, listAutoApplyEntries, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAutoApplyEntriesRow{}
+	for rows.Next() {
+		var i ListAutoApplyEntriesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.PublicSlug,
+			&i.Title,
+			&i.Company,
+			&i.ReviewDecision,
+			&i.FailedAt,
+			&i.BlockedAt,
+			&i.TailoredCvID,
+			&i.HasPreview,
+			&i.PreviewFailedAt,
+			&i.TailorFailedAt,
+			&i.CreatedAt,
+			&i.LastEventAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAutoApplyEvents = `-- name: ListAutoApplyEvents :many
+SELECT id, queue_id, kind, detail, created_at
+FROM auto_apply_events
+WHERE user_id = $1 AND job_id = $2
+ORDER BY id DESC
+LIMIT 100
+`
+
+type ListAutoApplyEventsParams struct {
+	UserID int64 `json:"user_id"`
+	JobID  int64 `json:"job_id"`
+}
+
+type ListAutoApplyEventsRow struct {
+	ID        int64              `json:"id"`
+	QueueID   int64              `json:"queue_id"`
+	Kind      string             `json:"kind"`
+	Detail    []byte             `json:"detail"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// The most recent history of one (user, job) pair, newest first; the caller reverses it.
+func (q *Queries) ListAutoApplyEvents(ctx context.Context, arg ListAutoApplyEventsParams) ([]ListAutoApplyEventsRow, error) {
+	rows, err := q.db.Query(ctx, listAutoApplyEvents, arg.UserID, arg.JobID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAutoApplyEventsRow{}
+	for rows.Next() {
+		var i ListAutoApplyEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.QueueID,
+			&i.Kind,
+			&i.Detail,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecentAutoApplySubmissions = `-- name: ListRecentAutoApplySubmissions :many
+SELECT DISTINCT ON (e.job_id) e.job_id, j.public_slug, j.title, j.company, e.created_at
+FROM auto_apply_events e
+JOIN jobs j ON j.id = e.job_id
+WHERE e.user_id = $1
+  AND e.kind = 'submitted'
+  AND e.created_at > now() - interval '30 days'
+  AND NOT EXISTS (SELECT 1 FROM auto_apply_queue q WHERE q.user_id = e.user_id AND q.job_id = e.job_id)
+ORDER BY e.job_id, e.created_at DESC
+`
+
+type ListRecentAutoApplySubmissionsRow struct {
+	JobID      int64              `json:"job_id"`
+	PublicSlug string             `json:"public_slug"`
+	Title      string             `json:"title"`
+	Company    string             `json:"company"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+// The caller's attempts that submitted within the last 30 days. A submission deletes its
+// queue row, so without this the list an agent reads would lose every success the moment it
+// happened.
+func (q *Queries) ListRecentAutoApplySubmissions(ctx context.Context, userID int64) ([]ListRecentAutoApplySubmissionsRow, error) {
+	rows, err := q.db.Query(ctx, listRecentAutoApplySubmissions, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecentAutoApplySubmissionsRow{}
+	for rows.Next() {
+		var i ListRecentAutoApplySubmissionsRow
+		if err := rows.Scan(
+			&i.JobID,
+			&i.PublicSlug,
+			&i.Title,
+			&i.Company,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markAutoApplyBlocked = `-- name: MarkAutoApplyBlocked :exec
 UPDATE auto_apply_queue
 SET blocked_at = now(),
@@ -437,6 +652,30 @@ type MarkAutoApplyBlockedParams struct {
 // auto_apply_queue_claimable_idx from here on.
 func (q *Queries) MarkAutoApplyBlocked(ctx context.Context, arg MarkAutoApplyBlockedParams) error {
 	_, err := q.db.Exec(ctx, markAutoApplyBlocked, arg.LastError, arg.Unmapped, arg.ID)
+	return err
+}
+
+const markAutoApplySubmitUncertain = `-- name: MarkAutoApplySubmitUncertain :exec
+UPDATE auto_apply_queue
+SET attempts            = attempts + 1,
+    last_error          = $1,
+    failed_at           = now(),
+    submit_uncertain_at = now()
+WHERE id = $2
+`
+
+type MarkAutoApplySubmitUncertainParams struct {
+	LastError string `json:"last_error"`
+	ID        int64  `json:"id"`
+}
+
+// Dead-letters an attempt whose submission may already have reached the employer — a press
+// of submit nothing confirmed or refused, or a real submission that failed to record
+// locally (migration 0196). Same terminal effect as RecordAutoApplyFailure at its last
+// attempt, plus submit_uncertain_at, which is what makes RetryAutoApplyEntry refuse the row:
+// re-arming it could send the same application twice.
+func (q *Queries) MarkAutoApplySubmitUncertain(ctx context.Context, arg MarkAutoApplySubmitUncertainParams) error {
+	_, err := q.db.Exec(ctx, markAutoApplySubmitUncertain, arg.LastError, arg.ID)
 	return err
 }
 
@@ -604,6 +843,76 @@ func (q *Queries) RecordAutoApplyPreviewFailure(ctx context.Context, arg RecordA
 	row := q.db.QueryRow(ctx, recordAutoApplyPreviewFailure, arg.LastError, arg.MaxAttempts, arg.ID)
 	var i RecordAutoApplyPreviewFailureRow
 	err := row.Scan(&i.PreviewAttempts, &i.PreviewFailedAt)
+	return i, err
+}
+
+const retryAutoApplyEntry = `-- name: RetryAutoApplyEntry :one
+WITH target AS (
+    SELECT q.id
+    FROM auto_apply_queue q
+    WHERE q.id = $1
+      AND q.user_id = $2
+      AND q.review_decision IS DISTINCT FROM 'declined'
+      AND q.submit_uncertain_at IS NULL
+      AND (q.blocked_at IS NOT NULL
+           OR q.failed_at IS NOT NULL
+           OR q.preview_failed_at IS NOT NULL
+           OR q.tailor_failed_at IS NOT NULL
+           OR (q.review_decision IS NULL AND q.resolved_preview IS NOT NULL))
+    FOR UPDATE
+), updated AS (
+    UPDATE auto_apply_queue q
+    SET blocked_at        = NULL,
+        unmapped          = NULL,
+        failed_at         = NULL,
+        attempts          = 0,
+        captcha_attempts  = 0,
+        preview_failed_at = NULL,
+        preview_attempts  = 0,
+        tailor_failed_at  = NULL,
+        claimed_at        = NULL,
+        last_error        = '',
+        resolved_preview  = CASE WHEN q.review_decision IS NULL THEN NULL ELSE q.resolved_preview END
+    FROM target t
+    WHERE q.id = t.id
+    RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id
+), recorded AS (
+    INSERT INTO auto_apply_events (user_id, job_id, queue_id, kind)
+    SELECT user_id, job_id, id, 'retried' FROM updated
+)
+SELECT id, tailored_cv_id FROM updated
+`
+
+type RetryAutoApplyEntryParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type RetryAutoApplyEntryRow struct {
+	ID           int64       `json:"id"`
+	TailoredCvID pgtype.UUID `json:"tailored_cv_id"`
+}
+
+// Re-arms one of the caller's stuck attempts (openspec/changes/auto-apply-over-mcp): a park,
+// a dead letter of any pass, or a tailoring failure — and also refreshes a preview awaiting
+// review, so an answer the candidate just banked shows up in what they are approving.
+//
+// Clears every marker and resets every budget, so the row is claimable again by whichever
+// pass it belongs to: an approved row by the submit pass, an unreviewed one with a tailored
+// CV by the preview pass (resolved_preview is dropped for it), and a row with no tailored CV
+// by nothing here — the caller re-publishes auto-apply/submit for that one, which is why
+// tailored_cv_id comes back.
+//
+// Never re-arms a decline (the candidate's own terminal answer) or a submission that may
+// already have reached the employer (submit_uncertain_at). pgx.ErrNoRows means not owned,
+// not found, or not retryable; the caller reads the row first to say which.
+//
+// Records `retried` in the same statement: the history trigger only names transitions INTO
+// a state, and clearing markers is the one write it cannot tell from any other.
+func (q *Queries) RetryAutoApplyEntry(ctx context.Context, arg RetryAutoApplyEntryParams) (RetryAutoApplyEntryRow, error) {
+	row := q.db.QueryRow(ctx, retryAutoApplyEntry, arg.ID, arg.UserID)
+	var i RetryAutoApplyEntryRow
+	err := row.Scan(&i.ID, &i.TailoredCvID)
 	return i, err
 }
 

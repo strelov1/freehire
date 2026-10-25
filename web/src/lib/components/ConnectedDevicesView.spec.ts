@@ -8,8 +8,12 @@ const {
   revokeOAuthGrant,
   reauthenticatePassword,
   connectedIdentities,
+  getAgentPermissions,
+  setAgentPermissions,
   user,
 } = vi.hoisted(() => ({
+  getAgentPermissions: vi.fn(),
+  setAgentPermissions: vi.fn(),
   listOAuthGrants: vi.fn(),
   revokeOAuthGrant: vi.fn(),
   reauthenticatePassword: vi.fn(),
@@ -31,7 +35,14 @@ const { StubApiError } = vi.hoisted(() => ({
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
 vi.mock('#lib/api.js', () => ({
-  api: { listOAuthGrants, revokeOAuthGrant, reauthenticatePassword, connectedIdentities },
+  api: {
+    listOAuthGrants,
+    revokeOAuthGrant,
+    reauthenticatePassword,
+    connectedIdentities,
+    getAgentPermissions,
+    setAgentPermissions,
+  },
   ApiError: StubApiError,
 }));
 vi.mock('#lib/auth.svelte.js', () => ({
@@ -69,9 +80,24 @@ beforeEach(() => {
   revokeOAuthGrant.mockReset().mockResolvedValue(undefined);
   reauthenticatePassword.mockReset().mockResolvedValue('2099-01-01T00:00:00Z');
   connectedIdentities.mockReset().mockResolvedValue({ has_password: false, identities: [] });
+  getAgentPermissions.mockReset().mockResolvedValue({ agents_may_apply: false });
+  setAgentPermissions.mockReset().mockImplementation(async (p) => p);
 });
 
 describe('ConnectedDevicesView', () => {
+  it('turns on letting connected agents apply, starting from the stored setting', async () => {
+    signedIn(true);
+    render(ConnectedDevicesView);
+    const toggle = await screen.findByRole('switch', { name: /let connected agents apply/i });
+    await vi.waitFor(() => expect((toggle as HTMLButtonElement).disabled).toBe(false));
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+
+    await fireEvent.click(toggle);
+
+    expect(setAgentPermissions).toHaveBeenCalledWith({ agents_may_apply: true });
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+  });
+
   it('renders an empty state when there are no grants', async () => {
     signedIn(true);
     listOAuthGrants.mockResolvedValue([]);

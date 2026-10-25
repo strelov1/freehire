@@ -830,6 +830,7 @@ func Register(app *fiber.App, cfg Config) {
 	if p := newInngestEventPublisher(cfg.InngestEventAPIURL, cfg.InngestEventKey); p != nil {
 		assistantH.events = p
 	}
+	assistantH.answerBank = answerBank
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	// The autofill planner is one cheap structured call per run, so it travels on the
@@ -1089,6 +1090,7 @@ func Register(app *fiber.App, cfg Config) {
 	autofillH.register(api, mw)
 	// The bank's own management surface: list, save, delete (see me_answer_bank.go).
 	answerBankH.register(api, mw)
+	(&agentPermissionHandlers{queries: queries}).register(api, mw)
 	// The browser-tool wire: a harness on one end, the caller's browser extension
 	// on the other, exchanging raw tool frames. Both ends authenticate with the
 	// session JWT (Bearer for a server-side harness, the subprotocol for the

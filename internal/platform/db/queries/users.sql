@@ -607,3 +607,10 @@ WHERE id = $1;
 UPDATE users
 SET onboarding_completed_at = now()
 WHERE id = $1 AND onboarding_completed_at IS NULL;
+
+-- name: GetAgentsMayApply :one
+-- Whether a connected MCP agent may act on this account's auto-apply attempts (migration 0196).
+SELECT agents_may_apply FROM users WHERE id = sqlc.arg(id);
+
+-- name: SetAgentsMayApply :exec
+UPDATE users SET agents_may_apply = sqlc.arg(agents_may_apply) WHERE id = sqlc.arg(id);

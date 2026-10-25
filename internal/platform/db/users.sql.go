@@ -131,6 +131,18 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
+const getAgentsMayApply = `-- name: GetAgentsMayApply :one
+SELECT agents_may_apply FROM users WHERE id = $1
+`
+
+// Whether a connected MCP agent may act on this account's auto-apply attempts (migration 0196).
+func (q *Queries) GetAgentsMayApply(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, getAgentsMayApply, id)
+	var agents_may_apply bool
+	err := row.Scan(&agents_may_apply)
+	return agents_may_apply, err
+}
+
 const getTalentNetworkMemberByHandle = `-- name: GetTalentNetworkMemberByHandle :one
 SELECT u.talent_handle,
        u.timezone,
@@ -907,6 +919,20 @@ func (q *Queries) SeizeUnverifiedAccount(ctx context.Context, id int64) (int32, 
 	var token_version int32
 	err := row.Scan(&token_version)
 	return token_version, err
+}
+
+const setAgentsMayApply = `-- name: SetAgentsMayApply :exec
+UPDATE users SET agents_may_apply = $1 WHERE id = $2
+`
+
+type SetAgentsMayApplyParams struct {
+	AgentsMayApply bool  `json:"agents_may_apply"`
+	ID             int64 `json:"id"`
+}
+
+func (q *Queries) SetAgentsMayApply(ctx context.Context, arg SetAgentsMayApplyParams) error {
+	_, err := q.db.Exec(ctx, setAgentsMayApply, arg.AgentsMayApply, arg.ID)
+	return err
 }
 
 const setTalentHandleIfUnset = `-- name: SetTalentHandleIfUnset :execrows

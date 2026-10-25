@@ -171,25 +171,36 @@ type AssistantSession struct {
 	CvID      *uuid.UUID         `json:"cv_id"`
 }
 
+type AutoApplyEvent struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	JobID     int64              `json:"job_id"`
+	QueueID   int64              `json:"queue_id"`
+	Kind      string             `json:"kind"`
+	Detail    []byte             `json:"detail"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type AutoApplyQueue struct {
-	ID              int64              `json:"id"`
-	UserID          int64              `json:"user_id"`
-	JobID           int64              `json:"job_id"`
-	Attempts        int32              `json:"attempts"`
-	ClaimedAt       pgtype.Timestamptz `json:"claimed_at"`
-	FailedAt        pgtype.Timestamptz `json:"failed_at"`
-	BlockedAt       pgtype.Timestamptz `json:"blocked_at"`
-	LastError       string             `json:"last_error"`
-	Unmapped        []byte             `json:"unmapped"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	TailoredCvID    *uuid.UUID         `json:"tailored_cv_id"`
-	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
-	ReviewDecision  pgtype.Text        `json:"review_decision"`
-	ResolvedPreview []byte             `json:"resolved_preview"`
-	PreviewAttempts int32              `json:"preview_attempts"`
-	PreviewFailedAt pgtype.Timestamptz `json:"preview_failed_at"`
-	TailorFailedAt  pgtype.Timestamptz `json:"tailor_failed_at"`
-	CaptchaAttempts int32              `json:"captcha_attempts"`
+	ID                int64              `json:"id"`
+	UserID            int64              `json:"user_id"`
+	JobID             int64              `json:"job_id"`
+	Attempts          int32              `json:"attempts"`
+	ClaimedAt         pgtype.Timestamptz `json:"claimed_at"`
+	FailedAt          pgtype.Timestamptz `json:"failed_at"`
+	BlockedAt         pgtype.Timestamptz `json:"blocked_at"`
+	LastError         string             `json:"last_error"`
+	Unmapped          []byte             `json:"unmapped"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	TailoredCvID      *uuid.UUID         `json:"tailored_cv_id"`
+	ReviewedAt        pgtype.Timestamptz `json:"reviewed_at"`
+	ReviewDecision    pgtype.Text        `json:"review_decision"`
+	ResolvedPreview   []byte             `json:"resolved_preview"`
+	PreviewAttempts   int32              `json:"preview_attempts"`
+	PreviewFailedAt   pgtype.Timestamptz `json:"preview_failed_at"`
+	TailorFailedAt    pgtype.Timestamptz `json:"tailor_failed_at"`
+	CaptchaAttempts   int32              `json:"captcha_attempts"`
+	SubmitUncertainAt pgtype.Timestamptz `json:"submit_uncertain_at"`
 }
 
 type BillingEvent struct {
@@ -1493,6 +1504,7 @@ type User struct {
 	LimitNudgeSentAt   pgtype.Timestamptz `json:"limit_nudge_sent_at"`
 	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
 	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
+	AgentsMayApply     bool               `json:"agents_may_apply"`
 }
 
 type UserEmailCode struct {

@@ -14,9 +14,19 @@ import (
 // accountServerInstructions tells the model this surface acts as a specific,
 // already-authenticated person — the opposite framing from serverInstructions
 // above, which warns an anonymous aggregator view apart from the catalogue.
+//
+// The auto-apply paragraph is the order the tools only work in: an agent that starts an
+// attempt and stops there leaves it waiting for a review nobody gives, and one that answers a
+// question without retrying leaves it parked.
 const accountServerInstructions = "This server acts as the signed-in freehire account that " +
 	"approved this connection. Tools read and change that account's own saved jobs, " +
-	"applications, and tracking board — never another account's."
+	"applications, and tracking board — never another account's. " +
+	"Automatic applications: auto_apply_start begins one; follow it with auto_apply_get, whose " +
+	"next_step says what to do. When it stops on questions, ask the person, save their answers " +
+	"with answer_bank_save or screening_answers_set, then call auto_apply_retry. When it reaches " +
+	"pending_review, show the person what will be sent and record their decision with " +
+	"auto_apply_review. Answers you save are sent to employers in the person's name — never " +
+	"invent one."
 
 // NewAccountServer builds the per-request signed-in MCP server for one resolved
 // user. tools is the caller's assistantDiscoveryTools() + assistantTrackingTools()

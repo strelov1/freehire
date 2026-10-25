@@ -91,6 +91,19 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"apply_job":   assistant.EffectAdds,
 		"unsave_job":  assistant.EffectOverwrites,
 		"track_job":   assistant.EffectOverwrites,
+
+		"auto_apply_list":       assistant.EffectReads,
+		"auto_apply_get":        assistant.EffectReads,
+		"answer_bank_list":      assistant.EffectReads,
+		"screening_answers_get": assistant.EffectReads,
+		"auto_apply_start":      assistant.EffectAdds,
+		// Approving sends a real application in the person's name; a client should ask.
+		"auto_apply_review":     assistant.EffectOverwrites,
+		"auto_apply_retry":      assistant.EffectOverwrites,
+		"auto_apply_cancel":     assistant.EffectOverwrites,
+		"answer_bank_save":      assistant.EffectOverwrites,
+		"answer_bank_delete":    assistant.EffectOverwrites,
+		"screening_answers_set": assistant.EffectOverwrites,
 	}
 	for _, tool := range mcpAccountTools(&assistantHandlers{}) {
 		effect, known := want[tool.Name]

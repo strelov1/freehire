@@ -3,6 +3,7 @@ package autoapply
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -24,6 +25,7 @@ type fakeStore struct {
 	failedCaptcha  []int64
 	failCaptchaMax int
 	failErr        error
+	uncertain      []int64
 }
 
 func (f *fakeStore) Claim(ctx context.Context, batch, leaseSeconds int) ([]Claimed, error) {
@@ -80,6 +82,15 @@ func (f *fakeStore) Fail(ctx context.Context, queueID int64, errMsg string, maxA
 	f.failMax = maxAttempts
 	f.failMsg = errMsg
 	return f.failAttempts[queueID] >= maxAttempts, nil
+}
+
+func (f *fakeStore) DeadLetterUncertain(ctx context.Context, queueID int64, reason string) error {
+	if f.failErr != nil {
+		return f.failErr
+	}
+	f.uncertain = append(f.uncertain, queueID)
+	f.failMsg = reason
+	return nil
 }
 
 type fakeAnswers struct {
@@ -243,8 +254,9 @@ func TestRunDeadLettersImmediatelyWhenRecordingASuccessfulSubmitFails(t *testing
 	if stats.DeadLettered != 1 {
 		t.Errorf("DeadLettered = %d, want 1 — a lost post-submit record must never be silently retried", stats.DeadLettered)
 	}
-	if got := store.failAttempts[5]; got != 1 {
-		t.Errorf("Fail called %d times for the lost record, want exactly 1 (forced dead-letter, not the normal retry budget)", got)
+	if !slices.Equal(store.uncertain, []int64{5}) || store.failAttempts[5] != 0 {
+		t.Errorf("uncertain=%v Fail calls=%d, want DeadLetterUncertain once and no ordinary Fail — a retry could submit twice",
+			store.uncertain, store.failAttempts[5])
 	}
 }
 
@@ -267,8 +279,9 @@ func TestRunDeadLettersImmediatelyOnAnUnconfirmedSubmission(t *testing.T) {
 	if len(store.submitted) != 0 {
 		t.Error("Store.Submit must not be called for an unconfirmed result — it is not a known success")
 	}
-	if got := store.failAttempts[6]; got != 1 {
-		t.Errorf("Fail called %d times, want exactly 1 (forced dead-letter, not the normal retry budget)", got)
+	if !slices.Equal(store.uncertain, []int64{6}) || store.failAttempts[6] != 0 {
+		t.Errorf("uncertain=%v Fail calls=%d, want DeadLetterUncertain once and no ordinary Fail — a retry could submit twice",
+			store.uncertain, store.failAttempts[6])
 	}
 }
 

@@ -163,6 +163,11 @@ type Store interface {
 	// entry with 12 captcha refusals was dead-lettered by the first field fill that
 	// timed out. Same separation RecordAutoApplyPreviewFailure already makes.
 	FailCaptcha(ctx context.Context, queueID int64, errMsg string, maxAttempts int) (deadLettered bool, err error)
+	// DeadLetterUncertain dead-letters an attempt whose submission may already have
+	// reached the employer, and marks it so (auto_apply_queue.submit_uncertain_at). The
+	// mark is what keeps a candidate's retry from re-arming it: Fail at its last attempt
+	// looks identical to an ordinary exhausted budget, which IS safe to retry.
+	DeadLetterUncertain(ctx context.Context, queueID int64, reason string) error
 }
 
 // RunOptions are the per-run knobs, the same shape internal/applyform's RunOptions takes.
@@ -297,14 +302,14 @@ func (rn *run) recordApplied(ctx context.Context, c Claimed) outbox.Outcome {
 	return rn.deadLetterImmediately(ctx, c, fmt.Sprintf("submitted but failed to record: %v", err))
 }
 
-// deadLetterImmediately forces a dead-letter (maxAttempts=1) rather than spending the run's
+// deadLetterImmediately forces a dead-letter rather than spending the run's
 // configured retry budget — the shared ending for every outcome where retrying normally
 // risks a second real submission to the employer: a lost post-submit record
 // (recordApplied) and an unconfirmed submission (process's StatusUnconfirmed case) both
 // land here. The row never becomes reclaimable again; it surfaces as work a human must look
 // at, not as a queue that quietly retries its way into a duplicate application.
 func (rn *run) deadLetterImmediately(ctx context.Context, c Claimed, reason string) outbox.Outcome {
-	if _, failErr := rn.store.Fail(ctx, c.QueueID, reason, 1); failErr != nil {
+	if failErr := rn.store.DeadLetterUncertain(ctx, c.QueueID, reason); failErr != nil {
 		// The write that was supposed to make this row terminal did not happen: it
 		// stays claimed, its lease still runs out on its own, and a later run can
 		// reclaim it as an ordinary pending attempt — reopening exactly the "might

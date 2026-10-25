@@ -71,6 +71,7 @@ import type {
   ApiPlan,
   CreatedApiKey,
   OAuthGrant,
+  AgentPermissions,
   WebhookConfig,
   ConnectedIdentities,
   SavedSearch,
@@ -1445,6 +1446,32 @@ export function createApi(
       `/api/v1/me/auto-apply/${encodeURIComponent(queueId)}/review`,
       jsonBody('POST', { decision }),
     );
+  }
+
+  /** Re-arm a stopped auto-apply attempt on this job — parked on a question, failed, or
+   *  unable to tailor — or refresh the answer preview of one awaiting review. Rejects with an
+   *  ApiError (404 no attempt, 409 not retryable) whose `message` says why. */
+  function retryAutoApply(slug: string): Promise<{ retried: boolean }> {
+    return requestData<{ retried: boolean }>(`/api/v1/jobs/${encodeURIComponent(slug)}/auto-apply/retry`, {
+      method: 'POST',
+    });
+  }
+
+  /** Withdraw the auto-apply attempt on this job. Rejects with an ApiError (404 no attempt,
+   *  409 being submitted right now). */
+  function cancelAutoApply(slug: string): Promise<{ cancelled: boolean }> {
+    return requestData<{ cancelled: boolean }>(`/api/v1/jobs/${encodeURIComponent(slug)}/auto-apply`, {
+      method: 'DELETE',
+    });
+  }
+
+  function getAgentPermissions(): Promise<AgentPermissions> {
+    return requestData<AgentPermissions>('/api/v1/me/agent-permissions');
+  }
+
+  /** Cookie-only on the server: no credential an agent holds may grant itself this. */
+  function setAgentPermissions(p: AgentPermissions): Promise<AgentPermissions> {
+    return requestData<AgentPermissions>('/api/v1/me/agent-permissions', jsonBody('PUT', p));
   }
 
   /** Save the candidate's answer to one screening question into their answer bank, so it
@@ -3228,6 +3255,10 @@ export function createApi(
     unsaveJob,
     autoApplyJob,
     reviewAutoApply,
+    retryAutoApply,
+    cancelAutoApply,
+    getAgentPermissions,
+    setAgentPermissions,
     saveBankedAnswer,
     listBankedAnswers,
     deleteBankedAnswer,

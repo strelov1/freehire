@@ -135,27 +135,54 @@ func firstEligibilityBlocker(blockers []hardconstraint.Blocker) (hardconstraint.
 // PostJobAutoApply is the candidate-facing trigger auto-apply-tailored-resume and
 // auto-apply-inngest-orchestration both assumed would exist: it creates one durable
 // auto-apply attempt for the caller and the named job, starting the already-built
-// tailor-then-review sequence. Cookie-only (mw.cookie, never mw.key) — the same "the
-// browser is the only place the candidate can watch it happen and undo it" reasoning
+// tailor-then-review sequence. Cookie-only (mw.cookie, never mw.key) — the same
+// "the browser is the only place the candidate can watch it happen and undo it" reasoning
 // /autopilot already uses, at higher stakes here: a fresh entry can end in a REAL
-// submitted job application, not only an unattended CV rewrite.
-//
-// Gates, in order: the job must be a Greenhouse posting, the caller must already have a base
-// CV, the pair must not already be applied to, and the caller must have auto-apply allowance
-// left today. The allowance is LAST so that everything a request can be refused for on other
-// grounds costs nothing — and it is where the old "must be on the PRO tier" check went, since
-// free is configured to no allowance at all. A repeat request for a pair that
-// already has a live, undecided entry succeeds without creating a second row; a repeat for
-// a pair whose entry was already declined by the candidate is refused permanently.
+// submitted job application, not only an unattended CV rewrite. The one other door is the
+// signed-in MCP server, and only for an account that switched agents_may_apply on from
+// this same browser session (openspec/changes/auto-apply-over-mcp).
 func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
+	var refused *autoApplyAllowanceRefusal
+	switch err := h.startAutoApply(c.Context(), userID, c.Params("slug")); {
+	case errors.As(err, &refused):
+		return refuse(c, refused.decision)
+	case err != nil:
+		return err
+	}
+	return autoApplyQueuedResponse(c)
+}
 
-	job, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
+// autoApplyAllowanceRefusal is startAutoApply's answer when the day's allowance is spent. A
+// type of its own rather than a fiber.Error because the browser renders it as the 402 body
+// every plan refusal shares — figures, reset time, upgrade link — while an agent reads only
+// the sentence.
+type autoApplyAllowanceRefusal struct{ decision plan.Decision }
+
+func (r *autoApplyAllowanceRefusal) Error() string {
+	return refusalMessage(r.decision.Feature, r.decision.FairUse, planIncludes(viewDecision(r.decision)))
+}
+
+// startAutoApply creates one auto-apply attempt for userID and the job behind slug, or
+// reports why it may not. The route and the MCP tool both call it, so the gates cannot
+// differ between them.
+//
+// Gates, in order: the job must be on an ATS auto-apply can queue against, the caller must
+// already have a base CV, the pair must not already be applied to, and the caller must have
+// auto-apply allowance left today. The allowance is LAST so that everything a request can be
+// refused for on other grounds costs nothing — and it is where the old "must be on the PRO
+// tier" check went, since free is configured to no allowance at all. A repeat request for a
+// pair that already has a live, undecided entry succeeds without creating a second row; a
+// repeat for a pair whose entry was already declined by the candidate is refused permanently.
+//
+// An unknown slug comes back as pgx.ErrNoRows, which the HTTP path renders as 404.
+func (h *assistantHandlers) startAutoApply(ctx context.Context, userID int64, slug string) error {
+	job, err := h.queries.GetJobBySlug(ctx, slug)
 	if err != nil {
-		return err // pgx.ErrNoRows -> 404, per RenderError's own mapping
+		return err
 	}
 	if !autoApplyEnqueueSources[job.Source] {
 		return fiber.NewError(fiber.StatusBadRequest, "auto-apply cannot queue an attempt against this posting's ATS")
@@ -164,7 +191,7 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 	if h.cv == nil || h.cv.cvStore == nil {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
-	if _, ok, err := h.cv.cvStore.BaseCV(c.Context(), userID); err != nil {
+	if _, ok, err := h.cv.cvStore.BaseCV(ctx, userID); err != nil {
 		return err
 	} else if !ok {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before using auto-apply")
@@ -174,7 +201,7 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 	// marks the job applied (applications.applied_at, via MarkJobApplied), so a completed
 	// attempt leaves no queue row behind for EnqueueAutoApply's own ON CONFLICT to catch —
 	// without this check a re-click after a real submission would start a second one.
-	if applied, err := h.queries.GetUserJobApplied(c.Context(), db.GetUserJobAppliedParams{
+	if applied, err := h.queries.GetUserJobApplied(ctx, db.GetUserJobAppliedParams{
 		UserID: userID, JobID: pgtype.Int8{Int64: job.ID, Valid: true},
 	}); err != nil {
 		return err
@@ -185,9 +212,8 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 	// Eligibility gate (openspec/changes/add-auto-apply-eligibility-gate): refuse — or, in
 	// shadow mode, merely log — enqueueing a pair the candidate's own known
 	// work-authorization or location evidence positively conflicts with. Runs before the
-	// allowance charge, like every other gate in this handler, so a refused request costs
-	// nothing.
-	if b, mismatched := h.eligibilityBlocker(c.Context(), userID, job); mismatched {
+	// allowance charge, like every other gate here, so a refused request costs nothing.
+	if b, mismatched := h.eligibilityBlocker(ctx, userID, job); mismatched {
 		enforced := autoApplyEligibilityEnforce()
 		// Logged in both modes — tagged by category — so the false-positive rate among
 		// Pro candidates can be read from shadow-mode logs before enforcement is flipped
@@ -202,35 +228,31 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 		}
 	}
 
-	// The allowance, and it replaces the plan-tier check this route used to make: free is
-	// configured to nothing, so "auto-apply is a PRO feature" is now the ordinary refusal
-	// with the day's figures attached rather than a sentence carrying no numbers.
-	//
-	// LAST of the gates, so a request refused for an unsupported platform, a missing CV or an
-	// application already sent spends nothing.
+	// The allowance, LAST of the gates, so a request refused for an unsupported platform, a
+	// missing CV or an application already sent spends nothing.
 	//
 	// Charged BEFORE anything is created and keyed by the POSTING. Consume is idempotent by
 	// its reference, so a double-clicked button reads as already charged and costs one
 	// attempt rather than two — and so does a retry after a database error. Charging after
 	// the queue write instead would have to key on the queue row's id, which a repeat request
 	// never gets, so the second click would charge again.
-	if refused, err := h.chargeAutoApply(c, userID, job.ID); err != nil || refused {
+	if err := h.chargeAutoApply(ctx, userID, job.ID); err != nil {
 		return err
 	}
 
-	h.ensureTrackedForAutoApply(c.Context(), userID, job)
+	h.ensureTrackedForAutoApply(ctx, userID, job)
 
-	id, err := h.queries.EnqueueAutoApply(c.Context(), db.EnqueueAutoApplyParams{UserID: userID, JobID: job.ID})
+	id, err := h.queries.EnqueueAutoApply(ctx, db.EnqueueAutoApplyParams{UserID: userID, JobID: job.ID})
 	switch {
 	case err == nil:
 		// This request's own INSERT won the race — it is the only caller that may ever
 		// publish for this entry (see design.md: publishing on every request, including
 		// an idempotent replay that touched no row, would let the orchestrator's executor
 		// see the same auto-apply/submit more than once for one entry).
-		h.publishSubmit(c.Context(), id)
-		return autoApplyQueuedResponse(c)
+		h.publishSubmit(ctx, id)
+		return nil
 	case errors.Is(err, pgx.ErrNoRows):
-		existing, ferr := h.queries.GetAutoApplyQueueEntryForJob(c.Context(), db.GetAutoApplyQueueEntryForJobParams{
+		existing, ferr := h.queries.GetAutoApplyQueueEntryForJob(ctx, db.GetAutoApplyQueueEntryForJobParams{
 			UserID: userID, JobID: job.ID,
 		})
 		if ferr != nil {
@@ -242,18 +264,23 @@ func (h *assistantHandlers) PostJobAutoApply(c *fiber.Ctx) error {
 		case autoApplyStatusFailed:
 			// cmd/auto-apply gave up on this entry (dead-lettered or parked on an
 			// unresolvable form field) — reporting "queued" here would tell the
-			// candidate their attempt is still in flight when it is permanently stuck.
-			return fiber.NewError(fiber.StatusConflict, "this auto-apply attempt could not be completed")
+			// candidate their attempt is still in flight when it is stuck. It is
+			// retryable, which is the way forward this names.
+			return fiber.NewError(fiber.StatusConflict, autoApplyStuckMessage)
 		default:
 			// A live, undecided entry already exists (the common "page reload, a second
 			// tab" case per design.md) — reporting success without a second row is the
 			// intended idempotent behavior, not a fault to log.
-			return autoApplyQueuedResponse(c)
+			return nil
 		}
 	default:
 		return err
 	}
 }
+
+// autoApplyStuckMessage answers a start request for a pair whose attempt stopped. It names
+// retry because that is now the way forward; before retry existed the same state was final.
+const autoApplyStuckMessage = "this auto-apply attempt stopped — retry it rather than starting a new one"
 
 // ensureTrackedForAutoApply puts job on the caller's tracker board at stage `preparing`
 // when it is not there already (openspec/changes/auto-apply-review-tracking) — otherwise an
@@ -282,7 +309,7 @@ func (h *assistantHandlers) ensureTrackedForAutoApply(ctx context.Context, userI
 }
 
 // chargeAutoApply spends one unit of the caller's daily auto-apply allowance for this
-// posting, and reports whether the request was refused.
+// posting. A spent allowance comes back as *autoApplyAllowanceRefusal.
 //
 // The reference is the POSTING's id, which makes the charge idempotent for the pair by
 // construction: a second request for the same job reads as already charged and costs
@@ -293,20 +320,20 @@ func (h *assistantHandlers) ensureTrackedForAutoApply(ctx context.Context, userI
 // model call whose cost we absorb. Here the action drives a browser and submits a real
 // application to a real employer under somebody's name, so an unmeasured one is not a
 // rounding error — the honest answer to "we could not tell whether you may" is to say so.
-func (h *assistantHandlers) chargeAutoApply(c *fiber.Ctx, userID, jobID int64) (bool, error) {
+func (h *assistantHandlers) chargeAutoApply(ctx context.Context, userID, jobID int64) error {
 	if h.plans == nil {
-		return false, fiber.NewError(fiber.StatusServiceUnavailable, "auto-apply is not available")
+		return fiber.NewError(fiber.StatusServiceUnavailable, "auto-apply is not available")
 	}
 
 	ref := "job:" + strconv.FormatInt(jobID, 10)
-	d, err := h.plans.Consume(c.Context(), userID, plan.FeatureAutoApply, ref)
+	d, err := h.plans.Consume(ctx, userID, plan.FeatureAutoApply, ref)
 	switch {
 	case err == nil:
-		return false, nil
+		return nil
 	case isRefusal(err):
-		return true, refuse(c, d)
+		return &autoApplyAllowanceRefusal{decision: d}
 	default:
 		log.Printf("plan: charging an auto-apply for user %d on job %d: %v", userID, jobID, err)
-		return true, fiber.NewError(fiber.StatusServiceUnavailable, "auto-apply is not available")
+		return fiber.NewError(fiber.StatusServiceUnavailable, "auto-apply is not available")
 	}
 }

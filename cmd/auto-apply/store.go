@@ -124,6 +124,12 @@ func (s *dbStore) Fail(ctx context.Context, queueID int64, errMsg string, maxAtt
 	return row.FailedAt.Valid, nil
 }
 
+// DeadLetterUncertain dead-letters an attempt the employer may already hold and marks it so,
+// which is what RetryAutoApplyEntry refuses on (migration 0196).
+func (s *dbStore) DeadLetterUncertain(ctx context.Context, queueID int64, reason string) error {
+	return s.q.MarkAutoApplySubmitUncertain(ctx, db.MarkAutoApplySubmitUncertainParams{ID: queueID, LastError: reason})
+}
+
 // FailCaptcha is Fail's counterpart for the one refusal safe to retry, on captcha_attempts
 // rather than Fail's attempts (migration 0157). It shares failed_at: running out of asks is
 // still the entry giving up, and the candidate is told the same way. Separating the counter

@@ -42,6 +42,7 @@ func mountMCPAccount(api fiber.Router, mw middleware, assistants *assistantHandl
 // search_jobs already hands it.
 func mcpAccountTools(assistants *assistantHandlers) []assistant.Tool {
 	all := append(assistants.assistantDiscoveryTools(), assistants.assistantTrackingTools()...)
+	all = append(all, assistants.autoApplyMCPTools()...)
 	return slices.DeleteFunc(all, func(t assistant.Tool) bool { return t.Name == presentJobsToolName })
 }
 

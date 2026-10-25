@@ -190,6 +190,15 @@ is `EffectOverwrites` on purpose: a tool that declares nothing is announced as o
 lose data. `TestMCPAccountTools_DeclareTheirEffect` walks the set the mount actually serves,
 so a tool joining it must be classified there.
 
+The account server also serves auto-apply and the screening answers
+(`internal/api/handler/assistant_auto_apply_tools.go`, openspec/changes/auto-apply-over-mcp):
+start, list, get, review, retry and cancel an attempt, plus the answer bank and the six typed
+screening facts. The four that ACT on an attempt refuse unless the account turned on
+`users.agents_may_apply`, which only a browser session can write — reading never needs it.
+An answer saved here is the CANDIDATE's (`answerbank.AuthorCandidate`, so it is sent): this
+server only ever acts for the person who approved the connection. `accountServerInstructions`
+spells out the order the tools only work in.
+
 `present_jobs` is NOT served there (`mcpAccountTools`). It draws cards in our own chat UI and
 its description tells the model never to write a job link; in a client with no card renderer
 a model obeying it showed the person no vacancies at all.

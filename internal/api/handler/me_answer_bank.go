@@ -48,6 +48,11 @@ func (h *answerBankHandlers) ListAnswers(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	return c.JSON(fiber.Map{"data": toBankedAnswerResponses(answers)})
+}
+
+// toBankedAnswerResponses renders the bank for the wire; the route and the MCP tool share it.
+func toBankedAnswerResponses(answers []answerbank.Answer) []bankedAnswerResponse {
 	out := make([]bankedAnswerResponse, 0, len(answers))
 	for _, a := range answers {
 		out = append(out, bankedAnswerResponse{
@@ -55,7 +60,7 @@ func (h *answerBankHandlers) ListAnswers(c *fiber.Ctx) error {
 			Provenance: a.Provenance, UpdatedAt: a.UpdatedAt.UTC(),
 		})
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return out
 }
 
 // saveAnswerRequest is what the review screen and the CLI both send.
@@ -79,7 +84,14 @@ func (h *answerBankHandlers) SaveAnswer(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 
-	err = h.bank.Save(c.Context(), userID, in.Question, in.Answer, answerbank.AuthorCandidate)
+	if err := bankSaveError(h.bank.Save(c.Context(), userID, in.Question, in.Answer, answerbank.AuthorCandidate)); err != nil {
+		return err
+	}
+	return c.JSON(fiber.Map{"data": fiber.Map{"saved": true}})
+}
+
+// bankSaveError names a refused save for the caller; the route and the MCP tool share it.
+func bankSaveError(err error) error {
 	switch {
 	case errors.Is(err, answerbank.ErrEmptyAnswer):
 		return fiber.NewError(fiber.StatusBadRequest, "the answer is empty")
@@ -87,10 +99,8 @@ func (h *answerBankHandlers) SaveAnswer(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "this question cannot be saved — it has no readable text")
 	case errors.Is(err, answerbank.ErrTooLong):
 		return fiber.NewError(fiber.StatusBadRequest, "this answer is too long for a screening question")
-	case err != nil:
-		return err
 	}
-	return c.JSON(fiber.Map{"data": fiber.Map{"saved": true}})
+	return err
 }
 
 // DeleteAnswer removes one of the caller's own answers. Nothing else ever removes from the

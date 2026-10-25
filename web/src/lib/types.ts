@@ -965,6 +965,15 @@ export interface AutoApplyReviewInfo {
   queue_id: number;
   resolved_preview?: AutoApplyResolvedPreview;
   unmapped?: AutoApplyUnmappedField[];
+  /** Set on a `failed` attempt the employer may already hold. Such an attempt is never
+   *  retried — the server refuses — so no surface offers it. */
+  may_have_reached_employer?: boolean;
+}
+
+/** What a connected MCP agent may do beyond reading and tracking. */
+export interface AgentPermissions {
+  /** Whether a connected agent may start, review, retry and cancel auto-apply attempts. */
+  agents_may_apply: boolean;
 }
 
 /** One answer the candidate has banked for a screening question. */

@@ -40,7 +40,7 @@
   import { autoApplyReviewBanner } from '#lib/autoApplyReview.js';
   import { autoApplyProgressSteps, type AutoApplyProgressStepId } from '#lib/autoApplyProgress.js';
   import { isAutoApplyPaused, setAutoApplyPaused } from '#lib/autoApplyPauseStorage.js';
-  import { hasVisibleRows, pendingRows } from '#lib/answerBank.js';
+  import { hasVisibleRows, pendingRows, type PendingAnswerRow } from '#lib/answerBank.js';
   import { messages } from './JobDrawer.messages';
   import { format, plural, t } from '#lib/i18n/t.js';
 
@@ -247,6 +247,43 @@
       bankSaving = null;
     }
   }
+  // The questions a submission attempt parked on, answerable the same way as the review's
+  // pending ones: save the answer to the bank, then try again (openspec/changes/
+  // auto-apply-over-mcp). Only one banner renders at a time, so the two lists share the
+  // drafts below without their position keys colliding.
+  const blockedQuestions = $derived(
+    pendingRows(autoApply?.unmapped?.map((u) => ({ label: u.label, will_draft_at_submission: false }))),
+  );
+  const showsBlockedList = $derived(hasVisibleRows(blockedQuestions));
+
+  // Retry re-arms a stopped attempt (or refreshes a review's preview after answers were
+  // saved); cancel withdraws one. Both re-read the attempt afterwards rather than guessing
+  // its next status — a retry can land on any of three, depending on where it stopped.
+  let autoApplyActing = $state(false);
+  async function actOnAutoApply(act: (slug: string) => Promise<unknown>, failed: string) {
+    if (!item.job || autoApplyActing) return;
+    autoApplyActing = true;
+    autoApplyError = null;
+    try {
+      await act(item.job.public_slug);
+      bankSaved = {};
+      // Read directly rather than through loadEmails, which returns early while its own
+      // load is in flight and would leave the pre-action status on screen.
+      const app = await api.getTrackedApplication(item.job.public_slug);
+      autoApply = app.auto_apply ?? null;
+      events = app.events ?? [];
+      // A cancel takes the Progress tab away with the attempt; stay on a tab that exists.
+      if (tab === 'auto_apply' && !autoApply && !autoApplied) tab = 'application';
+    } catch (e) {
+      autoApplyError = errorMessage(e, failed);
+    } finally {
+      autoApplyActing = false;
+    }
+  }
+  const retryAutoApply = () => actOnAutoApply(api.retryAutoApply, s.retryFailed);
+  const cancelAutoApply = () => actOnAutoApply(api.cancelAutoApply, s.cancelFailed);
+  const savedAnyAnswer = $derived(Object.values(bankSaved).some(Boolean));
+
   // The full posting. The listing serves a card — employer, role, and the facets a row draws —
   // because carrying every description was 84% of its payload for text no row renders. The
   // panel is the one place that wants the posting, and it already makes this request for the
@@ -408,6 +445,56 @@
     );
   const sectionLabel = 'text-sm font-medium text-muted-foreground';
 </script>
+
+{#snippet answerList(rows: PendingAnswerRow[])}
+<ul class="flex flex-col gap-2 text-xs text-muted-foreground">
+  {#each rows as row (row.key)}
+    {#if row.kind === 'draft'}
+      <li>{format(s.willBeFilledAutomatically, { label: row.pending.label })}</li>
+    {:else if row.kind === 'blocked'}
+      <!-- A work-authorization question: the bank refuses to recall an
+           answer for it (the correct one depends on this posting's own
+           country), and offering an input would only collect one it could
+           never safely reuse. Plain text, distinct in wording and color from
+           both the "filled automatically" row above and an answerable
+           question's input below, so the candidate sees what is blocking
+           the application instead of nothing at all. -->
+      <li class="text-warning-strong">
+        {format(s.cannotAnswerForYou, { label: row.pending.label })}
+      </li>
+    {:else if row.kind === 'answerable'}
+      <li class="flex flex-col gap-1">
+        <label class="text-foreground" for={`bank-${row.key}`}>{row.pending.label}</label>
+        <div class="flex items-start gap-2">
+          <!-- A textarea, not an input: the bound is 2000 characters, and a
+               single-line control collects a paragraph the writer cannot
+               re-read. -->
+          <textarea
+            id={`bank-${row.key}`}
+            rows="2"
+            maxlength="2000"
+            class="min-w-0 flex-1 resize-y rounded-md border border-border bg-background px-2 py-1"
+            bind:value={bankDrafts[row.key]}
+            placeholder={s.answerPlaceholder}
+          ></textarea>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={bankSaving !== null || !bankDrafts[row.key]?.trim()}
+            onclick={() => saveBankedAnswer(row.key, row.pending.label)}
+          >
+            {s.save}
+          </Button>
+        </div>
+        {#if bankSaved[row.key]}
+          <span class="text-brand-strong">{s.savedToBank}</span>
+        {/if}
+      </li>
+    {/if}
+  {/each}
+</ul>
+{/snippet}
+
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && !blocked && close()} />
 
@@ -648,9 +735,14 @@
 
           {#if canPauseAutoApply}
             <div class="flex flex-col gap-1">
-              <Button variant="outline" size="sm" class="w-fit" onclick={toggleAutoApplyPaused}>
-                {autoApplyPaused ? s.continue : s.pause}
-              </Button>
+              <div class="flex items-center gap-2">
+                <Button variant="outline" size="sm" class="w-fit" onclick={toggleAutoApplyPaused}>
+                  {autoApplyPaused ? s.continue : s.pause}
+                </Button>
+                <Button variant="ghost" size="sm" class="w-fit" disabled={autoApplyActing} onclick={cancelAutoApply}>
+                  {s.cancelAutoApply}
+                </Button>
+              </div>
               {#if autoApplyPaused}
                 <p class="text-xs text-muted-foreground">
                   {s.pausedNote}
@@ -700,52 +792,7 @@
                 </dl>
               {/if}
               {#if showsPendingList}
-                <ul class="flex flex-col gap-2 text-xs text-muted-foreground">
-                  {#each pendingQuestions as row (row.key)}
-                    {#if row.kind === 'draft'}
-                      <li>{format(s.willBeFilledAutomatically, { label: row.pending.label })}</li>
-                    {:else if row.kind === 'blocked'}
-                      <!-- A work-authorization question: the bank refuses to recall an
-                           answer for it (the correct one depends on this posting's own
-                           country), and offering an input would only collect one it could
-                           never safely reuse. Plain text, distinct in wording and color from
-                           both the "filled automatically" row above and an answerable
-                           question's input below, so the candidate sees what is blocking
-                           the application instead of nothing at all. -->
-                      <li class="text-warning-strong">
-                        {format(s.cannotAnswerForYou, { label: row.pending.label })}
-                      </li>
-                    {:else if row.kind === 'answerable'}
-                      <li class="flex flex-col gap-1">
-                        <label class="text-foreground" for={`bank-${row.key}`}>{row.pending.label}</label>
-                        <div class="flex items-start gap-2">
-                          <!-- A textarea, not an input: the bound is 2000 characters, and a
-                               single-line control collects a paragraph the writer cannot
-                               re-read. -->
-                          <textarea
-                            id={`bank-${row.key}`}
-                            rows="2"
-                            maxlength="2000"
-                            class="min-w-0 flex-1 resize-y rounded-md border border-border bg-background px-2 py-1"
-                            bind:value={bankDrafts[row.key]}
-                            placeholder={s.answerPlaceholder}
-                          ></textarea>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={bankSaving !== null || !bankDrafts[row.key]?.trim()}
-                            onclick={() => saveBankedAnswer(row.key, row.pending.label)}
-                          >
-                            {s.save}
-                          </Button>
-                        </div>
-                        {#if bankSaved[row.key]}
-                          <span class="text-brand-strong">{s.savedToBank}</span>
-                        {/if}
-                      </li>
-                    {/if}
-                  {/each}
-                </ul>
+                {@render answerList(pendingQuestions)}
                 {#if bankError}
                   <p class="text-xs text-destructive">{bankError}</p>
                 {/if}
@@ -757,6 +804,14 @@
                 >
                   {s.viewTailoredCv}
                 </a>
+              {/if}
+              {#if savedAnyAnswer}
+                <div class="flex flex-col gap-1">
+                  <Button size="sm" variant="outline" class="w-fit" disabled={autoApplyActing} onclick={retryAutoApply}>
+                    {s.refreshPreview}
+                  </Button>
+                  <p class="text-xs text-muted-foreground">{s.refreshPreviewNote}</p>
+                </div>
               {/if}
               <div class="flex items-center gap-2">
                 <Button size="sm" disabled={autoApplyDeciding} onclick={() => decideAutoApply('approved')}>
@@ -771,16 +826,21 @@
               {/if}
             </div>
           {:else if autoApplyBanner?.kind === 'blocked'}
-            <div class="flex flex-col gap-1 rounded-md border border-border bg-muted/30 px-3 py-2">
+            <div class="flex flex-col gap-2 rounded-md border border-warning/50 bg-warning-muted/40 px-3 py-2">
               <p class="text-sm font-medium">{s.banners.blocked}</p>
-              {#if autoApply?.unmapped?.length}
-                <ul class="flex list-inside list-disc flex-col gap-0.5 text-xs text-muted-foreground">
-                  {#each autoApply.unmapped as u (u.id)}
-                    <li>{u.label}</li>
-                  {/each}
-                </ul>
+              {#if showsBlockedList}
+                {@render answerList(blockedQuestions)}
+                {#if bankError}
+                  <p class="text-xs text-destructive">{bankError}</p>
+                {/if}
               {/if}
-              <p class="text-xs text-muted-foreground">{s.banners.finalAttempt}</p>
+              <p class="text-xs text-muted-foreground">{s.banners.blockedRetryHint}</p>
+              <Button size="sm" class="w-fit" disabled={autoApplyActing} onclick={retryAutoApply}>
+                {s.tryAgain}
+              </Button>
+              {#if autoApplyError}
+                <p class="text-xs text-destructive">{autoApplyError}</p>
+              {/if}
             </div>
           {:else if autoApplyBanner?.kind === 'declined'}
             <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
@@ -789,10 +849,21 @@
               </p>
             </div>
           {:else if autoApplyBanner?.kind === 'failed'}
-            <div class="rounded-md border border-border bg-muted/30 px-3 py-2">
-              <p class="text-sm text-muted-foreground">
-                {s.banners.failed}
-              </p>
+            <div class="flex flex-col gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+              {#if autoApply?.may_have_reached_employer}
+                <!-- The one failure retry refuses: the employer may already hold the
+                     application, and sending it again would be a duplicate in the
+                     candidate's name. -->
+                <p class="text-sm text-muted-foreground">{s.banners.failedUncertain}</p>
+              {:else}
+                <p class="text-sm text-muted-foreground">{s.banners.failed}</p>
+                <Button size="sm" variant="outline" class="w-fit" disabled={autoApplyActing} onclick={retryAutoApply}>
+                  {s.tryAgain}
+                </Button>
+              {/if}
+              {#if autoApplyError}
+                <p class="text-xs text-destructive">{autoApplyError}</p>
+              {/if}
             </div>
           {:else if autoApplyBanner?.kind === 'tailor_failed'}
             <!-- Deliberately not the 'failed' copy: nothing was submitted and there is no
@@ -805,6 +876,12 @@
               <p class="text-xs text-muted-foreground">
                 {s.banners.tailorFailedDetail}
               </p>
+              <Button size="sm" variant="outline" class="w-fit" disabled={autoApplyActing} onclick={retryAutoApply}>
+                {s.tryAgain}
+              </Button>
+              {#if autoApplyError}
+                <p class="text-xs text-destructive">{autoApplyError}</p>
+              {/if}
               {#if hasPosting && item.job}
                 <a
                   href={resolve('/tailor/[slug]', { slug: item.job.public_slug })}

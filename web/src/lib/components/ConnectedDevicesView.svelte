@@ -11,6 +11,7 @@
   import { messages } from './ConnectedDevicesView.messages';
   import ConfirmIdentity from './ConfirmIdentity.svelte';
   import States from './States.svelte';
+  import ToggleSwitch from './ToggleSwitch.svelte';
 
   // A list and one dialog, mirroring ApiKeysView: each MCP client a member approved
   // via the OAuth consent screen, with a revoke action gated by the same identity
@@ -23,6 +24,34 @@
   });
   const status = $derived(grantsData.status);
   const grants = $derived(grantsData.value);
+
+  // Whether connected clients may act on auto-apply (openspec/changes/auto-apply-over-mcp).
+  // Account-wide rather than per connection, and settable only from here: the server takes
+  // the write from the browser session alone, so no client can grant itself this.
+  let agentsMayApply = $state<boolean | null>(null);
+  let permissionSaving = $state(false);
+  let permissionError = $state<string | null>(null);
+  $effect(() => {
+    if (!isAuthenticated()) return;
+    api.getAgentPermissions().then(
+      (p) => (agentsMayApply = p.agents_may_apply),
+      () => (permissionError = s.errors.permissionLoad),
+    );
+  });
+
+  async function toggleAgentsMayApply(): Promise<void> {
+    if (agentsMayApply === null || permissionSaving) return;
+    const next = !agentsMayApply;
+    permissionSaving = true;
+    permissionError = null;
+    try {
+      agentsMayApply = (await api.setAgentPermissions({ agents_may_apply: next })).agents_may_apply;
+    } catch {
+      permissionError = s.errors.permissionSave;
+    } finally {
+      permissionSaving = false;
+    }
+  }
 
   let revokeTarget = $state<OAuthGrant | null>(null);
   let confirmRevokeOpen = $state(false);
@@ -74,6 +103,22 @@
     <div class="flex flex-col gap-1">
       <h2 class="text-lg font-semibold tracking-tight">{s.title}</h2>
       <p class="text-sm text-muted-foreground">{s.intro}</p>
+    </div>
+
+    <div class="flex items-start justify-between gap-4 rounded-lg border border-border px-4 py-3">
+      <div class="flex min-w-0 flex-col gap-0.5">
+        <span class="text-sm font-medium">{s.agentsMayApply.label}</span>
+        <span class="text-xs text-muted-foreground">{s.agentsMayApply.detail}</span>
+        {#if permissionError}
+          <span class="text-xs text-destructive">{permissionError}</span>
+        {/if}
+      </div>
+      <ToggleSwitch
+        on={agentsMayApply ?? false}
+        label={s.agentsMayApply.label}
+        disabled={agentsMayApply === null || permissionSaving}
+        onToggle={toggleAgentsMayApply}
+      />
     </div>
 
     {#if status === 'loading'}

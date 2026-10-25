@@ -353,6 +353,16 @@ type Querier interface {
 	// names the meeting by its iCalUID; a deleted one is documented to carry just the
 	// provider's own `id`, which is why that is stored alongside.
 	CancelApplicationInterview(ctx context.Context, arg CancelApplicationInterviewParams) (int64, error)
+	// Withdraws one of the caller's attempts by deleting it, unless the submit pass may be
+	// pressing submit right now: an approved, live row claimed within the worker's lease. That
+	// window is refused rather than raced — the browser driver cannot be called back. Records
+	// `cancelled` in the same statement. pgx.ErrNoRows means not owned, not found,
+	// mid-submission, or uncertain; the caller reads the row first to say which.
+	//
+	// An uncertain submission (submit_uncertain_at) is never deleted: the row is the only record
+	// that the employer may hold the application, and without it a fresh start for the same job
+	// would find nothing to stop it sending a second one.
+	CancelAutoApplyEntry(ctx context.Context, arg CancelAutoApplyEntryParams) (int64, error)
 	// Withdrawal and any other wholesale removal: cancel every future confirmed session at
 	// once, RETURNING enough to notify each seeker. Their notifications are sent after this
 	// commits — a booking cancelled without its seeker being told is worse than one not
@@ -1523,6 +1533,9 @@ type Querier interface {
 	// Retire an attempt that submitted successfully. jobtracking's MarkJobApplied (called in
 	// the same transaction, alongside LockJobForApply) is the durable record; the queue entry
 	// has nothing left to say. Mirrors DeleteApplyFormEntry.
+	//
+	// Records the attempt's `submitted` event in the same statement (migration 0196): the
+	// history trigger does not handle DELETE, since it cannot tell a submission from a cancel.
 	DeleteAutoApplyEntry(ctx context.Context, id int64) error
 	// ListSubscribersNearProExpiry was removed by the add-store-purchases change, and its absence
 	// is worth a line because deleting a query is unusual here.
@@ -2278,6 +2291,8 @@ type Querier interface {
 	// Authentication accepts only active identities. A pending Apple revocation
 	// must not sign the user back in and silently cancel an unlink request.
 	GetActiveUserByIdentity(ctx context.Context, arg GetActiveUserByIdentityParams) (GetActiveUserByIdentityRow, error)
+	// Whether a connected MCP agent may act on this account's auto-apply attempts (migration 0196).
+	GetAgentsMayApply(ctx context.Context, id int64) (bool, error)
 	// The caller's own current stage for a job, or pgx.ErrNoRows when no application row
 	// exists yet — the check behind "put the job on the board at stage preparing when auto-apply
 	// starts, but never move a job already on the board" (auto-apply-review-tracking): a NULL
@@ -3489,6 +3504,12 @@ type Querier interface {
 	// own comment, metrics.sql), and the dead-letter marker wins there, so it wins
 	// here too — one nudge per attempt, not two contradictory ones.
 	ListAutoApplyBlockedCandidates(ctx context.Context, windowDays int32) ([]ListAutoApplyBlockedCandidatesRow, error)
+	// The caller's live attempts, newest first, with what a status derivation and a list row
+	// need. last_event_at is when anything last happened to the pair, which is what an agent
+	// polling for progress compares.
+	ListAutoApplyEntries(ctx context.Context, userID int64) ([]ListAutoApplyEntriesRow, error)
+	// The most recent history of one (user, job) pair, newest first; the caller reverses it.
+	ListAutoApplyEvents(ctx context.Context, arg ListAutoApplyEventsParams) ([]ListAutoApplyEventsRow, error)
 	// Queue entries cmd/auto-apply dead-lettered: attempts exhausted the retry budget,
 	// or (Runner.deadLetterImmediately) the very first attempt already made the
 	// question moot — an unconfirmed submission or a lost post-submit record are both
@@ -4544,6 +4565,10 @@ type Querier interface {
 	// byte-identical between turns and the provider's prompt cache can hit it, and the widest
 	// window such a boundary leaves is just under one block past the limit.
 	ListRecentAssistantMessages(ctx context.Context, arg ListRecentAssistantMessagesParams) ([]AssistantMessage, error)
+	// The caller's attempts that submitted within the last 30 days. A submission deletes its
+	// queue row, so without this the list an agent reads would lose every success the moment it
+	// happened.
+	ListRecentAutoApplySubmissions(ctx context.Context, userID int64) ([]ListRecentAutoApplySubmissionsRow, error)
 	// Keyset continuation of the global feed: rows strictly older than the cursor.
 	ListRecentOpenThreadsAfter(ctx context.Context, arg ListRecentOpenThreadsAfterParams) ([]ListRecentOpenThreadsAfterRow, error)
 	// First page of the global discussions feed: open threads across ALL subjects, newest
@@ -4968,6 +4993,12 @@ type Querier interface {
 	// untouched and blocked_at, not failed_at, is what excludes it from
 	// auto_apply_queue_claimable_idx from here on.
 	MarkAutoApplyBlocked(ctx context.Context, arg MarkAutoApplyBlockedParams) error
+	// Dead-letters an attempt whose submission may already have reached the employer — a press
+	// of submit nothing confirmed or refused, or a real submission that failed to record
+	// locally (migration 0196). Same terminal effect as RecordAutoApplyFailure at its last
+	// attempt, plus submit_uncertain_at, which is what makes RetryAutoApplyEntry refuse the row:
+	// re-arming it could send the same application twice.
+	MarkAutoApplySubmitUncertain(ctx context.Context, arg MarkAutoApplySubmitUncertainParams) error
 	// Records that a tailoring run gave up without producing a CV (migration 0154), so the
 	// entry stops reading as one still being prepared.
 	//
@@ -6386,6 +6417,23 @@ type Querier interface {
 	// see the row this retracts as live, conflict with it, and silently record nothing — the
 	// correction would appear to succeed while leaving the wrong company credited.
 	RetractSupersededEmailEvent(ctx context.Context, arg RetractSupersededEmailEventParams) (int64, error)
+	// Re-arms one of the caller's stuck attempts (openspec/changes/auto-apply-over-mcp): a park,
+	// a dead letter of any pass, or a tailoring failure — and also refreshes a preview awaiting
+	// review, so an answer the candidate just banked shows up in what they are approving.
+	//
+	// Clears every marker and resets every budget, so the row is claimable again by whichever
+	// pass it belongs to: an approved row by the submit pass, an unreviewed one with a tailored
+	// CV by the preview pass (resolved_preview is dropped for it), and a row with no tailored CV
+	// by nothing here — the caller re-publishes auto-apply/submit for that one, which is why
+	// tailored_cv_id comes back.
+	//
+	// Never re-arms a decline (the candidate's own terminal answer) or a submission that may
+	// already have reached the employer (submit_uncertain_at). pgx.ErrNoRows means not owned,
+	// not found, or not retryable; the caller reads the row first to say which.
+	//
+	// Records `retried` in the same statement: the history trigger only names transitions INTO
+	// a state, and clearing markers is the one write it cannot tell from any other.
+	RetryAutoApplyEntry(ctx context.Context, arg RetryAutoApplyEntryParams) (RetryAutoApplyEntryRow, error)
 	// An admin kill switch. Deliberately does not delete the row or free company_slug — see the
 	// migration comment: there is no self-service handoff on this MVP, so freeing the slug on
 	// revoke would let anyone re-claim a company an admin just decided to shut out.
@@ -6554,6 +6602,7 @@ type Querier interface {
 	// it without also being able to turn it ON by accident: the two callers pass
 	// different values and neither writes the other's columns.
 	SetActivityEnabled(ctx context.Context, arg SetActivityEnabledParams) error
+	SetAgentsMayApply(ctx context.Context, arg SetAgentsMayApplyParams) error
 	// Name a session from its first user message. Applied only while the label is still unset,
 	// so a long conversation keeps the name it was born with. Owner-scoped for the same
 	// reason TouchAssistantSession is.

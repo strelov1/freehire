@@ -76,8 +76,16 @@ RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id, j.source, j.external_id, 
 -- Retire an attempt that submitted successfully. jobtracking's MarkJobApplied (called in
 -- the same transaction, alongside LockJobForApply) is the durable record; the queue entry
 -- has nothing left to say. Mirrors DeleteApplyFormEntry.
-DELETE FROM auto_apply_queue
-WHERE id = sqlc.arg(id);
+--
+-- Records the attempt's `submitted` event in the same statement (migration 0196): the
+-- history trigger does not handle DELETE, since it cannot tell a submission from a cancel.
+WITH deleted AS (
+    DELETE FROM auto_apply_queue q
+    WHERE q.id = sqlc.arg(id)
+    RETURNING q.id, q.user_id, q.job_id
+)
+INSERT INTO auto_apply_events (user_id, job_id, queue_id, kind)
+SELECT d.user_id, d.job_id, d.id, 'submitted' FROM deleted d;
 
 -- name: MarkAutoApplyBlocked :exec
 -- Park an attempt the sidecar could not fully resolve: record which fields stopped it and
@@ -310,7 +318,7 @@ RETURNING id;
 -- is: without it, an entry whose preview pass permanently gave up would read forever as
 -- "tailoring" — no preview, no failure, nothing to tell the candidate anything went wrong.
 SELECT id, review_decision, failed_at, blocked_at, tailored_cv_id, unmapped, resolved_preview,
-       preview_failed_at, tailor_failed_at
+       preview_failed_at, tailor_failed_at, submit_uncertain_at, claimed_at
 FROM auto_apply_queue
 WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id);
 
@@ -326,3 +334,131 @@ SET review_decision = 'declined',
     blocked_at      = now(),
     last_error      = sqlc.arg(last_error)
 WHERE id = sqlc.arg(id) AND review_decision IS NULL;
+
+-- name: MarkAutoApplySubmitUncertain :exec
+-- Dead-letters an attempt whose submission may already have reached the employer — a press
+-- of submit nothing confirmed or refused, or a real submission that failed to record
+-- locally (migration 0196). Same terminal effect as RecordAutoApplyFailure at its last
+-- attempt, plus submit_uncertain_at, which is what makes RetryAutoApplyEntry refuse the row:
+-- re-arming it could send the same application twice.
+UPDATE auto_apply_queue
+SET attempts            = attempts + 1,
+    last_error          = sqlc.arg(last_error),
+    failed_at           = now(),
+    submit_uncertain_at = now()
+WHERE id = sqlc.arg(id);
+
+-- name: RetryAutoApplyEntry :one
+-- Re-arms one of the caller's stuck attempts (openspec/changes/auto-apply-over-mcp): a park,
+-- a dead letter of any pass, or a tailoring failure — and also refreshes a preview awaiting
+-- review, so an answer the candidate just banked shows up in what they are approving.
+--
+-- Clears every marker and resets every budget, so the row is claimable again by whichever
+-- pass it belongs to: an approved row by the submit pass, an unreviewed one with a tailored
+-- CV by the preview pass (resolved_preview is dropped for it), and a row with no tailored CV
+-- by nothing here — the caller re-publishes auto-apply/submit for that one, which is why
+-- tailored_cv_id comes back.
+--
+-- Never re-arms a decline (the candidate's own terminal answer) or a submission that may
+-- already have reached the employer (submit_uncertain_at). pgx.ErrNoRows means not owned,
+-- not found, or not retryable; the caller reads the row first to say which.
+--
+-- Records `retried` in the same statement: the history trigger only names transitions INTO
+-- a state, and clearing markers is the one write it cannot tell from any other.
+WITH target AS (
+    SELECT q.id
+    FROM auto_apply_queue q
+    WHERE q.id = sqlc.arg(id)
+      AND q.user_id = sqlc.arg(user_id)
+      AND q.review_decision IS DISTINCT FROM 'declined'
+      AND q.submit_uncertain_at IS NULL
+      AND (q.blocked_at IS NOT NULL
+           OR q.failed_at IS NOT NULL
+           OR q.preview_failed_at IS NOT NULL
+           OR q.tailor_failed_at IS NOT NULL
+           OR (q.review_decision IS NULL AND q.resolved_preview IS NOT NULL))
+    FOR UPDATE
+), updated AS (
+    UPDATE auto_apply_queue q
+    SET blocked_at        = NULL,
+        unmapped          = NULL,
+        failed_at         = NULL,
+        attempts          = 0,
+        captcha_attempts  = 0,
+        preview_failed_at = NULL,
+        preview_attempts  = 0,
+        tailor_failed_at  = NULL,
+        claimed_at        = NULL,
+        last_error        = '',
+        resolved_preview  = CASE WHEN q.review_decision IS NULL THEN NULL ELSE q.resolved_preview END
+    FROM target t
+    WHERE q.id = t.id
+    RETURNING q.id, q.user_id, q.job_id, q.tailored_cv_id
+), recorded AS (
+    INSERT INTO auto_apply_events (user_id, job_id, queue_id, kind)
+    SELECT user_id, job_id, id, 'retried' FROM updated
+)
+SELECT id, tailored_cv_id FROM updated;
+
+-- name: CancelAutoApplyEntry :one
+-- Withdraws one of the caller's attempts by deleting it, unless the submit pass may be
+-- pressing submit right now: an approved, live row claimed within the worker's lease. That
+-- window is refused rather than raced — the browser driver cannot be called back. Records
+-- `cancelled` in the same statement. pgx.ErrNoRows means not owned, not found,
+-- mid-submission, or uncertain; the caller reads the row first to say which.
+--
+-- An uncertain submission (submit_uncertain_at) is never deleted: the row is the only record
+-- that the employer may hold the application, and without it a fresh start for the same job
+-- would find nothing to stop it sending a second one.
+WITH deleted AS (
+    DELETE FROM auto_apply_queue q
+    WHERE q.id = sqlc.arg(id)
+      AND q.user_id = sqlc.arg(user_id)
+      AND q.submit_uncertain_at IS NULL
+      AND NOT (q.review_decision = 'approved'
+               AND q.blocked_at IS NULL
+               AND q.failed_at IS NULL
+               AND q.claimed_at IS NOT NULL
+               AND q.claimed_at > now() - make_interval(secs => sqlc.arg(lease_seconds)::int))
+    RETURNING q.id, q.user_id, q.job_id
+), recorded AS (
+    INSERT INTO auto_apply_events (user_id, job_id, queue_id, kind)
+    SELECT user_id, job_id, id, 'cancelled' FROM deleted
+)
+SELECT id FROM deleted;
+
+-- name: ListAutoApplyEntries :many
+-- The caller's live attempts, newest first, with what a status derivation and a list row
+-- need. last_event_at is when anything last happened to the pair, which is what an agent
+-- polling for progress compares.
+SELECT q.id, j.public_slug, j.title, j.company, q.review_decision, q.failed_at, q.blocked_at,
+       q.tailored_cv_id, (q.resolved_preview IS NOT NULL)::boolean AS has_preview,
+       q.preview_failed_at, q.tailor_failed_at, q.created_at,
+       (SELECT max(e.created_at) FROM auto_apply_events e
+        WHERE e.user_id = q.user_id AND e.job_id = q.job_id)::timestamptz AS last_event_at
+FROM auto_apply_queue q
+JOIN jobs j ON j.id = q.job_id
+WHERE q.user_id = sqlc.arg(user_id)
+ORDER BY q.id DESC
+LIMIT 200;
+
+-- name: ListRecentAutoApplySubmissions :many
+-- The caller's attempts that submitted within the last 30 days. A submission deletes its
+-- queue row, so without this the list an agent reads would lose every success the moment it
+-- happened.
+SELECT DISTINCT ON (e.job_id) e.job_id, j.public_slug, j.title, j.company, e.created_at
+FROM auto_apply_events e
+JOIN jobs j ON j.id = e.job_id
+WHERE e.user_id = sqlc.arg(user_id)
+  AND e.kind = 'submitted'
+  AND e.created_at > now() - interval '30 days'
+  AND NOT EXISTS (SELECT 1 FROM auto_apply_queue q WHERE q.user_id = e.user_id AND q.job_id = e.job_id)
+ORDER BY e.job_id, e.created_at DESC;
+
+-- name: ListAutoApplyEvents :many
+-- The most recent history of one (user, job) pair, newest first; the caller reverses it.
+SELECT id, queue_id, kind, detail, created_at
+FROM auto_apply_events
+WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id)
+ORDER BY id DESC
+LIMIT 100;

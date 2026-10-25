@@ -25,7 +25,9 @@ func (h *assistantHandlers) assistantScreeningTools() []assistant.Tool {
 // field Update leaves untouched, identically on both write paths.
 func (h *assistantHandlers) screeningAnswersSetTool() assistant.Tool {
 	return assistant.Tool{
-		Name: "screening_answers_set",
+		Name:   "screening_answers_set",
+		Title:  "Save screening answers",
+		Effect: assistant.EffectOverwrites,
 		Description: "Record the candidate's own answer to one or more of the six screening questions " +
 			"that repeat across job-application forms: which countries they are authorized to work in, " +
 			"whether they need visa sponsorship, their desired salary, their notice period, whether they " +

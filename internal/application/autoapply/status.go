@@ -94,7 +94,10 @@ type ResolvedAttempt struct {
 	Failed          bool
 	// TailorFailed is set when the tailoring run gave up without producing a CV.
 	TailorFailed bool
-	Unmapped     []UnmappedField
+	// SubmitUncertain is set when the attempt was dead-lettered because the employer may
+	// already hold the application (auto_apply_queue.submit_uncertain_at, migration 0196).
+	SubmitUncertain bool
+	Unmapped        []UnmappedField
 }
 
 // AutoApplyReviewInfo is what a tracked job's own read path surfaces about its live
@@ -112,6 +115,10 @@ type AutoApplyReviewInfo struct {
 	// Unmapped is set only when Status is StatusBlocked — the specific questions that
 	// stopped the attempt, never the internal reason it stopped.
 	Unmapped []UnmappedField `json:"unmapped,omitempty"`
+	// MayHaveReachedEmployer is set only when Status is StatusFailed and the failure left
+	// the employer possibly holding the application — the one failure a retry is refused
+	// for, so a surface must not offer one.
+	MayHaveReachedEmployer bool `json:"may_have_reached_employer,omitempty"`
 }
 
 // AssembleReviewInfo builds the candidate-facing view of a job's live auto-apply attempt,
@@ -134,6 +141,9 @@ func AssembleReviewInfo(hasAttempt bool, a ResolvedAttempt) *AutoApplyReviewInfo
 	}
 	if status == StatusBlocked {
 		info.Unmapped = a.Unmapped
+	}
+	if status == StatusFailed {
+		info.MayHaveReachedEmployer = a.SubmitUncertain
 	}
 	return info
 }

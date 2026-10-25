@@ -14,9 +14,19 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
   guesses.
 - **`Park` is not a retry.** A parked attempt needs new data, not another try — it is
   excluded from reclaim (`blocked_at`) rather than counted against `MaxAttempts`. Only a
-  genuine transient failure (`Fail`) spends the retry budget.
+  genuine transient failure (`Fail`) spends the retry budget. Once the candidate supplies
+  the data, THEY re-arm it (`RetryAutoApplyEntry`, from the drawer or the MCP
+  `auto_apply_retry` tool) — nothing in this package ever un-parks a row.
+- **The history is a trigger, not a call.** `auto_apply_events` (migration 0196) is written
+  by a trigger on `auto_apply_queue` from the OLD→NEW diff, so nothing here logs anything:
+  a new write path is covered the moment it exists. The three writes the trigger cannot read from a
+  diff — a submission's delete, a cancel's delete, and a retry clearing markers — record
+  their own event in the same statement (`DeleteAutoApplyEntry`, `CancelAutoApplyEntry`,
+  `RetryAutoApplyEntry`). An event never carries `last_error`.
 - **Two outcomes are dead-lettered immediately rather than retried normally, both through
-  the shared `deadLetterImmediately` (`Fail(..., maxAttempts=1)`):** a real submission that
+  the shared `deadLetterImmediately` (`Store.DeadLetterUncertain`, which also stamps
+  `submit_uncertain_at` so a candidate's retry refuses the row — an exhausted ordinary
+  budget looks identical by `failed_at` alone, and IS safe to retry):** a real submission that
   fails to record locally (`recordApplied`, when `Store.Submit` errors after the sidecar
   already reported `StatusApplied`), and an unconfirmed submission (`StatusUnconfirmed` —
   the sidecar pressed submit but could not tell whether the employer accepted it). Both
@@ -57,8 +67,8 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
 
 - **An enqueue-time eligibility gate refuses (or, in shadow mode, only logs) a positively
   mismatched (candidate, job) pair before it ever reaches this package's queue at all.**
-  `internal/api/handler`'s `PostJobAutoApply` (the only writer of `auto_apply_queue`, see
-  below) calls `internal/candidate/hardconstraint.Evaluate` — the same deterministic,
+  `internal/api/handler`'s `startAutoApply` (the only creator of `auto_apply_queue` rows,
+  behind both the job page's route and the MCP `auto_apply_start` tool) calls `internal/candidate/hardconstraint.Evaluate` — the same deterministic,
   no-I/O evaluator the match-analysis surface already uses advisorily — and refuses
   enqueueing when it reports an unmet `work-authorization` or `location-and-work-mode`
   blocker for the pair. Gated behind `AUTO_APPLY_ELIGIBILITY_ENFORCE` (unset = shadow:

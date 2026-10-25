@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/browsertools"
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/ai/plan"
+	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
@@ -81,6 +82,9 @@ type assistantHandlers struct {
 	// same reason the bank tools do: a candidate states their notice period or salary
 	// expectation whenever it comes up, not on a schedule.
 	screeningAnswers *screeninganswers.Store
+	// answerBank backs the signed-in MCP server's answer-bank tools — the same store
+	// /me/answer-bank serves, so an answer an agent saves is the one the worker sends.
+	answerBank *answerbank.Store
 	// mail backs the inbox tools, which only the general chat preset offers. The
 	// tools reach through it to inbox.Service — the same use cases /me/inbox and
 	// /me/emails render, so a rule cannot hold for one reader and not the other.
@@ -231,6 +235,11 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	// auto-apply-submit-trigger) — cookie-only, never mw.key or mw.autoApplyGate: see
 	// auto_apply_enqueue.go's own doc comment for why.
 	api.Post("/jobs/:slug/auto-apply", mw.cookie, mw.paidAI(plan.FeatureAutoApply), h.PostJobAutoApply)
+	// Retry and cancel an existing attempt (openspec/changes/auto-apply-over-mcp). Cookie-only
+	// like the start route: the one other door is the signed-in MCP server, behind the
+	// account's agents_may_apply switch, and an API key would be a third that skips it.
+	api.Post("/jobs/:slug/auto-apply/retry", mw.cookie, h.PostJobAutoApplyRetry)
+	api.Delete("/jobs/:slug/auto-apply", mw.cookie, h.DeleteJobAutoApply)
 }
 
 // defaultAssistantMaxPrompt bounds one user message when ASSISTANT_MAX_PROMPT is
