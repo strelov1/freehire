@@ -47,5 +47,5 @@
 
 - [x] 7.1 `gofmt -l .` clean, `go vet ./...`, `go test ./...`, `go vet -tags=integration ./...`; integration tests for the touched handlers and the Meili distinct count
 - [x] 7.2 `web`: svelte-check 0 errors, eslint/oxlint clean, vitest green; `pnpm check:dead` (knip) clean for new exports
-- [ ] 7.3 Drive the flow in a browser as a guest and as a signed-in user: describe → plan → refine → run → Show N jobs; CV attach; map limited to the requested country; companies_total matches
-- [ ] 7.4 PR → CI → merge → deploy → verify on prod as a guest; watch search-intent spend and 429s for a day
+- [x] 7.3 Drive the flow in a browser as a guest and as a signed-in user: describe → plan → refine → run → Show N jobs; CV attach; map limited to the requested country; companies_total matches
+- [x] 7.4 PR → CI → merge → deploy → verify on prod as a guest; watch search-intent spend and 429s for a day

@@ -5,39 +5,30 @@ TBD - created by archiving change resume-skill-gap. Update Purpose after archive
 ## Requirements
 ### Requirement: Extract skills from an uploaded resume
 
-The system SHALL provide `POST /api/v1/me/resume/extract`, guarded by cookie session
-authentication (`RequireAuth`), that turns an uploaded resume into a list of canonical skill
-slugs using the existing deterministic `internal/dict/skilltag` dictionary. The endpoint SHALL
-accept either a PDF file via `multipart/form-data` (field `file`) or plain text via
-`application/json` (`{"text": "..."}`), dispatched by `Content-Type`. PDF text extraction
-SHALL decode any text-bearing PDF regardless of font encoding — including CID fonts with
-`Identity-H` encoding mapped through an embedded `ToUnicode` CMap (as produced by Canva and
-similar builders). Oversize uploads are rejected by the server's existing global
-request-body limit (413). The resume file and text SHALL NOT be persisted to disk or
-database, and SHALL NOT be logged; only the resulting skill slugs are returned.
+The system SHALL provide `POST /api/v1/me/resume/extract`, open to signed-in and signed-out callers alike (an optional session: a cookie session is attached when present, its absence is not a rejection), that turns an uploaded resume into a list of canonical skill slugs using the existing deterministic `internal/dict/skilltag` dictionary. Signed-out callers SHALL be limited to 20 extractions per hour per client IP. The endpoint SHALL accept either a PDF file via `multipart/form-data` (field `file`) or plain text via `application/json` (`{"text": "..."}`), dispatched by `Content-Type`. PDF text extraction SHALL decode any text-bearing PDF regardless of font encoding — including CID fonts with `Identity-H` encoding mapped through an embedded `ToUnicode` CMap (as produced by Canva and similar builders). Oversize uploads are rejected by the server's existing global request-body limit (413). The resume file and text SHALL NOT be persisted to disk or database, and SHALL NOT be logged; only the resulting skill slugs are returned. The extraction SHALL call no language model.
 
 #### Scenario: Extract skills from a PDF resume
 
-- **WHEN** an authenticated user POSTs a PDF resume as `multipart/form-data` field `file`
+- **WHEN** a caller POSTs a PDF resume as `multipart/form-data` field `file`
 - **THEN** the system extracts the PDF text, runs `skilltag.Parse`, and responds `200` with
   `{"data": {"skills": [<canonical slugs, deduplicated and sorted>]}}`
 
 #### Scenario: Extract skills from a CID/Identity-H embedded-font PDF
 
-- **WHEN** an authenticated user POSTs a text-based PDF whose fonts are subset CID TrueType
+- **WHEN** a caller POSTs a text-based PDF whose fonts are subset CID TrueType
   with `Identity-H` encoding and a `ToUnicode` CMap (e.g. a Canva export)
 - **THEN** the system extracts the selectable text layer and responds `200` with the derived
   skill slugs, rather than rejecting the file as a scan or image
 
 #### Scenario: Extract skills from pasted text
 
-- **WHEN** an authenticated user POSTs `application/json` `{"text": "...experienced in Go and Postgres..."}`
+- **WHEN** a caller POSTs `application/json` `{"text": "...experienced in Go and Postgres..."}`
 - **THEN** the system runs `skilltag.Parse` on the text and responds `200` with the extracted
   canonical skill slugs
 
 #### Scenario: Resume with no recognizable skills
 
-- **WHEN** an authenticated user submits a resume whose text resolves to no dictionary skills
+- **WHEN** a caller submits a resume whose text resolves to no dictionary skills
 - **THEN** the system responds `200` with `{"data": {"skills": []}}`
 
 #### Scenario: Image-only or malformed PDF is rejected
@@ -52,8 +43,12 @@ database, and SHALL NOT be logged; only the resulting skill slugs are returned.
 - **WHEN** the uploaded request body exceeds the server's global body limit
 - **THEN** the server responds `413` (enforced by the framework before the handler runs)
 
-#### Scenario: Unauthenticated request is rejected
+#### Scenario: A signed-out caller is served
 
-- **WHEN** a request without a valid session cookie hits the endpoint
-- **THEN** the system responds `401` and performs no extraction
+- **WHEN** a request without a session cookie hits the endpoint with a text-based PDF
+- **THEN** the system responds `200` with the extracted skills and persists nothing
 
+#### Scenario: The signed-out limit is per IP
+
+- **WHEN** one IP has made 20 signed-out extractions within the hour and makes another
+- **THEN** the system responds `429` and performs no extraction
