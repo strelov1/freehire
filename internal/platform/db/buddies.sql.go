@@ -276,6 +276,56 @@ func (q *Queries) HideBuddyApplication(ctx context.Context, arg HideBuddyApplica
 	return application_id, err
 }
 
+const insertBuddyMessage = `-- name: InsertBuddyMessage :one
+WITH m AS (
+    INSERT INTO buddy_messages (conversation_id, sender_id, body)
+    SELECT c.id, $1::bigint, $2::text
+    FROM buddy_conversations c
+    WHERE c.id = $3
+      AND c.status = 'open'
+      AND $1::bigint IN (c.user_low, c.user_high)
+    FOR SHARE OF c
+    RETURNING id, conversation_id, sender_id, body, created_at
+), r AS (
+    UPDATE buddy_conversations c
+    SET last_read_low  = CASE WHEN c.user_low  = m.sender_id THEN m.id ELSE c.last_read_low  END,
+        last_read_high = CASE WHEN c.user_high = m.sender_id THEN m.id ELSE c.last_read_high END
+    FROM m
+    WHERE c.id = m.conversation_id
+)
+SELECT id, sender_id, body, created_at FROM m
+`
+
+type InsertBuddyMessageParams struct {
+	SenderID       int64  `json:"sender_id"`
+	Body           string `json:"body"`
+	ConversationID int64  `json:"conversation_id"`
+}
+
+type InsertBuddyMessageRow struct {
+	ID        int64              `json:"id"`
+	SenderID  int64              `json:"sender_id"`
+	Body      string             `json:"body"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// A message into an OPEN conversation the sender belongs to, and the sender's read cursor
+// moved onto it, in one statement. The status is guarded here, under FOR SHARE, and not by
+// an earlier read: a close that commits while this waits makes the row stop matching, so
+// no message lands after it. No row means the caller must look the conversation up to say
+// why.
+func (q *Queries) InsertBuddyMessage(ctx context.Context, arg InsertBuddyMessageParams) (InsertBuddyMessageRow, error) {
+	row := q.db.QueryRow(ctx, insertBuddyMessage, arg.SenderID, arg.Body, arg.ConversationID)
+	var i InsertBuddyMessageRow
+	err := row.Scan(
+		&i.ID,
+		&i.SenderID,
+		&i.Body,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const joinBuddyMember = `-- name: JoinBuddyMember :one
 INSERT INTO buddy_members (user_id, handle, category, countries, regions)
 VALUES (
@@ -356,6 +406,89 @@ func (q *Queries) LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMemb
 		&i.LeftAt,
 	)
 	return i, err
+}
+
+const listBuddyConversations = `-- name: ListBuddyConversations :many
+SELECT c.id,
+       c.user_low,
+       c.user_high,
+       c.initiator_id,
+       c.status,
+       c.created_at,
+       c.accepted_at,
+       m.handle,
+       m.countries,
+       u.resume_structured,
+       stats.unread::bigint AS unread,
+       coalesce(stats.newest, c.created_at)::timestamptz AS last_message_at
+FROM buddy_conversations c
+JOIN buddy_members m ON m.user_id = CASE WHEN c.user_low = $1 THEN c.user_high ELSE c.user_low END
+JOIN users u ON u.id = m.user_id
+CROSS JOIN LATERAL (
+    SELECT count(*) FILTER (
+               WHERE msg.sender_id <> $1
+                 AND msg.id > coalesce(CASE WHEN c.user_low = $1 THEN c.last_read_low ELSE c.last_read_high END, 0)
+           ) AS unread,
+           max(msg.created_at) AS newest
+    FROM buddy_messages msg
+    WHERE msg.conversation_id = c.id
+) stats
+WHERE $1 IN (c.user_low, c.user_high)
+  AND NOT (c.status = 'declined' AND c.initiator_id <> $1)
+ORDER BY last_message_at DESC, c.id DESC
+`
+
+type ListBuddyConversationsRow struct {
+	ID               int64              `json:"id"`
+	UserLow          int64              `json:"user_low"`
+	UserHigh         int64              `json:"user_high"`
+	InitiatorID      int64              `json:"initiator_id"`
+	Status           string             `json:"status"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	AcceptedAt       pgtype.Timestamptz `json:"accepted_at"`
+	Handle           string             `json:"handle"`
+	Countries        []string           `json:"countries"`
+	ResumeStructured []byte             `json:"resume_structured"`
+	Unread           int64              `json:"unread"`
+	LastMessageAt    pgtype.Timestamptz `json:"last_message_at"`
+}
+
+// Every conversation of the viewer with the other member's card inputs, their unread count
+// (the other side's messages past the viewer's read cursor) and the newest message time,
+// newest first. A declined invitation is hidden from the member who declined it. The
+// unread count and last time come from one pass over the conversation's messages, so
+// the list costs one query however many conversations there are.
+func (q *Queries) ListBuddyConversations(ctx context.Context, viewerID int64) ([]ListBuddyConversationsRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyConversations, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyConversationsRow{}
+	for rows.Next() {
+		var i ListBuddyConversationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserLow,
+			&i.UserHigh,
+			&i.InitiatorID,
+			&i.Status,
+			&i.CreatedAt,
+			&i.AcceptedAt,
+			&i.Handle,
+			&i.Countries,
+			&i.ResumeStructured,
+			&i.Unread,
+			&i.LastMessageAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listBuddyFeed = `-- name: ListBuddyFeed :many
@@ -458,6 +591,53 @@ func (q *Queries) ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([
 			&i.Handle,
 			&i.Countries,
 			&i.ResumeStructured,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBuddyMessages = `-- name: ListBuddyMessages :many
+SELECT id, sender_id, body, created_at
+FROM buddy_messages
+WHERE conversation_id = $1 AND id > $2
+ORDER BY id
+LIMIT $3
+`
+
+type ListBuddyMessagesParams struct {
+	ConversationID int64 `json:"conversation_id"`
+	AfterID        int64 `json:"after_id"`
+	PageLimit      int32 `json:"page_limit"`
+}
+
+type ListBuddyMessagesRow struct {
+	ID        int64              `json:"id"`
+	SenderID  int64              `json:"sender_id"`
+	Body      string             `json:"body"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Messages after a given id, oldest first. Readability is the caller's check.
+func (q *Queries) ListBuddyMessages(ctx context.Context, arg ListBuddyMessagesParams) ([]ListBuddyMessagesRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyMessages, arg.ConversationID, arg.AfterID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyMessagesRow{}
+	for rows.Next() {
+		var i ListBuddyMessagesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SenderID,
+			&i.Body,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -640,6 +820,38 @@ func (q *Queries) ListSimilarBuddies(ctx context.Context, arg ListSimilarBuddies
 		return nil, err
 	}
 	return items, nil
+}
+
+const markBuddyConversationRead = `-- name: MarkBuddyConversationRead :one
+UPDATE buddy_conversations c
+SET last_read_low = CASE WHEN c.user_low = $1
+        THEN GREATEST(coalesce(c.last_read_low, 0), LEAST($2::bigint, newest.id))
+        ELSE c.last_read_low END,
+    last_read_high = CASE WHEN c.user_high = $1
+        THEN GREATEST(coalesce(c.last_read_high, 0), LEAST($2::bigint, newest.id))
+        ELSE c.last_read_high END
+FROM (
+    SELECT coalesce(max(id), 0)::bigint AS id
+    FROM buddy_messages WHERE conversation_id = $3
+) newest
+WHERE c.id = $3
+  AND $1 IN (c.user_low, c.user_high)
+RETURNING c.id
+`
+
+type MarkBuddyConversationReadParams struct {
+	UserID         int64 `json:"user_id"`
+	UpTo           int64 `json:"up_to"`
+	ConversationID int64 `json:"conversation_id"`
+}
+
+// Move the caller's side of the read cursor up to up_to, never back and never past the
+// conversation's newest message. No row means the caller is not a party.
+func (q *Queries) MarkBuddyConversationRead(ctx context.Context, arg MarkBuddyConversationReadParams) (int64, error) {
+	row := q.db.QueryRow(ctx, markBuddyConversationRead, arg.UserID, arg.UpTo, arg.ConversationID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const showBuddyApplication = `-- name: ShowBuddyApplication :exec

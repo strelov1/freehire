@@ -259,3 +259,87 @@ WHERE id = sqlc.arg(id)
   AND initiator_id <> sqlc.arg(user_id)
   AND (user_low = sqlc.arg(user_id) OR user_high = sqlc.arg(user_id))
 RETURNING *;
+
+-- name: InsertBuddyMessage :one
+-- A message into an OPEN conversation the sender belongs to, and the sender's read cursor
+-- moved onto it, in one statement. The status is guarded here, under FOR SHARE, and not by
+-- an earlier read: a close that commits while this waits makes the row stop matching, so
+-- no message lands after it. No row means the caller must look the conversation up to say
+-- why.
+WITH m AS (
+    INSERT INTO buddy_messages (conversation_id, sender_id, body)
+    SELECT c.id, sqlc.arg(sender_id)::bigint, sqlc.arg(body)::text
+    FROM buddy_conversations c
+    WHERE c.id = sqlc.arg(conversation_id)
+      AND c.status = 'open'
+      AND sqlc.arg(sender_id)::bigint IN (c.user_low, c.user_high)
+    FOR SHARE OF c
+    RETURNING id, conversation_id, sender_id, body, created_at
+), r AS (
+    UPDATE buddy_conversations c
+    SET last_read_low  = CASE WHEN c.user_low  = m.sender_id THEN m.id ELSE c.last_read_low  END,
+        last_read_high = CASE WHEN c.user_high = m.sender_id THEN m.id ELSE c.last_read_high END
+    FROM m
+    WHERE c.id = m.conversation_id
+)
+SELECT id, sender_id, body, created_at FROM m;
+
+-- name: ListBuddyMessages :many
+-- Messages after a given id, oldest first. Readability is the caller's check.
+SELECT id, sender_id, body, created_at
+FROM buddy_messages
+WHERE conversation_id = sqlc.arg(conversation_id) AND id > sqlc.arg(after_id)
+ORDER BY id
+LIMIT sqlc.arg(page_limit);
+
+-- name: MarkBuddyConversationRead :one
+-- Move the caller's side of the read cursor up to up_to, never back and never past the
+-- conversation's newest message. No row means the caller is not a party.
+UPDATE buddy_conversations c
+SET last_read_low = CASE WHEN c.user_low = sqlc.arg(user_id)
+        THEN GREATEST(coalesce(c.last_read_low, 0), LEAST(sqlc.arg(up_to)::bigint, newest.id))
+        ELSE c.last_read_low END,
+    last_read_high = CASE WHEN c.user_high = sqlc.arg(user_id)
+        THEN GREATEST(coalesce(c.last_read_high, 0), LEAST(sqlc.arg(up_to)::bigint, newest.id))
+        ELSE c.last_read_high END
+FROM (
+    SELECT coalesce(max(id), 0)::bigint AS id
+    FROM buddy_messages WHERE conversation_id = sqlc.arg(conversation_id)
+) newest
+WHERE c.id = sqlc.arg(conversation_id)
+  AND sqlc.arg(user_id) IN (c.user_low, c.user_high)
+RETURNING c.id;
+
+-- name: ListBuddyConversations :many
+-- Every conversation of the viewer with the other member's card inputs, their unread count
+-- (the other side's messages past the viewer's read cursor) and the newest message time,
+-- newest first. A declined invitation is hidden from the member who declined it. The
+-- unread count and last time come from one pass over the conversation's messages, so
+-- the list costs one query however many conversations there are.
+SELECT c.id,
+       c.user_low,
+       c.user_high,
+       c.initiator_id,
+       c.status,
+       c.created_at,
+       c.accepted_at,
+       m.handle,
+       m.countries,
+       u.resume_structured,
+       stats.unread::bigint AS unread,
+       coalesce(stats.newest, c.created_at)::timestamptz AS last_message_at
+FROM buddy_conversations c
+JOIN buddy_members m ON m.user_id = CASE WHEN c.user_low = sqlc.arg(viewer_id) THEN c.user_high ELSE c.user_low END
+JOIN users u ON u.id = m.user_id
+CROSS JOIN LATERAL (
+    SELECT count(*) FILTER (
+               WHERE msg.sender_id <> sqlc.arg(viewer_id)
+                 AND msg.id > coalesce(CASE WHEN c.user_low = sqlc.arg(viewer_id) THEN c.last_read_low ELSE c.last_read_high END, 0)
+           ) AS unread,
+           max(msg.created_at) AS newest
+    FROM buddy_messages msg
+    WHERE msg.conversation_id = c.id
+) stats
+WHERE sqlc.arg(viewer_id) IN (c.user_low, c.user_high)
+  AND NOT (c.status = 'declined' AND c.initiator_id <> sqlc.arg(viewer_id))
+ORDER BY last_message_at DESC, c.id DESC;

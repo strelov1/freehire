@@ -93,6 +93,20 @@ type Repository interface {
 	// party to the conversation and ErrConversationState when it is not pending or the
 	// caller sent it.
 	AnswerInvitation(ctx context.Context, userID, conversationID int64, status string) (ConversationRow, error)
+	// Conversation reads one conversation by id, whoever it belongs to.
+	Conversation(ctx context.Context, conversationID int64) (ConversationRow, bool, error)
+	// InsertMessage stores a message from userID into an open conversation they belong to
+	// and moves their read cursor onto it, guarding the status in the insert itself. It
+	// returns ErrNotFound when userID is not a party and ErrConversationState when the
+	// conversation is not open.
+	InsertMessage(ctx context.Context, userID, conversationID int64, body string) (MessageRow, error)
+	// Messages is up to limit messages with an id above after, oldest first.
+	Messages(ctx context.Context, conversationID, after int64, limit int) ([]MessageRow, error)
+	// MarkRead advances userID's read cursor to upTo, never back and never past the newest
+	// message. It returns ErrNotFound when userID is not a party.
+	MarkRead(ctx context.Context, userID, conversationID, upTo int64) error
+	// Conversations lists every conversation userID may see, newest message first.
+	Conversations(ctx context.Context, userID int64) ([]ConversationListRow, error)
 }
 
 // Service is the membership and profile use cases.

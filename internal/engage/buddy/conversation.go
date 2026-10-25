@@ -69,15 +69,43 @@ func (c ConversationRow) Other(userID int64) int64 {
 	return c.UserLow
 }
 
-// Conversation is a conversation as one of its members sees it.
+// What a conversation is to the member looking at it. A pending invitation is incoming for
+// the member it was sent to and outgoing for the sender, and a declined one stays outgoing:
+// the sender is never told it was refused.
+const (
+	ForMeIncoming = "incoming"
+	ForMeOutgoing = "outgoing"
+	ForMeOpen     = "open"
+	ForMeClosed   = "closed"
+)
+
+// Conversation is a conversation as one of its members sees it. Card, Unread and
+// LastMessageAt are filled by ListConversations only.
 type Conversation struct {
 	ID          int64
 	OtherHandle string
 	Status      string
+	StatusForMe string
 	// Initiator is true when the viewer sent the invitation.
 	Initiator  bool
 	CreatedAt  time.Time
 	AcceptedAt *time.Time
+
+	Card          CardSummary
+	Unread        int
+	LastMessageAt time.Time
+}
+
+func statusForMe(status string, initiator bool) string {
+	switch {
+	case status == StatusOpen:
+		return ForMeOpen
+	case status == StatusClosed:
+		return ForMeClosed
+	case initiator:
+		return ForMeOutgoing
+	}
+	return ForMeIncoming
 }
 
 func (s *Service) conversationFor(ctx context.Context, userID int64, row ConversationRow) (Conversation, error) {
@@ -89,10 +117,15 @@ func (s *Service) conversationFor(ctx context.Context, userID int64, row Convers
 	if !ok {
 		return Conversation{}, ErrNotFound
 	}
+	return viewConversation(userID, row, other.Handle), nil
+}
+
+func viewConversation(userID int64, row ConversationRow, otherHandle string) Conversation {
+	initiator := row.InitiatorID == userID
 	return Conversation{
-		ID: row.ID, OtherHandle: other.Handle, Status: row.Status,
-		Initiator: row.InitiatorID == userID, CreatedAt: row.CreatedAt, AcceptedAt: row.AcceptedAt,
-	}, nil
+		ID: row.ID, OtherHandle: otherHandle, Status: row.Status, StatusForMe: statusForMe(row.Status, initiator),
+		Initiator: initiator, CreatedAt: row.CreatedAt, AcceptedAt: row.AcceptedAt,
+	}
 }
 
 // Invite opens a pending conversation with the member named by toHandle, holding body as

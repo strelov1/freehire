@@ -3159,6 +3159,12 @@ type Querier interface {
 	// submission of the same link; the caller maps that violation the same way a duplicate
 	// board contribution is mapped.
 	InsertBoardSubmission(ctx context.Context, arg InsertBoardSubmissionParams) (BoardSubmission, error)
+	// A message into an OPEN conversation the sender belongs to, and the sender's read cursor
+	// moved onto it, in one statement. The status is guarded here, under FOR SHARE, and not by
+	// an earlier read: a close that commits while this waits makes the row stop matching, so
+	// no message lands after it. No row means the caller must look the conversation up to say
+	// why.
+	InsertBuddyMessage(ctx context.Context, arg InsertBuddyMessageParams) (InsertBuddyMessageRow, error)
 	// Record one change: what it did (ops), what would undo it (inverse), who made it and through
 	// which entry point, and the document version it was computed against. Written in the same
 	// transaction as the document it changed — a change without its revision, or a revision
@@ -3636,6 +3642,12 @@ type Querier interface {
 	// all, because the only thing that creates the row is a page behind the login.
 	// Migration 0153 split the two.
 	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
+	// Every conversation of the viewer with the other member's card inputs, their unread count
+	// (the other side's messages past the viewer's read cursor) and the newest message time,
+	// newest first. A declined invitation is hidden from the member who declined it. The
+	// unread count and last time come from one pass over the conversation's messages, so
+	// the list costs one query however many conversations there are.
+	ListBuddyConversations(ctx context.Context, viewerID int64) ([]ListBuddyConversationsRow, error)
 	// One page of the buddy feed, newest first, keyset-paged on (occurred_at, id). Three kinds
 	// of event qualify and nothing else: an application ('applied'), and a move into the
 	// 'interview' or 'offer' stage. 'accepted' is excluded on purpose (it says the person
@@ -3657,6 +3669,8 @@ type Querier interface {
 	// visibility predicate as every other row, a cursor naming an event the viewer may not
 	// see (rejected, hidden, blocked, retracted, unknown) comes back without it.
 	ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([]ListBuddyFeedRow, error)
+	// Messages after a given id, oldest first. Readability is the caller's check.
+	ListBuddyMessages(ctx context.Context, arg ListBuddyMessagesParams) ([]ListBuddyMessagesRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
 	// Every revision of one agent turn or autopilot run that is still standing, newest first —
@@ -5122,6 +5136,9 @@ type Querier interface {
 	// Stamp an event as applied. Idempotent by shape: re-stamping a processed row writes the
 	// same fact, and the reconciler's own query no longer returns it.
 	MarkBillingEventProcessed(ctx context.Context, id int64) error
+	// Move the caller's side of the read cursor up to up_to, never back and never past the
+	// conversation's newest message. No row means the caller is not a party.
+	MarkBuddyConversationRead(ctx context.Context, arg MarkBuddyConversationReadParams) (int64, error)
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)

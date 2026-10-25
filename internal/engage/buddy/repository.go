@@ -272,3 +272,76 @@ func (r *QueriesRepository) AnswerInvitation(ctx context.Context, userID, conver
 	}
 	return ConversationRow{}, ErrConversationState
 }
+
+func (r *QueriesRepository) Conversation(ctx context.Context, conversationID int64) (ConversationRow, bool, error) {
+	row, err := r.q.GetBuddyConversation(ctx, conversationID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ConversationRow{}, false, nil
+	}
+	if err != nil {
+		return ConversationRow{}, false, err
+	}
+	return conversationFromRow(row), true, nil
+}
+
+func (r *QueriesRepository) InsertMessage(ctx context.Context, userID, conversationID int64, body string) (MessageRow, error) {
+	row, err := r.q.InsertBuddyMessage(ctx, db.InsertBuddyMessageParams{SenderID: userID, Body: body, ConversationID: conversationID})
+	if err == nil {
+		return MessageRow{ID: row.ID, SenderID: row.SenderID, Body: row.Body, CreatedAt: row.CreatedAt.Time}, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return MessageRow{}, err
+	}
+	// Nothing matched: say whether the conversation is the caller's at all.
+	cur, ok, err := r.Conversation(ctx, conversationID)
+	if err != nil {
+		return MessageRow{}, err
+	}
+	if !ok || (cur.UserLow != userID && cur.UserHigh != userID) {
+		return MessageRow{}, ErrNotFound
+	}
+	return MessageRow{}, ErrConversationState
+}
+
+func (r *QueriesRepository) Messages(ctx context.Context, conversationID, after int64, limit int) ([]MessageRow, error) {
+	rows, err := r.q.ListBuddyMessages(ctx, db.ListBuddyMessagesParams{ConversationID: conversationID, AfterID: after, PageLimit: int32(limit)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]MessageRow, len(rows))
+	for i, row := range rows {
+		out[i] = MessageRow{ID: row.ID, SenderID: row.SenderID, Body: row.Body, CreatedAt: row.CreatedAt.Time}
+	}
+	return out, nil
+}
+
+func (r *QueriesRepository) MarkRead(ctx context.Context, userID, conversationID, upTo int64) error {
+	_, err := r.q.MarkBuddyConversationRead(ctx, db.MarkBuddyConversationReadParams{UserID: userID, UpTo: upTo, ConversationID: conversationID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
+func (r *QueriesRepository) Conversations(ctx context.Context, userID int64) ([]ConversationListRow, error) {
+	rows, err := r.q.ListBuddyConversations(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ConversationListRow, len(rows))
+	for i, row := range rows {
+		c := ConversationRow{
+			ID: row.ID, UserLow: row.UserLow, UserHigh: row.UserHigh, InitiatorID: row.InitiatorID,
+			Status: row.Status, CreatedAt: row.CreatedAt.Time,
+		}
+		if row.AcceptedAt.Valid {
+			c.AcceptedAt = &row.AcceptedAt.Time
+		}
+		out[i] = ConversationListRow{
+			ConversationRow: c,
+			Other:           SimilarRow{Handle: row.Handle, Countries: row.Countries, CV: decodeCV(row.ResumeStructured)},
+			Unread:          int(row.Unread), LastMessageAt: row.LastMessageAt.Time,
+		}
+	}
+	return out, nil
+}
