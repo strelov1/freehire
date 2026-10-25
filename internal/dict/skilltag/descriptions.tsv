@@ -1088,3 +1088,24 @@ itwo	iTWO is a construction software suite from RIB used for cost estimation, te
 knx	KNX is an open standard for building automation that controls lighting, heating, blinds and security over a shared bus.
 profibus	PROFIBUS is a fieldbus standard for communication between controllers and field devices in factory and process automation.
 sap-fico	SAP FICO is the pair of SAP modules for Financial Accounting (FI) and Controlling (CO), covering ledgers, payables, receivables and cost accounting.
+mendix	Mendix is a low-code platform from Siemens for building and running business applications with visual models.
+outsystems	OutSystems is a low-code platform for building, deploying and maintaining web and mobile business applications.
+thinkwise	Thinkwise is a Dutch low-code platform that generates enterprise applications from a data model.
+pega	Pega (Pegasystems) is a low-code platform for business process management, case management and customer engagement.
+matillion	Matillion is a cloud ETL and ELT tool for loading and transforming data in warehouses such as Snowflake and Databricks.
+data-vault	Data Vault is a data warehouse modelling method that separates business keys, relationships and history into hubs, links and satellites.
+tabular-editor	Tabular Editor is a tool for developing and managing Power BI and Analysis Services tabular models.
+apache-camel	Apache Camel is an open-source Java framework for integrating systems through enterprise integration patterns.
+tekton	Tekton is an open-source, Kubernetes-native framework for building CI/CD pipelines.
+archimate	ArchiMate is an open modelling language for describing enterprise architecture.
+togaf	TOGAF is The Open Group's framework and method for designing and governing enterprise architecture.
+auth0	Auth0 is an identity platform for adding authentication and authorisation to applications.
+firestore	Firestore is Google's serverless NoSQL document database, part of Firebase and Google Cloud.
+topdesk	TOPdesk is IT and facility service-management software used by service desks for incidents, changes and assets.
+hastus	HASTUS is scheduling software public-transport operators use to plan vehicle and crew schedules.
+afas	AFAS is Dutch ERP software for HR, payroll, finance and CRM.
+exact-online	Exact Online is cloud accounting and ERP software for small and mid-sized businesses.
+nmbrs	Nmbrs is Dutch cloud software for payroll and HR administration.
+youforce	Youforce is Visma Raet's HR and payroll platform, common in Dutch public-sector and care organisations.
+nis2	NIS2 is the EU directive that sets cybersecurity risk-management and incident-reporting duties for essential and important entities.
+nen-7510	NEN 7510 is the Dutch standard for information security in healthcare, built on ISO 27001.
