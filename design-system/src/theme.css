@@ -132,6 +132,13 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-warning-strong: var(--warning-strong);
   --color-warning-muted: var(--warning-muted);
+  /* Success, the same four roles: a gain, a pass, a connected state. Before it, the
+     app wrote green-600 / emerald-600 / green-500 per call site, three shades for one
+     meaning and none of them legible as small text on the light page. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-strong: var(--success-strong);
+  --color-success-muted: var(--success-muted);
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);

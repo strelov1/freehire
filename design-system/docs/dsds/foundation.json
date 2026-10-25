@@ -40,7 +40,11 @@
         "warning",
         "warning-foreground",
         "warning-strong",
-        "warning-muted"
+        "warning-muted",
+        "success",
+        "success-foreground",
+        "success-strong",
+        "success-muted"
       ]
     },
     {

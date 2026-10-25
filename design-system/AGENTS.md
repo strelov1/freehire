@@ -61,7 +61,7 @@ rather than here — their census of `web/` was already off by a third.
   (`scripts/build-tokens.mjs`) into `dist/`. Edit the JSON, run `pnpm build` — never hand-edit
   `dist/`.
 - **`.dark` carries only what dark changes.** The dark build reads `color-dark.tokens.json`
-  alone, so `dist/tokens-dark.css` is 29 declarations, not a second copy of the whole scale —
+  alone, so `dist/tokens-dark.css` is 33 declarations, not a second copy of the whole scale —
   the cascade already inherits the rest from `:root`. A dark override of a non-colour token
   would need its file added to `darkSources`; nothing needs one yet.
 - **A token name may not be authored twice.** `build-tokens.mjs` throws and names both files.

@@ -93,5 +93,17 @@
   "warning-muted": {
     "$value": "oklch(0.279 0.077 45.635)",
     "$description": "Soft caution tint. A background that carries the meaning without the weight."
+  },
+  "success": {
+    "$value": "oklch(0.72 0.16 155)"
+  },
+  "success-foreground": {
+    "$value": "oklch(0.2 0.05 155)"
+  },
+  "success-strong": {
+    "$value": "oklch(0.8 0.15 155)"
+  },
+  "success-muted": {
+    "$value": "oklch(0.3 0.06 155)"
   }
 }
