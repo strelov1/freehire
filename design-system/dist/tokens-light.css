@@ -67,9 +67,9 @@
   --shadow-md: 0px 2px 4px 0px oklch(0 0 0 / 0.1); /** Default elevation — cards, popovers. */
   --shadow-lg: 0px 4px 12px 0px oklch(0 0 0 / 0.15); /** High elevation — dialogs, modals. */
   --shadow-xl: 0px 8px 24px 0px oklch(0 0 0 / 0.2); /** Maximum elevation — overlays, toasts. */
-  --duration-fast: 150ms; /** Quick feedback — hover, focus, toggle. */
-  --duration-normal: 250ms; /** Standard transition — color, opacity. */
-  --duration-slow: 400ms; /** Deliberate motion — dialog open, panel expand. */
+  --duration-fast: 0.15s; /** Quick feedback — hover, focus, toggle. */
+  --duration-normal: 0.25s; /** Standard transition — color, opacity. */
+  --duration-slow: 0.4s; /** Deliberate motion — dialog open, panel expand. */
   --ease-in: cubic-bezier(0.4, 0, 1, 1); /** Accelerating exit. */
   --ease-out: cubic-bezier(0, 0, 0.2, 1); /** Decelerating entrance. */
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1); /** Symmetric — default for most transitions. */
