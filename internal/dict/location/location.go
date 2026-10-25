@@ -95,10 +95,20 @@ func Parse(location string) Geo {
 				continue
 			}
 		}
+		// An Australian state code closing the token ("perth wa", the form SEEK writes with
+		// no comma) states the country and is cut off, so the place before it resolves as
+		// a city of its own, with its city name and metro.
+		if rest, ok := stripAustralianState(tok); ok {
+			countrySet["au"] = struct{}{}
+			regionSet[countryToRegion["au"]] = struct{}{}
+			tok = rest
+		}
 		// Curated geography first, into the scratch sets (authoritative for country/region).
 		clear(tokCountry)
 		clear(tokRegion)
-		if _, ok := resolveSubdivision(tok, prevTok); ok {
+		// An Australian state is not a US/CA subdivision: recording the "wa" of "Perth, WA"
+		// would key the metro lookup to Washington and find nothing in Perth.
+		if _, ok := resolveSubdivision(tok, prevTok); ok && !isAustralianState(tok, prevTok) {
 			if code, ok := statedSubdivisionCode(tok); ok {
 				statedSubdivisions[code] = struct{}{}
 			}
@@ -260,6 +270,11 @@ func resolveGeoToken(tok, prevTok string, countrySet, regionSet map[string]struc
 		regionSet[r] = struct{}{}
 		return true
 	}
+	if isAustralianState(tok, prevTok) {
+		countrySet["au"] = struct{}{}
+		regionSet[countryToRegion["au"]] = struct{}{}
+		return true
+	}
 	if code, ok := resolveSubdivision(tok, prevTok); ok {
 		countrySet[code] = struct{}{}
 		if r, ok := countryToRegion[code]; ok {
@@ -395,6 +410,44 @@ func resolveSubdivision(tok, prevTok string) (string, bool) {
 		return code, true
 	}
 	return "", false
+}
+
+// australianStateCodes are the postal abbreviations of Australia's states and territories.
+// The value says whether the code is Australia's alone: "nsw" or "qld" can only mean an
+// Australian state, while "wa" is also Washington, "nt" the Northwest Territories, "sa"
+// Saudi Arabia's ISO code and "act" an English word.
+var australianStateCodes = map[string]bool{
+	"nsw": true, "vic": true, "qld": true, "tas": true,
+	"wa": false, "sa": false, "nt": false, "act": false,
+}
+
+// isAustralianState reports whether code, stated after place, is an Australian state:
+// the comma form passes the preceding token as the place ("Perth, WA"), the no-comma form
+// the token's own leading words (stripAustralianState). A code only Australia uses needs
+// nothing more than a place before it; a shared one needs that place to be a city the dictionary
+// already puts in Australia, so "Seattle, WA" stays Washington and "Yellowknife, NT" stays
+// Canadian.
+func isAustralianState(code, place string) bool {
+	only, ok := australianStateCodes[code]
+	if !ok || place == "" {
+		return false
+	}
+	return only || isRecognizedCityOf(place, "au")
+}
+
+// stripAustralianState cuts an Australian state code off the end of a multi-word token
+// ("perth wa" -> "perth", "bondi junction nsw" -> "bondi junction"), under the same rule
+// isAustralianState applies with the leading words as the place.
+func stripAustralianState(tok string) (string, bool) {
+	fields := strings.Fields(tok)
+	if len(fields) < 2 {
+		return tok, false
+	}
+	place := strings.Join(fields[:len(fields)-1], " ")
+	if !isAustralianState(fields[len(fields)-1], place) {
+		return tok, false
+	}
+	return place, true
 }
 
 // subdivisionAccepted reports whether a matched subdivision code should win over

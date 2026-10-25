@@ -832,3 +832,52 @@ func TestParseUKPostcode(t *testing.T) {
 		}
 	}
 }
+
+// TestParseAustralianStateCodes covers the "City STATE" form SEEK writes ("Perth WA",
+// "Sydney NSW"): one token with no comma, whose trailing code used to be read against the
+// US/Canada table alone, so WA became Washington and NT the Northwest Territories.
+func TestParseAustralianStateCodes(t *testing.T) {
+	tests := []struct {
+		location string
+		want     []string
+	}{
+		// Codes only Australia uses resolve after any place name.
+		{"Sydney NSW", []string{"au"}},
+		{"Melbourne VIC", []string{"au"}},
+		{"Brisbane QLD", []string{"au"}},
+		{"Hobart TAS", []string{"au"}},
+		{"Bondi Junction NSW", []string{"au"}},
+		// Codes another country shares resolve to Australia only beside an Australian city.
+		{"Perth WA", []string{"au"}},
+		{"Perth, WA", []string{"au"}},
+		{"Osborne Park, Perth WA", []string{"au"}},
+		{"Adelaide SA", []string{"au"}},
+		{"Darwin NT", []string{"au"}},
+		{"Darwin, NT", []string{"au"}},
+		{"Canberra ACT", []string{"au"}},
+		// The other readings stay where no Australian city says otherwise.
+		{"Seattle, WA", []string{"us"}},
+		{"Spokane WA", []string{"us"}},
+		{"Yellowknife, NT", []string{"ca"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.location, func(t *testing.T) {
+			got := Parse(tt.location).Countries
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Parse(%q).Countries = %v, want %v", tt.location, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestParseAustralianStateKeepsTheCity guards what cutting the code off is for: the place
+// before it still resolves as a city, with its metro, instead of the whole "perth wa" token
+// matching nothing in the city dictionary.
+func TestParseAustralianStateKeepsTheCity(t *testing.T) {
+	want := Geo{Countries: []string{"au"}, Regions: []string{"apac"}, Cities: []string{"Perth"}, Metros: []string{"Perth (AU)"}}
+	for _, location := range []string{"Perth WA", "Osborne Park, Perth WA", "Perth, WA"} {
+		if got := Parse(location); !reflect.DeepEqual(got, want) {
+			t.Errorf("Parse(%q) = %+v, want %+v", location, got, want)
+		}
+	}
+}
