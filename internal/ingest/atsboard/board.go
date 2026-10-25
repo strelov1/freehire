@@ -255,6 +255,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"bamboohr.com", "bamboohr", modeSubdomain},
 	{"breezy.hr", "breezy", modeSubdomain},
 	{"jobspage.co", "jobspage", modeSubdomain},
+	// onlyfy by XING (formerly prescreen): <board>.onlyfy.jobs, and the older <board>.jobbase.io,
+	// which redirects to the same site.
+	{"onlyfy.jobs", "onlyfy", modeSubdomain},
+	{"jobbase.io", "onlyfy", modeSubdomain},
 	{"freshteam.com", "freshteam", modeSubdomain},
 	{"peopleforce.io", "peopleforce", modeSubdomain},
 	// Potok: <tenant>.potok.io/open/jobs/<id>. Its own infrastructure hosts share the wildcard

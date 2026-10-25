@@ -903,6 +903,7 @@ var probers = map[string]prober{
 	"harri":           harriProber{},
 	"hcshiring":       hcshiringProber{},
 	"appone":          apponeProber{},
+	"onlyfy":          onlyfyProber{},
 	"paradox":         paradoxProber{},
 	"phenom":          phenomProber{},
 	"polymer":         polymerProber{},

@@ -266,6 +266,8 @@ func TestRecognize(t *testing.T) {
 		{"jobspage vacancy", "https://richads.jobspage.co/9fu6scqy-account-manager", "jobspage", "richads", "https://richads.jobspage.co", true},
 		{"jobspage demo board is the vendor's", "https://demo.jobspage.co/", "", "", "", false},
 		{"jobspage marketing site is not a tenant", "https://www.jobspage.co/pricing", "", "", "", false},
+		{"onlyfy posting", "https://jungheinrich.onlyfy.jobs/en/job/qqeva17cjz1xgg6jzmc9hw4jnsc68o7", "onlyfy", "jungheinrich", "https://jungheinrich.onlyfy.jobs", true},
+		{"onlyfy legacy jobbase host", "https://eurogarages.jobbase.io/job/2ebprxxyc4boawly8ggm0saks8texkj", "onlyfy", "eurogarages", "https://eurogarages.jobbase.io", true},
 		{"keka subdomain", "https://100.keka.com/careers", "keka", "100", "https://100.keka.com", true},
 		{"personio nested apex subdomain", "https://acme.jobs.personio.com/job/9", "personio", "acme", "https://acme.jobs.personio.com", true},
 		{"personio de host", "https://reflex-aerospace-gmbh.jobs.personio.de/job/2679152?display=en#apply", "personio", "reflex-aerospace-gmbh", "https://reflex-aerospace-gmbh.jobs.personio.de", true},

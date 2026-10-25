@@ -1,0 +1,28 @@
+
+<div class="row">
+<div class="col-sm-24 row-table-empty text-center">
+<span class="text-muted">
+<big>
+<br/>
+There are currently no vacant positions.
+<br/>&nbsp;
+</big>
+</span>
+</div>
+</div>
+<script>
+$(document).ready(function () {
+/*
+* REMOVE OLD "LOAD MORE" LINK CONTAINER
+*/
+$('.pagination-next-container').length > 0 ? $('.pagination-next-container').remove() : null;
+$('#pageInfoCurrentDisplayStart').text(0);
+$('.page-info').attr('aria-label', 'showing 0 of 0');
+$('.page-info .icon-spinner').hide();
+$('#pageInfoTotalCount').text(0);
+});
+</script>
+<meta name="robots" content="noindex, follow">
+<script>
+var infiniteMaxPage = 0;
+</script>

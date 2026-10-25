@@ -440,6 +440,7 @@ func All(c HTTPClient) map[string]Source {
 		NewAlignerr(c, os.Getenv("ALIGNERR_REFERRAL_CODE")),
 		NewTalentHR(c),
 		NewJobspage(c),
+		NewOnlyfy(c),
 		NewPolymer(c),
 		NewFlatchr(c),
 		NewDvinci(c),
