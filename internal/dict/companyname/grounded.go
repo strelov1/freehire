@@ -20,7 +20,10 @@ var genericEmployerPhrases = map[string]bool{
 // TEXT's own spelling of it, never the model's.
 func GroundedName(candidate string, texts []string) (string, bool) {
 	want := []rune(foldForMatch(strings.Join(strings.Fields(candidate), " ")))
-	if len(want) < 2 || genericEmployerPhrases[string(want)] {
+	// The generic check ignores surrounding punctuation ("Our client:"); the grounding below
+	// does not, so what is admitted is still exactly what the text says.
+	bare := strings.TrimFunc(string(want), func(r rune) bool { return !isWordRune(r) })
+	if len(want) < 2 || genericEmployerPhrases[bare] {
 		return "", false
 	}
 	for _, text := range texts {

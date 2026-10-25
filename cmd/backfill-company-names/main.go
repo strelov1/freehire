@@ -34,6 +34,7 @@ import (
 	"slices"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
@@ -129,7 +130,8 @@ func run() int {
 		log.Printf("list placeholder boards: %v", err)
 		return 1
 	}
-	boards = capProvider(boards, "adp", llmMax)
+	// Days since the epoch, times the cap: the window advances by one cap a day (capProvider).
+	boards = capProvider(boards, "adp", llmMax, time.Now().UTC().Unix()/86400*llmMax)
 	boardRenames, unresolved := resolvePlaceholders(ctx, boards, placeholders)
 	sort.Slice(boardRenames, func(i, j int) bool {
 		a, b := boardRenames[i], boardRenames[j]

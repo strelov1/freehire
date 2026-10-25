@@ -88,15 +88,42 @@ func TestCapProvider(t *testing.T) {
 		{Provider: "adp", Board: "a1"}, {Provider: "oracle", Board: "o1"},
 		{Provider: "adp", Board: "a2"}, {Provider: "adp", Board: "a3"},
 	}
-	got := capProvider(rows, "adp", 2)
-	var boards []string
-	for _, r := range got {
-		boards = append(boards, r.Board)
+	boards := func(rs []db.ListPlaceholderCompanyBoardsRow) string {
+		var out []string
+		for _, r := range rs {
+			out = append(out, r.Board)
+		}
+		return strings.Join(out, ",")
 	}
-	if strings.Join(boards, ",") != "a1,o1,a2" {
-		t.Errorf("capProvider = %v, want a1,o1,a2 (other providers untouched)", boards)
+	for offset, want := range map[int64]string{
+		0: "a1,o1,a2", // other providers always kept
+		1: "o1,a2,a3",
+		2: "a1,o1,a3", // the window wraps
+		5: "a1,o1,a3", // offset is taken modulo the provider's rows
+	} {
+		if got := boards(capProvider(rows, "adp", 2, offset)); got != want {
+			t.Errorf("capProvider(offset %d) = %s, want %s", offset, got, want)
+		}
 	}
-	if len(capProvider(rows, "adp", 0)) != len(rows) {
-		t.Error("capProvider(0) should mean unbounded")
+	if len(capProvider(rows, "adp", 0, 7)) != len(rows) {
+		t.Error("capProvider(n=0) should mean unbounded")
+	}
+}
+
+// Successive days must reach every board: a fixed window would fill with the boards the
+// model refuses and never move past them.
+func TestCapProviderSweepsEveryBoard(t *testing.T) {
+	var rows []db.ListPlaceholderCompanyBoardsRow
+	for i := range 7 {
+		rows = append(rows, db.ListPlaceholderCompanyBoardsRow{Provider: "adp", Board: string(rune('a' + i))})
+	}
+	seen := map[string]bool{}
+	for day := int64(0); day < 4; day++ { // ceil(7/2) days
+		for _, r := range capProvider(rows, "adp", 2, day*2) {
+			seen[r.Board] = true
+		}
+	}
+	if len(seen) != len(rows) {
+		t.Errorf("four daily runs of 2 reached %d of %d boards", len(seen), len(rows))
 	}
 }

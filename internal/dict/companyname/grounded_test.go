@@ -34,8 +34,8 @@ func TestGroundedName(t *testing.T) {
 
 // A generic phrase is refused even when the text really contains it.
 func TestGroundedNameRefusesGenericPhrases(t *testing.T) {
-	texts := []string{"Our client is a leading firm. The Company offers benefits. Confidential."}
-	for _, c := range []string{"Our client", "The Company", "Confidential"} {
+	texts := []string{"Our client: a leading firm. The Company offers benefits. (Confidential)"}
+	for _, c := range []string{"Our client", "The Company", "Confidential", "Our client:", "(Confidential)"} {
 		if got, ok := GroundedName(c, texts); ok {
 			t.Errorf("GroundedName(%q) = %q, ok; want refused", c, got)
 		}

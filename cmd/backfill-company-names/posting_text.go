@@ -94,23 +94,38 @@ func (r postingTextResolver) Name(ctx context.Context, board string) (string, er
 	return name, nil
 }
 
-// capProvider keeps at most n of one provider's rows and every other provider's — how a run
-// bounds the boards it asks a model about without touching the providers that cost nothing.
-// n <= 0 keeps everything.
-func capProvider(rows []db.ListPlaceholderCompanyBoardsRow, provider string, n int64) []db.ListPlaceholderCompanyBoardsRow {
+// capProvider keeps at most n of one provider's rows, taken from a window that starts at
+// offset and wraps, plus every other provider's — how a run bounds the boards it asks a model
+// about without touching the providers that cost nothing. n <= 0 keeps everything.
+//
+// The window has to MOVE between runs. A board the model cannot name stays a placeholder and
+// stays in the list, so a window fixed at the front fills with refusals within a few runs and
+// the boards behind them are never read — the failure backfill-derive carried until
+// freehire#2864. The caller passes an offset that advances by n each day, so successive runs
+// sweep the whole list, and a refused board is asked again only once per sweep.
+func capProvider(rows []db.ListPlaceholderCompanyBoardsRow, provider string, n, offset int64) []db.ListPlaceholderCompanyBoardsRow {
 	if n <= 0 {
 		return rows
 	}
-	out := make([]db.ListPlaceholderCompanyBoardsRow, 0, len(rows))
-	var kept int64
-	for _, row := range rows {
+	var mine []int
+	for i, row := range rows {
 		if row.Provider == provider {
-			if kept >= n {
-				continue
-			}
-			kept++
+			mine = append(mine, i)
 		}
-		out = append(out, row)
+	}
+	if int64(len(mine)) <= n {
+		return rows
+	}
+	keep := make(map[int]bool, n)
+	start := offset % int64(len(mine))
+	for k := int64(0); k < n; k++ {
+		keep[mine[(start+k)%int64(len(mine))]] = true
+	}
+	out := make([]db.ListPlaceholderCompanyBoardsRow, 0, len(rows)-len(mine)+int(n))
+	for i, row := range rows {
+		if row.Provider != provider || keep[i] {
+			out = append(out, row)
+		}
 	}
 	return out
 }
