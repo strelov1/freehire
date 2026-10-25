@@ -147,7 +147,7 @@ func Parse(location string) Geo {
 		// ("Birmingham") can never *guess* a geography here; the country/region stay the
 		// curated dictionaries' job (and the LLM's, at serve time). This keeps the parser's
 		// "never guesses" contract while still populating the cities facet broadly.
-		if ce, ok := cityDict[tok]; ok && !regionNotCity[tok] && !provinceAfterCity(tok, citySet) {
+		if ce, ok := cityDict[tok]; ok && !regionNotCity[tok] && !provinceAfterCity(tok, lower, citySet) {
 			if resolved {
 				// The token is a curated place: emit the city name only when cityDict agrees
 				// on its country, so a country/region token ("usa") never emits the unrelated
@@ -664,17 +664,18 @@ var workModeMarkers = []struct {
 	markers []string
 }{
 	{"hybrid", []string{"hybrid", "гибрид"}},
-	// The second line is the remote label Recruitee writes in the posting's language
-	// IN PLACE of a location ("Werken op afstand", "Homeoffice", "Poste à distance").
-	{"remote", []string{"remote", "work from home", "wfh", "anywhere", "worldwide", "distributed", "удал",
-		"op afstand", "homeoffice", "à distance", "a distancia", "zdalna", "remoto", "hjemmefra"}},
+	{"remote", []string{"remote", "work from home", "wfh", "anywhere", "worldwide", "distributed", "удал"}},
 	{"onsite", []string{"on-site", "onsite", "on site", "in office", "in-office"}},
 }
 
 // detectWorkMode scans the whole lowercased location for a work-mode marker,
 // independent of tokenization so a marker embedded in a token ("Berlin
-// (On-site)") is still found.
+// (On-site)") is still found. A Recruitee remote label (remoteLabels) counts only as the
+// whole line.
 func detectWorkMode(lower string) string {
+	if remoteLabels[strings.TrimSpace(lower)] {
+		return "remote"
+	}
 	for _, wm := range workModeMarkers {
 		for _, m := range wm.markers {
 			if strings.Contains(lower, m) {

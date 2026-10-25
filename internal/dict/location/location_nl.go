@@ -52,8 +52,19 @@ var provinceCapitals = map[string]bool{
 	"luik": true, "liège": true,
 }
 
-// provinceAfterCity reports whether tok is a provinceCapitals name following a token that
-// already named a city in the line.
-func provinceAfterCity(tok string, citySet map[string]struct{}) bool {
-	return provinceCapitals[tok] && len(citySet) > 0
+// provinceAfterCity reports whether tok is a provinceCapitals name in the province slot of
+// a "Town, Province, Country" line: a city came before it, and the line writes it between
+// two commas. "Amersfoort or Utrecht, Nederland" names Utrecht as a second worksite — its
+// separator before it is a list word, not a comma — and keeps the city.
+func provinceAfterCity(tok, lower string, citySet map[string]struct{}) bool {
+	return provinceCapitals[tok] && len(citySet) > 0 && strings.Contains(lower, ", "+tok+",")
+}
+
+// remoteLabels are the remote label Recruitee writes in the posting's language IN PLACE
+// of a location. Matched as the WHOLE line, never as a substring: inside a longer line
+// "Homeoffice möglich" offers hybrid work and "kein Homeoffice" refuses it.
+var remoteLabels = map[string]bool{
+	"werken op afstand": true, "homeoffice": true, "poste à distance": true,
+	"trabajo a distancia": true, "praca zdalna": true, "trabalho remoto": true,
+	"stillingen kan udføres hjemmefra": true, "attālinātais darbs": true,
 }

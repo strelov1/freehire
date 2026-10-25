@@ -30,6 +30,7 @@ func TestParseDutchLocations(t *testing.T) {
 		{"Limburg is no city", "Maastricht, Limburg, Nederland", []string{"nl"}, []string{"Maastricht"}},
 		{"province alone", "Gelderland", []string{"nl"}, nil},
 		{"province named after its capital", "Amersfoort, Utrecht, Nederland", []string{"nl"}, []string{"Amersfoort"}},
+		{"a list naming the capital", "Amersfoort or Utrecht, Nederland", []string{"nl"}, []string{"Amersfoort", "Utrecht"}},
 		{"the capital itself", "Utrecht, Utrecht, Nederland", []string{"nl"}, []string{"Utrecht"}},
 		{"Den Bosch", "Den Bosch, Noord-Brabant, Nederland", []string{"nl"}, []string{"'s-Hertogenbosch"}},
 		// The province code Dutch writes after a town to tell it from its namesakes.
@@ -60,12 +61,17 @@ func TestParseDutchLocations(t *testing.T) {
 }
 
 // TestParseRecruiteeRemoteLabels pins the remote label Recruitee writes in the posting's
-// language in place of a location.
+// language in place of a location, and only as the whole line.
 func TestParseRecruiteeRemoteLabels(t *testing.T) {
 	for _, loc := range []string{"Werken op afstand", "Homeoffice", "Poste à distance",
 		"Trabajo a distancia", "Praca zdalna", "Trabalho remoto"} {
 		if g := Parse(loc); g.WorkMode != "remote" {
 			t.Errorf("Parse(%q).WorkMode = %q, want remote", loc, g.WorkMode)
+		}
+	}
+	for _, loc := range []string{"Berlin, Homeoffice möglich", "Kein Homeoffice, München"} {
+		if g := Parse(loc); g.WorkMode == "remote" {
+			t.Errorf("Parse(%q).WorkMode = remote, want the label read only as the whole line", loc)
 		}
 	}
 }

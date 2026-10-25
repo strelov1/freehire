@@ -138,7 +138,7 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   `stripDutchProvince` cuts it, and a code shared with a US state or an ISO country (NH, NB,
   UT, FR…) only when the town is Dutch. Also: the "1012 AB" postcode, "regio X", "X en
   omgeving", and Recruitee's translated remote label ("Werken op afstand", "Homeoffice",
-  "Poste à distance") as a remote marker.
+  "Poste à distance") as a remote marker, matched only as the whole line.
 - `work_mode` is dict-only — `jobview` serves the `jobs` column alone, the LLM's `enrichment.work_mode` is never merged in (it stays raw in the JSONB).
 - `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`): the dictionary wins when it pins a place, and the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket, so a dictionary-silent remote role still gets a geographic reach rather than none. This is the one deliberate exception to dict-only among the facets.
 
