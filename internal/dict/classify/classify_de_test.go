@@ -97,6 +97,9 @@ func TestGermanHeadsDoNotOverreach(t *testing.T) {
 		// A machine operator is not a leader; a landscape keeper is not a nurse.
 		{"Maschinenführer (m/w/d)", "manufacturing", ""},
 		{"Landschaftspfleger (m/w/d)", "", ""},
+		{"Tierpfleger (m/w/d) im Zoo", "", ""},
+		{"Baumpfleger (m/w/d)", "", ""},
+		{"Pferdepfleger (m/w/d)", "", ""},
 		// An IT technician is not a tradesman, and PLC programming stays unfiled.
 		{"IT-Techniker (m/w/d)", "", ""},
 		{"SPS-Programmierer (m/w/d)", "", ""},

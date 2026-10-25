@@ -48,6 +48,9 @@ var germanCategoryTable = []aliasEntry{
 	{"-landschaftspfleger", categoryNone}, // a landscape keeper, not a nurse
 	{"-denkmalpfleger", categoryNone},     // a monument conservator
 	{"-grünpfleger", categoryNone},
+	{"-baumpfleger", categoryNone},      // an arborist
+	{"-tierpfleger", categoryNone},      // an animal keeper
+	{"-pferdepfleger", categoryNone},    // a stable hand
 	{"-alltagsbegleiter", "healthcare"}, // the elderly-care companion, before the veto below
 	{"-schulbegleiter", "education"},    // a pupil's classroom aide
 	{"-begleiter", categoryNone},
