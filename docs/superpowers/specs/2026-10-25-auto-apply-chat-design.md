@@ -106,10 +106,18 @@ while the chat is open. Auto-apply itself already requires a paid plan.
 
 ### Web
 
-`JobDrawer.svelte`'s auto-apply tab renders `AssistantChat` bound to the `apply` session in
-place of the per-question `answerList` textareas. The progress bar, pause and cancel stay
-above it. `AssistantChat` gains the periodic sync while mounted. The textareas remain
-reachable behind a "fill in a form instead" link for anyone who prefers it.
+The chat opens in the docked assistant panel the experience bank already uses
+(`web/src/lib/components/ExperienceAssistantPanel.svelte`), not a new surface. That panel
+already solves what this needs: it docks beside the page instead of covering it where there
+is room, mounts the chat (and so creates the session) only on first open, keeps it mounted
+while hidden so a streaming turn is not cancelled, and links out to the full assistant. It is
+generalised into one `AssistantPanel` taking the session's preset and binding (`profile` +
+atoms for the bank, `apply` + job slug here); the experience bank keeps its behaviour.
+
+The job drawer's auto-apply tab gets a "Answer in chat" action that opens the panel on the
+attempt's `apply` session, shown whenever the attempt is `blocked` or `pending_review`. The
+per-question textareas stay in the tab as the form alternative. `AssistantChat` gains the
+periodic sync while mounted and bound to an `apply` session.
 
 ### MCP
 
