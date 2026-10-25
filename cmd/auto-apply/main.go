@@ -22,6 +22,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/experience"
 	"github.com/strelov1/freehire/internal/candidate/resume"
+	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
@@ -76,7 +77,8 @@ func run() int {
 	// extension-autofill path already resolves a candidate's profile through — see
 	// internal/candidateprofile's package doc for why this must be the one Assembler.
 	answers := assemblerAnswerSource{
-		assembler: candidateprofile.NewAssembler(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank),
+		assembler: candidateprofile.NewAssembler(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank).
+			WithProfileLocation(userprofile.New(userprofile.NewQueriesRepository(queries))),
 	}
 
 	// Question drafting (openspec/changes/auto-apply-llm-drafting) is optional: an

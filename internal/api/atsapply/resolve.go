@@ -56,6 +56,9 @@ var answerKeyFor = map[string]string{
 	// candidate whose name the profile had all along.
 	"firstname": "first_name",
 	"lastname":  "last_name",
+	// Workable's `address`, required on the same form, answered from the profile's location.
+	// By id and never by label: "Email address" and "IP address" are labels too.
+	"address":   "location",
 	"full_name": "full_name",
 	// Recruitee's own control name for the same field. Measured on production 2026-09-09:
 	// a queued Recruitee application parked on `{"id": "name", "label": "Full name"}` for

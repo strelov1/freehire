@@ -26,19 +26,20 @@ func TestSubmits_FollowsEveryPathThatCompletesAnApplication(t *testing.T) {
 	}
 }
 
-// Workable names its name fields firstname/lastname, not first_name/last_name.
-func TestResolve_WorkableNameFields(t *testing.T) {
+// Workable names its own identity fields firstname/lastname/address.
+func TestResolve_WorkableIdentityFields(t *testing.T) {
 	fields := []MergedField{
 		{ID: "firstname", Label: "First name", Kind: "text", Required: true},
 		{ID: "lastname", Label: "Last name", Kind: "text", Required: true},
+		{ID: "address", Label: "Address", Kind: "text", Required: true},
 	}
 
-	plan := Resolve(fields, map[string]string{"first_name": "Ilya", "last_name": "Strelov"}, false)
+	plan := Resolve(fields, map[string]string{"first_name": "Ilya", "last_name": "Strelov", "location": "São Paulo, Brazil"}, false)
 
 	if !plan.FullyResolved() {
 		t.Fatalf("unmapped = %+v", plan.Unmapped)
 	}
-	if plan.Fields[0].Value != "Ilya" || plan.Fields[1].Value != "Strelov" {
+	if plan.Fields[0].Value != "Ilya" || plan.Fields[1].Value != "Strelov" || plan.Fields[2].Value != "São Paulo, Brazil" {
 		t.Errorf("fields = %+v", plan.Fields)
 	}
 }

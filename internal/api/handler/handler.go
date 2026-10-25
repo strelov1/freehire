@@ -837,6 +837,7 @@ func Register(app *fiber.App, cfg Config) {
 	// shared client's default timeout. The contact block it plans over comes from the base
 	// CV, then the structured résumé — see autofillHandlers.autofillProfile.
 	autofillH := newAutofillHandlers(cvStore, resumeStore, queries, screeningAnswersSvc, answerBank, a.browserTools, llmBinding{client: cfg.LLM, keys: llmKeys}, cfg.TypesafeAPIKey)
+	autofillH.profiles.WithProfileLocation(profileSvc)
 	usageH := newUsageHandlers(cfg.LLMKeys, llmKeys)
 	accountDeletion.WithGatewayKeys(llmKeys.Revoke)
 

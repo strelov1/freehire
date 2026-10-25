@@ -149,6 +149,9 @@ type Assembler struct {
 	// bank is nil-able: "no answer bank configured" degrades to no banked answers, the
 	// same way an unconfigured screening-answers reader degrades those fields to empty.
 	bank BankReader
+	// profiles is nil-able: the job-search profile's base, read only when no contact source
+	// states a location (WithProfileLocation).
+	profiles ProfileReader
 }
 
 // NewAssembler builds an Assembler over its sources. screeningAnswers and bank may be nil.
@@ -184,6 +187,13 @@ func (a *Assembler) Assemble(ctx context.Context, userID int64) (Profile, error)
 	}
 
 	profile := BuildProfile(firstStatedHeader(fromCV, fromResume), account.Email)
+	if profile.Location == "" {
+		base, err := a.baseLocation(ctx, userID)
+		if err != nil {
+			return Profile{}, err
+		}
+		profile.Location = base
+	}
 	if err := applyScreeningFields(ctx, &profile, a.screeningAnswers, userID); err != nil {
 		return Profile{}, err
 	}
