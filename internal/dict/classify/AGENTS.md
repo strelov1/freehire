@@ -249,6 +249,29 @@ seniority 22.0% → 27.4%. Over 542k control titles (greenhouse, lever, smartrec
 workday, the German crawl) the Dutch tables resolved 2,814 categories and 2,149 grades,
 hand-checked: almost all are Dutch, Flemish or French postings read correctly.
 
+## Indian grade forms
+
+`india.go` holds `indianSeniorityTable`, a FALLBACK read after the main table and before
+the German and Dutch ones, so a stated grade always wins ("Senior Software Engineer II" is senior).
+The SDE ladder reads three rungs (SDE-1 junior, SDE-2 middle, SDE-3 senior, and the SDET
+and "Software Development Engineer" spellings); every other ladder reads only I and II,
+in Roman numerals: "Software Engineer III" is senior at some employers and mid at others,
+and "Java Developer 2-5 Years" is a range, not a rung. "Associate" grades only the role
+it precedes ("Associate Software Engineer", "Associate Consultant"); alone, before a rank
+or after a shop role it states nothing. SMTS/LMTS/PMTS are graded, bare MTS is not (it is
+the grade-blind "Member of Technical Staff"). Fresher is junior, Apprentice intern, Team
+Leader lead.
+
+Two changes sit in the MAIN table, because the main table answered them wrongly: the
+trainee HIRES ("Graduate Engineer Trainee", "Management Trainee", "Graduate Trainee",
+"Trainee Engineer") are junior, ahead of the bare "trainee" that stays intern; and
+"Assistant/Associate Vice President" are grade-blind phrases — an AVP is a corporate
+title below VP, not an executive, and used to read as `c_level` through the "vice
+president" inside it. No grade is ever read from a years figure in a title.
+
+Measured 2026-10-25 over 63,305 Indian postings: title seniority 31.6% → 34.1%; a
+hand-check of every newly resolved title in the top 400 found none wrong.
+
 ## Serving: dict-only
 
 `jobview.FromRow` overwrites the nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM's value is never a fallback. They remain **nested under `enrichment`** so existing search facets, SPA, and generated contracts are unchanged.

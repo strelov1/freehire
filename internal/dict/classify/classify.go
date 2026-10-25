@@ -77,8 +77,11 @@ func matchSeniority(lower string) string {
 	if s := matchOrdered(lower, seniorityTable); s != "" {
 		return s
 	}
-	// Nothing in the main table: try the German grade words and heads (german.go),
-	// then the Dutch ones (dutch.go).
+	// Nothing in the main table: try the Indian rungs and entry-hire words (india.go),
+	// then the German grade words and heads (german.go), then the Dutch ones (dutch.go).
+	if s := matchOrdered(lower, indianSeniorityTable); s != "" {
+		return s
+	}
 	if s := matchHeads(foldGermanSeniority(lower), germanSeniorityTable); s != "" {
 		return s
 	}

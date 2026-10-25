@@ -34,7 +34,7 @@ type cityEntry struct {
 
 // cityDict maps a lowercase city alias to its canonical name + country, built once
 // at init from the embedded dataset with the curated overrides layered on top.
-var cityDict, cityRenamedFrom = loadCityDict(citiesTSV, cityOverrides)
+var cityDict, cityRenamedFrom = pinCityAliases(loadCityDict(citiesTSV, cityOverrides))
 
 // contestMark suffixes an alias in the dataset when more than one country claims it.
 // cmd/gen-cities computes this across the WHOLE GeoNames dump — hamlets included, which
@@ -72,11 +72,15 @@ func loadCityDict(tsv string, overrides map[string]cityEntry) (map[string]cityEn
 		if len(parts) < 3 {
 			continue
 		}
+		name := parts[0]
+		if parts[1] == "in" {
+			name = foldIndianName(name)
+		}
 		for _, alias := range strings.Split(parts[2], "|") {
 			contested := strings.HasSuffix(alias, contestMark)
 			alias = strings.TrimSuffix(alias, contestMark)
 			if _, seen := dict[alias]; !seen {
-				dict[alias] = cityEntry{Name: parts[0], Country: parts[1], Contested: contested}
+				dict[alias] = cityEntry{Name: name, Country: parts[1], Contested: contested}
 			}
 		}
 	}

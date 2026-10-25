@@ -61,6 +61,10 @@ func Parse(location string) Geo {
 	// A token that opened a parenthesis is marked, so it can be told apart from a place
 	// in its own right once the separators are gone: see parenMark.
 	s := separatorReplacer.Replace(strings.ReplaceAll(lower, "(", "("+parenMark))
+	// A line that names the United States reads a colliding code beside it as the state.
+	namesUS := lineNamesUS(s)
+	// Metros a metropolitan-region token states without naming a city ("Delhi NCR").
+	regionMetros := map[string]struct{}{}
 
 	countrySet := map[string]struct{}{}
 	regionSet := map[string]struct{}{}
@@ -100,6 +104,29 @@ func Parse(location string) Geo {
 		// string. Skipping also keeps it out of the dash-split below.
 		tok = stripWorkmodeWords(tok)
 		if tok == "" {
+			continue
+		}
+		// India's export, district and office shapes become the city they name (india.go);
+		// a metropolitan region ("Delhi NCR") is read before that, as the region it is.
+		metro, isMetroRegion := indianMetroRegions[tok]
+		if !isMetroRegion {
+			tok = normalizeIndianToken(tok)
+			metro, isMetroRegion = indianMetroRegions[tok]
+		}
+		if isMetroRegion {
+			countrySet["in"] = struct{}{}
+			regionSet[countryToRegion["in"]] = struct{}{}
+			regionMetros[metro] = struct{}{}
+			prevTok = tok
+			continue
+		}
+		if _, colliding := collidingSubdivisions[tok]; colliding && namesUS {
+			countrySet["us"] = struct{}{}
+			regionSet[countryToRegion["us"]] = struct{}{}
+			if code, ok := statedSubdivisionCode(tok); ok {
+				statedSubdivisions[code] = struct{}{}
+			}
+			prevTok = tok
 			continue
 		}
 		// A UK postcode states the country on its own, the way a US ZIP does, and is cut
@@ -267,10 +294,16 @@ func Parse(location string) Geo {
 		}
 		metros = stringset.Sorted(metroSet)
 	}
+	if _, india := countrySet["in"]; india && len(countrySet) == 1 && len(regionMetros) > 0 {
+		for _, m := range metros {
+			regionMetros[m] = struct{}{}
+		}
+		metros = stringset.Sorted(regionMetros)
+	}
 
 	countries := stringset.Sorted(countrySet)
 	regions := stringset.Sorted(regionSet)
-	mode := detectWorkMode(lower)
+	mode := detectWorkMode(cutIndiaWidePhrases(lower))
 
 	return Geo{
 		Countries: countries,
@@ -665,7 +698,8 @@ var workModeMarkers = []struct {
 }{
 	{"hybrid", []string{"hybrid", "гибрид"}},
 	{"remote", []string{"remote", "work from home", "wfh", "anywhere", "worldwide", "distributed", "удал"}},
-	{"onsite", []string{"on-site", "onsite", "on site", "in office", "in-office"}},
+	// "WFO" is India's "work from office".
+	{"onsite", []string{"on-site", "onsite", "on site", "in office", "in-office", "work from office", "wfo"}},
 }
 
 // detectWorkMode scans the whole lowercased location for a work-mode marker,

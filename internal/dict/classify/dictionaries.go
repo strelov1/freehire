@@ -40,6 +40,10 @@ var gradeBlindPhrases = []string{
 	// ("Enterprise Account Executive (Middle-East & Africa)" read as middle).
 	"middle-east",
 	"lead-generation",
+	// Corporate titles a rung below Vice President — an AVP leads a desk at a bank or an
+	// account at a services firm — not executives. They name no grade of their own.
+	"assistant vice president",
+	"associate vice president",
 }
 
 // earlyCareersDeskPatterns are the grade-blind phrases of the early-careers vocabulary,
@@ -124,6 +128,14 @@ var seniorityTable = []aliasEntry{
 	{"джун", "junior"},
 	{"intern", "intern"},
 	{"internship", "intern"},
+	// A trainee HIRED as one is an employee on an entry grade, not an intern: India's
+	// Graduate Engineer Trainee and the Management Trainee are full-time campus hires, as
+	// a UK graduate trainee is. Listed before the bare word, which keeps its reading.
+	{"graduate engineer trainee", "junior"},
+	{"graduate trainee", "junior"},
+	{"management trainee", "junior"},
+	{"engineer trainee", "junior"},
+	{"trainee engineer", "junior"},
 	{"trainee", "intern"},
 	{"стажёр", "intern"},
 	{"стажер", "intern"},

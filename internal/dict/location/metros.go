@@ -41,6 +41,13 @@ func loadMetros(tsv string) (map[metroKey]string, map[[2]string]string) {
 		if len(f) != 4 {
 			continue
 		}
+		if f[1] == "in" {
+			// The city table speaks folded Indian names (foldIndianName), so this one does too.
+			f[0], f[3] = foldIndianName(f[0]), foldIndianName(f[3])
+		}
+		if v, ok := metroLabelOverrides[f[3]]; ok {
+			f[3] = v
+		}
 		ek := metroKey{f[0], f[1], f[2]}
 		if prev, ok := exact[ek]; ok && prev != f[3] {
 			exactAmbiguous[ek] = true

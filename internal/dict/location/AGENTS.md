@@ -108,6 +108,22 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   absent (the state); `palestine` is absent (Palestine, Texas) in favour of the unambiguous
   long forms. `Tbilisi, Georgia` still resolves to `ge` — through the city, not the country
   name. Precision over recall, the same rule the eligibility phrases follow.
+- **Indian location shapes are read in `india.go`**, per comma-token, before lookup:
+  country-state-city exports ("IN-KA-Bangalore", "India-Karnataka-Bangalore",
+  "IN.TN.Chennai") become their city; a city's revenue division or municipal form
+  ("Bangalore North", "Pune City", "Mumbai Suburban") becomes the city, but only when what
+  remains is an INDIAN city of the table, and never "Rural" (Bangalore Rural is another
+  district); an office line opening with a curated Indian city ("Chennai DLF") is that city.
+  "Delhi NCR"/"NCR"/"Greater Delhi Area" state the country and the Delhi metro and NO city —
+  naming Delhi, Gurugram or Noida would be a guess. "Pan India"/"Anywhere in India" state
+  the country, and their "anywhere" is not a remote marker. Indian display names drop
+  GeoNames' transliteration marks ("Thāne" → "Thane") in the city table, the search index
+  and the metro table alike (`foldIndianName`); two aliases GeoNames hands to a neighbour
+  are pinned without renaming it (`cityAliasPins`: Visakhapatnam, Secunderabad). A line that
+  names the United States reads a colliding code beside it as the state ("Hobart, IN, US"
+  is Indiana). Measured 2026-10-25 over 63,305 Indian postings: city 78.3% → 84.4%. The
+  residue is mostly localities (Malad, Baner, Andheri, Gachibowli), employer office codes
+  ("TPIN Malad", "INT Thane") and states alone, which correctly state no city.
 - It is a curated dictionary, not a geocoder — it resolves high-frequency names/shorthands and emits nothing for what it can't resolve (never guesses).
 - Region and work-mode values are drawn from the shared controlled vocabulary (`vocab.RegionValues`/`vocab.WorkModeValues`), so the parser, the enrichment payload, and the search facet all speak one set of values.
 - Geography is exposed as a Meilisearch facet (`regions`/`countries`/`work_mode` are filterable attributes), not a Postgres column filter.
@@ -139,6 +155,14 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   UT, FR…) only when the town is Dutch. Also: the "1012 AB" postcode, "regio X", "X en
   omgeving", and Recruitee's translated remote label ("Werken op afstand", "Homeoffice",
   "Poste à distance") as a remote marker, matched only as the whole line.
+- **Indian work-arrangement prose is a fourth phrase list** (`workmode_in.go`), read only
+  when none of the English, German and Dutch ones matched. "WFO"/"work from office" is onsite;
+  counted office days decide the rest ("3 days WFO", "Hybrid (3 days office)" → hybrid;
+  "5 days work from office" → onsite; "2 days WFH" → hybrid); a "hybrid" just before an
+  office marker keeps it hybrid. Bare "WFH" is NOT remote — it names a benefit ("occasional
+  WFH"), a shift or the staff an HR role manages as often as the arrangement — so only
+  anchored forms ("permanent WFH", "WFH / Remote", "Location: WFH") are. Measured
+  2026-10-25: description-derived work mode on Indian postings 8.6% → 10.7%.
 - `work_mode` is dict-only — `jobview` serves the `jobs` column alone, the LLM's `enrichment.work_mode` is never merged in (it stays raw in the JSONB).
 - `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`): the dictionary wins when it pins a place, and the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket, so a dictionary-silent remote role still gets a geographic reach rather than none. This is the one deliberate exception to dict-only among the facets.
 

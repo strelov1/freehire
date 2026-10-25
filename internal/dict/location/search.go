@@ -73,6 +73,9 @@ func loadCitySearchIndex(tsv string, overrides map[string]cityEntry) []citySearc
 		}
 		aliases := strings.Split(parts[2], "|")
 		final := cityEntry{Name: parts[0], Country: parts[1]}
+		if final.Country == "in" {
+			final.Name = foldIndianName(final.Name)
+		}
 		for _, alias := range aliases {
 			if ov, ok := overrides[alias]; ok && ov.Country == final.Country && !claimed[ov] {
 				final = ov

@@ -47,6 +47,9 @@ func loadSmallPlaces(tsv string) map[string][]smallPlace {
 			continue
 		}
 		p := smallPlace{Name: parts[0], Country: parts[1]}
+		if p.Country == "in" {
+			p.Name = foldIndianName(p.Name)
+		}
 		for _, alias := range strings.Split(parts[2], "|") {
 			out[alias] = append(out[alias], p)
 		}

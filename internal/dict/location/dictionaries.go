@@ -294,6 +294,11 @@ var nameToCountry = map[string]string{
 	"new delhi": "in", "delhi": "in", "kolkata": "in", "ahmedabad": "in",
 	"kochi": "in", "coimbatore": "in", "jaipur": "in", "indore": "in",
 	"chandigarh": "in", "thiruvananthapuram": "in",
+	// Indian cities whose name GeoNames also files under a place elsewhere (Madras, Oregon;
+	// Faridabad, Pakistan; Lucknow, Ontario), so the city table alone states no country
+	// for them. "Salem", "Kota" and "Whitefield" are withheld: the other readings are real.
+	"faridabad": "in", "madras": "in", "calcutta": "in", "bombay": "in",
+	"lucknow": "in", "patna": "in", "agra": "in", "howrah": "in", "raipur": "in",
 	"ho chi minh city": "vn", "hanoi": "vn",
 	"karachi": "pk", "lahore": "pk", "islamabad": "pk", "dhaka": "bd", "colombo": "lk",
 	// Europe.
