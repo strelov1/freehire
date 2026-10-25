@@ -11,6 +11,207 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const answerBuddyInvitation = `-- name: AnswerBuddyInvitation :one
+UPDATE buddy_conversations
+SET status = $1::text,
+    accepted_at = CASE WHEN $1::text = 'open' THEN now() ELSE accepted_at END
+WHERE id = $2
+  AND status = 'pending'
+  AND initiator_id <> $3
+  AND (user_low = $3 OR user_high = $3)
+RETURNING id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at
+`
+
+type AnswerBuddyInvitationParams struct {
+	Status string `json:"status"`
+	ID     int64  `json:"id"`
+	UserID int64  `json:"user_id"`
+}
+
+// Accept or decline a pending invitation. Only the party who did not send it matches; no
+// row means the caller must look the conversation up to say why.
+func (q *Queries) AnswerBuddyInvitation(ctx context.Context, arg AnswerBuddyInvitationParams) (BuddyConversation, error) {
+	row := q.db.QueryRow(ctx, answerBuddyInvitation, arg.Status, arg.ID, arg.UserID)
+	var i BuddyConversation
+	err := row.Scan(
+		&i.ID,
+		&i.UserLow,
+		&i.UserHigh,
+		&i.InitiatorID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.AcceptedAt,
+		&i.ClosedAt,
+		&i.LastReadLow,
+		&i.LastReadHigh,
+		&i.NotifiedLowAt,
+		&i.NotifiedHighAt,
+	)
+	return i, err
+}
+
+const buddyPairBlocked = `-- name: BuddyPairBlocked :one
+SELECT EXISTS (
+    SELECT 1 FROM buddy_blocks
+    WHERE (blocker_id = $1 AND blocked_id = $2)
+       OR (blocker_id = $2 AND blocked_id = $1)
+) AS blocked
+`
+
+type BuddyPairBlockedParams struct {
+	A int64 `json:"a"`
+	B int64 `json:"b"`
+}
+
+func (q *Queries) BuddyPairBlocked(ctx context.Context, arg BuddyPairBlockedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, buddyPairBlocked, arg.A, arg.B)
+	var blocked bool
+	err := row.Scan(&blocked)
+	return blocked, err
+}
+
+const countBuddyInvitationsSince = `-- name: CountBuddyInvitationsSince :one
+SELECT count(*)::bigint AS sent, min(created_at)::timestamptz AS oldest
+FROM buddy_conversations
+WHERE initiator_id = $1 AND created_at > $2
+`
+
+type CountBuddyInvitationsSinceParams struct {
+	InitiatorID int64              `json:"initiator_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type CountBuddyInvitationsSinceRow struct {
+	Sent   int64              `json:"sent"`
+	Oldest pgtype.Timestamptz `json:"oldest"`
+}
+
+// The initiator's invitations inside the rolling window, and when the oldest of them was
+// sent (NULL when there are none): that instant plus the window is when a slot frees up.
+func (q *Queries) CountBuddyInvitationsSince(ctx context.Context, arg CountBuddyInvitationsSinceParams) (CountBuddyInvitationsSinceRow, error) {
+	row := q.db.QueryRow(ctx, countBuddyInvitationsSince, arg.InitiatorID, arg.CreatedAt)
+	var i CountBuddyInvitationsSinceRow
+	err := row.Scan(&i.Sent, &i.Oldest)
+	return i, err
+}
+
+const createBuddyInvitation = `-- name: CreateBuddyInvitation :one
+WITH c AS (
+    INSERT INTO buddy_conversations (user_low, user_high, initiator_id)
+    VALUES ($1, $2, $3)
+    RETURNING id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at
+), m AS (
+    INSERT INTO buddy_messages (conversation_id, sender_id, body)
+    SELECT c.id, c.initiator_id, $4 FROM c
+)
+SELECT id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at FROM c
+`
+
+type CreateBuddyInvitationParams struct {
+	UserLow     int64  `json:"user_low"`
+	UserHigh    int64  `json:"user_high"`
+	InitiatorID int64  `json:"initiator_id"`
+	Body        string `json:"body"`
+}
+
+type CreateBuddyInvitationRow struct {
+	ID             int64              `json:"id"`
+	UserLow        int64              `json:"user_low"`
+	UserHigh       int64              `json:"user_high"`
+	InitiatorID    int64              `json:"initiator_id"`
+	Status         string             `json:"status"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	AcceptedAt     pgtype.Timestamptz `json:"accepted_at"`
+	ClosedAt       pgtype.Timestamptz `json:"closed_at"`
+	LastReadLow    pgtype.Int8        `json:"last_read_low"`
+	LastReadHigh   pgtype.Int8        `json:"last_read_high"`
+	NotifiedLowAt  pgtype.Timestamptz `json:"notified_low_at"`
+	NotifiedHighAt pgtype.Timestamptz `json:"notified_high_at"`
+}
+
+// A pending conversation and its first message in ONE statement, so the pair never exists
+// without the message that opened it. The caller passes the pair already ordered
+// (user_low < user_high). A second conversation for the pair is the unique violation on
+// (user_low, user_high).
+func (q *Queries) CreateBuddyInvitation(ctx context.Context, arg CreateBuddyInvitationParams) (CreateBuddyInvitationRow, error) {
+	row := q.db.QueryRow(ctx, createBuddyInvitation,
+		arg.UserLow,
+		arg.UserHigh,
+		arg.InitiatorID,
+		arg.Body,
+	)
+	var i CreateBuddyInvitationRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserLow,
+		&i.UserHigh,
+		&i.InitiatorID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.AcceptedAt,
+		&i.ClosedAt,
+		&i.LastReadLow,
+		&i.LastReadHigh,
+		&i.NotifiedLowAt,
+		&i.NotifiedHighAt,
+	)
+	return i, err
+}
+
+const getBuddyConversation = `-- name: GetBuddyConversation :one
+SELECT id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at FROM buddy_conversations WHERE id = $1
+`
+
+func (q *Queries) GetBuddyConversation(ctx context.Context, id int64) (BuddyConversation, error) {
+	row := q.db.QueryRow(ctx, getBuddyConversation, id)
+	var i BuddyConversation
+	err := row.Scan(
+		&i.ID,
+		&i.UserLow,
+		&i.UserHigh,
+		&i.InitiatorID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.AcceptedAt,
+		&i.ClosedAt,
+		&i.LastReadLow,
+		&i.LastReadHigh,
+		&i.NotifiedLowAt,
+		&i.NotifiedHighAt,
+	)
+	return i, err
+}
+
+const getBuddyConversationByPair = `-- name: GetBuddyConversationByPair :one
+SELECT id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at FROM buddy_conversations WHERE user_low = $1 AND user_high = $2
+`
+
+type GetBuddyConversationByPairParams struct {
+	UserLow  int64 `json:"user_low"`
+	UserHigh int64 `json:"user_high"`
+}
+
+// The pair's conversation in any status. The caller passes the pair ordered.
+func (q *Queries) GetBuddyConversationByPair(ctx context.Context, arg GetBuddyConversationByPairParams) (BuddyConversation, error) {
+	row := q.db.QueryRow(ctx, getBuddyConversationByPair, arg.UserLow, arg.UserHigh)
+	var i BuddyConversation
+	err := row.Scan(
+		&i.ID,
+		&i.UserLow,
+		&i.UserHigh,
+		&i.InitiatorID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.AcceptedAt,
+		&i.ClosedAt,
+		&i.LastReadLow,
+		&i.LastReadHigh,
+		&i.NotifiedLowAt,
+		&i.NotifiedHighAt,
+	)
+	return i, err
+}
+
 const getBuddyMemberByHandle = `-- name: GetBuddyMemberByHandle :one
 SELECT user_id, handle, category, countries, regions, joined_at, left_at FROM buddy_members WHERE handle = $1
 `

@@ -78,15 +78,31 @@ type Repository interface {
 	HideApplication(ctx context.Context, userID, applicationID int64) (bool, error)
 	ShowApplication(ctx context.Context, userID, applicationID int64) error
 	HiddenApplications(ctx context.Context, userID int64) ([]int64, error)
+	// Blocked reports a block between the two users in either direction.
+	Blocked(ctx context.Context, a, b int64) (bool, error)
+	// PairHasConversation reports a conversation between the two users in any status.
+	PairHasConversation(ctx context.Context, a, b int64) (bool, error)
+	// InvitationsSince is how many invitations userID sent after since, and when the
+	// oldest of them was sent (the zero time when there are none).
+	InvitationsSince(ctx context.Context, userID int64, since time.Time) (sent int, oldest time.Time, err error)
+	// CreateInvitation inserts a pending conversation and its first message atomically.
+	// It returns ErrConversationExists when the pair already has one.
+	CreateInvitation(ctx context.Context, from, to int64, body string) (ConversationRow, error)
+	// AnswerInvitation moves a pending conversation to status (open or declined) on behalf
+	// of the member who did not send it. It returns ErrNotFound when the caller is not a
+	// party to the conversation and ErrConversationState when it is not pending or the
+	// caller sent it.
+	AnswerInvitation(ctx context.Context, userID, conversationID int64, status string) (ConversationRow, error)
 }
 
 // Service is the membership and profile use cases.
 type Service struct {
 	repo Repository
+	now  func() time.Time
 }
 
 // New builds a Service.
-func New(repo Repository) *Service { return &Service{repo: repo} }
+func New(repo Repository) *Service { return &Service{repo: repo, now: time.Now} }
 
 // Status is a caller's own standing in the network.
 type Status struct {

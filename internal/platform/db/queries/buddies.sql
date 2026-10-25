@@ -211,3 +211,51 @@ WHERE user_id = $1 AND application_id = $2;
 SELECT application_id FROM buddy_hidden_applications
 WHERE user_id = $1
 ORDER BY application_id;
+
+-- name: CreateBuddyInvitation :one
+-- A pending conversation and its first message in ONE statement, so the pair never exists
+-- without the message that opened it. The caller passes the pair already ordered
+-- (user_low < user_high). A second conversation for the pair is the unique violation on
+-- (user_low, user_high).
+WITH c AS (
+    INSERT INTO buddy_conversations (user_low, user_high, initiator_id)
+    VALUES (sqlc.arg(user_low), sqlc.arg(user_high), sqlc.arg(initiator_id))
+    RETURNING *
+), m AS (
+    INSERT INTO buddy_messages (conversation_id, sender_id, body)
+    SELECT c.id, c.initiator_id, sqlc.arg(body) FROM c
+)
+SELECT * FROM c;
+
+-- name: GetBuddyConversation :one
+SELECT * FROM buddy_conversations WHERE id = $1;
+
+-- name: GetBuddyConversationByPair :one
+-- The pair's conversation in any status. The caller passes the pair ordered.
+SELECT * FROM buddy_conversations WHERE user_low = $1 AND user_high = $2;
+
+-- name: CountBuddyInvitationsSince :one
+-- The initiator's invitations inside the rolling window, and when the oldest of them was
+-- sent (NULL when there are none): that instant plus the window is when a slot frees up.
+SELECT count(*)::bigint AS sent, min(created_at)::timestamptz AS oldest
+FROM buddy_conversations
+WHERE initiator_id = $1 AND created_at > $2;
+
+-- name: BuddyPairBlocked :one
+SELECT EXISTS (
+    SELECT 1 FROM buddy_blocks
+    WHERE (blocker_id = sqlc.arg(a) AND blocked_id = sqlc.arg(b))
+       OR (blocker_id = sqlc.arg(b) AND blocked_id = sqlc.arg(a))
+) AS blocked;
+
+-- name: AnswerBuddyInvitation :one
+-- Accept or decline a pending invitation. Only the party who did not send it matches; no
+-- row means the caller must look the conversation up to say why.
+UPDATE buddy_conversations
+SET status = sqlc.arg(status)::text,
+    accepted_at = CASE WHEN sqlc.arg(status)::text = 'open' THEN now() ELSE accepted_at END
+WHERE id = sqlc.arg(id)
+  AND status = 'pending'
+  AND initiator_id <> sqlc.arg(user_id)
+  AND (user_low = sqlc.arg(user_id) OR user_high = sqlc.arg(user_id))
+RETURNING *;

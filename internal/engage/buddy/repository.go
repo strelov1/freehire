@@ -198,3 +198,77 @@ func memberFromRow(row db.BuddyMember) Member {
 		JoinedAt: row.JoinedAt.Time, Active: !row.LeftAt.Valid,
 	}
 }
+
+func orderedPair(a, b int64) (low, high int64) {
+	if a < b {
+		return a, b
+	}
+	return b, a
+}
+
+func conversationFromRow(row db.BuddyConversation) ConversationRow {
+	c := ConversationRow{
+		ID: row.ID, UserLow: row.UserLow, UserHigh: row.UserHigh, InitiatorID: row.InitiatorID,
+		Status: row.Status, CreatedAt: row.CreatedAt.Time,
+	}
+	if row.AcceptedAt.Valid {
+		c.AcceptedAt = &row.AcceptedAt.Time
+	}
+	return c
+}
+
+func (r *QueriesRepository) Blocked(ctx context.Context, a, b int64) (bool, error) {
+	return r.q.BuddyPairBlocked(ctx, db.BuddyPairBlockedParams{A: a, B: b})
+}
+
+func (r *QueriesRepository) PairHasConversation(ctx context.Context, a, b int64) (bool, error) {
+	low, high := orderedPair(a, b)
+	_, err := r.q.GetBuddyConversationByPair(ctx, db.GetBuddyConversationByPairParams{UserLow: low, UserHigh: high})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (r *QueriesRepository) InvitationsSince(ctx context.Context, userID int64, since time.Time) (int, time.Time, error) {
+	row, err := r.q.CountBuddyInvitationsSince(ctx, db.CountBuddyInvitationsSinceParams{
+		InitiatorID: userID, CreatedAt: pgtype.Timestamptz{Time: since, Valid: true},
+	})
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	return int(row.Sent), row.Oldest.Time, nil
+}
+
+func (r *QueriesRepository) CreateInvitation(ctx context.Context, from, to int64, body string) (ConversationRow, error) {
+	low, high := orderedPair(from, to)
+	row, err := r.q.CreateBuddyInvitation(ctx, db.CreateBuddyInvitationParams{
+		UserLow: low, UserHigh: high, InitiatorID: from, Body: body,
+	})
+	if err != nil {
+		if pgerr.IsUniqueViolation(err) {
+			return ConversationRow{}, ErrConversationExists
+		}
+		return ConversationRow{}, err
+	}
+	return conversationFromRow(db.BuddyConversation(row)), nil
+}
+
+func (r *QueriesRepository) AnswerInvitation(ctx context.Context, userID, conversationID int64, status string) (ConversationRow, error) {
+	row, err := r.q.AnswerBuddyInvitation(ctx, db.AnswerBuddyInvitationParams{Status: status, ID: conversationID, UserID: userID})
+	if err == nil {
+		return conversationFromRow(row), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return ConversationRow{}, err
+	}
+	// Nothing matched: say whether the conversation is the caller's to answer at all.
+	cur, err := r.q.GetBuddyConversation(ctx, conversationID)
+	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cur.UserLow != userID && cur.UserHigh != userID) {
+		return ConversationRow{}, ErrNotFound
+	}
+	if err != nil {
+		return ConversationRow{}, err
+	}
+	return ConversationRow{}, ErrConversationState
+}

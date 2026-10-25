@@ -125,6 +125,9 @@ type Querier interface {
 	// back to the state before the first of the coalesced edits, which is what makes undo mean
 	// something for typed text.
 	AmendCVRevision(ctx context.Context, arg AmendCVRevisionParams) (CvRevision, error)
+	// Accept or decline a pending invitation. Only the party who did not send it matches; no
+	// row means the caller must look the conversation up to say why.
+	AnswerBuddyInvitation(ctx context.Context, arg AnswerBuddyInvitationParams) (BuddyConversation, error)
 	// Append one message to a session's transcript, assigning the next sequence number in the
 	// same statement so concurrent writers cannot collide on (session_id, seq) — the primary
 	// key rejects a duplicate rather than silently reordering the conversation.
@@ -342,6 +345,7 @@ type Querier interface {
 	// in the URL/page). external_id is "<board>:<id>"; served by the
 	// (split_part(external_id,':',2)) WHERE source='greenhouse' partial index.
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (string, error)
+	BuddyPairBlocked(ctx context.Context, arg BuddyPairBlockedParams) (bool, error)
 	// Count one failed confirmation and return the new total, so the caller can burn the code
 	// once it reaches the ceiling. Atomic, so concurrent guesses cannot share an attempt.
 	BumpEmailCodeAttempts(ctx context.Context, arg BumpEmailCodeAttemptsParams) (int32, error)
@@ -1180,6 +1184,9 @@ type Querier interface {
 	// How many people a campaign would reach right now. Read before sending: a campaign
 	// is irreversible and goes to everyone, so the number is worth seeing first.
 	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)
+	// The initiator's invitations inside the rolling window, and when the oldest of them was
+	// sent (NULL when there are none): that instant plus the window is when a slot frees up.
+	CountBuddyInvitationsSince(ctx context.Context, arg CountBuddyInvitationsSinceParams) (CountBuddyInvitationsSinceRow, error)
 	// Exact open-job and company totals for the published catalogue-scale snapshot
 	// (internal/ingest/catalogstats). Deliberately the opposite trade to EstimateOpenJobs below:
 	// this is a full scan and belongs only in the scheduled rollup worker, never on a
@@ -1347,6 +1354,11 @@ type Querier interface {
 	// 'tailor'); cv_id/job_id bind a tailoring session to its CV and vacancy and are NULL
 	// for a chat. The label is set later, from the first user message.
 	CreateAssistantSession(ctx context.Context, arg CreateAssistantSessionParams) (CreateAssistantSessionRow, error)
+	// A pending conversation and its first message in ONE statement, so the pair never exists
+	// without the message that opened it. The caller passes the pair already ordered
+	// (user_low < user_high). A second conversation for the pair is the unique violation on
+	// (user_low, user_high).
+	CreateBuddyInvitation(ctx context.Context, arg CreateBuddyInvitationParams) (CreateBuddyInvitationRow, error)
 	// Insert a new CV for a user. data is the sanitized structured document (JSON). This is the
 	// user's own CV, not a copy made for a vacancy, so is_tailored is stated false rather than left to
 	// be inferred from a NULL job_id — an absence deleting the vacancy also produces. Users may own several of
@@ -2383,6 +2395,9 @@ type Querier interface {
 	// answers both pauses: a second query per board would double the per-board round trips over
 	// the crawl host's link to the database.
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (GetBoardCooldownRow, error)
+	GetBuddyConversation(ctx context.Context, id int64) (BuddyConversation, error)
+	// The pair's conversation in any status. The caller passes the pair ordered.
+	GetBuddyConversationByPair(ctx context.Context, arg GetBuddyConversationByPairParams) (BuddyConversation, error)
 	// The member behind a handle, active or left.
 	GetBuddyMemberByHandle(ctx context.Context, handle string) (BuddyMember, error)
 	// A member's own row, active or left. The caller decides what left_at means.
