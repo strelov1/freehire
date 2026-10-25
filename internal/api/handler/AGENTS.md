@@ -117,6 +117,11 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
 - `register`/`login` set JWT cookie + return `{"data": user}`. `logout` clears it. `me` is guarded by `RequireAuthOrScopedKey` (cookie or API key — the narrow `cv` key included, so an agent can resolve which account its key belongs to).
 - Credential endpoints are rate-limited per route, keyed on client IP: register 5/min, login 10/min, verify-request 5/min, verify-confirm 10/15min, password/forgot 3/5min, password/reset 10/15min.
 
+## Every `/api/v1/me/*` route refuses an anonymous caller (`signed_in_door.go`)
+
+- **This is load-bearing outside the repo.** Cloudflare challenges the hosting/VPN networks the enumeration fleet rents, and a CLI cannot solve a challenge; the edge rule exempts `/api/v1/me/*` precisely because nothing there answers without a credential, so the exemption hands the fleet nothing. A public read added under `/me/` would quietly reopen it to the fleet.
+- `/api/v1/me/api/<rest>` is the signed-in door: it checks `RequireAuthOrKey` and serves the request as `/api/v1/<rest>`, which is how a signed-in CLI on a VPN reaches the public reads. The CLI uses it only after the edge has answered a challenge (`cf-mitigated: challenge`). The target route keeps every gate of its own. It rewrites the path and lets routing continue rather than calling `RestartRouting`, which would replay the app-wide middleware and count and log every request twice; so it must stay mounted before every `/api/v1` route.
+
 ## Account Deletion (`me_delete.go`)
 
 - `DELETE /api/v1/me` erases the caller's account permanently — no soft-delete, no grace period, no restore. Cookie-only (`RequireAuth`), never `keyAuth`: a leaked API key must not destroy the account that issued it.

@@ -1007,6 +1007,9 @@ func Register(app *fiber.App, cfg Config) {
 	// builder, the inbox, subscriptions — where a leaked API key must not act.
 	cookieAuth := auth.RequireAuth(a.issuer, a.queries)
 
+	// Before any /api/v1 route: it hands them the rewritten request (signed_in_door.go).
+	mountSignedInDoor(app, keyAuth)
+
 	requireModerator := auth.RequireRole(a.queries, "moderator")
 	mw := middleware{
 		optional:       optionalAuth,
