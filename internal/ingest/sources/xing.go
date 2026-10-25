@@ -216,7 +216,7 @@ func (s xing) sitemap(ctx context.Context, url string) (sitemapDoc, error) {
 		if err != nil {
 			return err
 		}
-		defer zr.Close()
+		defer func() { _ = zr.Close() }()
 		return xml.NewDecoder(io.LimitReader(zr, xingMaxSitemapBytes)).Decode(&doc)
 	})
 	return doc, err
