@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/strelov1/freehire/internal/ai/llmkey"
 	"github.com/strelov1/freehire/internal/ai/plan"
@@ -146,6 +147,15 @@ func run() int {
 		sidecar = sidecar.WithBrowserUse(atsapply.NewBrowserUseExecutor(buClient))
 	}
 
+	// Entries whose tailoring nobody is doing any more become tailor_failed, so they stop
+	// reading as work in progress and a retry can start them again. Best-effort: a failure
+	// here costs this run's sweep, never the submissions below.
+	if n, err := queries.MarkStaleAutoApplyTailoringFailed(ctx, staleTailoringSeconds); err != nil {
+		log.Printf("auto-apply: marking stale tailoring: %v", err)
+	} else if n > 0 {
+		log.Printf("auto-apply: %d attempt(s) had no tailoring progress for %s; marked tailor_failed", n, time.Duration(staleTailoringSeconds)*time.Second)
+	}
+
 	store := newDBStore(pool)
 	stats, err := autoapply.Run(ctx, store, answers, sidecar, autoapply.RunOptions{
 		BatchSize:    acfg.BatchSize,
@@ -193,3 +203,9 @@ func run() int {
 	}
 	return 0
 }
+
+// staleTailoringSeconds is how long an attempt with no tailored CV may go without any
+// history before it is given up on. Far above one orchestrator run (12 minutes, see
+// internal/application/autoapplyorchestrate's hireRequestTimeout) and Inngest's own step
+// retries on top of it, so only an attempt nothing is working on any more crosses it.
+const staleTailoringSeconds = 6 * 60 * 60

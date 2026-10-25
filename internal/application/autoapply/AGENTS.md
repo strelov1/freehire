@@ -17,6 +17,12 @@ application, and record the outcome. Pgx/Fiber-free — `Store`, `AnswerSource` 
   genuine transient failure (`Fail`) spends the retry budget. Once the candidate supplies
   the data, THEY re-arm it (`RetryAutoApplyEntry`, from the drawer or the MCP
   `auto_apply_retry` tool) — nothing in this package ever un-parks a row.
+- **An attempt nobody is tailoring is given up on, not left "tailoring".** The orchestrator
+  is started by a best-effort publish, and a run can die between steps; such an entry is
+  claimable by neither pass and has no failure to retry. `cmd/auto-apply` marks it
+  `tailor_failed` once the pair's newest history event is 6h old
+  (`MarkStaleAutoApplyTailoringFailed` — measured from history, not `created_at`, so a
+  retried old entry is not failed again mid-run). The candidate or agent then retries it.
 - **The history is a trigger, not a call.** `auto_apply_events` (migration 0196) is written
   by a trigger on `auto_apply_queue` from the OLD→NEW diff, so nothing here logs anything:
   a new write path is covered the moment it exists. The three writes the trigger cannot read from a

@@ -269,3 +269,46 @@ func TestCancelAutoApplyEntry(t *testing.T) {
 		}
 	})
 }
+
+func TestMarkStaleAutoApplyTailoringFailed(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncateAutoApplyQueue(t, pool)
+
+	user := insertUser(t, pool, "stale@example.test")
+	stale := insertBareAutoApplyQueueEntry(t, pool, user, insertJob(t, pool, "stale"))
+	fresh := insertBareAutoApplyQueueEntry(t, pool, user, insertJob(t, pool, "fresh"))
+	retried := insertBareAutoApplyQueueEntry(t, pool, user, insertJob(t, pool, "retried"))
+	// Old entries: the stale one's history is old too; the retried one was re-armed just now.
+	if _, err := pool.Exec(ctx, `UPDATE auto_apply_queue SET created_at = now() - interval '2 days' WHERE id IN ($1, $2)`, stale, retried); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE auto_apply_events SET created_at = now() - interval '2 days' WHERE queue_id IN ($1, $2)`, stale, retried); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE auto_apply_queue SET tailor_failed_at = now() - interval '2 days' WHERE id = $1`, retried); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.RetryAutoApplyEntry(ctx, RetryAutoApplyEntryParams{ID: retried, UserID: user}); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := q.MarkStaleAutoApplyTailoringFailed(ctx, 6*3600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("marked %d, want only the stale entry", n)
+	}
+	var failed []int64
+	rows, _ := pool.Query(ctx, `SELECT id FROM auto_apply_queue WHERE tailor_failed_at IS NOT NULL ORDER BY id`)
+	for rows.Next() {
+		var id int64
+		_ = rows.Scan(&id)
+		failed = append(failed, id)
+	}
+	if !slices.Equal(failed, []int64{stale}) {
+		t.Fatalf("tailor_failed = %v, want [%d] (fresh=%d retried=%d untouched)", failed, stale, fresh, retried)
+	}
+}

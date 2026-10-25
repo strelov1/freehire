@@ -464,3 +464,26 @@ FROM auto_apply_events
 WHERE user_id = sqlc.arg(user_id) AND job_id = sqlc.arg(job_id)
 ORDER BY id DESC
 LIMIT 100;
+
+-- name: MarkStaleAutoApplyTailoringFailed :execrows
+-- Gives up on attempts whose tailoring nobody is doing: no CV, no failure recorded, no
+-- decision, and nothing has happened to the pair for stale_seconds. The orchestrator is
+-- started by a best-effort publish and a run can die between steps; either way the entry sat
+-- reading "tailoring" forever, unclaimable by both passes, with no failure for a retry to act
+-- on (two production entries since 2026-09-07). Marking it tailor_failed is what makes it
+-- visible and retryable — and the trigger records the event.
+--
+-- "Nothing has happened" is the pair's newest history event, not created_at: a retry
+-- re-publishes the orchestrator for an old entry, and measuring from created_at would fail it
+-- again before the new run could finish. COALESCE covers entries older than the history.
+UPDATE auto_apply_queue q
+SET tailor_failed_at = now(),
+    last_error       = 'tailoring never finished'
+WHERE q.tailored_cv_id IS NULL
+  AND q.tailor_failed_at IS NULL
+  AND q.review_decision IS NULL
+  AND q.blocked_at IS NULL
+  AND q.failed_at IS NULL
+  AND COALESCE((SELECT max(e.created_at) FROM auto_apply_events e
+                WHERE e.user_id = q.user_id AND e.job_id = q.job_id), q.created_at)
+      < now() - make_interval(secs => sqlc.arg(stale_seconds)::bigint);

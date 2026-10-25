@@ -5162,6 +5162,17 @@ type Querier interface {
 	// concurrent second decision affects no row (the service maps 0 rows to ErrAlreadyDecided).
 	// The optional job close is a separate write (CloseJobByID).
 	MarkReportResolved(ctx context.Context, arg MarkReportResolvedParams) (JobReport, error)
+	// Gives up on attempts whose tailoring nobody is doing: no CV, no failure recorded, no
+	// decision, and nothing has happened to the pair for stale_seconds. The orchestrator is
+	// started by a best-effort publish and a run can die between steps; either way the entry sat
+	// reading "tailoring" forever, unclaimable by both passes, with no failure for a retry to act
+	// on (two production entries since 2026-09-07). Marking it tailor_failed is what makes it
+	// visible and retryable — and the trigger records the event.
+	//
+	// "Nothing has happened" is the pair's newest history event, not created_at: a retry
+	// re-publishes the orchestrator for an old entry, and measuring from created_at would fail it
+	// again before the new run could finish. COALESCE covers entries older than the history.
+	MarkStaleAutoApplyTailoringFailed(ctx context.Context, staleSeconds int64) (int64, error)
 	// Mark a pending submission rejected with an optional reason, recording the deciding
 	// moderator. Scoped to status='pending' (see ClaimSubmissionForApproval). No job is created.
 	MarkSubmissionRejected(ctx context.Context, arg MarkSubmissionRejectedParams) (JobSubmission, error)
