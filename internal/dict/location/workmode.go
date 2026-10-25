@@ -49,7 +49,8 @@ var descriptionWorkModePhrases = []struct {
 // lowest-priority work-mode source (after the structured ATS signal and the parsed
 // location marker), so it only ever fills a value the others left empty. Values are
 // from vocab.WorkModeValues. The English phrases are tried first; German prose is read
-// only when none of them is stated (see germanWorkModePhrases).
+// only when none of them is stated (see germanWorkModePhrases), and Dutch prose only
+// when neither is (see dutchWorkModePhrases).
 func WorkModeFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, wm := range descriptionWorkModePhrases {
@@ -59,7 +60,10 @@ func WorkModeFromDescription(desc string) string {
 			}
 		}
 	}
-	return germanWorkMode(desc, lower)
+	if m := germanWorkMode(desc, lower); m != "" {
+		return m
+	}
+	return dutchWorkMode(desc, lower)
 }
 
 // phraseMatches reports whether p occurs in text (already lowercased) unguarded. A

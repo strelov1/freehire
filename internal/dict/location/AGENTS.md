@@ -120,6 +120,14 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   English order. Matched on folded markup with a word boundary at the end ("mobile
   Arbeitsmaschinen" is a trade) and a short negation window before ("kein Homeoffice
   möglich"). Bare `remote`/`hybrid`, `vor Ort` and `deutschlandweit` are deliberately absent.
+- **Dutch work-arrangement prose is a third list** (`workmode_nl.go`), read only when neither
+  the English nor the German one matched, with the German ordering and for the same reason:
+  "hybride werken", "2 dagen thuiswerken" and "thuiswerkvergoeding" are benefits (hybrid);
+  remote needs "volledig remote" / "100% thuiswerken". A phrase in the same sentence as
+  "buitenland" or "per jaar" is a bounded perk ("twee weken per jaar remote werken vanuit het
+  buitenland") and is passed over. Bare `hybride` (cloud, infrastructure), `op afstand` and
+  `niet remote` (remote support) are deliberately absent. Measured 2026-10-25 over 42k open
+  Dutch postings: work mode 3.5% → 16.4%.
 - `work_mode` is dict-only — `jobview` serves the `jobs` column alone, the LLM's `enrichment.work_mode` is never merged in (it stays raw in the JSONB).
 - `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`): the dictionary wins when it pins a place, and the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket, so a dictionary-silent remote role still gets a geographic reach rather than none. This is the one deliberate exception to dict-only among the facets.
 
