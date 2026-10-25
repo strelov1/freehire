@@ -151,7 +151,8 @@ import type {
   BankedAnswer,
   BuddyStatus,
   BuddySimilar,
-  BuddyFeedItem,
+  BuddyFeedPage,
+  BuddyProfile,
   BuddyConversation,
   BuddyMessage,
   BuddyReport,
@@ -2414,12 +2415,18 @@ export function createApi(
   async function listBuddySimilar(limit = 20, offset = 0): Promise<BuddySimilar[]> {
     return requestData(`/api/v1/me/buddies/similar?limit=${limit}&offset=${offset}`);
   }
-  async function listBuddyFeed(mode: 'similar' | 'all', cursor?: string, limit = 30): Promise<{ data: BuddyFeedItem[]; meta: { next_cursor: string | null } }> {
+  async function listBuddyFeed(mode: 'similar' | 'all', cursor?: string, limit = 30): Promise<BuddyFeedPage> {
     const q = new URLSearchParams({ mode, limit: String(limit) });
     if (cursor) q.set('cursor', cursor);
-    return request<{ data: BuddyFeedItem[]; meta: { next_cursor: string | null } }>(`/api/v1/me/buddies/feed?${q}`);
+    return request<BuddyFeedPage>(`/api/v1/me/buddies/feed?${q}`);
   }
-  async function getBuddyProfile(handle: string): Promise<{ handle: string; card: Record<string, unknown>; card_empty: boolean }> {
+  /** One member's own activity: the same feed, narrowed to their handle. */
+  async function listBuddyMemberFeed(handle: string, cursor?: string, limit = 30): Promise<BuddyFeedPage> {
+    const q = new URLSearchParams({ handle, limit: String(limit) });
+    if (cursor) q.set('cursor', cursor);
+    return request<BuddyFeedPage>(`/api/v1/me/buddies/feed?${q}`);
+  }
+  async function getBuddyProfile(handle: string): Promise<BuddyProfile> {
     return requestData(`/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}`);
   }
   async function listBuddyHiddenApplications(): Promise<number[]> { return requestData('/api/v1/me/buddies/hidden-applications'); }
@@ -3436,6 +3443,7 @@ export function createApi(
     leaveBuddies,
     listBuddySimilar,
     listBuddyFeed,
+    listBuddyMemberFeed,
     getBuddyProfile,
     listBuddyHiddenApplications,
     setBuddyApplicationHidden,

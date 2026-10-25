@@ -3,33 +3,36 @@
   import { page } from '$app/state';
   import { ApiError, api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
-  import type { BuddyFeedItem, BuddySimilar, BuddyStatus } from '#lib/types.js';
-  import { Button, ConfirmDialog, Dialog, EntityLogo } from '#lib/ui/index.js';
+  import { resolve } from '$app/paths';
+  import type { BuddyConversation, BuddyFeedItem, BuddySimilar, BuddyStatus } from '#lib/types.js';
+  import { Button, ConfirmDialog, EntityLogo } from '#lib/ui/index.js';
   import { companyLogoUrl } from '#lib/logo.js';
   import BuddyChatView from './BuddyChatView.svelte';
+  import BuddyFeedEntry from './BuddyFeedEntry.svelte';
+  import BuddyInviteDialog from './BuddyInviteDialog.svelte';
+  import BuddyMessageButton from './BuddyMessageButton.svelte';
   import States from './States.svelte';
 
   type Tab = 'similar' | 'feed' | 'chats';
   // The notification link /my/buddies?c=<id> names a conversation to open on the Chats tab.
   const linkedParam = Number(page.url.searchParams.get('c'));
-  const linkedConversation = Number.isInteger(linkedParam) && linkedParam > 0 ? linkedParam : null;
-  let tab = $state<Tab>(linkedConversation ? 'chats' : 'similar');
+  const linkedAtLoad = Number.isInteger(linkedParam) && linkedParam > 0 ? linkedParam : null;
+  // "Message" on a member who already has a conversation with the viewer re-aims it here.
+  let linkedConversation = $state<number | null>(linkedAtLoad);
+  let tab = $state<Tab>(linkedAtLoad ? 'chats' : 'similar');
   let mode = $state<'similar' | 'all'>('similar');
   const status = new AsyncData<BuddyStatus | null>(null);
   const similar = new AsyncData<BuddySimilar[]>([]);
   let feed = $state<BuddyFeedItem[]>([]);
   let cursor = $state<string | null>(null);
   let feedBusy = $state(false);
-  let activeHandle = $state('');
-  let inviteBody = $state('');
-  let inviteError = $state('');
+  // The viewer's conversations, read on the Similar and Feed tabs so each member's
+  // "Message" knows whether one already exists.
+  let conversations = $state<BuddyConversation[]>([]);
+  let inviteHandle = $state('');
+  let inviteOpen = $state(false);
   let membershipError = $state('');
   let confirmLeaveOpen = $state(false);
-  let busy = $state(false);
-  let selected = $state<BuddySimilar | null>(null);
-  let inviteOpen = $state(false);
-  let profile = $state<{ handle: string; card: Record<string, unknown>; card_empty: boolean } | null>(null);
-  let profileOpen = $state(false);
 
   onMount(() => { void status.run(() => api.buddyStatus()); });
   async function join() { await status.run(() => api.joinBuddies()); }
@@ -63,22 +66,15 @@
       }
     }
   }
-  function openInvite(person: BuddySimilar) {
-    selected = person; activeHandle = person.handle; inviteBody = ''; inviteError = ''; inviteOpen = true;
+  async function loadConversations() {
+    // Without the list every member offers a first message; the server still refuses a
+    // second conversation with the same member, so a failed read degrades, never misleads.
+    try { conversations = await api.listBuddyConversations(); } catch { /* keep the last list */ }
   }
-  async function showProfile(handle: string) { try { profile = await api.getBuddyProfile(handle); profileOpen = true; } catch { profile = null; } }
-  async function sendInvite() {
-    if (!selected || busy || !inviteBody.trim() || inviteBody.length > 500) return;
-    busy = true; inviteError = '';
-    try { await api.inviteBuddy(selected.handle, inviteBody.trim()); inviteOpen = false; }
-    catch (err) {
-      if (err instanceof ApiError && err.status === 429) {
-        const retryAt = err.body?.retry_at;
-        inviteError = `${err.message}${typeof retryAt === 'string' ? ` Try again after ${new Date(retryAt).toLocaleString()}.` : ''}`;
-      } else inviteError = err instanceof Error ? err.message : 'Could not send invitation.';
-    } finally { busy = false; }
-  }
+  function openInvite(handle: string) { inviteHandle = handle; inviteOpen = true; }
+  function openConversation(id: number) { linkedConversation = id; tab = 'chats'; }
   $effect(() => { if (status.value?.member && tab === 'similar') void loadSimilar(); });
+  $effect(() => { if (status.value?.member && tab !== 'chats') void loadConversations(); });
   $effect(() => { const member = status.value?.member; const currentTab = tab; const currentMode = mode; if (member && currentTab === 'feed') untrack(() => { feed = []; cursor = null; void loadFeed(false, currentMode); }); });
 </script>
 
@@ -104,40 +100,19 @@
     {#if tab === 'similar'}
       {#if similar.status === 'loading'}<States state="loading" />{:else if similar.value.length === 0}<States state="empty" message="No similar members yet." />{:else}
         <ul class="flex flex-col gap-3">{#each similar.value as person (person.handle)}<li class="rounded-lg border border-border p-4">
-          <div class="flex items-center justify-between gap-3"><button class="font-semibold hover:underline" onclick={() => showProfile(person.handle)}>{person.handle}</button><Button size="sm" variant="primary" onclick={() => openInvite(person)}>Invite</Button></div>
+          <div class="flex items-center justify-between gap-3"><a href={resolve('/my/buddies/[handle]', { handle: person.handle })} class="font-semibold hover:underline">{person.handle}</a><BuddyMessageButton handle={person.handle} {conversations} oninvite={openInvite} onconversation={openConversation} /></div>
           <p class="mt-1 text-sm text-muted-foreground">{[person.card_summary.category, person.card_summary.seniority, person.card_summary.country].filter(Boolean).join(' · ')}</p>
           {#if person.shared_companies.length}<div class="mt-3 flex flex-wrap gap-3">{#each person.shared_companies as company (company.slug)}<span class="flex items-center gap-1.5 text-xs"><EntityLogo name={company.name} src={companyLogoUrl(company.name) ?? undefined} shape="square" size="xs" />{company.name}</span>{/each}</div>{/if}
         </li>{/each}</ul>
       {/if}
     {:else if tab === 'feed'}
       <div class="flex gap-2"><Button variant={mode === 'similar' ? 'primary' : 'outline'} size="sm" onclick={() => mode = 'similar'}>Similar</Button><Button variant={mode === 'all' ? 'primary' : 'outline'} size="sm" onclick={() => mode = 'all'}>All</Button></div>
-      {#if feed.length === 0 && !feedBusy}<States state="empty" message="No application updates yet." />{:else}<ul>{#each feed as item (item.id)}<li class="flex items-center gap-3 border-b border-border py-3 text-sm"><button onclick={() => showProfile(item.handle)} class="font-medium hover:underline">{item.handle}</button><span>{item.type} at</span><EntityLogo name={item.company.name} src={companyLogoUrl(item.company.name) ?? undefined} shape="square" size="xs"/><span class="font-medium">{item.company.name}</span>{#if item.job_title}<span class="text-muted-foreground">· {item.job_title}</span>{/if}<time class="ml-auto text-xs text-muted-foreground">{item.day}</time></li>{/each}</ul>{#if cursor}<Button variant="outline" onclick={() => loadFeed(true)} disabled={feedBusy}>Load more</Button>{/if}{/if}
+      {#if feed.length === 0 && !feedBusy}<States state="empty" message="No application updates yet." />{:else}<ul>{#each feed as item (item.id)}<BuddyFeedEntry {item}>{#snippet actions()}<BuddyMessageButton handle={item.handle} {conversations} oninvite={openInvite} onconversation={openConversation} />{/snippet}</BuddyFeedEntry>{/each}</ul>{#if cursor}<Button variant="outline" onclick={() => loadFeed(true)} disabled={feedBusy}>Load more</Button>{/if}{/if}
     {:else}<BuddyChatView initialId={linkedConversation} />{/if}
   </section>
 {/if}
 
-{#if profile}
-  <Dialog bind:open={profileOpen} title={profile.handle} class="sm:max-w-lg">
-    {#if profile.card_empty}<p class="text-sm text-muted-foreground">This member has not added a profile card yet.</p>{:else}
-      <div class="flex flex-col gap-3 text-sm">
-        {#each Object.entries(profile.card) as [key, value] (key)}
-          {#if value && !['handle', 'name', 'email', 'username', 'employer'].includes(key)}
-            <div><h2 class="font-medium capitalize">{key.replaceAll('_', ' ')}</h2>{#if Array.isArray(value)}<ul class="flex flex-wrap gap-2">{#each value as item, index (`${key}-${index}`)}<li class="rounded bg-muted px-2 py-1">{typeof item === 'string' ? item : JSON.stringify(item)}</li>{/each}</ul>{:else}<p>{String(value)}</p>{/if}</div>
-          {/if}
-        {/each}
-      </div>
-    {/if}
-  </Dialog>
-{/if}
-
-<Dialog bind:open={inviteOpen} title="Invite {activeHandle}" class="sm:max-w-lg">
-  <form class="flex flex-col gap-3" onsubmit={(e) => { e.preventDefault(); void sendInvite(); }}>
-    <textarea bind:value={inviteBody} maxlength="500" rows="5" class="w-full rounded-md border border-border bg-background p-3 text-sm" aria-label="Invitation message"></textarea>
-    <span class="text-right text-xs text-muted-foreground">{inviteBody.length}/500</span>
-    {#if inviteError}<p class="text-sm text-destructive">{inviteError}</p>{/if}
-    <Button type="submit" variant="primary" disabled={busy || !inviteBody.trim()}>Send invitation</Button>
-  </form>
-</Dialog>
+<BuddyInviteDialog bind:open={inviteOpen} handle={inviteHandle} onsent={(conversation) => openConversation(conversation.id)} />
 
 <ConfirmDialog
   bind:open={confirmLeaveOpen}

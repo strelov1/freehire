@@ -109,6 +109,5 @@
   "web/src/routes/privacy/+page.svelte": 2,
   "web/src/routes/status/+page.svelte": 1,
   "web/src/routes/tailor/[slug]/+page.svelte": 2,
-  "web/src/routes/talent/[handle]/+page.svelte": 1,
   "web/src/routes/terms/+page.svelte": 2
 }
