@@ -107,7 +107,8 @@ class BuddyDockStore extends UserResource<Loaded> {
   }
 
   /** "Message" for a member: their conversation's window when one exists, otherwise the
-   *  first-message dialog. A closed conversation offers nothing. */
+   *  first-message dialog. A conversation closed by a leave is
+   *  re-invited; a former member's offers nothing. */
   openNew(handle: string): void {
     const intent = dockIntentFor(messageActionFor(this.#conversations, handle));
     if (intent?.kind === 'window') this.openConversation(intent.conversationId);

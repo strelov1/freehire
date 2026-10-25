@@ -43,8 +43,13 @@ describe('buddy member actions', () => {
     expect(messageActionFor([conv(9, 'buddy-1', 'incoming')], 'buddy-1')).toEqual({ kind: 'reply', conversationId: 9 });
   });
 
-  it('hides the action for a closed conversation', () => {
-    expect(messageActionFor([conv(10, 'buddy-1', 'closed')], 'buddy-1')).toEqual({ kind: 'none' });
+  it('invites again when the conversation was closed by a leave', () => {
+    expect(messageActionFor([conv(10, 'buddy-1', 'closed')], 'buddy-1')).toEqual({ kind: 'invite' });
+  });
+
+  it('hides the action for a closed conversation with a former member', () => {
+    const closed = { ...conv(10, 'buddy-1', 'closed'), former_member: true };
+    expect(messageActionFor([closed], 'buddy-1')).toEqual({ kind: 'none' });
   });
 
   it('never matches a former member by their empty handle', () => {

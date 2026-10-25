@@ -42,6 +42,7 @@ interface ConversationLike {
   id: number;
   other: { handle: string };
   status_for_me: 'incoming' | 'outgoing' | 'open' | 'closed';
+  former_member?: boolean;
 }
 
 export function messageActionFor(conversations: readonly ConversationLike[], handle: string): BuddyMessageAction {
@@ -52,7 +53,9 @@ export function messageActionFor(conversations: readonly ConversationLike[], han
     // A declined invitation reads as outgoing too: the sender is never told.
     case 'outgoing': return { kind: 'sent', conversationId: conv.id };
     case 'incoming': return { kind: 'reply', conversationId: conv.id };
-    case 'closed': return { kind: 'none' };
+    // Closed by a leave: a new invitation reopens it. A former member (left or blocked)
+    // cannot be invited.
+    case 'closed': return conv.former_member ? { kind: 'none' } : { kind: 'invite' };
   }
 }
 

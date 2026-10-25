@@ -40,9 +40,12 @@ describe('dock windows', () => {
 });
 
 describe('dock intent', () => {
-  const conv = (id: number, handle: string, status_for_me: 'incoming' | 'outgoing' | 'open' | 'closed') =>
-    ({ id, other: { handle }, status_for_me });
-  const conversations = [conv(1, 'open-one', 'open'), conv(2, 'sent-one', 'outgoing'), conv(3, 'asked-me', 'incoming'), conv(4, 'gone', 'closed')];
+  const conv = (id: number, handle: string, status_for_me: 'incoming' | 'outgoing' | 'open' | 'closed', former_member = false) =>
+    ({ id, other: { handle }, status_for_me, former_member });
+  const conversations = [
+    conv(1, 'open-one', 'open'), conv(2, 'sent-one', 'outgoing'), conv(3, 'asked-me', 'incoming'),
+    conv(4, 'gone', 'closed', true), conv(5, 'came-back', 'closed'),
+  ];
 
   it('opens a window for any existing conversation, pending or not', () => {
     expect(dockIntentFor(messageActionFor(conversations, 'open-one'))).toEqual({ kind: 'window', conversationId: 1 });
@@ -50,9 +53,10 @@ describe('dock intent', () => {
     expect(dockIntentFor(messageActionFor(conversations, 'asked-me'))).toEqual({ kind: 'window', conversationId: 3 });
   });
 
-  it('asks for a first message when there is none, and does nothing for a closed one', () => {
+  it('asks for a first message when there is none, and does nothing for a former member', () => {
     expect(dockIntentFor(messageActionFor(conversations, 'stranger'))).toEqual({ kind: 'invite' });
     expect(dockIntentFor(messageActionFor(conversations, 'gone'))).toBeNull();
+    expect(dockIntentFor(messageActionFor(conversations, 'came-back'))).toEqual({ kind: 'invite' });
   });
 });
 
