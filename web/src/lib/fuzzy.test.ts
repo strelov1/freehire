@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fuzzyMatch } from './fuzzy';
+import { fuzzyMatch, highlightParts } from './fuzzy';
 
 describe('fuzzyMatch', () => {
   it('matches an empty query (no filtering)', () => {
@@ -32,6 +32,19 @@ describe('fuzzyMatch', () => {
     expect(fuzzyMatch('Senior Backend Engineer', 'frontend')).toBe(false);
     // one good token, one nonsense token → no match (AND semantics)
     expect(fuzzyMatch('Senior Backend Engineer', 'senior zzzzz')).toBe(false);
+  });
+
+  it('marks the closest letters of a chip label', () => {
+    const marked = (label: string, query: string) =>
+      highlightParts(label, query)
+        .filter((part) => part.match)
+        .map((part) => part.text)
+        .join('');
+    expect(marked('Software Engineering', 'engen')).toBe('Engin');
+    expect(marked('Unreal Engine', 'engen')).toBe('Engin');
+    expect(marked('Senior', 'sineor')).toBe('Senior');
+    expect(marked('React Native', 'react')).toBe('React');
+    expect(marked('Marketing', 'engen')).toBe('');
   });
 
   it('does not fuzzily collapse short distinct words', () => {

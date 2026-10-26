@@ -5,9 +5,9 @@
   import { openWithinEnabled } from '#lib/features.js';
   import { Bell, Info, UserRound } from '@lucide/svelte';
   import { Tooltip } from '#lib/ui/index.js';
-  import { EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION } from '#lib/facets.js';
+  import { companySearch, EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION, searchCities } from '#lib/facets.js';
+  import { FILTER_SEARCH_MIN_QUERY, jobFilterSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
-  import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
   import { emptyFilters, type ClearanceFilter, type FilterStore, type JobFilters } from '#lib/filters.js';
@@ -107,25 +107,19 @@
   // the flag, and the header "Apply my profile" action gates on the profile. Both are
   // no-ops off the browser / once loaded.
   $effect(() => {
-    if (open && hasSavedTab && isAuthenticated()) {
-      void notifications.ensureLoaded();
-      void profileStore.ensureLoaded();
-    }
+    if (!(open && isAuthenticated())) return;
+    if (!plain && !railKeys) void profileStore.ensureLoaded();
+    if (hasSavedTab) void notifications.ensureLoaded();
   });
 
-  // The header "Apply my profile" affordance shows on the full job modal (same scope as
-  // the My-filters tab). Signed-out: the button still shows and its click opens the
-  // sign-in dialog (apply after auth). Signed-in: gated on the profile load having
+  // The header "Apply my profile" affordance shows on the full job modal. Signed-out:
+  // the same button links to the profile, and /my sends an anonymous visitor through
+  // sign-in with that page as the return. Signed-in: gated on the profile load having
   // settled (so a user who has a profile never flashes the "create" link while it
   // loads) — the profile-derived Apply button when a profile exists, a create-profile
   // link when it doesn't.
-  const showProfileAction = $derived(hasSavedTab && (!isAuthenticated() || profileStore.loaded));
+  const showProfileAction = $derived(!plain && !railKeys && (!isAuthenticated() || profileStore.loaded));
   const profile = $derived(profileStore.profile);
-
-  function applyProfileOrSignIn() {
-    if (profile) staged.applyProfile(profile);
-    else promptSignIn();
-  }
 
   // The footer nudge shows only when the My-filters tab exists (so the jump lands
   // somewhere), Telegram alerts are available, and there's a search worth saving.
@@ -237,6 +231,153 @@
   }
 
   const applyDisabled = $derived(canApply ? !canApply(staged.value) : false);
+  const openWithinAvailable = openWithinEnabled({ PUBLIC_OPEN_WITHIN });
+
+  let filterQuery = $state('');
+  const specializationHint = $derived.by(() => {
+    const q = filterQuery.trim().toLowerCase();
+    return q.length >= 2 && ('specialization'.startsWith(q) || 'specializations'.startsWith(q));
+  });
+  let remoteHits = $state<FilterSearchHit[]>([]);
+  const searchItems = $derived<FilterSearchHit[]>([
+    ...(hasSavedTab
+      ? [
+          {
+            id: 'jump:saved:My filters',
+            label: 'My filters',
+            group: 'My filters',
+            railKey: 'saved',
+            railLabel: 'My filters',
+            aliases: ['saved searches'],
+          },
+        ]
+      : []),
+    ...jobFilterSearchItems({ exclude, railKeys, openWithin: openWithinAvailable }),
+    ...remoteHits,
+  ]);
+
+  $effect(() => {
+    const q = filterQuery.trim();
+    const wantCompany =
+      open && q.length >= FILTER_SEARCH_MIN_QUERY && !exclude.includes('company_slug') && (!railKeys || railKeys.includes('company_slug'));
+    const wantCities =
+      open && q.length >= FILTER_SEARCH_MIN_QUERY && !exclude.includes('cities') && (!railKeys || railKeys.includes('location'));
+    if (!wantCompany && !wantCities) {
+      if (remoteHits.length > 0) remoteHits = [];
+      return;
+    }
+    if (remoteHits.length > 0) remoteHits = [];
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void Promise.all([
+        wantCompany ? companySearch(q).catch(() => []) : Promise.resolve([]),
+        wantCities ? searchCities(q).catch(() => []) : Promise.resolve([]),
+      ]).then(([companies, cities]) => {
+        if (cancelled) return;
+        remoteHits = [
+          ...companies.slice(0, 8).map((company) => ({
+            id: `company_slug:company_slug:${company.value}`,
+            label: company.label,
+            group: 'Company',
+            railKey: 'company_slug',
+            railLabel: 'Company',
+            param: 'company_slug',
+            value: company.value,
+          })),
+          ...cities.slice(0, 8).map((city) => ({
+            id: `location:cities:${city.value}`,
+            label: city.label,
+            group: 'City',
+            railKey: 'location',
+            railLabel: 'Location',
+            param: 'cities',
+            value: city.value,
+          })),
+        ];
+      });
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  });
+
+  function splitAction(action: string | undefined): { kind: string; rest: string } | null {
+    if (!action) return null;
+    const colon = action.indexOf(':');
+    if (colon < 0) {
+      if (action === 'visa' || action === 'hide-ai' || action === 'auto-apply') return { kind: action, rest: '' };
+      return null;
+    }
+    const kind = action.slice(0, colon);
+    if (kind === 'clearance' || kind === 'posted' || kind === 'open' || kind === 'experience') {
+      return { kind, rest: action.slice(colon + 1) };
+    }
+    return null;
+  }
+
+  function searchSelection(hit: FilterSearchHit) {
+    const off = { included: false, excluded: false, excludable: false };
+    const action = splitAction(hit.action);
+    switch (action?.kind) {
+      case 'visa':
+        return { ...off, included: staged.value.visa };
+      case 'hide-ai':
+        return { ...off, included: staged.value.hideAIInterview };
+      case 'auto-apply':
+        return { ...off, included: staged.value.autoApplyAvailable };
+      case 'clearance':
+        return { ...off, included: staged.value.clearance === action.rest };
+      case 'posted':
+        return { ...off, included: staged.value.postedWithinDays === Number(action.rest) };
+      case 'open':
+        return { ...off, included: staged.value.openWithinDays === Number(action.rest) };
+      case 'experience':
+        return { ...off, included: staged.value.experienceYearsMax === Number(action.rest) };
+    }
+    if (!hit.param || hit.value == null) return off;
+    const selected = staged.facet(hit.param);
+    return {
+      included: selected.include.includes(hit.value),
+      excluded: selected.exclude.includes(hit.value),
+      excludable: !plain && (FACETS.find((d) => d.param === hit.param)?.excludable ?? false),
+    };
+  }
+
+  function onSearchToggle(hit: FilterSearchHit) {
+    const action = splitAction(hit.action);
+    switch (action?.kind) {
+      case 'visa':
+        staged.setVisa(!staged.value.visa);
+        return;
+      case 'hide-ai':
+        staged.setHideAIInterview(!staged.value.hideAIInterview);
+        return;
+      case 'auto-apply':
+        staged.setAutoApplyAvailable(!staged.value.autoApplyAvailable);
+        return;
+      case 'clearance':
+        if (action.rest === 'hide' || action.rest === 'only') {
+          staged.setClearance(staged.value.clearance === action.rest ? 'any' : action.rest);
+        }
+        return;
+      case 'posted':
+        staged.setPostedWithinDays(staged.value.postedWithinDays === Number(action.rest) ? null : Number(action.rest));
+        return;
+      case 'open':
+        staged.setOpenWithinDays(staged.value.openWithinDays === Number(action.rest) ? null : Number(action.rest));
+        return;
+      case 'experience':
+        staged.setExperienceYearsMax(
+          staged.value.experienceYearsMax === Number(action.rest) ? null : Number(action.rest),
+        );
+        return;
+    }
+    if (!hit.param || hit.value == null) return;
+    const excludable = !plain && (FACETS.find((d) => d.param === hit.param)?.excludable ?? false);
+    if (excludable) staged.cycle(hit.param, hit.value);
+    else staged.pick(hit.param, hit.value);
+  }
 
   // Whether this modal offers the "describe your filters in words" entry point. It needs
   // a live store to write into, and it makes no sense in `plain` reuse (the profile
@@ -253,7 +394,6 @@
   // The first-seen bound rides the same stops and the same snap-to-Any rule. Read
   // straight from the runtime env rather than threaded through a prop: five callers
   // mount this modal and none of them has an opinion about the flag.
-  const openWithinAvailable = openWithinEnabled({ PUBLIC_OPEN_WITHIN });
   const openIndex = $derived.by(() => {
     const i = FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.openWithinDays);
     return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
@@ -305,6 +445,10 @@
   {titleHint}
   extra={extra || showAiEntry ? aboveThePane : undefined}
   {footerNote}
+  {searchItems}
+  {onSearchToggle}
+  {searchSelection}
+  bind:filterQuery
 />
 
 <!-- Most facets are three-state (off / include / exclude); one quiet hint in the
@@ -335,12 +479,19 @@
 {/snippet}
 
 {#snippet profileAction()}
-  {#if !isAuthenticated() || profile}
-    <!-- Signed-out: click sends the visitor to /signin; signed-in with a profile: applies it. -->
+  {#if !isAuthenticated()}
+    <a
+      href={resolve('/my/profile')}
+      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground ring-2 ring-brand-ring ring-offset-2 ring-offset-background transition-opacity hover:opacity-90"
+    >
+      <UserRound class="size-4 shrink-0" aria-hidden="true" />
+      Apply my profile
+    </a>
+  {:else if profile}
     <button
       type="button"
-      onclick={applyProfileOrSignIn}
-      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
+      onclick={() => staged.applyProfile(profile)}
+      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground ring-2 ring-brand-ring ring-offset-2 ring-offset-background transition-opacity hover:opacity-90"
     >
       <UserRound class="size-4 shrink-0" aria-hidden="true" />
       Apply my profile
@@ -416,7 +567,7 @@
   {#if entry.kind === 'saved'}
     <SavedSearches store={staged} />
   {:else if entry.kind === 'category'}
-    <CategoryPane store={staged} {plain} counts={c} empty={unrecognizedRole} />
+    <CategoryPane store={staged} {plain} counts={c} empty={unrecognizedRole} hintSearch={specializationHint} />
     {#if !exclude.includes('ai_archetype')}
       {@const aiArchetypeDef = facetDefFor('ai_archetype')}
       {#if aiArchetypeDef}

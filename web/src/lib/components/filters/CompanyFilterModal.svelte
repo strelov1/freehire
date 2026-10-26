@@ -1,5 +1,6 @@
 <script lang="ts">
   import { COMPANY_FACETS } from '#lib/facets.js';
+  import { railFacetSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
   import type { CompanyFilterStore } from '#lib/companyFilters.js';
   import { StagedCompanyFilters } from '#lib/stagedCompanyFilters.svelte.js';
   import { COMPANY_RAIL_GROUPS, type RailEntry, type RailSection } from '#lib/filterSections.js';
@@ -47,6 +48,21 @@
   function apply() {
     staged.commit(store);
   }
+
+  const searchItems = railFacetSearchItems(COMPANY_FACETS, COMPANY_RAIL_GROUPS);
+
+  function searchSelection(hit: FilterSearchHit) {
+    if (!hit.param || hit.value == null) return { included: false, excluded: false, excludable: false };
+    return {
+      included: staged.facet(hit.param).include.includes(hit.value),
+      excluded: false,
+      excludable: false,
+    };
+  }
+
+  function onSearchToggle(hit: FilterSearchHit) {
+    if (hit.param && hit.value != null) staged.pick(hit.param, hit.value);
+  }
 </script>
 
 <FilterModalShell
@@ -61,6 +77,9 @@
   {apply}
   applyLabel="Show results"
   {pane}
+  {searchItems}
+  {onSearchToggle}
+  {searchSelection}
 />
 
 {#snippet pane(entry: RailEntry, _live: FacetCounts | null)}

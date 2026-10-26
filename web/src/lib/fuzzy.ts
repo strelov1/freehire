@@ -51,6 +51,55 @@ function maxEdits(len: number): number {
 // whitespace-separated query token must match some word of the text — as a
 // substring or within maxEdits — so "sineor back" still finds "Senior Backend
 // Engineer".
+export function highlightParts(text: string, query: string): { text: string; match: boolean }[] {
+  const q = query.trim().toLowerCase();
+  if (q === '' || text === '') return [{ text, match: false }];
+  const spans = q
+    .split(/\s+/)
+    .map((token) => closestSpan(text, token))
+    .filter((span): span is [number, number] => span != null)
+    .sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  const taken: [number, number][] = [];
+  for (const span of spans) {
+    if (taken.some(([start, end]) => span[0] < end && span[1] > start)) continue;
+    taken.push(span);
+  }
+  taken.sort((a, b) => a[0] - b[0]);
+  if (taken.length === 0) return [{ text, match: false }];
+  const parts: { text: string; match: boolean }[] = [];
+  let cursor = 0;
+  for (const [start, end] of taken) {
+    if (start > cursor) parts.push({ text: text.slice(cursor, start), match: false });
+    parts.push({ text: text.slice(start, end), match: true });
+    cursor = end;
+  }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor), match: false });
+  return parts;
+}
+
+function closestSpan(text: string, token: string): [number, number] | null {
+  const t = text.toLowerCase();
+  const exact = t.indexOf(token);
+  if (exact >= 0) return [exact, exact + token.length];
+  const budget = maxEdits(token.length);
+  if (budget === 0) return null;
+  let best: { i: number; n: number; d: number } | null = null;
+  const minLen = Math.max(1, token.length - budget);
+  const maxLen = token.length + budget;
+  for (let n = minLen; n <= maxLen; n++) {
+    for (let i = 0; i + n <= t.length; i++) {
+      const window = t.slice(i, i + n);
+      if (window.includes(' ')) continue;
+      const d = osaDistance(token, window);
+      if (d > budget) continue;
+      if (best == null || d < best.d || (d === best.d && (n > best.n || (n === best.n && i < best.i)))) {
+        best = { i, n, d };
+      }
+    }
+  }
+  return best ? [best.i, best.i + best.n] : null;
+}
+
 export function fuzzyMatch(text: string, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (q === '') return true;

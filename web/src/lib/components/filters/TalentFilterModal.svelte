@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from '#lib/api.js';
   import { TALENT_FACETS } from '#lib/facets.js';
+  import { railFacetSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
   import type { TalentFilterStore } from '#lib/talentFilters.js';
   import { YEAR_THRESHOLDS } from '#lib/talentFacetModel.js';
   import { StagedTalentFilters } from '#lib/stagedTalentFilters.svelte.js';
@@ -64,6 +65,45 @@
   async function countsFetch(params: URLSearchParams): Promise<FacetCounts> {
     return api.talentFacets(params.toString());
   }
+
+  const searchItems = $derived<FilterSearchHit[]>([
+    ...railFacetSearchItems(TALENT_FACETS, TALENT_RAIL_GROUPS, { skills: true }),
+    ...YEAR_THRESHOLDS.map((years) => ({
+      id: `action:years:${years}`,
+      label: `${years}+ years`,
+      group: 'Experience',
+      railKey: 'seniorities',
+      railLabel: 'Grade',
+      action: `years:${years}`,
+    })),
+  ]);
+
+  function yearsFromAction(action: string | undefined): number | undefined {
+    if (!action?.startsWith('years:')) return undefined;
+    return Number(action.slice('years:'.length));
+  }
+
+  function searchSelection(hit: FilterSearchHit) {
+    const years = yearsFromAction(hit.action);
+    if (years !== undefined) {
+      return { included: staged.value.minYears === years, excluded: false, excludable: false };
+    }
+    if (!hit.param || hit.value == null) return { included: false, excluded: false, excludable: false };
+    return {
+      included: staged.facet(hit.param).include.includes(hit.value),
+      excluded: false,
+      excludable: false,
+    };
+  }
+
+  function onSearchToggle(hit: FilterSearchHit) {
+    const years = yearsFromAction(hit.action);
+    if (years !== undefined) {
+      staged.setMinYears(staged.value.minYears === years ? undefined : years);
+      return;
+    }
+    if (hit.param && hit.value != null) staged.pick(hit.param, hit.value);
+  }
 </script>
 
 <FilterModalShell
@@ -79,6 +119,9 @@
   {countsFetch}
   applyLabel="Show candidates"
   {pane}
+  {searchItems}
+  {onSearchToggle}
+  {searchSelection}
 />
 
 {#snippet pane(entry: RailEntry, live: FacetCounts | null)}
