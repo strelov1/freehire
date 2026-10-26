@@ -1,5 +1,6 @@
 <script lang="ts">
   import { buildActivityChart, pickTickIndices } from '#lib/activityChart.js';
+  import { chartTipPosition, nextChartIndex } from '#lib/chartKeys.js';
   import { formatCount } from '#lib/utils.js';
   import type { ActivityPoint } from '#lib/types.js';
 
@@ -25,6 +26,27 @@
   let tipY = $state(0);
 
   const hoveredBar = $derived(hovered === null ? null : (model.bars[hovered] ?? null));
+
+  let chartEl = $state<HTMLDivElement | null>(null);
+  let valuesEl = $state<HTMLUListElement | null>(null);
+
+  function showBar(i: number) {
+    const bar = model.bars[i];
+    if (!bar) return;
+    hovered = i;
+    if (!chartEl) return;
+    const tip = chartTipPosition(chartEl, bar.centerX / model.width);
+    tipX = tip.x;
+    tipY = tip.y;
+  }
+
+  function onValueKey(e: KeyboardEvent) {
+    const i = nextChartIndex(e.key, hovered, model.bars.length);
+    if (i === null) return;
+    e.preventDefault();
+    showBar(i);
+    valuesEl?.querySelectorAll('button')[i]?.focus();
+  }
 
   function onMove(e: PointerEvent) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -64,6 +86,7 @@
       class="relative"
       role="img"
       aria-label="Vacancies added versus removed per period"
+      bind:this={chartEl}
       onpointermove={onMove}
       onpointerleave={() => (hovered = null)}
     >
@@ -153,6 +176,20 @@
         </div>
       {/if}
     </div>
+    <ul class="sr-only" bind:this={valuesEl}>
+      {#each model.bars as bar, i (bar.period)}
+        <li>
+          <button
+            type="button"
+            tabindex={i === (hovered ?? 0) ? 0 : -1}
+            onfocus={() => showBar(i)}
+            onkeydown={onValueKey}
+          >
+            {fullDate(bar.period)}: {bar.added.toLocaleString()} added, {bar.removed.toLocaleString()} removed
+          </button>
+        </li>
+      {/each}
+    </ul>
 
     <figcaption class="flex items-center justify-center gap-6 text-xs text-muted-foreground">
       <span class="flex items-center gap-1.5">

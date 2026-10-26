@@ -123,7 +123,8 @@
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
                 {#if m.unread}
-                  <span class="size-1.5 shrink-0 rounded-full bg-brand" aria-label="unread"></span>
+                  <span class="sr-only">unread</span>
+                  <span class="size-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true"></span>
                 {/if}
                 <p class="truncate text-sm font-medium">{m.from}</p>
                 <span class="ml-auto shrink-0 text-xs text-muted-foreground">{m.when}</span>

@@ -28,6 +28,6 @@
     )}
   >
     {badge.label}
-    <span class="tabular-nums opacity-70">{badge.scale}</span>
+    <span class="font-normal tabular-nums">{badge.scale}</span>
   </span>
 {/if}

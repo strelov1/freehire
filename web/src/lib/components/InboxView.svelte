@@ -643,7 +643,8 @@
                       <div class="min-w-0 flex-1">
                         <div class="flex items-baseline gap-2">
                           {#if !m.read}
-                            <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-label={s.unreadDotAria}></span>
+                            <span class="sr-only">{s.unreadDotAria}</span>
+                            <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true"></span>
                           {/if}
                           <span class="min-w-0 flex-1 truncate text-sm {m.read ? 'font-medium text-foreground/90' : 'font-semibold text-foreground'}">
                             {m.from_name || m.from_addr}
@@ -654,7 +655,7 @@
                           {m.subject || s.noSubject}
                         </div>
                         {#if m.snippet}
-                          <div class="mt-0.5 truncate text-xs text-muted-foreground/80">{m.snippet}</div>
+                          <div class="mt-0.5 truncate text-xs text-muted-foreground">{m.snippet}</div>
                         {/if}
                         {#if statusLabel(m.status_signal, locale()) || m.linked_slug}
                           <div class="mt-1 flex items-center gap-1">

@@ -90,13 +90,15 @@
         </div>
         <div class="flex flex-wrap gap-1.5">
           {#each matched as skill (skill)}
-            <span class={haveChipClass} aria-label="{skill} — you have this skill">
-              <SkillIcon slug={skill} />{skillLabel(skill)}
+            <span class={haveChipClass}>
+              <Check class="size-3 shrink-0" aria-hidden="true" />
+              <SkillIcon slug={skill} />{skillLabel(skill)}<span class="sr-only">, you have this</span>
             </span>
           {/each}
           {#each missing as skill (skill)}
-            <span class={missingChipClass} aria-label="{skill} — missing">
-              <SkillIcon slug={skill} />{skillLabel(skill)}
+            <span class={missingChipClass}>
+              <TriangleAlert class="size-3 shrink-0" aria-hidden="true" />
+              <SkillIcon slug={skill} />{skillLabel(skill)}<span class="sr-only">, missing</span>
             </span>
           {/each}
         </div>

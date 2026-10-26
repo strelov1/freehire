@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { siClaude, siCursor, type SimpleIcon } from 'simple-icons';
   import { sourceLogoUrl } from '#lib/logo.js';
+  import { announce } from '#lib/announce.svelte.js';
   import { glyphColorFor } from '#lib/markColor.js';
   import { EntityLogo, SectionLabel } from '#lib/ui/index.js';
 
@@ -178,6 +179,7 @@
     try {
       await navigator.clipboard.writeText(text);
       copied = text;
+      announce('Copied to the clipboard');
       clearTimeout(copyTimer);
       copyTimer = setTimeout(() => (copied = null), 1600);
     } catch {
@@ -191,7 +193,7 @@
   <button
     type="button"
     onclick={() => copy(text)}
-    aria-label={`Copy ${label}`}
+    aria-label={copied === text ? `Copied ${label}` : `Copy ${label}`}
     class="shrink-0 rounded-md border border-border px-2 py-0.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
   >
     {copied === text ? 'copied ✓' : 'copy'}

@@ -5,7 +5,8 @@
   import { WORK_MODE_OPTIONS, REGION_OPTIONS, type FacetStore, type FacetOption } from '#lib/facets.js';
   import type { FacetCounts } from '#lib/types.js';
   import { summarizeScope, JOBS_SCOPE, COMPANIES_SCOPE } from '#lib/headerScope.js';
-  import { pillClass, pillTitle } from './facets/pill';
+  import { pillClass, pillPressed, pillTitle } from './facets/pill';
+  import PillMeta from './facets/PillMeta.svelte';
   import LocationPane from './filters/LocationPane.svelte';
   import { must } from '#lib/utils.js';
 
@@ -115,10 +116,11 @@
       <button
         type="button"
         onclick={() => must(store, 'store').cycle(param, opt.value)}
+        aria-pressed={pillPressed(inc, exc)}
         title={pillTitle(inc, exc, true)}
         class={pillClass(inc || exc, exc, 'px-3 py-1.5 text-sm')}
       >
-        {opt.label}
+        {opt.label}<PillMeta included={inc} excluded={exc} />
       </button>
     {/each}
   </div>

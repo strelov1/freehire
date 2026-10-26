@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
   import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen, Check } from '@lucide/svelte';
-  import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
+  import { askConfirmTailor, confirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
   import { groupedStages, humanizeStage, offersDebrief } from '#lib/stages.js';
   import { canFollowUp } from '#lib/followup.js';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '#lib/board.js';
@@ -553,7 +553,10 @@
 <!-- Not while the application chat is open: Escape there belongs to the chat (the covering
      panel closes itself on it), and closing the whole drawer under a half-typed answer would
      throw the conversation away. -->
-<svelte:window onkeydown={(e) => e.key === 'Escape' && !blocked && !confirmRemoveOpen && !applyChatOpen && close()} />
+<svelte:window
+  onkeydown={(e) =>
+    e.key === 'Escape' && !blocked && !confirmRemoveOpen && !applyChatOpen && !confirmTailorDialog.open && close()}
+/>
 
 <!-- Fullscreen job panel (like the swipe deck): a centered column with a fixed
      header + pill tabs, a scrolling tab body, and a pinned View-job footer. It covers

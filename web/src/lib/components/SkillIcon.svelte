@@ -1,6 +1,6 @@
 <script lang="ts">
   import { BrandMark } from '#lib/ui/index.js';
-  import { TECH_MARKS } from '#lib/techmarks.js';
+  import { ensureTechMarks, techMarks } from '#lib/techmarksLoad.svelte.js';
 
   // The one place a skill chip turns its slug into a brand logo — every call site
   // that renders a skill value (job cards, the skills facet picker, the profile's
@@ -10,7 +10,10 @@
   // real logos.
   let { slug, class: className = 'size-3 shrink-0' }: { slug: string; class?: string } = $props();
 
-  const mark = $derived(TECH_MARKS[slug]);
+  const onBrowser = typeof window !== 'undefined';
+  if (onBrowser) ensureTechMarks();
+
+  const mark = $derived(onBrowser ? techMarks()?.[slug] : undefined);
 </script>
 
 {#if mark}

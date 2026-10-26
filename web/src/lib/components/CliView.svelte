@@ -2,6 +2,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { CLI_INSTALL, CLI_REPO, MCP_REPO } from '#lib/cliLinks.js';
+  import { announce } from '#lib/announce.svelte.js';
   import { Button, SectionLabel, TabStrip, tabStripId } from '#lib/ui/index.js';
 
   const SKILLS_URL = 'https://github.com/strelov1/freehire-cli/tree/main/skills';
@@ -133,6 +134,7 @@
     try {
       await navigator.clipboard.writeText(text);
       copied = text;
+      announce('Copied to the clipboard');
       clearTimeout(copyTimer);
       copyTimer = setTimeout(() => (copied = null), 1600);
     } catch {
@@ -172,7 +174,7 @@
   <button
     type="button"
     onclick={() => copy(text)}
-    aria-label={`Copy ${label}`}
+    aria-label={copied === text ? `Copied ${label}` : `Copy ${label}`}
     class="shrink-0 rounded-md border border-border px-2 py-0.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
   >
     {copied === text ? 'copied ✓' : 'copy'}

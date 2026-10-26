@@ -80,13 +80,17 @@
     });
     return { height, barY, ribbons };
   });
+
+  const chartLabel = $derived(
+    ['Application pipeline by status', ...model.ribbons.map((r) => `${r.label}: ${r.count}`)].join('. '),
+  );
 </script>
 
 <svg
   viewBox="0 0 {W} {model.height}"
   class="w-full"
   role="img"
-  aria-label="Application pipeline by status"
+  aria-label={chartLabel}
 >
   <!-- Source bar: all applications -->
   <rect x={LX} y={model.barY} width={LW} height={HH} rx="3" class="fill-foreground" />

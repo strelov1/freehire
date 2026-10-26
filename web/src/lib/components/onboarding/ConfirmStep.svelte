@@ -11,7 +11,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { api } from '#lib/api.js';
   import { CATEGORY_GROUPS } from '#lib/filterSections.js';
-  import { pillClass, pillCountClass, pillTitle } from '#lib/components/facets/pill.js';
+  import { pillClass, pillCountClass, pillPressed, pillTitle } from '#lib/components/facets/pill.js';
   import SeniorityPills from '#lib/components/profile/SeniorityPills.svelte';
   import { MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
   import ProfileLinksFields from './ProfileLinksFields.svelte';
@@ -149,14 +149,20 @@
 {#each specGroups as g (g.name)}
   {@const isCollapsed = specCollapsed.has(g.name) && !specQuery}
   <div class="border-t border-border first:border-t-0">
-    <button
-      type="button"
-      class="flex w-full items-center gap-2 py-3"
-      onclick={() => (specCollapsed.has(g.name) ? specCollapsed.delete(g.name) : specCollapsed.add(g.name))}
-    >
-      <ChevronDown class={['size-4 text-muted-foreground transition-transform', isCollapsed && '-rotate-90']} />
-      <h3 class="text-sm font-semibold tracking-tight">{g.name}</h3>
-    </button>
+    <h3 class="text-sm font-semibold tracking-tight">
+      <button
+        type="button"
+        class="flex w-full items-center gap-2 py-3"
+        aria-expanded={!isCollapsed}
+        onclick={() => (specCollapsed.has(g.name) ? specCollapsed.delete(g.name) : specCollapsed.add(g.name))}
+      >
+        <ChevronDown
+          class={['size-4 text-muted-foreground transition-transform', isCollapsed && '-rotate-90']}
+          aria-hidden="true"
+        />
+        {g.name}
+      </button>
+    </h3>
     {#if !isCollapsed}
       <div class="flex flex-wrap gap-2 pb-3">
         {#each g.options as o (o.value)}
@@ -164,6 +170,7 @@
           <button
             type="button"
             onclick={() => toggleSpecialization(o.value)}
+            aria-pressed={pillPressed(included, false)}
             title={pillTitle(included, false, false)}
             class={pillClass(included, false, 'px-3 py-1.5 text-sm')}
           >

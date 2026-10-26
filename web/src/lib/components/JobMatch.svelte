@@ -326,7 +326,13 @@
              an "anal…" does not. -->
         <div class="flex flex-nowrap gap-1.5 overflow-hidden">
           {#each teaserSkills as skill (skill)}
-            <span class={`${teaser.missing.has(skill) ? missChip : haveChip} whitespace-nowrap`}>
+            {@const missingSkill = teaser.missing.has(skill)}
+            <span class={`${missingSkill ? missChip : haveChip} whitespace-nowrap`}>
+              {#if missingSkill}
+                <Ban class="size-3 shrink-0" aria-hidden="true" />
+              {:else}
+                <Check class="size-3 shrink-0" aria-hidden="true" />
+              {/if}
               <SkillIcon slug={skill} />{skillLabel(skill)}
             </span>
           {/each}
@@ -393,7 +399,7 @@
               disabled={pending}
               onclick={() => toggleClaimRow(a.name)}
             >
-              <SkillIcon slug={a.name} />{skillLabel(a.name)} <span class="opacity-70">· you have {a.via}</span>
+              <SkillIcon slug={a.name} />{skillLabel(a.name)} <span class="font-normal">· you have {a.via}</span>
             </button>
           {/each}
         </div>

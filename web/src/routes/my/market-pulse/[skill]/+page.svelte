@@ -7,6 +7,7 @@
   import { skillLabel } from '#lib/facets.js';
   import { buildSkillDetailChart } from '#lib/skillDetailChart.js';
   import { pickTickIndices } from '#lib/activityChart.js';
+  import { chartTipPosition, nextChartIndex } from '#lib/chartKeys.js';
   import { formatCount } from '#lib/utils.js';
   import { Button } from '#lib/ui/index.js';
   import States from '#lib/components/States.svelte';
@@ -52,6 +53,29 @@
   let tipX = $state(0);
   let tipY = $state(0);
   const hoveredPoint = $derived(hovered === null || !model ? null : (model.points[hovered] ?? null));
+
+  let chartEl = $state<HTMLDivElement | null>(null);
+  let valuesEl = $state<HTMLUListElement | null>(null);
+
+  function showPoint(i: number) {
+    if (!model) return;
+    const point = model.points[i];
+    if (!point) return;
+    hovered = i;
+    if (!chartEl) return;
+    const tip = chartTipPosition(chartEl, point.x / model.width);
+    tipX = tip.x;
+    tipY = tip.y;
+  }
+
+  function onValueKey(e: KeyboardEvent) {
+    if (!model) return;
+    const i = nextChartIndex(e.key, hovered, model.points.length);
+    if (i === null) return;
+    e.preventDefault();
+    showPoint(i);
+    valuesEl?.querySelectorAll('button')[i]?.focus();
+  }
 
   // Nearest-point-by-x rather than a slot-index formula: the series is short
   // (≤26 points) so an O(n) scan is trivial, and it stays correct regardless
@@ -138,6 +162,7 @@
         class="relative rounded-lg border border-border p-4"
         role="img"
         aria-label={format(s.demandAriaLabel, { label })}
+        bind:this={chartEl}
         onpointermove={onMove}
         onpointerleave={() => (hovered = null)}
       >
@@ -209,6 +234,20 @@
           </div>
         {/if}
       </div>
+      <ul class="sr-only" bind:this={valuesEl}>
+        {#each model.points as p, i (p.weekStart)}
+          <li>
+            <button
+              type="button"
+              tabindex={i === (hovered ?? 0) ? 0 : -1}
+              onfocus={() => showPoint(i)}
+              onkeydown={onValueKey}
+            >
+              {fullDate(p.weekStart)}: {p.openCount.toLocaleString()} {plural(locale(), p.openCount, s.openRoles)}
+            </button>
+          </li>
+        {/each}
+      </ul>
 
       {#if model.points.length === 1}
         <p class="text-center text-xs text-muted-foreground">

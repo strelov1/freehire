@@ -86,7 +86,8 @@
     <span class="mt-1 block text-[11px] text-muted-foreground">{timeAgo(item.created_at, locale())}</span>
   </span>
   {#if unread}
-    <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-label="unread"></span>
+    <span class="sr-only">unread</span>
+    <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true"></span>
   {/if}
 {/snippet}
 

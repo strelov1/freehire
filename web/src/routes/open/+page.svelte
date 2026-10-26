@@ -324,7 +324,7 @@
                  below one of them would lift that cell's number out of line with its
                  seven neighbours. -->
             <dt class="font-mono text-xs uppercase tracking-wide text-balance text-muted-foreground">
-              {e.label}{#if e.note}<span class="block normal-case opacity-70">{e.note}</span>{/if}
+              {e.label}{#if e.note}<span class="block font-normal normal-case">{e.note}</span>{/if}
             </dt>
             <!-- This type size is safe only because the view count is rendered compactly:
                  spelled out, its seven digits overflowed a 1/4-width cell into the

@@ -95,6 +95,13 @@
     });
     return { height, barY, ribbons };
   });
+
+  const chartLabel = $derived(
+    [
+      s.chartAria,
+      ...model.ribbons.map((r) => (r.breakdown ? `${r.label}: ${r.count}, ${r.breakdown}` : `${r.label}: ${r.count}`)),
+    ].join('. '),
+  );
 </script>
 
 <svg
@@ -102,7 +109,7 @@
   style="aspect-ratio: {W} / {model.height}"
   class="block h-auto w-full"
   role="img"
-  aria-label={s.chartAria}
+  aria-label={chartLabel}
 >
   <!-- Source bar: all applications -->
   <rect x={LX} y={model.barY} width={LW} height={HH} rx="3" class="fill-foreground" />
