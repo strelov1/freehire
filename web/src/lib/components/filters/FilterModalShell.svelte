@@ -132,7 +132,9 @@
       if (!rail.some((e) => e.key === active)) {
         active = (initialKey && rail.some((e) => e.key === initialKey) ? initialKey : rail[0]?.key) ?? '';
       }
-      if (searchItems) void tick().then(() => searchInput?.focus());
+      // Focus the search on a wide screen only: on a phone it would raise the keyboard
+      // over half the modal before the visitor asked to type.
+      if (searchItems && matchMedia('(min-width: 640px)').matches) void tick().then(() => searchInput?.focus());
     }
     if (!open && filterQuery) filterQuery = '';
     wasOpen = open;
@@ -287,14 +289,16 @@
       {@attach focusTrap()}
     >
       <!-- header -->
-      <div class="flex items-center gap-3 border-b border-border px-4 py-3">
+      <!-- On a phone the header actions leave the search no width, so the search wraps
+           onto its own full-width row under them. -->
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3 sm:flex-nowrap">
         <h2 class="flex shrink-0 items-center gap-1.5 text-base font-semibold tracking-tight">
           {title}
           {#if titleHint}{@render titleHint()}{/if}
         </h2>
         {#if searchItems}
           <div
-            class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-input px-3 focus-within:ring-2 focus-within:ring-ring"
+            class="order-last flex min-w-0 basis-full items-center gap-2 rounded-lg border border-input px-3 focus-within:ring-2 focus-within:ring-ring sm:order-none sm:flex-1 sm:basis-auto"
           >
             <Search class="size-4 shrink-0 text-muted-foreground" />
             <input
@@ -318,11 +322,12 @@
               </button>
             {/if}
           </div>
+          <div class="flex-1 sm:hidden"></div>
         {:else}
           <div class="flex-1"></div>
         {/if}
         {#if searchItems && headerAction}
-          <div class="mx-2 h-6 w-px shrink-0 bg-border" aria-hidden="true"></div>
+          <div class="mx-2 hidden h-6 w-px shrink-0 bg-border sm:block" aria-hidden="true"></div>
         {/if}
         {#if headerAction}{@render headerAction()}{/if}
         <button

@@ -90,7 +90,7 @@ function buildJobCatalog(): FilterSearchHit[] {
         entry.key,
         entry.label,
         entry.label,
-        entry.key === 'category' ? ['specialization', 'specializations', 'category'] : undefined,
+        entry.key === 'category' ? ['specialization', 'specializations', 'category', 'role', 'roles'] : undefined,
       ),
     );
   }
