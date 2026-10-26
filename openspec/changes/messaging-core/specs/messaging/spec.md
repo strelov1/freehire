@@ -13,7 +13,18 @@ Every conversation SHALL carry a kind that names the feature it belongs to (toda
 
 #### Scenario: Conversation names its kind and counterpart
 - **WHEN** a participant lists their conversations
-- **THEN** each entry carries its kind and a counterpart description supplied by that kind, together with status, last message time and unread count
+- **THEN** each entry carries its kind and a counterpart description, together with status, last message time and unread count
+
+### Requirement: Participants speak as a persona
+Every participant SHALL speak in a conversation as one persona (today only `buddy`). What a viewer sees of the other participant SHALL be decided by that participant's persona. No response about a conversation SHALL carry anything that identifies the account behind a persona: no account id, no email, and none of the account's other personas.
+
+#### Scenario: Counterpart follows the other participant's persona
+- **WHEN** a participant lists their conversations
+- **THEN** each entry's counterpart names the other participant's persona and carries only what that persona shows
+
+#### Scenario: Personas are not joined
+- **WHEN** a participant reads the list, the messages or a report of a buddy conversation
+- **THEN** the response contains no account id or email of the other participant
 
 ### Requirement: Request and accept
 A conversation SHALL start as pending, holding the starter's first message. The other participant SHALL be able to accept (the conversation becomes open) or decline (it becomes declined). A declined request SHALL NOT notify the starter; the starter SHALL see it as unanswered. Whether an account may start a conversation with another SHALL be decided by the conversation's kind.
