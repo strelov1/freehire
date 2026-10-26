@@ -268,3 +268,6 @@ extension/*.zip
 # cmd/harvest-boards, regenerated from the live boards table + whatever aggregator/query ran.
 # Not the catalog's own record (that's `boards`, written by cmd/harvest-boards --apply).
 /scripts/.harvest-seeds/
+
+# Local research notes (competitor scans, market notes) — kept out of the repository.
+/docs/research/
