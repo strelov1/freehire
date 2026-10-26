@@ -35,7 +35,7 @@ const namedEntities: Record<string, string> = {
 function decodeEntities(value: string): string {
   return value.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]*);/g, (entity, body: string) => {
     if (body.charAt(0) !== '#') return namedEntities[body] ?? entity;
-    const hex = body.charAt(1) === 'x' || body.charAt(1) === 'X';
+    const hex = body.startsWith('#x');
     const code = Number.parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
     const control = code < 32 && code !== 9 && code !== 10 && code !== 13;
     const surrogate = code >= 0xd800 && code <= 0xdfff;
