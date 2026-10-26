@@ -37,7 +37,8 @@ import (
 //     only when its own address code lies inside the board's area.
 //   - Both crawl hosts' IPs are refused by Cloudflare — a plain client and the proxies alike,
 //     and a Go Chrome-fingerprint client is shown the challenge — while the Scrapling
-//     service's impersonating fetcher is served from the crawl host's own IP (scraplingtier.go).
+//     service's impersonating fetcher is served. It is reached through the service's rotating
+//     proxy, because the site rate-limits per address (scraplingtier.go).
 type job104 struct {
 	http    HeaderJSONGetter
 	static  JSONGetter
@@ -55,15 +56,14 @@ const (
 	job104MaxPage = 100
 )
 
-// job104RequestInterval paces every search request of ONE run through one limiter — and the
-// provider is sharded, with the scheduler running several shards at once, each its own process
-// with its own limiter. The first production pass ran five shards concurrently at one request
-// every 0.8 s each (~6 a second together) and the platform began answering 429, with no
-// Retry-After, within minutes: 25 of shard 1's 69 boards failed and shards 2-5 failed almost
-// whole. A request repeated a few seconds later was served. Four seconds per shard keeps even
-// five concurrent shards near the ~1.25 a second a lone shard was served at for 19 minutes, and
-// job104RateLimitRetries rides out the 429s that still come.
-const job104RequestInterval = 4 * time.Second
+// job104RequestInterval paces every search request of ONE run through one limiter; the
+// scheduler runs several shards at once, each with its own. The platform rate-limits per
+// address — from the crawl host's own IP, five concurrent shards drew 429s at one request every
+// 0.8 s each and still did at 4 s — so the crawl leaves through the Scrapling service's
+// rotating proxy (scraplingtier.go), where each request has its own exit. The pace is then
+// courtesy toward the site rather than a limit we measured: five shards at 2 s are ~2.5
+// requests a second together, and a shard's ~1,000 pages fit its 4500 s budget.
+const job104RequestInterval = 2 * time.Second
 
 // job104RateLimitRetries and job104RateLimitBackoff retry a refused (403/429), failed (5xx) or
 // unanswered search, the wait

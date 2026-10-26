@@ -88,7 +88,7 @@ func TestScraplingRoutesAreTheMeasuredOnes(t *testing.T) {
 		"occ":         {scraplingfetch.ModeBrowser, false},
 		"vagas":       {scraplingfetch.ModeHTTP, true},
 		"instahyre":   {scraplingfetch.ModeHTTP, false},
-		"job104":      {scraplingfetch.ModeHTTP, false},
+		"job104":      {scraplingfetch.ModeHTTP, true},
 	}
 	for name, p := range scraplingProviders {
 		if p.route != want[name] {

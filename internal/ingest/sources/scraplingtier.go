@@ -120,10 +120,13 @@ var scraplingProviders = map[string]scraplingProvider{
 	// crawl host, and the impersonating fetcher from the crawl host's own IP is served (2026-10-25,
 	// ~0.4 s a page). The JSON search is not challenged and stays on a plain client.
 	// Cloudflare refuses the crawl host's IP for a plain client, through both proxies, and
-	// shows a Go Chrome-fingerprint client its challenge; the impersonating fetcher from the
-	// crawl host's own IP is served (2026-10-25, ~2-4 s a page). The code tables on
-	// static.104.com.tw have no such edge and stay on a plain client.
-	"job104": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+	// shows a Go Chrome-fingerprint client its challenge; the impersonating fetcher is served.
+	// Through the service's rotating proxy, not from the crawl host's own IP: that IP is
+	// rate-limited per address, and the first sharded passes drew 429s on 1-19 boards per shard
+	// even at one request every 4 s per shard, while the rotating exits answered 40 of 40 at
+	// ~3 s a page (2026-10-26). The code tables on static.104.com.tw have no such edge and stay
+	// on a plain client.
+	"job104": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewJob104(f, NewClient())
 	}},
 	"instahyre": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
