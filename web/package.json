@@ -67,7 +67,7 @@
     "isomorphic-dompurify": "^4.6.0",
     "marked": "^18.1.1",
     "posthog-js": "^1.438.12",
-    "satori": "^0.62.0",
+    "satori": "^0.63.0",
     "satori-html": "^0.3.2",
     "simple-icons": "^16.35.0",
     "svelte-dnd-action": "^0.9.80",
