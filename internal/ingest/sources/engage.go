@@ -40,8 +40,12 @@ const (
 	engageResultWindow = 10_000
 	// engageMaxPages is a safety ceiling: the result window at 60 rows a page.
 	engageMaxPages = engageResultWindow/60 + 1
-	// engageRequestInterval paces the walk to one page a second; a page answers in ~3 s anyway.
-	engageRequestInterval = time.Second
+	// engageRequestInterval paces every request of a run, all boards together. The search sits
+	// behind a per-IP rate rule: the first prod run, ~110 pages in 80 s across eleven boards walked
+	// at once, was refused with 403 on six of them within four seconds and kept ~30% of what the
+	// categories hold. One page every 3.5 s stays under 100 requests in five minutes, the floor
+	// such rules count in; a full run of the IT and creative codes (~475 pages) takes ~28 minutes.
+	engageRequestInterval = 3500 * time.Millisecond
 	engageRequestBurst    = 1
 )
 

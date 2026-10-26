@@ -48,13 +48,14 @@ const (
 	mynaviRequestInterval = time.Second
 	mynaviRequestBurst    = 1
 	mynaviDetailWorkers   = 2
-	// mynaviDetailBudget bounds one run's detail requests: ~25 minutes through the proxy, on
-	// top of the listing walk (~8 minutes for o16), inside the scheduler's 3000 s run timeout.
-	// A cold start of ~6.8k IT postings drains over the first ~9 runs.
-	mynaviDetailBudget = 800
-	// mynaviBoardDetailShare caps one board's claim on the run's budget, so one board's cold
-	// backlog cannot take a whole run while the other waits.
-	mynaviBoardDetailShare = 600
+	// mynaviDetailBudget bounds one run's detail requests. Measured on prod 2026-10-26, a run of
+	// o16 alone (137 listing pages + 800 details) took 16 minutes; with o17's ~180 listing pages
+	// and its own share of details a run stays near 35 minutes, inside the scheduler's 3000 s.
+	mynaviDetailBudget = 1600
+	// mynaviBoardDetailShare caps one board's claim on the run's budget: half of it, so each of
+	// the two boards gets its share whichever is crawled first and neither cold backlog starves
+	// the other.
+	mynaviBoardDetailShare = 800
 )
 
 // mynaviBoards are the occupation codes the engineer edition serves, and whether a posting
