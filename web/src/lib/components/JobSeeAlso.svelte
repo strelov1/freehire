@@ -19,7 +19,7 @@
       {#each cards as card (card.slug)}
         <a
           href={resolve('/collections/[slug]', { slug: card.slug })}
-          class="flex w-40 shrink-0 flex-col items-start gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-muted"
+          class="flex w-max shrink-0 flex-col items-start gap-1.5 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-muted"
         >
           <div class="flex w-full items-center justify-between gap-2">
             <CollectionMark mark={card.mark} />
@@ -31,7 +31,7 @@
               </span>
             {/if}
           </div>
-          <span class="text-sm font-medium text-foreground">{card.title} jobs</span>
+          <span class="whitespace-nowrap text-sm font-medium text-foreground">{card.title} jobs</span>
         </a>
       {/each}
     </div>
