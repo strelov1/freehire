@@ -23,7 +23,7 @@ var (
 )
 
 // maxHandleAttempts bounds the retry on a handle collision. The space is
-// |adj| x |noun| x 90, so a handful of attempts makes exhaustion a non-event.
+// |adj| x |noun| x 9990, so a handful of attempts makes exhaustion a non-event.
 const maxHandleAttempts = 8
 
 // Member is one account's place in the network.

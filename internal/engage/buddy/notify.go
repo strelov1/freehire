@@ -132,10 +132,15 @@ func (n *Notifier) NotifyUnread(ctx context.Context, now time.Time) (NotifyResul
 
 		if err := n.deliver(ctx, d); err != nil {
 			log.Printf("buddy: notice for conversation %d failed: %v", d.ConversationID, err)
-			if rerr := n.q.ReleaseBuddyUnread(ctx, db.ReleaseBuddyUnreadParams{
+			// The release must land even when the run's own context is what failed the
+			// delivery: a claim left in place silences this notice until a newer message.
+			rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+			rerr := n.q.ReleaseBuddyUnread(rctx, db.ReleaseBuddyUnreadParams{
 				IsLow: d.IsLow, ConversationID: d.ConversationID,
 				PrevNotifiedAt: d.PrevNotifiedAt, ClaimedAt: claimedAt,
-			}); rerr != nil {
+			})
+			cancel()
+			if rerr != nil {
 				return res, fmt.Errorf("buddy: releasing claim: %w", rerr)
 			}
 			res.Failed++

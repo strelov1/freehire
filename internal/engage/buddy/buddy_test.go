@@ -2,6 +2,7 @@ package buddy
 
 import (
 	"reflect"
+	"regexp"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
@@ -34,10 +35,12 @@ func TestRankingKeys(t *testing.T) {
 	}
 }
 
+var handleShape = regexp.MustCompile(`^[a-z]+-[a-z]+-[1-9][0-9]{1,3}$`)
+
 func TestGenerateHandleShape(t *testing.T) {
 	for range 50 {
 		h := GenerateHandle()
-		if len(h) < 6 || h[len(h)-3] != '-' {
+		if !handleShape.MatchString(h) {
 			t.Fatalf("unexpected handle %q", h)
 		}
 	}

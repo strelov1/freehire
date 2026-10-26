@@ -18,6 +18,7 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/strelov1/freehire/internal/engage/buddy"
@@ -36,6 +37,14 @@ func run() int {
 	if cfg.AWSRegion == "" || cfg.NotifyEmailFrom == "" {
 		log.Print("buddy-notify: email transport not configured (AWS_REGION / NOTIFY_EMAIL_FROM) — nothing to do")
 		return 0
+	}
+	if len(cfg.JWTSecret) < 32 {
+		log.Print("buddy-notify: JWT_SECRET must be at least 32 bytes — the unsubscribe link would not verify; refusing")
+		return 1
+	}
+	if !strings.HasPrefix(cfg.FrontendOrigin, "https://") {
+		log.Printf("buddy-notify: FRONTEND_ORIGIN is %q, which would send links nobody can open; refusing", cfg.FrontendOrigin)
+		return 1
 	}
 	maxRows, err := worker.EnvInt32("BUDDY_NOTIFY_MAX_PER_RUN", buddy.DefaultNotifyMaxPerRun)
 	if err != nil {

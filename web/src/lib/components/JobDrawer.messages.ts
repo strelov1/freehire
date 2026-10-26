@@ -125,7 +125,9 @@ export const messages = defineMessages(
     removeConfirm: 'Remove',
     removeCancel: 'Cancel',
     removeUntitled: 'this application',
+    showInBuddyFeed: 'Show in buddy feed',
     errors: {
+      buddyVisibility: 'Could not update buddy feed visibility.',
       loadEmails: 'Failed to load emails.',
       searchMail: 'Could not search your mail right now.',
       searchMailNeedsPlan: 'Finding this application in your mail is an AI feature, part of a paid plan.',
@@ -247,7 +249,9 @@ export const messages = defineMessages(
       removeConfirm: 'Убрать',
       removeCancel: 'Отмена',
       removeUntitled: 'эту заявку',
+      showInBuddyFeed: 'Показывать в ленте бадди',
       errors: {
+        buddyVisibility: 'Не удалось изменить видимость в ленте бадди.',
         loadEmails: 'Не удалось загрузить письма.',
         searchMail: 'Не удалось выполнить поиск в почте сейчас.',
         searchMailNeedsPlan: 'Поиск этого отклика в почте — AI-функция, она входит в платный план.',
