@@ -423,6 +423,15 @@ func All(c HTTPClient) map[string]Source {
 		// Garena: one keyless listing POST plus a detail GET per posting, which alone holds
 		// the responsibilities and requirements. See garena.go.
 		NewGarena(c),
+		// The Taiwanese hardware makers' own career sites, each a keyless endpoint the site's
+		// own page reads. MediaTek and Foxconn list the duties and hydrate each new posting for
+		// its requirements, Realtek lists no body at all, ASUS pages its listing five at a
+		// time, and Quanta is one dump. See each adapter's file.
+		NewMediaTek(c),
+		NewRealtek(c),
+		NewFoxconn(c),
+		NewASUS(c),
+		NewQuanta(c),
 		// Dassault Systèmes: its Taleo section is not public, so the catalogue — bodies
 		// included — is read from 3ds.com's own Exalead card search. See dassault.go.
 		NewDassault(c),

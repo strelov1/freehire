@@ -1,0 +1,18 @@
+{
+ "Pass": true,
+ "Data": {
+  "JobTitle": "IC Layout工程師",
+  "JobId": null,
+  "JobType": null,
+  "JobTypeId": null,
+  "JobOppId": null,
+  "CatId": null,
+  "Category": null,
+  "DegreeId": null,
+  "Degree": "大學",
+  "Exp": "0",
+  "LocationId": null,
+  "Location": "新竹科學園區",
+  "Requirement": "工作項目：IC layout\r\n\r\n應徵條件：\r\n1. 學士以上; 電機工程、電信工程、電子工程、通訊工程等相關科系畢業為主。\r\n2. 具 IC layout相關經驗者尤佳。"
+ }
+}

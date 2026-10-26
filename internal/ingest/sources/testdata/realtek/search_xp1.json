@@ -1,0 +1,29 @@
+{
+ "Pass": true,
+ "Data": [
+  {
+   "JobOppId": "343",
+   "JobId": "328",
+   "JobTypeId": "17",
+   "JobLocationId": "1",
+   "JobTitle": "WLAN數位IC驗證工程師",
+   "JobType": "數位設計",
+   "Degree": "碩士",
+   "Exp": "1",
+   "Location": "新竹科學園區",
+   "ModDate": null
+  },
+  {
+   "JobOppId": "1554",
+   "JobId": "847",
+   "JobTypeId": "26",
+   "JobLocationId": "2",
+   "JobTitle": "高階主管司機兼總務(約聘)",
+   "JobType": "台北辦公室",
+   "Degree": "高中",
+   "Exp": "1",
+   "Location": "台北市中山區",
+   "ModDate": null
+  }
+ ]
+}

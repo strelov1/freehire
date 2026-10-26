@@ -1,0 +1,18 @@
+{
+ "Pass": true,
+ "Data": {
+  "JobTitle": "Switch/Router/Gateway軟軔體設計工程師",
+  "JobId": null,
+  "JobType": null,
+  "JobTypeId": null,
+  "JobOppId": null,
+  "CatId": null,
+  "Category": null,
+  "DegreeId": null,
+  "Degree": "大學",
+  "Exp": "0",
+  "LocationId": null,
+  "Location": "新竹科學園區",
+  "Requirement": "大學以上，電機、資訊相關系所畢，具下列任一條件者佳：\r\n(1)熟C、C++、Assembly、Linux。\r\n(2)具網路embedded system開發經驗。\r\n(3)對網路如Ethernet, TCP/IP, NAT, QoS, Network processor/protocols/Architecture有興趣者。\r\n(4)對網路產品，程式設計有興趣者。"
+ }
+}

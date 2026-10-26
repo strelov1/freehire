@@ -1,0 +1,18 @@
+{
+ "Pass": true,
+ "Data": {
+  "JobTitle": "WLAN數位IC驗證工程師",
+  "JobId": null,
+  "JobType": null,
+  "JobTypeId": null,
+  "JobOppId": null,
+  "CatId": null,
+  "Category": null,
+  "DegreeId": null,
+  "Degree": "碩士",
+  "Exp": "1",
+  "LocationId": null,
+  "Location": "新竹科學園區",
+  "Requirement": "1. MS degree or above with EE or CS background\r\n2. 1 year experience or above in IC design/verification\r\n3. Familiar with SystemVerilog and Vera. Verilog or VHDL familiarity an advantage\r\n4. Good knowledge on Wireless communication or architecture.\r\n5. TCL/Perl coding experience is a plus"
+ }
+}

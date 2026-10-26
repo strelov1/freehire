@@ -1,0 +1,94 @@
+{
+ "result": {
+  "data": {
+   "json": {
+    "status": "complete",
+    "message": null,
+    "jobs": [
+     {
+      "id": "MTK120260519002",
+      "title": "System Performance Optimization Technical Manager_HsinChu",
+      "summary": null,
+      "location": null,
+      "jobPostStatus": "posted",
+      "description": "Lead the team in analyzing and optimizing gaming performance on mobile SoC platforms, and develop optimization technologies to achieve project targets.\n\nKey Responsibilities:\n\nLead the team in analyzing gaming performance bottlenecks and power consumption based on game behavior, and achieve the goal of enhancing the gaming experience on MediaTek platforms through software optimization and tuning.\nLead the team to collaborate with game studios, providing recommendations for gameplay experience optimization based on game behavior analysis.\nLead the team in achieving product performance and power efficiency targets for MediaTek and client projects through software tuning.\n\n#LI-AMY",
+      "publishedDate": "2026-10-15T16:00:00.000+00:00",
+      "applicationId": null,
+      "properties": {
+       "category": {
+        "label": "Software",
+        "code": "9020"
+       },
+       "workExperience": {
+        "label": "0006",
+        "code": "More than 8 Years Work Expe."
+       },
+       "location": {
+        "label": "0000009256",
+        "code": "HsinChu"
+       },
+       "program": {
+        "label": null,
+        "code": null
+       },
+       "jobEducationInfos": []
+      },
+      "jobStatusInfo": null
+     },
+     {
+      "id": "MTK120260630006",
+      "title": "SystemC/TLM Modeling Engineer (VDK Virtual Platform)",
+      "summary": null,
+      "location": null,
+      "jobPostStatus": "posted",
+      "description": "1.\tDevelop functional IP models in SystemC/TLM to enable software left-shift\n2.\tDesign clean TLM interfaces and connectivity for reusable modeling\n3.\tIntegrate IP models into a Virtual SoC (vSOC) and support system bring-up\n4.\tBuild platform-level tests and regression to validate correctness\n5.\tImprove productivity with tooling and CI/CD automation",
+      "publishedDate": "2026-07-01T16:00:00.000+00:00",
+      "applicationId": null,
+      "properties": {
+       "category": {
+        "label": "Chip Design",
+        "code": "9009"
+       },
+       "workExperience": {
+        "label": "0002",
+        "code": "Less than 2 Years Work Expe."
+       },
+       "location": {
+        "label": "0000073451",
+        "code": "ChuPei"
+       },
+       "program": {
+        "label": "60",
+        "code": "Hardware Talents Referral Program"
+       },
+       "jobEducationInfos": [
+        {
+         "educationDegree": "Master's Degree",
+         "educationMajor": "電控/控制 Electrical Control Engineering "
+        },
+        {
+         "educationDegree": "Master's Degree",
+         "educationMajor": "電機/電子 Electrical Engineering "
+        },
+        {
+         "educationDegree": "Master's Degree",
+         "educationMajor": "通訊/電信 Communication Engineering "
+        },
+        {
+         "educationDegree": "Master's Degree",
+         "educationMajor": "資科/資工 Computer Science "
+        }
+       ]
+      },
+      "jobStatusInfo": null
+     }
+    ],
+    "pagination": {
+     "current_page": 1,
+     "total_pages": 2,
+     "total_items": 3
+    }
+   }
+  }
+ }
+}

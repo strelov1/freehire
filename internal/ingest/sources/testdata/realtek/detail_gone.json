@@ -1,0 +1,18 @@
+{
+ "Pass": true,
+ "Data": {
+  "JobTitle": null,
+  "JobId": null,
+  "JobType": null,
+  "JobTypeId": null,
+  "JobOppId": null,
+  "CatId": null,
+  "Category": null,
+  "DegreeId": null,
+  "Degree": null,
+  "Exp": null,
+  "LocationId": null,
+  "Location": null,
+  "Requirement": null
+ }
+}

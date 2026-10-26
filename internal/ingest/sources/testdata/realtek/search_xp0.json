@@ -1,0 +1,29 @@
+{
+ "Pass": true,
+ "Data": [
+  {
+   "JobOppId": "18",
+   "JobId": "22",
+   "JobTypeId": "4",
+   "JobLocationId": "1",
+   "JobTitle": "IC Layout工程師",
+   "JobType": "設計技術服務",
+   "Degree": "大學",
+   "Exp": "0",
+   "Location": "新竹科學園區",
+   "ModDate": null
+  },
+  {
+   "JobOppId": "202",
+   "JobId": "208",
+   "JobTypeId": "19",
+   "JobLocationId": "1",
+   "JobTitle": "Switch/Router/Gateway軟軔體設計工程師",
+   "JobType": "系統設計",
+   "Degree": "大學",
+   "Exp": "0",
+   "Location": "新竹科學園區",
+   "ModDate": null
+  }
+ ]
+}

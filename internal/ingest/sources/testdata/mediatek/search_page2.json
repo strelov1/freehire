@@ -1,0 +1,64 @@
+{
+ "result": {
+  "data": {
+   "json": {
+    "status": "complete",
+    "message": null,
+    "jobs": [
+     {
+      "id": "MTK120261006013",
+      "title": "IT SW Infra Engineer",
+      "summary": null,
+      "location": null,
+      "jobPostStatus": "posted",
+      "description": "1.Support the RD environment in driving AI‑for‑Infra, integrating AI into the Data Transfer Platform for automated monitoring, diagnostics, and operations, thereby enhancing service reliability and operational efficiency.\n2.Develop and maintain an AI‑driven cross‑domain data validation service, enabling trustworthy data exchange to support global business growth.\n3.Optimize the performance, stability, security, and scalability of existing data‑transfer solutions to meet worldwide data‑transfer demands.\n\n\n\n#LI-EP1",
+      "publishedDate": "2026-10-09T16:00:00.000+00:00",
+      "applicationId": null,
+      "properties": {
+       "category": {
+        "label": "Information Technology ",
+        "code": "9013"
+       },
+       "workExperience": {
+        "label": "0003",
+        "code": "More than 2 Years Work Expe."
+       },
+       "location": {
+        "label": "0000009256",
+        "code": "HsinChu"
+       },
+       "program": {
+        "label": null,
+        "code": null
+       },
+       "jobEducationInfos": [
+        {
+         "educationDegree": "Master's Degree",
+         "educationMajor": "通訊/電信 Communication Engineering "
+        },
+        {
+         "educationDegree": "Master's Degree",
+         "educationMajor": "資科/資工 Computer Science "
+        },
+        {
+         "educationDegree": "Master's Degree",
+         "educationMajor": "電機/電子 Electrical Engineering "
+        },
+        {
+         "educationDegree": "Master's Degree",
+         "educationMajor": "資管 Information Management "
+        }
+       ]
+      },
+      "jobStatusInfo": null
+     }
+    ],
+    "pagination": {
+     "current_page": 2,
+     "total_pages": 2,
+     "total_items": 3
+    }
+   }
+  }
+ }
+}
