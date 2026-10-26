@@ -1,6 +1,7 @@
 package normalize
 
 import (
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -101,7 +102,7 @@ func BoardNameSlug(name string) string {
 // caller's vocabulary recognises, then slug what is left. The two differ only in that
 // vocabulary, and sharing the walk is what keeps their single-word and repeat rules identical.
 func trimTail(name string, isTail func(word string) bool) string {
-	words := strings.FieldsFunc(dropApostrophes(name), isWordBreak)
+	words := strings.FieldsFunc(dropApostrophes(trimJapaneseForms(name)), isWordBreak)
 	for len(words) > 1 && isTail(words[len(words)-1]) {
 		words = words[:len(words)-1]
 	}
@@ -131,6 +132,51 @@ func isWordBreak(r rune) bool {
 	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '/'
 }
 
+// japaneseForms are the Japanese corporate forms, written out and abbreviated. They are a
+// separate list from [legalSuffixes] only because they cannot be matched the same way: the
+// letters-only comparison reduces a kanji word to nothing, and Japanese writes no space
+// between the form and the name, so "株式会社サイバーエージェント" is a single word to the
+// tail walk. They are matched as a literal PREFIX or SUFFIX of the name instead — Japanese
+// puts the form on either side ("株式会社リクルート", "トヨタ自動車株式会社").
+//
+// Before this list the form reached [Slug] whole and was romanised as Chinese: 株式会社
+// became "zhu-shi-hui-she", measured 2026-10-26 as the leading or trailing segment of 6,037
+// company slugs carrying 42,203 postings (hrmos, herp, engage, mynavi), and the same
+// employer written with and without its form keyed as two companies.
+//
+// Only the business forms. The non-profit and institutional ones (医療法人, 学校法人,
+// 一般社団法人) are deliberately absent: they compound ("社会医療法人社団") in ways a literal
+// list does not cover, and together they key fewer than 300 companies.
+var japaneseForms = []string{
+	"株式会社", "有限会社", "合同会社", "合名会社", "合資会社",
+	"(株)", "（株）", "㈱", "(有)", "（有）", "㈲", "(同)", "（同）",
+}
+
+// trimJapaneseForms drops [japaneseForms] from either end of a name, repeatedly, with the
+// spaces around them — half-width and the full-width U+3000 that Japanese text uses. Like the
+// tail walk, it never empties a name: "株式会社" alone is left as it is, because an empty slug
+// silently matches nothing while a visibly odd row can be found and fixed.
+func trimJapaneseForms(name string) string {
+	const spaces = " \t\u3000"
+	name = strings.Trim(name, spaces)
+	for {
+		trimmed := name
+		for _, form := range japaneseForms {
+			if rest, ok := strings.CutPrefix(trimmed, form); ok {
+				trimmed = rest
+			}
+			if rest, ok := strings.CutSuffix(trimmed, form); ok {
+				trimmed = rest
+			}
+		}
+		trimmed = strings.Trim(trimmed, spaces)
+		if trimmed == name || trimmed == "" {
+			return name
+		}
+		name = trimmed
+	}
+}
+
 // IsLegalForm reports whether a single word of a company name is a corporate form ("Ltd.",
 // "GmbH", "B.V."), by the same letters-only comparison [CompanySlug] strips with.
 //
@@ -139,6 +185,9 @@ func isWordBreak(r rune) bool {
 // and must not use [CompanySlug]'s word breaks, which split "T-Mobile" in two and would make
 // a single-token name look specific enough to skip its headquarters check.
 func IsLegalForm(word string) bool {
+	if slices.Contains(japaneseForms, word) {
+		return true
+	}
 	_, ok := legalSuffixes[letters(word)]
 	return ok
 }

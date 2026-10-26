@@ -38,6 +38,19 @@ func TestCompanySlug(t *testing.T) {
 		{"typographic apostrophe", "Macy\u2019s", "macys"},
 		{"a symbol word is not part of the key", "Acme ™", "acme"},
 		{"a non-latin word is kept and transliterated", "Яндекс ООО", "iandeks-ooo"},
+		// Japanese writes the form with no space, on either side of the name; before it was
+		// matched literally, 株式会社 was romanised as Chinese into "zhu-shi-hui-she".
+		{"japanese form as a prefix", "株式会社Speee", "speee"},
+		{"japanese form as a suffix", "freee株式会社", "freee"},
+		{"japanese form with a full-width space", "株式会社\u3000Kaizen Platform", "kaizen-platform"},
+		{"japanese limited company", "有限会社Acme", "acme"},
+		{"japanese godo kaisha", "Amazon Japan合同会社", "amazon-japan"},
+		{"japanese abbreviated form, full-width brackets", "（株）Acme", "acme"},
+		{"japanese abbreviated form, half-width brackets", "Acme(株)", "acme"},
+		{"japanese abbreviated form, one character", "㈱Acme", "acme"},
+		{"japanese form and a latin form together", "株式会社Acme Inc.", "acme"},
+		{"japanese form inside a name is kept", "Acme株式会社 東京支店", "acmezhu-shi-hui-she-dong-jing-zhi-dian"},
+		{"a name that is only a japanese form is not erased", "株式会社", "zhu-shi-hui-she"},
 		{"empty stays empty", "", ""},
 	}
 

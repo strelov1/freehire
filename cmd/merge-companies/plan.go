@@ -157,7 +157,7 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 		// names the canon, and that canon need not hold a catalogue row yet (a slug no row
 		// holds is a legitimate canon; see electCanonical). Judging it by member count would
 		// silently drop exactly the entry a human took the trouble to write down.
-		if len(members) < 2 && !isCuratedGroup {
+		if len(members) < 2 && !isCuratedGroup && !keyedBeforeTheRule(members[0], frozen) {
 			continue
 		}
 		// Sort by job count descending, then by slug, so the election and the alias order
@@ -199,6 +199,23 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 	}
 	slices.SortFunc(out, func(a, b merge) int { return cmp.Compare(a.GroupKey, b.GroupKey) })
 	return out
+}
+
+// keyedBeforeTheRule reports whether a company with no twin still has to move: its stored slug
+// is the faithful [normalize.Slug] of its name, yet the company rule now derives a different
+// one — a legal form the rule has learned to strip since the slug was minted (the Japanese
+// 株式会社, stored romanised as "zhu-shi-hui-she-…").
+//
+// Such a company is not a duplicate of anything, but it is not left alone either: the write
+// path re-keys its next posting, and cmd/backfill-derive its stored ones, to the derived slug —
+// with no alias, so /companies/<old> would simply 404. Planning it here records the redirect
+// and moves the rows in the same reviewed wave, exactly as a two-member legal-form merge does.
+//
+// The Slug test is what keeps this to the rule's own change. A slug that is NOT the plain slug
+// of the latest name drifted for another reason — the source renamed the employer — and
+// re-keying that is a judgement about the rename, not about a form. A frozen canon never moves.
+func keyedBeforeTheRule(c company, frozen map[string]bool) bool {
+	return !frozen[c.Slug] && c.Slug == normalize.Slug(c.Name) && normalize.CompanySlug(c.Name) != c.Slug
 }
 
 // electCanonical picks the group's surviving slug. Members arrive sorted by open jobs

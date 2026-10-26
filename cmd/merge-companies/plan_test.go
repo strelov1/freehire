@@ -86,6 +86,38 @@ func TestPlanMerges_IgnoresACompanyWithNoTwin(t *testing.T) {
 	}
 }
 
+func TestPlanMerges_RekeysALoneCompanyTheRuleNowStrips(t *testing.T) {
+	// 株式会社 used to reach Slug whole and come out as Chinese pinyin. Nothing else carries
+	// this employer, so there is no group — but the write path and backfill-derive re-key it
+	// anyway, and without an alias the old URL would 404.
+	got := planMerges([]company{{Slug: "zhu-shi-hui-she-speee", Name: "株式会社Speee", JobCount: 7}}, nil, 0, nil)
+	want := []merge{{
+		Canonical: "speee",
+		GroupKey:  "speee",
+		Aliases:   []alias{{Slug: "zhu-shi-hui-she-speee", Reason: reasonLegalForm, FoldedKey: "speee", JobCount: 7}},
+		Jobs:      7,
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("planned %+v, want %+v", got, want)
+	}
+}
+
+func TestPlanMerges_LeavesALoneRenamedCompanyAlone(t *testing.T) {
+	// A slug that is not the plain slug of its latest name drifted because the source renamed
+	// the employer. Following the rename is a judgement, not a form the rule learned.
+	got := planMerges([]company{{Slug: "facebook", Name: "Meta Platforms", JobCount: 40}}, nil, 0, nil)
+	if len(got) != 0 {
+		t.Errorf("planned %+v, want nothing", got)
+	}
+}
+
+func TestPlanMerges_LeavesALoneFrozenCanonAlone(t *testing.T) {
+	got := planMerges([]company{{Slug: "acme-inc", Name: "Acme Inc", JobCount: 4}}, map[string]bool{"acme-inc": true}, 0, nil)
+	if len(got) != 0 {
+		t.Errorf("planned %+v, want nothing — a frozen canon never moves", got)
+	}
+}
+
 func TestPlanMerges_IsDeterministic(t *testing.T) {
 	// A dry run a human reviewed must be the run that --apply then performs. Ties break on the
 	// slug so the plan does not depend on map iteration order.

@@ -111,6 +111,15 @@ as aliases. A curated group overrides that grouping: its canon is the one the li
 the one an election reaches — Sopra Steria's artefact board carries 1,336 open jobs against the
 real company's 337, so an election would retire the company into its own artefact.
 
+A company with NO twin is planned too when the rule itself has moved under it: its stored slug
+is the plain `Slug` of its name, yet `CompanySlug` now derives another — a form the rule learned
+to strip after the slug was minted. The Japanese forms are the case that made this necessary:
+株式会社 used to reach `Slug` whole and was romanised as Chinese, `zhu-shi-hui-she-…`, on ~12k
+companies (2026-10-26), and ~11k of them have no other spelling to merge with. Ingest and
+`backfill-derive` re-key such a company regardless; skipping it here would leave the old URL
+404ing with no alias. A slug that is NOT the plain slug of the latest name is left alone — it
+drifted because the source renamed the employer, which is a judgement, not a form.
+
 It reports by default; `--apply` writes and `--min-jobs` bounds a wave so the plan
 stays short enough to read. Jobs move in chunks whose statement selects rows still carrying the
 retired slug, so an updated row leaves the set — the loop ends on its own, a re-run moves

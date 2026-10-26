@@ -24,6 +24,8 @@ func TestSameCompany(t *testing.T) {
 		{"placeholder tenant", "Anatta Design", "Fake job", false},
 		{"non-latin script folded", "Яндекс", "Iandeks", true},
 		{"one name is a prefix of the other", "Base", "Basecamp", false},
+		{"japanese form on one side", "株式会社リクルート", "リクルート", true},
+		{"japanese form, abbreviated against written out", "（株）リクルート", "株式会社リクルート", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
