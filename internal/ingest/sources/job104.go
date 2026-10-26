@@ -65,7 +65,8 @@ const (
 // job104RateLimitRetries rides out the 429s that still come.
 const job104RequestInterval = 4 * time.Second
 
-// job104RateLimitRetries and job104RateLimitBackoff retry a refused (403/429) search, the wait
+// job104RateLimitRetries and job104RateLimitBackoff retry a refused (403/429), failed (5xx) or
+// unanswered search, the wait
 // doubling from 5 s up to retryDelayCap. The Scrapling client retries nothing itself (see
 // newScraplingClient), so without this one 429 fails the whole board.
 const (
@@ -258,7 +259,7 @@ func (s job104) search(ctx context.Context, params url.Values, page int) (job104
 	// Newest first, so a page boundary moves only when a posting is added ahead of it.
 	q.Set("order", "2")
 	var resp job104Response
-	err := retryWhile(ctx, job104RateLimitRetries, s.backoff, isRateLimited, func() error {
+	err := retryWhile(ctx, job104RateLimitRetries, s.backoff, isRefusedOrTransient, func() error {
 		if err := s.limiter.Wait(ctx); err != nil {
 			return err
 		}

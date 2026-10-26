@@ -75,7 +75,7 @@ func TestCakeMapsAListedPostingAndItsDetail(t *testing.T) {
 	f := &cakeFake{t: t, search: cakeOnePage(t, "search_slice.json"), details: map[string]string{
 		cakeRecruiterPath: "detail_1.json",
 	}}
-	jobs, err := NewCake(f).Fetch(context.Background(), CompanyEntry{Provider: "cake"})
+	jobs, err := newTestCake(f).Fetch(context.Background(), CompanyEntry{Provider: "cake"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestCakeMapsAnHourlyChinesePosting(t *testing.T) {
 	f := &cakeFake{t: t, search: cakeOnePage(t, "search_zh.json"), details: map[string]string{
 		cakeRetailPath: "detail_zh.json",
 	}}
-	jobs, err := NewCake(f).Fetch(context.Background(), CompanyEntry{Provider: "cake"})
+	jobs, err := newTestCake(f).Fetch(context.Background(), CompanyEntry{Provider: "cake"})
 	if err != nil || len(jobs) != 1 {
 		t.Fatalf("jobs = %d, err = %v", len(jobs), err)
 	}
@@ -205,7 +205,7 @@ func TestCakeSplitsSlicesUntilEachFitsTheWindow(t *testing.T) {
 		}
 		return map[string]any{"total_entries": 0, "total_relation": "eq", "data": []any{}}, nil
 	}
-	jobs, err := NewCake(f).(cake).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return true })
+	jobs, err := newTestCake(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return true })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestCakeHydratesOnlyUnseenPostingsWithinTheBudget(t *testing.T) {
 	f := &cakeFake{t: t, search: cakeOnePage(t, "search_slice.json"), details: map[string]string{
 		cakeRecruiterPath: "detail_1.json",
 	}}
-	src := NewCake(f).(cake)
+	src := newTestCake(f)
 	src.maxNewPerRun = 1
 	jobs, err := src.FetchNew(context.Background(), CompanyEntry{}, func(id string) bool { return id != cakeRecruiterPath })
 	if err != nil {
@@ -261,7 +261,30 @@ func TestCakeFailsTheCrawlWhenASearchFails(t *testing.T) {
 		}
 		return map[string]any{"total_entries": 60, "total_relation": "eq", "data": cakeRows("x", cakePerPage)}, nil
 	}
-	if _, err := NewCake(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
+	if _, err := newTestCake(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
 		t.Fatal("a failed page must fail the crawl")
+	}
+}
+
+func newTestCake(f *cakeFake) cake {
+	s := NewCake(f).(cake)
+	s.backoff = 0
+	return s
+}
+
+// One search lost to a slow exit must not cost the whole listing: it is repeated.
+func TestCakeRetriesATransientSearchFailure(t *testing.T) {
+	calls := 0
+	f := &cakeFake{t: t, details: map[string]string{}}
+	f.search = func(cakeSearchRequest) (any, error) {
+		calls++
+		if calls == 1 {
+			return nil, context.DeadlineExceeded
+		}
+		return map[string]any{"total_entries": 1, "total_relation": "eq", "data": []any{cakeRow("x")}}, nil
+	}
+	jobs, err := newTestCake(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return true })
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs = %d, err = %v", len(jobs), err)
 	}
 }

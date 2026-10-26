@@ -36,6 +36,7 @@ import (
 type cake struct {
 	http         cakeHTTP
 	maxNewPerRun int
+	backoff      time.Duration
 }
 
 // cakeHTTP is the transport the adapter needs: the POST search and the GET detail.
@@ -72,13 +73,17 @@ const cakeDetailWorkers = 4
 // past the bound is hydrated by a later run.
 const cakeMaxNewPerRun = 2500
 
-// cakeRefusalRetries is how many times a request the platform refused (403/429) is retried. A
-// retry leaves through a fresh rotating exit, and a refused exit is the usual cause.
+// cakeRefusalRetries is how many times a refused (403/429), failed (5xx) or unanswered request
+// is retried. A retry leaves through a fresh rotating exit, and a bad exit is the usual cause:
+// the first production run lost its whole listing to ONE search whose body timed out.
 const cakeRefusalRetries = 3
+
+// cakeRetryBackoff is the first retry's wait, doubling after.
+const cakeRetryBackoff = 2 * time.Second
 
 // NewCake builds the adapter over the given client.
 func NewCake(c cakeHTTP) Source {
-	return cake{http: c, maxNewPerRun: cakeMaxNewPerRun}
+	return cake{http: c, maxNewPerRun: cakeMaxNewPerRun, backoff: cakeRetryBackoff}
 }
 
 func (cake) Provider() string { return "cake" }
@@ -252,7 +257,7 @@ func (s cake) readPages(ctx context.Context, filters map[string][]string, total 
 func (s cake) search(ctx context.Context, filters map[string][]string, page int) (cakeSearchResponse, error) {
 	body := cakeSearchRequest{Page: page, PerPage: cakePerPage, SortBy: "latest", Filters: filters}
 	var resp cakeSearchResponse
-	err := retryWhile(ctx, cakeRefusalRetries, 2*time.Second, isRateLimited, func() error {
+	err := retryWhile(ctx, cakeRefusalRetries, s.backoff, isRefusedOrTransient, func() error {
 		resp = cakeSearchResponse{}
 		return s.http.PostJSON(ctx, cakeSearchURL, body, &resp)
 	})
@@ -298,7 +303,7 @@ func cakePostingURL(l cakeListing) string {
 // detail hydrates one new posting. A 404 is the platform's answer that it is gone.
 func (s cake) detail(ctx context.Context, l cakeListing) (Job, bool) {
 	var d cakeDetail
-	err := retryWhile(ctx, cakeRefusalRetries, 2*time.Second, isRateLimited, func() error {
+	err := retryWhile(ctx, cakeRefusalRetries, s.backoff, isRefusedOrTransient, func() error {
 		d = cakeDetail{}
 		return s.http.GetJSON(ctx, cakeAPI+"/"+url.PathEscape(l.Path), &d)
 	})

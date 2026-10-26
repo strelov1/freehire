@@ -314,6 +314,20 @@ func isRateLimited(err error) bool {
 	return errors.As(err, &se) && (se.Code == 403 || se.Code == 429)
 }
 
+// isRefusedOrTransient reports whether a request is worth repeating: the platform refused it
+// (403/429), answered with a server error (5xx), or no answer arrived at all — a timeout, a
+// reset, a body cut short. A 4xx answer is the platform's verdict and is not repeated. It is for
+// a crawl where one lost request costs the whole run (a listing that must be read whole), so a
+// slow proxy exit or a passing 500 must not end it; a cancelled run is never retried, since
+// retryWhile stops on the context.
+func isRefusedOrTransient(err error) bool {
+	var se *StatusError
+	if !errors.As(err, &se) {
+		return !errors.Is(err, context.Canceled)
+	}
+	return se.Code == 403 || se.Code == 429 || se.Code >= 500
+}
+
 // headedSection renders one body section under its heading, or "" when it is empty.
 func headedSection(heading, body string) string {
 	if strings.TrimSpace(body) == "" {

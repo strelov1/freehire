@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -41,6 +42,25 @@ func TestFirstNonEmpty(t *testing.T) {
 	for _, c := range cases {
 		if got := firstNonEmpty(c.parts...); got != c.want {
 			t.Errorf("firstNonEmpty(%q) = %q, want %q", c.parts, got, c.want)
+		}
+	}
+}
+
+func TestIsRefusedOrTransient(t *testing.T) {
+	for _, c := range []struct {
+		err  error
+		want bool
+	}{
+		{&StatusError{Code: 429}, true},
+		{&StatusError{Code: 403}, true},
+		{&StatusError{Code: 502}, true},
+		{&StatusError{Code: 404}, false},
+		{&StatusError{Code: 422}, false},
+		{context.DeadlineExceeded, true},
+		{context.Canceled, false},
+	} {
+		if got := isRefusedOrTransient(c.err); got != c.want {
+			t.Errorf("isRefusedOrTransient(%v) = %v, want %v", c.err, got, c.want)
 		}
 	}
 }
