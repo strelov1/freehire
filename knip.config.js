@@ -87,7 +87,9 @@ export default {
       // its exports are not evidence of anything.
       ignore: ['src/lib/generated/**'],
       // @tsconfig/svelte is consumed by tsconfig.json's `extends`, tslib by the compiler.
-      ignoreDependencies: ['@tsconfig/svelte', 'svelte-eslint-parser', 'tslib'],
+      // vue-sonner@1.3.2 imports Vue without declaring it as a dependency. The direct
+      // dependency lets Vite resolve that import; application source does not import Vue.
+      ignoreDependencies: ['@tsconfig/svelte', 'svelte-eslint-parser', 'tslib', 'vue'],
     },
   },
 };
