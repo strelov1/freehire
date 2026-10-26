@@ -1,6 +1,6 @@
 ## 1. Branch and migrations
 
-- [ ] 1.1 Rebase `interview-buddies` onto `origin/main`; renumber the buddy migrations after 0201 as 0202_messaging, 0203_buddies, 0204_application_events_feed_idx (design D8)
+- [x] 1.1 Rebase `interview-buddies` onto `origin/main`; renumber the buddy migrations after 0201 as 0202_messaging, 0203_buddies, 0204_application_events_feed_idx (design D8)
 - [ ] 1.2 Write `0202_messaging.sql` (conversations, conversation_participants, messages, user_blocks, conversation_reports) and strip the old chat tables from `0203_buddies.sql`; `pnpm check:sql` clean
 - [ ] 1.3 Rewrite the chat queries in `internal/platform/db/queries/` over participants (new `messaging.sql`), `make sqlc`
 
