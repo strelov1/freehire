@@ -315,6 +315,11 @@
     void goto(onboardingUrl(page.url.pathname + page.url.search));
   }
 
+  function signInFromGate() {
+    showSignInPrompt = false;
+    promptSignIn();
+  }
+
   // A vacancy taking applications here has no outside page: Apply opens the form instead
   // of a link, and the "did you apply?" prompt has nothing to ask — sending the form IS
   // the application, and the server records it in the tracker.
@@ -550,6 +555,28 @@
     >
       {external.label} <ArrowRight class="size-4" />
     </Button>
+  {/if}
+{/snippet}
+
+{#snippet signInFeedback()}
+  {#if showSignInPrompt}
+    <div
+      aria-live="polite"
+      class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
+    >
+      <span class="text-sm">
+        {job.direct_apply
+          ? 'Sign in to apply — your CV goes straight to the employer.'
+          : 'Sign in to keep track of the jobs you apply to.'}
+      </span>
+      <div class="flex flex-wrap items-center gap-2">
+        <Button variant="primary" size="sm" onclick={signInFromGate}>Sign in</Button>
+        <Button variant="outline" size="sm" onclick={signUpFromGate}>Sign up</Button>
+        {#if !job.direct_apply}
+          <Button variant="ghost" size="sm" onclick={viewWithoutSignIn}>Continue without signing in</Button>
+        {/if}
+      </div>
+    </div>
   {/if}
 {/snippet}
 
@@ -1285,23 +1312,7 @@
       />
     {/if}
 
-    {#if showSignInPrompt}
-      <div
-        class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
-      >
-        <span class="text-sm">
-          {job.direct_apply
-            ? 'Sign in to apply — your CV goes straight to the employer.'
-            : 'Sign in to keep track of the jobs you apply to.'}
-        </span>
-        <div class="flex items-center gap-2">
-          <Button variant="primary" size="sm" onclick={signUpFromGate}>Sign up</Button>
-          {#if !job.direct_apply}
-            <Button variant="ghost" size="sm" onclick={viewWithoutSignIn}>View without signing in</Button>
-          {/if}
-        </div>
-      </div>
-    {/if}
+    <div class="hidden lg:block">{@render signInFeedback()}</div>
 
     {#if contentTabs.length > 1}
       <!-- One panel for every tab, its contents toggled by class rather than {#if}.
@@ -1351,18 +1362,21 @@
        title picks the apply link up whenever auto-apply has taken this bar. -->
   {#if !closed}
     <div
-      class="pointer-events-none sticky bottom-0 z-30 -mx-5 flex gap-2 border-t border-border bg-background/95 px-5 pb-safe pt-3 sm:-mx-4 sm:px-4 lg:hidden"
+      class="pointer-events-none sticky bottom-0 z-30 -mx-5 flex flex-col gap-2 border-t border-border bg-background/95 px-5 pb-safe pt-3 shadow-lg sm:-mx-4 sm:px-4 lg:hidden"
     >
-      {@render tailorCta('lg', 'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg')}
-      {#if cta.autoApply?.leads}
-        {@render autoApplyCta('lg', 'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg')}
-      {:else}
-        {@render applyCta(
-          'lg',
-          'pointer-events-auto flex-1 rounded-xl font-semibold shadow-lg',
-          cta.external,
-        )}
-      {/if}
+      <div class="pointer-events-auto lg:hidden">{@render signInFeedback()}</div>
+      <div class="pointer-events-auto flex gap-2">
+        {@render tailorCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg')}
+        {#if cta.autoApply?.leads}
+          {@render autoApplyCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg')}
+        {:else}
+          {@render applyCta(
+            'lg',
+            'flex-1 rounded-xl font-semibold shadow-lg',
+            cta.external,
+          )}
+        {/if}
+      </div>
     </div>
   {/if}
 </article>

@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import type { Snippet } from 'svelte';
+  import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Bookmark, Check, ExternalLink, Eye, EyeOff, FileText, Lock } from '@lucide/svelte';
   import { companyLogoUrl } from '#lib/logo.js';
@@ -7,6 +9,7 @@
   import JobMatchBar from './JobMatchBar.svelte';
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { track } from '#lib/analytics.js';
   import { cardTags, cardTagsFromCard, formatSalary } from '#lib/enrichment.js';
@@ -198,6 +201,7 @@
   const saved = $derived(isSaved(job.public_slug));
   // Guards against a double-click racing two requests for the same job.
   let saving = $state(false);
+  let showApplyGate = $state(false);
 
   // Toggle the save mark. Optimistic: flip the shared set first so the bookmark
   // fills instantly, then confirm with the server and roll back on failure. A
@@ -265,16 +269,30 @@
 
   // Apply-intent — fired regardless of auth, the same event and shape the job page's own
   // Apply button fires (JobView.svelte), so the funnel stays comparable across surfaces.
-  // Applying is for signed-in visitors, like saving: a signed-out click goes to sign-in
-  // (back to this list afterwards) instead of out to the employer's site, so the
-  // application lands on a board that can track it.
+  // A signed-out click gets an explicit choice: sign in/up to track the application,
+  // or continue to the employer without an account.
   function onApplyClick(e: MouseEvent) {
+    if (applyJob) track('job_apply', { slug: applyJob.public_slug, source: applyJob.source });
     if (!isAuthenticated()) {
       e.preventDefault();
-      promptSignIn();
-      return;
+      showApplyGate = true;
     }
-    if (applyJob) track('job_apply', { slug: applyJob.public_slug, source: applyJob.source });
+  }
+
+  function signUpFromApplyGate() {
+    showApplyGate = false;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() resolves the route and adds the return location
+    void goto(onboardingUrl(page.url.pathname + page.url.search));
+  }
+
+  function signInFromApplyGate() {
+    showApplyGate = false;
+    promptSignIn();
+  }
+
+  function viewApplyWithoutSigningIn() {
+    showApplyGate = false;
+    if (applyJob) window.open(applyJob.url, '_blank', 'noopener,noreferrer');
   }
 </script>
 
@@ -659,5 +677,19 @@
   jobSlug={job.public_slug}
   class={compact ? 'absolute right-12 top-4' : 'absolute right-2.5 top-4'}
 />
+
+{#if showApplyGate && applyJob}
+  <div
+    aria-live="polite"
+    class="relative z-10 mx-3 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-secondary px-4 py-3"
+  >
+    <span class="text-sm">Sign in to keep track of the jobs you apply to.</span>
+    <div class="flex flex-wrap items-center gap-2">
+      <Button variant="primary" size="sm" onclick={signInFromApplyGate}>Sign in</Button>
+      <Button variant="outline" size="sm" onclick={signUpFromApplyGate}>Sign up</Button>
+      <Button variant="ghost" size="sm" onclick={viewApplyWithoutSigningIn}>Continue without signing in</Button>
+    </div>
+  </div>
+{/if}
 
 </div>
