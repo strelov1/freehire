@@ -186,7 +186,9 @@ var seniorityTable = []aliasEntry{
 //
 // The Japanese block (japanese.go) leads it: a Japanese title routinely carries Latin
 // fragments ("AWS", "SE", "PM") that the aliases below would otherwise claim first.
-var categoryTable = slices.Concat(japaneseCategoryTable, coreCategoryTable, japaneseTrailCategoryTable)
+// The Chinese block (chinese.go) closes it, behind everything a title could already
+// resolve to.
+var categoryTable = slices.Concat(japaneseCategoryTable, coreCategoryTable, japaneseTrailCategoryTable, chineseCategoryTable)
 
 var coreCategoryTable = []aliasEntry{
 	{"full stack", "fullstack"},

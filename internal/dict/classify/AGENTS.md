@@ -35,6 +35,15 @@ English half first). Inside each, a profession outranks a function word and a do
 word (介護, ホテル) comes last. A bare エンジニア/データ/開発/デザイナー is never an alias —
 classify_ja_test.go keeps the real titles that prove why.
 
+`chinese.go` holds the Chinese aliases (Simplified and Traditional, listed separately),
+LAST in `categoryTable`, so a title anything else resolves keeps its answer and a Japanese
+title is read as Japanese first. Every alias is a role compound carrying Han — a bare
+工程師/人員/助理/開發/設計 is never one, and a purely Latin alias would reach Latin titles
+(`TestChineseAliasesCarryHan`). Japanese titles the Japanese blocks leave unresolved still
+fall through to it, so a kanji form whose meaning differs between the languages (保全, 業務,
+行政) is listed only in its Chinese compounds or vetoed; classify_zh_test.go keeps the
+Japanese titles that prove each one.
+
 ## The two design crafts
 
 `design` means product/visual/experience design. Engineering draughting —
