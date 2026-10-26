@@ -104,7 +104,8 @@
         const [p, first] = await Promise.all([
           api.getBuddyProfile(current),
           api.listBuddyMemberFeed(current),
-          messagingDock.refresh(),
+          // A failed list read keeps the last one; it must not take the page down.
+          messagingDock.refresh().catch(() => {}),
         ]);
         if (cancelled) return;
         profile = p; feed = first.data; cursor = first.meta.next_cursor;

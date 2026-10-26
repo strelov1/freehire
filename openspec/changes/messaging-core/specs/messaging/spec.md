@@ -42,7 +42,7 @@ A conversation SHALL start as pending, holding the starter's first message. The 
 - **THEN** the system responds 409
 
 ### Requirement: Messages and read state
-Participants of an open conversation SHALL be able to send text messages of 1 to 4000 characters and read the conversation's messages oldest first. Sending into a pending (by the starter), declined or closed conversation SHALL be refused. The system SHALL track per participant which messages they have read and report an unread count per conversation.
+Participants of an open conversation SHALL be able to send text messages of 1 to 4000 characters and read the conversation's messages oldest first. Sending into a pending, declined or closed conversation SHALL be refused, whichever participant sends. The system SHALL track per participant which messages they have read and report an unread count per conversation.
 
 #### Scenario: Message is delivered
 - **WHEN** A sends a message in an open conversation with B
