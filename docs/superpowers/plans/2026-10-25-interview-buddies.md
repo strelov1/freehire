@@ -7,7 +7,7 @@ Source of truth: `openspec/changes/interview-buddies/` — `specs/interview-budd
 - Repo rules: `AGENTS.md` at the repo root (English only, surgical changes, no overengineering, no MVP hacks). Read `internal/engage/AGENTS.md` and `internal/platform/db/AGENTS.md` before touching those areas.
 - Package `internal/engage/buddy` (layer 7). It may import `platform`, `dict`, `ai`, `identity`, `candidate`, `job`, `application`, `search`, and nothing from `ingest` or `api`.
 - `internal/platform/db/` is generated. Edit `internal/platform/db/queries/buddies.sql`, then run `make sqlc`.
-- Migrations: `0199_buddies.sql` and `0200_application_events_feed_idx.sql` (the second has a no-transaction marker on its own comment line and uses `CREATE INDEX CONCURRENTLY IF NOT EXISTS`). Never edit an applied migration.
+- Migrations: `0199_buddies.sql` and `0200_application_events_feed_idx.sql` (renumbered and split by messaging-core: `0202_messaging.sql`, `0203_buddies.sql`, `0204_application_events_feed_idx.sql`) (the second has a no-transaction marker on its own comment line and uses `CREATE INDEX CONCURRENTLY IF NOT EXISTS`). Never edit an applied migration.
 - Before every commit with Go: `gofmt -l .` prints nothing, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`. Run the tagged tests of the packages you touched: `go test -tags=integration ./internal/engage/buddy/... ./internal/api/handler/ -run Buddy`. These need Docker.
 - Invoke the `simplify` skill on your diff before committing.
 - Response shapes: `{"data": ...}` and `{"data": [...], "meta": {...}}`; errors `{"error": msg}`.
@@ -88,7 +88,7 @@ Covers 6.1, 6.2, 6.3. Design D11, D12. Spec: the 401/403/404/409/429/400 scenari
 Covers 7.1, 7.2, 7.3. Design D9. Spec: "Unread message notifications".
 
 - `buddy.NotifyUnread(ctx, now)` doing claim, then send, then release on failure. Delivery follows `internal/engage/referral/pinger.go`: email via `emailnotify` honouring `emailprefs`, plus Telegram when linked, plus `RecordNotification` with a dedup key.
-- `cmd/buddy-notify` on `internal/platform/worker` conventions. It is a no-op that never opens the pool when the mail config is missing. Add an entry to the root `AGENTS.md` worker list.
+- `cmd/buddy-notify` (now `cmd/message-notify`, see messaging-core) on `internal/platform/worker` conventions. It is a no-op that never opens the pool when the mail config is missing. Add an entry to the root `AGENTS.md` worker list.
 - Integration tests for every scenario (use fake transports).
 
 ## Task 10: Web — client, page, similar, feed

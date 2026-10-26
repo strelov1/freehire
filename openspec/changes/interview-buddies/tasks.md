@@ -1,7 +1,7 @@
 ## 1. Schema and queries
 
-- [x] 1.1 Migration `0199_buddies.sql`: `buddy_members`, `buddy_hidden_applications`, `buddy_conversations`, `buddy_messages`, `buddy_blocks`, `buddy_reports` with CHECKs, unique pair index, cascades (design D2, D6, D7, D10); passes `pnpm check:sql`
-- [x] 1.2 Migration `0200_application_events_feed_idx.sql` (no-transaction, `CREATE INDEX CONCURRENTLY IF NOT EXISTS`) for the feed keyset read (D5)
+- [x] 1.1 Migration `0199_buddies.sql` (since split into `0202_messaging.sql` + `0203_buddies.sql` by messaging-core): `buddy_members`, `buddy_hidden_applications`, `buddy_conversations`, `buddy_messages`, `buddy_blocks`, `buddy_reports` with CHECKs, unique pair index, cascades (design D2, D6, D7, D10); passes `pnpm check:sql`
+- [x] 1.2 Migration `0200_application_events_feed_idx.sql` (now `0204_…`) (no-transaction, `CREATE INDEX CONCURRENTLY IF NOT EXISTS`) for the feed keyset read (D5)
 - [x] 1.3 `internal/platform/db/queries/buddies.sql` membership queries (upsert join/rejoin keeping handle, leave, get, update ranking keys) + `make sqlc`
 - [x] 1.4 Register `buddy` in `internal/platform/arch/layering/blocks.go` under `engage`; package skeleton `internal/engage/buddy` with `AGENTS.md`, linked from the root AGENTS.md table
 
@@ -55,7 +55,7 @@
 
 - [x] 9.1 Full checks: `gofmt -l .`, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`, tagged tests for `internal/engage/buddy` and `internal/api/handler` buddies, `pnpm run check` + web tests, `pnpm check:links`
 - [ ] 9.2 Build the 0200 index CONCURRENTLY on prod by hand before merge; PR, CI green, merge, deploy
-- [ ] 9.3 `freehire-ops`: `freehire-buddy-notify.{service,timer}` (5 min, `.env` + `.env.notify`), copy to host, `daemon-reload`, enable; verify one run in journal
+- [ ] 9.3 `freehire-ops`: `freehire-message-notify.{service,timer}` (was `freehire-buddy-notify`, renamed by messaging-core) (5 min, `.env` + `.env.notify`), copy to host, `daemon-reload`, enable; verify one run in journal
 - [ ] 9.4 Verify on prod: join, invite between two test accounts, chat, notification arrives, feed shows an applied event, block hides
 
 ## 10. Owner review follow-ups

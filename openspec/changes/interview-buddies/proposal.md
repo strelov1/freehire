@@ -1,3 +1,11 @@
+> **Superseded in part by `openspec/changes/messaging-core`.** The chat tables, blocks,
+> reports, chat routes and the unread worker described below moved into the shared
+> messaging core before release: tables `conversations`/`conversation_participants`/
+> `messages`/`user_blocks`/`conversation_reports` (migration `0202_messaging.sql`), routes
+> under `/me/conversations` and `/moderation/conversation-reports`, the invitation at
+> `POST /me/buddies/invite`, and the worker `cmd/message-notify`. Buddy-only tables are in
+> `0203_buddies.sql`, the feed index in `0204_application_events_feed_idx.sql`.
+
 ## Why
 
 People searching for the same kind of role in the same place, often at the same companies, have no way to find each other on freehire. Each of them goes through the same interview loops alone, while the person who just reached the onsite at a company is exactly who the next applicant wants to ask. An opt-in, anonymous peer network ("interview buddies") turns the tracking data we already hold into that connection without exposing anyone to their current employer or to recruiters.

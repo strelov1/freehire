@@ -1,3 +1,11 @@
+> **Superseded in part by `openspec/changes/messaging-core`.** The chat tables, blocks,
+> reports, chat routes and the unread worker described below moved into the shared
+> messaging core before release: tables `conversations`/`conversation_participants`/
+> `messages`/`user_blocks`/`conversation_reports` (migration `0202_messaging.sql`), routes
+> under `/me/conversations` and `/moderation/conversation-reports`, the invitation at
+> `POST /me/buddies/invite`, and the worker `cmd/message-notify`. Buddy-only tables are in
+> `0203_buddies.sql`, the feed index in `0204_application_events_feed_idx.sql`.
+
 ## Context
 
 freehire already holds, for every signed-in user, a structured CV (`users.resume_structured`), CV-derived geography (`users.resume_countries/regions`), search preferences (`user_profiles`), and an append-only ledger of what happened to each application (`application_events`, migration 0062: `applied`, `stage_set` with a stage signal, dated by `occurred_at`, company denormalized into `company_slug`). It also has a dictionary-only anonymous card for the public Talent Network (`talentnetwork.ProjectCard`), a pseudonymous community persona, and three delivery paths (email, Telegram, the in-app notification center).
@@ -120,8 +128,8 @@ A member can message from anywhere, not only from the Chats tab: a dock in the b
 
 ## Migration Plan
 
-1. Migration `0199_buddies.sql`: the six tables, CHECKs and indexes on the new tables (empty, so no lock risk).
-2. Migration `0200_application_events_feed_idx.sql` with the `migrate: no-transaction` marker: `CREATE INDEX CONCURRENTLY IF NOT EXISTS ...`. Build it on prod by hand before the merge, as the lock-timeout note requires for large tables. The migration is then a no-op on deploy.
+1. Migrations `0202_messaging.sql` and `0203_buddies.sql`: the six tables, CHECKs and indexes on the new tables (empty, so no lock risk).
+2. Migration `0204_application_events_feed_idx.sql` with the `migrate: no-transaction` marker: `CREATE INDEX CONCURRENTLY IF NOT EXISTS ...`. Build it on prod by hand before the merge, as the lock-timeout note requires for large tables. The migration is then a no-op on deploy.
 3. Deploy the server and web. The feature is reachable from the account navigation.
-4. Add the `freehire-buddy-notify.{service,timer}` units in `freehire-ops` (every 5 minutes, reading `.env` and `.env.notify`), copy them to the host and run `daemon-reload`.
+4. Add the `freehire-message-notify.{service,timer}` units in `freehire-ops` (every 5 minutes, reading `.env` and `.env.notify`), copy them to the host and run `daemon-reload`.
 5. Rollback: remove the nav entry or revert. The tables are additive and can stay. Stopping the timer stops notifications.
