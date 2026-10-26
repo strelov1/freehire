@@ -196,3 +196,25 @@ func TestMynaviAllDetailsFailingFailsTheBoard(t *testing.T) {
 		t.Error("want an error when no requested detail answered")
 	}
 }
+
+// A posting with one place carries jobLocation as a single Place object, not an array; reading
+// it as an array failed the whole JobPosting and deferred every such posting forever.
+func TestMynaviSinglePlacePosting(t *testing.T) {
+	f := newMynaviFake(t)
+	b, err := os.ReadFile("testdata/mynavi/detail_417400-1-5-1.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := mynaviBase + "/jobinfo-417400-1-5-1/"
+	f.pages[u] = string(b)
+	j, ok, err := NewMynavi(f).(mynavi).withDetail(context.Background(), Job{ExternalID: "417400-1-5-1", URL: u})
+	if err != nil || !ok {
+		t.Fatalf("withDetail = %v, %v", ok, err)
+	}
+	if j.Location == "" || len(j.Countries) != 1 || j.Countries[0] != "jp" {
+		t.Errorf("location = %q, countries = %v", j.Location, j.Countries)
+	}
+	if j.SalaryMin == nil || *j.SalaryMin != 3650000 || j.SalaryMax == nil || *j.SalaryMax != 5140000 {
+		t.Errorf("salary = %v %v", j.SalaryMin, j.SalaryMax)
+	}
+}

@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
+
+	"github.com/strelov1/freehire/internal/platform/flexjson"
 )
 
 // mynavi adapts マイナビ転職 (tenshoku.mynavi.jp), one of Japan's largest job boards. Board-based
@@ -300,19 +302,14 @@ type mynaviPosting struct {
 	HiringOrganization struct {
 		Name string `json:"name"`
 	} `json:"hiringOrganization"`
-	JobLocation []struct {
-		Address struct {
-			Country  string `json:"addressCountry"`
-			Region   string `json:"addressRegion"`
-			Locality string `json:"addressLocality"`
-		} `json:"address"`
-	} `json:"jobLocation"`
-	BaseSalary struct {
+	// A single-place posting carries one Place object, a multi-place one an array.
+	JobLocation schemaPlaces `json:"jobLocation"`
+	BaseSalary  struct {
 		Currency string `json:"currency"`
 		Value    struct {
-			Min  string `json:"minValue"`
-			Max  string `json:"maxValue"`
-			Unit string `json:"unitText"`
+			Min  flexjson.Int64 `json:"minValue"`
+			Max  flexjson.Int64 `json:"maxValue"`
+			Unit string         `json:"unitText"`
 		} `json:"value"`
 	} `json:"baseSalary"`
 }
@@ -367,10 +364,10 @@ func (s mynavi) withDetail(ctx context.Context, base Job) (Job, bool, error) {
 	inJapan := false
 	for _, l := range p.JobLocation {
 		a := l.Address
-		if strings.EqualFold(a.Country, "JP") {
+		if strings.EqualFold(a.AddressCountry, "JP") {
 			inJapan = true
 		}
-		if place := joinNonEmpty(strings.TrimSpace(a.Locality), strings.TrimSpace(a.Region)); place != "" {
+		if place := joinNonEmpty(strings.TrimSpace(a.AddressLocality), strings.TrimSpace(a.AddressRegion)); place != "" {
 			places = append(places, place)
 		}
 	}
@@ -389,12 +386,12 @@ func mynaviSalary(j *Job, p mynaviPosting) {
 	if p.BaseSalary.Currency != "JPY" || !strings.EqualFold(v.Unit, "YEAR") {
 		return
 	}
-	lo, err := strconv.Atoi(strings.TrimSpace(v.Min))
-	if err != nil || lo <= 0 {
+	lo, hi := int(v.Min), int(v.Max)
+	if lo <= 0 {
 		return
 	}
 	j.SalaryMin = &lo
-	if hi, err := strconv.Atoi(strings.TrimSpace(v.Max)); err == nil && hi >= lo {
+	if hi >= lo {
 		j.SalaryMax = &hi
 	}
 	j.SalaryCurrency = "JPY"
