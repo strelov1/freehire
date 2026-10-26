@@ -21,6 +21,16 @@ export const JOBS_API_FAQ: FaqItem[] = [
       'The rate. API allows 1,200 requests a minute per account, Data 6,000. Both carry the same fields, filters, company data and licence. Bulk catalogue files are coming to the Data plan; until they ship, Data is the higher rate.',
   },
   {
+    question: 'Which plan fits research or skills analytics?',
+    answer:
+      'Usually the API plan. Analytics reads the catalogue once and then keeps up with what changed, which fits well inside 1,200 requests a minute. Take Data when you need to re-read large slices of the catalogue often. If your project needs something neither plan has yet, write to hello@freehire.me — we add features on request.',
+  },
+  {
+    question: 'Can I keep historical postings and train models on them?',
+    answer:
+      'Yes, with a plan. You may keep the postings you read as a history, analyse how skills, salaries and demand change over time, and use the data to build, train and evaluate statistical or machine-learning models, including in a commercial product. What you may not do is hand the raw postings on as a dataset or feed of their own.',
+  },
+  {
     question: 'Is there a free tier?',
     answer:
       'Yes: the read API answers without a key, limited per address, for personal and non-commercial use. It is the same API, so you can build against it for free and switch to a key when you go live.',
@@ -38,6 +48,11 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'Can I cancel?',
     answer:
-      'Any time, from the billing portal. The plan — and the licence with it — stays until the end of the period you paid for.',
+      'Any time, from the billing portal. The plan stays until the end of the period you paid for.',
+  },
+  {
+    question: 'What happens to the data I stored when my plan ends?',
+    answer:
+      'We delete nothing on your side. Stop showing the postings in your product; you may keep what you stored for your own internal analysis. What you derived from the data — aggregated figures, trends, indicators and the models you trained — stays yours, and you may keep using it commercially as long as it does not reproduce the postings themselves.',
   },
 ];
