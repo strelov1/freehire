@@ -55,12 +55,15 @@ const (
 	job104MaxPage = 100
 )
 
-// job104RequestInterval paces every search request of a run through one limiter. At one
-// request every 0.8 s the platform began answering 429 after ~20 minutes (2026-10-26, first
-// production shard: 25 of 69 boards failed on it), with no Retry-After; a request repeated a
-// few seconds later was served. The slower pace keeps the run under that threshold, and
+// job104RequestInterval paces every search request of ONE run through one limiter — and the
+// provider is sharded, with the scheduler running several shards at once, each its own process
+// with its own limiter. The first production pass ran five shards concurrently at one request
+// every 0.8 s each (~6 a second together) and the platform began answering 429, with no
+// Retry-After, within minutes: 25 of shard 1's 69 boards failed and shards 2-5 failed almost
+// whole. A request repeated a few seconds later was served. Four seconds per shard keeps even
+// five concurrent shards near the ~1.25 a second a lone shard was served at for 19 minutes, and
 // job104RateLimitRetries rides out the 429s that still come.
-const job104RequestInterval = 1200 * time.Millisecond
+const job104RequestInterval = 4 * time.Second
 
 // job104RateLimitRetries and job104RateLimitBackoff retry a refused (403/429) search, the wait
 // doubling from 5 s up to retryDelayCap. The Scrapling client retries nothing itself (see
