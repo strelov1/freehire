@@ -49,6 +49,11 @@ func TestCompanySlug(t *testing.T) {
 		{"japanese abbreviated form, half-width brackets", "Acme(株)", "acme"},
 		{"japanese abbreviated form, one character", "㈱Acme", "acme"},
 		{"japanese form and a latin form together", "株式会社Acme Inc.", "acme"},
+		// Mynavi writes full-width letters and the middle dot where hrmos and herp write
+		// ASCII and a space; unidecode folds both, and the form test must not depend on which.
+		{"full-width letters with a japanese form", "ＦＵＴＵＲＥＭＩＮＤ株式会社", "futuremind"},
+		{"full-width abbreviated form", "（株）ＡＢＣ", "abc"},
+		{"middle dot is a word break", "株式会社 Future・Mind", "future-mind"},
 		{"japanese form inside a name is kept", "Acme株式会社 東京支店", "acmezhu-shi-hui-she-dong-jing-zhi-dian"},
 		{"a name that is only a japanese form is not erased", "株式会社", "zhu-shi-hui-she"},
 		{"empty stays empty", "", ""},
