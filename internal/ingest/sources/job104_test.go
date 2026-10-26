@@ -70,6 +70,7 @@ func newTestJob104(f *job104Fake) job104 {
 	}
 	s := NewJob104(f, f).(job104)
 	s.limiter = noWait{}
+	s.backoff = 0
 	return s
 }
 
@@ -210,5 +211,22 @@ func TestJob104AreaPrefix(t *testing.T) {
 func TestJob104TechHintFollowsTheITFamily(t *testing.T) {
 	if !job104IsTech([]int64{2012002001, 2007001004}) || job104IsTech([]int64{2008001001}) {
 		t.Error("only the 2007 family is technical")
+	}
+}
+
+// The platform answers an occasional 429 with no Retry-After; a repeat is served, so a 429
+// must not fail the board.
+func TestJob104RetriesARateLimitedSearch(t *testing.T) {
+	calls := 0
+	f := &job104Fake{t: t, search: func(url.Values) (any, error) {
+		calls++
+		if calls <= 2 {
+			return nil, &StatusError{Code: 429}
+		}
+		return withLastPage(job104Page(6001023001, "x"), 1), nil
+	}}
+	jobs, err := newTestJob104(f).Fetch(context.Background(), CompanyEntry{Board: "6001023000"})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs = %d, err = %v", len(jobs), err)
 	}
 }
