@@ -358,3 +358,24 @@ func TestPlanMerges_SeesASlugWhoseIndexCounterIsZero(t *testing.T) {
 		t.Errorf("Canonical = %q, want jp-morgan-chase", got[0].Canonical)
 	}
 }
+
+func TestOnlyReason_KeepsGroupsWhoseEveryAliasMatches(t *testing.T) {
+	plan := []merge{
+		{Canonical: "speee", Aliases: []alias{{Slug: "zhu-shi-hui-she-speee", Reason: reasonLegalForm}}},
+		{Canonical: "dollar-tree", Aliases: []alias{{Slug: "dollartree", Reason: reasonSpelling}}},
+		{Canonical: "acme", Aliases: []alias{
+			{Slug: "acme-inc", Reason: reasonLegalForm},
+			{Slug: "ac-me", Reason: reasonSpelling},
+		}},
+	}
+	var got []string
+	for _, m := range onlyReason(plan, reasonLegalForm) {
+		got = append(got, m.Canonical)
+	}
+	if want := []string{"speee"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("kept %v, want %v — a mixed group must be left out whole", got, want)
+	}
+	if n := len(onlyReason(plan, "")); n != len(plan) {
+		t.Errorf("empty reason kept %d of %d groups", n, len(plan))
+	}
+}

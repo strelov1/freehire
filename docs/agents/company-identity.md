@@ -119,6 +119,8 @@ companies (2026-10-26), and ~11k of them have no other spelling to merge with. I
 `backfill-derive` re-key such a company regardless; skipping it here would leave the old URL
 404ing with no alias. A slug that is NOT the plain slug of the latest name is left alone — it
 drifted because the source renamed the employer, which is a judgement, not a form.
+`--reason legal_form` takes only the groups whose every alias is that pure-rule class, so a
+wave like this one can run without dragging the unreviewed spelling backlog along with it.
 
 It reports by default; `--apply` writes and `--min-jobs` bounds a wave so the plan
 stays short enough to read. Jobs move in chunks whose statement selects rows still carrying the

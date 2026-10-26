@@ -39,7 +39,13 @@ const rekeyChunk = 500
 func run() int {
 	apply := flag.Bool("apply", false, "actually merge; without it the run only reports the plan")
 	minJobs := flag.Int("min-jobs", 0, "only merge folded groups whose combined open jobs reach this")
+	reason := flag.String("reason", "", "only merge groups whose every alias retires for this reason ("+
+		reasonLegalForm+" or "+reasonSpelling+"); empty takes both")
 	flag.Parse()
+	if *reason != "" && *reason != reasonLegalForm && *reason != reasonSpelling {
+		log.Printf("merge-companies: unknown --reason %q", *reason)
+		return 2
+	}
 
 	ctx, _, pool, cleanup, err := worker.Bootstrap(context.Background())
 	if err != nil {
@@ -54,6 +60,7 @@ func run() int {
 		log.Printf("merge-companies: plan: %v", err)
 		return 1
 	}
+	plan = onlyReason(plan, *reason)
 	report(plan)
 	if !*apply {
 		log.Printf("merge-companies: dry run, nothing written. Re-run with --apply to merge.")

@@ -277,3 +277,23 @@ func reasonFor(c company, winner string) string {
 	}
 	return reasonSpelling
 }
+
+// onlyReason keeps the groups whose every alias retires for reason; "" keeps them all.
+//
+// It exists so a wave can take the pure rule without the judgement. A legal_form retirement is
+// what the write path does to the company anyway, so it is safe to apply wholesale when the
+// rule learns a form (the Japanese 株式会社, ~12k companies at once); a spelling merge elects
+// between two honest spellings and is read in reviewed waves. A group mixing the two is left
+// out whole rather than half-applied, since its canon was elected over both.
+func onlyReason(plan []merge, reason string) []merge {
+	if reason == "" {
+		return plan
+	}
+	var out []merge
+	for _, m := range plan {
+		if !slices.ContainsFunc(m.Aliases, func(a alias) bool { return a.Reason != reason }) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
