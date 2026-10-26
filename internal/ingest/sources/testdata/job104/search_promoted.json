@@ -1,0 +1,590 @@
+{
+ "data": [
+  {
+   "appearDate": "20261021",
+   "applyCnt": 0,
+   "coIndustry": 1002011010,
+   "coIndustryDesc": "其他金屬相關製造業",
+   "custName": "福建福貞金屬包裝有限公司",
+   "custNo": "130000000169195",
+   "description": "1. 研擬營運計劃及年度專案規劃，執行與追蹤各項營運績效管理目標。\n2. 推動各部門中、長期經營策略規劃，完成全公司中、長期企劃案，以確保公司經營穩定成長。\n3. 即時更新營運所在地，經營環境變化，以及法令法規更新，維護公司權益。\n4. 規劃及審核公司各項管理制度，以符合經營管理之需求。\n",
+   "descSnippet": "1. 研擬營運計劃及年度專案規劃，執行與追蹤各項營運績效管理目標。\n2. 推動各部門中、長期經營策略規劃，完成全公司中、長期企劃案，以確保公司經營穩定成長。\n3. 即時更新營運所在地，經營環境變化，以及法令法規更新，維護公司權益。\n4. 規劃及審核公司各項管理制度，以符合經營管理之需求。\n",
+   "mrtDist": 0,
+   "jobAddress": "台商投資區鳳山工業園",
+   "jobAddrNo": 6002006006,
+   "jobAddrNoDesc": "福建省漳州市",
+   "jobName": "營運主管",
+   "jobNameSnippet": "營運主管",
+   "jobNo": "13222979",
+   "jobRo": 1,
+   "jobType": 2,
+   "lat": 24.513792,
+   "lon": 117.874271,
+   "link": {
+    "job": "https://www.104.com.tw/job/7vewz",
+    "cust": "https://www.104.com.tw/company/1a2x6blluz",
+    "applyAnalyze": "https://www.104.com.tw/jobs/apply/analysis/7vewz?channel=104rpt"
+   },
+   "major": [],
+   "mrt": "",
+   "mrtDesc": "",
+   "optionEdu": [
+    3,
+    4,
+    5,
+    6
+   ],
+   "period": 6,
+   "remoteWorkType": 0,
+   "s10": 10,
+   "salaryHigh": 0,
+   "salaryLow": 0,
+   "tags": {
+    "wf4": {
+     "desc": "",
+     "param": "wf4"
+    }
+   },
+   "s9": [
+    1
+   ],
+   "s5": 0,
+   "d3": "",
+   "hrBehaviorPR": 0,
+   "jobCat": [
+    2001001001,
+    2009001001,
+    2005003003
+   ],
+   "labels": [
+    "association@j00001",
+    "joblist_search@jl_j0003_004.5",
+    "association@j00014",
+    "foreigners@overseasStudents_tick",
+    "c@wf4",
+    "foreigners@foreigners_tick",
+    "persona_rerank@j00004_002",
+    "foreigners@fc_emp5m_jbs",
+    "persona_rerank@j00002_004",
+    "senior@senior_job_G",
+    "association@j00018",
+    "association@j00030"
+   ],
+   "languageRequirements": [],
+   "acceptRole": [
+    32,
+    64,
+    2048,
+    4096,
+    32768,
+    65536,
+    131072
+   ],
+   "employeeCount": 1300,
+   "pcSkills": [],
+   "pddScore": 0,
+   "custLogo": "https://static.104.com.tw/b_profile/cust_picture/9195/130000000169195/logo.jpg?v=20251124111136",
+   "jobSwitch": "on",
+   "isSave": null,
+   "interactionRecord": {
+    "lastProcessedResumeAtTime": 0,
+    "lastCustReplyTimestamp": 0,
+    "nowTimestamp": 0,
+    "lastProcessedResumeDesc": "",
+    "lastCustReplyDesc": ""
+   },
+   "isApplied": null,
+   "applyDate": null,
+   "userApplyCount": null,
+   "analysisType": 3,
+   "hasHrBehavior": true
+  },
+  {
+   "appearDate": "20261021",
+   "applyCnt": 0,
+   "coIndustry": 1002011010,
+   "coIndustryDesc": "其他金屬相關製造業",
+   "custName": "福建福貞金屬包裝有限公司",
+   "custNo": "130000000169195",
+   "description": "1. 開發新客戶。\n2. 展會策劃。\n3. 與國外客戶接洽、提供客戶產品知識服務、維護客戶關係。\n4. 完成公司及主管交辦事項，並能自我掌控工作進度與效率。\n5.需具與國外客戶溝通及郵件往來能力。\n\n",
+   "descSnippet": "1. 開發新客戶。\n2. 展會策劃。\n3. 與國外客戶接洽、提供客戶產品知識服務、維護客戶關係。\n4. 完成公司及主管交辦事項，並能自我掌控工作進度與效率。\n5.需具與國外客戶溝通及郵件往來能力。\n\n",
+   "mrtDist": 0,
+   "jobAddress": "台商投資區鳳山工業園",
+   "jobAddrNo": 6002006006,
+   "jobAddrNoDesc": "福建省漳州市",
+   "jobName": "外貿人員",
+   "jobNameSnippet": "外貿人員",
+   "jobNo": "14868396",
+   "jobRo": 1,
+   "jobType": 2,
+   "lat": 24.5134699,
+   "lon": 117.64725,
+   "link": {
+    "job": "https://www.104.com.tw/job/8uoj0",
+    "cust": "https://www.104.com.tw/company/1a2x6blluz",
+    "applyAnalyze": "https://www.104.com.tw/jobs/apply/analysis/8uoj0?channel=104rpt"
+   },
+   "major": [],
+   "mrt": "",
+   "mrtDesc": "",
+   "optionEdu": [
+    4,
+    5
+   ],
+   "period": 6,
+   "remoteWorkType": 0,
+   "s10": 10,
+   "salaryHigh": 0,
+   "salaryLow": 0,
+   "tags": {
+    "wf4": {
+     "desc": "",
+     "param": "wf4"
+    }
+   },
+   "s9": [
+    1
+   ],
+   "s5": 0,
+   "d3": "",
+   "hrBehaviorPR": 0,
+   "jobCat": [
+    2005003005,
+    2005003002
+   ],
+   "labels": [
+    "persona_rerank@j00004_002",
+    "persona_rerank@j00002_004",
+    "joblist_search@jl_j0003_004.5",
+    "association@j00022",
+    "indexjob@ij070",
+    "foreigners@foreigners_tick",
+    "c@wf4",
+    "association@j00014",
+    "foreigners@overseasStudents_tick",
+    "persona_rerank@j00003_003",
+    "senior@senior_job_G",
+    "foreigners@fc_emp5m_jbs",
+    "association@j00026",
+    "c@rdss_welcome",
+    "association@j00030",
+    "association@j00031",
+    "persona_rerank@j00003_004",
+    "persona_rerank@j00003_002",
+    "c@graduates_welcome",
+    "association@j00018",
+    "c@intern_welcome"
+   ],
+   "languageRequirements": [
+    {
+     "language": 1,
+     "ability": {
+      "listening": 2,
+      "speaking": 2,
+      "reading": 2,
+      "writing": 2
+     }
+    }
+   ],
+   "acceptRole": [
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+    1024,
+    2048,
+    4096,
+    8192,
+    16384,
+    32768,
+    65536,
+    131072
+   ],
+   "employeeCount": 1300,
+   "pcSkills": [],
+   "pddScore": 0,
+   "custLogo": "https://static.104.com.tw/b_profile/cust_picture/9195/130000000169195/logo.jpg?v=20251124111136",
+   "jobSwitch": "on",
+   "isSave": null,
+   "interactionRecord": {
+    "lastProcessedResumeAtTime": 0,
+    "lastCustReplyTimestamp": 0,
+    "nowTimestamp": 0,
+    "lastProcessedResumeDesc": "",
+    "lastCustReplyDesc": ""
+   },
+   "isApplied": null,
+   "applyDate": null,
+   "userApplyCount": null,
+   "analysisType": 2,
+   "hasHrBehavior": false
+  },
+  {
+   "appearDate": "20261022",
+   "applyCnt": 0,
+   "coIndustry": 1001003003,
+   "coIndustryDesc": "消費性電子產品製造業",
+   "custName": "泰咏電子(上海)有限公司",
+   "custNo": "130000000192135",
+   "description": "#PCBA #SMT #DIP #客戶品質保證  #品保 #工程師 #主管\n\n以符合客戶標準並落實持續之品質精進、提升與改善為目標，設計產品的品質以滿足客戶需求，主導產品自設計至量產過程中所進行之各環節分析與要求，以提升整體品質與產出。\n\n【核心職務】\n1. 品質把關與提升的主要推動者\n(1) 定期召開品質會議，維持品質改善機制、釐清品質原因並提出改善方案。\n(2) 以生產低良率與集中性異常的改善，進而提升品質良率。\n(3) 建立品質檢驗規範與方式，以有效能的追蹤模式，藉以符合廠內及客戶期待。\n\n2 客訴問題之分析、回覆與改善狀況追蹤：\n(1) 以妥善的溝通，體會客戶回饋的異常狀況，進而執行問題原因分析與改善督促。\n(2) 確認改善方案的可行性，提高產品的安全水準。\n(3) 針對有效的改善方案，建立標準化作業。\n\n若您有著靈活開放的特質，能跳脫框架、並成熟的面對問題，參與跨單位合作，\n在這裡有很大的機會與空間扮演不同的角色，並學習如何從系統的角度及管理的觀點看待事情，歡迎你主動應徵討論合作的可能性。\n\n廠內五大認證系統\n-ISO9001\n-ISO14001\n-ESD20.20\n-QC080000\n-IATF16949\n",
+   "descSnippet": "#PCBA #SMT #DIP #客戶品質保證  #品保 #工程師 #主管\n\n以符合客戶標準並落實持續之品質精進、提升與改善為目標，設計產品的品質以滿足客戶需求，主導產品自設計至量產過程中所進行之各環節分析與要求，以提升整體品質與產出。\n\n【核心職務】\n1. 品質把關與提升的主要推動者\n(1) 定期召開品質會議，維持品質改善機制、釐清品質原因並提出改善方案。\n(2) 以生產低良率與集中性異常的改善，進而提升品質良率。\n(3) 建立品質檢驗規範與方式，以有效能的追蹤模式，藉以符合廠內及客戶期待。\n\n2 客訴問題之分析、回覆與改善狀況追蹤：\n(1) 以妥善的溝通，體會客戶回饋的異常狀況，進而執行問題原因分析與改善督促。\n(2) 確認改善方案的可行性，提高產品的安全水準。\n(3) 針對有效的改善方案，建立標準化作業。\n\n若您有著靈活開放的特質，能跳脫框架、並成熟的面對問題，參與跨單位合作，\n在這裡有很大的機會與空間扮演不同的角色，並學習如何從系統的角度及管理的觀點看待事情，歡迎你主動應徵討論合作的可能性。\n\n廠內五大認證系統\n-ISO9001\n-ISO14001\n-ESD20.20\n-QC080000\n-IATF16949\n",
+   "mrtDist": 0,
+   "jobAddress": "浦東新區自由貿易試驗區美盛路168號(國聯大廈四樓)",
+   "jobAddrNo": 6002003001,
+   "jobAddrNoDesc": "上海市",
+   "jobName": "【上海廠】品保主管(外派)",
+   "jobNameSnippet": "【上海廠】品保主管(外派)",
+   "jobNo": "12878074",
+   "jobRo": 1,
+   "jobType": 3,
+   "lat": 31.3376,
+   "lon": 121.60076,
+   "link": {
+    "job": "https://www.104.com.tw/job/7o0sa",
+    "cust": "https://www.104.com.tw/company/1a2x6bm3k7",
+    "applyAnalyze": "https://www.104.com.tw/jobs/apply/analysis/7o0sa?channel=104rpt"
+   },
+   "major": [],
+   "mrt": "",
+   "mrtDesc": "",
+   "optionEdu": [
+    3,
+    4,
+    5,
+    6
+   ],
+   "period": 6,
+   "remoteWorkType": 0,
+   "s10": 10,
+   "salaryHigh": 0,
+   "salaryLow": 0,
+   "tags": {
+    "wf30": {
+     "desc": "",
+     "param": "wf30"
+    },
+    "wf35": {
+     "desc": "",
+     "param": "wf35"
+    },
+    "wf2": {
+     "desc": "",
+     "param": "wf2"
+    },
+    "wf7": {
+     "desc": "",
+     "param": "wf7"
+    },
+    "wf29": {
+     "desc": "",
+     "param": "wf29"
+    },
+    "wf27": {
+     "desc": "",
+     "param": "wf27"
+    },
+    "wf18": {
+     "desc": "",
+     "param": "wf18"
+    },
+    "wf28": {
+     "desc": "",
+     "param": "wf28"
+    },
+    "wf23": {
+     "desc": "",
+     "param": "wf23"
+    },
+    "wf9": {
+     "desc": "",
+     "param": "wf9"
+    },
+    "wf25": {
+     "desc": "",
+     "param": "wf25"
+    },
+    "wf26": {
+     "desc": "",
+     "param": "wf26"
+    },
+    "wf3": {
+     "desc": "",
+     "param": "wf3"
+    },
+    "wf1": {
+     "desc": "",
+     "param": "wf1"
+    },
+    "wf13": {
+     "desc": "",
+     "param": "wf13"
+    },
+    "wf31": {
+     "desc": "",
+     "param": "wf31"
+    },
+    "wf10": {
+     "desc": "",
+     "param": "wf10"
+    },
+    "wf4": {
+     "desc": "",
+     "param": "wf4"
+    },
+    "wf34": {
+     "desc": "",
+     "param": "wf34"
+    }
+   },
+   "s9": [
+    1
+   ],
+   "s5": 0,
+   "d3": "",
+   "hrBehaviorPR": 0,
+   "jobCat": [
+    2009003001,
+    2009003009,
+    2009003002
+   ],
+   "labels": [
+    "c@wf30",
+    "c@wf35",
+    "c@wf2",
+    "45plus@45invited",
+    "c@wf7",
+    "c@wf29",
+    "c@wf27",
+    "c@wf18",
+    "c@wf28",
+    "senior@60days_invite_senior_job",
+    "c@wf23",
+    "c@wf9",
+    "c@wf25",
+    "association@j00004",
+    "c@wf26",
+    "c@wf3",
+    "indexjob@ij009",
+    "c@wf1",
+    "senior@90days_invite_senior_job",
+    "c@wf13",
+    "c@wf31",
+    "c@wf10",
+    "c@wf4",
+    "c@wf34"
+   ],
+   "languageRequirements": [],
+   "acceptRole": [],
+   "employeeCount": 100,
+   "pcSkills": [
+    {
+     "code": "12005001004",
+     "description": "ISO 14000"
+    },
+    {
+     "code": "12005001005",
+     "description": "ISO 9000"
+    },
+    {
+     "code": "12005001012",
+     "description": "IATF16949"
+    }
+   ],
+   "pddScore": 0.91892976,
+   "custLogo": "https://static.104.com.tw/b_profile/cust_picture/2135/130000000192135/logo.png?v=20260608142114",
+   "jobSwitch": "on",
+   "isSave": null,
+   "interactionRecord": {
+    "lastProcessedResumeAtTime": 0,
+    "lastCustReplyTimestamp": 0,
+    "nowTimestamp": 0,
+    "lastProcessedResumeDesc": "4 天內處理過履歷",
+    "lastCustReplyDesc": "4 天內聯絡過求職者"
+   },
+   "isApplied": null,
+   "applyDate": null,
+   "userApplyCount": null,
+   "analysisType": 1,
+   "hasHrBehavior": false
+  },
+  {
+   "appearDate": "20261021",
+   "applyCnt": 0,
+   "coIndustry": 1001006002,
+   "coIndustryDesc": "半導體製造業",
+   "custName": "(ASML)台灣艾司摩爾科技股份有限公司",
+   "custNo": "130000000119045",
+   "description": "This is a job which perform professional Skill to deliver high quality semiconductor E-beam machine both in ASML and customer site.\n​Job Mission\nCalibrates, qualifies and installs ASML's products according to the highest quality standards and world class delivery performance.\nJob Description\nModule Installation \nIs able to work according planning, and reports to team leader on a daily basis on the progress of the  planning. If planning is not on schedule, proposes to team leader new plan of approach \n Is able to initiate and execute project \nUnderstands and explains process issues as well as equipment issues to junior colleagues or towards customers \nIs capable of resolving a large part of issues without assistance and is highly independent \nIs able to track equipment performance(e.g. interpretation of test results) \nIs able to prepare technical reports for TS, PE, supervisor and is able to give suggestion of possible solution \nIs able to coordinate test and integration activities for the complete system\nExperience\nExperience with mechanics and electronics; \nExperience with computer systems and test software; \nExperience with functional testing and troubleshoot; \nCapable of logging the progress of the workflow and the interruptions; \nFollow up on actions and give feedback on taken actions.\nPersonal Skills\nAbility to work in a multi-disciplinary team within a high tech(proto) environment; \nFlexibility to work in shifts and weekends, work overtime when needed; \nTechnical drive: curious, persistent, practical, analytical; drive for continuous improvement;\nDrive to share knowledge and train colleagues; \nAccurate within the job, the job environment and the work flow; \nFamiliar with computers, Word and Excel; Good English language skills in speech and writing \nGood social and communication skills; with a customer focus for understanding, influencing and supporting them; \nAwareness of various cultures and their differences;  effective interpersonal skills; able to convince others; able to take the lead; Flexible, can cope with stress;  Very active, plenty of initiative.\n\nContext of the position\nFinal Assembly of E-Beam in a cleanroom environment; \nPerforms system calibration and  qualification through functional testing;\n Install SBI and MBI E-beam systems at both ASML factory and customer locations, from unload components, to build and  qualifying performance.\nCollaborating with D&E in developing center in SJ and VHV to introduce the prototypes machine and transfer knowledges to Factory, \nTakes responsibility for system progress; \nProvides first line technical support on integration of systems, in order to minimize impact on production output; \nPoints out recurring problems during assembly, calibration and qualification and contributes to their solution; interfaces with internal customers on technical issues and improvement proposal; \nInterfaces with own work center, Manufacturing Engineering and Development and Engineering on complex technical reduction issues and New Product Introduction;\n Transfers knowledge to colleagues on existing and newly introduced products; \nContributes to continuous improvement activities with technical expertise on both products and (SW) tooling.\n​\nOther Information\nIs able to support, motivate and develop.     \nIs responsible/accountable for daily work. \n\nTravel %\n10-30%, based on factory’s organization structure, assignment driving by business reality.\n\nThis position requires access to controlled technology, as defined in the United States Export Administration Regulations (15 C.F.R. § 730, et seq.). Qualified candidates must be legally authorized to access such controlled technology prior to beginning work. Business demands may require ASML to proceed with candidates who are immediately eligible to access controlled technology.\n\nInclusion and diversity\nASML is an Equal Opportunity Employer that values and respects the importance of a diverse and inclusive workforce. It is the policy of the company to recruit, hire, train and promote persons in all job titles without regard to race, color, religion, sex, age, national origin, veteran status, disability, sexual orientation, or gender identity. We recognize that inclusion and diversity is a driving force in the success of our company.\n\nNeed to know more about applying for a job at ASML? Read our frequently asked questions.",
+   "descSnippet": "This is a job which perform professional Skill to deliver high quality semiconductor E-beam machine both in ASML and customer site.\n​Job Mission\nCalibrates, qualifies and installs ASML's products according to the highest quality standards and world class delivery performance.\nJob Description\nModule Installation \nIs able to work according planning, and reports to team leader on a daily basis on the progress of the  planning. If planning is not on schedule, proposes to team leader new plan of approach \n Is able to initiate and execute project \nUnderstands and explains process issues as well as equipment issues to junior colleagues or towards customers \nIs capable of resolving a large part of issues without assistance and is highly independent \nIs able to track equipment performance(e.g. interpretation of test results) \nIs able to prepare technical reports for TS, PE, supervisor and is able to give suggestion of possible solution \nIs able to coordinate test and integration activities for the complete system\nExperience\nExperience with mechanics and electronics; \nExperience with computer systems and test software; \nExperience with functional testing and troubleshoot; \nCapable of logging the progress of the workflow and the interruptions; \nFollow up on actions and give feedback on taken actions.\nPersonal Skills\nAbility to work in a multi-disciplinary team within a high tech(proto) environment; \nFlexibility to work in shifts and weekends, work overtime when needed; \nTechnical drive: curious, persistent, practical, analytical; drive for continuous improvement;\nDrive to share knowledge and train colleagues; \nAccurate within the job, the job environment and the work flow; \nFamiliar with computers, Word and Excel; Good English language skills in speech and writing \nGood social and communication skills; with a customer focus for understanding, influencing and supporting them; \nAwareness of various cultures and their differences;  effective interpersonal skills; able to convince others; able to take the lead; Flexible, can cope with stress;  Very active, plenty of initiative.\n\nContext of the position\nFinal Assembly of E-Beam in a cleanroom environment; \nPerforms system calibration and  qualification through functional testing;\n Install SBI and MBI E-beam systems at both ASML factory and customer locations, from unload components, to build and  qualifying performance.\nCollaborating with D&E in developing center in SJ and VHV to introduce the prototypes machine and transfer knowledges to Factory, \nTakes responsibility for system progress; \nProvides first line technical support on integration of systems, in order to minimize impact on production output; \nPoints out recurring problems during assembly, calibration and qualification and contributes to their solution; interfaces with internal customers on technical issues and improvement proposal; \nInterfaces with own work center, Manufacturing Engineering and Development and Engineering on complex technical reduction issues and New Product Introduction;\n Transfers knowledge to colleagues on existing and newly introduced products; \nContributes to continuous improvement activities with technical expertise on both products and (SW) tooling.\n​\nOther Information\nIs able to support, motivate and develop.     \nIs responsible/accountable for daily work. \n\nTravel %\n10-30%, based on factory’s organization structure, assignment driving by business reality.\n\nThis position requires access to controlled technology, as defined in the United States Export Administration Regulations (15 C.F.R. § 730, et seq.). Qualified candidates must be legally authorized to access such controlled technology prior to beginning work. Business demands may require ASML to proceed with candidates who are immediately eligible to access controlled technology.\n\nInclusion and diversity\nASML is an Equal Opportunity Employer that values and respects the importance of a diverse and inclusive workforce. It is the policy of the company to recruit, hire, train and promote persons in all job titles without regard to race, color, religion, sex, age, national origin, veteran status, disability, sexual orientation, or gender identity. We recognize that inclusion and diversity is a driving force in the success of our company.\n\nNeed to know more about applying for a job at ASML? Read our frequently asked questions.",
+   "mrtDist": 0,
+   "jobAddress": "",
+   "jobAddrNo": 6001014036,
+   "jobAddrNoDesc": "台南市新市區",
+   "jobName": "Manufacturing- Senior Assembly Engineer-Tainan _ J-00331062",
+   "jobNameSnippet": "Manufacturing- Senior Assembly Engineer-Tainan _ J-00331062",
+   "jobNo": "14940456",
+   "jobRo": 1,
+   "jobType": 3,
+   "lat": 23.0780281,
+   "lon": 120.2919179,
+   "link": {
+    "job": "https://www.104.com.tw/job/8w84o",
+    "cust": "https://www.104.com.tw/company/1a2x6bkj5x",
+    "applyAnalyze": "https://www.104.com.tw/jobs/apply/analysis/8w84o?channel=104rpt"
+   },
+   "major": [],
+   "mrt": "",
+   "mrtDesc": "",
+   "optionEdu": [
+    4,
+    5,
+    6
+   ],
+   "period": 0,
+   "remoteWorkType": 0,
+   "s10": 10,
+   "salaryHigh": 0,
+   "salaryLow": 0,
+   "tags": {
+    "zoneForeign": {
+     "desc": "外商公司",
+     "param": 5
+    },
+    "wf10": {
+     "desc": "",
+     "param": "wf10"
+    },
+    "wf9": {
+     "desc": "",
+     "param": "wf9"
+    },
+    "wf4": {
+     "desc": "",
+     "param": "wf4"
+    },
+    "wf34": {
+     "desc": "",
+     "param": "wf34"
+    },
+    "wf2": {
+     "desc": "",
+     "param": "wf2"
+    },
+    "wf7": {
+     "desc": "",
+     "param": "wf7"
+    },
+    "wf17": {
+     "desc": "",
+     "param": "wf17"
+    },
+    "wf19": {
+     "desc": "",
+     "param": "wf19"
+    },
+    "wf8": {
+     "desc": "",
+     "param": "wf8"
+    }
+   },
+   "s9": [
+    1,
+    2,
+    4,
+    8
+   ],
+   "s5": 256,
+   "d3": "",
+   "hrBehaviorPR": 0,
+   "jobCat": [
+    2009002007,
+    2008001016
+   ],
+   "labels": [
+    "c@wf10",
+    "c@wf9",
+    "association@j00003",
+    "foreigners@foreigners",
+    "indexjob@ij072",
+    "foreigners@fc_empmidchinese_jbs",
+    "c@wf4",
+    "indexjob@ij018",
+    "foreigners@full_fc_em_jbs",
+    "persona_rerank@j00003_001",
+    "indexjob@ij048",
+    "college@student_invited",
+    "c@wf34",
+    "c@wf2",
+    "foreigners@chineseDiasporas",
+    "persona_rerank@j00004_001",
+    "c@wf7",
+    "c@wf17",
+    "c@wf19",
+    "association@j00002_001",
+    "foreigners@jbs_invite_cant_speak_chinese",
+    "indexjob@ij070",
+    "c@wf8"
+   ],
+   "languageRequirements": [
+    {
+     "language": 1,
+     "ability": {
+      "listening": 2,
+      "speaking": 2,
+      "reading": 2,
+      "writing": 2
+     }
+    }
+   ],
+   "acceptRole": [],
+   "employeeCount": 4500,
+   "pcSkills": [],
+   "pddScore": 0.91892976,
+   "custLogo": "https://static.104.com.tw/b_profile/cust_picture/9045/130000000119045/logo.gif?v=20260114104826",
+   "jobSwitch": "on",
+   "isSave": null,
+   "interactionRecord": {
+    "lastProcessedResumeAtTime": 0,
+    "lastCustReplyTimestamp": 0,
+    "nowTimestamp": 0,
+    "lastProcessedResumeDesc": "23 天內處理過履歷",
+    "lastCustReplyDesc": "7 天內聯絡過求職者"
+   },
+   "isApplied": null,
+   "applyDate": null,
+   "userApplyCount": null,
+   "analysisType": 1,
+   "hasHrBehavior": false
+  }
+ ],
+ "metadata": {
+  "pagination": {
+   "count": 11,
+   "currentPage": 1,
+   "lastPage": 1,
+   "total": 5
+  },
+  "isPreciseHotJob": false,
+  "filterQuery": {
+   "order": 11,
+   "asc": 0,
+   "excludeKwFz": 4,
+   "excludeKwKwop": 8,
+   "enableJobNoTopOrder": 1,
+   "area": [
+    "6002006000"
+   ],
+   "ro": [
+    0
+   ],
+   "scstrict": 0,
+   "scneg": 0,
+   "page": 1,
+   "pagesize": 30
+  },
+  "offJobs": [],
+  "personalBoost": 0
+ }
+}

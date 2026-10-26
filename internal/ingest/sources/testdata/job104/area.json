@@ -1,0 +1,68 @@
+[
+ {
+  "no": "6001000000",
+  "des": "台灣地區",
+  "n": [
+   {
+    "no": "6001014000",
+    "des": "台南市",
+    "n": [
+     {
+      "no": "6001014036",
+      "des": "台南市新市區",
+      "eng": "Xinshi District, Tainan City",
+      "n": []
+     }
+    ],
+    "eng": "Tainan City"
+   },
+   {
+    "no": "6001023000",
+    "des": "連江縣",
+    "n": [
+     {
+      "no": "6001023001",
+      "des": "連江縣南竿鄉",
+      "eng": "Nangan Township, Lienchiang County",
+      "n": []
+     }
+    ],
+    "eng": "Lienchiang County, Kinmen County"
+   }
+  ],
+  "eng": "Taiwan"
+ },
+ {
+  "no": "6002000000",
+  "des": "大陸地區",
+  "n": [
+   {
+    "no": "6002003000",
+    "des": "上海市",
+    "n": [
+     {
+      "no": "6002003001",
+      "des": "上海市",
+      "eng": "Shanghai",
+      "n": []
+     }
+    ],
+    "eng": "Shanghai"
+   },
+   {
+    "no": "6002006000",
+    "des": "福建省",
+    "n": [
+     {
+      "no": "6002006006",
+      "des": "福建省漳州市",
+      "eng": "Zhangzhou, Fujian Province",
+      "n": []
+     }
+    ],
+    "eng": "Fujian Province"
+   }
+  ],
+  "eng": "Mainland China"
+ }
+]

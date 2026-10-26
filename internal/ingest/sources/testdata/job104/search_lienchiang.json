@@ -1,0 +1,411 @@
+{
+ "data": [
+  {
+   "appearDate": "20261026",
+   "applyCnt": 0,
+   "coIndustry": 1011001002,
+   "coIndustryDesc": "建築工程業",
+   "custName": "久大營造股份有限公司",
+   "custNo": "130000000273866",
+   "description": "1. 負責接案工程發包及成本預算控制。\n2. 負責分項工程現場指揮。\n3. 負責分包商施工之監督與評估。\n4. 依據施工圖進行工程檢討與審查。\n5. 控管施工進度與品質。\n6. 執行分項工程及安全衛生自主檢查。\n7. 負責進場物料的驗收、檢驗與堆置管理。\n8. 協調工程事務與勞務。\n9. 製作、整理、保存施工紀錄與文件資料。\n",
+   "descSnippet": "1. 負責接案工程發包及成本預算控制。\n2. 負責分項工程現場指揮。\n3. 負責分包商施工之監督與評估。\n4. 依據施工圖進行工程檢討與審查。\n5. 控管施工進度與品質。\n6. 執行分項工程及安全衛生自主檢查。\n7. 負責進場物料的驗收、檢驗與堆置管理。\n8. 協調工程事務與勞務。\n9. 製作、整理、保存施工紀錄與文件資料。\n",
+   "mrtDist": 0,
+   "jobAddress": "",
+   "jobAddrNo": 6001023001,
+   "jobAddrNoDesc": "連江縣南竿鄉",
+   "jobName": "工地主任",
+   "jobNameSnippet": "工地主任",
+   "jobNo": "15362663",
+   "jobRo": 1,
+   "jobType": 0,
+   "lat": 26.1534361,
+   "lon": 119.9306863,
+   "link": {
+    "job": "https://www.104.com.tw/job/959wn",
+    "cust": "https://www.104.com.tw/company/1a2x6bnumi",
+    "applyAnalyze": "https://www.104.com.tw/jobs/apply/analysis/959wn?channel=104rpt"
+   },
+   "major": [],
+   "mrt": "",
+   "mrtDesc": "",
+   "optionEdu": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "period": 6,
+   "remoteWorkType": 0,
+   "s10": 50,
+   "salaryHigh": 9999999,
+   "salaryLow": 65000,
+   "tags": [],
+   "s9": [
+    1
+   ],
+   "s5": 0,
+   "d3": "",
+   "hrBehaviorPR": 0,
+   "jobCat": [
+    2012002001,
+    2012001001,
+    2012002002
+   ],
+   "labels": [
+    "foreigners@fc_emp5m_jbs",
+    "persona_rerank@j00003_002",
+    "association@j00018",
+    "senior@senior_job_H",
+    "c@intern_welcome",
+    "c@graduates_welcome",
+    "association@j00022",
+    "association@j00030",
+    "c@rdss_welcome",
+    "association@j00026",
+    "foreigners@foreigners_tick",
+    "association@j00014",
+    "joblist_search@jl_j0003_004.5",
+    "persona_rerank@j00002_004",
+    "persona_rerank@j00004_002",
+    "persona_rerank@j00003_003",
+    "foreigners@overseasStudents_tick",
+    "association@j00031",
+    "persona_rerank@j00003_004"
+   ],
+   "languageRequirements": [],
+   "acceptRole": [
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+    1024,
+    2048,
+    4096,
+    8192,
+    16384,
+    32768,
+    65536,
+    131072
+   ],
+   "employeeCount": 0,
+   "pcSkills": [],
+   "pddScore": 0,
+   "custLogo": "",
+   "jobSwitch": "on",
+   "isSave": null,
+   "interactionRecord": {
+    "lastProcessedResumeAtTime": 0,
+    "lastCustReplyTimestamp": 0,
+    "nowTimestamp": 0,
+    "lastProcessedResumeDesc": "4 天內處理過履歷",
+    "lastCustReplyDesc": ""
+   },
+   "isApplied": null,
+   "applyDate": null,
+   "userApplyCount": null,
+   "analysisType": 1,
+   "hasHrBehavior": false
+  },
+  {
+   "appearDate": "20261026",
+   "applyCnt": 0,
+   "coIndustry": 1003002013,
+   "coIndustryDesc": "百貨相關業",
+   "custName": "統一超商股份有限公司",
+   "custNo": "22555003000",
+   "description": "*早晚及大夜三班別門市運作及店務執行\n招募職位：正職員/兼職人員/大夜班人員(依各門市需求為主)\n工作待遇：時薪:196元以上；月薪:29,500元以上；依班別不同\n工作地點：新北市八里、三芝、三重、三峽、土城、石門、五股、板橋、泰山、淡水、新莊、樹林、蘆洲、鶯歌、中和地區，連江縣門市\n\n*福利:\n保險類\n1.勞保\n2.健保\n3.勞退提撥 6%\n請/休假制度\n1.特別休假/年假\n2.陪產假\n3.家庭照顧假\n4.產假、安胎假、育嬰假、生理假\n5.事假、病假、喪假、婚假\n其他\n1.免費制服\n2.完整的教育訓練\n3.內部加盟優惠\n4.年度食品從業人員健康檢查\n5.年度聚餐\n6.員工諮商服務",
+   "descSnippet": "*早晚及大夜三班別門市運作及店務執行\n招募職位：正職員/兼職人員/大夜班人員(依各門市需求為主)\n工作待遇：時薪:196元以上；月薪:29,500元以上；依班別不同\n工作地點：新北市八里、三芝、三重、三峽、土城、石門、五股、板橋、泰山、淡水、新莊、樹林、蘆洲、鶯歌、中和地區，連江縣門市\n\n*福利:\n保險類\n1.勞保\n2.健保\n3.勞退提撥 6%\n請/休假制度\n1.特別休假/年假\n2.陪產假\n3.家庭照顧假\n4.產假、安胎假、育嬰假、生理假\n5.事假、病假、喪假、婚假\n其他\n1.免費制服\n2.完整的教育訓練\n3.內部加盟優惠\n4.年度食品從業人員健康檢查\n5.年度聚餐\n6.員工諮商服務",
+   "mrtDist": 0,
+   "jobAddress": "莒光鄉、北竿鄉、東引鄉",
+   "jobAddrNo": 6001023001,
+   "jobAddrNoDesc": "連江縣南竿鄉",
+   "jobName": "(歡迎銀髮族/二度就業/原住民加入)(馬祖連江縣地區)統一超商門市夥伴招募，彈性工時x離家近！",
+   "jobNameSnippet": "(歡迎銀髮族/二度就業/原住民加入)(馬祖連江縣地區)統一超商門市夥伴招募，彈性工時x離家近！",
+   "jobNo": "14468485",
+   "jobRo": 2,
+   "jobType": 2,
+   "lat": 26.2245753,
+   "lon": 119.9982607,
+   "link": {
+    "job": "https://www.104.com.tw/job/8m3yd",
+    "cust": "https://www.104.com.tw/company/ad0nzp4",
+    "applyAnalyze": "https://www.104.com.tw/jobs/apply/analysis/8m3yd?channel=104rpt"
+   },
+   "major": [],
+   "mrt": "",
+   "mrtDesc": "",
+   "optionEdu": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "period": 0,
+   "remoteWorkType": 0,
+   "s10": 30,
+   "salaryHigh": 9999999,
+   "salaryLow": 196,
+   "tags": {
+    "zone": {
+     "desc": "上市上櫃",
+     "param": 16
+    },
+    "wf10": {
+     "desc": "",
+     "param": "wf10"
+    },
+    "wf23": {
+     "desc": "",
+     "param": "wf23"
+    },
+    "wf3": {
+     "desc": "",
+     "param": "wf3"
+    },
+    "wf31": {
+     "desc": "",
+     "param": "wf31"
+    },
+    "wf2": {
+     "desc": "",
+     "param": "wf2"
+    },
+    "wf7": {
+     "desc": "",
+     "param": "wf7"
+    },
+    "wf9": {
+     "desc": "",
+     "param": "wf9"
+    }
+   },
+   "s9": [
+    1,
+    2,
+    4,
+    8
+   ],
+   "s5": 256,
+   "d3": "日班/夜班/大夜班/假日班；工時安排仍按工作現場需求",
+   "hrBehaviorPR": 0,
+   "jobCat": [
+    2002001011,
+    2005002004,
+    2005002001
+   ],
+   "labels": [
+    "association@j00014",
+    "c@wf10",
+    "indexjob@ij034",
+    "persona_rerank@j00001_005",
+    "persona_rerank@j00002_004",
+    "persona_rerank@j00001_001",
+    "indexjob@ij071",
+    "c@wf23",
+    "joblist_search@jl_j0004_001.26",
+    "foreigners@full_fc_em_jbs",
+    "senior@senior_job_G",
+    "association@j00035",
+    "foreigners@pt_fc_em_jbs",
+    "foreigners@fc_empmidchinese_jbs",
+    "persona_rerank@j00003_004",
+    "association@j00021",
+    "c@wf3",
+    "foreigners@foreigners_tick",
+    "c@rdss_welcome",
+    "joblist_search@jl_j0007_001.29",
+    "c@wf31",
+    "association@j00018",
+    "association@j00022",
+    "persona_rerank@j00003_003",
+    "c@wf2",
+    "joblist_search@jl_j0003_004.5",
+    "c@graduates_welcome",
+    "association@j00001",
+    "association@j00026",
+    "association@j00003",
+    "c@wf7",
+    "persona_rerank@j00001_004",
+    "association@j00033",
+    "c@wf9",
+    "joblist_search@jl_j0006_001.32",
+    "association@j00037",
+    "persona_rerank@j00004_002",
+    "persona_rerank@j00001_003",
+    "joblist_search@jl_j0005_001.35",
+    "indexjob@ij055",
+    "association@j00039",
+    "persona_rerank@j00001_002"
+   ],
+   "languageRequirements": [],
+   "acceptRole": [
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+    2048,
+    4096,
+    8192,
+    32768
+   ],
+   "employeeCount": 8775,
+   "pcSkills": [],
+   "pddScore": 0,
+   "custLogo": "https://static.104.com.tw/b_profile/cust_picture/3000/22555003000/logo.jpg?v=20260830233715",
+   "jobSwitch": "on",
+   "isSave": null,
+   "interactionRecord": {
+    "lastProcessedResumeAtTime": 0,
+    "lastCustReplyTimestamp": 0,
+    "nowTimestamp": 0,
+    "lastProcessedResumeDesc": "",
+    "lastCustReplyDesc": ""
+   },
+   "isApplied": null,
+   "applyDate": null,
+   "userApplyCount": null,
+   "analysisType": 1,
+   "hasHrBehavior": false
+  },
+  {
+   "appearDate": "20261025",
+   "applyCnt": 0,
+   "coIndustry": 1010002005,
+   "coIndustryDesc": "貨運承攬業",
+   "custName": "華羿航空貨運承攬有限公司",
+   "custNo": "130000000060049",
+   "description": "從事福澳港倉儲理貨作業。\n    \n提供宿舍",
+   "descSnippet": "從事福澳港倉儲理貨作業。\n    \n提供宿舍",
+   "mrtDist": 0,
+   "jobAddress": "馬祖福澳港",
+   "jobAddrNo": 6001023001,
+   "jobAddrNoDesc": "連江縣南竿鄉",
+   "jobName": "倉儲理貨作業人員-馬祖南竿福澳港",
+   "jobNameSnippet": "倉儲理貨作業人員-馬祖南竿福澳港",
+   "jobNo": "11302930",
+   "jobRo": 1,
+   "jobType": 0,
+   "lat": 26.1563246,
+   "lon": 119.9444207,
+   "link": {
+    "job": "https://www.104.com.tw/job/6q9ea",
+    "cust": "https://www.104.com.tw/company/1a2x6bj9n5",
+    "applyAnalyze": "https://www.104.com.tw/jobs/apply/analysis/6q9ea?channel=104rpt"
+   },
+   "major": [],
+   "mrt": "",
+   "mrtDesc": "",
+   "optionEdu": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "period": 2,
+   "remoteWorkType": 0,
+   "s10": 50,
+   "salaryHigh": 45000,
+   "salaryLow": 40000,
+   "tags": {
+    "wf7": {
+     "desc": "",
+     "param": "wf7"
+    }
+   },
+   "s9": [
+    1,
+    2
+   ],
+   "s5": 256,
+   "d3": "09:00-18:00",
+   "hrBehaviorPR": 0,
+   "jobCat": [
+    2011002009
+   ],
+   "labels": [
+    "persona_rerank@j00004_002",
+    "foreigners@foreigners_tick",
+    "persona_rerank@j00003_003",
+    "association@j00014",
+    "c@graduates_welcome",
+    "association@j00022",
+    "persona_rerank@j00002_004",
+    "association@j00031",
+    "association@j00030",
+    "association@j00017",
+    "association@j00001",
+    "senior@senior_job_G",
+    "foreigners@fc_emp5m_jbs",
+    "association@j00018",
+    "joblist_search@jl_j0003_004.5",
+    "association@j00021",
+    "c@wf7"
+   ],
+   "languageRequirements": [],
+   "acceptRole": [
+    2,
+    4,
+    32,
+    64,
+    2048,
+    16384,
+    32768,
+    131072
+   ],
+   "employeeCount": 30,
+   "pcSkills": [],
+   "pddScore": 0,
+   "custLogo": "",
+   "jobSwitch": "on",
+   "isSave": null,
+   "interactionRecord": {
+    "lastProcessedResumeAtTime": 0,
+    "lastCustReplyTimestamp": 0,
+    "nowTimestamp": 0,
+    "lastProcessedResumeDesc": "1 天內處理過履歷",
+    "lastCustReplyDesc": "12 天內聯絡過求職者"
+   },
+   "isApplied": null,
+   "applyDate": null,
+   "userApplyCount": null,
+   "analysisType": 1,
+   "hasHrBehavior": false
+  }
+ ],
+ "metadata": {
+  "pagination": {
+   "count": 23,
+   "currentPage": 1,
+   "lastPage": 1,
+   "total": 23
+  },
+  "isPreciseHotJob": false,
+  "filterQuery": {
+   "order": 11,
+   "asc": 0,
+   "excludeKwFz": 4,
+   "excludeKwKwop": 8,
+   "enableJobNoTopOrder": 1,
+   "area": [
+    "6001023000"
+   ],
+   "ro": [
+    0
+   ],
+   "scstrict": 0,
+   "scneg": 0,
+   "page": 1,
+   "pagesize": 30
+  },
+  "offJobs": [],
+  "personalBoost": 0
+ }
+}

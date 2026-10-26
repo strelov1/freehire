@@ -533,6 +533,11 @@ func All(c HTTPClient) map[string]Source {
 		// facets and hydrating each new posting from the detail API. The crawl hosts are
 		// Cloudflare-challenged, so it egresses through the rotating proxy (proxy.go). See cake.go.
 		NewCake(c),
+		// 104 Job Bank: Taiwan's largest job board, enumerated by the platform's own area code
+		// (board) and read from its search, whose rows carry the whole posting. Both crawl hosts
+		// are refused by Cloudflare, so production reaches it through the Scrapling tier
+		// (scraplingtier.go). See job104.go.
+		NewJob104(c, c),
 		// XING Jobs: the DACH professional network's job board, enumerated from its gzip job
 		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
 		// See xing.go.
