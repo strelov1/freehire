@@ -88,7 +88,12 @@ var chineseCategoryTable = []aliasEntry{
 	{"美容外科", "healthcare"},  // a cosmetic-surgery clinic, not 美容 (beauty)
 	{"宾客服务", "hospitality"}, // hotel guest services, not 客服
 	{"賓客服務", "hospitality"},
-	{"行政酒廊", "hospitality"},              // an executive lounge, not 行政
+	{"行政酒廊", "hospitality"}, // an executive lounge, not 行政
+	{"行政主廚", "hospitality"}, // an executive chef, not 行政
+	{"行政主厨", "hospitality"},
+	{"行政總廚", "hospitality"},
+	{"行政总厨", "hospitality"},
+	{"行政管家", "hospitality"},              // an executive housekeeper
 	{"育嬰留停", categoryNone},               // parental-leave cover, not childcare
 	{"清洁验证", "industrial_engineering"},   // GMP cleaning validation, not a cleaner
 	{"品質系統工程", "industrial_engineering"}, // quality systems, not 系統工程
