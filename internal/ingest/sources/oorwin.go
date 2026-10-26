@@ -58,12 +58,14 @@ const (
 	// run, since every tenant's detail is answered by the same API host.
 	oorwinDetailWorkers = 4
 	oorwinMaxInFlight   = 4
-	// oorwinMaxNewPerRun bounds how many unseen postings one board hydrates per run. At ~4 s a
-	// detail and four in flight, a 2.5k-posting board would otherwise hold one run for ~45
-	// minutes and lose all of it to the run timeout, since a buffered board persists only
-	// when its Fetch returns. A posting past the bound is not yielded (nothing is stored for
-	// it yet) and is hydrated by a later run.
-	oorwinMaxNewPerRun = 400
+	// oorwinMaxNewPerRun bounds how many unseen postings one board hydrates per run. A detail
+	// takes ~4 s and the run keeps four in flight, so the provider hydrates ~1 posting a second
+	// in total. A buffered board persists only when its Fetch returns, so the bound is sized for
+	// the WHOLE run to fit the 3000 s ingest timeout: seven portals hold more than 150 postings,
+	// so a first run hydrates ~1,650 (~28 minutes) and the 7.6k backlog drains over about five
+	// runs. A posting past the bound is not yielded (nothing is stored for it yet) and is
+	// hydrated by a later run.
+	oorwinMaxNewPerRun = 150
 )
 
 // oorwinBoard is a career-portal label.
