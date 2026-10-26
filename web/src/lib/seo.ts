@@ -17,14 +17,41 @@ const SITE_GITHUB = 'https://github.com/strelov1/freehire';
 /** One question/answer pair; the shape shared by the visible FAQ and its schema. */
 export type FaqItem = { question: string; answer: string };
 
+const namedEntities: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: '\u00a0',
+  AMP: '&',
+  LT: '<',
+  GT: '>',
+  QUOT: '"',
+  APOS: "'",
+  NBSP: '\u00a0',
+};
+
+function decodeEntities(value: string): string {
+  return value.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]*);/g, (entity, body: string) => {
+    if (body.charAt(0) !== '#') return namedEntities[body] ?? entity;
+    const hex = body.charAt(1) === 'x' || body.charAt(1) === 'X';
+    const code = Number.parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
+    const control = code < 32 && code !== 9 && code !== 10 && code !== 13;
+    const surrogate = code >= 0xd800 && code <= 0xdfff;
+    if (!Number.isInteger(code) || control || surrogate || code > 0x10ffff) return entity;
+    return String.fromCodePoint(code);
+  });
+}
+
 /** Plain-text, length-capped description for `<meta name="description">` and OG,
  *  derived from the job's sanitized HTML body. Cuts at the last whole word within
  *  the budget rather than mid-word, and defaults to ~155-160 chars — Google's own
  *  typical search-snippet width, beyond which it truncates the snippet itself and
- *  we lose control of where the cut lands. */
+ *  we lose control of where the cut lands. Character references are decoded after
+ *  tags are stripped, so a list card shows the same letters the job page does. */
 export function metaDescription(html: string, max = 160): string {
-  const text = html
-    .replace(/<[^>]*>/g, ' ')
+  const text = decodeEntities(html.replace(/<[^>]*>/g, ' '))
     .replace(/\s+/g, ' ')
     .trim();
   if (text.length <= max) return text;

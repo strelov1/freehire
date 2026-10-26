@@ -114,6 +114,20 @@ func TestSanitizeHTMLLinkStripIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestSanitizeHTMLWritesQuotesAsCharacters(t *testing.T) {
+	got := Sanitize(`<p>technology isn&#39;t about R&amp;D and &#34;fit&#34;</p>`)
+	want := `<p>technology isn't about R&amp;D and "fit"</p>`
+	if got != want {
+		t.Fatalf("Sanitize = %q, want %q", got, want)
+	}
+	if twice := Sanitize(got); twice != got {
+		t.Fatalf("Sanitize is not idempotent: %q", twice)
+	}
+	if strings.Contains(Sanitize(`<li>isn&#39;t</li>`), "&#39;") {
+		t.Fatal("re-rendering an orphan list put the apostrophe reference back")
+	}
+}
+
 // Some ATS boards emit descriptions whose words are glued by non-breaking spaces
 // (U+00A0, often as the &nbsp; entity) instead of regular spaces. Rendered with
 // {@html} this becomes one unbreakable line that overflows the page horizontally,

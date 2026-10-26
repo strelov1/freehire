@@ -70,7 +70,17 @@ func Sanitize(s string) string {
 		// Only a drop can empty a block, so a body with nothing stripped is never rewritten.
 		out = dropEmptyBlocks(out)
 	}
-	return wrapOrphanListItems(out)
+	// Last, after wrapOrphanListItems: its re-render goes through html.EscapeString,
+	// which writes apostrophes and quotes back as &#39; and &#34;. Ampersands stay
+	// escaped — a bare & is not valid text in the HTML this column stores.
+	return restoreTextQuotes(wrapOrphanListItems(out))
+}
+
+func restoreTextQuotes(s string) string {
+	if !strings.Contains(s, "&#3") {
+		return s
+	}
+	return strings.NewReplacer("&#39;", "'", "&#34;", `"`).Replace(s)
 }
 
 // literalNewlineMarker is the two-character sequence a double-escaping feed leaves behind:

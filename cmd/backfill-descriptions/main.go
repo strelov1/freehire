@@ -25,11 +25,20 @@
 // is re-sanitized here. Expect this to rewrite most of the catalogue on its first run — see the
 // pacing note below.
 //
+// The fifth repair is also universal. html.EscapeString, which bluemonday uses to write text
+// nodes, stores an apostrophe as &#39; and a quotation mark as &#34;. That is valid HTML, and
+// the job page renders it, but every plain-text reader that only strips tags shows the reference.
+// Sanitize now writes those two as characters (an ampersand stays &amp;, which HTML requires).
+// A stored body that still contains either reference predates that and is re-sanitized here.
+// This rewrites a large share of the catalogue on its first run; the pause below is what keeps
+// that from saturating the host.
+//
 // It pages by keyset and rewrites every row whose description still carries a repair marker — an
-// encoding ("%3C" or "&lt;") or an anchor ("<a") — re-running the same sanitize+decode pipeline
-// the adapters use and refreshing content_hash so the row re-indexes. The markers are
-// source-agnostic: any such description is repaired the same way, open or closed. Idempotent — a
-// repaired row carries none of the markers, so a second run rewrites nothing.
+// encoding ("%3C" or "&lt;"), an anchor ("<a"), a literal "\n", or a quote reference ("&#39;"
+// or "&#34;") — re-running the same sanitize+decode pipeline the adapters use and refreshing
+// content_hash so the row re-indexes. The markers are source-agnostic: any such description is
+// repaired the same way, open or closed. Idempotent — a repaired row carries none of the markers,
+// so a second run rewrites nothing.
 //
 // BACKFILL_PAUSE_MS (default 100) is how long the sweep waits after a page in which it actually
 // wrote rows. Postgres on the app host is untuned and a description lives in TOAST, so rewriting
@@ -85,6 +94,12 @@ const (
 	// the same upstream network). Unlike the encodings this needs no decoder of its own — the
 	// sanitizer repairs it — so the marker only has to select the row.
 	literalNewlineMarker = `\n`
+	// apostropheMarker and quoteMarker are the fifth signature. They are what html.EscapeString
+	// writes for ' and ", and what Sanitize no longer emits. &amp; is deliberately not a marker:
+	// rewriting it would put a bare & back into stored HTML, and the next sanitize would escape
+	// it again.
+	apostropheMarker = "&#39;"
+	quoteMarker      = "&#34;"
 )
 
 // himalayasSource is the one provider whose stored bodies carry the aggregator's own branding
@@ -230,7 +245,8 @@ func repairDescription(source, stored string) string {
 		decoded = sources.UnescapeEncodedHTML(decoded)
 	}
 	repaired := stored
-	if decoded != stored || strings.Contains(decoded, anchorMarker) || strings.Contains(decoded, literalNewlineMarker) {
+	if decoded != stored || strings.Contains(decoded, anchorMarker) || strings.Contains(decoded, literalNewlineMarker) ||
+		strings.Contains(decoded, apostropheMarker) || strings.Contains(decoded, quoteMarker) {
 		repaired = htmltext.Sanitize(decoded)
 	}
 	if source == himalayasSource {

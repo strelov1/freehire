@@ -75,6 +75,25 @@ describe('metaDescription', () => {
     const text = 'a'.repeat(300);
     expect(metaDescription(text, 220)).toBe(`${'a'.repeat(219)}…`); // no spaces to cut at: falls back to a hard cut
   });
+
+  it('decodes character references the browser would, so a list card matches the job page', () => {
+    expect(metaDescription('<p>technology isn&#39;t about R&amp;D</p>')).toBe(
+      "technology isn't about R&D",
+    );
+    expect(metaDescription('it&#x27;s')).toBe("it's");
+  });
+
+  it('counts the decoded character toward the length budget, not the reference', () => {
+    expect(metaDescription(`${'a'.repeat(158)}&#39;`, 160)).toBe(`${'a'.repeat(158)}'`);
+  });
+
+  it('strips tags before decoding, so escaped markup stays visible text', () => {
+    expect(metaDescription('use &lt;b&gt; tags')).toBe('use <b> tags');
+  });
+
+  it('treats non-breaking spaces as whitespace', () => {
+    expect(metaDescription('<p>a&nbsp;&nbsp;b</p>')).toBe('a b');
+  });
 });
 
 describe('collectionHeading', () => {

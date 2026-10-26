@@ -205,6 +205,39 @@ func TestBackfillStripsHimalayasSelfPromo(t *testing.T) {
 	}
 }
 
+func TestBackfillRestoresQuotedCharacters(t *testing.T) {
+	store := &fakeStore{jobs: []db.Job{
+		{ID: 1, Source: "ashby", Title: "A", Description: `<p>technology isn&#39;t</p>`},
+		{ID: 2, Source: "lever", Title: "B", Description: `<p>say &#34;fit&#34;</p>`},
+		{ID: 3, Source: "workday", Title: "C", Description: `<p>R&amp;D</p>`},
+		{ID: 4, Source: "greenhouse", Title: "D", Description: `<p>Clean.</p>`},
+	}}
+
+	scanned, updated, err := backfillAll(context.Background(), store, "", 0)
+	if err != nil {
+		t.Fatalf("backfillAll: %v", err)
+	}
+	if scanned != 4 || updated != 2 {
+		t.Fatalf("scanned=%d updated=%d, want 4/2", scanned, updated)
+	}
+	got := map[int64]db.UpdateJobDescriptionParams{}
+	for _, u := range store.updates {
+		got[u.ID] = u
+	}
+	if want := `<p>technology isn't</p>`; got[1].Description != want {
+		t.Errorf("apostrophe Description = %q, want %q", got[1].Description, want)
+	}
+	if want := `<p>say "fit"</p>`; got[2].Description != want {
+		t.Errorf("quote Description = %q, want %q", got[2].Description, want)
+	}
+	if _, rewritten := got[3]; rewritten {
+		t.Error("an ampersand entity is valid HTML and must not be rewritten")
+	}
+	if _, rewritten := got[4]; rewritten {
+		t.Error("a clean row must not be rewritten")
+	}
+}
+
 // TestBackfillStripsLinksAcrossSources pins the universal repair: any stored description that
 // still carries an anchor is re-sanitized, whatever its provider, and a body that never had one
 // is left byte-for-byte alone.
