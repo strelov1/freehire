@@ -828,8 +828,9 @@ func All(c HTTPClient) map[string]Source {
 	}
 	// engage (en-gage.net): a Japanese ATS, enumerated by occupation category (board) through the
 	// cross-tenant search its own site runs on; a search row carries the whole posting, so no
-	// detail requests. Paced to one page a second. See engage.go.
-	registry["engage"] = NewEngage(pacedEngageGetter(c))
+	// detail requests. Paced to one page a second, over a cookie client so the load balancer keeps
+	// a walk on one backend node. See engage.go.
+	registry["engage"] = cookieSessionSource(c, func(g JSONGetter) Source { return NewEngage(pacedEngageGetter(g)) })
 	// マイナビ転職 (Mynavi): a Japanese job board, enumerated by engineer-edition occupation code
 	// (board), each new posting's body read from its page's schema.org JobPosting. The origin
 	// refuses datacenter IPs, so the crawl is really served once ApplyProxyEgress rebuilds it

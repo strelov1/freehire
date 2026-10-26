@@ -23,7 +23,10 @@ func newEngageFake(t *testing.T) *engageFake {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &engageFake{t: t, pages: map[string]string{"1": string(b)}}
+	// The recorded page is the whole IT category (17,152 rows); the fake states a total inside the
+	// search's result window, as one of its narrower codes would.
+	body := strings.Replace(string(b), `"totalCount": 17152`, `"totalCount": 9152`, 1)
+	return &engageFake{t: t, pages: map[string]string{"1": body}}
 }
 
 func (f *engageFake) GetJSON(_ context.Context, raw string, v any) error {
@@ -61,7 +64,7 @@ func TestEngageMapsSearchRowsAndSkipsSyndicatedOnes(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("jobs = %d, want 3: %+v", len(got), jobs)
 	}
-	if p2 := f.asked[1]; p2.Get("p_t") != "17152" || p2.Get("f_t") != "0" || p2.Get("job") != "400000" {
+	if p2 := f.asked[1]; p2.Get("p_t") != "9152" || p2.Get("f_t") != "0" || p2.Get("job") != "400000" {
 		t.Errorf("page 2 query = %v, want p_t carried from page 1", p2)
 	}
 
@@ -141,6 +144,30 @@ func TestEngageWorkIDTakesOnlyNumericIDs(t *testing.T) {
 	} {
 		if got := engageWorkID(json.RawMessage(raw)); got != want {
 			t.Errorf("engageWorkID(%s) = %q, want %q", raw, got, want)
+		}
+	}
+}
+
+func TestEngageCategoryPastTheResultWindowFails(t *testing.T) {
+	f := newEngageFake(t)
+	f.pages["1"] = strings.Replace(f.pages["1"], `"totalCount": 9152`, `"totalCount": 17152`, 1)
+	if _, err := NewEngage(f).Fetch(context.Background(), CompanyEntry{Board: "400000"}); err == nil {
+		t.Error("want a category the search cannot page through whole refused")
+	}
+}
+
+func TestEngageIgnoredCodeFailsTheBoard(t *testing.T) {
+	// The recorded rows are filed under 4055 (IT support) and others; asked as 401000 (IT
+	// development), they are what the search answers when it ignores a code.
+	if _, err := NewEngage(newEngageFake(t)).Fetch(context.Background(), CompanyEntry{Board: "401000"}); err == nil {
+		t.Error("want a first page outside the board's category refused")
+	}
+}
+
+func TestEngageCategoryPrefix(t *testing.T) {
+	for code, want := range map[string]string{"400000": "40", "401000": "4010", "405500": "4055", "401015": "401015"} {
+		if got := engageCategoryPrefix(code); got != want {
+			t.Errorf("engageCategoryPrefix(%s) = %q, want %q", code, got, want)
 		}
 	}
 }

@@ -21,19 +21,25 @@ import (
 
 // engage adapts en-gage.net, エン・ジャパン's free ATS, through the cross-tenant job search its own
 // site runs on (/user/api/search/result_work_list/). Board-based aggregator: a board is one of the
-// search's OCCUPATION CATEGORY codes (the `job` parameter, e.g. 400000 for IT), so one board
+// search's OCCUPATION CATEGORY codes (the `job` parameter, e.g. 401000 for IT development), so one board
 // reaches every tenant's postings in that category — not one tenant's careers page, which caps
 // each employment type at 100 postings and would need a roster of tenant slugs to reach anyone.
 //
 // A search row carries the whole posting — the body's sections, salary, address, employment
-// type — so the crawl makes no detail requests. See the engage traps in AGENTS.md.
+// type — so the crawl makes no detail requests. The search answers from several backend nodes that
+// order rows differently, so the adapter runs over a cookie client: the load balancer's sticky cookie
+// keeps one walk on one node. See the engage traps in AGENTS.md.
 type engage struct{ http JSONGetter }
 
 const (
 	engageBase = "https://en-gage.net"
-	// engageMaxPages is a safety ceiling, not the platform's: 400000 held 17,152 postings (286
-	// pages of 60) on 2026-10-25. A walk that reaches it is logged.
-	engageMaxPages = 1000
+	// engageResultWindow is how deep the search pages: past 10,000 rows it reports no more pages,
+	// whatever its total says. A category larger than that cannot be read whole, and a walk that
+	// sees a different part of it on every run would close and reopen postings at random, so such
+	// a board fails and must be replaced by its narrower codes (400000 by 401000, 402500, ...).
+	engageResultWindow = 10_000
+	// engageMaxPages is a safety ceiling: the result window at 60 rows a page.
+	engageMaxPages = engageResultWindow/60 + 1
 	// engageRequestInterval paces the walk to one page a second; a page answers in ~3 s anyway.
 	engageRequestInterval = time.Second
 	engageRequestBurst    = 1
@@ -42,10 +48,19 @@ const (
 // engageBoardRE is a six-digit occupation category code.
 var engageBoardRE = regexp.MustCompile(`^[1-9][0-9]{5}$`)
 
-// engageTechBoards are the categories whose postings are technical by the site's own filing.
-// 350000 (creative and web) mixes UI engineers with video and print staff, so it is left to the
-// title dictionary.
-var engageTechBoards = map[string]bool{"400000": true}
+// engageTechPrefix marks the IT categories (400000 and every code under it), whose postings are
+// technical by the site's own filing. 350000 (creative and web) mixes UI engineers with video and
+// print staff, so it is left to the title dictionary.
+const engageTechPrefix = "40"
+
+// engageCategoryPrefix is the prefix every posting under a code carries in its
+// occupation_detail_category: 400000 -> "40", 401000 -> "4010", 401015 -> "401015".
+func engageCategoryPrefix(code string) string {
+	for len(code) > 2 && strings.HasSuffix(code, "00") {
+		code = code[:len(code)-2]
+	}
+	return code
+}
 
 // NewEngage builds the engage adapter over the given HTTP client.
 func NewEngage(c JSONGetter) Source { return engage{http: c} }
@@ -68,6 +83,7 @@ func (engage) aggregator() {}
 // adapter reads tolerates both.
 type engageRow struct {
 	WorkID      json.RawMessage `json:"work_id"`
+	Category    json.RawMessage `json:"occupation_detail_category"`
 	IsKBWork    flexjson.Bool   `json:"is_kb_work"`
 	Slug        string          `json:"company_url_root_dir"`
 	CompanyName string          `json:"company_name"`
@@ -125,7 +141,8 @@ func (s engage) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	if !engageBoardRE.MatchString(e.Board) {
 		return nil, fmt.Errorf("engage: board %q is not an occupation category code", e.Board)
 	}
-	tech := engageTechBoards[e.Board]
+	tech := strings.HasPrefix(e.Board, engageTechPrefix)
+	prefix := engageCategoryPrefix(e.Board)
 	var jobs []Job
 	seen := map[string]bool{}
 	total := 0
@@ -143,9 +160,21 @@ func (s engage) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			break
 		}
 		total = p.TotalCount
+		if page == 1 && total > engageResultWindow {
+			return nil, fmt.Errorf("engage: category %s holds %d rows, past the search's %d-row window; replace it with its narrower codes",
+				e.Board, total, engageResultWindow)
+		}
 		for _, r := range p.SearchResult {
 			j, ok := engageJob(r, tech)
 			if !ok || seen[j.ExternalID] {
+				continue
+			}
+			// An unknown code is not an error to the search: it is ignored and the whole catalogue
+			// answers. A posting outside the board's category on the first page is that answer.
+			if cat := engageScalar(r.Category); cat != "" && !strings.HasPrefix(cat, prefix) {
+				if page == 1 {
+					return nil, fmt.Errorf("engage: category %s: the search ignored the code (a posting filed under %s answered)", e.Board, cat)
+				}
 				continue
 			}
 			seen[j.ExternalID] = true
@@ -168,11 +197,20 @@ var engageDigitsRE = regexp.MustCompile(`^[0-9]+$`)
 // search also mixes in rows syndicated from another job site (is_kb_work), whose id is a hex
 // token and whose page is not on en-gage.net, so anything but digits is no posting of ours.
 func engageWorkID(raw json.RawMessage) string {
-	id := strings.Trim(string(bytes.TrimSpace(raw)), `"`)
+	id := engageScalar(raw)
 	if !engageDigitsRE.MatchString(id) {
 		return ""
 	}
 	return id
+}
+
+// engageScalar reads a field that is a number in one row shape and a string in the other.
+func engageScalar(raw json.RawMessage) string {
+	v := strings.Trim(string(bytes.TrimSpace(raw)), `"`)
+	if v == "null" {
+		return ""
+	}
+	return v
 }
 
 // engageJob maps one search row to a Job, or reports it is not an engage posting.
