@@ -154,9 +154,9 @@ import type {
   BuddyFeedPage,
   BuddyProfile,
   BuddyActivity,
-  BuddyConversation,
-  BuddyMessage,
-  BuddyReport,
+  Conversation,
+  ConversationMessage,
+  ConversationReport,
 } from './types';
 
 /** A page of list items, optionally the total matching the query (endpoints that
@@ -2437,35 +2437,37 @@ export function createApi(
   async function setBuddyApplicationHidden(id: string, hidden: boolean): Promise<void> {
     await call(`/api/v1/me/buddies/hidden-applications/${encodeURIComponent(id)}`, { method: hidden ? 'PUT' : 'DELETE' });
   }
-  async function listBuddyConversations(): Promise<BuddyConversation[]> { return requestData('/api/v1/me/buddies/conversations'); }
-  async function inviteBuddy(handle: string, body: string): Promise<BuddyConversation> {
-    return requestData('/api/v1/me/buddies/conversations', jsonBody('POST', { handle, body }));
+  async function inviteBuddy(handle: string, body: string): Promise<Conversation> {
+    return requestData('/api/v1/me/buddies/invite', jsonBody('POST', { handle, body }));
   }
-  async function decideBuddyInvitation(id: number, action: 'accept' | 'decline'): Promise<BuddyConversation> {
-    return requestData(`/api/v1/me/buddies/conversations/${id}/${action}`, jsonBody('POST', {}));
+
+  // ── Conversations (the messaging core, every kind) ───────────────────────
+  async function listConversations(): Promise<Conversation[]> { return requestData('/api/v1/me/conversations'); }
+  async function answerConversation(id: number, action: 'accept' | 'decline'): Promise<Conversation> {
+    return requestData(`/api/v1/me/conversations/${id}/${action}`, jsonBody('POST', {}));
   }
-  async function blockBuddyConversation(id: number): Promise<void> { await call(`/api/v1/me/buddies/conversations/${id}/block`, { method: 'POST' }); }
-  async function reportBuddyConversation(id: number, reason: BuddyReport['reason'], note: string): Promise<void> {
-    await call(`/api/v1/me/buddies/conversations/${id}/report`, jsonBody('POST', { reason, note }));
+  async function blockConversation(id: number): Promise<void> { await call(`/api/v1/me/conversations/${id}/block`, { method: 'POST' }); }
+  async function reportConversation(id: number, reason: ConversationReport['reason'], note: string): Promise<void> {
+    await call(`/api/v1/me/conversations/${id}/report`, jsonBody('POST', { reason, note }));
   }
-  async function listBuddyMessages(id: number, after?: number, limit?: number): Promise<BuddyMessage[]> {
+  async function listConversationMessages(id: number, after?: number, limit?: number): Promise<ConversationMessage[]> {
     const params = new URLSearchParams();
     if (after) params.set('after', String(after));
     if (limit) params.set('limit', String(limit));
     const q = params.size ? `?${params}` : '';
-    return requestData(`/api/v1/me/buddies/conversations/${id}/messages${q}`);
+    return requestData(`/api/v1/me/conversations/${id}/messages${q}`);
   }
-  async function sendBuddyMessage(id: number, body: string): Promise<BuddyMessage> {
-    return requestData(`/api/v1/me/buddies/conversations/${id}/messages`, jsonBody('POST', { body }));
+  async function sendConversationMessage(id: number, body: string): Promise<ConversationMessage> {
+    return requestData(`/api/v1/me/conversations/${id}/messages`, jsonBody('POST', { body }));
   }
-  async function markBuddyRead(id: number, upTo: number): Promise<void> {
-    await call(`/api/v1/me/buddies/conversations/${id}/read`, jsonBody('POST', { up_to: upTo }));
+  async function markConversationRead(id: number, upTo: number): Promise<void> {
+    await call(`/api/v1/me/conversations/${id}/read`, jsonBody('POST', { up_to: upTo }));
   }
-  async function listBuddyReports(limit = 30, offset = 0, includeResolved = false): Promise<BuddyReport[]> {
+  async function listConversationReports(limit = 30, offset = 0, includeResolved = false): Promise<ConversationReport[]> {
     const q = new URLSearchParams({ limit: String(limit), offset: String(offset), include_resolved: String(includeResolved) });
-    return requestData(`/api/v1/moderation/buddy-reports?${q}`);
+    return requestData(`/api/v1/moderation/conversation-reports?${q}`);
   }
-  async function resolveBuddyReport(id: number): Promise<void> { await call(`/api/v1/moderation/buddy-reports/${id}/resolve`, jsonBody('POST', {})); }
+  async function resolveConversationReport(id: number): Promise<void> { await call(`/api/v1/moderation/conversation-reports/${id}/resolve`, jsonBody('POST', {})); }
 
   /** The referrer inbox: open requests for the companies the caller is approved for. */
   async function listIncomingReferrals(): Promise<IncomingReferralRequest[]> {
@@ -3452,16 +3454,16 @@ export function createApi(
     getBuddyActivity,
     listBuddyHiddenApplications,
     setBuddyApplicationHidden,
-    listBuddyConversations,
     inviteBuddy,
-    decideBuddyInvitation,
-    blockBuddyConversation,
-    reportBuddyConversation,
-    listBuddyMessages,
-    sendBuddyMessage,
-    markBuddyRead,
-    listBuddyReports,
-    resolveBuddyReport,
+    listConversations,
+    answerConversation,
+    blockConversation,
+    reportConversation,
+    listConversationMessages,
+    sendConversationMessage,
+    markConversationRead,
+    listConversationReports,
+    resolveConversationReport,
     referralCvUrl,
     listPendingReferralOffers,
     decideReferralOffer,

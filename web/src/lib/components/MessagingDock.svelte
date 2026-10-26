@@ -4,21 +4,22 @@
   import { MediaQuery } from 'svelte/reactivity';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { buddyConversationName } from '#lib/buddies.js';
-  import { type DockWindow, mobileSheetId, totalUnread } from '#lib/buddyDock.js';
-  import { buddyDock } from '#lib/buddyDock.svelte.js';
+  import { counterpartName } from '#lib/messaging.js';
+  import { type DockWindow, mobileSheetId, totalUnread } from '#lib/messagingDock.js';
+  import { messagingDock } from '#lib/messagingDock.svelte.js';
   import { ownsMobileStickyCta } from '#lib/supportToast.js';
-  import BuddyConversationPane from './BuddyConversationPane.svelte';
-  import BuddyConversationRow from './BuddyConversationRow.svelte';
-  import BuddyIdentity from './BuddyIdentity.svelte';
   import BuddyInviteDialog from './BuddyInviteDialog.svelte';
-  import BuddyUnreadBadge from './BuddyUnreadBadge.svelte';
+  import ConversationCounterpart from './ConversationCounterpart.svelte';
+  import ConversationPane from './ConversationPane.svelte';
+  import ConversationRow from './ConversationRow.svelte';
+  import UnreadBadge from './UnreadBadge.svelte';
 
-  // The interview-buddies messaging dock: a bar in the bottom-right corner that unfolds
-  // into the conversation list, with up to two chat windows beside it. Mounted once by the
-  // root layout and only for a member, so it and its windows survive client-side
-  // navigation. It renders nothing on /my/buddies, whose Chats tab is the full-size version
-  // of the same list and pane.
+  // The messaging dock: a bar in the bottom-right corner that unfolds into the
+  // conversation list (every kind), with up to two chat windows beside it. Mounted once by
+  // the root layout and only for an account with a conversation, so it and its windows
+  // survive client-side navigation. It renders nothing on /my/buddies, whose Chats tab is
+  // the full-size version of the same list and pane. It also hosts the buddy first-message
+  // dialog, so "Message" works from any page.
   //
   // A narrow screen shows one chat at a time as a full-width sheet under the header, and
   // that sheet is modal: everything outside it is inert while it is open, and folding it
@@ -27,16 +28,16 @@
   //
   // The list polls every 30 s while the page is visible and the dock is on screen; each
   // open window's pane polls its own messages. Minimizing a window unmounts its pane, so a
-  // minimized chat costs nothing; its unsent draft is kept in `buddyDock`.
+  // minimized chat costs nothing; its unsent draft is kept in `messagingDock`.
   const LIST_POLL_MS = 30000;
 
-  const shown = $derived(buddyDock.shownOn(page.url.pathname));
-  const unread = $derived(totalUnread(buddyDock.conversations));
+  const shown = $derived(messagingDock.shownOn(page.url.pathname));
+  const unread = $derived(totalUnread(messagingDock.conversations));
   // Tailwind's `sm` breakpoint, which is where the layout below switches.
   const wide = new MediaQuery('min-width: 40rem', true);
   // The window drawn as the narrow screen's sheet, and the one holding the page modal.
-  const sheetId = $derived(mobileSheetId(buddyDock.windows));
-  const modalId = $derived(!wide.current && buddyDock.inviteHandle === null ? sheetId : null);
+  const sheetId = $derived(mobileSheetId(messagingDock.windows));
+  const modalId = $derived(!wide.current && messagingDock.inviteHandle === null ? sheetId : null);
   let visible = $state(false);
   let headerButtons: Record<number, HTMLButtonElement | undefined> = $state({});
   let windowEls: Record<number, HTMLElement | undefined> = $state({});
@@ -44,25 +45,25 @@
   let listEl = $state<HTMLElement>();
   // Windows already on screen, so only a newly opened one takes focus — not the ones
   // restored from sessionStorage on load.
-  let knownWindows = new Set(buddyDock.windows.map((w) => w.id));
-  let expandedWindows = new Set(buddyDock.windows.filter((w) => !w.minimized).map((w) => w.id));
+  let knownWindows = new Set(messagingDock.windows.map((w) => w.id));
+  let expandedWindows = new Set(messagingDock.windows.filter((w) => !w.minimized).map((w) => w.id));
   // The control that unfolded each window, so the narrow screen's sheet can hand focus back.
   const openers: Record<number, HTMLElement | null> = {};
 
   $effect(() => {
     if (!shown || !visible) return;
-    void buddyDock.refresh().catch(() => { /* the next poll catches up */ });
-    const timer = setInterval(() => void buddyDock.refresh().catch(() => {}), LIST_POLL_MS);
+    void messagingDock.refresh().catch(() => { /* the next poll catches up */ });
+    const timer = setInterval(() => void messagingDock.refresh().catch(() => {}), LIST_POLL_MS);
     return () => clearInterval(timer);
   });
 
   // A window opened from a "Message" control anywhere on the page takes focus, so a
   // keyboard user lands in it rather than at the end of the document.
   $effect(() => {
-    const ids = buddyDock.windows.map((w) => w.id);
+    const ids = messagingDock.windows.map((w) => w.id);
     const opened = ids.find((id) => !knownWindows.has(id));
     knownWindows = new Set(ids);
-    const expanded = buddyDock.windows.filter((w) => !w.minimized).map((w) => w.id);
+    const expanded = messagingDock.windows.filter((w) => !w.minimized).map((w) => w.id);
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     for (const id of expanded) if (!expandedWindows.has(id)) openers[id] = active;
     expandedWindows = new Set(expanded);
@@ -109,17 +110,17 @@
   }
 
   function minimize(id: number) {
-    buddyDock.setMinimized(id, true);
+    messagingDock.setMinimized(id, true);
     returnFocus(id, false);
   }
 
   function close(id: number) {
-    buddyDock.close(id);
+    messagingDock.close(id);
     returnFocus(id, true);
   }
 
   function toggle(w: DockWindow) {
-    if (w.minimized) buddyDock.setMinimized(w.id, false);
+    if (w.minimized) messagingDock.setMinimized(w.id, false);
     else minimize(w.id);
   }
 
@@ -142,18 +143,18 @@
   }
 
   // Escape folds the window holding focus (or the list), never anything a dialog inside it
-  // is handling. The draft survives, since it is kept by conversation in `buddyDock`.
+  // is handling. The draft survives, since it is kept by conversation in `messagingDock`.
   function onKeydown(e: KeyboardEvent) {
     const target = e.target;
     if (e.key !== 'Escape' || !(target instanceof Node)) return;
     if (target instanceof Element && target.closest('dialog')) return;
-    const open = buddyDock.windows.find((w) => !w.minimized && windowEls[w.id]?.contains(target));
+    const open = messagingDock.windows.find((w) => !w.minimized && windowEls[w.id]?.contains(target));
     if (open) {
       e.preventDefault();
       minimize(open.id);
-    } else if (buddyDock.expanded && listEl?.contains(target)) {
+    } else if (messagingDock.expanded && listEl?.contains(target)) {
       e.preventDefault();
-      buddyDock.expanded = false;
+      messagingDock.expanded = false;
       listToggle?.focus();
     }
   }
@@ -166,10 +167,10 @@
     aria-label="Messaging"
     class="pointer-events-none fixed bottom-0 right-2 z-30 flex-col items-end gap-2 sm:right-4 sm:flex-row {ownsMobileStickyCta(page.url.pathname) ? 'hidden lg:flex' : 'flex'}"
   >
-    {#each buddyDock.windows as w (w.id)}
-      {@const c = buddyDock.conversation(w.id)}
+    {#each messagingDock.windows as w (w.id)}
+      {@const c = messagingDock.conversation(w.id)}
       {#if c}
-        {@const name = buddyConversationName(c.former_member, c.other.handle)}
+        {@const name = counterpartName(c.counterpart)}
         {@const modal = modalId === w.id}
         <section
           aria-label="Conversation with {name}"
@@ -186,8 +187,8 @@
               aria-expanded={!w.minimized}
               onclick={() => toggle(w)}
             >
-              {#if c.former_member}<span class="truncate">{name}</span>{:else}<BuddyIdentity handle={c.other.handle} summary={c.other.card_summary} size="sm" link={false} />{/if}
-              {#if w.minimized}<BuddyUnreadBadge count={c.unread} />{/if}
+              <ConversationCounterpart counterpart={c.counterpart} nameClass="truncate" />
+              {#if w.minimized}<UnreadBadge count={c.unread} />{/if}
             </button>
             <button
               type="button"
@@ -208,11 +209,11 @@
           </header>
           {#if !w.minimized}
             {#key c.id}
-              <BuddyConversationPane
+              <ConversationPane
                 conversation={c}
                 compact
-                onchange={(change) => { if (change !== 'accepted') buddyDock.close(c.id); }}
-                oninvite={(handle) => buddyDock.openNew(handle)}
+                onchange={(change) => { if (change !== 'accepted') messagingDock.close(c.id); }}
+                oninvite={(handle) => messagingDock.messageBuddy(handle)}
               />
             {/key}
           {/if}
@@ -225,26 +226,26 @@
         bind:this={listToggle}
         type="button"
         class="flex min-h-11 w-full items-center justify-between gap-2 rounded-t-lg px-3 py-2.5 text-sm font-semibold hover:bg-accent"
-        aria-expanded={buddyDock.expanded}
-        aria-controls="buddy-dock-list"
-        onclick={() => (buddyDock.expanded = !buddyDock.expanded)}
+        aria-expanded={messagingDock.expanded}
+        aria-controls="messaging-dock-list"
+        onclick={() => (messagingDock.expanded = !messagingDock.expanded)}
       >
         <span class="flex items-center gap-2">
           <MessageSquare class="size-4" aria-hidden="true" />
           Messaging
-          <BuddyUnreadBadge count={unread} />
+          <UnreadBadge count={unread} />
         </span>
-        {#if buddyDock.expanded}<ChevronDown class="size-4" aria-hidden="true" />{:else}<ChevronUp class="size-4" aria-hidden="true" />{/if}
+        {#if messagingDock.expanded}<ChevronDown class="size-4" aria-hidden="true" />{:else}<ChevronUp class="size-4" aria-hidden="true" />{/if}
       </button>
-      {#if buddyDock.expanded}
-        <div id="buddy-dock-list" class="max-h-96 overflow-y-auto border-t border-border">
-          {#if buddyDock.conversations.length === 0}<p class="p-3 text-sm text-muted-foreground">No conversations yet.</p>{/if}
+      {#if messagingDock.expanded}
+        <div id="messaging-dock-list" class="max-h-96 overflow-y-auto border-t border-border">
+          {#if messagingDock.conversations.length === 0}<p class="p-3 text-sm text-muted-foreground">No conversations yet.</p>{/if}
           <div class="divide-y divide-border">
-            {#each buddyDock.conversations as c (c.id)}
-              <BuddyConversationRow
+            {#each messagingDock.conversations as c (c.id)}
+              <ConversationRow
                 conversation={c}
-                selected={buddyDock.windows.some((w) => w.id === c.id && !w.minimized)}
-                onselect={(next) => buddyDock.openConversation(next.id)}
+                selected={messagingDock.windows.some((w) => w.id === c.id && !w.minimized)}
+                onselect={(next) => messagingDock.openConversation(next.id)}
               />
             {/each}
           </div>
@@ -256,7 +257,7 @@
 {/if}
 
 <BuddyInviteDialog
-  bind:open={() => buddyDock.inviteHandle !== null, (open) => { if (!open) buddyDock.inviteHandle = null; }}
-  handle={buddyDock.inviteHandle ?? ''}
-  onsent={(conversation) => void buddyDock.invited(conversation)}
+  bind:open={() => messagingDock.inviteHandle !== null, (open) => { if (!open) messagingDock.inviteHandle = null; }}
+  handle={messagingDock.inviteHandle ?? ''}
+  onsent={(conversation) => void messagingDock.invited(conversation)}
 />

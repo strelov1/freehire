@@ -3,7 +3,7 @@
   import { page } from '$app/state';
   import { ApiError, api } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
-  import { buddyDock } from '#lib/buddyDock.svelte.js';
+  import { messagingDock } from '#lib/messagingDock.svelte.js';
   import type { BuddyFeedItem, BuddySimilar, BuddyStatus } from '#lib/types.js';
   import { buddySharedCompanies } from '#lib/buddyPresent.js';
   import { Button, Card, Chip, ConfirmDialog, EntityLogo, LoadMore, Tabs, TabStrip, tabStripId } from '#lib/ui/index.js';
@@ -43,11 +43,11 @@
   let confirmLeaveOpen = $state(false);
 
   onMount(() => { void status.run(() => api.buddyStatus()); });
-  // Membership decides whether the messaging dock exists, so it is re-probed after either change.
-  async function join() { await status.run(() => api.joinBuddies()); buddyDock.reset(); }
+  // Joining or leaving changes what the conversation list holds, so it is re-read after either.
+  async function join() { await status.run(() => api.joinBuddies()); messagingDock.reset(); }
   async function leave() {
     membershipError = '';
-    try { await api.leaveBuddies(); buddyDock.reset(); await status.run(() => api.buddyStatus()); }
+    try { await api.leaveBuddies(); messagingDock.reset(); await status.run(() => api.buddyStatus()); }
     catch (err) { membershipError = err instanceof Error ? err.message : 'Could not leave interview buddies.'; }
   }
   async function loadSimilar() { await similar.run(() => api.listBuddySimilar()); }
@@ -82,7 +82,7 @@
     // "Message" on the Similar and Feed tabs knows whether one already exists. Without it
     // every member offers a first message; the server still refuses a second conversation
     // with the same member, so a failed read degrades, never misleads.
-    try { await buddyDock.refresh(); } catch { /* keep the last list */ }
+    try { await messagingDock.refresh(); } catch { /* keep the last list */ }
   }
   function openInvite(handle: string) { inviteHandle = handle; inviteOpen = true; }
   function openConversation(id: number) { linkedConversation = id; tab = 'chats'; }
@@ -119,7 +119,7 @@
               <Card class="flex flex-col gap-3 p-4">
                 <div class="flex items-start justify-between gap-3">
                   <BuddyIdentity handle={person.handle} summary={person.card_summary} />
-                  <BuddyMessageButton handle={person.handle} conversations={buddyDock.conversations} oninvite={openInvite} onconversation={openConversation} />
+                  <BuddyMessageButton handle={person.handle} conversations={messagingDock.conversations} oninvite={openInvite} onconversation={openConversation} />
                 </div>
                 {#if person.shared_companies.length}
                   <div class="flex flex-col gap-1.5 sm:pl-13">
@@ -142,7 +142,7 @@
         {:else if feed.length === 0 && feedBusy}<States state="loading" />
         {:else if feed.length === 0}<States state="empty" message="No application updates yet." />
         {:else}
-          <ul class="flex flex-col gap-3">{#each feed as item (item.id)}<BuddyFeedEntry {item}>{#snippet actions()}<BuddyMessageButton handle={item.handle} conversations={buddyDock.conversations} oninvite={openInvite} onconversation={openConversation} />{/snippet}</BuddyFeedEntry>{/each}</ul>
+          <ul class="flex flex-col gap-3">{#each feed as item (item.id)}<BuddyFeedEntry {item}>{#snippet actions()}<BuddyMessageButton handle={item.handle} conversations={messagingDock.conversations} oninvite={openInvite} onconversation={openConversation} />{/snippet}</BuddyFeedEntry>{/each}</ul>
           {#if cursor}<LoadMore loading={feedBusy} error={feedError === 'more'} onclick={() => void loadFeed(true)} />{/if}
         {/if}
       </Tabs>

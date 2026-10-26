@@ -1149,9 +1149,20 @@ export interface BuddyProfile { handle: string; card: CandidateCard; card_empty:
 /** One member's feed events per UTC day over the last year; only days with an event. */
 export interface BuddyActivity { days: { day: string; count: number }[] }
 export interface BuddyFeedItem { id: number; handle: string; card_summary: BuddySummary; company: BuddyCompany; job_title: string | null; type: 'applied' | 'interview' | 'offer'; day: string }
-export interface BuddyConversation { id: number; other: { handle: string; card_summary: BuddySummary }; former_member: boolean; status_for_me: 'incoming' | 'outgoing' | 'open' | 'closed'; unread: number; last_message_at: string | null; created_at: string }
-export interface BuddyMessage { id: number; mine: boolean; body: string; created_at: string }
-export interface BuddyReport { id: number; conversation_id: number; reason: 'spam' | 'harassment' | 'scam' | 'other'; note: string; created_at: string; resolved_at: string | null; reporter_handle: string; reported_handle: string; messages: { id?: number; sender_handle: string; body: string; created_at: string }[] }
+/** How a buddy counterpart is drawn: by handle and card, and nothing at all once they are
+ *  unreachable (left, blocked) — not even the handle. */
+type BuddyCounterpart =
+  | { persona: 'buddy'; reachable: true; detail: { handle: string; card_summary: BuddySummary } }
+  | { persona: 'buddy'; reachable: false; detail: null };
+/** The other side of a conversation, drawn by the persona they speak as. Nothing here names
+ *  the account behind the persona (internal/engage/messaging/AGENTS.md). */
+export type Counterpart = BuddyCounterpart;
+export type ConversationStatus = 'incoming' | 'outgoing' | 'open' | 'closed';
+export interface Conversation { id: number; kind: 'buddy'; status_for_me: ConversationStatus; counterpart: Counterpart; unread: number; last_message_at: string | null; created_at: string }
+export interface ConversationMessage { id: number; mine: boolean; body: string; created_at: string }
+/** A reported conversation for moderators; every participant is named the way the
+ *  conversation's kind draws them (a buddy by handle). */
+export interface ConversationReport { id: number; conversation_id: number; kind: Conversation['kind']; reason: 'spam' | 'harassment' | 'scam' | 'other'; note: string; created_at: string; resolved_at: string | null; reporter: string; reported: string; messages: { sender: string; body: string; created_at: string }[] }
 
 /** The assembled follow-up message for a silent application. Deterministic and
  *  template-built server-side — no model, no allowance. `recipient` is present only

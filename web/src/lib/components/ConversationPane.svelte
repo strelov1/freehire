@@ -1,23 +1,25 @@
 <script lang="ts">
   import { onDestroy, onMount, tick, untrack } from 'svelte';
   import { ApiError, api } from '#lib/api.js';
-  import { buddyConversationName, followsNewMessages, isSendShortcut, mergeBuddyMessages, messageActionFor } from '#lib/buddies.js';
-  import { buddyDock } from '#lib/buddyDock.svelte.js';
-  import type { BuddyConversation, BuddyMessage, BuddyReport } from '#lib/types.js';
+  import { messageActionFor } from '#lib/buddies.js';
+  import { counterpartName, followsNewMessages, isSendShortcut, kindCopy, mergeMessages } from '#lib/messaging.js';
+  import { messagingDock } from '#lib/messagingDock.svelte.js';
+  import type { Conversation, ConversationMessage, ConversationReport } from '#lib/types.js';
   import { Button, ConfirmDialog } from '#lib/ui/index.js';
-  import BuddyIdentity from './BuddyIdentity.svelte';
+  import ConversationCounterpart from './ConversationCounterpart.svelte';
 
-  // One conversation: its messages, the invitation answer, the composer, block and
-  // report. The one implementation behind both the Chats tab and a dock window — mount it
-  // keyed by the conversation id, so a different conversation is a fresh pane rather than
-  // a pane that has to forget the last one's messages. The composer's draft is held in
-  // `buddyDock` by conversation id, so unmounting the pane (minimizing a dock window,
-  // switching conversations) never throws away what was typed.
+  // One conversation of any kind: its messages, the invitation answer, the composer, block
+  // and report. The one implementation behind both the buddies Chats tab and a dock window —
+  // mount it keyed by the conversation id, so a different conversation is a fresh pane
+  // rather than a pane that has to forget the last one's messages. The composer's draft is
+  // held in `messagingDock` by conversation id, so unmounting the pane (minimizing a dock
+  // window, switching conversations) never throws away what was typed.
   //
   // `conversation` is the caller's live copy from the shared list, so a status the other
-  // member changed (an accepted invitation, a departure) arrives through the next list
-  // read. Every change made here re-reads that list, which is what keeps the unread
-  // counts in the dock and the Chats tab in step.
+  // side changed (an accepted invitation, a departure) arrives through the next list read.
+  // Every change made here re-reads that list, which is what keeps the unread counts in
+  // the dock and the Chats tab in step. The other side is drawn by
+  // ConversationCounterpart, and what is said about a closed conversation by its kind.
 
   // A conversation is read page by page until a page comes back short, bounded so a runaway
   // history cannot spin the loop.
@@ -31,27 +33,30 @@
     onchange,
     oninvite,
   }: {
-    conversation: BuddyConversation;
-    /** In a dock window, whose own header already names the member. */
+    conversation: Conversation;
+    /** In a dock window, whose own header already names the other side. */
     compact?: boolean;
     /** The conversation was answered or ended from here; `declined` and `blocked` mean it is gone. */
     onchange?: (change: 'accepted' | 'declined' | 'blocked') => void;
-    /** A conversation closed by a leave can be started again with a new first message. */
+    /** A buddy conversation closed by a leave can be started again with a new first message. */
     oninvite?: (handle: string) => void;
   } = $props();
 
   const id = untrack(() => conversation.id);
   const uid = $props.id();
-  const name = $derived(buddyConversationName(conversation.former_member, conversation.other.handle));
-  const live = $derived(!conversation.former_member);
+  const name = $derived(counterpartName(conversation.counterpart));
+  const live = $derived(conversation.counterpart.reachable);
   const status = $derived(conversation.status_for_me);
-  const reinvite = $derived(
-    Boolean(oninvite) && status === 'closed' && live
-      && messageActionFor(buddyDock.conversations, conversation.other.handle).kind === 'invite',
-  );
+  const copy = $derived(kindCopy(conversation.kind));
+  // The buddy handle a closed conversation can be re-invited under, or null.
+  const reinviteHandle = $derived.by(() => {
+    const cp = conversation.counterpart;
+    if (!oninvite || status !== 'closed' || cp.persona !== 'buddy' || !cp.reachable) return null;
+    return messageActionFor(messagingDock.conversations, cp.detail.handle).kind === 'invite' ? cp.detail.handle : null;
+  });
 
-  let messages = $state<BuddyMessage[]>([]);
-  let body = $state(untrack(() => buddyDock.draft(id)));
+  let messages = $state<ConversationMessage[]>([]);
+  let body = $state(untrack(() => messagingDock.draft(id)));
   // The first read decides between the history, an empty conversation and a failure; a
   // later poll that fails keeps whatever is already on screen.
   let history = $state<'loading' | 'ready' | 'error'>('loading');
@@ -64,7 +69,7 @@
   let error = $state('');
   let actionBusy = $state(false);
   let confirmBlockOpen = $state(false);
-  let reportReason = $state<BuddyReport['reason']>('spam');
+  let reportReason = $state<ConversationReport['reason']>('spam');
   let reportNote = $state('');
   let reportOpen = $state(false);
   let reportSuccess = $state(false);
@@ -80,9 +85,9 @@
     try {
       let fetched = 0;
       for (let i = 0; i < MAX_PAGES; i++) {
-        const page = await api.listBuddyMessages(id, messages.at(-1)?.id, PAGE_SIZE);
+        const page = await api.listConversationMessages(id, messages.at(-1)?.id, PAGE_SIZE);
         if (destroyed) return;
-        messages = mergeBuddyMessages(messages, page);
+        messages = mergeMessages(messages, page);
         fetched += page.length;
         if (page.length < PAGE_SIZE) break;
       }
@@ -92,8 +97,8 @@
       }
       const lastMessage = messages.at(-1);
       if (fetched && lastMessage) {
-        await api.markBuddyRead(id, lastMessage.id);
-        if (!destroyed) await buddyDock.refresh();
+        await api.markConversationRead(id, lastMessage.id);
+        if (!destroyed) await messagingDock.refresh();
       }
     } catch {
       // A failed first read is shown with a retry; a later one is recovered by the next poll.
@@ -113,7 +118,7 @@
     return () => clearInterval(timer);
   });
 
-  $effect(() => { buddyDock.setDraft(id, body); });
+  $effect(() => { messagingDock.setDraft(id, body); });
 
   // Keep the newest message in view as messages arrive, unless the reader has scrolled up
   // into the history (sending brings them back down; see send).
@@ -144,9 +149,9 @@
     actionBusy = true;
     error = '';
     try {
-      await api.decideBuddyInvitation(id, action);
+      await api.answerConversation(id, action);
       onchange?.(action === 'accept' ? 'accepted' : 'declined');
-      await buddyDock.refresh().catch(() => { /* the next poll catches up */ });
+      await messagingDock.refresh().catch(() => { /* the next poll catches up */ });
       if (action === 'accept') void refreshMessages();
     }
     catch (err) { error = err instanceof Error ? err.message : 'Could not update the invitation.'; }
@@ -158,11 +163,11 @@
     actionBusy = true;
     error = '';
     try {
-      const sent = await api.sendBuddyMessage(id, text);
+      const sent = await api.sendConversationMessage(id, text);
       body = '';
       following = true;
-      messages = mergeBuddyMessages(messages, [sent]);
-      void buddyDock.refresh().catch(() => { /* the next poll catches up */ });
+      messages = mergeMessages(messages, [sent]);
+      void messagingDock.refresh().catch(() => { /* the next poll catches up */ });
     }
     catch (err) { error = err instanceof Error ? err.message : 'Could not send message.'; }
     finally { actionBusy = false; }
@@ -170,16 +175,16 @@
   async function block() {
     error = '';
     try {
-      await api.blockBuddyConversation(id);
+      await api.blockConversation(id);
       onchange?.('blocked');
-      await buddyDock.refresh().catch(() => { /* the next poll catches up */ });
+      await messagingDock.refresh().catch(() => { /* the next poll catches up */ });
     }
     catch (err) { error = err instanceof Error ? err.message : 'Could not block this member.'; }
   }
   async function report() {
     if (reportNote.length > 1000) return;
     error = ''; reportSuccess = false; actionBusy = true;
-    try { await api.reportBuddyConversation(id, reportReason, reportNote.trim()); reportSuccess = true; reportOpen = false; reportNote = ''; }
+    try { await api.reportConversation(id, reportReason, reportNote.trim()); reportSuccess = true; reportOpen = false; reportNote = ''; }
     catch (err) { error = err instanceof ApiError ? err.message : 'Could not send report.'; }
     finally { actionBusy = false; }
   }
@@ -200,7 +205,7 @@
   {#if !compact || (live && (status === 'open' || status === 'incoming'))}
     <header class="flex items-center gap-2 border-b border-border {compact ? 'justify-end px-3 py-2' : 'justify-between pb-3'}">
       {#if !compact}
-        {#if live}<BuddyIdentity handle={conversation.other.handle} summary={conversation.other.card_summary} size="sm" />{:else}<strong>{name}</strong>{/if}
+        <ConversationCounterpart counterpart={conversation.counterpart} link nameClass="font-bold" />
       {/if}
       {#if live && (status === 'open' || status === 'incoming')}
         <div class="flex gap-2">
@@ -245,8 +250,8 @@
     {:else if status === 'open' && live}<form class="flex flex-col gap-2 border-t border-border py-3" onsubmit={(e) => { e.preventDefault(); void send(); }}><textarea bind:value={body} maxlength="4000" rows={compact ? 2 : 3} class="w-full rounded-md border border-border bg-background p-3 text-sm" aria-label="Message to {name}" aria-describedby="{uid}-composer-hint" placeholder="Write a message" onkeydown={onComposerKeydown}></textarea><div class="flex items-center justify-between gap-2"><span id="{uid}-composer-hint" class="text-xs text-muted-foreground">{body.length}/4000 · {sendKey}+Enter sends</span><Button variant="primary" size={compact ? 'sm' : 'md'} type="submit" disabled={actionBusy || !body.trim()}>Send</Button></div></form>
     {:else}
       <div class="flex flex-col items-start gap-2 border-t border-border py-3 text-sm text-muted-foreground">
-        <p>{live ? 'This conversation closed when one of you left interview buddies.' : 'This member is no longer in interview buddies, so the conversation is closed.'}</p>
-        {#if reinvite}<Button variant="primary" size={compact ? 'sm' : 'md'} onclick={() => oninvite?.(conversation.other.handle)}>Message {name} again</Button>{/if}
+        <p>{live ? copy.closed : copy.gone}</p>
+        {#if reinviteHandle}{@const handle = reinviteHandle}<Button variant="primary" size={compact ? 'sm' : 'md'} onclick={() => oninvite?.(handle)}>Message {name} again</Button>{/if}
       </div>
     {/if}
   </div>
@@ -255,7 +260,7 @@
 <ConfirmDialog
   bind:open={confirmBlockOpen}
   title={`Block ${name}?`}
-  description="The conversation closes for good, and you stop seeing each other in lists, the feed and invitations. This cannot be undone."
+  description={copy.block}
   confirmLabel="Block"
   variant="destructive"
   onConfirm={block}

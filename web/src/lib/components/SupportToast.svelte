@@ -4,8 +4,8 @@
   import { Star, X } from '@lucide/svelte';
   import { githubStars, formatStars, GITHUB_URL } from '#lib/github.svelte.js';
   import { bannerVisible } from '#lib/consent.svelte.js';
-  import { buddyDock } from '#lib/buddyDock.svelte.js';
-  import { dockToastOffsetClass } from '#lib/buddyDock.js';
+  import { messagingDock } from '#lib/messagingDock.svelte.js';
+  import { dockToastOffsetClass } from '#lib/messagingDock.js';
   import { cn } from '#lib/ui/index.js';
   import {
     ownsMobileStickyCta,
@@ -37,7 +37,7 @@
 
   // The buddies messaging dock shares this corner too: the toast rises above its bars,
   // and steps aside entirely while a conversation list or chat is unfolded there.
-  const dockCorner = $derived(buddyDock.cornerOn(page.url.pathname));
+  const dockCorner = $derived(messagingDock.cornerOn(page.url.pathname));
 
   const visible = $derived(
     mounted && !answered && !bannerVisible() && !suppressesToast(page.url.pathname) && dockCorner !== 'open',
@@ -63,7 +63,7 @@
       // `lg`. A promo never covers a page's own primary action, so here the toast waits
       // for the width at which that bar is gone.
       ownsMobileStickyCta(page.url.pathname) && 'hidden lg:block',
-      dockCorner === 'bars' && dockToastOffsetClass(buddyDock.windows),
+      dockCorner === 'bars' && dockToastOffsetClass(messagingDock.windows),
     )}
   >
     <div class="flex items-start gap-3">

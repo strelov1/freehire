@@ -119,6 +119,11 @@ replaces `BUDDY_NOTIFY_MAX_PER_RUN`.
 become `MessagingDock`, `ConversationPane`, `ConversationRow`, `UnreadBadge`. Each draws the
 counterpart through a per-persona snippet; only `buddy` exists. `BuddyReportsQueue` becomes
 `ConversationReportsQueue`. The `/my/buddies` Chats tab keeps using the shared pane.
+The dock can no longer learn membership from a 403 on the list (D6), and must not call
+`GET /me/buddies`; it now appears for an account that has at least one conversation, or
+while a buddy first message is being written (its dialog lives in the dock). A member with
+no conversation yet therefore sees no dock until the first one exists, and a member who left
+keeps their closed conversations in it.
 
 ### D8. Migrations
 The unreleased buddy migration is split and renumbered after `main`: `0202_messaging.sql`

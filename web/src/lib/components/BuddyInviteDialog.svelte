@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ApiError, api } from '#lib/api.js';
-  import type { BuddyConversation } from '#lib/types.js';
+  import type { Conversation } from '#lib/types.js';
   import { Button, Dialog } from '#lib/ui/index.js';
 
   // The first message to a member, which is what an invitation is: the conversation opens
@@ -11,7 +11,7 @@
     open = $bindable(false),
     handle,
     onsent,
-  }: { open?: boolean; handle: string; onsent: (conversation: BuddyConversation) => void } = $props();
+  }: { open?: boolean; handle: string; onsent: (conversation: Conversation) => void } = $props();
 
   let body = $state('');
   let error = $state('');

@@ -26,8 +26,8 @@
 
 ## 5. Web
 
-- [ ] 5.1 API client and types: conversation routes, discriminated `counterpart`
-- [ ] 5.2 Rename and generalize dock, pane, row, unread badge, reports queue; buddy counterpart snippet; svelte-check, vitest, knip clean
+- [x] 5.1 API client and types: conversation routes, discriminated `counterpart`
+- [x] 5.2 Rename and generalize dock, pane, row, unread badge, reports queue; buddy counterpart snippet; svelte-check, vitest, knip clean
 
 ## 6. Ship
 

@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ApiError, api } from '#lib/api.js';
-  import { buddyDock } from '#lib/buddyDock.svelte.js';
+  import { messagingDock } from '#lib/messagingDock.svelte.js';
   import BuddyFeedEntry from '#lib/components/BuddyFeedEntry.svelte';
   import BuddyMessageButton from '#lib/components/BuddyMessageButton.svelte';
   import CandidateCardView from '#lib/components/CandidateCardView.svelte';
@@ -104,7 +104,7 @@
         const [p, first] = await Promise.all([
           api.getBuddyProfile(current),
           api.listBuddyMemberFeed(current),
-          buddyDock.refresh(),
+          messagingDock.refresh(),
         ]);
         if (cancelled) return;
         profile = p; feed = first.data; cursor = first.meta.next_cursor;
@@ -158,10 +158,10 @@
       {#snippet actions()}
         <BuddyMessageButton
           handle={profile?.handle ?? ''}
-          conversations={buddyDock.conversations}
+          conversations={messagingDock.conversations}
           size="md"
-          oninvite={(h) => buddyDock.openNew(h)}
-          onconversation={(id) => buddyDock.openConversation(id)}
+          oninvite={(h) => messagingDock.messageBuddy(h)}
+          onconversation={(id) => messagingDock.openConversation(id)}
         />
       {/snippet}
       {#if grid}

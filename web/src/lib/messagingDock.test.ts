@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { messageActionFor } from './buddies';
 import {
   closeDockWindow,
   dockCorner,
   dockHiddenOn,
-  dockIntentFor,
   dockReserveClass,
   dockToastOffsetClass,
   DraftBook,
@@ -14,7 +12,7 @@ import {
   pruneDockWindows,
   setDockWindowMinimized,
   totalUnread,
-} from './buddyDock';
+} from './messagingDock';
 
 describe('dock windows', () => {
   it('opens a window at the end and closes the oldest past two', () => {
@@ -40,27 +38,6 @@ describe('dock windows', () => {
     const windows = openDockWindow(openDockWindow([], 1), 2);
     expect(closeDockWindow(windows, 1).map((w) => w.id)).toEqual([2]);
     expect(pruneDockWindows(windows, new Set([2, 9])).map((w) => w.id)).toEqual([2]);
-  });
-});
-
-describe('dock intent', () => {
-  const conv = (id: number, handle: string, status_for_me: 'incoming' | 'outgoing' | 'open' | 'closed', former_member = false) =>
-    ({ id, other: { handle }, status_for_me, former_member });
-  const conversations = [
-    conv(1, 'open-one', 'open'), conv(2, 'sent-one', 'outgoing'), conv(3, 'asked-me', 'incoming'),
-    conv(4, 'gone', 'closed', true), conv(5, 'came-back', 'closed'),
-  ];
-
-  it('opens a window for any existing conversation, pending or not', () => {
-    expect(dockIntentFor(messageActionFor(conversations, 'open-one'))).toEqual({ kind: 'window', conversationId: 1 });
-    expect(dockIntentFor(messageActionFor(conversations, 'sent-one'))).toEqual({ kind: 'window', conversationId: 2 });
-    expect(dockIntentFor(messageActionFor(conversations, 'asked-me'))).toEqual({ kind: 'window', conversationId: 3 });
-  });
-
-  it('asks for a first message when there is none, and does nothing for a former member', () => {
-    expect(dockIntentFor(messageActionFor(conversations, 'stranger'))).toEqual({ kind: 'invite' });
-    expect(dockIntentFor(messageActionFor(conversations, 'gone'))).toBeNull();
-    expect(dockIntentFor(messageActionFor(conversations, 'came-back'))).toEqual({ kind: 'invite' });
   });
 });
 

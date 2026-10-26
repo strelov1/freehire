@@ -1,8 +1,6 @@
-// The buddy messaging dock's window arithmetic, kept free of Svelte runes so it unit-tests
-// in plain node. The reactive store is `buddyDock.svelte.ts`; the markup is
-// `components/BuddyMessagingDock.svelte`.
-
-import type { BuddyMessageAction } from './buddies.js';
+// The messaging dock's window arithmetic, kept free of Svelte runes so it unit-tests in
+// plain node. The reactive store is `messagingDock.svelte.ts`; the markup is
+// `components/MessagingDock.svelte`.
 
 /** One chat window docked beside the conversation list. */
 export interface DockWindow {
@@ -34,21 +32,6 @@ export function setDockWindowMinimized(windows: readonly DockWindow[], id: numbe
 /** Drop the windows whose conversation the list no longer carries (declined, blocked). */
 export function pruneDockWindows(windows: readonly DockWindow[], ids: ReadonlySet<number>): DockWindow[] {
   return windows.filter((w) => ids.has(w.id));
-}
-
-/** What the dock does for a "Message" press, from the one rule `messageActionFor`
- *  decides: an existing conversation (open or pending either way) opens its window, no
- *  conversation opens the first-message dialog, a closed one does nothing. */
-type DockIntent = { kind: 'window'; conversationId: number } | { kind: 'invite' } | null;
-
-export function dockIntentFor(action: BuddyMessageAction): DockIntent {
-  switch (action.kind) {
-    case 'invite': return { kind: 'invite' };
-    case 'open':
-    case 'sent':
-    case 'reply': return { kind: 'window', conversationId: action.conversationId };
-    case 'none': return null;
-  }
 }
 
 export function totalUnread(conversations: readonly { unread: number }[]): number {

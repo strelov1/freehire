@@ -1,61 +1,22 @@
-const STATUS_LABELS = {
-  incoming: 'Invitation',
-  outgoing: 'Waiting for a reply',
-  open: 'Chat',
-  closed: 'Closed',
-} as const;
+import type { Conversation } from './types.js';
 
-export function buddyOutgoingLabel(status: keyof typeof STATUS_LABELS): string {
-  return STATUS_LABELS[status];
-}
-
-export function buddyConversationName(formerMember: boolean, handle: string): string {
-  return formerMember ? 'Former member' : handle;
-}
-
-const REPORT_REASON_LABELS = {
-  spam: 'Spam',
-  harassment: 'Harassment',
-  scam: 'Scam',
-  other: 'Other',
-} as const;
-
-export function buddyReportReasonLabel(reason: keyof typeof REPORT_REASON_LABELS): string {
-  return REPORT_REASON_LABELS[reason];
-}
-
-export function mergeBuddyMessages<T extends { id: number }>(current: T[], incoming: T[]): T[] {
-  const byId = new Map(current.map((message) => [message.id, message]));
-  for (const message of incoming) byId.set(message.id, message);
-  return [...byId.values()].sort((a, b) => a.id - b.id);
-}
-
-/** What the "Message" control does for one member, from the conversation already held
- *  with them (one per pair). A former member's row carries an empty handle, so it never
- *  matches a live one. */
-export type BuddyMessageAction =
+/** What the "Message" control does for one member, from the buddy conversation already
+ *  held with them (one per pair): none yet, or one closed by a leave, asks for a first
+ *  message; any other goes to it. A counterpart who is unreachable (left, blocked) carries
+ *  no handle, so their conversation never matches a member shown anywhere. */
+type BuddyMessageAction =
   | { kind: 'invite' }
-  | { kind: 'open' | 'sent' | 'reply'; conversationId: number }
-  | { kind: 'none' };
+  | { kind: 'open' | 'sent' | 'reply'; conversationId: number };
 
-interface ConversationLike {
-  id: number;
-  other: { handle: string };
-  status_for_me: 'incoming' | 'outgoing' | 'open' | 'closed';
-  former_member?: boolean;
-}
-
-export function messageActionFor(conversations: readonly ConversationLike[], handle: string): BuddyMessageAction {
-  const conv = handle ? conversations.find((c) => c.other.handle === handle) : undefined;
-  if (!conv) return { kind: 'invite' };
-  switch (conv.status_for_me) {
+export function messageActionFor(conversations: readonly Pick<Conversation, 'id' | 'counterpart' | 'status_for_me'>[], handle: string): BuddyMessageAction {
+  const conv = conversations.find(({ counterpart: c }) => c.persona === 'buddy' && c.reachable && c.detail.handle === handle);
+  switch (conv?.status_for_me) {
     case 'open': return { kind: 'open', conversationId: conv.id };
     // A declined invitation reads as outgoing too: the sender is never told.
     case 'outgoing': return { kind: 'sent', conversationId: conv.id };
     case 'incoming': return { kind: 'reply', conversationId: conv.id };
-    // Closed by a leave: a new invitation reopens it. A former member (left or blocked)
-    // cannot be invited.
-    case 'closed': return conv.former_member ? { kind: 'none' } : { kind: 'invite' };
+    // Closed by a leave: a new invitation reopens it.
+    default: return { kind: 'invite' };
   }
 }
 
@@ -78,18 +39,4 @@ const FEED_EVENT_LABELS = {
 
 export function buddyFeedEventLabel(type: keyof typeof FEED_EVENT_LABELS): string {
   return FEED_EVENT_LABELS[type];
-}
-
-/** How close to the bottom (px) the message list must be for new messages to keep it
- *  pinned there. A reader scrolled further up is reading history and stays put. */
-const FOLLOW_SLACK_PX = 48;
-
-export function followsNewMessages(list: { scrollTop: number; scrollHeight: number; clientHeight: number }): boolean {
-  return list.scrollHeight - list.scrollTop - list.clientHeight <= FOLLOW_SLACK_PX;
-}
-
-/** Cmd+Enter or Ctrl+Enter sends; a plain Enter is a newline, and a key pressed while an
- *  input method is composing belongs to the composition. */
-export function isSendShortcut(e: { key: string; metaKey: boolean; ctrlKey: boolean; isComposing?: boolean }): boolean {
-  return e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing;
 }

@@ -1,11 +1,12 @@
-// The interview-buddies conversation list and the messaging dock's windows, as one
-// module-level store: the dock in the root layout, the Chats tab and every "Message"
-// control read the SAME list, so an unread count cannot disagree between two surfaces
-// on the same screen.
+// The caller's conversations (every kind) and the messaging dock's windows, as one
+// module-level store: the dock in the root layout, the buddies Chats tab and every
+// "Message" control read the SAME list, so an unread count cannot disagree between two
+// surfaces on the same screen.
 //
-// Membership is probed through the conversation list itself, which answers 403 to a
-// non-member — never through GET /me/buddies, which touches the member's ranking keys
-// and may only run on entering the section (internal/engage/buddy/AGENTS.md).
+// The dock exists for an account that has at least one conversation. The list itself is
+// open to every signed-in account (a non-member simply has none), so it is the only probe:
+// never GET /me/buddies, which touches a member's ranking keys and may only run on entering
+// that section (internal/engage/buddy/AGENTS.md).
 //
 // SSR-safe (see UserResource): nothing loads on the server, and the window state is
 // only ever written from browser interactions. What survives a reload is which windows
@@ -13,69 +14,57 @@
 // and go with the session.
 
 import { browser } from '$app/env';
-import { ApiError, api } from '#lib/api.js';
+import { api } from '#lib/api.js';
 import { messageActionFor } from '#lib/buddies.js';
 import {
   closeDockWindow,
   type DockCorner,
   dockCorner,
   dockHiddenOn,
-  dockIntentFor,
   type DockWindow,
   DraftBook,
   openDockWindow,
   parseDockWindows,
   pruneDockWindows,
   setDockWindowMinimized,
-} from '#lib/buddyDock.js';
-import type { BuddyConversation } from '#lib/types.js';
+} from '#lib/messagingDock.js';
+import type { Conversation } from '#lib/types.js';
 import { UserResource } from '#lib/userResource.svelte.js';
 
-const WINDOWS_KEY = 'hire.buddy-dock-windows';
-
-/** `null` is "not a member": the list answered 403. */
-type Loaded = BuddyConversation[] | null;
+const WINDOWS_KEY = 'hire.messaging-dock-windows';
 
 function readWindows(): DockWindow[] {
   if (!browser) return [];
   try { return parseDockWindows(sessionStorage.getItem(WINDOWS_KEY)); } catch { return []; }
 }
 
-class BuddyDockStore extends UserResource<Loaded> {
-  #member = $state(false);
-  #conversations = $state.raw<BuddyConversation[]>([]);
+class MessagingDockStore extends UserResource<Conversation[]> {
+  #conversations = $state.raw<Conversation[]>([]);
   #windows = $state.raw<DockWindow[]>(readWindows());
   #generation = 0;
   #drafts = new DraftBook();
   /** Whether the dock's conversation list is unfolded. */
   expanded = $state(false);
-  /** The member the first-message dialog is aimed at, or null when it is closed. */
+  /** The buddy the first-message dialog is aimed at, or null when it is closed. */
   inviteHandle = $state<string | null>(null);
 
-  get member(): boolean { return this.#member; }
-  get conversations(): BuddyConversation[] { return this.#conversations; }
+  /** Whether the dock is needed at all: there is a conversation to show, or a first
+   *  message is being written (its dialog lives in the dock). */
+  get active(): boolean { return this.#conversations.length > 0 || this.inviteHandle !== null; }
+  get conversations(): Conversation[] { return this.#conversations; }
   get windows(): DockWindow[] { return this.#windows; }
 
-  protected async load(): Promise<Loaded> {
-    try { return await api.listBuddyConversations(); }
-    catch (err) {
-      if (err instanceof ApiError && err.status === 403) return null;
-      throw err;
-    }
-  }
+  protected load(): Promise<Conversation[]> { return api.listConversations(); }
 
-  protected apply(data: Loaded): void {
-    this.#member = data !== null;
-    this.#conversations = data ?? [];
-    if (data === null) this.#setWindows([]);
+  protected apply(data: Conversation[]): void {
+    this.#conversations = data;
     // A declined or blocked conversation leaves the list; its window goes with it. Only
     // pruned against a list that was actually read, so a restored window survives until then.
-    else this.#setWindows(pruneDockWindows(this.#windows, new Set(data.map((c) => c.id))));
+    this.#setWindows(pruneDockWindows(this.#windows, new Set(data.map((c) => c.id))));
   }
 
   protected clearState(): void {
     this.#generation++;
-    this.#member = false;
     this.#conversations = [];
     this.#setWindows([]);
     this.#drafts.clear();
@@ -83,25 +72,25 @@ class BuddyDockStore extends UserResource<Loaded> {
     this.inviteHandle = null;
   }
 
-  /** Re-read the list now. Rejects on a failure other than "not a member", so a caller
-   *  with its own error state can show it; a poll can ignore it. */
+  /** Re-read the list now. Rejects on a failure, so a caller with its own error state can
+   *  show it; a poll can ignore it. */
   async refresh(): Promise<void> {
     const generation = this.#generation;
     const data = await this.load();
-    if (generation !== this.#generation) return; // signed out (or rejoined) meanwhile
+    if (generation !== this.#generation) return; // signed out (or reset) meanwhile
     this.apply(data);
     this.markLoaded();
   }
 
   /** Whether the dock renders on this page at all. */
-  shownOn(pathname: string): boolean { return this.#member && !dockHiddenOn(pathname); }
+  shownOn(pathname: string): boolean { return this.#conversations.length > 0 && !dockHiddenOn(pathname); }
 
   /** How much of the bottom-right corner the dock takes on this page. */
   cornerOn(pathname: string): DockCorner {
     return dockCorner(this.shownOn(pathname), this.expanded, this.#windows);
   }
 
-  conversation(id: number): BuddyConversation | undefined {
+  conversation(id: number): Conversation | undefined {
     return this.#conversations.find((c) => c.id === id);
   }
 
@@ -110,17 +99,16 @@ class BuddyDockStore extends UserResource<Loaded> {
     this.#setWindows(openDockWindow(this.#windows, id));
   }
 
-  /** "Message" for a member: their conversation's window when one exists, otherwise the
-   *  first-message dialog. A conversation closed by a leave is
-   *  re-invited; a former member's offers nothing. */
-  openNew(handle: string): void {
-    const intent = dockIntentFor(messageActionFor(this.#conversations, handle));
-    if (intent?.kind === 'window') this.openConversation(intent.conversationId);
-    else if (intent?.kind === 'invite') this.inviteHandle = handle;
+  /** "Message" for a buddy: their conversation's window when one is pending or open,
+   *  otherwise the first-message dialog (a conversation closed by a leave is re-invited). */
+  messageBuddy(handle: string): void {
+    const action = messageActionFor(this.#conversations, handle);
+    if (action.kind === 'invite') this.inviteHandle = handle;
+    else this.openConversation(action.conversationId);
   }
 
   /** The first message went out: show the new pending conversation in a window. */
-  async invited(conversation: BuddyConversation): Promise<void> {
+  async invited(conversation: Conversation): Promise<void> {
     this.#conversations = [conversation, ...this.#conversations.filter((c) => c.id !== conversation.id)];
     this.openConversation(conversation.id);
     await this.refresh().catch(() => { /* the poll catches up */ });
@@ -146,4 +134,4 @@ class BuddyDockStore extends UserResource<Loaded> {
   }
 }
 
-export const buddyDock = new BuddyDockStore();
+export const messagingDock = new MessagingDockStore();
