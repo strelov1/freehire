@@ -30,13 +30,15 @@
 // the job page renders it, but every plain-text reader that only strips tags shows the reference.
 // Sanitize now writes those two as characters (an ampersand stays &amp;, which HTML requires).
 // A stored body that still contains either reference predates that and is re-sanitized here.
+// The doubled form (&amp;#39; / &amp;#34;) is the same quote stored one escape earlier.
 // This rewrites a large share of the catalogue on its first run; the pause below is what keeps
 // that from saturating the host.
 //
 // It pages by keyset and rewrites every row whose description still carries a repair marker — an
 // encoding ("%3C" or "&lt;"), an anchor ("<a"), a literal "\n", or a quote reference ("&#39;"
-// or "&#34;") — re-running the same sanitize+decode pipeline the adapters use and refreshing
-// content_hash so the row re-indexes. The markers are source-agnostic: any such description is
+// or "&#34;", including the doubled "&amp;#39;" / "&amp;#34;") — re-running the same
+// sanitize+decode pipeline the adapters use and refreshing content_hash so the row re-indexes.
+// The markers are source-agnostic: any such description is
 // repaired the same way, open or closed. Idempotent — a repaired row carries none of the markers,
 // so a second run rewrites nothing.
 //
@@ -95,11 +97,14 @@ const (
 	// sanitizer repairs it — so the marker only has to select the row.
 	literalNewlineMarker = `\n`
 	// apostropheMarker and quoteMarker are the fifth signature. They are what html.EscapeString
-	// writes for ' and ", and what Sanitize no longer emits. &amp; is deliberately not a marker:
-	// rewriting it would put a bare & back into stored HTML, and the next sanitize would escape
-	// it again.
-	apostropheMarker = "&#39;"
-	quoteMarker      = "&#34;"
+	// writes for ' and ", and what Sanitize no longer emits. The doubled markers are the same
+	// quote with the ampersand escaped once more (&amp;#39;). &amp; alone is deliberately not a
+	// marker: rewriting it would put a bare & back into stored HTML, and the next sanitize
+	// would escape it again.
+	apostropheMarker        = "&#39;"
+	quoteMarker             = "&#34;"
+	doubledApostropheMarker = "amp;#39;"
+	doubledQuoteMarker      = "amp;#34;"
 )
 
 // himalayasSource is the one provider whose stored bodies carry the aggregator's own branding
@@ -246,7 +251,8 @@ func repairDescription(source, stored string) string {
 	}
 	repaired := stored
 	if decoded != stored || strings.Contains(decoded, anchorMarker) || strings.Contains(decoded, literalNewlineMarker) ||
-		strings.Contains(decoded, apostropheMarker) || strings.Contains(decoded, quoteMarker) {
+		strings.Contains(decoded, apostropheMarker) || strings.Contains(decoded, quoteMarker) ||
+		strings.Contains(decoded, doubledApostropheMarker) || strings.Contains(decoded, doubledQuoteMarker) {
 		repaired = htmltext.Sanitize(decoded)
 	}
 	if source == himalayasSource {

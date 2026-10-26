@@ -33,7 +33,10 @@ const namedEntities: Record<string, string> = {
 };
 
 function decodeEntities(value: string): string {
-  return value.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]*);/g, (entity, body: string) => {
+  const quotes = value
+    .replace(/&amp;(?:amp;)?#39;/g, '&#39;')
+    .replace(/&amp;(?:amp;)?#34;/g, '&#34;');
+  return quotes.replace(/&(#x[0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]*);/g, (entity, body: string) => {
     if (body.charAt(0) !== '#') return namedEntities[body] ?? entity;
     const hex = body.startsWith('#x');
     const code = Number.parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);

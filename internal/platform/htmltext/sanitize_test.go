@@ -126,6 +126,10 @@ func TestSanitizeHTMLWritesQuotesAsCharacters(t *testing.T) {
 	if strings.Contains(Sanitize(`<li>isn&#39;t</li>`), "&#39;") {
 		t.Fatal("re-rendering an orphan list put the apostrophe reference back")
 	}
+	doubled := Sanitize(`<p>Bachelor&amp;#39;s and R&amp;D and &amp;#34;fit&amp;#34;</p>`)
+	if want := `<p>Bachelor's and R&amp;D and "fit"</p>`; doubled != want {
+		t.Fatalf("doubled quotes Sanitize = %q, want %q", doubled, want)
+	}
 }
 
 // Some ATS boards emit descriptions whose words are glued by non-breaking spaces

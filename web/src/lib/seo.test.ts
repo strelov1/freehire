@@ -81,6 +81,8 @@ describe('metaDescription', () => {
       "technology isn't about R&D",
     );
     expect(metaDescription('it&#x27;s')).toBe("it's");
+    expect(metaDescription('Bachelor&amp;#39;s and &amp;#34;fit&amp;#34;')).toBe(`Bachelor's and "fit"`);
+    expect(metaDescription('R&amp;amp;D')).toBe('R&amp;D');
   });
 
   it('counts the decoded character toward the length budget, not the reference', () => {

@@ -211,14 +211,16 @@ func TestBackfillRestoresQuotedCharacters(t *testing.T) {
 		{ID: 2, Source: "lever", Title: "B", Description: `<p>say &#34;fit&#34;</p>`},
 		{ID: 3, Source: "workday", Title: "C", Description: `<p>R&amp;D</p>`},
 		{ID: 4, Source: "greenhouse", Title: "D", Description: `<p>Clean.</p>`},
+		{ID: 5, Source: "ismartrecruit", Title: "E", Description: `<p>Bachelor&amp;#39;s</p>`},
+		{ID: 6, Source: "ismartrecruit", Title: "F", Description: `<p>R&amp;amp;D</p>`},
 	}}
 
 	scanned, updated, err := backfillAll(context.Background(), store, "", 0)
 	if err != nil {
 		t.Fatalf("backfillAll: %v", err)
 	}
-	if scanned != 4 || updated != 2 {
-		t.Fatalf("scanned=%d updated=%d, want 4/2", scanned, updated)
+	if scanned != 6 || updated != 3 {
+		t.Fatalf("scanned=%d updated=%d, want 6/3", scanned, updated)
 	}
 	got := map[int64]db.UpdateJobDescriptionParams{}
 	for _, u := range store.updates {
@@ -235,6 +237,12 @@ func TestBackfillRestoresQuotedCharacters(t *testing.T) {
 	}
 	if _, rewritten := got[4]; rewritten {
 		t.Error("a clean row must not be rewritten")
+	}
+	if want := `<p>Bachelor's</p>`; got[5].Description != want {
+		t.Errorf("doubled apostrophe Description = %q, want %q", got[5].Description, want)
+	}
+	if _, rewritten := got[6]; rewritten {
+		t.Error("a doubled ampersand is not a quote and must not be rewritten")
 	}
 }
 

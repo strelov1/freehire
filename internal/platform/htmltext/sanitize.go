@@ -74,16 +74,22 @@ func Sanitize(s string) string {
 	return restoreTextQuotes(wrapOrphanListItems(out))
 }
 
-// textQuotes undoes the &#39; and &#34; that html.EscapeString writes. &amp; stays:
-// a bare & is not valid text in the HTML this column stores. The contains check
-// skips the copy Replace makes when nothing matches.
+// textQuotes undoes &#39; and &#34;, including the doubled &amp;#39; / &amp;#34; a feed
+// stored one escape earlier. &amp; stays: a bare & is not valid text in the HTML
+// this column stores. The contains check skips the copy Replace makes when
+// nothing matches.
 var textQuotes = strings.NewReplacer(
+	"&amp;amp;#39;", "'",
+	"&amp;amp;#34;", `"`,
+	"&amp;#39;", "'",
+	"&amp;#34;", `"`,
 	"&#39;", "'",
 	"&#34;", `"`,
 )
 
 func restoreTextQuotes(s string) string {
-	if strings.Contains(s, "&#39;") || strings.Contains(s, "&#34;") {
+	if strings.Contains(s, "&#39;") || strings.Contains(s, "&#34;") ||
+		strings.Contains(s, "amp;#39;") || strings.Contains(s, "amp;#34;") {
 		return textQuotes.Replace(s)
 	}
 	return s
