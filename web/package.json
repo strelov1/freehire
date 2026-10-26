@@ -57,7 +57,7 @@
   },
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
-    "@scalar/api-reference": "1.69.2",
+    "@scalar/api-reference": "1.75.0",
     "@scalar/server-side-rendering": "0.1.60",
     "@scalar/types": "0.24.0",
     "@sentry/sveltekit": "^11.8.0",
