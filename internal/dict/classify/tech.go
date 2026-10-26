@@ -84,6 +84,9 @@ var techTitleTerms = []string{
 	// ("Analyst, End User Support", "Desktop / End User Support Technician"); spaced
 	// and hyphenated are separate terms because a hyphen is a word boundary.
 	"service desk", "help desk", "helpdesk", "technical support analyst",
+	// The Japanese spellings of the same estate: ヘルプデスク is the help desk, ITサポート the
+	// IT support desk. Both resolve the `support` category in japanese.go.
+	"ヘルプデスク", "itサポート",
 	"it support", "it supporter", "desktop support", "deskside support",
 	"end user support", "end-user support",
 	// Architects (never bare "architect")
@@ -226,7 +229,7 @@ var techTitleTerms = []string{
 func IsTech(title string) bool {
 	lower := strings.ToLower(title)
 	for _, term := range techTitleTerms {
-		if wordmatch.Contains(lower, term, wordmatch.UnicodeBoundary) {
+		if wordmatch.Contains(lower, term, titleBoundary) {
 			return true
 		}
 	}

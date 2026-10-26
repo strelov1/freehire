@@ -1,6 +1,9 @@
 package classify
 
-import "regexp"
+import (
+	"regexp"
+	"slices"
+)
 
 // aliasEntry pairs a lowercase title alias with its enrich-vocabulary canonical.
 // The ordered table is the single source of truth: its order encodes precedence
@@ -44,6 +47,10 @@ var gradeBlindPhrases = []string{
 	// account at a services firm — not executives. They name no grade of their own.
 	"assistant vice president",
 	"associate vice president",
+	// "Second new graduate" — someone a year or three out of university — is written as a
+	// welcome ("第二新卒歓迎") on postings of every grade, so it states none. Cut, it also stops
+	// the 新卒 inside it from reading as a new-graduate hire.
+	"第二新卒",
 }
 
 // earlyCareersDeskPatterns are the grade-blind phrases of the early-careers vocabulary,
@@ -176,52 +183,12 @@ var seniorityTable = []aliasEntry{
 // specific terms first, so "data analyst" wins over a bare "data" and "fullstack"
 // is not shadowed by "backend"/"frontend" — each paired with its
 // vocab.CategoryValues canonical.
-var categoryTable = []aliasEntry{
-	// Japanese. Every alias is a COMPOUND, and that is the design rather than a shortcut:
-	// a bare エンジニア ("engineer"), データ ("data"), 開発 ("development") or デザイナー
-	// ("designer") runs through Japanese manufacturing, procurement and recruiting titles —
-	// 半導体プロセス生産エンジニア is a semiconductor production engineer, 電気電子部品購買担当者
-	// buys parts, 採用担当…エンジニアリング事業本部 is a RECRUITER, and トラクタのキャビン…設計開発
-	// designs a tractor cab. Matching a single token would have declared all of them
-	// technical, which is the trap a bare "analyst" already sprang on 77k postings.
-	//
-	// Japanese writes no spaces, so these match as substrings; the probe that established
-	// the matcher accepts them is classify_ja_test.go, whose negative half is nine real
-	// hrmos titles that must stay unclassified.
-	//
-	// Placed ahead of the Latin aliases for the same reason the table is ordered at all:
-	// フロントエンドから設計・AWSまで！…Webアプリケーションエンジニア contains "AWS", and the
-	// compound must win over it.
-	{"機械学習エンジニア", "ml_ai"},
-	{"mlエンジニア", "ml_ai"},
-	{"データサイエンティスト", "data_science"},
-	{"データエンジニア", "data_engineering"},
-	{"データアナリスト", "data_analytics"},
-	{"sreエンジニア", "sre"},
-	{"インフラエンジニア", "devops"},
-	{"サーバーエンジニア", "devops"},
-	{"ネットワークエンジニア", "devops"},
-	{"ネットワーク設計構築エンジニア", "devops"},
-	{"クラウドエンジニア", "devops"},
-	{"プラットフォームエンジニア", "devops"},
-	{"セキュリティエンジニア", "security"},
-	{"バックエンドエンジニア", "backend"},
-	{"サーバーサイドエンジニア", "backend"},
-	{"フロントエンドエンジニア", "frontend"},
-	{"webアプリケーションエンジニア", "backend"},
-	{"アプリケーションエンジニア", "backend"},
-	{"webエンジニア", "backend"},
-	{"ソフトウェアエンジニア", "backend"},
-	{"モバイルエンジニア", "mobile"},
-	{"iosエンジニア", "mobile"},
-	{"androidエンジニア", "mobile"},
-	{"qaエンジニア", "qa"},
-	// UI/UX is the qualifier that makes this a product-design role; a bare デザイナー is
-	// industrial or graphic design far more often (リードデザイナー/デザインセンター).
-	{"ui/uxデザイナー", "design"},
-	{"uiデザイナー", "design"},
-	{"uxデザイナー", "design"},
-	{"プロダクトデザイナー", "design"},
+//
+// The Japanese block (japanese.go) leads it: a Japanese title routinely carries Latin
+// fragments ("AWS", "SE", "PM") that the aliases below would otherwise claim first.
+var categoryTable = slices.Concat(japaneseCategoryTable, coreCategoryTable, japaneseTrailCategoryTable)
+
+var coreCategoryTable = []aliasEntry{
 	{"full stack", "fullstack"},
 	{"full-stack", "fullstack"},
 	{"fullstack", "fullstack"},
