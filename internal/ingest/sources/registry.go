@@ -529,6 +529,10 @@ func All(c HTTPClient) map[string]Source {
 		// hydrating each new posting from its page's ld+json. Posting pages refuse the
 		// project's bare User-Agent, hence the browser-compatible form of it. See catho.go.
 		compatibleUASource(c, NewCatho),
+		// Cake: Taiwan's tech-leaning job board, enumerated through its search sliced by its own
+		// facets and hydrating each new posting from the detail API. The crawl hosts are
+		// Cloudflare-challenged, so it egresses through the rotating proxy (proxy.go). See cake.go.
+		NewCake(c),
 		// XING Jobs: the DACH professional network's job board, enumerated from its gzip job
 		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
 		// See xing.go.

@@ -102,6 +102,11 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// resets with INTERNAL_ERROR — a headless Chrome included), while the residential proxy is
 	// served in ~1-2s (measured 2026-10-18 from prod and the crawl host). The app User-Agent
 	// the API requires is re-applied over the proxied client, and the pacer wraps it.
+	// api.cake.me answers a Cloudflare challenge to both crawl hosts' IPs, and caps one exit at
+	// ~40 requests a minute (429, Retry-After ~50 s). Through the rotating gateway 60 of 60
+	// searches were served (2026-10-25), so it rides the rotating exit — see
+	// rotatingProxyProviders.
+	"cake": func(c HTTPClient) Source { return NewCake(c) },
 	"naukri": func(c HTTPClient) Source {
 		return NewNaukri(pacedNaukriGetter(withUserAgent(c, naukriUserAgent)))
 	},
@@ -125,7 +130,10 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 //
 // Every other provider keeps the fixed exit: a fresh IP per request would break any flow that
 // leans on a session.
-var rotatingProxyProviders = map[string]bool{"naukri": true, "workable": true}
+//
+// cake (proxied): one exit is refused after ~40 requests a minute, and a crawl is ~800 searches
+// plus a detail per new posting, all stateless — so each request takes a fresh exit.
+var rotatingProxyProviders = map[string]bool{"naukri": true, "workable": true, "cake": true}
 
 // proxyFor is the proxy a provider's proxy lane egresses through: the rotating gateway for the
 // rotatingProxyProviders when one is configured, the fixed exit otherwise.
