@@ -27,10 +27,10 @@ import (
 // Measured live on 2026-10-25 (see the "104 traps" section of AGENTS.md):
 //
 //   - The search reads at most 100 pages of ~30 rows, and its total saturates at 1001. A board
-//     whose first page reports 100 pages is split over the job categories (18 families, 44
-//     groups, 619 leaves) and then the five disjoint experience brackets, until every slice
-//     ends before page 100. A posting under several categories is met in several slices and
-//     kept once.
+//     whose first page reports 100 pages is split over the five disjoint experience brackets
+//     and then the job categories (18 families, 44 groups, 619 leaves), until every slice ends
+//     before page 100. A posting under several categories is met in several slices and kept
+//     once.
 //   - The listing row already carries the full description (the detail endpoint's is the same
 //     text), so a crawl is listing pages only.
 //   - The filters are soft: promoted rows from anywhere are mixed into a page. A row is kept
@@ -58,12 +58,12 @@ const (
 
 // job104RequestInterval paces every search request of ONE run through one limiter; the
 // scheduler runs several shards at once, each with its own. The platform rate-limits per
-// address — from the crawl host's own IP, five concurrent shards drew 429s at one request every
+// address — from the crawl host's own IP, concurrent shards drew 429s at one request every
 // 0.8 s each and still did at 4 s — so the crawl leaves through the Scrapling service's
-// rotating proxy (scraplingtier.go), where each request has its own exit. The pace is then
-// courtesy toward the site rather than a limit we measured: five shards at 2 s are ~2.5
-// requests a second together, and a shard's ~1,000 pages fit its 4500 s budget.
-const job104RequestInterval = 2 * time.Second
+// rotating proxy (scraplingtier.go), where each request has its own exit; through it the
+// sharded passes drew no 429 at all. The pace is then courtesy toward the site and the run
+// budget: at 2 s a shard holding two of the largest districts outlasted its 4500 s.
+const job104RequestInterval = 1200 * time.Millisecond
 
 // job104RateLimitRetries and job104RateLimitBackoff retry a refused (403/429), failed (5xx) or
 // unanswered search, the wait
@@ -200,8 +200,11 @@ func (s job104) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 	}
 
-	// walk reads a slice, or splits it when it reaches the page cap: first down the category
-	// tree (nodes are the categories at this depth), then over the experience brackets.
+	// walk reads a slice, or splits it when it reaches the page cap: first over the experience
+	// brackets, then down the category tree (nodes are the categories at this depth). The
+	// brackets go first because they are disjoint — each posting is fetched in one of them —
+	// while a posting under three categories is fetched three times, which made a large
+	// district's crawl outlast its run budget.
 	var walk func(params url.Values, nodes []job104Code, expSplit bool) error
 	walk = func(params url.Values, nodes []job104Code, expSplit bool) error {
 		first, err := s.search(ctx, params, 1)
@@ -214,15 +217,15 @@ func (s job104) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			return s.readPages(ctx, params, last, add)
 		}
 		switch {
-		case len(nodes) > 0:
-			for _, n := range nodes {
-				if err := walk(with104(params, "jobcat", n.No), n.Children, false); err != nil {
+		case !expSplit:
+			for _, b := range job104ExpBrackets {
+				if err := walk(with104(params, "jobexp", b), nodes, true); err != nil {
 					return err
 				}
 			}
-		case !expSplit:
-			for _, b := range job104ExpBrackets {
-				if err := walk(with104(params, "jobexp", b), nil, true); err != nil {
+		case len(nodes) > 0:
+			for _, n := range nodes {
+				if err := walk(with104(params, "jobcat", n.No), n.Children, true); err != nil {
 					return err
 				}
 			}

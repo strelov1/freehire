@@ -146,8 +146,8 @@ func withLastPage(p map[string]any, last int) map[string]any {
 	return p
 }
 
-// A board at the page cap is split down the category tree and then over the experience
-// brackets; a posting met in two slices is kept once.
+// A board at the page cap is split over the experience brackets and then down the category
+// tree; a posting met in two slices is kept once.
 func TestJob104SplitsCappedSlices(t *testing.T) {
 	f := &job104Fake{t: t, jobCats: []job104Code{
 		{No: "2007000000", Children: []job104Code{{No: "2007001000"}, {No: "2007002000"}}},
@@ -157,14 +157,18 @@ func TestJob104SplitsCappedSlices(t *testing.T) {
 	f.search = func(q url.Values) (any, error) {
 		page, _ := strconv.Atoi(q.Get("page"))
 		switch cat, exp := q.Get("jobcat"), q.Get("jobexp"); {
-		case cat == "" || cat == "2007000000" || (cat == "2007002000" && exp == ""):
+		case cat != "" && exp == "":
+			t.Errorf("a category was split before the experience brackets: %v", q)
+		case exp == "" || (exp == "1" && (cat == "" || cat == "2007000000")):
 			return withLastPage(job104Page(addr, "capped"), job104MaxPage), nil
-		case cat == "2007001000":
+		case exp == "1" && cat == "2007001000":
 			return withLastPage(job104Page(addr, "a"+strconv.Itoa(page), "shared"), 2), nil
-		case cat == "2007002000" && exp == "3":
+		case exp == "1" && cat == "2007002000":
 			return withLastPage(job104Page(addr, "b", "shared"), 1), nil
-		case cat == "2001000000":
+		case exp == "1" && cat == "2001000000":
 			return withLastPage(job104Page(addr, "c"), 1), nil
+		case exp == "3" && cat == "":
+			return withLastPage(job104Page(addr, "d"), 1), nil
 		}
 		return withLastPage(job104Page(addr), 0), nil
 	}
@@ -176,7 +180,7 @@ func TestJob104SplitsCappedSlices(t *testing.T) {
 	for _, j := range jobs {
 		got = append(got, j.ExternalID)
 	}
-	want := []string{"a1", "shared", "a2", "b", "c"}
+	want := []string{"a1", "shared", "a2", "b", "c", "d"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("jobs = %v, want %v", got, want)
 	}
