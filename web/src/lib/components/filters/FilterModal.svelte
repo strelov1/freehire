@@ -8,6 +8,7 @@
   import { companySearch, EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION, searchCities } from '#lib/facets.js';
   import { FILTER_SEARCH_MIN_QUERY, jobFilterSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
   import { emptyFilters, type ClearanceFilter, type FilterStore, type JobFilters } from '#lib/filters.js';
@@ -107,19 +108,25 @@
   // the flag, and the header "Apply my profile" action gates on the profile. Both are
   // no-ops off the browser / once loaded.
   $effect(() => {
-    if (!(open && isAuthenticated())) return;
-    if (!plain && !railKeys) void profileStore.ensureLoaded();
-    if (hasSavedTab) void notifications.ensureLoaded();
+    if (open && hasSavedTab && isAuthenticated()) {
+      void notifications.ensureLoaded();
+      void profileStore.ensureLoaded();
+    }
   });
 
-  // The header "Apply my profile" affordance shows on the full job modal. Signed-out:
-  // the same button links to the profile, and /my sends an anonymous visitor through
-  // sign-in with that page as the return. Signed-in: gated on the profile load having
+  // The header "Apply my profile" affordance shows on the full job modal (same scope as
+  // the My-filters tab). Signed-out: the button still shows and its click opens the
+  // sign-in dialog (apply after auth). Signed-in: gated on the profile load having
   // settled (so a user who has a profile never flashes the "create" link while it
   // loads) — the profile-derived Apply button when a profile exists, a create-profile
   // link when it doesn't.
-  const showProfileAction = $derived(!plain && !railKeys && (!isAuthenticated() || profileStore.loaded));
+  const showProfileAction = $derived(hasSavedTab && (!isAuthenticated() || profileStore.loaded));
   const profile = $derived(profileStore.profile);
+
+  function applyProfileOrSignIn() {
+    if (profile) staged.applyProfile(profile);
+    else promptSignIn();
+  }
 
   // The footer nudge shows only when the My-filters tab exists (so the jump lands
   // somewhere), Telegram alerts are available, and there's a search worth saving.
@@ -231,6 +238,8 @@
   }
 
   const applyDisabled = $derived(canApply ? !canApply(staged.value) : false);
+  // Read straight from the runtime env rather than threaded through a prop: five callers
+  // mount this modal and none of them has an opinion about the flag.
   const openWithinAvailable = openWithinEnabled({ PUBLIC_OPEN_WITHIN });
 
   let filterQuery = $state('');
@@ -391,9 +400,7 @@
     return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
   });
 
-  // The first-seen bound rides the same stops and the same snap-to-Any rule. Read
-  // straight from the runtime env rather than threaded through a prop: five callers
-  // mount this modal and none of them has an opinion about the flag.
+  // The first-seen bound rides the same stops and the same snap-to-Any rule.
   const openIndex = $derived.by(() => {
     const i = FRESHNESS_PRESETS.findIndex((p) => p.days === staged.value.openWithinDays);
     return i < 0 ? FRESHNESS_PRESETS.length - 1 : i;
@@ -479,19 +486,12 @@
 {/snippet}
 
 {#snippet profileAction()}
-  {#if !isAuthenticated()}
-    <a
-      href={resolve('/my/profile')}
-      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground ring-2 ring-brand-ring ring-offset-2 ring-offset-background transition-opacity hover:opacity-90"
-    >
-      <UserRound class="size-4 shrink-0" aria-hidden="true" />
-      Apply my profile
-    </a>
-  {:else if profile}
+  {#if !isAuthenticated() || profile}
+    <!-- Signed-out: click sends the visitor to /signin; signed-in with a profile: applies it. -->
     <button
       type="button"
-      onclick={() => staged.applyProfile(profile)}
-      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground ring-2 ring-brand-ring ring-offset-2 ring-offset-background transition-opacity hover:opacity-90"
+      onclick={applyProfileOrSignIn}
+      class="flex h-9 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90"
     >
       <UserRound class="size-4 shrink-0" aria-hidden="true" />
       Apply my profile

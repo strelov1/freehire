@@ -379,6 +379,7 @@
              which section it is in. -->
         <section
           aria-labelledby={activeEntry && !searching ? railLabelId(activeEntry.key) : undefined}
+          aria-label={searching ? 'Matching filters' : undefined}
           class="min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6"
         >
           {#if extra && !searching}<div class="mb-6">{@render extra()}</div>{/if}
@@ -408,14 +409,14 @@
           <button
             type="button"
             onclick={clearAll}
-            class="inline-flex h-11 items-center gap-1.5 rounded-lg px-3 -ml-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            ><X class="size-3.5" />Clear all</button
+            class="-ml-3 inline-flex h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            ><X class="size-3.5" aria-hidden="true" />Clear all</button
           >
           <button
             type="button"
             onclick={runApply}
             disabled={applyDisabled || applyBusy}
-            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand px-6 text-sm font-semibold text-brand-foreground ring-2 ring-brand-ring ring-offset-2 ring-offset-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand px-6 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {#if applyLabel}
               {applyBusy ? 'Saving…' : applyLabel}

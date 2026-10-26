@@ -15,7 +15,8 @@
   // `plain` makes it an include-only choice (e.g. a profile category is not a filter
   // to exclude). When `counts` is passed, each chip shows its live match count.
   // `query` is bindable so a page can seed the search; `empty`, when given, renders
-  // in place of the groups once the search matches no specialization.
+  // in place of the groups once the search matches no specialization. `hintSearch`
+  // briefly rings the search field, pointing the eye at it from the modal-wide search.
   let {
     store,
     plain = false,
