@@ -67,6 +67,9 @@ importers:
       three:
         specifier: ^0.186.1
         version: 0.186.1
+      vue:
+        specifier: 3.5.44
+        version: 3.5.44(typescript@6.0.3)
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1

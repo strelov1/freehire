@@ -71,7 +71,8 @@
     "satori-html": "^0.3.2",
     "simple-icons": "^16.35.0",
     "svelte-dnd-action": "^0.9.80",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "vue": "3.5.44"
   },
   "imports": {
     "#lib/*": "./src/lib/*"
