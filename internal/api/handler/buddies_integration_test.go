@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,9 +21,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/engage/buddy"
+	"github.com/strelov1/freehire/internal/engage/messaging"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
+
+// accountIDBase is the first account id newBuddyEnv seeds.
+const accountIDBase = 7_340_001
 
 type buddyEnv struct {
 	t     *testing.T
@@ -44,31 +49,37 @@ func newBuddyEnv(t *testing.T, names ...string) *buddyEnv {
 		"skills":      []string{"Go"},
 		"experience":  []map[string]any{{"title": "Senior Backend Engineer", "company": "Initech", "current": true}},
 	})
-	for _, name := range names {
+	for i, name := range names {
 		role := "user"
 		if name == "mod" {
 			role = "moderator"
 		}
+		// Account ids far from any conversation, message or report id, so a payload that
+		// leaks one is caught by a plain substring search (TestBuddyPayloadsNeverNameTheAccount).
 		var id int64
 		if err := pool.QueryRow(context.Background(),
-			`INSERT INTO users (email, role, resume_structured) VALUES ($1, $2, $3) RETURNING id`,
-			name+"@example.test", role, cv).Scan(&id); err != nil {
+			`INSERT INTO users (id, email, role, resume_structured) OVERRIDING SYSTEM VALUE
+			 VALUES ($1, $2, $3, $4) RETURNING id`,
+			accountIDBase+int64(i), name+"@example.test", role, cv).Scan(&id); err != nil {
 			t.Fatalf("seed %s: %v", name, err)
 		}
 		env.users[name] = id
 	}
 
-	h := newBuddyHandlers(buddy.New(buddy.NewQueriesRepository(queries)))
+	repo := buddy.NewQueriesRepository(queries)
+	msg := messaging.New(messaging.NewQueriesRepository(queries), buddy.NewPersona(repo))
 	env.app = fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(env.app.Group("/api/v1"), middleware{
+	mw := middleware{
 		cookie:    auth.RequireAuth(iss, testVersions),
 		moderator: auth.RequireRole(queries, "moderator"),
-	})
+	}
+	newBuddyHandlers(buddy.New(repo, msg)).register(env.app.Group("/api/v1"), mw)
+	newConversationHandlers(msg).register(env.app.Group("/api/v1"), mw)
 	return env
 }
 
-// do sends one request as user (empty for anonymous) and decodes the JSON answer.
-func (e *buddyEnv) do(method, path, user string, body any) (int, map[string]any, http.Header) {
+// send sends one request as user (empty for anonymous) and returns the raw answer.
+func (e *buddyEnv) send(method, path, user string, body any) (int, []byte, http.Header) {
 	e.t.Helper()
 	var buf io.Reader
 	if body != nil {
@@ -93,9 +104,27 @@ func (e *buddyEnv) do(method, path, user string, body any) (int, map[string]any,
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, raw, resp.Header
+}
+
+// do sends one request as user (empty for anonymous) and decodes the JSON answer.
+func (e *buddyEnv) do(method, path, user string, body any) (int, map[string]any, http.Header) {
+	e.t.Helper()
+	code, raw, hdr := e.send(method, path, user, body)
 	var out map[string]any
 	_ = json.Unmarshal(raw, &out)
-	return resp.StatusCode, out, resp.Header
+	return code, out, hdr
+}
+
+// raw sends one request as user and returns the undecoded answer, failing on any status
+// but code.
+func (e *buddyEnv) raw(code int, method, path, user string, body any) string {
+	e.t.Helper()
+	got, out, _ := e.send(method, path, user, body)
+	if got != code {
+		e.t.Fatalf("%s %s as %q: status %d body %s, want %d", method, path, user, got, out, code)
+	}
+	return string(out)
 }
 
 func (e *buddyEnv) want(code int, method, path, user string, body any) map[string]any {
@@ -113,16 +142,22 @@ func (e *buddyEnv) join(user string) string {
 	return out["data"].(map[string]any)["handle"].(string)
 }
 
+// counterpartHandle is the other member's handle in a conversation answer.
+func counterpartHandle(conv map[string]any) any {
+	return conv["counterpart"].(map[string]any)["detail"].(map[string]any)["handle"]
+}
+
 func convPath(id float64, suffix string) string {
-	return "/api/v1/me/buddies/conversations/" + strconv.FormatInt(int64(id), 10) + suffix
+	return "/api/v1/me/conversations/" + strconv.FormatInt(int64(id), 10) + suffix
 }
 
 func TestBuddyRequiresSession(t *testing.T) {
 	env := newBuddyEnv(t, "a")
 	env.want(http.StatusUnauthorized, http.MethodGet, "/api/v1/me/buddies", "", nil)
 	env.want(http.StatusUnauthorized, http.MethodGet, "/api/v1/me/buddies/similar", "", nil)
-	env.want(http.StatusUnauthorized, http.MethodPost, "/api/v1/me/buddies/conversations", "", map[string]any{})
-	env.want(http.StatusUnauthorized, http.MethodGet, "/api/v1/moderation/buddy-reports", "", nil)
+	env.want(http.StatusUnauthorized, http.MethodPost, "/api/v1/me/buddies/invite", "", map[string]any{})
+	env.want(http.StatusUnauthorized, http.MethodGet, "/api/v1/me/conversations", "", nil)
+	env.want(http.StatusUnauthorized, http.MethodGet, "/api/v1/moderation/conversation-reports", "", nil)
 }
 
 func TestBuddyNonMember(t *testing.T) {
@@ -133,7 +168,12 @@ func TestBuddyNonMember(t *testing.T) {
 	}
 	env.want(http.StatusForbidden, http.MethodGet, "/api/v1/me/buddies/similar", "a", nil)
 	env.want(http.StatusForbidden, http.MethodGet, "/api/v1/me/buddies/feed", "a", nil)
-	env.want(http.StatusForbidden, http.MethodGet, "/api/v1/me/buddies/conversations", "a", nil)
+	env.want(http.StatusForbidden, http.MethodPost, "/api/v1/me/buddies/invite", "a", map[string]any{"handle": "x", "body": "hi"})
+	// The conversation list is the messaging core's, open to every account: a non-member
+	// simply has no buddy conversations in it.
+	if l := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/conversations", "a", nil)["data"].([]any); len(l) != 0 {
+		t.Fatalf("non-member list = %v", l)
+	}
 	env.want(http.StatusForbidden, http.MethodDelete, "/api/v1/me/buddies", "a", nil)
 }
 
@@ -208,20 +248,20 @@ func TestBuddyConversationHappyPath(t *testing.T) {
 	hb := env.join("b")
 	env.join("c")
 
-	inv := env.want(http.StatusCreated, http.MethodPost, "/api/v1/me/buddies/conversations", "a",
+	inv := env.want(http.StatusCreated, http.MethodPost, "/api/v1/me/buddies/invite", "a",
 		map[string]any{"handle": hb, "body": "hello there"})["data"].(map[string]any)
 	id := inv["id"].(float64)
-	if inv["status_for_me"] != "outgoing" || inv["other"].(map[string]any)["handle"] != hb {
+	if inv["status_for_me"] != "outgoing" || inv["kind"] != "buddy" || counterpartHandle(inv) != hb {
 		t.Fatalf("invite = %v", inv)
 	}
 
 	// The invitee sees it as incoming, with the invitation as unread.
-	list := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/buddies/conversations", "b", nil)["data"].([]any)
+	list := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/conversations", "b", nil)["data"].([]any)
 	if len(list) != 1 || list[0].(map[string]any)["status_for_me"] != "incoming" {
 		t.Fatalf("b list = %v", list)
 	}
-	if list[0].(map[string]any)["former_member"] != false {
-		t.Fatalf("active member listed as former: %v", list)
+	if list[0].(map[string]any)["counterpart"].(map[string]any)["reachable"] != true {
+		t.Fatalf("active member listed as unreachable: %v", list)
 	}
 
 	// A pending invitation takes no messages.
@@ -249,7 +289,7 @@ func TestBuddyConversationHappyPath(t *testing.T) {
 	}
 
 	unread := func(user string) float64 {
-		l := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/buddies/conversations", user, nil)["data"].([]any)
+		l := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/conversations", user, nil)["data"].([]any)
 		return l[0].(map[string]any)["unread"].(float64)
 	}
 	if unread("b") == 0 {
@@ -267,13 +307,13 @@ func TestBuddyConversationHappyPath(t *testing.T) {
 	env.want(http.StatusNotFound, http.MethodPost, convPath(id, "/report"), "c", map[string]any{"reason": "spam"})
 
 	env.want(http.StatusNoContent, http.MethodPost, convPath(id, "/block"), "b", nil)
-	closed := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/buddies/conversations", "a", nil)["data"].([]any)
+	closed := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/conversations", "a", nil)["data"].([]any)
 	if len(closed) != 1 || closed[0].(map[string]any)["status_for_me"] != "closed" {
 		t.Fatalf("a list after block = %v", closed)
 	}
 	// A blocked pair stop being identified to each other.
-	if row := closed[0].(map[string]any); row["former_member"] != true || row["other"].(map[string]any)["handle"] != "" {
-		t.Fatalf("blocked member still identified: %v", row)
+	if cp := closed[0].(map[string]any)["counterpart"].(map[string]any); cp["reachable"] != false || cp["detail"] != nil {
+		t.Fatalf("blocked member still identified: %v", cp)
 	}
 }
 
@@ -281,10 +321,10 @@ func TestBuddyDeclineIsNotRevealed(t *testing.T) {
 	env := newBuddyEnv(t, "a", "b")
 	env.join("a")
 	hb := env.join("b")
-	id := env.want(http.StatusCreated, http.MethodPost, "/api/v1/me/buddies/conversations", "a",
+	id := env.want(http.StatusCreated, http.MethodPost, "/api/v1/me/buddies/invite", "a",
 		map[string]any{"handle": hb, "body": "hi"})["data"].(map[string]any)["id"].(float64)
 	env.want(http.StatusOK, http.MethodPost, convPath(id, "/decline"), "b", nil)
-	l := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/buddies/conversations", "a", nil)["data"].([]any)
+	l := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/conversations", "a", nil)["data"].([]any)
 	if len(l) != 1 || l[0].(map[string]any)["status_for_me"] != "outgoing" {
 		t.Fatalf("declined invitation must still read outgoing: %v", l)
 	}
@@ -294,7 +334,7 @@ func TestBuddyInviteReopensConversationClosedByLeaving(t *testing.T) {
 	env := newBuddyEnv(t, "a", "b")
 	env.join("a")
 	hb := env.join("b")
-	url := "/api/v1/me/buddies/conversations"
+	url := "/api/v1/me/buddies/invite"
 	id := env.want(http.StatusCreated, http.MethodPost, url, "a",
 		map[string]any{"handle": hb, "body": "hi"})["data"].(map[string]any)["id"].(float64)
 	env.want(http.StatusOK, http.MethodPost, convPath(id, "/accept"), "b", nil)
@@ -312,7 +352,7 @@ func TestBuddyInviteErrors(t *testing.T) {
 	env := newBuddyEnv(t, "a", "b")
 	env.join("a")
 	hb := env.join("b")
-	url := "/api/v1/me/buddies/conversations"
+	url := "/api/v1/me/buddies/invite"
 
 	env.want(http.StatusBadRequest, http.MethodPost, url, "a", map[string]any{"handle": hb, "body": ""})
 	env.want(http.StatusBadRequest, http.MethodPost, url, "a", map[string]any{"body": "no handle"})
@@ -333,7 +373,7 @@ func TestBuddyInviteLimit(t *testing.T) {
 	for _, n := range names[1:] {
 		handles = append(handles, env.join(n))
 	}
-	url := "/api/v1/me/buddies/conversations"
+	url := "/api/v1/me/buddies/invite"
 	for _, h := range handles[:buddy.DailyInvitationCap] {
 		env.want(http.StatusCreated, http.MethodPost, url, "a", map[string]any{"handle": h, "body": "hi"})
 	}
@@ -357,23 +397,23 @@ func TestBuddyReportAndModeration(t *testing.T) {
 	env := newBuddyEnv(t, "a", "b", "mod")
 	env.join("a")
 	hb := env.join("b")
-	id := env.want(http.StatusCreated, http.MethodPost, "/api/v1/me/buddies/conversations", "a",
+	id := env.want(http.StatusCreated, http.MethodPost, "/api/v1/me/buddies/invite", "a",
 		map[string]any{"handle": hb, "body": "buy my thing"})["data"].(map[string]any)["id"].(float64)
 
 	env.want(http.StatusBadRequest, http.MethodPost, convPath(id, "/report"), "b", map[string]any{"reason": "because"})
 	env.want(http.StatusNoContent, http.MethodPost, convPath(id, "/report"), "b", map[string]any{"reason": "spam", "note": "ad"})
 	env.want(http.StatusConflict, http.MethodPost, convPath(id, "/report"), "b", map[string]any{"reason": "spam"})
 
-	env.want(http.StatusForbidden, http.MethodGet, "/api/v1/moderation/buddy-reports", "b", nil)
-	env.want(http.StatusForbidden, http.MethodPost, "/api/v1/moderation/buddy-reports/1/resolve", "b", nil)
+	env.want(http.StatusForbidden, http.MethodGet, "/api/v1/moderation/conversation-reports", "b", nil)
+	env.want(http.StatusForbidden, http.MethodPost, "/api/v1/moderation/conversation-reports/1/resolve", "b", nil)
 
-	q := env.want(http.StatusOK, http.MethodGet, "/api/v1/moderation/buddy-reports", "mod", nil)
+	q := env.want(http.StatusOK, http.MethodGet, "/api/v1/moderation/conversation-reports", "mod", nil)
 	rows := q["data"].([]any)
 	if len(rows) != 1 {
 		t.Fatalf("queue = %v", q)
 	}
 	r := rows[0].(map[string]any)
-	if r["reason"] != "spam" || r["reported_handle"] != ha(env, "a") || r["reporter_handle"] != hb {
+	if r["kind"] != "buddy" || r["reason"] != "spam" || r["reported"] != ha(env, "a") || r["reporter"] != hb {
 		t.Fatalf("report = %v", r)
 	}
 	if msgs := r["messages"].([]any); len(msgs) != 1 || msgs[0].(map[string]any)["body"] != "buy my thing" {
@@ -381,12 +421,12 @@ func TestBuddyReportAndModeration(t *testing.T) {
 	}
 
 	rid := strconv.FormatInt(int64(r["id"].(float64)), 10)
-	env.want(http.StatusNoContent, http.MethodPost, "/api/v1/moderation/buddy-reports/"+rid+"/resolve", "mod", nil)
-	env.want(http.StatusNotFound, http.MethodPost, "/api/v1/moderation/buddy-reports/999999/resolve", "mod", nil)
-	if open := env.want(http.StatusOK, http.MethodGet, "/api/v1/moderation/buddy-reports", "mod", nil)["data"].([]any); len(open) != 0 {
+	env.want(http.StatusNoContent, http.MethodPost, "/api/v1/moderation/conversation-reports/"+rid+"/resolve", "mod", nil)
+	env.want(http.StatusNotFound, http.MethodPost, "/api/v1/moderation/conversation-reports/999999/resolve", "mod", nil)
+	if open := env.want(http.StatusOK, http.MethodGet, "/api/v1/moderation/conversation-reports", "mod", nil)["data"].([]any); len(open) != 0 {
 		t.Fatalf("resolved report still queued: %v", open)
 	}
-	if all := env.want(http.StatusOK, http.MethodGet, "/api/v1/moderation/buddy-reports?include_resolved=true", "mod", nil)["data"].([]any); len(all) != 1 {
+	if all := env.want(http.StatusOK, http.MethodGet, "/api/v1/moderation/conversation-reports?include_resolved=true", "mod", nil)["data"].([]any); len(all) != 1 {
 		t.Fatalf("include_resolved = %v", all)
 	}
 }
@@ -435,4 +475,50 @@ func TestBuddyMemberActivity(t *testing.T) {
 	}
 	env.want(http.StatusNotFound, http.MethodGet, "/api/v1/me/buddies/profiles/"+handleA+"/activity", "a", nil)
 	env.want(http.StatusNotFound, http.MethodGet, "/api/v1/me/buddies/profiles/nobody-here/activity", "a", nil)
+}
+
+// Personas are never joined: nothing a buddy conversation answers — to either member or to
+// a moderator — may carry the account behind a handle, by id or by email.
+func TestBuddyPayloadsNeverNameTheAccount(t *testing.T) {
+	env := newBuddyEnv(t, "a", "b", "mod")
+	env.join("a")
+	hb := env.join("b")
+
+	var payloads []string
+	invite := env.raw(http.StatusCreated, http.MethodPost, "/api/v1/me/buddies/invite", "a",
+		map[string]any{"handle": hb, "body": "hello there"})
+	payloads = append(payloads, invite)
+	var inv struct {
+		Data struct {
+			ID          float64 `json:"id"`
+			Counterpart struct {
+				Persona string `json:"persona"`
+			} `json:"counterpart"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(invite), &inv); err != nil || inv.Data.Counterpart.Persona != "buddy" {
+		t.Fatalf("invite = %s (%v)", invite, err)
+	}
+	id := inv.Data.ID
+	payloads = append(payloads,
+		env.raw(http.StatusOK, http.MethodPost, convPath(id, "/accept"), "b", nil),
+		env.raw(http.StatusCreated, http.MethodPost, convPath(id, "/messages"), "b", map[string]any{"body": "hi back"}),
+	)
+	for _, user := range []string{"a", "b"} {
+		payloads = append(payloads,
+			env.raw(http.StatusOK, http.MethodGet, "/api/v1/me/conversations", user, nil),
+			env.raw(http.StatusOK, http.MethodGet, convPath(id, "/messages"), user, nil),
+		)
+	}
+	env.raw(http.StatusNoContent, http.MethodPost, convPath(id, "/report"), "a", map[string]any{"reason": "spam"})
+	payloads = append(payloads, env.raw(http.StatusOK, http.MethodGet, "/api/v1/moderation/conversation-reports", "mod", nil))
+
+	for _, user := range []string{"a", "b"} {
+		id := strconv.FormatInt(env.users[user], 10)
+		for _, p := range payloads {
+			if strings.Contains(p, id) || strings.Contains(p, user+"@example.test") {
+				t.Fatalf("payload names account %s (%s): %s", user, id, p)
+			}
+		}
+	}
 }

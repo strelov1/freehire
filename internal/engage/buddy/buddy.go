@@ -8,6 +8,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
 	"github.com/strelov1/freehire/internal/dict/classify"
+	"github.com/strelov1/freehire/internal/engage/messaging"
 )
 
 var (
@@ -61,7 +62,7 @@ type Repository interface {
 	// Join creates the member or reactivates a returning one, keeping the stored handle.
 	// It returns ErrHandleTaken when handle collides with another member's.
 	Join(ctx context.Context, userID int64, handle string, keys Keys) (Member, error)
-	// Leave deactivates an active member and closes their pending and open
+	// Leave deactivates an active member and closes their pending and open buddy
 	// conversations. ok is false when the user was not an active member.
 	Leave(ctx context.Context, userID int64) (ok bool, err error)
 	Member(ctx context.Context, userID int64) (Member, bool, error)
@@ -81,59 +82,27 @@ type Repository interface {
 	HideApplication(ctx context.Context, userID, applicationID int64) (bool, error)
 	ShowApplication(ctx context.Context, userID, applicationID int64) error
 	HiddenApplications(ctx context.Context, userID int64) ([]int64, error)
-	// Blocked reports a block between the two users in either direction.
+	// Blocked reports a block between the two users in either direction. Blocks are the
+	// messaging core's and account-wide.
 	Blocked(ctx context.Context, a, b int64) (bool, error)
-	// PairHasConversation reports a conversation between the two users in any status but
-	// closed: a closed one is reopened by CreateInvitation.
-	PairHasConversation(ctx context.Context, a, b int64) (bool, error)
-	// InvitationsSince is how many invitations userID sent after since, and when the
-	// oldest of them was sent (the zero time when there are none).
-	InvitationsSince(ctx context.Context, userID int64, since time.Time) (sent int, oldest time.Time, err error)
-	// CreateInvitation inserts a pending conversation and its first message atomically.
-	// It returns ErrConversationExists when the pair already has one.
-	CreateInvitation(ctx context.Context, from, to int64, body string) (ConversationRow, error)
-	// AnswerInvitation moves a pending conversation to status (open or declined) on behalf
-	// of the member who did not send it. It returns ErrNotFound when the caller is not a
-	// party to the conversation and ErrConversationState when it is not pending or the
-	// caller sent it.
-	AnswerInvitation(ctx context.Context, userID, conversationID int64, status string) (ConversationRow, error)
-	// Conversation reads one conversation by id, whoever it belongs to.
-	Conversation(ctx context.Context, conversationID int64) (ConversationRow, bool, error)
-	// InsertMessage stores a message from userID into an open conversation they belong to
-	// and moves their read cursor onto it, guarding the status in the insert itself. It
-	// returns ErrNotFound when userID is not a party and ErrConversationState when the
-	// conversation is not open.
-	InsertMessage(ctx context.Context, userID, conversationID int64, body string) (MessageRow, error)
-	// Messages is up to limit messages with an id above after, oldest first.
-	Messages(ctx context.Context, conversationID, after int64, limit int) ([]MessageRow, error)
-	// MarkRead advances userID's read cursor to upTo, never back and never past the newest
-	// message. It returns ErrNotFound when userID is not a party.
-	MarkRead(ctx context.Context, userID, conversationID, upTo int64) error
-	// Conversations lists every conversation userID may see, newest message first.
-	Conversations(ctx context.Context, userID int64) ([]ConversationListRow, error)
-	// Block records that blocker blocked the other party and closes the conversation, in
-	// one statement. It returns ErrNotFound when blocker is not a party.
-	Block(ctx context.Context, blocker, conversationID int64) error
-	// Report stores a report. It returns ErrNotFound when reporter is not a party and
-	// ErrAlreadyReported when they already filed one.
-	Report(ctx context.Context, reporter, conversationID int64, reason, note string) error
-	// Reports is one page of reports, newest first.
-	Reports(ctx context.Context, limit, offset int, includeResolved bool) ([]ReportRow, error)
-	// ReportMessages is every message of the given conversations, oldest first.
-	ReportMessages(ctx context.Context, conversationIDs []int64) ([]ReportMessageRow, error)
-	// ResolveReport stamps a report resolved, keeping an earlier resolution. It returns
-	// ErrNotFound for an unknown id.
-	ResolveReport(ctx context.Context, moderatorID, reportID int64) error
+	// Counterparts reads how each of userIDs is drawn in viewerID's conversation list.
+	Counterparts(ctx context.Context, viewerID int64, userIDs []int64) ([]CounterpartRow, error)
+	// Handles is the handle behind each account, active or left.
+	Handles(ctx context.Context, userIDs []int64) (map[int64]string, error)
 }
 
-// Service is the membership and profile use cases.
+// Service is the membership, profile and invitation use cases. Conversations themselves are
+// the messaging core's: an invitation is a conversation of kind "buddy" started through it.
 type Service struct {
 	repo Repository
+	msg  *messaging.Service
 	now  func() time.Time
 }
 
-// New builds a Service.
-func New(repo Repository) *Service { return &Service{repo: repo, now: time.Now} }
+// New builds a Service. msg must be built with this package's Persona.
+func New(repo Repository, msg *messaging.Service) *Service {
+	return &Service{repo: repo, msg: msg, now: time.Now}
+}
 
 // Status is a caller's own standing in the network.
 type Status struct {

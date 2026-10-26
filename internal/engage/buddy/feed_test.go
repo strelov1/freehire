@@ -32,13 +32,13 @@ func TestFeedType(t *testing.T) {
 }
 
 func TestFeedRefusesBadModeAndNonMember(t *testing.T) {
-	if _, err := New(stubRepo{}).Feed(context.Background(), 1, "bogus", "", 10); !errors.Is(err, ErrBadFeedRequest) {
+	if _, err := New(stubRepo{}, nil).Feed(context.Background(), 1, "bogus", "", 10); !errors.Is(err, ErrBadFeedRequest) {
 		t.Errorf("bad mode: %v", err)
 	}
-	if _, err := New(stubRepo{}).Feed(context.Background(), 1, FeedAll, "", 10); !errors.Is(err, ErrNotMember) {
+	if _, err := New(stubRepo{}, nil).Feed(context.Background(), 1, FeedAll, "", 10); !errors.Is(err, ErrNotMember) {
 		t.Errorf("non-member: %v", err)
 	}
-	if err := New(stubRepo{}).HideApplication(context.Background(), 1, 2); !errors.Is(err, ErrNotMember) {
+	if err := New(stubRepo{}, nil).HideApplication(context.Background(), 1, 2); !errors.Is(err, ErrNotMember) {
 		t.Errorf("hide by non-member: %v", err)
 	}
 }
@@ -70,7 +70,7 @@ func (f *feedRepo) Feed(_ context.Context, _ int64, authors []string, similarOnl
 
 func TestFeedSimilarModeHandsOnlyTheTopMembersToTheQuery(t *testing.T) {
 	r := &feedRepo{top: []SimilarRow{{Handle: "a"}, {Handle: "b"}}}
-	if _, err := New(r).Feed(context.Background(), 1, FeedSimilar, "", 10); err != nil {
+	if _, err := New(r, nil).Feed(context.Background(), 1, FeedSimilar, "", 10); err != nil {
 		t.Fatal(err)
 	}
 	if !r.similar || !slices.Equal(r.authors, []string{"a", "b"}) {
@@ -78,7 +78,7 @@ func TestFeedSimilarModeHandsOnlyTheTopMembersToTheQuery(t *testing.T) {
 	}
 	// No similar members at all is an empty feed, not a fall back to everyone.
 	empty := &feedRepo{}
-	page, err := New(empty).Feed(context.Background(), 1, FeedSimilar, "", 10)
+	page, err := New(empty, nil).Feed(context.Background(), 1, FeedSimilar, "", 10)
 	if err != nil || len(page.Entries) != 0 || empty.authors != nil {
 		t.Fatalf("empty top: %+v, %v, authors %v", page, err, empty.authors)
 	}
@@ -87,11 +87,11 @@ func TestFeedSimilarModeHandsOnlyTheTopMembersToTheQuery(t *testing.T) {
 func TestFeedContinuationMustStartAtTheCursorEvent(t *testing.T) {
 	// The cursor event is missing from the answer (not visible to this viewer).
 	r := &feedRepo{rows: []FeedRow{{ID: 7}, {ID: 6}}}
-	if _, err := New(r).Feed(context.Background(), 1, FeedAll, "9", 10); !errors.Is(err, ErrBadFeedRequest) {
+	if _, err := New(r, nil).Feed(context.Background(), 1, FeedAll, "9", 10); !errors.Is(err, ErrBadFeedRequest) {
 		t.Fatalf("foreign cursor: %v", err)
 	}
 	r = &feedRepo{rows: []FeedRow{{ID: 9}, {ID: 7}, {ID: 6}}}
-	page, err := New(r).Feed(context.Background(), 1, FeedAll, "9", 10)
+	page, err := New(r, nil).Feed(context.Background(), 1, FeedAll, "9", 10)
 	if err != nil || len(page.Entries) != 2 || page.Entries[0].ID != 7 || page.NextCursor != "" {
 		t.Fatalf("page = %+v, %v", page, err)
 	}

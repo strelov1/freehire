@@ -224,7 +224,7 @@ var blocks = map[string][]string{
 		// internal/ai/plan.Store directly into plan_limit_hits, so this package never
 		// imports ai/plan at all — only its own candidate query over that table and users.
 		"limitnudge",
-		"linkedinauth", "mailpreview", "mentorship",
+		"linkedinauth", "mailpreview", "mentorship", "messaging",
 		// mentorship/busysync is named in full, per the auth/oauth convention: it is a
 		// sub-package of mentorship and takes its parent's block, but the sync worker
 		// reaches into application (gmailsync) the way mentorship itself does for the

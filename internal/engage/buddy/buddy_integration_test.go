@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/engage/buddy"
+	"github.com/strelov1/freehire/internal/engage/messaging"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
 )
@@ -24,7 +25,21 @@ const secretText = "Led the Initech billing rewrite"
 func setup(t *testing.T) (*pgxpool.Pool, *buddy.Service) {
 	t.Helper()
 	pool := testdb.Pool(t)
-	return pool, buddy.New(buddy.NewQueriesRepository(db.New(pool)))
+	return pool, buddy.New(buddy.NewQueriesRepository(db.New(pool)), chat(pool))
+}
+
+// otherHandle is the other member's handle as a conversation draws them, empty when they
+// are not shown.
+func otherHandle(c messaging.Conversation) string {
+	d, _ := c.Counterpart.Detail.(buddy.Counterpart)
+	return d.Handle
+}
+
+// chat is the messaging core with the buddy persona, as the server builds it: what accepts,
+// sends, lists, blocks and reports a buddy conversation.
+func chat(pool *pgxpool.Pool) *messaging.Service {
+	q := db.New(pool)
+	return messaging.New(messaging.NewQueriesRepository(q), buddy.NewPersona(buddy.NewQueriesRepository(q)))
 }
 
 func seedUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
@@ -119,37 +134,33 @@ func TestLeaveClosesConversations(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	conv := func(low, high int64, status string) {
+	conv := func(from, to int64, status string) int64 {
 		t.Helper()
-		if _, err := pool.Exec(ctx, `INSERT INTO buddy_conversations (user_low, user_high, initiator_id, status) VALUES ($1, $2, $1, $3)`, low, high, status); err != nil {
+		cv, err := chat(pool).Start(ctx, messaging.StartRequest{
+			Kind: buddy.KindName, StarterID: from, StarterPersona: buddy.PersonaName,
+			RecipientID: to, RecipientPersona: buddy.PersonaName, Body: "hi",
+		})
+		if err != nil {
 			t.Fatal(err)
 		}
+		if _, err := pool.Exec(ctx, `UPDATE conversations SET status = $2 WHERE id = $1`, cv.ID, status); err != nil {
+			t.Fatal(err)
+		}
+		return cv.ID
 	}
-	conv(a, b, "pending")
-	conv(a, c, "open")
-	conv(b, c, "open")
+	pending, open, others := conv(a, b, "pending"), conv(c, a, "open"), conv(b, c, "open")
 
 	if err := svc.Leave(ctx, a); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := pool.Query(ctx, `SELECT user_low, user_high, status, closed_at IS NOT NULL FROM buddy_conversations`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var low, high int64
+	for id, want := range map[int64]string{pending: "closed", open: "closed", others: "open"} {
 		var status string
 		var closed bool
-		if err := rows.Scan(&low, &high, &status, &closed); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT status, closed_at IS NOT NULL FROM conversations WHERE id = $1`, id).Scan(&status, &closed); err != nil {
 			t.Fatal(err)
 		}
-		involvesA := low == a || high == a
-		if involvesA && (status != "closed" || !closed) {
-			t.Errorf("conversation (%d,%d) = %s, want closed", low, high, status)
-		}
-		if !involvesA && status != "open" {
-			t.Errorf("conversation (%d,%d) = %s, want untouched open", low, high, status)
+		if status != want || closed != (want == "closed") {
+			t.Errorf("conversation %d = %s (closed_at set: %v), want %s", id, status, closed, want)
 		}
 	}
 }

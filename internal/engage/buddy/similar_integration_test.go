@@ -150,7 +150,7 @@ func TestSimilarExcludesLeftAndBlockedBothWays(t *testing.T) {
 	if err := svc.Leave(ctx, left); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO buddy_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($3, $1)`, viewer, blockedByMe, blockedMe); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($3, $1)`, viewer, blockedByMe, blockedMe); err != nil {
 		t.Fatal(err)
 	}
 	got, err := svc.Similar(ctx, viewer, 10, 0)

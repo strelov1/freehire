@@ -1,8 +1,8 @@
 //go:build integration
 
 // Integration tests for the unread-message notifier.
-// Run with: go test -tags=integration ./internal/engage/buddy/
-package buddy_test
+// Run with: go test -tags=integration ./internal/engage/messaging/
+package messaging_test
 
 import (
 	"context"
@@ -13,9 +13,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/strelov1/freehire/internal/engage/buddy"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
+	"github.com/strelov1/freehire/internal/engage/messaging"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -45,18 +45,18 @@ func (f *fakeTelegram) SendMessage(_ context.Context, _ int64, html string) erro
 	return nil
 }
 
-func notifier(pool *pgxpool.Pool, em *fakeEmail, tg buddy.TelegramSender) *buddy.Notifier {
-	return buddy.NewNotifier(db.New(pool), buddy.NotifierConfig{
+func notifier(pool *pgxpool.Pool, em *fakeEmail, tg messaging.TelegramSender) *messaging.Notifier {
+	return messaging.NewNotifier(db.New(pool), messaging.NotifierConfig{
 		Email: em, From: "noreply@example.test", Telegram: tg,
 		Links: emailprefs.NewLinks("test-secret-test-secret-test-secret-0123", "https://freehire.test"), Origin: "https://freehire.test",
-	})
+	}, stubKind{})
 }
 
 // age moves every message of the conversation `by` before the real clock.
 func age(t *testing.T, pool *pgxpool.Pool, convID int64, by time.Duration) {
 	t.Helper()
 	if _, err := pool.Exec(context.Background(),
-		`UPDATE buddy_messages SET created_at = now() - make_interval(secs => $2) WHERE conversation_id = $1`,
+		`UPDATE messages SET created_at = now() - make_interval(secs => $2) WHERE conversation_id = $1`,
 		convID, by.Seconds()); err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func age(t *testing.T, pool *pgxpool.Pool, convID int64, by time.Duration) {
 func lastMessageID(t *testing.T, pool *pgxpool.Pool, convID int64) int64 {
 	t.Helper()
 	var id int64
-	if err := pool.QueryRow(context.Background(), `SELECT max(id) FROM buddy_messages WHERE conversation_id = $1`, convID).Scan(&id); err != nil {
+	if err := pool.QueryRow(context.Background(), `SELECT max(id) FROM messages WHERE conversation_id = $1`, convID).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -101,10 +101,10 @@ func TestNotifyOncePerConversationAcrossRuns(t *testing.T) {
 	if len(em.sent) != 1 || em.sent[0].To != "b@example.test" {
 		t.Fatalf("sent = %+v", em.sent)
 	}
-	if em.sent[0].Subject != "You have a new message from a buddy" {
+	if em.sent[0].Subject != "You have a new message" {
 		t.Fatalf("subject = %q", em.sent[0].Subject)
 	}
-	if got := countRows(t, pool, `SELECT count(*) FROM user_notifications WHERE user_id = $1 AND kind = 'buddy_message'`, b); got != 1 {
+	if got := countRows(t, pool, `SELECT count(*) FROM user_notifications WHERE user_id = $1 AND kind = 'stub_message'`, b); got != 1 {
 		t.Fatalf("in-app notifications = %d", got)
 	}
 }
@@ -132,7 +132,9 @@ func TestNotifyAgainAfterReadAndNewMessage(t *testing.T) {
 	age(t, pool, id, 10*time.Minute)
 	em := &fakeEmail{}
 	n := notifier(pool, em, nil)
-	if res, err := n.NotifyUnread(ctx, time.Now()); err != nil || res.Notified != 1 {
+	// The first claim is stamped a minute back so the database's clock, which may trail
+	// this process's, still writes the later message after it.
+	if res, err := n.NotifyUnread(ctx, time.Now().Add(-time.Minute)); err != nil || res.Notified != 1 {
 		t.Fatalf("first = %+v, %v", res, err)
 	}
 
@@ -156,17 +158,15 @@ func TestNotifyAgainAfterReadAndNewMessage(t *testing.T) {
 	}
 }
 
-func TestNotifySkipsDeclinedClosedAndLeft(t *testing.T) {
+func TestNotifySkipsDeclinedAndClosed(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range []struct {
 		name string
 		stmt string
 		arg  func(id, b int64) int64
 	}{
-		{"declined", `UPDATE buddy_conversations SET status = 'declined' WHERE id = $1`, func(id, _ int64) int64 { return id }},
-		{"closed", `UPDATE buddy_conversations SET status = 'closed' WHERE id = $1`, func(id, _ int64) int64 { return id }},
-		// The conversation stays open, so only the membership gate can stop the notice.
-		{"left", `UPDATE buddy_members SET left_at = now() WHERE user_id = $1`, func(_, b int64) int64 { return b }},
+		{"declined", `UPDATE conversations SET status = 'declined' WHERE id = $1`, func(id, _ int64) int64 { return id }},
+		{"closed", `UPDATE conversations SET status = 'closed' WHERE id = $1`, func(id, _ int64) int64 { return id }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			pool, svc, a, b, id := openChat(t)
@@ -185,12 +185,12 @@ func TestNotifySkipsDeclinedClosedAndLeft(t *testing.T) {
 	}
 }
 
-func TestInitiatorNotNotifiedAboutOwnPendingInvite(t *testing.T) {
+func TestStarterNotNotifiedAboutOwnPendingRequest(t *testing.T) {
 	pool, svc := setup(t)
 	ctx := context.Background()
-	a, _ := member(t, pool, svc, "a@example.test")
-	b, bHandle := member(t, pool, svc, "b@example.test")
-	c, err := svc.Invite(ctx, a, bHandle, "hello there")
+	a := seedUser(t, pool, "a@example.test")
+	b := seedUser(t, pool, "b@example.test")
+	c, err := start(ctx, svc, a, b, "hello there")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,10 +200,10 @@ func TestInitiatorNotNotifiedAboutOwnPendingInvite(t *testing.T) {
 	if err != nil || res.Notified != 1 || len(em.sent) != 1 {
 		t.Fatalf("run = %+v, %v, mails %d", res, err, len(em.sent))
 	}
-	if em.sent[0].To != "b@example.test" || em.sent[0].Subject != "You have a new buddy invitation" {
+	if em.sent[0].To != "b@example.test" || em.sent[0].Subject != "You have a new request" {
 		t.Fatalf("mail = %+v", em.sent[0])
 	}
-	if got := countRows(t, pool, `SELECT count(*) FROM user_notifications WHERE user_id = $1 AND kind = 'buddy_invitation'`, b); got != 1 {
+	if got := countRows(t, pool, `SELECT count(*) FROM user_notifications WHERE user_id = $1 AND kind = 'stub_request'`, b); got != 1 {
 		t.Fatalf("invitation notifications = %d", got)
 	}
 }
@@ -250,7 +250,7 @@ func TestPartialChannelSuccessCountsAsSent(t *testing.T) {
 	}
 }
 
-func TestNoticeCarriesNoMessageTextOrHandle(t *testing.T) {
+func TestNoticeCarriesNoMessageTextOrAccount(t *testing.T) {
 	pool, svc, a, b, id := openChat(t)
 	ctx := context.Background()
 	if _, err := svc.Send(ctx, a, id, "my secret-body-marker"); err != nil {
@@ -258,10 +258,6 @@ func TestNoticeCarriesNoMessageTextOrHandle(t *testing.T) {
 	}
 	age(t, pool, id, time.Hour)
 	linkTelegram(t, pool, b)
-	var handle string
-	if err := pool.QueryRow(ctx, `SELECT handle FROM buddy_members WHERE user_id = $1`, a).Scan(&handle); err != nil {
-		t.Fatal(err)
-	}
 	em, tg := &fakeEmail{}, &fakeTelegram{}
 	if _, err := notifier(pool, em, tg).NotifyUnread(ctx, time.Now()); err != nil {
 		t.Fatal(err)
@@ -275,11 +271,11 @@ func TestNoticeCarriesNoMessageTextOrHandle(t *testing.T) {
 	}
 	texts := []string{em.sent[0].Subject, em.sent[0].HTML, em.sent[0].Text, tg.sent[0], title, body}
 	for _, s := range texts {
-		if strings.Contains(s, "secret-body-marker") || strings.Contains(s, handle) || strings.Contains(s, "a@example.test") {
+		if strings.Contains(s, "secret-body-marker") || strings.Contains(s, "a@example.test") {
 			t.Fatalf("notice leaks content: %q", s)
 		}
 	}
-	if !strings.Contains(em.sent[0].Text, "https://freehire.test/my/buddies?c=") {
+	if !strings.Contains(em.sent[0].Text, "https://freehire.test/my/inbox?c=") {
 		t.Fatalf("no chat link in %q", em.sent[0].Text)
 	}
 }

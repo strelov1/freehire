@@ -1,8 +1,8 @@
 //go:build integration
 
 // Integration tests for the in-app chat.
-// Run with: go test -tags=integration ./internal/engage/buddy/
-package buddy_test
+// Run with: go test -tags=integration ./internal/engage/messaging/
+package messaging_test
 
 import (
 	"context"
@@ -11,27 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/strelov1/freehire/internal/engage/buddy"
+	"github.com/strelov1/freehire/internal/engage/messaging"
+	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/testdb"
 )
-
-// openChat seeds two members and an accepted conversation between them, A having invited B.
-func openChat(t *testing.T) (pool *pgxpool.Pool, svc *buddy.Service, a, b, convID int64) {
-	t.Helper()
-	pool, svc = setup(t)
-	ctx := context.Background()
-	a, _ = member(t, pool, svc, "a@example.test")
-	b, bHandle := member(t, pool, svc, "b@example.test")
-	c, err := svc.Invite(ctx, a, bHandle, "hello")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.Accept(ctx, b, c.ID); err != nil {
-		t.Fatal(err)
-	}
-	return pool, svc, a, b, c.ID
-}
 
 func TestSendIsDeliveredAndCountsAsUnread(t *testing.T) {
 	_, svc, a, b, id := openChat(t)
@@ -52,7 +35,7 @@ func TestSendIsDeliveredAndCountsAsUnread(t *testing.T) {
 	if len(msgs) != 2 || msgs[0].Body != "hello" || msgs[1].Body != "see you at the screen" || msgs[0].Mine || msgs[1].Mine {
 		t.Fatalf("B reads %+v", msgs)
 	}
-	list, err := svc.ListConversations(ctx, b)
+	list, err := svc.List(ctx, b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +43,7 @@ func TestSendIsDeliveredAndCountsAsUnread(t *testing.T) {
 		t.Fatalf("B's list = %+v, want unread 2", list)
 	}
 	// The sender never sees their own message as unread.
-	mine, err := svc.ListConversations(ctx, a)
+	mine, err := svc.List(ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,32 +55,32 @@ func TestSendIsDeliveredAndCountsAsUnread(t *testing.T) {
 func TestSendRefusesAPendingDeclinedOrForeignConversation(t *testing.T) {
 	pool, svc := setup(t)
 	ctx := context.Background()
-	a, _ := member(t, pool, svc, "a@example.test")
-	b, bHandle := member(t, pool, svc, "b@example.test")
-	third, _ := member(t, pool, svc, "c@example.test")
-	c, err := svc.Invite(ctx, a, bHandle, "hello")
+	a := seedUser(t, pool, "a@example.test")
+	b := seedUser(t, pool, "b@example.test")
+	third := seedUser(t, pool, "c@example.test")
+	c, err := start(ctx, svc, a, b, "hello")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Pending: refused for the inviter and for the recipient alike.
 	for name, u := range map[string]int64{"inviter": a, "recipient": b} {
-		if _, err := svc.Send(ctx, u, c.ID, "more"); !errors.Is(err, buddy.ErrConversationState) {
+		if _, err := svc.Send(ctx, u, c.ID, "more"); !errors.Is(err, messaging.ErrState) {
 			t.Fatalf("pending, %s: %v", name, err)
 		}
 	}
-	if _, err := svc.Send(ctx, third, c.ID, "hi"); !errors.Is(err, buddy.ErrNotFound) {
+	if _, err := svc.Send(ctx, third, c.ID, "hi"); !errors.Is(err, messaging.ErrNotFound) {
 		t.Fatalf("outsider: %v", err)
 	}
-	if _, err := svc.Send(ctx, a, c.ID+1000, "hi"); !errors.Is(err, buddy.ErrNotFound) {
+	if _, err := svc.Send(ctx, a, c.ID+1000, "hi"); !errors.Is(err, messaging.ErrNotFound) {
 		t.Fatalf("unknown: %v", err)
 	}
 	if _, err := svc.Decline(ctx, b, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Send(ctx, b, c.ID, "hi"); !errors.Is(err, buddy.ErrConversationState) {
+	if _, err := svc.Send(ctx, b, c.ID, "hi"); !errors.Is(err, messaging.ErrState) {
 		t.Fatalf("declined: %v", err)
 	}
-	if n := countRows(t, pool, `SELECT count(*) FROM buddy_messages`); n != 1 {
+	if n := countRows(t, pool, `SELECT count(*) FROM messages`); n != 1 {
 		t.Fatalf("messages = %d, want 1", n)
 	}
 }
@@ -106,30 +89,26 @@ func TestSendRefusesBadBodiesAndClosedChats(t *testing.T) {
 	pool, svc, a, b, id := openChat(t)
 	ctx := context.Background()
 	for name, body := range map[string]string{
-		"empty": "", "blank": "  \n", "too long": strings.Repeat("x", buddy.MaxMessageRunes+1),
-		"too long in runes": strings.Repeat("щ", buddy.MaxMessageRunes+1),
+		"empty": "", "blank": "  \n", "too long": strings.Repeat("x", messaging.MaxMessageRunes+1),
+		"too long in runes": strings.Repeat("щ", messaging.MaxMessageRunes+1),
 	} {
-		if _, err := svc.Send(ctx, a, id, body); !errors.Is(err, buddy.ErrInvalidMessage) {
+		if _, err := svc.Send(ctx, a, id, body); !errors.Is(err, messaging.ErrInvalidMessage) {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}
-	if _, err := svc.Send(ctx, a, id, strings.Repeat("щ", buddy.MaxMessageRunes)); err != nil {
+	if _, err := svc.Send(ctx, a, id, strings.Repeat("щ", messaging.MaxMessageRunes)); err != nil {
 		t.Fatalf("4000 runes: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE buddy_conversations SET status = 'closed' WHERE id = $1`, id); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE conversations SET status = 'closed' WHERE id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Send(ctx, b, id, "hi"); !errors.Is(err, buddy.ErrConversationState) {
+	if _, err := svc.Send(ctx, b, id, "hi"); !errors.Is(err, messaging.ErrState) {
 		t.Fatalf("closed: %v", err)
 	}
 	// A closed chat's history stays readable to both parties.
 	msgs, err := svc.Messages(ctx, b, id, 0, 0)
 	if err != nil || len(msgs) != 2 {
 		t.Fatalf("closed history = %+v, %v", msgs, err)
-	}
-	outsider := seedUser(t, pool, "x@example.test")
-	if _, err := svc.Send(ctx, outsider, id, "hi"); !errors.Is(err, buddy.ErrNotMember) {
-		t.Fatalf("non-member: %v", err)
 	}
 }
 
@@ -144,7 +123,7 @@ func TestConcurrentCloseNeverLetsAMessageIn(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // rollback after commit is a no-op
-	if _, err := tx.Exec(ctx, `UPDATE buddy_conversations SET status = 'closed' WHERE id = $1`, id); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE conversations SET status = 'closed' WHERE id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
@@ -154,7 +133,7 @@ func TestConcurrentCloseNeverLetsAMessageIn(t *testing.T) {
 	}()
 	// Let the send reach the row lock before the close commits.
 	deadline := time.Now().Add(5 * time.Second)
-	for countRows(t, pool, `SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%buddy_messages%'`) == 0 {
+	for countRows(t, pool, `SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%messages%'`) == 0 {
 		if time.Now().After(deadline) {
 			t.Fatal("the send never blocked behind the close")
 		}
@@ -163,26 +142,48 @@ func TestConcurrentCloseNeverLetsAMessageIn(t *testing.T) {
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := <-done; !errors.Is(err, buddy.ErrConversationState) {
+	if err := <-done; !errors.Is(err, messaging.ErrState) {
 		t.Fatalf("send behind a close: %v, want ErrConversationState", err)
 	}
-	if n := countRows(t, pool, `SELECT count(*) FROM buddy_messages WHERE conversation_id = $1`, id); n != 1 {
+	if n := countRows(t, pool, `SELECT count(*) FROM messages WHERE conversation_id = $1`, id); n != 1 {
 		t.Fatalf("messages = %d, want only the invitation", n)
 	}
 }
 
-func TestOutsiderCannotReadOrMarkRead(t *testing.T) {
-	pool, svc, _, _, id := openChat(t)
+// Every operation an outsider can name answers exactly as for a conversation that does not
+// exist, and changes nothing.
+func TestOutsiderCannotReachAConversation(t *testing.T) {
+	pool, svc, _, b, open := openChat(t)
 	ctx := context.Background()
-	third, _ := member(t, pool, svc, "c@example.test")
-	if _, err := svc.Messages(ctx, third, id, 0, 0); !errors.Is(err, buddy.ErrNotFound) {
-		t.Fatalf("Messages: %v", err)
+	c := seedUser(t, pool, "c@example.test")
+	pending, err := start(ctx, svc, b, seedUser(t, pool, "d@example.test"), "hi")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := svc.MarkRead(ctx, third, id, 1); !errors.Is(err, buddy.ErrNotFound) {
-		t.Fatalf("MarkRead: %v", err)
+	ops := map[string]func(id int64) error{
+		"Messages": func(id int64) error { _, err := svc.Messages(ctx, c, id, 0, 0); return err },
+		"Send":     func(id int64) error { _, err := svc.Send(ctx, c, id, "hi"); return err },
+		"MarkRead": func(id int64) error { return svc.MarkRead(ctx, c, id, 1) },
+		"Accept":   func(id int64) error { _, err := svc.Accept(ctx, c, id); return err },
+		"Decline":  func(id int64) error { _, err := svc.Decline(ctx, c, id); return err },
+		"Block":    func(id int64) error { return svc.Block(ctx, c, id) },
+		"Report":   func(id int64) error { return svc.Report(ctx, c, id, "spam", "") },
 	}
-	if _, err := svc.Messages(ctx, third, id+1000, 0, 0); !errors.Is(err, buddy.ErrNotFound) {
-		t.Fatalf("unknown: %v", err)
+	for name, op := range ops {
+		for _, id := range []int64{open, pending.ID, open + 1000} {
+			if err := op(id); !errors.Is(err, messaging.ErrNotFound) {
+				t.Fatalf("%s on %d: %v, want ErrNotFound", name, id, err)
+			}
+		}
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM user_blocks`) + countRows(t, pool, `SELECT count(*) FROM conversation_reports`); n != 0 {
+		t.Fatalf("an outsider wrote %d block/report rows", n)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM messages`); n != 2 {
+		t.Fatalf("messages = %d, want the two first messages", n)
+	}
+	if n := countRows(t, pool, `SELECT count(*) FROM conversations WHERE status = 'pending'`); n != 1 {
+		t.Fatal("an outsider answered a request")
 	}
 }
 
@@ -217,7 +218,7 @@ func TestMessagesAfterCursorOldestFirstAndLimit(t *testing.T) {
 	}
 	// Reading alone does not mark anything read. B's own "two" moved B's cursor past the
 	// invitation and "one", so only A's "three" is left unread.
-	list, err := svc.ListConversations(ctx, b)
+	list, err := svc.List(ctx, b)
 	if err != nil || list[0].Unread != 1 {
 		t.Fatalf("unread after a bare read = %+v, %v", list, err)
 	}
@@ -231,7 +232,7 @@ func TestMarkReadZeroesUnreadAndIsMonotonic(t *testing.T) {
 	m3, _ := svc.Send(ctx, a, id, "three")
 
 	unread := func() int {
-		list, err := svc.ListConversations(ctx, b)
+		list, err := svc.List(ctx, b)
 		if err != nil || len(list) != 1 {
 			t.Fatalf("list = %+v, %v", list, err)
 		}
@@ -268,28 +269,28 @@ func TestMarkReadZeroesUnreadAndIsMonotonic(t *testing.T) {
 func TestListConversationsStatusesOrderAndHiddenDecline(t *testing.T) {
 	pool, svc := setup(t)
 	ctx := context.Background()
-	me, myHandle := member(t, pool, svc, "me@example.test")
-	incoming, _ := member(t, pool, svc, "in@example.test")
-	_, outgoingH := member(t, pool, svc, "out@example.test")
-	open, openH := member(t, pool, svc, "open@example.test")
-	closedU, closedH := member(t, pool, svc, "closed@example.test")
-	iDeclined, iDeclinedH := member(t, pool, svc, "d1@example.test")
-	theyDeclined, theyDeclinedH := member(t, pool, svc, "d2@example.test")
+	me := seedUser(t, pool, "me@example.test")
+	incoming := seedUser(t, pool, "in@example.test")
+	outgoing := seedUser(t, pool, "out@example.test")
+	open := seedUser(t, pool, "open@example.test")
+	closedU := seedUser(t, pool, "closed@example.test")
+	iDeclined := seedUser(t, pool, "d1@example.test")
+	theyDeclined := seedUser(t, pool, "d2@example.test")
 
-	invite := func(from int64, toHandle string) int64 {
+	invite := func(from, to int64) int64 {
 		t.Helper()
-		c, err := svc.Invite(ctx, from, toHandle, "hi")
+		c, err := start(ctx, svc, from, to, "hi")
 		if err != nil {
 			t.Fatal(err)
 		}
 		return c.ID
 	}
-	invite(incoming, myHandle)
-	invite(me, outgoingH)
-	openID := invite(me, openH)
-	closedID := invite(me, closedH)
-	iDeclinedID := invite(iDeclined, myHandle)
-	theyDeclinedID := invite(me, theyDeclinedH)
+	invite(incoming, me)
+	invite(me, outgoing)
+	openID := invite(me, open)
+	closedID := invite(me, closedU)
+	iDeclinedID := invite(iDeclined, me)
+	theyDeclinedID := invite(me, theyDeclined)
 	if _, err := svc.Decline(ctx, me, iDeclinedID); err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +303,7 @@ func TestListConversationsStatusesOrderAndHiddenDecline(t *testing.T) {
 	if _, err := svc.Accept(ctx, closedU, closedID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE buddy_conversations SET status = 'closed' WHERE id = $1`, closedID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE conversations SET status = 'closed' WHERE id = $1`, closedID); err != nil {
 		t.Fatal(err)
 	}
 	// The open chat gets the newest message, so it leads the list.
@@ -310,64 +311,79 @@ func TestListConversationsStatusesOrderAndHiddenDecline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	list, err := svc.ListConversations(ctx, me)
+	list, err := svc.List(ctx, me)
 	if err != nil {
 		t.Fatal(err)
 	}
-	byHandle := map[string]buddy.Conversation{}
+	// The stub kind draws the other participant as their account id.
+	byOther := map[int64]messaging.Conversation{}
 	for _, c := range list {
-		byHandle[c.OtherHandle] = c
+		if c.Kind != "buddy" || c.Counterpart.Persona != "buddy" || !c.Counterpart.Reachable {
+			t.Fatalf("entry = %+v", c)
+		}
+		byOther[c.Counterpart.Detail.(int64)] = c
 	}
-	var incomingH string
-	if err := pool.QueryRow(ctx, `SELECT handle FROM buddy_members WHERE user_id = $1`, incoming).Scan(&incomingH); err != nil {
-		t.Fatal(err)
-	}
-	want := map[string]string{
-		incomingH: buddy.ForMeIncoming, outgoingH: buddy.ForMeOutgoing, openH: buddy.ForMeOpen,
-		closedH: buddy.ForMeClosed, theyDeclinedH: buddy.ForMeOutgoing,
+	want := map[int64]string{
+		incoming: messaging.ForMeIncoming, outgoing: messaging.ForMeOutgoing, open: messaging.ForMeOpen,
+		closedU: messaging.ForMeClosed, theyDeclined: messaging.ForMeOutgoing,
 	}
 	if len(list) != len(want) {
 		t.Fatalf("list has %d entries, want %d: %+v", len(list), len(want), list)
 	}
-	if _, ok := byHandle[iDeclinedH]; ok {
-		t.Fatal("the invitation I declined is listed")
+	if _, ok := byOther[iDeclined]; ok {
+		t.Fatal("the request I declined is listed")
 	}
-	for h, s := range want {
-		if byHandle[h].StatusForMe != s {
-			t.Fatalf("%s: status_for_me = %q, want %q", h, byHandle[h].StatusForMe, s)
+	for u, s := range want {
+		if byOther[u].StatusForMe != s {
+			t.Fatalf("%d: status_for_me = %q, want %q", u, byOther[u].StatusForMe, s)
 		}
 	}
-	if list[0].OtherHandle != openH || list[0].Unread != 1 || list[0].LastMessageAt.IsZero() {
+	if list[0].ID != openID || list[0].Unread != 1 || list[0].LastMessageAt.IsZero() {
 		t.Fatalf("first = %+v, want the open chat with the newest message", list[0])
 	}
-	if byHandle[incomingH].Unread != 1 {
-		t.Fatalf("incoming unread = %d, want 1", byHandle[incomingH].Unread)
+	if byOther[incoming].Unread != 1 {
+		t.Fatalf("incoming unread = %d, want 1", byOther[incoming].Unread)
 	}
-	// The member whose invitation was declined still sees it, as unanswered.
-	got, err := svc.ListConversations(ctx, iDeclined)
-	if err != nil || len(got) != 1 || got[0].StatusForMe != buddy.ForMeOutgoing {
-		t.Fatalf("initiator of the declined invitation sees %+v, %v", got, err)
+	// The starter of the declined request still sees it, as unanswered.
+	got, err := svc.List(ctx, iDeclined)
+	if err != nil || len(got) != 1 || got[0].StatusForMe != messaging.ForMeOutgoing {
+		t.Fatalf("starter of the declined request sees %+v, %v", got, err)
 	}
 }
 
-func TestListConversationsCarriesTheOtherCard(t *testing.T) {
-	pool, svc, a, b, _ := openChat(t)
-	seedCV(t, pool, a)
-	list, err := svc.ListConversations(context.Background(), b)
+func TestUnreachableCounterpartServesNothing(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	a := seedUser(t, pool, "a@example.test")
+	b := seedUser(t, pool, "b@example.test")
+	// The persona hides B from everybody, yet tries to hand over a detail anyway.
+	svc := messaging.New(messaging.NewQueriesRepository(db.New(pool)), stubPersona{hidden: map[int64]bool{b: true}})
+	c, err := start(ctx, svc, a, b, "hi")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 || list[0].Card.Category == "" {
-		t.Fatalf("card = %+v", list)
+	bare := messaging.Counterpart{Persona: "buddy"}
+	if c.Counterpart != bare {
+		t.Fatalf("start answered counterpart %+v", c.Counterpart)
+	}
+	list, err := svc.List(ctx, a)
+	if err != nil || len(list) != 1 || list[0].Counterpart != bare {
+		t.Fatalf("list = %+v, %v", list, err)
+	}
+	// A persona the service was not built with still lists, as unreachable.
+	unregistered := messaging.New(messaging.NewQueriesRepository(db.New(pool)))
+	list, err = unregistered.List(ctx, b)
+	if err != nil || len(list) != 1 || list[0].Counterpart != bare {
+		t.Fatalf("unregistered persona = %+v, %v", list, err)
 	}
 }
 
 func TestRecipientReadsAPendingInvitation(t *testing.T) {
 	pool, svc := setup(t)
 	ctx := context.Background()
-	a, _ := member(t, pool, svc, "a@example.test")
-	b, bHandle := member(t, pool, svc, "b@example.test")
-	c, err := svc.Invite(ctx, a, bHandle, "hello there")
+	a := seedUser(t, pool, "a@example.test")
+	b := seedUser(t, pool, "b@example.test")
+	c, err := start(ctx, svc, a, b, "hello there")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -37,7 +37,7 @@ func (s stubRepo) Member(context.Context, int64) (Member, bool, error) { return 
 
 func TestSimilarRefusesNonMember(t *testing.T) {
 	for name, r := range map[string]stubRepo{"unknown": {}, "left": {member: Member{Active: false}, found: true}} {
-		if _, err := New(r).Similar(context.Background(), 1, 10, 0); !errors.Is(err, ErrNotMember) {
+		if _, err := New(r, nil).Similar(context.Background(), 1, 10, 0); !errors.Is(err, ErrNotMember) {
 			t.Errorf("%s: err = %v", name, err)
 		}
 	}

@@ -11,292 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const answerBuddyInvitation = `-- name: AnswerBuddyInvitation :one
-UPDATE buddy_conversations
-SET status = $1::text,
-    accepted_at = CASE WHEN $1::text = 'open' THEN now() ELSE accepted_at END
-WHERE id = $2
-  AND status = 'pending'
-  AND initiator_id <> $3
-  AND (user_low = $3 OR user_high = $3)
-  AND (SELECT count(*) FROM buddy_members WHERE user_id IN (user_low, user_high) AND left_at IS NULL) = 2
-  AND NOT EXISTS (
-      SELECT 1 FROM buddy_blocks
-      WHERE (blocker_id = user_low AND blocked_id = user_high)
-         OR (blocker_id = user_high AND blocked_id = user_low))
-RETURNING id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at
-`
-
-type AnswerBuddyInvitationParams struct {
-	Status string `json:"status"`
-	ID     int64  `json:"id"`
-	UserID int64  `json:"user_id"`
-}
-
-// Accept or decline a pending invitation. Only the party who did not send it matches, and
-// both parties must still be active and unblocked (a leave or block closes the
-// conversation, but one committing between the caller's read and this write would not be
-// seen otherwise); no row means the caller must look the conversation up to say why.
-func (q *Queries) AnswerBuddyInvitation(ctx context.Context, arg AnswerBuddyInvitationParams) (BuddyConversation, error) {
-	row := q.db.QueryRow(ctx, answerBuddyInvitation, arg.Status, arg.ID, arg.UserID)
-	var i BuddyConversation
-	err := row.Scan(
-		&i.ID,
-		&i.UserLow,
-		&i.UserHigh,
-		&i.InitiatorID,
-		&i.Status,
-		&i.CreatedAt,
-		&i.AcceptedAt,
-		&i.ClosedAt,
-		&i.LastReadLow,
-		&i.LastReadHigh,
-		&i.NotifiedLowAt,
-		&i.NotifiedHighAt,
-	)
-	return i, err
-}
-
-const blockBuddyConversation = `-- name: BlockBuddyConversation :one
-WITH c AS (
-    UPDATE buddy_conversations
-    SET status = 'closed', closed_at = coalesce(closed_at, now())
-    WHERE id = $1
-      AND $2::bigint IN (user_low, user_high)
-    RETURNING id, CASE WHEN user_low = $2 THEN user_high ELSE user_low END AS other_id
-), b AS (
-    INSERT INTO buddy_blocks (blocker_id, blocked_id)
-    SELECT $2::bigint, c.other_id FROM c
-    ON CONFLICT DO NOTHING
-)
-SELECT id FROM c
-`
-
-type BlockBuddyConversationParams struct {
-	ConversationID int64 `json:"conversation_id"`
-	BlockerID      int64 `json:"blocker_id"`
-}
-
-// Block the other party of a conversation and close it, in one statement so neither half
-// can land alone. Only a party matches; no row means the caller must say the conversation
-// is not theirs. Closing is allowed from any status, and a conversation that was already
-// closed keeps its original closed_at. Blocking twice writes nothing the second time.
-func (q *Queries) BlockBuddyConversation(ctx context.Context, arg BlockBuddyConversationParams) (int64, error) {
-	row := q.db.QueryRow(ctx, blockBuddyConversation, arg.ConversationID, arg.BlockerID)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const buddyPairBlocked = `-- name: BuddyPairBlocked :one
-SELECT EXISTS (
-    SELECT 1 FROM buddy_blocks
-    WHERE (blocker_id = $1 AND blocked_id = $2)
-       OR (blocker_id = $2 AND blocked_id = $1)
-) AS blocked
-`
-
-type BuddyPairBlockedParams struct {
-	A int64 `json:"a"`
-	B int64 `json:"b"`
-}
-
-func (q *Queries) BuddyPairBlocked(ctx context.Context, arg BuddyPairBlockedParams) (bool, error) {
-	row := q.db.QueryRow(ctx, buddyPairBlocked, arg.A, arg.B)
-	var blocked bool
-	err := row.Scan(&blocked)
-	return blocked, err
-}
-
-const claimBuddyUnread = `-- name: ClaimBuddyUnread :one
-UPDATE buddy_conversations c
-SET notified_low_at  = CASE WHEN $1::boolean THEN $2::timestamptz ELSE c.notified_low_at END,
-    notified_high_at = CASE WHEN $1::boolean THEN c.notified_high_at ELSE $2::timestamptz END
-WHERE c.id = $3
-  AND c.status IN ('open', 'pending')
-  AND CASE WHEN $1::boolean
-        THEN c.notified_low_at IS NOT DISTINCT FROM $4::timestamptz
-         AND coalesce(c.last_read_low, 0) = $5::bigint
-        ELSE c.notified_high_at IS NOT DISTINCT FROM $4::timestamptz
-         AND coalesce(c.last_read_high, 0) = $5::bigint
-      END
-RETURNING c.id
-`
-
-type ClaimBuddyUnreadParams struct {
-	IsLow          bool               `json:"is_low"`
-	ClaimedAt      pgtype.Timestamptz `json:"claimed_at"`
-	ConversationID int64              `json:"conversation_id"`
-	PrevNotifiedAt pgtype.Timestamptz `json:"prev_notified_at"`
-	LastRead       int64              `json:"last_read"`
-}
-
-// Take the notice for one side before sending it: only the run that moves the stamp from
-// the value it read (and sees the same read cursor) gets a row back. A concurrent run, or
-// a read that landed in between, gets none and sends nothing.
-func (q *Queries) ClaimBuddyUnread(ctx context.Context, arg ClaimBuddyUnreadParams) (int64, error) {
-	row := q.db.QueryRow(ctx, claimBuddyUnread,
-		arg.IsLow,
-		arg.ClaimedAt,
-		arg.ConversationID,
-		arg.PrevNotifiedAt,
-		arg.LastRead,
-	)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const countBuddyInvitationsSince = `-- name: CountBuddyInvitationsSince :one
-SELECT count(*)::bigint AS sent, min(created_at)::timestamptz AS oldest
-FROM buddy_conversations
-WHERE initiator_id = $1 AND created_at > $2
-`
-
-type CountBuddyInvitationsSinceParams struct {
-	InitiatorID int64              `json:"initiator_id"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-}
-
-type CountBuddyInvitationsSinceRow struct {
-	Sent   int64              `json:"sent"`
-	Oldest pgtype.Timestamptz `json:"oldest"`
-}
-
-// The initiator's invitations inside the rolling window, and when the oldest of them was
-// sent (NULL when there are none): that instant plus the window is when a slot frees up.
-func (q *Queries) CountBuddyInvitationsSince(ctx context.Context, arg CountBuddyInvitationsSinceParams) (CountBuddyInvitationsSinceRow, error) {
-	row := q.db.QueryRow(ctx, countBuddyInvitationsSince, arg.InitiatorID, arg.CreatedAt)
-	var i CountBuddyInvitationsSinceRow
-	err := row.Scan(&i.Sent, &i.Oldest)
-	return i, err
-}
-
-const createBuddyInvitation = `-- name: CreateBuddyInvitation :one
-WITH c AS (
-    INSERT INTO buddy_conversations (user_low, user_high, initiator_id)
-    SELECT $1::bigint, $2::bigint, $3::bigint
-    WHERE (SELECT count(*) FROM buddy_members
-           WHERE user_id IN ($1, $2) AND left_at IS NULL) = 2
-      AND NOT EXISTS (
-          SELECT 1 FROM buddy_blocks
-          WHERE (blocker_id = $1 AND blocked_id = $2)
-             OR (blocker_id = $2 AND blocked_id = $1))
-    RETURNING id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at
-), m AS (
-    INSERT INTO buddy_messages (conversation_id, sender_id, body)
-    SELECT c.id, c.initiator_id, $4 FROM c
-)
-SELECT id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at FROM c
-`
-
-type CreateBuddyInvitationParams struct {
-	UserLow     int64  `json:"user_low"`
-	UserHigh    int64  `json:"user_high"`
-	InitiatorID int64  `json:"initiator_id"`
-	Body        string `json:"body"`
-}
-
-type CreateBuddyInvitationRow struct {
-	ID             int64              `json:"id"`
-	UserLow        int64              `json:"user_low"`
-	UserHigh       int64              `json:"user_high"`
-	InitiatorID    int64              `json:"initiator_id"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	AcceptedAt     pgtype.Timestamptz `json:"accepted_at"`
-	ClosedAt       pgtype.Timestamptz `json:"closed_at"`
-	LastReadLow    pgtype.Int8        `json:"last_read_low"`
-	LastReadHigh   pgtype.Int8        `json:"last_read_high"`
-	NotifiedLowAt  pgtype.Timestamptz `json:"notified_low_at"`
-	NotifiedHighAt pgtype.Timestamptz `json:"notified_high_at"`
-}
-
-// A pending conversation and its first message in ONE statement, so the pair never exists
-// without the message that opened it. The caller passes the pair already ordered
-// (user_low < user_high). A second conversation for the pair is the unique violation on
-// (user_low, user_high). Both parties must still be active and unblocked, checked HERE and
-// not in an earlier read, so a leave or block that commits in between cannot leave an
-// invitation to someone who is gone; no row then means the pair is unavailable.
-func (q *Queries) CreateBuddyInvitation(ctx context.Context, arg CreateBuddyInvitationParams) (CreateBuddyInvitationRow, error) {
-	row := q.db.QueryRow(ctx, createBuddyInvitation,
-		arg.UserLow,
-		arg.UserHigh,
-		arg.InitiatorID,
-		arg.Body,
-	)
-	var i CreateBuddyInvitationRow
-	err := row.Scan(
-		&i.ID,
-		&i.UserLow,
-		&i.UserHigh,
-		&i.InitiatorID,
-		&i.Status,
-		&i.CreatedAt,
-		&i.AcceptedAt,
-		&i.ClosedAt,
-		&i.LastReadLow,
-		&i.LastReadHigh,
-		&i.NotifiedLowAt,
-		&i.NotifiedHighAt,
-	)
-	return i, err
-}
-
-const getBuddyConversation = `-- name: GetBuddyConversation :one
-SELECT id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at FROM buddy_conversations WHERE id = $1
-`
-
-func (q *Queries) GetBuddyConversation(ctx context.Context, id int64) (BuddyConversation, error) {
-	row := q.db.QueryRow(ctx, getBuddyConversation, id)
-	var i BuddyConversation
-	err := row.Scan(
-		&i.ID,
-		&i.UserLow,
-		&i.UserHigh,
-		&i.InitiatorID,
-		&i.Status,
-		&i.CreatedAt,
-		&i.AcceptedAt,
-		&i.ClosedAt,
-		&i.LastReadLow,
-		&i.LastReadHigh,
-		&i.NotifiedLowAt,
-		&i.NotifiedHighAt,
-	)
-	return i, err
-}
-
-const getBuddyConversationByPair = `-- name: GetBuddyConversationByPair :one
-SELECT id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at FROM buddy_conversations WHERE user_low = $1 AND user_high = $2
-`
-
-type GetBuddyConversationByPairParams struct {
-	UserLow  int64 `json:"user_low"`
-	UserHigh int64 `json:"user_high"`
-}
-
-// The pair's conversation in any status. The caller passes the pair ordered.
-func (q *Queries) GetBuddyConversationByPair(ctx context.Context, arg GetBuddyConversationByPairParams) (BuddyConversation, error) {
-	row := q.db.QueryRow(ctx, getBuddyConversationByPair, arg.UserLow, arg.UserHigh)
-	var i BuddyConversation
-	err := row.Scan(
-		&i.ID,
-		&i.UserLow,
-		&i.UserHigh,
-		&i.InitiatorID,
-		&i.Status,
-		&i.CreatedAt,
-		&i.AcceptedAt,
-		&i.ClosedAt,
-		&i.LastReadLow,
-		&i.LastReadHigh,
-		&i.NotifiedLowAt,
-		&i.NotifiedHighAt,
-	)
-	return i, err
-}
-
 const getBuddyMemberByHandle = `-- name: GetBuddyMemberByHandle :one
 SELECT user_id, handle, category, countries, regions, joined_at, left_at FROM buddy_members WHERE handle = $1
 `
@@ -361,88 +75,6 @@ func (q *Queries) HideBuddyApplication(ctx context.Context, arg HideBuddyApplica
 	return application_id, err
 }
 
-const insertBuddyMessage = `-- name: InsertBuddyMessage :one
-WITH m AS (
-    INSERT INTO buddy_messages (conversation_id, sender_id, body)
-    SELECT c.id, $1::bigint, $2::text
-    FROM buddy_conversations c
-    WHERE c.id = $3
-      AND c.status = 'open'
-      AND $1::bigint IN (c.user_low, c.user_high)
-    FOR SHARE OF c
-    RETURNING id, conversation_id, sender_id, body, created_at
-), r AS (
-    UPDATE buddy_conversations c
-    SET last_read_low  = CASE WHEN c.user_low  = m.sender_id THEN m.id ELSE c.last_read_low  END,
-        last_read_high = CASE WHEN c.user_high = m.sender_id THEN m.id ELSE c.last_read_high END
-    FROM m
-    WHERE c.id = m.conversation_id
-)
-SELECT id, sender_id, body, created_at FROM m
-`
-
-type InsertBuddyMessageParams struct {
-	SenderID       int64  `json:"sender_id"`
-	Body           string `json:"body"`
-	ConversationID int64  `json:"conversation_id"`
-}
-
-type InsertBuddyMessageRow struct {
-	ID        int64              `json:"id"`
-	SenderID  int64              `json:"sender_id"`
-	Body      string             `json:"body"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-// A message into an OPEN conversation the sender belongs to, and the sender's read cursor
-// moved onto it, in one statement. The status is guarded here, under FOR SHARE, and not by
-// an earlier read: a close that commits while this waits makes the row stop matching, so
-// no message lands after it. No row means the caller must look the conversation up to say
-// why.
-func (q *Queries) InsertBuddyMessage(ctx context.Context, arg InsertBuddyMessageParams) (InsertBuddyMessageRow, error) {
-	row := q.db.QueryRow(ctx, insertBuddyMessage, arg.SenderID, arg.Body, arg.ConversationID)
-	var i InsertBuddyMessageRow
-	err := row.Scan(
-		&i.ID,
-		&i.SenderID,
-		&i.Body,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const insertBuddyReport = `-- name: InsertBuddyReport :one
-INSERT INTO buddy_reports (conversation_id, reporter_id, reason, note)
-SELECT c.id, $1::bigint, $2::text, $3::text
-FROM buddy_conversations c
-WHERE c.id = $4
-  AND $1::bigint IN (c.user_low, c.user_high)
-ON CONFLICT (conversation_id, reporter_id) DO NOTHING
-RETURNING id
-`
-
-type InsertBuddyReportParams struct {
-	ReporterID     int64       `json:"reporter_id"`
-	Reason         string      `json:"reason"`
-	Note           pgtype.Text `json:"note"`
-	ConversationID int64       `json:"conversation_id"`
-}
-
-// A report of a conversation by one of its parties. No row means either the reporter is
-// not a party or they already reported it; the caller looks the conversation up to say
-// which.
-func (q *Queries) InsertBuddyReport(ctx context.Context, arg InsertBuddyReportParams) (int64, error) {
-	row := q.db.QueryRow(ctx, insertBuddyReport,
-		arg.ReporterID,
-		arg.Reason,
-		arg.Note,
-		arg.ConversationID,
-	)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
 const joinBuddyMember = `-- name: JoinBuddyMember :one
 INSERT INTO buddy_members (user_id, handle, category, countries, regions)
 VALUES (
@@ -494,22 +126,27 @@ func (q *Queries) JoinBuddyMember(ctx context.Context, arg JoinBuddyMemberParams
 
 const leaveBuddyMember = `-- name: LeaveBuddyMember :one
 WITH closed AS (
-    UPDATE buddy_conversations
+    UPDATE conversations c
     SET status = 'closed', closed_at = now()
-    WHERE status IN ('pending', 'open')
-      AND (user_low = $1 OR user_high = $1)
+    WHERE c.kind = 'buddy'
+      AND c.status IN ('pending', 'open')
+      AND EXISTS (
+          SELECT 1 FROM conversation_participants p
+          WHERE p.conversation_id = c.id AND p.user_id = $1)
 )
-UPDATE buddy_members
+UPDATE buddy_members bm
 SET left_at = now()
-WHERE user_id = $1 AND left_at IS NULL
-RETURNING user_id, handle, category, countries, regions, joined_at, left_at
+WHERE bm.user_id = $1 AND bm.left_at IS NULL
+RETURNING bm.user_id, bm.handle, bm.category, bm.countries, bm.regions, bm.joined_at, bm.left_at
 `
 
-// Opt a member out: stamp left_at and close every pending or open conversation they are
-// in, in one statement so a leave cannot half-apply. The row is kept, so rejoining
-// restores the handle. The member update is guarded by left_at IS NULL, so for a member
-// who is not active it returns no row; the conversation close is not guarded, which is
-// harmless because a left member has no pending or open conversation to close.
+// Opt a member out: stamp left_at and close every pending or open buddy conversation they
+// are in, in one statement so a leave cannot half-apply. The conversations are the
+// messaging core's (kind 'buddy'); closing them here rather than through the core is what
+// keeps the two writes atomic. The row is kept, so rejoining restores the handle. The
+// member update is guarded by left_at IS NULL, so for a member who is not active it
+// returns no row; the conversation close is not guarded, which is harmless because a left
+// member has no pending or open buddy conversation to close.
 func (q *Queries) LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMember, error) {
 	row := q.db.QueryRow(ctx, leaveBuddyMember, userID)
 	var i BuddyMember
@@ -525,88 +162,56 @@ func (q *Queries) LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMemb
 	return i, err
 }
 
-const listBuddyConversations = `-- name: ListBuddyConversations :many
-SELECT c.id,
-       c.user_low,
-       c.user_high,
-       c.initiator_id,
-       c.status,
-       c.created_at,
-       c.accepted_at,
+const listBuddyCounterparts = `-- name: ListBuddyCounterparts :many
+SELECT m.user_id,
        m.handle,
        m.countries,
        u.resume_structured,
-       (m.left_at IS NULL AND NOT EXISTS (
-           SELECT 1 FROM buddy_blocks b
-           WHERE (b.blocker_id = $1 AND b.blocked_id = m.user_id)
-              OR (b.blocker_id = m.user_id AND b.blocked_id = $1)
-       )) AS other_visible,
-       stats.unread::bigint AS unread,
-       coalesce(stats.newest, c.created_at)::timestamptz AS last_message_at
-FROM buddy_conversations c
-JOIN buddy_members m ON m.user_id = CASE WHEN c.user_low = $1 THEN c.user_high ELSE c.user_low END
+       (m.left_at IS NULL
+        AND EXISTS (SELECT 1 FROM buddy_members v
+                    WHERE v.user_id = $1 AND v.left_at IS NULL)
+        AND NOT EXISTS (
+            SELECT 1 FROM user_blocks b
+            WHERE (b.blocker_id = $1 AND b.blocked_id = m.user_id)
+               OR (b.blocker_id = m.user_id AND b.blocked_id = $1)))::boolean AS visible
+FROM buddy_members m
 JOIN users u ON u.id = m.user_id
-CROSS JOIN LATERAL (
-    SELECT count(*) FILTER (
-               WHERE msg.sender_id <> $1
-                 AND msg.id > coalesce(CASE WHEN c.user_low = $1 THEN c.last_read_low ELSE c.last_read_high END, 0)
-           ) AS unread,
-           max(msg.created_at) AS newest
-    FROM buddy_messages msg
-    WHERE msg.conversation_id = c.id
-) stats
-WHERE $1 IN (c.user_low, c.user_high)
-  AND NOT (c.status = 'declined' AND c.initiator_id <> $1)
-ORDER BY last_message_at DESC, c.id DESC
+WHERE m.user_id = ANY($2::bigint[])
 `
 
-type ListBuddyConversationsRow struct {
-	ID               int64              `json:"id"`
-	UserLow          int64              `json:"user_low"`
-	UserHigh         int64              `json:"user_high"`
-	InitiatorID      int64              `json:"initiator_id"`
-	Status           string             `json:"status"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	AcceptedAt       pgtype.Timestamptz `json:"accepted_at"`
-	Handle           string             `json:"handle"`
-	Countries        []string           `json:"countries"`
-	ResumeStructured []byte             `json:"resume_structured"`
-	OtherVisible     pgtype.Bool        `json:"other_visible"`
-	Unread           int64              `json:"unread"`
-	LastMessageAt    pgtype.Timestamptz `json:"last_message_at"`
+type ListBuddyCounterpartsParams struct {
+	ViewerID int64   `json:"viewer_id"`
+	UserIds  []int64 `json:"user_ids"`
 }
 
-// Every conversation of the viewer with the other member's card inputs, their unread count
-// (the other side's messages past the viewer's read cursor) and the newest message time,
-// newest first. A declined invitation is hidden from the member who declined it. The other
-// member is visible only while they are active and the pair is not blocked in either
-// direction; otherwise the row still lists (history is kept) but the caller must not serve
-// their handle or card. The
-// unread count and last time come from one pass over the conversation's messages, so
-// the list costs one query however many conversations there are.
-func (q *Queries) ListBuddyConversations(ctx context.Context, viewerID int64) ([]ListBuddyConversationsRow, error) {
-	rows, err := q.db.Query(ctx, listBuddyConversations, viewerID)
+type ListBuddyCounterpartsRow struct {
+	UserID           int64    `json:"user_id"`
+	Handle           string   `json:"handle"`
+	Countries        []string `json:"countries"`
+	ResumeStructured []byte   `json:"resume_structured"`
+	Visible          bool     `json:"visible"`
+}
+
+// How the other side of each of the viewer's buddy conversations is drawn: handle and card
+// inputs, and whether they may be shown at all. They may while both sides are active
+// members and no block stands between them in either direction; otherwise the
+// conversation still lists (its history is the viewer's) but the caller must not serve
+// the other member's handle or card.
+func (q *Queries) ListBuddyCounterparts(ctx context.Context, arg ListBuddyCounterpartsParams) ([]ListBuddyCounterpartsRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyCounterparts, arg.ViewerID, arg.UserIds)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListBuddyConversationsRow{}
+	items := []ListBuddyCounterpartsRow{}
 	for rows.Next() {
-		var i ListBuddyConversationsRow
+		var i ListBuddyCounterpartsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.UserLow,
-			&i.UserHigh,
-			&i.InitiatorID,
-			&i.Status,
-			&i.CreatedAt,
-			&i.AcceptedAt,
+			&i.UserID,
 			&i.Handle,
 			&i.Countries,
 			&i.ResumeStructured,
-			&i.OtherVisible,
-			&i.Unread,
-			&i.LastMessageAt,
+			&i.Visible,
 		); err != nil {
 			return nil, err
 		}
@@ -643,7 +248,7 @@ WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
   AND ($4::bigint IS NULL
        OR (e.occurred_at, e.id) <= (SELECT c.occurred_at, c.id FROM application_events c WHERE c.id = $4::bigint))
   AND NOT EXISTS (
-      SELECT 1 FROM buddy_blocks b
+      SELECT 1 FROM user_blocks b
       WHERE (b.blocker_id = $1 AND b.blocked_id = e.user_id)
          OR (b.blocker_id = e.user_id AND b.blocked_id = $1))
   AND NOT EXISTS (
@@ -733,6 +338,37 @@ func (q *Queries) ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([
 	return items, nil
 }
 
+const listBuddyHandles = `-- name: ListBuddyHandles :many
+SELECT user_id, handle FROM buddy_members WHERE user_id = ANY($1::bigint[])
+`
+
+type ListBuddyHandlesRow struct {
+	UserID int64  `json:"user_id"`
+	Handle string `json:"handle"`
+}
+
+// The handles behind account ids, active or left, for a moderator reading a reported
+// buddy conversation by what its members saw.
+func (q *Queries) ListBuddyHandles(ctx context.Context, userIds []int64) ([]ListBuddyHandlesRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyHandles, userIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyHandlesRow{}
+	for rows.Next() {
+		var i ListBuddyHandlesRow
+		if err := rows.Scan(&i.UserID, &i.Handle); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBuddyMemberActivity = `-- name: ListBuddyMemberActivity :many
 SELECT (e.occurred_at AT TIME ZONE 'UTC')::date AS day,
        count(*)::int AS events
@@ -746,7 +382,7 @@ WHERE e.kind IN ('applied', 'stage_set') AND e.retracted_at IS NULL
   AND e.user_id = $2
   AND e.occurred_at >= $3::date::timestamp AT TIME ZONE 'UTC'
   AND NOT EXISTS (
-      SELECT 1 FROM buddy_blocks b
+      SELECT 1 FROM user_blocks b
       WHERE (b.blocker_id = $1 AND b.blocked_id = e.user_id)
          OR (b.blocker_id = e.user_id AND b.blocked_id = $1))
   AND NOT EXISTS (
@@ -784,261 +420,6 @@ func (q *Queries) ListBuddyMemberActivity(ctx context.Context, arg ListBuddyMemb
 	for rows.Next() {
 		var i ListBuddyMemberActivityRow
 		if err := rows.Scan(&i.Day, &i.Events); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listBuddyMessages = `-- name: ListBuddyMessages :many
-SELECT id, sender_id, body, created_at
-FROM buddy_messages
-WHERE conversation_id = $1 AND id > $2
-ORDER BY id
-LIMIT $3
-`
-
-type ListBuddyMessagesParams struct {
-	ConversationID int64 `json:"conversation_id"`
-	AfterID        int64 `json:"after_id"`
-	PageLimit      int32 `json:"page_limit"`
-}
-
-type ListBuddyMessagesRow struct {
-	ID        int64              `json:"id"`
-	SenderID  int64              `json:"sender_id"`
-	Body      string             `json:"body"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-// Messages after a given id, oldest first. Readability is the caller's check.
-func (q *Queries) ListBuddyMessages(ctx context.Context, arg ListBuddyMessagesParams) ([]ListBuddyMessagesRow, error) {
-	rows, err := q.db.Query(ctx, listBuddyMessages, arg.ConversationID, arg.AfterID, arg.PageLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListBuddyMessagesRow{}
-	for rows.Next() {
-		var i ListBuddyMessagesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.SenderID,
-			&i.Body,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listBuddyMessagesForConversations = `-- name: ListBuddyMessagesForConversations :many
-SELECT msg.conversation_id, m.handle AS sender_handle, msg.body, msg.created_at
-FROM buddy_messages msg
-JOIN buddy_members m ON m.user_id = msg.sender_id
-WHERE msg.conversation_id = ANY($1::bigint[])
-ORDER BY msg.conversation_id, msg.id
-`
-
-type ListBuddyMessagesForConversationsRow struct {
-	ConversationID int64              `json:"conversation_id"`
-	SenderHandle   string             `json:"sender_handle"`
-	Body           string             `json:"body"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-}
-
-// Every message of the given conversations, oldest first within each, with the sender's
-// handle. One read for a whole page of reports.
-func (q *Queries) ListBuddyMessagesForConversations(ctx context.Context, conversationIds []int64) ([]ListBuddyMessagesForConversationsRow, error) {
-	rows, err := q.db.Query(ctx, listBuddyMessagesForConversations, conversationIds)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListBuddyMessagesForConversationsRow{}
-	for rows.Next() {
-		var i ListBuddyMessagesForConversationsRow
-		if err := rows.Scan(
-			&i.ConversationID,
-			&i.SenderHandle,
-			&i.Body,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listBuddyReports = `-- name: ListBuddyReports :many
-SELECT r.id,
-       r.conversation_id,
-       r.reason,
-       r.note,
-       r.created_at,
-       r.resolved_at,
-       reporter.handle AS reporter_handle,
-       other.handle    AS reported_handle
-FROM buddy_reports r
-JOIN buddy_conversations c ON c.id = r.conversation_id
-JOIN buddy_members reporter ON reporter.user_id = r.reporter_id
-JOIN buddy_members other ON other.user_id = CASE WHEN c.user_low = r.reporter_id THEN c.user_high ELSE c.user_low END
-WHERE $1::boolean OR r.resolved_at IS NULL
-ORDER BY r.id DESC
-LIMIT $3 OFFSET $2
-`
-
-type ListBuddyReportsParams struct {
-	IncludeResolved bool  `json:"include_resolved"`
-	PageOffset      int32 `json:"page_offset"`
-	PageLimit       int32 `json:"page_limit"`
-}
-
-type ListBuddyReportsRow struct {
-	ID             int64              `json:"id"`
-	ConversationID int64              `json:"conversation_id"`
-	Reason         string             `json:"reason"`
-	Note           pgtype.Text        `json:"note"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	ResolvedAt     pgtype.Timestamptz `json:"resolved_at"`
-	ReporterHandle string             `json:"reporter_handle"`
-	ReportedHandle string             `json:"reported_handle"`
-}
-
-// A page of reports, newest first, with the handles of the reporter and of the member
-// they reported. Handles only: a moderator reads the conversation by what the members saw.
-func (q *Queries) ListBuddyReports(ctx context.Context, arg ListBuddyReportsParams) ([]ListBuddyReportsRow, error) {
-	rows, err := q.db.Query(ctx, listBuddyReports, arg.IncludeResolved, arg.PageOffset, arg.PageLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListBuddyReportsRow{}
-	for rows.Next() {
-		var i ListBuddyReportsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.ConversationID,
-			&i.Reason,
-			&i.Note,
-			&i.CreatedAt,
-			&i.ResolvedAt,
-			&i.ReporterHandle,
-			&i.ReportedHandle,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listBuddyUnreadDue = `-- name: ListBuddyUnreadDue :many
-SELECT s.conversation_id,
-       s.user_id,
-       s.is_low,
-       (s.status = 'pending')::boolean AS invitation,
-       s.notified_at AS prev_notified_at,
-       s.last_read,
-       u.oldest_id,
-       us.email,
-       tl.chat_id
-FROM (
-    SELECT c.id AS conversation_id, c.status, c.initiator_id,
-           c.user_low AS user_id, c.user_high AS other_id, true AS is_low,
-           c.last_read_low AS last_read, c.notified_low_at AS notified_at
-    FROM buddy_conversations c
-    WHERE c.status IN ('open', 'pending')
-    UNION ALL
-    SELECT c.id, c.status, c.initiator_id,
-           c.user_high, c.user_low, false,
-           c.last_read_high, c.notified_high_at
-    FROM buddy_conversations c
-    WHERE c.status IN ('open', 'pending')
-) s
-JOIN buddy_members bm ON bm.user_id = s.user_id AND bm.left_at IS NULL
-JOIN users us ON us.id = s.user_id
-LEFT JOIN telegram_links tl ON tl.user_id = s.user_id
-CROSS JOIN LATERAL (
-    SELECT msg.id AS oldest_id, msg.created_at AS oldest_at
-    FROM buddy_messages msg
-    WHERE msg.conversation_id = s.conversation_id
-      AND msg.sender_id = s.other_id
-      AND msg.id > coalesce(s.last_read, 0)
-    ORDER BY msg.id
-    LIMIT 1
-) u
-WHERE (s.status = 'open' OR s.initiator_id <> s.user_id)
-  AND u.oldest_at <= $1::timestamptz
-  AND (s.notified_at IS NULL OR s.notified_at < u.oldest_at)
-ORDER BY u.oldest_at
-LIMIT $2
-`
-
-type ListBuddyUnreadDueParams struct {
-	Cutoff  pgtype.Timestamptz `json:"cutoff"`
-	MaxRows int32              `json:"max_rows"`
-}
-
-type ListBuddyUnreadDueRow struct {
-	ConversationID int64              `json:"conversation_id"`
-	UserID         int64              `json:"user_id"`
-	IsLow          bool               `json:"is_low"`
-	Invitation     bool               `json:"invitation"`
-	PrevNotifiedAt pgtype.Timestamptz `json:"prev_notified_at"`
-	LastRead       pgtype.Int8        `json:"last_read"`
-	OldestID       int64              `json:"oldest_id"`
-	Email          string             `json:"email"`
-	ChatID         pgtype.Int8        `json:"chat_id"`
-}
-
-// The sides of conversations that are due an unread notice (design D9). One row per
-// (conversation, recipient side). A side is due when the other participant has written
-// something past this side's read cursor, the OLDEST such message is not newer than
-// sqlc.arg(cutoff), and the side was not already notified since that message — notified_*_at
-// is compared with the oldest unread message rather than cleared on read, so reading and a
-// later message re-arms it without the read path knowing the worker exists. Open
-// conversations notify both sides; a pending one only its recipient, so an initiator is
-// never told about their own invitation. Declined and closed are never due, and neither is
-// a member who has left.
-//
-// prev_notified_at and last_read are returned for the compare-and-set in ClaimBuddyUnread.
-func (q *Queries) ListBuddyUnreadDue(ctx context.Context, arg ListBuddyUnreadDueParams) ([]ListBuddyUnreadDueRow, error) {
-	rows, err := q.db.Query(ctx, listBuddyUnreadDue, arg.Cutoff, arg.MaxRows)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListBuddyUnreadDueRow{}
-	for rows.Next() {
-		var i ListBuddyUnreadDueRow
-		if err := rows.Scan(
-			&i.ConversationID,
-			&i.UserID,
-			&i.IsLow,
-			&i.Invitation,
-			&i.PrevNotifiedAt,
-			&i.LastRead,
-			&i.OldestID,
-			&i.Email,
-			&i.ChatID,
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1099,7 +480,7 @@ candidates AS (
     WHERE m.left_at IS NULL
       AND m.user_id <> $2
       AND NOT EXISTS (
-          SELECT 1 FROM buddy_blocks b
+          SELECT 1 FROM user_blocks b
           WHERE (b.blocker_id = $2 AND b.blocked_id = m.user_id)
              OR (b.blocker_id = m.user_id AND b.blocked_id = $2))
 ),
@@ -1185,7 +566,7 @@ type ListSimilarBuddiesRow struct {
 // feed: hiding an application takes it out of every buddy surface. The page's shared
 // companies come back as parallel slug / name arrays, at most company_cap, in slug order.
 //
-// Excluded: the viewer, members who left, and any pair in buddy_blocks in either
+// Excluded: the viewer, members who left, and any pair in user_blocks (account-wide) in either
 // direction. A viewer who is not an active member yields no rows (the service checks first).
 // The CV is read for the page's rows only, to project the card summary.
 func (q *Queries) ListSimilarBuddies(ctx context.Context, arg ListSimilarBuddiesParams) ([]ListSimilarBuddiesRow, error) {
@@ -1222,177 +603,6 @@ func (q *Queries) ListSimilarBuddies(ctx context.Context, arg ListSimilarBuddies
 		return nil, err
 	}
 	return items, nil
-}
-
-const markBuddyConversationRead = `-- name: MarkBuddyConversationRead :one
-UPDATE buddy_conversations c
-SET last_read_low = CASE WHEN c.user_low = $1
-        THEN GREATEST(coalesce(c.last_read_low, 0), LEAST($2::bigint, newest.id))
-        ELSE c.last_read_low END,
-    last_read_high = CASE WHEN c.user_high = $1
-        THEN GREATEST(coalesce(c.last_read_high, 0), LEAST($2::bigint, newest.id))
-        ELSE c.last_read_high END
-FROM (
-    SELECT coalesce(max(id), 0)::bigint AS id
-    FROM buddy_messages WHERE conversation_id = $3
-) newest
-WHERE c.id = $3
-  AND $1 IN (c.user_low, c.user_high)
-RETURNING c.id
-`
-
-type MarkBuddyConversationReadParams struct {
-	UserID         int64 `json:"user_id"`
-	UpTo           int64 `json:"up_to"`
-	ConversationID int64 `json:"conversation_id"`
-}
-
-// Move the caller's side of the read cursor up to up_to, never back and never past the
-// conversation's newest message. No row means the caller is not a party.
-func (q *Queries) MarkBuddyConversationRead(ctx context.Context, arg MarkBuddyConversationReadParams) (int64, error) {
-	row := q.db.QueryRow(ctx, markBuddyConversationRead, arg.UserID, arg.UpTo, arg.ConversationID)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const releaseBuddyUnread = `-- name: ReleaseBuddyUnread :exec
-UPDATE buddy_conversations c
-SET notified_low_at  = CASE WHEN $1::boolean THEN $2::timestamptz ELSE c.notified_low_at END,
-    notified_high_at = CASE WHEN $1::boolean THEN c.notified_high_at ELSE $2::timestamptz END
-WHERE c.id = $3
-  AND CASE WHEN $1::boolean
-        THEN c.notified_low_at = $4::timestamptz
-        ELSE c.notified_high_at = $4::timestamptz
-      END
-`
-
-type ReleaseBuddyUnreadParams struct {
-	IsLow          bool               `json:"is_low"`
-	PrevNotifiedAt pgtype.Timestamptz `json:"prev_notified_at"`
-	ConversationID int64              `json:"conversation_id"`
-	ClaimedAt      pgtype.Timestamptz `json:"claimed_at"`
-}
-
-// Give a claim back after every channel failed, so the next run retries. Guarded on the
-// stamp being the claim's own: a side that has since been re-notified keeps its newer one.
-func (q *Queries) ReleaseBuddyUnread(ctx context.Context, arg ReleaseBuddyUnreadParams) error {
-	_, err := q.db.Exec(ctx, releaseBuddyUnread,
-		arg.IsLow,
-		arg.PrevNotifiedAt,
-		arg.ConversationID,
-		arg.ClaimedAt,
-	)
-	return err
-}
-
-const reopenBuddyConversation = `-- name: ReopenBuddyConversation :one
-WITH c AS (
-    UPDATE buddy_conversations c
-    SET status = 'pending',
-        initiator_id = $1::bigint,
-        created_at = now(),
-        accepted_at = NULL,
-        closed_at = NULL,
-        notified_low_at = NULL,
-        notified_high_at = NULL,
-        last_read_low = newest.id,
-        last_read_high = newest.id
-    FROM (
-        SELECT coalesce(max(id), 0)::bigint AS id
-        FROM buddy_messages
-        WHERE conversation_id = (SELECT id FROM buddy_conversations
-                                 WHERE user_low = $2 AND user_high = $3)
-    ) newest
-    WHERE c.user_low = $2::bigint
-      AND c.user_high = $3::bigint
-      AND c.status = 'closed'
-      AND (SELECT count(*) FROM buddy_members
-           WHERE user_id IN (c.user_low, c.user_high) AND left_at IS NULL) = 2
-      AND NOT EXISTS (
-          SELECT 1 FROM buddy_blocks
-          WHERE (blocker_id = c.user_low AND blocked_id = c.user_high)
-             OR (blocker_id = c.user_high AND blocked_id = c.user_low))
-    RETURNING c.id, c.user_low, c.user_high, c.initiator_id, c.status, c.created_at, c.accepted_at, c.closed_at, c.last_read_low, c.last_read_high, c.notified_low_at, c.notified_high_at
-), m AS (
-    INSERT INTO buddy_messages (conversation_id, sender_id, body)
-    SELECT c.id, c.initiator_id, $4 FROM c
-)
-SELECT id, user_low, user_high, initiator_id, status, created_at, accepted_at, closed_at, last_read_low, last_read_high, notified_low_at, notified_high_at FROM c
-`
-
-type ReopenBuddyConversationParams struct {
-	InitiatorID int64  `json:"initiator_id"`
-	UserLow     int64  `json:"user_low"`
-	UserHigh    int64  `json:"user_high"`
-	Body        string `json:"body"`
-}
-
-type ReopenBuddyConversationRow struct {
-	ID             int64              `json:"id"`
-	UserLow        int64              `json:"user_low"`
-	UserHigh       int64              `json:"user_high"`
-	InitiatorID    int64              `json:"initiator_id"`
-	Status         string             `json:"status"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	AcceptedAt     pgtype.Timestamptz `json:"accepted_at"`
-	ClosedAt       pgtype.Timestamptz `json:"closed_at"`
-	LastReadLow    pgtype.Int8        `json:"last_read_low"`
-	LastReadHigh   pgtype.Int8        `json:"last_read_high"`
-	NotifiedLowAt  pgtype.Timestamptz `json:"notified_low_at"`
-	NotifiedHighAt pgtype.Timestamptz `json:"notified_high_at"`
-}
-
-// A new invitation on a pair whose conversation was closed WITHOUT a block (a leave closes
-// it; a block never reopens). The row is reused rather than replaced, so the history
-// stays and the pair keeps exactly one conversation. It goes back to pending under the
-// new inviter, created_at restarts so the invitation counts against the cap, and the old
-// messages count as read for both sides so only the new first message is unread. The same
-// guards as CreateBuddyInvitation apply; no row means closed-without-block did not hold.
-func (q *Queries) ReopenBuddyConversation(ctx context.Context, arg ReopenBuddyConversationParams) (ReopenBuddyConversationRow, error) {
-	row := q.db.QueryRow(ctx, reopenBuddyConversation,
-		arg.InitiatorID,
-		arg.UserLow,
-		arg.UserHigh,
-		arg.Body,
-	)
-	var i ReopenBuddyConversationRow
-	err := row.Scan(
-		&i.ID,
-		&i.UserLow,
-		&i.UserHigh,
-		&i.InitiatorID,
-		&i.Status,
-		&i.CreatedAt,
-		&i.AcceptedAt,
-		&i.ClosedAt,
-		&i.LastReadLow,
-		&i.LastReadHigh,
-		&i.NotifiedLowAt,
-		&i.NotifiedHighAt,
-	)
-	return i, err
-}
-
-const resolveBuddyReport = `-- name: ResolveBuddyReport :one
-UPDATE buddy_reports
-SET resolved_at = coalesce(resolved_at, now()),
-    resolved_by = coalesce(resolved_by, $1::bigint)
-WHERE id = $2
-RETURNING id
-`
-
-type ResolveBuddyReportParams struct {
-	ModeratorID int64 `json:"moderator_id"`
-	ID          int64 `json:"id"`
-}
-
-// Mark a report handled. An already resolved report keeps its first resolver and time.
-func (q *Queries) ResolveBuddyReport(ctx context.Context, arg ResolveBuddyReportParams) (int64, error) {
-	row := q.db.QueryRow(ctx, resolveBuddyReport, arg.ModeratorID, arg.ID)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
 }
 
 const showBuddyApplication = `-- name: ShowBuddyApplication :exec

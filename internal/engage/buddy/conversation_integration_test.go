@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/engage/buddy"
+	"github.com/strelov1/freehire/internal/engage/messaging"
 )
 
 // member seeds a user and joins them to the network.
@@ -27,6 +28,23 @@ func member(t *testing.T, pool *pgxpool.Pool, svc *buddy.Service, email string) 
 		t.Fatal(err)
 	}
 	return id, m.Handle
+}
+
+// openChat seeds two members and an accepted conversation between them, A having invited B.
+func openChat(t *testing.T) (pool *pgxpool.Pool, svc *buddy.Service, a, b, convID int64) {
+	t.Helper()
+	pool, svc = setup(t)
+	ctx := context.Background()
+	a, _ = member(t, pool, svc, "a@example.test")
+	b, bHandle := member(t, pool, svc, "b@example.test")
+	c, err := svc.Invite(ctx, a, bHandle, "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := chat(pool).Accept(ctx, b, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	return pool, svc, a, b, c.ID
 }
 
 func countRows(t *testing.T, pool *pgxpool.Pool, query string, args ...any) int {
@@ -48,12 +66,12 @@ func TestInviteCreatesPendingConversationWithFirstMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Status != buddy.StatusPending || !c.Initiator || c.OtherHandle != bHandle || c.ID == 0 {
+	if c.Status != messaging.StatusPending || !c.Starter || otherHandle(c) != bHandle || c.ID == 0 {
 		t.Fatalf("invite = %+v", c)
 	}
 	var body string
 	var sender int64
-	if err := pool.QueryRow(ctx, `SELECT body, sender_id FROM buddy_messages WHERE conversation_id = $1`, c.ID).Scan(&body, &sender); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT body, sender_id FROM messages WHERE conversation_id = $1`, c.ID).Scan(&body, &sender); err != nil {
 		t.Fatal(err)
 	}
 	if body != "Interviewing for the same role?" || sender != a {
@@ -79,7 +97,7 @@ func TestInviteIsOrderIndependent(t *testing.T) {
 	if lo == a {
 		other = bHandle
 	}
-	if _, err := svc.Invite(ctx, lo, other, "hi"); !errors.Is(err, buddy.ErrConversationExists) {
+	if _, err := svc.Invite(ctx, lo, other, "hi"); !errors.Is(err, messaging.ErrExists) {
 		t.Fatalf("reverse invite err = %v, want ErrConversationExists", err)
 	}
 }
@@ -94,22 +112,22 @@ func TestInviteRefusesSecondConversationForPairInAnyStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Invite(ctx, a, bHandle, "again"); !errors.Is(err, buddy.ErrConversationExists) {
+	if _, err := svc.Invite(ctx, a, bHandle, "again"); !errors.Is(err, messaging.ErrExists) {
 		t.Fatalf("pending: %v", err)
 	}
-	if _, err := svc.Decline(ctx, b, c.ID); err != nil {
+	if _, err := chat(pool).Decline(ctx, b, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Invite(ctx, a, bHandle, "again"); !errors.Is(err, buddy.ErrConversationExists) {
+	if _, err := svc.Invite(ctx, a, bHandle, "again"); !errors.Is(err, messaging.ErrExists) {
 		t.Fatalf("declined: %v", err)
 	}
-	if _, err := svc.Invite(ctx, b, aHandle, "my turn"); !errors.Is(err, buddy.ErrConversationExists) {
+	if _, err := svc.Invite(ctx, b, aHandle, "my turn"); !errors.Is(err, messaging.ErrExists) {
 		t.Fatalf("declined, other direction: %v", err)
 	}
-	if n := countRows(t, pool, `SELECT count(*) FROM buddy_conversations`); n != 1 {
+	if n := countRows(t, pool, `SELECT count(*) FROM conversations`); n != 1 {
 		t.Fatalf("conversations = %d, want 1", n)
 	}
-	if n := countRows(t, pool, `SELECT count(*) FROM buddy_messages`); n != 1 {
+	if n := countRows(t, pool, `SELECT count(*) FROM messages`); n != 1 {
 		t.Fatalf("messages = %d, want 1", n)
 	}
 }
@@ -140,14 +158,14 @@ func TestInviteConcurrentDuplicateIsConflictNotError(t *testing.T) {
 		switch {
 		case err == nil:
 			created++
-		case !errors.Is(err, buddy.ErrConversationExists):
+		case !errors.Is(err, messaging.ErrExists):
 			t.Fatalf("racing invite failed with %v, want nil or ErrConversationExists", err)
 		}
 	}
 	if created != 1 {
 		t.Fatalf("%d invitations succeeded, want 1", created)
 	}
-	if n := countRows(t, pool, `SELECT count(*) FROM buddy_messages`); n != 1 {
+	if n := countRows(t, pool, `SELECT count(*) FROM messages`); n != 1 {
 		t.Fatalf("messages = %d, want 1", n)
 	}
 }
@@ -164,11 +182,11 @@ func TestInviteDailyLimitReportsWhenNextIsPossible(t *testing.T) {
 	}
 	// Age the first invitation so the oldest in the window is a known instant.
 	oldest := time.Now().Add(-20 * time.Hour).Truncate(time.Microsecond)
-	if _, err := pool.Exec(ctx, `UPDATE buddy_conversations SET created_at = $2 WHERE id = (SELECT min(id) FROM buddy_conversations WHERE initiator_id = $1)`, a, oldest); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE conversations SET created_at = $2 WHERE id = (SELECT min(id) FROM conversations WHERE starter_id = $1)`, a, oldest); err != nil {
 		t.Fatal(err)
 	}
 	_, extra := member(t, pool, svc, "extra@example.test")
-	before := countRows(t, pool, `SELECT count(*) FROM buddy_conversations`)
+	before := countRows(t, pool, `SELECT count(*) FROM conversations`)
 
 	_, err := svc.Invite(ctx, a, extra, "one more")
 	var limit *buddy.InvitationLimitError
@@ -178,12 +196,12 @@ func TestInviteDailyLimitReportsWhenNextIsPossible(t *testing.T) {
 	if want := oldest.Add(24 * time.Hour); !limit.RetryAt.Equal(want) {
 		t.Fatalf("RetryAt = %v, want %v", limit.RetryAt, want)
 	}
-	if n := countRows(t, pool, `SELECT count(*) FROM buddy_conversations`); n != before {
+	if n := countRows(t, pool, `SELECT count(*) FROM conversations`); n != before {
 		t.Fatalf("a refused invitation created a conversation")
 	}
 
 	// An invitation older than the window no longer counts.
-	if _, err := pool.Exec(ctx, `UPDATE buddy_conversations SET created_at = now() - interval '25 hours' WHERE initiator_id = $1`, a); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE conversations SET created_at = now() - interval '25 hours' WHERE starter_id = $1`, a); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.Invite(ctx, a, extra, "one more"); err != nil {
@@ -201,7 +219,7 @@ func TestInviteRefusesBadMessage(t *testing.T) {
 		"empty": "", "blank": " \n\t ", "too long": strings.Repeat("x", buddy.MaxInvitationRunes+1),
 		"too long in runes": strings.Repeat("щ", buddy.MaxInvitationRunes+1),
 	} {
-		if _, err := svc.Invite(ctx, a, bHandle, body); !errors.Is(err, buddy.ErrInvalidMessage) {
+		if _, err := svc.Invite(ctx, a, bHandle, body); !errors.Is(err, messaging.ErrInvalidMessage) {
 			t.Fatalf("%s: err = %v, want ErrInvalidMessage", name, err)
 		}
 	}
@@ -209,7 +227,7 @@ func TestInviteRefusesBadMessage(t *testing.T) {
 	if _, err := svc.Invite(ctx, a, bHandle, strings.Repeat("щ", buddy.MaxInvitationRunes)); err != nil {
 		t.Fatalf("500 runes: %v", err)
 	}
-	if n := countRows(t, pool, `SELECT count(*) FROM buddy_conversations`); n != 1 {
+	if n := countRows(t, pool, `SELECT count(*) FROM conversations`); n != 1 {
 		t.Fatalf("conversations = %d, want 1", n)
 	}
 }
@@ -227,7 +245,7 @@ func TestInviteRefusesUnavailableRecipients(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, q := range [][2]int64{{a, blocked}, {blocker, a}} {
-		if _, err := pool.Exec(ctx, `INSERT INTO buddy_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, q[0], q[1]); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, q[0], q[1]); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -248,7 +266,7 @@ func TestInviteRefusesUnavailableRecipients(t *testing.T) {
 	if _, err := svc.Invite(ctx, left, bHandle, "hi"); !errors.Is(err, buddy.ErrNotMember) {
 		t.Fatalf("left inviter: %v", err)
 	}
-	if n := countRows(t, pool, `SELECT count(*) FROM buddy_conversations`); n != 0 {
+	if n := countRows(t, pool, `SELECT count(*) FROM conversations`); n != 0 {
 		t.Fatalf("conversations = %d, want 0", n)
 	}
 }
@@ -262,17 +280,17 @@ func TestAcceptOpensTheConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := svc.Accept(ctx, b, c.ID)
+	got, err := chat(pool).Accept(ctx, b, c.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != buddy.StatusOpen || got.Initiator || got.OtherHandle != aHandle || got.AcceptedAt == nil {
+	if got.Status != messaging.StatusOpen || got.Starter || otherHandle(got) != aHandle || got.AcceptedAt == nil {
 		t.Fatalf("accept = %+v", got)
 	}
-	if _, err := svc.Accept(ctx, b, c.ID); !errors.Is(err, buddy.ErrConversationState) {
+	if _, err := chat(pool).Accept(ctx, b, c.ID); !errors.Is(err, messaging.ErrState) {
 		t.Fatalf("second accept: %v", err)
 	}
-	if _, err := svc.Decline(ctx, b, c.ID); !errors.Is(err, buddy.ErrConversationState) {
+	if _, err := chat(pool).Decline(ctx, b, c.ID); !errors.Is(err, messaging.ErrState) {
 		t.Fatalf("decline after accept: %v", err)
 	}
 }
@@ -286,14 +304,14 @@ func TestDeclineIsSilentAndFinal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := svc.Decline(ctx, b, c.ID)
+	got, err := chat(pool).Decline(ctx, b, c.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != buddy.StatusDeclined || got.AcceptedAt != nil {
+	if got.Status != messaging.StatusDeclined || got.AcceptedAt != nil {
 		t.Fatalf("decline = %+v", got)
 	}
-	if _, err := svc.Accept(ctx, b, c.ID); !errors.Is(err, buddy.ErrConversationState) {
+	if _, err := chat(pool).Accept(ctx, b, c.ID); !errors.Is(err, messaging.ErrState) {
 		t.Fatalf("accept after decline: %v", err)
 	}
 }
@@ -309,21 +327,21 @@ func TestOnlyTheRecipientAnswers(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The inviter cannot answer their own invitation.
-	if _, err := svc.Accept(ctx, a, c.ID); !errors.Is(err, buddy.ErrConversationState) {
+	if _, err := chat(pool).Accept(ctx, a, c.ID); !errors.Is(err, messaging.ErrState) {
 		t.Fatalf("inviter accept: %v", err)
 	}
-	if _, err := svc.Decline(ctx, a, c.ID); !errors.Is(err, buddy.ErrConversationState) {
+	if _, err := chat(pool).Decline(ctx, a, c.ID); !errors.Is(err, messaging.ErrState) {
 		t.Fatalf("inviter decline: %v", err)
 	}
 	// An outsider and an unknown id are both "not found".
-	if _, err := svc.Accept(ctx, third, c.ID); !errors.Is(err, buddy.ErrNotFound) {
+	if _, err := chat(pool).Accept(ctx, third, c.ID); !errors.Is(err, messaging.ErrNotFound) {
 		t.Fatalf("outsider accept: %v", err)
 	}
-	if _, err := svc.Decline(ctx, third, c.ID+1000); !errors.Is(err, buddy.ErrNotFound) {
+	if _, err := chat(pool).Decline(ctx, third, c.ID+1000); !errors.Is(err, messaging.ErrNotFound) {
 		t.Fatalf("unknown id: %v", err)
 	}
 	var status string
-	if err := pool.QueryRow(ctx, `SELECT status FROM buddy_conversations WHERE id = $1`, c.ID).Scan(&status); err != nil || status != buddy.StatusPending {
+	if err := pool.QueryRow(ctx, `SELECT status FROM conversations WHERE id = $1`, c.ID).Scan(&status); err != nil || status != messaging.StatusPending {
 		t.Fatalf("status = %q, %v", status, err)
 	}
 }

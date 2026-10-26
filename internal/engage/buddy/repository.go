@@ -213,180 +213,34 @@ func memberFromRow(row db.BuddyMember) Member {
 	}
 }
 
-func orderedPair(a, b int64) (low, high int64) {
-	if a < b {
-		return a, b
-	}
-	return b, a
-}
-
-func conversationFromRow(row db.BuddyConversation) ConversationRow {
-	c := ConversationRow{
-		ID: row.ID, UserLow: row.UserLow, UserHigh: row.UserHigh, InitiatorID: row.InitiatorID,
-		Status: row.Status, CreatedAt: row.CreatedAt.Time,
-	}
-	if row.AcceptedAt.Valid {
-		c.AcceptedAt = &row.AcceptedAt.Time
-	}
-	return c
-}
-
 func (r *QueriesRepository) Blocked(ctx context.Context, a, b int64) (bool, error) {
-	return r.q.BuddyPairBlocked(ctx, db.BuddyPairBlockedParams{A: a, B: b})
+	return r.q.UsersBlocked(ctx, db.UsersBlockedParams{A: a, B: b})
 }
 
-func (r *QueriesRepository) PairHasConversation(ctx context.Context, a, b int64) (bool, error) {
-	low, high := orderedPair(a, b)
-	row, err := r.q.GetBuddyConversationByPair(ctx, db.GetBuddyConversationByPairParams{UserLow: low, UserHigh: high})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	// A closed conversation is not a barrier: CreateInvitation reopens it, or refuses when
-	// a block is the reason it is closed.
-	return err == nil && row.Status != StatusClosed, err
-}
-
-func (r *QueriesRepository) InvitationsSince(ctx context.Context, userID int64, since time.Time) (int, time.Time, error) {
-	row, err := r.q.CountBuddyInvitationsSince(ctx, db.CountBuddyInvitationsSinceParams{
-		InitiatorID: userID, CreatedAt: pgtype.Timestamptz{Time: since, Valid: true},
-	})
-	if err != nil {
-		return 0, time.Time{}, err
-	}
-	return int(row.Sent), row.Oldest.Time, nil
-}
-
-func (r *QueriesRepository) CreateInvitation(ctx context.Context, from, to int64, body string) (ConversationRow, error) {
-	low, high := orderedPair(from, to)
-	row, err := r.q.CreateBuddyInvitation(ctx, db.CreateBuddyInvitationParams{
-		UserLow: low, UserHigh: high, InitiatorID: from, Body: body,
-	})
-	if err != nil {
-		if pgerr.IsUniqueViolation(err) {
-			return r.reopenInvitation(ctx, low, high, from, body)
-		}
-		if errors.Is(err, pgx.ErrNoRows) {
-			// The statement guards both parties' membership and the block table itself.
-			return ConversationRow{}, ErrRecipientUnavailable
-		}
-		return ConversationRow{}, err
-	}
-	return conversationFromRow(db.BuddyConversation(row)), nil
-}
-
-// reopenInvitation answers an invitation on a pair that already has a conversation: a
-// closed one without a block comes back as pending, anything else stays as it is.
-func (r *QueriesRepository) reopenInvitation(ctx context.Context, low, high, from int64, body string) (ConversationRow, error) {
-	row, err := r.q.ReopenBuddyConversation(ctx, db.ReopenBuddyConversationParams{
-		UserLow: low, UserHigh: high, InitiatorID: from, Body: body,
-	})
-	if err == nil {
-		return conversationFromRow(db.BuddyConversation(row)), nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return ConversationRow{}, err
-	}
-	// Nothing matched: still closed means a block or a departed member (not revealed),
-	// any other status means the pair is already talking or declined.
-	cur, err := r.q.GetBuddyConversationByPair(ctx, db.GetBuddyConversationByPairParams{UserLow: low, UserHigh: high})
-	if err != nil {
-		return ConversationRow{}, err
-	}
-	if cur.Status == StatusClosed {
-		return ConversationRow{}, ErrRecipientUnavailable
-	}
-	return ConversationRow{}, ErrConversationExists
-}
-
-func (r *QueriesRepository) AnswerInvitation(ctx context.Context, userID, conversationID int64, status string) (ConversationRow, error) {
-	row, err := r.q.AnswerBuddyInvitation(ctx, db.AnswerBuddyInvitationParams{Status: status, ID: conversationID, UserID: userID})
-	if err == nil {
-		return conversationFromRow(row), nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return ConversationRow{}, err
-	}
-	// Nothing matched: say whether the conversation is the caller's to answer at all.
-	cur, err := r.q.GetBuddyConversation(ctx, conversationID)
-	if errors.Is(err, pgx.ErrNoRows) || (err == nil && cur.UserLow != userID && cur.UserHigh != userID) {
-		return ConversationRow{}, ErrNotFound
-	}
-	if err != nil {
-		return ConversationRow{}, err
-	}
-	return ConversationRow{}, ErrConversationState
-}
-
-func (r *QueriesRepository) Conversation(ctx context.Context, conversationID int64) (ConversationRow, bool, error) {
-	row, err := r.q.GetBuddyConversation(ctx, conversationID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ConversationRow{}, false, nil
-	}
-	if err != nil {
-		return ConversationRow{}, false, err
-	}
-	return conversationFromRow(row), true, nil
-}
-
-func (r *QueriesRepository) InsertMessage(ctx context.Context, userID, conversationID int64, body string) (MessageRow, error) {
-	row, err := r.q.InsertBuddyMessage(ctx, db.InsertBuddyMessageParams{SenderID: userID, Body: body, ConversationID: conversationID})
-	if err == nil {
-		return MessageRow{ID: row.ID, SenderID: row.SenderID, Body: row.Body, CreatedAt: row.CreatedAt.Time}, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return MessageRow{}, err
-	}
-	// Nothing matched: say whether the conversation is the caller's at all.
-	cur, ok, err := r.Conversation(ctx, conversationID)
-	if err != nil {
-		return MessageRow{}, err
-	}
-	if !ok || (cur.UserLow != userID && cur.UserHigh != userID) {
-		return MessageRow{}, ErrNotFound
-	}
-	return MessageRow{}, ErrConversationState
-}
-
-func (r *QueriesRepository) Messages(ctx context.Context, conversationID, after int64, limit int) ([]MessageRow, error) {
-	rows, err := r.q.ListBuddyMessages(ctx, db.ListBuddyMessagesParams{ConversationID: conversationID, AfterID: after, PageLimit: int32(limit)})
+func (r *QueriesRepository) Counterparts(ctx context.Context, viewerID int64, userIDs []int64) ([]CounterpartRow, error) {
+	rows, err := r.q.ListBuddyCounterparts(ctx, db.ListBuddyCounterpartsParams{ViewerID: viewerID, UserIds: userIDs})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]MessageRow, len(rows))
+	out := make([]CounterpartRow, len(rows))
 	for i, row := range rows {
-		out[i] = MessageRow{ID: row.ID, SenderID: row.SenderID, Body: row.Body, CreatedAt: row.CreatedAt.Time}
+		out[i] = CounterpartRow{
+			UserID:     row.UserID,
+			SimilarRow: SimilarRow{Handle: row.Handle, Countries: row.Countries, CV: decodeCV(row.ResumeStructured)},
+			Visible:    row.Visible,
+		}
 	}
 	return out, nil
 }
 
-func (r *QueriesRepository) MarkRead(ctx context.Context, userID, conversationID, upTo int64) error {
-	_, err := r.q.MarkBuddyConversationRead(ctx, db.MarkBuddyConversationReadParams{UserID: userID, UpTo: upTo, ConversationID: conversationID})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-	return err
-}
-
-func (r *QueriesRepository) Conversations(ctx context.Context, userID int64) ([]ConversationListRow, error) {
-	rows, err := r.q.ListBuddyConversations(ctx, userID)
+func (r *QueriesRepository) Handles(ctx context.Context, userIDs []int64) (map[int64]string, error) {
+	rows, err := r.q.ListBuddyHandles(ctx, userIDs)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ConversationListRow, len(rows))
-	for i, row := range rows {
-		c := ConversationRow{
-			ID: row.ID, UserLow: row.UserLow, UserHigh: row.UserHigh, InitiatorID: row.InitiatorID,
-			Status: row.Status, CreatedAt: row.CreatedAt.Time,
-		}
-		if row.AcceptedAt.Valid {
-			c.AcceptedAt = &row.AcceptedAt.Time
-		}
-		out[i] = ConversationListRow{
-			ConversationRow: c,
-			Other:           SimilarRow{Handle: row.Handle, Countries: row.Countries, CV: decodeCV(row.ResumeStructured)},
-			OtherVisible:    row.OtherVisible.Bool,
-			Unread:          int(row.Unread), LastMessageAt: row.LastMessageAt.Time,
-		}
+	out := make(map[int64]string, len(rows))
+	for _, row := range rows {
+		out[row.UserID] = row.Handle
 	}
 	return out, nil
 }

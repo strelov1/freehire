@@ -144,7 +144,7 @@ func TestFeedExcludesLeftBlockedAndNonMembers(t *testing.T) {
 	if err := svc.Leave(ctx, left); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO buddy_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($3, $1)`, viewer, byMe, meBy); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($3, $1)`, viewer, byMe, meBy); err != nil {
 		t.Fatal(err)
 	}
 	got, err := svc.Feed(ctx, viewer, buddy.FeedAll, "", 50)
@@ -221,7 +221,7 @@ func TestFeedForgedCursorsAreRefused(t *testing.T) {
 	joinWith(t, pool, svc, viewer, "", nil, nil)
 	joinWith(t, pool, svc, author, "", nil, nil)
 	joinWith(t, pool, svc, blocked, "", nil, nil)
-	if _, err := pool.Exec(ctx, `INSERT INTO buddy_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, viewer, blocked); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, viewer, blocked); err != nil {
 		t.Fatal(err)
 	}
 	app := newApp(t, pool, author, "acme")
@@ -266,7 +266,7 @@ func TestFeedSimilarModeRestrictsToTopMembers(t *testing.T) {
 	if len(sim.Entries) != 1 || sim.Entries[0].ID != nearEv || sim.Entries[0].Handle != hNear {
 		t.Fatalf("similar = %+v", sim.Entries)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO buddy_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, viewer, near); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, viewer, near); err != nil {
 		t.Fatal(err)
 	}
 	sim, err = svc.Feed(ctx, viewer, buddy.FeedSimilar, "", 10)
@@ -485,7 +485,7 @@ func TestMemberFeedUnavailableHandles(t *testing.T) {
 	if err := svc.Leave(ctx, left); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO buddy_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($3, $1)`, viewer, byMe, meBy); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($3, $1)`, viewer, byMe, meBy); err != nil {
 		t.Fatal(err)
 	}
 	for name, h := range map[string]string{"unknown": "no-such-handle-00", "left": hL, "blocked by me": hB1, "blocked me": hB2, "own": hV} {

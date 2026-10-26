@@ -42,6 +42,7 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
+	"github.com/strelov1/freehire/internal/engage/messaging"
 	"github.com/strelov1/freehire/internal/engage/processreport"
 	"github.com/strelov1/freehire/internal/engage/referral"
 	"github.com/strelov1/freehire/internal/engage/reminder"
@@ -926,7 +927,12 @@ func Register(app *fiber.App, cfg Config) {
 	referralSvc := referral.New(referral.NewQueriesRepository(queries), referralPinger, cfg.Blob,
 		referral.Config{CabinetURL: referralCabinetURL})
 	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore, queries)
-	buddyH := newBuddyHandlers(buddy.New(buddy.NewQueriesRepository(queries)))
+	// Conversations are the messaging core's; each persona a participant may speak as is
+	// registered here.
+	buddyRepo := buddy.NewQueriesRepository(queries)
+	messagingSvc := messaging.New(messaging.NewQueriesRepository(queries), buddy.NewPersona(buddyRepo))
+	conversationH := newConversationHandlers(messagingSvc)
+	buddyH := newBuddyHandlers(buddy.New(buddyRepo, messagingSvc))
 
 	// The mentorship marketplace: referral's opposite number, where the insider is named
 	// and chosen rather than anonymous. A nil notifier is a deployment with no mail
@@ -1121,6 +1127,9 @@ func Register(app *fiber.App, cfg Config) {
 
 	// Interview buddies (see buddyHandlers).
 	buddyH.register(api, mw)
+
+	// Conversations of every kind (see conversationHandlers).
+	conversationH.register(api, mw)
 
 	// The mentorship marketplace (see mentorshipHandlers).
 	mentorshipH.register(api, mw)

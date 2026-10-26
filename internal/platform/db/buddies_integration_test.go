@@ -1,7 +1,7 @@
 //go:build integration
 
-// Integration test for the interview-buddies schema's account-deletion cascade and the
-// membership queries. Run with: go test -tags=integration ./internal/platform/db/
+// Integration test for the interview-buddies and messaging schemas' account-deletion
+// cascade and the membership queries. Run with: go test -tags=integration ./internal/platform/db/
 package db
 
 import (
@@ -22,28 +22,23 @@ func TestDeletingUserCascadesBuddyData(t *testing.T) {
 		}
 	}
 
-	low, high := alice, bob
-	if low > high {
-		low, high = high, low
+	// Bob starts it, so Alice's deletion reaches the conversation only through her
+	// participant row — the trigger's path, not the starter's foreign key.
+	started, err := q.StartConversation(ctx, StartConversationParams{
+		Kind: "buddy", StarterID: bob, StarterPersona: "buddy", RecipientID: alice, RecipientPersona: "buddy", Body: "hello",
+	})
+	if err != nil {
+		t.Fatalf("start conversation: %v", err)
 	}
-	var conv int64
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO buddy_conversations (user_low, user_high, initiator_id) VALUES ($1, $2, $1) RETURNING id`,
-		low, high).Scan(&conv); err != nil {
-		t.Fatalf("insert conversation: %v", err)
-	}
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO buddy_messages (conversation_id, sender_id, body) VALUES ($1, $2, 'hello')`, conv, low); err != nil {
-		t.Fatalf("insert message: %v", err)
-	}
+	conv := started.ID
 
 	for _, stmt := range []struct {
 		sql  string
 		args []any
 	}{
-		{`INSERT INTO buddy_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, []any{alice, bob}},
+		{`INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2)`, []any{alice, bob}},
 		{`INSERT INTO buddy_hidden_applications (user_id, application_id) VALUES ($1, 42)`, []any{alice}},
-		{`INSERT INTO buddy_reports (conversation_id, reporter_id, reason) VALUES ($1, $2, 'spam')`, []any{conv, bob}},
+		{`INSERT INTO conversation_reports (conversation_id, reporter_id, reason) VALUES ($1, $2, 'spam')`, []any{conv, bob}},
 	} {
 		if _, err := pool.Exec(ctx, stmt.sql, stmt.args...); err != nil {
 			t.Fatalf("seed %q: %v", stmt.sql, err)
@@ -61,11 +56,12 @@ func TestDeletingUserCascadesBuddyData(t *testing.T) {
 	}{
 		{"deleted member", `SELECT count(*) FROM buddy_members WHERE user_id = $1`, []any{alice}, 0},
 		{"other member", `SELECT count(*) FROM buddy_members WHERE user_id = $1`, []any{bob}, 1},
-		{"conversations", `SELECT count(*) FROM buddy_conversations`, nil, 0},
-		{"messages", `SELECT count(*) FROM buddy_messages`, nil, 0},
-		{"blocks", `SELECT count(*) FROM buddy_blocks`, nil, 0},
+		{"conversations", `SELECT count(*) FROM conversations`, nil, 0},
+		{"participants", `SELECT count(*) FROM conversation_participants`, nil, 0},
+		{"messages", `SELECT count(*) FROM messages`, nil, 0},
+		{"blocks", `SELECT count(*) FROM user_blocks`, nil, 0},
 		{"hidden applications", `SELECT count(*) FROM buddy_hidden_applications`, nil, 0},
-		{"reports", `SELECT count(*) FROM buddy_reports`, nil, 0},
+		{"reports", `SELECT count(*) FROM conversation_reports`, nil, 0},
 	} {
 		var n int
 		if err := pool.QueryRow(ctx, c.query, c.args...).Scan(&n); err != nil {
@@ -93,16 +89,13 @@ func TestBuddyMembershipQueries(t *testing.T) {
 		t.Fatal("fresh member has left_at set")
 	}
 
-	low, high := user, other
-	if low > high {
-		low, high = high, low
+	started, err := q.StartConversation(ctx, StartConversationParams{
+		Kind: "buddy", StarterID: other, StarterPersona: "buddy", RecipientID: user, RecipientPersona: "buddy", Body: "hello",
+	})
+	if err != nil {
+		t.Fatalf("start conversation: %v", err)
 	}
-	var conv int64
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO buddy_conversations (user_low, user_high, initiator_id, status) VALUES ($1, $2, $1, 'open') RETURNING id`,
-		low, high).Scan(&conv); err != nil {
-		t.Fatalf("insert conversation: %v", err)
-	}
+	conv := started.ID
 
 	left, err := q.LeaveBuddyMember(ctx, user)
 	if err != nil {
@@ -112,7 +105,7 @@ func TestBuddyMembershipQueries(t *testing.T) {
 		t.Error("leave did not set left_at")
 	}
 	var status string
-	if err := pool.QueryRow(ctx, `SELECT status FROM buddy_conversations WHERE id = $1`, conv).Scan(&status); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT status FROM conversations WHERE id = $1`, conv).Scan(&status); err != nil {
 		t.Fatalf("read conversation: %v", err)
 	}
 	if status != "closed" {

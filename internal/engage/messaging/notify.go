@@ -1,4 +1,4 @@
-package buddy
+package messaging
 
 import (
 	"bytes"
@@ -29,16 +29,9 @@ const unreadAfter = 5 * time.Minute
 // due on the next one.
 const DefaultNotifyMaxPerRun = 500
 
-// Notification kinds recorded in the in-app notification center. user_notifications.kind
-// is free text, so they need no migration.
-const (
-	kindMessage    = "buddy_message"
-	kindInvitation = "buddy_invitation"
-)
-
 // The notice is deliberately contentless: who wrote, and what, lives behind authorization
 // in the chat, never in an inbox or a Telegram thread.
-var noticeHTML = template.Must(mailtpl.Partials().New("buddyUnread").Parse(`
+var noticeHTML = template.Must(mailtpl.Partials().New("messageUnread").Parse(`
 {{template "p" .Line}}
 {{template "button" (mailLink .URL "Open the chat")}}`))
 
@@ -55,7 +48,7 @@ type TelegramSender interface {
 }
 
 // Silencer answers whether an account has turned a group of mail off; *emailprefs.Service
-// satisfies it. It governs the email channel only — Telegram is something the member
+// satisfies it. It governs the email channel only — Telegram is something the account
 // connected themselves and turns off where they connected it.
 type Silencer interface {
 	Silenced(ctx context.Context, userID int64, g emailprefs.Group) bool
@@ -83,65 +76,75 @@ type NotifierConfig struct {
 	MaxPerRun int32
 }
 
-// Notifier tells members about messages they have left unread.
+// Notifier tells participants about messages they have left unread, in each kind's words.
 type Notifier struct {
 	q      *db.Queries
 	cfg    NotifierConfig
 	layout *mailtpl.Layout
+	kinds  map[string]Kind
 }
 
-// NewNotifier builds a Notifier.
-func NewNotifier(q *db.Queries, cfg NotifierConfig) *Notifier {
+// NewNotifier builds a Notifier over the kinds it words notices for. A conversation of a
+// kind it was not built with is never claimed, so it stays due for a notifier that knows it.
+func NewNotifier(q *db.Queries, cfg NotifierConfig, kinds ...Kind) *Notifier {
 	if cfg.MaxPerRun <= 0 {
 		cfg.MaxPerRun = DefaultNotifyMaxPerRun
 	}
 	cfg.Origin = strings.TrimRight(cfg.Origin, "/")
-	return &Notifier{q: q, cfg: cfg, layout: mailtpl.New(cfg.Origin)}
+	n := &Notifier{q: q, cfg: cfg, layout: mailtpl.New(cfg.Origin), kinds: make(map[string]Kind, len(kinds))}
+	for _, k := range kinds {
+		n.kinds[k.Name()] = k
+	}
+	return n
 }
 
-// NotifyUnread sends each member at most one notice per run of unread messages: a side is
-// due once the oldest message the other side wrote since its read cursor is five minutes
-// old, and is not due again until it reads and a newer message ages the same way.
+// NotifyUnread sends each participant at most one notice per run of unread messages: a
+// participant is due once the oldest message another wrote since its read cursor is five
+// minutes old, and is not due again until it reads and a newer message ages the same way.
 //
 // The claim comes first. A worker that sends and then records sends twice whenever the
-// second step fails, so the side's stamp is moved before anything leaves and only the run
-// that moved it sends. When every channel fails the claim is released and the next run
-// retries; one channel succeeding counts as sent.
+// second step fails, so the participant's stamp is moved before anything leaves and only
+// the run that moved it sends. When every channel fails the claim is released and the next
+// run retries; one channel succeeding counts as sent.
 func (n *Notifier) NotifyUnread(ctx context.Context, now time.Time) (NotifyResult, error) {
-	due, err := n.q.ListBuddyUnreadDue(ctx, db.ListBuddyUnreadDueParams{
+	due, err := n.q.ListUnreadDue(ctx, db.ListUnreadDueParams{
 		Cutoff:  pgtype.Timestamptz{Time: now.Add(-unreadAfter), Valid: true},
 		MaxRows: n.cfg.MaxPerRun,
 	})
 	if err != nil {
-		return NotifyResult{}, fmt.Errorf("buddy: reading due notices: %w", err)
+		return NotifyResult{}, fmt.Errorf("messaging: reading due notices: %w", err)
 	}
 
 	var res NotifyResult
 	for _, d := range due {
+		kind, ok := n.kinds[d.Kind]
+		if !ok {
+			continue
+		}
 		claimedAt := pgtype.Timestamptz{Time: now, Valid: true}
-		_, err := n.q.ClaimBuddyUnread(ctx, db.ClaimBuddyUnreadParams{
-			IsLow: d.IsLow, ClaimedAt: claimedAt, ConversationID: d.ConversationID,
-			PrevNotifiedAt: d.PrevNotifiedAt, LastRead: d.LastRead.Int64,
+		_, err := n.q.ClaimUnread(ctx, db.ClaimUnreadParams{
+			ClaimedAt: claimedAt, ConversationID: d.ConversationID, UserID: d.UserID,
+			PrevNotifiedAt: d.PrevNotifiedAt, LastRead: d.LastRead,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
-			continue // somebody else has it, or the member read in the meantime
+			continue // somebody else has it, or the participant read in the meantime
 		}
 		if err != nil {
-			return res, fmt.Errorf("buddy: claiming notice: %w", err)
+			return res, fmt.Errorf("messaging: claiming notice: %w", err)
 		}
 
-		if err := n.deliver(ctx, d); err != nil {
-			log.Printf("buddy: notice for conversation %d failed: %v", d.ConversationID, err)
+		if err := n.deliver(ctx, d, kind.Notice(d.ConversationID, d.Pending)); err != nil {
+			log.Printf("messaging: notice for conversation %d failed: %v", d.ConversationID, err)
 			// The release must land even when the run's own context is what failed the
 			// delivery: a claim left in place silences this notice until a newer message.
 			rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-			rerr := n.q.ReleaseBuddyUnread(rctx, db.ReleaseBuddyUnreadParams{
-				IsLow: d.IsLow, ConversationID: d.ConversationID,
+			rerr := n.q.ReleaseUnread(rctx, db.ReleaseUnreadParams{
+				ConversationID: d.ConversationID, UserID: d.UserID,
 				PrevNotifiedAt: d.PrevNotifiedAt, ClaimedAt: claimedAt,
 			})
 			cancel()
 			if rerr != nil {
-				return res, fmt.Errorf("buddy: releasing claim: %w", rerr)
+				return res, fmt.Errorf("messaging: releasing claim: %w", rerr)
 			}
 			res.Failed++
 			continue
@@ -153,12 +156,8 @@ func (n *Notifier) NotifyUnread(ctx context.Context, now time.Time) (NotifyResul
 
 // deliver sends one notice over every enabled channel and records it in the notification
 // center. It fails only when at least one channel was tried and none got through.
-func (n *Notifier) deliver(ctx context.Context, d db.ListBuddyUnreadDueRow) error {
-	title, line, kind := "You have a new message from a buddy", "You have a new message from a buddy.", kindMessage
-	if d.Invitation {
-		title, line, kind = "You have a new buddy invitation", "You have a new buddy invitation.", kindInvitation
-	}
-	url := fmt.Sprintf("%s/my/buddies?c=%d", n.cfg.Origin, d.ConversationID)
+func (n *Notifier) deliver(ctx context.Context, d db.ListUnreadDueRow, nt Notice) error {
+	url := n.cfg.Origin + nt.Path
 
 	var attempted int
 	var errs []error
@@ -166,13 +165,13 @@ func (n *Notifier) deliver(ctx context.Context, d db.ListBuddyUnreadDueRow) erro
 	if n.cfg.Email != nil && d.Email != "" &&
 		(n.cfg.Silencer == nil || !n.cfg.Silencer.Silenced(ctx, d.UserID, emailprefs.GroupActivity)) {
 		attempted++
-		if err := n.sendEmail(ctx, d, title, line, url); err != nil {
+		if err := n.sendEmail(ctx, d, nt, url); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	if n.cfg.Telegram != nil && d.ChatID.Valid && d.ChatID.Int64 != 0 {
 		attempted++
-		msg := fmt.Sprintf(`%s <a href="%s">Open the chat</a>.`, html.EscapeString(line), html.EscapeString(url))
+		msg := fmt.Sprintf(`%s <a href="%s">Open the chat</a>.`, html.EscapeString(nt.Line), html.EscapeString(url))
 		if err := n.cfg.Telegram.SendMessage(ctx, d.ChatID.Int64, msg); err != nil {
 			errs = append(errs, err)
 		}
@@ -183,31 +182,31 @@ func (n *Notifier) deliver(ctx context.Context, d db.ListBuddyUnreadDueRow) erro
 
 	// Best-effort history row: a failure here must never fail the delivery it records.
 	if _, err := n.q.RecordNotification(ctx, db.RecordNotificationParams{
-		UserID: d.UserID, Kind: kind, Title: title, Body: line,
-		DedupKey: pgtype.Text{String: fmt.Sprintf("buddy:%d:%d", d.ConversationID, d.OldestID), Valid: true},
+		UserID: d.UserID, Kind: nt.NotificationKind, Title: nt.Title, Body: nt.Line,
+		DedupKey: pgtype.Text{String: fmt.Sprintf("%s:%d:%d", d.Kind, d.ConversationID, d.OldestID), Valid: true},
 	}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("buddy: recording notification: %v", err)
+		log.Printf("messaging: recording notification: %v", err)
 	}
 	return nil
 }
 
-func (n *Notifier) sendEmail(ctx context.Context, d db.ListBuddyUnreadDueRow, title, line, url string) error {
+func (n *Notifier) sendEmail(ctx context.Context, d db.ListUnreadDueRow, nt Notice, url string) error {
 	unsubscribe, err := n.cfg.Links.For(d.UserID, emailprefs.GroupActivity)
 	if err != nil {
-		return fmt.Errorf("buddy: unsubscribe link for user %d: %w", d.UserID, err)
+		return fmt.Errorf("messaging: unsubscribe link for user %d: %w", d.UserID, err)
 	}
 	var content bytes.Buffer
-	_ = noticeHTML.Execute(&content, struct{ Line, URL string }{line, url}) // trusted template; a failure is a template bug
+	_ = noticeHTML.Execute(&content, struct{ Line, URL string }{nt.Line, url}) // trusted template; a failure is a template bug
 	body := n.layout.Render(mailtpl.Body{
-		Preheader:      title,
-		Heading:        title,
-		Content:        template.HTML(content.String()), //nolint:gosec // rendered by the trusted template above
-		Footer:         "You’re getting this because you joined interview buddies.",
+		Preheader:      nt.Title,
+		Heading:        nt.Title,
+		Content:        template.HTML(content.String()),             //nolint:gosec // rendered by the trusted template above
+		Footer:         template.HTML(html.EscapeString(nt.Footer)), //nolint:gosec // escaped here
 		UnsubscribeURL: unsubscribe,
 	})
 	return n.cfg.Email.Send(ctx, emailnotify.Message{
-		From: n.cfg.From, To: d.Email, Subject: title,
-		HTML: body, Text: line + " Open the chat: " + url + "\n" + emailprefs.TextFooter(unsubscribe),
+		From: n.cfg.From, To: d.Email, Subject: nt.Title,
+		HTML: body, Text: nt.Line + " Open the chat: " + url + "\n" + emailprefs.TextFooter(unsubscribe),
 		Group: emailprefs.GroupActivity, UnsubscribeURL: unsubscribe,
 	})
 }

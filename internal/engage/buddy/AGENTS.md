@@ -2,8 +2,13 @@
 
 ## Scope
 The opt-in peer network (openspec/changes/interview-buddies): membership under a generated
-handle, similar members, a feed of other members' search progress, and one-to-one chat with
-an invitation step. Layer 7 (`engage`); tables are `buddy_*` (migration 0199), queries in
+handle, similar members, a feed of other members' search progress, and the invitation that
+starts a one-to-one chat. The chat itself — conversations, messages, blocks, reports, the
+unread notices — is the messaging core's ([internal/engage/messaging](../messaging/AGENTS.md)),
+kind `buddy`, both participants speaking as the persona `buddy`. This package registers
+both: `Persona` (a member drawn by handle and card, named by handle to a moderator, never
+by account) and `Kind` (the notice wording and link). Layer 7 (`engage`); tables are
+`buddy_members` and `buddy_hidden_applications` (migration 0203), queries in
 `internal/platform/db/queries/buddies.sql`. HTTP lives in `internal/api/handler`, not here.
 
 ## Always true
@@ -21,12 +26,20 @@ an invitation step. Layer 7 (`engage`); tables are `buddy_*` (migration 0199), q
   one and change the other. `TestMemberActivityMatchesMemberFeed` seeds every exclusion and
   holds the grid's total to the member feed's length. Never reuse the tracker's activity
   query for another person: it counts follow-ups and every stage move.
-- **One conversation per pair**, stored as `user_low < user_high`. Leaving closes every
-  pending or open conversation the member is in; the row and handle survive, so rejoining
-  restores the handle.
+- **One conversation per pair**: the messaging pair key `"<low>:<high>"`. Leaving closes every
+  pending or open buddy conversation the member is in, in the same statement as the leave
+  (`LeaveBuddyMember` touches the core's `conversations` for exactly that); the row and
+  handle survive, so rejoining restores the handle and a new invitation reopens the closed
+  conversation.
+- **Membership is checked by a read before the start, not inside it.** A block is checked in
+  the core's insert; a leave committing between `Invite`'s read and the start can leave a
+  pending invitation to someone who left, which stays pending until they rejoin. The core
+  cannot know a kind's membership, so this race is accepted, not guarded.
+- **A counterpart is drawn only while both sides are active members and unblocked**
+  (`ListBuddyCounterparts`); otherwise the conversation lists as history with nothing about
+  the other side.
 - **Account deletion** is the foreign keys: every reference to `users` cascades, and a
   new one must be indexed on the referencing side (`TestEveryUserForeignKeyIsIndexed`).
-- A conversation the caller is not part of is "not found", never "forbidden".
 - **Only entering the section touches.** `GET /me/buddies` runs `Touch`, which rewrites the
   member's ranking keys; no other route may call it.
 - **A privately pasted posting (`jobs.is_private`) never reaches another member**: the feed and

@@ -233,7 +233,7 @@ extension/*.zip
 /reslug
 /rollup-facets
 /build-suggestions
-/buddy-notify
+/message-notify
 /rollup-stats
 /server
 /tg-extract

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/strelov1/freehire/internal/engage/messaging"
 )
 
 // Invitation limits.
@@ -19,28 +21,10 @@ const (
 	invitationWindow = 24 * time.Hour
 )
 
-// Conversation statuses as stored.
-const (
-	StatusPending  = "pending"
-	StatusOpen     = "open"
-	StatusDeclined = "declined"
-	StatusClosed   = "closed"
-)
-
-var (
-	// ErrInvalidMessage is a message that is empty or too long (400).
-	ErrInvalidMessage = errors.New("buddy: message is empty or too long")
-	// ErrRecipientUnavailable is an invitation to someone who is not an active member, is
-	// the inviter, or is blocked in either direction. The cases are deliberately not told
-	// apart (403).
-	ErrRecipientUnavailable = errors.New("buddy: recipient is unavailable")
-	// ErrConversationExists is an invitation to a member the inviter already has a
-	// conversation with, in any status (409).
-	ErrConversationExists = errors.New("buddy: a conversation with this member already exists")
-	// ErrConversationState is an answer to a conversation that is not pending, or by the
-	// member who sent the invitation (409).
-	ErrConversationState = errors.New("buddy: conversation cannot be answered")
-)
+// ErrRecipientUnavailable is an invitation to someone who is not an active member, is the
+// inviter, or is blocked in either direction. The cases are deliberately not told apart
+// (403).
+var ErrRecipientUnavailable = errors.New("buddy: recipient is unavailable")
 
 // InvitationLimitError is an invitation over the daily cap (429). RetryAt is when the
 // oldest invitation in the window ages out, which is the first moment another is possible.
@@ -50,154 +34,70 @@ func (e *InvitationLimitError) Error() string {
 	return fmt.Sprintf("buddy: invitation limit reached, next possible at %s", e.RetryAt.UTC().Format(time.RFC3339))
 }
 
-// ConversationRow is a stored conversation.
-type ConversationRow struct {
-	ID          int64
-	UserLow     int64
-	UserHigh    int64
-	InitiatorID int64
-	Status      string
-	CreatedAt   time.Time
-	AcceptedAt  *time.Time
+// pairKey is the messaging pair key of a buddy pair: one conversation per pair, whoever
+// invites whom.
+func pairKey(a, b int64) string {
+	return fmt.Sprintf("%d:%d", min(a, b), max(a, b))
 }
 
-// Other is the participant that is not userID.
-func (c ConversationRow) Other(userID int64) int64 {
-	if c.UserLow == userID {
-		return c.UserHigh
-	}
-	return c.UserLow
-}
-
-// What a conversation is to the member looking at it. A pending invitation is incoming for
-// the member it was sent to and outgoing for the sender, and a declined one stays outgoing:
-// the sender is never told it was refused.
-const (
-	ForMeIncoming = "incoming"
-	ForMeOutgoing = "outgoing"
-	ForMeOpen     = "open"
-	ForMeClosed   = "closed"
-)
-
-// Conversation is a conversation as one of its members sees it. Card, Unread and
-// LastMessageAt are filled by ListConversations only.
-type Conversation struct {
-	ID          int64
-	OtherHandle string
-	Status      string
-	StatusForMe string
-	// Initiator is true when the viewer sent the invitation.
-	Initiator  bool
-	CreatedAt  time.Time
-	AcceptedAt *time.Time
-
-	// FormerMember marks a conversation whose other party left or is blocked; the handle
-	// and card are then empty.
-	FormerMember  bool
-	Card          CardSummary
-	Unread        int
-	LastMessageAt time.Time
-}
-
-func statusForMe(status string, initiator bool) string {
-	switch {
-	case status == StatusOpen:
-		return ForMeOpen
-	case status == StatusClosed:
-		return ForMeClosed
-	case initiator:
-		return ForMeOutgoing
-	}
-	return ForMeIncoming
-}
-
-func (s *Service) conversationFor(ctx context.Context, userID int64, row ConversationRow) (Conversation, error) {
-	// The other side's row is kept when they leave, so their handle always resolves.
-	other, ok, err := s.repo.Member(ctx, row.Other(userID))
-	if err != nil {
-		return Conversation{}, err
-	}
-	if !ok {
-		return Conversation{}, ErrNotFound
-	}
-	return viewConversation(userID, row, other.Handle), nil
-}
-
-func viewConversation(userID int64, row ConversationRow, otherHandle string) Conversation {
-	initiator := row.InitiatorID == userID
-	return Conversation{
-		ID: row.ID, OtherHandle: otherHandle, Status: row.Status, StatusForMe: statusForMe(row.Status, initiator),
-		Initiator: initiator, CreatedAt: row.CreatedAt, AcceptedAt: row.AcceptedAt,
-	}
-}
-
-// Invite opens a pending conversation with the member named by toHandle, holding body as
-// its first message.
-func (s *Service) Invite(ctx context.Context, fromUserID int64, toHandle, body string) (Conversation, error) {
+// Invite starts a buddy conversation with the member named by toHandle, holding body as
+// its first message. What a buddy invitation adds to a plain messaging start is here: both
+// sides active members, a first message of at most MaxInvitationRunes, and the daily cap.
+//
+// Membership is checked by a read before the start, not inside it as a block is: a leave
+// committing in between leaves a pending invitation to someone who has left. Their Leave
+// closed every conversation that existed when it ran, so this one stays pending until they
+// rejoin, which is when they would see it anyway.
+func (s *Service) Invite(ctx context.Context, fromUserID int64, toHandle, body string) (messaging.Conversation, error) {
 	body = strings.TrimSpace(body)
 	if n := utf8.RuneCountInString(body); n < 1 || n > MaxInvitationRunes {
-		return Conversation{}, ErrInvalidMessage
+		return messaging.Conversation{}, messaging.ErrInvalidMessage
 	}
-	from, ok, err := s.repo.Member(ctx, fromUserID)
-	if err != nil {
-		return Conversation{}, err
-	}
-	if !ok || !from.Active {
-		return Conversation{}, ErrNotMember
+	if err := s.requireActive(ctx, fromUserID); err != nil {
+		return messaging.Conversation{}, err
 	}
 	to, ok, err := s.repo.MemberByHandle(ctx, toHandle)
 	if err != nil {
-		return Conversation{}, err
+		return messaging.Conversation{}, err
 	}
 	if !ok || !to.Active || to.UserID == fromUserID {
-		return Conversation{}, ErrRecipientUnavailable
+		return messaging.Conversation{}, ErrRecipientUnavailable
 	}
 	blocked, err := s.repo.Blocked(ctx, fromUserID, to.UserID)
 	if err != nil {
-		return Conversation{}, err
+		return messaging.Conversation{}, err
 	}
 	if blocked {
-		return Conversation{}, ErrRecipientUnavailable
+		return messaging.Conversation{}, ErrRecipientUnavailable
 	}
-	exists, err := s.repo.PairHasConversation(ctx, fromUserID, to.UserID)
+	key := pairKey(fromUserID, to.UserID)
+	// The pair's existing conversation is checked before the cap, so a member who is
+	// already talking to this one hears that, not that they are over their limit. A closed
+	// one is no barrier: the start reopens it.
+	existing, ok, err := s.msg.ConversationByPairKey(ctx, KindName, key)
 	if err != nil {
-		return Conversation{}, err
+		return messaging.Conversation{}, err
 	}
-	if exists {
-		return Conversation{}, ErrConversationExists
+	if ok && existing.Status != messaging.StatusClosed {
+		return messaging.Conversation{}, messaging.ErrExists
 	}
 	// As with referral's daily cap this is a count followed by an insert, so concurrent
 	// invitations from one member can slip a few past the cap. The cap is a spam brake,
-	// not a quota; the one-conversation-per-pair constraint is what holds exactly.
-	sent, oldest, err := s.repo.InvitationsSince(ctx, fromUserID, s.now().Add(-invitationWindow))
+	// not a quota; the one-conversation-per-pair key is what holds exactly.
+	sent, oldest, err := s.msg.StartedSince(ctx, KindName, fromUserID, s.now().Add(-invitationWindow))
 	if err != nil {
-		return Conversation{}, err
+		return messaging.Conversation{}, err
 	}
 	if sent >= DailyInvitationCap {
-		return Conversation{}, &InvitationLimitError{RetryAt: oldest.Add(invitationWindow)}
+		return messaging.Conversation{}, &InvitationLimitError{RetryAt: oldest.Add(invitationWindow)}
 	}
-	row, err := s.repo.CreateInvitation(ctx, fromUserID, to.UserID, body)
-	if err != nil {
-		return Conversation{}, err
+	conv, err := s.msg.Start(ctx, messaging.StartRequest{
+		Kind: KindName, StarterID: fromUserID, StarterPersona: PersonaName,
+		RecipientID: to.UserID, RecipientPersona: PersonaName, PairKey: key, Body: body,
+	})
+	if errors.Is(err, messaging.ErrUnavailable) {
+		// A block that landed after the read above: still not revealed.
+		return messaging.Conversation{}, ErrRecipientUnavailable
 	}
-	return s.conversationFor(ctx, fromUserID, row)
-}
-
-// Accept opens a pending conversation the caller was invited to.
-func (s *Service) Accept(ctx context.Context, userID, conversationID int64) (Conversation, error) {
-	return s.answer(ctx, userID, conversationID, StatusOpen)
-}
-
-// Decline refuses a pending invitation. The inviter is not told: they keep seeing it as
-// unanswered, and the pair cannot be invited again.
-func (s *Service) Decline(ctx context.Context, userID, conversationID int64) (Conversation, error) {
-	return s.answer(ctx, userID, conversationID, StatusDeclined)
-}
-
-func (s *Service) answer(ctx context.Context, userID, conversationID int64, status string) (Conversation, error) {
-	row, err := s.repo.AnswerInvitation(ctx, userID, conversationID, status)
-	if err != nil {
-		return Conversation{}, err
-	}
-	return s.conversationFor(ctx, userID, row)
+	return conv, err
 }

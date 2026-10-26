@@ -158,7 +158,7 @@ func TestMemberActivityUnavailableHandles(t *testing.T) {
 	for _, u := range []int64{viewer, byMe, meBy, left} {
 		eventDaysAgo(t, pool, u, newApp(t, pool, u, "acme"), "applied", "", 1)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO buddy_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($3, $1)`, viewer, byMe, meBy); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO user_blocks (blocker_id, blocked_id) VALUES ($1, $2), ($3, $1)`, viewer, byMe, meBy); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.Leave(ctx, left); err != nil {
