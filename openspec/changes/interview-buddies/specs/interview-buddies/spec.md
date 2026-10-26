@@ -115,7 +115,7 @@ Every application SHALL be shown in the buddy feed by default. A member SHALL be
 - **THEN** its events appear in the feed again
 
 ### Requirement: Invitations
-A member SHALL be able to invite another active member by sending a first message of 1 to 500 characters. There SHALL be at most one conversation per pair of members. A member SHALL be able to send at most 10 invitations per rolling 24 hours. The recipient SHALL be able to accept or decline. A declined invitation SHALL NOT notify the sender; the sender SHALL see the invitation as unanswered.
+A member SHALL be able to invite another active member by sending a first message of 1 to 500 characters. There SHALL be at most one conversation per pair of members. A member SHALL be able to send at most 10 invitations per rolling 24 hours. Accepting and declining follow the `messaging` capability.
 
 #### Scenario: Invitation creates a pending conversation
 - **WHEN** member A invites member B with a message
@@ -145,73 +145,26 @@ A member SHALL be able to invite another active member by sending a first messag
 - **WHEN** A invites an account that is not an active member, or that has blocked A, or that A has blocked
 - **THEN** the system responds 403 and creates nothing
 
-#### Scenario: Accepting opens the chat
-- **WHEN** B accepts A's invitation
-- **THEN** the conversation becomes open and both can send messages
+### Requirement: Buddy conversations run on messaging
+A buddy conversation SHALL be a `messaging` conversation of kind `buddy`, with one conversation per pair of members, and SHALL follow the `messaging` capability's rules for request and accept, messages and read state, blocks, reports and unread notices. Its counterpart SHALL be the other member's handle and card summary, and SHALL mark the other member unreachable once they have left the network or a block exists between the pair.
 
-#### Scenario: Declining is silent
-- **WHEN** B declines A's invitation
-- **THEN** the conversation becomes declined, A receives no notification, and A sees the invitation as unanswered
+#### Scenario: Buddy chat lists the other member by handle
+- **WHEN** a member lists their conversations
+- **THEN** each buddy conversation names the other member by handle with their card summary, never by account details
 
-### Requirement: In-app chat
-Members of an open conversation SHALL be able to send text messages of 1 to 4000 characters and read the conversation's messages in order. Only the two members SHALL be able to read a conversation. Sending into a pending (by the inviter), declined or closed conversation SHALL be refused. The system SHALL track per member which messages they have read and report unread counts per conversation.
+#### Scenario: Left member is shown unreachable
+- **WHEN** the other member has left the network
+- **THEN** the conversation's counterpart is marked unreachable and carries no card
 
-#### Scenario: Message is delivered
-- **WHEN** A sends a message in an open conversation with B
-- **THEN** B's next read of the conversation includes the message and B's unread count for it increases by one
+### Requirement: A block hides members from each other
+A block between two accounts, made from any conversation, SHALL hide the two members from each other's similar list, feed and member pages, and SHALL stop either from inviting the other.
 
-#### Scenario: Outsider cannot read
-- **WHEN** a third member requests the messages of A and B's conversation
-- **THEN** the system responds 404
-
-#### Scenario: Inviter cannot send before acceptance
-- **WHEN** A sends a second message while the invitation is still pending
-- **THEN** the system responds 409
-
-#### Scenario: Reading marks messages read
-- **WHEN** B reads the conversation
-- **THEN** B's unread count for it becomes zero
-
-#### Scenario: New messages since a cursor
-- **WHEN** the client asks for messages after a given message id
-- **THEN** only newer messages are returned, oldest first
-
-### Requirement: Block and report
-A member SHALL be able to block the other member of any conversation, and to report a conversation with a reason from a closed list and an optional note. A block SHALL close the conversation permanently and hide the two members from each other in lists, feeds and invitations. A report SHALL be visible to moderators together with the reported conversation's messages.
-
-#### Scenario: Block closes and hides
+#### Scenario: Block hides both ways
 - **WHEN** A blocks B
-- **THEN** their conversation is closed, neither can send into it, neither appears in the other's similar list or feed, and neither can invite the other
-
-#### Scenario: Report reaches moderation
-- **WHEN** A reports the conversation with B
-- **THEN** a moderator listing buddy reports sees the report, its reason and the conversation's messages
-
-#### Scenario: Non-moderator cannot list reports
-- **WHEN** an account without the moderator role lists buddy reports
-- **THEN** the system responds 403
-
-### Requirement: Unread message notifications
-A worker SHALL notify a member about a conversation that has a message from the other member that has stayed unread for at least 5 minutes, at most once per conversation until the member reads it, over the member's enabled notification channels. A pending invitation SHALL be notified the same way. A conversation that is declined or closed SHALL NOT be notified.
-
-#### Scenario: One notification for many messages
-- **WHEN** B has three unread messages from A in one conversation, the oldest older than 5 minutes, and the worker runs twice
-- **THEN** B receives exactly one notification for that conversation
-
-#### Scenario: Recent messages wait
-- **WHEN** B's only unread message from A is 2 minutes old
-- **THEN** the worker sends nothing for it on this run
-
-#### Scenario: Notified again after reading and a new message
-- **WHEN** B reads the conversation and later a new message from A stays unread for 5 minutes
-- **THEN** the worker notifies B again
-
-#### Scenario: Notification carries no message text
-- **WHEN** a notification is sent
-- **THEN** it names neither the sender's account nor the message body, and links to the conversation
+- **THEN** neither appears in the other's similar list or feed, neither can open the other's member page, and neither can invite the other
 
 ### Requirement: Account deletion removes buddy data
-Deleting an account SHALL delete its membership, its conversations, all messages in them, its blocks and its hidden-application marks.
+Deleting an account SHALL delete its membership and its hidden-application marks; its conversations, messages and blocks are removed as the `messaging` capability requires.
 
 #### Scenario: Deleted account's conversation is gone
 - **WHEN** A deletes their account
