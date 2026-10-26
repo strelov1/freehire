@@ -642,7 +642,7 @@
             onclick={onApplyClick}
             aria-label={isAuthenticated()
               ? `Apply to ${job.title} on the employer's site (opens in a new tab)`
-              : `Sign in to apply to ${job.title}`}
+              : `Choose how to apply to ${job.title}`}
             class="h-9 shrink-0 bg-transparent opacity-0 focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100"
           >
             <ExternalLink class="size-4" aria-hidden="true" />
@@ -678,9 +678,14 @@
   class={compact ? 'absolute right-12 top-4' : 'absolute right-2.5 top-4'}
 />
 
+<div class="sr-only" aria-live="polite" aria-atomic="true">
+  {#if showApplyGate && applyJob}
+    Choose how to apply to {job.title}: sign in, sign up, or continue without signing in.
+  {/if}
+</div>
+
 {#if showApplyGate && applyJob}
   <div
-    aria-live="polite"
     class="relative z-10 mx-3 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-secondary px-4 py-3"
   >
     <span class="text-sm">Sign in to keep track of the jobs you apply to.</span>

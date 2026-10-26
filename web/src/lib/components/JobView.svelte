@@ -112,6 +112,7 @@
   let justApplied = $state(false);
   // Signed-out gate: the "Apply" click offers sign-in before opening the posting.
   let showSignInPrompt = $state(false);
+  let mobileSignInFeedback: HTMLDivElement | undefined = $state();
   // The report dialog (a problem-with-this-job complaint) opens over the page.
   let showReport = $state(false);
   // The application form of a vacancy its employer publishes here (job.direct_apply). The
@@ -226,6 +227,26 @@
     const root = document.documentElement;
     root.classList.add('job-scroll-pad');
     root.classList.toggle('job-scroll-pad-bar', !closed);
+    const feedback = mobileSignInFeedback;
+    if (!closed && showSignInPrompt && feedback) {
+      const updateFeedbackHeight = () => {
+        const parent = feedback.parentElement;
+        const gap = parent ? Number.parseFloat(getComputedStyle(parent).rowGap) || 0 : 0;
+        root.style.setProperty(
+          '--job-scroll-pad-feedback-height',
+          `${feedback.getBoundingClientRect().height + gap}px`,
+        );
+      };
+      updateFeedbackHeight();
+      const observer = new ResizeObserver(updateFeedbackHeight);
+      observer.observe(feedback);
+      return () => {
+        observer.disconnect();
+        root.classList.remove('job-scroll-pad', 'job-scroll-pad-bar');
+        root.style.removeProperty('--job-scroll-pad-feedback-height');
+      };
+    }
+    root.style.removeProperty('--job-scroll-pad-feedback-height');
     return () => root.classList.remove('job-scroll-pad', 'job-scroll-pad-bar');
   });
 
@@ -1364,7 +1385,9 @@
     <div
       class="pointer-events-none sticky bottom-0 z-30 -mx-5 flex flex-col gap-2 border-t border-border bg-background/95 px-5 pb-safe pt-3 shadow-lg sm:-mx-4 sm:px-4 lg:hidden"
     >
-      <div class="pointer-events-auto lg:hidden">{@render signInFeedback()}</div>
+      <div class="pointer-events-auto lg:hidden" bind:this={mobileSignInFeedback}>
+        {@render signInFeedback()}
+      </div>
       <div class="pointer-events-auto flex gap-2">
         {@render tailorCta('lg', 'flex-1 rounded-xl font-semibold shadow-lg')}
         {#if cta.autoApply?.leads}
@@ -1395,7 +1418,9 @@
   }
 
   :global(html.job-scroll-pad.job-scroll-pad-bar) {
-    scroll-padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+    scroll-padding-bottom: calc(
+      4.75rem + env(safe-area-inset-bottom) + var(--job-scroll-pad-feedback-height, 0px)
+    );
   }
 
   @media (min-width: 64rem) {

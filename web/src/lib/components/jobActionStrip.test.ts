@@ -84,14 +84,23 @@ function pinnedHeaderButtons(): string {
   return close === -1 ? '' : JOB_VIEW.slice(open, close);
 }
 
-/** The phone's sticky bottom bar, also not a snippet. Anchored on the glass panel's own
- *  class — `pointer-events-none sticky bottom-0` appears nowhere else — and cut at the
- *  panel's closing tag; the `{#if}` inside it opens no element. */
+/** The phone's sticky bottom bar, also not a snippet. Anchored on its own class and cut
+ *  at its matching closing tag so nested feedback and CTA wrappers remain in the audit. */
 function stickyBar(): string {
-  const open = JOB_VIEW.indexOf('pointer-events-none sticky bottom-0');
-  if (open === -1) return '';
-  const close = JOB_VIEW.indexOf('</div>', open);
-  return close === -1 ? '' : JOB_VIEW.slice(open, close);
+  const marker = JOB_VIEW.indexOf('pointer-events-none sticky bottom-0');
+  if (marker === -1) return '';
+  const open = JOB_VIEW.lastIndexOf('<div', marker);
+  const start = JOB_VIEW.indexOf('>', marker) + 1;
+  if (open === -1 || start === 0) return '';
+
+  const tags = /<\/?div\b[^>]*>/g;
+  tags.lastIndex = start;
+  let depth = 1;
+  for (let tag = tags.exec(JOB_VIEW); tag; tag = tags.exec(JOB_VIEW)) {
+    depth += tag[0].startsWith('</') ? -1 : 1;
+    if (depth === 0) return JOB_VIEW.slice(open, tags.lastIndex);
+  }
+  return '';
 }
 
 // The same audit, one row up: which controls compose the page's CALL TO ACTION, and how
@@ -129,6 +138,14 @@ describe('the job page call-to-action row', () => {
   // re-enable them for itself.
   it('renders tailorCta in the phone sticky bar', () => {
     expect(stickyBar()).toContain('@render tailorCta(');
+  });
+
+  it('adds the visible sign-in feedback height to the phone scroll offset', () => {
+    expect(JOB_VIEW).toContain("'--job-scroll-pad-feedback-height'");
+    expect(JOB_VIEW).toContain('feedback.getBoundingClientRect().height + gap');
+    expect(JOB_VIEW).toContain('observer.observe(feedback)');
+    expect(JOB_VIEW).toContain("root.style.removeProperty('--job-scroll-pad-feedback-height')");
+    expect(JOB_VIEW).toContain('var(--job-scroll-pad-feedback-height, 0px)');
   });
 
   // The bar holds two buttons at `flex-1`. A third would either shrink all three past
