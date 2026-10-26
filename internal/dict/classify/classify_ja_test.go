@@ -161,3 +161,18 @@ func TestTitleBoundaryRelaxesOnlyCJKEdges(t *testing.T) {
 		}
 	}
 }
+
+// A CJK alias matches as a substring, so a single character would match inside any longer
+// word that happens to contain it. Every CJK alias must be at least two characters; the
+// two-character ones (営業, 経理, 介護…) were each sampled against live titles before entry.
+func TestCJKAliasesAreNeverSingleCharacters(t *testing.T) {
+	tables := [][]aliasEntry{categoryTable, japaneseSeniorityTable}
+	for _, table := range tables {
+		for _, e := range table {
+			runes := []rune(e.alias)
+			if len(runes) < 2 && (isCJK(runes[0])) {
+				t.Errorf("CJK alias %q is a single character", e.alias)
+			}
+		}
+	}
+}
