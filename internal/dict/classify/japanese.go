@@ -209,6 +209,8 @@ var japaneseTrailCategoryTable = []aliasEntry{
 	{"配管設計", "engineering_design"},
 	{"生産技術", "industrial_engineering"},
 	{"生産エンジニア", "industrial_engineering"},
+	// A 製造技術員 (shared with Taiwanese titles) works the line; a 製造技術 engineer designs it.
+	{"製造技術員", "manufacturing"},
 	{"製造技術", "industrial_engineering"},
 	{"プロセスエンジニア", "industrial_engineering"},
 	{"設備保全", "industrial_engineering"},
@@ -360,9 +362,27 @@ var japaneseTrailCategoryTable = []aliasEntry{
 	// Domain words, last of all: they name the setting, not the role, so any role a
 	// title also names outranks them — 介護施設調理師 is a cook, ホテル…法人営業 a salesperson.
 	{"介護", "healthcare"},
-	{"保育", "education"},
+	// The childcare compounds Japanese uses beside 保育士. Bare 保育 also reads 動物保育員, which
+	// is a Taiwanese zookeeper.
+	{"保育補助", "education"},
+	{"保育スタッフ", "education"},
+	{"保育教諭", "education"},
+	{"保育園", "education"},
+	{"延長保育", "education"},
 	{"ホテル", "hospitality"},
-	{"調理", "hospitality"},
+	// The kitchen compounds. Bare 調理 also reads Chinese food-plant and dietitian titles
+	// (冷凍食品調理區 技術員, 營養師), where it does not name a cook.
+	{"調理人", "hospitality"},
+	{"調理職", "hospitality"},
+	{"調理部", "hospitality"},
+	{"調理補助", "hospitality"},
+	{"和食調理", "hospitality"},
+	{"洋食調理", "hospitality"},
+	{"西洋調理", "hospitality"},
+	{"宴会調理", "hospitality"},
+	{"中華調理", "hospitality"},
+	{"イタリアン調理", "hospitality"},
+	{"フレンチ調理", "hospitality"},
 	{"看護", "healthcare"},
 	{"有料老人ホーム", "healthcare"},
 	{"生鮮", "retail"},

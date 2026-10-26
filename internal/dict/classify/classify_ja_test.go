@@ -176,3 +176,20 @@ func TestCJKAliasesAreNeverSingleCharacters(t *testing.T) {
 		}
 	}
 }
+
+// Japanese aliases match Taiwanese titles too, because the two scripts share kanji. These
+// three were misread before the aliases were narrowed to their Japanese compounds.
+func TestJapaneseAliasesDoNotMisreadTaiwaneseTitles(t *testing.T) {
+	notWant := []struct{ title, category string }{
+		{"動物保育員", "education"},         // a zookeeper
+		{"冷凍食品調理區 技術員", "hospitality"}, // a food-plant technician
+	}
+	for _, c := range notWant {
+		if got := Parse(c.title).Category; got == c.category {
+			t.Errorf("Parse(%q).Category = %q — a Japanese alias misread a Taiwanese title", c.title, got)
+		}
+	}
+	if got := Parse("製造技術員").Category; got != "manufacturing" {
+		t.Errorf("Parse(%q).Category = %q, want manufacturing", "製造技術員", got)
+	}
+}
