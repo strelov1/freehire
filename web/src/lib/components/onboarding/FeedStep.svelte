@@ -4,11 +4,12 @@
   import { Check, Search, X } from '@lucide/svelte';
   import { api } from '#lib/api.js';
   import { CATEGORY_GROUPS } from '#lib/filterSections.js';
-  import { fuzzyMatch } from '#lib/fuzzy.js';
+  import { rankOptionMatches } from '#lib/facets.js';
+  import { FACET_ALIASES } from '#lib/generated/contracts.js';
   import { TECH_CATEGORY_VALUES } from '#lib/generated/contracts.js';
   import { orderSpecializations } from '#lib/onboardingSteps.js';
   import { MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
-  import { loadSkillDistribution } from '#lib/skillDictionary.js';
+  import { loadSkillDistribution, searchSkillOptions } from '#lib/skillDictionary.js';
   import { pillClass, pillCountClass } from '#lib/components/facets/pill.js';
   import RemoteSearchSelect from '#lib/components/facets/RemoteSearchSelect.svelte';
   import LocationPreferencesFields from '#lib/components/profile/LocationPreferencesFields.svelte';
@@ -65,7 +66,8 @@
   let capError = $state<string | null>(null);
 
   const visible = $derived.by(() => {
-    if (query.trim()) return ALL.filter((o) => fuzzyMatch(o.label, query));
+    // The same aliases the filter panel's specialization search reads ("swe", "devops").
+    if (query.trim()) return rankOptionMatches(ALL, query, FACET_ALIASES);
     const ordered = orderSpecializations(ALL, counts, TECH);
     const shown = showAll ? ordered : ordered.slice(0, FIRST);
     // A pick outside the first twelve (from a CV, or from before) must stay visible to be
@@ -100,8 +102,7 @@
   });
 
   function searchSkills(q: string): Promise<FacetOption[]> {
-    const matches = q.trim() ? skillDist.filter((o) => fuzzyMatch(o.label, q)) : skillDist;
-    return Promise.resolve(matches.slice(0, q.trim() ? 50 : 8));
+    return Promise.resolve(searchSkillOptions(skillDist, q));
   }
 
   const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);

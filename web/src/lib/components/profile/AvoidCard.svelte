@@ -6,7 +6,7 @@
   // profileExclusions.ts) rather than the mutual-exclusion dance withAvoidedSkill does.
   import type { FacetOption } from '#lib/facets.js';
   import { companySearch, dynamicLabel } from '#lib/facets.js';
-  import { loadSkillDistribution } from '#lib/skillDictionary.js';
+  import { loadSkillDistribution, searchSkillOptions } from '#lib/skillDictionary.js';
   import { loadSourceDistribution } from '#lib/sourceDictionary.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import RemoteSearchSelect from '../facets/RemoteSearchSelect.svelte';
@@ -95,17 +95,16 @@
   });
 
   // A locally-held distribution search: an empty query lists the popular first page (8),
-  // a real query filters by label and returns up to 50 matches. `avoid` drops candidates
-  // that must not be pickable here — currently-wanted skills for the skills-to-avoid
-  // search (see `skills` above); sources/companies have no such counterpart.
-  function searchDist(dist: FacetOption[], query: string, avoid: string[] = []): Promise<FacetOption[]> {
-    const pool = avoid.length ? dist.filter((o) => !avoid.includes(o.value)) : dist;
+  // a real query filters by label and returns up to 50 matches.
+  function searchDist(dist: FacetOption[], query: string): Promise<FacetOption[]> {
     const q = query.trim().toLowerCase();
-    const matches = q ? pool.filter((o) => o.label.toLowerCase().includes(q)) : pool;
+    const matches = q ? dist.filter((o) => o.label.toLowerCase().includes(q)) : dist;
     return Promise.resolve(matches.slice(0, q ? 50 : 8));
   }
 
-  const searchSkills = (query: string) => searchDist(skillDist, query, skills);
+  // Skills search the shared way (aliases, typos), leaving out the currently-wanted skills
+  // so one cannot be both wanted and avoided (see `skills` above).
+  const searchSkills = (query: string) => Promise.resolve(searchSkillOptions(skillDist, query, skills));
   const searchSources = (query: string) => searchDist(sourceDist, query);
   const s = $derived(t(messages, locale()));
 </script>

@@ -348,6 +348,32 @@ export function optionMatches(
   return !!aliases && aliases.some((a) => fuzzyMatch(a, query));
 }
 
+/** The options matching `query`, best match first: the label or an alias spelled exactly,
+ *  then one that starts with the query, then one that contains it, then a typo-tolerant
+ *  match — each tier in the order given (a busiest-first list stays busiest-first).
+ *  Without tiers a typo match outranks an exact alias whenever it is the busier option:
+ *  "golang" sat one typo from Solana, and Solana carried more jobs than Go. */
+export function rankOptionMatches(
+  options: readonly FacetOption[],
+  query: string,
+  searchAliases?: Record<string, readonly string[]>,
+): FacetOption[] {
+  const q = query.trim().toLowerCase();
+  if (q === '') return [...options];
+  const tier = (o: FacetOption): number => {
+    const names = [o.label.toLowerCase(), ...(searchAliases?.[o.value] ?? [])];
+    if (names.includes(q)) return 0;
+    if (names.some((n) => n.startsWith(q))) return 1;
+    if (names.some((n) => n.includes(q))) return 2;
+    return optionMatches(o, q, searchAliases) ? 3 : -1;
+  };
+  return options
+    .map((o) => ({ o, t: tier(o) }))
+    .filter(({ t }) => t >= 0)
+    .sort((a, b) => a.t - b.t)
+    .map(({ o }) => o);
+}
+
 /** Build facet options from generated values, overriding labels where given. */
 function options(values: readonly string[], labels: Record<string, string> = {}): FacetOption[] {
   return values.map((value) => ({ value, label: labels[value] ?? titleCase(value) }));

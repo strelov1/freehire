@@ -47,7 +47,8 @@ vi.mock('#lib/profile.svelte.js', () => ({
 
 // The dictionary fetch is real network (api.facetCounts) in production; stubbed here
 // so the picker's mount effect resolves instantly with no candidates to search.
-vi.mock('#lib/skillDictionary.js', () => ({
+vi.mock('#lib/skillDictionary.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('#lib/skillDictionary.js')>()),
   loadSkillDistribution: vi.fn().mockResolvedValue([]),
 }));
 

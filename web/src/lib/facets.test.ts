@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COLLECTIONS, AI_ARCHETYPE_VALUES, ROLE_TYPE_VALUES } from './generated/contracts';
 import {
+  rankOptionMatches,
   cityOption,
   collapseCities,
   countryFromSlug,
@@ -213,5 +214,30 @@ describe('dynamicLabel', () => {
 
   it('still passes through a facet with no label map of its own', () => {
     expect(dynamicLabel('some_other_facet', 'raw-value')).toBe('raw-value');
+  });
+});
+
+describe('rankOptionMatches', () => {
+  // Ordered as the picker hands them over: busiest first.
+  const opts = [
+    { value: 'solana', label: 'Solana' },
+    { value: 'go', label: 'Go' },
+    { value: 'google-cloud', label: 'Google Cloud' },
+    { value: 'django', label: 'Django' },
+  ];
+  const aliases = { go: ['golang'], 'google-cloud': ['gcp'] };
+
+  // "golang" is one typo-budget away from "solana", and the busier skill used to win.
+  it('puts an alias spelled out in full ahead of a typo match', () => {
+    expect(rankOptionMatches(opts, 'golang', aliases).map((o) => o.value)).toEqual(['go', 'solana']);
+  });
+
+  it('ranks an exact label, then a prefix, then a match inside the word', () => {
+    expect(rankOptionMatches(opts, 'go', aliases).map((o) => o.value)).toEqual(['go', 'google-cloud', 'django']);
+  });
+
+  it('keeps the given order within a tier', () => {
+    expect(rankOptionMatches(opts, 'gcp', aliases).map((o) => o.value)).toEqual(['google-cloud']);
+    expect(rankOptionMatches(opts, '', aliases).map((o) => o.value)).toEqual(opts.map((o) => o.value));
   });
 });
