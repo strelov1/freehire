@@ -36,7 +36,7 @@ function snippetBody(name: string): string {
 }
 
 const CTA_SNIPPETS = ['applyCta', 'autoApplyCta'] as const;
-const QUIET_CONTROLS = ['reportButton', 'saveButton', 'AddToListButton'] as const;
+const QUIET_CONTROLS = ['reportButton', 'saveButton'] as const;
 
 describe('the job page action strip', () => {
   const strip = snippetBody('actionStrip');

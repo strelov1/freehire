@@ -9,7 +9,6 @@ import {
   User,
   Bot,
   LayoutList,
-  ListPlus,
   Activity,
   BellRing,
   Key,
@@ -45,7 +44,6 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   // is somebody teaching. The two sections sit together and must not read as one.
   '/my/mentorship': GraduationCap,
   '/my/tracking': LayoutList,
-  '/my/lists': ListPlus,
   '/my/activity': Activity,
   '/my/inbox': Inbox,
   '/my/market-pulse': TrendingUp,

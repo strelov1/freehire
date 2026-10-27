@@ -34,7 +34,6 @@
   import { hasViewed } from '#lib/viewedJobs.svelte.js';
   import { isSaved, markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
   import { markDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
-  import AddToListButton from './AddToListButton.svelte';
 
   // Single source of truth for how a job appears in any list (jobs list and
   // company detail). The whole card is a link to the job detail.
@@ -320,11 +319,10 @@
        The name truncates to a single line, so a long company (e.g. "Veterinary
        Emergency Group (VEG)") keeps the logo centred and the card rhythm even
        instead of wrapping into a ragged multi-line header. -->
-  <!-- Reserves the top-right corner for the overlays outside this link, so the timestamp
-       never slides under one. A compact card still keeps both Save and "Add to list" up
-       here and needs the wider gutter; a normal card has moved Save into the action row
-       at its foot, leaving only "Add to list". -->
-  <div class={['flex items-center justify-between gap-3', compact ? 'pr-20' : 'pr-11']}>
+  <!-- Reserves the top-right corner for the Save overlay outside this link, so the
+       timestamp never slides under it. Only a compact card keeps Save up here; a normal
+       card has moved it into the action row at its foot, leaving the corner free. -->
+  <div class={['flex items-center justify-between gap-3', compact && 'pr-11']}>
     <div class="flex min-w-0 items-center gap-2">
       <EntityLogo
         name={job.company || 'Unknown company'}
@@ -669,14 +667,6 @@
     {/if}
   </div>
 {/if}
-
-<!-- Add-to-list: independent of Save — a job can be saved, listed, both, or neither.
-     It sits where Save's overlay used to on a compact card, and takes that corner itself
-     on a normal one, where Save has moved down into the action row. -->
-<AddToListButton
-  jobSlug={job.public_slug}
-  class={compact ? 'absolute right-12 top-4' : 'absolute right-2.5 top-4'}
-/>
 
 <div class="sr-only" aria-live="polite" aria-atomic="true">
   {#if showApplyGate && applyJob}

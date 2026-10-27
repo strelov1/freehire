@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twenty-two account sections', () => {
-    expect(accountNav).toHaveLength(22);
+  it('lists the twenty-one account sections', () => {
+    expect(accountNav).toHaveLength(21);
   });
 
   // A section whose page exists and whose nav entry does not is reachable by URL and by
@@ -21,10 +21,6 @@ describe('accountNav config', () => {
     expect(hrefs(false, true)).toContain('/my/mentorship');
     expect(hrefs(false, false)).not.toContain('/my/mentorship');
     expect(hrefs(true, false)).not.toContain('/my/mentorship');
-  });
-
-  it('offers a section for job lists', () => {
-    expect(accountNav.map((i) => i.href)).toContain('/my/lists');
   });
 
   it('offers a security section for password and session management', () => {

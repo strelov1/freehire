@@ -1533,37 +1533,6 @@ export interface SavedSearch {
   updated_at: string | null;
 }
 
-/** A user's named list of specific jobs — independent of the "save" star, and
- *  distinct from a saved search (a query snapshot, not a set of jobs). A job may
- *  belong to any number of lists. `public_slug` is "" when private; a shared list is
- *  readable by anyone at /l/<public_slug>. Timestamps are RFC3339 strings or null. */
-export interface JobList {
-  id: number;
-  name: string;
-  description: string;
-  public_slug: string;
-  job_count: number;
-  created_at: string | null;
-  updated_at: string | null;
-}
-
-/** A public shared job list readable by anyone at /l/<slug>: display fields and its
- *  jobs (the same Card projection job-search results use), no owner identity. A
- *  closed/expired job stays in the list, carrying its usual closed status. */
-export interface PublicJobList {
-  name: string;
-  description: string;
-  jobs: JobCard[];
-}
-
-/** One of the caller's job lists, flagged with whether a given job already belongs
- *  to it — what the job card's "Add to list" control renders as a toggle. */
-export interface JobListMembership {
-  id: number;
-  name: string;
-  in_list: boolean;
-}
-
 /** A user's single profile: their professional self — a non-empty set of
  *  `specializations` (job categories) and a non-empty set of canonical skill tokens. One
  *  per user (no id, no name); the foundation for finding relevant work. Timestamps are

@@ -28,7 +28,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Ghost job reports](#ghost-job-reports)
 - [Screening answers](#screening-answers)
 - [Onboarding survey](#onboarding-survey)
-- [Activity & shared job lists](#activity--shared-job-lists)
+- [Activity](#activity)
 - [Account, plan & extension](#account-plan--extension)
 - [Link intake & discovery](#link-intake--discovery)
 - [Votes, notifications & discussions](#votes-notifications--discussions)
@@ -2200,9 +2200,9 @@ curl "https://freehire.me/api/v1/me/survey" -H "Authorization: Bearer $FREEHIRE_
 }
 ```
 
-## Activity & shared job lists
+## Activity
 
-Two public reads — the catalogue-activity time series and a shared job list by slug. A published list exposes no owner identity.
+A public read of the catalogue-activity time series.
 
 ### `GET /stats/jobs-activity`
 
@@ -2232,28 +2232,6 @@ curl "https://freehire.me/api/v1/stats/jobs-activity?granularity=week"
   ],
   "meta": { "granularity": "week", "from": "2025-06-09", "to": "2026-06-08" }
 }
-```
-
-### `GET /lists/{slug}`
-
-**Auth:** Public
-
-A shared job list by its public slug.
-
-Public, no owner-scoping — returns display fields (`name`, `description`) plus the jobs it contains (a closed/expired job stays listed, marked as such). An unknown or unshared slug is a `404`.
-
-**Path parameters**
-
-| Name | Type | Required | Description |
-| --- | --- | --- | --- |
-| `slug` | string | yes | The job-list public slug. (e.g. `backend-jobs-a3f1`) |
-
-```bash
-curl "https://freehire.me/api/v1/lists/backend-jobs-a3f1"
-```
-
-```json
-{ "data": { "name": "Backend jobs", "description": "Shortlist for this round", "jobs": [ { "public_slug": "senior-go-engineer-acme-1a2b", "title": "Senior Go Engineer", "...": "..." } ] } }
 ```
 
 ## Account, plan & extension

@@ -64,8 +64,8 @@
       "description": "What you told us about your search when you signed up: how far along it is, the single biggest thing in its way, and what you earn today. A singleton per user — no id in the path. These answers describe you to us and reach no employer and no job search; what you WANT to be paid is a screening answer (`desired_salary_*`), not one of these. `PUT` is a partial update: a field the body omits keeps its stored value, and there is no way to clear one back to unstated."
     },
     {
-      "name": "Activity & shared job lists",
-      "description": "Two public reads — the catalogue-activity time series and a shared job list by slug. A published list exposes no owner identity."
+      "name": "Activity",
+      "description": "A public read of the catalogue-activity time series."
     },
     {
       "name": "Account, plan & extension",
@@ -3554,43 +3554,7 @@
         },
         "security": [],
         "tags": [
-          "Activity & shared job lists"
-        ]
-      }
-    },
-    "/lists/{slug}": {
-      "get": {
-        "operationId": "get_lists_slug",
-        "summary": "A shared job list by its public slug.",
-        "description": "Public, no owner-scoping — returns display fields (`name`, `description`) plus the jobs it contains (a closed/expired job stays listed, marked as such). An unknown or unshared slug is a `404`.",
-        "parameters": [
-          {
-            "name": "slug",
-            "in": "path",
-            "required": true,
-            "description": "The job-list public slug.",
-            "schema": {
-              "type": "string"
-            },
-            "example": "backend-jobs-a3f1"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "string"
-                },
-                "example": "{ \"data\": { \"name\": \"Backend jobs\", \"description\": \"Shortlist for this round\", \"jobs\": [ { \"public_slug\": \"senior-go-engineer-acme-1a2b\", \"title\": \"Senior Go Engineer\", \"...\": \"...\" } ] } }"
-              }
-            }
-          }
-        },
-        "security": [],
-        "tags": [
-          "Activity & shared job lists"
+          "Activity"
         ]
       }
     },

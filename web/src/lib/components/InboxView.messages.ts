@@ -29,8 +29,7 @@ export const messages = defineMessages(
     refresh: 'Refresh',
     // `{subject}` is substituted via `format()`. Curly quotes match the original
     // literal exactly; the Russian translation uses «», that language's own
-    // quoting convention, not a copy of the English glyphs (see
-    // JobListsView.messages.ts).
+    // quoting convention, not a copy of the English glyphs.
     deletedToast: 'Deleted “{subject}”',
     undo: 'Undo',
     // The count renders inline with the noun (unlike the stat-tile pattern in

@@ -2372,10 +2372,8 @@ data: {"type":"result","stop_reason":"completed"}
     ],
   },
   {
-    title: 'Activity & shared job lists',
-    intro:
-      'Two public reads — the catalogue-activity time series and a shared job list ' +
-      'by slug. A published list exposes no owner identity.',
+    title: 'Activity',
+    intro: 'A public read of the catalogue-activity time series.',
     endpoints: [
       {
         method: 'GET',
@@ -2400,19 +2398,6 @@ data: {"type":"result","stop_reason":"completed"}
   ],
   "meta": { "granularity": "week", "from": "2025-06-09", "to": "2026-06-08" }
 }`,
-      },
-      {
-        method: 'GET',
-        path: '/lists/{slug}',
-        auth: 'none',
-        summary: 'A shared job list by its public slug.',
-        description:
-          'Public, no owner-scoping — returns display fields (`name`, `description`) ' +
-          'plus the jobs it contains (a closed/expired job stays listed, marked as ' +
-          'such). An unknown or unshared slug is a `404`.',
-        pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job-list public slug.', example: 'backend-jobs-a3f1' }],
-        curl: `curl "${BASE_URL}/lists/backend-jobs-a3f1"`,
-        responseExample: `{ "data": { "name": "Backend jobs", "description": "Shortlist for this round", "jobs": [ { "public_slug": "senior-go-engineer-acme-1a2b", "title": "Senior Go Engineer", "...": "..." } ] } }`,
       },
     ],
   },
@@ -2614,112 +2599,6 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'cookie',
         summary: 'Delete your webhook destination.',
         curl: `curl -X DELETE "${BASE_URL}/me/webhook" -b cookies.txt`,
-        responseExample: `(204 No Content)`,
-      },
-    ],
-  },
-  {
-    title: 'Job lists',
-    intro:
-      'Named lists of specific jobs — independent of the single-flag "save" — that ' +
-      'you can optionally publish read-only by slug (see the public read under ' +
-      '"Activity & shared job lists"). Browser conveniences, session-only. Each ' +
-      'operation is owner-scoped — a non-owned id is a 404.',
-    endpoints: [
-      {
-        method: 'GET',
-        path: '/me/lists',
-        auth: 'cookie',
-        summary: 'List your job lists.',
-        curl: `curl "${BASE_URL}/me/lists" -b cookies.txt`,
-        responseExample: `{ "data": [ { "id": 3, "name": "Backend jobs", "description": "Shortlist for this round", "public_slug": "", "job_count": 4 } ] }`,
-      },
-      {
-        method: 'POST',
-        path: '/me/lists',
-        auth: 'cookie',
-        summary: 'Create a job list.',
-        body: [
-          { name: 'name', type: 'string', required: true, description: 'Display name.', example: 'Backend jobs' },
-          { name: 'description', type: 'string', description: 'Optional free-text description.', example: 'Shortlist for this round' },
-        ],
-        curl: `curl -X POST "${BASE_URL}/me/lists" \\
-  -H 'Content-Type: application/json' -b cookies.txt \\
-  -d '{"name":"Backend jobs","description":"Shortlist for this round"}'`,
-        responseExample: `{ "data": { "id": 3, "name": "Backend jobs", "description": "Shortlist for this round", "public_slug": "", "job_count": 0 } }`,
-      },
-      {
-        method: 'PATCH',
-        path: '/me/lists/{id}',
-        auth: 'cookie',
-        summary: 'Rename or re-describe a job list.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' }],
-        body: [
-          { name: 'name', type: 'string', description: 'New name (optional).' },
-          { name: 'description', type: 'string', description: 'New description (optional).' },
-        ],
-        curl: `curl -X PATCH "${BASE_URL}/me/lists/3" \\
-  -H 'Content-Type: application/json' -b cookies.txt \\
-  -d '{"name":"Backend jobs — Q3"}'`,
-        responseExample: `{ "data": { "id": 3, "name": "Backend jobs — Q3", "description": "...", "public_slug": "", "job_count": 4 } }`,
-      },
-      {
-        method: 'DELETE',
-        path: '/me/lists/{id}',
-        auth: 'cookie',
-        summary: 'Delete a job list.',
-        description: 'The referenced jobs and your separate "save" flags are untouched.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' }],
-        curl: `curl -X DELETE "${BASE_URL}/me/lists/3" -b cookies.txt`,
-        responseExample: `(204 No Content)`,
-      },
-      {
-        method: 'POST',
-        path: '/me/lists/{id}/jobs',
-        auth: 'cookie',
-        summary: 'Add a job to a list.',
-        description:
-          'Jobs are addressed by `job_slug` (the public slug), the same identifier ' +
-          'every job carries elsewhere. Idempotent: adding an already-present job ' +
-          'changes nothing. An unknown slug is a `404`.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' }],
-        body: [{ name: 'job_slug', type: 'string', required: true, description: 'The job to add.', example: 'senior-go-engineer-acme-1a2b' }],
-        curl: `curl -X POST "${BASE_URL}/me/lists/3/jobs" \\
-  -H 'Content-Type: application/json' -b cookies.txt \\
-  -d '{"job_slug":"senior-go-engineer-acme-1a2b"}'`,
-        responseExample: `(204 No Content)`,
-      },
-      {
-        method: 'DELETE',
-        path: '/me/lists/{id}/jobs/{job_slug}',
-        auth: 'cookie',
-        summary: 'Remove a job from a list.',
-        description: 'Idempotent: a job not in the list, or a slug that resolves to no job at all, is a no-op.',
-        pathParams: [
-          { name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' },
-          { name: 'job_slug', type: 'string', required: true, description: 'The job to remove.', example: 'senior-go-engineer-acme-1a2b' },
-        ],
-        curl: `curl -X DELETE "${BASE_URL}/me/lists/3/jobs/senior-go-engineer-acme-1a2b" -b cookies.txt`,
-        responseExample: `(204 No Content)`,
-      },
-      {
-        method: 'POST',
-        path: '/me/lists/{id}/share',
-        auth: 'cookie',
-        summary: 'Publish a job list as a public, read-only page.',
-        description: 'Mints (or keeps) the public slug. Returns the list, now carrying `public_slug`.',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' }],
-        curl: `curl -X POST "${BASE_URL}/me/lists/3/share" -b cookies.txt`,
-        responseExample: `{ "data": { "id": 3, "name": "Backend jobs", "description": "...", "public_slug": "backend-jobs-a3f1", "job_count": 4 } }`,
-      },
-      {
-        method: 'DELETE',
-        path: '/me/lists/{id}/share',
-        auth: 'cookie',
-        summary: 'Make a shared job list private again.',
-        description: 'Idempotent (already-private is a no-op).',
-        pathParams: [{ name: 'id', type: 'integer', required: true, description: 'The job-list id.', example: '3' }],
-        curl: `curl -X DELETE "${BASE_URL}/me/lists/3/share" -b cookies.txt`,
         responseExample: `(204 No Content)`,
       },
     ],

@@ -37,7 +37,6 @@
   import { Button, Chip, EntityLogo, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { formatDate, formatDateOrAgo, formatDateTime } from '#lib/utils.js';
-  import AddToListButton from './AddToListButton.svelte';
   import BackerBadge from './BackerBadge.svelte';
   import CountryFlagStack from './CountryFlagStack.svelte';
   import JobApplyForm, { applyFormWorthShowing } from './JobApplyForm.svelte';
@@ -786,7 +785,6 @@
     </a>
     {@render reportButton()}
     {@render saveButton()}
-    <AddToListButton jobSlug={job.public_slug} />
     <!-- The link out, phone only. Below lg the sticky bottom bar belongs to auto-apply
          whenever auto-apply can be started, so the posting's own page needs a door
          somewhere else — and this strip is where the quiet things already are. On lg the
