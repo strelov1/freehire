@@ -49,6 +49,8 @@ func TestSpanishAndLatinAmericanLines(t *testing.T) {
 		{"Celaya, Guanajuato", []string{"mx"}, []string{"Celaya"}},
 		{"Juárez, Chihuahua", []string{"mx"}, []string{"Ciudad Juárez"}},
 		{"Distrito Federal, Mexico", []string{"mx"}, []string{"Mexico City"}},
+		{"Distrito Federal, Brasil", []string{"br"}, nil}, // Brasília's district
+		{"Ferrol, La Coruña, España", []string{"es"}, []string{"Ferrol"}},
 		{"Baja California", []string{"mx"}, nil}, // was read as California
 		{"Remote, Querétaro, Qro., México", []string{"mx"}, []string{"Santiago de Querétaro"}},
 		// A country name is not its capital.

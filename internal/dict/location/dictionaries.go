@@ -493,10 +493,12 @@ var cityOverrides = map[string]cityEntry{
 	"montréal":  {Name: "Montreal", Country: "ca"},
 	// Valencia (Venezuela) and Zaragoza outnumber their Spanish namesakes in GeoNames, so
 	// the curated "valencia"/"zaragoza" → es named no city at all.
-	"valencia":         {Name: "Valencia", Country: "es"},
-	"zaragoza":         {Name: "Zaragoza", Country: "es"},
-	"madrid capital":   {Name: "Madrid", Country: "es"},
-	"distrito federal": {Name: "Mexico City", Country: "mx"}, // Mexico City's former name
+	"valencia":       {Name: "Valencia", Country: "es"},
+	"zaragoza":       {Name: "Zaragoza", Country: "es"},
+	"madrid capital": {Name: "Madrid", Country: "es"},
+	// Mexico City's former name, and also Brasília's district: contested, so it names
+	// Mexico City only in a line that states Mexico.
+	"distrito federal": {Name: "Mexico City", Country: "mx", Contested: true},
 	"bogotá d.c.":      {Name: "Bogotá", Country: "co"},
 	"bogota d.c.":      {Name: "Bogotá", Country: "co"},
 }

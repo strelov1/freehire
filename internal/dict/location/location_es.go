@@ -5,7 +5,7 @@ package location
 // "Oliva, Valencia, España"), so in that slot the name is the province, not a second
 // city — the rule provinceAfterCity applies to the Dutch provinceCapitals.
 var spanishProvinceCapitals = map[string]bool{
-	"a coruña": true, "albacete": true, "alicante": true, "almería": true, "almeria": true,
+	"a coruña": true, "a coruna": true, "la coruña": true, "la coruna": true, "albacete": true, "alicante": true, "almería": true, "almeria": true,
 	"ávila": true, "avila": true, "badajoz": true, "barcelona": true, "burgos": true,
 	"cáceres": true, "caceres": true, "cádiz": true, "cadiz": true, "castellón": true,
 	"castellon": true, "ciudad real": true, "córdoba": true, "cordoba": true, "cuenca": true,
