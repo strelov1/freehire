@@ -117,6 +117,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, experienceIncludeUnspecified: on };
   }
 
+  setExperienceOnlySeniorityUnspecified(on: boolean): void {
+    this.#f = { ...this.#f, experienceOnlySeniorityUnspecified: on };
+  }
+
   setSeniorityIncludeUnspecified(on: boolean): void {
     this.#f = { ...this.#f, seniorityIncludeUnspecified: on };
   }

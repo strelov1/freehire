@@ -112,7 +112,10 @@
     // its chip would leave the narrowest experience filter with no way to remove it.
     if (f.experienceYearsMax != null) {
       const text = experienceLabel(f.experienceYearsMax) + (f.experienceIncludeUnspecified ? ' or not stated' : '');
-      push('Experience', [{ key: 'experience_years_max', text, exclude: false, remove: () => store.setExperienceYearsMax(null) }]);
+      const chips: SummaryChip[] = [{ key: 'experience_years_max', text, exclude: false, remove: () => store.setExperienceYearsMax(null) }];
+      if (f.experienceOnlySeniorityUnspecified)
+        chips.push({ key: 'experience_only_seniority_unspecified', text: 'Only when no level stated', exclude: false, remove: () => store.setExperienceOnlySeniorityUnspecified(false) });
+      push('Experience', chips);
     }
 
     for (const def of unsummarized(FACETS, shown, exclude)) facetGroup(def.param, def.label);

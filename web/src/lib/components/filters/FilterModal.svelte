@@ -698,6 +698,24 @@
         />
         <span>Include postings that don't state experience</span>
       </label>
+      <!-- The entry-level profile seeds this (freehire#3655): a posting labelled with a
+           picked level is answered by the level, so the limit reads only the postings
+           with no level. Shown beside the other modifier so a profile applied to /jobs
+           does not narrow the list through a switch nobody can see. -->
+      <label
+        class="mt-2 flex items-center gap-2 text-sm {staged.value.experienceYearsMax == null
+          ? 'cursor-not-allowed opacity-50'
+          : 'cursor-pointer'}"
+      >
+        <input
+          type="checkbox"
+          class="size-4 rounded border-border"
+          checked={staged.value.experienceOnlySeniorityUnspecified}
+          disabled={staged.value.experienceYearsMax == null}
+          onchange={(e) => staged.setExperienceOnlySeniorityUnspecified(e.currentTarget.checked)}
+        />
+        <span>Apply the limit only to postings with no level stated</span>
+      </label>
       <p class="mt-1 text-xs text-muted-foreground">
         Most postings don't state an experience requirement. A limit hides them unless this is ticked.
       </p>

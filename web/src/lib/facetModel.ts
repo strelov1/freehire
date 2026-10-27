@@ -88,6 +88,12 @@ export interface JobFilters {
    *  catalogue, which a bound drops otherwise. A modifier of the bound, not a filter:
    *  written to the URL only beside one, and never counted on its own. */
   experienceIncludeUnspecified: boolean;
+  /** Apply the experience bound only to the jobs that carry no seniority level, so a
+   *  labelled one passes it whatever years it states. Beside the included levels and
+   *  `seniorityIncludeUnspecified` this reads "one of these levels, or no level and
+   *  within the bound" — the entry-level profile rule (freehire#3655). A modifier of the
+   *  bound: written to the URL only beside one, and never counted on its own. */
+  experienceOnlySeniorityUnspecified: boolean;
   /** Also keep the jobs that carry no seniority level — most of the catalogue, which
    *  including a level drops otherwise. A modifier of the included levels: written to
    *  the URL only beside one, and never counted on its own. */
@@ -266,6 +272,7 @@ export function emptyFilters(): JobFilters {
     openWithinDays: null,
     experienceYearsMax: null,
     experienceIncludeUnspecified: false,
+    experienceOnlySeniorityUnspecified: false,
     seniorityIncludeUnspecified: false,
     sort: null,
     qFields: null,
@@ -299,6 +306,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.experienceYearsMax != null) {
     p.set('experience_years_max', String(f.experienceYearsMax));
     if (f.experienceIncludeUnspecified) p.set('experience_include_unspecified', 'true');
+    if (f.experienceOnlySeniorityUnspecified) p.set('experience_only_seniority_unspecified', 'true');
   }
   if (f.seniorityIncludeUnspecified && (f.facets.seniority?.include.length ?? 0) > 0) {
     p.set('seniority_include_unspecified', 'true');
@@ -389,6 +397,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   const years = Number(rawYears);
   f.experienceYearsMax = rawYears !== '' && Number.isInteger(years) && years >= 0 ? years : null;
   f.experienceIncludeUnspecified = p.get('experience_include_unspecified') === 'true';
+  f.experienceOnlySeniorityUnspecified = p.get('experience_only_seniority_unspecified') === 'true';
   f.seniorityIncludeUnspecified = p.get('seniority_include_unspecified') === 'true';
   // Anything but a recognized value reads as the contextual default — including the
   // retired `sort=cv` and the endpoint's `created_at`, which the browse UI does not
@@ -604,15 +613,18 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
   if (levels.length && !SENIORITY_VALUES.every((v) => levels.includes(v))) {
     f.facets.seniority = seed(SENIORITY_VALUES.filter((v) => levels.includes(v)));
     f.seniorityIncludeUnspecified = true;
-    // The exclusion cannot reach a posting with no level, and for someone after an entry
-    // role that is most of what it lets through — an intern's alerts were 19 of 19
+    // The level include cannot judge a posting with no level, and for someone after an
+    // entry role that is most of what it lets through — an intern's alerts were 19 of 19
     // unlabelled, ten of them asking for 2-5 years (freehire#3397). The posting's stated
-    // years are the backstop, and the postings stating none stay in, for the same reason
-    // the unlabelled ones do.
+    // years are the backstop for THOSE postings only: one labelled with a picked level
+    // passes whatever it states, since most internships state no years at all (95,645
+    // labelled intern, 4,071 of them stating at most a year — prod, 2026-10-26). An
+    // unlabelled posting must state a bound within the cap; keeping the unstated ones too
+    // was what flooded the alert with 2.6M postings (freehire#3655).
     const cap = entryExperienceCap(profile.seniorities);
     if (cap != null) {
       f.experienceYearsMax = cap;
-      f.experienceIncludeUnspecified = true;
+      f.experienceOnlySeniorityUnspecified = true;
     }
   }
   // Skills: wanted → include, avoided → exclude. Only stage an exclude for a token not

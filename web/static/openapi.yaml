@@ -236,6 +236,7 @@ paths:
         - $ref: "#/components/parameters/ExperienceYearsMin"
         - $ref: "#/components/parameters/ExperienceYearsMax"
         - $ref: "#/components/parameters/ExperienceIncludeUnspecified"
+        - $ref: "#/components/parameters/ExperienceOnlySeniorityUnspecified"
         - $ref: "#/components/parameters/SeniorityIncludeUnspecified"
         - $ref: "#/components/parameters/PostedWithinDays"
         - $ref: "#/components/parameters/OpenWithinDays"
@@ -322,6 +323,7 @@ paths:
         - $ref: "#/components/parameters/ExperienceYearsMin"
         - $ref: "#/components/parameters/ExperienceYearsMax"
         - $ref: "#/components/parameters/ExperienceIncludeUnspecified"
+        - $ref: "#/components/parameters/ExperienceOnlySeniorityUnspecified"
         - $ref: "#/components/parameters/SeniorityIncludeUnspecified"
         - $ref: "#/components/parameters/PostedWithinDays"
         - $ref: "#/components/parameters/OpenWithinDays"
@@ -580,6 +582,7 @@ paths:
         - $ref: "#/components/parameters/ExperienceYearsMin"
         - $ref: "#/components/parameters/ExperienceYearsMax"
         - $ref: "#/components/parameters/ExperienceIncludeUnspecified"
+        - $ref: "#/components/parameters/ExperienceOnlySeniorityUnspecified"
         - $ref: "#/components/parameters/SeniorityIncludeUnspecified"
         - $ref: "#/components/parameters/PostedWithinDays"
         - $ref: "#/components/parameters/OpenWithinDays"
@@ -1622,6 +1625,16 @@ components:
         With either experience bound, also keep the postings that state no
         experience requirement — most of the catalogue, which a bound
         otherwise excludes. Has no effect without a bound.
+    ExperienceOnlySeniorityUnspecified:
+      name: experience_only_seniority_unspecified
+      in: query
+      schema:
+        type: boolean
+      description: >-
+        Apply either experience bound only to the postings that carry no seniority
+        level; a posting with a level passes the bound whatever it states. With
+        `seniority` and `seniority_include_unspecified=true` this reads "one of these
+        levels, or no level and within the bound". Has no effect without a bound.
     SeniorityIncludeUnspecified:
       name: seniority_include_unspecified
       in: query

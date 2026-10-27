@@ -206,6 +206,41 @@ func TestFilterFromValues_ExperienceIncludeUnspecifiedAloneIsNoFilter(t *testing
 	}
 }
 
+// experience_only_seniority_unspecified confines each experience bound to the postings
+// that carry no level: a labelled one passes the bound whatever years it states, so it
+// is answered by the seniority facet alone. Paired with seniority_include_unspecified it
+// reads "one of these levels, or no level and within the bound" — the entry-level
+// profile alert, which an independent AND of the two cannot express (freehire#3655).
+func TestFilterFromValues_ExperienceOnlySeniorityUnspecified(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("seniority=intern&seniority_include_unspecified=true&experience_years_max=1&experience_only_seniority_unspecified=true")))
+	want := [][]string{
+		{`enrichment.experience_years_min <= 1`, `enrichment.seniority EXISTS`},
+		{`enrichment.seniority = "intern"`, `enrichment.seniority NOT EXISTS`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Both experience modifiers OR into the same bound group, so together a bound admits
+// a labelled posting, an unstated one, or one within the bound.
+func TestFilterFromValues_ExperienceModifiersCombine(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("experience_years_min=2&experience_include_unspecified=true&experience_only_seniority_unspecified=true")))
+	want := [][]string{
+		{`enrichment.experience_years_min >= 2`, `enrichment.experience_years_min NOT EXISTS`, `enrichment.seniority EXISTS`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Like the other modifier, alone it bounds nothing.
+func TestFilterFromValues_ExperienceOnlySeniorityUnspecifiedAloneIsNoFilter(t *testing.T) {
+	if got := FilterFromValues(vals("experience_only_seniority_unspecified=true")); got != nil {
+		t.Errorf("got %v, want no filter", got)
+	}
+}
+
 // seniority_include_unspecified ORs the postings with no level into the included
 // levels' own group. Most of the catalogue carries no level, so "intern" alone is a
 // narrow slice of what an intern can apply to (freehire#3397).

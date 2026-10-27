@@ -103,6 +103,12 @@ export const FILTER_EXTRAS: FilterRow[] = [
       'true — with either experience bound, also keep the jobs that state no experience requirement (most of the catalogue). Has no effect without a bound',
   },
   {
+    param: 'experience_only_seniority_unspecified',
+    label: 'Experience only without a level',
+    values:
+      'true — apply either experience bound only to the jobs that carry no seniority level; a job with a level passes the bound whatever it states. With seniority and seniority_include_unspecified this reads "one of these levels, or no level and within the bound". Has no effect without a bound',
+  },
+  {
     param: 'seniority_include_unspecified',
     label: 'Include unstated seniority',
     values:

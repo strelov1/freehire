@@ -47,6 +47,12 @@ func NotExists(attr string) string {
 	return attr + " NOT EXISTS"
 }
 
+// Exists builds `attr EXISTS`, the complement of NotExists: documents that carry the
+// attribute at all.
+func Exists(attr string) string {
+	return attr + " EXISTS"
+}
+
 // Gte builds a `attr >= n` numeric fragment.
 func Gte(attr string, n int) string {
 	return attr + " >= " + strconv.Itoa(n)

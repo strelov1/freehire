@@ -33,9 +33,20 @@ const ExperienceIncludeUnspecifiedParam = "experience_include_unspecified"
 // alone it reads nothing.
 const SeniorityIncludeUnspecifiedParam = "seniority_include_unspecified"
 
+// ExperienceOnlySeniorityUnspecifiedParam confines the experience bounds to the
+// postings that carry no seniority level, so a labelled posting passes them whatever
+// years it states. Beside seniority_include_unspecified it reads "one of these levels,
+// or no level and within the bound" — a rule two independently ANDed facets cannot
+// express. Alone it reads nothing.
+const ExperienceOnlySeniorityUnspecifiedParam = "experience_only_seniority_unspecified"
+
 // scalarModifiers are params filterFromValues reads only to change how a filter
 // applies. Known to UnknownParams, never a filter on their own.
-var scalarModifiers = []string{ExperienceIncludeUnspecifiedParam, SeniorityIncludeUnspecifiedParam}
+var scalarModifiers = []string{
+	ExperienceIncludeUnspecifiedParam,
+	SeniorityIncludeUnspecifiedParam,
+	ExperienceOnlySeniorityUnspecifiedParam,
+}
 
 // qSearchableFields are the fields `q` matches against, in the same order as the
 // jobs index's SearchableAttributes (see facetSettings in client.go). q_fields

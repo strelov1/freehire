@@ -109,7 +109,7 @@
     <div class="min-w-0 flex-1">
       <h2 class="text-sm font-semibold leading-tight">Jobs matching my profile</h2>
       <p class="text-xs text-muted-foreground">
-        Get notified when a new job matches your role, skills and location preferences.
+        Get notified when a new job matches your role, level, skills and location preferences.
       </p>
     </div>
 

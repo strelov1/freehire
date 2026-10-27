@@ -290,12 +290,23 @@ func filterFromValues(v url.Values, now time.Time) any {
 	// honest reading of "asks for at most N years", and most of the catalogue.
 	// `experience_include_unspecified=true` ORs those postings back into each bound's
 	// own group; on its own it bounds nothing, so it adds no group of its own.
+	//
+	// `experience_only_seniority_unspecified=true` ORs every LABELLED posting into the
+	// bound's group, which leaves the bound reading only the postings with no level.
+	// With the seniority group it composes to `level IN (selected) OR (no level AND
+	// within the bound)`: an internship stating no years stays in, an unlabelled posting
+	// asking for five does not (freehire#3655).
 	includeUnstated := v.Get(ExperienceIncludeUnspecifiedParam) == "true"
+	onlyUnlevelled := v.Get(ExperienceOnlySeniorityUnspecifiedParam) == "true"
 	experienceGroup := func(bound string) []string {
+		group := []string{bound}
 		if includeUnstated {
-			return []string{bound, NotExists("enrichment.experience_years_min")}
+			group = append(group, NotExists("enrichment.experience_years_min"))
 		}
-		return []string{bound}
+		if onlyUnlevelled {
+			group = append(group, Exists(StringFacets["seniority"]))
+		}
+		return group
 	}
 	if n, ok := atoiOK(v.Get("experience_years_min")); ok {
 		groups = append(groups, experienceGroup(Gte("enrichment.experience_years_min", n)))
