@@ -1037,7 +1037,7 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		// and a bare one resolve to the same board. A URL carrying ONLY a locale (host/en-US, itself
 		// a 404 landing) has no derivable site and is left unrecognized rather than taken as a false
 		// "en-US" board. Canonical strips to scheme://host/site.
-		site := firstSegmentAfterLocale(u)
+		site := workdaySite(u)
 		// A Workday per-job URL can reach us with no site at all (host/job/... or
 		// host/details/...), and those segments are the POSTING, never a career site. Taking one
 		// as the site yields "<host>/job" — a board that does not exist but looks new, so the
@@ -1608,6 +1608,27 @@ func firstSegmentAfterLocale(u *url.URL) string {
 		return segs[0]
 	}
 	return ""
+}
+
+// bareLanguage matches a two-letter language code standing alone as a path segment ("es").
+var bareLanguage = regexp.MustCompile(`^[a-z]{2}$`)
+
+// workdaySite returns the career site a Workday URL addresses, "" when it names none. Beside the
+// xx-XX locale every reader skips, Workday also serves a posting under a BARE language,
+// host/es/<site>/job/… — measured 2026-10-27 on Spanish employers' apply links (Repsol, 3M,
+// Europcar), where reading "es" as the site yields "<host>/es", a board that does not exist. A
+// bare two-letter segment cannot be skipped unconditionally: ~80 live boards ARE two-letter sites
+// (pt, se, us, ch, …). So it is read as a language only when the posting marker follows the NEXT
+// segment — host/es/<site>/job/… — since a two-letter site's own posting reads host/pt/job/….
+func workdaySite(u *url.URL) string {
+	segs := segmentsAfterLocale(u)
+	if len(segs) >= 3 && bareLanguage.MatchString(segs[0]) && (segs[2] == "job" || segs[2] == "details") {
+		segs = segs[1:]
+	}
+	if len(segs) == 0 {
+		return ""
+	}
+	return segs[0]
 }
 
 // segmentsAfterLocale returns u's path segments with a leading xx-XX locale dropped, nil for an

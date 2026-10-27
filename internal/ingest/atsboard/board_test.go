@@ -426,6 +426,9 @@ func TestRecognize(t *testing.T) {
 		{"workday other pod", "https://goodyear.wd1.myworkdayjobs.com/goodyearcareers/job/x", "workday", "goodyear.wd1.myworkdayjobs.com/goodyearcareers", "https://goodyear.wd1.myworkdayjobs.com/goodyearcareers", true},
 		// Workday's public URL may prefix the site with an xx-XX locale the CXS API omits — skip it
 		{"workday locale-prefixed site", "https://gm.wd5.myworkdayjobs.com/en-US/Careers_GM/job/x/Eng_JR-1", "workday", "gm.wd5.myworkdayjobs.com/Careers_GM", "https://gm.wd5.myworkdayjobs.com/Careers_GM", true},
+		{"workday bare-language posting", "https://repsol.wd3.myworkdayjobs.com/es/Repsol/job/Madrid/Tecnico_R123", "workday", "repsol.wd3.myworkdayjobs.com/Repsol", "https://repsol.wd3.myworkdayjobs.com/Repsol", true},
+		{"workday two-letter site posting", "https://acme.wd1.myworkdayjobs.com/pt/job/Lisboa/Eng_R1", "workday", "acme.wd1.myworkdayjobs.com/pt", "https://acme.wd1.myworkdayjobs.com/pt", true},
+		{"workday two-letter site listing", "https://acme.wd1.myworkdayjobs.com/pt", "workday", "acme.wd1.myworkdayjobs.com/pt", "https://acme.wd1.myworkdayjobs.com/pt", true},
 
 		// CatsOne's adapter fetches "https://<board>/careers", so the board is the WHOLE host —
 		// the same shape catsone.yml stores. Reading the leftmost label instead handed back
