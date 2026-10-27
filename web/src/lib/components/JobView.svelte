@@ -583,18 +583,21 @@
   {#if showSignInPrompt}
     <div
       aria-live="polite"
-      class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-secondary px-4 py-3"
+      class="flex flex-col gap-3 rounded-md border border-border bg-secondary px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
       <span class="text-sm">
         {job.direct_apply
           ? 'Sign in to apply — your CV goes straight to the employer.'
           : 'Sign in to keep track of the jobs you apply to.'}
       </span>
-      <div class="flex flex-wrap items-center gap-2">
+      <!-- The same phone layout as the job card's gate (JobRow.svelte). -->
+      <div class="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:items-center">
         <Button variant="primary" size="sm" onclick={signInFromGate}>Sign in</Button>
         <Button variant="outline" size="sm" onclick={signUpFromGate}>Sign up</Button>
         {#if !job.direct_apply}
-          <Button variant="ghost" size="sm" onclick={viewWithoutSignIn}>Continue without signing in</Button>
+          <Button variant="ghost" size="sm" class="col-span-2" onclick={viewWithoutSignIn}>
+            Continue without signing in
+          </Button>
         {/if}
       </div>
     </div>

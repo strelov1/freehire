@@ -686,13 +686,17 @@
 
 {#if showApplyGate && applyJob}
   <div
-    class="relative z-10 mx-3 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-secondary px-4 py-3"
+    class="relative z-10 mx-3 mb-3 flex flex-col gap-3 rounded-lg border border-border bg-secondary px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
   >
     <span class="text-sm">Sign in to keep track of the jobs you apply to.</span>
-    <div class="flex flex-wrap items-center gap-2">
+    <!-- Two equal buttons over a full-width escape on a phone, where three in a wrapping
+         row left the last one stranded on a line of its own; one row from sm up. -->
+    <div class="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:items-center">
       <Button variant="primary" size="sm" onclick={signInFromApplyGate}>Sign in</Button>
       <Button variant="outline" size="sm" onclick={signUpFromApplyGate}>Sign up</Button>
-      <Button variant="ghost" size="sm" onclick={viewApplyWithoutSigningIn}>Continue without signing in</Button>
+      <Button variant="ghost" size="sm" class="col-span-2" onclick={viewApplyWithoutSigningIn}>
+        Continue without signing in
+      </Button>
     </div>
   </div>
 {/if}
