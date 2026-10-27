@@ -585,7 +585,7 @@
       aria-live="polite"
       class="flex flex-col gap-3 rounded-md border border-border bg-secondary px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
     >
-      <span class="text-sm">
+      <span class="text-sm text-pretty">
         {job.direct_apply
           ? 'Sign in to apply — your CV goes straight to the employer.'
           : 'Sign in to keep track of the jobs you apply to.'}
