@@ -20,16 +20,20 @@ import (
 // internal/ingest/sources/bizneo.go, which is unexported.
 //
 // bizneo.cloud has no wildcard DNS, so an unknown host fails to resolve and counts as a probe
-// failure; a switched-off site answers 404.
+// failure; a switched-off site answers 404. A customer's own domain (emprego.imancorp.pt) serves
+// the same pages; such a host counts only when its listing loads Bizneo's career-site bundle,
+// since nothing else ties an arbitrary host to the platform.
 type bizneoProber struct{}
 
 var (
-	bizneoHostPattern = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+bizneo\.cloud$`)
-	bizneoTotal       = regexp.MustCompile(`(\d+)`)
+	bizneoHostPattern  = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$`)
+	bizneoCloudHost    = regexp.MustCompile(`\.bizneo\.cloud$`)
+	bizneoCareerBundle = regexp.MustCompile(`^https://assets\.bizneo\.com/vite/assets/custom-companies`)
+	bizneoTotal        = regexp.MustCompile(`(\d+)`)
 )
 
 func (bizneoProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
-	if !bizneoHostPattern.MatchString(board) {
+	if !bizneoHostPattern.MatchString(board) || board == "bizneo.com" || strings.HasSuffix(board, ".bizneo.com") {
 		return "", 0, nil
 	}
 	root, err := c.GetHTML(ctx, "https://"+board+"/jobs?page=1")
@@ -42,11 +46,15 @@ func (bizneoProber) probe(ctx context.Context, c httpClient, board string) (stri
 	}
 	cards := 0
 	total := -1
+	bundle := bizneoCloudHost.MatchString(board)
 	var visit func(*html.Node)
 	visit = func(n *html.Node) {
 		if n.Type == html.ElementNode {
 			if n.Data == "a" && sources.HasClass(n, "job-card") {
 				cards++
+			}
+			if n.Data == "script" && bizneoCareerBundle.MatchString(sources.Attr(n, "src")) {
+				bundle = true
 			}
 			if total < 0 && n.Data == "p" && sources.HasClass(n, "subtitle") {
 				if m := bizneoTotal.FindStringSubmatch(bizneoNodeText(n)); m != nil {
@@ -59,6 +67,9 @@ func (bizneoProber) probe(ctx context.Context, c httpClient, board string) (stri
 		}
 	}
 	visit(root)
+	if !bundle {
+		return "", 0, nil
+	}
 	if total < 0 {
 		total = cards
 	}

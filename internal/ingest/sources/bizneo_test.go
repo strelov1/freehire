@@ -116,7 +116,7 @@ func TestBizneoReadsTheJobPostingWhenPresent(t *testing.T) {
 }
 
 func TestBizneoRefusesAForeignBoard(t *testing.T) {
-	for _, board := range []string{"acme", "groundforce.bizneo.com", "evil.com/x.bizneo.cloud"} {
+	for _, board := range []string{"acme", "groundforce.bizneo.com", "bizneo.com", "evil.com/x.bizneo.cloud"} {
 		if _, err := NewBizneo(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{Board: board}); err == nil {
 			t.Errorf("board %q: want an error", board)
 		}

@@ -13,8 +13,10 @@ import (
 
 // bizneo adapts the career sites of Bizneo HR, a Spanish HR suite whose ATS publishes each
 // customer's openings on a host under bizneo.cloud — usually <company>.careers.ats.bizneo.cloud,
-// sometimes a shorter vanity label (jobs.abeienergy.bizneo.cloud, sivsa.bizneo.cloud). The board
-// is that whole host, since the label alone does not say which of the two shapes it lives under.
+// sometimes a shorter vanity label (jobs.abeienergy.bizneo.cloud, sivsa.bizneo.cloud), and for some
+// customers their own domain (emprego.imancorp.pt, trabalho.grupo-crit.com: the same pages, found
+// by the assets.bizneo.com bundle, see atsdetect). The board is that whole host, since the label
+// alone does not say which of the shapes it lives under.
 //
 // The site is server-rendered:
 //
@@ -49,8 +51,15 @@ const bizneoRequestInterval = 500 * time.Millisecond
 // bizneoMaxPages caps the ?page=N walk; the largest site seen (somos-grupo-mas) has 19 pages.
 const bizneoMaxPages = 100
 
-// bizneoBoard is a career-site host: one or more labels under bizneo.cloud.
-var bizneoBoard = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+bizneo\.cloud$`)
+// bizneoBoard is a career-site host: one or more labels under bizneo.cloud, or a customer's own
+// domain serving the same site (emprego.imancorp.pt, opportunities.noesis.pt). Hosts under the
+// vendor's bizneo.com are its own pages, never a career site.
+var bizneoBoard = regexp.MustCompile(`^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$`)
+
+// bizneoVendorHost reports whether host is one of the vendor's own (bizneo.com) hosts.
+func bizneoVendorHost(host string) bool {
+	return host == "bizneo.com" || strings.HasSuffix(host, ".bizneo.com")
+}
 
 // bizneoSlug captures a posting's slug from its page URL.
 var bizneoSlug = regexp.MustCompile(`/jobs/([A-Za-z0-9][A-Za-z0-9_.~%-]*)/?$`)
@@ -90,8 +99,8 @@ func (s bizneo) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 // error; a later page failing ends the walk with the cards gathered so far.
 func (s bizneo) list(ctx context.Context, rawBoard string) ([]bizneoCard, error) {
 	board := strings.ToLower(strings.TrimSpace(rawBoard))
-	if !bizneoBoard.MatchString(board) {
-		return nil, fmt.Errorf("bizneo: board %q is not a bizneo.cloud career-site host", rawBoard)
+	if !bizneoBoard.MatchString(board) || bizneoVendorHost(board) {
+		return nil, fmt.Errorf("bizneo: board %q is not a career-site host", rawBoard)
 	}
 	base := &url.URL{Scheme: "https", Host: board, Path: "/jobs"}
 	var cards []bizneoCard

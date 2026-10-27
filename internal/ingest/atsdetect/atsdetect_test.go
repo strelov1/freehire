@@ -132,6 +132,16 @@ func TestDetectSelfHosted(t *testing.T) {
 			html:     `<meta name="generator" content="Teamtailor">`,
 			provider: "teamtailor", board: "careers.investengine.com", ok: true,
 		},
+		{
+			name: "bizneo career site on a custom domain", host: "opportunities.noesis.pt",
+			html:     `<script src="https://assets.bizneo.com/vite/assets/custom-companies-DEK45LIi.js"></script>`,
+			provider: "bizneo", board: "opportunities.noesis.pt", ok: true,
+		},
+		{
+			name: "bizneo referral link is not a career site", host: "www.sa-formacao.pt",
+			html: `<a href="https://hello.bizneo.com/pt/demo/ats/ref/">Bizneo</a>`,
+			ok:   false,
+		},
 		// www is not part of the board: the adapters and board files store the bare careers host.
 		{
 			name: "www stripped from the board", host: "www.github.careers",
