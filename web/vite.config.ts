@@ -141,12 +141,18 @@ export default defineConfig({
           // which is the same argument the logo proxy and the badge host already sit on.
           // Left off, every avatar on those pages silently falls back to initials — the
           // page still renders, so nothing fails loudly.
+          // www.googletagmanager.com is the one exception to that argument: gtag.js
+          // fires its tag-diagnostics beacon (/td) as an image pixel, and that URL
+          // DOES take arbitrary query parameters. It is accepted anyway because
+          // anything smuggled through it lands in Google's logs, not an attacker's —
+          // and left off, every page view logs a CSP violation in the console.
           'img-src': [
             'self',
             'data:',
             'https://logo.freehire.me',
             'https://api.producthunt.com',
             'https://avatars.githubusercontent.com',
+            'https://www.googletagmanager.com',
           ],
           // Pinning img-src deliberately stopped there: connect-src was considered as
           // part of the same hardening and left out, because getting it wrong fails
