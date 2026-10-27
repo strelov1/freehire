@@ -143,11 +143,6 @@ func (in SearchInput) QueryValues() url.Values {
 	setNonEmpty(v, "q", in.Query)
 	setList(v, "countries", countryCodes(in.Countries))
 	setList(v, "cities", in.Cities)
-	setList(v, "skills", in.Skills)
-	if in.RequireAllSkills && v.Has("skills") {
-		v.Set("skills_mode", "and")
-	}
-	setList(v, "skills_exclude", in.ExcludeSkills)
 	setList(v, "company_slug", in.CompanySlugs)
 	setList(v, "company_slug_exclude", in.ExcludeCompanySlugs)
 	setList(v, "source", in.Sources)
@@ -155,7 +150,10 @@ func (in SearchInput) QueryValues() url.Values {
 	// Unsupported reports, so what is SENT and what is REPORTED cannot disagree about a
 	// value, and a new facet joins both by being written once.
 	for _, facet := range checkedFacets {
-		setList(v, facet.param, keepKnown(facet.allowed, facet.values(in)))
+		setList(v, facet.param, keepKnown(facet.param, facet.values(in)))
+	}
+	if in.RequireAllSkills && v.Has("skills") {
+		v.Set("skills_mode", "and")
 	}
 	setNonEmpty(v, "salary_currency", in.SalaryCurrency)
 	setPositive(v, "salary_min", in.SalaryMin)

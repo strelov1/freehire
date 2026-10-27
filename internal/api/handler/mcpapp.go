@@ -345,3 +345,17 @@ func (h *mcpappHandlers) MarketStats(ctx context.Context, in mcpapp.SearchInput)
 	out.IgnoredParams = in.Unsupported()
 	return out, nil
 }
+
+// FacetCounts answers `list_filter_values`: the website's unfiltered facet read, through
+// the same cache entry an unfiltered /jobs/facets fills, re-keyed by facetView to the public
+// parameter names. The tool projects one filter of it.
+func (h *mcpappHandlers) FacetCounts(ctx context.Context) (map[string]map[string]int64, error) {
+	if h.facets == nil {
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
+	}
+	res, err := cachedFacetCounts(ctx, h.facets, h.cache, search.FacetParams{Facets: facetAttributes()})
+	if err != nil {
+		return nil, err
+	}
+	return facetView(res).Facets, nil
+}

@@ -151,8 +151,8 @@ info:
     Facets with a fixed vocabulary (`work_mode`, `regions`, `seniority`,
     `category`, `employment_type`, `education_level`, `company_type`,
     `company_size`, `salary_period`, `relocation`, `english_level`, `role_type`,
-    `ai_archetype`, `domains`, `reality` and the boolean facets) still apply a
-    value outside it — so `?work_mode=foo` answers `total: 0`, which reads
+    `ai_archetype`, `domains`, `reality`, `skills` and the boolean facets) still
+    apply a value outside it — so `?work_mode=foo` answers `total: 0`, which reads
     exactly like an empty market. `meta.ignored_values` names such values per
     parameter (the `_exclude` form under its own name):
 
@@ -161,9 +161,11 @@ info:
               "ignored_values": { "work_mode": ["foo"] } }
     ```
 
-    Values are compared case-insensitively. Open facets (`skills`, `countries`,
-    `cities`, `company_slug`, `source`, `collections`, `salary_currency`,
-    `posting_language`) are not checked: an unknown value there can be
+    Values are compared case-insensitively. A `skills` value is checked against
+    the skill dictionary that tags postings, so an alias it knows (`golang`) is
+    not unknown — it is read as its canonical slug (`go`). Open facets
+    (`countries`, `cities`, `company_slug`, `source`, `collections`,
+    `salary_currency`, `posting_language`) are not checked: an unknown value there can be
     legitimate. Absent on a clean request; capped at ten parameters of ten
     values each. Reported by `searchJobs`, `agentSearchJobs` and
     `getJobFacets`.
@@ -1253,7 +1255,7 @@ components:
         type: array
         items:
           type: string
-      description: Canonical skill slugs from `getJobFacets`. Never invent one.
+      description: Canonical skill slugs from `getJobFacets`. A known alias (`golang`) is read as its canonical slug (`go`); an unknown value is named in `meta.ignored_values`. Never invent one.
     SkillsMode:
       name: skills_mode
       in: query

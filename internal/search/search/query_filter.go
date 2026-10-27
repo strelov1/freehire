@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/dict/location"
+	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
@@ -239,15 +240,23 @@ const maxWithinDays = 36500
 // it says exactly what honouring it would have.
 func withinDays(n int) bool { return n > 0 && n <= maxWithinDays }
 
-// facetValue maps a caller-supplied facet value to the value the index carries. Only
-// `cities` is resolved: the index holds the canonical name ("Munich"), so a local
-// spelling ("München") is looked up in the curated location dictionary. An unknown
-// value stays verbatim, since an open facet may legitimately carry a value the
-// dictionary does not know.
+// facetValue maps a caller-supplied facet value to the value the index carries. Two
+// facets are resolved through the dictionary that wrote them. `cities`: the index holds
+// the canonical name ("Munich"), so a local spelling ("München") is looked up in the
+// curated location dictionary. `skills`: the index holds skilltag's canonical slug, so an
+// alias ("golang") reaches the postings tagged "go" — until 2026-10-27 `skills=golang`
+// answered zero beside 8,522 for `skills=go`. An unknown value stays verbatim, since an
+// open facet may legitimately carry a value the dictionary does not know (and an unknown
+// skill is named by IgnoredValues rather than dropped here).
 func facetValue(param, val string) string {
-	if param == "cities" {
+	switch param {
+	case "cities":
 		if name, ok := location.CanonicalCity(val); ok {
 			return name
+		}
+	case "skills":
+		if canonical, ok := skilltag.Resolve(val); ok {
+			return canonical
 		}
 	}
 	return val

@@ -31,9 +31,10 @@ const Version = "1.0"
 const serverInstructions = "freehire aggregates IT job postings and attributes each to the board it " +
 	"came from: name the source and link the employer's posting. search_jobs finds postings " +
 	"(semantic: for a need put in words, not a title); get_job reads one and its liveness; " +
-	"check_jobs_open rechecks a shortlist; similar_jobs finds more like one; salary_stats and " +
-	"job_market_stats answer pay and market; search_companies and get_company cover employers. " +
-	"Geography filters union. Unknown filter values return in ignored_params; retry."
+	"check_jobs_open rechecks a shortlist; similar_jobs finds more like one; " +
+	"salary_stats/job_market_stats: pay and market; search_companies/get_company: employers. " +
+	"Geography filters union. list_filter_values lists a filter's values; unknown ones " +
+	"return in ignored_params."
 
 // Tool names. Unlike the OJCP transport's, they feed no manifest — there is nothing here
 // that ADVERTISES a tool separately from registering it, so they are constants only because
@@ -52,6 +53,8 @@ const (
 	toolSimilarJobs = "similar_jobs"
 	toolSalaryStats = "salary_stats"
 	toolMarketStats = "job_market_stats"
+
+	toolFilterValues = "list_filter_values"
 )
 
 // readOnly is every tool's annotation block, written once.
@@ -220,6 +223,22 @@ func newServer(r Reader, origin string) *mcp.Server {
 		Annotations: readOnly(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, MarketStatsResult, error) {
 		return toolResult(r.MarketStats(ctx, in))
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:  toolFilterValues,
+		Title: "List filter values",
+		Description: "The values one job-search filter accepts — skills, categories, " +
+			"seniorities, sources, countries and the rest — each with how many open " +
+			"postings carry it, most common first. A value not listed matches no posting. " +
+			"Use it before filtering on a value you are not sure of.",
+		Annotations: readOnly(),
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in FilterValuesInput) (*mcp.CallToolResult, FilterValuesResult, error) {
+		counts, err := r.FacetCounts(ctx)
+		if err != nil {
+			return toolResult(FilterValuesResult{}, err)
+		}
+		return toolResult(FilterValues(in, counts), nil)
 	})
 
 	return server

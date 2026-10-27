@@ -16,6 +16,7 @@ type fakeReader struct {
 	similarJobs     func(context.Context, string, int) (SimilarJobsResult, error)
 	salaryStats     func(context.Context, SalaryInput) (SalaryStatsResult, error)
 	marketStats     func(context.Context, SearchInput) (MarketStatsResult, error)
+	facetCounts     func(context.Context) (map[string]map[string]int64, error)
 }
 
 func (f fakeReader) SearchJobs(ctx context.Context, in SearchInput) (SearchJobsResult, error) {
@@ -48,6 +49,10 @@ func (f fakeReader) SalaryStats(ctx context.Context, in SalaryInput) (SalaryStat
 
 func (f fakeReader) MarketStats(ctx context.Context, in SearchInput) (MarketStatsResult, error) {
 	return f.marketStats(ctx, in)
+}
+
+func (f fakeReader) FacetCounts(ctx context.Context) (map[string]map[string]int64, error) {
+	return f.facetCounts(ctx)
 }
 
 // The assertion the file exists for. A method added to Reader without a fake to answer it

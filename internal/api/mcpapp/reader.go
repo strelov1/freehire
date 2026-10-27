@@ -21,6 +21,9 @@ type Reader interface {
 	SimilarJobs(ctx context.Context, slug string, limit int) (SimilarJobsResult, error)
 	SalaryStats(ctx context.Context, in SalaryInput) (SalaryStatsResult, error)
 	MarketStats(ctx context.Context, in SearchInput) (MarketStatsResult, error)
+	// FacetCounts is the catalogue's whole facet distribution, unfiltered, keyed by the
+	// search core's facet param — what list_filter_values projects one filter of.
+	FacetCounts(ctx context.Context) (map[string]map[string]int64, error)
 }
 
 // NotFoundError marks the one failure the model must be able to act on: the posting or the

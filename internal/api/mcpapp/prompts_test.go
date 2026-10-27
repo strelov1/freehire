@@ -85,7 +85,7 @@ func TestTheInstructionsIntroduceEveryTool(t *testing.T) {
 	// search and fetch are left out on purpose: they exist for the deep-research connectors,
 	// which call them by name without being told.
 	for _, name := range []string{toolSearchJobs, toolGetJob, toolSearchCompanies, toolGetCompany,
-		toolCheckJobsOpen, toolSimilarJobs, toolSalaryStats, toolMarketStats} {
+		toolCheckJobsOpen, toolSimilarJobs, toolSalaryStats, toolMarketStats, toolFilterValues} {
 		if !strings.Contains(serverInstructions, name) {
 			t.Errorf("the instructions never mention %s", name)
 		}

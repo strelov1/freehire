@@ -145,3 +145,30 @@ func canonicalizeToken(tok string, o options) (string, bool) {
 	}
 	return "", false
 }
+
+// emittable is Canonicals as a set, built once for Resolve.
+var emittable = func() map[string]struct{} {
+	out := map[string]struct{}{}
+	for _, c := range Canonicals() {
+		out[c] = struct{}{}
+	}
+	return out
+}()
+
+// Resolve reads one search-filter value as the skill a posting's `skills` facet would
+// carry: a canonical this package emits passes as itself, and anything else goes through
+// Canonicalize, so "golang" reaches the postings tagged "go". ok is false for a value
+// that is neither — no posting is tagged with it, so filtering on it answers nothing.
+//
+// Every emitted canonical passes, résumé-scoped and category-scoped acronyms included.
+// Canonicalize alone would refuse those (it guards against reading their letters as
+// prose), but a filter value is not prose: "rag" is a tag that postings carry, reached
+// through "retrieval augmented generation", and refusing it would report a working
+// filter as unknown.
+func Resolve(value string) (string, bool) {
+	norm := normalize(value)
+	if _, ok := emittable[norm]; ok {
+		return norm, true
+	}
+	return canonicalizeToken(value, options{})
+}

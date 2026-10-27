@@ -73,6 +73,9 @@ func readerThatFinds(t *testing.T) fakeReader {
 		marketStats: func(_ context.Context, in SearchInput) (MarketStatsResult, error) {
 			return MarketStatsResult{Total: 1, IgnoredParams: in.Unsupported()}, nil
 		},
+		facetCounts: func(context.Context) (map[string]map[string]int64, error) {
+			return map[string]map[string]int64{"skills": {"go": 8522, "golang-migrate": 3, "rust": 900}}, nil
+		},
 	}
 }
 
@@ -97,6 +100,7 @@ func TestEveryAdvertisedToolCanActuallyBeCalled(t *testing.T) {
 		toolSimilarJobs:     {"slug": "senior-go-engineer-acme-abc123"},
 		toolSalaryStats:     {"category": "backend"},
 		toolMarketStats:     {"skills": []string{"go"}},
+		toolFilterValues:    {"filter": "skills"},
 	}
 
 	listed, err := session.ListTools(ctx, nil)
@@ -261,7 +265,7 @@ func TestNoToolDescriptionDirectsTheModelToAnotherTool(t *testing.T) {
 		t.Fatalf("tools/list: %v", err)
 	}
 	names := []string{toolSearchJobs, toolGetJob, toolSearchCompanies, toolGetCompany, toolCheckJobsOpen, toolFetch,
-		toolSimilarJobs, toolSalaryStats, toolMarketStats}
+		toolSimilarJobs, toolSalaryStats, toolMarketStats, toolFilterValues}
 
 	for _, tool := range listed.Tools {
 		raw, err := json.Marshal(struct {

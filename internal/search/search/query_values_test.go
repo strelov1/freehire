@@ -22,7 +22,10 @@ func TestIgnoredValues(t *testing.T) {
 		{"retired category is translated, not ignored", "category=management", nil},
 		{"boolean facet", "requires_clearance=flase&is_tech=true", map[string][]string{"requires_clearance": {"flase"}}},
 		{"reality class", "reality=likely-evergreen&reality=ghost", map[string][]string{"reality": {"ghost"}}},
-		{"open-ended facets are not checked", "skills=notaskill&countries=zz&cities=atlantis", nil},
+		{"open-ended facets are not checked", "countries=zz&cities=atlantis&source=nowhere", nil},
+		{"unknown skill", "skills=golangg", map[string][]string{"skills": {"golangg"}}},
+		{"skill alias the filter resolves is known", "skills=golang,Go&skills_exclude=reactjs", nil},
+		{"unknown excluded skill", "skills_exclude=phpp", map[string][]string{"skills_exclude": {"phpp"}}},
 		{"repeated value reported once", "work_mode=foo&work_mode=foo", map[string][]string{"work_mode": {"foo"}}},
 		{"stray comma is not a value", "work_mode=remote,", nil},
 	}
@@ -63,12 +66,32 @@ func TestIgnoredValuesIsBounded(t *testing.T) {
 // an empty one would report every value, and a facet the filter does not read would name
 // a value the request never filtered on.
 func TestClosedFacetsAreRealFacetsWithAVocabulary(t *testing.T) {
-	for facet, allowed := range closedFacets {
+	for facet, known := range closedFacets {
 		if _, ok := StringFacets[facet]; !ok {
 			t.Errorf("%s: not in StringFacets", facet)
 		}
-		if len(allowed) == 0 {
-			t.Errorf("%s: empty vocabulary", facet)
+		if known("zzz-not-a-value") {
+			t.Errorf("%s: accepts anything", facet)
+		}
+	}
+}
+
+func TestUnknownFacetValue(t *testing.T) {
+	cases := []struct {
+		param, value string
+		want         bool
+	}{
+		{"category", "site-reliability", true},
+		{"category", "backend", false},
+		{"skills", "golangg", true},
+		{"skills", "golang", false},
+		{"skills_exclude", "golangg", true},
+		{"cities", "atlantis", false}, // open facet: nothing to be unknown against
+		{"q", "anything", false},
+	}
+	for _, tc := range cases {
+		if got := UnknownFacetValue(tc.param, tc.value); got != tc.want {
+			t.Errorf("UnknownFacetValue(%q, %q) = %v, want %v", tc.param, tc.value, got, tc.want)
 		}
 	}
 }

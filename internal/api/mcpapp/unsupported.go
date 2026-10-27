@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/strelov1/freehire/internal/dict/vocab"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // A filter value we hold no facet for is dropped from the query and named in the answer,
@@ -20,33 +20,35 @@ import (
 // runs, which for "ai" is the search that was wanted in the first place, and the model is
 // told which word was not understood instead of being handed a false negative.
 //
-// Only CLOSED vocabularies are checked. Skills, cities, company slugs and sources have no
-// finite list to check against, and writing one here would be a second dictionary drifting
-// from the real ones — the failure this repository has already paid for more than once.
+// Only CLOSED vocabularies are checked, and which ones are closed is the search core's
+// answer (search.UnknownFacetValue), not this package's: the REST surface names the same
+// values in meta.ignored_values, and two lists of "what is known" would drift. That
+// includes skills — the facet is written by the skill dictionary alone, so a skill it
+// cannot resolve ("golangg") matches nothing, while an alias it does resolve ("golang")
+// is kept and reaches the postings tagged "go". Cities, company slugs and sources have no
+// finite list to check against; list_filter_values is how a model learns their values.
 
-// checkedFacets pairs each query parameter whose values must belong to a closed vocabulary
-// with the dictionary itself and with the field the input carries it in.
+// checkedFacets names each query parameter whose values must belong to a closed vocabulary,
+// with the field the input carries it in.
 //
 // ONE table, deliberately. It was a map of vocabularies beside a switch resolving the field,
 // and that pair had a silent failure mode: a facet added to the map without its matching
 // case reads NO values, so every value passes and the check is switched off for exactly the
 // facet it was added for. Both readers — the query builder and the reporter — walk this
 // slice, so a new facet joins both by being written once.
-//
-// The vocabularies are the dictionaries themselves, never a copy: a value added to vocab
-// joins this check by existing.
 var checkedFacets = []struct {
-	param   string
-	allowed []string
-	values  func(SearchInput) []string
+	param  string
+	values func(SearchInput) []string
 }{
-	{"work_mode", vocab.WorkModeValues, func(in SearchInput) []string { return in.WorkMode }},
-	{"seniority", vocab.SeniorityValues, func(in SearchInput) []string { return in.Seniority }},
-	{"category", vocab.CategoryValues, func(in SearchInput) []string { return in.Category }},
-	{"employment_type", vocab.EmploymentTypeValues, func(in SearchInput) []string { return in.EmploymentType }},
-	{"english_level", vocab.EnglishLevelValues, func(in SearchInput) []string { return in.EnglishLevel }},
-	{"regions", vocab.RegionValues, func(in SearchInput) []string { return in.Regions }},
-	{"relocation", vocab.RelocationValues, func(in SearchInput) []string { return in.Relocation }},
+	{"work_mode", func(in SearchInput) []string { return in.WorkMode }},
+	{"seniority", func(in SearchInput) []string { return in.Seniority }},
+	{"category", func(in SearchInput) []string { return in.Category }},
+	{"employment_type", func(in SearchInput) []string { return in.EmploymentType }},
+	{"english_level", func(in SearchInput) []string { return in.EnglishLevel }},
+	{"regions", func(in SearchInput) []string { return in.Regions }},
+	{"relocation", func(in SearchInput) []string { return in.Relocation }},
+	{"skills", func(in SearchInput) []string { return in.Skills }},
+	{"skills_exclude", func(in SearchInput) []string { return in.ExcludeSkills }},
 }
 
 // Unsupported names the filter values this input carries that the catalogue cannot filter
@@ -60,7 +62,7 @@ func (in SearchInput) Unsupported() []string {
 	var out []string
 	for _, facet := range checkedFacets {
 		for _, value := range facet.values(in) {
-			if !known(facet.allowed, value) {
+			if search.UnknownFacetValue(facet.param, value) {
 				out = append(out, facet.param+"="+value)
 			}
 		}
@@ -97,14 +99,14 @@ func known(allowed []string, value string) bool {
 	return slices.ContainsFunc(allowed, func(a string) bool { return strings.EqualFold(a, value) })
 }
 
-// keepKnown drops the values the catalogue cannot filter on.
+// keepKnown drops the values of a facet param the catalogue cannot filter on.
 //
 // A facet with one wrong value keeps its right ones: dropping the whole facet would throw
 // away a filter the caller got correct, and answer wider than either reading asked for.
-func keepKnown(allowed, values []string) []string {
+func keepKnown(param string, values []string) []string {
 	kept := make([]string, 0, len(values))
 	for _, value := range values {
-		if known(allowed, value) {
+		if !search.UnknownFacetValue(param, value) {
 			kept = append(kept, value)
 		}
 	}

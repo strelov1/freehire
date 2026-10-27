@@ -643,3 +643,21 @@ func TestFilterFromValues_CitiesResolveThroughDictionary(t *testing.T) {
 		t.Errorf("cities_exclude=münchen: got %v, want %v", excl, wantExcl)
 	}
 }
+
+func TestFilterFromValues_SkillsResolveThroughDictionary(t *testing.T) {
+	cases := []struct{ query, want string }{
+		{"skills=golang", `skills = "go"`},
+		{"skills=Go", `skills = "go"`},
+		// An emitted canonical reachable only through an acronym tier passes as itself.
+		{"skills=rag", `skills = "rag"`},
+		// An unknown skill stays verbatim: IgnoredValues names it, the filter is left alone.
+		{"skills=golangg", `skills = "golangg"`},
+		{"skills_exclude=golang", `skills != "go"`},
+	}
+	for _, tc := range cases {
+		got := normalizeGroups(t, FilterFromValues(vals(tc.query)))
+		if want := [][]string{{tc.want}}; !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: got %v, want %v", tc.query, got, want)
+		}
+	}
+}

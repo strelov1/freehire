@@ -66,7 +66,22 @@ catalogue the keyword hits are the answer anyway.
   2026-09-18: `/jobs/search?category=ai` answers 0 results and reports nothing ignored. Over
   REST that is a client's problem; here the client summarises the zero as "freehire has no
   AI jobs" and says it to a person. So a value outside a closed vocabulary is DROPPED and
-  named in `ignored_params`, and the free text still runs.
+  named in `ignored_params`, and the free text still runs. Which vocabularies are closed is
+  `search.UnknownFacetValue`'s answer — the same table REST's `meta.ignored_values` reads —
+  never a list here. `skills`/`exclude_skills` are closed since 2026-10-27 (`skills=golangg`
+  answered `total: 0` and named nothing): the facet is written by `skilltag` alone, so a
+  value `skilltag.Resolve` cannot read matches no posting. An alias it CAN read (`golang`)
+  is kept and the search core reads it as `go`.
+
+## `list_filter_values`
+
+The vocabulary lookup, so a model can check a value before a search rather than learn of it
+from `ignored_params` after one. It is the account server's `facets` narrowed to ONE filter
+per call (skills alone are ~1,200 values), keyed by `search_jobs`' own field names
+(`sources`, not `source`) and read from the website's unfiltered facet distribution and its
+cache entry. `contains` filters by substring; for skills it also returns the canonical an
+alias resolves to, because "golang" is not a substring of "go". `company_slugs` is not
+listable — an employer is found by name through `search_companies`.
 
 ## Liveness is computed on read, and only in `get_job`
 

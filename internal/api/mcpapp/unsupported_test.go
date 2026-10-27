@@ -49,6 +49,8 @@ func TestEveryClosedVocabularyIsChecked(t *testing.T) {
 		{"english_level", SearchInput{EnglishLevel: []string{"fluent"}}},
 		{"regions", SearchInput{Regions: []string{"europe"}}},
 		{"relocation", SearchInput{Relocation: []string{"yes"}}},
+		{"skills", SearchInput{Skills: []string{"golangg"}}},
+		{"skills_exclude", SearchInput{ExcludeSkills: []string{"phpp"}}},
 	}
 
 	for _, tc := range cases {
@@ -91,9 +93,9 @@ func TestAnythingThatIsNotACountryCodeIsNamed(t *testing.T) {
 }
 
 func TestAnOpenVocabularyIsNotPolicedAtAll(t *testing.T) {
-	// Skills, cities, company slugs and sources have no closed list to check against, and
-	// inventing one here would be a second dictionary drifting from the real ones.
-	in := SearchInput{Skills: []string{"brainfuck"}, Cities: []string{"atlantis"}}
+	// Cities, company slugs and sources have no closed list to check against, and inventing
+	// one here would be a second dictionary drifting from the real ones.
+	in := SearchInput{Cities: []string{"atlantis"}, Sources: []string{"nowhere"}, CompanySlugs: []string{"acme"}}
 
 	if got := in.Unsupported(); len(got) != 0 {
 		t.Errorf("unsupported = %v, want none — these vocabularies are open", got)
@@ -139,6 +141,10 @@ func TestEveryCheckedFacetReadsItsOwnField(t *testing.T) {
 				in.Regions = []string{"probe"}
 			case "relocation":
 				in.Relocation = []string{"probe"}
+			case "skills":
+				in.Skills = []string{"probe"}
+			case "skills_exclude":
+				in.ExcludeSkills = []string{"probe"}
 			default:
 				t.Fatalf("%s is in the table but this test does not know how to set it", facet.param)
 			}
@@ -148,5 +154,32 @@ func TestEveryCheckedFacetReadsItsOwnField(t *testing.T) {
 					got, facet.param)
 			}
 		})
+	}
+}
+
+// Measured against production on 2026-10-27: search_jobs with skills=["golangg"] answered
+// {"jobs":[],"total":0} and named nothing, and a model read that as "no Go jobs". The skill
+// dictionary is the whole of what the facet carries, so a value it cannot resolve is a word
+// it did not understand — dropped and named like a category. An alias it does resolve is
+// NOT unknown: it is kept, and the search core reads "golang" as "go".
+func TestAnUnknownSkillIsDroppedAndNamedButAnAliasIsKept(t *testing.T) {
+	in := SearchInput{Skills: []string{"golangg", "golang"}, RequireAllSkills: true}
+
+	v := in.QueryValues()
+	if got := v.Get("skills"); got != "golang" {
+		t.Errorf("skills = %q, want the alias kept and the unknown value dropped", got)
+	}
+	if got := v.Get("skills_mode"); got != "and" {
+		t.Errorf("skills_mode = %q, want and", got)
+	}
+	if got := in.Unsupported(); !slices.Equal(got, []string{"skills=golangg"}) {
+		t.Errorf("unsupported = %v, want exactly [skills=golangg]", got)
+	}
+
+	// Every skill unknown leaves no skills param, so require_all_skills must not survive
+	// alone as a mode on nothing.
+	none := SearchInput{Skills: []string{"golangg"}, RequireAllSkills: true}.QueryValues()
+	if none.Has("skills") || none.Has("skills_mode") {
+		t.Errorf("query = %v, want neither skills nor skills_mode", none)
 	}
 }

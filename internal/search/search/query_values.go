@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/job/jobreality"
 )
@@ -16,14 +17,21 @@ import (
 // caller meant to exclude — which is the stronger reason to name it.
 var boolValues = []string{"true", "false"}
 
-// closedFacets maps each facet whose values come from a closed vocabulary to that
-// vocabulary — the dictionary itself, never a copy, so a value added to vocab joins
-// this check by existing. A value outside it matches no posting, so the filter narrows
-// the answer to nothing and the empty page reads exactly like an empty market.
+// closedFacets maps each facet whose values come from a closed vocabulary to the check
+// that a value belongs to it — the dictionary itself, never a copy, so a value added to
+// the dictionary joins this check by existing. A value outside it matches no posting, so
+// the filter narrows the answer to nothing and the empty page reads exactly like an empty
+// market.
+//
+// skills is in the table although its vocabulary is not a vocab list: the facet is written
+// by internal/dict/skilltag alone (measured 2026-10-27, 98 stray values carried by 147
+// postings beside 12.27M canonical tags), so a value skilltag cannot resolve is a value
+// no posting carries. The check is skilltag.Resolve, the same reading the filter makes
+// (see facetValue), so "golang" is known — it reaches the postings tagged "go".
 //
 // The facets NOT listed have no finite list to check against, and writing one here would
 // be a second dictionary drifting from the real one:
-//   - skills, cities, company_slug: open by nature; an unknown value can be legitimate.
+//   - cities, company_slug: open by nature; an unknown value can be legitimate.
 //   - countries: any ISO code is a valid ask, including one no posting carries yet.
 //   - source: the adapter registry grows, and non-adapter sources (telegram) exist.
 //   - collections: curated tags kept in data, not in code.
@@ -31,30 +39,46 @@ var boolValues = []string{"true", "false"}
 //
 // Every value is read through splitFacetValues, the same way filterFromValues reads it,
 // so the report and the filter cannot disagree about what was asked.
-var closedFacets = map[string][]string{
-	"work_mode": vocab.WorkModeValues,
+var closedFacets = map[string]func(string) bool{
+	"work_mode": oneOf(vocab.WorkModeValues),
 	// RegionUnspecified is a reserved value the filter maps to IS EMPTY.
-	"regions":   append(slices.Clone(vocab.RegionValues), RegionUnspecified),
-	"seniority": vocab.SeniorityValues,
+	"regions":   oneOf(append(slices.Clone(vocab.RegionValues), RegionUnspecified)),
+	"seniority": oneOf(vocab.SeniorityValues),
 	// The retired category is translated, not dropped (see retiredCategory).
-	"category":        append(slices.Clone(vocab.CategoryValues), vocab.RetiredCategoryManagement),
-	"employment_type": vocab.EmploymentTypeValues,
-	"education_level": vocab.EducationLevelValues,
-	"company_type":    vocab.CompanyTypeValues,
-	"company_size":    vocab.CompanySizeValues,
-	"salary_period":   vocab.SalaryPeriodValues,
-	"relocation":      vocab.RelocationValues,
-	"english_level":   vocab.EnglishLevelValues,
-	"role_type":       vocab.RoleTypeValues,
-	"ai_archetype":    vocab.AIArchetypeValues,
-	"domains":         vocab.DomainValues,
-	"reality": {
+	"category":        oneOf(append(slices.Clone(vocab.CategoryValues), vocab.RetiredCategoryManagement)),
+	"employment_type": oneOf(vocab.EmploymentTypeValues),
+	"education_level": oneOf(vocab.EducationLevelValues),
+	"company_type":    oneOf(vocab.CompanyTypeValues),
+	"company_size":    oneOf(vocab.CompanySizeValues),
+	"salary_period":   oneOf(vocab.SalaryPeriodValues),
+	"relocation":      oneOf(vocab.RelocationValues),
+	"english_level":   oneOf(vocab.EnglishLevelValues),
+	"role_type":       oneOf(vocab.RoleTypeValues),
+	"ai_archetype":    oneOf(vocab.AIArchetypeValues),
+	"domains":         oneOf(vocab.DomainValues),
+	"reality": oneOf([]string{
 		jobreality.ClassFresh, jobreality.ClassStale, jobreality.ClassLikelyEvergreen,
+	}),
+	"skills": func(val string) bool {
+		_, ok := skilltag.Resolve(val)
+		return ok
 	},
-	"is_tech":               boolValues,
-	RequiresClearanceParam:  boolValues,
-	AIInterviewParam:        boolValues,
-	AutoApplyAvailableParam: boolValues,
+	"is_tech":               oneOf(boolValues),
+	RequiresClearanceParam:  oneOf(boolValues),
+	AIInterviewParam:        oneOf(boolValues),
+	AutoApplyAvailableParam: oneOf(boolValues),
+}
+
+// UnknownFacetValue reports whether value falls outside the closed vocabulary of a facet
+// param (or its `_exclude` form) — the value IgnoredValues would name. false for a param
+// with no closed vocabulary: an open facet has nothing to be unknown against.
+//
+// It is how a surface that DROPS such a value (the MCP app, whose reader is a language
+// model) asks the same question this package's report answers, so the two cannot
+// disagree about which values are known.
+func UnknownFacetValue(param, value string) bool {
+	known, closed := closedFacets[strings.TrimSuffix(param, "_exclude")]
+	return closed && !known(value)
 }
 
 // IgnoredValues reports, per query param, the values of a closed-vocabulary facet (or its
@@ -77,11 +101,11 @@ var closedFacets = map[string][]string{
 func IgnoredValues(v url.Values) map[string][]string {
 	var params []string
 	out := map[string][]string{}
-	for facet, allowed := range closedFacets {
+	for facet, known := range closedFacets {
 		for _, param := range []string{facet, facet + "_exclude"} {
 			var bad []string
 			for _, val := range splitFacetValues(v[param]) {
-				if !inVocabulary(allowed, val) && !slices.Contains(bad, val) {
+				if !known(val) && !slices.Contains(bad, val) {
 					bad = append(bad, val)
 				}
 			}
@@ -106,7 +130,11 @@ func IgnoredValues(v url.Values) map[string][]string {
 	return out
 }
 
-func inVocabulary(allowed []string, value string) bool {
-	value = strings.TrimSpace(value)
-	return slices.ContainsFunc(allowed, func(a string) bool { return strings.EqualFold(a, value) })
+// oneOf is the check for a vocabulary given as a list. A value is compared trimmed and
+// case-insensitively (see IgnoredValues).
+func oneOf(allowed []string) func(string) bool {
+	return func(value string) bool {
+		value = strings.TrimSpace(value)
+		return slices.ContainsFunc(allowed, func(a string) bool { return strings.EqualFold(a, value) })
+	}
 }
