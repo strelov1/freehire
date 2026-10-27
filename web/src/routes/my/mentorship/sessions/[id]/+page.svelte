@@ -136,7 +136,7 @@
         ></textarea>
       </label>
       <div>
-        <Button disabled={reviewing} onclick={submitReview}>
+        <Button variant="primary" disabled={reviewing} onclick={submitReview}>
           {reviewing ? 'Saving…' : reviewed ? 'Update the review' : 'Leave a review'}
         </Button>
       </div>

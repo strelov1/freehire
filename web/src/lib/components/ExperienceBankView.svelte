@@ -765,7 +765,7 @@
                 <span class="text-muted-foreground">I currently work here</span>
               </label>
               <div class="flex gap-2">
-                <Button size="sm" disabled={busy || !jobCompany.trim()} onclick={createJob}>Save</Button>
+                <Button size="sm" variant="primary" disabled={busy || !jobCompany.trim()} onclick={createJob}>Save</Button>
                 <Button size="sm" variant="ghost" onclick={() => (addingJob = false)}>Cancel</Button>
               </div>
             </div>
@@ -808,7 +808,7 @@
                 <PeriodDateInput bind:value={projEnd} placeholder="End" label="Project end" />
               </div>
               <div class="flex gap-2">
-                <Button size="sm" disabled={busy || !projName.trim()} onclick={createProject}>Save</Button>
+                <Button size="sm" variant="primary" disabled={busy || !projName.trim()} onclick={createProject}>Save</Button>
                 <Button size="sm" variant="ghost" onclick={() => (addingProject = false)}>Cancel</Button>
               </div>
             </div>

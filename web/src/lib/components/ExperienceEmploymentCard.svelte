@@ -226,7 +226,7 @@
               {/snippet}
             </FormField>
             <div class="flex gap-2">
-              <Button size="sm" disabled={busy} onclick={saveEdit}>Save</Button>
+              <Button size="sm" variant="primary" disabled={busy} onclick={saveEdit}>Save</Button>
               <Button size="sm" variant="ghost" onclick={closeEdit}>Cancel</Button>
             </div>
           </div>

@@ -131,7 +131,7 @@
   -->
   <div class="relative flex min-h-dvh flex-col p-6 max-sm:optical-center sm:block sm:min-h-full">
     {#if title}
-      <h2 id={titleId} class="text-lg font-semibold">{title}</h2>
+      <h2 id={titleId} class="pr-8 text-lg font-semibold">{title}</h2>
     {/if}
     {#if description}
       <p id={descriptionId} class="mt-1 text-sm text-muted-foreground">{description}</p>

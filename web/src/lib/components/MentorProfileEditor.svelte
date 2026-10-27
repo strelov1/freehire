@@ -357,7 +357,7 @@
   </div>
 
   <div>
-    <Button disabled={saving} onclick={save}>
+    <Button variant="primary" disabled={saving} onclick={save}>
       {saving ? 'Saving…' : profile ? 'Save changes' : 'Submit for review'}
     </Button>
   </div>

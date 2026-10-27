@@ -56,7 +56,7 @@
   </div>
 
   <div>
-    <Button disabled={saving} onclick={save}>
+    <Button variant="primary" disabled={saving} onclick={save}>
       {saving ? 'Saving…' : 'Save'}
     </Button>
   </div>

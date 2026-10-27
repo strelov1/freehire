@@ -219,7 +219,7 @@
           class="border-input bg-background h-9 rounded-md border px-2 text-sm"
         />
       {/if}
-      <Button size="sm" disabled={saving || !overrideDate} onclick={addOverride}>Add</Button>
+      <Button size="sm" variant="primary" disabled={saving || !overrideDate} onclick={addOverride}>Add</Button>
     </div>
   </section>
 

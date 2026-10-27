@@ -173,7 +173,7 @@
         {/snippet}
       </FormField>
       <div class="flex items-center gap-2">
-        <Button size="sm" onclick={saveEdit} disabled={busy || !draftClaim.trim()}>
+        <Button size="sm" variant="primary" onclick={saveEdit} disabled={busy || !draftClaim.trim()}>
           <Check class="size-4" />
           Save — this makes it yours
         </Button>
@@ -197,7 +197,7 @@
         {/snippet}
       </FormField>
       <div class="flex items-center gap-2">
-        <Button size="sm" onclick={savePromote} disabled={busy || !promoteName.trim()}>
+        <Button size="sm" variant="primary" onclick={savePromote} disabled={busy || !promoteName.trim()}>
           <Check class="size-4" />
           Save as project
         </Button>
