@@ -77,9 +77,10 @@
   const currentKind = $derived<StepKind | undefined>(steps[index]);
   const isLast = $derived(index >= steps.length - 1);
 
-  // One load of everything the plan depends on. A failed read is not fatal: that store then
-  // counts as unanswered, which asks a question the candidate may have answered — strictly
-  // better than skipping one they have not.
+  // One load of everything the plan depends on. Every read must succeed before the plan is
+  // made: a failed one would read as "nothing stored", and since showing the tour marks it
+  // complete, an outage would spend the account's one tour on the wrong steps. A failure
+  // shows a retry instead and records nothing.
   //
   // Run once, untracked: the stores' own `loaded` flags flip while this reads them, and a
   // tracked read would start a second load that lands after the first and overwrites
@@ -91,14 +92,28 @@
     untrack(() => void load());
   });
 
+  let loadFailed = $state(false);
+
   async function load() {
+    loadFailed = false;
+    let failed = false;
+    const failure = () => {
+      failed = true;
+      return null;
+    };
+    // The stores swallow their own errors and stay not-loaded, so their flags are the
+    // success signal; the two direct reads report through `failure`.
     const [resume, survey] = await Promise.all([
-      api.getResume().catch(() => null),
-      api.getSurvey().catch(() => null),
-      profileStore.ensureLoaded().catch(() => {}),
-      savedSearches.ensureLoaded().catch(() => {}),
-      notifications.ensureLoaded().catch(() => {}),
+      api.getResume().catch(failure),
+      api.getSurvey().catch(failure),
+      profileStore.ensureLoaded(),
+      savedSearches.ensureLoaded(),
+      notifications.ensureLoaded(),
     ]);
+    if (failed || !profileStore.loaded || !savedSearches.loaded || !notifications.loaded) {
+      loadFailed = true;
+      return;
+    }
     const profile = profileStore.profile;
     specializations = profile ? [...profile.specializations] : [];
     seniorities = profile ? [...profile.seniorities] : [];
@@ -319,7 +334,13 @@
       <!-- body -->
       <div class="no-scrollbar mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-y-auto px-5 py-6">
         <h1 class="sr-only">Get to know freehire</h1>
-        {#if !loaded}
+        {#if loadFailed}
+          <div class="py-10 text-sm" role="alert">
+            <p class="font-medium">We couldn't load your details.</p>
+            <p class="mt-1 text-muted-foreground">Check your connection and try again.</p>
+            <Button variant="outline" size="sm" class="mt-4" onclick={() => void load()}>Try again</Button>
+          </div>
+        {:else if !loaded}
           <div class="flex items-center gap-2 py-10 text-sm text-muted-foreground">
             <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /> Getting your details…
           </div>

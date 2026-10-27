@@ -2306,8 +2306,9 @@ data: {"type":"result","stop_reason":"completed"}
   {
     title: 'Onboarding survey',
     intro:
-      'What you told us about your search when you signed up: how far along it is, ' +
-      'the single biggest thing in its way, and what you earn today. A singleton per ' +
+      'Your stored answers about your job search: how far along it is, the things in ' +
+      'its way, and what you earn today. The onboarding tour asks only for the things in ' +
+      'its way; the other two are kept from earlier sign-ups. A singleton per ' +
       'user — no id in the path. These answers describe you to us and reach no ' +
       'employer and no job search; what you WANT to be paid is a screening answer ' +
       '(`desired_salary_*`), not one of these. `PUT` is a partial update: a field the ' +
