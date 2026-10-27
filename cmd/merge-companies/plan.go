@@ -338,3 +338,20 @@ func onlyReason(plan []merge, reason string) []merge {
 	}
 	return out
 }
+
+// onlySlugs keeps the groups holding at least one listed slug, as canon or as alias.
+//
+// It is how a handful of groups a person has already read are taken without the rest of the
+// backlog: the Japanese forms left 29 slugs in spelling groups ("センター・フォース" beside
+// "センターフォース"), and the only other way to reach them was a spelling wave over 2,344
+// unreviewed groups. The whole group goes, never part of it, since its canon was elected over
+// every member.
+func onlySlugs(plan []merge, slugs map[string]bool) []merge {
+	var out []merge
+	for _, m := range plan {
+		if slugs[m.Canonical] || slices.ContainsFunc(m.Aliases, func(a alias) bool { return slugs[a.Slug] }) {
+			out = append(out, m)
+		}
+	}
+	return out
+}

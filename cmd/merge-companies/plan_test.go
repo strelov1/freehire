@@ -447,3 +447,25 @@ func TestOnlyReason_KeepsGroupsWhoseEveryAliasMatches(t *testing.T) {
 		t.Errorf("empty reason kept %d of %d groups", n, len(plan))
 	}
 }
+
+func TestOnlySlugs_KeepsWholeGroupsHoldingAListedSlug(t *testing.T) {
+	plan := []merge{
+		{Canonical: "center-force-kk", Aliases: []alias{
+			{Slug: "zhu-shi-hui-she-center-force", Reason: reasonLegalForm},
+			{Slug: "zhu-shi-hui-she-centerforce", Reason: reasonSpelling},
+		}},
+		{Canonical: "dollar-tree", Aliases: []alias{{Slug: "dollartree", Reason: reasonSpelling}}},
+		{Canonical: "acme", Aliases: []alias{{Slug: "acme-inc", Reason: reasonLegalForm}}},
+	}
+	got := onlySlugs(plan, map[string]bool{"zhu-shi-hui-she-centerforce": true, "acme": true})
+	var canons []string
+	for _, m := range got {
+		canons = append(canons, m.Canonical)
+		if m.Canonical == "center-force-kk" && len(m.Aliases) != 2 {
+			t.Errorf("group was cut down to %d aliases, want the whole group", len(m.Aliases))
+		}
+	}
+	if want := []string{"center-force-kk", "acme"}; !reflect.DeepEqual(canons, want) {
+		t.Errorf("kept %v, want %v", canons, want)
+	}
+}

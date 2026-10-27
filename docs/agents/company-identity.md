@@ -133,6 +133,8 @@ Any other slug that is not the plain slug of the latest name is left alone — i
 the source renamed the employer, which is a judgement, not a form.
 `--reason legal_form` takes only the groups whose every alias is that pure-rule class, so a
 wave like this one can run without dragging the unreviewed spelling backlog along with it.
+`--only-slugs <file>` narrows a wave to the whole groups holding a listed slug — how a few
+groups already read by a person are taken without the rest of the spelling backlog.
 
 It reports by default; `--apply` writes and `--min-jobs` bounds a wave so the plan
 stays short enough to read. Jobs move in chunks whose statement selects rows still carrying the

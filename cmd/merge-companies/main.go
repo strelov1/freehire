@@ -19,8 +19,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
+	"os"
+	"strings"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
@@ -41,6 +44,7 @@ func run() int {
 	minJobs := flag.Int("min-jobs", 0, "only merge folded groups whose combined open jobs reach this")
 	reason := flag.String("reason", "", "only merge groups whose every alias retires for this reason ("+
 		reasonLegalForm+" or "+reasonSpelling+"); empty takes both")
+	onlySlugsFile := flag.String("only-slugs", "", "only merge groups holding a slug listed in this file, one per line")
 	flag.Parse()
 	if *reason != "" && *reason != reasonLegalForm && *reason != reasonSpelling {
 		log.Printf("merge-companies: unknown --reason %q", *reason)
@@ -61,6 +65,14 @@ func run() int {
 		return 1
 	}
 	plan = onlyReason(plan, *reason)
+	if *onlySlugsFile != "" {
+		slugs, err := readSlugList(*onlySlugsFile)
+		if err != nil {
+			log.Printf("merge-companies: --only-slugs: %v", err)
+			return 2
+		}
+		plan = onlySlugs(plan, slugs)
+	}
 	report(plan)
 	if !*apply {
 		log.Printf("merge-companies: dry run, nothing written. Re-run with --apply to merge.")
@@ -161,4 +173,24 @@ func (s *store) RekeyChunk(ctx context.Context, aliasSlug, canonical string, chu
 		AliasSlug:     aliasSlug,
 		ChunkSize:     int32(chunk),
 	})
+}
+
+// readSlugList reads one slug per line, skipping blank lines. An empty list is refused: a
+// filter that admits nothing would report an empty wave, which reads exactly like a list
+// whose groups have all been merged already.
+func readSlugList(path string) (map[string]bool, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	slugs := make(map[string]bool)
+	for _, line := range strings.Split(string(raw), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			slugs[line] = true
+		}
+	}
+	if len(slugs) == 0 {
+		return nil, errors.New(path + " lists no slugs")
+	}
+	return slugs, nil
 }
