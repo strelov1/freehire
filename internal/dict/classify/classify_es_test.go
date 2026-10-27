@@ -120,6 +120,10 @@ func TestSpanishHeadsAndFields(t *testing.T) {
 		{"Advogado(a) / Bancário", "", ""},
 		// "Centro comercial" is the mall, "ingeniero comercial" a Chilean degree.
 		{"Gerente centro comercial", "", ""},
+		// The Italian "reparto" is a department, not a delivery round.
+		{"Addetto reparto gastronomia", "", ""},
+		{"Capo reparto", "", ""},
+		{"Ayudante de reparto", "logistics", ""},
 		{"Ingeniero comercial", "", ""},
 
 		// A generic head with no field resolves nothing.
@@ -178,6 +182,13 @@ func TestSpanishGrades(t *testing.T) {
 		{"Administrativo/a Contable SSR con exp en Tango gestión", "middle"},
 		{"Analista funcional Ssr- Sr", "senior"},
 		{"Ingeniero/a de Datos SSR/SR", "senior"},
+		{"Desarrollador Front end React Ssr", "middle"},
+		// "SSR" beside a rendering word is server-side rendering, not the grade.
+		{"Frontend Engineer (SSR, Next.js)", ""},
+		// The assistant of an executive is not the executive.
+		{"Asistente del Director General", ""},
+		{"Adjunto/a al Director Financiero", ""},
+		{"Secretaria de Dirección General", ""},
 		// Portuguese shares the fallback: its internship and middle grade.
 		{"Estágio Administrativo", "intern"},
 		{"Estagiário de Logística - Roteirização", "intern"},

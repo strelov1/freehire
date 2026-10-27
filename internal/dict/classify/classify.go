@@ -82,6 +82,9 @@ func matchSeniority(lower string) string {
 	for _, desk := range earlyCareersDeskPatterns {
 		lower = desk.ReplaceAllString(lower, " ")
 	}
+	if ssrRendering.MatchString(lower) {
+		lower = ssrWord.ReplaceAllString(lower, " ")
+	}
 	lower = semiSenior.ReplaceAllString(lower, "ssr")
 	if s := matchOrdered(lower, seniorityTable); s != "" {
 		return s
@@ -114,6 +117,14 @@ func matchSeniority(lower string) string {
 // "Semi-Senior", "Semisenior", "Semi Sr" — which contains "senior" and would otherwise
 // read as it. matchSeniority folds it to "ssr", the abbreviation the same postings use.
 var semiSenior = regexp.MustCompile(`\bsemi[\s-]?(?:senior|sr)\b`)
+
+// ssrRendering is a frontend title whose "SSR" is server-side rendering, not the grade:
+// "Frontend Engineer (SSR, Next.js)". Such a title's bare "ssr" (ssrWord) is cut first. A
+// framework name alone does not qualify: "Desarrollador React Ssr" is a LatAm grade.
+var (
+	ssrRendering = regexp.MustCompile(`\b(?:next\.?js|nuxt|ssg|csr|server[\s-]side|rendering)\b`)
+	ssrWord      = regexp.MustCompile(`\bssr\b`)
+)
 
 // Categories resolves every category the text mentions — each alias that occurs as a
 // whole word — distinct and in precedence order (the primary category first). Unlike

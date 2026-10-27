@@ -536,7 +536,7 @@ var spanishCategoryTable = []aliasEntry{
 	{"almacen", "logistics"},
 	{"de bodega", "logistics"}, // the warehouse in Chile and Mexico; a bare "bodega" is also a winery
 	{"de deposito", "logistics"},
-	{"reparto", "logistics"},
+	{"de reparto", "logistics"}, // not bare: the Italian "reparto" is a department ("Capo reparto")
 	{"cocina", "hospitality"},
 	{"hosteleria", "hospitality"},
 	{"restaurante", "hospitality"},
@@ -667,11 +667,11 @@ var spanishSeniorityTable = []aliasEntry{
 	{"lider tecnico", "lead"},
 }
 
-// assistantOfSpanishLead is the assistant OF a lead — "Ayudante de jefe de obra",
-// "Adjunto al jefe de tienda", "Subjefe de turno", "Segundo jefe" — which states no
-// lead grade. It is cut before the Spanish grade match, as assistantOfLead is before
-// the German one.
-var assistantOfSpanishLead = regexp.MustCompile(`\b(?:(?:ayudante|asistente|adjunto|adjunta|auxiliar)\s+(?:del?|al)\s+jef[ea]s?|subjef[ea]s?|segund[oa]\s+jef[ea])\b`)
+// assistantOfSpanishLead is the assistant OF a lead or an executive — "Ayudante de jefe de
+// obra", "Adjunto al jefe de tienda", "Subjefe de turno", "Segundo jefe", "Asistente del
+// Director General", "Secretaria de dirección general" — which states no grade of its own.
+// It is cut before the Spanish grade match, as assistantOfLead is before the German one.
+var assistantOfSpanishLead = regexp.MustCompile(`\b(?:(?:ayudante|asistente|adjunto|adjunta|auxiliar|secretari[oa])\s+(?:(?:del?|al|a la)\s+)?(?:jef[ea]s?|director[a]?\s+(?:general|ejecutiv[oa]|financier[oa])|direccion\s+(?:general|financiera))|subjef[ea]s?|segund[oa]\s+jef[ea])\b`)
 
 // foldSpanishSeniority prepares a lowercased title for the Spanish grade match.
 func foldSpanishSeniority(lower string) string {
