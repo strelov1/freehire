@@ -364,9 +364,11 @@
 
 <!-- Visible A4 sheets, stacked. The CSS `zoom` property scales the whole stack — layout included —
      so the scroll container reserves the scaled size (transform: scale would keep the 794px box and
-     clip the left edge on first paint). `items-center` centres each sheet when it fits and lets it
-     overflow-scroll when zoomed past the column width. -->
-<div class="flex flex-col items-center gap-6" style="zoom: {zoom};">
+     clip the left edge on first paint). `items-center-safe` centres each sheet when it fits and,
+     once the sheet is wider than the column (a phone, or zoomed in), falls back to the start edge
+     so it overflow-scrolls to the right — plain `items-center` overflows BOTH sides, and the left
+     half sits past the scroll origin where no scrollbar can reach it. -->
+<div class="flex flex-col items-center-safe gap-6" style="zoom: {zoom};">
   {#each pageBlocks as page, p (p)}
     <article
       class={['bg-white text-neutral-900 shadow-sm', useTemplateFace && (isSans ? 'font-sans' : 'font-serif')]}

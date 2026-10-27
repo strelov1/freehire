@@ -94,7 +94,7 @@
   "web/src/lib/tailor/ArtifactPanel.svelte": 1,
   "web/src/lib/tailor/AtsDelta.svelte": 1,
   "web/src/lib/tailor/CvHtmlPreview.svelte": 23,
-  "web/src/lib/tailor/JobMatch.svelte": 3,
+  "web/src/lib/tailor/JobMatch.svelte": 1,
   "web/src/lib/tailor/TemplateGallery.svelte": 2,
   "web/src/routes/delete-account/+page.svelte": 2,
   "web/src/routes/insights/companies/+page.svelte": 2,

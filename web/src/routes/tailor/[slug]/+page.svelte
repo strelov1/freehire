@@ -36,6 +36,7 @@
   import { clampWidth, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from '#lib/tailor/geometry.js';
   import { undoRun, openingActions } from '#lib/tailor/autopilot.js';
   import { findPlaceholders } from '#lib/tailor/readiness.js';
+  import { tablist } from '#lib/actions/tablist.js';
   import {
     toEditable,
     emptyDocument,
@@ -161,7 +162,8 @@
 
   // Centre preview zoom, clamped to 50–150% in 10% steps. Starts at 80%: the A4 page then fits
   // the centre column with both side panels open, so nothing has to be dragged before reading.
-  let zoom = $state(0.8);
+  const DEFAULT_ZOOM = 0.8;
+  let zoom = $state(DEFAULT_ZOOM);
   const zoomPct = $derived(Math.round(zoom * 100));
   const clampZoom = (z: number) => Math.min(1.5, Math.max(0.5, Math.round(z * 10) / 10));
   const zoomOut = () => (zoom = clampZoom(zoom - 0.1));
@@ -652,10 +654,19 @@
       >
         <!-- Own tab bar (and save status) is desktop-only; the mobile bar drives the tab there. -->
         <div class="hidden items-center justify-between gap-2 border-b border-border px-2 py-1.5 text-sm lg:flex">
-          <div class="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto">
+          <div
+            role="tablist"
+            aria-label="Edit this CV"
+            use:tablist={leftTab}
+            class="flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto"
+          >
             {#each leftTabs as [id, label] (id)}
               <button
                 type="button"
+                role="tab"
+                id="tailor-left-tab-{id}"
+                aria-selected={leftTab === id}
+                aria-controls="tailor-left-panel"
                 onclick={() => (leftTab = id)}
                 class={['shrink-0 rounded px-2 py-1 transition-colors', leftTab === id ? 'bg-brand-muted font-semibold text-brand-strong' : 'text-muted-foreground hover:text-foreground']}
               >
@@ -683,7 +694,7 @@
             </button>
           </div>
         </div>
-        <div class="min-h-0 flex-1">
+        <div id="tailor-left-panel" role="tabpanel" aria-labelledby="tailor-left-tab-{leftTab}" class="min-h-0 flex-1">
           <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'editor'}>
             {#if runActive}
               <p class="mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
@@ -808,7 +819,15 @@
               <button type="button" onclick={zoomOut} aria-label="Zoom out" class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground">
                 <ZoomOut class="size-4" />
               </button>
-              <span class="w-12 text-center text-xs tabular-nums text-muted-foreground">{zoomPct}%</span>
+              <button
+                type="button"
+                onclick={() => (zoom = DEFAULT_ZOOM)}
+                aria-label="Reset zoom to {Math.round(DEFAULT_ZOOM * 100)}%"
+                title="Reset zoom"
+                class="w-12 rounded py-0.5 text-center text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                {zoomPct}%
+              </button>
               <button type="button" onclick={zoomIn} aria-label="Zoom in" class="rounded p-1 text-muted-foreground transition-colors hover:text-foreground">
                 <ZoomIn class="size-4" />
               </button>

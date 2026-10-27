@@ -17,6 +17,7 @@
   import { resolve } from '$app/paths';
   import { ExternalLink, PanelRightClose, PanelRightOpen } from '@lucide/svelte';
   import { clampWidth, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from './geometry';
+  import { tablist } from '#lib/actions/tablist.js';
   import JobDescription from '#lib/components/JobDescription.svelte';
   import MatchAnalysisFull from '#lib/components/MatchAnalysisFull.svelte';
   import { companyLogoUrl } from '#lib/logo.js';
@@ -193,9 +194,14 @@
   <!-- Own tab bar is desktop-only; on mobile the page's flat tab bar drives the tab. The
        collapse control sits at its end, beside the edge the panel folds towards. -->
   <div class="hidden items-center gap-1 border-b border-border px-2 py-1.5 text-sm lg:flex">
+    <div role="tablist" aria-label="Measure this CV" use:tablist={tab} class="flex min-w-0 items-center gap-1">
     {#each tabs as [id, label] (id)}
       <button
         type="button"
+        role="tab"
+        id="tailor-right-tab-{id}"
+        aria-selected={tab === id}
+        aria-controls="tailor-right-panel"
         onclick={() => (tab = id)}
         class={[
           'whitespace-nowrap rounded px-2 py-1 transition-colors',
@@ -210,6 +216,7 @@
         {/if}
       </button>
     {/each}
+    </div>
     <button
       type="button"
       onclick={() => (collapsed = true)}
@@ -248,7 +255,7 @@
     {/if}
   </div>
 
-  <div class="min-h-0 flex-1 overflow-auto">
+  <div id="tailor-right-panel" role="tabpanel" aria-labelledby="tailor-right-tab-{tab}" class="min-h-0 flex-1 overflow-auto">
     {#if tab === 'history'}
       <div>
         {#if onReseed}
@@ -265,7 +272,7 @@
               onclick={() => void onReseed()}
               class="mt-2 inline-flex items-center rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {resetBusy ? 'Resetting…' : 'Reset Changes'}
+              {resetBusy ? 'Resetting…' : 'Reset changes'}
             </button>
             {#if resetError}
               <p class="mt-1.5 text-xs text-destructive">{resetError}</p>

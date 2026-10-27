@@ -42,7 +42,7 @@
       <div class="h-full rounded-full transition-[width] {toneBar[tone]}" style="width: {view.overall}%"></div>
     </div>
 
-    <p class="mb-3 text-[11px] leading-snug text-muted-foreground">
+    <p class="mb-3 text-xs leading-snug text-muted-foreground">
       Scored on your tailored CV as it renders now, against this vacancy.
       {#if view.partial}
         Some categories could not be checked and were left out of the score rather than
@@ -71,7 +71,7 @@
         <ul class="flex flex-wrap gap-1">
           {#each view.missingSkills as skill, i (i)}
             <li
-              class="flex items-center gap-1 rounded border border-warning/30 bg-background/60 px-1.5 py-0.5 text-[11px] text-warning-strong"
+              class="flex items-center gap-1 rounded border border-warning/30 bg-background/60 px-1.5 py-0.5 text-xs text-warning-strong"
             >
               <SkillIcon slug={skill} />{skillLabel(skill)}
             </li>
