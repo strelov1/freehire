@@ -41,6 +41,7 @@ func TestParse_SpanishMarket(t *testing.T) {
 		{"eda", "Arquitectura orientada a eventos con Kafka", []string{"event-driven-architecture"}, nil},
 		{"oop", "Programación orientada a objetos en C#", []string{"oop"}, nil},
 		{"bi", "Herramientas de inteligencia de negocio", []string{"business-intelligence"}, nil},
+		{"computer vision", "Proyectos de vision artificial y visión por computador", []string{"computer-vision"}, nil},
 		// The Spanish words alone are no skill.
 		{"plain words", "Buscamos personas con ganas de aprender y trabajar en equipo.", nil,
 			[]string{"data-quality", "rest", "ci-cd"}},
