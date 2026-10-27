@@ -304,6 +304,46 @@ president" inside it. No grade is ever read from a years figure in a title.
 Measured 2026-10-25 over 63,305 Indian postings: title seniority 31.6% → 34.1%; a
 hand-check of every newly resolved title in the top 400 found none wrong.
 
+## Spanish heads and fields
+
+Spanish titles are not compounds: they name a generic head and the field it works in
+("Técnico de mantenimiento", "Auxiliar de cocina", "Ejecutivo de ventas"). `spanish.go`
+holds `spanishCategoryTable`, whole-word phrases matched on a FOLDED title (accents
+dropped, "/a", "-a", "(a)" and "(h/m)" cut), ordered in bands: a head and field whose
+answer differs from the field's default ("Ingeniero de ventas" is pre-sales), then the
+role nouns that name a trade alone (camarero, electricista, conductor), then the fields
+(ventas, mantenimiento, cocina, almacén, limpieza), then the heads that name a desk alone
+(administrativo, comercial). A generic head with no field — técnico, auxiliar, operario,
+asesor, gerente, analista — resolves nothing. Before the Spanish table, the main table is
+asked again of the gender-folded title, because "Operario/a de producción" hides an alias
+it already carries. It runs after the German, Dutch and Danish fallbacks.
+
+The bare "desarrollador"/"programador" resolve here, after vetoes the main table cannot
+afford: the business developer is sales, the property and energy project developer
+nothing, the CNC and production programmer manufacturing, the PLC, robot, maintenance
+and service programmer nothing. "Médico" sits below the sales field (it is also the
+adjective of the equipment a rep sells), "maestro" is absent (a foreman, a kitchen, a
+restaurant chain), and a bare "bancario" is absent (a Portuguese banking lawyer).
+
+Grades (`spanishSeniorityTable`): becario/beca/prácticas/practicante/pasante/aprendiz are
+intern and outrank `jefe`, which is lead as the German `-leiter` is; responsable, gerente,
+supervisor and coordinador state no grade, as manager and supervisor do in the main
+table. The assistant OF a jefe is cut first. Only director general/ejecutivo/financiero
+and consejero delegado are c_level. Latin America's "semi senior" is folded to `ssr` in
+`matchSeniority` and is `middle` in the MAIN table (it contains "senior", so the fallback
+could never reach it); listed after `sr`, the range "Ssr/Sr" keeps its upper bound.
+Portuguese reaches the same fallback, so `estagio`/`estagiario` (intern) and `pleno`
+(middle) sit here too.
+
+Measured 2026-10-27 over 25,017 open Spanish-language postings (infojobs, occ,
+pandapelatam, teamtailor, factorial, getonbrd, torre, hiringroom, personio, eures,
+getmanfred; whatjobs excluded, it is already categorised): category 17.9% → 74.3%,
+seniority 6.9% → 11.0%, and 74 semi-senior titles moved from senior to middle. Over
+4,004 Portuguese postings (pandape, empregos): category 25.3% → 39.5%, seniority 1.8% →
+17.4%. Over 81k control titles (whatjobs-uk/it/fr/pt, greenhouse, workday, coveto,
+recruitee, jobindex, gupy, smartrecruiters) category 68.0% → 71.2%; every newly resolved
+title was hand-checked and the misreadings found became vetoes.
+
 ## Serving: dict-only
 
 `jobview.FromRow` overwrites the nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM's value is never a fallback. They remain **nested under `enrichment`** so existing search facets, SPA, and generated contracts are unchanged.

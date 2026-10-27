@@ -109,7 +109,7 @@ func TestDanishHeadsDoNotOverreach(t *testing.T) {
 		{"Order to Cash Leader SSA (Sub Sahara Africa)", "", ""},                              // SSA the region
 		{"Handläggande VVS-ingenjör WSP Stockholm", "", ""},                                   // the Swedish HVAC designer
 		{"Mitarbeiter mit normaler Arbeitszeit", "", ""},                                      // German "normaler", not a painter
-		{"Programador CNC", "", ""},                                                           // the Spanish form stays unresolved
+		{"Programador CNC", "manufacturing", ""},                                              // the Spanish table's machine shop, not a Danish head
 	}
 	for _, c := range cases {
 		got := Parse(c.title)

@@ -131,7 +131,7 @@ func TestChineseLatinEdges(t *testing.T) {
 	}{
 		{"鳳凰食號-中餐二級廚師/西廚(COMMIS II)", "hospitality"}, // not "mis"
 		{"倉管高工(墨西哥) - PHPF24341", "logistics"},       // a requisition code, not PHP
-		{"Programador CNC", ""},
+		{"Programador CNC", "manufacturing"},         // the Spanish table's, not a Chinese alias
 		{"CAD Engineer - AI Trainer", ""},
 	}
 	for _, c := range cases {

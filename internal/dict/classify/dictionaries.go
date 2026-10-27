@@ -118,6 +118,10 @@ var seniorityTable = []aliasEntry{
 	// "sr" already covers the dotted "Sr." form: '.' is a non-word boundary, so a
 	// separate "sr." alias could never match anything "sr" does not.
 	{"sr", "senior"},
+	// Latin America's "semi senior" (Ssr) is the rung between junior and senior. The
+	// spelled-out forms contain "senior", so matchSeniority folds them to "ssr" first;
+	// listed after "sr", a range like "Ssr/Sr" keeps its upper bound.
+	{"ssr", "middle"},
 	{"старший", "senior"},
 	{"синьор", "senior"},
 	{"сеньор", "senior"},

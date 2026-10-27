@@ -1,6 +1,6 @@
 // Package classify derives a job's seniority and role category deterministically
 // from its title. It is a curated dictionary, not a model: it resolves known
-// English, Russian, German, Dutch, Danish, Japanese and Chinese title terms and emits nothing for what it cannot resolve
+// English, Russian, German, Dutch, Danish, Spanish, Japanese and Chinese title terms and emits nothing for what it cannot resolve
 // (it never guesses). Canonical values are drawn from the same controlled
 // vocabularies the enrichment contract defines (vocab.SeniorityValues /
 // vocab.CategoryValues), so the parser, the enrichment payload, and the search
@@ -8,6 +8,7 @@
 package classify
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 
@@ -48,14 +49,18 @@ func matchCategory(lower string) string {
 	c := matchOrdered(lower, categoryTable)
 	if c == "" {
 		// Nothing in the main table: try the German compound heads (german.go),
-		// then the Dutch ones (dutch.go), then the Danish ones (danish.go).
+		// then the Dutch ones (dutch.go), then the Danish ones (danish.go), then the
+		// Spanish heads and fields (spanish.go).
 		if c := matchHeads(lower, germanCategoryTable); c != "" {
 			return c
 		}
 		if c := matchHeads(lower, dutchCategoryTable); c != "" {
 			return c
 		}
-		return matchHeads(lower, danishCategoryTable)
+		if c := matchHeads(lower, danishCategoryTable); c != "" {
+			return c
+		}
+		return matchSpanishCategory(lower)
 	}
 	if c == categoryNone {
 		return ""
@@ -77,6 +82,7 @@ func matchSeniority(lower string) string {
 	for _, desk := range earlyCareersDeskPatterns {
 		lower = desk.ReplaceAllString(lower, " ")
 	}
+	lower = semiSenior.ReplaceAllString(lower, "ssr")
 	if s := matchOrdered(lower, seniorityTable); s != "" {
 		return s
 	}
@@ -88,7 +94,7 @@ func matchSeniority(lower string) string {
 	}
 	// Nothing in the main table: try the Indian rungs and entry-hire words (india.go),
 	// then the German grade words and heads (german.go), then the Dutch ones (dutch.go),
-	// then the Danish ones (danish.go).
+	// then the Danish ones (danish.go), then the Spanish ones (spanish.go).
 	if s := matchOrdered(lower, indianSeniorityTable); s != "" {
 		return s
 	}
@@ -98,8 +104,16 @@ func matchSeniority(lower string) string {
 	if s := matchHeads(foldDutchSeniority(lower), dutchSeniorityTable); s != "" {
 		return s
 	}
-	return matchHeads(lower, danishSeniorityTable)
+	if s := matchHeads(lower, danishSeniorityTable); s != "" {
+		return s
+	}
+	return matchOrdered(foldSpanishSeniority(lower), spanishSeniorityTable)
 }
+
+// semiSenior is Latin America's spelled-out middle grade — "Semi Senior",
+// "Semi-Senior", "Semisenior", "Semi Sr" — which contains "senior" and would otherwise
+// read as it. matchSeniority folds it to "ssr", the abbreviation the same postings use.
+var semiSenior = regexp.MustCompile(`\bsemi[\s-]?(?:senior|sr)\b`)
 
 // Categories resolves every category the text mentions — each alias that occurs as a
 // whole word — distinct and in precedence order (the primary category first). Unlike

@@ -47,10 +47,13 @@ func TestParse(t *testing.T) {
 		// software- or language-anchored phrases resolve (never a bare
 		// developer/engineer/programmer noun — prod titles show that noun alone
 		// also names a real-estate developer in ES/PT/FR or a machine/CNC
-		// programmer in ES/DE, in every language sampled, not just English).
-		{"Desarrollador de Software Semi Senior", "senior", "software_engineering"},
+		// programmer in ES/DE, in every language sampled, not just English). The
+		// Spanish fallback (spanish.go) reads the bare noun only after its vetoes,
+		// and files the CNC programmer with the machine shop. "Semi Senior" is Latin
+		// America's middle rung, not a senior.
+		{"Desarrollador de Software Semi Senior", "middle", "software_engineering"},
 		{"Ingeniera de Software con IA", "", "software_engineering"},
-		{"Programador CNC", "", ""},
+		{"Programador CNC", "", "manufacturing"},
 		// The seniorityTable is ALSO English+Russian only — a separate, not-yet-done
 		// gap — so "Sênior"/"Starszy" resolve no grade even though the category
 		// does. Category and seniority are independent matches (Parse runs both

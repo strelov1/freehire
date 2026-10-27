@@ -218,6 +218,17 @@ linters:
         - economisch
         - defensie
         - ierland
+        # Spanish title vocabulary (internal/dict/classify/spanish.go).
+        - bomberos
+        - clientes
+        - construccion
+        - coordinador
+        - guardias
+        - integracion
+        - prevencion
+        - produccion
+        - producto
+        - responsable
 
 formatters:
   enable:
