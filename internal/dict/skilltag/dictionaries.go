@@ -973,6 +973,14 @@ var wordAliases = map[string]string{
 	"microservicios": "microservices",
 	"microservicio":  "microservices",
 	"observabilidad": "observability",
+
+	// batch 9 (2026-10-27, Brazilian and Portuguese market) — the same, in Portuguese,
+	// with and without the accents. See engineeringPhraseAliases for the phrases.
+	"microsserviços":  "microservices",
+	"microsservicos":  "microservices",
+	"microsserviço":   "microservices",
+	"microsservico":   "microservices",
+	"observabilidade": "observability",
 }
 
 // ambiguousWords marks the wordAliases keys whose word-pass match is "weak": Parse
@@ -1680,6 +1688,62 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"visión por computador", "computer-vision"}, {"vision por computador", "computer-vision"},
 	{"visión artificial", "computer-vision"}, {"vision artificial", "computer-vision"},
 	{"pruebas de penetración", "penetration-testing"}, {"pruebas de penetracion", "penetration-testing"},
+	// batch 9 (2026-10-27, Brazilian and Portuguese market), measured over 37,608 open
+	// postings. Brazilian and European spellings both ("modelagem"/"modelação",
+	// "controle"/"controlo"). Left out: "entrega contínua" (a delivery driver's promise, as
+	// in Spanish), bare "banco de dados" (no "database" canonical; only the relational and
+	// vector forms map), "análise de dados", "segurança da informação", "metodologias
+	// ágeis" and "computação em nuvem" (their English names are no alias either, or gated),
+	// and the plural "controle de versões", which a document controller's posting uses
+	// ("garantir o controle de versões … documentos desatualizados").
+	{"serviços rest", "rest"}, {"servicos rest", "rest"},
+	{"integração contínua", "ci-cd"}, {"integracao continua", "ci-cd"},
+	{"implantação contínua", "ci-cd"}, {"implantacao continua", "ci-cd"},
+	{"deploy contínuo", "ci-cd"}, {"deploy continuo", "ci-cd"},
+	{"infraestrutura como código", "infrastructure-as-code"},
+	{"infraestrutura como codigo", "infrastructure-as-code"},
+	{"testes unitários", "unit-testing"}, {"testes unitarios", "unit-testing"},
+	{"teste unitário", "unit-testing"}, {"teste unitario", "unit-testing"},
+	{"testes de unidade", "unit-testing"},
+	{"testes de integração", "integration-testing"}, {"testes de integracao", "integration-testing"},
+	{"testes automatizados", "test-automation"}, {"automação de testes", "test-automation"},
+	{"automacao de testes", "test-automation"},
+	{"controle de versão", "version-control"}, {"controle de versao", "version-control"},
+	{"controlo de versões", "version-control"}, {"controlo de versoes", "version-control"},
+	{"versionamento de código", "version-control"}, {"versionamento de codigo", "version-control"},
+	{"padrões de projeto", "design-patterns"}, {"padroes de projeto", "design-patterns"},
+	{"padrões de design", "design-patterns"}, {"padroes de design", "design-patterns"},
+	{"arquitetura hexagonal", "hexagonal-architecture"},
+	{"arquitetura limpa", "clean-architecture"},
+	{"desenvolvimento orientado a testes", "tdd"},
+	{"sistemas distribuídos", "distributed-systems"}, {"sistemas distribuidos", "distributed-systems"},
+	{"modelagem de dados", "data-modeling"}, {"modelação de dados", "data-modeling"},
+	{"modelacao de dados", "data-modeling"}, {"modelagem dimensional", "dimensional-modeling"},
+	{"pipelines de dados", "data-pipelines"}, {"pipeline de dados", "data-pipelines"},
+	{"engenharia de dados", "data-engineering"},
+	{"ciência de dados", "data-science"}, {"ciencia de dados", "data-science"},
+	{"governança de dados", "data-governance"}, {"governanca de dados", "data-governance"},
+	{"visualização de dados", "data-visualization"}, {"visualizacao de dados", "data-visualization"},
+	{"aprendizado de máquina", "machine-learning"}, {"aprendizado de maquina", "machine-learning"},
+	{"aprendizagem automática", "machine-learning"}, {"aprendizagem automatica", "machine-learning"},
+	{"aprendizado profundo", "deep-learning"}, {"aprendizagem profunda", "deep-learning"},
+	{"inteligência artificial generativa", "generative-ai"},
+	{"processamento de linguagem natural", "nlp"},
+	{"arquitetura orientada a eventos", "event-driven-architecture"},
+	{"arquiteturas orientadas a eventos", "event-driven-architecture"},
+	{"programação orientada a objetos", "oop"}, {"programacao orientada a objetos", "oop"},
+	{"orientação a objetos", "oop"}, {"orientacao a objetos", "oop"},
+	{"inteligência de negócios", "business-intelligence"},
+	{"inteligencia de negocios", "business-intelligence"},
+	{"inteligência de negócio", "business-intelligence"},
+	{"sistemas embarcados", "embedded-systems"},
+	{"visão computacional", "computer-vision"}, {"visao computacional", "computer-vision"},
+	{"bancos de dados relacionais", "rdbms"}, {"banco de dados relacional", "rdbms"},
+	{"bases de dados relacionais", "rdbms"},
+	{"bancos de dados vetoriais", "vector-databases"}, {"banco de dados vetorial", "vector-databases"},
+	{"testes de penetração", "penetration-testing"}, {"testes de penetracao", "penetration-testing"},
+	{"testes de intrusão", "penetration-testing"}, {"testes de intrusao", "penetration-testing"},
+	{"teste de intrusão", "penetration-testing"},
 }
 
 // professionalPhraseAliases is the non-engineering half of the IT-company role
