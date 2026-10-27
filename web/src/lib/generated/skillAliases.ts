@@ -150,7 +150,7 @@ export const SKILL_ALIASES = {
   'chromadb': ['chroma db', 'chromadb'],
   'churn-prevention': ['churn prevention'],
   'churnzero': ['churnzero'],
-  'ci-cd': ['ci cd', 'ci/cd', 'cicd', 'continuous delivery', 'continuous integration', 'despliegue continuo', 'entrega continua', 'integracion continua', 'integración continua'],
+  'ci-cd': ['ci cd', 'ci/cd', 'cicd', 'continuous delivery', 'continuous integration', 'despliegue continuo', 'integracion continua', 'integración continua'],
   'cics': ['cics'],
   'cinema-4d': ['c4d', 'cinema 4d'],
   'circleci': ['circleci'],

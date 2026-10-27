@@ -1636,7 +1636,8 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"api rest", "rest"}, {"apis rest", "rest"}, {"api restful", "rest"},
 	{"apis restful", "rest"}, {"servicios rest", "rest"},
 	{"integración continua", "ci-cd"}, {"integracion continua", "ci-cd"},
-	{"despliegue continuo", "ci-cd"}, {"entrega continua", "ci-cd"},
+	// Not "entrega continua": a delivery driver's posting promises it too.
+	{"despliegue continuo", "ci-cd"},
 	{"infraestructura como código", "infrastructure-as-code"},
 	{"infraestructura como codigo", "infrastructure-as-code"},
 	{"pruebas unitarias", "unit-testing"}, {"tests unitarios", "unit-testing"},
