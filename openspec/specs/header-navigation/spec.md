@@ -17,7 +17,8 @@ on every viewport. The header SHALL NOT render inline nav links outside the
 controls cluster. On a wide viewport, the controls cluster additionally hosts
 a profile menu trigger for a signed-in user (see Requirement: Desktop profile
 menu); on a narrow viewport it does not, and the consolidated menu trigger is
-the cluster's only menu control.
+the cluster's only menu control. For a signed-out visitor the controls cluster
+SHALL show a labelled "Sign in" button on every viewport.
 
 #### Scenario: Header renders three slots on desktop
 
@@ -32,6 +33,11 @@ the cluster's only menu control.
 - **THEN** the header shows the logo, the search field, and the controls
   cluster with a single menu trigger button, in the same arrangement as
   desktop
+
+#### Scenario: Signed-out visitor sees Sign in
+
+- **WHEN** a signed-out visitor loads any page on any viewport
+- **THEN** the header's controls cluster shows a button labelled "Sign in"
 
 ### Requirement: Instant search results
 
