@@ -51,12 +51,14 @@ const (
 	shineRequestInterval = time.Second
 	// shineDetailWorkers keeps enough pages in flight that the limiter, not latency, sets the pace.
 	shineDetailWorkers = 2
-	// shineMaxNewPerRun bounds how many unseen postings one run reads: 1,800 pages at one a second
-	// is 30 minutes, inside the scheduler's default 2,400 s crawl budget with the ~25 sitemaps.
-	// ~10k postings reach the sitemaps a day — under the ~21k twelve two-hourly runs read — and
-	// the first runs face the whole catalogue, so it is taken in slices, newest first; a posting
-	// past the bound is read by a later run.
-	shineMaxNewPerRun = 1800
+	// shineMaxNewPerRun bounds how many unseen postings one run reads: 1,500 pages at one a second
+	// is 25 minutes. The rest of the scheduler's default 2,400 s crawl budget goes to the ~22
+	// sitemaps, the coverage probe over ~62k employers and the writes after the fetch — and a run
+	// that meets its deadline stores nothing, so the margin is the point. ~10k postings reach the
+	// sitemaps a day — under the ~18k twelve two-hourly runs read — and the first runs face the
+	// whole catalogue, so it is taken in slices, newest first; a posting past the bound is read by
+	// a later run.
+	shineMaxNewPerRun = 1500
 )
 
 // NewShine builds the adapter over the given client.

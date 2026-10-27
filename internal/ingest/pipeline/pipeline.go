@@ -905,10 +905,16 @@ func canonicalCompanySlug(canon companyCanonical, company string) string {
 // is the recoverable direction: the worst case is a duplicate company the next merge wave
 // collapses, where refusing the board loses the postings outright.
 func (r Runner) resolveCompanyAliases(ctx context.Context, e sources.CompanyEntry, raw []sources.Job) companyCanonical {
+	return r.resolveSlugAliases(ctx, e, distinctCompanySlugs(raw))
+}
+
+// resolveSlugAliases is resolveCompanyAliases over already-derived distinct slugs, so the
+// coverage probe — which holds company names, not Jobs — resolves its whole board in the same
+// single call.
+func (r Runner) resolveSlugAliases(ctx context.Context, e sources.CompanyEntry, slugs []string) companyCanonical {
 	if r.Aliases == nil {
 		return nil
 	}
-	slugs := distinctCompanySlugs(raw)
 	if len(slugs) == 0 {
 		return nil
 	}
@@ -1155,12 +1161,15 @@ func (r Runner) coverageProbe(ctx context.Context, e sources.CompanyEntry) func(
 	if !applies {
 		return nil
 	}
-	canon := r.streamCompanyCanonical(ctx, e)
 	return func(companies []string) map[string]bool {
 		// Resolve before asking, for the same reason the buffered path does: the probe is
 		// deciding whether a posting is worth a detail request, and the answer has to be
-		// about the employer the catalogue actually holds.
-		slugs := resolveAll(canon, distinctSlugs(companies))
+		// about the employer the catalogue actually holds. In ONE batch, as the buffered path
+		// does: resolving company by company cost shine (~62k employers, ~36 ms from the
+		// crawl host to the database) its entire crawl budget before the first posting page.
+		derived := distinctSlugs(companies)
+		canon := r.resolveSlugAliases(ctx, e, derived)
+		slugs := resolveAll(canon, derived)
 		if len(slugs) == 0 {
 			return nil
 		}

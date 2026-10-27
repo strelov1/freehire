@@ -1002,6 +1002,39 @@ func TestCoverageProbeAsksOnceForTheWholeBoard(t *testing.T) {
 	}
 }
 
+// The probe resolves a board's companies through the alias registry in ONE batch, too. It
+// used to resolve them one company at a time: shine lists ~62k distinct employers, the crawl
+// host sits ~36 ms from the database, and 62k sequential round trips ate the whole 40-minute
+// crawl budget before a single posting page was requested — every run died with nothing stored.
+func TestCoverageProbeResolvesAliasesInOneBatch(t *testing.T) {
+	src := &fakeCoverageGatedSource{fakeHydratingSource: fakeHydratingSource{
+		provider: "himalayas",
+		jobs: []sources.Job{
+			{ExternalID: "1", Title: "Backend Engineer", Company: "DollarTree", Description: "<p>x</p>"},
+			{ExternalID: "2", Title: "Frontend Engineer", Company: "Acme", Description: "<p>y</p>"},
+			{ExternalID: "3", Title: "Backend Engineer", Company: "Beta Corp", Description: "<p>z</p>"},
+		},
+	}}
+	coverage := &fakeCoverage{covered: map[string]bool{"dollar-tree": true}}
+	aliases := &fakeAliases{canon: map[string]string{"dollartree": "dollar-tree"}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, Coverage: coverage, Aliases: aliases}
+
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Himalayas", Provider: "himalayas"},
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !src.coveredBack["DollarTree"] {
+		t.Errorf("covered = %v, want DollarTree covered through its canonical slug", src.coveredBack)
+	}
+	for i, call := range aliases.calls {
+		if len(call) == 1 {
+			t.Errorf("alias call %d asked about one company %v; the probe must resolve the board in one batch (calls: %v)",
+				i, call, aliases.calls)
+		}
+	}
+}
+
 // A provider the gate does not apply to must keep the plain hydrating path: handing it a
 // resolver that can only answer "nothing is covered" would be a lie dressed as an answer.
 func TestCoverageGatedFallsBackToFetchNewWhenTheGateDoesNotApply(t *testing.T) {
