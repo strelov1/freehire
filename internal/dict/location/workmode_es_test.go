@@ -32,11 +32,15 @@ func TestSpanishWorkMode(t *testing.T) {
 		{"modalidad presencial", "Modalidad de trabajo: presencial. Requisitos: ingeniería.", "onsite"},
 		{"empleo presencial", "Lugar de trabajo: empleo presencial", "onsite"},
 		{"sin teletrabajo", "Horario de lunes a viernes, sin teletrabajo.", "onsite"},
+		{"not offered", "Horario de oficina; no se ofrece teletrabajo.", "onsite"},
+		{"no possibility", "Puesto en planta, sin posibilidad de teletrabajo.", "onsite"},
 		// A negated, refused, hedged or seasonal offer is not the arrangement.
 		{"refused", "Teletrabajo/remoto no corresponde en esta posición.", ""},
 		{"hedged", "Modalidad: híbrida, con posibilidad de evaluar 100% remoto.", "hybrid"},
 		{"summer perk", "Jornada intensiva y teletrabajo durante agosto.", ""},
 		{"seasonal full", "Teletrabajo completo en verano, Navidad y Semana Santa.", ""},
+		{"start month", "Incorporación en agosto, modalidad 100% remoto.", "remote"},
+		{"markup between", "<b>Modalidad</b> mixta: oficina y casa.", "hybrid"},
 		// The trigger words in their other senses state no arrangement.
 		{"tutoring", "Si deseas impartir clases presenciales o en línea, ¡únete!", ""},
 		{"interview", "Haremos una entrevista personal (presencial u online).", ""},

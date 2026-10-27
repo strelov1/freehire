@@ -98,6 +98,11 @@ var spanishWorkModePhrases = []struct {
 // híbrida, con posibilidad de evaluar 100% remoto" is hybrid.
 var spanishNegations = []string{"no ", "sin ", "ni ", "nunca ", "evaluar "}
 
+// spanishNegationWindow is wider than the German one: a Spanish refusal puts a verb or a
+// noun between the negation and the phrase ("no se ofrece teletrabajo", "sin posibilidad
+// de teletrabajo").
+const spanishNegationWindow = 20
+
 // spanishRefusals, found just AFTER a remote or hybrid phrase in the same sentence,
 // withdraw it ("teletrabajo/remoto no corresponde", "teletrabajo: no disponible").
 var spanishRefusals = []string{"no es posible", "no disponible", "no aplica",
@@ -105,16 +110,20 @@ var spanishRefusals = []string{"no es posible", "no disponible", "no aplica",
 
 // spanishPerks, in the same sentence as a remote or hybrid phrase, make it a BOUNDED
 // perk rather than the arrangement: "teletrabajo completo en verano, Navidad y Semana
-// Santa", "jornada intensiva y teletrabajo durante agosto".
-var spanishPerks = []string{"verano", "agosto", "julio", "navidad", "semana santa"}
+// Santa", "jornada intensiva y teletrabajo durante agosto". A month alone is not one —
+// "Incorporación en agosto, modalidad 100% remoto" starts in August — so a month counts
+// only after "durante".
+var spanishPerks = []string{"verano", "navidad", "semana santa", "durante agosto",
+	"durante julio", "durante el mes de agosto", "julio y agosto"}
 
 // spanishGuards bundles the Spanish qualifiers for guardedPhraseMatches.
-var spanishGuards = phraseGuards{negations: spanishNegations, refusals: spanishRefusals, perks: spanishPerks}
+var spanishGuards = phraseGuards{negations: spanishNegations, refusals: spanishRefusals,
+	perks: spanishPerks, negationWindow: spanishNegationWindow}
 
 // spanishWorkModeTriggers gate the fold: each is one word, so neither a tag nor an entity
 // can split it, and each is spelled the way both the accented and the bare form begin.
 var spanishWorkModeTriggers = []string{"remot", "teletrabajo", "presencial", "home",
-	"híbrid", "hibrid", "oficina", "desde casa", "modalidad mixta"}
+	"híbrid", "hibrid", "oficina", "desde casa", "mixta"}
 
 // spanishWorkMode derives a work mode from Spanish arrangement prose, "" when none of
 // spanishWorkModePhrases is stated. lower is the description already lowercased.

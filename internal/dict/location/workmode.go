@@ -78,6 +78,9 @@ func WorkModeFromDescription(desc string) string {
 // anywhere in its sentence.
 type phraseGuards struct {
 	negations, refusals, perks []string
+	// negationWindow is how far before the phrase a negation still governs it; zero
+	// means germanNegationWindow.
+	negationWindow int
 }
 
 // guardedPhraseMatches reports whether p occurs in text as a whole phrase, read for the
@@ -106,7 +109,11 @@ func guardedPhraseMatches(text, p, mode string, g phraseGuards) bool {
 		if mode == "onsite" {
 			return true
 		}
-		if containsAny(text[max(0, start-germanNegationWindow):start], g.negations) {
+		window := g.negationWindow
+		if window == 0 {
+			window = germanNegationWindow
+		}
+		if containsAny(text[max(0, start-window):start], g.negations) {
 			continue
 		}
 		tail := text[end:min(len(text), end+germanRefusalWindow)]
