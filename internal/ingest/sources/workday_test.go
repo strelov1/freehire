@@ -705,3 +705,60 @@ func TestWorkdayFetchesPathTenantBoard(t *testing.T) {
 		t.Errorf("URL = %q, want the posting's public /recruiting path", jobs[0].URL)
 	}
 }
+
+// Workday nests its location dimensions inside a "locationMainGroup" facet whose values are
+// themselves facets, with no id and no count (verified live on michaels.wd5, 2026-10-27). The
+// nested dimensions must be split on like any other — they are often the only fine-grained
+// ones — and the wrapper itself, whose zero-count "values" looked like the smallest dimension
+// of all, must never be chosen.
+func TestWorkdaySplitsByANestedLocationFacet(t *testing.T) {
+	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
+		route(`{}`, `{"total":2000,"jobPostings":[],"facets":[
+			{"facetParameter":"jobFamilyGroup","values":[{"id":"f1","count":3000},{"id":"f2","count":1300}]},
+			{"facetParameter":"locationMainGroup","values":[
+				{"facetParameter":"locationCountry","values":[{"id":"us","count":4100}]},
+				{"facetParameter":"locationRegionStateProvince","values":[{"id":"tx","count":1400},{"id":"ca","count":1300}]}
+			]}
+		]}`).
+		route(`{"locationRegionStateProvince":["tx"]}`, `{"total":1,"jobPostings":[{"title":"TX","externalPath":"/job/X/TX-1","locationsText":"Dallas"}]}`).
+		route(`{"locationRegionStateProvince":["ca"]}`, `{"total":1,"jobPostings":[{"title":"CA","externalPath":"/job/X/CA-1","locationsText":"Fresno"}]}`)
+
+	b, err := parseWorkdayBoard("acme.wd1.myworkdayjobs.com/Careers")
+	if err != nil {
+		t.Fatalf("parseWorkdayBoard: %v", err)
+	}
+	postings, err := workday{http: fake}.listPostings(context.Background(), b)
+	if err != nil {
+		t.Fatalf("listPostings: %v (want the nested locationRegionStateProvince picked)", err)
+	}
+	if len(postings) != 2 {
+		t.Fatalf("len(postings) = %d, want 2 (one per state)", len(postings))
+	}
+}
+
+// A facet whose values do not add up to the capped slice cannot partition it: Workday's
+// "distance" facet (10/25/50 miles) sums to 5 postings on a 4,390-posting board (michaels.wd5,
+// measured 2026-10-27). Its tiny largest value made it look like the best split, and taking it
+// listed 548 postings and reported success — a silent truncation the unseen sweep would read as
+// thousands of removals.
+func TestWorkdaySplitIgnoresAFacetThatDoesNotCoverTheBoard(t *testing.T) {
+	fake := (&facetedWorkday{routedHTTP: &routedHTTP{}}).
+		route(`{}`, `{"total":2000,"jobPostings":[],"facets":[
+			{"facetParameter":"distance","values":[{"id":"d10","count":1},{"id":"d25","count":1}]},
+			{"facetParameter":"state","values":[{"id":"tx","count":1500},{"id":"ca","count":1400}]}
+		]}`).
+		route(`{"state":["tx"]}`, `{"total":1,"jobPostings":[{"title":"TX","externalPath":"/job/X/TX-1","locationsText":"Dallas"}]}`).
+		route(`{"state":["ca"]}`, `{"total":1,"jobPostings":[{"title":"CA","externalPath":"/job/X/CA-1","locationsText":"Fresno"}]}`)
+
+	b, err := parseWorkdayBoard("acme.wd1.myworkdayjobs.com/Careers")
+	if err != nil {
+		t.Fatalf("parseWorkdayBoard: %v", err)
+	}
+	postings, err := workday{http: fake}.listPostings(context.Background(), b)
+	if err != nil {
+		t.Fatalf("listPostings: %v (want state picked, never distance)", err)
+	}
+	if len(postings) != 2 {
+		t.Fatalf("len(postings) = %d, want 2 (one per state)", len(postings))
+	}
+}

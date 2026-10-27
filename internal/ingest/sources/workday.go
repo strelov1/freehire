@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -21,6 +24,13 @@ const (
 	// single job family is still capped after one dimension, resolved by a second) with
 	// headroom to spare; raise it if a board's exhaustion log shows it is not enough.
 	maxFacetDepth = 3
+	// workdaySliceParallelism bounds how many facet-slice listing requests one capped board has
+	// in flight at once, across every level of its split. A capped board is split by its
+	// finest dimension, which is often one value per store: michaels.wd5 has 1,340 locations and
+	// bridgestone.wd5 1,676, one request each. Made serially that is 15–30 minutes for one board,
+	// enough to eat a sharded run's whole budget. Four at a time keeps the load on one tenant
+	// modest, and the 403/429 retry absorbs a refusal.
+	workdaySliceParallelism = 4
 	// workdayRetryMaxAttempts and workdayRetryBase bound how a rate-limited (403/429) listing
 	// or detail request is retried before giving up.
 	workdayRetryMaxAttempts = 6
@@ -168,6 +178,11 @@ func (s workday) listingJob(e CompanyEntry, b workdayBoard, p workdayPosting) Jo
 type workdayFacetValue struct {
 	ID    string `json:"id"`
 	Count int    `json:"count"`
+	// Parameter and Values are set instead of ID and Count when the value is itself a facet:
+	// Workday nests its location dimensions (locationCountry, locationRegionStateProvince,
+	// locations, ...) inside a "locationMainGroup" wrapper whose values are facets, not values.
+	Parameter string              `json:"facetParameter"`
+	Values    []workdayFacetValue `json:"values"`
 }
 
 // workdayFacet is one filterable dimension a listing response offers, e.g. "jobFamilyGroup" or
@@ -202,7 +217,8 @@ func (s workday) listPostings(ctx context.Context, b workdayBoard) ([]workdayPos
 	}
 	log.Printf("workday: board %s/%s reports the capped total (%d); splitting by facet",
 		b.tenant, b.site, workdayCapTotal)
-	return s.splitByFacet(ctx, url, b, map[string]any{}, first, map[string]bool{}, 0)
+	inflight := make(chan struct{}, workdaySliceParallelism)
+	return s.splitByFacet(ctx, url, b, map[string]any{}, first, map[string]bool{}, 0, inflight)
 }
 
 // fetchListPage fetches one page of the given (possibly facet-scoped) query.
@@ -255,7 +271,12 @@ func (s workday) pageAll(ctx context.Context, url string, appliedFacets map[stri
 // recurses again with a different dimension) up to maxFacetDepth combined dimensions. Results
 // are merged and deduped by ExternalPath, since a multi-counting dimension (e.g. workerSubType)
 // can place the same posting in more than one slice.
-func (s workday) splitByFacet(ctx context.Context, url string, b workdayBoard, appliedFacets map[string]any, capped workdayListPage, used map[string]bool, depth int) ([]workdayPosting, error) {
+//
+// Slices are listed concurrently; inflight is one semaphore shared by the whole split, so the
+// board never has more than workdaySliceParallelism requests open however deep it recurses. It is
+// held only around a slice's own requests, never across a recursion, so a level waiting on its
+// children cannot starve them.
+func (s workday) splitByFacet(ctx context.Context, url string, b workdayBoard, appliedFacets map[string]any, capped workdayListPage, used map[string]bool, depth int, inflight chan struct{}) ([]workdayPosting, error) {
 	dim := pickSplitDimension(capped.Facets, used)
 	if dim == nil {
 		// Paging the capped response as-is would return fewer postings than the board
@@ -280,27 +301,41 @@ func (s workday) splitByFacet(ctx context.Context, url string, b workdayBoard, a
 	}
 	nextUsed[dim.Parameter] = true
 
+	var mu sync.Mutex
 	byExternalPath := map[string]workdayPosting{}
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(workdaySliceParallelism)
 	for _, v := range dim.Values {
 		sliceFacets := cloneAppliedFacets(appliedFacets)
 		sliceFacets[dim.Parameter] = []string{v.ID}
-
-		page, err := s.fetchListPage(ctx, url, sliceFacets, 0)
-		if err != nil {
-			return nil, err
-		}
-		var slice []workdayPosting
-		if page.Total == workdayCapTotal {
-			slice, err = s.splitByFacet(ctx, url, b, sliceFacets, page, nextUsed, depth+1)
-		} else {
-			slice, err = s.pageAll(ctx, url, sliceFacets, page)
-		}
-		if err != nil {
-			return nil, err
-		}
-		for _, p := range slice {
-			byExternalPath[p.ExternalPath] = p
-		}
+		g.Go(func() error {
+			inflight <- struct{}{}
+			page, err := s.fetchListPage(gctx, url, sliceFacets, 0)
+			<-inflight
+			if err != nil {
+				return err
+			}
+			var slice []workdayPosting
+			if page.Total == workdayCapTotal {
+				slice, err = s.splitByFacet(gctx, url, b, sliceFacets, page, nextUsed, depth+1, inflight)
+			} else {
+				inflight <- struct{}{}
+				slice, err = s.pageAll(gctx, url, sliceFacets, page)
+				<-inflight
+			}
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			for _, p := range slice {
+				byExternalPath[p.ExternalPath] = p
+			}
+			mu.Unlock()
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	postings := make([]workdayPosting, 0, len(byExternalPath))
@@ -308,6 +343,37 @@ func (s workday) splitByFacet(ctx context.Context, url string, b workdayBoard, a
 		postings = append(postings, p)
 	}
 	return postings, nil
+}
+
+// splittableFacets flattens Workday's facet tree into the dimensions a query can actually be
+// scoped by. A wrapper whose values are themselves facets ("locationMainGroup" holding
+// locationCountry, locationRegionStateProvince and locations) is replaced by those nested facets,
+// and a value without an id is dropped, since it cannot be applied. Measured 2026-10-27 on
+// michaels.wd5: the nested state facet (largest value 378) is what clears the 2000 cap, while the
+// wrapper — read as a dimension of zero-count values — looked like the best split of all and
+// was applied with an empty id.
+func splittableFacets(facets []workdayFacet) []workdayFacet {
+	var out []workdayFacet
+	var walk func(f workdayFacet)
+	walk = func(f workdayFacet) {
+		applicable := workdayFacet{Parameter: f.Parameter}
+		for _, v := range f.Values {
+			if v.Parameter != "" {
+				walk(workdayFacet{Parameter: v.Parameter, Values: v.Values})
+				continue
+			}
+			if v.ID != "" {
+				applicable.Values = append(applicable.Values, workdayFacetValue{ID: v.ID, Count: v.Count})
+			}
+		}
+		if len(applicable.Values) > 0 {
+			out = append(out, applicable)
+		}
+	}
+	for _, f := range facets {
+		walk(f)
+	}
+	return out
 }
 
 // pickSplitDimension returns the facet dimension (not already in used) whose largest single
@@ -319,18 +385,26 @@ func (s workday) splitByFacet(ctx context.Context, url string, b workdayBoard, a
 // no real progress across several depth-3 exhaustions before this was corrected.)
 // Returns nil if every present dimension has already been applied in this branch.
 func pickSplitDimension(facets []workdayFacet, used map[string]bool) *workdayFacet {
+	candidates := splittableFacets(facets)
 	var best *workdayFacet
 	bestMax := -1
-	for i := range facets {
-		f := &facets[i]
+	for i := range candidates {
+		f := &candidates[i]
 		if used[f.Parameter] || len(f.Values) == 0 {
 			continue
 		}
-		max := 0
+		max, sum := 0, 0
 		for _, v := range f.Values {
+			sum += v.Count
 			if v.Count > max {
 				max = v.Count
 			}
+		}
+		// A capped slice holds at least workdayCapTotal postings, so a dimension whose values
+		// add up to fewer cannot partition it: Workday's "distance" facet sums to 5 on a
+		// 4,390-posting board, and splitting on it listed 548 and called that the whole board.
+		if sum < workdayCapTotal {
+			continue
 		}
 		if best == nil || max < bestMax {
 			bestMax = max
