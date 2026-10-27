@@ -474,6 +474,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   feinaactiva: 'Feina Activa',
   turijobs: 'Turijobs',
   sapoemprego: 'SAPO Emprego',
+  netempregos: 'Net-Empregos',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

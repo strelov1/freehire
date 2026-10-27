@@ -875,6 +875,9 @@ func All(c HTTPClient) map[string]Source {
 	// SAPO Emprego: a Portuguese general job board, enumerated from its offers sitemap, each new
 	// posting's facts read from its page's schema.org JobPosting. See sapoemprego.go.
 	registry["sapoemprego"] = NewSapoEmprego(c)
+	// Net-Empregos: a Portuguese general job board, enumerated from its sitemap and RSS feeds,
+	// each new posting's body read from its page's schema.org JobPosting. See netempregos.go.
+	registry["netempregos"] = NewNetEmpregos(c)
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the
