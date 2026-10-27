@@ -1,11 +1,5 @@
 package location
 
-import (
-	"strings"
-	"unicode"
-	"unicode/utf8"
-)
-
 // dutchWorkModePhrases is the Dutch counterpart of germanWorkModePhrases, built from the
 // Dutch crawl (eures, recruitee, whatjobs-nl: ~42k open postings on 2026-10-25).
 //
@@ -89,6 +83,9 @@ var dutchRefusals = []string{"niet mogelijk", "niet toegestaan", "niet van toepa
 // the Dutch shape of the travel-perk guard on "work from anywhere" (freehire#2696).
 var dutchPerks = []string{"buitenland", "per jaar"}
 
+// dutchGuards bundles the Dutch qualifiers for guardedPhraseMatches.
+var dutchGuards = phraseGuards{negations: dutchNegations, refusals: dutchRefusals, perks: dutchPerks}
+
 // dutchWorkModeTriggers gate the fold, as germanWorkModeTriggers do: each is one word,
 // so neither a tag nor an entity can split it.
 var dutchWorkModeTriggers = []string{"thuis", "huis", "hybride", "hybrid", "remote",
@@ -103,52 +100,10 @@ func dutchWorkMode(desc, lower string) string {
 	text := foldMarkup(desc)
 	for _, wm := range dutchWorkModePhrases {
 		for _, p := range wm.phrases {
-			if dutchPhraseMatches(text, p, wm.mode) {
+			if guardedPhraseMatches(text, p, wm.mode, dutchGuards) {
 				return wm.mode
 			}
 		}
 	}
 	return ""
-}
-
-// dutchPhraseMatches reports whether p occurs in text as a whole phrase, read for the
-// family mode it belongs to. A remote or hybrid occurrence that a dutchNegations word
-// precedes, or a dutchRefusals phrase follows in its sentence, is passed over and the scan
-// continues — the shape germanPhraseMatches has, with the Dutch words and the same
-// windows. The onsite family is the refusals themselves, so neither check applies to it.
-func dutchPhraseMatches(text, p, mode string) bool {
-	offset := 0
-	for {
-		i := strings.Index(text[offset:], p)
-		if i < 0 {
-			return false
-		}
-		start, end := offset+i, offset+i+len(p)
-		offset = end
-		if r, _ := utf8.DecodeRuneInString(text[end:]); end < len(text) && unicode.IsLetter(r) {
-			continue
-		}
-		if start > 0 {
-			if r, _ := utf8.DecodeLastRuneInString(text[:start]); unicode.IsLetter(r) {
-				continue
-			}
-		}
-		if mode == "onsite" {
-			return true
-		}
-		if containsAny(text[max(0, start-germanNegationWindow):start], dutchNegations) {
-			continue
-		}
-		tail := text[end:min(len(text), end+germanRefusalWindow)]
-		if j := strings.IndexAny(tail, ".;!?"); j >= 0 {
-			tail = tail[:j]
-		}
-		if containsAny(tail, dutchRefusals) {
-			continue
-		}
-		if containsAny(sentenceAround(text, start, end), dutchPerks) {
-			continue
-		}
-		return true
-	}
 }

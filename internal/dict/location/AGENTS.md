@@ -155,8 +155,22 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   UT, FR…) only when the town is Dutch. Also: the "1012 AB" postcode, "regio X", "X en
   omgeving", and Recruitee's translated remote label ("Werken op afstand", "Homeoffice",
   "Poste à distance") as a remote marker, matched only as the whole line.
+- **Spanish work-arrangement prose** (`workmode_es.go`) is read after the Dutch list, on the
+  folded text with its accents dropped, and in the German order (remote, hybrid, onsite):
+  "100% remoto"/"100% teletrabajo" is remote; "modalidad híbrida", "3 días presenciales",
+  "2 días de home office" and "teletrabajo" in a perks list are hybrid; "modalidad
+  presencial", "100% presencial" and "sin teletrabajo" are onsite. The Dutch matcher is
+  shared (`guardedPhraseMatches`): negations ("sin", "no", and the hedge "evaluar"),
+  refusals after ("no corresponde") and seasonal perks ("teletrabajo completo en verano")
+  withdraw a phrase. Bare `remoto` (remote support), `híbrido` (hybrid stacks), `presencial`
+  (a tutoring platform's "clases presenciales o en línea" on ~5k rows) and `home office`
+  (German and English prose reach this list) are deliberately absent. Portuguese shares the
+  phrasing and benefits ("100% presencial", "modelo híbrido"). Measured 2026-10-27 over 39k
+  Spanish-language postings: work mode from any source 48.7% → 56.8%; the description list
+  agrees with the adapter's structured value on 86% of the rows that carry both, and most of
+  the rest are the adapter's value contradicting the posting's own text.
 - **Indian work-arrangement prose is a fourth phrase list** (`workmode_in.go`), read only
-  when none of the English, German and Dutch ones matched. "WFO"/"work from office" is onsite;
+  when none of the English, German, Dutch and Spanish ones matched. "WFO"/"work from office" is onsite;
   counted office days decide the rest ("3 days WFO", "Hybrid (3 days office)" → hybrid;
   "5 days work from office" → onsite; "2 days WFH" → hybrid); a "hybrid" just before an
   office marker keeps it hybrid. Bare "WFH" is NOT remote — it names a benefit ("occasional

@@ -50,7 +50,8 @@ var descriptionWorkModePhrases = []struct {
 // location marker), so it only ever fills a value the others left empty. Values are
 // from vocab.WorkModeValues. The English phrases are tried first; German prose is read
 // only when none of them is stated (see germanWorkModePhrases), Dutch prose only
-// when neither is (see dutchWorkModePhrases), and the Indian register last (workmode_in.go).
+// when neither is (see dutchWorkModePhrases), then Spanish (workmode_es.go), and the
+// Indian register last (workmode_in.go).
 func WorkModeFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, wm := range descriptionWorkModePhrases {
@@ -66,7 +67,60 @@ func WorkModeFromDescription(desc string) string {
 	if m := dutchWorkMode(desc, lower); m != "" {
 		return m
 	}
+	if m := spanishWorkMode(desc, lower); m != "" {
+		return m
+	}
 	return indianWorkMode(desc, lower)
+}
+
+// phraseGuards are one language's qualifiers that withdraw a remote or hybrid phrase:
+// a negation just before it, a refusal just after it in its sentence, a bounded perk
+// anywhere in its sentence.
+type phraseGuards struct {
+	negations, refusals, perks []string
+}
+
+// guardedPhraseMatches reports whether p occurs in text as a whole phrase, read for the
+// family mode it belongs to. A remote or hybrid occurrence that one of g's negations
+// precedes, one of its refusals follows in its sentence, or one of its perks shares a
+// sentence with, is passed over and the scan continues — the shape germanPhraseMatches
+// has, with the same windows. The onsite family is the refusals themselves, so none of
+// the guards applies to it. Used by the Dutch and Spanish lists.
+func guardedPhraseMatches(text, p, mode string, g phraseGuards) bool {
+	offset := 0
+	for {
+		i := strings.Index(text[offset:], p)
+		if i < 0 {
+			return false
+		}
+		start, end := offset+i, offset+i+len(p)
+		offset = end
+		if r, _ := utf8.DecodeRuneInString(text[end:]); end < len(text) && unicode.IsLetter(r) {
+			continue
+		}
+		if start > 0 {
+			if r, _ := utf8.DecodeLastRuneInString(text[:start]); unicode.IsLetter(r) {
+				continue
+			}
+		}
+		if mode == "onsite" {
+			return true
+		}
+		if containsAny(text[max(0, start-germanNegationWindow):start], g.negations) {
+			continue
+		}
+		tail := text[end:min(len(text), end+germanRefusalWindow)]
+		if j := strings.IndexAny(tail, ".;!?"); j >= 0 {
+			tail = tail[:j]
+		}
+		if containsAny(tail, g.refusals) {
+			continue
+		}
+		if containsAny(sentenceAround(text, start, end), g.perks) {
+			continue
+		}
+		return true
+	}
 }
 
 // phraseMatches reports whether p occurs in text (already lowercased) unguarded. A
