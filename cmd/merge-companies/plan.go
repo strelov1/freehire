@@ -214,8 +214,16 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 // The Slug test is what keeps this to the rule's own change. A slug that is NOT the plain slug
 // of the latest name drifted for another reason — the source renamed the employer — and
 // re-keying that is a judgement about the rename, not about a form. A frozen canon never moves.
+//
+// The two are compared FOLDED, because the rule and Slug disagree about word breaks in ways
+// that say nothing about who the employer is: the rule splits "ディー・エヌ・エー" at the middle
+// dot and drops the apostrophe of "Linc'well", where Slug glues the first and splits the
+// second. Compared exactly, 472 Japanese companies minted under the old rule (2026-10-27) read
+// as renamed and were left on their pinyin slug.
 func keyedBeforeTheRule(c company, frozen map[string]bool) bool {
-	return !frozen[c.Slug] && c.Slug == normalize.Slug(c.Name) && normalize.CompanySlug(c.Name) != c.Slug
+	return !frozen[c.Slug] &&
+		normalize.FoldSlug(c.Slug) == normalize.FoldSlug(normalize.Slug(c.Name)) &&
+		normalize.CompanySlug(c.Name) != c.Slug
 }
 
 // electCanonical picks the group's surviving slug. Members arrive sorted by open jobs

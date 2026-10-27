@@ -102,6 +102,22 @@ func TestPlanMerges_RekeysALoneCompanyTheRuleNowKeysDifferently(t *testing.T) {
 	}
 }
 
+func TestPlanMerges_RekeysALoneCompanyWhoseOldSlugBrokeWordsDifferently(t *testing.T) {
+	// The old rule split at the middle dot and dropped the apostrophe; Slug does neither, so
+	// an exact comparison would read these as renamed and leave them on their pinyin slug.
+	got := planMerges([]company{
+		{Slug: "zhu-shi-hui-she-dei-enu-e", Name: "株式会社ディー・エヌ・エー", JobCount: 55},
+		{Slug: "zhu-shi-hui-she-lincwell", Name: "株式会社Linc'well", JobCount: 22},
+	}, nil, 0, nil)
+	var canons []string
+	for _, m := range got {
+		canons = append(canons, m.Canonical)
+	}
+	if want := []string{"dei-enu-e-kk", "lincwell-kk"}; !reflect.DeepEqual(canons, want) {
+		t.Errorf("canonicals = %v, want %v", canons, want)
+	}
+}
+
 func TestPlanMerges_LeavesALoneRenamedCompanyAlone(t *testing.T) {
 	// A slug that is not the plain slug of its latest name drifted because the source renamed
 	// the employer. Following the rename is a judgement, not a form the rule learned.
