@@ -533,7 +533,7 @@ var assistantOfPortugueseLead = regexp.MustCompile(`\b(?:(?:assistente|auxiliar|
 // PL/SQL, "II" a product generation — so they count only after a Portuguese desk head
 // within the same clause. I is the junior rung, II the middle and III the senior, the
 // ladder the Brazilian employers in the crawl share.
-var brazilianGradeLadder = regexp.MustCompile(`\b(?:analista|assistente|auxiliar|tecnic[oa]|especialista|desenvolvedor[a]?|engenheir[oa]|programador[a]?|consultor[a]?|operador[a]?|advogad[oa]|comprador[a]?|contador[a]?|projetista|atendente|agente|executiv[oa]|supervisor[a]?|coordenador[a]?)\b[^|()\-–,:]*?[\s/](pl|iii|ii|i)(?:\s*$|\s*[|()\-–,/:]|\s+(?:remoto|presencial|hibrido|home|temporario|\d))`)
+var brazilianGradeLadder = regexp.MustCompile(`\b(?:analista|assistente|auxiliar|tecnic[oa]|especialista|desenvolvedor[a]?|engenheir[oa]|programador[a]?|consultor[a]?|operador[a]?|advogad[oa]|comprador[a]?|contador[a]?|projetista|atendente|agente|executiv[oa]|coordenador[a]?)\b[^|()\-–,:]*?[\s/](pl|iii|ii|i)(?:\s*$|\s*[|()\-–,/:]|\s+(?:remoto|presencial|hibrido|home|temporario|\d))`)
 
 // plSQL is Oracle's language, whose "PL" is not the grade: "Analista de PL/SQL".
 var plSQL = regexp.MustCompile(`\bpl[\s/-]?sql\b`)

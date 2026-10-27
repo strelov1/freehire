@@ -157,6 +157,8 @@ func TestPortugueseGrades(t *testing.T) {
 		{"Java Developer - Warsaw, PL", ""},
 		{"Espec Santander II 8h", ""},
 		{"Analista de PL/SQL", ""},
+		// "Supervisor" is also English, whose table states no grade for it.
+		{"Production Supervisor II", ""},
 	}
 	for _, c := range cases {
 		if got := Parse(c.title).Seniority; got != c.seniority {
