@@ -86,15 +86,15 @@ func TestPlanMerges_IgnoresACompanyWithNoTwin(t *testing.T) {
 	}
 }
 
-func TestPlanMerges_RekeysALoneCompanyTheRuleNowStrips(t *testing.T) {
-	// 株式会社 used to reach Slug whole and come out as Chinese pinyin. Nothing else carries
+func TestPlanMerges_RekeysALoneCompanyTheRuleNowKeysDifferently(t *testing.T) {
+	// 株式会社 used to reach Slug whole and come out as Chinese pinyin; it is now the `kk` mark. Nothing else carries
 	// this employer, so there is no group — but the write path and backfill-derive re-key it
 	// anyway, and without an alias the old URL would 404.
 	got := planMerges([]company{{Slug: "zhu-shi-hui-she-speee", Name: "株式会社Speee", JobCount: 7}}, nil, 0, nil)
 	want := []merge{{
-		Canonical: "speee",
-		GroupKey:  "speee",
-		Aliases:   []alias{{Slug: "zhu-shi-hui-she-speee", Reason: reasonLegalForm, FoldedKey: "speee", JobCount: 7}},
+		Canonical: "speee-kk",
+		GroupKey:  "speeekk",
+		Aliases:   []alias{{Slug: "zhu-shi-hui-she-speee", Reason: reasonLegalForm, FoldedKey: "speeekk", JobCount: 7}},
 		Jobs:      7,
 	}}
 	if !reflect.DeepEqual(got, want) {
@@ -361,7 +361,7 @@ func TestPlanMerges_SeesASlugWhoseIndexCounterIsZero(t *testing.T) {
 
 func TestOnlyReason_KeepsGroupsWhoseEveryAliasMatches(t *testing.T) {
 	plan := []merge{
-		{Canonical: "speee", Aliases: []alias{{Slug: "zhu-shi-hui-she-speee", Reason: reasonLegalForm}}},
+		{Canonical: "speee-kk", Aliases: []alias{{Slug: "zhu-shi-hui-she-speee", Reason: reasonLegalForm}}},
 		{Canonical: "dollar-tree", Aliases: []alias{{Slug: "dollartree", Reason: reasonSpelling}}},
 		{Canonical: "acme", Aliases: []alias{
 			{Slug: "acme-inc", Reason: reasonLegalForm},
@@ -372,7 +372,7 @@ func TestOnlyReason_KeepsGroupsWhoseEveryAliasMatches(t *testing.T) {
 	for _, m := range onlyReason(plan, reasonLegalForm) {
 		got = append(got, m.Canonical)
 	}
-	if want := []string{"speee"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"speee-kk"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("kept %v, want %v — a mixed group must be left out whole", got, want)
 	}
 	if n := len(onlyReason(plan, "")); n != len(plan) {

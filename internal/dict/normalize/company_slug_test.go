@@ -39,21 +39,24 @@ func TestCompanySlug(t *testing.T) {
 		{"a symbol word is not part of the key", "Acme ™", "acme"},
 		{"a non-latin word is kept and transliterated", "Яндекс ООО", "iandeks-ooo"},
 		// Japanese writes the form with no space, on either side of the name; before it was
-		// matched literally, 株式会社 was romanised as Chinese into "zhu-shi-hui-she".
-		{"japanese form as a prefix", "株式会社Speee", "speee"},
-		{"japanese form as a suffix", "freee株式会社", "freee"},
-		{"japanese form with a full-width space", "株式会社\u3000Kaizen Platform", "kaizen-platform"},
-		{"japanese limited company", "有限会社Acme", "acme"},
-		{"japanese godo kaisha", "Amazon Japan合同会社", "amazon-japan"},
-		{"japanese abbreviated form, full-width brackets", "（株）Acme", "acme"},
-		{"japanese abbreviated form, half-width brackets", "Acme(株)", "acme"},
-		{"japanese abbreviated form, one character", "㈱Acme", "acme"},
-		{"japanese form and a latin form together", "株式会社Acme Inc.", "acme"},
+		// matched literally, 株式会社 was romanised as Chinese into "zhu-shi-hui-she". It is
+		// kept as a Latin mark rather than dropped, so a Japanese firm never lands on a foreign
+		// namesake's key, and every spelling of the same form lands on the same mark.
+		{"japanese form as a prefix", "株式会社Speee", "speee-kk"},
+		{"japanese form as a suffix", "Speee株式会社", "speee-kk"},
+		{"japanese abbreviated form, full-width brackets", "（株）Speee", "speee-kk"},
+		{"japanese abbreviated form, half-width brackets", "Speee(株)", "speee-kk"},
+		{"japanese abbreviated form, one character", "㈱Speee", "speee-kk"},
+		{"japanese form with a full-width space", "株式会社\u3000Kaizen Platform", "kaizen-platform-kk"},
+		{"japanese limited company has its own mark", "有限会社Acme", "acme-yk"},
+		{"japanese godo kaisha has its own mark", "Amazon Japan合同会社", "amazon-japan-gk"},
+		{"a latin form is still dropped beside a japanese one", "株式会社Acme Inc.", "acme-kk"},
+		{"the mark is written once when the form repeats", "株式会社Acme株式会社", "acme-kk"},
 		// Mynavi writes full-width letters and the middle dot where hrmos and herp write
 		// ASCII and a space; unidecode folds both, and the form test must not depend on which.
-		{"full-width letters with a japanese form", "ＦＵＴＵＲＥＭＩＮＤ株式会社", "futuremind"},
-		{"full-width abbreviated form", "（株）ＡＢＣ", "abc"},
-		{"middle dot is a word break", "株式会社 Future・Mind", "future-mind"},
+		{"full-width letters with a japanese form", "ＦＵＴＵＲＥＭＩＮＤ株式会社", "futuremind-kk"},
+		{"full-width abbreviated form", "（株）ＡＢＣ", "abc-kk"},
+		{"middle dot is a word break", "株式会社 Future・Mind", "future-mind-kk"},
 		{"japanese form inside a name is kept", "Acme株式会社 東京支店", "acmezhu-shi-hui-she-dong-jing-zhi-dian"},
 		{"a name that is only a japanese form is not erased", "株式会社", "zhu-shi-hui-she"},
 		{"empty stays empty", "", ""},

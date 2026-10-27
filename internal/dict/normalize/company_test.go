@@ -24,8 +24,9 @@ func TestSameCompany(t *testing.T) {
 		{"placeholder tenant", "Anatta Design", "Fake job", false},
 		{"non-latin script folded", "Яндекс", "Iandeks", true},
 		{"one name is a prefix of the other", "Base", "Basecamp", false},
-		{"japanese form on one side", "株式会社リクルート", "リクルート", true},
+		{"japanese form before and after the name", "株式会社リクルート", "リクルート株式会社", true},
 		{"japanese form, abbreviated against written out", "（株）リクルート", "株式会社リクルート", true},
+		{"a japanese firm is not its foreign namesake", "株式会社タケダ", "Takeda", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -50,6 +51,9 @@ func TestBoardNameSlug(t *testing.T) {
 		{"tail mid-name is not a tail", "Spa Holiday Systems", "spa-holiday-systems"},
 		{"single word is never stripped", "Spa", "spa"},
 		{"no tail", "Datapizza", "datapizza"},
+		// A board id carries no corporate form, so the Japanese mark the company key keeps
+		// would only make the guess miss.
+		{"japanese form is dropped, not marked", "株式会社Speee", "speee"},
 		// The over-trim this vocabulary knowingly buys: a resort folds onto a hotel chain's
 		// name. Harmless here, where it is one extra probe an unrelated board simply fails —
 		// and the reason the tails may not join legalSuffixes, guarded just below.

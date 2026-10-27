@@ -22,7 +22,7 @@ import (
 // job, and the two are different keys. Most non-Latin forms (ООО, 有限公司) are stripped
 // by neither: the form test reduces a word to its ASCII letters, so a Cyrillic or Chinese
 // suffix simply is not one. The Japanese business forms (株式会社) are the exception, which
-// CompanySlug matches literally — see japaneseForms. Slug is faithful to the name it
+// CompanySlug matches literally and keys as a Latin mark — see japaneseForms. Slug is faithful to the name it
 // was given, which is what a URL path segment and a job's public slug need; CompanySlug
 // answers "which employer is this", where "RingCentral" and "RingCentral, Inc." must not
 // be two answers. Reach for CompanySlug whenever the value keys a COMPANY.

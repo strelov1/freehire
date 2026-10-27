@@ -203,8 +203,8 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 
 // keyedBeforeTheRule reports whether a company with no twin still has to move: its stored slug
 // is the faithful [normalize.Slug] of its name, yet the company rule now derives a different
-// one — a legal form the rule has learned to strip since the slug was minted (the Japanese
-// 株式会社, stored romanised as "zhu-shi-hui-she-…").
+// one — a legal form the rule has learned since the slug was minted (the Japanese 株式会社,
+// stored romanised as "zhu-shi-hui-she-…" and now keyed as a `kk` mark).
 //
 // Such a company is not a duplicate of anything, but it is not left alone either: the write
 // path re-keys its next posting, and cmd/backfill-derive its stored ones, to the derived slug —

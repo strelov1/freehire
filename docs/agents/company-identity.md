@@ -27,6 +27,9 @@ for display names, and [internal/job/collections](../../internal/job/collections
   same evidence (`Hilton Luxor Resort & Spa` outweighs every real S.p.A.). `group` is out
   because it is not a form at all — collapsing `bosch-group` into `bosch` is a judgement, and
   judgements belong to the merge worker, which shows a dry run and records a reversible alias.
+- **A Japanese form is kept as a mark, not dropped** (`株式会社Speee` → `speee-kk`). Dropping it
+  failed the test above: 726 small Japanese firms landed on an unrelated namesake's key
+  (株式会社タケダ on Takeda), because a romanised short name is so often someone else's word.
 - **`company_slug_aliases` is the one company-adjacent table that is NOT derived from `jobs`.**
   Everything else here is rebuilt by `SyncCompaniesFromJobs`, and `DeleteOrphanCompanies`
   removes any `companies` row no job references. A canonical decision recorded there would
@@ -115,7 +118,8 @@ A company with NO twin is planned too when the rule itself has moved under it: i
 is the plain `Slug` of its name, yet `CompanySlug` now derives another — a form the rule learned
 to strip after the slug was minted. The Japanese forms are the case that made this necessary:
 株式会社 used to reach `Slug` whole and was romanised as Chinese, `zhu-shi-hui-she-…`, on ~12k
-companies (2026-10-26), and ~11k of them have no other spelling to merge with. Ingest and
+companies (2026-10-26); it now keys as a Latin mark (`speee-kk`), so almost none of them has
+another spelling to merge with. Ingest and
 `backfill-derive` re-key such a company regardless; skipping it here would leave the old URL
 404ing with no alias. A slug that is NOT the plain slug of the latest name is left alone — it
 drifted because the source renamed the employer, which is a judgement, not a form.
