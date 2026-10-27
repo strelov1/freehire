@@ -43,7 +43,7 @@ func TestParse_SpanishMarket(t *testing.T) {
 		{"bi", "Herramientas de inteligencia de negocio", []string{"business-intelligence"}, nil},
 		{"computer vision", "Proyectos de vision artificial y visión por computador", []string{"computer-vision"}, nil},
 		// The Spanish words alone are no skill.
-		{"delivery round", "Entregador de productos: entrega continua a nuestros clientes.", nil,
+		{"delivery round", "Entregador de ruta: entrega continua a nuestros clientes.", nil,
 			[]string{"ci-cd"}},
 		{"plain words", "Buscamos personas con ganas de aprender y trabajar en equipo.", nil,
 			[]string{"data-quality", "rest", "ci-cd"}},
