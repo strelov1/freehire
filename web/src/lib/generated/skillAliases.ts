@@ -193,7 +193,7 @@ export const SKILL_ALIASES = {
   'collibra': ['collibra'],
   'color-grading': ['color grading', 'colour grading'],
   'community-management': ['community management'],
-  'computer-vision': ['computer vision', 'vision por computador', 'visión artificial', 'visión por computador'],
+  'computer-vision': ['computer vision', 'vision artificial', 'vision por computador', 'visión artificial', 'visión por computador'],
   'concur': ['sap concur'],
   'confined-space': ['confined space', 'confined spaces'],
   'confluence': ['confluence'],

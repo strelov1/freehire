@@ -1677,7 +1677,7 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"sistemas embebidos", "embedded-systems"},
 	{"bases de datos vectoriales", "vector-databases"},
 	{"visión por computador", "computer-vision"}, {"vision por computador", "computer-vision"},
-	{"visión artificial", "computer-vision"},
+	{"visión artificial", "computer-vision"}, {"vision artificial", "computer-vision"},
 	{"pruebas de penetración", "penetration-testing"}, {"pruebas de penetracion", "penetration-testing"},
 }
 
