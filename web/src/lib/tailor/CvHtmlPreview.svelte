@@ -12,7 +12,7 @@
   import type { Document, ExperienceItem, Project } from '#lib/generated/contracts.js';
   import { experienceHeader, educationLine, languageLabel, certificationLine, type CvFont } from '#lib/cv.js';
   import HeadshotSilhouette from '#lib/components/HeadshotSilhouette.svelte';
-  import { paginateBlocks, previewTypography, printedPageCount } from './geometry';
+  import { A4_WIDTH_PX, paginateBlocks, previewTypography, printedPageCount } from './geometry';
   import { must } from '#lib/utils.js';
   import { keepIndex, makeHighlighter, makeContainerHighlighter } from './revisions';
 
@@ -45,7 +45,7 @@
   const litInside = $derived(makeContainerHighlighter(highlightPaths));
 
   // A4 at 96dpi, and the inch→pixel factor margins convert through.
-  const PAGE_W = 794;
+  const PAGE_W = A4_WIDTH_PX;
   const PAGE_H = 1123;
   const PX_PER_IN = 96;
   const COL_GAP = 24; // matches the sidebar grid's gap-6

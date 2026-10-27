@@ -26,6 +26,7 @@
   import AutopilotReport from './AutopilotReport.svelte';
   import AtsDelta from './AtsDelta.svelte';
   import JobMatch from './JobMatch.svelte';
+  import { scoreTone, type JobMatchTone } from './jobmatch';
   import CoverLetter from './CoverLetter.svelte';
   import type { Analysis, AutopilotEntry, RevisionView } from '#lib/generated/contracts.js';
   import type { Job, MatchAnalysisResponse } from '#lib/types.js';
@@ -98,7 +99,7 @@
 
   const tabs: [Tab, string][] = [
     ['jobmatch', 'Job Match'],
-    ['score', 'Score'],
+    ['score', 'ATS'],
     ['letter', 'Letter'],
     ['history', 'History'],
     ['jd', 'Job'],
@@ -112,6 +113,13 @@
     jobmatch: jobMatch?.available ? jobMatch.score?.overall : undefined,
     score: atsDelta?.available ? atsDelta.delta?.tailored : undefined,
   });
+  // The same thresholds the Job match card colours its own number by, so a badge and the card
+  // it summarises never disagree about whether a score is good.
+  const badgeTone: Record<JobMatchTone, string> = {
+    strong: 'text-brand-strong',
+    moderate: 'text-warning-strong',
+    poor: 'text-destructive',
+  };
   let width = $state(400);
   let resizing = false;
   // Collapsed to a rail so the centre CV preview can take the width. Desktop-only: below lg
@@ -212,7 +220,9 @@
       >
         {label}
         {#if badges[id] !== undefined}
-          <span class="ml-1 text-xs font-normal tabular-nums opacity-80">{badges[id]}</span>
+          {@const value = badges[id] ?? 0}
+          <span class="ml-1 text-xs font-medium tabular-nums {badgeTone[scoreTone(value)]}">{value}</span>
+          <span class="sr-only">out of 100</span>
         {/if}
       </button>
     {/each}

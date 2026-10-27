@@ -15,6 +15,7 @@
   import { Menu } from '@lucide/svelte';
   import AssistantChat from '#lib/assistant/AssistantChat.svelte';
   import AccountNavRail from '#lib/components/AccountNavRail.svelte';
+  import { fillViewport } from '#lib/actions/fillViewport.js';
   import { entryFromQuery, historyModeFor } from '#lib/assistant/presets.js';
   import { messages } from './messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -27,33 +28,6 @@
   // a phone gets the chat's full width instead of a 56px column of icons beside it.
   let navOpen = $state(false);
 
-  // Where this page starts. It fills the viewport from there down, so the composer at its
-  // foot is always on screen. Measured, not assumed: what stands above it is the header
-  // AND whichever self-gating bands the root layout shows (the email-verification prompt,
-  // whose height changes when its code form opens), and a fixed `100dvh - header` sized
-  // the page past the fold by exactly their height. Neither the body nor the page itself
-  // can tell when a band changes — html and body are pinned at 100% — so the two boxes
-  // observed are the root layout's `min-h-svh` column and its <main>: a band that grows
-  // pushes the column past the viewport, and one that shrinks or goes away hands the
-  // freed height to <main> (it is `flex-1`, and the column cannot shrink below the
-  // viewport). A page that then refits moves neither back out of step, so the measurement
-  // settles in one step. Starts at the header's h-14 so the server render matches what it
-  // always drew.
-  let shellEl = $state<HTMLDivElement | null>(null);
-  let top = $state(56);
-  $effect(() => {
-    const el = shellEl;
-    const main = el?.closest('main');
-    if (!el || !main) return;
-    const measure = () => {
-      top = Math.max(0, el.getBoundingClientRect().top + window.scrollY);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(main);
-    if (main.parentElement) observer.observe(main.parentElement);
-    return () => observer.disconnect();
-  });
   const session = $derived(page.params.id);
   // Read once, not reactively: the query says what this ARRIVAL asked for, and the
   // address is rewritten to the session's own URL — dropping the query — moments later.
@@ -70,7 +44,7 @@
 
 <h1 class="sr-only">{s.heading}</h1>
 
-<div bind:this={shellEl} class="flex" style:height="calc(100dvh - {top}px)">
+<div use:fillViewport class="flex" style:height="calc(100dvh - 3.5rem)">
   <AccountNavRail collapsible bind:open={navOpen} />
   <AssistantChat
     {session}

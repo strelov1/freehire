@@ -1,7 +1,8 @@
 // Which routes render as a full-bleed, app-like shell rather than a centered document.
 // Kept as a pure predicate (not inline in TopBar) so the list of such routes is
-// unit-testable and lives in one place. These pages size themselves as
-// `h-[calc(100dvh-3.5rem)]` — the viewport minus the header — and carry their own
+// unit-testable and lives in one place. These pages fill the viewport below whatever sits
+// above them (`#lib/actions/fillViewport`, with `h-[calc(100dvh-3.5rem)]` — the viewport
+// minus the header — as the server-rendered fallback) and carry their own
 // left-edge icon rail, so a header centered inside `max-w-6xl` would float above a page
 // that already reaches both screen edges. `+layout.svelte` also reads this to hide the
 // footer, which belongs only here: a full-viewport shell has no room for one, but a page

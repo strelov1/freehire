@@ -8,6 +8,23 @@ export function clampWidth(px: number, min: number, max: number): number {
 }
 
 /** The width band both tailor side panels resize within, by drag or by keyboard. */
+/** An A4 sheet's width at 96dpi: the preview draws every page this wide before zooming. */
+export const A4_WIDTH_PX = 794;
+
+/**
+ * fitToWidthZoom is the zoom at which one sheet fills a column `available` pixels wide.
+ *
+ * Rounded DOWN to the hundredth, never to nearest: rounding up by a fraction of a percent
+ * is enough to overflow by a pixel and bring the horizontal scrollbar back. The floor is
+ * lower than the buttons' 50% so a phone still gets the whole page, and the ceiling matches
+ * theirs so a very wide window does not blow the page up.
+ */
+export function fitToWidthZoom(available: number): number {
+  if (available <= 0) return 0.8;
+  const exact = Math.floor((available / A4_WIDTH_PX) * 100) / 100;
+  return Math.min(1.5, Math.max(0.3, exact));
+}
+
 export const PANEL_MIN_WIDTH = 340;
 export const PANEL_MAX_WIDTH = 720;
 /** One arrow press on a focused splitter: the keyboard path to the widths a drag reaches. */

@@ -4,6 +4,8 @@ import {
   keyResizeWidth,
   paginateBlocks,
   printedPageCount,
+  fitToWidthZoom,
+  A4_WIDTH_PX,
   stepMargin,
   MARGIN_MIN,
   MARGIN_MAX,
@@ -220,5 +222,25 @@ describe('printedPageCount', () => {
 
   it('calls an empty document one page', () => {
     expect(printedPageCount([[]], [], 1000)).toBe(1);
+  });
+});
+
+describe('fitToWidthZoom', () => {
+  it('fits one sheet into the column, rounding down so it never overflows by a pixel', () => {
+    const z = fitToWidthZoom(622 - 48);
+    expect(z).toBe(0.72);
+    expect(A4_WIDTH_PX * z).toBeLessThanOrEqual(574);
+  });
+
+  it('shrinks below the buttons\' 50% floor so a phone shows the whole page', () => {
+    expect(fitToWidthZoom(390 - 48)).toBe(0.43);
+  });
+
+  it('stops at 150% on a very wide column', () => {
+    expect(fitToWidthZoom(5000)).toBe(1.5);
+  });
+
+  it('falls back to 80% before the column has been measured', () => {
+    expect(fitToWidthZoom(0)).toBe(0.8);
   });
 });

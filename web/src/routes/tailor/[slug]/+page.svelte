@@ -33,10 +33,11 @@
   import TemplateGallery from '#lib/tailor/TemplateGallery.svelte';
   import AccountNavRail from '#lib/components/AccountNavRail.svelte';
   import { ConfirmDialog } from '#lib/ui/index.js';
-  import { clampWidth, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from '#lib/tailor/geometry.js';
+  import { clampWidth, fitToWidthZoom, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from '#lib/tailor/geometry.js';
   import { undoRun, openingActions } from '#lib/tailor/autopilot.js';
   import { findPlaceholders } from '#lib/tailor/readiness.js';
   import { tablist } from '#lib/actions/tablist.js';
+  import { fillViewport } from '#lib/actions/fillViewport.js';
   import {
     toEditable,
     emptyDocument,
@@ -141,7 +142,7 @@
     ['design', 'Design'],
     ['preview', 'Preview'],
     ['jobmatch', 'Job Match'],
-    ['score', 'Score'],
+    ['score', 'ATS'],
     ['letter', 'Letter'],
     ['history', 'History'],
     ['jd', 'Job'],
@@ -160,14 +161,24 @@
     else if (v !== 'preview') artifactTab = v;
   }
 
-  // Centre preview zoom, clamped to 50–150% in 10% steps. Starts at 80%: the A4 page then fits
-  // the centre column with both side panels open, so nothing has to be dragged before reading.
-  const DEFAULT_ZOOM = 0.8;
-  let zoom = $state(DEFAULT_ZOOM);
+  // Centre preview zoom. It opens fitted to the column's width, so the whole sheet is readable
+  // whatever the window or the side panels leave; the + and − buttons then step in 10% from
+  // there (50–150%), and the percentage puts it back to fit. A fixed 80% start used to promise
+  // this and overflowed the column at 1440px with both panels open.
+  const SCROLLER_PADDING = 48; // the scroller's p-6, both sides
+  let previewWidth = $state(0);
+  let fitMode = $state(true);
+  let manualZoom = $state(0.8);
+  const fitZoom = $derived(fitToWidthZoom(previewWidth - SCROLLER_PADDING));
+  const zoom = $derived(fitMode ? fitZoom : manualZoom);
   const zoomPct = $derived(Math.round(zoom * 100));
   const clampZoom = (z: number) => Math.min(1.5, Math.max(0.5, Math.round(z * 10) / 10));
-  const zoomOut = () => (zoom = clampZoom(zoom - 0.1));
-  const zoomIn = () => (zoom = clampZoom(zoom + 0.1));
+  const setZoom = (z: number) => {
+    manualZoom = clampZoom(z);
+    fitMode = false;
+  };
+  const zoomOut = () => setZoom(zoom - 0.1);
+  const zoomIn = () => setZoom(zoom + 0.1);
   const pdfUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${pdfVersion}`);
 
   // Readiness of the PDF, the one thing here the seeker actually sends. The page count comes
@@ -583,7 +594,7 @@
 
 <!-- Full-width workspace loses the account shell nav; the same left-edge icon rail as
      the Agent page brings the account sections back. It stays put across every state. -->
-<div class="flex h-[calc(100dvh-3.5rem)]">
+<div use:fillViewport class="flex h-[calc(100dvh-3.5rem)]">
   <AccountNavRail collapsible bind:open={navOpen} />
   {#if status === 'loading'}
     <div class="flex min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -821,9 +832,10 @@
               </button>
               <button
                 type="button"
-                onclick={() => (zoom = DEFAULT_ZOOM)}
-                aria-label="Reset zoom to {Math.round(DEFAULT_ZOOM * 100)}%"
-                title="Reset zoom"
+                onclick={() => (fitMode = true)}
+                aria-label="Zoom {zoomPct}%. Fit the page to the width"
+                title="Fit to width"
+                aria-pressed={fitMode}
                 class="w-12 rounded py-0.5 text-center text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 {zoomPct}%
@@ -855,7 +867,8 @@
                 class="inline-flex items-center gap-1.5 rounded-md bg-warning-muted px-2.5 py-1 text-xs font-medium text-warning-strong transition-colors hover:bg-warning-muted/70"
               >
                 <TriangleAlert class="size-3.5" aria-hidden="true" />
-                {placeholders.length === 1 ? '1 unfilled placeholder' : `${placeholders.length} unfilled placeholders`}
+                <!-- Names one of the slots: "placeholder" alone did not say what was wrong. -->
+                {placeholders.length === 1 ? `1 gap: ${placeholders[0]?.token}` : `${placeholders.length} gaps like ${placeholders[0]?.token}`}
               </button>
             {/if}
             <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
@@ -871,7 +884,7 @@
             </a>
           </div>
         </div>
-        <div bind:this={previewScroller} class="min-h-0 flex-1 overflow-auto p-6">
+        <div bind:this={previewScroller} bind:clientWidth={previewWidth} class="min-h-0 flex-1 overflow-auto p-6">
           <CvHtmlPreview
             {doc}
             {templateId}
@@ -923,8 +936,8 @@
 
 <ConfirmDialog
   bind:open={confirmDownloadOpen}
-  title="Your CV still has unfilled placeholders"
-  description="These template slots will print in the PDF exactly as written."
+  title="Your CV still has gaps to fill"
+  description="These bracketed slots will print in the PDF exactly as written."
   confirmLabel="Download anyway"
   cancelLabel="Keep editing"
   onConfirm={() => {
