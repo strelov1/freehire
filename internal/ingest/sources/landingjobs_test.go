@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -200,17 +201,52 @@ func TestLandingJobsSkipsPostingsMissingAnIdentity(t *testing.T) {
 	}
 }
 
-// One request per crawl. `?page=N` is ignored by the endpoint (identical bodies, verified
-// live), so a page walk would re-fetch the same postings; this pins the adapter against someone
-// "fixing" pagination back in without evidence that a depth parameter exists.
-func TestLandingJobsMakesExactlyOneRequest(t *testing.T) {
-	feed := `[{"id":9004,"title":"A","url":"https://landing.jobs/at/acme/a","published_at":"2026-08-02T00:00:00.000Z"}]`
-	fake := (&routedHTTP{}).route("/api/v1/jobs", feed)
-	if _, err := NewLandingJobs(fake).Fetch(context.Background(), CompanyEntry{}); err != nil {
+// The endpoint ignores `page` and `limit` but honours `offset`: measured live, the bare request
+// answered 50 postings and `?offset=50` the remaining 7, which the one-request adapter never read.
+// The walk steps by the page it just read and stops on the short page.
+func TestLandingJobsWalksByOffsetUntilAShortPage(t *testing.T) {
+	page1 := `[{"id":1,"title":"A","url":"https://landing.jobs/at/acme/a"},
+{"id":2,"title":"B","url":"https://landing.jobs/at/acme/b"}]`
+	page2 := `[{"id":3,"title":"C","url":"https://landing.jobs/at/acme/c"}]`
+	fake := (&routedHTTP{}).route("offset=2", page2).route("/api/v1/jobs", page1)
+	jobs, err := NewLandingJobs(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if fake.calls != 1 {
-		t.Errorf("made %d requests, want exactly 1 — the feed is not paginated", fake.calls)
+	if len(jobs) != 3 {
+		t.Fatalf("got %d jobs, want 3 — the posting past the first page is part of the feed", len(jobs))
+	}
+	if fake.calls != 2 {
+		t.Errorf("made %d requests, want 2 — a page shorter than the first is the last", fake.calls)
+	}
+}
+
+// Should the endpoint start ignoring `offset` the way it ignores `page`, every request answers
+// the same postings. The walk must stop at the first page that adds nothing rather than spin to
+// its cap.
+func TestLandingJobsStopsWhenAnOffsetAddsNothing(t *testing.T) {
+	page := `[{"id":1,"title":"A","url":"https://landing.jobs/at/acme/a"},
+{"id":2,"title":"B","url":"https://landing.jobs/at/acme/b"}]`
+	fake := (&routedHTTP{}).route("/api/v1/jobs", page)
+	jobs, err := NewLandingJobs(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Errorf("got %d jobs, want the 2 distinct postings", len(jobs))
+	}
+	if fake.calls != 2 {
+		t.Errorf("made %d requests, want 2 — the repeated page ends the walk", fake.calls)
+	}
+}
+
+// A later page failing fails the board: the walk is the only listing of the catalogue, and a
+// salvaged first page would leave the tail unseen until the sweep closed it.
+func TestLandingJobsLaterPageFailureIsABoardError(t *testing.T) {
+	page1 := `[{"id":1,"title":"A","url":"https://landing.jobs/at/acme/a"}]`
+	fake := (&routedHTTP{}).routeErr("offset=", errors.New("boom")).route("/api/v1/jobs", page1)
+	if _, err := NewLandingJobs(fake).Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Error("a failed later page should fail the board")
 	}
 }
 

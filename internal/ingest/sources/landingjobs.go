@@ -22,13 +22,14 @@ import (
 // live slugs bake in a year (`…-in-lisbon-2025`), so a slug the board regenerates would
 // silently duplicate the posting instead of updating it.
 //
-// **One request, and no pagination.** `?page=N` is ignored by the endpoint — pages 1 and 2 come
-// back byte-for-byte identical (verified live 2026-08-13, issue #1627) — so a page walk would
-// re-fetch the same postings until its own cap and dedup them all away, paying N requests for
-// one page of data. The single response is therefore taken as the whole feed. Whether the 50
-// items it returns ARE the whole active catalogue is unconfirmed; if a parameter controlling
-// depth is found, this is where the walk goes, and `internal/ingest/sources/AGENTS.md`'s first-page
-// rule applies to it.
+// **Paged by `offset`, not by `page`.** `?page=N` is ignored by the endpoint — pages 1 and 2
+// come back byte-for-byte identical (verified live 2026-08-13, issue #1627) — and so is `limit`
+// (`?limit=200` still answers 50). `?offset=N` IS honoured: measured 2026-10-27, the bare request
+// answered 50 postings and `?offset=50` the remaining 7, while the adapter read only the first
+// request and prod held exactly 50 open. The walk therefore steps the offset by the size of the
+// page it just read and stops on a short or empty page. A page that adds no new id also ends it:
+// should the endpoint ever start ignoring `offset` as it ignores `page`, the walk must not spin
+// to its cap re-reading the same postings.
 //
 // Note: landing.jobs' robots.txt disallows /api/ for every listed user agent. The endpoint is
 // public and unauthenticated, and the crawl is a scheduled job rather than a search-engine
@@ -90,15 +91,47 @@ func (p landingjobsPlace) label() string {
 	return joinNonEmpty(strings.TrimSpace(p.City), strings.TrimSpace(p.CountryCode))
 }
 
+// landingjobsMaxPages bounds the offset walk. The live catalogue is ~60 postings (two pages);
+// the cap only stops a misbehaving endpoint from walking forever.
+const landingjobsMaxPages = 40
+
+// Fetch walks the feed by offset. Any page failing fails the board, not just the first: the
+// run is the only listing of the catalogue, and a salvaged first page would leave the tail
+// unseen until the sweep closed it.
 func (s landingjobs) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
-	var postings []landingjobsPosting
-	if err := s.http.GetJSON(ctx, landingjobsListURL, &postings); err != nil {
-		return nil, fmt.Errorf("landingjobs: list: %w", err)
-	}
-	jobs := make([]Job, 0, len(postings))
-	for _, p := range postings {
-		if job, ok := p.toJob(); ok {
-			jobs = append(jobs, job)
+	seen := map[int64]bool{}
+	var jobs []Job
+	offset, pageSize := 0, 0
+	for range landingjobsMaxPages {
+		url := landingjobsListURL
+		if offset > 0 {
+			url += "?offset=" + strconv.Itoa(offset)
+		}
+		var postings []landingjobsPosting
+		if err := s.http.GetJSON(ctx, url, &postings); err != nil {
+			return nil, fmt.Errorf("landingjobs: list offset %d: %w", offset, err)
+		}
+		added := 0
+		for _, p := range postings {
+			if seen[p.ID] {
+				continue
+			}
+			seen[p.ID] = true
+			added++
+			if job, ok := p.toJob(); ok {
+				jobs = append(jobs, job)
+			}
+		}
+		if added == 0 {
+			break
+		}
+		if pageSize == 0 {
+			// The endpoint ignores `limit`, so its page size is whatever the first page held.
+			pageSize = len(postings)
+		}
+		offset += len(postings)
+		if len(postings) < pageSize {
+			break
 		}
 	}
 	return jobs, nil
