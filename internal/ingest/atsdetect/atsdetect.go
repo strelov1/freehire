@@ -53,9 +53,10 @@ var selfHosted = []struct {
 	{"phenom", regexp.MustCompile(`(?i)phenompeople`)},
 	{"jibe", regexp.MustCompile(`(?i)jibeapply`)},
 	{"teamtailor", regexp.MustCompile(`(?i)teamtailor`)},
-	// Bizneo's career-site bundle; a customer's own domain serves the same pages as its
-	// bizneo.cloud host (emprego.imancorp.pt). The vendor's other pages load other bundles.
-	{"bizneo", regexp.MustCompile(`assets\.bizneo\.com/vite/assets/custom-companies`)},
+	// Bizneo's career-site bundle, assets.bizneo.com/vite/assets/custom-companies-<hash>.js; a
+	// customer's own domain serves the same pages as its bizneo.cloud host (emprego.imancorp.pt).
+	// The vendor's other pages load other bundles. Matched by its path, which names the product.
+	{"bizneo", regexp.MustCompile(`/vite/assets/custom-companies-[A-Za-z0-9_-]+\.js`)},
 }
 
 // vendorDomains are ATS vendors' own domains, which a self-hosted board never sits on. For the
