@@ -192,16 +192,54 @@
   let confirmDownloadOpen = $state(false);
   let previewScroller = $state<HTMLElement | null>(null);
 
-  async function togglePlaceholders(show = !showingPlaceholders) {
-    placeholdersShown = show;
-    if (!show) return;
+  // Each press of the gap chip goes to the next slot, in reading order, and wraps — so a CV
+  // with three gaps is fixed by pressing it three times, not by hunting for underlines.
+  let gapCursor = 0;
+
+  // Underlines every slot on the sheet and puts the cursor on one of them in the Editor, with
+  // the bracketed text selected, so typing replaces it. The field is found by the same address
+  // the check produced (`experience[1].bullets[0]`), which the Editor tags each input with.
+  async function goToGap(index = gapCursor) {
+    if (placeholders.length === 0) return;
+    const gap = placeholders[index % placeholders.length];
+    if (!gap) return;
+    gapCursor = (index % placeholders.length) + 1;
+    placeholdersShown = true;
+    leftCollapsed = false;
+    pickMobile('editor');
     await tick();
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const behavior = reduce ? 'auto' : 'smooth';
     // The hidden measurement layer renders the same marks, so skip anything inside it.
-    const first = Array.from(previewScroller?.querySelectorAll('.cv-lit') ?? []).find(
+    const mark = Array.from(previewScroller?.querySelectorAll('.cv-lit') ?? []).find(
       (el) => !el.closest('[aria-hidden="true"]'),
     );
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    first?.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    mark?.scrollIntoView({ block: 'center', behavior });
+    const field = leftPanelEl?.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `[data-path="${CSS.escape(gap.path)}"]`,
+    );
+    announce(`Gap ${gapCursor} of ${placeholders.length}: ${gap.token}`);
+    // A run locks the form (a disabled field takes no focus); the underline still shows where.
+    if (!field || field.disabled) return;
+    field.scrollIntoView({ block: 'center', behavior });
+    field.focus({ preventScroll: true });
+    const at = field.value.indexOf(gap.token);
+    if (at < 0) return;
+    field.setSelectionRange(at, at + gap.token.length);
+    revealSelection(field, at);
+  }
+
+  // A single-line <input> does not scroll its own text to a selection made from code, so a slot
+  // past the visible width (most bullets are longer than the panel) would be selected out of
+  // sight. Measure the text in front of it in the field's own font and scroll there, leaving a
+  // third of the width for context. A <textarea> wraps, so its selection is already in view.
+  function revealSelection(field: HTMLInputElement | HTMLTextAreaElement, at: number) {
+    if (field instanceof HTMLTextAreaElement) return;
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (!ctx) return;
+    ctx.font = getComputedStyle(field).font;
+    const before = ctx.measureText(field.value.slice(0, at)).width;
+    field.scrollLeft = Math.max(0, before - field.clientWidth / 3);
   }
 
   function guardDownload(e: MouseEvent) {
@@ -862,8 +900,8 @@
             {#if placeholders.length > 0}
               <button
                 type="button"
-                onclick={() => togglePlaceholders()}
-                aria-pressed={showingPlaceholders}
+                onclick={() => goToGap()}
+                title="Go to the next gap in the editor"
                 class="inline-flex items-center gap-1.5 rounded-md bg-warning-muted px-2.5 py-1 text-xs font-medium text-warning-strong transition-colors hover:bg-warning-muted/70"
               >
                 <TriangleAlert class="size-3.5" aria-hidden="true" />
@@ -909,7 +947,11 @@
         {jobMatch}
         onRerunAutopilot={() => chatRef?.startRun()}
         {revisions}
-        onPreviewRevision={(r) => (pinnedRevision = r)}
+        onPreviewRevision={(r) => {
+          pinnedRevision = r;
+          // Picking a revision is asking "what changed"; the gap underlines would drown it.
+          placeholdersShown = false;
+        }}
         onUndoRevision={undoRevision}
         onUndoRevisionRun={undoRevisionRun}
         onReseed={reseed}
@@ -954,9 +996,9 @@
     class="mt-3 text-sm font-medium text-brand-strong underline-offset-4 hover:underline"
     onclick={() => {
       confirmDownloadOpen = false;
-      togglePlaceholders(true);
+      void goToGap(0);
     }}
   >
-    Show them on the page
+    Fix them in the editor
   </button>
 </ConfirmDialog>

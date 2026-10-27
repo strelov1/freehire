@@ -11,7 +11,10 @@
     // Names each row's input for assistive tech ("Bullet 2"), since the placeholder is
     // the only visible hint and a placeholder is not an accessible name.
     label = 'Item',
-  }: { items: string[]; placeholder?: string; addLabel?: string; label?: string } = $props();
+    // The list's address in the CV document (`experience[0].bullets`). Each row is tagged
+    // `<path>[<i>]`, so the workspace can put the cursor on the exact row a check pointed at.
+    path,
+  }: { items: string[]; placeholder?: string; addLabel?: string; label?: string; path?: string } = $props();
 
   // Stable per-row keys. String values aren't unique (duplicate or empty rows) and
   // rows are removed from the middle, so an index key would rebind surviving inputs
@@ -34,7 +37,7 @@
 <div class="space-y-2">
   {#each items as _, i (ids[i])}
     <div class="flex items-center gap-2">
-      <Input bind:value={items[i]} {placeholder} aria-label="{label} {i + 1}" class="flex-1" />
+      <Input bind:value={items[i]} {placeholder} aria-label="{label} {i + 1}" data-path={path ? `${path}[${i}]` : undefined} class="flex-1" />
       <Button variant="ghost" size="icon" onclick={() => remove(i)} aria-label="Remove {label.toLowerCase()} {i + 1}">
         <X class="h-4 w-4" />
       </Button>
