@@ -165,8 +165,8 @@ func sameName(name, tok string) bool {
 
 // tokenLocation is the one location of a multi-location line a comma-token belongs to.
 type tokenLocation struct {
-	text                    string // the location's own lowercased text
-	namesBrazil, namesIndia bool
+	text                             string // the location's own lowercased text
+	namesBrazil, namesIndia, namesUS bool
 }
 
 // tokenLocations splits a lowercased line into the locations it lists — separated by ";"
@@ -179,13 +179,15 @@ func tokenLocations(lower, s string) []tokenLocation {
 	out := make([]tokenLocation, 0, n)
 	for _, part := range strings.Split(strings.ReplaceAll(lower, "|", ";"), ";") {
 		norm := separatorReplacer.Replace(strings.ReplaceAll(part, "(", "("+parenMark))
-		loc := tokenLocation{text: part, namesBrazil: lineNamesBrazil(norm), namesIndia: lineNamesIndia(norm)}
+		loc := tokenLocation{text: part, namesBrazil: lineNamesBrazil(norm), namesIndia: lineNamesIndia(norm),
+			namesUS: lineNamesUS(norm)}
 		for range strings.Count(norm, ",") + 1 {
 			out = append(out, loc)
 		}
 	}
 	if len(out) != n {
-		whole := tokenLocation{text: lower, namesBrazil: lineNamesBrazil(s), namesIndia: lineNamesIndia(s)}
+		whole := tokenLocation{text: lower, namesBrazil: lineNamesBrazil(s), namesIndia: lineNamesIndia(s),
+			namesUS: lineNamesUS(s)}
 		out = out[:0]
 		for range n {
 			out = append(out, whole)

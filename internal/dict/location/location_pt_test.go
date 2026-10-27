@@ -58,6 +58,8 @@ func TestBrazilianAndPortugueseLines(t *testing.T) {
 		{"San Juan, PR", []string{"pr"}, []string{"San Juan"}},
 		{"Columbia, SC", []string{"us"}, []string{"Columbia"}},
 		{"Columbia, SC; Curitiba, Brasil", []string{"br", "us"}, []string{"Columbia", "Curitiba"}},
+		{"Curitiba, PR; United States", []string{"br", "us"}, []string{"Curitiba"}},
+		{"Colombo, Sri Lanka; Colombo, PR", []string{"br", "lk"}, []string{"Colombo"}},
 		// An Indian state code between an Indian city and the country is the state:
 		// "BR" is Bihar.
 		{"Patna, BR, in", []string{"in"}, []string{"Patna"}},

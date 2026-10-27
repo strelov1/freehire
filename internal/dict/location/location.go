@@ -102,6 +102,9 @@ func Parse(location string) Geo {
 	// prevCountries are the countries the previous token stated through the curated
 	// tables, withdrawn when a Brazilian state code after it places that town in Brazil.
 	var prevCountries []string
+	// countryVotes counts the tokens that stated each country through the curated tables,
+	// so a withdrawal never removes a country another token also stated.
+	countryVotes := map[string]int{}
 	for i, tok := range strings.Split(s, ",") {
 		seg := segs[i]
 		tok = strings.TrimSpace(tok)
@@ -147,11 +150,11 @@ func Parse(location string) Geo {
 		}
 		// A Brazilian state code after a Brazilian town is the state ("Curitiba, PR"), not
 		// Puerto Rico; see brazilianStateCodes.
-		if brazilianStateCodes[tok] && !first && !namesUS && brazilianStateAccepted(tok, prevTok, seg.namesBrazil) {
+		if brazilianStateCodes[tok] && !first && !seg.namesUS && brazilianStateAccepted(tok, prevTok, seg.namesBrazil) {
 			// "Colombo, PR": the town is Paraná's Colombo, so Sri Lanka goes; "Concordia,
 			// SC" is Concórdia, not the El Paso district the city table named.
 			for _, c := range lastCountries {
-				if c != "br" {
+				if countryVotes[c]--; c != "br" && countryVotes[c] == 0 {
 					withdrawCountry(c, countrySet, regionSet)
 				}
 			}
@@ -263,6 +266,7 @@ func Parse(location string) Geo {
 		}
 		for c := range tokCountry {
 			countrySet[c] = struct{}{}
+			countryVotes[c]++
 			prevCountries = append(prevCountries, c)
 		}
 		for r := range tokRegion {
