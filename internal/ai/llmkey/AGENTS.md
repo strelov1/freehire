@@ -124,6 +124,16 @@ An unreadable store is NOT an account without a credential. `read` returns both 
 whether the store answered, because minting on a database fault would issue a fresh key per
 request, each unstorable and each abandoned.
 
+## A refused credential keeps its name
+
+`Forget` BLOCKS a credential the gateway refused (it keeps the spend history) and clears the
+row, so the next call mints again — under a name the blocked key still holds. The gateway
+answers that create with 409. Until 2026-10-25 nothing handled it: every model call the
+account made tried the same name, was refused, and ran on the service credential, so the
+account had no attribution and no budget for good. `Mint` now retries a taken name once as
+`freehire-user-<id>-r<unix time>`. Spend reports that group by `virtual_key_name` must group
+by the `freehire-user-<id>` prefix, not the exact name.
+
 ## Where the spend actually lands
 In the gateway's own request log, one row per call, keyed by the credential's id.
 `GET /api/logs/stats` aggregates it over a window; that is what `/me/usage` reads and why

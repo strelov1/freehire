@@ -35,6 +35,9 @@ var ErrUpstream = errors.New("llm gateway")
 // throwing it away would orphan a live credential.
 var ErrUnknownKey = fmt.Errorf("%w: key not recognised", ErrUpstream)
 
+// errNameTaken is the gateway refusing a create because a key already carries the name.
+var errNameTaken = fmt.Errorf("%w: key name already taken", ErrUpstream)
+
 // requestTimeout bounds one admin call. It is short because these calls sit in front of
 // a user's request: minting is what stands between somebody pressing send and their
 // answer starting, so a slow gateway must give up quickly and let the call proceed
@@ -157,8 +160,24 @@ func (c *Client) Mint(ctx context.Context, userID int64) (Credential, error) {
 		return Credential{}, err
 	}
 
+	name := namePrefix + strconv.FormatInt(userID, 10)
+	minted, err := c.create(ctx, name, policy)
+	// The account's name is taken by its own earlier credential: Forget BLOCKS a refused key
+	// rather than deleting it, to keep its spend history, and the name goes with it. Without
+	// this retry every model call the account made tried the same name again and was refused
+	// for good — measured on production 2026-10-25 — leaving it on the service credential
+	// with no attribution and no budget. The suffix keeps the account's own name as the
+	// prefix, which is what spend reports group by.
+	if errors.Is(err, errNameTaken) {
+		minted, err = c.create(ctx, name+"-r"+strconv.FormatInt(time.Now().Unix(), 10), policy)
+	}
+	return minted, err
+}
+
+// create posts one virtual key under name with the policy Mint read.
+func (c *Client) create(ctx context.Context, name string, policy []providerConfig) (Credential, error) {
 	body := map[string]any{
-		"name":             namePrefix + strconv.FormatInt(userID, 10),
+		"name":             name,
 		"description":      "per-user spend attribution",
 		"is_active":        true,
 		"provider_configs": policy,
@@ -358,6 +377,9 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) err
 
 	if resp.StatusCode == http.StatusNotFound {
 		return ErrUnknownKey
+	}
+	if resp.StatusCode == http.StatusConflict {
+		return errNameTaken
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("%w: %s: status %d", ErrUpstream, req.URL.Path, resp.StatusCode)
