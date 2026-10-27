@@ -221,7 +221,7 @@
             (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
           }
         }}
-        class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1 text-base leading-6 text-foreground placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+        class="block max-h-[200px] min-h-[1.5rem] flex-1 resize-none cursor-text bg-transparent py-1.5 text-base leading-6 text-foreground placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
       ></textarea>
       {#if DICTATION_ENABLED && !dictationOff}
         <VoiceInput
@@ -259,7 +259,7 @@
     <!-- The keys used to live in the placeholder, which wrapped to three lines in a narrow
          panel and inflated the box before anything was typed. Pointer devices only: a phone
          keyboard has no Shift+Enter to explain. -->
-    <p id={keysHintId} class="mt-1.5 hidden px-4 text-xs text-muted-foreground pointer-fine:block">{s.keysHint}</p>
+    <p id={keysHintId} class="mt-1.5 hidden text-center text-xs text-muted-foreground/80 pointer-fine:block">{s.keysHint}</p>
 
     {#if voiceError}
       <p class="mt-1.5 px-4 text-xs text-destructive" role="alert">{voiceError}</p>
