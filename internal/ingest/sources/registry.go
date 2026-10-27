@@ -478,8 +478,8 @@ func All(c HTTPClient) map[string]Source {
 		NewHomerun(pacedHomerunGetter(newHomerunEgress(c, nil))),
 		NewHROffice(c),
 		// Bizneo HR (Spain): board = the career-site host under bizneo.cloud; bodies hydrated for
-		// new postings only.
-		NewBizneo(c),
+		// new postings only. Paced: every site is served by one edge (see bizneoRequestInterval).
+		NewBizneo(pacedHTMLGetter(c, bizneoRequestInterval, 1)),
 		// ePreselec (Spain, Adevinta): board = the <label>.epreselec.com site; Imperva-fronted, so
 		// on the crawl host it is rebuilt over the Scrapling tier (scraplingtier.go).
 		NewEPreselec(c),

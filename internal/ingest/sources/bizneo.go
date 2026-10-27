@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -38,6 +39,12 @@ type bizneo struct {
 func NewBizneo(c HTMLGetter) Source { return bizneo{http: c} }
 
 func (bizneo) Provider() string { return "bizneo" }
+
+// bizneoRequestInterval paces the whole provider: every career site is served by one edge,
+// which answered 429 to three listings and thirteen posting pages in the first crawl
+// (2026-10-27) at the shared client's eight detail workers. Two requests a second covers the
+// ~600 postings and their pages in a few minutes.
+const bizneoRequestInterval = 500 * time.Millisecond
 
 // bizneoMaxPages caps the ?page=N walk; the largest site seen (somos-grupo-mas) has 19 pages.
 const bizneoMaxPages = 100

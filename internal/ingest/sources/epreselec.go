@@ -33,7 +33,7 @@ import (
 // Interruption" (HTTP 405) after a handful of requests, and through the rotating exits about
 // half the requests pass. The provider is therefore routed through the Scrapling tier's
 // impersonating fetcher over the rotating proxy (scraplingtier.go), and the adapter retries a 405
-// a few times — each retry leaves on a new exit.
+// several times — each retry leaves on a new exit.
 //
 // An unknown or switched-off label answers 200 with the platform's "404 - Page not found" page;
 // that is a board-level error, so the chronic-board close retires the board.
@@ -45,7 +45,7 @@ type epreselec struct {
 
 // NewEPreselec builds the ePreselec adapter over the given HTML client.
 func NewEPreselec(c HTMLGetter) Source {
-	return epreselec{http: c, maxNewPerRun: epreselecMaxNewPerBoard, retryWait: 3 * time.Second}
+	return epreselec{http: c, maxNewPerRun: epreselecMaxNewPerBoard, retryWait: 5 * time.Second}
 }
 
 func (epreselec) Provider() string { return "epreselec" }
@@ -59,9 +59,10 @@ const (
 	// ~300 offers and each body is a page carrying the whole list again; the rest wait for the
 	// next run, and a stored posting never costs a body again.
 	epreselecMaxNewPerBoard = 120
-	// epreselecAttempts is how many times a request refused by the edge (405) is sent; through
-	// the rotating exits about half pass, so four attempts fail ~6% of the time.
-	epreselecAttempts = 4
+	// epreselecAttempts is how many times a request refused by the edge (405) is sent. With four,
+	// the first crawl (2026-10-27) still lost 498 of 1,211 bodies and ten lists: the refusals
+	// come in runs, not independently. Each retry leaves on a new rotating exit.
+	epreselecAttempts = 8
 	// epreselecDetailWorkers keeps the per-board fan-out low: every request goes through the
 	// crawl host's Scrapling service.
 	epreselecDetailWorkers = 2
