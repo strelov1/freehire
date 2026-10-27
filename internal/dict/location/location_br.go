@@ -162,3 +162,34 @@ func withdrawCountry(c string, countrySet, regionSet map[string]struct{}) {
 func sameName(name, tok string) bool {
 	return dropAccents(strings.ToLower(name)) == dropAccents(tok)
 }
+
+// tokenLocation is the one location of a multi-location line a comma-token belongs to.
+type tokenLocation struct {
+	text                    string // the location's own lowercased text
+	namesBrazil, namesIndia bool
+}
+
+// tokenLocations splits a lowercased line into the locations it lists — separated by ";"
+// or "|", the two separators that never join a place to its region — and returns, for each
+// comma-token of the separator-normalized line s, the location it belongs to. The tokens
+// line up because separatorReplacer turns each ";" and "|" into exactly one comma. Should
+// they ever not, every token gets the whole line, which is what the parser read before.
+func tokenLocations(lower, s string) []tokenLocation {
+	n := strings.Count(s, ",") + 1
+	out := make([]tokenLocation, 0, n)
+	for _, part := range strings.Split(strings.ReplaceAll(lower, "|", ";"), ";") {
+		norm := separatorReplacer.Replace(strings.ReplaceAll(part, "(", "("+parenMark))
+		loc := tokenLocation{text: part, namesBrazil: lineNamesBrazil(norm), namesIndia: lineNamesIndia(norm)}
+		for range strings.Count(norm, ",") + 1 {
+			out = append(out, loc)
+		}
+	}
+	if len(out) != n {
+		whole := tokenLocation{text: lower, namesBrazil: lineNamesBrazil(s), namesIndia: lineNamesIndia(s)}
+		out = out[:0]
+		for range n {
+			out = append(out, whole)
+		}
+	}
+	return out
+}

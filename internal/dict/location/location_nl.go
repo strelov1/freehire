@@ -67,9 +67,10 @@ func provinceAfterCity(tok, lower string, first bool) bool {
 	if first {
 		return false
 	}
-	// "Matosinhos,Porto,PT" writes the same slots with no space after the commas.
-	compact := strings.ReplaceAll(strings.ReplaceAll(lower, ", ", ","), " ,", ",")
-	between := strings.Contains(compact, ","+tok+",")
+	// The space after the comma is part of the shape: an unspaced line is a list
+	// ("…,Spain,Italy,…,Valencia,Lebanon,Barcelona,…"), where every entry sits between two
+	// commas and none is a province.
+	between := strings.Contains(lower, ", "+tok+",")
 	switch {
 	case provinceCapitals[tok]:
 		return between

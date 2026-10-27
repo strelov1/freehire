@@ -57,6 +57,7 @@ func TestBrazilianAndPortugueseLines(t *testing.T) {
 		{"Ciudad de México, DF", []string{"mx"}, []string{"Mexico City"}},
 		{"San Juan, PR", []string{"pr"}, []string{"San Juan"}},
 		{"Columbia, SC", []string{"us"}, []string{"Columbia"}},
+		{"Columbia, SC; Curitiba, Brasil", []string{"br", "us"}, []string{"Columbia", "Curitiba"}},
 		// An Indian state code between an Indian city and the country is the state:
 		// "BR" is Bihar.
 		{"Patna, BR, in", []string{"in"}, []string{"Patna"}},
@@ -67,7 +68,10 @@ func TestBrazilianAndPortugueseLines(t *testing.T) {
 		{"Porto, Porto District, pt", []string{"pt"}, []string{"Porto"}},
 		// A district named after its capital, after a town, is the district.
 		{"Matosinhos, Porto, PT", []string{"pt"}, []string{"Matosinhos"}},
-		{"Matosinhos,Porto,PT", []string{"pt"}, []string{"Matosinhos"}},
+		// An unspaced line is a list, and every entry in it a place.
+		{"Remote,Spain,Valencia,Lebanon,Barcelona", []string{"es", "lb"}, []string{"Barcelona", "Valencia"}},
+		// Each location of a list is read on its own.
+		{"Matosinhos, Porto, PT; Porto, PT", []string{"pt"}, []string{"Matosinhos", "Porto"}},
 		{"Carnaxide, Lisboa, pt", []string{"pt"}, []string{"Carnaxide"}},
 		{"Amadora, Lisbon, pt", []string{"pt"}, []string{"Amadora"}},
 		{"Ovar, Aveiro, pt", []string{"pt"}, []string{"Ovar"}},

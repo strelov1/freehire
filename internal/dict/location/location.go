@@ -63,9 +63,11 @@ func Parse(location string) Geo {
 	s := separatorReplacer.Replace(strings.ReplaceAll(lower, "(", "("+parenMark))
 	// A line that names the United States reads a colliding code beside it as the state.
 	namesUS := lineNamesUS(s)
-	// A line that names Brazil reads a Brazilian state code as the state (location_br.go),
-	// and one that ends in India reads an Indian state code between its city and the country.
-	namesBrazil, namesIndia := lineNamesBrazil(s), lineNamesIndia(s)
+	// Each comma-token's own location, when the line lists several ("Columbia, SC;
+	// Curitiba, Brasil"): a location that names Brazil reads a Brazilian state code as the
+	// state (location_br.go), one that ends in India an Indian state code between its city
+	// and the country, and a province is told from a city within its own location only.
+	segs := tokenLocations(lower, s)
 	// Metros a metropolitan-region token states without naming a city ("Delhi NCR").
 	regionMetros := map[string]struct{}{}
 
@@ -100,7 +102,8 @@ func Parse(location string) Geo {
 	// prevCountries are the countries the previous token stated through the curated
 	// tables, withdrawn when a Brazilian state code after it places that town in Brazil.
 	var prevCountries []string
-	for _, tok := range strings.Split(s, ",") {
+	for i, tok := range strings.Split(s, ",") {
+		seg := segs[i]
 		tok = strings.TrimSpace(tok)
 		tok, parenthetical := strings.CutPrefix(tok, parenMark)
 		tok = strings.TrimSpace(tok)
@@ -136,7 +139,7 @@ func Parse(location string) Geo {
 			prevTok = tok
 			continue
 		}
-		if indianStateBetween(tok, prevTok, namesIndia) {
+		if indianStateBetween(tok, prevTok, seg.namesIndia) {
 			countrySet["in"] = struct{}{}
 			regionSet[countryToRegion["in"]] = struct{}{}
 			prevTok = tok
@@ -144,7 +147,7 @@ func Parse(location string) Geo {
 		}
 		// A Brazilian state code after a Brazilian town is the state ("Curitiba, PR"), not
 		// Puerto Rico; see brazilianStateCodes.
-		if brazilianStateCodes[tok] && !first && !namesUS && brazilianStateAccepted(tok, prevTok, namesBrazil) {
+		if brazilianStateCodes[tok] && !first && !namesUS && brazilianStateAccepted(tok, prevTok, seg.namesBrazil) {
 			// "Colombo, PR": the town is Paraná's Colombo, so Sri Lanka goes; "Concordia,
 			// SC" is Concórdia, not the El Paso district the city table named.
 			for _, c := range lastCountries {
@@ -223,7 +226,7 @@ func Parse(location string) Geo {
 		// ("Birmingham") can never *guess* a geography here; the country/region stay the
 		// curated dictionaries' job (and the LLM's, at serve time). This keeps the parser's
 		// "never guesses" contract while still populating the cities facet broadly.
-		if ce, ok := cityDict[tok]; ok && !regionNotCity[tok] && !provinceAfterCity(tok, lower, first) {
+		if ce, ok := cityDict[tok]; ok && !regionNotCity[tok] && !provinceAfterCity(tok, seg.text, first) {
 			if resolved {
 				// The token is a curated place: emit the city name only when cityDict agrees
 				// on its country, so a country/region token ("usa") never emits the unrelated
