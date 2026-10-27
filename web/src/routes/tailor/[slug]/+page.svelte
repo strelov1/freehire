@@ -1,7 +1,8 @@
 <script lang="ts">
   // The dedicated CV-tailoring workspace: a three-column surface — left panel tabbed between the
-  // structured Editor and the Chat, a centre live HTML CV preview (zoom + Download PDF), and a
-  // right context panel tabbed between Templates, the Job description, and the Verdict. Two modes:
+  // Chat, the structured Editor, the Experience bank and Design, a centre live HTML CV preview
+  // (zoom, page count, Download PDF), and a right context panel that measures the CV against the
+  // vacancy (Job Match, Score, Cover letter, History, Job). Two modes:
   //  - bootstrap (no ?cv): create the tailored CV + a seeded agent session and store the
   //    session id on the CV. Nothing is sent: the empty chat offers two ways to start.
   //  - resume (?cv=<id>): reuse the existing CV + its stored session — re-attach, NO kickoff.
@@ -105,14 +106,13 @@
   // switches (hidden, not unmounted) so its live session is never dropped.
   // The left panel holds what CHANGES the document — its text, its template, its typography —
   // and the chat that does all three by asking. Measuring the document is the right panel's job.
-  type LeftTab = 'chat' | 'editor' | 'experience' | 'templates' | 'settings';
+  type LeftTab = 'chat' | 'editor' | 'experience' | 'design';
   let leftTab = $state<LeftTab>('chat');
   const leftTabs: [LeftTab, string][] = [
     ['chat', 'Chat'],
     ['editor', 'Editor'],
     ['experience', 'Experience'],
-    ['templates', 'Templates'],
-    ['settings', 'Settings'],
+    ['design', 'Design'],
   ];
   let leftWidth = $state(350);
   // Folded to a rail so the centre CV preview can take the width. Desktop-only: below lg the
@@ -132,17 +132,16 @@
   // syncs the matching column's own selector (mobile → column) so the wide layout shows the same
   // content once revealed. The reverse (a desktop tab change updating mobileView) is not wired —
   // switching a column tab then narrowing across lg resets the mobile view to that tab's default.
-  type MobileView = 'chat' | 'editor' | 'experience' | 'settings' | 'preview' | 'templates' | 'jd' | 'jobmatch' | 'score' | 'letter' | 'history';
+  type MobileView = 'chat' | 'editor' | 'experience' | 'design' | 'preview' | 'jd' | 'jobmatch' | 'score' | 'letter' | 'history';
   const mobileTabs: [MobileView, string][] = [
     ['chat', 'Chat'],
     ['editor', 'Editor'],
     ['experience', 'Experience'],
-    ['templates', 'Templates'],
-    ['settings', 'Settings'],
+    ['design', 'Design'],
     ['preview', 'Preview'],
     ['jobmatch', 'Job Match'],
     ['score', 'Score'],
-    ['letter', 'Cover letter'],
+    ['letter', 'Letter'],
     ['history', 'History'],
     ['jd', 'Job'],
   ];
@@ -156,7 +155,7 @@
   let navOpen = $state(false);
   function pickMobile(v: MobileView) {
     mobileView = v;
-    if (v === 'chat' || v === 'editor' || v === 'experience' || v === 'templates' || v === 'settings') leftTab = v;
+    if (v === 'chat' || v === 'editor' || v === 'experience' || v === 'design') leftTab = v;
     else if (v !== 'preview') artifactTab = v;
   }
 
@@ -644,7 +643,7 @@
         bind:this={leftPanelEl}
         class={[
           'w-full min-h-0 flex-1 flex-col border-r border-border bg-background lg:w-[var(--lw)] lg:flex-none',
-          mobileView === 'chat' || mobileView === 'editor' || mobileView === 'experience' || mobileView === 'templates' || mobileView === 'settings'
+          mobileView === 'chat' || mobileView === 'editor' || mobileView === 'experience' || mobileView === 'design'
             ? 'flex'
             : 'hidden',
           leftCollapsed ? 'lg:hidden' : 'lg:flex',
@@ -665,7 +664,7 @@
             {/each}
           </div>
           <div class="flex shrink-0 items-center gap-1">
-            {#if leftTab === 'editor' || leftTab === 'settings'}
+            {#if leftTab === 'editor' || leftTab === 'design'}
               <span
                 class={['text-xs', saveState === 'error' ? 'text-destructive' : 'text-muted-foreground']}
                 aria-live="polite"
@@ -674,14 +673,6 @@
                 {#if saveState === 'saving'}Saving…{:else if saveState === 'saved'}Saved{:else if saveState === 'error'}Save failed{/if}
               </span>
             {/if}
-            <button
-              type="button"
-              onclick={() => (cliDialogOpen = true)}
-              aria-label="Edit this CV from the CLI"
-              class="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <Terminal class="size-4" />
-            </button>
             <button
               type="button"
               onclick={() => (leftCollapsed = true)}
@@ -704,6 +695,15 @@
             <fieldset disabled={runActive} class="contents">
               <CvSectionForm bind:doc bind:title />
             </fieldset>
+            <!-- The terminal is another way to edit the same text, so it is offered where the
+                 text is edited rather than as an unlabelled glyph in the panel's header. -->
+            <button
+              type="button"
+              onclick={() => (cliDialogOpen = true)}
+              class="mt-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Terminal class="size-4" aria-hidden="true" /> Edit this CV from your terminal
+            </button>
           </div>
           <!-- The experience bank as its owner sees it on /my/profile — same component, so
                checking, confirming, or editing what the assistant knows never means leaving the
@@ -721,31 +721,31 @@
             {/if}
             <ExperienceBankView onBankMutated={offerRefreshAfterBankEdit} />
           </div>
-          <!-- Presentation, in two blocks of label→control rows. Both write straight into the
-               shared document, so the centre preview re-renders live and autosave persists them
-               on the same debounce as any other edit. -->
-          <!-- Templates: what the CV looks like, beside the rest of what decides that. The
-               gallery is the same component the right panel used to host — moved, not rewritten. -->
-          <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'templates'}>
-            <TemplateGallery {cvId} onSelected={onTemplateSelected} />
-          </div>
-          <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'settings'}>
-            <div class="space-y-6">
-              <section class="space-y-2">
-                <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Typography</h2>
+          <!-- Design: everything that decides how the CV looks, in one place — the template first,
+               since it sets the defaults every control below adjusts. All of it writes straight
+               into the shared document, so the centre preview re-renders live and autosave
+               persists it on the same debounce as any other edit. -->
+          <div class="h-full overflow-auto p-4" class:hidden={leftTab !== 'design'}>
+            <div class="space-y-8">
+              <section class="space-y-3">
+                <h2 class="text-sm font-semibold text-foreground">Template</h2>
+                <TemplateGallery {cvId} onSelected={onTemplateSelected} />
+              </section>
+              <section class="space-y-3">
+                <h2 class="text-sm font-semibold text-foreground">Typography</h2>
                 <StyleSettings bind:style={doc.style} {fonts} />
               </section>
-              <section class="space-y-2">
-                <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Page margins <span class="font-normal normal-case tracking-normal">(inches)</span>
+              <section class="space-y-3">
+                <h2 class="text-sm font-semibold text-foreground">
+                  Page margins <span class="font-normal text-muted-foreground">(inches)</span>
                 </h2>
                 <MarginSettings bind:margins={doc.margins} />
               </section>
               <!-- Not a presentation choice, and deliberately last: consent to track whoever opens
                    this CV is a different kind of decision from a font size, and it writes on its
                    own rather than riding the document's autosave. -->
-              <section class="space-y-2">
-                <h2 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Link tracking</h2>
+              <section class="space-y-3 border-t border-border pt-6">
+                <h2 class="text-sm font-semibold text-foreground">Link tracking</h2>
                 <TracerLinksSettings {cvId} bind:enabled={tracerLinksEnabled} />
               </section>
             </div>
@@ -865,7 +865,7 @@
         </div>
       </div>
 
-      <!-- RIGHT: Templates / Job description / Verdict (renders its own splitter). Shown on mobile
+      <!-- RIGHT: Job Match / Score / Cover letter / History / Job (renders its own splitter). Shown on mobile
            only when one of its tabs is picked; always shown at lg. -->
       <ArtifactPanel
         job={must(job, 'job')}

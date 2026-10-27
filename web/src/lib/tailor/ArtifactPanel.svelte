@@ -98,12 +98,19 @@
   const tabs: [Tab, string][] = [
     ['jobmatch', 'Job Match'],
     ['score', 'Score'],
-    ['letter', 'Cover letter'],
+    ['letter', 'Letter'],
     ['history', 'History'],
     ['jd', 'Job'],
   ];
   // 400 rather than the 340 floor: at the floor the tab strip wraps "Job Match" onto two lines
   // and the vacancy title truncates after a couple of words, so the panel opened looking cramped.
+  // Each measuring tab carries its current number, so the score is readable from whichever tab
+  // is open and the three measurements stop competing for one heading. Absent when the score
+  // is — a badge reading "–" would be a state to ignore, which is what the panel avoids.
+  const badges = $derived<Partial<Record<Tab, number>>>({
+    jobmatch: jobMatch?.available ? jobMatch.score?.overall : undefined,
+    score: atsDelta?.available ? atsDelta.delta?.tailored : undefined,
+  });
   let width = $state(400);
   let resizing = false;
   // Collapsed to a rail so the centre CV preview can take the width. Desktop-only: below lg
@@ -191,13 +198,16 @@
         type="button"
         onclick={() => (tab = id)}
         class={[
-          'rounded px-2 py-1 transition-colors',
+          'whitespace-nowrap rounded px-2 py-1 transition-colors',
           tab === id
             ? 'bg-brand-muted font-semibold text-brand-strong'
             : 'text-muted-foreground hover:text-foreground',
         ]}
       >
         {label}
+        {#if badges[id] !== undefined}
+          <span class="ml-1 text-xs font-normal tabular-nums opacity-80">{badges[id]}</span>
+        {/if}
       </button>
     {/each}
     <button
@@ -288,13 +298,11 @@
       <div class="p-4">
         <JobMatch data={jobMatch} />
         <!-- The match analysis used to be a frozen base-profile snapshot; it is now refreshed
-             by every autopilot run, so it says that instead of implying it never moves. -->
-        <div class="mb-3 rounded-lg border border-border bg-muted/30 px-2.5 py-2">
+             by every autopilot run, so it says that instead of implying it never moves. A
+             heading rather than a card: the analysis below already draws its own surface. -->
+        <div class="mb-2 mt-6 flex items-baseline justify-between gap-2">
           <h3 class="text-sm font-semibold text-foreground">Match analysis</h3>
-          <p class="mt-0.5 text-xs leading-snug text-muted-foreground">
-            Refreshed automatically after every autopilot run. You can also run or recompute it
-            here any time.
-          </p>
+          <p class="text-xs text-muted-foreground">Refreshed after every autopilot run</p>
         </div>
         <!-- Keyed on whether an analysis is present: MatchAnalysisFull seeds its internal state
              from `initial` once, on mount, and does not re-read it if the prop changes later —
