@@ -50,8 +50,8 @@ var descriptionWorkModePhrases = []struct {
 // location marker), so it only ever fills a value the others left empty. Values are
 // from vocab.WorkModeValues. The English phrases are tried first; German prose is read
 // only when none of them is stated (see germanWorkModePhrases), Dutch prose only
-// when neither is (see dutchWorkModePhrases), then Spanish (workmode_es.go), and the
-// Indian register last (workmode_in.go).
+// when neither is (see dutchWorkModePhrases), then Spanish (workmode_es.go), then
+// Portuguese (workmode_pt.go), and the Indian register last (workmode_in.go).
 func WorkModeFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, wm := range descriptionWorkModePhrases {
@@ -68,6 +68,9 @@ func WorkModeFromDescription(desc string) string {
 		return m
 	}
 	if m := spanishWorkMode(desc, lower); m != "" {
+		return m
+	}
+	if m := portugueseWorkMode(desc, lower); m != "" {
 		return m
 	}
 	return indianWorkMode(desc, lower)
@@ -113,7 +116,13 @@ func guardedPhraseMatches(text, p, mode string, g phraseGuards) bool {
 		if window == 0 {
 			window = germanNegationWindow
 		}
-		if containsAny(text[max(0, start-window):start], g.negations) {
+		// A negation governs its own clause only: "não é 100% remota; modelo híbrido"
+		// states the hybrid.
+		from := max(0, start-window)
+		if j := strings.LastIndexAny(text[from:start], ".;!?"); j >= 0 {
+			from += j + 1
+		}
+		if startsWordAny(text[:start], from, g.negations) {
 			continue
 		}
 		tail := text[end:min(len(text), end+germanRefusalWindow)]
@@ -128,6 +137,26 @@ func guardedPhraseMatches(text, p, mode string, g phraseGuards) bool {
 		}
 		return true
 	}
+}
+
+// startsWordAny reports whether one of words starts a word in s at or after from. A
+// negation is a word of its own: "entorno", "bono", "humano" and "polígono" end in "no "
+// without negating anything.
+func startsWordAny(s string, from int, words []string) bool {
+	for _, w := range words {
+		for at := from; at < len(s); {
+			i := strings.Index(s[at:], w)
+			if i < 0 {
+				break
+			}
+			at += i
+			if r, _ := utf8.DecodeLastRuneInString(s[:at]); at == 0 || !unicode.IsLetter(r) {
+				return true
+			}
+			at++
+		}
+	}
+	return false
 }
 
 // phraseMatches reports whether p occurs in text (already lowercased) unguarded. A

@@ -717,10 +717,13 @@ var workModeMarkers = []struct {
 	mode    string
 	markers []string
 }{
-	{"hybrid", []string{"hybrid", "гибрид"}},
-	{"remote", []string{"remote", "work from home", "wfh", "anywhere", "worldwide", "distributed", "удал"}},
+	// The Portuguese and Spanish words ("Remoto, Remoto, BR", "São Paulo - SP - Presencial")
+	// are spelled with and without the accent; a location line is short, so the bare
+	// stem cannot meet the "soporte remoto" sense a description has.
+	{"hybrid", []string{"hybrid", "гибрид", "híbrid", "hibrid"}},
+	{"remote", []string{"remote", "work from home", "wfh", "anywhere", "worldwide", "distributed", "удал", "remoto", "remota"}},
 	// "WFO" is India's "work from office".
-	{"onsite", []string{"on-site", "onsite", "on site", "in office", "in-office", "work from office", "wfo"}},
+	{"onsite", []string{"on-site", "onsite", "on site", "in office", "in-office", "work from office", "wfo", "presencial"}},
 }
 
 // detectWorkMode scans the whole lowercased location for a work-mode marker,

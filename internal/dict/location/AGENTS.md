@@ -169,6 +169,25 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   Spanish-language postings: work mode from any source 48.7% → 56.8%; the description list
   agrees with the adapter's structured value on 86% of the rows that carry both, and most of
   the rest are the adapter's value contradicting the posting's own text.
+- **Portuguese work-arrangement prose** (`workmode_pt.go`) is read after the Spanish list,
+  which already reads the shared phrases ("100% remoto", "modelo híbrido", "100%
+  presencial"). Brazilian postings state the model in a labelled line ("Modelo de
+  trabalho: híbrido", "Modalidade: presencial", "Atuação: 100% remota"; a spaced colon is
+  read too). "home office" is REMOTE when it is the model ("Modelo de trabalho: home
+  office", "local de trabalho: home office") and nothing as a benefit ("auxílio home
+  office" is listed by remote, hybrid and onsite postings alike); counted office days ("2x
+  por semana presencial", "3 dias presenciais e 2 dias home office") are hybrid. Absent: bare
+  `remoto`/`trabalho remoto` (support, equipment requirements), bare `teletrabalho` and
+  `sistema híbrido` (an internship boilerplate on ~200 empregos postings that says the
+  opposite), bare `presencial` and `modalidade presencial` (a course's modality in an
+  education requirement). The location-line markers read `remoto`, `híbrido` and
+  `presencial` ("Remoto, Remoto, BR"). Two fixes to the shared guard came with it: a
+  negation must START a word ("entorno", "bono", "humano", "polígono" end in "no " and had
+  hidden stated Spanish hybrids) and governs only its own clause ("não é 100% remota;
+  modelo híbrido" is hybrid); the Spanish negations also read "não"/"sem", since
+  Portuguese prose meets that list first. Measured 2026-10-27 over 30,677 Brazilian and
+  6,931 Portuguese postings, location plus description: work mode 4.9% → 14.7% (BR) and
+  15.8% → 18.6% (PT); 24 of 17,500 control rows changed, all correct.
 - **Spanish and Latin-American location lines** (`location_es.go`, the Spanish, Mexican,
   Colombian, Argentine and Chilean blocks of `foreignSubdivisionNames`, measured 2026-10-27
   over 39k Spanish-language postings). The autonomous communities, Basque provinces and
@@ -187,7 +206,7 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   the curated es country used to suppress their city. infojobs and occ carry
   `FallbackCountries` es/mx (28% and 16% of their open postings stated no country).
 - **Indian work-arrangement prose is a fourth phrase list** (`workmode_in.go`), read only
-  when none of the English, German, Dutch and Spanish ones matched. "WFO"/"work from office" is onsite;
+  when none of the English, German, Dutch, Spanish and Portuguese ones matched. "WFO"/"work from office" is onsite;
   counted office days decide the rest ("3 days WFO", "Hybrid (3 days office)" → hybrid;
   "5 days work from office" → onsite; "2 days WFH" → hybrid); a "hybrid" just before an
   office marker keeps it hybrid. Bare "WFH" is NOT remote — it names a benefit ("occasional

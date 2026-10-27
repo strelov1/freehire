@@ -96,7 +96,11 @@ var spanishWorkModePhrases = []struct {
 //
 // "evaluar" is a hedge, not a negation, but it withdraws the same way: "Modalidad:
 // híbrida, con posibilidad de evaluar 100% remoto" is hybrid.
-var spanishNegations = []string{"no ", "sin ", "ni ", "nunca ", "evaluar "}
+//
+// Portuguese prose reaches this list before its own (workmode_pt.go) and shares many of
+// its phrases ("100% remoto", "modelo híbrido"), so the Portuguese "não" and "sem" are
+// read here too: "esta vaga não é 100% remota" is not a remote offer.
+var spanishNegations = []string{"no ", "sin ", "ni ", "nunca ", "evaluar ", "nao ", "sem "}
 
 // spanishNegationWindow is wider than the German one: a Spanish refusal puts a verb or a
 // noun between the negation and the phrase ("no se ofrece teletrabajo", "sin posibilidad
