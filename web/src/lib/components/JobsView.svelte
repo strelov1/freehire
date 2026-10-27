@@ -17,7 +17,7 @@
   import { ensureDismissedLoaded, isDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
   import { latestOnly } from '#lib/latestOnly.js';
   import { Paginator } from '#lib/paginated.svelte.js';
-  import { pageCount, pageOffset } from '#lib/pagination.js';
+  import { pageCount, pageOffset, resumePage } from '#lib/pagination.js';
   import Pagination from './Pagination.svelte';
   import {
     FilterStore,
@@ -124,7 +124,12 @@
   // didn't change the query; a changed query resets it to 1, because the visitor is
   // now looking at a different result set (and FilterStore has already dropped
   // `page` from the URL — it only ever writes facet params).
-  let activePage = $state(untrack(() => currentPage));
+  //
+  // On the client it starts from the address bar instead when the route loaded some
+  // other URL — a back/forward onto a shallow-routed entry, see resumePage.
+  let activePage = $state(
+    untrack(() => (browser ? resumePage(page.url.search, location.search, currentPage) : currentPage)),
+  );
 
   // Seeded from the server-rendered page — an intentional one-time snapshot of the
   // props, which the effects below re-take when the page or the query changes.
@@ -537,6 +542,10 @@
     const slice = initial;
     untrack(() => {
       if (nextPage === activePage) return;
+      // `initial` describes `page.url`. When that is not the address bar (the stale
+      // restore above) it is a page the visitor is not on; the reload effect fetches
+      // the right one, and re-seeding here would put the stale page back over it.
+      if (browser && page.url.search !== location.search) return;
       activePage = nextPage;
       const next = makePaginator();
       next.seed(slice, pageOffset(nextPage));

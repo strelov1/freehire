@@ -76,6 +76,20 @@ export function parsePage(params: URLSearchParams): number {
   return page;
 }
 
+/** The page a freshly mounted feed should show, given the page its route loaded
+ *  (`routePage`, parsed from `routeSearch`) and what the address bar holds.
+ *
+ *  The two disagree after a back/forward onto an entry whose filters were written by
+ *  shallow routing: SvelteKit re-runs the route's `load` for the URL that entry was
+ *  ORIGINALLY navigated to — page 3 of a broad search, say — while the address bar
+ *  carries the filters applied since, and those writes never carry a page. Resuming
+ *  page 3 of the narrowed search asks for rows past its end and draws an empty feed.
+ *  The address bar is the truth, so when it differs the page comes from there. */
+export function resumePage(routeSearch: string, addressSearch: string, routePage: number): number {
+  if (routeSearch === addressSearch) return routePage;
+  return parsePage(new URLSearchParams(addressSearch));
+}
+
 /** Whether `page` is one the feed window reaches at all — the check a listing `load`
  *  makes BEFORE it searches, answering 404 when it fails.
  *

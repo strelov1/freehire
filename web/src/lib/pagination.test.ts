@@ -12,6 +12,7 @@ import {
   pageWindow,
   pageWithinWindow,
   parsePage,
+  resumePage,
 } from './pagination';
 
 describe('parsePage', () => {
@@ -224,5 +225,23 @@ describe('pageHref', () => {
 
   it('leaves an unfiltered listing with a plain path', () => {
     expect(pageHref('/jobs', new URLSearchParams(), 1)).toBe('/jobs');
+  });
+});
+
+describe('resumePage', () => {
+  it('keeps the route page when the route loaded the URL the address bar shows', () => {
+    expect(resumePage('?q=go&page=3', '?q=go&page=3', 3)).toBe(3);
+  });
+
+  // Back onto an entry whose filters were written by shallow routing: the route
+  // loaded the entry's ORIGINAL URL (page 3 of a broad search) while the address bar
+  // holds the narrowed filters, which name no page. Resuming page 3 of the narrowed
+  // search asked for rows past its end and drew "No matching jobs."
+  it('reads the page from the address bar when the route loaded a stale URL', () => {
+    expect(resumePage('?q=go&page=3', '?q=go+ladybird', 3)).toBe(1);
+  });
+
+  it('honours a page the address bar does name', () => {
+    expect(resumePage('', '?q=go&page=2', 1)).toBe(2);
   });
 });
