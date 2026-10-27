@@ -44,10 +44,17 @@ func (f *turijobsFake) GetHTML(_ context.Context, u string) (*html.Node, error) 
 	if f.pageErr != nil {
 		return nil, f.pageErr
 	}
-	if !strings.HasSuffix(u, "/"+turijobsPageID) {
+	path := ""
+	switch {
+	case strings.HasSuffix(u, "/"+turijobsPageID):
+		path = "testdata/turijobs/posting.html"
+	case strings.HasSuffix(u, "/358178"):
+		// A page with no JobPosting, read from its __NEXT_DATA__ (posting 360227's state).
+		path = "testdata/turijobs/nextdata.html"
+	default:
 		return nil, &StatusError{Method: "GET", Code: 404, URL: u}
 	}
-	raw, err := os.ReadFile("testdata/turijobs/posting.html")
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -66,13 +73,27 @@ func TestTurijobsHydratesNewPostingsNewestFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(jobs) != 2 {
-		t.Fatalf("jobs = %+v, want the refreshed and the hydrated posting", jobs)
+	if len(jobs) != 3 {
+		t.Fatalf("jobs = %+v, want the refreshed and the two hydrated postings", jobs)
 	}
-	if !jobs[0].SeenRefresh || jobs[0].ExternalID != "357140" {
-		t.Errorf("seen posting = %+v", jobs[0])
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
 	}
-	j := jobs[1]
+	if r := byID["357140"]; !r.SeenRefresh {
+		t.Errorf("seen posting = %+v", r)
+	}
+	n := byID["358178"]
+	if n.Title != "Assistente de Direção" || n.Company != "Cotur" || n.Location != "Odivelas, Lisboa" {
+		t.Errorf("next-data posting = %q / %q / %q", n.Title, n.Company, n.Location)
+	}
+	if len(n.Countries) != 1 || n.Countries[0] != "pt" || n.PostedAt == nil || n.PostedAt.Format("2006-01-02") != "2026-10-22" {
+		t.Errorf("next-data posting countries/posted = %v / %v", n.Countries, n.PostedAt)
+	}
+	if !strings.Contains(n.Description, "Viagens e Turismo") {
+		t.Errorf("next-data description = %q", n.Description)
+	}
+	j := byID[turijobsPageID]
 	if j.ExternalID != turijobsPageID || j.Company != "Viajes Esport Actiu" {
 		t.Errorf("identity = %q %q", j.ExternalID, j.Company)
 	}
@@ -94,7 +115,7 @@ func TestTurijobsHydratesNewPostingsNewestFirst(t *testing.T) {
 	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2026-09-27" {
 		t.Errorf("posted = %v", j.PostedAt)
 	}
-	// Newest id first: 358178 (gone) is asked before 358177; 357140 is seen and never asked.
+	// 357140 is seen and never asked.
 	if len(f.pages) != 2 {
 		t.Errorf("pages = %v", f.pages)
 	}

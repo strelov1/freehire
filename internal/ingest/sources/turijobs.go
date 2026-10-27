@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/net/html"
 	"golang.org/x/time/rate"
 
 	"github.com/strelov1/freehire/internal/dict/location"
@@ -258,10 +259,79 @@ func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, err
 	}
 	var ld turijobsLD
 	if !ldJobPosting(root, &ld) {
-		return Job{}, false, errTurijobsNoPosting
+		// ~10% of pages (measured on the first crawl, 56 of 600) carry no JobPosting; the
+		// page's own Next.js state always holds the offer.
+		next, found, blind := turijobsFromNextData(root)
+		if !found {
+			return Job{}, false, errTurijobsNoPosting
+		}
+		if blind {
+			// The employer chose to stay hidden: a posting under no company is not stored.
+			return Job{}, false, nil
+		}
+		ld = next
 	}
 	job, ok := turijobsJob(ld, p)
 	return job, ok, nil
+}
+
+// turijobsNextData is the part of the page's __NEXT_DATA__ the adapter reads.
+type turijobsNextData struct {
+	Props struct {
+		PageProps struct {
+			OfferData struct {
+				OfferDetail *struct {
+					Title           string `json:"title"`
+					Description     string `json:"description"`
+					PublicationDate string `json:"publicationDate"`
+					IsBlind         bool   `json:"isBlind"`
+					Location        struct {
+						City    string `json:"cityName"`
+						Region  string `json:"regionName"`
+						Country string `json:"countryISO"`
+					} `json:"location"`
+					Company struct {
+						BrandName      string `json:"brandName"`
+						EnterpriseName string `json:"enterpriseName"`
+					} `json:"company"`
+				} `json:"offerDetail"`
+			} `json:"offerData"`
+		} `json:"pageProps"`
+	} `json:"props"`
+}
+
+// turijobsFromNextData reads the offer from the page's Next.js state, as the JobPosting the
+// adapter otherwise reads. found is false when the page holds no offer; blind reports an offer
+// whose employer is hidden.
+func turijobsFromNextData(root *html.Node) (ld turijobsLD, found, blind bool) {
+	raw := scriptTextByID(root, "__NEXT_DATA__")
+	if raw == "" {
+		return turijobsLD{}, false, false
+	}
+	var nd turijobsNextData
+	if err := json.Unmarshal([]byte(raw), &nd); err != nil {
+		return turijobsLD{}, false, false
+	}
+	o := nd.Props.PageProps.OfferData.OfferDetail
+	if o == nil || strings.TrimSpace(o.Title) == "" {
+		return turijobsLD{}, false, false
+	}
+	if o.IsBlind {
+		return turijobsLD{}, true, true
+	}
+	ld.Title = o.Title
+	ld.Description = o.Description
+	if len(o.PublicationDate) >= 10 {
+		ld.DatePosted = o.PublicationDate[:10]
+	}
+	ld.HiringOrganization.Name = o.Company.BrandName
+	if strings.TrimSpace(ld.HiringOrganization.Name) == "" {
+		ld.HiringOrganization.Name = o.Company.EnterpriseName
+	}
+	var place turijobsPlace
+	place.Address.Locality, place.Address.Region, place.Address.Country = o.Location.City, o.Location.Region, o.Location.Country
+	ld.JobLocation, _ = json.Marshal(place)
+	return ld, true, false
 }
 
 // turijobsJob maps a posting's JobPosting to a Job. ok is false for one with no title, employer
