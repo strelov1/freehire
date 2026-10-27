@@ -93,6 +93,7 @@ var renderers = []func(string) (Sample, error){
 	noAlertSample,
 	extensionSample,
 	openSourceSample,
+	tailorSample,
 	verificationSample,
 	passwordResetSample,
 	directApplicationSample,
@@ -207,6 +208,10 @@ func extensionSample(baseURL string) (Sample, error) {
 
 func openSourceSample(baseURL string) (Sample, error) {
 	return onboardingSample("onboarding-open-source", "Onboarding / 5 · Open source", onboarding.StepOpenSource, baseURL)
+}
+
+func tailorSample(baseURL string) (Sample, error) {
+	return onboardingSample("onboarding-tailor", "Onboarding / 6 · CV tailoring", onboarding.StepTailor, baseURL)
 }
 
 func verificationSample(baseURL string) (Sample, error) {

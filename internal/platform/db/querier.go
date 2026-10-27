@@ -4806,6 +4806,11 @@ type Querier interface {
 	// The caller's subscriptions joined to each saved search's display name and query,
 	// newest first — the "My subscriptions" view.
 	ListSubscriptions(ctx context.Context, userID int64) ([]ListSubscriptionsRow, error)
+	// Greeted a while ago and not paying: an introduction to CV tailoring, which is a
+	// Pro feature. An account with a live Pro or Ultra tier already has it, and a letter
+	// selling it what it bought reads as nobody looking. pro_until/ultra_until rather than
+	// the per-provider sources, for the reason ListProWelcomeCandidates gives.
+	ListTailorCandidates(ctx context.Context, arg ListTailorCandidatesParams) ([]ListTailorCandidatesRow, error)
 	// Resolve tailored-CV ids to their target job's display labels for the credit-history page
 	// (tailor debits). Only tailored CVs (job_id set) whose job still exists resolve; the handler
 	// falls back to a generic label otherwise.

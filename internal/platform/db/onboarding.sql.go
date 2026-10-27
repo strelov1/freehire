@@ -226,6 +226,59 @@ func (q *Queries) ListOpenSourceCandidates(ctx context.Context, arg ListOpenSour
 	return items, nil
 }
 
+const listTailorCandidates = `-- name: ListTailorCandidates :many
+SELECT u.id, u.email
+FROM users u
+JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.email_verified
+  AND u.created_at > now() - make_interval(days => $1::int)
+  AND w.sent_at < now() - make_interval(days => $2::int)
+  AND COALESCE(ns.news_email_enabled, true)
+  AND NOT (COALESCE(u.pro_until > now(), false) OR COALESCE(u.ultra_until > now(), false))
+  AND NOT EXISTS (
+      SELECT 1 FROM onboarding_emails oe
+      WHERE oe.user_id = u.id AND oe.step = 'tailor'
+  )
+ORDER BY u.created_at
+LIMIT $3::int
+`
+
+type ListTailorCandidatesParams struct {
+	WindowDays int32 `json:"window_days"`
+	AfterDays  int32 `json:"after_days"`
+	MaxRows    int32 `json:"max_rows"`
+}
+
+type ListTailorCandidatesRow struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+}
+
+// Greeted a while ago and not paying: an introduction to CV tailoring, which is a
+// Pro feature. An account with a live Pro or Ultra tier already has it, and a letter
+// selling it what it bought reads as nobody looking. pro_until/ultra_until rather than
+// the per-provider sources, for the reason ListProWelcomeCandidates gives.
+func (q *Queries) ListTailorCandidates(ctx context.Context, arg ListTailorCandidatesParams) ([]ListTailorCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listTailorCandidates, arg.WindowDays, arg.AfterDays, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTailorCandidatesRow{}
+	for rows.Next() {
+		var i ListTailorCandidatesRow
+		if err := rows.Scan(&i.ID, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWelcomeCandidates = `-- name: ListWelcomeCandidates :many
 
 SELECT u.id, u.email

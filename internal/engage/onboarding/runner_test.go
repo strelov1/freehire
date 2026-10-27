@@ -13,10 +13,10 @@ import (
 
 // fakeStore serves fixed candidate lists and records what was written back.
 type fakeStore struct {
-	welcome, advancedSearch, noAlert, extension, openSource []int64
-	recorded                                                []db.RecordOnboardingEmailParams
-	listErr                                                 error
-	recordErr                                               error
+	welcome, advancedSearch, noAlert, extension, openSource, tailor []int64
+	recorded                                                        []db.RecordOnboardingEmailParams
+	listErr                                                         error
+	recordErr                                                       error
 
 	// params captures what the runner asked for, so the tests can assert on the
 	// window and caps rather than trusting them.
@@ -24,6 +24,7 @@ type fakeStore struct {
 	advancedSearchParams db.ListAdvancedSearchCandidatesParams
 	noAlertParams        db.ListNoAlertCandidatesParams
 	extensionParams      db.ListExtensionCandidatesParams
+	tailorParams         db.ListTailorCandidatesParams
 }
 
 func rows(ids []int64) []db.ListWelcomeCandidatesRow {
@@ -70,6 +71,15 @@ func (s *fakeStore) ListOpenSourceCandidates(_ context.Context, _ db.ListOpenSou
 	out := make([]db.ListOpenSourceCandidatesRow, 0, len(s.openSource))
 	for _, id := range s.openSource {
 		out = append(out, db.ListOpenSourceCandidatesRow{ID: id, Email: "user@example.test"})
+	}
+	return out, nil
+}
+
+func (s *fakeStore) ListTailorCandidates(_ context.Context, arg db.ListTailorCandidatesParams) ([]db.ListTailorCandidatesRow, error) {
+	s.tailorParams = arg
+	out := make([]db.ListTailorCandidatesRow, 0, len(s.tailor))
+	for _, id := range s.tailor {
+		out = append(out, db.ListTailorCandidatesRow{ID: id, Email: "user@example.test"})
 	}
 	return out, nil
 }
@@ -256,8 +266,15 @@ func TestRun_LaterStepsArePacedFromTheGreeting(t *testing.T) {
 		t.Errorf("step delays must increase: extension %d, open_source %d",
 			cfg.ExtensionAfterDays, cfg.OpenSourceAfterDays)
 	}
-	if cfg.OpenSourceAfterDays >= cfg.WindowDays {
-		t.Errorf("open_source at day %d never fires inside a %d-day window",
-			cfg.OpenSourceAfterDays, cfg.WindowDays)
+	if store.tailorParams.AfterDays != cfg.TailorAfterDays {
+		t.Fatalf("tailor delay = %d, want %d", store.tailorParams.AfterDays, cfg.TailorAfterDays)
+	}
+	if cfg.OpenSourceAfterDays >= cfg.TailorAfterDays {
+		t.Errorf("step delays must increase: open_source %d, tailor %d",
+			cfg.OpenSourceAfterDays, cfg.TailorAfterDays)
+	}
+	if cfg.TailorAfterDays >= cfg.WindowDays {
+		t.Errorf("tailor at day %d never fires inside a %d-day window",
+			cfg.TailorAfterDays, cfg.WindowDays)
 	}
 }

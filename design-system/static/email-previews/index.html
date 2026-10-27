@@ -88,7 +88,7 @@ Unsubscribe: ./unsubscribe?t=1.news.2QPea7f2nPgMFm8JnIjHTAoO3YfA2jsJY2SRDfWRCEY
   <div class="card">
     <div class="meta">
       <div class="name">Onboarding / 1 · Welcome</div>
-      <div class="subject">What are you looking for?</div>
+      <div class="subject">If something gets in your way, tell me</div>
     </div>
     <iframe data-mail="onboarding-welcome" src="onboarding-welcome.light.html" title="Onboarding / 1 · Welcome" sandbox="allow-same-origin" loading="lazy"></iframe>
     <div class="text">
@@ -98,12 +98,11 @@ Unsubscribe: ./unsubscribe?t=1.news.2QPea7f2nPgMFm8JnIjHTAoO3YfA2jsJY2SRDfWRCEY
 So I built an aggregator that pulls from hundreds of company boards, merges the duplicates,
 and flags postings that look dead. The whole thing is open source.
 
-One question — a one-line reply is plenty:
+If something gets in your way, reply to this email.
 
-What role are you looking for, and where?
-
-I read every reply myself. If we don&#39;t cover your search well yet, tell me — that is usually
-what I work on next.
+A filter you can&#39;t find, a search that comes back empty, a posting that turned out to be dead.
+I read every reply myself, and the more specific it is, the sooner it gets fixed — that is
+usually what I work on next.
 
 Set up a job alert: ./my/notifications
 
@@ -134,6 +133,9 @@ your choice.
 
 See how the filters work: ./features/advanced-search
 
+One question: which filter did you look for and not find? Or did a search come back emptier
+than it should have? Reply with what you were trying to search for — I read every reply myself.
+
 — Ilya Strelov, building freehire
 https://www.linkedin.com/in/istrelov/
 
@@ -152,9 +154,9 @@ Unsubscribe: ./unsubscribe?t=1.news.2QPea7f2nPgMFm8JnIjHTAoO3YfA2jsJY2SRDfWRCEY
       <details><summary>Plain-text alternative</summary><pre>You signed up a few days ago but haven&#39;t set up a job alert yet. That is the part that does the
 work for you: describe the search once, and new matches come to you instead of you checking.
 
-If it is easier, just reply with the role and where you want to work. I&#39;ll tell you honestly
-whether we cover it well — and if we don&#39;t, I&#39;d rather you knew now than checked an empty page
-for a week.
+If something stopped you, reply and tell me what: a filter you needed and couldn&#39;t find, too
+few matches for your search, or it just wasn&#39;t clear how. A one-line reply is plenty — it is
+usually what I fix next.
 
 Set up an alert: ./my/notifications
 
@@ -182,15 +184,19 @@ the application form out of your profile. You read what it wrote and press Submi
 
 The point is that it works where you already are.
 
-It signs in with the same account, so it is your CV and your profile it fills from —
-nothing to set up a second time.
+It fills from your freehire account — your CV, your profile, and your screening answers:
+work authorization, visa sponsorship, notice period, salary expectations, relocation. Fill
+those in once and every form gets them. A question you have answered before is answered the
+same way again, so you stop typing your notice period into the fortieth form.
+
+Add your screening answers: ./my/profile/screening
 
 Add it to Chrome: https://chromewebstore.google.com/detail/freehire/ijfaechijopdlikalojadpojmpilplnj
+On Firefox: https://addons.mozilla.org/firefox/addon/freehire/
 
 What it does, in more detail: ./features/extension
 
-It is Chrome for now. If you are on Firefox or Safari, reply and say so — that is how I
-decide what to build next.
+If it stumbled on a form, reply with the link — that is exactly what I fix next.
 
 — Ilya Strelov, building freehire
 https://www.linkedin.com/in/istrelov/
@@ -231,6 +237,42 @@ And if the project has been useful, a star is how most people end up finding it:
 https://github.com/strelov1/freehire
 
 Replying to this mail reaches me too.
+
+— Ilya Strelov, building freehire
+https://www.linkedin.com/in/istrelov/
+
+Unsubscribe: ./unsubscribe?t=1.news.2QPea7f2nPgMFm8JnIjHTAoO3YfA2jsJY2SRDfWRCEY
+</pre></details>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="meta">
+      <div class="name">Onboarding / 6 · CV tailoring</div>
+      <div class="subject">One CV for every job is why you don’t hear back</div>
+    </div>
+    <iframe data-mail="onboarding-tailor" src="onboarding-tailor.light.html" title="Onboarding / 6 · CV tailoring" sandbox="allow-same-origin" loading="lazy"></iframe>
+    <div class="text">
+      <details><summary>Plain-text alternative</summary><pre>A generic CV loses to a specific one. Most people know that and still send the same CV
+everywhere, because rewriting it for every application takes an evening.
+
+freehire does that rewrite with you. Start from a job: run the match analysis, then tailor
+from its result. It copies your CV for that one vacancy — your original is never touched —
+and pulls forward the experience you already have but buried three roles down.
+
+It does not invent anything.
+
+When the job asks for something your history doesn&#39;t support, it asks you instead of writing
+it in. Every change is one edit you can see and undo, and the result is a clean PDF an ATS
+can actually read.
+
+Tailoring is part of Pro.
+
+See how tailoring works: ./features/tailor
+
+What Pro includes: ./pricing
+
+If you tried it and something got in the way, reply — I read every reply myself.
 
 — Ilya Strelov, building freehire
 https://www.linkedin.com/in/istrelov/

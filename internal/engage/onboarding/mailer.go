@@ -1,4 +1,4 @@
-// Package onboarding sends the founder's signup sequence: five mails over a new
+// Package onboarding sends the founder's signup sequence: six mails over a new
 // account's first days, written in the first person and inviting a reply.
 //
 // It is deliberately unlike the other mail features in this codebase. A digest or a
@@ -8,12 +8,12 @@
 //
 //   - the mails carry a Reply-To pointing at a human inbox, not the send address;
 //   - the copy lives here as prose rather than being assembled from data, because
-//     there is no data — every recipient gets the same five letters.
+//     there is no data — every recipient gets the same letters.
 //
 // The sequence is: welcome (immediately), advanced_search (day 3, everyone),
 // no_alert (day 6, only if the account never created an alert), extension (day 8,
-// everyone), open_source (day 10, everyone). Runner owns when; this file owns what
-// they say.
+// everyone), open_source (day 10, everyone), tailor (day 12, only accounts not on a
+// paid tier). Runner owns when; this file owns what they say.
 package onboarding
 
 import (
@@ -45,6 +45,7 @@ const (
 	StepNoAlert        Step = "no_alert"
 	StepExtension      Step = "extension"
 	StepOpenSource     Step = "open_source"
+	StepTailor         Step = "tailor"
 )
 
 // Links the sequence points at. They are constants rather than configuration
@@ -58,6 +59,7 @@ const (
 	// one thing in this file that cannot be re-derived if it is wrong, since a
 	// mistyped id is a live page for somebody else's extension rather than a 404.
 	storeURL    = "https://chromewebstore.google.com/detail/freehire/ijfaechijopdlikalojadpojmpilplnj"
+	firefoxURL  = "https://addons.mozilla.org/firefox/addon/freehire/"
 	linkedInURL = "https://www.linkedin.com/in/istrelov/"
 )
 
@@ -121,7 +123,11 @@ type content struct {
 	AlertsURL         string
 	AdvancedSearchURL string
 	ExtensionURL      string
+	TailorURL         string
+	PricingURL        string
 	StoreURL          string
+	FirefoxURL        string
+	ScreeningURL      string
 	GitHubIcon        string
 	ChromeIcon        string
 	DiscordIcon       string
@@ -159,7 +165,11 @@ func (m *Mailer) content() content {
 		AlertsURL:         m.baseURL + "/my/notifications?utm_source=email",
 		AdvancedSearchURL: m.baseURL + "/features/advanced-search?utm_source=email",
 		ExtensionURL:      m.baseURL + "/features/extension?utm_source=email",
+		TailorURL:         m.baseURL + "/features/tailor?utm_source=email",
+		PricingURL:        m.baseURL + "/pricing?utm_source=email",
 		StoreURL:          storeURL,
+		FirefoxURL:        firefoxURL,
+		ScreeningURL:      m.baseURL + "/my/profile/screening?utm_source=email",
 		GitHubIcon:        m.baseURL + "/email-icon-github.png",
 		ChromeIcon:        m.baseURL + "/email-icon-chrome.png",
 		DiscordIcon:       m.baseURL + "/email-icon-discord.png",

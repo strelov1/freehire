@@ -40,7 +40,7 @@ import (
 var (
 	sendTo   = flag.String("to", "", "send one mail to this address and exit (no database, no ledger)")
 	sendUser = flag.Int64("to-user", 0, "the account id -to belongs to; required with -to, because the mail carries that account's unsubscribe link")
-	sendStep = flag.String("step", string(onboarding.StepWelcome), "which step -to sends: welcome | advanced_search | no_alert | open_source")
+	sendStep = flag.String("step", string(onboarding.StepWelcome), "which step -to sends: welcome | advanced_search | no_alert | extension | open_source | tailor")
 )
 
 func main() {
