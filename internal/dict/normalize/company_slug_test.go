@@ -59,6 +59,29 @@ func TestCompanySlug(t *testing.T) {
 		{"middle dot is a word break", "株式会社 Future・Mind", "future-mind-kk"},
 		{"japanese form inside a name is kept", "Acme株式会社 東京支店", "acmezhu-shi-hui-she-dong-jing-zhi-dian"},
 		{"a name that is only a japanese form is not erased", "株式会社", "zhu-shi-hui-she"},
+		// The South-Asian private-company forms. "Pvt" is a form wherever it stands, but
+		// "Private" and the bracketed "(P)" are forms only directly before a stripped "Limited"
+		// or "Ltd": alone, "Private" is an ordinary word some employers' names end in.
+		{"indian pvt ltd", "Acme Software Pvt Ltd", "acme-software"},
+		{"indian pvt ltd, punctuated", "Acme Software Pvt. Ltd.", "acme-software"},
+		{"indian pvt ltd, bracketed", "Acme Software (Pvt) Ltd", "acme-software"},
+		{"bare pvt is a form on its own", "Zoho Corporation Pvt", "zoho"},
+		{"indian private limited", "Acme Private Limited", "acme"},
+		{"indian private ltd", "Acme Private Ltd.", "acme"},
+		{"indian private limited, bracketed", "Acme (Private) Limited", "acme"},
+		{"indian (p) ltd", "Infomaze Elite (P) Ltd.", "infomaze-elite"},
+		{"singapore pte ltd", "EPAM Systems Pte. Ltd.", "epam-systems"},
+		{"singapore pte ltd, bracketed", "Volvo Group Singapore (Pte.) Ltd.", "volvo-group-singapore"},
+		// A dot is not a word break (it lives inside "B.V."), so these arrive as ONE word.
+		{"forms glued by a dot", "Acme Pvt.Ltd.", "acme"},
+		{"singapore forms glued by a dot", "Acme Pte.Ltd", "acme"},
+		{"a dotted name is not a glued form", "Acme Foo.com", "acme-foo-com"},
+		{"private alone is a word, not a form", "Julius Baer Private", "julius-baer-private"},
+		{"private before a non-form is kept", "Private Bank", "private-bank"},
+		{"private mid-name is kept", "Private Equity Partners", "private-equity-partners"},
+		{"private before a non-limited form is kept", "Acme Private GmbH", "acme-private"},
+		{"a bracketed initial alone is kept", "Milton Roy India (P)", "milton-roy-india-p"},
+		{"a name that is only a compound form is not erased", "Private Limited", "private"},
 		{"empty stays empty", "", ""},
 	}
 

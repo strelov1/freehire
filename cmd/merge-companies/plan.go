@@ -220,10 +220,26 @@ func planMerges(companies []company, frozen map[string]bool, minJobs int, curate
 // dot and drops the apostrophe of "Linc'well", where Slug glues the first and splits the
 // second. Compared exactly, 472 Japanese companies minted under the old rule (2026-10-27) read
 // as renamed and were left on their pinyin slug.
+//
+// A slug minted by an OLDER rule that already stripped PART of the form is the same case, and
+// is not the plain slug: "Acme Pvt Ltd" was keyed `acme-pvt` while the rule knew "Ltd" and not
+// "Pvt" (1,936 companies, 2026-10-27). So a stored slug also qualifies when it lies BETWEEN
+// the two — the current key a prefix of it, it a prefix of the plain slug — because then
+// everything separating it from the key is a trailing word the rule now strips as a form. A
+// renamed employer fails that test from either side: "Acme" renamed "Acme Holdings Ltd" is
+// shorter than its new key, and a different name is no prefix of the plain slug at all.
 func keyedBeforeTheRule(c company, frozen map[string]bool) bool {
-	return !frozen[c.Slug] &&
-		normalize.FoldSlug(c.Slug) == normalize.FoldSlug(normalize.Slug(c.Name)) &&
-		normalize.CompanySlug(c.Name) != c.Slug
+	if frozen[c.Slug] {
+		return false
+	}
+	derived := normalize.CompanySlug(c.Name)
+	if derived == c.Slug {
+		return false
+	}
+	stored := normalize.FoldSlug(c.Slug)
+	plain := normalize.FoldSlug(normalize.Slug(c.Name))
+	return stored == plain ||
+		(strings.HasPrefix(plain, stored) && strings.HasPrefix(stored, normalize.FoldSlug(derived)))
 }
 
 // electCanonical picks the group's surviving slug. Members arrive sorted by open jobs
@@ -269,7 +285,9 @@ func nameWords(name string) int {
 	fields := strings.FieldsFunc(name, func(r rune) bool {
 		return unicode.IsSpace(r) || r == '-'
 	})
-	for len(fields) > 1 && normalize.IsLegalForm(fields[len(fields)-1]) {
+	next := ""
+	for len(fields) > 1 && normalize.IsLegalFormBefore(fields[len(fields)-1], next) {
+		next = fields[len(fields)-1]
 		fields = fields[:len(fields)-1]
 	}
 	return len(fields)

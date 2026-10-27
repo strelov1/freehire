@@ -118,6 +118,54 @@ func TestPlanMerges_RekeysALoneCompanyWhoseOldSlugBrokeWordsDifferently(t *testi
 	}
 }
 
+func TestPlanMerges_RekeysALoneCompanyAnOlderRuleHalfStripped(t *testing.T) {
+	// The rule stripped "Ltd" but not the "Pvt" or "(P)" before it, so these slugs are neither
+	// the plain slug of the name nor its current key. Left unplanned, backfill-derive re-keys
+	// their rows and /companies/<old> 404s with no alias to redirect it.
+	got := planMerges([]company{
+		{Slug: "acme-software-pvt", Name: "Acme Software Pvt Ltd", JobCount: 11},
+		{Slug: "infomaze-elite-p", Name: "Infomaze Elite (P) Ltd.", JobCount: 3},
+		{Slug: "mynd-solutions-private", Name: "Mynd Solutions Private Limited", JobCount: 4},
+	}, nil, 0, nil)
+	canon := map[string]string{}
+	for _, m := range got {
+		for _, a := range m.Aliases {
+			if a.Reason != reasonLegalForm {
+				t.Errorf("%s retires as %q, want %q", a.Slug, a.Reason, reasonLegalForm)
+			}
+			canon[a.Slug] = m.Canonical
+		}
+	}
+	want := map[string]string{
+		"acme-software-pvt":      "acme-software",
+		"infomaze-elite-p":       "infomaze-elite",
+		"mynd-solutions-private": "mynd-solutions",
+	}
+	if !reflect.DeepEqual(canon, want) {
+		t.Errorf("re-keyed %v, want %v", canon, want)
+	}
+}
+
+func TestPlanMerges_LeavesALoneCompanyRenamedPastItsSlugAlone(t *testing.T) {
+	// The stored slug is a prefix of the plain slug, but SHORTER than the current key: the
+	// employer was renamed by a word that is not a form, which is a judgement, not the rule.
+	got := planMerges([]company{{Slug: "acme", Name: "Acme Holdings Ltd", JobCount: 9}}, nil, 0, nil)
+	if len(got) != 0 {
+		t.Errorf("planned %+v, want nothing", got)
+	}
+}
+
+func TestPlanMerges_FoldsPvtLtdOntoItsPlainSpelling(t *testing.T) {
+	got := planMerges([]company{
+		{Slug: "zoho", Name: "Zoho", JobCount: 50},
+		{Slug: "zoho-corporation-pvt", Name: "Zoho Corporation Pvt. Ltd.", JobCount: 8},
+	}, nil, 0, nil)
+	if len(got) != 1 || got[0].Canonical != "zoho" || len(got[0].Aliases) != 1 ||
+		got[0].Aliases[0].Reason != reasonLegalForm {
+		t.Errorf("planned %+v, want zoho-corporation-pvt retiring into zoho as a legal form", got)
+	}
+}
+
 func TestPlanMerges_LeavesALoneRenamedCompanyAlone(t *testing.T) {
 	// A slug that is not the plain slug of its latest name drifted because the source renamed
 	// the employer. Following the rename is a judgement, not a form the rule learned.

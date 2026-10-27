@@ -24,6 +24,13 @@ import (
 //     Sachs & Co. → Goldman Sachs).
 //   - "pte" is small — 7 companies — and earns its place on one of them: without it,
 //     "epam systems pte. ltd." keys apart from the EPAM Systems that holds 1,172 open jobs.
+//   - "pvt" is the South-Asian private-company form and nothing else: every catalogue name
+//     ending in it (measured 2026-10-27) is an Indian "Pvt", "Pvt Ltd" or "(Pvt) Ltd"
+//     employer, and before it was listed "Zoho Corporation Pvt" keyed apart from Zoho.
+//
+// "Private" is the same form written out, and it is NOT listed, because unlike "pvt" it is an
+// ordinary word: "Julius Baer Private" and "Private Equity Partners" are names, not forms. It
+// is stripped only as half of the compound "Private Limited" — see [formQualifiers].
 //
 // Two tails that look like they belong here and deliberately do not — they live in
 // [boardNameTails] instead, where over-trimming costs a lookup rather than an employer:
@@ -41,7 +48,7 @@ import (
 var legalSuffixes = map[string]struct{}{
 	"corporation": {}, "limited": {}, "gmbh": {}, "corp": {}, "llc": {}, "ltd": {},
 	"inc": {}, "incorporated": {}, "plc": {}, "llp": {}, "lp": {}, "cic": {}, "cio": {},
-	"srl": {}, "pty": {}, "pte": {}, "bv": {}, "nv": {}, "aps": {},
+	"srl": {}, "pty": {}, "pte": {}, "pvt": {}, "bv": {}, "nv": {}, "aps": {},
 	"ab": {}, "ag": {}, "kg": {}, "oy": {}, "sa": {}, "as": {}, "se": {}, "co": {},
 }
 
@@ -59,7 +66,46 @@ var legalSuffixes = map[string]struct{}{
 //
 // A single-word name is never stripped: "Limited" stays "limited", because an empty slug
 // silently matches nothing while a visibly odd company row can be found and fixed.
-func CompanySlug(name string) string { return trimTail(name, IsLegalForm, true) }
+func CompanySlug(name string) string { return trimTail(name, IsLegalFormBefore, true) }
+
+// formQualifiers are the words that are a corporate form only as the first half of a compound,
+// directly before one of [qualifiedForms]: the Indian and Sri Lankan "Private Limited", and its
+// abbreviation "(P) Ltd".
+//
+// They cannot join [legalSuffixes], which strips a word wherever it ends a name, because both
+// are ordinary words in their own right. "Private" ends real names — "Julius Baer Private",
+// "William Blair - Private" — and stripping it there would fold a private bank onto its parent;
+// "(P)" alone ends "Milton Roy India (P)", where nothing says it is a form at all. Before a
+// stripped "Limited" neither reading is open: "Acme Private Limited" is the company form
+// 1,671 catalogue companies carry (2026-10-27), and keying it at `acme-private` split every
+// one of them from its own unsuffixed spelling.
+//
+// The qualified form must itself have been STRIPPED, not merely be the next word, so "Private
+// Bank" and "Private Limited Partners" keep their "Private".
+var formQualifiers = map[string]struct{}{"private": {}, "p": {}}
+
+// qualifiedForms are the forms a [formQualifiers] word may stand in front of.
+var qualifiedForms = map[string]struct{}{"limited": {}, "ltd": {}}
+
+// IsLegalFormBefore is [IsLegalForm] for a word read in its place: next is the word right after
+// it, which the caller has ALREADY stripped as a form ("" when word is the last word, or the
+// word after it was kept). It answers yes for everything IsLegalForm does, and for a
+// [formQualifiers] word standing directly before one of [qualifiedForms].
+//
+// It is exported for the callers that walk a name's tail with their own word breaks and must
+// stay on the company key's vocabulary (merge-companies' nameWords, mailmatch's stripLegalForm):
+// a walk that asked IsLegalForm alone would leave "Private" behind where the key drops it.
+func IsLegalFormBefore(word, next string) bool {
+	if IsLegalForm(word) {
+		return true
+	}
+	if next == "" {
+		return false
+	}
+	_, qualifier := formQualifiers[letters(word)]
+	_, qualified := qualifiedForms[letters(next)]
+	return qualifier && qualified
+}
 
 // boardNameTails are the tails an ATS board id drops that the company key must keep. They are
 // a SECOND vocabulary rather than entries in [legalSuffixes] because they are not corporate
@@ -97,7 +143,9 @@ func IsBoardNameTail(word string) bool {
 // live evidence — a slug that happens to be another employer's board is rejected by the probe
 // and the name gate, not accepted on the resemblance. It must never key a company.
 func BoardNameSlug(name string) string {
-	return trimTail(name, func(word string) bool { return IsLegalForm(word) || IsBoardNameTail(word) }, false)
+	return trimTail(name, func(word, next string) bool {
+		return IsLegalFormBefore(word, next) || IsBoardNameTail(word)
+	}, false)
 }
 
 // trimTail is the shared walk under [CompanySlug] and [BoardNameSlug]: drop trailing words the
@@ -106,10 +154,16 @@ func BoardNameSlug(name string) string {
 //
 // keepJapaneseMark decides what becomes of a Japanese form cut from either end: the company key
 // keeps it as one Latin mark at the tail (see [japaneseForms]), a board-id guess drops it.
-func trimTail(name string, isTail func(word string) bool, keepJapaneseMark bool) string {
+//
+// isTail is asked about each word together with the word after it that the walk has just
+// dropped ("" for the last word), which is what lets a compound form like "Private Limited"
+// be recognised without either half being a form on its own.
+func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark bool) string {
 	rest, mark := trimJapaneseForms(name)
 	words := strings.FieldsFunc(dropApostrophes(rest), isWordBreak)
-	for len(words) > 1 && isTail(words[len(words)-1]) {
+	next := ""
+	for len(words) > 1 && isTail(words[len(words)-1], next) {
+		next = words[len(words)-1]
 		words = words[:len(words)-1]
 	}
 	if keepJapaneseMark && mark != "" {
@@ -215,8 +269,30 @@ func IsLegalForm(word string) bool {
 	if slices.ContainsFunc(japaneseForms, func(f struct{ form, mark string }) bool { return f.form == word }) {
 		return true
 	}
-	_, ok := legalSuffixes[letters(word)]
-	return ok
+	if _, ok := legalSuffixes[letters(word)]; ok {
+		return true
+	}
+	return isGluedForms(word)
+}
+
+// isGluedForms reports whether a word is several forms joined by dots with no space, "Pvt.Ltd."
+// or "Pte.Ltd" — one word to the tail walk, since a dot is not a word break (it lives inside
+// "B.V."), and as letters "pvtltd", which no entry names. It is a form when EVERY dotted part
+// is one, read right to left as the walk reads words, so "Pvt.Ltd" and "P.Ltd" qualify while
+// "Foo.com" does not. The punctuated single forms never reach this: "B.V." is already "bv".
+func isGluedForms(word string) bool {
+	parts := strings.FieldsFunc(word, func(r rune) bool { return r == '.' })
+	if len(parts) < 2 {
+		return false
+	}
+	next := ""
+	for i := len(parts) - 1; i >= 0; i-- {
+		if !IsLegalFormBefore(parts[i], next) {
+			return false
+		}
+		next = parts[i]
+	}
+	return true
 }
 
 // letters lowercases a word down to its ASCII letters, so the punctuated and bare spellings

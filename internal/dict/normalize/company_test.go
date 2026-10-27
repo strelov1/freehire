@@ -27,6 +27,9 @@ func TestSameCompany(t *testing.T) {
 		{"japanese form before and after the name", "株式会社リクルート", "リクルート株式会社", true},
 		{"japanese form, abbreviated against written out", "（株）リクルート", "株式会社リクルート", true},
 		{"a japanese firm is not its foreign namesake", "株式会社タケダ", "Takeda", false},
+		{"indian private limited", "Mynd Solutions Private Limited", "Mynd Solutions", true},
+		{"indian pvt ltd against private limited", "Acme Pvt. Ltd.", "Acme Private Limited", true},
+		{"private alone keeps two employers apart", "Julius Baer Private", "Julius Baer", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
