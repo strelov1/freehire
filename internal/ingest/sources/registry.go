@@ -472,8 +472,10 @@ func All(c HTTPClient) map[string]Source {
 		// Concurrency-limited: one API host answers every Oorwin portal (see oorwinMaxInFlight).
 		NewOorwin(limitedOorwinPoster(c)),
 		NewEasyCruit(c),
-		// Rate-paced: one origin serves every Homerun feed and vacancy page (see homerunRequestInterval).
-		NewHomerun(pacedHomerunGetter(c)),
+		// Rate-paced: one origin serves every Homerun feed and vacancy page (see homerunRequestInterval);
+		// the first refusal stops the run's Homerun traffic until ApplyProxyEgress gives it the
+		// rotating lane (see homerunEgress).
+		NewHomerun(pacedHomerunGetter(newHomerunEgress(c, nil))),
 		NewHROffice(c),
 		NewGreytHR(c),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).

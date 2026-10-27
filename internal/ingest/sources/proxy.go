@@ -253,6 +253,12 @@ func ApplyProxyEgress(registry map[string]Source) error {
 			registry[name] = build(seekDirect, seekNetwork)
 		}
 	}
+	// Homerun keeps the direct IP and moves the rest of a run onto the ROTATING gateway after
+	// its edge first refuses the direct one (homerunEgress). Never the fixed exit: one address
+	// is exactly what Homerun blocks once a run's volume has landed on it.
+	if _, ok := registry["homerun"]; ok && rotating != nil {
+		registry["homerun"] = NewHomerun(pacedHomerunGetter(newHomerunEgress(NewClient(), NewRotatingProxyClient(rotating))))
+	}
 	// Fingerprint-proxied providers need BOTH the Chrome fingerprint and the proxy IP, so they
 	// are rewired over a proxied fingerprint transport rather than the standard proxied client.
 	// Build it once, only when one such provider is actually registered, and fail fast if the

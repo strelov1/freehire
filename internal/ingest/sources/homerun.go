@@ -149,13 +149,16 @@ type homerunJobPosting struct {
 }
 
 // detail maps a feed entry to a Job, reading the vacancy's page for its address. A 404 or 410 is
-// Homerun's "not found" for a vacancy the feed still lists, and drops it; any other failure, or a
-// page without a JobPosting, leaves the feed's entry to stand on its own, body and all.
+// Homerun's "not found" for a vacancy the feed still lists, and drops it, and so does a page the
+// run's stopped egress did not request (homerunEgress); any other failure, or a page without a
+// JobPosting, leaves the feed's entry to stand on its own, body and all.
 func (s homerun) detail(ctx context.Context, e CompanyEntry, en homerunEntry) (Job, bool) {
 	j := homerunJob(e, en)
 	root, err := s.http.GetHTML(ctx, j.URL)
 	if err != nil {
-		if !detailUnreadable(err) {
+		// A page the stopped run never asked for is deferred to the next run rather than
+		// stored bare: a stored vacancy's page is never read again.
+		if errors.Is(err, errHomerunStopped) || !detailUnreadable(err) {
 			return Job{}, false
 		}
 		return j, true

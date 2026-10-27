@@ -786,12 +786,18 @@ func limitedCovetoGetter(c covetoGetter) covetoGetter {
 // 429s within 8 seconds and then a 403 on every request from that address for over an hour, while
 // the same 874 feeds at 4 in flight from a laptop (~0.5s round trips, so ~8/s) all answered; a
 // sweep of 2,499 vacancy pages at 4 in flight drew 392 refusals once it had run a few minutes.
-// So every request the adapter makes, feed and page alike, draws on one provider-wide budget of 2
-// a second: a first crawl of ~500 feeds and ~2,500 pages is ~25 minutes, and a refresh run, which
-// only reads the feeds and the few new pages, a few minutes.
+// So every request the adapter makes, feed and page alike, draws on one provider-wide budget.
+//
+// 2 a second was not enough from host2's datacenter address either: on 2026-10-25..27 five of six
+// scheduled runs were refused 60 to 220 seconds in, after ~120 to ~440 feed requests (a refresh
+// run reads every feed and only the few new pages), while the one clean run held the same rate
+// for 11 minutes — so no rate was shown safe, only 2 a second shown unsafe. The budget is halved
+// to 1 a second (a refresh run of ~580 feeds is ~10 minutes, well inside its window), and what
+// happens after a refusal is homerunEgress's: the rest of the run moves to the rotating proxy, or
+// stops.
 const (
-	homerunRequestInterval = 500 * time.Millisecond
-	homerunRequestBurst    = 2
+	homerunRequestInterval = time.Second
+	homerunRequestBurst    = 1
 )
 
 // pacedHomerun routes both of Homerun's request kinds through one shared limiter.
