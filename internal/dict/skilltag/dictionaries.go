@@ -966,6 +966,13 @@ var wordAliases = map[string]string{
 	"firestore":   "firestore",
 	"onelake":     "microsoft-fabric",
 	"pegasystems": "pega",
+
+	// batch 8 (2026-10-27, Spanish market) — the Spanish names of practices already
+	// canonical in English, mined from the requirement clauses of the open
+	// Spanish-language technical postings. See engineeringPhraseAliases for the phrases.
+	"microservicios": "microservices",
+	"microservicio":  "microservices",
+	"observabilidad": "observability",
 }
 
 // ambiguousWords marks the wordAliases keys whose word-pass match is "weak": Parse
@@ -1622,6 +1629,56 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"apache camel", "apache-camel"},
 	{"hastus", "hastus"}, {"topdesk", "topdesk"},
 	{"nis2", "nis2"}, {"nis 2", "nis2"}, {"nen 7510", "nen-7510"}, {"nen7510", "nen-7510"},
+	// batch 8 (2026-10-27, Spanish market). The Spanish name of an English canonical, each
+	// written with and without its accents, as postings write both. Every one is a
+	// multi-word term of the craft; the plain words in them ("datos", "pruebas",
+	// "calidad") stay out.
+	{"api rest", "rest"}, {"apis rest", "rest"}, {"api restful", "rest"},
+	{"apis restful", "rest"}, {"servicios rest", "rest"},
+	{"integración continua", "ci-cd"}, {"integracion continua", "ci-cd"},
+	{"despliegue continuo", "ci-cd"}, {"entrega continua", "ci-cd"},
+	{"infraestructura como código", "infrastructure-as-code"},
+	{"infraestructura como codigo", "infrastructure-as-code"},
+	{"pruebas unitarias", "unit-testing"}, {"tests unitarios", "unit-testing"},
+	{"test unitarios", "unit-testing"},
+	{"pruebas automatizadas", "test-automation"}, {"automatización de pruebas", "test-automation"},
+	{"automatizacion de pruebas", "test-automation"},
+	{"control de versiones", "version-control"},
+	{"patrones de diseño", "design-patterns"}, {"patrones de diseno", "design-patterns"},
+	{"arquitectura hexagonal", "hexagonal-architecture"},
+	{"arquitectura limpia", "clean-architecture"},
+	{"diseño dirigido por el dominio", "domain-driven-design"},
+	{"diseno dirigido por el dominio", "domain-driven-design"},
+	{"desarrollo dirigido por pruebas", "tdd"},
+	{"sistemas distribuidos", "distributed-systems"},
+	{"modelado de datos", "data-modeling"}, {"modelado dimensional", "dimensional-modeling"},
+	{"pipelines de datos", "data-pipelines"}, {"pipeline de datos", "data-pipelines"},
+	{"canalizaciones de datos", "data-pipelines"},
+	{"ingeniería de datos", "data-engineering"}, {"ingenieria de datos", "data-engineering"},
+	{"ciencia de datos", "data-science"},
+	{"almacén de datos", "data-warehousing"}, {"almacen de datos", "data-warehousing"},
+	{"lago de datos", "data-lake"},
+	{"gobierno del dato", "data-governance"}, {"gobierno de datos", "data-governance"},
+	{"gobernanza de datos", "data-governance"}, {"gobernanza del dato", "data-governance"},
+	// Only the term of art: "velar por la calidad de los datos" is an order clerk's duty,
+	// and as a strong match it lifted the gate off "SAP" and "ERP" beside it.
+	{"calidad del dato", "data-quality"},
+	{"visualización de datos", "data-visualization"}, {"visualizacion de datos", "data-visualization"},
+	{"aprendizaje automático", "machine-learning"}, {"aprendizaje automatico", "machine-learning"},
+	{"aprendizaje profundo", "deep-learning"},
+	{"ia generativa", "generative-ai"}, {"inteligencia artificial generativa", "generative-ai"},
+	{"procesamiento del lenguaje natural", "nlp"}, {"procesamiento de lenguaje natural", "nlp"},
+	{"arquitectura orientada a eventos", "event-driven-architecture"},
+	{"arquitecturas orientadas a eventos", "event-driven-architecture"},
+	{"arquitectura dirigida por eventos", "event-driven-architecture"},
+	{"programación orientada a objetos", "oop"}, {"programacion orientada a objetos", "oop"},
+	{"inteligencia de negocio", "business-intelligence"},
+	{"inteligencia de negocios", "business-intelligence"},
+	{"sistemas embebidos", "embedded-systems"},
+	{"bases de datos vectoriales", "vector-databases"},
+	{"visión por computador", "computer-vision"}, {"vision por computador", "computer-vision"},
+	{"visión artificial", "computer-vision"},
+	{"pruebas de penetración", "penetration-testing"}, {"pruebas de penetracion", "penetration-testing"},
 }
 
 // professionalPhraseAliases is the non-engineering half of the IT-company role

@@ -208,6 +208,13 @@ linters:
         # Catalan/Spanish words in the Feina Activa adapter's salary line and fixture.
         - anual
         - individuales
+        # Spanish skill vocabulary (internal/dict/skilltag/dictionaries.go, batch 8).
+        - integracion
+        - versiones
+        - patrones
+        - visualizacion
+        - automatico
+        - penetracion
         # Dutch title vocabulary (internal/dict/classify/dutch.go).
         - administratief
         - adviseur
