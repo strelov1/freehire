@@ -480,6 +480,9 @@ func All(c HTTPClient) map[string]Source {
 		// Bizneo HR (Spain): board = the career-site host under bizneo.cloud; bodies hydrated for
 		// new postings only.
 		NewBizneo(c),
+		// ePreselec (Spain, Adevinta): board = the <label>.epreselec.com site; Imperva-fronted, so
+		// on the crawl host it is rebuilt over the Scrapling tier (scraplingtier.go).
+		NewEPreselec(c),
 		NewGreytHR(c),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
 		NewHelixjobs(limitedHelixjobsGetter(c)),

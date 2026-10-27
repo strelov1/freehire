@@ -318,6 +318,8 @@ func TestRecognize(t *testing.T) {
 		{"bizneo posting", "https://somos-grupo-mas.careers.ats.bizneo.cloud/jobs/auxiliar-de-compras-561c3b68-504a-4a97-b220-020be92f6059", "bizneo", "somos-grupo-mas.careers.ats.bizneo.cloud", "https://somos-grupo-mas.careers.ats.bizneo.cloud", true},
 		{"bizneo vanity label", "https://jobs.abeienergy.bizneo.cloud/jobs", "bizneo", "jobs.abeienergy.bizneo.cloud", "https://jobs.abeienergy.bizneo.cloud", true},
 		{"bizneo marketing host is not a career site", "https://www.bizneo.com/ats/", "", "", "", false},
+		{"epreselec offer", "https://fcc.epreselec.com/Ofertas/Ofertas.aspx?id_oferta=3374767", "epreselec", "fcc", "https://fcc.epreselec.com", true},
+		{"epreselec InfoJobs sign-in bridge is not a tenant", "https://logininfojobs.epreselec.com/LoginInfojobs.aspx", "", "", "", false},
 		{"hroffice vacancy", "https://middendelfland.inhroffice.com/nl/job/391727", "hroffice", "middendelfland", "https://middendelfland.inhroffice.com", true},
 		{"hroffice link shortener is not a tenant", "https://link.inhroffice.com/abc123", "", "", "", false},
 		{"kenjo help center is not a tenant", "https://help.kenjo.io/de/articles/123", "", "", "", false},

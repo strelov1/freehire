@@ -333,6 +333,8 @@ var atsBoards = []struct{ host, source, mode string }{
 	// HR Office (Dutch): the career site is a label on inhroffice.com. Employers that show the
 	// same vacancies on their own domain pull them from there, so those domains name no board.
 	{"inhroffice.com", "hroffice", modeSubdomain},
+	// ePreselec (Spain, Adevinta): one ASP.NET careers site per customer at <label>.epreselec.com.
+	{"epreselec.com", "epreselec", modeSubdomain},
 	// helixjobs: the concludis portal, keyed by instance id (see queryBoards).
 	{"helixjobs.com", "helixjobs", modeQuery},
 	// Emply: <tenant>.career.emply.com. A site on the customer's own domain (midtjob.dk) is a
@@ -1528,7 +1530,8 @@ var platformLabelsByApex = map[string][]string{
 	// Oorwin's marketing site and the vendor's own demo/CRM portals, which answer the careers API
 	// with sample postings.
 	"oorwin.com":     {"www", "demous", "demoind", "demosg", "oorwincrm"},
-	"inhroffice.com": {"www", "link"}, // link.inhroffice.com is the vendor's link shortener
+	"inhroffice.com": {"www", "link"},          // link.inhroffice.com is the vendor's link shortener
+	"epreselec.com":  {"www", "logininfojobs"}, // the product site and the InfoJobs sign-in bridge
 	// Darwinbox's marketing site, its content hub and its events site.
 	"darwinbox.com": {"www", "explore", "lighthouse"},
 	"darwinbox.in":  {"www"},

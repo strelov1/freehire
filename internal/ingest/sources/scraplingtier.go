@@ -129,6 +129,13 @@ var scraplingProviders = map[string]scraplingProvider{
 	"job104": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewJob104(f, NewClient())
 	}},
+	// Imperva's bot wall ("Pardon Our Interruption", HTTP 405) to the crawl host and to the fixed
+	// proxy exit after a handful of requests; the browser over the proxy is refused too. The
+	// impersonating fetcher over the rotating exits passed about half the requests on 2026-10-27,
+	// and the adapter re-sends a 405, each attempt on a new exit.
+	"epreselec": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
+		return NewEPreselec(f)
+	}},
 	"instahyre": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return pacedInstahyre(NewClient(), f)
 	}},
