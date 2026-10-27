@@ -43,7 +43,7 @@ gets no mail about it.
    email (switch — the `ProfileAlertToggle` behaviour), Telegram (Connect → the bot
    link flow, then subscribe), push (only the iPhone app registers a device → "Get the
    app").
-4. **Search jobs from your AI assistant.** The `/mcp` setup, extracted into a shared
+4. **Search jobs from your AI assistant with MCP.** The `/mcp` setup, extracted into a shared
    `McpSetup` component used by both pages. In the tour it is compact, opens on the
    account connector, and lifts the selected host's one-click install (Claude, Cursor)
    above the picker.

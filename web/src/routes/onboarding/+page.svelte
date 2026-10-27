@@ -164,7 +164,7 @@
         cv: null,
         created_at: null,
         updated_at: null,
-        ...profileStore.profile,
+        ...untrack(() => profileStore.profile),
         specializations,
         seniorities,
         skills,

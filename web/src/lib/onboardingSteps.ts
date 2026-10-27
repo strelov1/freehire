@@ -107,7 +107,7 @@ export interface ChallengeTip {
   pro?: boolean;
 }
 
-const T = {
+const TIP = {
   tailor: {
     icon: 'tailor',
     title: 'A CV for each job',
@@ -217,16 +217,16 @@ const T = {
 // Keyed by the survey's closed vocabulary (surveyOptions.ts); a test holds every answer to
 // at least one tip.
 const TIPS: Record<string, ChallengeTip[]> = {
-  recruiter_contact: [T.tailor, T.forms, T.referrals, T.tracking],
-  job_fit: [T.feed, T.skills, T.ghost],
-  remote_flexible: [T.remoteWorldwide, T.workFilters],
-  working_abroad: [T.relocation, T.remoteWorldwide],
-  visa_sponsorship: [T.visaJobs, T.visaCompanies],
-  technical_interviews: [T.buddies, T.mentors],
-  english: [T.language],
-  first_job: [T.junior, T.buddies],
-  just_starting: [T.organised],
-  other: [T.feed, T.tracking],
+  recruiter_contact: [TIP.tailor, TIP.forms, TIP.referrals, TIP.tracking],
+  job_fit: [TIP.feed, TIP.skills, TIP.ghost],
+  remote_flexible: [TIP.remoteWorldwide, TIP.workFilters],
+  working_abroad: [TIP.relocation, TIP.remoteWorldwide],
+  visa_sponsorship: [TIP.visaJobs, TIP.visaCompanies],
+  technical_interviews: [TIP.buddies, TIP.mentors],
+  english: [TIP.language],
+  first_job: [TIP.junior, TIP.buddies],
+  just_starting: [TIP.organised],
+  other: [TIP.feed, TIP.tracking],
 };
 
 /** The tips for the picked answers together, in the order picked, each tip once. */

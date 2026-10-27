@@ -97,9 +97,9 @@
   );
   const compactFooter = $derived(isAccountRoute && !hideFooter);
 
-  // The onboarding gate: auto-redirect a signed-in visitor who has never been through the
-  // wizard to /onboarding (which bounces an anonymous visitor straight on to /signin — see
-  // that page's own gate).
+  // The onboarding gate: auto-redirect a signed-in visitor who has not been shown the tour
+  // to /onboarding (which bounces an anonymous visitor straight on to /signin — see that
+  // page's own gate).
   //
   // The condition is one explicit account fact, `onboarding_completed_at`. It used to be
   // "does this account have a CV", which was a fair proxy while the wizard was about the
@@ -109,9 +109,9 @@
   // new question permanently.
   //
   // It rides on the user read the layout already makes, so there is no separate fetch to
-  // wait for. `onboardingGate.dismissed` is what keeps this from re-firing within one
-  // visit for someone who navigated away without finishing; they are asked again next
-  // visit, which is the same behaviour the CV rule had.
+  // wait for. The tour marks the account complete the moment it is shown, so this fires
+  // at most once; `onboardingGate.dismissed` covers the rest of that visit, before the
+  // session read picks the marker up.
   const needsOnboarding = $derived(currentUser()?.onboarding_completed_at == null);
   $effect(() => {
     if (isAuthenticated() && needsOnboarding && !onboardingGate.dismissed && page.url.pathname !== '/onboarding') {
