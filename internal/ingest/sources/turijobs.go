@@ -42,7 +42,8 @@ type turijobs struct {
 }
 
 const (
-	turijobsBaseURL = "https://www.turijobs.com"
+	turijobsHost    = "www.turijobs.com"
+	turijobsBaseURL = "https://" + turijobsHost
 	// turijobsSitemapURL lists every open posting; the pt-pt and es-mx editions list the same
 	// set under their own prefixes.
 	turijobsSitemapURL = turijobsBaseURL + "/es-es/sitemap/active-offers.xml"
@@ -93,7 +94,7 @@ var turijobsPostingPath = regexp.MustCompile(`^/[a-z]{2}-[a-z]{2}/oferta-trabajo
 
 func turijobsParsePosting(raw string) (turijobsPosting, bool) {
 	u, err := url.Parse(raw)
-	if err != nil {
+	if err != nil || u.Scheme != "https" || u.Host != turijobsHost {
 		return turijobsPosting{}, false
 	}
 	m := turijobsPostingPath.FindStringSubmatch(u.Path)
@@ -236,8 +237,13 @@ func turijobsOneOrMany[T any](raw json.RawMessage) []T {
 	return many
 }
 
+// errTurijobsNoPosting marks a page that answered without a JobPosting. It is not the site's
+// answer that the posting is gone — a bot-management interstitial answers the same way — so it
+// counts as no answer.
+var errTurijobsNoPosting = errors.New("page carries no JobPosting")
+
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
-// is gone (404/410, or a page with no JobPosting); an error is the absence of an answer.
+// is gone (404/410); an error is the absence of an answer.
 func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, error) {
 	if err := s.limiter.Wait(ctx); err != nil {
 		return Job{}, false, err
@@ -252,7 +258,7 @@ func (s turijobs) detail(ctx context.Context, p turijobsPosting) (Job, bool, err
 	}
 	var ld turijobsLD
 	if !ldJobPosting(root, &ld) {
-		return Job{}, false, nil
+		return Job{}, false, errTurijobsNoPosting
 	}
 	job, ok := turijobsJob(ld, p)
 	return job, ok, nil

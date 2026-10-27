@@ -100,6 +100,17 @@ func TestTurijobsHydratesNewPostingsNewestFirst(t *testing.T) {
 	}
 }
 
+func TestTurijobsReadsOnlyItsOwnHost(t *testing.T) {
+	for _, raw := range []string{
+		"https://evil.example/es-es/oferta-trabajo/x/y/1",
+		"http://www.turijobs.com/es-es/oferta-trabajo/x/y/1",
+	} {
+		if _, ok := turijobsParsePosting(raw); ok {
+			t.Errorf("read %q as a posting", raw)
+		}
+	}
+}
+
 func TestTurijobsGateSkipsRejectedTitles(t *testing.T) {
 	f := &turijobsFake{}
 	gate := DetailGate{Rejected: func(j Job) bool { return true }}
