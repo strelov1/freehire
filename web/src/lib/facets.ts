@@ -469,6 +469,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   hirist: 'Hirist',
   iimjobs: 'iimjobs',
   shine: 'Shine.com',
+  spainjobs: 'SpainJobs.io',
   infoempleo: 'Infoempleo',
   feinaactiva: 'Feina Activa',
   turijobs: 'Turijobs',

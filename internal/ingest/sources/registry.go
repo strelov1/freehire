@@ -859,6 +859,9 @@ func All(c HTTPClient) map[string]Source {
 	// Shine.com: an Indian general job board, enumerated from its job sitemaps, each new
 	// posting's facts read from its page's schema.org JobPosting. See shine.go.
 	registry["shine"] = NewShine(c)
+	// SpainJobs.io: an English-language board of Spanish employers' career-page postings,
+	// enumerated from its job sitemaps, each new posting read from its page. See spainjobs.go.
+	registry["spainjobs"] = NewSpainJobs(c)
 	// Infoempleo: a Spanish general job board, enumerated from its paginated listing, each new
 	// posting's body read from its page's schema.org JobPosting. See infoempleo.go.
 	registry["infoempleo"] = NewInfoempleo(c)
