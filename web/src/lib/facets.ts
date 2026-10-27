@@ -473,6 +473,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   infoempleo: 'Infoempleo',
   feinaactiva: 'Feina Activa',
   turijobs: 'Turijobs',
+  sapoemprego: 'SAPO Emprego',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

@@ -53,6 +53,30 @@ func fetchDetails[P any](postings []P, workers int, fetch func(P) (Job, bool)) [
 	return out
 }
 
+// hydrationLanes picks one run's detail requests out of a hydrating aggregator's unseen
+// postings, which arrive newest first: the newest fresh, then backlog postings from the rest,
+// starting at an offset that advances by backlog every hour and wraps around.
+//
+// The backlog lane exists for the postings the pipeline discards unsaved — an employer already
+// covered by a non-aggregator source, a hidden employer — when the listing cannot name the
+// employer before the page is bought (no DetailGate to consult). Such a posting is never stored,
+// so it stays unseen and is bought again on every run; newest-first alone would stall the
+// backlog for good once those outnumbered the budget. The moving window always reaches older
+// postings; what it re-reads in passing is the cost of not keeping a record of declined ids,
+// which nothing in the pipeline does.
+func hydrationLanes[P any](unseen []P, fresh, backlog int, now time.Time) []P {
+	if len(unseen) <= fresh+backlog {
+		return unseen
+	}
+	picked := append([]P(nil), unseen[:fresh]...)
+	rest := unseen[fresh:]
+	start := int((now.Unix() / 3600 * int64(backlog)) % int64(len(rest)))
+	for i := 0; i < backlog; i++ {
+		picked = append(picked, rest[(start+i)%len(rest)])
+	}
+	return picked
+}
+
 // fetchDetailsStream maps each posting to a Job via fetch, concurrently with a bounded worker
 // pool, emitting each successful Job to emit as soon as its detail completes (a posting whose
 // fetch returns ok=false is dropped). Unlike fetchDetails it does not buffer or preserve order,

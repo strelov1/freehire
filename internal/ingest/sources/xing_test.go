@@ -268,7 +268,7 @@ func TestXingDetailGonePosting(t *testing.T) {
 	}
 }
 
-func TestXingLanes(t *testing.T) {
+func TestHydrationLanes(t *testing.T) {
 	var unseen []xingPosting
 	for id := int64(100); id > 0; id-- {
 		unseen = append(unseen, xingPosting{id: id})
@@ -281,15 +281,15 @@ func TestXingLanes(t *testing.T) {
 		return out
 	}
 	hour := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
-	a := ids(xingLanes(unseen, 3, 2, hour))
-	b := ids(xingLanes(unseen, 3, 2, hour.Add(time.Hour)))
+	a := ids(hydrationLanes(unseen, 3, 2, hour))
+	b := ids(hydrationLanes(unseen, 3, 2, hour.Add(time.Hour)))
 	if len(a) != 5 || a[0] != 100 || a[1] != 99 || a[2] != 98 {
 		t.Fatalf("fresh lane = %v, want the three newest first", a)
 	}
 	if a[3] == b[3] {
 		t.Errorf("backlog window did not move between hours: %v vs %v", a, b)
 	}
-	if got := xingLanes(unseen[:4], 3, 2, hour); len(got) != 4 {
+	if got := hydrationLanes(unseen[:4], 3, 2, hour); len(got) != 4 {
 		t.Errorf("a short backlog must be taken whole, got %d", len(got))
 	}
 }

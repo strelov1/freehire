@@ -146,27 +146,11 @@ func (s xing) FetchNew(ctx context.Context, _ CompanyEntry, seen func(externalID
 		}
 		unseen = append(unseen, p)
 	}
-	picked := xingLanes(unseen, s.freshPerRun, s.backlogPerRun, s.now())
+	picked := hydrationLanes(unseen, s.freshPerRun, s.backlogPerRun, s.now())
 	jobs := fetchDetails(picked, xingDetailWorkers, func(p xingPosting) (Job, bool) {
 		return s.detail(ctx, p)
 	})
 	return append(jobs, refreshed...), nil
-}
-
-// xingLanes picks one run's postings out of the unseen ones, which arrive newest id first: the
-// newest fresh, then backlog postings from the rest, starting at an offset that advances by
-// backlog every hour and wraps around.
-func xingLanes(unseen []xingPosting, fresh, backlog int, now time.Time) []xingPosting {
-	if len(unseen) <= fresh+backlog {
-		return unseen
-	}
-	picked := append([]xingPosting(nil), unseen[:fresh]...)
-	rest := unseen[fresh:]
-	start := int((now.Unix() / 3600 * int64(backlog)) % int64(len(rest)))
-	for i := 0; i < backlog; i++ {
-		picked = append(picked, rest[(start+i)%len(rest)])
-	}
-	return picked
 }
 
 // list reads every posting sitemap the index names and returns their postings, newest id first.

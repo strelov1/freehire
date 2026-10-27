@@ -872,6 +872,9 @@ func All(c HTTPClient) map[string]Source {
 	// posting pages need the Scrapling tier (see scraplingProviders), so over this plain client
 	// only the sitemap is read. See turijobs.go.
 	registry["turijobs"] = NewTurijobs(c, c)
+	// SAPO Emprego: a Portuguese general job board, enumerated from its offers sitemap, each new
+	// posting's facts read from its page's schema.org JobPosting. See sapoemprego.go.
+	registry["sapoemprego"] = NewSapoEmprego(c)
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the
