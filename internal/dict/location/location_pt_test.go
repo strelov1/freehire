@@ -39,6 +39,8 @@ func TestBrazilianAndPortugueseLines(t *testing.T) {
 		{"Conceição, BA, BR", []string{"br"}, nil},
 		// A country and its own ISO code are that country, not a town and a state.
 		{"Juan díaz, Panamá, PA", []string{"pa"}, []string{"Juan Díaz"}},
+		{"Panamá PA", nil, nil}, // not Brazil, though Goiás has a town called Panamá
+		{"Localização não informada, PR (Brasil)", []string{"br"}, nil},
 		// The separators the crawl writes: a dash, a slash, a space.
 		{"São Paulo - SP", []string{"br"}, []string{"São Paulo"}},
 		{"Belo Horizonte/MG", []string{"br"}, []string{"Belo Horizonte"}},
@@ -65,6 +67,7 @@ func TestBrazilianAndPortugueseLines(t *testing.T) {
 		{"Porto, Porto District, pt", []string{"pt"}, []string{"Porto"}},
 		// A district named after its capital, after a town, is the district.
 		{"Matosinhos, Porto, PT", []string{"pt"}, []string{"Matosinhos"}},
+		{"Matosinhos,Porto,PT", []string{"pt"}, []string{"Matosinhos"}},
 		{"Carnaxide, Lisboa, pt", []string{"pt"}, []string{"Carnaxide"}},
 		{"Amadora, Lisbon, pt", []string{"pt"}, []string{"Amadora"}},
 		{"Ovar, Aveiro, pt", []string{"pt"}, []string{"Ovar"}},

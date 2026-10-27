@@ -67,7 +67,9 @@ func provinceAfterCity(tok, lower string, first bool) bool {
 	if first {
 		return false
 	}
-	between := strings.Contains(lower, ", "+tok+",")
+	// "Matosinhos,Porto,PT" writes the same slots with no space after the commas.
+	compact := strings.ReplaceAll(strings.ReplaceAll(lower, ", ", ","), " ,", ",")
+	between := strings.Contains(compact, ","+tok+",")
 	switch {
 	case provinceCapitals[tok]:
 		return between

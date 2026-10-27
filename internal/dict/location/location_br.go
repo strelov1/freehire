@@ -35,7 +35,7 @@ func lineNamesBrazil(s string) bool {
 	toks := strings.Split(s, ",")
 	last := ""
 	for _, tok := range toks {
-		tok = strings.TrimSpace(tok)
+		tok = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(tok), parenMark))
 		if brazilNames[tok] {
 			return true
 		}
@@ -106,7 +106,7 @@ func stripBrazilianState(tok string) (string, bool) {
 		return tok, false
 	}
 	place := strings.Join(fields[:len(fields)-1], " ")
-	if !isBrazilianPlace(place) {
+	if !brazilianStateAccepted(fields[len(fields)-1], place, false) {
 		return tok, false
 	}
 	return place, true
@@ -123,7 +123,7 @@ func indianStateBetween(tok, prevTok string, namesIndia bool) bool {
 func lineNamesIndia(s string) bool {
 	toks := strings.Split(s, ",")
 	for i := len(toks) - 1; i >= 0; i-- {
-		if tok := strings.TrimSpace(toks[i]); tok != "" {
+		if tok := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(toks[i]), parenMark)); tok != "" {
 			return tok == "in" || tok == "ind" || tok == "india"
 		}
 	}
