@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/meilisearch/meilisearch-go"
@@ -47,7 +48,56 @@ func (c *Client) FacetCounts(ctx context.Context, p FacetParams) (FacetResult, e
 	if err != nil {
 		return FacetResult{}, queryErr(ctx, "search: facet query", err)
 	}
-	return buildFacetResult(resp)
+	res, err := buildFacetResult(resp)
+	if err != nil {
+		return FacetResult{}, err
+	}
+	if err := widenImpliedRegionCounts(ctx, p.Query, p.Filter, res.Facets["regions"], c.facetSearch); err != nil {
+		return FacetResult{}, err
+	}
+	return res, nil
+}
+
+// andFragment ANDs one more fragment onto a filter as FilterFromValues builds it
+// (nil or [][]string). Any other shape is refused rather than replaced: dropping the
+// caller's filter would report a count for the whole catalogue as if it were theirs.
+func andFragment(filter any, frag string) (any, error) {
+	switch f := filter.(type) {
+	case nil:
+		return [][]string{{frag}}, nil
+	case [][]string:
+		return append(slices.Clone(f), []string{frag}), nil
+	default:
+		return nil, fmt.Errorf("search: cannot narrow a %T filter", filter)
+	}
+}
+
+// widenImpliedRegionCounts replaces each implying region's bucket in a regions
+// distribution with what choosing it actually returns (see regionImplies): the
+// documents carrying ANY of its regions, counted once. Summing the buckets would
+// count an EMEA posting, which carries both "eu" and "uk", twice — so it asks the
+// engine, one count per implying region. A nil distribution (regions not requested)
+// costs nothing.
+func widenImpliedRegionCounts(ctx context.Context, query string, filter any, dist map[string]int64, search facetSearcher) error {
+	if dist == nil {
+		return nil
+	}
+	for val := range regionImplies {
+		set := impliedRegions(val)
+		if !slices.ContainsFunc(set, func(r string) bool { return dist[r] > 0 }) {
+			continue
+		}
+		widened, err := andFragment(filter, InStrings("regions", set))
+		if err != nil {
+			return err
+		}
+		resp, err := search(ctx, query, widened, nil)
+		if err != nil {
+			return queryErr(ctx, "search: region count "+val, err)
+		}
+		dist[val] = resp.EstimatedTotalHits
+	}
+	return nil
 }
 
 // facetSearch runs one facet-count query, reading q's operators the same way
@@ -172,6 +222,11 @@ func disjunctiveFacetCounts(ctx context.Context, query string, reqs []FacetReq, 
 			fr, err := buildFacetResult(resp)
 			if err != nil {
 				return err
+			}
+			if r.Attr == "regions" {
+				if err := widenImpliedRegionCounts(ctx, query, r.Filter, fr.Facets[r.Attr], search); err != nil {
+					return err
+				}
 			}
 			mu.Lock()
 			if d, ok := fr.Facets[r.Attr]; ok {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 	"strconv"
 	"sync"
 	"testing"
@@ -62,6 +63,42 @@ func TestDisjunctiveFacetCounts(t *testing.T) {
 	}
 	if sen == nil || sen.filter != "F_sen" {
 		t.Errorf("seniority query filter = %v, want F_sen", sen)
+	}
+}
+
+func TestDisjunctiveFacetCounts_EuropeCountIncludesUK(t *testing.T) {
+	// The Europe count must be what choosing Europe returns — the documents in
+	// Europe OR the UK, counted once — not the bare "eu" bucket of the distribution.
+	var mu sync.Mutex
+	var widened any
+	searcher := func(_ context.Context, _ string, filter any, facets []string) (*meilisearch.SearchResponse, error) {
+		if len(facets) > 0 {
+			dist, _ := json.Marshal(map[string]map[string]int64{"regions": {"eu": 100, "uk": 30, "latam": 7}})
+			return &meilisearch.SearchResponse{FacetDistribution: dist}, nil
+		}
+		if groups, ok := filter.([][]string); ok && len(groups) == 2 {
+			mu.Lock()
+			widened = filter
+			mu.Unlock()
+			return &meilisearch.SearchResponse{EstimatedTotalHits: 120}, nil
+		}
+		return &meilisearch.SearchResponse{EstimatedTotalHits: 500}, nil
+	}
+
+	reqs := []FacetReq{{Attr: "regions", Filter: [][]string{{`work_mode = "remote"`}}}}
+	got, err := disjunctiveFacetCounts(context.Background(), "", reqs, nil, searcher)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got.Facets["regions"]["eu"] != 120 {
+		t.Errorf("eu = %d, want 120 (Europe OR UK, overlap counted once)", got.Facets["regions"]["eu"])
+	}
+	if got.Facets["regions"]["uk"] != 30 || got.Facets["regions"]["latam"] != 7 {
+		t.Errorf("other regions changed: %v", got.Facets["regions"])
+	}
+	want := [][]string{{`work_mode = "remote"`}, {`regions IN ["eu", "uk"]`}}
+	if !reflect.DeepEqual(widened, want) {
+		t.Errorf("widened count filter = %v, want %v", widened, want)
 	}
 }
 

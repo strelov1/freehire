@@ -92,8 +92,8 @@ func TestFilterFromValues_IgnoresTheRetiredRoleFacet(t *testing.T) {
 
 	// It must not take the region down with it: a retired facet beside a live one
 	// leaves the live one filtering.
-	got := normalizeGroups(t, FilterFromValues(vals("role=founding_engineer&regions=eu")))
-	want := [][]string{{`regions = "eu"`}}
+	got := normalizeGroups(t, FilterFromValues(vals("role=founding_engineer&regions=latam")))
+	want := [][]string{{`regions = "latam"`}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
@@ -318,6 +318,30 @@ func TestFilterFromValues_ExperienceYearsMaxUnparseable(t *testing.T) {
 	}
 }
 
+func TestFilterFromValues_EuropeIncludesUK(t *testing.T) {
+	// Europe is the geographic region, and the UK is in it: choosing Europe must
+	// reach a London posting, which carries only the separate "uk" region.
+	got := normalizeGroups(t, FilterFromValues(vals("regions=eu")))
+	want := [][]string{{`regions IN ["eu", "uk"]`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("regions=eu: got %v, want %v", got, want)
+	}
+
+	// Excluding Europe excludes the UK with it, or "not Europe" would still list London.
+	got = normalizeGroups(t, FilterFromValues(vals("regions_exclude=eu")))
+	want = [][]string{{`regions NOT IN ["eu", "uk"]`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("regions_exclude=eu: got %v, want %v", got, want)
+	}
+
+	// The UK alone stays the UK alone — it does not pull the rest of Europe in.
+	got = normalizeGroups(t, FilterFromValues(vals("regions=uk")))
+	want = [][]string{{`regions = "uk"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("regions=uk: got %v, want %v", got, want)
+	}
+}
+
 func TestFilterFromValues_RegionUnspecifiedSentinel(t *testing.T) {
 	// The reserved `regions=none` value selects jobs with no resolved geography
 	// via Meili's IS EMPTY, not an equality against a literal "none" region.
@@ -329,10 +353,10 @@ func TestFilterFromValues_RegionUnspecifiedSentinel(t *testing.T) {
 
 	// It ORs with real region values inside the same facet group, so "Europe or
 	// unspecified" is a single OR of an equality and IS EMPTY.
-	got = normalizeGroups(t, FilterFromValues(vals("regions=none&regions=eu")))
-	want = [][]string{{`regions = "eu"`, `regions IS EMPTY`}}
+	got = normalizeGroups(t, FilterFromValues(vals("regions=none&regions=latam")))
+	want = [][]string{{`regions = "latam"`, `regions IS EMPTY`}}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("regions=none&eu: got %v, want %v", got, want)
+		t.Errorf("regions=none&latam: got %v, want %v", got, want)
 	}
 
 	// Excluding the sentinel keeps only jobs that DO have a region (IS NOT EMPTY).
@@ -363,8 +387,8 @@ func TestFilterFromValues_LocationFacetsORTogether(t *testing.T) {
 	}
 
 	// Cities join the same OR group.
-	got = normalizeGroups(t, FilterFromValues(vals("regions=eu&countries=BR&cities=Berlin")))
-	want = [][]string{{`cities = "Berlin"`, `countries = "BR"`, `regions = "eu"`}}
+	got = normalizeGroups(t, FilterFromValues(vals("regions=latam&countries=BR&cities=Berlin")))
+	want = [][]string{{`cities = "Berlin"`, `countries = "BR"`, `regions = "latam"`}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("regions+countries+cities: got %v, want %v", got, want)
 	}
@@ -378,9 +402,9 @@ func TestFilterFromValues_LocationFacetsORTogether(t *testing.T) {
 
 	// A non-location facet still ANDs with the location group as its own group:
 	// "remote AND (Europe OR Brazil)".
-	got = normalizeGroups(t, FilterFromValues(vals("regions=eu&countries=BR&work_mode=remote")))
+	got = normalizeGroups(t, FilterFromValues(vals("regions=latam&countries=BR&work_mode=remote")))
 	want = [][]string{
-		{`countries = "BR"`, `regions = "eu"`},
+		{`countries = "BR"`, `regions = "latam"`},
 		{`work_mode = "remote"`},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -396,10 +420,10 @@ func TestFilterFromValues_LocationFacetsORTogether(t *testing.T) {
 
 	// Location excludes stay their own AND groups, independent of the include OR:
 	// "(Europe OR Brazil) AND never Russia".
-	got = normalizeGroups(t, FilterFromValues(vals("regions=eu&countries=BR&countries_exclude=RU")))
+	got = normalizeGroups(t, FilterFromValues(vals("regions=latam&countries=BR&countries_exclude=RU")))
 	want = [][]string{
 		{`countries != "RU"`},
-		{`countries = "BR"`, `regions = "eu"`},
+		{`countries = "BR"`, `regions = "latam"`},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("location OR with exclude: got %v, want %v", got, want)

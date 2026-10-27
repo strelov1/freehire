@@ -82,7 +82,7 @@ func TestJobFacets_DisjunctiveReducesEachFacetsOwnFilter(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior&regions=eu")
+	status, _ := doGet(t, app, "/jobs/facets?disjunctive=1&seniority=senior&regions=latam")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -95,7 +95,7 @@ func TestJobFacets_DisjunctiveReducesEachFacetsOwnFilter(t *testing.T) {
 	if filterHas(senGroups, `enrichment.seniority = "senior"`) {
 		t.Errorf("seniority facet should drop its own selection, got %#v", senGroups)
 	}
-	if !filterHas(senGroups, `regions = "eu"`) {
+	if !filterHas(senGroups, `regions = "latam"`) {
 		t.Errorf("seniority facet should keep other facets (regions), got %#v", senGroups)
 	}
 
@@ -104,13 +104,13 @@ func TestJobFacets_DisjunctiveReducesEachFacetsOwnFilter(t *testing.T) {
 	if !filterHas(regGroups, `enrichment.seniority = "senior"`) {
 		t.Errorf("regions facet should keep seniority, got %#v", regGroups)
 	}
-	if filterHas(regGroups, `regions = "eu"`) {
+	if filterHas(regGroups, `regions = "latam"`) {
 		t.Errorf("regions facet should drop its own selection, got %#v", regGroups)
 	}
 
 	// The grand total uses the full filter (both facets).
 	totalGroups, _ := fake.gotTotal.([][]string)
-	if !filterHas(totalGroups, `enrichment.seniority = "senior"`) || !filterHas(totalGroups, `regions = "eu"`) {
+	if !filterHas(totalGroups, `enrichment.seniority = "senior"`) || !filterHas(totalGroups, `regions = "latam"`) {
 		t.Errorf("total filter should include all facets, got %#v", totalGroups)
 	}
 }
@@ -151,7 +151,7 @@ func TestJobFacets_PassesFiltersAndRequestsFacets(t *testing.T) {
 	fake := &fakeFacetCounter{}
 	app := facetsApp(fake)
 
-	status, _ := doGet(t, app, "/jobs/facets?q=golang&seniority=senior&regions=eu")
+	status, _ := doGet(t, app, "/jobs/facets?q=golang&seniority=senior&regions=latam")
 	if status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
@@ -163,7 +163,7 @@ func TestJobFacets_PassesFiltersAndRequestsFacets(t *testing.T) {
 	if !ok {
 		t.Fatalf("Filter = %#v, want [][]string", fake.got.Filter)
 	}
-	if !filterHas(groups, `enrichment.seniority = "senior"`) || !filterHas(groups, `regions = "eu"`) {
+	if !filterHas(groups, `enrichment.seniority = "senior"`) || !filterHas(groups, `regions = "latam"`) {
 		t.Errorf("Filter missing facets: %#v", groups)
 	}
 	// The handler must request a distribution for the facetable attributes,
@@ -398,7 +398,7 @@ func TestJobFacets_CacheKeyStableAcrossMultiFacetRequests(t *testing.T) {
 	fake := &fakeFacetCounter{res: search.FacetResult{Total: 42}}
 	app := facetsAppCached(fake, cache.NewMemory())
 
-	const q = "/jobs/facets?seniority=senior&work_mode=remote&category=backend&regions=eu"
+	const q = "/jobs/facets?seniority=senior&work_mode=remote&category=backend&regions=latam"
 	for i := 0; i < 8; i++ {
 		status, _ := doGet(t, app, q)
 		if status != fiber.StatusOK {

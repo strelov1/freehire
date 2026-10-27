@@ -22,6 +22,25 @@ func Neq(attr, value string) string {
 	return attr + " != " + quote(value)
 }
 
+// InStrings builds `attr IN ["a", "b"]`, matching documents carrying any of the values
+// (each quoted and escaped like Eq).
+func InStrings(attr string, values []string) string {
+	return attr + " IN " + quotedList(values)
+}
+
+// NotInStrings builds `attr NOT IN ["a", "b"]`, the exclude form of InStrings.
+func NotInStrings(attr string, values []string) string {
+	return attr + " NOT IN " + quotedList(values)
+}
+
+func quotedList(values []string) string {
+	quoted := make([]string, len(values))
+	for i, v := range values {
+		quoted[i] = quote(v)
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
+}
+
 // EqBool builds an equality fragment against a boolean attribute (unquoted, as
 // Meilisearch compares booleans literally).
 func EqBool(attr string, v bool) string {

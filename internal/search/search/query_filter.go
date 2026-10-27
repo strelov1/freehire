@@ -84,12 +84,34 @@ var locationFacets = map[string]bool{"regions": true, "countries": true, "cities
 // the former materialized `remote_unspecified` boolean with a query-time predicate.
 const RegionUnspecified = "none"
 
+// regionImplies names, for a region filter value, the other regions choosing it
+// also selects. "eu" is Europe in the geographic sense, and the UK is in Europe, but
+// a British posting carries only its own "uk" region — so without this, choosing
+// Europe hid every London job (HN feedback, 2026-10-26). The UK stays its own region,
+// so it can still be chosen alone. Applied at query time, never stored: the document's
+// regions say where the posting IS, and the job card renders them verbatim.
+var regionImplies = map[string][]string{"eu": {"uk"}}
+
+// impliedRegions returns every region a regions filter value selects, itself first,
+// or nil when it selects only itself.
+func impliedRegions(val string) []string {
+	extra := regionImplies[val]
+	if len(extra) == 0 {
+		return nil
+	}
+	return append([]string{val}, extra...)
+}
+
 // facetEq builds a facet's include fragment: an equality, except the regions
-// unspecified sentinel, which becomes IS EMPTY, and the retired management category,
-// which becomes the role_type equality (see retiredCategory).
+// unspecified sentinel, which becomes IS EMPTY, a region that implies others (see
+// regionImplies), which becomes an IN, and the retired management category, which
+// becomes the role_type equality (see retiredCategory).
 func facetEq(param, attr, val string) string {
 	if param == "regions" && val == RegionUnspecified {
 		return IsEmpty(attr)
+	}
+	if set := impliedRegions(val); param == "regions" && set != nil {
+		return InStrings(attr, set)
 	}
 	attr, val = retiredCategory(param, attr, val)
 	if trueOrAbsentParams[param] {
@@ -138,10 +160,14 @@ func trueOrAbsentFragment(attr, val string) string {
 }
 
 // facetNeq builds a facet's exclude fragment: an inequality, except the regions
-// unspecified sentinel, which becomes IS NOT EMPTY.
+// unspecified sentinel, which becomes IS NOT EMPTY, and a region that implies others,
+// which excludes all of them.
 func facetNeq(param, attr, val string) string {
 	if param == "regions" && val == RegionUnspecified {
 		return IsNotEmpty(attr)
+	}
+	if set := impliedRegions(val); param == "regions" && set != nil {
+		return NotInStrings(attr, set)
 	}
 	attr, val = retiredCategory(param, attr, val)
 	return Neq(attr, val)

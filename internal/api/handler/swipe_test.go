@@ -87,7 +87,7 @@ func TestSwipeDeck_NoExclusionWhenNothingJudged(t *testing.T) {
 	fake := &fakeSearcher{}
 	app, iss := deckApp(fake, nil)
 
-	if status, _ := deckGet(t, app, iss, "/api/v1/me/tracking/swipe?regions=eu"); status != fiber.StatusOK {
+	if status, _ := deckGet(t, app, iss, "/api/v1/me/tracking/swipe?regions=latam"); status != fiber.StatusOK {
 		t.Fatalf("status = %d, want 200", status)
 	}
 	groups, _ := fake.got.Filter.([][]string)
@@ -98,7 +98,7 @@ func TestSwipeDeck_NoExclusionWhenNothingJudged(t *testing.T) {
 			}
 		}
 	}
-	if !filterHas(groups, `regions = "eu"`) {
+	if !filterHas(groups, `regions = "latam"`) {
 		t.Errorf("facet filter not forwarded: %#v", groups)
 	}
 }
