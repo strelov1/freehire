@@ -341,8 +341,8 @@ type netempregosLD struct {
 }
 
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
-// is gone — a 404/410, or the "Esta oferta já não está activa" page (HTTP 200, no JobPosting) it
-// serves for a withdrawn or expired one; an error is the absence of an answer.
+// is gone — a 404/410, or the netempregosInactive notice; an error is the absence of an answer,
+// including a page that is neither a posting nor that notice.
 func (s netempregos) detail(ctx context.Context, p netempregosPosting) (Job, bool, error) {
 	page, err := s.get(ctx, p.url)
 	if err != nil {
@@ -358,11 +358,22 @@ func (s netempregos) detail(ctx context.Context, p netempregosPosting) (Job, boo
 	}
 	var ld netempregosLD
 	if !ldJobPosting(root, &ld) {
-		return Job{}, false, nil
+		// Only the site's own notice says the posting is gone. Any other page without a
+		// JobPosting is not an answer: a datacenter IP is served the candidate LOGIN page
+		// (HTTP 200) for every posting, and reading that as "gone" made a whole run read 1,500
+		// pages and store nothing without a single error.
+		if strings.Contains(page, netempregosInactive) {
+			return Job{}, false, nil
+		}
+		return Job{}, false, fmt.Errorf("page carries no JobPosting (%q)", titleText(root))
 	}
 	job, ok := netempregosJob(ld, p)
 	return job, ok, nil
 }
+
+// netempregosInactive is the notice the site serves, HTTP 200 and no JobPosting, for a withdrawn
+// or expired posting.
+const netempregosInactive = "Esta oferta já não está activa"
 
 // netempregosSelfLink is the posting's own URL the site appends to every description.
 var netempregosSelfLink = regexp.MustCompile(`(?i)(\s*<br\s*/?>)*\s*https?://www\.net-empregos\.com/\d+/\S*\s*$`)

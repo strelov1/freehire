@@ -107,6 +107,11 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// searches were served (2026-10-25), so it rides the rotating exit — see
 	// rotatingProxyProviders.
 	"cake": func(c HTTPClient) Source { return NewCake(c) },
+	// net-empregos.com serves both crawl hosts' datacenter IPs its candidate LOGIN page (HTTP
+	// 200) in place of every posting page, whatever the User-Agent, while its feeds still answer;
+	// both proxies are served the posting (measured 2026-10-27). NewNetEmpregos takes a
+	// TextGetter.
+	"netempregos": func(c HTTPClient) Source { return NewNetEmpregos(c) },
 	"naukri": func(c HTTPClient) Source {
 		return NewNaukri(pacedNaukriGetter(withUserAgent(c, naukriUserAgent)))
 	},

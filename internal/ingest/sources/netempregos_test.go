@@ -18,6 +18,8 @@ import (
 type netempregosFake struct {
 	rssErr  error
 	pageErr error
+	// wall serves the candidate login page for every posting, as the site does to a datacenter IP.
+	wall bool
 
 	mu    sync.Mutex
 	pages []string
@@ -39,6 +41,10 @@ func (f *netempregosFake) GetText(_ context.Context, u string) (string, error) {
 		f.mu.Unlock()
 		if f.pageErr != nil {
 			return "", f.pageErr
+		}
+		if f.wall {
+			raw, err := os.ReadFile("testdata/netempregos/login.html")
+			return string(raw), err
 		}
 		pages := map[string]string{
 			"/16179591/": "posting.html",
@@ -190,5 +196,15 @@ func TestNetEmpregosPlace(t *testing.T) {
 		if loc != c.loc || (fb != nil) != c.pt {
 			t.Errorf("netempregosPlace(%q) = %q, %v", c.zone, loc, fb)
 		}
+	}
+}
+
+// The login wall a datacenter IP is served instead of every posting is not the site saying the
+// posting is gone: a run that meets nothing else fails instead of storing nothing quietly.
+func TestNetEmpregosLoginWallIsNotGone(t *testing.T) {
+	f := &netempregosFake{wall: true}
+	_, err := newTestNetEmpregos(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err == nil || !strings.Contains(err.Error(), "none answered") {
+		t.Fatalf("err = %v, want the run to fail", err)
 	}
 }
