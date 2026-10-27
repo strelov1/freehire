@@ -76,32 +76,6 @@
       ],
     },
     {
-      id: 'gemini',
-      label: 'Gemini',
-      domain: 'gemini.google.com',
-      // Google's own help page (support.google.com/gemini/answer/17209137); custom apps are
-      // US-only, personal Google accounts, web and mobile apps.
-      steps: [
-        'On gemini.google.com, open Settings, then Connected Apps.',
-        'Under Custom apps, choose Add a custom app, paste the address, and choose Next.',
-        'Follow the on-screen steps to finish connecting.',
-        'In a chat, type @, pick freehire, and ask a job question.',
-      ],
-    },
-    {
-      // Meta's Muse has no connector settings page: it adds a server when asked to in a
-      // chat, so the setup is a message to send rather than a form to fill.
-      id: 'muse',
-      label: 'Muse',
-      domain: 'muse.ai',
-      steps: [
-        'There is no settings page: send Muse the message below in a chat.',
-        'Tap Approve when Muse tests the connection, then ask a job question in the same chat.',
-      ],
-      file: 'message to Muse',
-      snippet: (u) => `Connect to my freehire MCP: ${u}`,
-    },
-    {
       id: 'grok',
       label: 'Grok Bot',
       domain: 'grok.com',
@@ -120,6 +94,14 @@
       domain: 'claude.ai',
       steps: ['Run this once in your terminal, then ask Claude Code a job question.'],
       snippet: (u) => `claude mcp add --transport http freehire ${u}`,
+    },
+    {
+      // Gemini's own web app has no way to add an MCP server; its CLI does.
+      id: 'gemini-cli',
+      label: 'Gemini CLI',
+      domain: 'gemini.google.com',
+      steps: ['Run this once in your terminal, then ask Gemini CLI a job question.'],
+      snippet: (u) => `gemini mcp add --transport http freehire ${u}`,
     },
     {
       id: 'cursor',
