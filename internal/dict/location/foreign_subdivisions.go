@@ -147,6 +147,50 @@ var foreignSubdivisionNames = map[string]string{
 	"waals-brabant": "be", "brabant wallon": "be", "flandre-orientale": "be",
 	"flandre-occidentale": "be", "vlaanderen": "be", "wallonië": "be", "wallonie": "be",
 	"henegouwen": "be", "hainaut": "be",
+	// Spain — the autonomous communities in Spanish, Catalan, Basque and English, the
+	// Basque provinces, and the islands a location line names in place of a town ("Madrid,
+	// Comunidad de Madrid", "Palma, Illes Balears", "Tenerife"). The provinces named after
+	// their capital are the city in either reading (spanishProvinceCapitals). La Rioja is
+	// absent: it is also an Argentine province and city.
+	"comunidad de madrid": "es", "cataluña": "es", "catalunya": "es", "catalonia": "es",
+	"país vasco": "es", "pais vasco": "es", "euskadi": "es", "basque country": "es",
+	"comunidad valenciana": "es", "comunitat valenciana": "es",
+	"andalucía": "es", "andalucia": "es", "andalusia": "es",
+	"aragón": "es", "aragon": "es", "principado de asturias": "es", "asturias": "es",
+	"islas baleares": "es", "illes balears": "es", "baleares": "es", "balearic islands": "es",
+	"canarias": "es", "islas canarias": "es", "canary islands": "es", "cantabria": "es",
+	"castilla y león": "es", "castilla y leon": "es", "castilla-la mancha": "es",
+	"castilla la mancha": "es", "extremadura": "es", "galicia": "es",
+	"región de murcia": "es", "region de murcia": "es",
+	"comunidad foral de navarra": "es", "navarra": "es", "nafarroa": "es",
+	"bizkaia": "es", "vizcaya": "es", "gipuzkoa": "es", "guipúzcoa": "es", "guipuzcoa": "es",
+	"álava": "es", "alava": "es", "araba": "es",
+	"mallorca": "es", "menorca": "es", "tenerife": "es", "gran canaria": "es",
+	"lanzarote": "es", "fuerteventura": "es",
+	// Mexico — the states OCC writes after the town ("Mérida, Yucatán", "Toluca, Estado
+	// de México"). The states named after their capital are the city in either reading
+	// (mexicanStateCapitals). Withheld for a US reading the catalogue meets: "Durango"
+	// (Colorado), "Hidalgo" (Texas), "Sonora" (California).
+	"aguascalientes": "mx", "baja california": "mx", "baja california sur": "mx",
+	"campeche": "mx", "chiapas": "mx", "chihuahua": "mx", "coahuila": "mx", "coahuila de zaragoza": "mx",
+	"colima": "mx", "estado de méxico": "mx", "estado de mexico": "mx", "edomex": "mx",
+	"guanajuato": "mx", "guerrero": "mx", "jalisco": "mx", "michoacán": "mx",
+	"michoacan": "mx", "michoacán de ocampo": "mx", "morelos": "mx", "nayarit": "mx",
+	"nuevo león": "mx", "nuevo leon": "mx", "oaxaca": "mx", "puebla": "mx",
+	"querétaro": "mx", "queretaro": "mx", "quintana roo": "mx", "san luis potosí": "mx",
+	"san luis potosi": "mx", "sinaloa": "mx", "tabasco": "mx", "tamaulipas": "mx",
+	"tlaxcala": "mx", "veracruz": "mx", "yucatán": "mx", "yucatan": "mx", "zacatecas": "mx",
+	// Colombia — the departments a line names beside or instead of Bogotá's "D.C.".
+	// Withheld: "Santander" (the Spanish city), "Bolívar", "Córdoba", "Magdalena", "Cesar".
+	"antioquia": "co", "valle del cauca": "co", "cundinamarca": "co", "atlántico": "co",
+	"atlantico": "co", "risaralda": "co", "boyacá": "co", "boyaca": "co", "tolima": "co",
+	"huila": "co", "quindío": "co", "quindio": "co", "norte de santander": "co",
+	// Argentina and Chile — the capital districts and their conurbations.
+	"caba": "ar", "capital federal": "ar", "ciudad autónoma de buenos aires": "ar",
+	"ciudad autonoma de buenos aires": "ar", "gran buenos aires": "ar", "gba": "ar",
+	"provincia de buenos aires": "ar",
+	"región metropolitana":      "cl", "region metropolitana": "cl",
+	"región metropolitana de santiago": "cl",
 }
 
 // regionNotCity are the subdivision names the city table ALSO lists as an alias of a
@@ -164,6 +208,28 @@ var regionNotCity = map[string]bool{
 	// A Dutch and a Belgian province, and Limburg an der Lahn in Hesse: it states no
 	// city, and — being two countries' province — no country either.
 	"limburg": true,
+	// The Spanish islands and communities whose name GeoNames also gives a town: Tenerife
+	// is an alias of Santa Cruz de Tenerife, Andalucía and Asturias are Colombian and
+	// Philippine towns.
+	"tenerife": true, "gran canaria": true, "mallorca": true, "andalucía": true,
+	"andalucia": true, "asturias": true, "galicia": true, "navarra": true,
+	// Mexican states the city table reads as a different town ("Jalisco" is Xalisco,
+	// "Chiapas" Chiapa de Corzo, "Morelos" Ecatepec de Morelos).
+	"jalisco": true, "chiapas": true, "morelos": true, "nuevo león": true, "nuevo leon": true,
+	"michoacán": true, "michoacan": true, "coahuila": true, "guerrero": true, "nayarit": true,
+	"quintana roo": true, "sinaloa": true, "tabasco": true, "tamaulipas": true,
+	"yucatán": true, "yucatan": true, "baja california": true, "baja california sur": true,
+	"estado de méxico": true, "estado de mexico": true, "edomex": true,
+	// Colombian departments, Bogotá's "D.C." (an alias of Washington) and Buenos Aires'
+	// "CABA" (an alias of Chamba).
+	"antioquia": true, "valle del cauca": true, "cundinamarca": true, "atlántico": true,
+	"atlantico": true, "risaralda": true, "boyacá": true, "boyaca": true, "tolima": true,
+	"huila": true, "quindío": true, "quindio": true, "norte de santander": true,
+	"d.c.": true, "caba": true,
+	// Country names GeoNames also gives the capital: "Monterrey, Mexico" named Mexico City
+	// as a second city, "David, Panama" Panama City.
+	"mexico": true, "méxico": true, "méjico": true, "panama": true, "panamá": true,
+	"guatemala": true, "paraguay": true, "puerto rico": true, "nicaragua": true,
 }
 
 // init merges the table into nameToCountry. A name already there is a programming

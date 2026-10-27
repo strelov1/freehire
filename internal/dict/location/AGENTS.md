@@ -169,6 +169,23 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   Spanish-language postings: work mode from any source 48.7% → 56.8%; the description list
   agrees with the adapter's structured value on 86% of the rows that carry both, and most of
   the rest are the adapter's value contradicting the posting's own text.
+- **Spanish and Latin-American location lines** (`location_es.go`, the Spanish, Mexican,
+  Colombian, Argentine and Chilean blocks of `foreignSubdivisionNames`, measured 2026-10-27
+  over 39k Spanish-language postings). The autonomous communities, Basque provinces and
+  islands state Spain and no city; the Mexican states OCC writes after the town state Mexico.
+  A province named after its capital is the province, not a second city, when a place came
+  before it: between two commas for Spain ("Oliva, Valencia, España"), also in Factorial's
+  "ESPAÑA/Province/Community" export, and also in the LAST slot for Mexico ("León,
+  Guanajuato") — `provinceAfterCity` now asks whether a place came first, not whether a city
+  did, so an unresolved town before the province still counts. Country names GeoNames gives
+  the capital ("Mexico", "Panama", "Puerto Rico", "Guatemala") and "D.C." are
+  `regionNotCity`: "Monterrey, Mexico" used to name Mexico City too. **A contested alias whose
+  city is named differently from the line is held back until the line states that city's
+  country** (`renamedContested`): "León, ES" was León de los Aldama, "Canton, Ohio" Guangzhou,
+  "Salem, MA" Jerusalem, "Annapolis" a Brazilian town — ~6.7k wrong city names over the
+  Spanish sample, ~550 lines in an 18k-line control. Valencia and Zaragoza are city overrides:
+  the curated es country used to suppress their city. infojobs and occ carry
+  `FallbackCountries` es/mx (28% and 16% of their open postings stated no country).
 - **Indian work-arrangement prose is a fourth phrase list** (`workmode_in.go`), read only
   when none of the English, German, Dutch and Spanish ones matched. "WFO"/"work from office" is onsite;
   counted office days decide the rest ("3 days WFO", "Hybrid (3 days office)" → hybrid;

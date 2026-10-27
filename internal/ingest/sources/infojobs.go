@@ -290,6 +290,11 @@ func infojobsWorkMode(teleworking string) string {
 // toJob maps a listing offer to a Job, returning ok=false for an unusable offer (no code to key
 // on, no link to build the URL, or no company). The URL is the offer's protocol-relative link
 // with its tracking query stripped and the scheme restored.
+//
+// infojobs.net is the Spanish board, and its location is the bare city ("Murcia", "Vigo",
+// "Getafe"), which GeoNames also gives to Latin-American and Philippine towns: measured
+// 2026-10-27, 28% of its open postings had no country at all. Spain is therefore the
+// FallbackCountries signal — read only when the city states no country of its own.
 func (o infojobsOffer) toJob() (Job, bool) {
 	if o.Code == "" || o.Link == "" || o.CompanyName == "" {
 		return Job{}, false
@@ -305,5 +310,7 @@ func (o infojobsOffer) toJob() (Job, bool) {
 		Remote:      mode == "remote",
 		WorkMode:    mode,
 		PostedAt:    parseRFC3339(o.PublishedAt),
+
+		FallbackCountries: []string{"es"},
 	}, true
 }

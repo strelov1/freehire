@@ -53,11 +53,29 @@ var provinceCapitals = map[string]bool{
 }
 
 // provinceAfterCity reports whether tok is a provinceCapitals name in the province slot of
-// a "Town, Province, Country" line: a city came before it, and the line writes it between
+// a "Town, Province, Country" line: a place came before it, and the line writes it between
 // two commas. "Amersfoort or Utrecht, Nederland" names Utrecht as a second worksite — its
-// separator before it is a list word, not a comma — and keeps the city.
-func provinceAfterCity(tok, lower string, citySet map[string]struct{}) bool {
-	return provinceCapitals[tok] && len(citySet) > 0 && strings.Contains(lower, ", "+tok+",")
+// separator before it is a list word, not a comma — and keeps the city, and "Utrecht,
+// Utrecht, Nederland" still names Utrecht once, from its first token.
+//
+// The Spanish provinces follow the same rule (spanishProvinceCapitals), and also in the
+// "Town, ESPAÑA/Province/Community, España" export one Factorial tenant writes. A Mexican
+// state named after its capital is also the state in the LAST slot ("León, Guanajuato"),
+// the form OCC writes (mexicanStateCapitals).
+func provinceAfterCity(tok, lower string, first bool) bool {
+	if first {
+		return false
+	}
+	between := strings.Contains(lower, ", "+tok+",")
+	switch {
+	case provinceCapitals[tok]:
+		return between
+	case spanishProvinceCapitals[tok]:
+		return between || strings.Contains(lower, "españa/"+tok+"/") || strings.Contains(lower, "/"+tok+", españa")
+	case mexicanStateCapitals[tok]:
+		return between || strings.HasSuffix(strings.TrimSpace(lower), ", "+tok)
+	}
+	return false
 }
 
 // remoteLabels are the remote label Recruitee writes in the posting's language IN PLACE

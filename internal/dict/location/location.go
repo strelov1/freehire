@@ -88,6 +88,12 @@ func Parse(location string) Geo {
 	// pending holds the tokens that name a city only in a country the line states, resolved
 	// once the whole line has been read (resolvePending).
 	var pending []pendingCity
+	// renamedContested holds the contested long-tail cities the line names by an alias of
+	// a differently named place, emitted after the loop only if the line states its country.
+	var renamedContested []cityEntry
+	// seenTok is whether a token came before this one: a province named after its capital
+	// is the province only after another place (provinceAfterCity).
+	seenTok := false
 	for _, tok := range strings.Split(s, ",") {
 		tok = strings.TrimSpace(tok)
 		tok, parenthetical := strings.CutPrefix(tok, parenMark)
@@ -106,6 +112,8 @@ func Parse(location string) Geo {
 		if tok == "" {
 			continue
 		}
+		first := !seenTok
+		seenTok = true
 		// India's export, district and office shapes become the city they name (india.go);
 		// a metropolitan region ("Delhi NCR") is read before that, as the region it is.
 		metro, isMetroRegion := indianMetroRegions[tok]
@@ -174,7 +182,7 @@ func Parse(location string) Geo {
 		// ("Birmingham") can never *guess* a geography here; the country/region stay the
 		// curated dictionaries' job (and the LLM's, at serve time). This keeps the parser's
 		// "never guesses" contract while still populating the cities facet broadly.
-		if ce, ok := cityDict[tok]; ok && !regionNotCity[tok] && !provinceAfterCity(tok, lower, citySet) {
+		if ce, ok := cityDict[tok]; ok && !regionNotCity[tok] && !provinceAfterCity(tok, lower, first) {
 			if resolved {
 				// The token is a curated place: emit the city name only when cityDict agrees
 				// on its country, so a country/region token ("usa") never emits the unrelated
@@ -187,7 +195,15 @@ func Parse(location string) Geo {
 				// emit its name for the facet now, and remember its country as a
 				// LAST-RESORT candidate. It is applied after the whole string is read
 				// and only if nothing else stated a country — see cityFallback below.
-				citySet[ce.Name] = struct{}{}
+				//
+				// A contested alias whose city is named differently from the line is held
+				// back until the country is known: "León" is León de los Aldama only in a
+				// line that places it in Mexico, and "León, España" must not name it.
+				if ce.Contested && !strings.EqualFold(foldIndianName(ce.Name), foldIndianName(tok)) {
+					renamedContested = append(renamedContested, ce)
+				} else {
+					citySet[ce.Name] = struct{}{}
+				}
 				resolved = true
 				if !ce.Contested && ce.Country != "" {
 					cityFallbackCountries[ce.Country] = struct{}{}
@@ -256,6 +272,11 @@ func Parse(location string) Geo {
 	// Before the long-tail fallback below, never after: a pending city waits for a country
 	// the line STATED, and a country inferred from another city is not that.
 	resolvePending(pending, countrySet, citySet)
+	for _, ce := range renamedContested {
+		if _, stated := countrySet[ce.Country]; stated {
+			citySet[ce.Name] = struct{}{}
+		}
+	}
 
 	// Nothing in the line stated a country, so the long-tail cities get to — but only
 	// with one voice. Two guards, and the change is wrong without either:

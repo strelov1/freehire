@@ -106,6 +106,10 @@ func TestInfojobsFetchNewRefreshesSeenAndHydratesNew(t *testing.T) {
 	if bbb.WorkMode != "remote" || !bbb.Remote || bbb.PostedAt == nil {
 		t.Errorf("BBB fields = %+v, want remote and a posted date", bbb)
 	}
+	// The Spanish board's bare city ("Murcia") states no country; Spain is the fallback.
+	if len(bbb.FallbackCountries) != 1 || bbb.FallbackCountries[0] != "es" || bbb.Countries != nil {
+		t.Errorf("BBB countries = %v / fallback %v, want fallback [es]", bbb.Countries, bbb.FallbackCountries)
+	}
 	for _, u := range http.got {
 		if strings.Contains(u, "of-iAAA") {
 			t.Error("a seen offer must not cost a detail request")

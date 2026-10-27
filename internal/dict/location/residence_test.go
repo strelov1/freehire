@@ -19,12 +19,12 @@ func TestParseResidence(t *testing.T) {
 		want     Residence
 	}{
 		{
-			// Valencia is ambiguous (Spain and Venezuela), so the parser's city-agreement
-			// check suppresses the city facet while still pinning the country from the
-			// spelled-out country name. Residence inherits that never-guess behaviour
+			// León is ambiguous (Spain and Mexico, where the city table's León is León de
+			// los Aldama), so the parser's city-agreement check suppresses the city facet
+			// while still pinning the country from the spelled-out country name. Residence inherits that never-guess behaviour
 			// unchanged — it subtracts from Parse, it does not soften it.
 			name:     "an ambiguous city still pins the country, without claiming the city",
-			location: "Valencia, Spain",
+			location: "León, Spain",
 			want:     Residence{Countries: []string{"es"}, Regions: []string{"eu"}},
 		},
 		{

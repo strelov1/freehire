@@ -74,6 +74,12 @@ func TestSubdivisionCityAliasesAreDecided(t *testing.T) {
 	namesakes := map[string]bool{
 		"bern": true, "fribourg": true, "genf": true, "lucerne": true, "luzern": true,
 		"neuchâtel": true, "schaffhausen": true, "schwyz": true, "solothurn": true,
+		// Mexican states named after their capital, and Buenos Aires' own city.
+		"aguascalientes": true, "campeche": true, "chihuahua": true, "colima": true, "guanajuato": true,
+		"oaxaca": true, "puebla": true, "querétaro": true, "queretaro": true,
+		"san luis potosí": true, "san luis potosi": true, "tlaxcala": true, "veracruz": true,
+		"zacatecas": true, "ciudad autónoma de buenos aires": true,
+		"ciudad autonoma de buenos aires": true,
 	}
 	for name := range foreignSubdivisionNames {
 		ce, ok := cityDict[name]

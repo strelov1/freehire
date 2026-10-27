@@ -124,6 +124,10 @@ func TestOCCMapsThePostingJSON(t *testing.T) {
 	if !strings.Contains(pm.Description, "Supply Chain") {
 		t.Errorf("body: %.200s", pm.Description)
 	}
+	// The Mexican board: a town named without a state falls back to Mexico.
+	if len(pm.FallbackCountries) != 1 || pm.FallbackCountries[0] != "mx" || pm.Countries != nil {
+		t.Errorf("countries = %v / fallback %v, want fallback [mx]", pm.Countries, pm.FallbackCountries)
+	}
 	// A salary the employer withholds is a sentence, not a range.
 	sap := jobs["21367373"]
 	if sap.SalaryMin != nil || sap.SalaryCurrency != "" || sap.Location != "México" {

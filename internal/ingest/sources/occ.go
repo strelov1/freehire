@@ -266,6 +266,10 @@ func (d occDetail) toJob(id string, tech bool) (Job, bool) {
 		Remote:         workMode == "remote",
 		EmploymentType: occEmploymentTypes[o.EmployURL],
 		IsTechHint:     tech,
+		// OCC is the Mexican board: a town it names without a state ("Puebla",
+		// "Veracruz") is also a namesake elsewhere, and 16% of its open postings had no
+		// country (2026-10-27). Mexico is read only when the line states none.
+		FallbackCountries: []string{"mx"},
 	}
 	occSalary(&job, o.SalaryMin, o.SalaryMax, o.SalaryText)
 	return job, true

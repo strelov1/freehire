@@ -225,7 +225,9 @@ var nameToCountry = map[string]string{
 	"polonia": "pl", "rumanía": "ro", "hungría": "hu", "turquía": "tr",
 	"japón": "jp", "filipinas": "ph", "malasia": "my", "tailandia": "th",
 	"corea del sur": "kr", "emiratos árabes unidos": "ae", "arabia saudita": "sa",
-	"egipto": "eg", "perú": "pe",
+	"egipto": "eg", "perú": "pe", "panamá": "pa", "república dominicana": "do",
+	"republica dominicana": "do", "canadá": "ca", "bélgica": "be", "irlanda": "ie",
+	"espanya": "es", // Catalan
 	// Portuguese.
 	"espanha": "es", "alemanha": "de", "frança": "fr", "grécia": "gr",
 	"países baixos": "nl", "suíça": "ch", "polónia": "pl", "roménia": "ro",
@@ -489,6 +491,14 @@ var cityOverrides = map[string]cityEntry{
 	"zurich":    {Name: "Zurich", Country: "ch"},   // GeoNames: "Zürich"
 	"montreal":  {Name: "Montreal", Country: "ca"}, // GeoNames: "Montréal"
 	"montréal":  {Name: "Montreal", Country: "ca"},
+	// Valencia (Venezuela) and Zaragoza outnumber their Spanish namesakes in GeoNames, so
+	// the curated "valencia"/"zaragoza" → es named no city at all.
+	"valencia":         {Name: "Valencia", Country: "es"},
+	"zaragoza":         {Name: "Zaragoza", Country: "es"},
+	"madrid capital":   {Name: "Madrid", Country: "es"},
+	"distrito federal": {Name: "Mexico City", Country: "mx"}, // Mexico City's former name
+	"bogotá d.c.":      {Name: "Bogotá", Country: "co"},
+	"bogota d.c.":      {Name: "Bogotá", Country: "co"},
 }
 
 // nameToRegion resolves macro-region names (and explicit open-anywhere markers)
