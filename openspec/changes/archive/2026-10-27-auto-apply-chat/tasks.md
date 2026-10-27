@@ -31,4 +31,4 @@
 
 ## 6. Verify
 
-- [ ] 6.1 Live run on production against a real blocked attempt: open chat, answer in Russian, review, send
+- [x] 6.1 Live run on production against a real blocked attempt: open chat, answer in Russian, review, send
