@@ -15,7 +15,7 @@ func TestDanishCompoundHeads(t *testing.T) {
 		{"Softwareudvikler til maritime kommunikationsløsninger", "software_engineering", ""},
 		{"IT-udvikler til automatisering, RPA og AI i Lolland Kommune", "software_engineering", ""},
 		{"Softwareingeniør", "software_engineering", ""},
-		{"IT-supporter", "support", ""},
+		{"IT-supporter", "it_support", ""},
 		{"IT-arkitekt til sikring af fremtidens Sejlads", "architecture", ""},
 		{"Dataanalytiker til bekæmpelse af skatteøkonomisk kriminalitet", "data_analytics", ""},
 		{"Underviser til uddannelser i IT-sikkerhed – vær med til at forme fremtidens digitale forsvar", "security", ""},

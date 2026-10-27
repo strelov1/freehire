@@ -206,23 +206,31 @@ category without tagging a CISO's CV with it: the whole phrase "information secu
 officer" claims the span first. A shorter alias that also occurs outside every claimed
 span still counts.
 
-## The one place category and `is_tech` disagree on purpose
+## IT support is its own category
 
-IT support (`service desk`, `help desk`, `helpdesk`, `it support`, `it supporter`,
-`desktop support`, `deskside support`, `end user support`, `technical support
-analyst`) resolves the `support` category — a `vocab.NonTechCategories` member — and is *also* a
-`techTitleTerms` entry, so `jobderive.deriveIsTech` reads it as `is_tech = true`.
-That is deliberate, not drift: the category is right about the FUNCTION (reactive,
-ticket-driven, alongside customer service) and wrong about the CRAFT, and only the title
-list can say the second thing. `tech.go` carries the argument and the measurements
-beside the terms; do not restate them here, or the two copies will drift.
+The help desk, the service desk, desktop/deskside/end-user support, the tiered desk
+(1st/2nd line, L1-L3), the technical support engineer/analyst/specialist, application
+support and the NOC resolve `it_support` — a `vocab.TechCategories` member, so the
+category alone derives `is_tech = true`. `support` keeps customer service, the call and
+contact centre and customer care, and stays non-technical. Until 2026-10 both sat in
+`support`, and the IT half reached `is_tech = true` only through `techTitleTerms`; those
+terms stay, because a title term wins outright where a category yields to a non-tech
+word elsewhere in the title (`tech.go` carries the argument beside them).
 
-**A term earns its place by naming the ESTATE, not the mood of the work.** That is why
-bare `technical support` has no entry — live titles give AGV, automotive, controls,
-logistics and instructional support under that phrase — while `desktop support` does.
-If you are tempted to widen this family, sample the phrase against live titles first;
-every term here was admitted that way, and the whole exception depends on none of them
-being loose.
+**A phrase earns its place by naming the ESTATE, not the mood of the work.** Bare
+`technical support` and bare `support engineer` stay `support`: live titles give AGV,
+automotive, field-equipment, robotics and maintenance support under them. "Tier 1" is
+absent too — it heads customer-service titles as often. Widen the family only after
+sampling the phrase against live titles; `TestCategoryCorpusProbe` is the tool.
+
+**The bare `support` is the LAST entry of `coreCategoryTable`.** It names a desk as often
+as nothing at all ("Associate Dentist – Full Support", "Mortgage Loan Officer –
+Purchase-Focused, Full Support", "Autism Support Specialist (RBT)"), and while it sat
+beside "customer service" it outranked every profession declared after it. The phrases
+that name the customer side outright ("customer service", "customer support", "client
+support", "call center") stay in the support block, ahead of the professions. Measured
+2026-10-26 over a 10% sample of the open `support` population (22,638 postings): 3,057
+move to `it_support`, ~1,500 to the profession their title names, ~18,100 stay.
 
 ## German compound heads
 

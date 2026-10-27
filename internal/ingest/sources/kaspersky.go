@@ -272,7 +272,7 @@ var kasperskyCategories = map[string]string{
 	"data analysis":             "data_analytics",
 	"software architect":        "architecture",
 	"design":                    "design",
-	"technical support":         "support",
+	"technical support":         "it_support",
 	"technical writer":          "technical_writing",
 	"project management":        "project_management",
 	"finance":                   "finance",

@@ -42,7 +42,7 @@ func TestParse(t *testing.T) {
 		{"Мобильный разработчик", "", "mobile"},
 		{"Инженер по информационной безопасности", "", "security"},
 		{"Специалист по продажам", "", "sales"},
-		{"Специалист технической поддержки", "", "support"},
+		{"Специалист технической поддержки", "", "it_support"},
 		// Non-English forms of the generic software_engineering catch-all: only
 		// software- or language-anchored phrases resolve (never a bare
 		// developer/engineer/programmer noun — prod titles show that noun alone
@@ -164,7 +164,7 @@ func TestParseGradeBlindPhrases(t *testing.T) {
 		{"Member of the Technical Staff, Interpretability", "", "software_engineering"},
 		// With the phrase masked, the remaining words state the real grade.
 		{"Senior Member of Technical Staff", "senior", "software_engineering"},
-		{"Senior Member of Technical Staff (SMTS) - Cloud Product Support", "senior", "support"},
+		{"Senior Member of Technical Staff (SMTS) - Cloud Product Support", "senior", "software_engineering"},
 		{"Principal Member of Technical Staff", "principal", "software_engineering"},
 		{"Principal Member of Technical Staff, Full-stack Engineer", "principal", "fullstack"},
 		// "Mid-training" is a model-training stage (the sibling of pre- and
@@ -279,7 +279,7 @@ func TestParse_RoleExpansionBatch(t *testing.T) {
 		{"Business Development Manager", "sales"},
 		{"Account Manager", "sales"},
 		{"Customer Success Manager", "customer_success"}, // split out of support
-		{"Help Desk Technician", "support"},
+		{"Help Desk Technician", "it_support"},
 		{"Customer Service Specialist", "support"},
 		{"Copywriter", "marketing"},
 		{"Content Writer", "marketing"},
@@ -379,8 +379,8 @@ func TestParse_ITCompanyRoles(t *testing.T) {
 // now names its own discipline.
 func TestParse_UnnamedITRoles(t *testing.T) {
 	cases := []struct{ title, wantCategory string }{
-		{"Lead Service Desk Analyst", "support"},
-		{"IT Service Desk Specialist Level II", "support"},
+		{"Lead Service Desk Analyst", "it_support"},
+		{"IT Service Desk Specialist Level II", "it_support"},
 		{"SOC Analyst L2", "security"},
 		{"Director - IT Infrastructure", "devops"},
 		{"IT Infrastructure Analyst (Networks and Telecoms)", "devops"},
@@ -583,8 +583,8 @@ func TestParse_ITAdjacentCoverage(t *testing.T) {
 		// operations
 		{"Facilities Coordinator", "operations"},
 
-		// support — the unspaced compound "help desk" cannot reach
-		{"Helpdesk Technician", "support"},
+		// it_support — the unspaced compound "help desk" cannot reach
+		{"Helpdesk Technician", "it_support"},
 
 		// customer_success — guard: beat unresolved
 		{"Implementation Engineer", "customer_success"},
@@ -1119,8 +1119,8 @@ func TestParse_ITTailCoverage(t *testing.T) {
 		{"Network Operations Engineer", "devops", ""},
 		{"Network Specialist", "network_engineering", ""},
 		{"Network Technician", "network_engineering", ""},
-		{"IT Specialist", "support", "the same desk \"IT Support Specialist\" already resolves to"},
-		{"IT Technician", "support", ""},
+		{"IT Specialist", "it_support", "the same desk \"IT Support Specialist\" already resolves to"},
+		{"IT Technician", "it_support", ""},
 
 		// German fused compounds. German joins a title's role words into one
 		// unbroken word with no separator, so the word-boundary matcher that
@@ -2023,7 +2023,7 @@ func TestParse_SocialServicesScienceManufacturing(t *testing.T) {
 		{"Medical Lab Technician", "healthcare", "SOC 29-2010: the clinical lab is healthcare"},
 		{"Clinical Laboratory Scientist", "healthcare", ""},
 		{"Cath Lab Technician", "healthcare", "a cardiac procedure room"},
-		{"Computer Lab Technician", "support", "the campus computer lab is IT support"},
+		{"Computer Lab Technician", "it_support", "the campus computer lab is IT support"},
 
 		{"Assembler", "manufacturing", ""},
 		{"Assembly Technician", "manufacturing", ""},
@@ -2166,7 +2166,7 @@ func TestParse_CategoryPassTwo(t *testing.T) {
 		{"Direct Support Professional (DSP)", "social_services", ""},
 		{"Support Worker - Nights", "social_services", ""},
 		{"Personal Support Worker", "social_services", ""},
-		{"IT Support Worker", "support", "the desk keeps it"},
+		{"IT Support Worker", "it_support", "the desk keeps it"},
 		{"Customer Support Worker", "support", ""},
 		{"Administrative Support Worker", "administration", ""},
 		{"Customer Support Specialist", "support", "unchanged"},
@@ -2334,6 +2334,54 @@ func TestParse_RemoteTail(t *testing.T) {
 	} {
 		if got := Parse(tc.title).Category; got != tc.want {
 			t.Errorf("Parse(%q).Category = %q, want %q", tc.title, got, tc.want)
+		}
+	}
+}
+
+// TestParse_ITSupportSplit pins the help desk's split out of `support`: the IT side
+// resolves the technical `it_support`, customer service stays `support`, and the bare
+// "support" — declared last — no longer outranks the profession a title names.
+func TestParse_ITSupportSplit(t *testing.T) {
+	cases := []struct{ title, wantCategory, why string }{
+		{"IT Help Desk Technician", "it_support", ""},
+		{"Service Desk Analyst L2", "it_support", ""},
+		{"Desktop Support Technician", "it_support", ""},
+		{"IT Support Engineer", "it_support", ""},
+		{"Technical Support Engineer", "it_support", "the analyst/engineer/specialist forms only"},
+		{"Technical Support Specialist", "it_support", ""},
+		{"1st Level IT Supporter", "it_support", "the trailing \"er\" needs its own alias"},
+		{"IT-Supporter (m/w/d)", "it_support", ""},
+		{"1st Level Support (m/w/d)", "it_support", ""},
+		{"2nd Line Support Engineer", "it_support", ""},
+		{"L3 Support Engineer (Azure, M365, AVD & Automation)", "it_support", ""},
+		{"Application Support Analyst", "it_support", ""},
+		{"NOC Technician", "it_support", "resolved nothing before"},
+		{"Desktop Engineer L2", "it_support", "resolved nothing before"},
+		{"Technicien support informatique H/F", "it_support", ""},
+		{"Специалист техподдержки", "it_support", ""},
+		{"Инженер технической поддержки L2", "it_support", ""},
+		{"ITサポートエンジニア", "it_support", ""},
+		{"Servicedeskmedewerker", "it_support", "the Dutch compound head"},
+
+		{"Customer Service Representative", "support", ""},
+		{"Call Center Agent", "support", ""},
+		{"Customer Support Engineer", "support", "names the customer side outright"},
+		{"Client Support & Benefits Representative", "support", "not sales"},
+		{"Customer Service Desk Associate", "support", "the customer desk, pinned ahead of \"service desk\""},
+		{"Support Engineer", "support", "bare: also field-equipment and robotics support"},
+		{"Technical Support", "support", "bare: also automotive and AGV support"},
+		{"Support Specialist", "support", "nothing else in the title speaks"},
+		{"サービスエンジニア・サポートエンジニア（工作機械・ロボット・機械系）", "support", "a machine-tool field engineer, not IT"},
+		{"HR Help Desk Executive (Mandarin Speaker)", "hr", ""},
+
+		{"Associate Dentist – Full Support, NO Weekends!", "healthcare", "the bare support names a benefit here"},
+		{"Mortgage Loan Officer - Purchase-Focused, Full Support", "finance", ""},
+		{"Child Autism Support Professional (Entry Level)", "healthcare", "ABA line staff, the RBT"},
+		{"Administrative Support Specialist", "administration", ""},
+	}
+	for _, tc := range cases {
+		if got := Parse(tc.title).Category; got != tc.wantCategory {
+			t.Errorf("Parse(%q).Category = %q, want %q %s", tc.title, got, tc.wantCategory, tc.why)
 		}
 	}
 }

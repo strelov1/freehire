@@ -63,7 +63,6 @@ func TestNonTechFromDescription(t *testing.T) {
 		{"seo specialist", "We need an SEO specialist to grow organic traffic.", "marketing"},
 		{"customer support", "We are hiring a customer support representative.", "support"},
 		{"customer success", "This customer success manager owns renewals.", "support"},
-		{"help desk", "We are hiring a help desk technician.", "support"},
 		{"office manager", "We are hiring an office manager for our Berlin HQ.", "operations"},
 		{"operations manager", "This is an operations manager position.", "operations"},
 		{"hr manager", "Hiring an HR manager to build the people team.", "hr"},
@@ -83,6 +82,8 @@ func TestNonTechFromDescription(t *testing.T) {
 		{"product manager excluded", "Join us as a product manager.", ""},
 		{"project manager excluded", "Seeking a project manager for the platform.", ""},
 		{"data engineering manager excluded", "We are hiring a data engineering manager.", ""},
+		// The help desk is it_support, a technical category this detector never emits.
+		{"help desk excluded", "We are hiring a help desk technician.", ""},
 
 		// Topic mentions (a skill/outcome/tool, not a role) must NOT set a category —
 		// they appear in the prose of unrelated roles.

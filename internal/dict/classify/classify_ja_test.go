@@ -43,7 +43,7 @@ func TestJapaneseITTitlesResolve(t *testing.T) {
 		{"【Salesforce関連】プロジェクトマネージャ―、コンサルタント（東京）【在宅勤務可】＜0048CX＞", "project_management"},
 		{"プリセールスSE‐戦略アカウント担当（商社・流通・小売・製薬業界)", "solutions_engineering"},
 		{"ソリューションアーキテクト（Solution Architect）", "architecture"},
-		{"ヘルプデスク", "support"},
+		{"ヘルプデスク", "it_support"},
 	}
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.want {

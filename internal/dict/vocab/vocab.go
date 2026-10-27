@@ -56,6 +56,14 @@ var (
 		"software_engineering",
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
 		"network_engineering",
+		// "it_support" is the help desk and service desk: desktop, deskside and
+		// end-user support, the L1/L2/L3 tiers, the technical support engineer of a
+		// software product. It was split out of `support` in 2026-10, which held it
+		// beside customer service and the call centre — 143,798 open postings of
+		// which only ~15k were technical — so a candidate with years on a service
+		// desk found no filter that named their work. It is TECHNICAL (the desk runs
+		// an IT estate), while `support` stays the non-technical customer side.
+		"it_support",
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
 		"qa", "security", "hardware", "embedded", "blockchain", "architecture",
 		// "creative" is media production — video, animation, art, audio and
@@ -175,7 +183,7 @@ var (
 	TechCategories = []string{
 		"software_engineering",
 		"backend", "frontend", "fullstack", "mobile", "devops", "sre",
-		"network_engineering",
+		"network_engineering", "it_support",
 		"data_engineering", "data_science", "data_analytics", "ml_ai", "ai_engineering",
 		"qa", "security", "hardware", "embedded", "blockchain", "architecture",
 		"design", "creative", "product", "project_management",

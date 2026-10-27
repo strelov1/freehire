@@ -63,9 +63,9 @@ var danishCategoryTable = []aliasEntry{
 	{"-cybersikkerhed", "security"},
 	{"-it-sikkerhed", "security"},
 	{"-informationssikkerhed", "security"},
-	{"-it-supporter", "support"},
-	{"-it-support", "support"},
-	{"-it-medarbejder", "support"},
+	{"-it-supporter", "it_support"},
+	{"-it-support", "it_support"},
+	{"-it-medarbejder", "it_support"},
 
 	// Engineering. The engineer is named by the discipline in front of "-ingeniør";
 	// a bare "ingeniør" says no more than the English "Engineer", which the main table

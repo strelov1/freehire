@@ -1022,33 +1022,124 @@ var coreCategoryTable = []aliasEntry{
 	{"продажи", "sales"},
 	{"продаж", "sales"},
 	{"продажам", "sales"},
+	// IT support: the help desk and the service desk, desktop and end-user support,
+	// the tiered desk (1st/2nd line, L1-L3), the technical support engineer of a
+	// software product and the NOC. Split out of `support` (customer service) into
+	// its own TECHNICAL category, so a service-desk veteran finds a facet naming the
+	// work and the derivation reads it as technical from the category alone.
+	//
+	// A phrase earns its place by naming the IT ESTATE, not the mood of the work
+	// (the rule tech.go's techTitleTerms carries for the same family). Sampled
+	// 2026-10-26 against a 10% sample of the open `support` population (22,638
+	// postings): of 624 carrying "help desk"/"service desk", the only non-IT ones
+	// were an HR help desk and a customer service desk, pinned first below. Bare
+	// "technical support" and bare "support engineer" stay `support`: they also name
+	// automotive, field-equipment, robotics and maintenance support, so only the
+	// analyst/engineer/specialist forms of technical support are claimed.
+	{"customer service desk", "support"},
+	{"hr help desk", "hr"},
+	{"it support", "it_support"},
+	{"it-support", "it_support"},
+	// The German/Nordic surface form ("1st Level IT Supporter"): the trailing "er"
+	// breaks the word boundary, so "it support" cannot see it.
+	{"it supporter", "it_support"},
+	{"it-supporter", "it_support"},
+	{"it technical support", "it_support"},
+	{"ict support", "it_support"},
+	{"pc support", "it_support"},
+	{"desktop support", "it_support"},
+	{"deskside support", "it_support"},
+	{"desk side support", "it_support"},
+	{"it field support", "it_support"},
+	{"desktop engineer", "it_support"},
+	{"desktop technician", "it_support"},
+	{"desktop analyst", "it_support"},
+	// "end user" is an IT term of art; spaced and hyphenated are separate aliases
+	// because a hyphen is a word boundary.
+	{"end user support", "it_support"},
+	{"end-user support", "it_support"},
+	{"help desk", "it_support"},
+	// The unspaced compound: "help desk" above cannot reach it, the same trap the
+	// "back-end"/"back end"/"backend" trio guards against.
+	{"helpdesk", "it_support"},
+	// The ITIL name for the same desk. Without it the far more common "Service Desk
+	// Analyst" fell through to the bare "analyst" alias and read as data_analytics.
+	{"service desk", "it_support"},
+	{"servicedesk", "it_support"},
+	{"technical support engineer", "it_support"},
+	{"technical support engineering", "it_support"},
+	{"technical support analyst", "it_support"},
+	{"technical support specialist", "it_support"},
+	{"tech support specialist", "it_support"},
+	{"application support", "it_support"},
+	{"applications support", "it_support"},
+	{"software support", "it_support"},
+	{"systems support", "it_support"},
+	{"server support", "it_support"},
+	{"cloud support engineer", "it_support"},
+	{"technology support", "it_support"},
+	// French and Spanish: "Technicien support informatique", "Soporte informático".
+	{"support informatique", "it_support"},
+	{"soporte informático", "it_support"},
+	{"soporte informatico", "it_support"},
+	// The tiered desk. "Tier 1" is deliberately absent: it heads customer-service
+	// titles as often ("Tier 1 Customer Support", "Tier 1 - Customer Service").
+	{"1st level support", "it_support"},
+	{"2nd level support", "it_support"},
+	{"3rd level support", "it_support"},
+	{"first level support", "it_support"},
+	{"second level support", "it_support"},
+	{"third level support", "it_support"},
+	{"1st line support", "it_support"},
+	{"2nd line support", "it_support"},
+	{"3rd line support", "it_support"},
+	{"first line support", "it_support"},
+	{"second line support", "it_support"},
+	{"third line support", "it_support"},
+	{"l1 support", "it_support"},
+	{"l2 support", "it_support"},
+	{"l3 support", "it_support"},
+	// The network operations centre watches the estate around the clock.
+	{"noc technician", "it_support"},
+	{"noc engineer", "it_support"},
+	{"noc analyst", "it_support"},
+	{"noc specialist", "it_support"},
+	{"noc operator", "it_support"},
+	// Russian. "Техническая поддержка" is filed by hh.ru under Information
+	// Technology ("Специалист технической поддержки") and the sampled titles agree —
+	// 1C, L2, "2-я линия", telecoms. The bare "поддержка"/"поддержки" below stay
+	// `support`: they also name chat operators and the state-benefits desks.
+	{"техподдержка", "it_support"},
+	{"техподдержки", "it_support"},
+	{"тех поддержки", "it_support"},
+	{"техническая поддержка", "it_support"},
+	{"технической поддержки", "it_support"},
+	{"поддержки пользователей", "it_support"},
+	{"хелпдеск", "it_support"},
+	{"хелпдеска", "it_support"},
 	// Disability and residential care is social service, not a help desk. "Direct
 	// Support Professional" is the US title for the worker who supports a person with an
 	// intellectual or developmental disability at home or in a group home, and "Support
 	// Worker" (with "Personal/Family/Home/Bank Support Worker") is the UK and Canadian
-	// title for the same care work. The bare "support" below filed both as customer
-	// support. The IT and customer-service spellings of "support worker" are pinned
-	// first, so the desk keeps them.
+	// title for the same care work. The bare "support" filed both as customer support.
+	// The IT, administrative and customer-service spellings of "support worker" are
+	// pinned first, so each desk keeps them.
 	//
 	// The abbreviation "DSP" is deliberately never an alias: in this catalogue it is as
 	// often Amazon's Delivery Service Partner ("Amazon DSP Delivery Driver"), a
 	// demand-side platform, a downstream-process operator or digital signal processing.
-	{"administrative support worker", "administration"},
-	{"it support worker", "support"},
+	{"administrative support", "administration"},
 	{"customer support worker", "support"},
 	{"technical support worker", "support"},
 	{"direct support", "social_services"},
 	{"support worker", "social_services"},
 	{"support workers", "social_services"},
-	{"support", "support"},
 	{"customer service", "support"},
-	{"help desk", "support"},
-	// The unspaced compound: "help desk" above cannot reach it, the same trap the
-	// "back-end"/"back end"/"backend" trio guards against.
-	{"helpdesk", "support"},
-	// The ITIL name for the same desk. Without it the far more common "Service Desk
-	// Analyst" fell through to the bare "analyst" alias and read as data_analytics.
-	{"service desk", "support"},
+	// The desk phrases that name the customer side outright. The bare "support" is
+	// declared last in the table, so without these a "Client Support & Benefits
+	// Representative" read as sales through a word further down.
+	{"customer support", "support"},
+	{"client support", "support"},
 	{"call center", "support"},
 	{"call-центр", "support"},
 	{"колл-центр", "support"},
@@ -1056,10 +1147,8 @@ var coreCategoryTable = []aliasEntry{
 	{"customer care", "support"},
 	{"поддержка", "support"},
 	{"поддержки", "support"},
-	{"техподдержка", "support"},
-	{"техподдержки", "support"},
 	// customer_success (proactive post-sale: adoption/renewals) is distinct from the
-	// reactive helpdesk "support" above; "account manager" stays in sales.
+	// reactive customer "support" above; "account manager" stays in sales.
 	{"customer success", "customer_success"},
 	{"client success", "customer_success"},
 	{"customer onboarding", "customer_success"},
@@ -1743,8 +1832,8 @@ var coreCategoryTable = []aliasEntry{
 	{"network technician", "network_engineering"},
 	// 256 live postings, previously read as data analysts.
 	{"network analyst", "network_engineering"},
-	{"it specialist", "support"},
-	{"it technician", "support"},
+	{"it specialist", "it_support"},
+	{"it technician", "it_support"},
 	// The integration family. None of these contains "systems engineer" as consecutive
 	// words, so their order against that alias does not matter.
 	{"integration engineer", "software_engineering"},
@@ -2155,6 +2244,10 @@ var coreCategoryTable = []aliasEntry{
 	// Healthcare.
 	{"behavior technician", "healthcare"},
 	{"rbt", "healthcare"},
+	// The ABA therapy line staff the "rbt" above names, spelled without the acronym
+	// ("Child Autism Support Professional"). Before the bare "support" moved to the
+	// end of the table it read these as customer support.
+	{"autism support", "healthcare"},
 	{"behavioral health", "healthcare"},
 	{"language pathologist", "healthcare"},
 	{"therapy assistant", "healthcare"},
@@ -2695,10 +2788,10 @@ var coreCategoryTable = []aliasEntry{
 	{"cath lab", "healthcare"},
 	{"ep lab", "healthcare"},
 	{"sleep lab", "healthcare"},
-	// The school or campus computer lab is IT support, filed beside "it technician".
-	{"computer lab technician", "support"},
-	{"computer laboratory technician", "support"},
-	{"computer lab assistant", "support"},
+	// The school or campus computer lab is IT support, filed with "it technician".
+	{"computer lab technician", "it_support"},
+	{"computer laboratory technician", "it_support"},
+	{"computer lab assistant", "it_support"},
 	// There is deliberately NO bare "scientist" and NO bare "research associate".
 	// "Research Scientist", "Applied Scientist", "Computer Scientist" and "Principal
 	// NLP Scientist" are software and machine-learning roles as often as laboratory
@@ -3519,8 +3612,8 @@ var coreCategoryTable = []aliasEntry{
 	{"vodja oddelka elektro konstrukcije", "engineering_design"},
 	{"operativni vodja oddelka projektov", "project_management"},
 	{"programer cnc obdelovalnih strojev", "manufacturing"},
-	{"it inženir za uporabniško podporo", "support"},
-	{"it skrbnik za podporo uporabnikom", "support"},
+	{"it inženir za uporabniško podporo", "it_support"},
+	{"it skrbnik za podporo uporabnikom", "it_support"},
 	{"svetovalci za podporo uporabnikom", "support"},
 	{"svetovalec za podporo uporabnikom", "support"},
 	{"it svetovalec za poslovne rešitve", "solutions_engineering"},
@@ -3975,7 +4068,7 @@ var coreCategoryTable = []aliasEntry{
 	{"vodenje projektov", "project_management"},
 	{"vodja informatike", "devops"},
 	{"delovni terapevt", "healthcare"},
-	{"sistemski tehnik", "support"},
+	{"sistemski tehnik", "it_support"},
 	{"prodajni inženir", "solutions_engineering"},
 	{"cnc posluževalec", "manufacturing"},
 	{"borzni posrednik", "finance"},
@@ -4266,15 +4359,15 @@ var coreCategoryTable = []aliasEntry{
 	{"informatičarka", "devops"},
 	{"informatik", "devops"},
 	{"informatikus", "devops"},
-	{"it підтримки", "support"},
-	{"технічної підтримки", "support"},
+	{"it підтримки", "it_support"},
+	{"технічної підтримки", "it_support"},
 	{"обслуговування клієнтів", "support"},
 	{"obsługi klienta", "support"},
 	{"obsługa klienta", "support"},
 	{"obsługi klientów", "support"},
 	{"korisničkoj podršci", "support"},
-	{"računalni tehničar", "support"},
-	{"informatički tehničar", "support"},
+	{"računalni tehničar", "it_support"},
+	{"informatički tehničar", "it_support"},
 	{"korisnička podrška", "support"},
 	{"kontaktnem centru", "support"},
 	{"контактен център", "support"},
@@ -4309,8 +4402,8 @@ var coreCategoryTable = []aliasEntry{
 	{"systémový inženýr", "software_engineering"},
 	{"počítačových sítí", "network_engineering"},
 	{"počítačových sietí", "network_engineering"},
-	{"technici uživatelské podpory", "support"},
-	{"technici užívateľskej podpory", "support"},
+	{"technici uživatelské podpory", "it_support"},
+	{"technici užívateľskej podpory", "it_support"},
 
 	// Healthcare.
 	{"lekarz", "healthcare"},
@@ -5011,7 +5104,7 @@ var coreCategoryTable = []aliasEntry{
 	{"evidentičar", "administration"},
 	{"gradbenik", "skilled_trades"},
 	{"gradbinec", "skilled_trades"},
-	{"računalnikar", "support"},
+	{"računalnikar", "it_support"},
 	{"plakatiranje", "marketing"},
 
 	// The desk a title names, in the case the title puts it in: last, so a role noun
@@ -5108,4 +5201,12 @@ var coreCategoryTable = []aliasEntry{
 	// category here, and the pin only reaches a title nothing above resolved.
 	{"военнослужащий", categoryNone},
 	{"стрелок", "public_safety"},
+
+	// The bare "support", LAST: the weakest evidence in the table. It names a desk
+	// as often as it names nothing at all — "Associate Dentist – Full Support",
+	// "Mortgage Loan Officer - Purchase-Focused, Full Support", "Autism Support
+	// Specialist (RBT)", "Administrative Support Specialist" — so it only files a
+	// title that no alias above has placed. While it sat beside "customer service"
+	// it outranked every profession declared after it.
+	{"support", "support"},
 }

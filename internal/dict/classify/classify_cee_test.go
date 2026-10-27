@@ -76,7 +76,7 @@ func TestParse_CentralEasternEuropeTitles(t *testing.T) {
 		// Ukrainian and Bulgarian.
 		{"Медичний представник РХ, Львів", "sales"},
 		{"Медицински представител - град София и област София", "sales"},
-		{"Фахівець IT підтримки", "support"},
+		{"Фахівець IT підтримки", "it_support"},
 		{"Фахівець з діджитал маркетингу", "marketing"},
 		{"Асистент відділу маркетингу", "marketing"},
 		{"Сътрудник Продажби", "sales"},

@@ -128,10 +128,10 @@ specialist/technician titles.
   classified
 - **THEN** its category is `network_engineering`
 
-#### Scenario: End-user IT resolves to support
+#### Scenario: End-user IT resolves to IT support
 
 - **WHEN** a job titled "IT Specialist" or "IT Technician" is classified
-- **THEN** its category is `support`, the same category "IT Support Specialist"
+- **THEN** its category is `it_support`, the same category "IT Support Specialist"
   already resolves to
 
 #### Scenario: The integration family resolves to software engineering

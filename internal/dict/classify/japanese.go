@@ -135,10 +135,14 @@ var japaneseCategoryTable = []aliasEntry{
 	{"rubyエンジニア", "software_engineering"},
 	{"c#エンジニア", "software_engineering"},
 	{"unityエンジニア", "software_engineering"},
-	{"ヘルプデスク", "support"},
+	// The IT desk is it_support; a bare サポートエンジニア stays support, since doda files
+	// the machine-tool, automotive and medical-equipment field engineer under it
+	// (サービスエンジニア・サポートエンジニア（工作機械・ロボット・機械系）). ITサポート is declared
+	// ahead of it so "ITサポートエンジニア" keeps the IT reading.
+	{"ヘルプデスク", "it_support"},
+	{"itサポート", "it_support"},
+	{"テクニカルサポート", "it_support"},
 	{"サポートエンジニア", "support"},
-	{"itサポート", "support"},
-	{"テクニカルサポート", "support"},
 	// UI/UX is the qualifier that makes this a product-design role; a bare デザイナー is
 	// industrial design far more often (リードデザイナー/デザインセンター).
 	{"ui/uxデザイナー", "design"},

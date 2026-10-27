@@ -85,7 +85,9 @@ var descriptionNonTechPhrases = []struct {
 	{"support", []string{
 		"customer support representative", "customer support specialist",
 		"customer success manager", "customer success specialist",
-		"support representative", "help desk technician", "help desk specialist",
+		"support representative",
+		// No help desk phrase: the help desk is `it_support`, a technical category,
+		// and this detector resolves only non-technical ones.
 	}},
 	{"operations", []string{"office manager", "operations manager"}},
 	{"hr", []string{"hr manager"}},

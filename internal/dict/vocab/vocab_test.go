@@ -82,6 +82,24 @@ func TestCreativeIsTech(t *testing.T) {
 	}
 }
 
+// TestITSupportIsTechAndSupportIsNot pins the split of the help desk out of
+// `support`: the desk runs an IT estate, so it is enriched like any technical role,
+// while customer service stays off the LLM and embedding budgets.
+func TestITSupportIsTechAndSupportIsNot(t *testing.T) {
+	if !slices.Contains(CategoryValues, "it_support") {
+		t.Fatal("CategoryValues must contain it_support")
+	}
+	if !slices.Contains(TechCategories, "it_support") {
+		t.Error("it_support must be a TechCategories member")
+	}
+	if slices.Contains(NonTechCategories, "it_support") {
+		t.Error("it_support must not be a NonTechCategories member")
+	}
+	if !slices.Contains(NonTechCategories, "support") {
+		t.Error("support (customer service) must stay a NonTechCategories member")
+	}
+}
+
 func TestConsumerCategoriesAreNonTech(t *testing.T) {
 	for _, c := range []string{
 		"healthcare", "skilled_trades", "retail", "hospitality",

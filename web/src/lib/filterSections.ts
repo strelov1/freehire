@@ -46,6 +46,9 @@ const CATEGORY_GROUP: Record<Category, CategoryGroup> = {
   devops: 'Engineering',
   sre: 'Engineering',
   network_engineering: 'Engineering',
+  // The help desk runs the IT estate beside devops and the network, so it sits with
+  // them rather than with customer `support` in the go-to-market group.
+  it_support: 'Engineering',
   hardware: 'Engineering',
   embedded: 'Engineering',
   blockchain: 'Engineering',

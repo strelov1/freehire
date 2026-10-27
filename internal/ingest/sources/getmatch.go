@@ -205,7 +205,7 @@ var getmatchSpecializationCategory = map[string]string{
 	"engineering_management": "software_engineering",
 	"sales":                  "sales",
 	"marketing":              "marketing",
-	"support_engineer":       "support",
+	"support_engineer":       "it_support",
 }
 
 // getmatchCategory resolves an offer's specializations to a single category, mirroring

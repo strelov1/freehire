@@ -127,19 +127,21 @@ var dutchCategoryTable = []aliasEntry{
 	{"-laserprogrammeur", "manufacturing"},
 	{"-ontwikkelaar", "software_engineering"},
 	{"-programmeur", "software_engineering"},
-	// The service desk and the application administrator who supports its users.
-	{"-servicedeskmedewerker", "support"},
-	{"-helpdeskmedewerker", "support"},
+	// The service desk and the application administrator who supports its users are
+	// it_support; the customer-service desk beside them, and the bare
+	// "supportmedewerker" (as often the customer side), stay support.
+	{"-servicedeskmedewerker", "it_support"},
+	{"-helpdeskmedewerker", "it_support"},
 	{"-supportmedewerker", "support"},
-	{"servicedesk", "support"},
+	{"servicedesk", "it_support"},
 	{"-klantenservicemedewerker", "support"},
 	{"klantenservice", "support"},
 	{"-callcentermedewerker", "support"},
 	{"-klantcontactmedewerker", "support"},
-	{"-werkplekbeheerder", "support"},
-	{"-werkplekondersteuner", "support"},
-	{"-gebruikersondersteuner", "support"},
-	{"-applicatiebeheerder", "support"},
+	{"-werkplekbeheerder", "it_support"},
+	{"-werkplekondersteuner", "it_support"},
+	{"-gebruikersondersteuner", "it_support"},
+	{"-applicatiebeheerder", "it_support"},
 	{"-architect", "architecture"}, // Domeinarchitect, Informatiearchitect
 
 	// Marketing.
@@ -360,11 +362,11 @@ var dutchCategoryTable = []aliasEntry{
 	{"-makelaar", "sales"},
 
 	// The generic IT employee, last: an "Administratief Medewerker ICT" is the clerk.
-	{"-ict-medewerker", "support"},
-	{"ict medewerker", "support"},
-	{"medewerker ict", "support"},
-	{"it medewerker", "support"},
-	{"medewerker it", "support"},
+	{"-ict-medewerker", "it_support"},
+	{"ict medewerker", "it_support"},
+	{"medewerker ict", "it_support"},
+	{"it medewerker", "it_support"},
+	{"medewerker it", "it_support"},
 }
 
 // dutchSeniorityTable lists the Dutch grade aliases in precedence order.

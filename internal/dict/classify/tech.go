@@ -62,12 +62,13 @@ var techTitleTerms = []string{
 	"system administrator", "systems administrator", "sysadmin", "network administrator",
 	"database administrator", "linux administrator", "windows administrator",
 	"it administrator", "devsecops",
-	// IT support. These are the one family here whose CATEGORY cannot say what they
-	// are: they resolve to `support`, a vocab.NonTechCategories member, so without an
-	// entry here the derivation reads them as confidently non-technical and the
-	// enrichment gate skips them. That category is right about the function —
-	// reactive, ticket-driven — and wrong about the craft: a help desk runs an IT
-	// estate.
+	// IT support. These resolve the `it_support` category, a TechCategories member,
+	// so the category alone already reads them as technical. They stay here because
+	// a term in this list wins OUTRIGHT in jobderive.deriveIsTech, while a technical
+	// category yields to a non-tech title term or to a non-tech category an earlier
+	// alias resolved ("IT Help Desk - Customer Service" still runs an IT estate).
+	// Before 2026-10 they were the one family whose category could not say what they
+	// were: the help desk sat in the non-technical `support` beside customer service.
 	//
 	// What makes a term safe here is an anchor that names the estate, not the mood of
 	// the work. "it support", "desktop support" and "deskside support" are IT by
@@ -75,7 +76,7 @@ var techTitleTerms = []string{
 	// support" is NOT and gets no entry: the same sample gives AGV, automotive,
 	// controls, logistics and instructional support, so only the analyst form —
 	// already the office-IT title in practice — carries the claim. Bare "support" is
-	// the whole customer-service population (226k open postings) and stays out too.
+	// the whole customer-service population and stays out too.
 	//
 	// "it supporter" is the German/Nordic surface form ("1st Level IT Supporter") and
 	// needs its own term: the trailing "er" breaks the word boundary, the same trap
@@ -85,7 +86,7 @@ var techTitleTerms = []string{
 	// and hyphenated are separate terms because a hyphen is a word boundary.
 	"service desk", "help desk", "helpdesk", "technical support analyst",
 	// The Japanese spellings of the same estate: ヘルプデスク is the help desk, ITサポート the
-	// IT support desk. Both resolve the `support` category in japanese.go.
+	// IT support desk. Both resolve the `it_support` category in japanese.go.
 	"ヘルプデスク", "itサポート",
 	"it support", "it supporter", "desktop support", "deskside support",
 	"end user support", "end-user support",

@@ -33,8 +33,8 @@ func TestIsTech(t *testing.T) {
 		// "AI-native" describes the toolchain, not the discipline — still software.
 		{"ai-native engineer", "Senior AI-Native Engineer", true},
 		{"ai native engineer", "AI Native Engineer", true},
-		// The IT service desk: `support` is a non-tech category, so this list is the
-		// only thing that reads the desk as the IT work it is.
+		// The IT service desk. Its `it_support` category is technical too, but a term
+		// here wins outright, even against a non-tech word elsewhere in the title.
 		{"service desk", "Lead Service Desk Analyst", true},
 		{"help desk", "Help Desk Technician (Tier 1)", true},
 		{"helpdesk", "Mitarbeiter IT Support und Helpdesk (m/w/d)", true},
