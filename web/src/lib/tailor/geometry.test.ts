@@ -3,6 +3,7 @@ import {
   clampWidth,
   keyResizeWidth,
   paginateBlocks,
+  printedPageCount,
   stepMargin,
   MARGIN_MIN,
   MARGIN_MAX,
@@ -203,5 +204,21 @@ describe('keyResizeWidth', () => {
   it('ignores every other key', () => {
     expect(keyResizeWidth(400, 'Enter', 'ArrowLeft')).toBeNull();
     expect(keyResizeWidth(400, 'ArrowUp', 'ArrowLeft')).toBeNull();
+  });
+});
+
+describe('printedPageCount', () => {
+  it('counts one printed page per sheet whose content fits', () => {
+    expect(printedPageCount([[0, 1], [2]], [400, 400, 400], 1000)).toBe(2);
+  });
+
+  // The preview never splits a block, so an entry taller than a page sits on one sheet that
+  // runs long. The PDF breaks inside it, and the count has to follow the PDF.
+  it('counts the extra pages an oversized block spills onto', () => {
+    expect(printedPageCount([[0], [1]], [2500, 300], 1000)).toBe(4);
+  });
+
+  it('calls an empty document one page', () => {
+    expect(printedPageCount([[]], [], 1000)).toBe(1);
   });
 });

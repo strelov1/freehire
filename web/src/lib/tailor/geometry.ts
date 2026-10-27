@@ -146,3 +146,17 @@ export function paginateBlocks(blockHeights: number[], pageBodyHeight: number): 
   });
   return pages;
 }
+
+/**
+ * printedPageCount is how many pages the PDF will have, read off the preview's sheets.
+ *
+ * paginateBlocks never splits a block, so a single entry taller than a page lands on one
+ * sheet that simply runs long, while Typst breaks inside it. Counting sheets would then call
+ * a three-page CV "1 page"; each sheet instead counts as however many pages its content fills.
+ */
+export function printedPageCount(pages: number[][], blockHeights: number[], pageBodyHeight: number): number {
+  return pages.reduce((total, page) => {
+    const used = page.reduce((sum, i) => sum + (blockHeights[i] ?? 0), 0);
+    return total + Math.max(1, Math.ceil(used / pageBodyHeight));
+  }, 0);
+}

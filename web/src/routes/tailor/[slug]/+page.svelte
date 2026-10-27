@@ -9,11 +9,11 @@
   // The page owns the CV document in memory so the Editor and the centre preview share one object:
   // typing re-renders the preview instantly, autosave persists in the background, and an agent turn
   // refetches and replaces the document.
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
-  import { ZoomIn, ZoomOut, Download, Menu, PanelLeftClose, PanelLeftOpen, Terminal } from '@lucide/svelte';
+  import { Check, Download, Menu, PanelLeftClose, PanelLeftOpen, Terminal, TriangleAlert, ZoomIn, ZoomOut } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { offerCvRefresh, TAILOR_REFRESH_MESSAGE } from '#lib/cvRefreshOffer.js';
@@ -34,6 +34,7 @@
   import { ConfirmDialog } from '#lib/ui/index.js';
   import { clampWidth, keyResizeWidth, PANEL_MAX_WIDTH, PANEL_MIN_WIDTH } from '#lib/tailor/geometry.js';
   import { undoRun, openingActions } from '#lib/tailor/autopilot.js';
+  import { findPlaceholders } from '#lib/tailor/readiness.js';
   import {
     toEditable,
     emptyDocument,
@@ -167,6 +168,35 @@
   const zoomOut = () => (zoom = clampZoom(zoom - 0.1));
   const zoomIn = () => (zoom = clampZoom(zoom + 0.1));
   const pdfUrl = $derived(`${api.cvPdfUrl(cvId)}?v=${pdfVersion}`);
+
+  // Readiness of the PDF, the one thing here the seeker actually sends. The page count comes
+  // from the preview's own pagination; a template slot the agent left behind (`[result]`)
+  // would print verbatim, so the download stops to say so rather than letting it go out.
+  let pageCount = $state<number | null>(null);
+  const placeholders = $derived(findPlaceholders(doc));
+  const placeholderTokens = $derived([...new Set(placeholders.map((p) => p.token))]);
+  let placeholdersShown = $state(false);
+  const showingPlaceholders = $derived(placeholdersShown && placeholders.length > 0);
+  let confirmDownloadOpen = $state(false);
+  let previewScroller = $state<HTMLElement | null>(null);
+
+  async function togglePlaceholders(show = !showingPlaceholders) {
+    placeholdersShown = show;
+    if (!show) return;
+    await tick();
+    // The hidden measurement layer renders the same marks, so skip anything inside it.
+    const first = Array.from(previewScroller?.querySelectorAll('.cv-lit') ?? []).find(
+      (el) => !el.closest('[aria-hidden="true"]'),
+    );
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    first?.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+  }
+
+  function guardDownload(e: MouseEvent) {
+    if (placeholders.length === 0) return;
+    e.preventDefault();
+    confirmDownloadOpen = true;
+  }
 
   // The member's headshot, for the templates that print one. Read once here rather than inside
   // the preview: the photo belongs to the profile, not to the CV being edited, and the same URL
@@ -783,20 +813,55 @@
                 <ZoomIn class="size-4" />
               </button>
             </div>
+            {#if pageCount !== null}
+              <span
+                class={['inline-flex items-center gap-1 text-xs tabular-nums', pageCount > 2 ? 'text-warning-strong' : 'text-muted-foreground']}
+              >
+                {#if pageCount > 2}
+                  <TriangleAlert class="size-3.5" aria-hidden="true" />
+                  {pageCount} pages · aim for 1–2
+                {:else}
+                  <Check class="size-3.5 text-success-strong" aria-hidden="true" />
+                  {pageCount} {pageCount === 1 ? 'page' : 'pages'}
+                {/if}
+              </span>
+            {/if}
           </div>
-          <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
-          <a
-            href={pdfUrl}
-            target="_blank"
-            rel="noopener"
-            class="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-          >
-            <!-- eslint-enable svelte/no-navigation-without-resolve -->
-            <Download class="size-4" /> Download PDF
-          </a>
+          <div class="flex flex-wrap items-center gap-2">
+            {#if placeholders.length > 0}
+              <button
+                type="button"
+                onclick={() => togglePlaceholders()}
+                aria-pressed={showingPlaceholders}
+                class="inline-flex items-center gap-1.5 rounded-md bg-warning-muted px-2.5 py-1 text-xs font-medium text-warning-strong transition-colors hover:bg-warning-muted/70"
+              >
+                <TriangleAlert class="size-3.5" aria-hidden="true" />
+                {placeholders.length === 1 ? '1 unfilled placeholder' : `${placeholders.length} unfilled placeholders`}
+              </button>
+            {/if}
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- external CV PDF API URL, not an internal route -->
+            <a
+              href={pdfUrl}
+              target="_blank"
+              rel="noopener"
+              onclick={guardDownload}
+              class="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              <!-- eslint-enable svelte/no-navigation-without-resolve -->
+              <Download class="size-4" /> Download PDF
+            </a>
+          </div>
         </div>
-        <div class="min-h-0 flex-1 overflow-auto p-6">
-          <CvHtmlPreview {doc} {templateId} {zoom} {fonts} {photoSrc} highlightPaths={pinnedRevision?.paths ?? []} />
+        <div bind:this={previewScroller} class="min-h-0 flex-1 overflow-auto p-6">
+          <CvHtmlPreview
+            {doc}
+            {templateId}
+            {zoom}
+            {fonts}
+            {photoSrc}
+            highlightPaths={showingPlaceholders ? placeholders.map((p) => p.path) : (pinnedRevision?.paths ?? [])}
+            onPageCount={(n) => (pageCount = n)}
+          />
         </div>
       </div>
 
@@ -836,3 +901,30 @@
   confirmLabel="Reset"
   onConfirm={applyReseed}
 />
+
+<ConfirmDialog
+  bind:open={confirmDownloadOpen}
+  title="Your CV still has unfilled placeholders"
+  description="These template slots will print in the PDF exactly as written."
+  confirmLabel="Download anyway"
+  cancelLabel="Keep editing"
+  onConfirm={() => {
+    window.open(pdfUrl, '_blank', 'noopener');
+  }}
+>
+  <ul class="flex flex-wrap gap-1.5">
+    {#each placeholderTokens as token (token)}
+      <li><code class="rounded bg-muted px-1.5 py-0.5 text-xs">{token}</code></li>
+    {/each}
+  </ul>
+  <button
+    type="button"
+    class="mt-3 text-sm font-medium text-brand-strong underline-offset-4 hover:underline"
+    onclick={() => {
+      confirmDownloadOpen = false;
+      togglePlaceholders(true);
+    }}
+  >
+    Show them on the page
+  </button>
+</ConfirmDialog>

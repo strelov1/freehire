@@ -12,7 +12,7 @@
   import type { Document, ExperienceItem, Project } from '#lib/generated/contracts.js';
   import { experienceHeader, educationLine, languageLabel, certificationLine, type CvFont } from '#lib/cv.js';
   import HeadshotSilhouette from '#lib/components/HeadshotSilhouette.svelte';
-  import { paginateBlocks, previewTypography } from './geometry';
+  import { paginateBlocks, previewTypography, printedPageCount } from './geometry';
   import { must } from '#lib/utils.js';
   import { keepIndex, makeHighlighter, makeContainerHighlighter } from './revisions';
 
@@ -23,6 +23,7 @@
     fonts = [],
     photoSrc = null,
     highlightPaths = [],
+    onPageCount,
   }: {
     doc: Document;
     templateId?: string;
@@ -32,6 +33,9 @@
     /** Addresses a revision touched, e.g. `experience[2].bullets[1]`. The nodes they name are
      *  underlined, so "what changed" is answerable by looking at the page. */
     highlightPaths?: string[];
+    /** Told how many pages the PDF will have, or null until the blocks have been measured —
+     *  before that everything sits on one sheet, and a "1 page" read off it would be a guess. */
+    onPageCount?: (pages: number | null) => void;
   } = $props();
 
   // Whether a given address was touched by whatever the history has selected.
@@ -181,6 +185,9 @@
   // re-paginate once real heights land.
   const measured = $derived(heights.length === blocks.length ? heights : blocks.map(() => 0));
   const pages = $derived(paginateBlocks(measured, pageBodyHeight));
+  $effect(() => {
+    onPageCount?.(heights.length === blocks.length ? printedPageCount(pages, heights, pageBodyHeight) : null);
+  });
   // Resolve each page's block indices to the blocks themselves for type-safe iteration.
   const pageBlocks = $derived<Block[][]>(pages.map((pg) => pg.map((i) => blocks[i]).filter((b): b is Block => !!b)));
 </script>
