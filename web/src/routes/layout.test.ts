@@ -34,3 +34,16 @@ describe('root layout footer state', () => {
     expect(SOURCE).toContain('<Footer compact={compactFooter} />');
   });
 });
+
+// The onboarding redirect must not fire on /signin. Signing in there flips the session and
+// the sign-in page then navigates to its own returnTo; a redirect fired in between raced
+// that navigation and lost, so the tour opened for an instant — long enough to record
+// itself as shown — and the visitor never saw it (2026-10-27, 18 accounts). The sign-in
+// page lands the visitor first; the gate runs on the page it lands on.
+describe('root layout onboarding gate', () => {
+  it('leaves /signin to finish its own navigation', () => {
+    const gateAt = SOURCE.indexOf('const needsOnboarding');
+    const gate = SOURCE.slice(gateAt, SOURCE.indexOf('});', gateAt));
+    expect(gate).toContain("path !== '/signin'");
+  });
+});

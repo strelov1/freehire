@@ -114,7 +114,11 @@
   // session read picks the marker up.
   const needsOnboarding = $derived(currentUser()?.onboarding_completed_at == null);
   $effect(() => {
-    if (isAuthenticated() && needsOnboarding && !onboardingGate.dismissed && page.url.pathname !== '/onboarding') {
+    // Not on /signin: it navigates to its own returnTo the moment the session flips, and a
+    // redirect fired in between races that navigation. The tour, opened for an instant,
+    // would record itself as shown and the visitor would never see it.
+    const path = page.url.pathname;
+    if (isAuthenticated() && needsOnboarding && !onboardingGate.dismissed && path !== '/onboarding' && path !== '/signin') {
       // eslint-disable-next-line svelte/no-navigation-without-resolve -- onboardingUrl() wraps resolve('/onboarding'); the rule can't see through the appended ?returnTo= query
       void goto(onboardingUrl(page.url.pathname + page.url.search));
     }
