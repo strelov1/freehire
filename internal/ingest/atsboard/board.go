@@ -383,6 +383,11 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"dvinci-hr", "dvinci", modeHost},
 	{"dvinci-easy", "dvinci", modeHost},
 	{"dvinci", "dvinci", modeHost}, // <tenant>.dvinci.de, the vendor's third domain (bomag.dvinci.de)
+	// Bizneo HR (Spain): a career site is a host under bizneo.cloud — usually
+	// <company>.careers.ats.bizneo.cloud, sometimes a vanity label (jobs.abeienergy.bizneo.cloud) —
+	// and the adapter lists <board>/jobs, so the board is the whole host. The vendor's bizneo.com
+	// hosts carry no live career site.
+	{"bizneo.cloud", "bizneo", modeHost},
 	// rexx systems: <tenant>-portal.rexx-systems.com and <tenant>-portal.rexx-recruitment.com.
 	// The adapter lists <board>/stellenangebote.html, so the board is the whole host. A portal
 	// on an employer's own domain (jobs.newyorker.de/karriere) is not derivable from a URL.
@@ -1395,6 +1400,14 @@ func recognizeAPI(u *url.URL, host string) (source, board, canonical string, ok 
 func matchHost(host string) (source, mode, apex string, ok bool) {
 	for _, a := range atsBoards {
 		if a.mode == modeHost {
+			// A bare vendor name matches under any TLD (<tenant>.factorial.<tld>); a dotted one is
+			// a fixed apex (bizneo.cloud), so the vendor's other domains stay unmatched.
+			if strings.Contains(a.host, ".") {
+				if strings.HasSuffix(host, "."+a.host) {
+					return a.source, a.mode, a.host, true
+				}
+				continue
+			}
 			if strings.Contains(host, "."+a.host+".") {
 				return a.source, a.mode, a.host, true
 			}

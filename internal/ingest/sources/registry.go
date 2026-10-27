@@ -477,6 +477,9 @@ func All(c HTTPClient) map[string]Source {
 		// rotating lane (see homerunEgress).
 		NewHomerun(pacedHomerunGetter(newHomerunEgress(c, nil))),
 		NewHROffice(c),
+		// Bizneo HR (Spain): board = the career-site host under bizneo.cloud; bodies hydrated for
+		// new postings only.
+		NewBizneo(c),
 		NewGreytHR(c),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
 		NewHelixjobs(limitedHelixjobsGetter(c)),
