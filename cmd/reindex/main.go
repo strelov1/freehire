@@ -352,7 +352,7 @@ type realityLookup func(companySlug, fingerprint string) (repost, mass int)
 //
 // A miss (the row represents nobody) yields a zero ClosureGeo — a no-op widening. A nil lookup skips
 // widening entirely (tests that do not exercise clustering).
-type closureGeoLookup func(ownerID int64) search.ClosureGeo
+type closureGeoLookup func(ownerID int64) jobview.ClosureGeo
 
 // companyBatchSize bounds how many companies one RecomputeRoleDuplicatesForCompanies /
 // SuppressAggregatorDuplicatesForCompanies call covers. Measured on prod (2026-08-06):
@@ -523,11 +523,11 @@ func buildClosureGeoLookup(ctx context.Context, q *db.Queries) (closureGeoLookup
 	if err != nil {
 		return nil, err
 	}
-	m := make(map[int64]search.ClosureGeo, len(rows))
+	m := make(map[int64]jobview.ClosureGeo, len(rows))
 	for _, r := range rows {
-		m[r.OwnerID] = search.ClosureGeo{Countries: r.Countries, Regions: r.Regions, Cities: r.Cities, Metros: r.Metros}
+		m[r.OwnerID] = jobview.ClosureGeo{Countries: r.Countries, Regions: r.Regions, Cities: r.Cities, Metros: r.Metros}
 	}
-	return func(ownerID int64) search.ClosureGeo { return m[ownerID] }, nil
+	return func(ownerID int64) jobview.ClosureGeo { return m[ownerID] }, nil
 }
 
 // splitJobs partitions a batch from the reindex feed:

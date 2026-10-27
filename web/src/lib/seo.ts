@@ -283,7 +283,7 @@ function isPlaceholderLocation(location: string): boolean {
 
 // schema.org jobLocation from the raw location string: Google accepts a
 // PostalAddress with just locality; add the ISO country code when the geo
-// dictionary pinned one (job.countries is alpha-2), never a made-up street/postal
+// dictionary pinned exactly one (job.countries is alpha-2), never a made-up street/postal
 // code — mismatched structured data is a ranking liability. Shared by a non-remote
 // posting and a remote one whose region never resolved (see jobPostingJsonLd).
 //
@@ -298,7 +298,10 @@ function jobLocationFromText(
     '@type': 'PostalAddress',
     addressLocality: location,
   };
-  if (countries?.[0]) address.addressCountry = countries[0].toUpperCase();
+  // Only an unambiguous country: a posting that stands for its reposts carries all their
+  // countries, sorted, so the first is an alphabet's pick rather than this locality's.
+  const only = countries?.length === 1 ? countries[0] : undefined;
+  if (only) address.addressCountry = only.toUpperCase();
   return { '@type': 'Place', address };
 }
 

@@ -154,6 +154,15 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 		return err
 	}
 
+	// Widen the geography with the reposts this posting stands for, the same union its
+	// search document carries — otherwise a role found under 129 countries names one on
+	// its own page (#3646). Best-effort: a failed lookup leaves the row's own geography.
+	if rows, err := h.queries.DuplicateClosureGeoFor(c.Context(), []int64{job.ID}); err == nil {
+		for _, g := range rows {
+			view.MergeClosureGeography(jobview.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})
+		}
+	}
+
 	// Attach the job-reality signal (see internal/job/jobreality): the badge on the detail
 	// page. A count-query failure degrades to a unique role (counts 1) rather than
 	// dropping the whole response.

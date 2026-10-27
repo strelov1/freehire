@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -132,11 +133,11 @@ func TestSplitJobs_CanonGetsClosureGeoUnion(t *testing.T) {
 		Countries:   []string{"de"}, Regions: []string{"eu"}, Cities: []string{"München"},
 		Category: "backend", Description: "<p>Build things.</p>",
 	}
-	geo := func(ownerID int64) search.ClosureGeo {
+	geo := func(ownerID int64) jobview.ClosureGeo {
 		if ownerID == 1 {
-			return search.ClosureGeo{Countries: []string{"at", "de", "pl"}, Regions: []string{"eu"}, Cities: []string{"München", "Wien"}, Metros: []string{"Munich (DE)", "Vienna (AT)"}}
+			return jobview.ClosureGeo{Countries: []string{"at", "de", "pl"}, Regions: []string{"eu"}, Cities: []string{"München", "Wien"}, Metros: []string{"Munich (DE)", "Vienna (AT)"}}
 		}
-		return search.ClosureGeo{}
+		return jobview.ClosureGeo{}
 	}
 
 	docs, _, err := splitJobs([]db.Job{canon}, nil, geo, nil, time.Now())
@@ -167,7 +168,7 @@ func TestSplitJobs_ClosureMissLeavesGeographyAlone(t *testing.T) {
 		Countries:   []string{"de"}, Regions: []string{"eu"}, Cities: []string{"München"},
 		Category: "backend", Description: "<p>Build things.</p>",
 	}
-	geo := func(int64) search.ClosureGeo { return search.ClosureGeo{} }
+	geo := func(int64) jobview.ClosureGeo { return jobview.ClosureGeo{} }
 
 	docs, _, err := splitJobs([]db.Job{solo}, nil, geo, nil, time.Now())
 	if err != nil {

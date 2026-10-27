@@ -537,6 +537,17 @@ describe('jobPostingJsonLd', () => {
       address: { '@type': 'PostalAddress', addressLocality: 'Berlin', addressCountry: 'DE' },
     });
   });
+
+  // A posting standing for its reposts lists every country they are open in, sorted —
+  // so the first one is Andorra, not the country of this row's "Mbabane, Eswatini"
+  // (#3646). With more than one there is no country to pin the locality to.
+  it('leaves addressCountry off when the posting spans several countries', () => {
+    const ld = jobPostingJsonLd(postingJob({ location: 'Mbabane, Eswatini', countries: ['ad', 'eg', 'sz'] }), ORIGIN);
+    expect(ld.jobLocation).toEqual({
+      '@type': 'Place',
+      address: { '@type': 'PostalAddress', addressLocality: 'Mbabane, Eswatini' },
+    });
+  });
 });
 
 describe('companyPageTitle', () => {

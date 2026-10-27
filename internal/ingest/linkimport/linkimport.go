@@ -337,7 +337,7 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 		log.Printf("linkimport: duplicate-closure geography for job %d: %v", saved.Job.ID, err)
 	} else {
 		for _, g := range rows {
-			doc.MergeClosureGeography(search.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})
+			doc.MergeClosureGeography(jobview.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})
 		}
 	}
 	if err := im.idx.SubmitJobs(ctx, []search.JobDocument{doc}); err != nil {

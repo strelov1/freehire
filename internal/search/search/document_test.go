@@ -157,7 +157,7 @@ func TestMergeClosureGeography_WidensSearchableRowFacets(t *testing.T) {
 		Regions:   []string{"eu"},
 		Cities:    []string{"Düsseldorf"},
 	}}
-	doc.MergeClosureGeography(ClosureGeo{
+	doc.MergeClosureGeography(jobview.ClosureGeo{
 		Countries: []string{"at", "de", "pl"},
 		Regions:   []string{"eu"},
 		Cities:    []string{"Kraków", "Wien", "Düsseldorf"},
@@ -178,7 +178,7 @@ func TestMergeClosureGeography_EmptyClosureLeavesFacetsUnchanged(t *testing.T) {
 		Countries: []string{"de"},
 		Cities:    []string{"Düsseldorf"},
 	}}
-	doc.MergeClosureGeography(ClosureGeo{})
+	doc.MergeClosureGeography(jobview.ClosureGeo{})
 	if got, want := doc.Countries, []string{"de"}; !slices.Equal(got, want) {
 		t.Errorf("countries = %v, want unchanged %v", got, want)
 	}
@@ -394,7 +394,7 @@ func TestFromJob_CapsIndexedDescription(t *testing.T) {
 func TestMergeClosureGeographyWidensMetros(t *testing.T) {
 	d := JobDocument{}
 	d.Metros = []string{"Sacramento (US)"}
-	d.MergeClosureGeography(ClosureGeo{Metros: []string{"Detroit (US)", "Sacramento (US)"}})
+	d.MergeClosureGeography(jobview.ClosureGeo{Metros: []string{"Detroit (US)", "Sacramento (US)"}})
 	if !slices.Equal(d.Metros, []string{"Detroit (US)", "Sacramento (US)"}) {
 		t.Errorf("Metros = %v", d.Metros)
 	}
