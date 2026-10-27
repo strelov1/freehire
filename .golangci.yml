@@ -205,6 +205,9 @@ linters:
         - manipulant
         - omre
         - proces
+        # Catalan/Spanish words in the Feina Activa adapter's salary line and fixture.
+        - anual
+        - individuales
         # Dutch title vocabulary (internal/dict/classify/dutch.go).
         - administratief
         - adviseur

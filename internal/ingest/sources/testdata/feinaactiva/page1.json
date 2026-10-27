@@ -1,0 +1,197 @@
+{
+ "total": 3,
+ "included": [
+  {
+   "externalId": "7e772e4ea05b9257b89e774bf15c058d",
+   "isExpress": false,
+   "isSpecialCare": false,
+   "status": "PUBLISHED",
+   "reference": "FA92325157",
+   "business": {
+    "name": "RESIDENCIA EIXAMPLE EL PRAT, S.L.",
+    "externalId": "c3cd515e186ce0d974346ac589977db2"
+   },
+   "publishedAt": "1789975895245",
+   "content": {
+    "title": "FISIOTERAPEUTA",
+    "summary": {
+     "text": "Residencia de 108 plazas más 35 de centro de día precisa incorporar un/a fisioterapeuta a tiempo parcial. \nIncorporación inmediata\n",
+     "highlight": "Experiència 1 anys. ., Jornada parcial matí (20 hores - jornada setmanal), Salari mensual brut des de '850' fins a '900'"
+    },
+    "place": "BARCELONA - BAIX LLOBREGAT - 08820 PRAT DE LLOBREGAT, EL"
+   },
+   "facets": {
+    "educationLevelIds": [
+     "56"
+    ],
+    "educationDegreeLevelIds": [],
+    "educationDegreeThemeIds": [],
+    "languageExternalIds": [
+     "90"
+    ],
+    "languageSpeakIds": [
+     "2"
+    ],
+    "languageWriteIds": [
+     "2"
+    ]
+   },
+   "offerDetail": {
+    "externalId": "7e772e4ea05b9257b89e774bf15c058d",
+    "title": "FISIOTERAPEUTA",
+    "business": {
+     "externalId": "c3cd515e186ce0d974346ac589977db2",
+     "name": "RESIDENCIA EIXAMPLE EL PRAT, S.L.",
+     "hasLogo": true,
+     "hasName": true
+    },
+    "isExpress": false,
+    "isSpecialCare": false,
+    "publishedAt": "2026-09-21T07:31:35.245Z",
+    "closesAt": "2026-12-20T07:31:35.244Z",
+    "reference": "FA92325157",
+    "description": "Residencia de 108 plazas más 35 de centro de día precisa incorporar un/a fisioterapeuta a tiempo parcial. \nIncorporación inmediata\n",
+    "location": "BARCELONA - BAIX LLOBREGAT - 08820 PRAT DE LLOBREGAT, EL",
+    "job": "Sesiones individuales y grupales, participación en PAI, valoraciones y gestión de ortopedia y PAOS.\nValoraciones de usuarios, actividades grupales en las diferentes unidades de convivencia, participación PAIV, participación en actividades comunitarias y realización de tareas administrativas de control y documentación de contenciones, requerimientos especiales... ",
+    "requirements": [
+     "Experiència 1 anys. .",
+     "TÍTOL D'ESPECIALITZACIÓ PROFESSIONAL",
+     "català (parlat Baix, escrit Baix)"
+    ],
+    "conditions": [
+     "Contracte laboral indefinit",
+     "Jornada parcial matí (20 hores - jornada setmanal)",
+     "Salari mensual brut des de '850' fins a '900'",
+     "Altres dades d'interès: Horari de dilluns a divendres de 9:30 a 13:00 i un dissabte al mes de 9 a 13 \nEl salari es amb les pagues prorratejades, és a  dir per 12 pagues\nL'empresa posa disposició del personal esmorzar i dinar sense cost\nFormació i capacitació\nExcel.lent ambient de treball \nIncorporación inmediata\n"
+    ],
+    "counters": {
+     "registered": 3
+    },
+    "positions": 1,
+    "isOpenInscription": true,
+    "status": 2
+   },
+   "isOpenInscription": true,
+   "origin": "feina-activa"
+  },
+  {
+   "externalId": "721fd8a6eea08e3eb3bddba539abfaf8",
+   "isExpress": false,
+   "isSpecialCare": false,
+   "status": "PUBLISHED",
+   "reference": "FA92322175",
+   "business": {
+    "name": "Empresa Sector Serveis Electricitat"
+   },
+   "publishedAt": "1785500084574",
+   "content": {
+    "title": "INSTAL.LADOR/A ELECTRICISTA",
+    "summary": {
+     "text": "Se sol·licita un/a Instal.lador/a de solars fotovoltaiques i tèrmiques tant per obres noves com manteniments i reparacions.",
+     "highlight": "Experiència 1 anys. • Coneixements en instal·lacions de llum i aigua.\n• Experiència mínima de 3 anys desenvolupant les mateixes funcions.\n• Formació relacionada amb el sector: electricitat, aigua, climatització, calefacció, etc.\n• Valorable disposar de coneixements de xarxes.\n• Disposar de carnet de conduir i cotxe propi.\n• Ubicació: Prioritàriament Baix Empordà i Alt Empordà, esporàdicament província de Girona.\n• Persona responsable, amb iniciativa i ganes de d’aprendre ii amb bona actitud de cara al tracte\namb el client final.\n• Imprescindible residència a la zona o voltants per accedir diàriament al centre de treball.\n, Jornada intensiva, Salari mensual brut des de '1800' fins a '2500'"
+    },
+    "place": "GIRONA - BAIX EMPORDÀ - 17100 BISBAL D'EMPORDÀ, LA"
+   },
+   "facets": {
+    "educationLevelIds": [],
+    "educationDegreeLevelIds": [],
+    "educationDegreeThemeIds": [],
+    "languageExternalIds": [
+     "90"
+    ],
+    "languageSpeakIds": [
+     "4"
+    ],
+    "languageWriteIds": [
+     "4"
+    ]
+   },
+   "offerDetail": {
+    "externalId": "721fd8a6eea08e3eb3bddba539abfaf8",
+    "title": "INSTAL.LADOR/A ELECTRICISTA",
+    "business": {
+     "externalId": "852732ecd6281aa4e128d2215788f713",
+     "name": "Empresa Sector Serveis Electricitat",
+     "hasLogo": false,
+     "hasName": false
+    },
+    "isExpress": false,
+    "isSpecialCare": false,
+    "publishedAt": "2026-07-31T12:14:44.574Z",
+    "closesAt": "2026-10-29T12:14:44.573Z",
+    "reference": "FA92322175",
+    "description": "Se sol·licita un/a Instal.lador/a de solars fotovoltaiques i tèrmiques tant per obres noves com manteniments i reparacions.",
+    "location": "GIRONA - BAIX EMPORDÀ - 17100 BISBAL D'EMPORDÀ, LA",
+    "job": "• Professional per realitzar instal·lacions elèctriques al sector domèstic i industrial\n• Instal·lacions de plaques fotovoltaiques\n• Col·laborar amb l’equip de manteniment en les proves de funcionament i reparació d’equips.\n• Realitzar la part elèctrica d'una instal·lació fotovoltaica. Muntatge de quadre, proteccions,\ninversor, cablejat AC i CC.\n• Ser l'interlocutor amb el client, facilitar les explicacions tècniques necessàries del muntatge,\ntermini execució, posada en marxa i monitoratge.\n• Supervisar i validar la qualitat del total de la instal·lació.\n• Complir dins del termini i en la forma escaient, l'execució i posada en marxa.\n• Sistemes elèctrics i electrònics de conversió d'energia associats/solars i altres equips\nauxiliars.\n• Muntatges elèctrics i mecànics de panells fotovoltaics: col·locació de mòduls, cablejats,\ninstal·lació d'equips i posada en servei de la instal·lació.\n",
+    "requirements": [
+     "Experiència 1 anys. • Coneixements en instal·lacions de llum i aigua.\n• Experiència mínima de 3 anys desenvolupant les mateixes funcions.\n• Formació relacionada amb el sector: electricitat, aigua, climatització, calefacció, etc.\n• Valorable disposar de coneixements de xarxes.\n• Disposar de carnet de conduir i cotxe propi.\n• Ubicació: Prioritàriament Baix Empordà i Alt Empordà, esporàdicament província de Girona.\n• Persona responsable, amb iniciativa i ganes de d’aprendre ii amb bona actitud de cara al tracte\namb el client final.\n• Imprescindible residència a la zona o voltants per accedir diàriament al centre de treball.\n",
+     "català (parlat Superior, escrit Superior)",
+     "Permisos de conduir: b"
+    ],
+    "conditions": [
+     "Contracte laboral indefinit",
+     "Jornada intensiva",
+     "Salari mensual brut des de '1800' fins a '2500'"
+    ],
+    "counters": {
+     "registered": 18
+    },
+    "positions": 1,
+    "isOpenInscription": true,
+    "status": 2
+   },
+   "isOpenInscription": true,
+   "origin": "feina-activa"
+  },
+  {
+   "externalId": "20260916O84",
+   "isExpress": false,
+   "isSpecialCare": false,
+   "status": "PUBLISHED",
+   "reference": "FA20260916O84",
+   "business": {
+    "name": "Hospital Clínic de Barcelona (HCB)",
+    "externalId": "P0800000B",
+    "parentId": "P0800000B"
+   },
+   "publishedAt": "1789516800000",
+   "content": {
+    "title": "1 plaça d'Especialista per a l'Institut Clínic Respoiratori (ICR) - Servei de Pneumologia  CIDO",
+    "summary": {
+     "text": "Hospital Clínic de Barcelona (HCB). 1 plaça d'Especialista per a l'Institut Clínic Respoiratori (ICR) - Servei de Pneumologia. Concurs o valoració de mèrits. Laboral temporal. 2026-11-16. Termini obert. A1 - Grau universitari (correspondència amb llicenciatures). Grau/Llicenciatura en Medicina i Cirurgia. Especialitat en Pneumologia",
+     "highlight": "Jornada indiferent"
+    },
+    "place": "BARCELONA - BARCELONÈS - 8036 BARCELONA"
+   },
+   "offerDetail": {
+    "externalId": "20260916O84",
+    "title": "1 plaça d'Especialista per a l'Institut Clínic Respoiratori (ICR) - Servei de Pneumologia  CIDO",
+    "business": {
+     "externalId": "P0800000B",
+     "parentId": "P0800000B",
+     "name": "Hospital Clínic de Barcelona (HCB)",
+     "hasLogo": true,
+     "hasName": true
+    },
+    "isExpress": false,
+    "isSpecialCare": false,
+    "publishedAt": "2026-09-16T00:00:00.000Z",
+    "reference": "FA20260916O84",
+    "description": "Hospital Clínic de Barcelona (HCB). 1 plaça d'Especialista per a l'Institut Clínic Respoiratori (ICR) - Servei de Pneumologia. Concurs o valoració de mèrits. Laboral temporal. 2026-11-16. Termini obert. A1 - Grau universitari (correspondència amb llicenciatures). Grau/Llicenciatura en Medicina i Cirurgia. Especialitat en Pneumologia",
+    "location": "BARCELONA - BARCELONÈS - 8036 BARCELONA",
+    "job": "Veure convocatòria",
+    "requirements": [],
+    "conditions": [
+     "Contracte laboral indiferent",
+     "Jornada indiferent"
+    ],
+    "externalUrl": "https://cido.diba.cat/oposicions/22192984",
+    "positions": 1,
+    "isOpenInscription": true,
+    "status": 2
+   },
+   "isOpenInscription": true,
+   "origin": "diba"
+  }
+ ]
+}

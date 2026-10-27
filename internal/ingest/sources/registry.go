@@ -862,6 +862,9 @@ func All(c HTTPClient) map[string]Source {
 	// Infoempleo: a Spanish general job board, enumerated from its paginated listing, each new
 	// posting's body read from its page's schema.org JobPosting. See infoempleo.go.
 	registry["infoempleo"] = NewInfoempleo(c)
+	// Feina Activa: the Catalan public employment service's job board, read in full from its
+	// own JSON listing and streamed page by page. See feinaactiva.go.
+	registry["feinaactiva"] = NewFeinaActiva(c)
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the

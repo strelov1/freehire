@@ -470,6 +470,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   iimjobs: 'iimjobs',
   shine: 'Shine.com',
   infoempleo: 'Infoempleo',
+  feinaactiva: 'Feina Activa',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),
