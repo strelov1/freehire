@@ -477,6 +477,9 @@ func All(c HTTPClient) map[string]Source {
 		// rotating lane (see homerunEgress).
 		NewHomerun(pacedHomerunGetter(newHomerunEgress(c, nil))),
 		NewHROffice(c),
+		// CVWarehouse (Belgium/Portugal): board = companyGuid on jobpage.cvwarehouse.com. Paced: one
+		// host serves every customer's pages (see cvwarehouseRequestInterval).
+		NewCVWarehouse(pacedHTMLGetter(c, cvwarehouseRequestInterval, 1)),
 		// Bizneo HR (Spain): board = the career-site host under bizneo.cloud; bodies hydrated for
 		// new postings only. Paced: every site is served by one edge (see bizneoRequestInterval).
 		NewBizneo(pacedHTMLGetter(c, bizneoRequestInterval, 1)),

@@ -304,6 +304,8 @@ func TestRecognize(t *testing.T) {
 		{"oorwin demo portal is not a tenant", "https://demous.oorwin.com/careers", "", "", "", false},
 		{"talentstorm offer", "https://advades.talentstorm.de/stellenangebote/sap-development-consultant-cap-m-w-d-26187", "talentstorm", "advades", "https://advades.talentstorm.de", true},
 		{"talentstorm api is not a tenant", "https://api.talentstorm.de/api/v1/joboffers/basic/advades", "", "", "", false},
+		{"cvwarehouse vacancy", "https://jobpage.cvwarehouse.com/?companyGuid=78373ED3-eb9b-4bea-821b-367667e8825f&lang=pt-PT&job=402573", "cvwarehouse", "78373ed3-eb9b-4bea-821b-367667e8825f", "https://jobpage.cvwarehouse.com/?companyGuid=78373ed3-eb9b-4bea-821b-367667e8825f", true},
+		{"cvwarehouse page without a companyGuid", "https://jobpage.cvwarehouse.com/Content/images/loader.svg", "", "", "", false},
 		{"helixjobs listing", "https://helixjobs.com/_/joblist?iid=146&page=2", "helixjobs", "146", "https://helixjobs.com/_/joblist?iid=146", true},
 		{"helixjobs posting names its iid", "https://helixjobs.com/_/jobad?prj=100007p36&source=ba", "helixjobs", "100007", "https://helixjobs.com/_/joblist?iid=100007", true},
 		{"helixjobs apply form on a vanity label", "https://awo-rheinland.helixjobs.com/_/apply/form?prj=2728P663", "helixjobs", "2728", "https://awo-rheinland.helixjobs.com/_/joblist?iid=2728", true},

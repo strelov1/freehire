@@ -434,6 +434,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   homerun: 'Homerun',
   easycruit: 'EasyCruit',
   hroffice: 'HR Office',
+  cvwarehouse: 'CVWarehouse',
   bizneo: 'Bizneo',
   epreselec: 'ePreselec',
   viterbit: 'Viterbit',

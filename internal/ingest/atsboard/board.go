@@ -339,6 +339,8 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"viterbit.site", "viterbit", modeSubdomain},
 	// helixjobs: the concludis portal, keyed by instance id (see queryBoards).
 	{"helixjobs.com", "helixjobs", modeQuery},
+	// CVWarehouse: every customer's career site is jobpage.cvwarehouse.com/?companyGuid=<board>.
+	{"jobpage.cvwarehouse.com", "cvwarehouse", modeQuery},
 	// Emply: <tenant>.career.emply.com. A site on the customer's own domain (midtjob.dk) is a
 	// vanity host and stays unrecognised here.
 	{"career.emply.com", "emply", modeSubdomain},
@@ -790,6 +792,15 @@ var queryBoards = map[string]struct {
 		listingPath:  "/careers",
 		boardPattern: regexp.MustCompile(`^[a-z0-9-]+(?:\.[a-z0-9-]+)+$`),
 		tenantHost:   true,
+	},
+	// CVWarehouse names a customer's career site by its companyGuid on every page: the listing is
+	// /?companyGuid=<board> and a vacancy /?companyGuid=<board>&job=<id>
+	// (internal/ingest/sources/cvwarehouse.go). The host serves the platform's own pages too, so a
+	// link without the parameter is declined.
+	"jobpage.cvwarehouse.com": {
+		param:        "companyGuid",
+		listingPath:  "/",
+		boardPattern: regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`),
 	},
 	// helixjobs.com, the portal Perbility runs for its concludis employers, names an employer
 	// by its numeric instance id: the listing is /_/joblist?iid=<board>, while a posting
