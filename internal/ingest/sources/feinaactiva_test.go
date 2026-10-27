@@ -14,13 +14,19 @@ import (
 // named employer, a hidden one and a relayed CIDO call — and answers every later page empty, as
 // the site does past its end.
 type feinaactivaFake struct {
-	err   error
-	pages []string
+	err error
+	// laterErr fails every page after the first, whose total then claims 100 offers so the walk
+	// goes on to page 2.
+	laterErr error
+	pages    []string
 }
 
 func (f *feinaactivaFake) GetJSON(_ context.Context, u string, v any) error {
 	f.pages = append(f.pages, u)
 	if u != fmt.Sprintf(feinaactivaListURL, 1) {
+		if f.laterErr != nil {
+			return f.laterErr
+		}
 		return json.Unmarshal([]byte(`{"total":3,"included":[]}`), v)
 	}
 	if f.err != nil {
@@ -30,7 +36,13 @@ func (f *feinaactivaFake) GetJSON(_ context.Context, u string, v any) error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(raw, v)
+	if err := json.Unmarshal(raw, v); err != nil {
+		return err
+	}
+	if p, ok := v.(*feinaactivaPage); ok && f.laterErr != nil {
+		p.Total = 100
+	}
+	return nil
 }
 
 func newTestFeinaActiva(f *feinaactivaFake) feinaactiva {
@@ -93,6 +105,22 @@ func TestFeinaActivaFirstPageFailingFailsTheCrawl(t *testing.T) {
 	f := &feinaactivaFake{err: errors.New("boom")}
 	if _, err := newTestFeinaActiva(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
 		t.Fatal("want an error")
+	}
+}
+
+func TestFeinaActivaLaterPageFailingKeepsWhatWasRead(t *testing.T) {
+	f := &feinaactivaFake{laterErr: errors.New("boom")}
+	s := newTestFeinaActiva(f)
+	var got []Job
+	err := s.FetchStream(context.Background(), CompanyEntry{}, func(j Job) { got = append(got, j) })
+	if err != nil {
+		t.Fatalf("a later page failing is not a failed crawl: %v", err)
+	}
+	if len(f.pages) != 2 {
+		t.Errorf("pages read = %v, want pages 1 and 2", f.pages)
+	}
+	if len(got) != 2 {
+		t.Errorf("emitted %d offers, want page 1's two", len(got))
 	}
 }
 

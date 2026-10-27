@@ -24,7 +24,7 @@ import (
 // place, duties, requirements and conditions — so no posting page is ever bought. It serves ten
 // offers a page whatever the request asks for, so a whole walk is ~570 requests; the adapter
 // therefore STREAMS each page's offers to the pipeline as it reads them, so a run cut short still
-// keeps what it read.
+// keeps what it read, and reads ahead while the pipeline writes (see feinaactivaPrefetch).
 type feinaactiva struct {
 	http     JSONGetter
 	limiter  waiter
@@ -100,35 +100,40 @@ func (s feinaactiva) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return jobs, err
 }
 
+// feinaactivaPrefetch is how many listing pages may wait, read, for the pipeline to save them.
+// Reading and saving are decoupled because each is slow on its own: a page answers in ~1.5 s
+// and its ten offers take ~1.5 s more to write from the crawl host, so a walk that waited on its
+// own writes took ~45 minutes against a 50-minute run budget.
+const feinaactivaPrefetch = 64
+
+// feinaactivaBatch is one listing page as the walk hands it over: its offers, or the error that
+// ended the walk on that page.
+type feinaactivaBatch struct {
+	page   int
+	offers []feinaactivaOffer
+	err    error
+}
+
 // FetchStream walks the listing newest first and emits each offer as its page arrives. The first
 // page failing fails the crawl; a later one ends the walk with what was emitted, since the
 // adapter is not swept by source.
 func (s feinaactiva) FetchStream(ctx context.Context, _ CompanyEntry, emit func(Job)) error {
+	batches := make(chan feinaactivaBatch, feinaactivaPrefetch)
+	done := make(chan struct{})
+	defer close(done)
+	go s.walk(ctx, batches, done)
+
 	seen := make(map[string]bool)
 	read := 0
-	for page := 1; page <= s.maxPages; page++ {
-		if err := s.limiter.Wait(ctx); err != nil {
-			if page == 1 {
-				return err
+	for b := range batches {
+		if b.err != nil {
+			if b.page == 1 {
+				return fmt.Errorf("feinaactiva: listing: %w", b.err)
 			}
-			log.Printf("feinaactiva: walk stopped at page %d: %v", page, err)
+			log.Printf("feinaactiva: listing page %d failed; keeping the %d offers read: %v", b.page, read, b.err)
 			return nil
 		}
-		var p feinaactivaPage
-		if err := s.http.GetJSON(ctx, fmt.Sprintf(feinaactivaListURL, page), &p); err != nil {
-			if page == 1 {
-				return fmt.Errorf("feinaactiva: listing: %w", err)
-			}
-			log.Printf("feinaactiva: listing page %d failed; keeping the %d offers read: %v", page, read, err)
-			return nil
-		}
-		if len(p.Included) == 0 {
-			if page == 1 {
-				return fmt.Errorf("feinaactiva: listing carries no offer")
-			}
-			return nil
-		}
-		for _, o := range p.Included {
+		for _, o := range b.offers {
 			read++
 			if seen[o.Reference] {
 				continue
@@ -138,11 +143,48 @@ func (s feinaactiva) FetchStream(ctx context.Context, _ CompanyEntry, emit func(
 				emit(j)
 			}
 		}
-		if p.Total > 0 && read >= p.Total {
-			return nil
-		}
 	}
 	return nil
+}
+
+// walk reads the listing pages in order into batches until a page carries no offer, the
+// listing's own total is reached, or a page fails (handed over as that page's error). It stops
+// early when the reader is gone.
+func (s feinaactiva) walk(ctx context.Context, batches chan<- feinaactivaBatch, done <-chan struct{}) {
+	defer close(batches)
+	send := func(b feinaactivaBatch) bool {
+		select {
+		case batches <- b:
+			return true
+		case <-done:
+			return false
+		}
+	}
+	read := 0
+	for page := 1; page <= s.maxPages; page++ {
+		if err := s.limiter.Wait(ctx); err != nil {
+			send(feinaactivaBatch{page: page, err: err})
+			return
+		}
+		var p feinaactivaPage
+		if err := s.http.GetJSON(ctx, fmt.Sprintf(feinaactivaListURL, page), &p); err != nil {
+			send(feinaactivaBatch{page: page, err: err})
+			return
+		}
+		if len(p.Included) == 0 {
+			if page == 1 {
+				send(feinaactivaBatch{page: page, err: fmt.Errorf("listing carries no offer")})
+			}
+			return
+		}
+		if !send(feinaactivaBatch{page: page, offers: p.Included}) {
+			return
+		}
+		read += len(p.Included)
+		if p.Total > 0 && read >= p.Total {
+			return
+		}
+	}
 }
 
 // feinaactivaJob maps an offer to a Job. ok is false for one with no reference, title or body, and
