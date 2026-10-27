@@ -181,6 +181,8 @@ var nameToCountry = map[string]string{
 	// --- Country names: English + native + ES/PT/DE, seeded from the unresolved
 	// production strings. (Names already keyed above are not repeated.)
 	"china": "cn", "greece": "gr", "brasil": "br", "philippines": "ph",
+	// "Todo Brasil" / "Todo o Brasil": the Brazilian crawl's "anywhere in Brazil".
+	"todo brasil": "br", "todo o brasil": "br",
 	"colombia": "co", "cyprus": "cy", "taiwan": "tw", "malaysia": "my",
 	"romania": "ro", "hungary": "hu", "magyarország": "hu", "bulgaria": "bg", "thailand": "th",
 	"indonesia": "id", "vietnam": "vn", "south korea": "kr", "korea": "kr",
@@ -500,7 +502,11 @@ var cityOverrides = map[string]cityEntry{
 	// Mexico City only in a line that states Mexico.
 	"distrito federal": {Name: "Mexico City", Country: "mx", Contested: true},
 	"bogotá d.c.":      {Name: "Bogotá", Country: "co"},
-	"bogota d.c.":      {Name: "Bogotá", Country: "co"},
+	// GeoNames lists "Porto" as an alias of Bordeaux, the more populous place, so a
+	// "Porto, PT" line named no city at all.
+	"porto":       {Name: "Porto", Country: "pt"},
+	"oporto":      {Name: "Porto", Country: "pt"},
+	"bogota d.c.": {Name: "Bogotá", Country: "co"},
 }
 
 // nameToRegion resolves macro-region names (and explicit open-anywhere markers)

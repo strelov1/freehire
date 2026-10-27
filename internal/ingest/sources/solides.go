@@ -76,8 +76,12 @@ func (s solides) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			Location:    joinNonEmpty(p.City.Name, p.State.Code),
 			Description: sanitizeHTML(p.Description),
 			Remote:      p.HomeOffice,
-			WorkMode:    solidesWorkMode(p.JobType),
-			PostedAt:    parseDate(p.CreatedAt),
+			// Sólides hosts Brazilian employers, and 2.6% of its open postings name no
+			// city or state (measured 2026-10-27). A FallbackCountries signal, read only
+			// when the line states nothing of its own.
+			FallbackCountries: []string{"br"},
+			WorkMode:          solidesWorkMode(p.JobType),
+			PostedAt:          parseDate(p.CreatedAt),
 		})
 	}
 	return jobs, nil

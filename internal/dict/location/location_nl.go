@@ -61,7 +61,8 @@ var provinceCapitals = map[string]bool{
 // The Spanish provinces follow the same rule (spanishProvinceCapitals), and also in the
 // "Town, ESPAÑA/Province/Community, España" export one Factorial tenant writes. A Mexican
 // state named after its capital is also the state in the LAST slot ("León, Guanajuato"),
-// the form OCC writes (mexicanStateCapitals).
+// the form OCC writes (mexicanStateCapitals). The Portuguese districts follow the Dutch
+// rule ("Matosinhos, Porto, PT"; portugueseDistrictCapitals).
 func provinceAfterCity(tok, lower string, first bool) bool {
 	if first {
 		return false
@@ -72,6 +73,8 @@ func provinceAfterCity(tok, lower string, first bool) bool {
 		return between
 	case spanishProvinceCapitals[tok]:
 		return between || strings.Contains(lower, "españa/"+tok+"/") || strings.Contains(lower, "/"+tok+", españa")
+	case portugueseDistrictCapitals[tok]:
+		return between
 	case mexicanStateCapitals[tok]:
 		return between || strings.HasSuffix(strings.TrimSpace(lower), ", "+tok)
 	}

@@ -205,6 +205,29 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   Spanish sample, ~550 lines in an 18k-line control. Valencia and Zaragoza are city overrides:
   the curated es country used to suppress their city. infojobs and occ carry
   `FallbackCountries` es/mx (28% and 16% of their open postings stated no country).
+- **Brazilian state codes and Portuguese districts** (`location_br.go`, measured 2026-10-27
+  over 30,677 Brazilian and 6,931 Portuguese postings). Every Brazilian ATS writes the
+  state code after the town ("Curitiba, PR", "Belo Horizonte/MG", "São Paulo - SP",
+  "Campinas SP"), and most codes spell a country or a US state: PR Puerto Rico, SC South
+  Carolina, BA Bosnia, ES Spain, PE Peru, MT Malta, RS Serbia, MA Massachusetts. 20.1% of
+  the Brazilian lines carried a wrong second country, and "Fortaleza, CE" none. A code is
+  now the Brazilian state when the line names Brazil or the town before it has a
+  Brazilian reading in any table — including a namesake the city table gives to another
+  country first, whose country is withdrawn and whose name becomes the Brazilian one
+  ("Colombo, PR", "Concordia, SC" → Concórdia, not El Paso). Not when the line names the
+  US, and not after the country the code spells ("Juan Díaz, Panamá, PA"). Lines with a
+  wrong country 20.1% → 1.1%; exactly Brazil 76.6% → 97.9%. The state names that have no
+  second reading state Brazil and no city (`foreignSubdivisionNames` + `regionNotCity`:
+  "Rio Grande do Sul" named Rio Grande, "Ceará" Fortaleza, "Bahia" Salvador); Paraná,
+  Santa Catarina, Amazonas, Acre and Distrito Federal are left out (an Argentine city, a
+  Mexican city, a Venezuelan region, an Israeli city, Mexico City). An Indian state code
+  between an Indian city and the country is the state ("Patna, BR, in" was Brazil too).
+  Portugal: "Porto" was an alias of Bordeaux, so "Porto, PT" named no city (550 lines in
+  the sample) — now a city override; a district named after its capital is the district
+  between two commas ("Matosinhos, Porto, PT"; `portugueseDistrictCapitals`); Madeira and
+  the Azores state Portugal. Portuguese city coverage 60.2% → 68.2%, two-city lines 4.1% →
+  1.2%. Not seen in the sample, so not built: "Grande São Paulo", "ABC Paulista",
+  "Região Metropolitana de …", "Grande Lisboa", a CEP before the town.
 - **Indian work-arrangement prose is a fourth phrase list** (`workmode_in.go`), read only
   when none of the English, German, Dutch, Spanish and Portuguese ones matched. "WFO"/"work from office" is onsite;
   counted office days decide the rest ("3 days WFO", "Hybrid (3 days office)" → hybrid;

@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -104,6 +105,10 @@ func TestSolidesFetchMapsFieldsAndPaginates(t *testing.T) {
 	}
 	if sre.Location != "" {
 		t.Errorf("Location = %q, want empty when city/state are blank", sre.Location)
+	}
+	// Sólides is a Brazilian platform: a posting that names no place is in Brazil.
+	if !slices.Equal(sre.FallbackCountries, []string{"br"}) {
+		t.Errorf("FallbackCountries = %v, want [br]", sre.FallbackCountries)
 	}
 }
 

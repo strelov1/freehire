@@ -20,6 +20,21 @@ package location
 // Zaporizhzhia and Kherson regions — are left out on purpose: assigning them a
 // country is not a dictionary decision.
 var foreignSubdivisionNames = map[string]string{
+	// Brazil's states, in the long form a location line writes beside or instead of the
+	// two-letter code (location_br.go). Absent, because the name has a second reading:
+	// "Paraná" (an Argentine city), "Santa Catarina" (a Mexican city), "Amazonas" (a
+	// Venezuelan and a Peruvian region), "Acre" (an Israeli city), "Distrito Federal"
+	// (Mexico City's), and São Paulo and Rio de Janeiro, which the city table already places.
+	"minas gerais": "br", "rio grande do sul": "br", "rio grande do norte": "br",
+	"mato grosso": "br", "mato grosso do sul": "br", "espírito santo": "br",
+	"espirito santo": "br", "pernambuco": "br", "ceará": "br", "ceara": "br", "bahia": "br",
+	"goiás": "br", "goias": "br", "maranhão": "br", "maranhao": "br", "paraíba": "br",
+	"paraiba": "br", "piauí": "br", "piaui": "br", "alagoas": "br", "sergipe": "br",
+	"tocantins": "br", "rondônia": "br", "rondonia": "br", "roraima": "br", "amapá": "br",
+	"amapa": "br", "pará": "br",
+	// Portugal's autonomous regions.
+	"madeira": "pt", "região autónoma da madeira": "pt", "açores": "pt", "acores": "pt",
+	"azores": "pt", "região autónoma dos açores": "pt",
 	// Russia — republics, in the official form and the short one a location line
 	// splits into ("Республика Татарстан (Татарстан)", "Чувашская Республика - Чувашия").
 	"республика адыгея": "ru", "адыгея": "ru",
@@ -226,6 +241,16 @@ var regionNotCity = map[string]bool{
 	"atlantico": true, "risaralda": true, "boyacá": true, "boyaca": true, "tolima": true,
 	"huila": true, "quindío": true, "quindio": true, "norte de santander": true,
 	"d.c.": true, "caba": true,
+	// The Brazilian states and Portuguese islands the city table reads as a town ("Ceará"
+	// is an alias of Fortaleza, "Madeira" of Tabira, "Rio Grande do Sul" a prefix of Rio
+	// Grande).
+	"minas gerais": true, "rio grande do sul": true, "rio grande do norte": true,
+	"mato grosso": true, "mato grosso do sul": true, "espírito santo": true,
+	"espirito santo": true, "pernambuco": true, "ceará": true, "ceara": true, "bahia": true,
+	"goiás": true, "goias": true, "maranhão": true, "maranhao": true, "paraíba": true,
+	"paraiba": true, "piauí": true, "piaui": true, "alagoas": true, "sergipe": true,
+	"tocantins": true, "rondônia": true, "rondonia": true, "roraima": true, "amapá": true,
+	"amapa": true, "pará": true, "madeira": true, "açores": true, "acores": true, "azores": true,
 	// Country names GeoNames also gives the capital: "Monterrey, Mexico" named Mexico City
 	// as a second city, "David, Panama" Panama City.
 	"mexico": true, "méxico": true, "méjico": true, "panama": true, "panamá": true,
