@@ -80,6 +80,12 @@ var scraplingProviders = map[string]scraplingProvider{
 	"cleverstaff": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewCleverstaff(f)
 	}},
+	// Only the posting pages: Akamai bot management holds a plain request open without
+	// answering, and the impersonating fetcher is served from the crawl host's own IP (measured
+	// 2026-10-27). The active-offers sitemap is not behind it and stays on a plain client.
+	"turijobs": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewTurijobs(NewClient(), f)
+	}},
 	// The crawl host's IP times out; the impersonating fetcher through the proxy is served.
 	"kontur": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewKontur(f)
