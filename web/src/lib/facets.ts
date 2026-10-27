@@ -436,6 +436,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   hroffice: 'HR Office',
   bizneo: 'Bizneo',
   epreselec: 'ePreselec',
+  viterbit: 'Viterbit',
   darwinbox: 'Darwinbox',
   greythr: 'greytHR',
   helixjobs: 'helixjobs',

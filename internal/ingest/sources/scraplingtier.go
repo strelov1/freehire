@@ -142,6 +142,12 @@ var scraplingProviders = map[string]scraplingProvider{
 	"epreselec": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewEPreselec(f)
 	}},
+	// Cloudflare's "Just a moment..." challenge (403) to every plain client, from the crawl host,
+	// the fixed proxy and a laptop alike; the impersonating fetcher from the crawl host's own IP
+	// read all 59 measured sites, 4,097 jobs, on 2026-10-27.
+	"viterbit": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewViterbit(f)
+	}},
 	"instahyre": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return pacedInstahyre(NewClient(), f)
 	}},

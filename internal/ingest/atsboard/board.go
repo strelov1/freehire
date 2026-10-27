@@ -335,6 +335,8 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"inhroffice.com", "hroffice", modeSubdomain},
 	// ePreselec (Spain, Adevinta): one ASP.NET careers site per customer at <label>.epreselec.com.
 	{"epreselec.com", "epreselec", modeSubdomain},
+	// Viterbit (Spain): one career site per customer at <label>.viterbit.site.
+	{"viterbit.site", "viterbit", modeSubdomain},
 	// helixjobs: the concludis portal, keyed by instance id (see queryBoards).
 	{"helixjobs.com", "helixjobs", modeQuery},
 	// Emply: <tenant>.career.emply.com. A site on the customer's own domain (midtjob.dk) is a
@@ -1532,6 +1534,7 @@ var platformLabelsByApex = map[string][]string{
 	"oorwin.com":     {"www", "demous", "demoind", "demosg", "oorwincrm"},
 	"inhroffice.com": {"www", "link"},          // link.inhroffice.com is the vendor's link shortener
 	"epreselec.com":  {"www", "logininfojobs"}, // the product site and the InfoJobs sign-in bridge
+	"viterbit.site":  {"www"},
 	// Darwinbox's marketing site, its content hub and its events site.
 	"darwinbox.com": {"www", "explore", "lighthouse"},
 	"darwinbox.in":  {"www"},
