@@ -236,7 +236,7 @@ func cvwarehouseLocation(city, regionsJSON string) string {
 // full and part time says nothing.
 func cvwarehouseEmploymentType(workType, schedulesJSON string) string {
 	switch strings.ToLower(strings.TrimSpace(workType)) {
-	case "freelance", "zelfstandige", "indépendant", "independente", "trabalhador independente":
+	case "freelance", "zelfstandige", "indépendant", "independente", "trabalhador independente": //nolint:misspell // Portuguese, not English
 		return "contract"
 	case "stage", "stagiair", "estágio", "estagiário", "internship", "intern":
 		return "internship"
@@ -250,7 +250,7 @@ func cvwarehouseEmploymentType(workType, schedulesJSON string) string {
 		switch strings.ToLower(strings.TrimSpace(s)) {
 		case "voltijds", "tempo inteiro", "full time", "full-time", "temps plein", "vollzeit":
 			full = true
-		case "deeltijds", "halftijds", "tempo parcial", "part time", "part-time", "temps partiel", "mi-temps", "teilzeit":
+		case "deeltijds", "halftijds", "tempo parcial", "part time", "part-time", "temps partiel", "mi-temps", "teilzeit": //nolint:misspell // French, not English
 			part = true
 		}
 	}
