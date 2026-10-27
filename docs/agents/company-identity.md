@@ -121,8 +121,13 @@ to strip after the slug was minted. The Japanese forms are the case that made th
 companies (2026-10-26); it now keys as a Latin mark (`speee-kk`), so almost none of them has
 another spelling to merge with. Ingest and
 `backfill-derive` re-key such a company regardless; skipping it here would leave the old URL
-404ing with no alias. A slug that is NOT the plain slug of the latest name is left alone — it
-drifted because the source renamed the employer, which is a judgement, not a form.
+404ing with no alias. The South-Asian forms are the second case and a different shape: the rule
+already stripped "Ltd" but not the "Pvt" or "Private" before it, so "Acme Pvt Ltd" was minted
+`acme-pvt` — neither the plain slug nor the current key (1,936 companies, 2026-10-27). A stored
+slug that lies BETWEEN the two (the current key a prefix of it, it a prefix of the plain slug,
+compared folded) is planned the same way, since everything it carries beyond the key is a form.
+Any other slug that is not the plain slug of the latest name is left alone — it drifted because
+the source renamed the employer, which is a judgement, not a form.
 `--reason legal_form` takes only the groups whose every alias is that pure-rule class, so a
 wave like this one can run without dragging the unreviewed spelling backlog along with it.
 
