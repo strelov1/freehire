@@ -237,9 +237,24 @@ func keyedBeforeTheRule(c company, frozen map[string]bool) bool {
 		return false
 	}
 	stored := normalize.FoldSlug(c.Slug)
-	plain := normalize.FoldSlug(normalize.Slug(c.Name))
-	return stored == plain ||
-		(strings.HasPrefix(plain, stored) && strings.HasPrefix(stored, normalize.FoldSlug(derived)))
+	plain := normalize.Slug(c.Name)
+	if stored == normalize.FoldSlug(plain) {
+		return true
+	}
+	return strings.HasPrefix(stored, normalize.FoldSlug(derived)) && isLeadingWords(stored, plain)
+}
+
+// isLeadingWords reports whether a folded slug is exactly the first few WORDS of a plain slug,
+// so a cut inside a word never counts: `acme-p` is not a leading part of `acme-pvt-ltd`, and
+// a company stored there was named "Acme P" by its source, not half-stripped by the rule.
+func isLeadingWords(folded, plain string) bool {
+	words := strings.Split(plain, "-")
+	for k := 1; k <= len(words); k++ {
+		if normalize.FoldSlug(strings.Join(words[:k], "-")) == folded {
+			return true
+		}
+	}
+	return false
 }
 
 // electCanonical picks the group's surviving slug. Members arrive sorted by open jobs

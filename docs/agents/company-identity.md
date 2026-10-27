@@ -125,7 +125,10 @@ another spelling to merge with. Ingest and
 already stripped "Ltd" but not the "Pvt" or "Private" before it, so "Acme Pvt Ltd" was minted
 `acme-pvt` — neither the plain slug nor the current key (1,936 companies, 2026-10-27). A stored
 slug that lies BETWEEN the two (the current key a prefix of it, it a prefix of the plain slug,
-compared folded) is planned the same way, since everything it carries beyond the key is a form.
+compared folded and cut only at a word boundary) is planned the same way, since everything it
+carries beyond the key is a form. **Run that `--reason legal_form --apply` wave before the next
+`backfill-derive`**: the planner reads `jobs`, so a slug whose rows a re-derive has already
+moved is invisible to it, and its old URL is left with no alias to 301 from.
 Any other slug that is not the plain slug of the latest name is left alone — it drifted because
 the source renamed the employer, which is a judgement, not a form.
 `--reason legal_form` takes only the groups whose every alias is that pure-rule class, so a

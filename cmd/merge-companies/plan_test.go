@@ -149,7 +149,11 @@ func TestPlanMerges_RekeysALoneCompanyAnOlderRuleHalfStripped(t *testing.T) {
 func TestPlanMerges_LeavesALoneCompanyRenamedPastItsSlugAlone(t *testing.T) {
 	// The stored slug is a prefix of the plain slug, but SHORTER than the current key: the
 	// employer was renamed by a word that is not a form, which is a judgement, not the rule.
-	got := planMerges([]company{{Slug: "acme", Name: "Acme Holdings Ltd", JobCount: 9}}, nil, 0, nil)
+	got := planMerges([]company{
+		{Slug: "acme", Name: "Acme Holdings Ltd", JobCount: 9},
+		// A prefix that ends INSIDE a word is a different name ("Acme P"), not a cut form.
+		{Slug: "acme-p", Name: "Acme Pvt Ltd", JobCount: 2},
+	}, nil, 0, nil)
 	if len(got) != 0 {
 		t.Errorf("planned %+v, want nothing", got)
 	}
