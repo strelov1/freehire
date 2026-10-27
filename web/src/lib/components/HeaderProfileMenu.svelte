@@ -69,7 +69,10 @@
   onkeydown={(e) => e.key === 'Escape' && (open = false)}
 />
 
-<div class="relative hidden sm:inline-flex" bind:this={root}>
+<!-- Signed in, the profile trigger lives here on wide screens only (the consolidated menu
+     carries it on a phone). Signed out, Sign in shows at every width: a first-time visitor
+     on a phone otherwise had no way in short of opening the menu. -->
+<div class={['relative', isAuthenticated() ? 'hidden sm:inline-flex' : 'inline-flex']} bind:this={root}>
   {#if isAuthenticated()}
     <button
       type="button"
@@ -139,8 +142,12 @@
       </div>
     {/if}
   {:else}
-    <button type="button" aria-label="Sign in" onclick={signIn} class={cn('inline-flex', iconButton)}>
-      <LogIn class="size-5" />
+    <button
+      type="button"
+      onclick={signIn}
+      class="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <LogIn class="size-4" aria-hidden="true" /> Sign in
     </button>
   {/if}
 </div>

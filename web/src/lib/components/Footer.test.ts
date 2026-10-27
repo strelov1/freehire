@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { APP_STORE_URL } from '#lib/appLinks.js';
 import { describe, expect, it } from 'vitest';
 
 // A SOURCE-TEXT AUDIT, not a mounted-component test — web/ has no component-test
@@ -64,8 +65,9 @@ describe('Footer store buttons', () => {
     // The listing's own share link is `/br/app/...`, which pins every visitor to the
     // Brazilian storefront — a wrong-country page still loads, so nothing downstream
     // could catch it. Without a country Apple redirects each visitor to their own.
-    expect(SOURCE).toContain('https://apps.apple.com/app/freehire-open-job-search/id6801885119');
-    expect(SOURCE).not.toMatch(/apps\.apple\.com\/[a-z]{2}\//);
+    expect(SOURCE).toContain('APP_STORE_URL');
+    expect(APP_STORE_URL).toBe('https://apps.apple.com/app/freehire-open-job-search/id6801885119');
+    expect(APP_STORE_URL).not.toMatch(/apps\.apple\.com\/[a-z]{2}\//);
   });
 
   it('takes the Chrome Web Store URL from #lib/extensionLinks rather than spelling it again', () => {

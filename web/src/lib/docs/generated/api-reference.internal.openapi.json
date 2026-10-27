@@ -1636,7 +1636,7 @@
       "put": {
         "operationId": "put_me_survey",
         "summary": "Update one or more survey answers.",
-        "description": "A field the body omits is left unchanged. A stage or challenge outside its vocabulary, a note alongside any challenge other than `other`, a currency that is not a three-letter ISO 4217 code, a period outside the vocabulary, or a non-positive income is a `400` naming the offending field.",
+        "description": "A field the body omits is left unchanged. A stage or challenge outside its vocabulary, `just_starting` beside another challenge, a note when the challenges do not include `other`, a currency that is not a three-letter ISO 4217 code, a period outside the vocabulary, or a non-positive income is a `400` naming the offending field.",
         "requestBody": {
           "required": false,
           "content": {
@@ -1649,14 +1649,17 @@
                     "description": "One of `not_started`, `searching`, `employed_looking`, `exploring`.",
                     "example": "searching"
                   },
-                  "biggest_challenge": {
-                    "type": "string",
-                    "description": "One of `english`, `recruiter_contact`, `working_abroad`, `technical_interviews`, `other`.",
-                    "example": "technical_interviews"
+                  "biggest_challenges": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Any of `recruiter_contact`, `job_fit`, `remote_flexible`, `working_abroad`, `visa_sponsorship`, `technical_interviews`, `english`, `first_job`, `just_starting`, `other`. `just_starting` stands alone. Replaces the stored list.",
+                    "example": "[\"technical_interviews\"]"
                   },
                   "biggest_challenge_note": {
                     "type": "string",
-                    "description": "Free text. Accepted only alongside `biggest_challenge: \"other\"`."
+                    "description": "Free text. Accepted only while `biggest_challenges` includes `other`."
                   },
                   "current_income_amount": {
                     "type": "integer",

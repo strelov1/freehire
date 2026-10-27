@@ -2192,7 +2192,7 @@ curl "https://freehire.me/api/v1/me/survey" -H "Authorization: Bearer $FREEHIRE_
 {
   "data": {
     "job_search_stage": "searching",
-    "biggest_challenge": "technical_interviews",
+    "biggest_challenges": ["technical_interviews", "visa_sponsorship"],
     "current_income_amount": 5000,
     "current_income_currency": "USD",
     "current_income_period": "month"

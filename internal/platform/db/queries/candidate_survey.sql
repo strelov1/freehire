@@ -13,13 +13,13 @@ WHERE user_id = $1;
 -- whole. So the SQL layer stays a plain upsert and the partial-update semantics live in Go,
 -- where they are unit-testable without a database.
 INSERT INTO candidate_survey (
-    user_id, job_search_stage, biggest_challenge, biggest_challenge_note,
+    user_id, job_search_stage, biggest_challenges, biggest_challenge_note,
     current_income_amount, current_income_currency, current_income_period
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (user_id) DO UPDATE
 SET job_search_stage        = EXCLUDED.job_search_stage,
-    biggest_challenge       = EXCLUDED.biggest_challenge,
+    biggest_challenges      = EXCLUDED.biggest_challenges,
     biggest_challenge_note  = EXCLUDED.biggest_challenge_note,
     current_income_amount   = EXCLUDED.current_income_amount,
     current_income_currency = EXCLUDED.current_income_currency,

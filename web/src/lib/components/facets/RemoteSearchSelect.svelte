@@ -33,6 +33,7 @@
     onToggle,
     fallbackLabel,
     clearOnSelect = false,
+    closeOnSelect = false,
     expand = false,
     ready = true,
     techIcons = false,
@@ -47,6 +48,9 @@
     // When set, the search field is cleared after picking an option (search →
     // pick a chip → search the next), suited to a build-a-set form.
     clearOnSelect?: boolean;
+    // Close the floating list after a pick, so the new chip below the field is seen
+    // rather than hidden under the list it was picked from. Compact mode only.
+    closeOnSelect?: boolean;
     // Drop the floating panel for a roomy inline pane — for the modal's own scroll area.
     expand?: boolean;
     // False while the candidate list behind `search` (e.g. a facet dictionary) is
@@ -118,6 +122,7 @@
   function pick(value: string) {
     onToggle(value);
     if (clearOnSelect) query = '';
+    if (closeOnSelect && !expand) nav.close();
   }
 
   const selected = $derived([...include, ...exclude]);
@@ -260,6 +265,18 @@
         onblur={() => setTimeout(nav.close, 120)}
         onkeydown={onKeydown}
       />
+      {#if query}
+        <!-- Clear the typed query. mousedown is prevented so the field keeps focus. -->
+        <button
+          type="button"
+          onmousedown={(e) => e.preventDefault()}
+          onclick={() => (query = '')}
+          aria-label="Clear search"
+          class="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <X class="size-3.5" />
+        </button>
+      {/if}
       {#if nav.listOpen}
         {@render optionList()}
       {/if}

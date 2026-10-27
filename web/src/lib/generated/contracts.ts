@@ -1391,11 +1391,15 @@ export interface Answers {
  */
 export interface Responses {
   job_search_stage?: string;
-  biggest_challenge?: string;
   /**
-   * BiggestChallengeNote is free text, and only vocab.JobChallengeOther admits it. A note
-   * beside a coded challenge could contradict it, and nothing downstream would know which
-   * to believe.
+   * BiggestChallenges are members of vocab.JobChallengeValues, in the order picked. Nil
+   * means unstated; Sanitize folds an empty list into nil so the two never differ.
+   */
+  biggest_challenges?: string[];
+  /**
+   * BiggestChallengeNote is free text, admitted only while vocab.JobChallengeOther is
+   * among the challenges. A note beside coded answers alone could contradict them, and
+   * nothing downstream would know which to believe.
    */
   biggest_challenge_note?: string;
   current_income_amount?: number /* int */;
@@ -1548,6 +1552,10 @@ export const SENIORITY_VALUES = ['intern', 'junior', 'middle', 'senior', 'lead',
 export type Seniority = (typeof SENIORITY_VALUES)[number];
 export const CATEGORY_VALUES = ['software_engineering', 'backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'network_engineering', 'it_support', 'data_engineering', 'data_science', 'data_analytics', 'ml_ai', 'ai_engineering', 'qa', 'security', 'hardware', 'embedded', 'blockchain', 'architecture', 'design', 'creative', 'engineering_design', 'industrial_engineering', 'occupational_safety', 'product', 'project_management', 'healthcare', 'skilled_trades', 'retail', 'hospitality', 'logistics', 'education', 'personal_services', 'administration', 'social_services', 'science', 'manufacturing', 'public_safety', 'marketing', 'sales', 'support', 'business_analysis', 'solutions_engineering', 'developer_relations', 'technical_writing', 'recruiting', 'hr', 'finance', 'legal', 'operations', 'customer_success', 'other'] as const;
 export type Category = (typeof CATEGORY_VALUES)[number];
+export const TECH_CATEGORY_VALUES = ['software_engineering', 'backend', 'frontend', 'fullstack', 'mobile', 'devops', 'sre', 'network_engineering', 'it_support', 'data_engineering', 'data_science', 'data_analytics', 'ml_ai', 'ai_engineering', 'qa', 'security', 'hardware', 'embedded', 'blockchain', 'architecture', 'design', 'creative', 'product', 'project_management', 'business_analysis', 'solutions_engineering', 'developer_relations', 'technical_writing'] as const;
+export type TechCategory = (typeof TECH_CATEGORY_VALUES)[number];
+export const JOB_CHALLENGE_VALUES = ['english', 'recruiter_contact', 'working_abroad', 'technical_interviews', 'job_fit', 'remote_flexible', 'visa_sponsorship', 'first_job', 'just_starting', 'other'] as const;
+export type JobChallenge = (typeof JOB_CHALLENGE_VALUES)[number];
 export const EMPLOYMENT_TYPE_VALUES = ['full_time', 'part_time', 'contract', 'internship', 'fellowship'] as const;
 export type EmploymentType = (typeof EMPLOYMENT_TYPE_VALUES)[number];
 export const RELOCATION_VALUES = ['not_supported', 'supported', 'required'] as const;

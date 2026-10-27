@@ -142,7 +142,7 @@ func TestPutSurveyRejectsAnOutOfVocabularyValueWith400(t *testing.T) {
 	repo := &fakeSurveyRepo{}
 	app, token := surveyApp(t, repo, &fakeOnboardingStore{})
 
-	resp := doSurvey(t, app, http.MethodPut, "/me/survey", `{"biggest_challenge":"vibes"}`, token)
+	resp := doSurvey(t, app, http.MethodPut, "/me/survey", `{"biggest_challenges":["vibes"]}`, token)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)

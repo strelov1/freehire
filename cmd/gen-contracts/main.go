@@ -413,6 +413,12 @@ func genVocab() string {
 	b.WriteString(emitVocab("WorkMode", "WORK_MODE_VALUES", vocab.WorkModeValues))
 	b.WriteString(emitVocab("Seniority", "SENIORITY_VALUES", vocab.SeniorityValues))
 	b.WriteString(emitVocab("Category", "CATEGORY_VALUES", vocab.CategoryValues))
+	// The technical half of the categories, generated rather than re-listed so a picker
+	// that leads with technical roles cannot drift from the split is_tech reads.
+	b.WriteString(emitVocab("TechCategory", "TECH_CATEGORY_VALUES", vocab.TechCategories))
+	// The survey's challenge answers, generated so the tour's options are checked against
+	// the list the server validates — a drifted value is an answer that is always a 400.
+	b.WriteString(emitVocab("JobChallenge", "JOB_CHALLENGE_VALUES", vocab.JobChallengeValues))
 	b.WriteString(emitVocab("EmploymentType", "EMPLOYMENT_TYPE_VALUES", vocab.EmploymentTypeValues))
 	b.WriteString(emitVocab("Relocation", "RELOCATION_VALUES", vocab.RelocationValues))
 	b.WriteString(emitVocab("EnglishLevel", "ENGLISH_LEVEL_VALUES", vocab.EnglishLevelValues))

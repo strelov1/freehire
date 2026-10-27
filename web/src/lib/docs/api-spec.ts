@@ -2323,7 +2323,7 @@ data: {"type":"result","stop_reason":"completed"}
         responseExample: `{
   "data": {
     "job_search_stage": "searching",
-    "biggest_challenge": "technical_interviews",
+    "biggest_challenges": ["technical_interviews", "visa_sponsorship"],
     "current_income_amount": 5000,
     "current_income_currency": "USD",
     "current_income_period": "month"
@@ -2337,13 +2337,14 @@ data: {"type":"result","stop_reason":"completed"}
         summary: 'Update one or more survey answers.',
         description:
           'A field the body omits is left unchanged. A stage or challenge outside its ' +
-          'vocabulary, a note alongside any challenge other than `other`, a currency ' +
+          'vocabulary, `just_starting` beside another challenge, a note when the challenges ' +
+          'do not include `other`, a currency ' +
           'that is not a three-letter ISO 4217 code, a period outside the vocabulary, ' +
           'or a non-positive income is a `400` naming the offending field.',
         body: [
           { name: 'job_search_stage', type: 'string', description: 'One of `not_started`, `searching`, `employed_looking`, `exploring`.', example: 'searching' },
-          { name: 'biggest_challenge', type: 'string', description: 'One of `english`, `recruiter_contact`, `working_abroad`, `technical_interviews`, `other`.', example: 'technical_interviews' },
-          { name: 'biggest_challenge_note', type: 'string', description: 'Free text. Accepted only alongside `biggest_challenge: "other"`.' },
+          { name: 'biggest_challenges', type: 'string[]', description: 'Any of `recruiter_contact`, `job_fit`, `remote_flexible`, `working_abroad`, `visa_sponsorship`, `technical_interviews`, `english`, `first_job`, `just_starting`, `other`. `just_starting` stands alone. Replaces the stored list.', example: '["technical_interviews"]' },
+          { name: 'biggest_challenge_note', type: 'string', description: 'Free text. Accepted only while `biggest_challenges` includes `other`.' },
           { name: 'current_income_amount', type: 'integer', description: 'What you earn today, in the currency and period below.', example: '5000' },
           { name: 'current_income_currency', type: 'string', description: 'Three-letter ISO 4217 currency code.', example: 'USD' },
           { name: 'current_income_period', type: 'string', description: 'Income period, e.g. `year`, `month`.', example: 'month' },

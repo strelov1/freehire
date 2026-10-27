@@ -42,7 +42,7 @@ func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, a Response
 	row, err := r.q.UpsertCandidateSurvey(ctx, db.UpsertCandidateSurveyParams{
 		UserID:                userID,
 		JobSearchStage:        pgconv.Text(derefString(a.JobSearchStage)),
-		BiggestChallenge:      pgconv.Text(derefString(a.BiggestChallenge)),
+		BiggestChallenges:     a.BiggestChallenges,
 		BiggestChallengeNote:  pgconv.Text(derefString(a.BiggestChallengeNote)),
 		CurrentIncomeAmount:   pgconv.Int4(a.CurrentIncomeAmount),
 		CurrentIncomeCurrency: pgconv.Text(derefString(a.CurrentIncomeCurrency)),
@@ -58,7 +58,7 @@ func (r *QueriesRepository) Upsert(ctx context.Context, userID int64, a Response
 func answersFromRow(row db.CandidateSurvey) Responses {
 	return Responses{
 		JobSearchStage:        pgconv.TextPtr(row.JobSearchStage),
-		BiggestChallenge:      pgconv.TextPtr(row.BiggestChallenge),
+		BiggestChallenges:     row.BiggestChallenges,
 		BiggestChallengeNote:  pgconv.TextPtr(row.BiggestChallengeNote),
 		CurrentIncomeAmount:   pgconv.IntPtr(row.CurrentIncomeAmount),
 		CurrentIncomeCurrency: pgconv.TextPtr(row.CurrentIncomeCurrency),

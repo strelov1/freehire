@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Check, User } from '@lucide/svelte';
   import { ApiError } from '#lib/api.js';
-  import { filtersFromProfile, filtersToParams } from '#lib/filters.js';
   import { notifications } from '#lib/notifications.svelte.js';
+  import { enableProfileAlert, profileAlertSearch } from '#lib/profileAlert.js';
   import { savedSearches } from '#lib/savedSearches.svelte.js';
   import { cn } from '#lib/ui/index.js';
-  import type { SavedSearch, UserProfile } from '#lib/types.js';
+  import type { UserProfile } from '#lib/types.js';
 
   // The built-in "notify me about jobs matching my profile" toggle: flipping it on
   // creates the exact saved search the modal's "Apply my profile" action would stage
@@ -24,7 +24,7 @@
   // chip off there must not leave this one still claiming the alert is on.
   let { profile }: { profile: UserProfile } = $props();
 
-  const profileSearch = $derived(savedSearches.items.find((s) => s.derived_from_profile) ?? null);
+  const profileSearch = $derived(profileAlertSearch());
   const enabled = $derived(
     profileSearch !== null && notifications.forSavedSearch(profileSearch.id, 'email') !== undefined,
   );
@@ -52,32 +52,10 @@
   async function enable() {
     saveState = 'saving';
     saveError = null;
-    // Only a search THIS call created may be rolled back below; an existing one is the
-    // user's, and re-enabling after they turned the Email chip off must not delete it.
-    let created: SavedSearch | undefined;
     try {
-      // Reuse the profile search when there is one — the server's partial unique index
-      // permits exactly one, so re-creating it would conflict rather than re-subscribe.
-      let search = profileSearch;
-      if (!search) {
-        const query = filtersToParams(filtersFromProfile(profile)).toString();
-        search = created = await savedSearches.create('My profile', query, true);
-      }
-      // Through the store, not api.createSubscription: this page also renders this
-      // search's per-channel chips (AlertChannels), which read the store. Writing past
-      // it drew the Email chip "off" over a live subscription — tapping it 409'd.
-      await notifications.subscribe(search.id, 'email');
+      await enableProfileAlert(profile, 'email');
       flash();
     } catch (e) {
-      // The search may have been created before the subscribe call failed — clean it up
-      // so a half-done enable leaves no saved search the user never asked for.
-      if (created) {
-        try {
-          await savedSearches.remove(created.id);
-        } catch {
-          // best-effort; the toggle's error state still surfaces the original failure.
-        }
-      }
       saveState = 'error';
       saveError = e instanceof ApiError ? e.message : 'Could not enable the alert.';
     }

@@ -295,6 +295,7 @@ type CandidateSurvey struct {
 	CurrentIncomeCurrency pgtype.Text        `json:"current_income_currency"`
 	CurrentIncomePeriod   pgtype.Text        `json:"current_income_period"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
+	BiggestChallenges     []string           `json:"biggest_challenges"`
 }
 
 type CommunityPersona struct {

@@ -1,184 +1,182 @@
 <script lang="ts">
-  // The onboarding wizard: eight steps, all skippable, each saved as it is left.
+  // The onboarding tour: up to seven steps, all skippable — the CV, the feed, alerts, the
+  // AI assistant, what is in the way, and the two paid features.
   //
   // GATING (whether to be on this route at all) lives in the root layout and reads one
-  // fact: `users.onboarding_completed_at`. Null routes the account here, a timestamp never
-  // does. This page assumes it is here for a reason and runs the steps that still have
-  // something to ask.
+  // fact: `users.onboarding_completed_at`. Null routes the account here. This page marks it
+  // the moment the tour is SHOWN, not when it ends, so the redirect fires at most once — a
+  // visitor who leaves on the first step is never pulled back.
+  //
+  // Every account comes through here once, new or existing (migration 0207 re-asked the
+  // accounts the old wizard had marked), so the plan skips what an account already has and
+  // every shown step opens with what is stored. An account that lacks nothing is marked
+  // complete and sent on without a screen.
   //
   // An anonymous visitor has no steps to run: the effect below bounces them to /signin
-  // (carrying this page's own URL, returnTo and all, as ITS returnTo) before any wizard
-  // markup renders, and /signin sends them right back once they have an account.
-  //
-  // WHY EACH STEP SAVES ITSELF rather than one commit at the end: the wizard now runs once
-  // per account and asks eight questions. A run abandoned on the sixth used to lose all
-  // five earlier answers, and there was no second chance to collect them. Each step writes
-  // to the store that already owns its fact — the search profile, the screening answers,
-  // the candidate-owned résumé overlay, the survey — so a failure in one cannot corrupt
-  // another, and no store here exists only to serve this page.
-  import { onDestroy } from 'svelte';
+  // (carrying this page's own URL, returnTo and all, as ITS returnTo) before any markup
+  // renders, and /signin sends them right back once they have an account.
+  import { onDestroy, untrack } from 'svelte';
   import { goto } from '$app/navigation';
   import { gotoPath } from '#lib/gotoPath.js';
   import { page } from '$app/state';
   import { ArrowLeft, ArrowRight, LoaderCircle, X } from '@lucide/svelte';
   import { api, ApiError } from '#lib/api.js';
-  import { completeOnboarding, isAuthenticated } from '#lib/auth.svelte.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { filtersFromProfile, filtersToParams } from '#lib/filters.js';
+  import { notifications } from '#lib/notifications.svelte.js';
   import { onboardingGate } from '#lib/onboardingGate.svelte.js';
-  import { nextResumePollDelayMs, type CvParseState } from '#lib/onboardingResumeWait.js';
-  import { ORDERED_STEPS, plannedSteps, type OnboardingAnswered, type StepKind } from '#lib/onboardingSteps.js';
-  import { persistStep, type SaveDeps, type WizardAnswers } from '#lib/onboardingSave.js';
-  import { splitProfileLinks, type ProfileLinks } from '#lib/profileLinks.js';
+  import { nextResumePollDelayMs } from '#lib/onboardingResumeWait.js';
+  import { persistStep, type SaveDeps, type TourAnswers } from '#lib/onboardingSave.js';
+  import { plannedSteps, TOUR_STEPS, type StepKind } from '#lib/onboardingSteps.js';
   import { profileStore } from '#lib/profile.svelte.js';
+  import { profileAlertSearch } from '#lib/profileAlert.js';
   import { syncProfileAlert } from '#lib/profileAlertSync.js';
   import { safeRedirect } from '#lib/safeRedirect.js';
+  import { savedSearches } from '#lib/savedSearches.svelte.js';
   import { signinUrl } from '#lib/signin.js';
   import { focusTrap } from '#lib/actions/focusTrap.js';
-  import type { CandidateContacts, LocationPreferences, ResumeMeta } from '#lib/types.js';
+  import { Button } from '#lib/ui/index.js';
+  import type { LocationPreferences } from '#lib/types.js';
   import type { MergedFacets } from '#lib/onboardingImport.js';
+  import AgentStep from '#lib/components/onboarding/AgentStep.svelte';
+  import AlertChannelsStep from '#lib/components/onboarding/AlertChannelsStep.svelte';
   import ChallengeStep from '#lib/components/onboarding/ChallengeStep.svelte';
-  import ConfirmStep from '#lib/components/onboarding/ConfirmStep.svelte';
   import CvStep from '#lib/components/onboarding/CvStep.svelte';
-  import ExperienceStep from '#lib/components/onboarding/ExperienceStep.svelte';
-  import LocationStep from '#lib/components/onboarding/LocationStep.svelte';
-  import MoneyStep from '#lib/components/onboarding/MoneyStep.svelte';
-  import SkillsStep from '#lib/components/onboarding/SkillsStep.svelte';
-  import StageStep from '#lib/components/onboarding/StageStep.svelte';
+  import ExtensionStep from '#lib/components/onboarding/ExtensionStep.svelte';
+  import FeedStep from '#lib/components/onboarding/FeedStep.svelte';
+  import TailorStep from '#lib/components/onboarding/TailorStep.svelte';
 
   // Where finishing or skipping sends the visitor — the page they were on when they landed
-  // here, not always home. Validated the same way every other returnTo in the app is
-  // (safeRedirect: same-origin relative path only), since it arrives as a query param a
-  // visitor's browser holds.
+  // here, not always home. Validated like every other returnTo (same-origin path only).
   const returnTo = $derived(safeRedirect(page.url.searchParams.get('returnTo')) ?? '/');
 
   $effect(() => {
-    if (isAuthenticated()) {
-      void profileStore.ensureLoaded();
-      return;
-    }
+    if (isAuthenticated()) return;
     // `returnTo` for /signin is THIS page's own URL, so a successful sign-in lands back
-    // here. `cancelTo` is deliberately NOT this page: it is where this page's own returnTo
-    // points, so /signin's close button skips both the credential form and the wizard
-    // instead of bouncing back here and right back to /signin in a loop.
+    // here. `cancelTo` is where this page's own returnTo points, so /signin's close button
+    // skips both the credential form and the tour instead of looping back to /signin.
     const here = page.url.pathname + page.url.search;
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
     void goto(signinUrl({ returnTo: here, cancelTo: returnTo }));
   });
 
-  // ---- staged answers ----
-  //
-  // Seeded once from what the account already has, so a step that IS shown (because its
-  // sibling question on the same screen is unanswered) still opens with the stored value
-  // rather than blank.
+  // ---- what the tour is holding ----
 
   let specializations = $state.raw<string[]>([]);
   let seniorities = $state.raw<string[]>([]);
   let skills = $state.raw<string[]>([]);
   let location = $state<LocationPreferences | null>(null);
-  let links = $state<ProfileLinks>({ linkedin: '', github: '', other: [] });
-  let linksPrefilled = $state(false);
-  // The account's whole owned résumé overlay, held because every write to it is a FULL
-  // REPLACE — see onboardingSave.ts's header. Kept current from each write's response.
-  let contacts = $state<CandidateContacts>({});
-  let totalYears = $state<number | null>(null);
-  let derivedTotalYears = $state<number | null>(null);
-  let currentIncome = $state<number | null>(null);
-  let desiredSalary = $state<number | null>(null);
-  let moneyCurrency = $state('USD');
-  let moneyPeriod = $state('month');
-  let searchStage = $state<string | null>(null);
-  let challenge = $state<string | null>(null);
+  let challenges = $state.raw<string[]>([]);
   let challengeNote = $state('');
+  // The feed step's values came from a CV parsed on this run.
+  let fromCv = $state(false);
 
-  // ---- what this account has already answered ----
-
-  let steps = $state.raw<StepKind[]>(ORDERED_STEPS);
+  let steps = $state.raw<StepKind[]>(TOUR_STEPS);
   let loaded = $state(false);
-
-  // One load of everything the plan depends on. A failed read is not fatal: the wizard then
-  // plans every step, which asks a question or two the candidate has already answered —
-  // strictly better than skipping one it has not.
-  $effect(() => {
-    if (!isAuthenticated() || loaded) return;
-    void (async () => {
-      const [resume, screening, survey] = await Promise.all([
-        api.getResume().catch(() => null),
-        api.getScreeningAnswers().catch(() => null),
-        api.getSurvey().catch(() => null),
-      ]);
-      await profileStore.ensureLoaded().catch(() => {});
-      const profile = profileStore.profile;
-
-      specializations = profile ? [...profile.specializations] : [];
-      seniorities = profile ? [...profile.seniorities] : [];
-      skills = profile ? [...profile.skills] : [];
-      location = profile?.location_preferences ?? null;
-
-      // Contacts are the candidate's own edits; the structured extract is what the CV said.
-      // Prefer the former, fall back to the latter — the same precedence the résumé screens
-      // use, so the wizard never shows a stale link beside a corrected one.
-      contacts = resume?.contacts ?? {};
-      const storedLinks = resume?.contacts?.links ?? resume?.structured?.links ?? [];
-      if (storedLinks.length > 0) {
-        links = splitProfileLinks(storedLinks);
-        linksPrefilled = links.linkedin !== '' || links.github !== '';
-      }
-
-      const ownedYears = resume?.contacts?.total_years;
-      const ownedYearsSet = resume?.contacts?.total_years_set === true;
-      if (ownedYearsSet || (ownedYears ?? 0) > 0) totalYears = ownedYears ?? 0;
-      derivedTotalYears = resume?.structured?.total_years ?? null;
-
-      if (screening?.desired_salary_amount != null) {
-        desiredSalary = screening.desired_salary_amount;
-        if (screening.desired_salary_currency) moneyCurrency = screening.desired_salary_currency;
-        if (screening.desired_salary_period) moneyPeriod = screening.desired_salary_period;
-      }
-      if (survey?.current_income_amount != null) currentIncome = survey.current_income_amount;
-      searchStage = survey?.job_search_stage ?? null;
-      challenge = survey?.biggest_challenge ?? null;
-      challengeNote = survey?.biggest_challenge_note ?? '';
-
-      const answered: OnboardingAnswered = {
-        hasResume: resume?.present === true,
-        hasSpecializations: specializations.length > 0,
-        hasProfileLinks: storedLinks.length > 0,
-        hasTotalYears: totalYears !== null,
-        hasSkills: skills.length > 0,
-        hasLocation: location !== null,
-        hasDesiredSalary: desiredSalary !== null,
-        hasCurrentIncome: currentIncome !== null,
-        hasStage: searchStage !== null,
-        hasChallenge: challenge !== null,
-      };
-      steps = plannedSteps(answered);
-      // The plan replaces a provisional list of all eight steps, so the cursor has to go
-      // back to the start with it — a Skip pressed while the load was still in flight would
-      // otherwise leave it pointing past the end of the real plan, at nothing.
-      index = 0;
-      loaded = true;
-
-      // An account with nothing left to ask should not be shown a wizard with no steps in
-      // it. Mark it done and send it on — this is the path an existing, fully-filled-in
-      // account takes on its one and only routing here.
-      if (steps.length === 0) void leave();
-    })();
-  });
-
   let index = $state(0);
-  // Undefined only in the instant between the plan coming back empty and `leave()` taking
-  // the visitor away — the markup is gated on `loaded` and the plan is never empty past
-  // that point, but the type has to admit the gap rather than be asserted away.
   const currentKind = $derived<StepKind | undefined>(steps[index]);
   const isLast = $derived(index >= steps.length - 1);
+
+  // One load of everything the plan depends on. A failed read is not fatal: that store then
+  // counts as unanswered, which asks a question the candidate may have answered — strictly
+  // better than skipping one they have not.
+  //
+  // Run once, untracked: the stores' own `loaded` flags flip while this reads them, and a
+  // tracked read would start a second load that lands after the first and overwrites
+  // whatever the candidate picked in between.
+  let started = false;
+  $effect(() => {
+    if (!isAuthenticated() || started) return;
+    started = true;
+    untrack(() => void load());
+  });
+
+  async function load() {
+    const [resume, survey] = await Promise.all([
+      api.getResume().catch(() => null),
+      api.getSurvey().catch(() => null),
+      profileStore.ensureLoaded().catch(() => {}),
+      savedSearches.ensureLoaded().catch(() => {}),
+      notifications.ensureLoaded().catch(() => {}),
+    ]);
+    const profile = profileStore.profile;
+    specializations = profile ? [...profile.specializations] : [];
+    seniorities = profile ? [...profile.seniorities] : [];
+    skills = profile ? [...profile.skills] : [];
+    location = profile?.location_preferences ?? null;
+    challenges = survey?.biggest_challenges ?? [];
+    challengeNote = survey?.biggest_challenge_note ?? '';
+
+    const alert = profileAlertSearch();
+    steps = plannedSteps({
+      hasResume: resume?.present === true,
+      hasFeed: profile !== null && profile.specializations.length > 0 && profile.skills.length > 0,
+      hasAlert: alert !== null && notifications.subscriptions.some((s) => s.saved_search_id === alert.id),
+      hasChallenge: challenges.length > 0,
+    });
+    index = 0;
+    loaded = true;
+
+    // Shown means done: mark it now, so leaving on any step never brings the tour back.
+    // Best-effort — a failed write only means being offered the tour once more.
+    //
+    // The raw call, not auth's invalidating one: re-reading the session here would hand the
+    // layout a completed account while it is ON /onboarding, and its arrival check would
+    // send the candidate away from the tour they were just shown. For the rest of this
+    // visit the gate's dismissal keeps them from being routed back; the next load reads
+    // the marker fresh.
+    onboardingGate.dismiss();
+    void api.completeOnboarding().catch(() => {});
+    // Nothing to ask — go straight on.
+    if (steps.length === 0) leave();
+  }
+
+  // ---- the feed step's answer, live ----
+
+  // How many open jobs the feed step's picks match. One debounced read, cancelled by the
+  // next change; a failure hides the figure rather than leaving a stale one.
+  let matchCount = $state<number | null>(null);
+  $effect(() => {
+    if (currentKind !== 'feed') return;
+    // The picks over whatever the stored profile carries besides them (its exclusions), so
+    // the figure is the feed the save is about to produce.
+    const params = filtersToParams(
+      filtersFromProfile({
+        excluded_skills: [],
+        excluded_sources: [],
+        excluded_companies: [],
+        derived_location: null,
+        cv: null,
+        created_at: null,
+        updated_at: null,
+        ...profileStore.profile,
+        specializations,
+        seniorities,
+        skills,
+        location_preferences: location,
+      }),
+    );
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      api
+        .searchJobs(params, 1, 0, ctrl.signal)
+        .then((s) => (matchCount = s.total ?? null))
+        .catch(() => {
+          if (!ctrl.signal.aborted) matchCount = null;
+        });
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  });
 
   // ---- saving ----
 
   let saving = $state(false);
   let saveError = $state<string | null>(null);
 
-  // What the dispatch in onboardingSave.ts is handed. Assembled here rather than there so
-  // that module stays Svelte-free and its tests need no runes.
-  const wizardAnswers = $derived<WizardAnswers>({
+  const answers = $derived<TourAnswers>({
     specializations,
     skills,
     seniorities,
@@ -186,16 +184,7 @@
     excludedSources: profileStore.profile?.excluded_sources ?? [],
     excludedCompanies: profileStore.profile?.excluded_companies ?? [],
     location,
-    links,
-    contacts,
-    totalYears,
-    derivedTotalYears,
-    currentIncome,
-    desiredSalary,
-    currency: moneyCurrency,
-    period: moneyPeriod,
-    stage: searchStage,
-    challenge,
+    challenges,
     challengeNote,
   });
 
@@ -205,33 +194,19 @@
       void syncProfileAlert();
       return result;
     },
-    putResumeContacts: (c) => api.putResumeContacts(c),
-    updateScreeningAnswers: (p) => api.updateScreeningAnswers(p),
     updateSurvey: (p) => api.updateSurvey(p),
   };
-
-  // True when Level and/or Location have a pick the profile save is about to drop, for the
-  // reason saveProfile explains. Shown as a heads-up rather than a blocker — the
-  // alternative was the picks vanishing with no explanation.
-  const willLoseOrphanedPicks = $derived(
-    (seniorities.length > 0 || location !== null) && (specializations.length === 0 || skills.length === 0),
-  );
 
   /** Save the current step and move on. On the last one, finish. */
   async function advance() {
     if (saving || !loaded || currentKind === undefined) return;
-    const kind = currentKind;
     saving = true;
     saveError = null;
     try {
-      // The response IS the new stored overlay, so keeping it is what stops a later contacts
-      // write spreading something three screens stale — see onboardingSave.ts's header.
-      contacts = await persistStep(kind, wizardAnswers, saveDeps);
+      await persistStep(currentKind, answers, saveDeps);
     } catch (err) {
-      // The server's own message when there is one: a rejection names the field it refused
-      // ("too many specializations (max 10)"), and that is something the candidate can act
-      // on, unlike "couldn't save that just now" — which is all a candidate on prod ever
-      // saw while the 400 went to their browser console.
+      // The server's own message when there is one: a rejection names the field it
+      // refused, which is something the candidate can act on.
       saveError =
         err instanceof ApiError
           ? `${err.message}. Fix it above, or skip this step.`
@@ -239,177 +214,84 @@
       saving = false;
       return;
     }
-    // An account that arrived here with a CV already stored gets one wait started on its
-    // behalf, since nothing was uploaded on this run to start one. A run that DID upload is
-    // already waiting (CvStep calls onCvUploaded the moment the upload lands, which is
-    // seconds earlier than this), and must not be restarted — that would throw away a
-    // backoff already several steps in.
-    if (kind === 'cv' && cvParse !== 'waiting') void waitForResumeStructure();
     saving = false;
-    if (isLast) await leave();
-    else index += 1;
+    next();
   }
 
-  /** Move on WITHOUT saving. Skipping is a choice not to answer, so it must not persist a
-   *  slider's resting position as though the candidate had put it there.
-   *
-   *  Guarded on `saving` for the same reason Continue is: without it, clicking Continue and
-   *  then Skip advances the index twice — once here and once when the save resolves — and
-   *  the step in between is never shown, never asked, never saved. */
-  async function skip() {
+  /** Move on WITHOUT saving. Guarded on `saving` so Continue-then-Skip cannot advance twice
+   *  and pass a step unseen. */
+  function skip() {
     if (saving || !loaded) return;
-    if (isLast) await leave();
+    next();
+  }
+
+  function next() {
+    if (isLast) leave();
     else index += 1;
   }
-
-  /** Re-read the résumé and take anything it now offers that the candidate has not answered
-   *  themselves. Best-effort and non-destructive: a value the candidate set always wins, and
-   *  a parse still in flight simply yields nothing rather than blocking the wizard.
-   *
-   *  Returns what the server said about the résumé, so the caller can tell a parse that is
-   *  still running from one that has landed or given up. Null when the read itself failed. */
-  async function refreshFromResume(): Promise<ResumeMeta | null> {
-    const resume = await api.getResume().catch(() => null);
-    if (!resume) return null;
-    contacts = resume.contacts ?? contacts;
-    derivedTotalYears = resume.structured?.total_years ?? derivedTotalYears;
-    const storedLinks = resume.contacts?.links ?? resume.structured?.links ?? [];
-    if (storedLinks.length === 0) return resume;
-    const found = splitProfileLinks(storedLinks);
-    // Fill only the boxes the candidate has left empty, and keep every link we did not
-    // recognise so a round trip cannot lose one.
-    links = {
-      linkedin: links.linkedin || found.linkedin,
-      github: links.github || found.github,
-      other: [...new Set([...links.other, ...found.other])],
-    };
-    linksPrefilled = linksPrefilled || links.linkedin !== '' || links.github !== '';
-    return resume;
-  }
-
-  /** Whether the CV's background parse is still being waited on, and how it ended.
-   *  'failed' is shown to the candidate — a CV we could not read is the one case where the
-   *  empty link boxes in front of them are our doing and not theirs. */
-  let cvParse = $state<CvParseState>('idle');
-  // Supersedes an in-flight wait: bumped by a newer upload and by leaving the page, so a
-  // resolved poll can tell whether it is still the one anybody is waiting for.
-  let waitToken = 0;
-
-  /** Keep asking for the CV's structured parse until it lands, filling in what it offers
-   *  each time round.
-   *
-   *  Runs in the BACKGROUND on purpose. The parse takes seconds and the candidate has steps
-   *  to answer meanwhile, so blocking Continue on it would trade an empty box for a spinner
-   *  and make an optional step feel mandatory. A link that arrives late still lands: every
-   *  step reads `links` live, and refreshFromResume never touches a box already typed in.
-   *
-   *  `structure_pending` is deliberately NOT the signal read here. The server sets it for a
-   *  parse that FAILED as well as one still running (see resume.go's GetResume), so waiting
-   *  on it would wait forever for the third of uploads whose extraction times out. The
-   *  three-valued `parse_status` is what tells those apart. */
-  async function waitForResumeStructure() {
-    const token = ++waitToken;
-    cvParse = 'waiting';
-    for (let attempt = 0; ; attempt++) {
-      // oxlint-disable-next-line no-await-in-loop -- a backoff poll IS sequential: each read decides whether there is a next one, so there is no set of promises to run together
-      const resume = await refreshFromResume();
-      if (token !== waitToken) return; // a newer upload, or the wizard is gone
-      // Storage off, or nothing stored: there is no parse to wait for and never will be.
-      if (resume && (!resume.enabled || !resume.present)) {
-        cvParse = 'idle';
-        return;
-      }
-      if (resume && resume.parse_status !== 'pending') {
-        cvParse = resume.parse_status === 'failed' ? 'failed' : 'idle';
-        // A parse that landed is what makes the server able to derive a location from the
-        // CV, and that field reaches the wizard only through the profile store — which was
-        // read on arrival, before this CV existed. Without this the location step offers a
-        // new candidate no derived address at all, which is the one case it is there for.
-        // Best-effort and not awaited: a failed read keeps the previous copy, and the step
-        // is several clicks away (see ProfileStore.refresh).
-        if (resume.parse_status !== 'failed') void profileStore.refresh();
-        return;
-      }
-      // A read that failed outright (resume === null) is treated as still pending: one
-      // dropped request during a wizard is far likelier than a parse that finished in the
-      // same instant, and the table below bounds the retrying either way.
-      const delay = nextResumePollDelayMs(attempt);
-      if (delay === null) {
-        cvParse = 'idle';
-        return;
-      }
-      // oxlint-disable-next-line no-await-in-loop -- the wait between reads is the point; running these together would be no backoff at all
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      if (token !== waitToken) return;
-    }
-  }
-
-  // Stop waiting when the wizard goes away. Without this the loop outlives the page for up
-  // to a minute, re-reading a résumé for a wizard nobody is looking at — and, after a
-  // sign-out, for an account that is no longer the caller.
-  onDestroy(() => {
-    waitToken++;
-  });
 
   function back() {
     if (index > 0) index -= 1;
   }
 
-  /** End the wizard for good: mark the account complete and go where the visitor was
-   *  headed. Called on finishing the last step and on an explicit close — both are the
-   *  candidate deciding they are done here.
-   *
-   *  Merely navigating away calls none of this: that account is asked again on a later
-   *  visit, and `onboardingGate.dismiss()` is what stops the layout re-capturing them
-   *  within this one. Best-effort on the marker — a failed write must not trap someone on
-   *  this page; the worst case is being asked once more. */
-  async function leave() {
+  /** Go where the visitor was headed. Completion was recorded when the tour was shown. */
+  function leave() {
     onboardingGate.dismiss();
-    try {
-      await completeOnboarding();
-    } catch {
-      // best-effort — see doc comment above.
-    }
     void gotoPath(returnTo);
   }
+
+  // ---- the CV ----
 
   function onExtracted(merged: MergedFacets) {
     specializations = merged.specializations;
     seniorities = merged.seniorities;
     skills = merged.skills;
+    fromCv = merged.resolved;
   }
 
-  /** Escape leaves the wizard for THIS VISIT only — it does not mark onboarding complete.
-   *
-   *  Deliberately weaker than the close button beside it. Escape is not always aimed at the
-   *  dialog: the skills typeahead and the specialization search both use it to dismiss their
-   *  own popups and do not stop it propagating, so a candidate closing a dropdown reaches
-   *  this handler. While completion was a per-visit flag that misfire cost them nothing —
-   *  they were asked again next time. Now that it is a permanent account fact, treating a
-   *  stray keypress as "I am done with onboarding forever" would end the wizard for good for
-   *  someone who never meant to leave it. */
-  function onKeydown(e: KeyboardEvent) {
-    if (e.key !== 'Escape') return;
-    onboardingGate.dismiss();
-    void gotoPath(returnTo);
+  // A stored CV starts a background parse; once it lands the server can derive where the
+  // candidate is, which reaches the feed step's location field only through the profile
+  // store — read on arrival, before this CV existed. Poll until the parse settles, then
+  // refresh it. Best-effort and bounded by the backoff table.
+  let waitToken = 0;
+  async function waitForResumeStructure() {
+    const token = ++waitToken;
+    for (let attempt = 0; ; attempt++) {
+      // oxlint-disable-next-line no-await-in-loop -- a backoff poll IS sequential: each read decides whether there is a next one
+      const resume = await api.getResume().catch(() => null);
+      if (token !== waitToken) return;
+      if (resume && (!resume.enabled || !resume.present)) return;
+      if (resume && resume.parse_status !== 'pending') {
+        if (resume.parse_status !== 'failed') void profileStore.refresh();
+        return;
+      }
+      const delay = nextResumePollDelayMs(attempt);
+      if (delay === null) return;
+      // oxlint-disable-next-line no-await-in-loop -- the wait between reads is the point
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (token !== waitToken) return;
+    }
   }
+
+  // Stop polling when the tour goes away — and, after a sign-out, for an account that is no
+  // longer the caller.
+  onDestroy(() => {
+    waitToken++;
+  });
 </script>
 
-<svelte:window onkeydown={onKeydown} />
-
 {#if !isAuthenticated()}
-  <!-- Redirecting to /signin — see the effect above. Nothing to render meanwhile, since the
-       wizard below assumes an account already exists. -->
+  <!-- Redirecting to /signin — see the effect above. -->
 {:else}
   <div class="fixed inset-0 z-50 flex flex-col bg-background">
     <div
       class="flex h-full w-full flex-col overflow-hidden"
       role="dialog"
       aria-modal="true"
-      aria-label="Finish setting up your account"
+      aria-label="Get to know freehire"
       {@attach focusTrap()}
     >
-      <!-- header: step dots + skip + close -->
+      <!-- header: progress + skip + close -->
       <div class="flex items-center gap-3 border-b border-border px-5 py-3">
         <div class="flex flex-1 items-center gap-1.5" aria-hidden="true">
           {#each steps as _, i (i)}
@@ -418,7 +300,7 @@
         </div>
         <button
           type="button"
-          onclick={() => void skip()}
+          onclick={skip}
           disabled={saving || !loaded}
           class="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
         >
@@ -426,7 +308,7 @@
         </button>
         <button
           type="button"
-          onclick={() => void leave()}
+          onclick={leave}
           aria-label="Close"
           class="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
@@ -435,80 +317,61 @@
       </div>
 
       <!-- body -->
-      <div class="no-scrollbar mx-auto min-h-0 w-full max-w-lg flex-1 overflow-y-auto px-5 py-6">
-        <!-- The page's heading; each step's own question is an h2 under it. -->
-        <h1 class="sr-only">Set up your profile</h1>
+      <div class="no-scrollbar mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-y-auto px-5 py-6">
+        <h1 class="sr-only">Get to know freehire</h1>
         {#if !loaded}
           <div class="flex items-center gap-2 py-10 text-sm text-muted-foreground">
             <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /> Getting your details…
           </div>
         {:else}
-          <div class="mb-1 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-strong">
-            Step {index + 1} of {steps.length}
-          </div>
+          <p class="mb-1 text-xs font-semibold tabular-nums text-brand-strong">{index + 1} / {steps.length}</p>
           {#if currentKind === 'cv'}
             <CvStep
               staged={{ specializations, seniorities, skills }}
               {onExtracted}
               onCvUploaded={() => void waitForResumeStructure()}
               onAdvance={() => void advance()}
+              onSkip={skip}
             />
-          {:else if currentKind === 'confirm'}
-            <ConfirmStep
+          {:else if currentKind === 'feed'}
+            <FeedStep
               {specializations}
               {seniorities}
-              {links}
-              {linksPrefilled}
-              {cvParse}
-              onSpecializationsChange={(next) => (specializations = next)}
-              onSenioritiesChange={(next) => (seniorities = next)}
-              onLinksChange={(next) => (links = next)}
-            />
-          {:else if currentKind === 'experience'}
-            <ExperienceStep
-              value={totalYears}
-              fromCv={derivedTotalYears}
-              onChange={(years) => (totalYears = years)}
-            />
-          {:else if currentKind === 'skills'}
-            <SkillsStep {skills} onChange={(next) => (skills = next)} />
-          {:else if currentKind === 'location'}
-            <LocationStep
-              value={location}
+              {skills}
+              {location}
               derivedLocation={profileStore.profile?.derived_location}
-              onChange={(next) => (location = next)}
+              {fromCv}
+              onSpecializationsChange={(v) => (specializations = v)}
+              onSenioritiesChange={(v) => (seniorities = v)}
+              onSkillsChange={(v) => (skills = v)}
+              onLocationChange={(v) => (location = v)}
             />
-          {:else if currentKind === 'money'}
-            <MoneyStep
-              {currentIncome}
-              {desiredSalary}
-              currency={moneyCurrency}
-              period={moneyPeriod}
-              onCurrentIncomeChange={(amount) => (currentIncome = amount)}
-              onDesiredSalaryChange={(amount) => (desiredSalary = amount)}
-              onCurrencyChange={(c) => (moneyCurrency = c)}
-              onPeriodChange={(p) => (moneyPeriod = p)}
-            />
-          {:else if currentKind === 'stage'}
-            <StageStep value={searchStage} onChange={(v) => (searchStage = v)} />
+          {:else if currentKind === 'alerts'}
+            <AlertChannelsStep profile={profileStore.profile} />
+          {:else if currentKind === 'agent'}
+            <AgentStep />
           {:else if currentKind === 'challenge'}
             <ChallengeStep
-              value={challenge}
+              value={challenges}
               note={challengeNote}
-              onChange={(v) => (challenge = v)}
+              onChange={(v) => (challenges = v)}
               onNoteChange={(n) => (challengeNote = n)}
             />
+          {:else if currentKind === 'tailor'}
+            <TailorStep />
+          {:else if currentKind === 'extension'}
+            <ExtensionStep />
           {/if}
         {/if}
       </div>
 
-      <!-- footer: back / continue|finish -->
-      <div class="mx-auto w-full max-w-lg border-t border-border px-5 py-3">
+      <!-- footer: back · match count · continue/finish -->
+      <div class="mx-auto w-full max-w-2xl border-t border-border px-5 py-3">
         {#if saveError}
           <p class="mb-2 text-xs text-destructive">{saveError}</p>
-        {:else if willLoseOrphanedPicks && (currentKind === 'skills' || currentKind === 'location')}
+        {:else if currentKind === 'feed' && (specializations.length === 0 || skills.length === 0)}
           <p class="mb-2 text-xs text-muted-foreground">
-            Add a specialization and a skill (on the Confirm step) to save your level/location picks — otherwise they won't be kept.
+            Pick at least one specialization and one skill to save your feed.
           </p>
         {/if}
         <div class="flex items-center gap-3">
@@ -522,18 +385,19 @@
             </button>
           {/if}
           <div class="flex-1"></div>
-          <button
-            type="button"
-            onclick={() => void advance()}
-            disabled={saving || !loaded}
-            class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-brand px-6 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
+          {#if currentKind === 'feed' && matchCount !== null}
+            <p class="text-right text-sm leading-tight text-muted-foreground tabular-nums" aria-live="polite">
+              <span class="font-semibold text-foreground">{matchCount.toLocaleString()}</span>
+              <br class="sm:hidden" /> jobs match
+            </p>
+          {/if}
+          <Button variant="cta" size="lg" onclick={() => void advance()} disabled={saving || !loaded}>
             {#if saving}
               <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /> Saving…
             {:else}
-              {isLast ? 'Finish' : 'Continue'} <ArrowRight class="size-4" />
+              {isLast ? 'Go to my feed' : 'Continue'} <ArrowRight class="size-4" />
             {/if}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

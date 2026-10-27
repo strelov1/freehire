@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { APP_STORE_URL } from '#lib/appLinks.js';
   import { resolve } from '$app/paths';
   import { reopen } from '#lib/consent.svelte.js';
   import { EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
@@ -119,23 +120,14 @@
   // and follows the theme without a second asset per mode; ProviderIcon already
   // ships both marks, so this needs no image at all.
   //
-  // The App Store URL carries NO country segment on purpose. The listing's share link
-  // is `/br/app/...`, which pins every visitor to the Brazilian storefront; without one
-  // Apple redirects each visitor to their own (measured: the bare form answers 301 to
-  // `/us/app/...`, the `/br/` form answers 200).
-  //
-  // The extension's URL is not spelled here at all — see #lib/extensionLinks, which the
-  // extension landing and its JSON-LD read too. The App Store one IS spelled here, and
-  // the asymmetry is deliberate only while this is its single consumer: a mobile landing
-  // page or a MobileApplication JSON-LD is the second, and that is when it earns an
-  // appLinks.ts beside extensionLinks.ts. Note for whoever does it — Footer.test.ts pins
-  // the literal to THIS file, so the move is two edits, not one.
+  // Neither store URL is spelled here: #lib/extensionLinks and #lib/appLinks own them,
+  // since the extension landing and the onboarding tour link the same listings.
   const stores = [
     {
       provider: 'apple',
       kicker: 'Download on the',
       name: 'App Store',
-      href: 'https://apps.apple.com/app/freehire-open-job-search/id6801885119',
+      href: APP_STORE_URL,
     },
     {
       provider: 'chrome',

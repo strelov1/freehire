@@ -3,6 +3,8 @@ package survey
 import (
 	"context"
 	"errors"
+	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -35,7 +37,7 @@ func TestGetOnAnUnansweredAccountReportsUnstatedRatherThanFailing(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Get() = %v, want nil", err)
 	}
-	if got != (Responses{}) {
+	if !reflect.DeepEqual(got, Responses{}) {
 		t.Errorf("Get() = %+v, want a fully unstated record", got)
 	}
 }
@@ -53,15 +55,15 @@ func TestUpdateMergesOverWhatIsStored(t *testing.T) {
 	repo := &fakeRepo{stored: Responses{JobSearchStage: s("searching")}}
 	store := New(repo)
 
-	got, err := store.Update(context.Background(), 1, Responses{BiggestChallenge: s("english")})
+	got, err := store.Update(context.Background(), 1, Responses{BiggestChallenges: []string{"english"}})
 	if err != nil {
 		t.Fatalf("Update() = %v, want nil", err)
 	}
 	if got.JobSearchStage == nil || *got.JobSearchStage != "searching" {
 		t.Errorf("JobSearchStage = %v, want the stored value preserved", got.JobSearchStage)
 	}
-	if got.BiggestChallenge == nil || *got.BiggestChallenge != "english" {
-		t.Errorf("BiggestChallenge = %v, want the update applied", got.BiggestChallenge)
+	if !slices.Equal(got.BiggestChallenges, []string{"english"}) {
+		t.Errorf("BiggestChallenges = %v, want the update applied", got.BiggestChallenges)
 	}
 }
 
@@ -98,7 +100,7 @@ func TestUpdateValidatesTheMergedRecordNotJustThePatch(t *testing.T) {
 	// A caller who already stored `other` and now sends only the note is completing an
 	// answer, not contradicting one — validating the patch alone would reject it because
 	// the patch carries no challenge.
-	repo := &fakeRepo{stored: Responses{BiggestChallenge: s("other")}}
+	repo := &fakeRepo{stored: Responses{BiggestChallenges: []string{"other"}}}
 	store := New(repo)
 
 	got, err := store.Update(context.Background(), 1, Responses{BiggestChallengeNote: s("visa paperwork")})
@@ -114,10 +116,10 @@ func TestUpdateRejectsAPatchThatMakesTheMergedRecordInvalid(t *testing.T) {
 	// The mirror image: moving off `other` while a note is stored must not persist a record
 	// Validate would reject. Merge drops the stale note, so this is really a guard that the
 	// two agree.
-	repo := &fakeRepo{stored: Responses{BiggestChallenge: s("other"), BiggestChallengeNote: s("visa paperwork")}}
+	repo := &fakeRepo{stored: Responses{BiggestChallenges: []string{"other"}, BiggestChallengeNote: s("visa paperwork")}}
 	store := New(repo)
 
-	got, err := store.Update(context.Background(), 1, Responses{BiggestChallenge: s("english")})
+	got, err := store.Update(context.Background(), 1, Responses{BiggestChallenges: []string{"english"}})
 	if err != nil {
 		t.Fatalf("Update() = %v, want nil", err)
 	}

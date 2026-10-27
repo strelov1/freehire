@@ -1,80 +1,116 @@
 import { describe, expect, it } from 'vitest';
-import { ORDERED_STEPS, plannedSteps, type OnboardingAnswered } from './onboardingSteps';
+import { JOB_CHALLENGE_OPTIONS } from './surveyOptions';
+import {
+  TOUR_STEPS,
+  challengeTips,
+  orderSpecializations,
+  plannedSteps,
+  toggleChallenge,
+  type TourAnswered,
+} from './onboardingSteps';
 
-/** Nothing answered — the state a freshly registered account is in. */
-const nothing: OnboardingAnswered = {
-  hasResume: false,
-  hasSpecializations: false,
-  hasProfileLinks: false,
-  hasTotalYears: false,
-  hasSkills: false,
-  hasLocation: false,
-  hasDesiredSalary: false,
-  hasCurrentIncome: false,
-  hasStage: false,
-  hasChallenge: false,
-};
+const nothing: TourAnswered = { hasResume: false, hasFeed: false, hasAlert: false, hasChallenge: false };
+const everything: TourAnswered = { hasResume: true, hasFeed: true, hasAlert: true, hasChallenge: true };
 
 describe('plannedSteps', () => {
-  it('gives a fresh account every step, in order', () => {
-    expect(plannedSteps(nothing)).toEqual(ORDERED_STEPS);
+  it('gives a new account the whole tour, CV first and the two Pro steps last', () => {
+    expect(plannedSteps(nothing)).toEqual(TOUR_STEPS);
+    expect(TOUR_STEPS[0]).toBe('cv');
+    expect(TOUR_STEPS.slice(-2)).toEqual(['tailor', 'extension']);
   });
 
-  it('puts the acted-on questions before the ones that only describe the candidate', () => {
-    // An abandoned run should have answered the things that change what the user is shown
-    // before the things that only tell us about them.
-    const order = plannedSteps(nothing);
-    for (const research of ['stage', 'challenge'] as const) {
-      for (const product of ['cv', 'confirm', 'experience', 'skills', 'location', 'money'] as const) {
-        expect(order.indexOf(product), `${product} before ${research}`).toBeLessThan(order.indexOf(research));
-      }
+  it('asks a returning account only what it lacks, plus the introductions', () => {
+    expect(plannedSteps({ ...everything, hasAlert: false })).toEqual(['alerts', 'agent', 'tailor', 'extension']);
+  });
+
+  it('keeps the canonical order when several steps are missing', () => {
+    expect(plannedSteps({ ...everything, hasFeed: false, hasChallenge: false })).toEqual([
+      'feed',
+      'agent',
+      'challenge',
+      'tailor',
+      'extension',
+    ]);
+  });
+
+  // The caller marks such an account complete without rendering a screen.
+  it('leaves an account that lacks nothing with no steps at all', () => {
+    expect(plannedSteps(everything)).toEqual([]);
+  });
+});
+
+describe('orderSpecializations', () => {
+  const opt = (value: string) => ({ value, label: value });
+  const options = ['healthcare', 'backend', 'sales', 'devops', 'other'].map(opt);
+  const tech = new Set(['backend', 'devops']);
+
+  it('puts technical categories first, each half ordered by job count', () => {
+    const counts = { healthcare: 500, sales: 300, backend: 20, devops: 60, other: 1 };
+    expect(orderSpecializations(options, counts, tech).map((o) => o.value)).toEqual([
+      'devops',
+      'backend',
+      'healthcare',
+      'sales',
+      'other',
+    ]);
+  });
+
+  it('keeps the given order within each half when counts are not loaded yet', () => {
+    expect(orderSpecializations(options, null, tech).map((o) => o.value)).toEqual([
+      'backend',
+      'devops',
+      'healthcare',
+      'sales',
+      'other',
+    ]);
+  });
+
+  it('does not mutate its input', () => {
+    const copy = [...options];
+    orderSpecializations(options, { healthcare: 9 }, tech);
+    expect(options).toEqual(copy);
+  });
+});
+
+describe('toggleChallenge', () => {
+  it('adds and removes an answer, keeping the order picked', () => {
+    expect(toggleChallenge(['english'], 'job_fit')).toEqual(['english', 'job_fit']);
+    expect(toggleChallenge(['english', 'job_fit'], 'english')).toEqual(['job_fit']);
+  });
+
+  it('lets "just starting" stand alone, whichever comes second', () => {
+    expect(toggleChallenge(['english', 'job_fit'], 'just_starting')).toEqual(['just_starting']);
+    expect(toggleChallenge(['just_starting'], 'english')).toEqual(['english']);
+  });
+});
+
+describe('challengeTips', () => {
+  it('answers getting replies with tailoring, form filling, referrals and tracking', () => {
+    expect(challengeTips(['recruiter_contact']).map((t) => t.title)).toEqual([
+      'A CV for each job',
+      'Forms filled in for you',
+      'Anonymous employee referrals',
+      'Track every application',
+    ]);
+  });
+
+  it('sends visa sponsorship to the filter and the register companies', () => {
+    const tips = challengeTips(['visa_sponsorship']);
+    expect(tips.map((t) => t.href)).toEqual(['/jobs?visa_sponsorship=true', '/collections/visa-sponsors']);
+  });
+
+  it('shows a tip shared by two answers once', () => {
+    const titles = challengeTips(['remote_flexible', 'working_abroad']).map((t) => t.title);
+    expect(new Set(titles).size).toBe(titles.length);
+  });
+
+  it('has tips for every answer', () => {
+    for (const { value } of JOB_CHALLENGE_OPTIONS) {
+      expect(challengeTips([value]).length).toBeGreaterThan(0);
     }
   });
 
-  it('drops a step whose answer is already stored', () => {
-    expect(plannedSteps({ ...nothing, hasResume: true })).not.toContain('cv');
-    expect(plannedSteps({ ...nothing, hasStage: true })).not.toContain('stage');
-  });
-
-  it('keeps asking the confirm step until BOTH its questions are answered', () => {
-    // Specializations and profile links share one screen. Treating it as done on the
-    // specializations alone would mean an existing account is never once asked for its
-    // LinkedIn — and the wizard only runs once, so never means never.
-    expect(plannedSteps({ ...nothing, hasSpecializations: true })).toContain('confirm');
-    expect(plannedSteps({ ...nothing, hasProfileLinks: true })).toContain('confirm');
-    expect(plannedSteps({ ...nothing, hasSpecializations: true, hasProfileLinks: true })).not.toContain('confirm');
-  });
-
-  it('keeps asking the money step until BOTH its figures are stored', () => {
-    // Same rule as the confirm step, for the same reason: the screen carries two
-    // independent questions (desired salary in the screening answers, current income in the
-    // survey), and any account that ever set a desired salary through /me/screening-answers
-    // would otherwise never once be asked what it earns today.
-    expect(plannedSteps({ ...nothing, hasDesiredSalary: true })).toContain('money');
-    expect(plannedSteps({ ...nothing, hasCurrentIncome: true })).toContain('money');
-    expect(plannedSteps({ ...nothing, hasDesiredSalary: true, hasCurrentIncome: true })).not.toContain('money');
-  });
-
-  it('leaves an account that has answered everything with no steps at all', () => {
-    const everything: OnboardingAnswered = {
-      hasResume: true,
-      hasSpecializations: true,
-      hasProfileLinks: true,
-      hasTotalYears: true,
-      hasSkills: true,
-      hasLocation: true,
-      hasDesiredSalary: true,
-      hasCurrentIncome: true,
-      hasStage: true,
-      hasChallenge: true,
-    };
-    expect(plannedSteps(everything)).toEqual([]);
-  });
-
-  it('keeps the surviving steps in their canonical order', () => {
-    // A trimmed plan must not reshuffle: the money step still comes after skills for the
-    // existing account that only skipped the CV.
-    const got = plannedSteps({ ...nothing, hasResume: true, hasSkills: true });
-    expect(got).toEqual(ORDERED_STEPS.filter((s) => s !== 'cv' && s !== 'skills'));
+  it('shows nothing before an answer', () => {
+    expect(challengeTips([])).toEqual([]);
   });
 });

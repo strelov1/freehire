@@ -3482,7 +3482,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "{\n  \"data\": {\n    \"job_search_stage\": \"searching\",\n    \"biggest_challenge\": \"technical_interviews\",\n    \"current_income_amount\": 5000,\n    \"current_income_currency\": \"USD\",\n    \"current_income_period\": \"month\"\n  }\n}"
+                "example": "{\n  \"data\": {\n    \"job_search_stage\": \"searching\",\n    \"biggest_challenges\": [\"technical_interviews\", \"visa_sponsorship\"],\n    \"current_income_amount\": 5000,\n    \"current_income_currency\": \"USD\",\n    \"current_income_period\": \"month\"\n  }\n}"
               }
             }
           }

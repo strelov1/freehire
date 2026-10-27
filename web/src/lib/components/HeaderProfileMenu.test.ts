@@ -58,11 +58,17 @@ describe('HeaderProfileMenu', () => {
     expect(SOURCE).toContain('closedOverlay(closeSelf)');
   });
 
-  it('shows a direct Sign-in action with no dropdown when signed out', () => {
+  it('shows a direct, labelled Sign-in action with no dropdown when signed out', () => {
     const signedOutBranch = SOURCE.slice(SOURCE.indexOf('{:else}'));
-    expect(signedOutBranch).toContain('aria-label="Sign in"');
+    expect(signedOutBranch).toMatch(/\/>\s*Sign in\s*<\/button>/);
     expect(signedOutBranch).toContain('onclick={signIn}');
     expect(signedOutBranch).not.toContain('aria-haspopup="menu"');
+  });
+
+  // A first-time visitor on a phone had no sign-in control outside the menu: the whole
+  // component was hidden below sm. Only the signed-in profile trigger stays desktop-only.
+  it('hides itself on a phone only when signed in', () => {
+    expect(SOURCE).toContain("isAuthenticated() ? 'hidden sm:inline-flex' : 'inline-flex'");
   });
 });
 

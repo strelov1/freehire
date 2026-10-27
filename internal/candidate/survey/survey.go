@@ -1,5 +1,5 @@
 // Package survey holds the candidate's self-reported segmentation answers: how far along
-// their job search is, the single biggest thing in its way, and what they earn today.
+// their job search is, the things in its way, and what they earn today.
 //
 // These are the questions the onboarding wizard could not ask while every one of its steps
 // was a search facet. They describe the candidate to US, and to nobody else — deliberately
@@ -26,11 +26,13 @@ import (
 // pointer means the candidate has not stated that fact, never a guessed default and never
 // a zero standing in for silence.
 type Responses struct {
-	JobSearchStage   *string `json:"job_search_stage,omitempty"`
-	BiggestChallenge *string `json:"biggest_challenge,omitempty"`
-	// BiggestChallengeNote is free text, and only vocab.JobChallengeOther admits it. A note
-	// beside a coded challenge could contradict it, and nothing downstream would know which
-	// to believe.
+	JobSearchStage *string `json:"job_search_stage,omitempty"`
+	// BiggestChallenges are members of vocab.JobChallengeValues, in the order picked. Nil
+	// means unstated; Sanitize folds an empty list into nil so the two never differ.
+	BiggestChallenges []string `json:"biggest_challenges,omitempty"`
+	// BiggestChallengeNote is free text, admitted only while vocab.JobChallengeOther is
+	// among the challenges. A note beside coded answers alone could contradict them, and
+	// nothing downstream would know which to believe.
 	BiggestChallengeNote  *string `json:"biggest_challenge_note,omitempty"`
 	CurrentIncomeAmount   *int    `json:"current_income_amount,omitempty"`
 	CurrentIncomeCurrency *string `json:"current_income_currency,omitempty"`
@@ -48,6 +50,20 @@ func (a *Responses) Sanitize() {
 	if a.CurrentIncomeCurrency != nil {
 		upper := strings.ToUpper(strings.TrimSpace(*a.CurrentIncomeCurrency))
 		a.CurrentIncomeCurrency = &upper
+	}
+	if len(a.BiggestChallenges) == 0 {
+		a.BiggestChallenges = nil
+	} else {
+		// A repeated pick says nothing new; keep the first, which keeps the order picked.
+		seen := make(map[string]bool, len(a.BiggestChallenges))
+		unique := make([]string, 0, len(a.BiggestChallenges))
+		for _, c := range a.BiggestChallenges {
+			if !seen[c] {
+				seen[c] = true
+				unique = append(unique, c)
+			}
+		}
+		a.BiggestChallenges = unique
 	}
 	if a.BiggestChallengeNote != nil {
 		// A note of whitespace is an empty note, which is what lets someone who picked
@@ -71,11 +87,16 @@ func (a Responses) Validate() error {
 	if a.JobSearchStage != nil && !slices.Contains(vocab.JobSearchStageValues, *a.JobSearchStage) {
 		return fmt.Errorf("job_search_stage: %q is not one of %v", *a.JobSearchStage, vocab.JobSearchStageValues)
 	}
-	if a.BiggestChallenge != nil && !slices.Contains(vocab.JobChallengeValues, *a.BiggestChallenge) {
-		return fmt.Errorf("biggest_challenge: %q is not one of %v", *a.BiggestChallenge, vocab.JobChallengeValues)
+	for _, c := range a.BiggestChallenges {
+		if !slices.Contains(vocab.JobChallengeValues, c) {
+			return fmt.Errorf("biggest_challenges: %q is not one of %v", c, vocab.JobChallengeValues)
+		}
 	}
-	if a.BiggestChallengeNote != nil && (a.BiggestChallenge == nil || *a.BiggestChallenge != vocab.JobChallengeOther) {
-		return fmt.Errorf("biggest_challenge_note: only accepted alongside biggest_challenge %q", vocab.JobChallengeOther)
+	if len(a.BiggestChallenges) > 1 && slices.Contains(a.BiggestChallenges, vocab.JobChallengeJustStarting) {
+		return fmt.Errorf("biggest_challenges: %q cannot be picked with another answer", vocab.JobChallengeJustStarting)
+	}
+	if a.BiggestChallengeNote != nil && !slices.Contains(a.BiggestChallenges, vocab.JobChallengeOther) {
+		return fmt.Errorf("biggest_challenge_note: only accepted while biggest_challenges includes %q", vocab.JobChallengeOther)
 	}
 	if a.CurrentIncomeCurrency != nil && !vocab.IsCurrencyCode(*a.CurrentIncomeCurrency) {
 		return fmt.Errorf("current_income_currency: %q is not a three-letter ISO 4217 code", *a.CurrentIncomeCurrency)
@@ -100,14 +121,14 @@ func Merge(existing, update Responses) Responses {
 	if update.JobSearchStage != nil {
 		merged.JobSearchStage = update.JobSearchStage
 	}
-	if update.BiggestChallenge != nil {
-		// The note belongs to the "other" answer. Carrying it across a move to a coded
-		// challenge would leave a record Validate rejects and no API call could repair,
+	if update.BiggestChallenges != nil {
+		// The note belongs to the "other" answer. Carrying it past a list that no longer
+		// has "other" would leave a record Validate rejects and no API call could repair,
 		// since nothing here can clear a field on its own.
-		if *update.BiggestChallenge != vocab.JobChallengeOther {
+		if !slices.Contains(update.BiggestChallenges, vocab.JobChallengeOther) {
 			merged.BiggestChallengeNote = nil
 		}
-		merged.BiggestChallenge = update.BiggestChallenge
+		merged.BiggestChallenges = update.BiggestChallenges
 	}
 	if update.BiggestChallengeNote != nil {
 		merged.BiggestChallengeNote = update.BiggestChallengeNote

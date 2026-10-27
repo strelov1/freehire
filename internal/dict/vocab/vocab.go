@@ -287,15 +287,21 @@ var (
 	// the reason the package exists: one definition, so the Go validator and the wizard's
 	// option list cannot drift into two spellings of the same answer.
 	JobSearchStageValues = []string{"not_started", "searching", "employed_looking", "exploring"}
-	// JobChallengeValues is the single biggest thing the candidate says is in their way.
-	// Single-valued by design — see the column comment in migration 0134.
+	// JobChallengeValues are the things a candidate says are in their way. Several may be
+	// picked since migration 0207 (the tour shows what helps with each), except
+	// JobChallengeJustStarting, which says nothing is hard yet and so stands alone.
+	//
+	// `english` keeps its identifier but is worded "Language requirements" from 0207 on, so
+	// answers before that deploy mean English only. The five values after it came out of
+	// the free-text notes "other" collected (job fit, remote, visa, first job, nothing yet).
 	//
 	// `other` is load-bearing, not filler: it is the ONLY value a free-text note may
 	// accompany, so the survey can collect an unanticipated answer without letting a note
 	// contradict a coded one. TestJobChallengeHasOther locks it.
 	JobChallengeValues = []string{
 		"english", "recruiter_contact", "working_abroad", "technical_interviews",
-		JobChallengeOther,
+		"job_fit", "remote_flexible", "visa_sponsorship", "first_job",
+		JobChallengeJustStarting, JobChallengeOther,
 	}
 )
 
@@ -312,6 +318,11 @@ const RetiredCategoryManagement = "management"
 // note gate and the vocabulary itself — and a literal in both is a silent drift waiting
 // to happen.
 const JobChallengeOther = "other"
+
+// JobChallengeJustStarting is the answer that nothing is hard yet. It cannot sit beside
+// another answer — the survey rejects the pair — so, like JobChallengeOther, the code
+// that enforces it names it rather than spelling the string.
+const JobChallengeJustStarting = "just_starting"
 
 // currencyRE matches a well-formed ISO 4217 currency code.
 var currencyRE = regexp.MustCompile(`^[A-Z]{3}$`)

@@ -611,10 +611,8 @@
 
 <div class="min-w-0">
     {#if resumeParse === 'failed'}
-      <!-- Same wording the onboarding wizard already uses for this exact state
-           (ProfileLinksFields.svelte) — this is the same signal (parse_status), finally
-           surfaced where a candidate actually manages experience, not only once at
-           sign-up. -->
+      <!-- The CV's parse_status, surfaced where a candidate actually manages experience
+           rather than only once at sign-up. -->
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-warning/5 px-4 py-3 text-sm">
         <p>Couldn't read your CV — that may be why this looks empty.</p>
         <Button size="sm" variant="outline" onclick={() => void retryResumeExtraction()}>

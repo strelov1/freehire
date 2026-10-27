@@ -1,92 +1,235 @@
-// Which questions the onboarding wizard asks this account, and in what order.
+// Which screens the onboarding tour shows, and the logic its screens share: the order
+// specializations are offered in, how challenge answers combine, and what helps with each.
 //
-// Pure and Svelte-free (mirrors onboarding.ts / facetModel.ts), so the rule that decides
-// whether an existing account is asked something is unit-testable in plain Node rather than
-// only observable by signing in as somebody.
-//
-// The wizard runs ONCE per account — `users.onboarding_completed_at` is set when it ends,
-// and a marked account is never routed back. That is why this trims conservatively: asking
-// a question the candidate has effectively answered costs one skippable screen in a
-// one-time run, while wrongly deciding a question is answered means it is never asked at
-// all.
+// Pure and Svelte-free (mirrors onboarding.ts / facetModel.ts), so each rule is
+// unit-testable in plain Node rather than only observable by signing in as somebody.
 
-/** One screen of the wizard. */
-export type StepKind =
-  | 'cv'
-  | 'confirm'
-  | 'experience'
-  | 'skills'
-  | 'location'
-  | 'money'
-  | 'stage'
-  | 'challenge';
+import { JOB_CHALLENGE_JUST_STARTING } from './surveyOptions';
 
-/** Every step, in the order they are asked.
- *
- *  Ordered by what the answer DOES, not by how easy it is to answer: the steps whose
- *  answers change what the candidate is shown (their role, skills, geography, salary floor)
- *  come first, and the two that only describe them to us come last. A run abandoned
- *  half-way has then answered the questions worth having. */
-export const ORDERED_STEPS: StepKind[] = [
-  'cv',
-  'confirm',
-  'experience',
-  'skills',
-  'location',
-  'money',
-  'stage',
-  'challenge',
-];
+/** One screen of the tour. */
+export type StepKind = 'cv' | 'feed' | 'alerts' | 'agent' | 'challenge' | 'tailor' | 'extension';
 
-/** What this account has already told us, one flag per step. Assembled by the page from the
- *  profile, résumé, screening answers and survey it has loaded — kept as plain booleans so
- *  the ordering rule below has nothing to know about any of those shapes. */
-export interface OnboardingAnswered {
+/** Every step, in the order shown. The CV comes first because a parsed CV fills in the
+ *  feed step; the two paid features come last, after everything that is free. */
+export const TOUR_STEPS: StepKind[] = ['cv', 'feed', 'alerts', 'agent', 'challenge', 'tailor', 'extension'];
+
+/** The steps that only introduce a feature and store nothing. */
+const INTRO_STEPS = new Set<StepKind>(['agent', 'tailor', 'extension']);
+
+/** What this account already has, one flag per step that stores something. */
+export interface TourAnswered {
   hasResume: boolean;
-  hasSpecializations: boolean;
-  hasProfileLinks: boolean;
-  hasTotalYears: boolean;
-  hasSkills: boolean;
-  hasLocation: boolean;
-  /** The two money questions are tracked apart because they live in different stores and
-   *  are independently answerable — see the AND rule in stepIsUnanswered. */
-  hasDesiredSalary: boolean;
-  hasCurrentIncome: boolean;
-  hasStage: boolean;
+  /** The search profile exists, which needs a specialization and a skill. */
+  hasFeed: boolean;
+  /** The profile alert is subscribed on at least one channel. */
+  hasAlert: boolean;
   hasChallenge: boolean;
 }
 
-/** Whether a given step still has something to ask.
- *
- *  Two steps carry two independent questions each, and both count as answered only once
- *  BOTH are stored: `confirm` (specializations and profile links) and `money` (the desired
- *  salary, which lives in the screening answers, and today's income, which lives in the
- *  survey). Calling either done on one half is how an existing account goes from never
- *  having been asked for its LinkedIn — or what it earns — to never being asked at all. */
-function stepIsUnanswered(step: StepKind, a: OnboardingAnswered): boolean {
+function isAnswered(step: StepKind, a: TourAnswered): boolean {
   switch (step) {
     case 'cv':
-      return !a.hasResume;
-    case 'confirm':
-      return !a.hasSpecializations || !a.hasProfileLinks;
-    case 'experience':
-      return !a.hasTotalYears;
-    case 'skills':
-      return !a.hasSkills;
-    case 'location':
-      return !a.hasLocation;
-    case 'money':
-      return !a.hasDesiredSalary || !a.hasCurrentIncome;
-    case 'stage':
-      return !a.hasStage;
+      return a.hasResume;
+    case 'feed':
+      return a.hasFeed;
+    case 'alerts':
+      return a.hasAlert;
     case 'challenge':
-      return !a.hasChallenge;
+      return a.hasChallenge;
+    default:
+      return false;
   }
 }
 
-/** The steps this account is actually shown: every step it has not answered, in canonical
- *  order. An account that has answered everything gets an empty plan — the caller treats
- *  that as "nothing to ask" and marks onboarding complete without rendering a screen. */
-export function plannedSteps(answered: OnboardingAnswered): StepKind[] {
-  return ORDERED_STEPS.filter((step) => stepIsUnanswered(step, answered));
+/** The steps this account is shown. Every account is routed here once — a new one, and
+ *  each existing one again when the tour replaced the wizard — so a step it has already
+ *  answered is skipped, and the introductions come along only when there is something to
+ *  ask. An empty plan means "nothing to ask": the caller marks onboarding complete without
+ *  rendering a screen. */
+export function plannedSteps(answered: TourAnswered): StepKind[] {
+  const asks = TOUR_STEPS.filter((s) => !INTRO_STEPS.has(s) && !isAnswered(s, answered));
+  if (asks.length === 0) return [];
+  return TOUR_STEPS.filter((s) => INTRO_STEPS.has(s) || asks.includes(s));
+}
+
+/** Specializations with the technical ones first, each half ordered by how many open jobs
+ *  it holds. The catalogue's largest categories are not technical (healthcare alone
+ *  outnumbers software engineering four to one), while most people signing up are — so a
+ *  plain count order buries the answer most of them are looking for. Without counts the
+ *  given order is kept within each half (the sort is stable). */
+export function orderSpecializations<T extends { value: string }>(
+  options: readonly T[],
+  counts: Record<string, number> | null,
+  tech: ReadonlySet<string>,
+): T[] {
+  return [...options].sort(
+    (a, b) =>
+      Number(tech.has(b.value)) - Number(tech.has(a.value)) ||
+      (counts ? (counts[b.value] ?? 0) - (counts[a.value] ?? 0) : 0),
+  );
+}
+
+/** Pick or unpick one challenge answer. "Just starting" says nothing is hard yet, so it
+ *  replaces every other answer and any other answer replaces it — the same rule the server
+ *  enforces. */
+export function toggleChallenge(picked: readonly string[], value: string): string[] {
+  if (picked.includes(value)) return picked.filter((v) => v !== value);
+  if (value === JOB_CHALLENGE_JUST_STARTING) return [value];
+  return [...picked.filter((v) => v !== JOB_CHALLENGE_JUST_STARTING), value];
+}
+
+/** The icon a tip is drawn with; the component maps it to a glyph so this module stays
+ *  free of Svelte. */
+export type TipIcon =
+  | 'tailor'
+  | 'extension'
+  | 'referral'
+  | 'tracking'
+  | 'feed'
+  | 'skills'
+  | 'ghost'
+  | 'globe'
+  | 'filters'
+  | 'relocation'
+  | 'visa'
+  | 'companies'
+  | 'buddies'
+  | 'mentors'
+  | 'language'
+  | 'junior';
+
+/** A feature offered for a challenge answer. `href` is a site path, query included. */
+export interface ChallengeTip {
+  icon: TipIcon;
+  title: string;
+  body: string;
+  href: string;
+  pro?: boolean;
+}
+
+const T = {
+  tailor: {
+    icon: 'tailor',
+    title: 'A CV for each job',
+    body: "Rewritten in the posting's own words, as an ATS-readable PDF.",
+    href: '/features/tailor',
+    pro: true,
+  },
+  forms: {
+    icon: 'extension',
+    title: 'Forms filled in for you',
+    body: 'The browser extension fills application forms from your profile, on any site.',
+    href: '/features/extension',
+    pro: true,
+  },
+  referrals: {
+    icon: 'referral',
+    title: 'Anonymous employee referrals',
+    body: 'Ask someone inside the company to refer you — a referral gets read.',
+    href: '/referrals',
+  },
+  tracking: {
+    icon: 'tracking',
+    title: 'Track every application',
+    body: 'All of them on one board. A quiet one gets a day-counter, so you know when to follow up.',
+    href: '/features/tracking',
+  },
+  feed: {
+    icon: 'feed',
+    title: 'Your feed is already set',
+    body: 'The feed and your alerts follow what you picked a few steps ago.',
+    href: '/jobs',
+  },
+  skills: {
+    icon: 'skills',
+    title: 'Skills match on every job',
+    body: 'Each job shows how many of your skills it asks for.',
+    href: '/jobs',
+  },
+  ghost: {
+    icon: 'ghost',
+    title: 'Ghost-job warnings',
+    body: "Every job shows whether it looks real, so you don't spend time on postings nobody is hiring for.",
+    href: '/features/ghost-jobs',
+  },
+  remoteWorldwide: {
+    icon: 'globe',
+    title: 'Remote, open worldwide',
+    body: 'Remote jobs that hire from any country.',
+    href: '/collections/remote-worldwide',
+  },
+  workFilters: {
+    icon: 'filters',
+    title: 'Filter by how you work',
+    body: 'Remote, hybrid, part-time or contract — one filter each.',
+    href: '/features/advanced-search',
+  },
+  relocation: {
+    icon: 'relocation',
+    title: 'Jobs that support relocation',
+    body: 'A relocation filter shows employers that help you move.',
+    href: '/features/advanced-search',
+  },
+  visaJobs: {
+    icon: 'visa',
+    title: 'Jobs that sponsor a visa',
+    body: 'One filter shows only the jobs that offer visa sponsorship.',
+    href: '/jobs?visa_sponsorship=true',
+  },
+  visaCompanies: {
+    icon: 'companies',
+    title: 'Companies on visa-sponsor registers',
+    body: 'Open roles at employers listed on official government registers of visa sponsors.',
+    href: '/collections/visa-sponsors',
+  },
+  buddies: {
+    icon: 'buddies',
+    title: 'Interview buddies',
+    body: 'Pair up with other candidates and practise interviews together.',
+    href: '/my/buddies',
+  },
+  mentors: {
+    icon: 'mentors',
+    title: 'Talk to someone who works there',
+    body: 'Book a short call with a mentor from the company or the role.',
+    href: '/mentors',
+  },
+  language: {
+    icon: 'language',
+    title: 'Filter by language',
+    body: 'Show only jobs in a language you know, or cap the level of English a job may ask for.',
+    href: '/features/advanced-search',
+  },
+  junior: {
+    icon: 'junior',
+    title: 'Intern and junior roles',
+    body: 'Pick Intern or Junior as your level and the feed shows only those.',
+    href: '/jobs',
+  },
+  organised: {
+    icon: 'tracking',
+    title: 'Keep it organised from day one',
+    body: 'Save jobs and track every application on one board — see the whole search at a glance.',
+    href: '/features/tracking',
+  },
+} satisfies Record<string, ChallengeTip>;
+
+// Keyed by the survey's closed vocabulary (surveyOptions.ts); a test holds every answer to
+// at least one tip.
+const TIPS: Record<string, ChallengeTip[]> = {
+  recruiter_contact: [T.tailor, T.forms, T.referrals, T.tracking],
+  job_fit: [T.feed, T.skills, T.ghost],
+  remote_flexible: [T.remoteWorldwide, T.workFilters],
+  working_abroad: [T.relocation, T.remoteWorldwide],
+  visa_sponsorship: [T.visaJobs, T.visaCompanies],
+  technical_interviews: [T.buddies, T.mentors],
+  english: [T.language],
+  first_job: [T.junior, T.buddies],
+  just_starting: [T.organised],
+  other: [T.feed, T.tracking],
+};
+
+/** The tips for the picked answers together, in the order picked, each tip once. */
+export function challengeTips(picked: readonly string[]): ChallengeTip[] {
+  return [...new Set(picked.flatMap((v) => TIPS[v] ?? []))];
 }

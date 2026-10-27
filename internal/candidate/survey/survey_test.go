@@ -1,6 +1,7 @@
 package survey
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -13,7 +14,7 @@ func i(v int) *int       { return &v }
 func TestValidateAcceptsAFullyStatedRecord(t *testing.T) {
 	a := Responses{
 		JobSearchStage:        s("searching"),
-		BiggestChallenge:      s("english"),
+		BiggestChallenges:     []string{"english"},
 		CurrentIncomeAmount:   i(5000),
 		CurrentIncomeCurrency: s("USD"),
 		CurrentIncomePeriod:   s("month"),
@@ -47,7 +48,7 @@ func TestValidateRejectsAnUnknownStage(t *testing.T) {
 }
 
 func TestValidateRejectsAnUnknownChallenge(t *testing.T) {
-	a := Responses{BiggestChallenge: s("imposter_syndrome")}
+	a := Responses{BiggestChallenges: []string{"imposter_syndrome"}}
 	a.Sanitize()
 	if err := a.Validate(); err == nil {
 		t.Fatal("Validate() = nil, want an error")
@@ -66,7 +67,7 @@ func TestValidateRejectsAnEnumValueThatIsOnlyDifferentlyCased(t *testing.T) {
 }
 
 func TestNoteIsAcceptedOnlyAlongsideOther(t *testing.T) {
-	a := Responses{BiggestChallenge: s(vocab.JobChallengeOther), BiggestChallengeNote: s("visa paperwork")}
+	a := Responses{BiggestChallenges: []string{vocab.JobChallengeOther}, BiggestChallengeNote: s("visa paperwork")}
 	a.Sanitize()
 	if err := a.Validate(); err != nil {
 		t.Fatalf("Validate() on other+note = %v, want nil", err)
@@ -76,7 +77,7 @@ func TestNoteIsAcceptedOnlyAlongsideOther(t *testing.T) {
 func TestNoteAlongsideACodedChallengeIsRejected(t *testing.T) {
 	// A note beside a coded answer could contradict it, and nothing downstream would know
 	// which to believe.
-	a := Responses{BiggestChallenge: s("english"), BiggestChallengeNote: s("actually it is the interviews")}
+	a := Responses{BiggestChallenges: []string{"english"}, BiggestChallengeNote: s("actually it is the interviews")}
 	a.Sanitize()
 	err := a.Validate()
 	if err == nil {
@@ -98,7 +99,7 @@ func TestNoteWithoutAnyChallengeIsRejected(t *testing.T) {
 func TestSanitizeDropsAWhitespaceOnlyNote(t *testing.T) {
 	// A note of spaces is an empty note. Dropping it in Sanitize is what lets a user who
 	// picked "other" and typed nothing still pass validation.
-	a := Responses{BiggestChallenge: s(vocab.JobChallengeOther), BiggestChallengeNote: s("   ")}
+	a := Responses{BiggestChallenges: []string{vocab.JobChallengeOther}, BiggestChallengeNote: s("   ")}
 	a.Sanitize()
 	if a.BiggestChallengeNote != nil {
 		t.Fatalf("BiggestChallengeNote = %q, want nil after Sanitize", *a.BiggestChallengeNote)
@@ -147,14 +148,14 @@ func TestValidateRejectsANonPositiveIncome(t *testing.T) {
 }
 
 func TestMergeKeepsFieldsTheUpdateOmits(t *testing.T) {
-	existing := Responses{JobSearchStage: s("searching"), BiggestChallenge: s("english")}
-	merged := Merge(existing, Responses{BiggestChallenge: s("technical_interviews")})
+	existing := Responses{JobSearchStage: s("searching"), BiggestChallenges: []string{"english"}}
+	merged := Merge(existing, Responses{BiggestChallenges: []string{"technical_interviews"}})
 
 	if merged.JobSearchStage == nil || *merged.JobSearchStage != "searching" {
 		t.Errorf("JobSearchStage = %v, want the stored value to survive an update that omits it", merged.JobSearchStage)
 	}
-	if merged.BiggestChallenge == nil || *merged.BiggestChallenge != "technical_interviews" {
-		t.Errorf("BiggestChallenge = %v, want the update's value", merged.BiggestChallenge)
+	if !slices.Equal(merged.BiggestChallenges, []string{"technical_interviews"}) {
+		t.Errorf("BiggestChallenges = %v, want the update's value", merged.BiggestChallenges)
 	}
 }
 
@@ -162,13 +163,68 @@ func TestMergeReplacingTheChallengeDropsAStaleNote(t *testing.T) {
 	// The note belongs to the "other" answer. Moving off "other" without clearing it would
 	// leave a note attached to a coded challenge — exactly the state Validate rejects, and
 	// it would be unreachable through the API since there is no clear operation.
-	existing := Responses{BiggestChallenge: s(vocab.JobChallengeOther), BiggestChallengeNote: s("visa paperwork")}
-	merged := Merge(existing, Responses{BiggestChallenge: s("english")})
+	existing := Responses{BiggestChallenges: []string{vocab.JobChallengeOther}, BiggestChallengeNote: s("visa paperwork")}
+	merged := Merge(existing, Responses{BiggestChallenges: []string{"english"}})
 
 	if merged.BiggestChallengeNote != nil {
 		t.Fatalf("BiggestChallengeNote = %q, want it dropped when the challenge moves off %q", *merged.BiggestChallengeNote, vocab.JobChallengeOther)
 	}
 	if err := merged.Validate(); err != nil {
 		t.Fatalf("merged record does not validate: %v", err)
+	}
+}
+
+func TestValidateAcceptsSeveralChallenges(t *testing.T) {
+	a := Responses{BiggestChallenges: []string{"visa_sponsorship", "english", "job_fit"}}
+	a.Sanitize()
+	if err := a.Validate(); err != nil {
+		t.Fatalf("Validate() = %v, want nil", err)
+	}
+}
+
+func TestSanitizeDropsRepeatedChallengesKeepingOrder(t *testing.T) {
+	a := Responses{BiggestChallenges: []string{"english", "job_fit", "english"}}
+	a.Sanitize()
+	if !slices.Equal(a.BiggestChallenges, []string{"english", "job_fit"}) {
+		t.Fatalf("BiggestChallenges = %v, want duplicates dropped in first-seen order", a.BiggestChallenges)
+	}
+}
+
+func TestSanitizeTreatsAnEmptyListAsUnstated(t *testing.T) {
+	// An empty list carries no answer; storing it would read as "answered nothing" next to
+	// a record that never answered at all, and the two must be the same fact.
+	a := Responses{BiggestChallenges: []string{}}
+	a.Sanitize()
+	if a.BiggestChallenges != nil {
+		t.Fatalf("BiggestChallenges = %v, want nil", a.BiggestChallenges)
+	}
+}
+
+func TestJustStartingStandsAlone(t *testing.T) {
+	// "Nothing is hard yet" contradicts naming something that is.
+	a := Responses{BiggestChallenges: []string{vocab.JobChallengeJustStarting, "english"}}
+	a.Sanitize()
+	err := a.Validate()
+	if err == nil {
+		t.Fatal("Validate() = nil, want just_starting beside another answer rejected")
+	}
+	if !strings.Contains(err.Error(), "biggest_challenges") {
+		t.Errorf("error %q does not name the offending field", err)
+	}
+}
+
+func TestNoteIsAcceptedWhenOtherIsAmongSeveral(t *testing.T) {
+	a := Responses{BiggestChallenges: []string{"english", vocab.JobChallengeOther}, BiggestChallengeNote: s("visa paperwork")}
+	a.Sanitize()
+	if err := a.Validate(); err != nil {
+		t.Fatalf("Validate() = %v, want nil", err)
+	}
+}
+
+func TestMergeKeepsTheNoteWhileOtherStaysPicked(t *testing.T) {
+	existing := Responses{BiggestChallenges: []string{vocab.JobChallengeOther}, BiggestChallengeNote: s("visa paperwork")}
+	merged := Merge(existing, Responses{BiggestChallenges: []string{"english", vocab.JobChallengeOther}})
+	if merged.BiggestChallengeNote == nil {
+		t.Fatal("BiggestChallengeNote = nil, want it kept while other is still among the answers")
 	}
 }

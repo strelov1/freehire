@@ -1,18 +1,10 @@
 <script lang="ts">
+  import JobAlertDigestPreview from './JobAlertDigestPreview.svelte';
   import { Bell, Check, ChevronRight, Mail, SlidersHorizontal, Smartphone } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { Button, EntityLogo, ProviderIcon, SectionLabel } from '#lib/ui/index.js';
   import BrandMark from '#lib/components/BrandMark.svelte';
   import { NOTIFICATIONS_FAQ } from '#lib/notificationsFaq.js';
-
-  // Illustrative jobs for the digest mockup — decorative, not live data, all
-  // named for a "Remote Go Backend" saved search so the subject line and the
-  // rows agree with each other.
-  const digestJobs = [
-    { company: 'Grafana', title: 'Platform Engineer' },
-    { company: 'Datadog', title: 'Senior Backend Engineer' },
-    { company: 'Cloudflare', title: 'Staff Backend Engineer' },
-  ];
 
   const triggers = [
     { key: 'match', text: 'A new match: instantly, or once a day at a time you pick.' },
@@ -155,33 +147,7 @@
       </p>
     </div>
     <div class="mt-10 grid gap-6 lg:grid-cols-2">
-      <!-- Job-alert digest. -->
-      <figure class="overflow-hidden rounded-xl border border-border bg-secondary/40 shadow-sm">
-        <figcaption class="border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
-          3 new jobs for "Remote Go Backend"
-        </figcaption>
-        <div class="p-4 sm:p-5">
-          <div class="rounded-xl border border-border bg-card p-5 shadow-sm">
-            {@render mailHeader()}
-            <h3 class="mt-4 text-base font-semibold tracking-tight">3 new jobs for &ldquo;Remote Go Backend&rdquo;</h3>
-            <div class="mt-4 flex flex-col gap-2">
-              {#each digestJobs as job (job.title)}
-                <div class="flex items-center gap-3 rounded-lg border border-border p-2.5">
-                  <EntityLogo name={job.company} shape="square" size="xs" />
-                  <div class="min-w-0">
-                    <p class="truncate text-sm font-medium">{job.title}</p>
-                    <p class="truncate text-xs text-muted-foreground">{job.company}</p>
-                  </div>
-                </div>
-              {/each}
-            </div>
-            <span class="mt-5 inline-block rounded-md bg-brand px-4 py-2 text-sm font-medium text-brand-foreground">
-              View all — 12 more
-            </span>
-            {@render mailFooter("You're getting this because you set up a job alert on freehire.")}
-          </div>
-        </div>
-      </figure>
+      <JobAlertDigestPreview />
 
       <!-- Tracking follow-up nudge. -->
       <figure class="overflow-hidden rounded-xl border border-border bg-secondary/40 shadow-sm">

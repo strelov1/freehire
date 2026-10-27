@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The CV step: upload a PDF and let its facets fold into the wizard's staged set.
+  // The tour's first step: upload a PDF and let its facets fold into the feed step.
   //
   // There was a second entry point here — paste a public LinkedIn profile link and read the
   // same facets off the page. It is gone. LinkedIn answers a datacentre address with its
@@ -31,9 +31,11 @@
     onCvUploaded: () => void;
     /** Leave this step for the next one, saving it the way Continue would. */
     onAdvance: () => void;
+    /** Leave without a CV — the feed step is then picked by hand. */
+    onSkip: () => void;
   }
 
-  let { staged, onExtracted, onCvUploaded, onAdvance }: Props = $props();
+  let { staged, onExtracted, onCvUploaded, onAdvance, onSkip }: Props = $props();
 
   let cvState = $state<'idle' | 'parsing' | 'error'>('idle');
   let cvError = $state<string | null>(null);
@@ -114,34 +116,41 @@
   }
 </script>
 
-<h2 class="text-xl font-semibold tracking-tight">Upload your CV</h2>
-<p class="mt-1 text-sm text-muted-foreground">We'll use it to fill in your role, skills, and level — you can always skip this.</p>
+<h2 class="text-xl font-semibold tracking-tight text-balance">Start with your CV</h2>
+<p class="mt-1 text-sm text-muted-foreground text-pretty">
+  We'll read your specialization, level and skills from it, so the next step is already filled in.
+</p>
 
 <input type="file" accept=".pdf,application/pdf" bind:this={cvInput} onchange={onCvFile} class="hidden" />
 <button
   type="button"
   onclick={pickCv}
   disabled={cvState === 'parsing'}
-  class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card px-4 py-3 text-sm font-medium transition-colors hover:border-brand hover:bg-accent disabled:opacity-60"
+  class="mt-6 flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card px-4 py-10 text-sm transition-colors hover:border-brand hover:bg-accent disabled:opacity-60"
 >
   {#if cvState === 'parsing'}
-    <LoaderCircle class="size-4 animate-spin" aria-hidden="true" /> Reading your CV…
+    <LoaderCircle class="size-6 animate-spin text-brand-strong" aria-hidden="true" />
+    <span class="font-medium">Reading your CV…</span>
   {:else}
-    <FileUp class="size-4" aria-hidden="true" /> Upload CV
+    <FileUp class="size-6 text-brand-strong" aria-hidden="true" />
+    <span class="font-semibold">Upload your CV</span>
+    <span class="text-xs text-muted-foreground">PDF with selectable text, up to {RESUME_MAX_MB} MB</span>
   {/if}
 </button>
 {#if cvState === 'error'}
   <p class="mt-2 text-xs text-destructive">{cvError}</p>
 {:else if cvNote}
   <p class="mt-2 text-xs text-muted-foreground">{cvNote}</p>
-{:else}
-  <p class="mt-2 text-xs text-muted-foreground">PDF with selectable text, up to {RESUME_MAX_MB} MB.</p>
 {/if}
 
 <!-- The route for a candidate who has no PDF to hand. It is a hint rather than a second
      control on purpose: LinkedIn releases a signed-out reader the headline and the city and
      nothing else, so a button promising to read a profile link would promise more than the
      page behind it can give. -->
-<p class="mt-4 text-xs text-muted-foreground">
+<p class="mt-4 text-xs text-muted-foreground text-pretty">
   No CV file? Open your profile on LinkedIn, choose <span class="font-medium text-foreground">More → Save to PDF</span>, and upload that.
 </p>
+
+<button type="button" onclick={onSkip} class="mt-6 text-sm font-medium text-muted-foreground hover:text-foreground">
+  Skip — I'll pick by hand
+</button>

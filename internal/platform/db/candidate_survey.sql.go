@@ -12,7 +12,7 @@ import (
 )
 
 const getCandidateSurvey = `-- name: GetCandidateSurvey :one
-SELECT user_id, job_search_stage, biggest_challenge, biggest_challenge_note, current_income_amount, current_income_currency, current_income_period, updated_at FROM candidate_survey
+SELECT user_id, job_search_stage, biggest_challenge, biggest_challenge_note, current_income_amount, current_income_currency, current_income_period, updated_at, biggest_challenges FROM candidate_survey
 WHERE user_id = $1
 `
 
@@ -31,31 +31,32 @@ func (q *Queries) GetCandidateSurvey(ctx context.Context, userID int64) (Candida
 		&i.CurrentIncomeCurrency,
 		&i.CurrentIncomePeriod,
 		&i.UpdatedAt,
+		&i.BiggestChallenges,
 	)
 	return i, err
 }
 
 const upsertCandidateSurvey = `-- name: UpsertCandidateSurvey :one
 INSERT INTO candidate_survey (
-    user_id, job_search_stage, biggest_challenge, biggest_challenge_note,
+    user_id, job_search_stage, biggest_challenges, biggest_challenge_note,
     current_income_amount, current_income_currency, current_income_period
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (user_id) DO UPDATE
 SET job_search_stage        = EXCLUDED.job_search_stage,
-    biggest_challenge       = EXCLUDED.biggest_challenge,
+    biggest_challenges      = EXCLUDED.biggest_challenges,
     biggest_challenge_note  = EXCLUDED.biggest_challenge_note,
     current_income_amount   = EXCLUDED.current_income_amount,
     current_income_currency = EXCLUDED.current_income_currency,
     current_income_period   = EXCLUDED.current_income_period,
     updated_at              = now()
-RETURNING user_id, job_search_stage, biggest_challenge, biggest_challenge_note, current_income_amount, current_income_currency, current_income_period, updated_at
+RETURNING user_id, job_search_stage, biggest_challenge, biggest_challenge_note, current_income_amount, current_income_currency, current_income_period, updated_at, biggest_challenges
 `
 
 type UpsertCandidateSurveyParams struct {
 	UserID                int64       `json:"user_id"`
 	JobSearchStage        pgtype.Text `json:"job_search_stage"`
-	BiggestChallenge      pgtype.Text `json:"biggest_challenge"`
+	BiggestChallenges     []string    `json:"biggest_challenges"`
 	BiggestChallengeNote  pgtype.Text `json:"biggest_challenge_note"`
 	CurrentIncomeAmount   pgtype.Int4 `json:"current_income_amount"`
 	CurrentIncomeCurrency pgtype.Text `json:"current_income_currency"`
@@ -72,7 +73,7 @@ func (q *Queries) UpsertCandidateSurvey(ctx context.Context, arg UpsertCandidate
 	row := q.db.QueryRow(ctx, upsertCandidateSurvey,
 		arg.UserID,
 		arg.JobSearchStage,
-		arg.BiggestChallenge,
+		arg.BiggestChallenges,
 		arg.BiggestChallengeNote,
 		arg.CurrentIncomeAmount,
 		arg.CurrentIncomeCurrency,
@@ -88,6 +89,7 @@ func (q *Queries) UpsertCandidateSurvey(ctx context.Context, arg UpsertCandidate
 		&i.CurrentIncomeCurrency,
 		&i.CurrentIncomePeriod,
 		&i.UpdatedAt,
+		&i.BiggestChallenges,
 	)
 	return i, err
 }
