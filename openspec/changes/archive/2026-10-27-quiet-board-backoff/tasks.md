@@ -25,4 +25,4 @@
 ## 5. Docs and ship
 
 - [x] 5.1 Document the quiet backoff in `internal/ingest/pipeline/AGENTS.md` (beside the cooldown) and in `docs/agents/job-lifecycle.md`'s interactions.
-- [ ] 5.2 Full verification: `gofmt`, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`, the tagged board-health integration tests. PR, CI, merge, deploy, then check on prod that the quiet columns fill and skips are logged.
+- [x] 5.2 Full verification: `gofmt`, `go vet ./...`, `go vet -tags=integration ./...`, `go test ./...`, the tagged board-health integration tests. PR, CI, merge, deploy, then check on prod that the quiet columns fill and skips are logged.
