@@ -607,7 +607,8 @@ func foldSpanish(lower string) string {
 
 // matchSpanishCategory resolves the category of a lowercased title the other tables
 // left unresolved: the main table once more on the gender-folded title, then the
-// Spanish table on the folded one. A blind alias answers "".
+// Spanish table on the folded one. A blind alias answers categoryNone, so the caller
+// can tell a veto from a miss before it asks the Portuguese table.
 func matchSpanishCategory(lower string) string {
 	c := ""
 	if g := foldSpanishGender(lower); g != lower {
@@ -615,9 +616,6 @@ func matchSpanishCategory(lower string) string {
 	}
 	if c == "" {
 		c = matchOrdered(foldSpanish(lower), spanishCategoryTable)
-	}
-	if c == categoryNone {
-		return ""
 	}
 	return c
 }
@@ -653,13 +651,12 @@ var spanishSeniorityTable = []aliasEntry{
 	{"pasantia", "intern"},
 	{"aprendiz", "intern"},
 	// Portuguese reaches this fallback too (Brazil's pandape, gupy, empregos), and its
-	// internship and middle grade resolve nowhere else.
+	// internship resolves nowhere else. Its middle grade, "pleno", is read by the
+	// Portuguese table (portuguese.go) after "sênior", so a range keeps its upper bound.
 	{"estagio", "intern"},
 	{"estagiario", "intern"},
 	{"estagiaria", "intern"},
 	{"estagiarios", "intern"},
-	{"pleno", "middle"},
-	{"plena", "middle"},
 	{"jefe", "lead"},
 	{"jefa", "lead"},
 	{"jefes", "lead"},

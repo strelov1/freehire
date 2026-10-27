@@ -54,11 +54,10 @@ func TestParse(t *testing.T) {
 		{"Desarrollador de Software Semi Senior", "middle", "software_engineering"},
 		{"Ingeniera de Software con IA", "", "software_engineering"},
 		{"Programador CNC", "", "manufacturing"},
-		// The seniorityTable is ALSO English+Russian only — a separate, not-yet-done
-		// gap — so "Sênior"/"Starszy" resolve no grade even though the category
-		// does. Category and seniority are independent matches (Parse runs both
-		// against the same title), so this is not a category defect.
-		{"Engenheira de Software Sênior", "", "software_engineering"},
+		// The main seniorityTable cannot see an accented grade — "sênior" does not
+		// contain "senior" — so the Portuguese fallback (portuguese.go) reads it on
+		// the accent-folded title.
+		{"Engenheira de Software Sênior", "senior", "software_engineering"},
 		{"Développeur Java (H/F)", "", "software_engineering"},
 		{"Développeur.euse senior (C#/React)", "senior", ""},
 		{"Softwareentwickler (m/w/d)", "", "software_engineering"},

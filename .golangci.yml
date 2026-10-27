@@ -239,6 +239,8 @@ linters:
         - produccion
         - producto
         - responsable
+        # Portuguese title vocabulary (internal/dict/classify/portuguese.go).
+        - organizacional
 
 formatters:
   enable:

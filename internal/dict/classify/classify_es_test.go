@@ -116,8 +116,8 @@ func TestSpanishHeadsAndFields(t *testing.T) {
 		// The meter reader and the toll collector are not accountants.
 		{"Operarios lectores de contadores", "", ""},
 		{"COBRADOR DE PEAJE", "", ""},
-		// A banking lawyer is not a bank teller.
-		{"Advogado(a) / Bancário", "", ""},
+		// A banking lawyer is not a bank teller; the Portuguese table files the lawyer.
+		{"Advogado(a) / Bancário", "legal", ""},
 		// "Centro comercial" is the mall, "ingeniero comercial" a Chilean degree.
 		{"Gerente centro comercial", "", ""},
 		// The Italian "reparto" is a department, not a delivery round.
@@ -209,7 +209,8 @@ func TestSpanishFallbackLeavesOtherLanguages(t *testing.T) {
 	}{
 		{"Addetto vendita", ""},
 		{"Tecnico manutentore", ""},
-		{"Engenheiro de Projetos Mecânicos Sr", ""},
+		// The Spanish table does not claim it; the Portuguese one (portuguese.go) does.
+		{"Engenheiro de Projetos Mecânicos Sr", "industrial_engineering"},
 	}
 	for _, c := range cases {
 		if got := Parse(c.title).Category; got != c.category {

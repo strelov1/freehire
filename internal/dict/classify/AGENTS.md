@@ -332,8 +332,8 @@ table. The assistant OF a jefe is cut first. Only director general/ejecutivo/fin
 and consejero delegado are c_level. Latin America's "semi senior" is folded to `ssr` in
 `matchSeniority` and is `middle` in the MAIN table (it contains "senior", so the fallback
 could never reach it); listed after `sr`, the range "Ssr/Sr" keeps its upper bound.
-Portuguese reaches the same fallback, so `estagio`/`estagiario` (intern) and `pleno`
-(middle) sit here too.
+Portuguese reaches the same fallback, so `estagio`/`estagiario` (intern) sit here too;
+`pleno` moved to the Portuguese table below, after `sênior`.
 
 Measured 2026-10-27 over 25,017 open Spanish-language postings (infojobs, occ,
 pandapelatam, teamtailor, factorial, getonbrd, torre, hiringroom, personio, eures,
@@ -343,6 +343,44 @@ seniority 6.9% → 11.0%, and 74 semi-senior titles moved from senior to middle.
 17.4%. Over 81k control titles (whatjobs-uk/it/fr/pt, greenhouse, workday, coveto,
 recruitee, jobindex, gupy, smartrecruiters) category 68.0% → 71.2%; every newly resolved
 title was hand-checked and the misreadings found became vetoes.
+
+## Portuguese heads and fields
+
+Portuguese titles have the Spanish shape — "Auxiliar de Serviços Gerais", "Analista de
+Departamento Pessoal", "Operador/a de Armazém" — and words both languages spell alike
+("vendedor", "comercial", "administrativo", "logística") are already read by the Spanish
+table. `portuguese.go` holds `portugueseCategoryTable` for the rest, on the same folded
+title and in the same bands, and it runs AFTER the Spanish table: no Spanish answer
+changes, and a Spanish veto ("Programador de Manutenção") still blinds the title. It
+lists both standards where they differ (equipe/equipa, recepcionista/rececionista,
+empilhadeira/empilhador, European "restauração" for food service). A generic head with
+no field — analista, auxiliar, assistente, técnico, operador, consultor, especialista,
+engenheiro — resolves nothing; "analista" heads one Brazilian title in twelve.
+
+Placement decisions with a reason: the lawyer outranks the tax field ("Advogado
+Tributário" is legal); "fiscal" is the tax desk only after a desk head ("Fiscal de Loja"
+guards a shop, "Fiscal de Obras" inspects a site); the sales field outranks the shop and
+the service desk ("Consultor de Vendas - Loja", "Atendimento e Vendas" sell); "DP" (the
+payroll desk) counts only as "de DP" (a bare DP is DP World or dynamic positioning);
+"auxiliar de sala" is absent (Spanish waits tables in it); "desenvolvedor" alone is
+software, after the business, product and property developer.
+
+Grades (`portugueseSeniorityTable`, after the Spanish table): the accented
+"Sênior"/"Júnior" the main table cannot see (it also reads the French "Sénior"),
+`pleno` below `sênior` so "Pleno/Sênior" keeps its upper bound, `coordenador` and
+`chefe` lead, the general/executive/president/financial directors c_level. `supervisor`
+is left alone — spelled the same in Spanish and English, whose tables state no grade.
+The Brazilian ladder (`brazilianGradeLadder`) reads "PL" and the Roman rungs (I junior,
+II middle, III senior) only after a Portuguese desk head in the same clause, so
+"PL/SQL", "Warsaw, PL" and a product's "II" state nothing.
+
+Measured 2026-10-27 over 30,677 Brazilian postings (gupy, solides, quickin, catho,
+empregos, vagas, inhire, recrutei, pandape, smartrecruiters, workday, whatjobs-br) and
+6,931 Portuguese ones (smartrecruiters, teamtailor, workday, whatjobs-pt, recruitee,
+personio, bamboohr, landingjobs): title category 43.1% → 77.9% (BR) and 64.0% → 75.7%
+(PT); seniority 18.9% → 30.6% (BR) and 20.4% → 22.0% (PT). Over 17,500 control titles
+(pandapelatam, infojobs, eures, personio, greenhouse, whatjobs-uk/it/fr) 77 changed,
+all hand-checked (Spanish "logístico", French "Sénior", "RH").
 
 ## Serving: dict-only
 
