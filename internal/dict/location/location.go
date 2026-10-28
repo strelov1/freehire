@@ -159,7 +159,8 @@ func ParseIn(location string, known []string) Geo {
 		// "us"); a token that is ONLY a work-mode marker ("Remote", "On-site") strips
 		// to "" and is skipped — its work mode is detected separately from the whole
 		// string. Skipping also keeps it out of the dash-split below.
-		tok = stripWorkmodeWords(tok)
+		// "Remote within Canada" -> "canada"; see stripPlacePreposition.
+		tok = stripWorkmodeWords(stripPlacePreposition(tok))
 		if tok == "" {
 			continue
 		}
@@ -592,6 +593,72 @@ func stripWorkmodeWords(tok string) string {
 		kept = append(kept, f)
 	}
 	return strings.Join(kept, " ")
+}
+
+// placePrepositions introduce the area a remote line is open to ("Remote within Canada",
+// "Based in Germany", "Remote across LATAM").
+var placePrepositions = map[string]bool{
+	"in": true, "within": true, "from": true, "across": true, "throughout": true,
+}
+
+// placeLeadWords are the words that may stand before such a preposition — a work mode or a
+// phrase introducing a place ("Anywhere in Europe", "Work from anywhere in Canada", "Fully
+// remote, based in"). Any other word is a place of its own ("Kirchheim in Schwaben") and
+// keeps the token whole.
+var placeLeadWords = map[string]bool{
+	"remote": true, "hybrid": true, "onsite": true, "on-site": true, "fully": true,
+	"anywhere": true, "based": true, "located": true, "only": true, "work": true,
+	"working": true, "from": true,
+}
+
+// stripPlacePreposition returns the country or region name after a lead-in preposition
+// ("remote within canada" -> "canada", "anywhere in the us" -> "us"), or tok unchanged.
+// Only a name the dictionary resolves is taken — the preposition is cut to read a stated
+// place, never to guess one ("in zzyzx", "in the world" stay as they are). A bare "IN"
+// opening the token is also Indiana's code ("IN Lebanon", "IN Angola"), so with nothing
+// before it a name the US has a town of is left alone.
+func stripPlacePreposition(tok string) string {
+	fields := strings.Fields(tok)
+	for k, f := range fields {
+		if !placePrepositions[f] {
+			continue
+		}
+		lead := fields[:k]
+		if !allLeadWords(lead) {
+			return tok
+		}
+		rest := strings.Fields(stripWorkmodeWords(strings.Join(fields[k+1:], " ")))
+		if len(rest) > 1 && rest[0] == "the" {
+			rest = rest[1:]
+		}
+		name := strings.Join(rest, " ")
+		if !namesPlace(name) || (len(lead) == 0 && f == "in" && hasPlaceIn(name, "us")) {
+			continue
+		}
+		return name
+	}
+	return tok
+}
+
+// allLeadWords reports whether every word is a placeLeadWords entry.
+func allLeadWords(words []string) bool {
+	for _, w := range words {
+		if !placeLeadWords[w] {
+			return false
+		}
+	}
+	return true
+}
+
+// namesPlace reports whether name is a country, curated city or region name. A US state
+// or Canadian province is left out: resolveSubdivision already reads one closing a token
+// ("Remote in California"), and cut loose it would also name a town ("Oregon").
+func namesPlace(name string) bool {
+	if _, ok := nameToCountry[name]; ok {
+		return true
+	}
+	_, ok := nameToRegion[name]
+	return ok
 }
 
 // areaPrefixes name the area AROUND a place ("Großraum Hannover", "Region Stuttgart",
