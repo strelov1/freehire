@@ -998,6 +998,13 @@ type Mailbox struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+// Resume point of a per-company duplicate-marker pass: the last company a run finished. Machine-owned by cmd/reindex; empty after_company means start from the top.
+type MarkerPassCursor struct {
+	Pass         string             `json:"pass"`
+	AfterCompany string             `json:"after_company"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 // One moderated, publicly named mentor profile per account, bound to one company in the catalogue. The opposite number of referral_offers, which keeps its insider anonymous: a referral is a favour asked of a stranger, a mentor is chosen.
 type Mentor struct {
 	ID          int64       `json:"id"`

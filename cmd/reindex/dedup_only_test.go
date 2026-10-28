@@ -35,7 +35,7 @@ func (r errRow) Scan(...any) error { return r.cause }
 func TestRefreshDuplicateMarkersReportsHowManyPassesFailed(t *testing.T) {
 	q := db.New(failingDBTX{err: errors.New("statement timeout")})
 
-	failed := refreshDuplicateMarkers(context.Background(), q)
+	failed := refreshDuplicateMarkers(context.Background(), q, 4)
 
 	if failed != 3 {
 		t.Errorf("failed passes = %d, want 3", failed)
@@ -48,7 +48,7 @@ func TestRefreshDuplicateMarkersReportsHowManyPassesFailed(t *testing.T) {
 // the mode to `refreshDuplicateMarkers(ctx, q); return 0` left this package green. This one
 // goes through the seam the mode actually runs.
 func TestDedupOnlyExitsNonZeroWhenThePassesFailed(t *testing.T) {
-	if got := dedupOnlyExit(context.Background(), db.New(failingDBTX{err: errors.New("statement timeout")})); got != 1 {
+	if got := dedupOnlyExit(context.Background(), db.New(failingDBTX{err: errors.New("statement timeout")}), 4); got != 1 {
 		t.Errorf("exit code = %d, want 1 for a run that re-marked nothing it was asked to", got)
 	}
 }

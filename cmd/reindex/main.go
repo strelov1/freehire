@@ -18,6 +18,7 @@ import (
 	"log"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -78,6 +79,15 @@ func run() int {
 
 	q := db.New(pool)
 	rcfg := config.LoadReindex()
+	// How many companies the fuzzy pass works on at once. Its work waits on Postgres, not the
+	// CPU, so a few in flight cut its wall time several-fold; each holds a pool connection
+	// (database.defaultMaxConns is 10, one of them already the index lock's), so past that a
+	// higher value only queues on the pool.
+	fuzzyWorkers, err := worker.EnvInt64("REINDEX_FUZZY_WORKERS", 4)
+	if err != nil {
+		log.Printf("config: %v", err)
+		return 1
+	}
 
 	// Marker-only mode stops here, before anything Meilisearch-related — see
 	// config.Reindex.DedupOnly for why this can run far more often than a full
@@ -90,7 +100,7 @@ func run() int {
 	// simply had nothing to re-mark. The cancellation line forCompanyBatches assembles
 	// was thrown away with it.
 	if rcfg.DedupOnly {
-		return dedupOnlyExit(ctx, q)
+		return dedupOnlyExit(ctx, q, int(fuzzyWorkers))
 	}
 
 	// Captured before anything else runs (including the duplicate-marker recompute
@@ -125,7 +135,7 @@ func run() int {
 	// them the rebuild still collapses reposts; it just uses the markers the last
 	// dedup invocation left, which is what "eventually consistent" already meant.
 	if rcfg.Dedup {
-		refreshDuplicateMarkers(ctx, q)
+		refreshDuplicateMarkers(ctx, q, int(fuzzyWorkers))
 	}
 
 	// Only the open, canonical, public rows: splitJobs would drop every other row anyway,
@@ -186,11 +196,11 @@ func run() int {
 // without one, re-introducing the swallowed outcome (`refreshDuplicateMarkers(ctx, q);
 // return 0`) leaves every test in this package green, which is how it shipped that way
 // the first time.
-func dedupOnlyExit(ctx context.Context, q *db.Queries) int {
-	return worker.ExitCode(refreshDuplicateMarkers(ctx, q), 0)
+func dedupOnlyExit(ctx context.Context, q *db.Queries, fuzzyWorkers int) int {
+	return worker.ExitCode(refreshDuplicateMarkers(ctx, q, fuzzyWorkers), 0)
 }
 
-func refreshDuplicateMarkers(ctx context.Context, q *db.Queries) int {
+func refreshDuplicateMarkers(ctx context.Context, q *db.Queries, fuzzyWorkers int) int {
 	failed := 0
 
 	if n, err := recomputeRoleDuplicates(ctx, q); err != nil {
@@ -207,7 +217,7 @@ func refreshDuplicateMarkers(ctx context.Context, q *db.Queries) int {
 		log.Printf("reindex: suppressed aggregator duplicates (%d rows re-marked)", n)
 	}
 
-	if n, err := collapseFuzzyDuplicates(ctx, q); err != nil {
+	if n, err := collapseFuzzyDuplicates(ctx, q, fuzzyWorkers); err != nil {
 		failed++
 		log.Printf("reindex: collapse fuzzy duplicates (continuing with prior markers): %v", err)
 	} else if n > 0 {
@@ -467,27 +477,96 @@ func forCompanyBatches(ctx context.Context, companies []string, fn func(context.
 	return total, nil
 }
 
-// forEachCompany runs fn once per company, summing the rows it reports re-marked.
-// Companies are independent, so one failure must not starve the rest — it is counted
-// and skipped, and any failure turns the pass's result into an aggregate error (the
-// caller treats the whole pass as best-effort and continues with the prior markers).
-// Unlike forCompanyBatches, this stays one-at-a-time: its only caller
+// checkpointEvery is how many companies the finished prefix of a forEachCompany walk must
+// grow by before it is checkpointed again. The run is ended by its unit's SIGTERM, so
+// progress has to be saved along the way; at the pass's measured pace this is a write every
+// minute or two, which is nothing next to the per-company work.
+const checkpointEvery = 1000
+
+// forEachCompany runs fn once per company on `workers` goroutines, summing the rows it
+// reports re-marked. Unlike forCompanyBatches there is no query to batch: its only caller
 // (collapseFuzzyDuplicates, cmd/reindex/fuzzy.go) does real per-company work in Go —
-// fetching titles and descriptions, then fuzzy-comparing them in memory — not a single
-// set-based SQL statement, so there is no query to batch the way the two SQL-only
-// passes were.
-func forEachCompany(ctx context.Context, companies []string, fn func(context.Context, string) (int64, error)) (int64, error) {
-	var total int64
-	var failures int
-	var lastErr error
-	for _, c := range companies {
-		n, err := fn(ctx, c)
-		if err != nil {
-			failures++
-			lastErr = fmt.Errorf("company %q: %w", c, err)
-			continue
+// fetching titles and descriptions, then fuzzy-comparing them in memory. That work waits
+// on Postgres far more than it computes (measured 2026-10-28: under seven minutes of CPU
+// in a four-hour run), which is why it runs several companies at once. Each company's
+// marker write touches only that company's rows, so the workers never contend.
+//
+// Companies are independent, so one failure must not starve the rest — it is counted and
+// stepped over, and any failure turns the pass's result into an aggregate error (the
+// caller treats the whole pass as best-effort and continues with the prior markers).
+//
+// A cancelled context ends the walk instead: a company cut off by it is UNFINISHED, not
+// failed, and nothing further is dispatched — otherwise one deadline reads as hundreds of
+// thousands of failures, which is what the 2026-10-28 log said.
+//
+// checkpoint receives the resume point: the last company of the longest FINISHED prefix of
+// companies (a stepped-over failure counts as finished — retrying it is the next cycle's
+// job, and a company that always fails must not pin the walk). Never the newest company
+// finished: with several in flight a later one finishes while an earlier one is still
+// running, and resuming after the later one would skip the earlier one for good — the
+// freehire#2869 trap. It is called from this goroutine only, every checkpointEvery
+// companies of progress and once more at the end if the prefix moved since.
+func forEachCompany(ctx context.Context, companies []string, workers int, fn func(context.Context, string) (int64, error), checkpoint func(lastFinished string)) (int64, error) {
+	type result struct {
+		i   int
+		n   int64
+		err error
+	}
+	indices := make(chan int)
+	results := make(chan result)
+
+	go func() {
+		defer close(indices)
+		for i := range companies {
+			select {
+			case indices <- i:
+			case <-ctx.Done():
+				return
+			}
 		}
-		total += n
+	}()
+	var wg sync.WaitGroup
+	for range min(workers, len(companies)) {
+		wg.Go(func() {
+			for i := range indices {
+				n, err := fn(ctx, companies[i])
+				results <- result{i: i, n: n, err: err}
+			}
+		})
+	}
+	go func() { wg.Wait(); close(results) }()
+
+	var total int64
+	var finished, failures int
+	var lastErr error
+	done := make([]bool, len(companies))
+	prefix, saved := 0, 0 // companies[:prefix] are all finished; companies[:saved] were checkpointed
+	for r := range results {
+		if r.err != nil && ctx.Err() != nil {
+			continue // cut off by the cancellation: unfinished, so the resume point stays before it
+		}
+		done[r.i] = true
+		finished++
+		if r.err != nil {
+			failures++
+			lastErr = fmt.Errorf("company %q: %w", companies[r.i], r.err)
+		} else {
+			total += r.n
+		}
+		for prefix < len(done) && done[prefix] {
+			prefix++
+		}
+		if prefix-saved >= checkpointEvery {
+			checkpoint(companies[prefix-1])
+			saved = prefix
+		}
+	}
+	if prefix > saved {
+		checkpoint(companies[prefix-1])
+	}
+
+	if err := ctx.Err(); err != nil {
+		return total, fmt.Errorf("cancelled after %d/%d companies (%d failed): %w", finished, len(companies), failures, err)
 	}
 	if failures > 0 {
 		return total, fmt.Errorf("%d/%d companies failed; last: %w", failures, len(companies), lastErr)

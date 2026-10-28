@@ -2698,6 +2698,9 @@ type Querier interface {
 	// selected — it is retired in favor of the derived <users.username>@<domain> address
 	// (see the add-username-claim change) and no longer read by any caller.
 	GetMailboxByUser(ctx context.Context, userID int64) (GetMailboxByUserRow, error)
+	// The last company a per-company marker pass finished (see migration 0211). No row is the
+	// same as '' — start from the top — and the caller treats pgx.ErrNoRows that way.
+	GetMarkerPassCursor(ctx context.Context, pass string) (string, error)
 	// One booking with what both parties' views need. Authorisation is the caller's job: this
 	// returns the row for any id, and every caller must check the reader is its mentor or its
 	// seeker before rendering it.
@@ -7095,6 +7098,9 @@ type Querier interface {
 	// Claims the nudge send for one account. Guarded by IS NULL so a concurrent or
 	// repeated run never re-sends; 0 rows affected means somebody already claimed it.
 	SetLimitNudgeSent(ctx context.Context, id int64) (int64, error)
+	// Record (or, with '', clear) a pass's resume point. Written as the pass goes, not only at
+	// the end, because the run is routinely ended by its unit's timeout.
+	SetMarkerPassCursor(ctx context.Context, arg SetMarkerPassCursorParams) error
 	// Best-effort patch after CreateMentorBooking: the calendar event is created AFTER the
 	// booking row wins the EXCLUDE-constraint race, never before, so a lost race can never
 	// leave an orphaned Google event. No WHERE beyond the id — this always follows a
