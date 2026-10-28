@@ -4,10 +4,16 @@ export const messages = defineMessages(
   {
     headTitle: 'Security · freehire',
     title: 'Security',
-    subtitle: 'Change your email or password and end sessions on other devices.',
+    subtitle: 'Your email, password, and the devices signed in to this account.',
+    cancel: 'Cancel',
+    emailChanged: 'Email changed. Other devices were signed out.',
+    passwordChanged: 'Password changed. Other devices were signed out.',
     email: {
       heading: 'Email',
-      currentPrefix: 'Your account email is',
+      change: 'Change email',
+      dialogTitle: 'Change email',
+      providersNote:
+        'Google and other sign-in providers already linked to this account keep working after the change.',
       newEmailLabel: 'New email',
       confirmPrompt: 'Your email is how you sign in, so confirm it is you before changing it.',
       sendCode: 'Send confirmation code',
@@ -15,11 +21,10 @@ export const messages = defineMessages(
       codeSentPrefix: 'We sent a six-digit code to',
       codeSentSuffix: '. Enter it to finish — nothing changes until you do.',
       codeLabel: 'Code',
-      confirm: 'Change email',
+      confirm: 'Confirm',
       saving: 'Saving…',
       resend: 'Send a new code',
       otherAddress: 'Use a different address',
-      changed: 'Email changed. Other devices were signed out.',
       invalidEmail: 'That does not look like an email address.',
       sameEmail: 'That is already your email.',
       emailTaken: 'Another freehire account already uses this email.',
@@ -30,6 +35,9 @@ export const messages = defineMessages(
     },
     password: {
       heading: 'Password',
+      isSet: 'Set',
+      change: 'Change password',
+      dialogTitle: 'Change password',
       subheading: 'Changing it signs out every other device. You stay signed in here.',
       noPasswordNotice:
         'This account signs in with a provider and has no password. To add one — a second way in, independent of the provider — sign out, choose “Forgot your password?” on the sign-in screen, and set it with the code we email you.',
@@ -42,9 +50,8 @@ export const messages = defineMessages(
       staleSession:
         'This sign-in session is too old to confirm a security change. Please sign out and sign back in, then try again.',
       genericError: 'Something went wrong. Please try again.',
-      changed: 'Password changed. Other devices were signed out.',
       saving: 'Saving…',
-      save: 'Change password',
+      save: 'Save password',
     },
     sessions: {
       heading: 'Sessions',
@@ -64,10 +71,16 @@ export const messages = defineMessages(
       title: 'Безопасность',
       // "сессии", matching the `sessions.heading` below — the subtitle said
       // "сеансы" for the same thing.
-      subtitle: 'Измените почту или пароль и завершите сессии на других устройствах.',
+      subtitle: 'Почта, пароль и устройства, на которых выполнен вход.',
+      cancel: 'Отмена',
+      emailChanged: 'Почта изменена. Другие устройства вышли из аккаунта.',
+      passwordChanged: 'Пароль изменён. Другие устройства вышли из аккаунта.',
       email: {
         heading: 'Почта',
-        currentPrefix: 'Почта аккаунта:',
+        change: 'Сменить почту',
+        dialogTitle: 'Смена почты',
+        providersNote:
+          'Вход через Google и другие сервисы, уже привязанные к аккаунту, продолжит работать после смены.',
         newEmailLabel: 'Новая почта',
         confirmPrompt: 'Почта — это ваш логин, поэтому перед сменой подтвердите, что это вы.',
         sendCode: 'Отправить код',
@@ -75,11 +88,10 @@ export const messages = defineMessages(
         codeSentPrefix: 'Мы отправили шестизначный код на',
         codeSentSuffix: '. Введите его, чтобы завершить смену — до этого ничего не изменится.',
         codeLabel: 'Код',
-        confirm: 'Сменить почту',
+        confirm: 'Подтвердить',
         saving: 'Сохранение…',
         resend: 'Отправить новый код',
         otherAddress: 'Указать другой адрес',
-        changed: 'Почта изменена. Другие устройства вышли из аккаунта.',
         invalidEmail: 'Это не похоже на адрес почты.',
         sameEmail: 'Это и так ваша почта.',
         emailTaken: 'Эта почта уже используется другим аккаунтом freehire.',
@@ -90,6 +102,9 @@ export const messages = defineMessages(
       },
       password: {
         heading: 'Пароль',
+        isSet: 'Задан',
+        change: 'Сменить пароль',
+        dialogTitle: 'Смена пароля',
         subheading:
           'При смене пароля все остальные устройства выходят из аккаунта. Здесь вы останетесь в системе.',
         noPasswordNotice:
@@ -103,9 +118,8 @@ export const messages = defineMessages(
         staleSession:
           'Эта сессия слишком старая, чтобы подтвердить изменение настроек безопасности. Выйдите и войдите заново, затем повторите.',
         genericError: 'Что-то пошло не так. Попробуйте ещё раз.',
-        changed: 'Пароль изменён. Другие устройства вышли из аккаунта.',
         saving: 'Сохранение…',
-        save: 'Изменить пароль',
+        save: 'Сохранить пароль',
       },
       sessions: {
         heading: 'Сессии',

@@ -169,7 +169,7 @@
   <div class="flex flex-col gap-6">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="flex flex-col gap-1">
-        <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
+        <h2 class="text-lg font-semibold tracking-tight">{s.title}</h2>
         <p class="text-sm text-muted-foreground">
           {s.intro.lead}
           <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline">{s.intro.cliLink}</a>{s.intro.orSendDirectly}
@@ -299,7 +299,7 @@
     <ConfirmIdentity
       bind:this={revokeIdentity}
       bind:password={revokePassword}
-      returnTo="/my/api-keys"
+      returnTo="/my/integrations/api-keys"
       prompt={s.revokeDialog.confirmPrompt}
       draft={() => ({ surface: 'revoke-api-key', keyId: revokeTarget?.id ?? 0 })}
       active={confirmRevokeOpen}

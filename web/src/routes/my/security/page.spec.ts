@@ -47,6 +47,7 @@ beforeEach(() => {
 });
 
 async function fillAndSubmit(): Promise<void> {
+  await fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
   await fireEvent.input(screen.getByLabelText('Current password'), {
     target: { value: 'hunter2' },
   });
@@ -56,7 +57,7 @@ async function fillAndSubmit(): Promise<void> {
   await fireEvent.input(screen.getByLabelText('Repeat new password'), {
     target: { value: 'correct horse battery' },
   });
-  await fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Save password' }));
 }
 
 describe('security page — password change', () => {

@@ -153,7 +153,7 @@ describe('ApiKeysView — revoking', () => {
       await within(openDialog()).findByRole('button', { name: 'Confirm with google' }),
     );
 
-    expect(begin).toHaveBeenCalledWith('google', '/my/api-keys', {
+    expect(begin).toHaveBeenCalledWith('google', '/my/integrations/api-keys', {
       surface: 'revoke-api-key',
       keyId: 7,
     });

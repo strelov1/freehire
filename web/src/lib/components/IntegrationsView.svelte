@@ -303,7 +303,7 @@
 
 <div class="flex flex-col gap-4">
   <div class="flex flex-col gap-1">
-    <h1 class="text-2xl font-semibold tracking-tight">Integrations</h1>
+    <h2 class="text-lg font-semibold tracking-tight">Connected accounts</h2>
     <p class="text-sm text-muted-foreground">Connect the third-party accounts freehire can use on your behalf.</p>
   </div>
 

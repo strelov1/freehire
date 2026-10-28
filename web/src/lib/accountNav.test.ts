@@ -2,8 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the twenty-one account sections', () => {
-    expect(accountNav).toHaveLength(21);
+  it('lists the nineteen account sections', () => {
+    expect(accountNav).toHaveLength(19);
+  });
+
+  // API keys and the webhook are tabs of Integrations now; their old sections redirect.
+  it('reaches API keys and the webhook through Integrations, not sections of their own', () => {
+    const hrefs: string[] = accountNav.map((i) => i.href);
+    expect(hrefs).toContain('/my/integrations');
+    expect(hrefs).not.toContain('/my/api-keys');
+    expect(hrefs).not.toContain('/my/webhook');
   });
 
   // A section whose page exists and whose nav entry does not is reachable by URL and by
@@ -23,7 +31,7 @@ describe('accountNav config', () => {
     expect(hrefs(true, false)).not.toContain('/my/mentorship');
   });
 
-  it('offers a security section for password and session management', () => {
+  it('offers a security section for email, password and session management', () => {
     expect(accountNav.map((i) => i.href)).toContain('/my/security');
   });
 

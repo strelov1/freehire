@@ -173,7 +173,7 @@
       <ConfirmIdentity
         bind:this={identity}
         bind:password
-        returnTo="/my/api-keys"
+        returnTo="/my/integrations/api-keys"
         draft={() => ({ surface: 'create-api-key', name, days, scope })}
         prompt={s.confirmPrompt}
         active={open}

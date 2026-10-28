@@ -49,7 +49,7 @@
           <Button href={GPT_URL} target="_blank" rel="noopener noreferrer" variant="primary" size="lg">
             Open freehire GPT ↗
           </Button>
-          <Button href={resolve('/my/api-keys')} variant="outline" size="lg">Get an API key</Button>
+          <Button href={resolve('/my/integrations/api-keys')} variant="outline" size="lg">Get an API key</Button>
         </div>
 
         <p class="reveal mt-5 text-sm leading-relaxed text-muted-foreground" style="--d:300ms">
@@ -139,7 +139,7 @@
       <li>
         <span class="font-medium text-foreground">2.</span>
         To save, apply and track, create an
-        <a href={resolve('/my/api-keys')} class="font-medium text-foreground underline-offset-4 hover:underline">API key</a>
+        <a href={resolve('/my/integrations/api-keys')} class="font-medium text-foreground underline-offset-4 hover:underline">API key</a>
         and paste it into the GPT's authentication field.
       </li>
     </ol>

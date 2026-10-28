@@ -137,7 +137,7 @@ and \`freehire --help\` for the commands.`;
         </p>
 
         <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:240ms">
-          <Button href={resolve('/my/api-keys')} variant="primary" size="lg">Get an API key</Button>
+          <Button href={resolve('/my/integrations/api-keys')} variant="primary" size="lg">Get an API key</Button>
           <Button href={LLMS_TXT} target="_blank" rel="noopener noreferrer" variant="outline" size="lg">
             llms.txt ↗
           </Button>

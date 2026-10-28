@@ -1,17 +1,21 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { api, ApiError } from '#lib/api.js';
+  import { api } from '#lib/api.js';
   import { currentUser } from '#lib/auth.svelte.js';
   import DeleteAccountButton from '#lib/components/DeleteAccountButton.svelte';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import { Button } from '#lib/ui/index.js';
-  import ChangeEmail from './ChangeEmail.svelte';
+  import ChangeEmailDialog from './ChangeEmailDialog.svelte';
+  import ChangePasswordDialog from './ChangePasswordDialog.svelte';
   import { messages } from './messages';
 
   // Email, password and sessions. Every action is cookie-only server-side: an API key can
   // neither change the email or password nor end a human's sessions.
+  //
+  // The page itself is a list of what the account has, each with one button; the forms
+  // live in dialogs, so the page reads as a summary rather than three open forms.
 
   const s = $derived(t(messages, locale()));
   const user = $derived(currentUser());
@@ -20,59 +24,10 @@
   // the server — being signed in says nothing about whether a password exists.
   const hasPassword = $derived(user?.has_password ?? false);
 
-  let currentPassword = $state('');
-  let password = $state('');
-  let confirmation = $state('');
-  let saving = $state(false);
-  // Stores which message to show, not the resolved string — so a language switch
-  // while an error is visible re-renders it in the new language instead of
-  // leaving behind a snapshot from whichever locale was active when it occurred.
-  type PasswordErrorKey =
-    | 'mismatchError'
-    | 'wrongCurrentPassword'
-    | 'weakPassword'
-    | 'staleSession'
-    | 'genericError';
-  let changeErrorKey = $state<PasswordErrorKey | null>(null);
-  let changed = $state(false);
+  // Which change just succeeded — the KEY, so a language switch re-renders it.
+  let notice = $state<'emailChanged' | 'passwordChanged' | null>(null);
 
   let signingOut = $state(false);
-
-  function keyFor(e: unknown): PasswordErrorKey {
-    if (e instanceof ApiError) {
-      if (e.status === 401) return 'wrongCurrentPassword';
-      if (e.status === 400) return 'weakPassword';
-      // 428 is the recent-auth gate. Unlike the other gated surfaces, this one cannot
-      // answer it by asking for confirmation: the current password IS the confirmation and
-      // the server just accepted it. Reaching here means the proof would not bind to this
-      // session — a session minted before per-session ids existed — and the only cure is
-      // signing in again. It used to fall through to "Something went wrong", which is both
-      // untrue and unactionable.
-      if (e.status === 428) return 'staleSession';
-    }
-    return 'genericError';
-  }
-
-  async function changePassword(e: SubmitEvent) {
-    e.preventDefault();
-    changeErrorKey = null;
-    changed = false;
-    if (password !== confirmation) {
-      changeErrorKey = 'mismatchError';
-      return;
-    }
-    saving = true;
-    try {
-      await api.reauthenticatePassword(currentPassword);
-      await api.changePassword(currentPassword, password);
-      changed = true;
-      currentPassword = password = confirmation = '';
-    } catch (err) {
-      changeErrorKey = keyFor(err);
-    } finally {
-      saving = false;
-    }
-  }
 
   // Signing out everywhere ends this session too, so the app must return to a
   // signed-out state rather than keep rendering an account page.
@@ -93,60 +48,31 @@
 <h1 class="mb-1 text-2xl font-semibold tracking-tight">{s.title}</h1>
 <p class="mb-6 text-sm text-muted-foreground">{s.subtitle}</p>
 
-<ChangeEmail />
+<section class="mb-8 rounded-lg border border-border">
+  <div class="flex flex-wrap items-center justify-between gap-3 p-4">
+    <div class="min-w-0">
+      <h2 class="text-sm font-semibold">{s.email.heading}</h2>
+      <p class="truncate text-sm text-muted-foreground">{user?.email ?? ''}</p>
+    </div>
+    <ChangeEmailDialog onchanged={() => (notice = 'emailChanged')} />
+  </div>
 
-<section class="mb-8 rounded-lg border border-border p-4">
-  <h2 class="mb-1 text-sm font-semibold">{s.password.heading}</h2>
-  <p class="mb-4 text-sm text-muted-foreground">{s.password.subheading}</p>
-
-  {#if !hasPassword}
-    <p class="text-sm text-muted-foreground">{s.password.noPasswordNotice}</p>
-  {:else}
-    <form class="flex max-w-sm flex-col gap-3" onsubmit={changePassword}>
-      <label class="flex flex-col gap-1 text-sm">
-        <span class="text-muted-foreground">{s.password.currentPasswordLabel}</span>
-        <input
-          type="password"
-          bind:value={currentPassword}
-          required
-          autocomplete="current-password"
-          class="rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </label>
-      <label class="flex flex-col gap-1 text-sm">
-        <span class="text-muted-foreground">{s.password.newPasswordLabel}</span>
-        <input
-          type="password"
-          bind:value={password}
-          required
-          minlength={8}
-          maxlength={72}
-          autocomplete="new-password"
-          class="rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </label>
-      <label class="flex flex-col gap-1 text-sm">
-        <span class="text-muted-foreground">{s.password.repeatPasswordLabel}</span>
-        <input
-          type="password"
-          bind:value={confirmation}
-          required
-          autocomplete="new-password"
-          class="rounded-md border border-border bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </label>
-
-      {#if changeErrorKey}
-        <p class="text-sm text-destructive">{s.password[changeErrorKey]}</p>
+  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border p-4">
+    <div class="min-w-0">
+      <h2 class="text-sm font-semibold">{s.password.heading}</h2>
+      {#if hasPassword}
+        <p class="text-sm text-muted-foreground">{s.password.isSet}</p>
+      {:else}
+        <p class="max-w-prose text-sm text-muted-foreground">{s.password.noPasswordNotice}</p>
       {/if}
-      {#if changed}
-        <p class="text-sm text-muted-foreground">{s.password.changed}</p>
-      {/if}
+    </div>
+    {#if hasPassword}
+      <ChangePasswordDialog onchanged={() => (notice = 'passwordChanged')} />
+    {/if}
+  </div>
 
-      <Button type="submit" variant="primary" disabled={saving} class="mt-1">
-        {saving ? s.password.saving : s.password.save}
-      </Button>
-    </form>
+  {#if notice}
+    <p role="status" class="border-t border-border p-4 text-sm text-muted-foreground">{s[notice]}</p>
   {/if}
 </section>
 

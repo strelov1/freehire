@@ -84,7 +84,7 @@
   }
 
   // Webhook: like email/push, plain subscribe/unsubscribe — but only once a
-  // destination is configured; otherwise the chip is a link to /my/webhook (the
+  // destination is configured; otherwise the chip is a link to /my/integrations/webhook (the
   // same "not linked yet" treatment Telegram gets for Integrations).
   async function toggleWebhook() {
     if (busy || !webhook?.enabled) return;
@@ -168,7 +168,7 @@
       </button>
     {:else}
       <a
-        href={resolve('/my/webhook')}
+        href={resolve('/my/integrations/webhook')}
         class={chipClass(false)}
         title={webhook ? 'Re-enable your webhook in settings first' : 'Set up a webhook destination first'}
       >

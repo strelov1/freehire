@@ -68,7 +68,7 @@ beforeEach(() => {
   });
 });
 
-const props = { returnTo: '/my/api-keys' as const, prompt: 'A key is permanent access.' };
+const props = { returnTo: '/my/integrations/api-keys' as const, prompt: 'A key is permanent access.' };
 
 describe('ConfirmIdentity', () => {
   it('offers a password input to an account that has a password', async () => {
@@ -124,7 +124,7 @@ describe('ConfirmIdentity', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Confirm with google' }));
 
-    expect(begin).toHaveBeenCalledWith('google', '/my/api-keys', {
+    expect(begin).toHaveBeenCalledWith('google', '/my/integrations/api-keys', {
       surface: 'create-api-key',
       name: 'typed just before leaving',
       days: 30,

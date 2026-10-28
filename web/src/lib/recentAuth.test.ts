@@ -59,7 +59,7 @@ const VERIFIER_KEY = 'freehire.reauth.verifier';
 
 describe('beginProviderReauthentication', () => {
   it('stores the draft beside the verifier so the pending action survives the trip', async () => {
-    await beginProviderReauthentication('google', '/my/api-keys', {
+    await beginProviderReauthentication('google', '/my/integrations/api-keys', {
       surface: 'create-api-key',
       name: 'CI bot',
       days: 30,
@@ -89,7 +89,7 @@ describe('beginProviderReauthentication', () => {
 
 describe('consumeReauthDraft', () => {
   it('returns the stored draft and removes it', async () => {
-    await beginProviderReauthentication('google', '/my/api-keys', {
+    await beginProviderReauthentication('google', '/my/integrations/api-keys', {
       surface: 'create-api-key',
       name: 'CI bot',
       days: 0,
@@ -106,7 +106,7 @@ describe('consumeReauthDraft', () => {
   });
 
   it('returns null on a second call, so a later visit does not reopen the dialog', async () => {
-    await beginProviderReauthentication('google', '/my/api-keys', { surface: 'delete-account' });
+    await beginProviderReauthentication('google', '/my/integrations/api-keys', { surface: 'delete-account' });
     consumeReauthDraft('delete-account');
 
     expect(consumeReauthDraft('delete-account')).toBeNull();
@@ -115,7 +115,7 @@ describe('consumeReauthDraft', () => {
   it('carries which key a revocation was about', async () => {
     // Without this the member confirms, comes back to a closed dialog, and has to find the
     // key again — the silent loss the transport exists to prevent, one surface short.
-    await beginProviderReauthentication('google', '/my/api-keys', {
+    await beginProviderReauthentication('google', '/my/integrations/api-keys', {
       surface: 'revoke-api-key',
       keyId: 7,
     });
@@ -177,7 +177,7 @@ describe('consumeReauthDraft', () => {
 
 describe('completeProviderReauthentication', () => {
   it('leaves the draft for the returning surface to consume', async () => {
-    await beginProviderReauthentication('google', '/my/api-keys', {
+    await beginProviderReauthentication('google', '/my/integrations/api-keys', {
       surface: 'create-api-key',
       name: 'CI bot',
       days: 90,
@@ -185,7 +185,7 @@ describe('completeProviderReauthentication', () => {
     });
 
     await expect(completeProviderReauthentication('code-from-provider')).resolves.toBe(
-      '/my/api-keys',
+      '/my/integrations/api-keys',
     );
     expect(consumeReauthDraft('create-api-key')).toEqual({
       surface: 'create-api-key',
@@ -196,7 +196,7 @@ describe('completeProviderReauthentication', () => {
   });
 
   it('discards the draft when the exchange fails, leaving nothing to reopen later', async () => {
-    await beginProviderReauthentication('google', '/my/api-keys', {
+    await beginProviderReauthentication('google', '/my/integrations/api-keys', {
       surface: 'create-api-key',
       name: 'CI bot',
       days: 0,
@@ -278,7 +278,7 @@ describe('without usable storage', () => {
       removeItem() {},
     };
 
-    await expect(beginProviderReauthentication('google', '/my/api-keys')).rejects.toThrow();
+    await expect(beginProviderReauthentication('google', '/my/integrations/api-keys')).rejects.toThrow();
     expect(assign).not.toHaveBeenCalled();
   });
 });
@@ -288,7 +288,7 @@ describe('without usable storage', () => {
 describe('recentAuthExpiry', () => {
   it("records the server's own expiry rather than a locally guessed lifetime", async () => {
     exchange.mockResolvedValue('2099-01-01T00:10:00.000Z');
-    await beginProviderReauthentication('google', '/my/api-keys');
+    await beginProviderReauthentication('google', '/my/integrations/api-keys');
 
     await completeProviderReauthentication('code-from-provider');
 
@@ -301,7 +301,7 @@ describe('recentAuthExpiry', () => {
 
   it('reports nothing once the recorded expiry has passed', async () => {
     exchange.mockResolvedValue('2000-01-01T00:00:00.000Z');
-    await beginProviderReauthentication('google', '/my/api-keys');
+    await beginProviderReauthentication('google', '/my/integrations/api-keys');
     await completeProviderReauthentication('code-from-provider');
 
     expect(recentAuthExpiry()).toBeNull();
@@ -309,7 +309,7 @@ describe('recentAuthExpiry', () => {
 
   it('forgets the expiry when the server overrules the hint with a 428', async () => {
     exchange.mockResolvedValue('2099-01-01T00:10:00.000Z');
-    await beginProviderReauthentication('google', '/my/api-keys');
+    await beginProviderReauthentication('google', '/my/integrations/api-keys');
     await completeProviderReauthentication('code-from-provider');
 
     forgetRecentAuthExpiry();
@@ -319,7 +319,7 @@ describe('recentAuthExpiry', () => {
 
   it('reports nothing when the recorded value is not a readable date', async () => {
     exchange.mockResolvedValue('not a timestamp');
-    await beginProviderReauthentication('google', '/my/api-keys');
+    await beginProviderReauthentication('google', '/my/integrations/api-keys');
     await completeProviderReauthentication('code-from-provider');
 
     expect(recentAuthExpiry()).toBeNull();

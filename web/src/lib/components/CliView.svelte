@@ -345,7 +345,7 @@
           It reads the CLI's sign-in from <code class="font-mono text-foreground">~/.freehire/creds.json</code>.
           On a machine without it, add
           <code class="whitespace-nowrap font-mono text-foreground">"env": &lbrace; "FREEHIRE_TOKEN": "fhk_…" &rbrace;</code> with a key
-          from <a href={resolve('/my/api-keys')} class="font-medium text-foreground underline-offset-4 hover:underline"
+          from <a href={resolve('/my/integrations/api-keys')} class="font-medium text-foreground underline-offset-4 hover:underline"
             >API keys</a
           >.
         </p>

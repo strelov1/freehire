@@ -128,7 +128,7 @@
         href={resolve('/jobs-api')}
         class="font-medium text-foreground underline-offset-4 hover:underline">Jobs API</a
       > page. Keys live on your <a
-        href={resolve('/my/api-keys')}
+        href={resolve('/my/integrations/api-keys')}
         class="font-medium text-foreground underline-offset-4 hover:underline">API keys</a
       > page. What you may do with the data is in the
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->

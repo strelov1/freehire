@@ -135,7 +135,7 @@
       <div class="flex flex-col gap-4">
         <p class="text-sm leading-relaxed text-muted-foreground">
           Rather push than be pulled? Mint an
-          <a href={resolve('/my/api-keys')} class="font-medium text-foreground underline-offset-4 hover:underline"
+          <a href={resolve('/my/integrations/api-keys')} class="font-medium text-foreground underline-offset-4 hover:underline"
             >API key</a
           >
           and post roles straight to freehire — one call per vacancy, from your own systems or the
@@ -152,7 +152,7 @@
           for the full payload and endpoints.
         </p>
         <div class="flex flex-wrap gap-3">
-          <Button href={resolve('/my/api-keys')} variant="outline" size="sm">Get an API key</Button>
+          <Button href={resolve('/my/integrations/api-keys')} variant="outline" size="sm">Get an API key</Button>
           <Button href={resolve('/docs/api')} variant="ghost" size="sm">API reference</Button>
         </div>
       </div>
