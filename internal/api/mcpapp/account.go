@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -20,7 +21,9 @@ import (
 //
 // The auto-apply paragraph is the order the tools only work in: an agent that starts an
 // attempt and stops there leaves it waiting for a review nobody gives, and one that answers a
-// question without retrying leaves it parked.
+// question without retrying leaves it parked. It is told only to a session that is served
+// those tools (accountInstructions): an API key is not, and instructions naming tools a
+// session lacks walk the person through a workflow nothing can run.
 const accountServerInstructions = "This server acts as the signed-in freehire account that " +
 	"approved this connection. Tools read and change that account's own saved jobs, " +
 	"applications, and tracking board — never another account's. " +
@@ -28,15 +31,17 @@ const accountServerInstructions = "This server acts as the signed-in freehire ac
 	"(title:SRE OR title:\"site reliability\"); put location, work mode, seniority and skills " +
 	"in filters, never in the query; if few results come back, loosen one constraint at a " +
 	"time and say which. Present jobs as a table of title, company, location, posted date " +
-	"and link, naming the source. " +
-	"Automatic applications: auto_apply_start begins one; follow it with auto_apply_get, whose " +
+	"and link, naming the source. "
+
+const accountAutoApplyInstructions = "Automatic applications: auto_apply_start begins one; follow it with auto_apply_get, whose " +
 	"next_step says what to do. When it stops on questions, ask the person all of them as one " +
 	"numbered list, save their answers in the form's language with answer_bank_save or " +
 	"screening_answers_set, then call auto_apply_retry. When it reaches " +
 	"pending_review, show the person what will be sent and record their decision with " +
 	"auto_apply_review. Answers you save are sent to employers in the person's name — never " +
-	"invent one. " +
-	"Job alerts are saved searches over any filters, delivered by email, Telegram, the app or a " +
+	"invent one. "
+
+const accountAlertInstructions = "Job alerts are saved searches over any filters, delivered by email, Telegram, the app or a " +
 	"webhook, never to this chat. Before subscribe, run the same search with search_jobs so the " +
 	"person sees what they will get; to change an alert, read its search from list_subscriptions " +
 	"and pass update_subscription only what changes; to hold one, pause it rather than " +
@@ -48,7 +53,7 @@ const accountServerInstructions = "This server acts as the signed-in freehire ac
 // reimplemented so a tool result here and in the assistant can never disagree.
 func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.Server {
 	server := mcp.NewServer(Identity("freehire-account", Version, origin),
-		&mcp.ServerOptions{Instructions: accountServerInstructions})
+		&mcp.ServerOptions{Instructions: accountInstructions(tools)})
 
 	for _, t := range tools {
 		server.AddTool(&mcp.Tool{
@@ -60,6 +65,22 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.
 		}, accountToolHandler(t, userID))
 	}
 	return server
+}
+
+// accountInstructions is the account server's instructions for the tools this session is
+// actually served: each workflow paragraph only when the tool it begins with is among them.
+func accountInstructions(tools []assistant.Tool) string {
+	served := func(name string) bool {
+		return slices.ContainsFunc(tools, func(t assistant.Tool) bool { return t.Name == name })
+	}
+	out := accountServerInstructions
+	if served("auto_apply_start") {
+		out += accountAutoApplyInstructions
+	}
+	if served("subscribe") {
+		out += accountAlertInstructions
+	}
+	return out
 }
 
 // accountAnnotations declares what a tool does to the account, from the effect the tool
