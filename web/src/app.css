@@ -83,6 +83,15 @@
   bottom: max(1rem, env(safe-area-inset-bottom));
 }
 
+/* Padding for a full-height sheet pinned to the screen's LEFT edge (the account
+   drawer): 0.5rem (p-2), or clear of the home indicator below, the status bar above
+   and, in landscape, the notch beside it. Same viewport-fit=cover dependency as
+   pb-safe. */
+@utility sheet-left-safe {
+  padding: max(0.5rem, env(safe-area-inset-top)) 0.5rem max(0.5rem, env(safe-area-inset-bottom))
+    max(0.5rem, env(safe-area-inset-left));
+}
+
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {

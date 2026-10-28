@@ -64,7 +64,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby={titleId}
-    class="fixed left-0 top-0 z-50 flex h-full w-64 animate-sheet-in-left flex-col gap-1 overflow-y-auto border-r border-border bg-background p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))] pt-[max(0.5rem,env(safe-area-inset-top))] lg:hidden"
+    class="fixed left-0 top-0 z-50 flex h-full w-64 animate-sheet-in-left flex-col gap-1 overflow-y-auto border-r border-border bg-background sheet-left-safe lg:hidden"
     {@attach focusTrap()}
     {@attach (el) => {
       // Twenty sections outgrow a short phone, and the drawer opens at its top: bring the
