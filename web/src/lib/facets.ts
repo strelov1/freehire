@@ -477,6 +477,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   spainjobs: 'SpainJobs.io',
   infoempleo: 'Infoempleo',
   bumeran: 'Bumeran',
+  freework: 'Free-Work',
   itjobs: 'ITJobs.pt',
   feinaactiva: 'Feina Activa',
   turijobs: 'Turijobs',
