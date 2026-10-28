@@ -263,18 +263,23 @@ func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoC
 	return out, nil
 }
 
-// computrabajoEmptyListing reports whether a cardless page is the site's own empty result,
-// which states its card count in a hidden analytics field: value "0".
-func computrabajoEmptyListing(root *html.Node) bool {
-	found := false
+// computrabajoListingCount reads the card count every listing page states in a hidden analytics
+// field; ok is false for a page that is not a listing at all (a challenge answered 200).
+func computrabajoListingCount(root *html.Node) (count string, ok bool) {
 	walk(root, func(n *html.Node) bool {
 		if n.Type == html.ElementNode && n.Data == "input" && Attr(n, "id") == "gtm_afs_elements" {
-			found = Attr(n, "value") == "0"
+			count, ok = Attr(n, "value"), true
 			return false
 		}
 		return true
 	})
-	return found
+	return count, ok
+}
+
+// computrabajoEmptyListing reports whether a cardless page is the site's own empty result.
+func computrabajoEmptyListing(root *html.Node) bool {
+	count, ok := computrabajoListingCount(root)
+	return ok && count == "0"
 }
 
 // computrabajoAgeRe reads a card's age line: "Hace 56 minutos", "Hace 7 horas", "Hace 3 días".
@@ -480,8 +485,12 @@ func (s computrabajo) detail(ctx context.Context, c computrabajoCard, country st
 	j := computrabajoBaseJob(c, country)
 	offer := computrabajoOffer(root)
 	if offer == nil {
-		// A withdrawn posting redirects to a listing, which has no offer block.
-		return Job{}, false, nil
+		// A withdrawn posting redirects to its province's listing; any other page without an
+		// offer block (a challenge answered 200) is the absence of an answer.
+		if _, listing := computrabajoListingCount(root); listing {
+			return Job{}, false, nil
+		}
+		return Job{}, false, fmt.Errorf("posting page carries no offer")
 	}
 	body, tags, years := computrabajoBody(offer)
 	j.Description = sanitizeHTML(body)

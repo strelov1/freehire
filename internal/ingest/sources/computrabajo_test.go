@@ -255,3 +255,22 @@ func TestComputrabajoCardReadsHybridAndAge(t *testing.T) {
 		}
 	}
 }
+
+// A posting page without an offer block is gone only when it is the listing the site redirects a
+// withdrawn posting to; a challenge is no answer, so the posting stays unseen for the next run.
+func TestComputrabajoPostingChallengeIsNoAnswer(t *testing.T) {
+	read := func(path string) *html.Node {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		root, _ := html.Parse(strings.NewReader(string(raw)))
+		return root
+	}
+	if _, ok := computrabajoListingCount(read("testdata/computrabajo/challenge.html")); ok {
+		t.Error("a challenge page read as a listing")
+	}
+	if n, ok := computrabajoListingCount(read("testdata/computrabajo/empty.html")); !ok || n != "0" {
+		t.Errorf("empty listing count = %q %v", n, ok)
+	}
+}
