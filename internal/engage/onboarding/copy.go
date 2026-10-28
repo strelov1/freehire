@@ -220,6 +220,7 @@ var specs = map[Step]spec{
 {{template "p" "Interview buddies lets you find them. Join under a random handle and you’ll see members looking for the same kind of role, in the same place, and how far they got: applied, interview, offer."}}
 {{template "lead" "Then ask the one who’s been there."}}
 {{template "p" "Send a short first message — how the loop went, what they asked, how long the silence lasted. They can reply or decline, and declining is silent."}}
+{{template "p" "Why would they help? Usually their interview is already over — whichever way it went, they have nothing to lose by telling you. And next week you’ll be the one who’s been somewhere they haven’t."}}
 {{template "p" "Nobody sees your name, your email or your CV — only your handle, your role titles and your progress. Rejections never show up in the feed. It’s free."}}
 {{template "button" (mailLink .BuddiesURL "Find your interview buddies")}}
 {{template "muted" "If something stopped you from joining, reply — I read every reply myself."}}`),
@@ -232,6 +233,9 @@ var specs = map[Step]spec{
 				"Then ask the one who's been there.\n\n" +
 				"Send a short first message — how the loop went, what they asked, how long the silence\n" +
 				"lasted. They can reply or decline, and declining is silent.\n\n" +
+				"Why would they help? Usually their interview is already over — whichever way it went, they\n" +
+				"have nothing to lose by telling you. And next week you'll be the one who's been somewhere\n" +
+				"they haven't.\n\n" +
 				"Nobody sees your name, your email or your CV — only your handle, your role titles and your\n" +
 				"progress. Rejections never show up in the feed. It's free.\n\n" +
 				"Find your interview buddies: " + base + "/features/interview-buddies\n\n" +
