@@ -28,7 +28,7 @@ describe('demo copy', () => {
   // The page argues that tailoring adds nothing you did not do. The example must not contradict it.
   it('has one score per step, rising', () => {
     expect(DEMO_SCORES).toHaveLength(DEMO_BULLETS.length + 1);
-    for (let i = 1; i < DEMO_SCORES.length; i++) expect(DEMO_SCORES[i]).toBeGreaterThan(DEMO_SCORES[i - 1]);
+    DEMO_SCORES.slice(1).forEach((s, i) => expect(s).toBeGreaterThan(DEMO_SCORES[i] ?? Number.NaN));
   });
 
   it('ties every bullet and the asked requirement to a listed requirement', () => {
