@@ -56,7 +56,7 @@
       <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
         Your CV, rewritten for this job. Nothing made up.
       </h1>
-      <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
+      <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty">
         freehire reads the vacancy, brings your relevant work forward in the job's own words, and
         asks you about anything it can't find in your history.
       </p>
@@ -79,10 +79,10 @@
   <!-- Before and after -->
   <section class="py-16 sm:py-20">
     <SectionLabel text="before → after" />
-    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Same facts. Said for this job.
     </h2>
-    <p class="mt-3 text-sm text-muted-foreground">
+    <p class="mt-3 text-sm text-muted-foreground text-pretty">
       Example, tailored for <span class="font-medium text-foreground">{DEMO_ROLE}</span>. Highlighted words come from the vacancy.
     </p>
     <ol class="mt-8 grid gap-4">
@@ -90,11 +90,11 @@
         <li class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
           <div class="bg-background p-4">
             <p class="text-xs uppercase tracking-wide text-muted-foreground">Before</p>
-            <p class="mt-1 text-sm text-muted-foreground">{b.before}</p>
+            <p class="mt-1 text-sm text-muted-foreground text-pretty">{b.before}</p>
           </div>
           <div class="bg-background p-4">
             <p class="text-xs uppercase tracking-wide text-foreground">After</p>
-            <p class="mt-1 text-sm">
+            <p class="mt-1 text-sm text-pretty">
               {#each highlight(b.after, b.keywords) as part, i (i)}
                 {#if part.hit}<mark class="rounded bg-brand/15 px-0.5 text-foreground">{part.text}</mark>{:else}{part.text}{/if}
               {/each}
@@ -108,14 +108,14 @@
   <!-- Honesty split -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="it doesn't make things up" />
-    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       It knows the difference between burying something and not having it.
     </h2>
     <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each split as s (s.key)}
         <div class="bg-background p-6 sm:p-7">
-          <h3 class="text-lg font-semibold tracking-tight">{s.title}</h3>
-          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
+          <h3 class="text-balance text-lg font-semibold tracking-tight">{s.title}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">{s.body}</p>
           <div class="mt-4 flex flex-wrap gap-2">
             {#each s.sample as item (item)}
               <span class="rounded-md border px-2 py-0.5 font-mono text-xs {s.key === 'have' ? 'border-success-strong/50 text-success-strong' : 'border-warning/50 text-warning-strong'}">{item}</span>
@@ -124,7 +124,7 @@
         </div>
       {/each}
     </div>
-    <p class="mt-6 max-w-3xl text-sm text-muted-foreground">
+    <p class="mt-6 max-w-3xl text-sm text-muted-foreground text-pretty">
       This rule lives in the code, not in the agent's instructions, and the code is open source.
     </p>
   </section>
@@ -141,10 +141,10 @@
     <SectionLabel text="pro" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
-        <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
+        <h2 class="text-balance max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
           Tailoring is part of Pro{price ? ` — ${priceLabel(price)} a month` : ''}.
         </h2>
-        <p class="mt-4 max-w-md text-muted-foreground">Cancel any time. Search, alerts and tracking stay free.</p>
+        <p class="mt-4 max-w-md text-muted-foreground text-pretty">Cancel any time. Search, alerts and tracking stay free.</p>
         <div class="mt-8 flex flex-wrap items-center gap-3">
           <ProCheckoutButton {price} />
           <a href={resolve('/pricing')} class="text-sm font-medium text-muted-foreground hover:text-foreground">Compare plans</a>
@@ -168,7 +168,7 @@
   <!-- Comparison -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="compared" />
-    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Why not just ask a chatbot?</h2>
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Why not just ask a chatbot?</h2>
     <div class="mt-10 overflow-x-auto rounded-xl border border-border">
       <table class="w-full min-w-xl text-left text-sm">
         <thead class="bg-secondary/50 text-xs uppercase tracking-wide text-muted-foreground">
@@ -196,7 +196,7 @@
   <!-- Founder note -->
   <section class="border-t border-border py-16 sm:py-20">
     <figure class="mx-auto max-w-2xl">
-      <blockquote class="text-xl leading-relaxed tracking-tight sm:text-2xl">
+      <blockquote class="text-xl leading-relaxed tracking-tight sm:text-2xl text-pretty">
         It is easy for an AI to write that you led a Kubernetes migration you never touched.
         It reads well right up to the first interview question about it. So the agent here works the
         other way round: it only uses what you actually did, and when the job asks for something it
@@ -210,12 +210,12 @@
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share TAILOR_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="faq" />
-    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Questions people ask before buying.</h2>
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Questions people ask before buying.</h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each TAILOR_FAQ as item (item.question)}
         <div class="bg-background p-6 sm:odd:last:col-span-2 sm:p-7">
-          <dt class="text-lg font-semibold tracking-tight">{item.question}</dt>
-          <dd class="mt-2 text-sm leading-relaxed text-muted-foreground">{item.answer}</dd>
+          <dt class="text-balance text-lg font-semibold tracking-tight">{item.question}</dt>
+          <dd class="mt-2 leading-relaxed text-muted-foreground text-pretty">{item.answer}</dd>
         </div>
       {/each}
     </dl>
@@ -224,8 +224,8 @@
   <!-- Closing CTA -->
   <section class="border-t border-border py-16 sm:py-20">
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
-      <h2 class="text-2xl font-semibold tracking-tight">Stop sending the same CV everywhere.</h2>
-      <p class="max-w-xl text-muted-foreground">One job, one tailored CV, and nothing on it you didn't do.</p>
+      <h2 class="text-balance text-2xl font-semibold tracking-tight">Stop sending the same CV everywhere.</h2>
+      <p class="max-w-xl text-muted-foreground text-pretty">One job, one tailored CV, and nothing on it you didn't do.</p>
       <div class="flex flex-wrap items-center gap-3">
         <ProCheckoutButton {price} />
         <a href={resolve('/jobs')} class="text-sm font-medium text-muted-foreground hover:text-foreground">Browse jobs first</a>

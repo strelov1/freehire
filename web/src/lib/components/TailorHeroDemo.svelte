@@ -115,7 +115,7 @@
               {b.before}
             </span>
             <span
-              class="col-start-1 row-start-1 self-start rounded bg-brand/10 text-foreground transition-opacity duration-500 {i < step
+              class="col-start-1 row-start-1 -mx-1 self-start rounded bg-brand/10 px-1 py-1 text-foreground transition-opacity duration-500 {i < step
                 ? 'opacity-100'
                 : 'opacity-0'}"
             >

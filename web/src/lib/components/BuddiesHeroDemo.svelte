@@ -138,7 +138,7 @@
           : 'invisible translate-y-2 opacity-0'}"
       >
         <p class="text-xs text-muted-foreground">To {DEMO_INVITE.to}</p>
-        <p class="mt-0.5 text-sm">{DEMO_INVITE.body}</p>
+        <p class="mt-0.5 text-sm text-pretty">{DEMO_INVITE.body}</p>
         <p class="mt-1 text-right text-xs text-muted-foreground">sent</p>
       </div>
       <div
@@ -148,7 +148,7 @@
           : 'invisible translate-y-2 opacity-0'}"
       >
         <Avatar size="sm" class="shrink-0 bg-secondary" fallbackIcon={personIcon} />
-        <p class="rounded-lg bg-muted px-3 py-2 text-sm">{DEMO_REPLY.body}</p>
+        <p class="rounded-lg bg-muted px-3 py-2 text-sm text-pretty">{DEMO_REPLY.body}</p>
       </div>
     </div>
   </div>

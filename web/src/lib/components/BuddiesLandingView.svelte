@@ -62,7 +62,7 @@
       <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
         Find people interviewing where you are.
       </h1>
-      <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
+      <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground text-pretty">
         Join anonymously, see who's applying to the same companies and how far they got, and
         message the one who just had the interview you're preparing for.
       </p>
@@ -92,18 +92,18 @@
   <!-- Why it works -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="why it works" />
-    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Why help someone applying where you are?
     </h2>
     <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
       {#each reasons as r (r.title)}
         <div class="bg-background p-6 sm:p-7">
-          <h3 class="text-lg font-semibold tracking-tight">{r.title}</h3>
-          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{r.body}</p>
+          <h3 class="text-balance text-lg font-semibold tracking-tight">{r.title}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">{r.body}</p>
         </div>
       {/each}
     </div>
-    <p class="mt-6 max-w-3xl text-sm text-muted-foreground">
+    <p class="mt-6 max-w-3xl text-sm text-muted-foreground text-pretty">
       In the final for the same seat right now? You don't have to share anything — who you talk to is always your choice.
     </p>
   </section>
@@ -111,13 +111,13 @@
   <!-- Visibility -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="what others see" />
-    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
       Your progress is visible. You aren't.
     </h2>
     <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each visibility as v (v.key)}
         <div class="bg-background p-6 sm:p-7">
-          <h3 class="text-lg font-semibold tracking-tight">{v.title}</h3>
+          <h3 class="text-balance text-lg font-semibold tracking-tight">{v.title}</h3>
           <ul class="mt-4 flex flex-wrap gap-2">
             {#each v.items as item (item)}
               <li class="rounded-md border px-2 py-0.5 font-mono text-xs {v.chip}">{item}</li>
@@ -126,7 +126,7 @@
         </div>
       {/each}
     </div>
-    <p class="mt-6 max-w-3xl text-sm text-muted-foreground">
+    <p class="mt-6 max-w-3xl text-sm text-muted-foreground text-pretty">
       Hide any single application from the feed with one switch on the job in your tracker.
     </p>
   </section>
@@ -134,12 +134,12 @@
   <!-- Control -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="you stay in control" />
-    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Leave, block or report at any time.</h2>
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Leave, block or report at any time.</h2>
     <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
       {#each controls as c (c.title)}
         <div class="bg-background p-6 sm:p-7">
-          <h3 class="text-lg font-semibold tracking-tight">{c.title}</h3>
-          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{c.body}</p>
+          <h3 class="text-balance text-lg font-semibold tracking-tight">{c.title}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">{c.body}</p>
         </div>
       {/each}
     </div>
@@ -148,12 +148,12 @@
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share BUDDIES_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="faq" />
-    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Questions people ask before joining.</h2>
+    <h2 class="mt-6 text-balance max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Questions people ask before joining.</h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each BUDDIES_FAQ as item (item.question)}
         <div class="bg-background p-6 sm:odd:last:col-span-2 sm:p-7">
-          <dt class="text-lg font-semibold tracking-tight">{item.question}</dt>
-          <dd class="mt-2 text-sm leading-relaxed text-muted-foreground">{item.answer}</dd>
+          <dt class="text-balance text-lg font-semibold tracking-tight">{item.question}</dt>
+          <dd class="mt-2 leading-relaxed text-muted-foreground text-pretty">{item.answer}</dd>
         </div>
       {/each}
     </dl>
@@ -162,8 +162,8 @@
   <!-- Closing CTA -->
   <section class="border-t border-border py-16 sm:py-20">
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
-      <h2 class="text-2xl font-semibold tracking-tight">Stop interviewing alone.</h2>
-      <p class="max-w-xl text-muted-foreground">Free, anonymous, and you can leave any time.</p>
+      <h2 class="text-balance text-2xl font-semibold tracking-tight">Stop interviewing alone.</h2>
+      <p class="max-w-xl text-muted-foreground text-pretty">Free, anonymous, and you can leave any time.</p>
       {@render join()}
     </div>
   </section>

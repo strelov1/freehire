@@ -20,7 +20,7 @@
         {item.n}
       </span>
       <h3 class="mt-4 text-lg font-semibold tracking-tight">{item.title}</h3>
-      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
+      <p class="mt-2 text-sm leading-relaxed text-muted-foreground text-pretty">{item.body}</p>
     </div>
   {/each}
 </div>
