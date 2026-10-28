@@ -1,6 +1,6 @@
 {
   "Alert": 3,
-  "Avatar": 5,
+  "Avatar": 6,
   "Badge": 29,
   "BrandMark": 2,
   "Breadcrumbs": 6,
@@ -11,7 +11,7 @@
   "CountryFlag": 13,
   "Dialog": 15,
   "EmptyState": 5,
-  "EntityLogo": 32,
+  "EntityLogo": 33,
   "FormField": 8,
   "Input": 29,
   "LoadMore": 8,

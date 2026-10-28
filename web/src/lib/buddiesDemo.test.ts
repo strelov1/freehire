@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEMO_FEED, DEMO_INVITE } from './buddiesDemo';
+import { DEMO_FEED, DEMO_INVITE, DEMO_REPLY } from './buddiesDemo';
+import { buddyHeading } from './buddyPresent';
 
 // A handle is word, word, number. The dashes sit in classes only so the token linter
 // does not read them as Tailwind arbitrary values.
@@ -21,5 +22,18 @@ describe('buddies demo copy', () => {
     expect(DEMO_FEED.map((e) => e.handle)).toContain(DEMO_INVITE.to);
     expect(DEMO_INVITE.body.length).toBeGreaterThan(0);
     expect(DEMO_INVITE.body.length).toBeLessThanOrEqual(500);
+  });
+
+  it('gives every member a summary the real dictionaries resolve', () => {
+    for (const e of DEMO_FEED) {
+      expect(buddyHeading(e.summary)).not.toBe('Member');
+      expect(e.summary.country).toMatch(/^[a-z]{2}$/);
+    }
+  });
+
+  it('has the invited member answer, within the 500-character limit', () => {
+    expect(DEMO_REPLY.from).toBe(DEMO_INVITE.to);
+    expect(DEMO_REPLY.body.length).toBeGreaterThan(0);
+    expect(DEMO_REPLY.body.length).toBeLessThanOrEqual(500);
   });
 });

@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
+vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }));
+
 import BuddiesHeroDemo from './BuddiesHeroDemo.svelte';
 
 function mockMotion(reduce: boolean) {
@@ -24,8 +26,8 @@ afterEach(() => {
   observed = null;
 });
 
-const entry = (handle: string) => screen.getByText(handle).closest('li') as HTMLElement;
-const invite = () => screen.getByText(/How was the Globex interview/).closest('div') as HTMLElement;
+const entry = (handle: string) => screen.getAllByText(handle).at(0)?.closest('li') as HTMLElement;
+const slot = (id: string) => screen.getByTestId(id);
 
 describe('BuddiesHeroDemo', () => {
   it('shows every entry and the invitation when motion is reduced', () => {
@@ -33,7 +35,9 @@ describe('BuddiesHeroDemo', () => {
     render(BuddiesHeroDemo);
     expect(entry('amber-heron-42').className).toContain('opacity-100');
     expect(entry('kind-reef-2041').className).toContain('opacity-100');
-    expect(invite().className).not.toContain('invisible');
+    expect(slot('invite').className).not.toContain('invisible');
+    expect(slot('reply').className).not.toContain('invisible');
+    expect(slot('typing').className).toContain('invisible');
   });
 
   it('starts from one entry once visible, then adds the next', () => {
@@ -44,7 +48,8 @@ describe('BuddiesHeroDemo', () => {
     flushSync();
     expect(entry('amber-heron-42').className).toContain('opacity-100');
     expect(entry('tidy-kestrel-318').className).toContain('opacity-0');
-    expect(invite().className).toContain('invisible');
+    expect(slot('invite').className).toContain('invisible');
+    expect(slot('reply').className).toContain('invisible');
     vi.advanceTimersByTime(1800); // one step, matching STEP_MS in the component
     flushSync();
     expect(entry('tidy-kestrel-318').className).toContain('opacity-100');
