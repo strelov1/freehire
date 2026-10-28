@@ -195,3 +195,82 @@ func TestParse_SlovenianCatchAllNounsStayUnresolved(t *testing.T) {
 		}
 	}
 }
+
+// TestParse_CroatianSerbianTitles pins the curation of the freehire#3778 list. Each case is
+// a live title from a Croatian, Serbian or Bosnian posting that resolved no category before.
+func TestParse_CroatianSerbianTitles(t *testing.T) {
+	cases := []struct{ title, want string }{
+		{"Skladišni radnik (m/ž)", "logistics"},
+		{"Radnik/Radnica u Magacinu", "logistics"},
+		{"Viljuškarista", "logistics"},
+		{"Voditelj prodavaonice - Istarska županija", "retail"},
+		{"Rukovodilac prodavnice (m/ž), Zaječar/Bor", "retail"},
+		{"Trgovac (m/ž)", "retail"},
+		{"Izlagač robe", "retail"},
+		{"Prodajni savetnik (Delta City Beograd)", "sales"},
+		{"Komercijalist za direktnu prodaju (m/ž)", "sales"},
+		{"Agent korisničke podrške na nemačkom jeziku", "support"},
+		{"Agent u Pozivnom centru - student (m/ž)", "support"},
+		{"Voditelj kuhinje (m/ž)", "hospitality"},
+		{"Pica majstor", "hospitality"},
+		{"DIREKTOR HOTELA (m/ž) [Kvarner]", "hospitality"},
+		{"Pekar za proizvodnju hleba i somuna", "manufacturing"},
+		{"Operater na proizvodnoj liniji (m/ž)", "manufacturing"},
+		{"Kontrolor kvalitete", "manufacturing"},
+		{"POMOĆNI VODOINSTALATER/KA", "skilled_trades"},
+		{"Kućni majstor (m/ž)", "skilled_trades"},
+		{"Voditelj gradilišta (m/ž)", "skilled_trades"},
+		{"Farmaceutski tehničar (m/ž)", "healthcare"},
+		{"Dentalni tehničar - CAD/CAM (m/ž)", "healthcare"},
+		{"Spremač/spremačica", "personal_services"},
+		{"Stručnjak zaštite na radu i zaštite od požara (m/ž)", "occupational_safety"},
+		{"Geometar (m/ž)", "engineering_design"},
+		{"Projektant konstrukcija solarnih sistema", "engineering_design"},
+		{"Inženjer građevinarstva (m/ž)", "industrial_engineering"},
+		{"Junior prevoditelj (EN-DE)", "technical_writing"},
+		{"Student u ljudskim resursima (m/ž)", "hr"},
+		{"Regruter za proizvodne radnike (m/ž)", "recruiting"},
+		{"Saradnik u Finansijama", "finance"},
+		{"Administrativni asistent u odjelu Prodaje – student (m/ž), Zagreb", "administration"},
+		// The receptionist is administration, as "Receptionist" is, hotel or not.
+		{"Noćni recepcionar (m/ž) - Punta Skala Resort", "administration"},
+		// The researcher is science, but not the market or UX researcher.
+		{"MLAĐI/A ISTRAŽIVAČ/ICA ZA RAZVOJ INOVACIJA", "science"},
+		{"Istraživač tržišta (m/ž)", "marketing"},
+		// The role noun outranks the desk: a forklift driver in production drives.
+		{"Radnik u proizvodnji - Viljuškarista", "logistics"},
+		// "projektant" and "arhitekt" speak only after the programmer nouns.
+		{"PROJEKTANT PROGRAMER/PROJEKTANTICA PROGRAMERKA", "software_engineering"},
+		{"ARHITEKT IN RAZVIJALEC INFORMACIJSKIH REŠITEV - M/Ž", "software_engineering"},
+		// The Polish and Czech "projektant" draughts too, except where pinned.
+		{"Projektant Mostowy (K/M)", "engineering_design"},
+		{"Projektant | Oddělení pozemních staveb", "engineering_design"},
+		{"Analityk Projektant/ Analityczka Projektantka", "business_analysis"},
+		{"Projektant aplikacji multimedialnych, animacji i gier komputerowych", "software_engineering"},
+		{"Projektant (k/m) (bezpieczeństwo teleinformatyczne)", "security"},
+		// "Predavač" stays the Slovak shop assistant; the Croatian feminine is the lecturer.
+		{"Predavač", "retail"},
+		{"Predavačica engleskog jezika", "education"},
+	}
+	for _, c := range cases {
+		if got := Parse(c.title).Category; got != c.want {
+			t.Errorf("Parse(%q).Category = %q, want %q", c.title, got, c.want)
+		}
+	}
+}
+
+// TestParse_CroatianSerbianCatchAllNounsStayUnresolved pins what the #3778 curation dropped:
+// the list filed these generic nouns ("specijalist" and "voditelj" as operations, "operater"
+// as manufacturing), and they name no craft, as their English twins name none.
+func TestParse_CroatianSerbianCatchAllNounsStayUnresolved(t *testing.T) {
+	for _, title := range []string{
+		"Specijalist", "Specijalista", "Voditelj", "Radnik", "Djelatnik", "Operater",
+		"Savjetnik", "Savetnik", "Referent", "Stručni suradnik", "Stručni saradnik",
+		"Koordinator", "Menadžer", "Direktor", "Poslovođa", "Tehničar", "Majstor",
+		"Pripravnik", "Pomoćni radnik", "Studentski posao", "Zamjenik voditelja",
+	} {
+		if got := Parse(title).Category; got != "" {
+			t.Errorf("Parse(%q).Category = %q, want unresolved", title, got)
+		}
+	}
+}
