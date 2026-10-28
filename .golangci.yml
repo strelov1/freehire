@@ -225,6 +225,8 @@ linters:
         - visualizacion
         - automatico
         - penetracion
+        # French skill vocabulary (internal/dict/skilltag/dictionaries.go, batch 10).
+        - continus
         # Dutch title vocabulary (internal/dict/classify/dutch.go).
         - administratief
         - adviseur
