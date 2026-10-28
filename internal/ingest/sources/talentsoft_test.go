@@ -205,10 +205,17 @@ func TestTalentsoftFailedPostingIsUnreadable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	found := false
 	for _, j := range jobs {
-		if j.ExternalID == "237" && !j.Unreadable {
-			t.Fatalf("want an unreadable marker, got %+v", j)
+		if j.ExternalID == "237" {
+			found = true
+			if !j.Unreadable {
+				t.Fatalf("want an unreadable marker, got %+v", j)
+			}
 		}
+	}
+	if !found {
+		t.Fatal("a posting whose page failed must be reported unreadable, not dropped")
 	}
 }
 
