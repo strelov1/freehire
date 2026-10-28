@@ -195,6 +195,17 @@ describe('completeProviderReauthentication', () => {
     });
   });
 
+  // A tab opened before API keys moved under Integrations stored the old path; it must
+  // still come back to the API keys, not fall through to Security.
+  it('sends a return stored under the old API-keys path to its new home', async () => {
+    sessionStorage.setItem('freehire.reauth.verifier', 'verifier');
+    sessionStorage.setItem('freehire.reauth.return', '/my/api-keys');
+
+    await expect(completeProviderReauthentication('code-from-provider')).resolves.toBe(
+      '/my/integrations/api-keys',
+    );
+  });
+
   it('discards the draft when the exchange fails, leaving nothing to reopen later', async () => {
     await beginProviderReauthentication('google', '/my/integrations/api-keys', {
       surface: 'create-api-key',

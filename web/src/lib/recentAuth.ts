@@ -198,5 +198,9 @@ export async function completeProviderReauthentication(code: string): Promise<Re
   }
   const storedTarget = readSession(returnKey);
   forgetSession(returnKey);
-  return storedTarget === '/my/integrations/api-keys' ? storedTarget : '/my/security';
+  // '/my/api-keys' is what a tab opened before API keys moved under Integrations stored.
+  if (storedTarget === '/my/integrations/api-keys' || storedTarget === '/my/api-keys') {
+    return '/my/integrations/api-keys';
+  }
+  return '/my/security';
 }
