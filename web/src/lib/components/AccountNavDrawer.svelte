@@ -64,6 +64,11 @@
     aria-labelledby={titleId}
     class="fixed left-0 top-0 z-50 flex h-full w-64 animate-sheet-in-left flex-col gap-1 overflow-y-auto border-r border-border bg-background p-2 lg:hidden"
     {@attach focusTrap()}
+    {@attach (el) => {
+      // Twenty sections outgrow a short phone, and the drawer opens at its top: bring the
+      // section you are in into view, so the menu's first frame says where you are.
+      el.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest' });
+    }}
   >
     <div class="mb-1 flex items-center justify-between px-2 py-1.5">
       <span id={titleId} class="text-sm font-semibold text-foreground">{s.rail.menu}</span>
