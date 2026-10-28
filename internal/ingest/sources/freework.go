@@ -20,7 +20,7 @@ import (
 // employer is read per posting. See the "Free-Work traps" section of AGENTS.md for the
 // measurements behind each rule.
 //
-// The listing is the site's own public API (API Platform, JSON-LD "hydra" collections), walked
+// The listing is the site's own public API (API Platform, asked for plain JSON), walked
 // with a property filter that keeps a 300-posting page at ~120 KB; with every field a page of 50
 // takes ~15 s to render, so the whole board in one shape would outlast a run. The body comes from
 // the posting's own resource, bought only for postings the catalogue lacks, within a per-run
@@ -97,14 +97,6 @@ type freeworkCard struct {
 	Company     struct {
 		Name string `json:"name"`
 	} `json:"company"`
-}
-
-type freeworkPage struct {
-	Total   int            `json:"hydra:totalItems"`
-	Members []freeworkCard `json:"hydra:member"`
-	View    struct {
-		Next string `json:"hydra:next"`
-	} `json:"hydra:view"`
 }
 
 // freeworkDetail is the part of the posting resource the adapter reads.
@@ -207,35 +199,42 @@ func (s freework) nearDeadline(ctx context.Context) bool {
 	return ok && time.Until(d) < s.deadlineMargin
 }
 
-// list walks the listing by its own "next" links and returns every posting with a title and an
-// employer, newest first. The API refuses every ordering parameter, and its default order is the
-// publication date, which a republished posting moves to the top mid-walk: a walk sees ~0.1% of
-// the board twice (deduplicated here) and, in exchange, misses as many, which is far inside the
-// unseen sweep's 48 h. Any page failing fails the crawl — a partial listing would let the
+// list walks the listing page by page and returns every posting with a title and an employer,
+// newest first. The client asks for application/json, and in that format the API answers a bare
+// list with no total and no "next" link, and answers any page past the end with the LAST page
+// again. So the walk ends at a short page, or at a page that names no posting it had not already
+// read. The API refuses every ordering parameter, and its default order is the publication
+// date, which a republished posting moves to the top mid-walk: a walk sees ~0.1% of the board
+// twice (deduplicated here) and, in exchange, misses as many, which is far inside the unseen
+// sweep's 48 h. Any page failing fails the crawl — a partial listing would let the
 // company-scoped sweep close the postings of the employers it did see on the pages it did not.
 func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
-	seen := make(map[int64]bool)
+	listed := make(map[int64]bool)
 	var out []freeworkCard
 	for page := 1; page <= s.maxPages; page++ {
 		if err := s.limiter.Wait(ctx); err != nil {
 			return nil, err
 		}
-		var p freeworkPage
-		if err := s.get.GetJSON(ctx, fmt.Sprintf(freeworkListURL, page, freeworkPageSize), &p); err != nil {
+		var cards []freeworkCard
+		if err := s.get.GetJSON(ctx, fmt.Sprintf(freeworkListURL, page, freeworkPageSize), &cards); err != nil {
 			return nil, fmt.Errorf("freework: listing page %d: %w", page, err)
 		}
-		if page == 1 && len(p.Members) == 0 {
+		if page == 1 && len(cards) == 0 {
 			return nil, fmt.Errorf("freework: listing carries no posting")
 		}
-		for _, c := range p.Members {
-			if c.ID <= 0 || seen[c.ID] || strings.TrimSpace(c.Slug) == "" ||
-				freeworkClean(c.Title) == "" || freeworkClean(c.Company.Name) == "" {
+		fresh := 0
+		for _, c := range cards {
+			if c.ID <= 0 || listed[c.ID] {
 				continue
 			}
-			seen[c.ID] = true
+			listed[c.ID] = true
+			fresh++
+			if strings.TrimSpace(c.Slug) == "" || freeworkClean(c.Title) == "" || freeworkClean(c.Company.Name) == "" {
+				continue
+			}
 			out = append(out, c)
 		}
-		if p.View.Next == "" || len(p.Members) == 0 {
+		if len(cards) < freeworkPageSize || fresh == 0 {
 			return out, nil
 		}
 	}

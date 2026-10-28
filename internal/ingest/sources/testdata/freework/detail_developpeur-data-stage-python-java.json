@@ -1,7 +1,4 @@
 {
- "@context": "/contexts/JobPosting",
- "@id": "/job_postings/developpeur-data-stage-python-java",
- "@type": "JobPosting",
  "id": 687964,
  "title": "Développeur Data Stage / Python-Java",
  "slug": "developpeur-data-stage-python-java",
@@ -23,8 +20,6 @@
  "applicationContact": null,
  "applicationUrl": null,
  "location": {
-  "@type": "Location",
-  "@id": "/.well-known/genid/0977e344a348e85a059e",
   "street": null,
   "locality": null,
   "postalCode": null,
@@ -40,15 +35,11 @@
  },
  "startsAt": null,
  "company": {
-  "@id": "/companies/r-s-telecom",
-  "@type": "Company",
   "id": 21923,
   "name": "R&S TELECOM",
   "slug": "r-s-telecom"
  },
  "job": {
-  "@id": "/jobs/83",
-  "@type": "Job",
   "id": 83,
   "nameForContribution": "Développeur·euse Java (Kotlin, Groovy...)",
   "nameForContributionSlug": "developpeur-java-kotlin-groovy-scala",
@@ -60,8 +51,6 @@
  },
  "skills": [
   {
-   "@id": "/skills/3087",
-   "@type": "Skill",
    "id": 3087,
    "displayed": true,
    "skillJobs": [],

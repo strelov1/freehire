@@ -1,7 +1,4 @@
 {
- "@context": "/contexts/JobPosting",
- "@id": "/job_postings/developpeur-fullstack-devops-7",
- "@type": "JobPosting",
  "id": 663470,
  "title": "Développeur fullstack/ DevOps",
  "slug": "developpeur-fullstack-devops-7",
@@ -23,8 +20,6 @@
  "applicationContact": null,
  "applicationUrl": null,
  "location": {
-  "@type": "Location",
-  "@id": "/.well-known/genid/93d34b6b0e203dbd9326",
   "street": null,
   "locality": "Ramonville-Saint-Agne",
   "postalCode": "31520",
@@ -40,15 +35,11 @@
  },
  "startsAt": null,
  "company": {
-  "@id": "/companies/freelancerepublik-2",
-  "@type": "Company",
   "id": 21713,
   "name": "ODHCOM - FREELANCEREPUBLIK",
   "slug": "freelancerepublik-2"
  },
  "job": {
-  "@id": "/jobs/118",
-  "@type": "Job",
   "id": 118,
   "nameForContribution": "Ingénieur·e devops (Cloud)",
   "nameForContributionSlug": "ingenieur-devops-cloud",
@@ -60,18 +51,12 @@
  },
  "skills": [
   {
-   "@id": "/skills/16",
-   "@type": "Skill",
    "id": 16,
    "displayed": true,
    "skillJobs": [
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/cee5aa9a66ba7f1a7f22",
      "skill": "/skills/16",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/81",
       "id": 81,
       "nameForContribution": "Développeur·euse fullstack",
       "nameForContributionSlug": "developpeur-fullstack",
@@ -84,12 +69,8 @@
      "description": "Le/ La développeur·euse fullstack intègre des API REST dans des applications web ou mobiles, en développant à la fois les fonctionnalités côté serveur et leur utilisation côté client."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/960cdd9e463eab53e847",
      "skill": "/skills/16",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/118",
       "id": 118,
       "nameForContribution": "Ingénieur·e devops (Cloud)",
       "nameForContributionSlug": "ingenieur-devops-cloud",
@@ -102,12 +83,8 @@
      "description": "L'ingénieur·e devops (Cloud) implémente et automatise le déploiement d'API REST, garantissant leur scalabilité, leur disponibilité et leur intégration dans des environnements Cloud."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/573ebddcd4dccdc2130e",
      "skill": "/skills/16",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/29",
       "id": 29,
       "nameForContribution": "Architecte solutions",
       "nameForContributionSlug": "architecte-solutions",
@@ -120,12 +97,8 @@
      "description": "L'architecte solutions conçoit des architectures logicielles où les API REST jouent un rôle central pour connecter différents services et applications dans un écosystème logiciel cohérent."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/8a52c584ac426d67e72b",
      "skill": "/skills/16",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/22",
       "id": 22,
       "nameForContribution": "API Développeur",
       "nameForContributionSlug": "api-developpeur",
@@ -142,8 +115,6 @@
    "slug": "api-rest"
   },
   {
-   "@id": "/skills/18",
-   "@type": "Skill",
    "id": 18,
    "displayed": true,
    "skillJobs": [],
@@ -151,8 +122,6 @@
    "slug": "architecture"
   },
   {
-   "@id": "/skills/239",
-   "@type": "Skill",
    "id": 239,
    "displayed": true,
    "skillJobs": [],
@@ -160,18 +129,12 @@
    "slug": "client"
   },
   {
-   "@id": "/skills/335",
-   "@type": "Skill",
    "id": 335,
    "displayed": true,
    "skillJobs": [
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/ad2862a66fcc5c634cc4",
      "skill": "/skills/335",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/161",
       "id": 161,
       "nameForContribution": "Scrum master",
       "nameForContributionSlug": "scrum-master",
@@ -184,12 +147,8 @@
      "description": "Le Scrum master utilise Confluence pour gérer la documentation Agile, partager des informations sur les sprints, les rétrospectives et les décisions importantes prises au cours des réunions d'équipe."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/b47639ab10f2561a8087",
      "skill": "/skills/335",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/141",
       "id": 141,
       "nameForContribution": "Product owner",
       "nameForContributionSlug": "product-owner",
@@ -202,12 +161,8 @@
      "description": "Le/ La Product owner utilise Confluence pour gérer la documentation des exigences, organiser les backlogs de produit, et suivre l'évolution des fonctionnalités, tout en collaborant avec les équipes de développement."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/0577d283fdcc51a0bb6f",
      "skill": "/skills/335",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/46",
       "id": 46,
       "nameForContribution": "Coach agile",
       "nameForContributionSlug": "coach-agile",
@@ -220,12 +175,8 @@
      "description": "Le/La Coach agile utilise Confluence pour guider les équipes dans la documentation et l'amélioration continue des processus."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/78a1c6611e5843715ef9",
      "skill": "/skills/335",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/42",
       "id": 42,
       "nameForContribution": "Chef·fe de projet informatique",
       "nameForContributionSlug": "chef-de-projet-informatique",
@@ -238,12 +189,8 @@
      "description": "Le/ La Chef·fe de projet informatique utilise Confluence pour documenter les projets, suivre les plannings, partager les informations avec l'équipe et centraliser les données relatives au projet tout au long de son cycle de vie."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/e05794caa456311c5a77",
      "skill": "/skills/335",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/71",
       "id": 71,
       "nameForContribution": "Consultant·e technique",
       "nameForContributionSlug": "consultant-technique",
@@ -260,18 +207,12 @@
    "slug": "confluence"
   },
   {
-   "@id": "/skills/64",
-   "@type": "Skill",
    "id": 64,
    "displayed": true,
    "skillJobs": [
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/97ab0f96f83af9cef2ea",
      "skill": "/skills/64",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/118",
       "id": 118,
       "nameForContribution": "Ingénieur·e devops (Cloud)",
       "nameForContributionSlug": "ingenieur-devops-cloud",
@@ -284,12 +225,8 @@
      "description": "L’ingénieur·e devops utilise les pratiques DevOps pour automatiser et optimiser les processus de développement et de déploiement dans des environnements Cloud, garantissant la continuité et l'efficacité des opérations."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/ef81bec64cdba8cafeda",
      "skill": "/skills/64",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/129",
       "id": 129,
       "nameForContribution": "Ingénieur·e systèmes & réseaux",
       "nameForContributionSlug": "ingenieur-systemes-reseaux",
@@ -302,12 +239,8 @@
      "description": "L’ingénieur·e systèmes & réseaux travaille avec des outils DevOps pour gérer l’infrastructure, automatiser les tâches récurrentes et améliorer la collaboration entre les équipes de développement et d'exploitation."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/8edb111e391f14191dda",
      "skill": "/skills/64",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/136",
       "id": 136,
       "nameForContribution": "Lead developer / Tech lead",
       "nameForContributionSlug": "lead-developer",
@@ -320,12 +253,8 @@
      "description": "Le/ La lead developer utilise les pratiques DevOps pour superviser le développement et la livraison continue, tout en facilitant l’intégration entre les équipes de développement et d’exploitation."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/e6878e9dd2d547aa7774",
      "skill": "/skills/64",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/112",
       "id": 112,
       "nameForContribution": "Ingénieur·e d'exploitation",
       "nameForContributionSlug": "ingenieur-dexploitation",
@@ -342,18 +271,12 @@
    "slug": "devops"
   },
   {
-   "@id": "/skills/67",
-   "@type": "Skill",
    "id": 67,
    "displayed": true,
    "skillJobs": [
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/421321066e1c999a51e3",
      "skill": "/skills/67",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/118",
       "id": 118,
       "nameForContribution": "Ingénieur·e devops (Cloud)",
       "nameForContributionSlug": "ingenieur-devops-cloud",
@@ -366,12 +289,8 @@
      "description": "L'Ingénieur·e DevOps (Cloud) utilise Docker pour automatiser le déploiement d'applications, créer des conteneurs et gérer des infrastructures cloud."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/c6cf3f2370ef8c9a0c5c",
      "skill": "/skills/67",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/129",
       "id": 129,
       "nameForContribution": "Ingénieur·e systèmes & réseaux",
       "nameForContributionSlug": "ingenieur-systemes-reseaux",
@@ -384,12 +303,8 @@
      "description": "L'Ingénieur·e systèmes & réseaux maîtrise Docker pour la gestion des environnements de développement et de production via des conteneurs, facilitant la gestion des infrastructures systèmes et réseaux."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/7230ed6a48638d54017e",
      "skill": "/skills/67",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/81",
       "id": 81,
       "nameForContribution": "Développeur·euse fullstack",
       "nameForContributionSlug": "developpeur-fullstack",
@@ -402,12 +317,8 @@
      "description": "Le/ La Développeur·euse fullstack utilise Docker pour créer des environnements de développement, tester des applications et gérer le déploiement d'applications dans des conteneurs."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/e1bb11bb7203a6a5dcae",
      "skill": "/skills/67",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/116",
       "id": 116,
       "nameForContribution": "Ingénieur·e de production",
       "nameForContributionSlug": "ingenieur-de-production",
@@ -424,8 +335,6 @@
    "slug": "docker"
   },
   {
-   "@id": "/skills/60",
-   "@type": "Skill",
    "id": 60,
    "displayed": true,
    "skillJobs": [],
@@ -433,8 +342,6 @@
    "slug": "deploiement"
   },
   {
-   "@id": "/skills/63",
-   "@type": "Skill",
    "id": 63,
    "displayed": true,
    "skillJobs": [],
@@ -442,8 +349,6 @@
    "slug": "developpement"
   },
   {
-   "@id": "/skills/2363",
-   "@type": "Skill",
    "id": 2363,
    "displayed": true,
    "skillJobs": [],
@@ -451,18 +356,12 @@
    "slug": "framework"
   },
   {
-   "@id": "/skills/504",
-   "@type": "Skill",
    "id": 504,
    "displayed": true,
    "skillJobs": [
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/1147bbc75059e2de0a80",
      "skill": "/skills/504",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/118",
       "id": 118,
       "nameForContribution": "Ingénieur·e devops (Cloud)",
       "nameForContributionSlug": "ingenieur-devops-cloud",
@@ -475,12 +374,8 @@
      "description": "L'ingénieur·e devops (Cloud) utilise GitLab pour configurer et gérer des pipelines CI/CD, automatiser le déploiement des applications et collaborer sur le développement du code."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/7459d9cff7354daa53e6",
      "skill": "/skills/504",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/81",
       "id": 81,
       "nameForContribution": "Développeur·euse fullstack",
       "nameForContributionSlug": "developpeur-fullstack",
@@ -493,12 +388,8 @@
      "description": "Le/ La développeur·euse fullstack travaille avec GitLab pour gérer le contrôle de version du code, intégrer des outils de collaboration et déployer des projets web ou mobiles."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/04c7d5369dafe098f629",
      "skill": "/skills/504",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/123",
       "id": 123,
       "nameForContribution": "Ingénieur·e qualité et méthodes",
       "nameForContributionSlug": "ingenieur-qualite-et-methodes",
@@ -511,12 +402,8 @@
      "description": "L'ingénieur·e qualité et méthodes exploite GitLab pour intégrer des outils de test automatisé et suivre les performances des projets tout en maintenant des normes élevées de qualité du code."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/305b5cb61d939375f520",
      "skill": "/skills/504",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/136",
       "id": 136,
       "nameForContribution": "Lead developer / Tech lead",
       "nameForContributionSlug": "lead-developer",
@@ -533,8 +420,6 @@
    "slug": "gitlab"
   },
   {
-   "@id": "/skills/488",
-   "@type": "Skill",
    "id": 488,
    "displayed": true,
    "skillJobs": [],
@@ -542,8 +427,6 @@
    "slug": "gouvernance"
   },
   {
-   "@id": "/skills/499",
-   "@type": "Skill",
    "id": 499,
    "displayed": true,
    "skillJobs": [],
@@ -551,8 +434,6 @@
    "slug": "graphql"
   },
   {
-   "@id": "/skills/96",
-   "@type": "Skill",
    "id": 96,
    "displayed": true,
    "skillJobs": [],
@@ -560,8 +441,6 @@
    "slug": "integration"
   },
   {
-   "@id": "/skills/3060",
-   "@type": "Skill",
    "id": 3060,
    "displayed": true,
    "skillJobs": [],
@@ -569,8 +448,6 @@
    "slug": "keycloak"
   },
   {
-   "@id": "/skills/299",
-   "@type": "Skill",
    "id": 299,
    "displayed": true,
    "skillJobs": [],
@@ -578,18 +455,12 @@
    "slug": "production"
   },
   {
-   "@id": "/skills/152",
-   "@type": "Skill",
    "id": 152,
    "displayed": true,
    "skillJobs": [
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/213eb3a4eb988692104b",
      "skill": "/skills/152",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/73",
       "id": 73,
       "nameForContribution": "Data scientist",
       "nameForContributionSlug": "data-scientist",
@@ -602,12 +473,8 @@
      "description": "Le/La Data Scientist utilise Python pour développer des modèles d'apprentissage automatique et analyser de grandes quantités de données."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/8dd75599d9c1d761a43a",
      "skill": "/skills/152",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/188",
       "id": 188,
       "nameForContribution": "Data analyst",
       "nameForContributionSlug": "data-analyst",
@@ -624,8 +491,6 @@
    "slug": "python"
   },
   {
-   "@id": "/skills/6077",
-   "@type": "Skill",
    "id": 6077,
    "displayed": true,
    "skillJobs": [],
@@ -633,18 +498,12 @@
    "slug": "quarkus"
   },
   {
-   "@id": "/skills/183",
-   "@type": "Skill",
    "id": 183,
    "displayed": true,
    "skillJobs": [
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/c7a965b207054a3a4613",
      "skill": "/skills/183",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/69",
       "id": 69,
       "nameForContribution": "Consultant·e Microsoft (Office, SharePoint, 365...)",
       "nameForContributionSlug": "consultant-microsoft-sharepoint-365",
@@ -657,12 +516,8 @@
      "description": "Le/ La consultant·e Microsoft spécialisé·e dans SharePoint aide les entreprises à implémenter et à personnaliser des solutions SharePoint, permettant une gestion efficace de l'information et de la collaboration au sein des équipes."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/727438d2aac2253a2330",
      "skill": "/skills/183",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/2",
       "id": 2,
       "nameForContribution": "Administrateur·rice d'application (progiciel ERP, CRM, SIRH ...)",
       "nameForContributionSlug": "administrateur-applicatif-erp-crm-sirh",
@@ -675,12 +530,8 @@
      "description": "L'administrateur·rice d'application gère et maintient les systèmes SharePoint, s'assurant de leur disponibilité, de leur sécurité et de leur bon fonctionnement au sein de l'organisation."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/eb4b07729a3cceaed251",
      "skill": "/skills/183",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/88",
       "id": 88,
       "nameForContribution": "Développeur·euse / Intégrateur·rice de progiciel (ERP, CRM, Dynamics, Oracle, Salesforce, SAP, Sage, SharePoint, Sybase...)",
       "nameForContributionSlug": "developpeur-integrateur-dapplication-erp-crm-dynamics-oracle-salesforce-sap-sage-sharepoint-sybase",
@@ -693,12 +544,8 @@
      "description": "Le/ La développeur·euse / intégrateur·rice de progiciel utilise SharePoint pour intégrer des solutions de gestion documentaire, de collaboration et de workflow dans le système d'information d'une entreprise."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/3836e0f0c336568cf803",
      "skill": "/skills/183",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/150",
       "id": 150,
       "nameForContribution": "Responsable / Gestionnaire d'application",
       "nameForContributionSlug": "responsable-gestionnaire-dapplication",
@@ -715,18 +562,12 @@
    "slug": "sharepoint"
   },
   {
-   "@id": "/skills/188",
-   "@type": "Skill",
    "id": 188,
    "displayed": true,
    "skillJobs": [
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/bea2a502f334873e1717",
      "skill": "/skills/188",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/83",
       "id": 83,
       "nameForContribution": "Développeur·euse Java (Kotlin, Groovy...)",
       "nameForContributionSlug": "developpeur-java-kotlin-groovy-scala",
@@ -739,12 +580,8 @@
      "description": "Le/ La Développeur·euse Java (Kotlin, Groovy...) utilise le framework Spring pour créer des applications Java robustes, que ce soit pour le développement de services web, des applications backend, ou des applications microservices."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/884b07d39e65cc56bf86",
      "skill": "/skills/188",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/81",
       "id": 81,
       "nameForContribution": "Développeur·euse fullstack",
       "nameForContributionSlug": "developpeur-fullstack",
@@ -757,12 +594,8 @@
      "description": "Le/ La Développeur·euse fullstack intègre Spring avec des technologies front-end pour développer des applications web complètes. Il ou elle utilise Spring pour le côté serveur et l'API REST, tout en s'assurant de l'intégration fluide avec le front-end."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/83a4a951969f1b6bcd8f",
      "skill": "/skills/188",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/71",
       "id": 71,
       "nameForContribution": "Consultant·e technique",
       "nameForContributionSlug": "consultant-technique",
@@ -775,12 +608,8 @@
      "description": "Le/ La Consultant·e technique aide les entreprises à concevoir et à mettre en œuvre des solutions basées sur Spring, en choisissant les bonnes architectures et en adaptant Spring pour répondre aux besoins spécifiques des projets."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/469e027cd44078e18a08",
      "skill": "/skills/188",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/29",
       "id": 29,
       "nameForContribution": "Architecte solutions",
       "nameForContributionSlug": "architecte-solutions",
@@ -797,18 +626,12 @@
    "slug": "spring"
   },
   {
-   "@id": "/skills/372",
-   "@type": "Skill",
    "id": 372,
    "displayed": true,
    "skillJobs": [
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/4b5ab8922f82fad27938",
      "skill": "/skills/372",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/91",
       "id": 91,
       "nameForContribution": "Développeur·euse front-end (JavaScript, Node, React, Angular, Vue...)",
       "nameForContributionSlug": "developpeur-front-end-javascript-node-react-angular-vue",
@@ -821,12 +644,8 @@
      "description": "Le/ La Développeur·euse front-end (JavaScript, Node, React, Angular, Vue...) utilise TypeScript pour développer des applications web robustes et évolutives, en ajoutant une couche de typage statique au JavaScript pour améliorer la qualité du code."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/0160a327a9e1a50f0291",
      "skill": "/skills/372",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/81",
       "id": 81,
       "nameForContribution": "Développeur·euse fullstack",
       "nameForContributionSlug": "developpeur-fullstack",
@@ -839,12 +658,8 @@
      "description": "Le/ La Développeur·euse fullstack utilise TypeScript pour travailler sur le développement d'applications web côté serveur (back-end) et côté client (front-end), garantissant la cohérence du code et une meilleure gestion des erreurs."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/b77c2c255d3148f9a0ea",
      "skill": "/skills/372",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/77",
       "id": 77,
       "nameForContribution": "Développeur·euse mobile Android",
       "nameForContributionSlug": "developpeur-mobile-android",
@@ -857,12 +672,8 @@
      "description": "Le/ La Développeur·euse mobile (Android, iOS) utilise TypeScript en combinaison avec des frameworks comme React Native pour développer des applications mobiles cross-platform tout en bénéficiant des avantages du typage statique."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/a99525977769157a0734",
      "skill": "/skills/372",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/82",
       "id": 82,
       "nameForContribution": "Développeur·euse mobile iOS (Swift, Objective-C...)",
       "nameForContributionSlug": "developpeur-mobile-ios-swift-objective-c",
@@ -875,12 +686,8 @@
      "description": "Le/ La Développeur·euse mobile (Android, iOS) utilise TypeScript en combinaison avec des frameworks comme React Native pour développer des applications mobiles cross-platform tout en bénéficiant des avantages du typage statique."
     },
     {
-     "@type": "SkillJob",
-     "@id": "/.well-known/genid/355ba68eb754a090e087",
      "skill": "/skills/372",
      "job": {
-      "@type": "Job",
-      "@id": "/jobs/136",
       "id": 136,
       "nameForContribution": "Lead developer / Tech lead",
       "nameForContributionSlug": "lead-developer",
@@ -907,8 +714,6 @@
  "locale": "fr_FR",
  "premium": false,
  "applicationForm": {
-  "@id": "/application_forms/3550",
-  "@type": "ApplicationForm",
   "id": 3550,
   "questions": []
  },
