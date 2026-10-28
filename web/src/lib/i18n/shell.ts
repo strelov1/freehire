@@ -21,11 +21,9 @@ export const messages = defineMessages(
       '/my/mentorship': 'Mentorship',
       '/my/notifications': 'Notifications',
       '/my/integrations': 'Integrations',
-      '/my/submissions': 'My submissions',
       '/my/contributions': 'Contributions',
       '/my/employer': 'Employer',
       '/my/plan': 'Plan',
-      '/my/invite': 'Invite a friend',
       '/my/security': 'Security',
     },
     shell: {
@@ -55,16 +53,14 @@ export const messages = defineMessages(
         '/my/notifications': 'Уведомления',
         '/my/integrations': 'Интеграции',
         // Vacancies the user submitted for review — not posts they published.
-        '/my/submissions': 'Мои вакансии',
         // The section is "Contribute a board": paste a job link so we crawl a
         // board we don't have yet. A literal "Вклад" says nothing about that.
-        '/my/contributions': 'Добавить борд',
+        '/my/contributions': 'Вклад',
         '/my/employer': 'Работодатель',
         '/my/plan': 'Тариф',
         // "Пригласить друга" and not "Рефералы": that word is taken by the
         // employee-referral marketplace above, and two sections sharing a name
         // is a menu nobody can navigate.
-        '/my/invite': 'Пригласить друга',
         '/my/security': 'Безопасность',
       },
       shell: {

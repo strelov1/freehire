@@ -182,7 +182,7 @@
 {:else}
   <div class="flex flex-col gap-6">
     <div class="flex flex-col gap-1">
-      <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
+      <h2 class="text-lg font-semibold tracking-tight">{s.title}</h2>
       <p class="text-sm text-muted-foreground">{s.description}</p>
     </div>
 

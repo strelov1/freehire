@@ -58,20 +58,17 @@ export const accountNav = [
   // alerts carry). Each connection's own domain page keeps a short status line pointing
   // here instead of duplicating the connect/disconnect UI.
   { href: '/my/integrations', label: 'Integrations' },
-  { href: '/my/submissions', label: 'My submissions' },
-  // Paste a job link we don't have yet; a supported, novel link adds a board we don't crawl.
+  // What a member adds to the catalogue, as two tabs: a job link we don't have yet (a
+  // supported, novel link adds a board we don't crawl), and the vacancies they posted.
   { href: '/my/contributions', label: 'Contributions' },
   // Claim a company, manage its curated profile, and publish its own vacancies directly.
   // Open to every signed-in user — the claim step is what gates real access, not the nav.
   { href: '/my/employer', label: 'Employer' },
   // The plan's daily allowances and what they were spent on (analyses, CV editing,
-  // contribution rewards).
+  // contribution rewards), plus a tab with the account's own invite link and what it has
+  // earned. The tab is named "Invite" and not "Referrals" because that word is taken above
+  // by the employee-referral marketplace, an unrelated feature.
   { href: '/my/plan', label: 'Plan' },
-  // The account's own invite link and what it has earned. Named "Invite" and not
-  // "Referrals" because that word is taken above by the employee-referral marketplace,
-  // which is an unrelated feature — two sections sharing a name would be a menu nobody
-  // can navigate.
-  { href: '/my/invite', label: 'Invite a friend' },
   // Email, password and sessions: change the address or the password, and sign out
   // everywhere when a device is lost or a session is suspect.
   { href: '/my/security', label: 'Security' },

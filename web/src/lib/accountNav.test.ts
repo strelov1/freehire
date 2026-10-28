@@ -2,8 +2,17 @@ import { describe, it, expect } from 'vitest';
 import { accountNav, isSectionActive, visibleAccountNav } from './accountNav';
 
 describe('accountNav config', () => {
-  it('lists the nineteen account sections', () => {
-    expect(accountNav).toHaveLength(19);
+  it('lists the seventeen account sections', () => {
+    expect(accountNav).toHaveLength(17);
+  });
+
+  // Submissions and the invite link are tabs of Contributions and Plan now; their old
+  // sections redirect.
+  it('reaches submissions and the invite link through their parent sections', () => {
+    const hrefs: string[] = accountNav.map((i) => i.href);
+    expect(hrefs).toEqual(expect.arrayContaining(['/my/contributions', '/my/plan']));
+    expect(hrefs).not.toContain('/my/submissions');
+    expect(hrefs).not.toContain('/my/invite');
   });
 
   // API keys and the webhook are tabs of Integrations now; their old sections redirect.

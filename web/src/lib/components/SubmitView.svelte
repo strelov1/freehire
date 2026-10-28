@@ -253,7 +253,7 @@
           Thanks — <span class="font-medium">{submitted.title}</span> at
           <span class="font-medium">{submitted.company}</span> was submitted and is awaiting review.
           You can track it under
-          <a href={resolve('/my/submissions')} class="underline">My submissions</a>.
+          <a href={resolve('/my/contributions/vacancies')} class="underline">My submissions</a>.
         </div>
       </div>
     {/if}

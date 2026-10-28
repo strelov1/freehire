@@ -31,5 +31,5 @@ export const accountLinks = [
   { href: '/my/cvs', label: 'Tailor', icon: ScrollText },
   { href: '/my/notifications/searches', label: 'Search alerts', icon: BellRing },
   { href: '/my/integrations/api-keys', label: 'API keys', icon: KeyRound },
-  { href: '/my/submissions', label: 'My submissions', icon: FileText },
+  { href: '/my/contributions/vacancies', label: 'My submissions', icon: FileText },
 ] as const satisfies readonly HeaderAccountLink[];
