@@ -158,6 +158,8 @@ type drItem struct {
 type drPosting struct {
 	id, url string
 	item    drItem
+	// shell marks an item listed without a slug, whose page cannot be read (see list).
+	shell bool
 }
 
 // drDetail is one posting from the job-ad endpoint, the fields the adapter maps.
@@ -217,6 +219,8 @@ func (s digitalrecruiters) FetchNew(ctx context.Context, e CompanyEntry, seen fu
 		switch {
 		case seen(p.id):
 			jobs = append(jobs, Job{ExternalID: p.id, URL: p.url, Title: strings.TrimSpace(p.item.Title), Company: e.Company, SeenRefresh: true})
+		case p.shell:
+			// Nothing to buy: an unstored shell has no page.
 		case len(fresh) < s.maxNewPerRun:
 			fresh = append(fresh, p)
 		default:
@@ -341,25 +345,36 @@ func (s digitalrecruiters) list(ctx context.Context, board, locale, pathLocale s
 	}
 	var out []drPosting
 	seen := map[int64]bool{}
-	unusable := 0
+	usable, unusable := 0, 0
 	for _, it := range items {
 		if !strings.EqualFold(strings.TrimSpace(it.CareerDomain), board) || seen[it.JobAdID] {
 			continue // another site's posting this one aggregates, or a second address of one
 		}
 		// A listed ad can be an empty shell — no slug and no title (emploi.o2recrute.fr's
-		// 4636315, 2026-10-28) — whose page the site cannot render. It is skipped, not taken for
-		// a broken listing: failing the board would stop the site's every other posting too.
-		if it.JobAdID <= 0 || !drSlug.MatchString(it.URL) {
+		// 4636315, 2026-10-28) — whose page the site cannot render. Failing the board over it
+		// would stop the site's every other posting too, so it is kept as a shell: if the
+		// catalogue already holds that id (a posting whose slug went missing later) its liveness
+		// is refreshed, and otherwise nothing is bought for it.
+		if it.JobAdID <= 0 {
 			unusable++
 			continue
 		}
 		seen[it.JobAdID] = true
-		page := url.URL{Scheme: "https", Host: board, Path: "/" + pathLocale + "/annonce/" + it.URL}
-		out = append(out, drPosting{id: strconv.FormatInt(it.JobAdID, 10), url: page.String(), item: it})
+		p := drPosting{id: strconv.FormatInt(it.JobAdID, 10), item: it}
+		if drSlug.MatchString(it.URL) {
+			page := url.URL{Scheme: "https", Host: board, Path: "/" + pathLocale + "/annonce/" + it.URL}
+			p.url = page.String()
+			usable++
+		} else {
+			p.shell = true
+			p.url = (&url.URL{Scheme: "https", Host: board, Path: "/" + pathLocale + "/annonces"}).String()
+			unusable++
+		}
+		out = append(out, p)
 	}
 	if unusable > 0 {
-		log.Printf("digitalrecruiters: listing %s: skipped %d item(s) with no usable id or slug", board, unusable)
-		if len(out) == 0 {
+		log.Printf("digitalrecruiters: listing %s: %d item(s) with no usable id or slug", board, unusable)
+		if usable == 0 {
 			return nil, fmt.Errorf("digitalrecruiters: listing %s: none of its %d own items has a usable id or slug", board, unusable)
 		}
 	}

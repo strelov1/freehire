@@ -273,6 +273,20 @@ func TestDigitalrecruitersSkipsAnEmptyShellItem(t *testing.T) {
 	if err != nil || len(jobs) != 1 || jobs[0].ExternalID != "4664997" {
 		t.Fatalf("jobs=%+v err=%v; want the one usable posting", jobs, err)
 	}
+	// A shell the catalogue already holds (its slug went missing later) stays alive.
+	jobs, err = newDRTest(f).FetchNew(context.Background(), CompanyEntry{Board: drTestBoard}, func(id string) bool { return id == "4636315" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshed := false
+	for _, j := range jobs {
+		if j.ExternalID == "4636315" {
+			refreshed = j.SeenRefresh
+		}
+	}
+	if !refreshed {
+		t.Fatalf("a stored posting listed without a slug must be refreshed, got %+v", jobs)
+	}
 	f.bodies[drListingPath] = `{"count": 1, "items": [{"job_ad_id": 4636315, "url": "", "career_domain": "recrute.ouicare.com"}]}`
 	if _, err := newDRTest(f).Fetch(context.Background(), CompanyEntry{Board: drTestBoard}); err == nil {
 		t.Fatal("a listing whose own items are ALL unusable must fail the crawl")
