@@ -136,6 +136,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `reality` | Posting reality | fresh, stale, likely-evergreen |
 | `salary_currency` | Currency | USD, EUR, GBP, RUB |
 | `company_slug` | Company | Open vocabulary — call /jobs/facets for live values |
+| `source_type` | Source type | ats, company, aggregator, social |
 | `source` | Source | Open vocabulary — call /jobs/facets for live values |
 | `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |
 | `education_level` | Education level | none, bachelor, master, phd |
