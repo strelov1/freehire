@@ -310,7 +310,9 @@ func freeworkJob(d freeworkDetail, c freeworkCard) (Job, bool) {
 		j.Company = co
 	}
 	body := strings.TrimSpace(d.Description)
-	if p := strings.TrimSpace(d.CandidateProfile); p != "" {
+	// Some posters paste the profile into the description too; it is appended only when the
+	// description does not already carry it.
+	if p := strings.TrimSpace(d.CandidateProfile); p != "" && !strings.Contains(body, p) {
 		body += "\n<h2>Profil recherché</h2>\n" + p
 	}
 	j.Description = sanitizeHTML(body)

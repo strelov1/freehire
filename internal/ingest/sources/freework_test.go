@@ -105,8 +105,9 @@ func TestFreeWorkHydratesNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	if j.Company != "R&S TELECOM" {
 		t.Errorf("company = %q", j.Company)
 	}
-	if !strings.Contains(j.Description, "Profil recherché") || !strings.Contains(j.Description, "<") {
-		t.Errorf("description lost the profile or its markup: %.200q", j.Description)
+	// This posting's description already carries its profile, which must not be appended twice.
+	if strings.Count(j.Description, "<h2>Profil recherché</h2>") != 0 || !strings.Contains(j.Description, "<") {
+		t.Errorf("description repeated the profile or lost its markup: %.200q", j.Description)
 	}
 	if j.URL != freeworkSite+"developpeur-java-kotlin-groovy-scala/developpeur-data-stage-python-java" {
 		t.Errorf("url = %q", j.URL)
@@ -218,6 +219,15 @@ func TestFreeWorkLaterListingFailureFailsTheCrawl(t *testing.T) {
 	f := &freeworkFake{laterErr: errors.New("502")}
 	if _, err := newTestFreeWork(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
 		t.Fatal("a failed second listing page did not fail the crawl")
+	}
+}
+
+func TestFreeWorkAppendsAProfileTheDescriptionLacks(t *testing.T) {
+	d := freeworkDetail{Description: "<p>Missions</p>", CandidateProfile: "<p>Java, 5 ans</p>"}
+	d.Title, d.Company.Name = "Développeur Java", "CELAD"
+	j, ok := freeworkJob(d, freeworkCard{ID: 1, Slug: "dev-java"})
+	if !ok || !strings.Contains(j.Description, "Profil recherché") || !strings.Contains(j.Description, "Java, 5 ans") {
+		t.Errorf("profile not appended: %q", j.Description)
 	}
 }
 
