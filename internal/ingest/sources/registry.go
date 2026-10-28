@@ -489,6 +489,9 @@ func All(c HTTPClient) map[string]Source {
 		// Viterbit (Spain): board = the <label>.viterbit.site career site; Cloudflare-challenged, so
 		// on the crawl host it is rebuilt over the Scrapling tier (scraplingtier.go).
 		NewViterbit(c),
+		// Talent Clue (Spain): board = the customer's 32-hex client id the platform's widget reads
+		// its listing with; bodies hydrated for new postings only, at robots.txt's 10 s crawl delay.
+		NewTalentclue(c),
 		NewGreytHR(c),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
 		NewHelixjobs(limitedHelixjobsGetter(c)),
