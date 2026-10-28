@@ -478,11 +478,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   spainjobs: 'SpainJobs.io',
   infoempleo: 'Infoempleo',
   bumeran: 'Bumeran',
-<<<<<<< HEAD
   freework: 'Free-Work',
-=======
   cadremploi: 'Cadremploi',
->>>>>>> 5da9106ce (Add the Cadremploi adapter (France, managers and professionals))
   itjobs: 'ITJobs.pt',
   feinaactiva: 'Feina Activa',
   turijobs: 'Turijobs',
