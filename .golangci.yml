@@ -199,6 +199,22 @@ linters:
         - confidencial
         - administr
         - hybrides
+        # French title vocabulary (internal/dict/classify/french.go).
+        - affaires
+        - ambulancier
+        - analyste
+        - apprentie
+        - architecte
+        - artificiel
+        - assistantes
+        - chambre
+        - commandes
+        - electricien
+        - industriel
+        - partiel
+        - procede
+        - procedes
+        - restauration
         - instruktor
         - informatike
         - infrastrukture

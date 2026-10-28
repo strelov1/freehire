@@ -59,7 +59,9 @@ func TestParse(t *testing.T) {
 		// the accent-folded title.
 		{"Engenheira de Software Sênior", "senior", "software_engineering"},
 		{"Développeur Java (H/F)", "", "software_engineering"},
-		{"Développeur.euse senior (C#/React)", "senior", ""},
+		// The French fallback (french.go) reads the bare noun once the business and
+		// property developers are vetoed.
+		{"Développeur.euse senior (C#/React)", "senior", "software_engineering"},
 		{"Softwareentwickler (m/w/d)", "", "software_engineering"},
 		{"Software-Entwickler (m/w/d)", "", "software_engineering"},
 		{"SPS-Programmierer (m/w/d)", "", ""},

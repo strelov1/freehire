@@ -391,6 +391,58 @@ personio, bamboohr, landingjobs): title category 43.1% → 77.9% (BR) and 64.0% 
 (pandapelatam, infojobs, eures, personio, greenhouse, whatjobs-uk/it/fr) 77 changed,
 all hand-checked (Spanish "logístico", French "Sénior", "RH").
 
+## French heads and fields
+
+French titles have the Spanish shape — "Technicien de maintenance", "Conseiller de vente",
+"Chargé de recrutement", "Agent de quai" — with almost none of its words. `french.go`
+holds `frenchCategoryTable` in the Spanish bands (head and field exceptions, role nouns,
+fields, desk heads) and runs LAST, after the Portuguese table. Its aliases live in the
+space `foldFrench` maps a title into: accents dropped, every gender notice cut ("(H/F)",
+"F/H", "(e)", "·ne", ".e", "/euse") and each feminine word folded onto its masculine
+("développeuse", "conseillère", "chargée", "commerciale"); `TestFrenchAliasesAreFolded`
+holds every alias to that space. Before it the main table is asked again of the
+gender-cut title ("Ingénieur·e DevOps").
+
+It reads only a title that looks French (`looksFrench`: a gender notice, a French
+accent, an elided article, a French function word, or a French-only head noun), because
+many of its words are English too — commercial, assistant, agent, boutique, maintenance.
+"Stage" is no such cue (English "Early Stage", Dutch "stage"). Workplace words (bank,
+insurer, hotel, shop, haulier, laboratory) sit in `frenchWorkplaceTable`, consulted only
+when the title names no technical work: on "Tech Lead Java - Transport" the transport is
+the client's sector.
+
+Two fixes reach the MAIN table's reading of French titles. "Chef de/d'/des X" is any
+lead in French ("Chef de projet", "Chef d'équipe", "Chef de rayon"), but the main table's
+`chef` is a cook: `unchefFrench` rewrites every non-kitchen one (partie, cuisine, rang,
+salle, bar… keep it) to "cheffe" before the main walk — it was filing ~900 French titles
+under hospitality. And the electrician's "CFO" (courants forts, beside CFA) is rewritten
+on a French title that names electrical or building work, so "Technicien de maintenance
+CFO/CFA" is no longer finance. The German `-monteur` gives way to the French video editor.
+
+The bare "développeur" resolves here, after the business, property, territorial and
+network developers are vetoed. A generic head with no field — technicien, assistant,
+agent, chargé, responsable, gestionnaire, conseiller, consultant, ingénieur, directeur —
+resolves nothing. Switzerland's "employé de commerce" is the office apprenticeship
+(administration); Belgium's "technicien de surface" cleans; Québec's grocery clerk is
+headed by the department ("Épicerie Commis").
+
+Grades (`frenchSeniorityTable`): stage/stagiaire, alternance/alternant, apprenti and the
+professionalisation contract are intern and outrank the lead; `confirmé` is middle;
+`débutant` and `jeune diplômé` junior; `chef d'équipe`, `chef de groupe` and `responsable
+d'équipe` lead. "Chef de projet", responsable, manager, directeur and expert state no
+grade; only the general, executive and financial directors (and the PDG) are c_level.
+The assistant of an executive and the desk that runs the trainee programmes
+("Responsable alternance") are cut first.
+
+Measured 2026-10-28 over 24,609 open French-language postings (wttj, flatchr, werecruit,
+smartrecruiters, teamtailor, workday, eures, recruitee, lever, join, workable,
+greenhouse, personio; whatjobs excluded, it is already categorised): category 20.5% →
+72.8%, seniority 11.9% → 27.0%. Over 16,000 control titles (coveto, infojobs, gupy,
+greenhouse, workday, paylocity, join, pandapelatam) 62 changed, all French, Spanish or
+Portuguese titles read correctly. Still unresolved: a franchise's "Entrepreneur / City
+manager immobilier" postings, "Boulanger" (English "Baker" resolves nothing either), and
+generic heads with no field.
+
 ## Serving: dict-only
 
 `jobview.FromRow` overwrites the nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM's value is never a fallback. They remain **nested under `enrichment`** so existing search facets, SPA, and generated contracts are unchanged.

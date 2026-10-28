@@ -210,6 +210,13 @@ var germanCategoryTable = []aliasEntry{
 	{"-elektriker", "skilled_trades"},
 	{"-elektrofachkraft", "skilled_trades"},
 	{"-mechaniker", "skilled_trades"},
+	// The French video editor ("Monteur vidéo", "Cadreur-monteur") cuts film, not
+	// steel: French titles reach this table too.
+	{"monteur vidéo", "creative"},
+	{"monteur video", "creative"},
+	{"monteuse vidéo", "creative"},
+	{"cadreur-monteur", "creative"},
+	{"cadreur monteur", "creative"},
 	{"-monteur", "skilled_trades"},
 	{"-installateur", "skilled_trades"},
 	{"-schlosser", "skilled_trades"},

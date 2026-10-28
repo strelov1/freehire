@@ -1720,10 +1720,10 @@ var coreCategoryTable = []aliasEntry{
 	{"engenheira de software", "software_engineering"},
 	{"desenvolvedor java", "software_engineering"},
 	{"desenvolvedora java", "software_engineering"},
-	// French. No bare "développeur": it also names a real-estate/regional-economic
-	// developer in French job titles, so only the language- and software-anchored
-	// forms below resolve — a bare "Développeur" (or the inclusive "développeur.euse"
-	// spelling) with no qualifier stays unresolved rather than guessed.
+	// French. No bare "développeur" here: it also names a real-estate, regional-economic
+	// or business developer in French job titles. The French fallback (french.go) reads
+	// the bare noun only after vetoing those ("Développeur foncier", "Développeur
+	// commercial"), so it never reaches an English or Dutch title.
 	{"ingénieur logiciel", "software_engineering"},
 	{"développeur java", "software_engineering"},
 	{"développeur salesforce", "software_engineering"},
