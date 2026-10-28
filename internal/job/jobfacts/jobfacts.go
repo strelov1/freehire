@@ -67,14 +67,18 @@ var (
 	// alternants", "apprentissage automatique". The bare "stage" is English as well
 	// ("Early Stage", "Stage Manager"), so a title counts it only as a French label.
 	reTraineeTitleFR = regexp.MustCompile(`\b(stagiaire|alternance|alternante?|apprentie?|en apprentissage)\b|(?:^|[\-–|(:/]\s*)stage\b|\bstage\s*(?:$|[\-–|):/])|\bstage (?:de|d'|en)\b`)
-	reEnglishStage   = regexp.MustCompile(`\b(?:early|seed|late|growth|multi|pre-?seed)[\s-]stage\b|\bstage[\s-](?:manager|hand|door|crew|technician)\b`)
-	reTraineeBodyFR  = regexp.MustCompile(`\b(convention de stage|stage de fin d'[ée]tudes|stage de \d+ mois|stage conventionn[ée]|offre de stage|contrat d'apprentissage|contrat de professionnalisation)\b`)
+	// reEnglishStage cuts what a title may say that is no trainee: the English stage and
+	// its crafts, and French machine learning ("apprentissage automatique").
+	reEnglishStage = regexp.MustCompile(`\b(?:early|seed|late|growth|multi|pre-?seed)[\s-]stage\b|\bstage[\s-](?:manager|hand|door|crew|technician|director|designer|electrician|carpenter|rigger|lighting|sound|production|management|coordinator|supervisor|combat)\b|\bapprentissage automatique\b`)
+	// The phrases end on a letter RE2's \b cannot see past ("conventionné"), so the end
+	// is spelled out.
+	reTraineeBodyFR = regexp.MustCompile(`\b(convention de stage|stage de fin d'[ée]tudes|stage de \d+ mois|stage conventionn[ée]e?|offre de stage|contrat d'apprentissage|contrat de professionnalisation)(?:$|[^\p{L}\p{N}_])`)
 	// The hours count as a label ("CDI à temps partiel", "Type d'emploi : Temps plein",
 	// "Temps partiel 24h") or in the title, not as prose: "temps plein ou temps partiel",
 	// "forfait jours, temps partiel…" in a perks list, "professionnels à temps partiel".
-	rePartTimeFR   = regexp.MustCompile(`\b(?:cdi|cdd|poste|contrat|emploi)\s*(?::\s*)?(?:à |a |en )?(?:temps[ -]partiel|mi-temps)\b|\b(?:temps[ -]partiel|mi-temps)\s*(?:[(:\-–]\s*)?\d{1,2}\s*h\b`)
+	rePartTimeFR   = regexp.MustCompile(`\b(?:cdi|cdd|poste|contrat|emploi)\s*(?:[:\-–]\s*)?(?:à |a |en )?(?:temps[ -]partiel|mi-temps)\b|\b(?:temps[ -]partiel|mi-temps)\s*(?:[(:\-–]\s*)?\d{1,2}\s*h\b`)
 	reContractFR   = regexp.MustCompile(`\b(cdd|int[ée]rimaire|mission d'int[ée]rim|en int[ée]rim)\b|\bintérim\b`)
-	reFullTimeFR   = regexp.MustCompile(`\bcdi\b|\b(?:cdd|poste|contrat|emploi)\s*(?::\s*)?(?:à |a |en )?temps[ -](?:plein|complet)\b`)
+	reFullTimeFR   = regexp.MustCompile(`\bcdi\b|\b(?:cdd|poste|contrat|emploi)\s*(?:[:\-–]\s*)?(?:à |a |en )?temps[ -](?:plein|complet)\b`)
 	reHoursTitleFR = regexp.MustCompile(`\b(temps[ -]partiel|mi-temps|temps[ -]plein|temps[ -]complet)\b`)
 	// reFellowshipStaffRole excludes a "fellowship" mention that names the staff job
 	// running the program rather than the fellow's own position — e.g. "Fellowship
@@ -90,31 +94,43 @@ var (
 // returning one of vocab.EmploymentTypeValues or "" when nothing is stated. It
 // never assumes full-time for an unstated posting.
 func EmploymentType(title, description string) string {
-	s := strings.ReplaceAll(strings.ToLower(title+"\n"+description), "’", "'")
+	t := strings.ReplaceAll(strings.ToLower(title), "’", "'")
+	s := t + "\n" + strings.ReplaceAll(strings.ToLower(description), "’", "'")
 	switch {
 	case reFellowship.MatchString(s) && !reFellowshipStaffRole.MatchString(s):
 		return "fellowship"
-	case reInternship.MatchString(s) || reTraineeBodyFR.MatchString(s) || frenchTraineeTitle(title):
+	case reInternship.MatchString(s) || reTraineeBodyFR.MatchString(s) || frenchTraineeTitle(t):
 		return "internship"
-	case rePartTime.MatchString(s) || rePartTimeFR.MatchString(s) || frenchHoursTitle(title) == "part_time":
+	}
+	// A French title's own label is the advertised role's, and outranks a body that may
+	// describe the employer's other roles ("Développeur en CDI" beside "notre agence
+	// recrute en CDD et en intérim").
+	if h := frenchHoursTitle(t); h != "" {
+		return h
+	}
+	switch {
+	case rePartTime.MatchString(s) || rePartTimeFR.MatchString(s):
 		return "part_time"
+	case reContractFR.MatchString(t):
+		return "contract"
+	case reFullTimeFR.MatchString(t):
+		return "full_time"
 	case reContract.MatchString(s) || reContractShorthand.MatchString(s) || reContractFR.MatchString(s):
 		return "contract"
-	case reFullTime.MatchString(s) || reFullTimeFR.MatchString(s) || frenchHoursTitle(title) == "full_time":
+	case reFullTime.MatchString(s) || reFullTimeFR.MatchString(s):
 		return "full_time"
 	}
 	return ""
 }
 
-// frenchTraineeTitle reports whether a title names a French trainee contract.
-func frenchTraineeTitle(title string) bool {
-	t := reEnglishStage.ReplaceAllString(strings.ToLower(title), " ")
-	return reTraineeTitleFR.MatchString(t)
+// frenchTraineeTitle reports whether a lowercased title names a French trainee contract.
+func frenchTraineeTitle(t string) bool {
+	return reTraineeTitleFR.MatchString(reEnglishStage.ReplaceAllString(t, " "))
 }
 
-// frenchHoursTitle returns the hours a French title states, "" when none.
+// frenchHoursTitle returns the hours a lowercased French title states, "" when none.
 func frenchHoursTitle(title string) string {
-	m := reHoursTitleFR.FindString(strings.ToLower(title))
+	m := reHoursTitleFR.FindString(title)
 	switch {
 	case m == "":
 		return ""

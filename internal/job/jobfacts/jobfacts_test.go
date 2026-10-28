@@ -54,6 +54,13 @@ func TestEmploymentType(t *testing.T) {
 		{"machine learning", "Data Scientist", "Connaissances en apprentissage automatique.", ""},
 		{"english stage", "Account Executive - Early Stage", "Join an early-stage startup.", ""},
 		{"stage manager", "Stage Manager", "Run the theatre's productions.", ""},
+		{"stage director", "Stage Director", "Direct the season's productions.", ""},
+		{"machine learning title", "Ingénieur en apprentissage automatique", "Concevoir des modèles.", ""},
+		{"stage conventionne", "Assistant marketing", "Stage conventionné, 6 mois.", "internship"},
+		{"curly apostrophe title", "Assistant en stage d’hiver", "Rejoignez l'équipe.", "internship"},
+		{"hyphenated hours label", "Vendeur", "Contrat : CDI - temps partiel.", "part_time"},
+		{"title contract beats the employer's other roles", "Développeur en CDI", "Notre agence recrute en CDD et en intérim.", "full_time"},
+		{"title hours beat other prose", "Vendeur temps plein", "Nous avons aussi un poste à temps partiel.", "full_time"},
 		{"fellowship mention far from staff word still counts", "AI Policy Fellowship", strings.Repeat("Research the impact of AI governance policy. ", 20) + "Reports to the Program Manager.", "fellowship"},
 	}
 	for _, c := range cases {
