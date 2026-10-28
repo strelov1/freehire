@@ -392,6 +392,13 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"dvinci-hr", "dvinci", modeHost},
 	{"dvinci-easy", "dvinci", modeHost},
 	{"dvinci", "dvinci", modeHost}, // <tenant>.dvinci.de, the vendor's third domain (bomag.dvinci.de)
+	// Talentsoft / Cegid Talent (France): every customer runs one ASP.NET career site on its own
+	// host — <tenant>.talent-soft.com, <tenant>.profils.org (the vendor's older domain) or an
+	// employer domain — and the adapter reads <board>/offre-de-emploi/liste-toutes-offres.aspx,
+	// so the board is the whole host. Labels carry the tenant's own suffix (edf-recrute,
+	// framatome-career, dassault-aviation-cand), which is why the host and not a label is kept.
+	{"talent-soft.com", "talentsoft", modeHost},
+	{"profils.org", "talentsoft", modeHost},
 	// Bizneo HR (Spain): a career site is a host under bizneo.cloud — usually
 	// <company>.careers.ats.bizneo.cloud, sometimes a vanity label (jobs.abeienergy.bizneo.cloud) —
 	// and the adapter lists <board>/jobs, so the board is the whole host. The vendor's bizneo.com

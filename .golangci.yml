@@ -210,6 +210,9 @@ linters:
         # Catalan/Spanish words in the Feina Activa adapter's salary line and fixture.
         - anual
         - individuales
+        # French contract labels in the Talentsoft adapter ("temps partiel", "indépendant").
+        - partiel
+        - independant
         # Argentine place names (internal/dict/location/location_ar.go).
         - microcentro
         - constitucion

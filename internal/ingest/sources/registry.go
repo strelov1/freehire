@@ -495,6 +495,10 @@ func All(c HTTPClient) map[string]Source {
 		// Velora HR (Spain): board = the numeric career-site id its public API is keyed by; the
 		// listing carries every body, so a crawl is two requests per board.
 		NewVelorahr(c),
+		// Talentsoft / Cegid Talent (France): board = the careers HOST (<tenant>.talent-soft.com,
+		// <tenant>.profils.org or the employer's own domain); paced per site and across the vendor,
+		// bodies hydrated for new postings only.
+		NewTalentsoft(c),
 		NewGreytHR(c),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
 		NewHelixjobs(limitedHelixjobsGetter(c)),

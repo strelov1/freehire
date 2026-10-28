@@ -440,6 +440,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   viterbit: 'Viterbit',
   talentclue: 'Talent Clue',
   velorahr: 'Velora HR',
+  talentsoft: 'Talentsoft',
   darwinbox: 'Darwinbox',
   greythr: 'greytHR',
   helixjobs: 'helixjobs',
