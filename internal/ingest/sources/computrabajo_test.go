@@ -20,6 +20,9 @@ type computrabajoFake struct {
 	filterErr error
 	// provinceErr fails every province page but La Rioja's first.
 	provinceErr error
+	// challenge answers every page past La Rioja's first with a cardless 200 that is not the
+	// site's empty result.
+	challenge bool
 
 	mu   sync.Mutex
 	urls []string
@@ -49,6 +52,9 @@ func (f *computrabajoFake) GetHTML(_ context.Context, u string) (*html.Node, err
 			return nil, f.provinceErr
 		}
 		path = "testdata/computrabajo/empty.html"
+		if f.challenge {
+			path = "testdata/computrabajo/challenge.html"
+		}
 	case strings.HasSuffix(u, ctGlobalMedica), strings.HasSuffix(u, ctSserrano):
 		path = "testdata/computrabajo/posting_" + u[len(u)-32:] + ".html"
 	default:
@@ -199,6 +205,53 @@ func TestComputrabajoSalary(t *testing.T) {
 		got, ok := computrabajoSalary(in)
 		if got != want || ok != (want > 0) {
 			t.Errorf("computrabajoSalary(%q) = %d %v, want %d", in, got, ok, want)
+		}
+	}
+}
+
+// A cardless 200 that is not the site's own empty result (an edge challenge) must not pass for the
+// end of a province: the walk would report a short listing as a whole one.
+func TestComputrabajoChallengePageFailsTheCrawl(t *testing.T) {
+	f := &computrabajoFake{challenge: true}
+	if _, err := newTestComputrabajo(f).FetchNew(context.Background(), ctEntry, func(string) bool { return true }); err == nil {
+		t.Fatal("a challenge page was read as the end of the listing")
+	}
+}
+
+// The budget goes to the freshest card first: La Rioja lists two promoted cards days old ahead of
+// Grupo Ceta's, seven hours old.
+func TestComputrabajoBudgetGoesToTheFreshestCard(t *testing.T) {
+	f := &computrabajoFake{}
+	s := newTestComputrabajo(f)
+	s.maxNewPerRun = 1
+	if _, err := s.FetchNew(context.Background(), ctEntry, func(string) bool { return false }); err != nil {
+		t.Fatal(err)
+	}
+	var posting []string
+	for _, u := range f.urls {
+		if strings.Contains(u, "/oferta-de-trabajo-de-") {
+			posting = append(posting, u)
+		}
+	}
+	if len(posting) != 1 || !strings.HasSuffix(posting[0], "70E96A343FE3F74B61373E686DCF3405") {
+		t.Errorf("posting requests = %v, want only Grupo Ceta's, the freshest", posting)
+	}
+}
+
+func TestComputrabajoCardReadsHybridAndAge(t *testing.T) {
+	f := &computrabajoFake{}
+	jobs, err := newTestComputrabajo(f).FetchNew(context.Background(), ctEntry, func(string) bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, j := range jobs {
+		if j.ExternalID == ctGlobalMedica && j.WorkMode != "hybrid" {
+			t.Errorf("card work mode = %q, want hybrid from its i_home_office icon", j.WorkMode)
+		}
+	}
+	for in, want := range map[string]int{"Hace 56 minutos": 0, "Hace 7 horas": 7, "Ayer": 24, "Hace 3 días": 72, "19 de octubre": computrabajoOld} {
+		if got := computrabajoAge(in); got != want {
+			t.Errorf("computrabajoAge(%q) = %d, want %d", in, got, want)
 		}
 	}
 }

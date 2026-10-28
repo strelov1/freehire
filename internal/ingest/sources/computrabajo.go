@@ -84,9 +84,10 @@ type computrabajoCard struct {
 	place    string
 	salary   string
 	workMode string
-	// rank is the card's position in its province's listing, which runs newest first; the
-	// budget is spent across provinces by rank, so no province starves the others.
-	rank int
+	// ageHours is the card's age line in hours (computrabajoAge); rank its position in its
+	// province's listing. Together they order the detail budget.
+	ageHours int
+	rank     int
 }
 
 // computrabajoProvince is one slice of the location filter: its listing path and its size.
@@ -205,7 +206,11 @@ func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoC
 	seen := make(map[string]bool)
 	var out []computrabajoCard
 	for _, p := range provinces {
-		pages := min((p.count+computrabajoPageSize-1)/computrabajoPageSize+1, computrabajoMaxPages)
+		// An unreadable size leaves the walk to end on the empty page or the pager cap.
+		pages := computrabajoMaxPages
+		if p.count > 0 {
+			pages = min((p.count+computrabajoPageSize-1)/computrabajoPageSize+1, computrabajoMaxPages)
+		}
 		rank := 0
 		for page := 1; page <= pages; page++ {
 			if err := s.limiter.Wait(ctx); err != nil {
@@ -226,6 +231,11 @@ func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoC
 			}
 			cards := computrabajoCards(root, base)
 			if len(cards) == 0 {
+				// Only the site's own "no results" page ends a walk; anything else without a
+				// card (a challenge answered 200) is the absence of an answer.
+				if !computrabajoEmptyListing(root) {
+					return nil, fmt.Errorf("computrabajo: %s page %d carries neither cards nor an empty result", p.path, page)
+				}
 				break
 			}
 			for _, c := range cards {
@@ -239,8 +249,59 @@ func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoC
 			}
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].rank < out[j].rank })
+	if len(out) == 0 {
+		return nil, fmt.Errorf("computrabajo: no province listed a posting")
+	}
+	// Freshest first, so the detail budget goes to new postings: a province's order puts
+	// promoted cards ("Empleo destacado") days old ahead of hours-old ones. Rank breaks ties, so
+	// the budget is spread across provinces.
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].ageHours != out[j].ageHours {
+			return out[i].ageHours < out[j].ageHours
+		}
+		return out[i].rank < out[j].rank
+	})
 	return out, nil
+}
+
+// computrabajoEmptyListing reports whether a cardless page is the site's own empty result,
+// which states its card count in a hidden analytics field: value "0".
+func computrabajoEmptyListing(root *html.Node) bool {
+	found := false
+	walk(root, func(n *html.Node) bool {
+		if n.Type == html.ElementNode && n.Data == "input" && Attr(n, "id") == "gtm_afs_elements" {
+			found = Attr(n, "value") == "0"
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// computrabajoAgeRe reads a card's age line: "Hace 56 minutos", "Hace 7 horas", "Hace 3 días".
+var computrabajoAgeRe = regexp.MustCompile(`^Hace (\d+) (minutos?|horas?|días?)$`)
+
+// computrabajoOld is the age given to a card dated rather than aged ("19 de octubre"): the site
+// switches to a date after a week.
+const computrabajoOld = 24 * 31
+
+// computrabajoAge turns a card's age line into hours, for ordering only.
+func computrabajoAge(s string) int {
+	if s == "Ayer" {
+		return 24
+	}
+	m := computrabajoAgeRe.FindStringSubmatch(s)
+	if m == nil {
+		return computrabajoOld
+	}
+	n, _ := strconv.Atoi(m[1])
+	switch {
+	case strings.HasPrefix(m[2], "minuto"):
+		return 0
+	case strings.HasPrefix(m[2], "hora"):
+		return n
+	}
+	return 24 * n
 }
 
 // computrabajoProvinces reads the listing's location filter: every province's path and size.
@@ -309,11 +370,15 @@ func computrabajoCardFrom(n *html.Node, base string) (computrabajoCard, bool) {
 			c.company = computrabajoClean(textContent(x))
 			return false
 		}
+		if x.Data == "p" && HasClass(x, "fc_aux") {
+			c.ageHours = computrabajoAge(computrabajoClean(textContent(x)))
+			return false
+		}
 		if x.Data == "span" && HasClass(x, "dIB") {
 			switch {
 			case firstByClass(x, "i_salary") != nil:
 				c.salary = computrabajoClean(textContent(x))
-			case firstByClass(x, "i_home") != nil:
+			case computrabajoHasIcon(x, "i_home"):
 				c.workMode = computrabajoClean(textContent(x))
 			}
 			return false
@@ -335,6 +400,23 @@ func computrabajoCardFrom(n *html.Node, base string) (computrabajoCard, bool) {
 		return computrabajoCard{}, false
 	}
 	return c, true
+}
+
+// computrabajoHasIcon reports whether n holds an icon of the given family: the arrangement icon is
+// i_home for "Remoto" and i_home_office for "Presencial y remoto".
+func computrabajoHasIcon(n *html.Node, family string) bool {
+	found := false
+	walk(n, func(x *html.Node) bool {
+		if x.Type == html.ElementNode && HasClass(x, "icon") {
+			for _, c := range strings.Fields(Attr(x, "class")) {
+				if c == family || strings.HasPrefix(c, family+"_") {
+					found = true
+				}
+			}
+		}
+		return !found
+	})
+	return found
 }
 
 func hasAttr(n *html.Node, name string) bool {
