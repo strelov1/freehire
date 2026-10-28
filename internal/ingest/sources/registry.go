@@ -492,6 +492,9 @@ func All(c HTTPClient) map[string]Source {
 		// Talent Clue (Spain): board = the customer's 32-hex client id the platform's widget reads
 		// its listing with; bodies hydrated for new postings only, at robots.txt's 10 s crawl delay.
 		NewTalentclue(c),
+		// Velora HR (Spain): board = the numeric career-site id its public API is keyed by; the
+		// listing carries every body, so a crawl is two requests per board.
+		NewVelorahr(c),
 		NewGreytHR(c),
 		// Concurrency-limited: one origin serves every helixjobs iid (see helixjobsMaxInFlight).
 		NewHelixjobs(limitedHelixjobsGetter(c)),

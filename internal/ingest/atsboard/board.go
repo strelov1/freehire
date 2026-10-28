@@ -541,6 +541,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"taleo.net", "taleo", modePathPattern}, // after tbe.taleo.net (taleobe) above, which wins first
 	{"oraclecloud.com", "oracle", modePathPattern},
 	{"app.loxo.co", "loxo", modePathPattern},
+	// Velora HR (Spain): <tenant>.career.velorahr.com/<slug>-<career-site id>/…; the board is the
+	// id, since one tenant runs several sites (see pathPatternBoards).
+	{"career.velorahr.com", "velorahr", modePathPattern},
 }
 
 // pathTenantSubdomains names the path-mode hosts that ALSO serve a tenant on its own subdomain
@@ -621,6 +624,14 @@ var pathPatternBoards = map[string]pathPattern{
 	"app.trinethire.com": {
 		path:    regexp.MustCompile(`^/companies/(\d+(?:-[a-z0-9-]+)?)(?:/|$)`),
 		listing: "/companies/%s/jobs",
+	},
+	// Velora HR: /<slug>-<career-site id>[/offers/<offer id>] on <tenant>.career.velorahr.com
+	// (internal/ingest/sources/velorahr.go). The board is the trailing id alone: the site renders
+	// whatever slug precedes it (/158 and /wetaca-158 are one page), and the tenant host names no
+	// site, since one tenant may run several. The host's other pages carry no trailing number.
+	"career.velorahr.com": {
+		path:    regexp.MustCompile(`^/(?:[A-Za-z0-9-]*-)?([1-9][0-9]{0,8})(?:/|$)`),
+		listing: "/%s",
 	},
 	// GoHire: /<slug>-<8-character site code>/[<posting>/] (internal/ingest/sources/gohire.go).
 	// The code's shape is what separates a site from the platform's /assets and from the
