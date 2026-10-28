@@ -56,14 +56,15 @@ copy, visible scores).
    works from a real live posting; won't invent experience; shows a match score before and
    after; ATS-readable PDF; edits you can see and undo; price. Every cell must be true. Use
    "—" where we don't know, never a guess.
-8. **Founder note.** A short note in the first person, signed with the owner's name, which
-   the owner gives at spec review:
+8. **Founder note.** A short note in the first person, signed "Ilya Strelov, founder":
 
    > Most AI CV tools will happily write that you led a Kubernetes migration you never
    > touched. It reads well right up to the first interview question about it. So the agent
    > here works the other way round: it only uses what you actually did, and when the job
    > asks for something it can't find in your history, it asks you instead of writing it.
    > That rule lives in the code, not in a prompt, and the code is open for you to check.
+   >
+   > — Ilya Strelov, founder
 
 9. **FAQ.** Rewritten around buyer objections, still rendered from `TAILOR_FAQ` so the
    FAQPage JSON-LD keeps matching. Questions to cover:
