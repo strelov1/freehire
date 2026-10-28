@@ -127,6 +127,7 @@ type content struct {
 	ExtensionURL      string
 	TailorURL         string
 	BuddiesURL        string
+	BuddiesDemoURL    string
 	PricingURL        string
 	StoreURL          string
 	FirefoxURL        string
@@ -170,6 +171,7 @@ func (m *Mailer) content() content {
 		ExtensionURL:      m.baseURL + "/features/extension?utm_source=email",
 		TailorURL:         m.baseURL + "/features/tailor?utm_source=email",
 		BuddiesURL:        m.baseURL + "/features/interview-buddies?utm_source=email",
+		BuddiesDemoURL:    m.baseURL + "/email-buddies-demo.gif",
 		PricingURL:        m.baseURL + "/pricing?utm_source=email",
 		StoreURL:          storeURL,
 		FirefoxURL:        firefoxURL,

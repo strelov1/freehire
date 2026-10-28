@@ -75,6 +75,7 @@ func copyAssets(dir string) error {
 		"email-icon-chrome.png",
 		"email-icon-linkedin.png",
 		"ilya.jpg",
+		"email-buddies-demo.gif",
 	} {
 		b, err := os.ReadFile(filepath.Join("web/static", name))
 		if err != nil {

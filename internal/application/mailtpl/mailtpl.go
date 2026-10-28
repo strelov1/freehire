@@ -291,6 +291,7 @@ const darkRules = `
   .m-muted  { color: ` + darkMuted + ` !important; }
   .m-row    { border-top-color: ` + darkBorder + ` !important; }
   .m-quote  { color: ` + darkMuted + ` !important; border-left-color: ` + darkBorder + ` !important; }
+  .m-shot   { border-color: ` + darkBorder + ` !important; }
   .m-code   { background: ` + darkBrandMuted + ` !important; color: ` + darkBrandStrong + ` !important; }
   .m-tile   { background: ` + darkBrandMuted + ` !important; color: ` + darkBrandStrong + ` !important; }
   .m-link   { color: ` + darkBrandStrong + ` !important; }

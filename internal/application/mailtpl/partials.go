@@ -66,6 +66,8 @@ var partials = template.Must(template.New("partials").Funcs(funcs).Parse(`
 
 {{define "button"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 14px 0;"><tr><td class="m-btn" style="background:` + colorBrand + `;border-radius:8px;"><a href="{{.URL}}" class="m-btn-a" style="display:inline-block;padding:11px 20px;font-size:15px;font-weight:600;color:` + colorBrandFg + `;text-decoration:none;">{{.Label}}</a></td></tr></table>{{end}}
 
+{{define "image-link"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0 18px 0;"><tr><td><a href="{{.URL}}"><img src="{{.Src}}" width="{{.Width}}" alt="{{.Alt}}" class="m-shot" style="display:block;width:100%;max-width:{{.Width}}px;height:auto;border:1px solid ` + colorBorder + `;border-radius:12px;"></a></td></tr></table>{{end}}
+
 {{define "button-right"}}<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0 14px 0;"><tr><td align="right"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td class="m-btn" style="background:` + colorBrand + `;border-radius:8px;"><a href="{{.URL}}" class="m-btn-a" style="display:inline-block;padding:11px 20px;font-size:15px;font-weight:600;color:` + colorBrandFg + `;text-decoration:none;">{{.Label}}</a></td></tr></table></td></tr></table>{{end}}
 
 {{define "quote"}}<blockquote class="m-quote" style="margin:0 0 14px 0;padding:2px 0 2px 14px;border-left:3px solid ` + colorBorder + `;font-size:15px;line-height:1.6;color:` + colorMuted + `;">{{.}}</blockquote>{{end}}
@@ -108,6 +110,18 @@ type IconLink struct {
 	URL     string
 	Label   string
 	IconURL string
+}
+
+// ImageLink is an image that links somewhere — a product shot leading to the page
+// it shows. Width is the displayed width in CSS pixels; the asset itself is drawn at
+// twice that so it stays sharp on a dense screen, and the attribute is what Outlook
+// desktop sizes by, since it ignores the max-width the other clients honour. Alt
+// carries the picture in words for a client that blocks images.
+type ImageLink struct {
+	URL   string
+	Src   string
+	Alt   string
+	Width int
 }
 
 // LinkedInURL is the profile the sign-off points at. It lives beside DiscordURL for
@@ -175,5 +189,8 @@ var funcs = template.FuncMap{
 	},
 	"mailTextLink": func(text, url, label string) TextLink {
 		return TextLink{Text: text, URL: url, Label: label}
+	},
+	"mailImageLink": func(url, src, alt string, width int) ImageLink {
+		return ImageLink{URL: url, Src: src, Alt: alt, Width: width}
 	},
 }
