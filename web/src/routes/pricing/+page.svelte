@@ -6,6 +6,7 @@
   import { promptSignIn } from '#lib/signin.js';
   import { formatMinorUnits } from '#lib/money.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { PRO_PERKS } from '#lib/proPerks.js';
   import Seo from '#lib/components/Seo.svelte';
   import { ProviderIcon, buttonVariants, cn } from '#lib/ui/index.js';
   import type { PlanTierAllowance, PlansMatrix, PublicPrice } from '#lib/types.js';
@@ -91,15 +92,6 @@
     { text: 'Ghost-job warnings on every posting', href: resolve('/features/ghost-jobs') },
     { text: 'Search from ChatGPT, Claude or any agent over MCP, and the CLI', href: resolve('/mcp') },
     { text: 'Anonymous employee referrals', href: resolve('/features/referrals') },
-  ];
-
-  // What a paid plan adds. The daily amounts live in the allowance list under these lines,
-  // read from the backend, so nothing here quotes a number.
-  const PAID_FEATURES: Perk[] = [
-    { text: 'CV tailoring for each vacancy, with cover letters', href: resolve('/features/tailor') },
-    { text: 'AI assistant', href: resolve('/features/tailor') },
-    { text: 'Chrome and Firefox extension that fills applications for you', href: resolve('/features/extension') },
-    { text: 'Auto-apply in the background, within a daily limit', href: resolve('/features/extension') },
   ];
 
   let busy = $state(false);
@@ -285,7 +277,7 @@
     {#each items as item (item.text)}
       <li class="flex items-baseline gap-2">
         <Check class="size-4 shrink-0 translate-y-0.5 text-primary" aria-hidden="true" />
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every href is built with resolve() in FREE_FEATURES / PAID_FEATURES; the linter can't trace it via the variable -->
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- every href is built with resolve() in FREE_FEATURES / PRO_PERKS; the linter can't trace it via the variable -->
         <a href={item.href} class="hover:underline">{item.text}</a>
       </li>
     {/each}
@@ -386,7 +378,7 @@
         {/if}
         <p class="text-sm text-muted-foreground">Everything in Free, plus:</p>
       </div>
-      {@render perkList(PAID_FEATURES)}
+      {@render perkList(PRO_PERKS)}
       {@render allowanceList(rows, 'pro')}
 
       {@render discordPerk()}
