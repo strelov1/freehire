@@ -74,9 +74,15 @@ const (
 	talentsoftMaxNewPerBoard = 500
 	// talentsoftDeadlineMargin is the time hydration leaves the pipeline to write what it read.
 	talentsoftDeadlineMargin = 5 * time.Minute
-	// talentsoftMaxPages bounds the listing walk; the largest site measured needs 227 pages at
-	// its own 20-a-page. Needing more fails the crawl rather than ending it early.
-	talentsoftMaxPages = 1000
+	// talentsoftResultCap is the most results one search serves: past it the listing answers page
+	// one again (Safran's 4,546 postings at 20 a page stop at page 50; Crédit Agricole's 1,320 at
+	// 10 a page stop at page 100). A larger slice is split along a search facet.
+	talentsoftResultCap = 1000
+	// talentsoftMaxSplits bounds how many facets deep a slice is split before the crawl fails.
+	talentsoftMaxSplits = 3
+	// talentsoftMaxPages bounds one slice's walk, which the cap keeps under 200 pages at the
+	// smallest page size measured (5); needing more fails the crawl rather than ending it early.
+	talentsoftMaxPages = 250
 	talentsoftListPath = "/offre-de-emploi/liste-toutes-offres.aspx"
 )
 
@@ -191,35 +197,6 @@ func (p talentsoftPaced) get(ctx context.Context, u string) (*html.Node, string,
 // one, sees what slid past a page boundary — but a walk that comes back far short of it fails.
 func (s talentsoft) list(ctx context.Context, get talentsoftPaced, board string) ([]talentsoftPosting, error) {
 	base := &url.URL{Scheme: "https", Host: board}
-	pageURL := func(n int) string {
-		return base.String() + talentsoftListPath + "?all=1&mode=list&page=" + strconv.Itoa(n)
-	}
-	root, final, err := get.get(ctx, pageURL(1))
-	if err != nil {
-		return nil, fmt.Errorf("talentsoft: listing %s: %w", board, err)
-	}
-	if !strings.HasSuffix(strings.ToLower(pathOf(final)), talentsoftListPath) {
-		return nil, fmt.Errorf("talentsoft: listing %s: redirected to %s, not a Talentsoft listing", board, final)
-	}
-	total, stated := talentsoftTotal(root)
-	rows := talentsoftRows(base, root)
-	if !stated {
-		if len(rows) == 0 && talentsoftNoResult(root) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("talentsoft: listing %s: the page states no total", board)
-	}
-	if total == 0 {
-		return nil, nil
-	}
-	if len(rows) == 0 {
-		return nil, fmt.Errorf("talentsoft: listing %s: states %d postings and lists none", board, total)
-	}
-	pages := (total + len(rows) - 1) / len(rows)
-	if pages > talentsoftMaxPages {
-		return nil, fmt.Errorf("talentsoft: listing %s: %d postings need %d pages, above the %d-page bound",
-			board, total, pages, talentsoftMaxPages)
-	}
 	byID := map[string]bool{}
 	var out []talentsoftPosting
 	keep := func(rows []talentsoftPosting) {
@@ -230,17 +207,9 @@ func (s talentsoft) list(ctx context.Context, get talentsoftPaced, board string)
 			}
 		}
 	}
-	keep(rows)
-	for n := 2; n <= pages; n++ {
-		root, _, err := get.get(ctx, pageURL(n))
-		if err != nil {
-			return nil, fmt.Errorf("talentsoft: listing %s page %d: %w", board, n, err)
-		}
-		rows := talentsoftRows(base, root)
-		if len(rows) == 0 {
-			return nil, fmt.Errorf("talentsoft: listing %s: page %d of %d lists no posting", board, n, pages)
-		}
-		keep(rows)
+	total, err := s.walk(ctx, get, base, url.Values{}, keep, 0)
+	if err != nil {
+		return nil, err
 	}
 	if len(out)*10 < total*9 {
 		return nil, fmt.Errorf("talentsoft: listing %s: walk collected %d of the %d postings the site states",
@@ -248,6 +217,242 @@ func (s talentsoft) list(ctx context.Context, get talentsoftPaced, board string)
 	}
 	return out, nil
 }
+
+// walk reads one slice of the listing — the whole site, or the postings matching filters — and
+// returns the total it states. The platform serves at most talentsoftResultCap results of any
+// search (page 51 of a 20-a-page listing answers page 1 again), so a slice stating more is split
+// along one of the search facets the page offers and each value is walked in turn.
+func (s talentsoft) walk(ctx context.Context, get talentsoftPaced, base *url.URL, filters url.Values, keep func([]talentsoftPosting), depth int) (int, error) {
+	board := base.Host
+	pageURL := func(n int) string {
+		q := url.Values{}
+		for k, v := range filters {
+			q[k] = v
+		}
+		q.Set("all", "1")
+		q.Set("mode", "list")
+		q.Set("page", strconv.Itoa(n))
+		return base.String() + talentsoftListPath + "?" + q.Encode()
+	}
+	root, final, err := get.get(ctx, pageURL(1))
+	if err != nil {
+		return 0, fmt.Errorf("talentsoft: listing %s%s: %w", board, talentsoftSlice(filters), err)
+	}
+	if !strings.HasSuffix(strings.ToLower(pathOf(final)), talentsoftListPath) {
+		return 0, fmt.Errorf("talentsoft: listing %s: redirected to %s, not a Talentsoft listing", board, final)
+	}
+	total, stated := talentsoftTotal(root)
+	rows := talentsoftRows(base, root)
+	if !stated {
+		if len(rows) == 0 && talentsoftNoResult(root) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("talentsoft: listing %s%s: the page states no total", board, talentsoftSlice(filters))
+	}
+	if total == 0 {
+		return 0, nil
+	}
+	if total > talentsoftResultCap {
+		dim, ok := talentsoftPartition(root, filters, total, depth == 0)
+		if !ok || depth >= talentsoftMaxSplits {
+			return 0, fmt.Errorf("talentsoft: listing %s%s: states %d postings, above the %d one search serves, and no facet splits them",
+				board, talentsoftSlice(filters), total, talentsoftResultCap)
+		}
+		covered := 0
+		for _, v := range dim.values {
+			sub := url.Values{}
+			for k, vv := range filters {
+				sub[k] = vv
+			}
+			sub.Set("facet_"+dim.name, v.id)
+			n, err := s.walk(ctx, get, base, sub, keep, depth+1)
+			if err != nil {
+				return 0, err
+			}
+			covered += n
+		}
+		if total-covered > talentsoftSplitSlack(total) {
+			return 0, fmt.Errorf("talentsoft: listing %s%s: splitting %d postings by %s reached only %d",
+				board, talentsoftSlice(filters), total, dim.name, covered)
+		}
+		return total, nil
+	}
+	if len(rows) == 0 {
+		return 0, fmt.Errorf("talentsoft: listing %s%s: states %d postings and lists none", board, talentsoftSlice(filters), total)
+	}
+	pages := (total + len(rows) - 1) / len(rows)
+	if pages > talentsoftMaxPages {
+		return 0, fmt.Errorf("talentsoft: listing %s: %d postings need %d pages, above the %d-page bound",
+			board, total, pages, talentsoftMaxPages)
+	}
+	keep(rows)
+	for n := 2; n <= pages; n++ {
+		root, _, err := get.get(ctx, pageURL(n))
+		if err != nil {
+			return 0, fmt.Errorf("talentsoft: listing %s%s page %d: %w", board, talentsoftSlice(filters), n, err)
+		}
+		rows := talentsoftRows(base, root)
+		if len(rows) == 0 {
+			return 0, fmt.Errorf("talentsoft: listing %s%s: page %d of %d lists no posting", board, talentsoftSlice(filters), n, pages)
+		}
+		keep(rows)
+	}
+	return total, nil
+}
+
+// talentsoftSlice names a filtered slice in an error message, or "" for the whole site.
+func talentsoftSlice(filters url.Values) string {
+	if len(filters) == 0 {
+		return ""
+	}
+	return " (" + filters.Encode() + ")"
+}
+
+var (
+	// talentsoftFacetCount is the count a facet value's label ends in ("CDI (3382)").
+	talentsoftFacetCount = regexp.MustCompile(`\((\d+)\)\s*$`)
+	talentsoftFacetID    = regexp.MustCompile(`^[0-9]+$`)
+)
+
+// talentsoftDim is one search dimension a slice can be split along: the facet_<name> URL
+// parameter and its values with their counts. Counts read from the facet panel are the slice's
+// own; counts read from the search form are the whole site's.
+type talentsoftDim struct {
+	name        string
+	values      []talentsoftDimValue
+	conditional bool
+}
+
+type talentsoftDimValue struct {
+	id    string
+	count int
+}
+
+// talentsoftSplitSlack is how far a split's values may fall short of the slice they split: a
+// posting filed under no value of a field counts in the total and under none of its values.
+// Safran's 2,104 permanent European postings sum to 2,103 by job family (2026-10-28); EDF's
+// 1,997 sum to 1,934 by region, the rest being filed under a country alone. What a split
+// leaves out is not read, and the walk's own 90% floor bounds the whole loss.
+func talentsoftSplitSlack(total int) int { return max(2, total*5/100) }
+
+// talentsoftPartition picks the dimension to split a slice along. Two sources offer them. The
+// facet panel (Safran, Crédit Agricole) links each value as ?changefacet=1&facet_<dim>=<id> with
+// the slice's own count. A site without one (EDF) still takes the same parameters, which its
+// search form names only by field: the contract select is facet_JobDescription_Contract, and a
+// geographic checkbox is facet_Country, facet_Region or facet_Department by its depth in the
+// tree (its aria-labelledby lists its ancestors). Form counts are the whole site's, so they can
+// vouch for a split only at the top of the walk; deeper, a form split is checked after it is
+// walked.
+//
+// Of the dimensions whose counts cover the slice (or that cannot be checked yet), the one whose
+// largest value is smallest is taken, which keeps the next level of splitting shallow; checked
+// ones come first.
+func talentsoftPartition(root *html.Node, filters url.Values, total int, top bool) (talentsoftDim, bool) {
+	var best talentsoftDim
+	bestChecked, bestMax, found := false, 0, false
+	for _, d := range talentsoftDims(root) {
+		if filters.Has("facet_"+d.name) || len(d.values) == 0 {
+			continue
+		}
+		sum, largest := 0, 0
+		for _, v := range d.values {
+			sum += v.count
+			largest = max(largest, v.count)
+		}
+		checked := d.conditional || top
+		if checked && (sum > total || total-sum > talentsoftSplitSlack(total)) {
+			continue
+		}
+		switch {
+		case !found, checked && !bestChecked:
+		case checked != bestChecked, largest > bestMax, largest == bestMax && d.name >= best.name:
+			continue
+		}
+		best, bestChecked, bestMax, found = d, checked, largest, true
+	}
+	return best, found
+}
+
+// talentsoftDims reads every dimension the page offers: the facet panel's links, then the
+// search form's contract select and geographic checkboxes.
+func talentsoftDims(root *html.Node) []talentsoftDim {
+	byName := map[string]*talentsoftDim{}
+	var order []string
+	add := func(name, id string, count int, conditional bool) {
+		d, ok := byName[name]
+		if !ok {
+			d = &talentsoftDim{name: name, conditional: conditional}
+			byName[name] = d
+			order = append(order, name)
+		}
+		for _, v := range d.values {
+			if v.id == id {
+				return
+			}
+		}
+		d.values = append(d.values, talentsoftDimValue{id: id, count: count})
+	}
+	count := func(label string) (int, bool) {
+		m := talentsoftFacetCount.FindStringSubmatch(talentsoftClean(label))
+		if m == nil {
+			return 0, false
+		}
+		n, err := strconv.Atoi(m[1])
+		return n, err == nil
+	}
+	walk(root, func(n *html.Node) bool {
+		if n.Type != html.ElementNode {
+			return true
+		}
+		switch {
+		case n.Data == "a":
+			u, err := url.Parse(Attr(n, "href"))
+			if err != nil {
+				return false
+			}
+			c, ok := count(textContent(n))
+			if !ok {
+				return false
+			}
+			for k, v := range u.Query() {
+				dim, isFacet := strings.CutPrefix(k, "facet_")
+				if isFacet && len(v) == 1 && talentsoftFacetID.MatchString(v[0]) {
+					add(dim, v[0], c, true)
+				}
+			}
+			return false
+		case n.Data == "select" && strings.HasSuffix(Attr(n, "name"), "EngineCriteriaCollection$Contract"):
+			for o := n.FirstChild; o != nil; o = o.NextSibling {
+				if o.Type != html.ElementNode || o.Data != "option" || !talentsoftFacetID.MatchString(Attr(o, "value")) || Attr(o, "value") == "0" {
+					continue
+				}
+				if c, ok := count(textContent(o)); ok {
+					add("JobDescription_Contract", Attr(o, "value"), c, false)
+				}
+			}
+			return false
+		case n.Data == "input" && Attr(n, "type") == "checkbox" && strings.Contains(Attr(n, "name"), "GeographicalAreaCollection$"):
+			id := Attr(n, "value")
+			c, ok := count(Attr(n, "aria-label"))
+			level := len(strings.Fields(Attr(n, "aria-labelledby")))
+			if !ok || !talentsoftFacetID.MatchString(id) || level < 1 || level > len(talentsoftGeoLevels) {
+				return false
+			}
+			add(talentsoftGeoLevels[level-1], id, c, false)
+			return false
+		}
+		return true
+	})
+	out := make([]talentsoftDim, 0, len(order))
+	for _, name := range order {
+		out = append(out, *byName[name])
+	}
+	return out
+}
+
+// talentsoftGeoLevels names the URL parameter of a geographic checkbox by its depth in the
+// search form's tree, as the site's own "show the search URL" spells them.
+var talentsoftGeoLevels = []string{"Country", "Region", "Department"}
 
 // pathOf is a URL's path, or "" when it does not parse.
 func pathOf(raw string) string {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -287,5 +288,89 @@ func TestTalentsoftListedPlace(t *testing.T) {
 		if got := p.listedPlace(); got != want {
 			t.Errorf("%q = %q, want %q", items, got, want)
 		}
+	}
+}
+
+// tsListingPage renders a minimal Talentsoft listing: the stated total, one row per id, and the
+// extra markup (facet links or a search form) the test needs.
+func tsListingPage(total int, ids []string, extra string) string {
+	var b strings.Builder
+	b.WriteString(`<html><head><title>X - Résultat</title></head><body>`)
+	b.WriteString(`<span id="ctl00_ctl00_corpsRoot_corps_Pagination_TotalOffers" class="gras">` + strconv.Itoa(total) + ` offre(s)</span><ul>`)
+	for _, id := range ids {
+		b.WriteString(`<li class="ts-offer-list-item"><h3><a class="ts-offer-list-item__title-link " href="/offre-de-emploi/emploi-x_` + id + `.aspx">Job ` + id + `</a></h3><ul class="ts-offer-list-item__description"><li>01/10/2026</li></ul></li>`)
+	}
+	b.WriteString(`</ul>` + extra + `</body></html>`)
+	return b.String()
+}
+
+func tsIDs(from, n int) []string {
+	out := make([]string, n)
+	for i := range out {
+		out[i] = strconv.Itoa(from + i)
+	}
+	return out
+}
+
+func TestTalentsoftSplitsASliceAboveTheCap(t *testing.T) {
+	const host = "big.talent-soft.com"
+	list := "https://" + host + "/offre-de-emploi/liste-toutes-offres.aspx?all=1&"
+	panel := `<a href="/offre-de-emploi/liste-toutes-offres.aspx?changefacet=1&facet_Contract=1">CDI (1500)</a>` +
+		`<a href="/offre-de-emploi/liste-toutes-offres.aspx?changefacet=1&facet_Contract=2">Stage (499)</a>` +
+		// A tree whose counts overlap (an area and its country) does not partition and is skipped.
+		`<a href="/offre-de-emploi/liste-toutes-offres.aspx?changefacet=1&facet_JobGeographicalArea=9">Europe (2000)</a>`
+	cdiPanel := `<a href="/offre-de-emploi/liste-toutes-offres.aspx?changefacet=1&facet_JobFamily=7">IT (800)</a>` +
+		`<a href="/offre-de-emploi/liste-toutes-offres.aspx?changefacet=1&facet_JobFamily=8">Sales (699)</a>`
+	f := &talentsoftFake{t: t, routes: map[string]talentsoftRoute{
+		list + "mode=list&page=1": {body: tsListingPage(2000, tsIDs(1, 10), panel)},
+		// CDI is itself above the cap and splits again, by family; one CDI posting has none.
+		list + "facet_Contract=1&mode=list&page=1":                   {body: tsListingPage(1500, tsIDs(1, 10), cdiPanel)},
+		list + "facet_Contract=1&facet_JobFamily=7&mode=list&page=1": {body: tsListingPage(800, tsIDs(1, 800), "")},
+		list + "facet_Contract=1&facet_JobFamily=8&mode=list&page=1": {body: tsListingPage(699, tsIDs(801, 699), "")},
+		list + "facet_Contract=2&mode=list&page=1":                   {body: tsListingPage(499, tsIDs(2001, 499), "")},
+	}}
+	s := newTalentsoftTest(f)
+	got, err := s.list(context.Background(), talentsoftPaced{s: s}, host)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 1998 {
+		t.Fatalf("got %d postings, want 1998 (2000 stated, 2 filed under no value)", len(got))
+	}
+}
+
+func TestTalentsoftSplitsAlongTheSearchForm(t *testing.T) {
+	const host = "edf.talent-soft.com"
+	list := "https://" + host + "/offre-de-emploi/liste-toutes-offres.aspx?all=1&"
+	// No facet panel: the search form names the contract select and the geographic tree, whose
+	// region checkboxes are labelled by their country and themselves.
+	form := `<select name="ctl00$ctl00$moteurRapideOffre$ctl02$EngineCriteriaCollection$Contract"><option value="0">-</option><option value="34950">CDI (1400)</option><option value="34952">Stage (600)</option></select>` +
+		`<input type="checkbox" name="x$GeographicalAreaCollection$79" value="79" aria-label="France (1990)" aria-labelledby="c79">` +
+		`<input type="checkbox" name="x$GeographicalAreaCollection$198" value="198" aria-label="Rhône-Alpes (990)" aria-labelledby="c79 c198">` +
+		`<input type="checkbox" name="x$GeographicalAreaCollection$208" value="208" aria-label="Ile-de-France (960)" aria-labelledby="c79 c208">`
+	f := &talentsoftFake{t: t, routes: map[string]talentsoftRoute{
+		list + "mode=list&page=1":                  {body: tsListingPage(2000, tsIDs(1, 10), form)},
+		list + "facet_Region=198&mode=list&page=1": {body: tsListingPage(990, tsIDs(1, 990), form)},
+		list + "facet_Region=208&mode=list&page=1": {body: tsListingPage(960, tsIDs(991, 960), form)},
+	}}
+	s := newTalentsoftTest(f)
+	got, err := s.list(context.Background(), talentsoftPaced{s: s}, host)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	// Regions (largest 990) beat the contract select (largest 1400) and the country (1990).
+	if len(got) != 1950 {
+		t.Fatalf("got %d postings, want the two regions' 1950", len(got))
+	}
+}
+
+func TestTalentsoftFailsWhenNothingSplitsAnOversizedSlice(t *testing.T) {
+	const host = "big.talent-soft.com"
+	f := &talentsoftFake{t: t, routes: map[string]talentsoftRoute{
+		"https://" + host + "/offre-de-emploi/liste-toutes-offres.aspx?all=1&mode=list&page=1": {body: tsListingPage(1500, tsIDs(1, 10), "")},
+	}}
+	s := newTalentsoftTest(f)
+	if _, err := s.list(context.Background(), talentsoftPaced{s: s}, host); err == nil {
+		t.Fatal("a slice above the cap with no facet must fail the crawl, not read its first 1,000")
 	}
 }
