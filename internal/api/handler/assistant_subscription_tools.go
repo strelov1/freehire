@@ -151,8 +151,8 @@ func (a alertSearchArgs) given() bool {
 // alertSearchSchema is the JSON schema of alertSearchArgs' fields, merged into a tool's
 // own properties.
 func alertSearchSchema(props map[string]any) map[string]any {
-	props["query"] = map[string]any{"type": "string", "description": "Free-text query, as in search_jobs."}
-	props["filters"] = assistantFilterSchema("Facet filters, as in search_jobs.")
+	props["query"] = map[string]any{"type": "string", "description": "Free-text query, with the job search's operators."}
+	props["filters"] = assistantFilterSchema("Facet filters, the job search's own.")
 	props["salary_min"] = map[string]any{"type": "integer", "description": "Only postings whose stated salary floor is at least this, in the posting's currency — pair it with filters.salary_currency."}
 	props["salary_max"] = map[string]any{"type": "integer", "description": "Only postings whose stated salary ceiling is at most this."}
 	return props
@@ -484,14 +484,12 @@ func (h *assistantHandlers) subscribeTool(origin string) assistant.Tool {
 		Name:   "subscribe",
 		Title:  "Create a job alert",
 		Effect: assistant.EffectAdds,
-		Description: "Create a job alert: a saved search over ANY of search_jobs' filters whose new postings are " +
+		Description: "Create a job alert: a saved search over ANY of the job search's filters whose new postings are " +
 			"delivered to the person on the channels their account has connected (email, Telegram, the mobile " +
-			"app, a webhook) — this conversation is not notified. " + alertExample + ". Run the same search with " +
-			"search_jobs first so the person sees what they are subscribing to. The search must narrow the " +
+			"app, a webhook) — this conversation is not notified. " + alertExample + ". The search must narrow the " +
 			"catalogue. Values not in a filter's vocabulary are dropped and named in ignored_params. Leave " +
 			"channels empty for the default (email when alert mail is on, otherwise the first connected " +
-			"channel). The answer's alert.id is what update_subscription, unsubscribe and " +
-			"subscription_updates take. " +
+			"channel). The answer's alert.id addresses the alert from then on. " +
 			"Effect: saves the search on the account (or reuses the one already selecting the same postings) " +
 			"and delivers it on each channel; nothing existing is changed.",
 		Schema: map[string]any{
@@ -612,7 +610,7 @@ func (h *assistantHandlers) listSubscriptionsTool(origin string) assistant.Tool 
 		Title:  "List job alerts",
 		Effect: assistant.EffectReads,
 		Description: "List the person's job alerts with every setting: id, name, a readable filter summary AND the " +
-			"search as the structured object subscribe and update_subscription take (query, filters, " +
+			"search as the structured object the alert tools take (query, filters, " +
 			"salary_min/max; `other` holds website-only filters an update keeps), whether it is paused, and " +
 			"each delivery channel with its active flag, pending matches and last delivery. delivery_schedule " +
 			"is the account-wide digest timing every alert shares. Effect: none, read-only.",
@@ -648,14 +646,14 @@ func (h *assistantHandlers) updateSubscriptionTool(origin string) assistant.Tool
 			"an empty filters object clears the facet filters, a salary bound of 0 clears it; website-only " +
 			"filters in `other` are kept); channels (the full set to deliver on — added ones must be connected, " +
 			"missing ones stop); paused (true stops every channel, false resumes them). The new search must " +
-			"still narrow the catalogue, and unknown values are dropped and named, as in subscribe. " +
+			"still narrow the catalogue, and unknown values are dropped and named in ignored_params. " +
 			alertExample + ". Digest timing is account-wide and not changed here. " +
 			"Effect: overwrites the alert's name, search, channels or paused state; a removed channel's record " +
 			"of matches is deleted with it.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": alertSearchSchema(map[string]any{
-				"id":   map[string]any{"type": "integer", "description": "The alert id from list_subscriptions."},
+				"id":   map[string]any{"type": "integer", "description": "The alert id."},
 				"name": map[string]any{"type": "string", "description": "A new name (1-100 characters)."},
 				"channels": map[string]any{
 					"type":        "array",
@@ -747,18 +745,22 @@ func (h *assistantHandlers) updateSubscriptionTool(origin string) assistant.Tool
 				}
 			}
 			// paused applies to the channels the alert has AFTER the change, so a channel
-			// added in the same call is held with the rest. Without paused, a new channel
-			// joins an alert that is paused as active — the person asked for it to deliver.
-			if in.Paused != nil {
+			// added in the same call is held with the rest. Without paused, a channel added
+			// to a paused alert joins it paused: the alert stays one state, not half of each.
+			if in.Paused != nil || (current.Paused && len(add) > 0) {
+				paused := current.Paused
+				if in.Paused != nil {
+					paused = *in.Paused
+				}
 				after, err := h.ownAlert(ctx, userID, current.ID)
 				if err != nil {
 					return nil, err
 				}
 				for _, c := range after.Channels {
-					if c.Active == !*in.Paused {
+					if c.Active == !paused {
 						continue
 					}
-					if _, err := subs.SetActive(ctx, userID, c.SubscriptionID, !*in.Paused); err != nil {
+					if _, err := subs.SetActive(ctx, userID, c.SubscriptionID, !paused); err != nil {
 						return nil, err
 					}
 				}
@@ -781,8 +783,7 @@ func (h *assistantHandlers) unsubscribeTool() assistant.Tool {
 		Name:   "unsubscribe",
 		Title:  "Stop a job alert",
 		Effect: assistant.EffectOverwrites,
-		Description: "Stop one job alert by the id list_subscriptions gives, on every channel or on the one named. " +
-			"To hold an alert without losing it, use update_subscription with paused instead. " +
+		Description: "Stop one job alert by its id, on every channel or on the one named. " +
 			"Effect: deletes the alert's delivery on those channels and their record of matches; the saved " +
 			"search itself stays on the account as a bookmarked search.",
 		Schema: map[string]any{

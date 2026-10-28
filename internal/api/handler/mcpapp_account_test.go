@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -143,5 +144,33 @@ func TestMCPAccountTools_LeavesOutPresentJobs(t *testing.T) {
 	}
 	if len(tools) == 0 {
 		t.Fatal("mcpAccountTools served nothing")
+	}
+}
+
+// Anthropic's directory policy rules out a tool description that instructs the model about
+// another tool, and the account server is the one submitted to the directory. The job-alert
+// tools keep that rule: their order of use lives in the server instructions. Scoped to the
+// alert tools, whose names it reads from the set they register, so the check does not
+// depend on the anonymous server's tool list.
+func TestMCPAccountAlertTools_NameNoOtherTool(t *testing.T) {
+	tools := (&assistantHandlers{}).subscriptionMCPTools(testMCPOrigin)
+	names := make([]string, 0, len(tools)+1)
+	for _, tool := range tools {
+		names = append(names, tool.Name)
+	}
+	names = append(names, "search_jobs")
+	for _, tool := range tools {
+		raw, err := json.Marshal(struct {
+			Description string
+			Schema      any
+		}{tool.Description, tool.Schema})
+		if err != nil {
+			t.Fatalf("%s: %v", tool.Name, err)
+		}
+		for _, name := range names {
+			if name != tool.Name && strings.Contains(string(raw), name) {
+				t.Errorf("%s: description or schema names %s", tool.Name, name)
+			}
+		}
 	}
 }

@@ -188,8 +188,15 @@ func TestSubscriptionMCP_SubscribeListUpdateUnsubscribe(t *testing.T) {
 	if len(chans) != 1 || chans[0].(map[string]any)["channel"] != "telegram" || chans[0].(map[string]any)["active"] != false || upd["paused"] != true {
 		t.Fatalf("updated channels = %v paused=%v, want telegram only, paused", chans, upd["paused"])
 	}
-	// Resume.
-	if res := a.ok("update_subscription", map[string]any{"id": alertID, "paused": false})["alert"].(map[string]any); res["paused"] != false {
+	// A channel added to a paused alert joins it paused.
+	held := a.ok("update_subscription", map[string]any{"id": alertID, "channels": []string{"email", "telegram"}})["alert"].(map[string]any)
+	for _, c := range held["channels"].([]any) {
+		if c.(map[string]any)["active"] != false {
+			t.Fatalf("channel added to a paused alert = %v, want paused", c)
+		}
+	}
+	// Resume, back to Telegram only.
+	if res := a.ok("update_subscription", map[string]any{"id": alertID, "paused": false, "channels": []string{"telegram"}})["alert"].(map[string]any); res["paused"] != false {
 		t.Fatalf("resumed alert = %v", res)
 	}
 
