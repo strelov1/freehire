@@ -25,6 +25,8 @@ type cadremploiFake struct {
 	// sitemapErr fails every request for the given sitemap page.
 	sitemapErr   map[int]error
 	noJobPosting bool
+	// allChallenged answers every posting page with a challenge, expired ones included.
+	allChallenged bool
 
 	mu       sync.Mutex
 	asked    map[string]int
@@ -76,6 +78,9 @@ func (f *cadremploiFake) GetHTML(_ context.Context, u string) (*html.Node, error
 	f.mu.Unlock()
 	if f.refused(u) {
 		return nil, &StatusError{Method: "GET", Code: 403, URL: u}
+	}
+	if f.allChallenged {
+		return html.Parse(strings.NewReader("<html><body>Just a moment...</body></html>"))
 	}
 	var path string
 	switch {
@@ -168,8 +173,8 @@ func TestCadremploiRetriesARefusal(t *testing.T) {
 	}
 }
 
-// A page with no JobPosting and no expired notice is a challenge, not a gone posting: the crawl
-// that read nothing else must fail rather than report a quiet board.
+// A page with no JobPosting and no expired notice is a challenge, not a gone posting: it is no
+// answer, and the posting is not yielded.
 func TestCadremploiPageWithoutPostingIsNoAnswer(t *testing.T) {
 	f := &cadremploiFake{noJobPosting: true}
 	s := newTestCadremploi(f)
@@ -234,5 +239,14 @@ func TestCadremploiSalaryAndBody(t *testing.T) {
 	ld.BaseSalary.Value.UnitText = ""
 	if j, _ := cadremploiJob(ld, cadremploiPosting{id: "1"}); j.SalaryMin != nil {
 		t.Error("salary set without a stated period")
+	}
+}
+
+// A crawl whose every page is a challenge read nothing: it must fail rather than report a quiet
+// board.
+func TestCadremploiAllChallengedFailsTheCrawl(t *testing.T) {
+	f := &cadremploiFake{allChallenged: true}
+	if _, err := newTestCadremploi(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
+		t.Fatal("a crawl that read no page did not fail")
 	}
 }
