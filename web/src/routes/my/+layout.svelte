@@ -5,7 +5,7 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { toPath } from '#lib/pathname.js';
-  import { PanelLeftClose, PanelLeft } from '@lucide/svelte';
+  import { PanelLeftClose, PanelLeft, ChevronDown } from '@lucide/svelte';
   import { currentUser } from '#lib/auth.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { messages, navLabel } from '#lib/i18n/shell.js';
@@ -14,14 +14,14 @@
   import { visibleAccountNav, isSectionActive } from '#lib/accountNav.js';
   import { accountNavIcons } from '#lib/accountNavIcons.js';
   import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
+  import AccountNavDrawer from '#lib/components/AccountNavDrawer.svelte';
   import { dockOffset } from '#lib/assistantDock.svelte.js';
-  import { ScrollEdges } from '#lib/scrollEdges.svelte.js';
 
   // The account shell: one source of truth for the `my/*` chrome — the width
   // container, the noindex tag, the auth gate, and the section navigation. Child
   // pages render only their own header + body inside the content column. The nav
-  // is a collapsible vertical sidebar at lg+ and a horizontal scrollable strip
-  // below lg; Tracking and Activity keep their own sub-tabs (this is the top level).
+  // is a collapsible vertical sidebar at lg+ and a slide-in drawer below lg (the
+  // same one the agent's page opens); Tracking and Activity keep their own sub-tabs (this is the top level).
 
   let { children }: { children: Snippet } = $props();
 
@@ -67,30 +67,12 @@
     visibleAccountNav(currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false),
   );
 
-  // The phone strip. Past its width it scrolls, and nothing said so: the visible items
-  // ended flush at the edge, and the active section — anywhere past the fifth — opened
-  // off-screen. Both rules below are the ones the design system's TabStrip follows; this
-  // strip is a navigation landmark of links, not a tablist, so it does not borrow that
-  // component's roles and arrow keys along with them.
-  let strip = $state<HTMLElement | null>(null);
-  const stripEdges = new ScrollEdges();
-  // A mask, not a gradient overlay, so the strip fades its own content to transparent and
-  // needs no knowledge of the surface beneath it.
-  const stripMask = $derived.by(() => {
-    const { atStart, atEnd } = stripEdges;
-    if (atStart && atEnd) return undefined;
-    const from = atStart ? 'black 0' : 'transparent 0, black 1.5rem';
-    const to = atEnd ? 'black 100%' : 'black calc(100% - 1.5rem), transparent 100%';
-    return `linear-gradient(to right, ${from}, ${to})`;
-  });
-  // Bring the active section into view on arrival and on every navigation.
-  $effect(() => {
-    void path;
-    const link = strip?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (link) stripEdges.reveal(link);
-  });
+  // Below lg the sections live in a drawer; the trigger names the section you are in,
+  // so the page keeps saying where you are without a strip that scrolls off-screen.
+  let drawerOpen = $state(false);
+  const activeItem = $derived(navItems.find((i) => isSectionActive(path, i.href)));
 
-  // Shared item treatment for both nav forms; active matches the tracking tabs.
+  // Sidebar item treatment; active matches the tracking tabs.
   const itemClass = (active: boolean) =>
     cn(
       'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
@@ -116,9 +98,8 @@
     <!-- No signed-out branch here: +layout.server.ts redirects an anonymous visitor to
          /signin before this renders, so the shell only ever draws for a session. -->
 
-    <!-- Same items, two forms; `extra` carries the per-form item tweaks. When
-         `iconOnly`, the label is dropped and the icon centres (collapsed rail). -->
-    {#snippet navLinks(extra: string, iconOnly = false)}
+    <!-- When `iconOnly`, the label is dropped and the icon centres (collapsed rail). -->
+    {#snippet navLinks(iconOnly: boolean)}
       {#each navItems as item (item.href)}
         {@const active = isSectionActive(path, item.href)}
         {@const Icon = accountNavIcons[item.href]}
@@ -127,7 +108,7 @@
           href={resolve(toPath(item.href))}
           aria-current={active ? 'page' : undefined}
           title={iconOnly ? label : undefined}
-          class={cn(itemClass(active), iconOnly && 'justify-center', extra)}
+          class={cn(itemClass(active), iconOnly && 'justify-center')}
         >
           <Icon class="size-4 shrink-0" />
           {#if !iconOnly}
@@ -137,21 +118,29 @@
       {/each}
     {/snippet}
 
-    <!-- Below lg: a horizontal, scrollable strip above the content. -->
-    <nav
-      bind:this={strip}
-      {@attach (el) => {
-        // Re-attached when the items change, so the new links are observed too.
-        void navItems;
-        return stripEdges.attach(el);
-      }}
-      aria-label={s.shell.accountSections}
-      class="no-scrollbar mb-4 flex gap-1 overflow-x-auto lg:hidden"
-      style:mask-image={stripMask}
-      style:-webkit-mask-image={stripMask}
+    <!-- Below lg: a section switcher naming where you are, opening the drawer. A chevron,
+         not a burger: the site header already carries one, and two identical icons a row
+         apart read as the same control. The accessible name keeps the visible label in it
+         (WCAG 2.5.3), prefixed so a screen reader hears what the button switches. The
+         negative margin lines the section icon up with the page heading below. -->
+    <button
+      type="button"
+      onclick={() => (drawerOpen = true)}
+      aria-haspopup="dialog"
+      aria-expanded={drawerOpen}
+      class="-ml-3 mb-4 flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
     >
-      {@render navLinks('shrink-0 whitespace-nowrap')}
-    </nav>
+      <span class="sr-only">{s.shell.accountSections}:</span>
+      {#if activeItem}
+        {@const Icon = accountNavIcons[activeItem.href]}
+        <Icon class="size-4 shrink-0" aria-hidden="true" />
+        {navLabel(s, activeItem.href, activeItem.label)}
+      {:else}
+        {s.rail.menu}
+      {/if}
+      <ChevronDown class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+    </button>
+    <AccountNavDrawer bind:open={drawerOpen} />
 
     <div class="lg:flex lg:gap-8">
       <!-- lg and up: a collapsible vertical sidebar beside the content. A plain box, not
@@ -182,7 +171,7 @@
             {/if}
           </button>
           <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
-            {@render navLinks('', collapsed)}
+            {@render navLinks(collapsed)}
           </nav>
         </div>
       </div>
