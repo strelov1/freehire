@@ -109,34 +109,34 @@ func guardedPhraseMatches(text, p, mode string, g phraseGuards) bool {
 				continue
 			}
 		}
-		if mode == "onsite" {
+		if mode == "onsite" || !g.withdraws(text, start, end) {
 			return true
 		}
-		window := g.negationWindow
-		if window == 0 {
-			window = germanNegationWindow
-		}
-		// A negation governs its own clause only: "não é 100% remota; modelo híbrido"
-		// states the hybrid.
-		from := max(0, start-window)
-		if j := strings.LastIndexAny(text[from:start], ".;!?"); j >= 0 {
-			from += j + 1
-		}
-		if startsWordAny(text[:start], from, g.negations) {
-			continue
-		}
-		tail := text[end:min(len(text), end+germanRefusalWindow)]
-		if j := strings.IndexAny(tail, ".;!?"); j >= 0 {
-			tail = tail[:j]
-		}
-		if containsAny(tail, g.refusals) {
-			continue
-		}
-		if containsAny(sentenceAround(text, start, end), g.perks) {
-			continue
-		}
+	}
+}
+
+// withdraws reports whether the remote or hybrid statement at text[start:end] is withdrawn:
+// one of g's negations precedes it in its clause, one of its refusals follows it in its
+// sentence, or one of its perks shares that sentence.
+func (g phraseGuards) withdraws(text string, start, end int) bool {
+	window := g.negationWindow
+	if window == 0 {
+		window = germanNegationWindow
+	}
+	// A negation governs its own clause only: "não é 100% remota; modelo híbrido"
+	// states the hybrid.
+	from := max(0, start-window)
+	if j := strings.LastIndexAny(text[from:start], ".;!?"); j >= 0 {
+		from += j + 1
+	}
+	if startsWordAny(text[:start], from, g.negations) {
 		return true
 	}
+	tail := text[end:min(len(text), end+germanRefusalWindow)]
+	if j := strings.IndexAny(tail, ".;!?"); j >= 0 {
+		tail = tail[:j]
+	}
+	return containsAny(tail, g.refusals) || containsAny(sentenceAround(text, start, end), g.perks)
 }
 
 // startsWordAny reports whether one of words starts a word in s at or after from. A

@@ -29,7 +29,11 @@ func TestArgentineWorkMode(t *testing.T) {
 		// A share of office days is hybrid.
 		{"share", "Buenos Aires, Parque Patricios | Híbrido (40% presencial) full-time", "hybrid"},
 		{"share remote", "Modalidad: 80% remoto – presencialidad en CABA", "hybrid"},
+		{"visits far", "Modalidad de trabajo: remota con flexibilidad horaria y 2 asistencias semanales en CABA.", "hybrid"},
+		{"share after label", "Modalidad de trabajo: remoto, 40% presencial.", "hybrid"},
 		// Not the arrangement.
+		{"negated share", "Puesto en planta; no se ofrece 50% teletrabajo.", ""},
+		{"seasonal share", "50% teletrabajo durante agosto.", ""},
 		{"torre template", "Ubicación: Remoto - Av. Andres Reyes 338, San Isidro, Peru. Modalidad de trabajo: híbrido", "hybrid"},
 		{"benefit refund", "Reintegro de gastos de home office.", ""},
 		{"discount", "Gimnasio 100% bonificado y prepaga 100% bonificada.", ""},

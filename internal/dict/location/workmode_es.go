@@ -91,8 +91,7 @@ var spanishWorkModePhrases = []struct {
 		"esquema de empleo: hibrido", "esquema de trabajo: hibrido", "esquema de trabajo hibrido",
 		"modalidad laboral: hibrida", "modalidad laboral: hibrido", "jornada laboral hibrida",
 		"jornada laboral: hibrida", "modalidad es hibrida", "ubicacion: hibrido",
-		// The plural only: Mexico's "bono de asistencia semanal" is an attendance bonus.
-		"ubicacion: hibrida", "asistencias semanales",
+		"ubicacion: hibrida",
 	}},
 	{"onsite", []string{
 		"100% presencial", "100 % presencial", "totalmente presencial",
@@ -125,12 +124,8 @@ const spanishNegationWindow = 20
 
 // spanishRefusals, found just AFTER a remote or hybrid phrase in the same sentence,
 // withdraw it ("teletrabajo/remoto no corresponde", "teletrabajo: no disponible").
-//
-// Weekly office visits after a remote phrase withdraw it too, and the hybrid list then
-// reads them: "modalidad de trabajo remota con 1/2 asistencias semanales en CABA" is
-// hybrid.
 var spanishRefusals = []string{"no es posible", "no disponible", "no aplica",
-	"no corresponde", "no se contempla", "no esta disponible", "asistencias semanales"}
+	"no corresponde", "no se contempla", "no esta disponible"}
 
 // spanishPerks, in the same sentence as a remote or hybrid phrase, make it a BOUNDED
 // perk rather than the arrangement: "teletrabajo completo en verano, Navidad y Semana
@@ -158,6 +153,12 @@ func spanishWorkMode(desc, lower string) string {
 	// "Modalidad de trabajo : híbrida": a space before the colon is common enough in
 	// Argentine postings to fold away.
 	text := strings.ReplaceAll(dropAccents(foldMarkup(desc)), " :", ":")
+	// A partial share or weekly office visits make whatever model the text also names
+	// hybrid: "Modalidad de trabajo: remoto, 40% presencial", "remota con flexibilidad
+	// horaria y 2 asistencias semanales en CABA".
+	if spanishSplitWeek(text) {
+		return "hybrid"
+	}
 	for _, wm := range spanishWorkModePhrases {
 		for _, p := range wm.phrases {
 			if guardedPhraseMatches(text, p, wm.mode, spanishGuards) {
@@ -165,16 +166,25 @@ func spanishWorkMode(desc, lower string) string {
 			}
 		}
 	}
-	if officeShare.MatchString(text) {
-		return "hybrid"
-	}
 	return ""
 }
 
-// officeShare is a share of the week in the office or at home below a hundred percent —
-// "Híbrido (40% presencial)", "Modalidad: 80% remoto" — which is hybrid. A hundred percent
-// is read by the phrase list ("100% remoto", "100% presencial").
-var officeShare = regexp.MustCompile(`(?:^|[^\d])[1-9]\d? ?% (?:presencial|presencialidad|remoto|remota|en remoto|home office|teletrabajo)\b`)
+// spanishSplitWeek is a week split between the office and home: a share below a hundred
+// percent ("Híbrido (40% presencial)", "Modalidad: 80% remoto") or weekly office visits
+// ("1/2 asistencias semanales"), each under the same guards as the phrase list ("no se
+// ofrece 50% teletrabajo" is not one). A hundred percent is the phrase list's ("100%
+// remoto", "100% presencial"); the singular "asistencia semanal" is absent, because
+// Mexico's "bono de asistencia semanal" is an attendance bonus.
+func spanishSplitWeek(text string) bool {
+	for _, m := range splitWeek.FindAllStringIndex(text, -1) {
+		if !spanishGuards.withdraws(text, m[0], m[1]) {
+			return true
+		}
+	}
+	return false
+}
+
+var splitWeek = regexp.MustCompile(`\b[1-9]\d? ?% (?:presencial|presencialidad|remoto|remota|en remoto|home office|teletrabajo)\b|\basistencias semanales\b`)
 
 // dropAccents removes the combining marks from text, so "híbrida" reads "hibrida" and
 // "días" reads "dias".
