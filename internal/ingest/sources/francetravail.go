@@ -231,8 +231,13 @@ func (w *francetravailWalk) window(ctx context.Context, from, to time.Time) (int
 		return 0, err
 	}
 	total, stated := first.total()
-	full := len(first.Results) == francetravailPageSize
-	if (stated && total > francetravailWindow) || (!stated && full && w.reachesWindowEnd(ctx, from, to)) {
+	overflows := stated && total > francetravailWindow
+	if !stated && len(first.Results) == francetravailPageSize {
+		if overflows, err = w.reachesWindowEnd(ctx, from, to); err != nil {
+			return 0, err
+		}
+	}
+	if overflows {
 		if from.IsZero() {
 			from, to = w.s.floor, w.s.now().Add(time.Hour)
 		}
@@ -270,10 +275,14 @@ func (w *francetravailWalk) window(ctx context.Context, from, to time.Time) (int
 }
 
 // reachesWindowEnd reports, for a page that states no total, whether the window's last page is
-// full — the only sign left that the window holds more than the API will show.
-func (w *francetravailWalk) reachesWindowEnd(ctx context.Context, from, to time.Time) bool {
+// full — the only sign left that the window holds more than the API will show. Its failing fails
+// the walk: read as "not full", it would let a window past the cap pass for a whole one.
+func (w *francetravailWalk) reachesWindowEnd(ctx context.Context, from, to time.Time) (bool, error) {
 	p, found, err := w.page(ctx, from, to, francetravailWindow-francetravailPageSize)
-	return err == nil && found && len(p.Results) == francetravailPageSize
+	if err != nil {
+		return false, err
+	}
+	return found && len(p.Results) == francetravailPageSize, nil
 }
 
 func (w *francetravailWalk) keep(offers []francetravailOffer) {

@@ -23,6 +23,8 @@ type francetravailFake struct {
 	noTotals bool
 	// refuseToken answers 401 to the first search made with this token.
 	refuseToken string
+	// failRange answers 503 to every search for this range.
+	failRange string
 
 	mu       sync.Mutex
 	tokens   int
@@ -58,6 +60,9 @@ func (f *francetravailFake) GetJSONOrNoContent(_ context.Context, raw string, he
 	f.mu.Unlock()
 	if refuse {
 		return false, &StatusError{Method: "GET", Code: 401, URL: raw}
+	}
+	if f.failRange != "" && q.Get("range") == f.failRange {
+		return false, &StatusError{Method: "GET", Code: 503, URL: raw}
 	}
 	var lo, hi int
 	if _, err := fmt.Sscanf(q.Get("range"), "%d-%d", &lo, &hi); err != nil || lo > 1000 || hi > 1149 || hi < lo {
@@ -262,5 +267,14 @@ func TestFranceTravailReadsAWindowToItsLastPage(t *testing.T) {
 		if len(jobs) != 1100 {
 			t.Errorf("noTotals=%v: read %d of 1100 offers", noTotals, len(jobs))
 		}
+	}
+}
+
+// With no stated total, the probe of the window's last page is what says whether the window
+// overflows; its failing must fail the board, not pass a capped window off as whole.
+func TestFranceTravailFailedOverflowProbeFailsTheBoard(t *testing.T) {
+	f := &francetravailFake{offers: francetravailSynthetic(3000), noTotals: true, failRange: "1000-1149"}
+	if _, err := newTestFranceTravail(f).Fetch(context.Background(), CompanyEntry{Board: "75"}); err == nil {
+		t.Fatal("a failed overflow probe did not fail the board")
 	}
 }
