@@ -14,6 +14,7 @@ package location
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/platform/stringset"
@@ -66,7 +67,7 @@ func Parse(location string) Geo {
 // contested town, and the metro of a city. They are never added to Countries or Regions —
 // the caller owns that signal — and a line that states its own country ignores them.
 func ParseIn(location string, known []string) Geo {
-	lower := strings.ToLower(location)
+	lower := flagsToCodes(strings.ToLower(location))
 
 	// A token that opened a parenthesis is marked, so it can be told apart from a place
 	// in its own right once the separators are gone: see parenMark.
@@ -87,6 +88,9 @@ func ParseIn(location string, known []string) Geo {
 	}
 	_, hintAR := hint["ar"]
 	toks := strings.Split(s, ",")
+	// A five-digit token is a postcode of the country the line names, not a US ZIP, when
+	// the line names no part of the US (location_fr.go).
+	foreignPostcodes := foreignPostcodeLine(toks, namesUS, hint)
 	// Metros a metropolitan-region token states without naming a city ("Delhi NCR").
 	regionMetros := map[string]struct{}{}
 
@@ -114,7 +118,7 @@ func ParseIn(location string, known []string) Geo {
 	var pending []pendingCity
 	// renamedContested holds the contested long-tail cities the line names by an alias of
 	// a differently named place, emitted after the loop only if the line states its country.
-	var renamedContested []cityEntry
+	var renamedContested []heldContested
 	// placeToks counts the tokens left once work-mode words are cut. Whether one came before
 	// matters because a province named after its capital is the province only after another
 	// place (provinceAfterCity); the count, because the caller's countries name a pending or
@@ -138,6 +142,19 @@ func ParseIn(location string, known []string) Geo {
 		tok = stripCityPrefix(tok)
 		tok = stripAreaWords(tok)
 		tok = stripPostalPrefix(tok)
+		if foreignPostcodes {
+			// The postcode alone, or after its town ("Saint-Denis 97400, La Réunion").
+			if isUSZip(tok) {
+				prevTok = tok
+				continue
+			}
+			if f := strings.Fields(tok); len(f) > 1 && isUSZip(f[len(f)-1]) {
+				tok = strings.Join(f[:len(f)-1], " ")
+			}
+		}
+		// The city of an arrondissement, and a compound town written with spaces for its
+		// hyphens ("Issy les Moulineaux"); see location_fr.go.
+		tok = hyphenFolded(frenchPlaceToken(tok))
 		// Strip embedded work-mode words so the place still resolves ("US Remote" ->
 		// "us"); a token that is ONLY a work-mode marker ("Remote", "On-site") strips
 		// to "" and is skipped — its work mode is detected separately from the whole
@@ -264,6 +281,17 @@ func ParseIn(location string, known []string) Geo {
 			}
 		}
 		resolved := resolveGeoToken(tok, prevTok, tokCountry, tokRegion)
+		// A US state or Canadian province after a town the curated tables placed elsewhere
+		// names that town's North American namesake: "Paris, TX", "London, ON", "Dublin,
+		// OH". The other country goes, unless another token also stated it — or the town
+		// is itself a province ("Saint-Laurent, Quebec, CA").
+		if code, ok := resolveSubdivision(tok, prevTok); ok && !first && len(lastCountries) > 0 && !slices.Contains(lastCountries, code) && !isSubdivisionName(prevTok) {
+			for _, c := range lastCountries {
+				if countryVotes[c]--; countryVotes[c] == 0 {
+					withdrawCountry(c, countrySet, regionSet)
+				}
+			}
+		}
 		// Recorded now, before any of the branches below (including the early
 		// "continue" on a resolved token) that would otherwise skip past the
 		// end-of-loop assignment and leave the next token's collision check
@@ -292,7 +320,7 @@ func ParseIn(location string, known []string) Geo {
 				// back until the country is known: "León" is León de los Aldama only in a
 				// line that places it in Mexico, and "León, España" must not name it.
 				if ce.Contested && !strings.EqualFold(foldIndianName(ce.Name), foldIndianName(tok)) {
-					renamedContested = append(renamedContested, ce)
+					renamedContested = append(renamedContested, heldContested{ce, tok})
 				} else {
 					citySet[ce.Name] = struct{}{}
 				}
@@ -331,7 +359,9 @@ func ParseIn(location string, known []string) Geo {
 		// ("in-house", "de-witt") whose first segment merely happens to be a code.
 		// Tried only after the whole token failed, so "cluj-napoca"/"nur-sultan"
 		// (dictionary keys) still win as a unit.
-		if segs := strings.Split(tok, "-"); len(segs) > 1 {
+		// A small town's own hyphens are not an export's: "Meslay-du-Maine" names no US
+		// state, "Porto-Vecchio" no Portugal.
+		if segs := strings.Split(tok, "-"); len(segs) > 1 && smallPlaceCandidates(tok) == nil {
 			tailResolved := false
 			for _, seg := range segs[1:] {
 				if resolveGeoName(strings.TrimSpace(seg), countrySet, regionSet) {
@@ -370,9 +400,17 @@ func ParseIn(location string, known []string) Geo {
 		stated = hint
 	}
 	resolvePending(pending, stated, citySet)
-	for _, ce := range renamedContested {
-		if _, ok := stated[ce.Country]; ok {
-			citySet[ce.Name] = struct{}{}
+	for _, h := range renamedContested {
+		if _, ok := stated[h.ce.Country]; ok {
+			citySet[h.ce.Name] = struct{}{}
+			continue
+		}
+		// The line's own country may have a place of the name too: "Valence, France" is
+		// Valence, where the table's first reading of "valence" is Valencia.
+		for c := range stated {
+			if name := contestedCityIn(h.tok, c); name != "" {
+				citySet[name] = struct{}{}
+			}
 		}
 	}
 

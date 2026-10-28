@@ -21,10 +21,16 @@ var regionCountries = map[string][]string{
 	"latam": {
 		"ar", "br", "mx", "cl", "co", "pe", "uy",
 		"ec", "bo", "py", "ve", "cr", "pa", "gt", "do", "hn", "sv", "ni", "pr",
+		// France's Caribbean and South American departments.
+		"mq", "gp", "gf",
 	},
 	"apac": {
 		"sg", "jp", "au", "nz", "in", "hk", "tw", "kr", "cn", "my", "th", "ph", "vn", "id",
 		"bd", "pk", "lk", "np", "kh", "la", "mm", "mn", "bn", "mo",
+		// French Polynesia. New Caledonia ("nc") and Mayotte ("yt") are absent: their codes
+		// are North Carolina's and Yukon's, and a code with a region becomes a country a
+		// bare "NC" would resolve to.
+		"pf",
 	},
 	"mena": {
 		"ae", "sa", "il", "eg", "tr", "qa",
@@ -33,6 +39,8 @@ var regionCountries = map[string][]string{
 	"africa": {
 		"za", "ng", "ke",
 		"gh", "et", "tz", "ug", "rw", "sn", "ci", "cm", "ao", "mz", "zm", "zw", "mu",
+		// Réunion.
+		"re",
 	},
 	// CIS — the whole post-Soviet space (the RU-segment geography of the Telegram
 	// sources): Russia, Belarus, Moldova, the Caucasus, and the five Central Asian

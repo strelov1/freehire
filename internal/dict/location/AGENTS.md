@@ -195,6 +195,30 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   Portuguese prose meets that list first. Measured 2026-10-27 over 30,677 Brazilian and
   6,931 Portuguese postings, location plus description: work mode 4.9% → 14.7% (BR) and
   15.8% → 18.6% (PT); 24 of 17,500 control rows changed, all correct.
+- **French location lines** (`location_fr.go`, the French block of
+  `foreignSubdivisionNames`, measured 2026-10-28 over 33k postings placed in France). A
+  compound town written with spaces for its hyphens ("Issy les Moulineaux", "Aix en
+  Provence") reads through `hyphenFolded`, which only rewrites a token no table knows as
+  written. An arrondissement ("Lyon 3e", "Paris 19e Arrondissement", "9th arrondissement
+  of Paris") is the city; "Paris La Défense" is La Défense. A five-digit token is a postcode
+  of the country the line names, not a US ZIP, when the line names no part of the US or
+  the caller's countries exclude it (`foreignPostcodeLine`; "Paris, 75009, France" was
+  France AND the US). A small town's own hyphens are not a dash export ("Meslay-du-Maine"
+  named Maine, "Porto-Vecchio" Portugal). The regions (current and pre-2016) and the
+  departments state France and no city; withheld: Vienne, Jura, Manche, Nord, Ardennes,
+  Meuse (each has a second reading). Martinique, Guadeloupe, Guyane, Réunion and French
+  Polynesia keep their own ISO codes (placed in latam, africa and apac); New Caledonia and
+  Mayotte are absent, their codes being North Carolina's and Yukon's. Two catalogue-wide
+  fixes came with it: a US state or Canadian province after a town the curated tables
+  placed abroad names its namesake and withdraws the other country ("Paris, TX", "London,
+  ON", "Naples, FL" were France, Britain, Italy too — unless the town is itself a province,
+  "Saint-Laurent, Quebec, CA"); and a held-back contested alias names the line's own
+  country's place of the name when that country has exactly one, literally so called
+  (`contestedCityIn`: "Valence, France", "León, ES", "Baden, CH"; not "Conceição", not
+  Argentina's several San Martíns). A flag emoji is its country ("Lyon 🇫🇷"). FR-placed
+  lines: country 90.2% → 94.4%, a wrong second country 0.4% → 0.2%, city 78.4% → 84.2% (the
+  3.6k bare "France" lines can name none). werecruit writes "Provence-Alpes-Côte d'Azur" as
+  the region of nearly every posting whatever the town; the town still resolves.
 - **Spanish and Latin-American location lines** (`location_es.go`, the Spanish, Mexican,
   Colombian, Argentine and Chilean blocks of `foreignSubdivisionNames`, measured 2026-10-27
   over 39k Spanish-language postings). The autonomous communities, Basque provinces and

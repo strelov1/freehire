@@ -66,11 +66,12 @@ func TestSpanishAndLatinAmericanLines(t *testing.T) {
 		{"Panamá", []string{"pa"}, nil},
 		{"República Dominicana", []string{"do"}, nil},
 		// A contested name whose city is named differently is not that city in another
-		// country: León, Spain is not León de los Aldama.
-		{"León, ES", []string{"es"}, nil},
-		{"Annapolis, MD", []string{"us"}, nil}, // was Simão Dias, Brazil
-		{"Canton, Ohio", []string{"us"}, nil},  // was Guangzhou
-		{"Salem, MA", []string{"us"}, nil},     // was Jerusalem
+		// country: León, Spain is not León de los Aldama. The line's own country names its
+		// own place of the name, when it has exactly one (location_fr.go).
+		{"León, ES", []string{"es"}, []string{"León"}},
+		{"Annapolis, MD", []string{"us"}, []string{"Annapolis"}}, // was Simão Dias, Brazil
+		{"Canton, Ohio", []string{"us"}, nil},                    // was Guangzhou
+		{"Salem, MA", []string{"us"}, nil},                       // was Jerusalem
 		{"Córdoba, Spain", []string{"es"}, []string{"Córdoba"}},
 	}
 	for _, tt := range tests {
