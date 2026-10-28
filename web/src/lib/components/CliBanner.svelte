@@ -28,7 +28,7 @@
     loadCliBannerDismissed();
   });
 
-  // The agents the strip names — Claude, ChatGPT, Cursor and Grok — drawn as one
+  // The agents the strip names — Claude, ChatGPT, Gemini, Cursor and Grok — drawn as one
   // animated stack in /brands/agent-logos.svg instead of a sentence that wrapped to four
   // lines on a phone. One file rather than four proxied logos: the marks are fixed brand
   // art, and the lift animation runs inside the SVG with no script.
@@ -54,8 +54,8 @@
         <span class="font-medium text-foreground">Search jobs inside your AI agent.</span>
         <img
           src="/brands/agent-logos.svg"
-          alt="Claude, ChatGPT, Cursor and Grok"
-          width="135"
+          alt="Claude, ChatGPT, Gemini, Cursor and Grok"
+          width="161"
           height="53"
           class="mx-1 -my-1 inline-block h-7 w-auto align-middle"
         />
