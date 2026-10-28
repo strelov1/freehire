@@ -82,7 +82,14 @@ func TestGetMyCalendarHTTPFlow(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/mentorship/availability/calendar", cookieAuth, h.GetMyCalendar)
 
-	month := bookingStart.Format("2006-01")
+	// The calendar's month is the MENTOR's month: a booking starting late on the last day
+	// of a UTC month is already in the next one in Berlin, and asking for the UTC month
+	// then misses it (this failed for any run on 2026-10-28, booking 10-31 23:00 UTC).
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatalf("load location: %v", err)
+	}
+	month := bookingStart.In(berlin).Format("2006-01")
 
 	// Signed out is refused.
 	signedOutResp, err := app.Test(httptest.NewRequestWithContext(ctx, fiber.MethodGet,
