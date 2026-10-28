@@ -91,6 +91,7 @@ var scraplingProviders = map[string]scraplingProvider{
 	// occasional 403 the adapter retries (measured 2026-10-28).
 	"cadremploi": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewCadremploi(f)
+	}},
 	// Only the posting pages: a Cloudflare challenge answers 403 to a plain client and to the
 	// impersonating fetcher alike (1 of 5 served direct, a third to four in five over the
 	// rotating proxy at ~225 KB a refusal), and the browser passes 18 of 18 from the crawl host's
