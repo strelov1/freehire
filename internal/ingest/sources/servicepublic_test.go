@@ -174,22 +174,24 @@ func TestServicePublicPageWithoutBodyIsNoAnswer(t *testing.T) {
 	}
 }
 
-// Three days of three-hourly runs re-list every page past the head even while the head and the
-// page count move between runs — which they do, and which an offset taken modulo either breaks.
+// Runs that come at irregular gaps of up to twelve hours, with the head and the page count moving
+// between them, re-list every page past the head within the 72-hour grace.
 func TestServicePublicWindowComesRound(t *testing.T) {
 	seen := map[int]bool{}
-	start := time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)
+	at := time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)
 	maxHead, minPages := 0, 1<<30
-	for run := 0; run < 24; run++ {
+	gaps := []int{3, 12, 5, 3, 9, 3, 12, 7}
+	for run := 0; at.Before(time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)); run++ {
 		head := 3 + run%7
 		pages := 2160 + run*6
 		maxHead, minPages = max(maxHead, head), min(minPages, pages)
-		for _, p := range servicepublicWindow(head, pages, servicepublicWindowPages, start.Add(time.Duration(run*3)*time.Hour)) {
+		for _, p := range servicepublicWindow(head, pages, servicepublicWindowPages, at) {
 			if p <= head || p > pages {
 				t.Fatalf("window page %d outside (%d, %d]", p, head, pages)
 			}
 			seen[p] = true
 		}
+		at = at.Add(time.Duration(gaps[run%len(gaps)]) * time.Hour)
 	}
 	for p := maxHead + 1; p <= minPages; p++ {
 		if !seen[p] {

@@ -58,19 +58,24 @@ const (
 	// online a day (~50 pages), so a run three hours after the last meets known postings within
 	// a few pages, and a cold start reads this many before turning to the window.
 	servicepublicHeadPages = 150
-	// servicepublicWindowPages is the refresh window: 300 pages a run, advanced by 100 pages an
-	// hour, comes round a ~2,500-page cycle in about a day at a three-hour cadence.
-	servicepublicWindowPages = 300
-	servicepublicWindowStep  = 100
+	// servicepublicWindowPages and servicepublicWindowStep size the refresh window: 600 pages a
+	// run at an offset that advances 50 pages an hour. A run can come late — the scheduler has
+	// held runs back for hours when the fleet is saturated — and an offset that advanced faster
+	// than a window is wide would step over the pages between two runs. At 50 an hour a 600-page
+	// window still meets the previous one after a twelve-hour gap, and the ~2,500-page cycle
+	// comes round in ~50 hours, inside the 72 h grace.
+	servicepublicWindowPages = 600
+	servicepublicWindowStep  = 50
 	// servicepublicWindowCycle is the granularity the window's cycle is rounded up to.
 	servicepublicWindowCycle = 500
-	// servicepublicSweepGrace leaves the window three turns to come round before a stored
-	// posting it has not re-listed is closed.
+	// servicepublicSweepGrace leaves the window time to come round before a stored posting it
+	// has not re-listed is closed.
 	servicepublicSweepGrace = 72 * time.Hour
-	// servicepublicMaxNewPerRun bounds the posting pages of one run: up to ~450 listing pages
-	// and 900 posting pages at one a second, plus the writes, fit the 3,000 s run timeout this
-	// provider is scheduled with. A cold catalogue is taken newest first over many runs.
-	servicepublicMaxNewPerRun   = 900
+	// servicepublicMaxNewPerRun bounds the posting pages of one run: up to ~750 listing pages
+	// (~1-2 s each) and 600 posting pages at one a second, plus the writes, fit the 3,000 s run
+	// timeout this provider is scheduled with. A cold catalogue is taken newest first over many
+	// runs.
+	servicepublicMaxNewPerRun   = 600
 	servicepublicDeadlineMargin = 5 * time.Minute
 )
 
@@ -266,7 +271,7 @@ func servicepublicWindow(head, pages, windowPages int, now time.Time) []int {
 	cycle := (pages/servicepublicWindowCycle + 1) * servicepublicWindowCycle
 	start := int((now.Unix() / 3600 * servicepublicWindowStep) % int64(cycle))
 	var out []int
-	for i := 0; i < windowPages; i++ {
+	for i := 0; i < min(windowPages, cycle); i++ {
 		if p := 1 + (start+i)%cycle; p > head && p <= pages {
 			out = append(out, p)
 		}
