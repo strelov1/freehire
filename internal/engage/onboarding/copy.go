@@ -215,7 +215,7 @@ var specs = map[Step]spec{
 		preheader: "Find people applying to the same companies — anonymously, for free.",
 		heading:   "You don’t have to interview alone",
 		body: body("buddies", `
-{{template "p" "Somewhere on freehire, someone applied to the same companies you did — and one of them just had the interview you’re still waiting for."}}
+{{template "p" "If you’ve applied anywhere lately, chances are someone on freehire applied to the same companies — and one of them may have just had the interview you’re preparing for."}}
 {{template "image-link" (mailImageLink .BuddiesURL .BuddiesDemoURL "An example interview buddies feed: members applying and interviewing at the same companies, then a message asking how the interview went" 480)}}
 {{template "p" "Interview buddies lets you find them. Join under a random handle and you’ll see members looking for the same kind of role, in the same place, and how far they got: applied, interview, offer."}}
 {{template "lead" "Then ask the one who’s been there."}}
@@ -224,8 +224,8 @@ var specs = map[Step]spec{
 {{template "button" (mailLink .BuddiesURL "Find your interview buddies")}}
 {{template "muted" "If something stopped you from joining, reply — I read every reply myself."}}`),
 		text: func(base string) string {
-			return "Somewhere on freehire, someone applied to the same companies you did — and one of them just\n" +
-				"had the interview you're still waiting for.\n\n" +
+			return "If you've applied anywhere lately, chances are someone on freehire applied to the same\n" +
+				"companies — and one of them may have just had the interview you're preparing for.\n\n" +
 				"Interview buddies lets you find them. Join under a random handle and you'll see members\n" +
 				"looking for the same kind of role, in the same place, and how far they got: applied,\n" +
 				"interview, offer.\n\n" +
