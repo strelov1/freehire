@@ -358,3 +358,76 @@ func TestPandapeAnalyticsCountryIsUnescaped(t *testing.T) {
 		t.Errorf("country = %q, want España", got)
 	}
 }
+
+// The three Argentine vacancy pages were fetched from ManpowerGroup's and Hanaq's tenants on
+// 2026-10-28 (dataLayerProps and JobPosting verbatim, the description cut). Each card's salary
+// is the page's own wallet text, verbatim; none of them, nor anything else on the page, names a
+// currency other than the portal's "$".
+func TestPandapeLatamDropsASalaryNoArgentineJobPays(t *testing.T) {
+	cases := []struct {
+		fixture, id, wallet string
+		wantMin, wantMax    int // 0: no salary
+	}{
+		// A full-time warehouse job, Monday to Saturday, at 2,000-3,000 ARS a month: three
+		// hundredths of the median the tenants state. Probably dollars or an hourly rate, but the
+		// page says neither, so nothing is stored rather than either guess.
+		{"latam_manpower_detail_ars_too_low.html", "13774922", "2.000 $ a 3.000 $ (Mensual bruto)", 0, 0},
+		// A senior mining engineer at "111.111 $": the form's filler, not a figure.
+		{"latam_hanaq_detail_placeholder.html", "13074439", "111.111 $ (Mensual bruto)", 0, 0},
+		{"latam_manpower_detail_ars.html", "13376070", "1.000.000 $ a 1.200.000 $ (Mensual bruto)", 1000000, 1200000},
+	}
+	for _, tc := range cases {
+		root, err := html.Parse(strings.NewReader(pdFixture(t, tc.fixture)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		j, ok := pandapeLatam.job(root, pandapeCard{ID: tc.id, Title: "x", Salary: tc.wallet}, "x", CompanyEntry{})
+		if !ok || len(j.Countries) != 1 || j.Countries[0] != "ar" {
+			t.Fatalf("%s: ok=%v countries=%v", tc.id, ok, j.Countries)
+		}
+		if tc.wantMin == 0 {
+			if j.SalaryMin != nil || j.SalaryMax != nil || j.SalaryCurrency != "" || j.SalaryPeriod != "" {
+				t.Errorf("%s: salary = %v-%v %s/%s, want none", tc.id, j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod)
+			}
+			continue
+		}
+		if j.SalaryMin == nil || *j.SalaryMin != tc.wantMin || *j.SalaryMax != tc.wantMax || j.SalaryCurrency != "ARS" || j.SalaryPeriod != "month" {
+			t.Errorf("%s: salary = %v-%v %s/%s", tc.id, j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod)
+		}
+	}
+}
+
+// The monthly bounds below are values stored for open pandapelatam postings on 2026-10-28.
+func TestPandapeLatamSalaryIsPlausible(t *testing.T) {
+	cases := []struct {
+		country, period string
+		min, max        int
+		want            bool
+	}{
+		{"ar", "month", 680000, 1000000, true},
+		{"ar", "month", 2000, 3000, false},      // 133 such rows
+		{"ar", "month", 2000, 6100000, false},   // a junk bound beside a real one still marks a junk range
+		{"ar", "month", 45000, 45000, true},     // low, but within a twentieth of the median
+		{"ar", "month", 11111, 11111, false},    // filler
+		{"ar", "month", 600000, 2222222, false}, // filler in either bound
+		{"ar", "month", 22221, 22222, false},
+		{"cl", "month", 999999, 1000000, true}, // "up to a million": a run of nines is a price, not filler
+		{"cl", "month", 200000, 200000, true},  // Chile's part-time postings
+		{"cl", "month", 11111111, 11111111, false},
+		{"pe", "month", 615, 615, true}, // half of Peru's 1,230 minimum, a part-time wage
+		{"mx", "month", 2290, 2290, true},
+		{"mx", "month", 2, 2788, false},
+		{"co", "month", 1, 2, false},
+		{"co", "month", 296000, 296000, true},
+		{"uy", "month", 15000, 15000, true},
+		{"br", "month", 1000, 2000, false}, // no measured floor: never vouched for
+		// Every stored salary is monthly, so no other period has a floor; filler is still filler.
+		{"ar", "hour", 2000, 3000, true},
+		{"ar", "hour", 11111, 11111, false},
+	}
+	for _, tc := range cases {
+		if got := pandapeLatamSalaryPlausible(tc.country, tc.period, tc.min, tc.max); got != tc.want {
+			t.Errorf("%s %s %d-%d = %v, want %v", tc.country, tc.period, tc.min, tc.max, got, tc.want)
+		}
+	}
+}

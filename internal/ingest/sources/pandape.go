@@ -394,7 +394,9 @@ func (d pandapeDomain) job(root *xhtml.Node, c pandapeCard, link string, e Compa
 		if b.Value.MaxValue != nil {
 			hi = int(math.Round(*b.Value.MaxValue))
 		}
-		if period := schemaSalaryPeriod(b.Value.UnitText); lo > 0 && hi >= lo && period != "" && currency != "" {
+		period := schemaSalaryPeriod(b.Value.UnitText)
+		plausible := !d.templatedJobPosting || (len(job.Countries) == 1 && pandapeLatamSalaryPlausible(job.Countries[0], period, lo, hi))
+		if lo > 0 && hi >= lo && period != "" && currency != "" && plausible {
 			job.SalaryMin, job.SalaryMax = &lo, &hi
 			job.SalaryCurrency, job.SalaryPeriod = currency, period
 		}
@@ -510,13 +512,58 @@ var pandapeWeeklyHours = regexp.MustCompile(`^Jornada de (\d+) horas semanales$`
 // every one of them, so the currency is taken from the country — and only when the card's
 // salary carries that country's own symbol, so a posting paying in dollars is never recorded
 // in pesos. The countries are the ones the tenants measured on 2026-10-24 state.
-var pandapeLatamCurrencies = map[string]struct{ code, symbol string }{
-	"ar": {"ARS", "$"},
-	"cl": {"CLP", "$"},
-	"co": {"COP", "$"},
-	"mx": {"MXN", "$"},
-	"pe": {"PEN", "S/"},
-	"uy": {"UYU", "$"},
+//
+// monthlyMedian is the median monthly salary_min the open postings of that country stored on
+// 2026-10-28 (placeholders excluded; ar 1,191 salaries, cl 5,482, co 9,945, mx 8,950, pe 2,328,
+// uy 45), and is what pandapeLatamSalaryPlausible measures a monthly salary against.
+var pandapeLatamCurrencies = map[string]struct {
+	code, symbol  string
+	monthlyMedian int
+}{
+	"ar": {"ARS", "$", 680_000},
+	"cl": {"CLP", "$", 657_553},
+	"co": {"COP", "$", 1_800_000},
+	"mx": {"MXN", "$", 11_000},
+	"pe": {"PEN", "S/", 1_230},
+	"uy": {"UYU", "$", 30_000},
+}
+
+// pandapeLatamSalaryPlausible reports whether a salary range the employer typed into the
+// career site's form is a figure at all. The form is free: the page writes back whatever was
+// typed, with the portal's one symbol and "(Mensual bruto)", and states no other currency
+// anywhere — so a value that cannot be a wage in that currency is dropped, never re-read as
+// dollars or as an hourly rate, which would be a guess.
+//
+// Two things mark a range as not a figure:
+//
+//   - a bound that is one digit repeated, five or more times (11111, 222222, 1111111): the
+//     filler the form's required field gets. In 2026-10-28's open postings it is 127 of 1,318
+//     Argentine salaries, 44 of 89 Uruguayan, 22 of 5,504 Chilean, and nothing else. A run of nines is
+//     not filler — Chile's "999.999 $ a 1.000.000 $" is "up to a million" — and four digits are
+//     not either, since 2222 is a believable sol or peso figure.
+//   - a monthly bound under a twentieth of its country's median. Every country's genuine low
+//     end — part-time and half-wage postings, Peru's 615 (half its 1,230 minimum), Chile's
+//     200,000, Mexico's 2,090, Colombia's 296,000 — sits between a half and a sixth of its
+//     median, so a twentieth leaves three times that margin. Below it sit 184 more Argentine
+//     salaries, mostly 2,000-10,000 (a 340th to a 70th: IT leads and full-time warehouse jobs
+//     alike), plus Colombia's "1 $ a 2 $" and Mexico's "2 $ a 2.788 $". Peso inflation only ever lowers the floor relative to real pay, so a stale median
+//     admits more rather than refusing a real wage; it should be re-measured when it does.
+//
+// No period but the month has been observed, so no other period has a floor; a country with
+// no measured median is never vouched for.
+func pandapeLatamSalaryPlausible(country, period string, lo, hi int) bool {
+	cur, ok := pandapeLatamCurrencies[country]
+	if !ok || pandapeFillerDigits(lo) || pandapeFillerDigits(hi) {
+		return false
+	}
+	return period != "month" || lo*20 >= cur.monthlyMedian
+}
+
+// pandapeFillerDigits reports a number written as one digit, 1 to 8, repeated five or more
+// times.
+func pandapeFillerDigits(n int) bool {
+	s := strconv.Itoa(n)
+	return len(s) >= 5 && s[0] != '9' && strings.Count(s, s[:1]) == len(s)
 }
 
 func pandapeLatamCurrency(country, cardSalary string) string {
