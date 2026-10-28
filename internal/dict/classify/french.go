@@ -927,11 +927,13 @@ func foldFrench(lower string) string {
 
 // looksFrench reports whether a title shows it is written in French: a French gender
 // notice, an accented letter French uses, an elided article, or a French function
-// word or contract term. "Stage" is not one: Dutch and English titles carry it too
+// word or contract term. A point médian counts only between two letters
+// ("développeur·se"): some feeds separate an English title's parts with a bullet
+// ("Maintenance Planner • Austin"). "Stage" is not one: Dutch and English titles carry it too
 // ("Data Stage Consultant", "Launch Engineer, Stage 0"). Many of the table's words are also English ones —
 // "commercial", "assistant", "agent", "boutique", "restaurant", "production" — and an
 // English title the main table left unresolved must not be read as French.
-var looksFrenchRe = regexp.MustCompile(`[éèêàçùâîôûëï]|\b[hf]\s*/\s*[hf]\b|\b(?:d|l|qu)'\p{L}|\b(?:de|des|du|et|en|pour|au|aux|chez|avec|sur)\b|\b(?:cdi|cdd|alternance|alternant|stagiaire|apprenti|interim)\b|[·•]|\((?:e|ne|euse|trice|rice)\)`)
+var looksFrenchRe = regexp.MustCompile(`[éèêàçùâîôûëï]|\b[hf]\s*/\s*[hf]\b|\b(?:d|l|qu)'\p{L}|\b(?:de|des|du|et|en|pour|au|aux|chez|avec|sur)\b|\b(?:cdi|cdd|alternance|alternant|stagiaire|apprenti|interim)\b|\p{L}[·•]\p{L}|\((?:e|ne|euse|trice|rice)\)`)
 
 func looksFrench(lower string) bool {
 	return looksFrenchRe.MatchString(strings.ReplaceAll(lower, "’", "'")) || frenchOnlyHead.MatchString(foldSpanish(lower))
@@ -960,10 +962,11 @@ var frenchKitchenField = map[string]bool{
 // "CFA", courants faibles — which the main table reads as the chief financial officer:
 // "Technicien de maintenance CFO/CFA", "Conducteur de travaux CFO". It is rewritten only
 // on a French title that also names electrical or building work (frenchElectricalWork),
-// so "Directeur financier (CFO)" stays the executive.
+// so "Directeur financier (CFO)" stays the executive. Its boundaries are spelled out
+// because RE2's \b is ASCII-only and would never sit before an "é".
 var (
 	frenchCFO            = regexp.MustCompile(`\bcfo\b`)
-	frenchElectricalWork = regexp.MustCompile(`\b(?:cfa|maintenance|multitechnique|[ée]lectri\p{L}*|travaux|chantier|technicien\p{L}*|[ée]tudes?|affaires|courants?|ing[ée]nieur\p{L}*|r[ée]f[ée]rent\p{L}*)\b`)
+	frenchElectricalWork = regexp.MustCompile(`(?:^|[^\p{L}\p{N}_])(?:cfa|maintenance|multitechnique|[ée]lectri\p{L}*|travaux|chantier|technicien\p{L}*|[ée]tudes?|affaires|courants?|ing[ée]nieur\p{L}*|r[ée]f[ée]rent\p{L}*)(?:$|[^\p{L}\p{N}_])`)
 )
 
 // unchefFrench rewrites a French non-kitchen "chef de X" so the main table's "chef" (a

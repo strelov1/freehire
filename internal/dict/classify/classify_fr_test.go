@@ -77,6 +77,8 @@ func TestFrenchHeadsAndFields(t *testing.T) {
 		{"Technicien de maintenance CFO/CFA F/H", "skilled_trades", ""},
 		{"Conducteur de travaux CFO F/H", "skilled_trades", ""},
 		{"Electricien Cfo / Cfa H/f (H/F)", "skilled_trades", ""},
+		{"Électricien CFO H/F", "skilled_trades", ""},
+		{"Chargé d'Études CFO", "skilled_trades", ""},
 		{"CFO", "finance", ""},
 
 		// A workplace is the client's sector on a technical title.
@@ -127,6 +129,7 @@ func TestFrenchReadsOnlyFrenchTitles(t *testing.T) {
 		{"Programmer Analyst, System and infrastructure operations, maintenance and development", "", ""},
 		{"Account Executive - Early Stage", "sales", ""},
 		{"Stage Manager", "", ""},
+		{"Maintenance Planner • Austin", "", ""},
 		{"Hotel Restaurant Supervisor", "", ""},
 	}
 	for _, c := range cases {
