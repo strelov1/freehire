@@ -21,8 +21,8 @@ FAQ; the other showing before-and-after copy and visible scores.
 - No competitor names anywhere on the page or in code.
 - No Sparkles icon for AI. Mark AI in words.
 - "CV", not "résumé". English copy.
-- Price: Pro is **$5 a month, cancel any time**. There is no refund guarantee, so do not
-  write one. Read the price from the same source `/pricing` uses, so the two pages cannot
+- Price: Pro is **$5 a month, cancel any time**, with the 14-day no-questions refund /pricing already
+  offers. Quote that refund exactly as /pricing states it. Read the price from the same source `/pricing` uses, so the two pages cannot
   disagree.
 - `TailorWorkspacePreview.svelte` is also used by the onboarding tour. Leave it as is. The
   hero demo is a new component.

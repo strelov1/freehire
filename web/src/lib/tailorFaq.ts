@@ -30,12 +30,12 @@ export const TAILOR_FAQ: FaqItem[] = [
   {
     question: 'How much does it cost, and how do I cancel?',
     answer:
-      'Tailoring is part of Pro, which also covers cover letters, the AI assistant and auto-apply. It is billed monthly or yearly and you can cancel any time from your plan page; Pro stays on until the end of the period you paid for.',
+      'Tailoring is part of Pro, which also covers cover letters, the AI assistant and auto-apply. It is billed monthly or yearly and you can cancel any time from your plan page; Pro stays on until the end of the period you paid for. Not what you expected? Email us within 14 days and we\'ll refund it.',
   },
   {
     question: 'What happens to my data?',
     answer:
-      'Your CV is used only for the features you run on it. Your contact details are never sent to the tailoring agent, and the whole codebase is open source, so you can check how it is handled.',
+      'Your CV is used only for the features you run on it. The contact block at the top of your CV (name, email, phone, links) is never sent to the tailoring agent, and the whole codebase is open source, so you can check how it is handled.',
   },
   {
     question: 'Can I drive it from my own agent or the terminal?',

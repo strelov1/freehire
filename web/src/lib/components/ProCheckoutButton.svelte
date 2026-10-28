@@ -1,11 +1,12 @@
 <!-- The Pro call to action on a feature landing: straight to checkout at the monthly
      price, the same session /pricing opens. A promo code is entered on /pricing only; a
      discount the account already holds applies here too, since checkout reads it. With
-     no price known it falls back to the plan page rather than a dead button. -->
+     no price known it falls back to the plan page rather than a dead button. An account
+     already on a paid tier is sent to its plan page instead, never to checkout. -->
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { priceLabel } from '#lib/proPrice.js';
   import { promptSignIn } from '#lib/signin.js';
   import type { PublicPrice } from '#lib/types.js';
@@ -34,7 +35,9 @@
   }
 </script>
 
-{#if price}
+{#if currentUser()?.tier === 'pro' || currentUser()?.tier === 'ultra'}
+  <Button href={resolve('/my/plan')} variant="outline" size="lg">Manage your plan</Button>
+{:else if price}
   <Button variant="primary" size="lg" disabled={busy} onclick={checkout}>
     Get Pro — {priceLabel(price)}/mo
   </Button>

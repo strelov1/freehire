@@ -5,7 +5,7 @@ import type { PublicPrice } from '#lib/types.js';
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p }));
 vi.mock('#lib/signin.js', () => ({ promptSignIn: vi.fn() }));
-vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => false }));
+vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => false, currentUser: () => null }));
 vi.mock('#lib/api.js', () => ({ api: { billingCheckout: vi.fn() } }));
 
 vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('reduce'), media: q }));

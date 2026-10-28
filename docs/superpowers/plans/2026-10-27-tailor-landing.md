@@ -18,7 +18,7 @@ Worktree: `/Users/i_strelov/Projects/hire-wt-tailor-landing`, branch `tailor-lan
 - No competitor names anywhere, in copy or in code.
 - No Sparkles icon. Mark AI in words.
 - Say "CV", never "résumé". All copy is in English.
-- Pro is $5 a month, cancel any time. Never promise a refund. The price shown always comes from the backend's plan matrix, never from a hardcoded number.
+- Pro is $5 a month, cancel any time, with the 14-day no-questions refund /pricing already offers. Quote that refund exactly as /pricing states it. The price shown always comes from the backend's plan matrix, never from a hardcoded number.
 - `TailorWorkspacePreview.svelte` stays unchanged, because the onboarding tour uses it.
 - Every demo number and bullet is illustrative and labelled "example". An "after" bullet may only restate facts its "before" bullet already holds. The demo must not show tailoring that adds facts.
 - The tailor page's server load must not read cookies. A shared cache keys the HTML on the URL alone.

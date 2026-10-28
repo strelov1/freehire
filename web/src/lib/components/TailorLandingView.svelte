@@ -64,7 +64,7 @@
         <ProCheckoutButton {price} />
         <a href="#how-it-works" class="text-sm font-medium text-muted-foreground hover:text-foreground">See how it works ↓</a>
       </div>
-      <p class="mt-3 text-xs text-muted-foreground">Cancel any time · Your original CV is never touched.</p>
+      <p class="mt-3 text-xs text-muted-foreground">Cancel any time · 14-day refund · Your original CV is never touched.</p>
     </div>
     <TailorHeroDemo />
   </section>
@@ -152,8 +152,12 @@
       <ul class="grid gap-px overflow-hidden rounded-xl border border-border bg-border">
         {#each PRO_PERKS as perk (perk.text)}
           <li class="bg-background">
-            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- PRO_PERKS hrefs are built with resolve() in proPerks.ts -->
-            <a href={perk.href} class="block px-5 py-4 text-sm font-medium hover:bg-secondary/50">{perk.text}</a>
+            {#if perk.href === resolve('/features/tailor')}
+              <span class="block px-5 py-4 text-sm font-medium">{perk.text}</span>
+            {:else}
+              <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- PRO_PERKS hrefs are built with resolve() in proPerks.ts -->
+              <a href={perk.href} class="block px-5 py-4 text-sm font-medium hover:bg-secondary/50">{perk.text}</a>
+            {/if}
           </li>
         {/each}
       </ul>
