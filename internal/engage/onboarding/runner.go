@@ -28,8 +28,8 @@ type Config struct {
 	// and without a window the first run would greet every account ever created.
 	WindowDays int32
 	// AdvancedSearchAfterDays, NoAlertAfterDays, ExtensionAfterDays,
-	// OpenSourceAfterDays and TailorAfterDays are how long an account must have existed (since the welcome
-	// greeting) before those steps are eligible. They must strictly increase — Run
+	// OpenSourceAfterDays, TailorAfterDays and BuddiesAfterDays are how long an account
+	// must have existed (since the welcome greeting) before those steps are eligible. They must strictly increase — Run
 	// iterates the steps in that order, and a later step racing ahead of an earlier one
 	// is what the pacing exists to prevent.
 	AdvancedSearchAfterDays int32

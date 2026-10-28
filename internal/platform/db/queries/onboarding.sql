@@ -145,7 +145,7 @@ ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
 
 -- name: ListBuddiesCandidates :many
--- Greeted a while ago: an introduction to interview buddies. It skips three kinds
+-- Greeted a while ago: an introduction to interview buddies. It skips two kinds
 -- of account, each of which already knows the feature or has already been pitched it:
 --
 --   * one with a buddy_members row, active or left — a member, or someone who joined

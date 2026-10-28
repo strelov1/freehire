@@ -3667,7 +3667,7 @@ type Querier interface {
 	// all, because the only thing that creates the row is a page behind the login.
 	// Migration 0153 split the two.
 	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
-	// Greeted a while ago: an introduction to interview buddies. It skips three kinds
+	// Greeted a while ago: an introduction to interview buddies. It skips two kinds
 	// of account, each of which already knows the feature or has already been pitched it:
 	//
 	//   * one with a buddy_members row, active or left — a member, or someone who joined
