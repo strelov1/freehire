@@ -3239,6 +3239,10 @@ type Querier interface {
 	// table — queued behind it. This reads only the canonicals that lack a row, through the
 	// company_slug index. The registry rather than the current wave, so a run interrupted before
 	// its reconcile is healed by the next one, whose plan no longer holds the drained slugs.
+	//
+	// The name is the most recent one seen for the slug, as ListCompaniesForMerge reads it, so the
+	// row is not named after whichever variant the scan met first. Private rows are skipped: a JD
+	// one user pasted in must not name a public company (see ListSlugLikeCompaniesForBackfill).
 	InsertMissingCanonicalCompanies(ctx context.Context) (int64, error)
 	// Reserves a company slug for a claim in progress. The UNIQUE(company_slug) constraint is
 	// the whole race guard: two concurrent claims on the same slug both attempt this insert, one

@@ -18,15 +18,16 @@ func TestMergeReconcileIsScopedToTheAliasRegistry(t *testing.T) {
 	if _, err := pool.Exec(ctx, "TRUNCATE companies, company_slug_aliases, jobs RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	job := func(externalID, slug, company string) {
+	jobAt := func(externalID, slug, company, createdAt string, private bool) {
 		t.Helper()
 		if _, err := pool.Exec(ctx,
-			`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, company)
-			 VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, $2, $3)`,
-			externalID, slug, company); err != nil {
+			`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, company, created_at, is_private)
+			 VALUES ('test', $1, 'http://example.test', 'A job', 'job-' || $1, $2, $3, $4::timestamptz, $5)`,
+			externalID, slug, company, createdAt, private); err != nil {
 			t.Fatalf("insert job %q: %v", externalID, err)
 		}
 	}
+	job := func(externalID, slug, company string) { jobAt(externalID, slug, company, "2026-01-01", false) }
 	alias := func(aliasSlug, canonical string) {
 		t.Helper()
 		if _, err := q.InsertCompanySlugAlias(ctx, InsertCompanySlugAliasParams{
@@ -40,7 +41,12 @@ func TestMergeReconcileIsScopedToTheAliasRegistry(t *testing.T) {
 	// retired row is still there, and the canonical has no row of its own.
 	insertCompany(t, pool, "centerforce-kk", "CenterForce")
 	alias("centerforce-kk", "center-force-kk")
-	job("1", "center-force-kk", "Center Force")
+	// The row takes the most recent name, not whichever variant the scan met first.
+	jobAt("1", "center-force-kk", "CENTER FORCE (old)", "2025-01-01", false)
+	jobAt("1b", "center-force-kk", "Center Force", "2026-06-01", false)
+	// A canonical carried only by a private row: a pasted JD must not name a public company.
+	alias("private-old", "private-only")
+	jobAt("4", "private-only", "Pasted Employer", "2026-01-01", true)
 	// A retired slug that is a reference row: kept, as DeleteOrphanCompanies keeps it.
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO companies (slug, name, is_reference) VALUES ('ref-old', 'Ref', true)`); err != nil {
@@ -74,6 +80,7 @@ func TestMergeReconcileIsScopedToTheAliasRegistry(t *testing.T) {
 		"revived":           true,
 		"unrelated-orphan":  true,
 		"unrelated-rowless": false,
+		"private-only":      false,
 	} {
 		got, err := q.CompanyExists(ctx, slug)
 		if err != nil {
@@ -82,6 +89,10 @@ func TestMergeReconcileIsScopedToTheAliasRegistry(t *testing.T) {
 		if got != want {
 			t.Errorf("CompanyExists(%q) = %v, want %v", slug, got, want)
 		}
+	}
+
+	if c, err := q.GetCompany(ctx, "center-force-kk"); err != nil || c.Name != "Center Force" {
+		t.Errorf("canonical name = %q, %v; want the most recent, %q", c.Name, err, "Center Force")
 	}
 
 	// A re-run finds nothing left to do.

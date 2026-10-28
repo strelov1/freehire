@@ -109,15 +109,20 @@ ORDER BY folded_key, canonical_slug;
 -- table — queued behind it. This reads only the canonicals that lack a row, through the
 -- company_slug index. The registry rather than the current wave, so a run interrupted before
 -- its reconcile is healed by the next one, whose plan no longer holds the drained slugs.
+--
+-- The name is the most recent one seen for the slug, as ListCompaniesForMerge reads it, so the
+-- row is not named after whichever variant the scan met first. Private rows are skipped: a JD
+-- one user pasted in must not name a public company (see ListSlugLikeCompaniesForBackfill).
 INSERT INTO companies (slug, name)
 SELECT DISTINCT ON (j.company_slug) j.company_slug, j.company
 FROM jobs j
-WHERE j.company_slug IN (
+WHERE NOT j.is_private
+  AND j.company_slug IN (
     SELECT a.canonical_slug
     FROM company_slug_aliases a
     WHERE NOT EXISTS (SELECT 1 FROM companies c WHERE c.slug = a.canonical_slug)
 )
-ORDER BY j.company_slug
+ORDER BY j.company_slug, j.created_at DESC, j.id DESC
 ON CONFLICT (slug) DO NOTHING;
 
 -- name: DeleteOrphanAliasCompanies :execrows
