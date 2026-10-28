@@ -38,6 +38,7 @@
         { label: 'Application tracking', href: resolve('/features/tracking') },
         { label: 'Notifications', href: resolve('/features/notifications') },
         { label: 'Referrals', href: resolve('/features/referrals') },
+        { label: 'Interview buddies', href: resolve('/features/interview-buddies') },
         { label: 'Ghost jobs', href: resolve('/features/ghost-jobs') },
       ],
     },
