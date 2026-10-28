@@ -551,6 +551,11 @@ func All(c HTTPClient) map[string]Source {
 		// hydrating each new posting from its page's ld+json. Posting pages refuse the
 		// project's bare User-Agent, hence the browser-compatible form of it. See catho.go.
 		compatibleUASource(c, NewCatho),
+		// Computrabajo: the general job board in each Spanish-speaking Latin American country,
+		// board = the country subdomain ("ar"), walked province by province under its 500-page
+		// pager cap, each new posting's body read from its page. Its edge refuses the project's
+		// bare User-Agent. See computrabajo.go.
+		compatibleUASource(c, NewComputrabajo),
 		// Cake: Taiwan's tech-leaning job board, enumerated through its search sliced by its own
 		// facets and hydrating each new posting from the detail API. The crawl hosts are
 		// Cloudflare-challenged, so it egresses through the rotating proxy (proxy.go). See cake.go.

@@ -445,6 +445,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   helixjobs: 'helixjobs',
   talentstorm: 'talentstorm',
   pandape: 'Pandapé',
+  computrabajo: 'Computrabajo',
   pandapelatam: 'Pandapé LatAm',
   pythonorg: 'Python.org',
   jobboardly: 'Job Boardly',
