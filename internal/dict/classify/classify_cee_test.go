@@ -248,6 +248,8 @@ func TestParse_CroatianSerbianTitles(t *testing.T) {
 		{"Analityk Projektant/ Analityczka Projektantka", "business_analysis"},
 		{"Projektant aplikacji multimedialnych, animacji i gier komputerowych", "software_engineering"},
 		{"Projektant (k/m) (bezpieczeństwo teleinformatyczne)", "security"},
+		{"Projektant graficzny", "design"},
+		{"Projektantka wnętrz", "design"},
 		// "Predavač" stays the Slovak shop assistant; the Croatian feminine is the lecturer.
 		{"Predavač", "retail"},
 		{"Predavačica engleskog jezika", "education"},

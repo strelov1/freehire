@@ -5305,7 +5305,7 @@ var coreCategoryTable = []aliasEntry{
 	{"rukovatelj radnim strojem", "skilled_trades"},
 	{"rukovatelj radnim strojevima", "skilled_trades"},
 	{"rukovalac građevinskim mašinama", "skilled_trades"},
-	{"traktorista", "logistics"},
+	{"traktorista", "skilled_trades"},
 	{"kućni majstor", "skilled_trades"},
 	{"domar", "personal_services"},
 	{"vrtlar", "skilled_trades"},
@@ -5319,7 +5319,7 @@ var coreCategoryTable = []aliasEntry{
 	{"ljevač", "manufacturing"},
 	{"šivač", "manufacturing"},
 	{"šivačica", "manufacturing"},
-	{"krojačica", "skilled_trades"},
+	{"krojačica", "manufacturing"},
 	{"građevinski radnik", "skilled_trades"},
 	{"građevinska radnica", "skilled_trades"},
 	{"građevinar", "skilled_trades"},
@@ -5662,13 +5662,20 @@ var coreCategoryTable = []aliasEntry{
 	// structure, and so does the Polish, Czech and Slovak "projektant" (roads, bridges,
 	// building services). But a "projektant programer" designs software and an "arhitekt
 	// in razvijalec" builds it, so both speak only after the programmer nouns, and the
-	// Polish designers of software, games and IT security are pinned ahead of them.
+	// Polish designers of software, games, graphics, interiors, fashion and IT security
+	// are pinned ahead of them.
 	{"analityk projektant", "business_analysis"},
 	{"analityczka projektantka", "business_analysis"},
 	{"projektant aplikacji", "software_engineering"},
 	{"projektantka aplikacji", "software_engineering"},
 	{"projektant gier", "design"},
 	{"projektantka gier", "design"},
+	{"projektant graficzny", "design"},
+	{"projektantka graficzna", "design"},
+	{"projektant wnętrz", "design"},
+	{"projektantka wnętrz", "design"},
+	{"projektant mody", "design"},
+	{"projektantka mody", "design"},
 	{"bezpieczeństwo teleinformatyczne", "security"},
 	{"bezpieczeństwa teleinformatycznego", "security"},
 	{"projektant", "engineering_design"},
