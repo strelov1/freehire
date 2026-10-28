@@ -329,3 +329,25 @@ func TestExtractHiringRoomTitleRefusesOtherPages(t *testing.T) {
 		t.Errorf("trailing space before ! = %q", got)
 	}
 }
+
+// Live-verified 2026-10-28: 20 of 20 sampled placeholder boards (company == the careers host)
+// named the employer in the careers page's og:site_name, while its <title> is whatever the
+// tenant typed ("Join our team and deliver real innovation...", "Jobs at Careers").
+func TestPlaceholderZohoRecruitUsesTheSiteName(t *testing.T) {
+	getter := fakeHTTP{
+		"https://scrumconnect.zohorecruit.eu/jobs/Careers":       `<head><title>Join our team and deliver real innovation that improves people’s lives.</title><meta property="og:site_name" content="Scrumconnect Limited" /></head>`,
+		"https://burtandassociates.zohorecruit.com/jobs/Careers": `<head><meta property="og:site_name" content="MB&amp;A" /></head>`,
+		"https://nometa.zohorecruit.in/jobs/Careers":             `<head><title>Jobs at Careers</title></head>`,
+	}
+	reg := NewPlaceholderRegistry(getter)
+	for board, want := range map[string]string{
+		"scrumconnect.zohorecruit.eu":       "Scrumconnect Limited",
+		"burtandassociates.zohorecruit.com": "MB&A",
+		"nometa.zohorecruit.in":             "",
+	} {
+		got, err := reg["zohorecruit"].Name(context.Background(), board)
+		if err != nil || got != want {
+			t.Errorf("Name(%s) = %q, %v; want %q", board, got, err, want)
+		}
+	}
+}

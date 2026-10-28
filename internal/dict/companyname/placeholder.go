@@ -42,6 +42,12 @@ import (
 // labels as their company): the portal titles itself with the employer's name on both layouts
 // (ExtractHiringRoomTitle). A tenant whose public portal is off answers 404 and stays as it is.
 //
+// Measured 2026-10-28 on zohorecruit (693 of 4,708 live boards carried their careers host as the
+// company): the careers page's og:site_name is the employer, 20/20 sampled, while its <title> is
+// free text the tenant typed ("Jobs at Careers"). The host-shaped name also kept the aggregator
+// suppression from pairing a posting with its WhatJobs copy, since "scrumconnect.zohorecruit.eu"
+// and "Scrumconnect Limited" fold to different company slugs.
+//
 // Deliberately absent, each having been tried against live boards: adp (neither the listing nor the requisition detail names the client), and workday (the
 // detail's hiringOrganization is a per-posting legal entity — Dover's postings name
 // "Engineered Controls International, LLC" — so it would split one employer per subsidiary).
@@ -56,8 +62,28 @@ func NewPlaceholderRegistry(http httpGetter) Registry {
 		"ukg":      ukgResolver{http: http},
 		"taleo":    taleoResolver{http: http},
 		// The portal's /jobs redirects to /portal on the newer layout; the client follows it.
-		"hiringroom": newTitleResolver(http, "https://%s.hiringroom.com/jobs", ExtractHiringRoomTitle),
+		"hiringroom":  newTitleResolver(http, "https://%s.hiringroom.com/jobs", ExtractHiringRoomTitle),
+		"zohorecruit": zohoResolver{http: http},
 	}
+}
+
+type zohoResolver struct{ http textGetter }
+
+// Name reads the og:site_name of the careers page the zohorecruit adapter lists; the board is
+// the careers host itself ("scrumconnect.zohorecruit.eu").
+func (r zohoResolver) Name(ctx context.Context, board string) (string, error) {
+	if board == "" || strings.Contains(board, "/") {
+		return "", nil
+	}
+	body, err := r.http.GetText(ctx, "https://"+board+"/jobs/Careers")
+	if err != nil {
+		return "", err
+	}
+	m := ogSiteName.FindStringSubmatch(body)
+	if m == nil {
+		return "", nil
+	}
+	return html.UnescapeString(m[1]), nil
 }
 
 // ExtractHiringRoomTitle reads the employer from a HiringRoom portal's <title>, which has one
