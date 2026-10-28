@@ -67,6 +67,23 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   changes nothing. The country must be the LAST token of its location ("Naples, FL,
   Naples, FL, US" repeats a US place). Measured 2026-10-28: 252 distinct lines, 4,290
   open rows carried the spurious `us`/`ca`, all removals.
+- **A code that is both a US/CA subdivision and an ISO country is the COUNTRY when it
+  closes a location of three or more tokens** (`countryCodeClosingCity`): "Toronto, ON,
+  CA" and "Toronto, CA, CA" are Canada, not California; "Tel Aviv-Yafo, Tel Aviv District,
+  IL" Israel; "Casablanca, Casablanca-Settat, MA" Morocco. After one of that country's own
+  provinces it is the country whatever the town ("London, ON, CA"); otherwise the
+  location's first place must be a curated or main-table city of that country and not of
+  the US/CA, so "San Jose, CA, CA" stays Californian. The two-token "City, CA" is untouched.
+- **A US state and the US remove a foreign namesake of the town**, like a bare state does
+  ("Paris, TX"): "Valencia, CA, US", "Dublin, CA, US", "Paris, IL, US", "Lebanon, PA, US"
+  name no Spain, Ireland, France or Lebanon. Two paths used to skip the withdrawal — the
+  code read as the closing country's subdivision (`subdivisionBeforeCountry`) and a
+  colliding code beside a named US — and both now withdraw, the second only when the US
+  has a place of that name ("Jakarta, ID, United States" keeps Indonesia; "CL, CO, MX,
+  US" is a list of codes, not a town). Measured 2026-10-28 over every stored location:
+  4,271 distinct lines, 42,933 open rows changed country or region, all corrections
+  (~34.9k Canadian rows lost a spurious `us`); a further 18.3k open rows ("Fresno, CA,
+  US") gained the metro the now-recorded state lets `metroFor` resolve.
 - **A small place names a city, never a country** (`smallplaces.go`, `smallplaces.tsv`,
   written by `cmd/gen-cities` beside `cities1000.tsv`). The main table stops at 15,000
   people; the German crawl names towns of a few thousand beside their Land ("Billerbeck,

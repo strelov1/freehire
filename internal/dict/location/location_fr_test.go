@@ -48,8 +48,9 @@ func TestFrenchLines(t *testing.T) {
 		{"Paris, TX, us", []string{"us"}, []string{"Paris"}, nil},
 		{"Paris, Tennessee, United States", []string{"us"}, []string{"Paris"}, nil},
 		{"London, ON", []string{"ca"}, []string{"London"}, []string{"London (CA)"}},
-		// A town that is a province keeps it: "Quebec" is the province here.
-		{"Saint-Laurent, Quebec, CA", []string{"ca", "us"}, []string{"Québec", "Saint-Laurent"}, nil},
+		// A town that is a province keeps it: "Quebec" is the province here, and the
+		// closing CA is Canada, not California.
+		{"Saint-Laurent, Quebec, CA", []string{"ca"}, []string{"Québec", "Saint-Laurent"}, []string{"Montréal (CA)", "Québec (CA)"}},
 	}
 	for _, tt := range tests {
 		g := Parse(tt.location)
