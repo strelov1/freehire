@@ -211,7 +211,7 @@
            them; a narrow one scrolls them sideways as a carousel, bleeding to the
            screen edge, so no button is squeezed or stacked into a tall column. -->
       <div
-        class="no-scrollbar -mx-4 mt-8 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+        class="-mx-4 mt-8 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
       >
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
         <a href={productHunt.href} target="_blank" rel="noopener noreferrer" class="h-14 w-64 shrink-0 snap-start">

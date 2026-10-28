@@ -59,13 +59,24 @@ export function parseDockWindows(raw: string | null, max = MAX_DOCK_WINDOWS): Do
   }
 }
 
-/** The unread total a dismissal still covers after a fresh read of the list: `null` once a
- *  message arrived that the reader has not seen dismissed (the dock comes back for it),
- *  otherwise the lower of the two, so a conversation read elsewhere does not let the next
- *  message hide behind the old count. */
-export function keepDismissal(dismissedAt: number | null, unread: number): number | null {
-  if (dismissedAt === null || unread > dismissedAt) return null;
-  return unread;
+/** When the dock is dismissed it remembers the newest message time it had seen (ms since
+ *  the epoch, 0 with no messages yet). A conversation with an unread message newer than
+ *  that lifts the dismissal — per conversation, so reading one chat elsewhere cannot hide
+ *  a new message in another behind an unchanged total. */
+export function newestMessageAt(conversations: readonly { last_message_at: string | null }[]): number {
+  let newest = 0;
+  for (const c of conversations) {
+    const at = c.last_message_at ? Date.parse(c.last_message_at) : NaN;
+    if (at > newest) newest = at;
+  }
+  return newest;
+}
+
+export function dismissalLifted(
+  dismissedAt: number,
+  conversations: readonly { unread: number; last_message_at: string | null }[],
+): boolean {
+  return conversations.some((c) => c.unread > 0 && newestMessageAt([c]) > dismissedAt);
 }
 
 /** The dock stays off the buddies section's own page, whose Chats tab is the full-size

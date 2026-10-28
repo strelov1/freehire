@@ -18,17 +18,17 @@ import { api } from '#lib/api.js';
 import { messageActionFor } from '#lib/buddies.js';
 import {
   closeDockWindow,
+  dismissalLifted,
   type DockCorner,
   dockCorner,
   dockHiddenOn,
   type DockWindow,
   DraftBook,
-  keepDismissal,
+  newestMessageAt,
   openDockWindow,
   parseDockWindows,
   pruneDockWindows,
   setDockWindowMinimized,
-  totalUnread,
 } from '#lib/messagingDock.js';
 import type { Conversation } from '#lib/types.js';
 import { UserResource } from '#lib/userResource.svelte.js';
@@ -54,8 +54,9 @@ class MessagingDockStore extends UserResource<Conversation[]> {
   #windows = $state.raw<DockWindow[]>(readWindows());
   #generation = 0;
   #drafts = new DraftBook();
-  /** The unread total when the reader closed the dock, or null while it is not dismissed.
-   *  Kept for the tab's session; a newer unread message or opening a conversation lifts it. */
+  /** The newest message time the reader had seen when they closed the dock, or null while
+   *  it is not dismissed. Kept for the tab's session; a newer unread message or opening a
+   *  conversation lifts it. */
   #dismissedAt = $state<number | null>(readDismissed());
   /** Whether the dock's conversation list is unfolded. */
   expanded = $state(false);
@@ -72,7 +73,7 @@ class MessagingDockStore extends UserResource<Conversation[]> {
 
   protected apply(data: Conversation[]): void {
     this.#conversations = data;
-    this.#setDismissed(keepDismissal(this.#dismissedAt, totalUnread(data)));
+    if (this.#dismissedAt !== null && dismissalLifted(this.#dismissedAt, data)) this.#setDismissed(null);
     // A declined or blocked conversation leaves the list; its window goes with it. Only
     // pruned against a list that was actually read, so a restored window survives until then.
     this.#setWindows(pruneDockWindows(this.#windows, new Set(data.map((c) => c.id))));
@@ -108,7 +109,10 @@ class MessagingDockStore extends UserResource<Conversation[]> {
   /** Close the whole dock until a new unread message arrives or a conversation is opened. */
   dismiss(): void {
     this.expanded = false;
-    this.#setDismissed(totalUnread(this.#conversations));
+    // Folded first: a window left open would mount its pane (and mark its conversation
+    // read) the moment a new message brings the dock back, unasked.
+    this.#setWindows(this.#windows.map((w) => ({ ...w, minimized: true })));
+    this.#setDismissed(newestMessageAt(this.#conversations));
   }
 
   /** How much of the bottom-right corner the dock takes on this page. */
