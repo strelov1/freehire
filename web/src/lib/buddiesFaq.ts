@@ -10,12 +10,12 @@ export const BUDDIES_FAQ: FaqItem[] = [
   {
     question: 'Will my employer or a recruiter see this?',
     answer:
-      'No. Buddy pages are visible only to signed-in members of the network — not to search engines, not to recruiters, and not in the public Talent Network catalogue. You appear under a random handle, separate from your Talent Network handle and username.',
+      'Not as you. Buddy pages are visible only to signed-in members of the network — not to search engines and not in the public Talent Network catalogue. Anyone with an account can join, a recruiter included, but every member appears under a random handle, separate from your Talent Network handle and username.',
   },
   {
     question: 'What exactly do other members see about me?',
     answer:
-      'Your handle, your role titles, and facts like your category and country. In the feed, they see when you applied to a company and when you reached the interview or offer stage, by day. Never your name, email, employer, or anything you wrote in your CV — and never a rejection, a withdrawal, or the offer you accepted.',
+      'Your handle, your role titles as you wrote them, and facts like your category, seniority, skills and country. In the feed, they see when you applied to a company and when you reached the interview or offer stage, by day. Never your name or email, and nothing else from your CV — so if a role title names your employer, edit it before joining. Never a rejection, a withdrawal, or the offer you accepted.',
   },
   {
     question: 'Can I keep one application out of the feed?',

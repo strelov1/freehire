@@ -4,7 +4,12 @@ import BuddiesLandingView from './BuddiesLandingView.svelte';
 import { BUDDIES_FAQ } from '#lib/buddiesFaq.js';
 
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p }));
-vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('reduce'), media: q }));
+vi.stubGlobal('matchMedia', (q: string) => ({
+  matches: q.includes('reduce'),
+  media: q,
+  addEventListener() {},
+  removeEventListener() {},
+}));
 vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} });
 
 describe('BuddiesLandingView', () => {

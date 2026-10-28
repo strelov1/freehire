@@ -4,7 +4,7 @@
   import { Button, NumberedGrid, SectionLabel } from '#lib/ui/index.js';
   import { BUDDIES_FAQ } from '#lib/buddiesFaq.js';
 
-  const facts = ['Free for everyone', 'Anonymous handle', 'No recruiters, no crawlers', 'You choose what shows'];
+  const facts = ['Free for everyone', 'Anonymous handle', 'Members only, no crawlers', 'You choose what shows'];
 
   const steps = [
     { n: '01', title: 'Join', body: 'One click. You get a random handle like amber-heron-42 — no name, no photo.' },
@@ -17,13 +17,13 @@
     {
       key: 'seen',
       title: 'Others see',
-      items: ['Your handle', 'Role titles', 'Category, seniority, skills and country', 'Applications and interview or offer moves, with company and day'],
+      items: ['Your handle', 'Role titles, as you wrote them', 'Category, seniority, skills and country', 'Applications and interview or offer moves, with company and day'],
       chip: 'border-success-strong/50 text-success-strong',
     },
     {
       key: 'hidden',
       title: 'Nobody sees',
-      items: ['Your name', 'Your email or employer', 'Anything written in your CV', 'Rejections and withdrawals', 'The offer you accepted', 'Postings pasted privately'],
+      items: ['Your name or email', 'Anything else in your CV', 'Rejections and withdrawals', 'The offer you accepted', 'Postings pasted privately'],
       chip: 'border-border text-muted-foreground',
     },
   ];

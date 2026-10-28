@@ -5,8 +5,21 @@ vi.mock('$app/paths', () => ({ resolve: (p: string) => p, base: '', assets: '' }
 
 import BuddiesHeroDemo from './BuddiesHeroDemo.svelte';
 
+let setReduce: (reduce: boolean) => void = () => {};
+
 function mockMotion(reduce: boolean) {
-  vi.stubGlobal('matchMedia', (q: string) => ({ matches: reduce && q.includes('reduce'), media: q }));
+  const listeners = new Set<(e: Event) => void>();
+  const mql = {
+    matches: reduce,
+    media: '',
+    addEventListener: (_: string, fn: (e: Event) => void) => listeners.add(fn),
+    removeEventListener: (_: string, fn: (e: Event) => void) => listeners.delete(fn),
+  };
+  setReduce = (next) => {
+    mql.matches = next;
+    listeners.forEach((fn) => fn(new Event('change')));
+  };
+  vi.stubGlobal('matchMedia', () => mql);
 }
 
 let observed: ((entries: { isIntersecting: boolean }[]) => void) | null = null;
@@ -56,5 +69,23 @@ describe('BuddiesHeroDemo', () => {
     vi.advanceTimersByTime(1800); // one step, matching STEP_MS in the component
     flushSync();
     expect(entry('tidy-kestrel-318').className).toContain('opacity-100');
+  });
+
+  it('shows the finished state when motion becomes reduced mid-loop', () => {
+    vi.useFakeTimers();
+    mockMotion(false);
+    render(BuddiesHeroDemo);
+    observed?.([{ isIntersecting: true }]);
+    flushSync();
+    vi.advanceTimersByTime(1800 * 2);
+    flushSync();
+    expect(slot('reply').className).toContain('invisible');
+    setReduce(true);
+    flushSync();
+    expect(slot('reply').className).not.toContain('invisible');
+    expect(entry('kind-reef-2041').className).toContain('opacity-100');
+    vi.advanceTimersByTime(1800 * 3);
+    flushSync();
+    expect(slot('reply').className).not.toContain('invisible');
   });
 });

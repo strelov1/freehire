@@ -23,10 +23,11 @@ spec. The page states nothing beyond this list.
   `amber-heron-42`, and can leave at any time. A member who rejoins gets the same handle
   back.
 - **The card.** It shows only dictionary-resolved values, numbers, dates and role titles
-  verbatim. It never shows the person's name, email, username, employer names or any free
-  text from the CV. The buddy handle is separate from the Talent Network handle.
-- **Who can see it.** Only signed-in members see buddy pages. No crawler, no recruiter and
-  not the public Talent Network catalogue can see them. They are marked non-indexable and
+  verbatim, as the member wrote them (a title can name an employer, so the page tells
+  members to edit it before joining). It never shows the person's name, email, username or
+  any other free text from the CV. The buddy handle is separate from the Talent Network handle.
+- **Who can see it.** Only signed-in members see buddy pages, and any account can join, a
+  recruiter included. No crawler and not the public Talent Network catalogue can see them. They are marked non-indexable and
   are not in the sitemap.
 - **Similar members.** They are ranked by shared category, shared country and region, and
   companies both people applied to in the last 90 days. Each entry shows the companies
@@ -70,7 +71,7 @@ spec. The page states nothing beyond this list.
      signed-out visitor to sign in. Secondary: "See how it works ↓".
    - Microcopy: "Free · Anonymous · Leave any time".
    - On the right, the live demo described below.
-2. **Fact strip.** Four items: "Free for everyone", "Anonymous handle", "No recruiters, no
+2. **Fact strip.** Four items: "Free for everyone", "Anonymous handle", "Members only, no
    crawlers" and "You choose what shows".
 3. **How it works.** Four steps in a `NumberedGrid`:
    - Join, and get a random handle.
@@ -78,9 +79,9 @@ spec. The page states nothing beyond this list.
    - Follow their progress: applied, interview, offer, by day.
    - Invite one to chat with a first message of up to 500 characters.
 4. **What others see, and what nobody sees.** Two columns.
-   - "Others see": your handle, role titles, category and country, applications and
+   - "Others see": your handle, role titles as written, category, seniority, skills and country, applications and
      interview or offer moves with company and day.
-   - "Nobody sees": your name, email or employer, anything you wrote in your CV,
+   - "Nobody sees": your name or email, anything else in your CV,
      rejections and withdrawals, the offer you accepted, postings you pasted privately.
    - One line underneath: "Hide any single application from the feed with one switch on the
      job in your tracker."

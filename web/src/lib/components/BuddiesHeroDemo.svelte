@@ -4,6 +4,7 @@
      server, and under reduced motion, as its finished state. Every slot is always laid out
      and only its opacity/offset changes, so the card never changes height mid-loop. -->
 <script lang="ts">
+  import { MediaQuery } from 'svelte/reactivity';
   import { BadgeCheck, MessagesSquare, Send, User } from '@lucide/svelte';
   import { DEMO_FEED, DEMO_INVITE, DEMO_REPLY } from '#lib/buddiesDemo.js';
   import { buddyFeedEventLabel } from '#lib/buddies.js';
@@ -24,11 +25,18 @@
     offer: { icon: BadgeCheck, tile: 'bg-brand-muted text-brand-strong' },
   } as const;
 
+  const reduced = new MediaQuery('prefers-reduced-motion: reduce');
+
   let step = $state(REPLY);
   let root: HTMLElement | undefined = $state();
 
   $effect(() => {
-    if (!root || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    // Read here so the effect re-runs, and tears the loop down, when the preference flips.
+    if (!root) return;
+    if (reduced.current) {
+      step = REPLY;
+      return;
+    }
     let timer: ReturnType<typeof setInterval> | undefined;
     let tick = 0;
     const start = () => {
