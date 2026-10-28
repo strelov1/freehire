@@ -263,3 +263,18 @@ func TestDigitalrecruitersWaitSitsOutAnUnreachableDeadline(t *testing.T) {
 		t.Fatalf("wait = %v (ctx %v); want the context's own deadline error, returned once it has passed", err, ctx.Err())
 	}
 }
+
+func TestDigitalrecruitersSkipsAnEmptyShellItem(t *testing.T) {
+	f := newDRFake(t)
+	f.bodies[drListingPath] = `{"count": 2, "items": [
+		{"job_ad_id": 4636315, "title": "", "url": "", "career_domain": "recrute.ouicare.com"},
+		{"job_ad_id": 4664997, "title": "Chargé de recrutement H/F", "url": "4664997-charge-de-recrutement-hf-75008-paris", "career_domain": "recrute.ouicare.com"}]}`
+	jobs, err := newDRTest(f).FetchNew(context.Background(), CompanyEntry{Board: drTestBoard}, func(string) bool { return false })
+	if err != nil || len(jobs) != 1 || jobs[0].ExternalID != "4664997" {
+		t.Fatalf("jobs=%+v err=%v; want the one usable posting", jobs, err)
+	}
+	f.bodies[drListingPath] = `{"count": 1, "items": [{"job_ad_id": 4636315, "url": "", "career_domain": "recrute.ouicare.com"}]}`
+	if _, err := newDRTest(f).Fetch(context.Background(), CompanyEntry{Board: drTestBoard}); err == nil {
+		t.Fatal("a listing whose own items are ALL unusable must fail the crawl")
+	}
+}

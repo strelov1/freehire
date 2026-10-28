@@ -341,16 +341,27 @@ func (s digitalrecruiters) list(ctx context.Context, board, locale, pathLocale s
 	}
 	var out []drPosting
 	seen := map[int64]bool{}
+	unusable := 0
 	for _, it := range items {
 		if !strings.EqualFold(strings.TrimSpace(it.CareerDomain), board) || seen[it.JobAdID] {
 			continue // another site's posting this one aggregates, or a second address of one
 		}
+		// A listed ad can be an empty shell — no slug and no title (emploi.o2recrute.fr's
+		// 4636315, 2026-10-28) — whose page the site cannot render. It is skipped, not taken for
+		// a broken listing: failing the board would stop the site's every other posting too.
 		if it.JobAdID <= 0 || !drSlug.MatchString(it.URL) {
-			return nil, fmt.Errorf("digitalrecruiters: listing %s: item %d has no usable id or slug (%q)", board, it.JobAdID, it.URL)
+			unusable++
+			continue
 		}
 		seen[it.JobAdID] = true
 		page := url.URL{Scheme: "https", Host: board, Path: "/" + pathLocale + "/annonce/" + it.URL}
 		out = append(out, drPosting{id: strconv.FormatInt(it.JobAdID, 10), url: page.String(), item: it})
+	}
+	if unusable > 0 {
+		log.Printf("digitalrecruiters: listing %s: skipped %d item(s) with no usable id or slug", board, unusable)
+		if len(out) == 0 {
+			return nil, fmt.Errorf("digitalrecruiters: listing %s: none of its %d own items has a usable id or slug", board, unusable)
+		}
 	}
 	return out, nil
 }
