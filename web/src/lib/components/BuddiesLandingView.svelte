@@ -28,6 +28,21 @@
     },
   ];
 
+  const reasons = [
+    {
+      title: 'Rarely the same seat',
+      body: 'Even at one company, people apply to different openings, at different levels, on different timelines — and companies often hire more than one.'
+    },
+    {
+      title: 'Shared after the loop',
+      body: "Most of what's worth telling comes once your own interview is over. Whichever way it went, you lose nothing by passing it on."
+    },
+    {
+      title: 'It runs both ways',
+      body: "You apply to dozens of companies. Tell one person about one loop, and you get others' notes on many — plus someone to run mock interviews with."
+    }
+  ];
+
   const controls = [
     { title: 'Block', body: 'Ends the conversation for good and hides you from each other everywhere.' },
     { title: 'Report', body: 'Sends the conversation to our moderators.' },
@@ -71,6 +86,25 @@
   <section id="how-it-works" class="scroll-mt-20 py-16 sm:py-20">
     <SectionLabel text="how it works" />
     <NumberedGrid items={steps} class="mt-10 sm:grid-cols-2" />
+  </section>
+
+  <!-- Why it works -->
+  <section class="border-t border-border py-16 sm:py-20">
+    <SectionLabel text="why it works" />
+    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+      Why help someone applying where you are?
+    </h2>
+    <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+      {#each reasons as r (r.title)}
+        <div class="bg-background p-6 sm:p-7">
+          <h3 class="text-lg font-semibold tracking-tight">{r.title}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{r.body}</p>
+        </div>
+      {/each}
+    </div>
+    <p class="mt-6 max-w-3xl text-sm text-muted-foreground">
+      In the final for the same seat right now? You don't have to share anything — who you talk to is always your choice.
+    </p>
   </section>
 
   <!-- Visibility -->

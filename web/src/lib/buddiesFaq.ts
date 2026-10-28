@@ -13,6 +13,11 @@ export const BUDDIES_FAQ: FaqItem[] = [
       'Not as you. Buddy pages are visible only to signed-in members of the network — not to search engines and not in the public Talent Network catalogue. Anyone with an account can join, a recruiter included, but every member appears under a random handle, separate from your Talent Network handle and username.',
   },
   {
+    question: 'Why would anyone help someone applying for the same job?',
+    answer:
+      "You are rarely competing for the same seat: even at one company, people apply to different openings, at different levels, on different timelines, and companies often hire more than one. Most sharing happens after your own interview is over, when you have nothing to lose and the next person has a lot to gain. And it runs both ways — you apply to dozens of companies, so one conversation about one loop gets you others' notes on many. If you are both in the final for the same seat right now, you don't have to share anything; who you talk to is your choice.",
+  },
+  {
     question: 'What exactly do other members see about me?',
     answer:
       'Your handle, your role titles as you wrote them, and facts like your category, seniority, skills and country. In the feed, they see when you applied to a company and when you reached the interview or offer stage, by day. Never your name or email, and nothing else from your CV — so if a role title names your employer, edit it before joining. Never a rejection, a withdrawal, or the offer you accepted.',
