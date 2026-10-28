@@ -3,7 +3,6 @@
      question rather than written in. Illustrative — the copy is DEMO_* in tailorDemo.ts.
      Rendered on the server, and under reduced motion, as its finished state. -->
 <script lang="ts">
-  import { fade } from 'svelte/transition';
   import {
     DEMO_ASKED,
     DEMO_BULLETS,
@@ -81,11 +80,13 @@
           </li>
         {/each}
       </ul>
-      {#if step === LAST}
-        <p in:fade={{ duration: 300 }} class="mt-3 text-xs text-warning-strong">
-          Kubernetes operators: not in your history — asked you first.
-        </p>
-      {/if}
+      <p
+        class="mt-3 text-xs text-warning-strong transition-opacity duration-500 {step === LAST
+          ? 'opacity-100'
+          : 'invisible opacity-0'}"
+      >
+        Kubernetes operators: not in your history — asked you first.
+      </p>
     </div>
     <div class="relative bg-background p-4 sm:col-span-3">
       <div class="absolute right-4 top-4 text-right">
@@ -95,15 +96,21 @@
       <p class="text-xs uppercase tracking-wide text-muted-foreground">Your CV</p>
       <ul class="mt-3 space-y-2 pr-20 text-xs leading-snug">
         {#each DEMO_BULLETS as b, i (b.req)}
-          <li>
-            {#key i < step}
-              <span
-                in:fade={{ duration: 400 }}
-                class={i < step ? 'rounded bg-brand/10 text-foreground' : 'text-muted-foreground'}
-              >
-                {i < step ? b.after : b.before}
-              </span>
-            {/key}
+          <li class="grid">
+            <span
+              class="col-start-1 row-start-1 text-muted-foreground transition-opacity duration-500 {i < step
+                ? 'opacity-0'
+                : 'opacity-100'}"
+            >
+              {b.before}
+            </span>
+            <span
+              class="col-start-1 row-start-1 self-start rounded bg-brand/10 text-foreground transition-opacity duration-500 {i < step
+                ? 'opacity-100'
+                : 'opacity-0'}"
+            >
+              {b.after}
+            </span>
           </li>
         {/each}
       </ul>

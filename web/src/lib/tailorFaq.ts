@@ -35,7 +35,7 @@ export const TAILOR_FAQ: FaqItem[] = [
   {
     question: 'What happens to my data?',
     answer:
-      'Your CV is used to tailor your applications and nothing else. Your contact details are never sent to the tailoring agent, and the whole codebase is open source, so you can check how it is handled.',
+      'Your CV is used only for the features you run on it. Your contact details are never sent to the tailoring agent, and the whole codebase is open source, so you can check how it is handled.',
   },
   {
     question: 'Can I drive it from my own agent or the terminal?',

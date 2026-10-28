@@ -19,9 +19,6 @@ vi.stubGlobal(
   },
 );
 
-// jsdom has no Web Animations API, which svelte/transition's fade calls.
-Element.prototype.animate = vi.fn(() => ({ cancel() {}, finished: Promise.resolve(), onfinish: null })) as never;
-
 afterEach(() => {
   vi.useRealTimers();
   observed = null;
@@ -32,8 +29,8 @@ describe('TailorHeroDemo', () => {
     mockMotion(true);
     render(TailorHeroDemo);
     expect(screen.getByText('86')).toBeTruthy();
-    expect(screen.getByText('Migrated the payment ledger to Postgres.')).toBeTruthy();
-    expect(screen.getByText(/asked you first/)).toBeTruthy();
+    expect(screen.getByText('Migrated the payment ledger to Postgres.').className).toContain('opacity-100');
+    expect(screen.getByText(/asked you first/).className).not.toContain('invisible');
   });
 
   it('restarts from the first score once visible, then climbs', () => {

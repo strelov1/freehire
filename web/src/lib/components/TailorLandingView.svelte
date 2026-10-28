@@ -88,12 +88,18 @@
     <ol class="mt-8 grid gap-4">
       {#each DEMO_BULLETS as b (b.req)}
         <li class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
-          <p class="bg-background p-4 text-sm text-muted-foreground line-through decoration-muted-foreground/40">{b.before}</p>
-          <p class="bg-background p-4 text-sm">
-            {#each highlight(b.after, b.keywords) as part, i (i)}
-              {#if part.hit}<mark class="rounded bg-brand/15 px-0.5 text-foreground">{part.text}</mark>{:else}{part.text}{/if}
-            {/each}
-          </p>
+          <div class="bg-background p-4">
+            <p class="text-xs uppercase tracking-wide text-muted-foreground">Before</p>
+            <p class="mt-1 text-sm text-muted-foreground">{b.before}</p>
+          </div>
+          <div class="bg-background p-4">
+            <p class="text-xs uppercase tracking-wide text-foreground">After</p>
+            <p class="mt-1 text-sm">
+              {#each highlight(b.after, b.keywords) as part, i (i)}
+                {#if part.hit}<mark class="rounded bg-brand/15 px-0.5 text-foreground">{part.text}</mark>{:else}{part.text}{/if}
+              {/each}
+            </p>
+          </div>
         </li>
       {/each}
     </ol>
@@ -202,7 +208,7 @@
     <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Questions people ask before buying.</h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each TAILOR_FAQ as item (item.question)}
-        <div class="bg-background p-6 sm:p-7">
+        <div class="bg-background p-6 sm:odd:last:col-span-2 sm:p-7">
           <dt class="text-lg font-semibold tracking-tight">{item.question}</dt>
           <dd class="mt-2 text-sm leading-relaxed text-muted-foreground">{item.answer}</dd>
         </div>
