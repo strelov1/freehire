@@ -383,6 +383,8 @@ func TestRecognize(t *testing.T) {
 		{"hiringroom vacancy", "https://tatachile.hiringroom.com/jobs/get_vacancy/6acfeaf91c677c42c9135f1a", "hiringroom", "tatachile", "https://tatachile.hiringroom.com", true},
 		{"hiringroom marketing host is not a tenant", "https://www.hiringroom.com/jobs", "", "", "", false},
 		{"hiringroom apply host names no tenant", "https://hiringroom.com/jobs/get_vacancy/6acfeaf91c677c42c9135f1a/candidates/new", "", "", "", false},
+		{"hiringroom embedded vacancy list names the tenant", "https://hiringroom.com/api/vacancies/get_vacancy_list_frame/secco", "hiringroom", "secco", "https://hiringroom.com/api/vacancies/get_vacancy_list_frame/secco", true},
+		{"hiringroom embed asset names no tenant", "https://hiringroom.com/assets/js/api/embed.js", "", "", "", false},
 		{"friendwork vacancy", "https://jobs.friend.work/TeDo/97846", "friendwork", "TeDo", "https://jobs.friend.work/TeDo/97846", true},
 		// "apply" is HRM Direct's own host and a REAL recruitee board (recruitee.yml tracks it),
 		// so the guard is scoped to the apex that needs it. Declining it everywhere would drop a
@@ -407,6 +409,8 @@ func TestRecognize(t *testing.T) {
 		{"gethired apply link names no tenant", "https://easyapply.co/a/b3be0e78-b890-4ad5-a3de-ac1f7258a0e3", "", "", "", false},
 		{"gethired www is not a tenant", "https://www.easyapply.co/", "", "", "", false},
 		{"trakstar nested apex", "https://acme.hire.trakstar.com/x", "trakstar", "acme", "https://acme.hire.trakstar.com", true},
+		{"recruiterbox host is the trakstar tenant", "https://applegreen.recruiterbox.com/jobs/fk0j5vq", "trakstar", "applegreen", "https://applegreen.recruiterbox.com", true},
+		{"recruiterbox vendor host is not a tenant", "https://developers.recruiterbox.com/", "", "", "", false},
 		{"teamtailor host", "https://bryter.teamtailor.com/jobs/12345-senior-go", "teamtailor", "bryter.teamtailor.com", "https://bryter.teamtailor.com", true},
 		{"dvinci posting", "https://cadenas.dvinci-hr.com/de/jobs/20291/junior-genai-engineer-mwd-cadenas-augsburg", "dvinci", "cadenas.dvinci-hr.com", "https://cadenas.dvinci-hr.com", true},
 		{"dvinci nested tenant", "https://karriere.hahngruppe.dvinci-hr.com/en/jobs/iframe", "dvinci", "karriere.hahngruppe.dvinci-hr.com", "https://karriere.hahngruppe.dvinci-hr.com", true},

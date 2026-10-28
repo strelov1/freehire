@@ -301,6 +301,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"likeit.fi", "likeit", modeSubdomain},
 	{"spark.work", "spark", modeSubdomain},
 	{"hire.trakstar.com", "trakstar", modeSubdomain},
+	// Recruiterbox is Trakstar Hire's former name: <tenant>.recruiterbox.com still 301s to
+	// <tenant>.hire.trakstar.com under the SAME label, and older careers pages link the old host.
+	{"recruiterbox.com", "trakstar", modeSubdomain},
 	// GetHired: <tenant>.easyapply.co is the career site the adapter reads /rss from. Its
 	// apply links (easyapply.co/a/<uuid>, easyapply.co/job/<slug>) sit on the bare apex and
 	// name no tenant, so they stay unrecognised — the board is only on the career site.
@@ -911,6 +914,11 @@ var apiBoards = []struct{ host, source, prefix string }{
 	// postings: /JobPortal.svc/<alias>/PositionList/json/ (embeds spell the path in either
 	// case, hence the case-insensitive prefix). The alias is the board the adapter reads.
 	{"api.hr-manager.net", "hrmanager", "JobPortal.svc"},
+	// HiringRoom's embeddable vacancy list: an employer that keeps its careers page on its own
+	// domain loads hiringroom.com/assets/js/api/embed.js, which frames
+	// /api/vacancies/get_vacancy_list_frame/<tenant>. That frame is the only place such a page
+	// names the tenant; the bare apex is otherwise the vendor's own host.
+	{"hiringroom.com", "hiringroom", "api/vacancies/get_vacancy_list_frame"},
 }
 
 // noBoardHosts are hosts under a supported ATS's domain that serve the platform's own
@@ -1519,7 +1527,8 @@ var platformLabelsByApex = map[string][]string{
 	"rexx-systems":     {"www", "cdn"},
 	"rexx-recruitment": {"www", "cdn"},
 	"hiringroom.com":   {"www", "ve", "api-ve", "contacto-comercial"},
-	"easyapply.co":     {"www"}, // www.easyapply.co 404s; every tenant is a bare label
+	"recruiterbox.com": {"www", "developers", "go"}, // the vendor's marketing, API docs and campaign hosts
+	"easyapply.co":     {"www"},                     // www.easyapply.co 404s; every tenant is a bare label
 	// www is the vendor's marketing site; demo is its sample board for a fictional "Acme".
 	"jobspage.co": {"www", "demo"},
 	// www is the vendor's marketing site (an unknown tenant redirects to its "job-not-found"
