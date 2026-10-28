@@ -69,7 +69,7 @@ type SearchJobsResult struct {
 	// without saying so is the failure mode this repository reports everywhere rather than
 	// refusing — a retired facet must not break a saved search, and silence is what let a
 	// mistyped country pass for a search of that country.
-	IgnoredParams []string `json:"ignored_params,omitempty" jsonschema:"filters that were not applied; the answer is wider than asked"`
+	IgnoredParams []string `json:"ignored_params,omitempty" jsonschema:"filters that were not applied; the answer is wider than asked. Replace the value and search again rather than reporting that nothing was found"`
 	// Semantic reports what became of a `semantic: true` request: SemanticApplied, or
 	// SemanticUnavailable when it was answered by keywords alone. Omitted when not asked.
 	Semantic string `json:"semantic,omitempty" jsonschema:"applied: matched by meaning as asked; unavailable: answered by keywords only"`

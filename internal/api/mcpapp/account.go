@@ -15,12 +15,20 @@ import (
 // already-authenticated person — the opposite framing from serverInstructions
 // above, which warns an anonymous aggregator view apart from the catalogue.
 //
+// The searching sentence is the subset of the anonymous server's search strategy that this
+// server's search_jobs description, shared with the in-app assistant, does not already carry.
+//
 // The auto-apply paragraph is the order the tools only work in: an agent that starts an
 // attempt and stops there leaves it waiting for a review nobody gives, and one that answers a
 // question without retrying leaves it parked.
 const accountServerInstructions = "This server acts as the signed-in freehire account that " +
 	"approved this connection. Tools read and change that account's own saved jobs, " +
 	"applications, and tracking board — never another account's. " +
+	"Searching: join a role's two or three names in one query with OR " +
+	"(title:SRE OR title:\"site reliability\"); put location, work mode, seniority and skills " +
+	"in filters, never in the query; if few results come back, loosen one constraint at a " +
+	"time and say which. Present jobs as a table of title, company, location, posted date " +
+	"and link, naming the source. " +
 	"Automatic applications: auto_apply_start begins one; follow it with auto_apply_get, whose " +
 	"next_step says what to do. When it stops on questions, ask the person all of them as one " +
 	"numbered list, save their answers in the form's language with answer_bank_save or " +

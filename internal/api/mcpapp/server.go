@@ -17,24 +17,30 @@ const Version = "1.0"
 //
 // Four things belong here and nowhere else. The first is that this is an aggregator, so a
 // posting is attributed rather than offered as ours. The second is which tool answers which
-// question: tool descriptions may not point at other tools (Anthropic's directory policy),
-// so this is the one place the model learns that, and TestTheInstructionsIntroduceEveryTool
-// keeps it complete. The third is the OR: geography filters union, so asking for Germany and
-// Lisbon returns both rather than their intersection — a model that assumes AND will
-// describe the results wrongly and confidently, and nothing in a result would reveal it.
-// The fourth is when to send `semantic`: measured 2026-10-21 over 34 queries, it lifted a
-// need described in words from 3.3 to 7.4 relevant hits of 10 and non-English queries from
-// 8.1 to 9.6, but cost a named title a little and a non-tech query a lot (9.2 to 7.0) —
-// description vectors exist only for technical postings.
+// question, and in what ORDER: tool descriptions may not point at other tools (Anthropic's
+// directory policy), so this is the one place the model learns that, and
+// TestTheInstructionsIntroduceEveryTool keeps it complete. The order is the search strategy
+// adapted from openings-mcp's job-search skill (MIT): shortlist from previews and read only
+// the final few in full, recheck liveness before presenting, and fix a value the search did
+// not understand from the vocabulary instead of telling the person nothing exists. The third
+// is the OR: geography filters union, so asking for Germany and Lisbon returns both rather
+// than their intersection — a model that assumes AND will describe the results wrongly and
+// confidently, and nothing in a result would reveal it.
+//
+// Everything a single tool can say about itself lives in its description instead, where the
+// model reads it at the moment of the call: the synonym OR, filters-not-query, loosening one
+// constraint at a time and the result table are search_jobs', and when to send `semantic`
+// (measured 2026-10-21 over 34 queries: a need described in words went from 3.3 to 7.4
+// relevant hits of 10, a non-tech query fell from 9.2 to 7.0) is search_jobs' and its field's.
 //
 // Kept under 512 characters, which the Apps SDK guidance asks for and a test enforces.
-const serverInstructions = "freehire aggregates IT job postings and attributes each to the board it " +
-	"came from: name the source and link the employer's posting. search_jobs finds postings " +
-	"(semantic: for a need put in words, not a title); get_job reads one and its liveness; " +
-	"check_jobs_open rechecks a shortlist; similar_jobs finds more like one; " +
+const serverInstructions = "freehire aggregates job postings and attributes each to the board it " +
+	"came from: name the source and link the employer's posting. search_jobs finds postings: " +
+	"shortlist from its previews, call get_job only for the final 5-10, and check_jobs_open " +
+	"before presenting them. similar_jobs finds more like one; " +
 	"salary_stats/job_market_stats: pay and market; search_companies/get_company: employers. " +
-	"Geography filters union. list_filter_values lists a filter's values; unknown ones " +
-	"return in ignored_params."
+	"Geography filters union. A value in ignored_params was not understood: take one from " +
+	"list_filter_values and retry."
 
 // Tool names. Unlike the OJCP transport's, they feed no manifest — there is nothing here
 // that ADVERTISES a tool separately from registering it, so they are constants only because
@@ -113,7 +119,12 @@ func newServer(r Reader, origin string) *mcp.Server {
 		Title: "Search jobs",
 		Description: "Search freehire's catalogue of IT job postings. Use for any question " +
 			"about which jobs are open — by technology, seniority, location, pay or employer. " +
-			"Returns a short preview of each posting. Set semantic for a need described in words " +
+			"Returns a short preview of each posting. A role has several names: join two or three " +
+			"in one query with OR, e.g. title:SRE OR title:\"site reliability\". Location, work " +
+			"mode, seniority and skills go in their filters, never in the query. If suspiciously " +
+			"few results come back, loosen one constraint at a time and say which. Present " +
+			"results as a table of title, company, location, posted date and link (the employer's " +
+			"posting and ours), naming the source. Set semantic for a need described in words " +
 			"(\"keep our payment systems secure\"), not for a job title or a non-technical role, " +
 			"where plain keywords answer better.",
 		Annotations: readOnly(),
