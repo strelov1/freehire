@@ -109,14 +109,6 @@
     dark: 'https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1196233&theme=dark&t=1785605357228',
   };
 
-  // The GitHub Trending badge, copied verbatim from Trendshift's own embed snippet. It
-  // ships one variant only (white card, purple border), which reads on both themes.
-  const trendshift = {
-    href: 'https://trendshift.io/repositories/55060?utm_source=repository-badge&utm_medium=badge&utm_campaign=badge-repository-55060',
-    alt: 'strelov1/freehire | Trendshift',
-    src: 'https://trendshift.io/api/badge/repositories/55060',
-  };
-
   // Where the product can be installed, beside the Product Hunt badge rather than in
   // a link column: these are downloads, not navigation, and a store button among a
   // list of page links reads as neither.
@@ -205,8 +197,8 @@
         </ul>
       </nav>
 
-      <!-- The two badges and the store buttons are one size, w-64 h-14 (256x56): the
-           badges are ~250x54 images, so object-contain scales them to the box instead
+      <!-- The badge and the store buttons are one size, w-64 h-14 (256x56): the
+           badge is a 250x54 image, so object-contain scales it to the box instead
            of an arbitrary h-[54px], which check:tokens refuses. A wide viewport wraps
            them; a narrow one scrolls them sideways as a carousel, bleeding to the
            screen edge, so no button is squeezed or stacked into a tall column. -->
@@ -230,18 +222,6 @@
             height="54"
             loading="lazy"
             class="hidden size-full object-contain dark:block"
-          />
-        </a>
-
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Trendshift page opened in a new tab; not an internal route -->
-        <a href={trendshift.href} target="_blank" rel="noopener noreferrer" class="h-14 w-64 shrink-0 snap-start">
-          <img
-            src={trendshift.src}
-            alt={trendshift.alt}
-            width="250"
-            height="55"
-            loading="lazy"
-            class="size-full object-contain"
           />
         </a>
 
