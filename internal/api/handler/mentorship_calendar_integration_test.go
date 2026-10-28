@@ -58,7 +58,11 @@ func TestGetMyCalendarHTTPFlow(t *testing.T) {
 
 	// No availability rule is seeded: a confirmed booking is carved out as booked
 	// regardless of the mentor's stated hours, which is exactly what this test checks.
-	bookingStart := time.Now().UTC().AddDate(0, 0, 3).Truncate(time.Hour)
+	// Pinned to the month boundary right after the autumn clock change, next year: 23:00 UTC on
+	// 31 October is already 00:00 on 1 November in Berlin (CET), so the booking belongs to the
+	// mentor's November. A date taken from the wall clock made this test pass or fail by the
+	// day it ran.
+	bookingStart := time.Date(time.Now().Year()+1, time.October, 31, 23, 0, 0, 0, time.UTC)
 	seekerID := otherUserID
 	if _, err := queries.CreateMentorBooking(ctx, db.CreateMentorBookingParams{
 		MentorID: mentor.ID, SeekerUserID: seekerID,
@@ -82,7 +86,12 @@ func TestGetMyCalendarHTTPFlow(t *testing.T) {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/me/mentorship/availability/calendar", cookieAuth, h.GetMyCalendar)
 
-	month := bookingStart.Format("2006-01")
+	// The calendar's month is the mentor's own, so it is read in the mentor's zone.
+	berlin, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatalf("load location: %v", err)
+	}
+	month := bookingStart.In(berlin).Format("2006-01")
 
 	// Signed out is refused.
 	signedOutResp, err := app.Test(httptest.NewRequestWithContext(ctx, fiber.MethodGet,
@@ -154,5 +163,35 @@ func TestGetMyCalendarHTTPFlow(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("no booked interval starting at %v in %+v", bookingStart, parsed.Data)
+	}
+
+	// The month before ends exactly where the mentor's November begins — 23:00 UTC, since
+	// Berlin is back on CET by then — and does not carry the booking.
+	prevMonth := bookingStart.In(berlin).AddDate(0, -1, 0).Format("2006-01")
+	prevReq := httptest.NewRequestWithContext(ctx, fiber.MethodGet,
+		"/api/v1/me/mentorship/availability/calendar?month="+prevMonth, nil)
+	prevReq.AddCookie(&http.Cookie{Name: auth.CookieName, Value: mentorCookie})
+	prevResp, err := app.Test(prevReq)
+	if err != nil {
+		t.Fatalf("previous-month request: %v", err)
+	}
+	defer prevResp.Body.Close()
+	prevBody, _ := io.ReadAll(prevResp.Body)
+	var prev struct {
+		Data []struct {
+			EndsAt time.Time `json:"ends_at"`
+			Status string    `json:"status"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(prevBody, &prev); err != nil || len(prev.Data) == 0 {
+		t.Fatalf("previous month: %v, body = %s", err, prevBody)
+	}
+	if end := prev.Data[len(prev.Data)-1].EndsAt; !end.Equal(bookingStart) {
+		t.Errorf("previous month ends at %v, want %v (midnight in Berlin after the clock change)", end, bookingStart)
+	}
+	for _, iv := range prev.Data {
+		if iv.Status == "booked" {
+			t.Errorf("the previous month carries the next month's booking: %+v", prev.Data)
+		}
 	}
 }
