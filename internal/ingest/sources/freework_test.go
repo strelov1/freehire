@@ -21,6 +21,8 @@ type freeworkFake struct {
 	// fullFirst pads page 1 to a full page with postings that name no employer (dropped), so
 	// the walk asks for page 2 — which the API answers, past the end, with the last page again.
 	fullFirst bool
+	// laterNew makes page 2 a short page repeating one posting of page 1 beside a new one.
+	laterNew bool
 	// unpublished makes every posting resource answer a status other than "published".
 	unpublished bool
 
@@ -43,11 +45,17 @@ func (f *freeworkFake) GetJSON(_ context.Context, u string, v any) error {
 		if err := freeworkFixture("testdata/freework/list.json", v); err != nil {
 			return err
 		}
+		cards := v.(*[]freeworkCard)
 		if f.fullFirst {
-			cards := v.(*[]freeworkCard)
 			for i := len(*cards); i < freeworkPageSize; i++ {
 				*cards = append(*cards, freeworkCard{ID: int64(i + 1), Slug: "pad", Title: "Pad"})
 			}
+		}
+		if f.laterNew && !strings.Contains(u, "?page=1&") {
+			// Page 2 repeats one posting of page 1 and names one of its own.
+			later := (*cards)[0]
+			later.ID, later.Slug = 700001, "later-posting"
+			*cards = []freeworkCard{(*cards)[0], later}
 		}
 		return nil
 	}
@@ -294,5 +302,21 @@ func TestFreeWorkMappings(t *testing.T) {
 		if got := freeworkEmploymentType(c.in); got != c.want {
 			t.Errorf("freeworkEmploymentType(%v) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+// A later page's own postings are read, and a posting met on two pages is yielded once.
+func TestFreeWorkReadsALaterPage(t *testing.T) {
+	f := &freeworkFake{fullFirst: true, laterNew: true}
+	jobs, err := newTestFreeWork(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]int{}
+	for _, j := range jobs {
+		ids[j.ExternalID]++
+	}
+	if len(f.pages) != 2 || ids["700001"] != 1 || ids["687964"] != 1 || len(jobs) != 5 {
+		t.Errorf("listing requests = %d, jobs = %v; want two requests, the four page-1 postings and the later one, each once", len(f.pages), ids)
 	}
 }

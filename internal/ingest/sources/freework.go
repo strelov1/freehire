@@ -209,7 +209,8 @@ func (s freework) nearDeadline(ctx context.Context) bool {
 // sweep's 48 h. Any page failing fails the crawl — a partial listing would let the
 // company-scoped sweep close the postings of the employers it did see on the pages it did not.
 func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
-	listed := make(map[int64]bool)
+	listed := make(map[int64]bool) // every id a page named, for the end-of-list test
+	kept := make(map[int64]bool)   // the ids yielded, each once
 	var out []freeworkCard
 	for page := 1; page <= s.maxPages; page++ {
 		if err := s.limiter.Wait(ctx); err != nil {
@@ -224,14 +225,17 @@ func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
 		}
 		fresh := 0
 		for _, c := range cards {
-			if c.ID <= 0 || listed[c.ID] {
+			if c.ID <= 0 {
 				continue
 			}
-			listed[c.ID] = true
-			fresh++
-			if strings.TrimSpace(c.Slug) == "" || freeworkClean(c.Title) == "" || freeworkClean(c.Company.Name) == "" {
+			if !listed[c.ID] {
+				listed[c.ID] = true
+				fresh++
+			}
+			if kept[c.ID] || strings.TrimSpace(c.Slug) == "" || freeworkClean(c.Title) == "" || freeworkClean(c.Company.Name) == "" {
 				continue
 			}
+			kept[c.ID] = true
 			out = append(out, c)
 		}
 		if len(cards) < freeworkPageSize || fresh == 0 {
