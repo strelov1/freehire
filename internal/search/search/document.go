@@ -79,7 +79,11 @@ type JobDocument struct {
 	// pasted link). The classifier is sources.ProviderKind, which this package may not
 	// import, so the caller resolves it and FromJob takes it as a parameter. Like RoleType
 	// it lives on the document only and backs the `source_type` facet.
-	SourceType string `json:"source_type,omitempty"`
+	//
+	// The key is written even when empty. Meilisearch's `!=` does not match a document
+	// that lacks the attribute, so an omitted key would make `source_type_exclude=aggregator`
+	// drop every unclassified posting along with the aggregators.
+	SourceType string `json:"source_type"`
 	// AIInterview is true when the job's company carries at least one un-retracted
 	// AI-interview report, derived at index time from the embedded view's count.
 	//

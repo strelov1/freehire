@@ -1,6 +1,7 @@
 package search
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"reflect"
@@ -40,5 +41,26 @@ func TestSourceTypeIsAClosedVocabulary(t *testing.T) {
 	want := map[string][]string{"source_type": {"aggregators"}}
 	if got := IgnoredValues(v); !reflect.DeepEqual(got, want) {
 		t.Errorf("IgnoredValues = %v, want %v", got, want)
+	}
+}
+
+func TestAnUnclassifiedDocumentStillCarriesTheSourceTypeKey(t *testing.T) {
+	// Meilisearch's `!=` does not match a document that lacks the attribute, so with the key
+	// omitted `source_type_exclude=aggregator` would also drop every manual import and pasted
+	// link. An empty value keeps them, the same way role_type's empty value does.
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: "weblink"}, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var full map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &full); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := full["source_type"]; !ok {
+		t.Errorf("document omits source_type, so an exclusion filter drops it: %s", raw)
 	}
 }
