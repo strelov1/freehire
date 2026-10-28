@@ -249,8 +249,12 @@ func (w *francetravailWalk) window(ctx context.Context, from, to time.Time) (int
 		w.truncated += total - francetravailWindow
 	}
 	w.keep(first.Results)
+	// The window's last page starts at 1,000, not at the next multiple of 150 (1,050), which the
+	// API refuses; the overlap with the page before is deduplicated by keep.
+	const lastStart = francetravailWindow - francetravailPageSize
 	for start := francetravailPageSize; start < francetravailWindow && len(first.Results) == francetravailPageSize; start += francetravailPageSize {
-		p, found, err := w.page(ctx, from, to, start)
+		off := min(start, lastStart)
+		p, found, err := w.page(ctx, from, to, off)
 		if err != nil {
 			return 0, err
 		}
@@ -258,7 +262,7 @@ func (w *francetravailWalk) window(ctx context.Context, from, to time.Time) (int
 			break
 		}
 		w.keep(p.Results)
-		if len(p.Results) < francetravailPageSize {
+		if len(p.Results) < francetravailPageSize || off == lastStart {
 			break
 		}
 	}

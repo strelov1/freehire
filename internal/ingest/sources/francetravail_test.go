@@ -249,3 +249,18 @@ func TestFranceTravailIsRegisteredOnlyWithItsCredentials(t *testing.T) {
 		t.Error("not registered with its credentials")
 	}
 }
+
+// A window that fits under the result window but runs past 1,050 offers is read to its end: the
+// last page starts at 1,000, never at 1,050, which the API refuses.
+func TestFranceTravailReadsAWindowToItsLastPage(t *testing.T) {
+	for _, noTotals := range []bool{false, true} {
+		f := &francetravailFake{offers: francetravailSynthetic(1100), noTotals: noTotals}
+		jobs, err := newTestFranceTravail(f).Fetch(context.Background(), CompanyEntry{Board: "75"})
+		if err != nil {
+			t.Fatalf("noTotals=%v: %v", noTotals, err)
+		}
+		if len(jobs) != 1100 {
+			t.Errorf("noTotals=%v: read %d of 1100 offers", noTotals, len(jobs))
+		}
+	}
+}
