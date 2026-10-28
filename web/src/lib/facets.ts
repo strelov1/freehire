@@ -480,6 +480,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   bumeran: 'Bumeran',
   freework: 'Free-Work',
   cadremploi: 'Cadremploi',
+  jobteaser: 'JobTeaser',
   itjobs: 'ITJobs.pt',
   feinaactiva: 'Feina Activa',
   turijobs: 'Turijobs',

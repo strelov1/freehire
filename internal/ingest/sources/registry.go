@@ -906,6 +906,11 @@ func All(c HTTPClient) map[string]Source {
 	// online-postings sitemap, each new posting's body read from its page's schema.org JobPosting.
 	// Behind Cloudflare: crawled through the Scrapling tier (scraplingProviders). See cadremploi.go.
 	registry["cadremploi"] = NewCadremploi(c)
+	// JobTeaser: the European careers platform of business and engineering schools, one board per
+	// posting language, enumerated from its job-ads sitemaps, each new posting's body read from its
+	// page's schema.org JobPosting. Pages behind Cloudflare: read through the Scrapling tier
+	// (scraplingProviders). See jobteaser.go.
+	registry["jobteaser"] = NewJobTeaser(c, c)
 	// ITJobs.pt: Portugal's IT-only job board, enumerated from its paginated listing, each new
 	// posting's body read from its page's schema.org JobPosting. See itjobs.go.
 	registry["itjobs"] = NewITJobs(c)
