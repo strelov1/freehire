@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -57,11 +58,8 @@ func TestRegisterOAuthClient_RejectsBadShapes(t *testing.T) {
 	cases := map[string]map[string]any{
 		"plain http off loopback": {"client_name": "X", "redirect_uris": []string{"http://attacker.example.com/cb"}},
 		"javascript scheme":       {"client_name": "X", "redirect_uris": []string{"javascript:alert(1)"}},
-		"too many uris": {"client_name": "X", "redirect_uris": []string{
-			"https://a.example/1", "https://a.example/2", "https://a.example/3",
-			"https://a.example/4", "https://a.example/5", "https://a.example/6",
-		}},
-		"name too long": {"client_name": strings.Repeat("n", 101), "redirect_uris": []string{"https://a.example/cb"}},
+		"too many uris":           {"client_name": "X", "redirect_uris": manyRedirectURIs(maxRedirectURIs + 1)},
+		"name too long":           {"client_name": strings.Repeat("n", 101), "redirect_uris": []string{"https://a.example/cb"}},
 	}
 	for name, payload := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -79,4 +77,13 @@ func TestRegisterOAuthClient_RejectsBadShapes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// manyRedirectURIs returns n distinct, individually valid https callbacks.
+func manyRedirectURIs(n int) []string {
+	uris := make([]string, n)
+	for i := range uris {
+		uris[i] = fmt.Sprintf("https://a.example/%d", i)
+	}
+	return uris
 }

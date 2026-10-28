@@ -36,12 +36,14 @@ type registerClientResponse struct {
 	ResponseTypes           []string `json:"response_types"`
 }
 
-// Bounds on what one unauthenticated registration may store. Real MCP clients
-// send a short product name and one or two callbacks; anything past these is a
-// payload, not a client.
+// Bounds on what one unauthenticated registration may store. Most MCP clients
+// send a short product name and one or two callbacks, but Gemini registers more
+// than five at once (its 400 was "may hold at most 5", 71 times in a day), so the
+// URI bound is set well clear of real clients; anything past these is a payload,
+// not a client.
 const (
 	maxClientNameLength = 100
-	maxRedirectURIs     = 5
+	maxRedirectURIs     = 20
 )
 
 // oauthRegistrationsPerHour bounds client registration per IP. It cannot be

@@ -56,3 +56,32 @@ func TestRegisterOAuthClient_PersistsAndReturnsClientID(t *testing.T) {
 		t.Errorf("stored client_name = %q, want %q", got.ClientName, "Test MCP Client")
 	}
 }
+
+// Gemini registers more than five callbacks in one request; the bound used to be
+// five and refused it with a 400 every time.
+func TestRegisterOAuthClient_AcceptsManyRedirectURIs(t *testing.T) {
+	pool := startPostgres(t)
+	h := &authHandlers{queries: db.New(pool)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Post("/api/v1/oauth/register", h.RegisterOAuthClient)
+
+	uris := manyRedirectURIs(maxRedirectURIs)
+	body, _ := json.Marshal(map[string]any{"client_name": "Gemini", "redirect_uris": uris})
+	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/oauth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, fiber.StatusCreated)
+	}
+	var out registerClientResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(out.RedirectURIs) != len(uris) {
+		t.Errorf("redirect_uris = %d, want %d", len(out.RedirectURIs), len(uris))
+	}
+}
