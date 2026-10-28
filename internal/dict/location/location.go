@@ -235,8 +235,11 @@ func ParseIn(location string, known []string) Geo {
 			continue
 		}
 		// "Zaragoza, AR, España", "Herisau, AR, CH": a code between a town and a different
-		// country is that country's subdivision (Aragón, Appenzell), not a second country.
-		if subdivisionBeforeCountry(tok, prevTok, nextToken(toks, i)) {
+		// country is that country's subdivision (Aragón, Appenzell), not a second country;
+		// so is a US/CA/Australian code before the country closing the location ("Breda,
+		// NB, Netherlands" is Noord-Brabant, not New Brunswick).
+		if subdivisionBeforeCountry(tok, prevTok, nextToken(toks, i)) ||
+			foreignSubdivisionCode(tok, prevTok, closingToken(toks, segs, i)) {
 			prevTok = tok
 			continue
 		}

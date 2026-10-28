@@ -242,22 +242,74 @@ func subdivisionBeforeCountry(code, prevTok, next string) bool {
 	if _, iso := countryToRegion[code]; !iso {
 		return false
 	}
-	country := nameToCountry[next]
-	if country == "" {
-		if _, iso := countryToRegion[next]; iso && len(next) == 2 {
-			country = next
-		}
-	}
+	country := countryOf(next)
 	if country == "" || country == code {
 		return false
 	}
 	return hasPlaceIn(prevTok, country) && !hasPlaceIn(prevTok, code)
 }
 
+// foreignSubdivisionCode reports whether code, a US state, Canadian province or Australian
+// state code written between the town prevTok and the country closing its location, is
+// instead a subdivision of that country: "Breda, NB, Netherlands" is Noord-Brabant, not New
+// Brunswick; "Barcelona, CT, Spain" Catalonia, not Connecticut; "Tijuana, BC, Mexico" Baja
+// California, not British Columbia. The town's own reading decides — its curated name or
+// the main city table, never the small-places table, where most European cities have an
+// American namesake — so "Austin, TX, Canada" keeps Texas and a town nobody knows proves
+// nothing. closing is "" unless the country is the LAST token of the location: in "Naples,
+// FL, Naples, FL, US" the token after FL is a city nameToCountry also knows.
+func foreignSubdivisionCode(code, prevTok, closing string) bool {
+	if prevTok == "" || closing == "" {
+		return false
+	}
+	owner := ""
+	if c, ok := subdivisionToCountry[code]; ok && len(code) == 2 {
+		owner = c
+	} else if _, ok := australianStateCodes[code]; ok {
+		owner = "au"
+	}
+	// A code that spells the closing country itself ("Herzliya, IL, IL") is that country,
+	// which the ordinary reading already gives.
+	country := countryOf(closing)
+	return owner != "" && country != "" && owner != country && country != code &&
+		isRecognizedCityOf(prevTok, country) && !isRecognizedCityOf(prevTok, owner)
+}
+
+// countryOf is the country a token names, by name or by its ISO code; "" for neither.
+func countryOf(tok string) string {
+	if c := nameToCountry[tok]; c != "" {
+		return c
+	}
+	if _, iso := countryToRegion[tok]; iso && len(tok) == 2 {
+		return tok
+	}
+	return ""
+}
+
+// closingToken is the comma-token after toks[i] when it is also the last token of its
+// location (segs: see tokenLocations), trimmed; "" otherwise.
+func closingToken(toks []string, segs []tokenLocation, i int) string {
+	next := ""
+	for j := i + 1; j < len(toks) && segs[j] == segs[i]; j++ {
+		if t := trimToken(toks[j]); t != "" {
+			if next != "" {
+				return ""
+			}
+			next = t
+		}
+	}
+	return next
+}
+
+// trimToken trims a comma-token and the parenthesis mark that may open it.
+func trimToken(t string) string {
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(t), parenMark))
+}
+
 // nextToken is the comma-token after toks[i], trimmed, "" when there is none.
 func nextToken(toks []string, i int) string {
 	for _, t := range toks[i+1:] {
-		if t = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(t), parenMark)); t != "" {
+		if t = trimToken(t); t != "" {
 			return t
 		}
 	}

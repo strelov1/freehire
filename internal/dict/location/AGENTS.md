@@ -58,6 +58,15 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   there: "Seattle, WA" stays Washington. The code is cut off the token so the place keeps its
   city and metro, and it is never recorded as a stated subdivision, because the metro table
   keys those to US/CA codes.
+- **A US/CA or Australian code before a DIFFERENT country that closes the location is
+  that country's subdivision** (`foreignSubdivisionCode`): "Breda, NB, Netherlands" is
+  Noord-Brabant, not New Brunswick; "Barcelona, CT, Spain" Catalonia; "Tijuana, BC, Mexico"
+  Baja California. The town's own reading (curated name or main city table, never
+  small places — most European cities have a US namesake there) must be the closing
+  country and not the code's, so "Austin, TX, Canada" keeps Texas and an unknown town
+  changes nothing. The country must be the LAST token of its location ("Naples, FL,
+  Naples, FL, US" repeats a US place). Measured 2026-10-28: 252 distinct lines, 4,290
+  open rows carried the spurious `us`/`ca`, all removals.
 - **A small place names a city, never a country** (`smallplaces.go`, `smallplaces.tsv`,
   written by `cmd/gen-cities` beside `cities1000.tsv`). The main table stops at 15,000
   people; the German crawl names towns of a few thousand beside their Land ("Billerbeck,
