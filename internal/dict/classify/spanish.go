@@ -287,9 +287,6 @@ var spanishCategoryTable = []aliasEntry{
 	{"camareros", "hospitality"},
 	{"mesero", "hospitality"},
 	{"mesera", "hospitality"},
-	// Argentina's hotel housekeeper.
-	{"mucama", "hospitality"},
-	{"mucamas", "hospitality"},
 	{"cocinero", "hospitality"},
 	{"cocinera", "hospitality"},
 	{"cocineros", "hospitality"},
@@ -344,13 +341,12 @@ var spanishCategoryTable = []aliasEntry{
 	{"preparador de pedidos", "logistics"},
 	{"armador de pedidos", "logistics"},
 	// Argentina: the forklift driver is a "clarkista" (after Clark), the courier a
-	// "cadete", the day labourer a "changarín", the customs broker a "despachante".
+	// "cadete", the customs broker a "despachante". The day labourer ("changarín") is
+	// absent: he loads lorries as often as he works a building site.
 	{"clarkista", "logistics"},
 	{"clarkistas", "logistics"},
 	{"cadete", "logistics"},
 	{"cadetes", "logistics"},
-	{"changarin", "logistics"},
-	{"changarines", "logistics"},
 	{"despachante de aduana", "logistics"},
 	{"despachante aduanero", "logistics"},
 	{"pickers", "logistics"}, // the main table's "picker", plural
@@ -577,6 +573,10 @@ var spanishCategoryTable = []aliasEntry{
 	{"ingeniero comercial", categoryNone},
 	{"comercial", "sales"},
 	{"comerciales", "sales"},
+	// Argentina's housekeeper: a hotel's by default, but after the fields, so "Mucama de
+	// limpieza en casa particular" is the cleaner the field names.
+	{"mucama", "hospitality"},
+	{"mucamas", "hospitality"},
 	{"administrativo", "administration"},
 	{"administrativa", "administration"},
 	{"administrativos", "administration"},
@@ -693,13 +693,13 @@ var spanishSeniorityTable = []aliasEntry{
 // obra", "Adjunto al jefe de tienda", "Subjefe de turno", "Segundo jefe", "Asistente del
 // Director General", "Secretaria de dirección general" — which states no grade of its own.
 // It is cut before the Spanish grade match, as assistantOfLead is before the German one.
-var assistantOfSpanishLead = regexp.MustCompile(`\b(?:(?:ayudante|asistente|adjunto|adjunta|auxiliar|secretari[oa])\s+(?:(?:del?|al|a la)\s+)?(?:jef[ea]s?|director[a]?\s+(?:general|ejecutiv[oa]|financier[oa])|direccion\s+(?:general|financiera))|subjef[ea]s?|segund[oa]\s+jef[ea])\b`)
+var assistantOfSpanishLead = regexp.MustCompile(`\b(?:(?:ayudante|asistente|adjunto|adjunta|auxiliar|secretari[oa])\s+(?:(?:del?|al|a la)\s+)?(?:jef[ea]s?|director[a]?\s+(?:general|ejecutiv[oa]|financier[oa])|direccion\s+(?:general|financiera)|gerente\s+general)|subjef[ea]s?|segund[oa]\s+jef[ea])\b`)
 
 // openingLider is a title that OPENS with "Líder": "Líder Comercial", "Lider Tester",
 // "Líder DevOps" name the lead. Anywhere else the word praises the employer ("Repositor/a
 // Consumo Masivo (Empresa Líder)", "compañía líder en su rubro"), so only the opening word
 // is read, as the "lider de" the table already carries.
-var openingLider = regexp.MustCompile(`^\W*lider\b`)
+var openingLider = regexp.MustCompile(`^[^\p{L}\p{N}]*lider\b`)
 
 // foldSpanishSeniority prepares a lowercased title for the Spanish grade match.
 func foldSpanishSeniority(lower string) string {

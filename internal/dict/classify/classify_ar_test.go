@@ -16,6 +16,7 @@ func TestArgentineTitles(t *testing.T) {
 		{"Clarkista con registro E2 (req212589) Eventual", "logistics", ""},
 		{"Cadete zona Malvin", "logistics", ""},
 		{"Mucama/o para importante hotel 5 estrellas", "hospitality", ""},
+		{"Mucama de limpieza en casa particular", "personal_services", ""},
 		{"Plegadores para importante empresa metalúrgica", "manufacturing", ""},
 		{"Pickers / Armadores de pedidos (importante multinacional)", "logistics", ""},
 		{"Despachante de aduana", "logistics", ""},
@@ -27,9 +28,12 @@ func TestArgentineTitles(t *testing.T) {
 		{"Repositor/a Consumo Masivo (Empresa Líder)", "retail", ""},
 		// The general manager is the executive, as the director general is.
 		{"Gerente General", "", "c_level"},
+		{"Asistente del Gerente General", "", ""},
 		// An opening "Ssr" is the grade, even beside Next.js.
 		{"Ssr Fullstack Developer (Node.js + Next.js)", "fullstack", "middle"},
 		{"Frontend Engineer (SSR, Next.js)", "frontend", ""},
+		{"SSR / SSG Developer (Next.js)", "", ""},
+		{"Разработчик SSR (Next.js)", "software_engineering", ""},
 	}
 	for _, c := range cases {
 		got := Parse(c.title)

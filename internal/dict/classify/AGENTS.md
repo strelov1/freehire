@@ -346,7 +346,7 @@ title was hand-checked and the misreadings found became vetoes.
 
 **Argentina** (2026-10-27, 5,225 Spanish-language postings placed there; category 84.2% →
 84.9%, seniority 23.1% → 23.6% — the Spanish table already covered most of it). Added the
-rioplatense trades (`preventista`, `promovendedor`, `clarkista`, `cadete`, `changarín`,
+rioplatense trades (`preventista`, `promovendedor`, `clarkista`, `cadete`,
 `mucama`, `plegador`, `despachante de aduana`), "Gerente General" as c_level, and two
 position rules: a title that OPENS with "Líder" is the lead (elsewhere the word praises the
 employer, "Empresa Líder"), and an opening "Ssr" is the grade even beside Next.js (the
