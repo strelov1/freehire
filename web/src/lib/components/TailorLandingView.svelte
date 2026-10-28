@@ -39,11 +39,11 @@
   // differs product to product; never a guess. No product is named.
   const priceCell = $derived(price ? `${priceLabel(price)} / month` : 'Pro plan');
   const compare = $derived([
-    { row: 'Works from a real, live job posting', us: 'Yes', chat: 'You paste it in', builder: 'You paste it in' },
+    { row: 'Works from a real, live job posting', us: 'Yes', chat: 'You paste it in', builder: 'Usually you paste it in' },
     { row: "Won't add experience you don't have", us: 'Enforced in code', chat: 'Depends on your prompt', builder: 'Varies' },
-    { row: 'Job match score, before and after', us: 'Yes', chat: 'No', builder: 'Varies' },
+    { row: 'Job match score, before and after', us: 'Yes', chat: 'Only if you ask', builder: 'Varies' },
     { row: 'ATS-readable PDF', us: 'Yes', chat: 'You format it', builder: 'Varies' },
-    { row: 'Every edit visible and undoable', us: 'Yes', chat: 'Rewrites the whole text', builder: 'Varies' },
+    { row: 'Every edit visible and undoable', us: 'Yes', chat: 'Depends on how you ask', builder: 'Varies' },
     { row: 'Price', us: priceCell, chat: 'Varies', builder: 'Varies' },
   ]);
 </script>

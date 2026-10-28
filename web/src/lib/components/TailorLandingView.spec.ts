@@ -35,6 +35,6 @@ describe('TailorLandingView', () => {
   it('falls back to the plan name and a pricing link without a price', () => {
     render(TailorLandingView, { price: null });
     expect(within(screen.getByRole('table')).getByText('Pro plan')).toBeTruthy();
-    expect(screen.getAllByRole('link', { name: 'See Pro plans' }).length).toBeGreaterThan(0);
+    for (const link of screen.getAllByRole('link', { name: 'See Pro plans' })) expect(link.getAttribute('href')).toBe('/pricing');
   });
 });
