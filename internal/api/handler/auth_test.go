@@ -49,7 +49,8 @@ func (fakeRepo) SetPassword(context.Context, int64, string) (int32, error) {
 func (fakeRepo) ResetPassword(context.Context, int64, string) (int32, error) {
 	return 0, nil
 }
-func (fakeRepo) DeleteOAuthGrantsByUser(context.Context, int64) error { return nil }
+func (fakeRepo) ChangeEmail(context.Context, int64, string) (int32, error) { return 0, nil }
+func (fakeRepo) DeleteOAuthGrantsByUser(context.Context, int64) error      { return nil }
 func (fakeRepo) UserByEmail(context.Context, string) (accounts.User, string, bool, error) {
 	return accounts.User{}, "", false, accounts.ErrUserNotFound
 }

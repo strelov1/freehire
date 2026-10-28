@@ -142,6 +142,12 @@ type Repository interface {
 	// generation.
 	ResetPassword(ctx context.Context, userID int64, passwordHash string) (int32, error)
 
+	// ChangeEmail moves the account to a new address a mailed code proved: it marks the
+	// address verified, revokes every session, destroys the codes mailed to the old
+	// address, and returns the new generation. ErrEmailTaken when another account holds
+	// the address.
+	ChangeEmail(ctx context.Context, userID int64, email string) (int32, error)
+
 	// DeleteOAuthGrantsByUser wipes every MCP OAuth grant (connected MCP client)
 	// the account holds. Called on password reset — see ResetPassword's own
 	// comment for why that moment, specifically, deletes rather than merely

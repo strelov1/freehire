@@ -50,7 +50,7 @@ func (q *Queries) DeleteEmailCode(ctx context.Context, arg DeleteEmailCodeParams
 }
 
 const getEmailCode = `-- name: GetEmailCode :one
-SELECT code_hash, expires_at, attempts, created_at
+SELECT code_hash, expires_at, attempts, created_at, target_email
 FROM user_email_codes
 WHERE user_id = $1 AND purpose = $2
 `
@@ -61,10 +61,11 @@ type GetEmailCodeParams struct {
 }
 
 type GetEmailCodeRow struct {
-	CodeHash  string             `json:"code_hash"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	Attempts  int32              `json:"attempts"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	CodeHash    string             `json:"code_hash"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	Attempts    int32              `json:"attempts"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	TargetEmail pgtype.Text        `json:"target_email"`
 }
 
 // The outstanding code for a purpose. No row means nothing was issued or it was consumed;
@@ -78,12 +79,13 @@ func (q *Queries) GetEmailCode(ctx context.Context, arg GetEmailCodeParams) (Get
 		&i.ExpiresAt,
 		&i.Attempts,
 		&i.CreatedAt,
+		&i.TargetEmail,
 	)
 	return i, err
 }
 
 const getEmailCodeForUpdate = `-- name: GetEmailCodeForUpdate :one
-SELECT code_hash, expires_at, attempts, created_at
+SELECT code_hash, expires_at, attempts, created_at, target_email
 FROM user_email_codes
 WHERE user_id = $1 AND purpose = $2
 FOR UPDATE
@@ -95,10 +97,11 @@ type GetEmailCodeForUpdateParams struct {
 }
 
 type GetEmailCodeForUpdateRow struct {
-	CodeHash  string             `json:"code_hash"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	Attempts  int32              `json:"attempts"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	CodeHash    string             `json:"code_hash"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	Attempts    int32              `json:"attempts"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	TargetEmail pgtype.Text        `json:"target_email"`
 }
 
 // The outstanding code for a purpose locked for update inside a transaction.
@@ -110,37 +113,43 @@ func (q *Queries) GetEmailCodeForUpdate(ctx context.Context, arg GetEmailCodeFor
 		&i.ExpiresAt,
 		&i.Attempts,
 		&i.CreatedAt,
+		&i.TargetEmail,
 	)
 	return i, err
 }
 
 const upsertEmailCode = `-- name: UpsertEmailCode :exec
-INSERT INTO user_email_codes (user_id, purpose, code_hash, expires_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO user_email_codes (user_id, purpose, code_hash, expires_at, target_email)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (user_id, purpose) DO UPDATE
-SET code_hash  = EXCLUDED.code_hash,
-    expires_at = EXCLUDED.expires_at,
+SET code_hash    = EXCLUDED.code_hash,
+    expires_at   = EXCLUDED.expires_at,
+    target_email = EXCLUDED.target_email,
     attempts   = 0,
     created_at = now()
 `
 
 type UpsertEmailCodeParams struct {
-	UserID    int64              `json:"user_id"`
-	Purpose   string             `json:"purpose"`
-	CodeHash  string             `json:"code_hash"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	UserID      int64              `json:"user_id"`
+	Purpose     string             `json:"purpose"`
+	CodeHash    string             `json:"code_hash"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	TargetEmail pgtype.Text        `json:"target_email"`
 }
 
 // Issue (or replace) the outstanding code for one purpose. The composite primary key
 // makes this the whole "at most one live code per (user, purpose)" rule: a resend
 // overwrites the hash and expiry and resets attempts, so a burnt code never lingers
 // beside a fresh one. created_at is re-stamped, which is what the resend cooldown reads.
+// target_email is the address a change_email code was mailed to (NULL for every other
+// purpose); it is replaced with the hash, so a code only ever confirms its own address.
 func (q *Queries) UpsertEmailCode(ctx context.Context, arg UpsertEmailCodeParams) error {
 	_, err := q.db.Exec(ctx, upsertEmailCode,
 		arg.UserID,
 		arg.Purpose,
 		arg.CodeHash,
 		arg.ExpiresAt,
+		arg.TargetEmail,
 	)
 	return err
 }

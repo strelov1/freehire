@@ -132,6 +132,15 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	meGroup.Get("/username", mw.cookie, h.GetUsername)
 	meGroup.Put("/username", mw.cookie, h.ClaimUsername)
 	meGroup.Post("/password", mw.cookie, recent, h.ChangePassword)
+	// Changing the account email: request mails a code to the NEW address, confirm moves
+	// the account there. Cookie-only and recent-auth-gated on the request for the same
+	// reason as the password — the address is a sign-in credential. Confirm needs no
+	// fresh proof of its own: the code it spends could only be issued behind that gate.
+	// Same limits as verification: request sends mail, confirm is a code-guessing surface.
+	meGroup.Post("/email", ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("email-change-req"), 5, time.Minute),
+		mw.cookie, recent, h.RequestEmailChange)
+	meGroup.Post("/email/confirm", ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("email-change-conf"), 10, 15*time.Minute),
+		mw.cookie, h.ConfirmEmailChange)
 	meGroup.Post("/api-keys", mw.cookie, recent, h.CreateAPIKey)
 	meGroup.Get("/api-keys", mw.cookie, h.ListAPIKeys)
 	meGroup.Get("/api-plan", mw.cookie, h.GetAPIPlan)

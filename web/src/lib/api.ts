@@ -1339,6 +1339,19 @@ export function createApi(
     await call('/api/v1/me/password', jsonBody('POST', { current_password: currentPassword, password }));
   }
 
+  /** Mail a code to the address the signed-in user wants to move their account to.
+   *  Nothing changes until `confirmEmailChange` spends that code. Gated on recent auth
+   *  (428), 409 when another account holds the address, 429 inside the resend cooldown. */
+  async function requestEmailChange(email: string): Promise<void> {
+    await call('/api/v1/me/email', jsonBody('POST', { email }));
+  }
+
+  /** Move the account to the address the code was mailed to; returns the updated user.
+   *  Other sessions are revoked; this one is re-issued. */
+  function confirmEmailChange(code: string): Promise<User> {
+    return requestData<User>('/api/v1/me/email/confirm', jsonBody('POST', { code }));
+  }
+
   async function reauthenticatePassword(password: string): Promise<string> {
     const result = await requestData<{ recent_auth_expires_at: string }>(
       '/api/v2/auth/reauth/password', jsonBody('POST', { password }),
@@ -3242,6 +3255,8 @@ export function createApi(
     forgotPassword,
     resetPassword,
     changePassword,
+    requestEmailChange,
+    confirmEmailChange,
     reauthenticatePassword,
     exchangeOAuthReauthentication,
     connectedIdentities,

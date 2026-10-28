@@ -53,6 +53,11 @@ func recoveryError(err error) error {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "email delivery is not configured")
 	case errors.Is(err, accounts.ErrAlreadyVerified):
 		return fiber.NewError(fiber.StatusConflict, "this email is already confirmed")
+	case errors.Is(err, accounts.ErrSameEmail):
+		return fiber.NewError(fiber.StatusBadRequest, "that is already your email")
+	case errors.Is(err, accounts.ErrEmailTaken):
+		// Worded for the change flow, the only code flow that can meet it.
+		return fiber.NewError(fiber.StatusConflict, "another account already uses this email")
 	default:
 		return accountsError(err)
 	}
@@ -179,4 +184,51 @@ func (h *authHandlers) ChangePassword(c *fiber.Ctx) error {
 		return err
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"changed": true}})
+}
+
+type changeEmailRequest struct {
+	Email string `json:"email"`
+}
+
+// RequestEmailChange mails a confirmation code to the address the caller wants to move
+// the account to. Nothing changes until ConfirmEmailChange spends that code.
+func (h *authHandlers) RequestEmailChange(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	var in changeEmailRequest
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	if err := h.accounts.RequestEmailChange(c.Context(), userID, in.Email); err != nil {
+		return recoveryError(err)
+	}
+	return c.SendStatus(fiber.StatusAccepted)
+}
+
+// ConfirmEmailChange moves the caller's account to the address the code was mailed to.
+// The change revokes every session, and the caller's own cookie is re-issued at the new
+// generation so they stay signed in — the same shape as ChangePassword.
+func (h *authHandlers) ConfirmEmailChange(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	var in verifyCodeRequest
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	version, err := h.accounts.ConfirmEmailChange(c.Context(), userID, in.Code)
+	if err != nil {
+		return recoveryError(err)
+	}
+	if err := h.setSessionAt(c, userID, version); err != nil {
+		return err
+	}
+	user, err := h.accounts.UserByID(c.Context(), userID)
+	if err != nil {
+		return accountsError(err)
+	}
+	return c.JSON(fiber.Map{"data": h.toUserResponseWithTier(c.Context(), user)})
 }

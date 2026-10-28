@@ -47,7 +47,8 @@ export type ReauthDraft =
   | { surface: 'create-api-key'; name: string; days: number; scope: string }
   | { surface: 'revoke-api-key'; keyId: number }
   | { surface: 'revoke-oauth-grant'; grantId: number }
-  | { surface: 'delete-account' };
+  | { surface: 'delete-account' }
+  | { surface: 'change-email'; email: string };
 
 /** When the proof obtained by the last provider round trip stops being valid, as the SERVER
  *  stated it — both issuing routes answer with `recent_auth_expires_at`, so this is a
@@ -92,6 +93,8 @@ function isDraftFor<S extends ReauthDraft['surface']>(
       return typeof d.keyId === 'number';
     case 'revoke-oauth-grant':
       return typeof d.grantId === 'number';
+    case 'change-email':
+      return typeof d.email === 'string';
     default:
       // `delete-account` carries nothing but its own name, on purpose: the typed address
       // that arms it is a barrier, not a field to be remembered.

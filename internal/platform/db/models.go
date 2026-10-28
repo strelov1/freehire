@@ -1558,12 +1558,13 @@ type UserBlock struct {
 }
 
 type UserEmailCode struct {
-	UserID    int64              `json:"user_id"`
-	Purpose   string             `json:"purpose"`
-	CodeHash  string             `json:"code_hash"`
-	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
-	Attempts  int32              `json:"attempts"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UserID      int64              `json:"user_id"`
+	Purpose     string             `json:"purpose"`
+	CodeHash    string             `json:"code_hash"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	Attempts    int32              `json:"attempts"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	TargetEmail pgtype.Text        `json:"target_email"`
 }
 
 type UserIdentity struct {

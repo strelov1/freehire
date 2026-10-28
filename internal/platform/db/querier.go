@@ -418,6 +418,20 @@ type Querier interface {
 	// duplicate of a row nothing lists, removing BOTH from search — the import's own
 	// posting and the private one it was pointed at.
 	CanonicalJobForRole(ctx context.Context, arg CanonicalJobForRoleParams) (CanonicalJobForRoleRow, error)
+	// Move the account to a new address after a mailed code proved control of it: the
+	// address is verified by that same code, and every session is revoked, since the address
+	// is a sign-in credential like the password.
+	//
+	// The codes tied to the account's address are destroyed in the same statement. A pending
+	// password_reset code was mailed to the OLD address, and ResetPassword looks the account
+	// up by address and the code up by account — so once the account answers to the new
+	// address, a code sitting in the old mailbox would reset its password. Whoever still
+	// reads that mailbox must not keep a way back in. A data-modifying CTE for the same reason
+	// ResetUserPassword uses one: the cleanup cannot be separated from the change.
+	//
+	// API keys survive, unlike a reset: the change was made from a session that just proved
+	// its credential, so the account has not changed hands.
+	ChangeUserEmail(ctx context.Context, arg ChangeUserEmailParams) (int32, error)
 	// Claim a batch of live, unleased captures, freshest posting first, by stamping
 	// claimed_at. Mirrors ClaimApplyFormBatch: FOR UPDATE OF o locks only outbox rows, SKIP
 	// LOCKED lets concurrent workers take disjoint rows, and the lease predicate reclaims
@@ -7764,6 +7778,8 @@ type Querier interface {
 	// makes this the whole "at most one live code per (user, purpose)" rule: a resend
 	// overwrites the hash and expiry and resets attempts, so a burnt code never lingers
 	// beside a fresh one. created_at is re-stamped, which is what the resend cooldown reads.
+	// target_email is the address a change_email code was mailed to (NULL for every other
+	// purpose); it is replaced with the hash, so a code only ever confirms its own address.
 	UpsertEmailCode(ctx context.Context, arg UpsertEmailCodeParams) error
 	// Store a message the caller's own harness fetched, under source 'external' and
 	// idempotent by (user_id, source, external_id) so a re-sync updates rather than

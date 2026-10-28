@@ -234,6 +234,17 @@ func (r *QueriesRepository) ResetPassword(ctx context.Context, userID int64, pas
 	})
 }
 
+// ChangeEmail moves the account to a new, code-proven address: verified, every session
+// revoked, and the codes mailed to the old address destroyed. Returns ErrEmailTaken when
+// another account claimed the address since the code was issued.
+func (r *QueriesRepository) ChangeEmail(ctx context.Context, userID int64, email string) (int32, error) {
+	version, err := r.q.ChangeUserEmail(ctx, db.ChangeUserEmailParams{ID: userID, Email: email})
+	if pgerr.IsUniqueViolation(err) {
+		return 0, ErrEmailTaken
+	}
+	return version, err
+}
+
 // DeleteOAuthGrantsByUser wipes every MCP OAuth grant the account holds.
 func (r *QueriesRepository) DeleteOAuthGrantsByUser(ctx context.Context, userID int64) error {
 	return r.q.DeleteOAuthGrantsByUser(ctx, userID)

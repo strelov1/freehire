@@ -96,6 +96,8 @@ var renderers = []func(string) (Sample, error){
 	tailorSample,
 	verificationSample,
 	passwordResetSample,
+	emailChangeSample,
+	emailChangedSample,
 	directApplicationSample,
 	digestSample,
 	savedJobReminderSample,
@@ -225,6 +227,20 @@ func passwordResetSample(baseURL string) (Sample, error) {
 	return sample("password-reset", "Account / Password reset", func(c *capture) error {
 		return emailnotify.NewAuthMailer(c, "hi@freehire.me", baseURL).
 			SendPasswordResetCode(context.Background(), "someone@example.com", "730914")
+	})
+}
+
+func emailChangeSample(baseURL string) (Sample, error) {
+	return sample("email-change", "Account / Change email", func(c *capture) error {
+		return emailnotify.NewAuthMailer(c, "hi@freehire.me", baseURL).
+			SendEmailChangeCode(context.Background(), "someone.new@example.com", "264083")
+	})
+}
+
+func emailChangedSample(baseURL string) (Sample, error) {
+	return sample("email-changed", "Account / Email changed (old address)", func(c *capture) error {
+		return emailnotify.NewAuthMailer(c, "hi@freehire.me", baseURL).
+			SendEmailChangedNotice(context.Background(), "someone@example.com")
 	})
 }
 

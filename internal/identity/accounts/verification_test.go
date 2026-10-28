@@ -58,7 +58,7 @@ func (f *fakeCodes) Begin(ctx context.Context) (pgx.Tx, error) {
 	return &fakeTx{f: f}, nil
 }
 
-func (f *fakeCodes) UpsertCode(_ context.Context, userID int64, purpose, codeHash string, expiresAt time.Time) error {
+func (f *fakeCodes) UpsertCode(_ context.Context, userID int64, purpose, codeHash, target string, expiresAt time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.failNext != nil {
@@ -66,7 +66,7 @@ func (f *fakeCodes) UpsertCode(_ context.Context, userID int64, purpose, codeHas
 	}
 	f.upserts++
 	f.codes[codeKey(userID, purpose)] = StoredCode{
-		Hash: codeHash, ExpiresAt: expiresAt, Attempts: 0, IssuedAt: time.Now(),
+		Hash: codeHash, ExpiresAt: expiresAt, Attempts: 0, IssuedAt: time.Now(), Target: target,
 	}
 	return nil
 }
@@ -119,7 +119,27 @@ func (f *fakeCodes) put(userID int64, purpose string, c StoredCode) {
 type fakeMailer struct {
 	verification []string
 	reset        []string
-	err          error
+	// change records "address:code" for each email-change code; changedNotice the old
+	// addresses told the account moved away.
+	change        []string
+	changedNotice []string
+	err           error
+}
+
+func (m *fakeMailer) SendEmailChangeCode(_ context.Context, email, code string) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.change = append(m.change, email+":"+code)
+	return nil
+}
+
+func (m *fakeMailer) SendEmailChangedNotice(_ context.Context, email string) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.changedNotice = append(m.changedNotice, email)
+	return nil
 }
 
 func (m *fakeMailer) SendVerificationCode(_ context.Context, _, code string) error {

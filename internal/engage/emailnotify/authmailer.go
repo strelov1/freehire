@@ -55,6 +55,20 @@ var resetHTML = template.Must(mailtpl.Partials().New("reset").Parse(`
 {{template "muted" (printf "The code expires in %d minutes." .Minutes)}}
 `))
 
+var emailChangeHTML = template.Must(mailtpl.Partials().New("email-change").Parse(`
+{{template "p" "Someone asked to move a freehire account to this address. Confirm it with this code:"}}
+{{template "code" .Code}}
+{{template "muted" (printf "The code expires in %d minutes." .Minutes)}}
+`))
+
+// emailChangedHTML carries no code and never names the new address: the old mailbox may
+// no longer be the member's, and telling it where the account went would hand that over.
+var emailChangedHTML = template.Must(mailtpl.Partials().New("email-changed").Parse(`
+{{template "p" "The email address on your freehire account was just changed, so we will no longer write to this one."}}
+{{template "p" "If you did this, there is nothing else to do."}}
+{{template "muted" "If you did not, write to hello@freehire.me from this address and we will help you get the account back."}}
+`))
+
 var employerClaimHTML = template.Must(mailtpl.Partials().New("employer-claim").Parse(`
 {{template "p" "Confirm this work email to manage your company's profile and publish vacancies on freehire:"}}
 {{template "code" .Code}}
@@ -81,6 +95,27 @@ func (m *AuthMailer) SendPasswordResetCode(ctx context.Context, email, code stri
 	},
 		"Use this code to set a new password: "+code+
 			"\nIt expires in 15 minutes. If this was not you, ignore this message — your password has not changed.")
+}
+
+// SendEmailChangeCode mails the code that confirms a NEW account address.
+func (m *AuthMailer) SendEmailChangeCode(ctx context.Context, email, code string) error {
+	return m.send(ctx, email, "Confirm your new freehire email", emailChangeHTML, code, mailtpl.Body{
+		Preheader: "Your freehire email-change code",
+		Heading:   "Confirm your new email address",
+		Footer:    "If this was not you, ignore this message — the account does not move without the code.",
+	},
+		"Confirm this address for your freehire account with this code: "+code+
+			"\nIt expires in 15 minutes. If this was not you, ignore this message.")
+}
+
+// SendEmailChangedNotice tells the account's PREVIOUS address that it was replaced.
+func (m *AuthMailer) SendEmailChangedNotice(ctx context.Context, email string) error {
+	return m.send(ctx, email, "Your freehire email was changed", emailChangedHTML, "", mailtpl.Body{
+		Preheader: "The email on your freehire account was changed",
+		Heading:   "Your email address was changed",
+	},
+		"The email address on your freehire account was just changed, so we will no longer write to this one."+
+			"\nIf you did not do this, write to hello@freehire.me from this address and we will help you get the account back.")
 }
 
 // SendClaimVerificationCode mails a company-account claim's work-email verification code —

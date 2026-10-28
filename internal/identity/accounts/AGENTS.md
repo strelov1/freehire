@@ -85,6 +85,18 @@ Four packages split this surface — keep the split:
   invalid desired name is rejected outright — only `EnsureUsername`'s system-generated
   default goes through `Candidate`'s collision-suffix search. A user who typed a specific
   name asked for exactly that one.
+- **An email change proves the NEW address, and the code row carries it.** `PurposeChangeEmail`
+  is the one purpose whose code goes to an address the account does not hold yet, so
+  `user_email_codes.target_email` (migration 0209) stores where it was mailed and
+  `ConfirmEmailChange` applies exactly that — never an address the client sends. The request
+  route is recent-auth-gated (the address is a sign-in credential); the confirm is not, since
+  its code could only be issued behind that gate. The move (`ChangeUserEmail`) marks the
+  address verified, bumps `token_version`, and destroys the account's pending
+  `verify_email`/`password_reset` codes in the same statement: a reset code is looked up by
+  account, so one left in the OLD mailbox would otherwise reset the password of the account
+  at its new address. API keys survive — the account has not changed hands. The old address
+  is told (`SendEmailChangedNotice`, never naming the new one) only if it was ever verified.
+  Stripe keeps the customer email it was given at checkout; receipts follow that copy.
 
 ## Limitations
 

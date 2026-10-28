@@ -7,10 +7,11 @@
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import { Button } from '#lib/ui/index.js';
+  import ChangeEmail from './ChangeEmail.svelte';
   import { messages } from './messages';
 
-  // Password + sessions. Both actions are cookie-only server-side: an API key can
-  // neither change the password nor end a human's sessions.
+  // Email, password and sessions. Every action is cookie-only server-side: an API key can
+  // neither change the email or password nor end a human's sessions.
 
   const s = $derived(t(messages, locale()));
   const user = $derived(currentUser());
@@ -91,6 +92,8 @@
 
 <h1 class="mb-1 text-2xl font-semibold tracking-tight">{s.title}</h1>
 <p class="mb-6 text-sm text-muted-foreground">{s.subtitle}</p>
+
+<ChangeEmail />
 
 <section class="mb-8 rounded-lg border border-border p-4">
   <h2 class="mb-1 text-sm font-semibold">{s.password.heading}</h2>

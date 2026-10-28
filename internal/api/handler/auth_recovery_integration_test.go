@@ -31,6 +31,22 @@ import (
 type captureMailer struct {
 	verification []string
 	reset        []string
+	// change holds the email-change codes, changeTo the address each went to, and
+	// changedNotice the old addresses told the account moved.
+	change        []string
+	changeTo      []string
+	changedNotice []string
+}
+
+func (m *captureMailer) SendEmailChangeCode(_ context.Context, email, code string) error {
+	m.change = append(m.change, code)
+	m.changeTo = append(m.changeTo, email)
+	return nil
+}
+
+func (m *captureMailer) SendEmailChangedNotice(_ context.Context, email string) error {
+	m.changedNotice = append(m.changedNotice, email)
+	return nil
 }
 
 func (m *captureMailer) SendVerificationCode(_ context.Context, _, code string) error {
@@ -66,6 +82,8 @@ func recoveryApp(t *testing.T) (*fiber.App, *captureMailer, *db.Queries, *auth.I
 	app.Post("/api/v1/auth/password/forgot", h.ForgotPassword)
 	app.Post("/api/v1/auth/password/reset", h.ResetPassword)
 	app.Post("/api/v1/me/password", cookieAuth, h.ChangePassword)
+	app.Post("/api/v1/me/email", cookieAuth, h.RequestEmailChange)
+	app.Post("/api/v1/me/email/confirm", cookieAuth, h.ConfirmEmailChange)
 	app.Get("/api/v1/auth/me", cookieAuth, h.Me)
 	return app, mailer, queries, iss
 }
@@ -421,4 +439,135 @@ func decodeHasPassword(t *testing.T, resp *http.Response) bool {
 		t.Fatalf("decode: %v", err)
 	}
 	return body.Data.HasPassword
+}
+
+// An email change mails a code to the NEW address and moves the account only when that
+// code comes back; it then behaves like a credential change (every other session revoked,
+// the caller kept signed in) and leaves no code in the OLD mailbox that could reopen the
+// account.
+func TestChangeEmailMovesTheAccountToTheProvenAddress(t *testing.T) {
+	app, mailer, _, iss := recoveryApp(t)
+
+	other := postAuthJSON(t, app, "/api/v1/auth/register",
+		`{"email":"taken@example.test","password":"original-pw"}`, "")
+	defer other.Body.Close()
+
+	reg := postAuthJSON(t, app, "/api/v1/auth/register",
+		`{"email":"mover@example.test","password":"original-pw"}`, "")
+	defer reg.Body.Close()
+	var created struct {
+		Data struct {
+			ID int64 `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(reg.Body).Decode(&created); err != nil {
+		t.Fatalf("decode register: %v", err)
+	}
+	cookie := sessionCookie(t, reg)
+	// Prove the current address, so the move has an owner to tell.
+	verified := postAuthJSON(t, app, "/api/v1/auth/verify/confirm",
+		`{"code":"`+mailer.verification[len(mailer.verification)-1]+`"}`, cookie)
+	defer verified.Body.Close()
+	if verified.StatusCode != fiber.StatusOK {
+		t.Fatalf("verify status = %d, want 200", verified.StatusCode)
+	}
+	otherDevice, _ := iss.Issue(created.Data.ID, 1)
+
+	for _, tc := range []struct {
+		body string
+		want int
+	}{
+		{`{"email":"not-an-address"}`, fiber.StatusBadRequest},
+		{`{"email":"MOVER@example.test"}`, fiber.StatusBadRequest},
+		{`{"email":"taken@example.test"}`, fiber.StatusConflict},
+	} {
+		resp := postAuthJSON(t, app, "/api/v1/me/email", tc.body, cookie)
+		resp.Body.Close()
+		if resp.StatusCode != tc.want {
+			t.Errorf("request %s = %d, want %d", tc.body, resp.StatusCode, tc.want)
+		}
+	}
+	if len(mailer.change) != 0 {
+		t.Fatalf("a refused request mailed %d codes", len(mailer.change))
+	}
+
+	// A reset code waiting in the OLD mailbox, issued before the move.
+	forgot := postAuthJSON(t, app, "/api/v1/auth/password/forgot", `{"email":"mover@example.test"}`, "")
+	forgot.Body.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for len(mailer.reset) == 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(mailer.reset) != 1 {
+		t.Fatalf("mailed %d reset codes, want 1", len(mailer.reset))
+	}
+
+	req := postAuthJSON(t, app, "/api/v1/me/email", `{"email":"Moved@Example.test"}`, cookie)
+	req.Body.Close()
+	if req.StatusCode != fiber.StatusAccepted {
+		t.Fatalf("request status = %d, want 202", req.StatusCode)
+	}
+	if len(mailer.change) != 1 || mailer.changeTo[0] != "moved@example.test" {
+		t.Fatalf("change mails = %v, want one to moved@example.test", mailer.changeTo)
+	}
+
+	wrong := postAuthJSON(t, app, "/api/v1/me/email/confirm", `{"code":"000000"}`, cookie)
+	wrong.Body.Close()
+	if wrong.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("wrong code = %d, want 400", wrong.StatusCode)
+	}
+
+	confirmed := postAuthJSON(t, app, "/api/v1/me/email/confirm", `{"code":"`+mailer.change[0]+`"}`, cookie)
+	defer confirmed.Body.Close()
+	if confirmed.StatusCode != fiber.StatusOK {
+		t.Fatalf("confirm status = %d, want 200", confirmed.StatusCode)
+	}
+	var moved struct {
+		Data struct {
+			Email         string `json:"email"`
+			EmailVerified bool   `json:"email_verified"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(confirmed.Body).Decode(&moved); err != nil {
+		t.Fatalf("decode confirm: %v", err)
+	}
+	if moved.Data.Email != "moved@example.test" || !moved.Data.EmailVerified {
+		t.Errorf("after confirm = %+v, want moved@example.test, verified", moved.Data)
+	}
+	if len(mailer.changedNotice) != 1 || mailer.changedNotice[0] != "mover@example.test" {
+		t.Errorf("old-address notices = %v, want one to mover@example.test", mailer.changedNotice)
+	}
+
+	// The caller stays signed in on the re-issued cookie; every other session is gone.
+	fresh := sessionCookie(t, confirmed)
+	still := postAuthJSON(t, app, "/api/v1/me/email", `{"email":"moved@example.test"}`, fresh)
+	still.Body.Close()
+	if still.StatusCode == fiber.StatusUnauthorized {
+		t.Error("the caller was signed out by their own email change")
+	}
+	gone := postAuthJSON(t, app, "/api/v1/me/email", `{"email":"x@example.test"}`, otherDevice)
+	gone.Body.Close()
+	if gone.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("other device status = %d, want 401 after an email change", gone.StatusCode)
+	}
+
+	// The reset code in the old mailbox no longer opens the account at its new address.
+	reset := postAuthJSON(t, app, "/api/v1/auth/password/reset",
+		`{"email":"moved@example.test","code":"`+mailer.reset[0]+`","password":"hijacked-pw"}`, "")
+	reset.Body.Close()
+	if reset.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("old-mailbox reset code = %d, want 400", reset.StatusCode)
+	}
+
+	// The account answers to the new address only.
+	newLogin := postAuthJSON(t, app, "/api/v1/auth/login", `{"email":"moved@example.test","password":"original-pw"}`, "")
+	newLogin.Body.Close()
+	if newLogin.StatusCode != fiber.StatusOK {
+		t.Errorf("login at the new address = %d, want 200", newLogin.StatusCode)
+	}
+	oldLogin := postAuthJSON(t, app, "/api/v1/auth/login", `{"email":"mover@example.test","password":"original-pw"}`, "")
+	oldLogin.Body.Close()
+	if oldLogin.StatusCode != fiber.StatusUnauthorized {
+		t.Errorf("login at the old address = %d, want 401", oldLogin.StatusCode)
+	}
 }

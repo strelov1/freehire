@@ -3,11 +3,14 @@
 -- makes this the whole "at most one live code per (user, purpose)" rule: a resend
 -- overwrites the hash and expiry and resets attempts, so a burnt code never lingers
 -- beside a fresh one. created_at is re-stamped, which is what the resend cooldown reads.
-INSERT INTO user_email_codes (user_id, purpose, code_hash, expires_at)
-VALUES ($1, $2, $3, $4)
+-- target_email is the address a change_email code was mailed to (NULL for every other
+-- purpose); it is replaced with the hash, so a code only ever confirms its own address.
+INSERT INTO user_email_codes (user_id, purpose, code_hash, expires_at, target_email)
+VALUES ($1, $2, $3, $4, sqlc.narg(target_email))
 ON CONFLICT (user_id, purpose) DO UPDATE
-SET code_hash  = EXCLUDED.code_hash,
-    expires_at = EXCLUDED.expires_at,
+SET code_hash    = EXCLUDED.code_hash,
+    expires_at   = EXCLUDED.expires_at,
+    target_email = EXCLUDED.target_email,
     attempts   = 0,
     created_at = now();
 
@@ -15,13 +18,13 @@ SET code_hash  = EXCLUDED.code_hash,
 -- The outstanding code for a purpose. No row means nothing was issued or it was consumed;
 -- the caller treats pgx.ErrNoRows as "request a new code". Expiry and the attempt ceiling
 -- are enforced by the caller, which must fail identically for expired and wrong codes.
-SELECT code_hash, expires_at, attempts, created_at
+SELECT code_hash, expires_at, attempts, created_at, target_email
 FROM user_email_codes
 WHERE user_id = $1 AND purpose = $2;
 
 -- name: GetEmailCodeForUpdate :one
 -- The outstanding code for a purpose locked for update inside a transaction.
-SELECT code_hash, expires_at, attempts, created_at
+SELECT code_hash, expires_at, attempts, created_at, target_email
 FROM user_email_codes
 WHERE user_id = $1 AND purpose = $2
 FOR UPDATE;

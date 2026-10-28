@@ -33,7 +33,7 @@ func (s *Service) RequestPasswordReset(ctx context.Context, email string) error 
 		return err
 	}
 
-	code, err := s.issueCode(ctx, user.ID, PurposeResetPassword)
+	code, err := s.issueCode(ctx, user.ID, PurposeResetPassword, "")
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword st
 	txStore := s.codes.WithTx(tx)
 	txRepo := s.repo.WithTx(tx)
 
-	consumeErr := s.consumeCodeTx(ctx, txStore, user.ID, PurposeResetPassword, code)
+	_, consumeErr := s.consumeCodeTx(ctx, txStore, user.ID, PurposeResetPassword, code)
 	if consumeErr != nil {
 		if errors.Is(consumeErr, ErrInvalidCode) {
 			// The failed guess is kept: the attempt counter is what bounds guessing, and

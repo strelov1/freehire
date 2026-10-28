@@ -22,6 +22,10 @@ const (
 	// side effect on confirm (see ConfirmCode). Named here, not in that package, so every
 	// purpose sharing this one code store stays enumerated in one place.
 	PurposeVerifyWorkEmail = "verify_work_email"
+	// PurposeChangeEmail moves the account to a new address. Unlike every other purpose
+	// its code is mailed to an address the account does not hold yet, so the row records
+	// that address (StoredCode.Target) and the confirm step applies exactly it.
+	PurposeChangeEmail = "change_email"
 )
 
 const (
@@ -58,6 +62,9 @@ var (
 	// can be delivered. Surfaced as 503 — never as a silent success.
 	ErrMailUnavailable = errors.New("accounts: email delivery is not configured")
 
+	// ErrSameEmail reports an email change to the address the account already holds.
+	ErrSameEmail = errors.New("accounts: that is already the account's email")
+
 	// ErrAlreadyVerified reports a verification request for an account that is already
 	// verified, so the client can stop prompting.
 	ErrAlreadyVerified = errors.New("accounts: email already verified")
@@ -71,6 +78,8 @@ type StoredCode struct {
 	ExpiresAt time.Time
 	Attempts  int32
 	IssuedAt  time.Time
+	// Target is the address a PurposeChangeEmail code was mailed to; empty otherwise.
+	Target string
 }
 
 // CodeStore persists at most one outstanding code per (user, purpose).
@@ -80,7 +89,7 @@ type StoredCode struct {
 // and what makes "spend the code and reset the password" one act; an implementation that
 // answered (nil, nil) would turn both into properties of how the store was built.
 type CodeStore interface {
-	UpsertCode(ctx context.Context, userID int64, purpose, codeHash string, expiresAt time.Time) error
+	UpsertCode(ctx context.Context, userID int64, purpose, codeHash, target string, expiresAt time.Time) error
 	Code(ctx context.Context, userID int64, purpose string) (StoredCode, error)
 	GetEmailCodeForUpdate(ctx context.Context, userID int64, purpose string) (StoredCode, error)
 	BumpAttempts(ctx context.Context, userID int64, purpose string) (int32, error)
@@ -89,11 +98,17 @@ type CodeStore interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
-// CodeMailer delivers the two transactional mails. It is a port so accounts stays free of
-// the AWS/SES dependency graph.
+// CodeMailer delivers the transactional account mails. It is a port so accounts stays free
+// of the AWS/SES dependency graph.
 type CodeMailer interface {
 	SendVerificationCode(ctx context.Context, email, code string) error
 	SendPasswordResetCode(ctx context.Context, email, code string) error
+	// SendEmailChangeCode mails the code that proves control of a NEW address.
+	SendEmailChangeCode(ctx context.Context, email, code string) error
+	// SendEmailChangedNotice tells the OLD address the account moved away from it — the
+	// one signal a member whose session was hijacked would still receive. It never names
+	// the new address.
+	SendEmailChangedNotice(ctx context.Context, oldEmail string) error
 }
 
 // WithCodes enables the code-backed flows (email verification, password reset). Without
@@ -120,7 +135,8 @@ func newCode() (string, error) {
 // issueCode mints, stores, and returns a fresh code for one purpose, refusing a resend
 // inside the cooldown. The code is stored only as a hash — a stolen snapshot must not
 // yield live codes. It checks resend cooldown and upserts code atomically inside a transaction.
-func (s *Service) issueCode(ctx context.Context, userID int64, purpose string) (string, error) {
+// target is the address a PurposeChangeEmail code is mailed to, empty for every other purpose.
+func (s *Service) issueCode(ctx context.Context, userID int64, purpose, target string) (string, error) {
 	tx, err := s.codes.Begin(ctx)
 	if err != nil {
 		return "", err
@@ -146,7 +162,7 @@ func (s *Service) issueCode(ctx context.Context, userID int64, purpose string) (
 	if err != nil {
 		return "", err
 	}
-	if err := store.UpsertCode(ctx, userID, purpose, hash, s.now().Add(codeTTL)); err != nil {
+	if err := store.UpsertCode(ctx, userID, purpose, hash, target, s.now().Add(codeTTL)); err != nil {
 		return "", err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -156,28 +172,29 @@ func (s *Service) issueCode(ctx context.Context, userID int64, purpose string) (
 }
 
 // consumeCodeTx checks a presented code against the outstanding one using GetEmailCodeForUpdate
-// inside a transaction.
-func (s *Service) consumeCodeTx(ctx context.Context, store CodeStore, userID int64, purpose, presented string) error {
+// inside a transaction, and returns the consumed code so a caller can read what it was
+// issued for (StoredCode.Target).
+func (s *Service) consumeCodeTx(ctx context.Context, store CodeStore, userID int64, purpose, presented string) (StoredCode, error) {
 	stored, err := store.GetEmailCodeForUpdate(ctx, userID, purpose)
 	if errors.Is(err, ErrNoCode) {
-		return ErrInvalidCode
+		return StoredCode{}, ErrInvalidCode
 	}
 	if err != nil {
-		return err
+		return StoredCode{}, err
 	}
 	if stored.Attempts >= maxCodeAttempts {
-		return ErrInvalidCode
+		return StoredCode{}, ErrInvalidCode
 	}
 	if s.now().After(stored.ExpiresAt) {
-		return ErrCodeExpired
+		return StoredCode{}, ErrCodeExpired
 	}
 	if s.hasher.Check(stored.Hash, presented) != nil {
 		if _, err := store.BumpAttempts(ctx, userID, purpose); err != nil {
-			return err
+			return StoredCode{}, err
 		}
-		return ErrInvalidCode
+		return StoredCode{}, ErrInvalidCode
 	}
-	return store.DeleteCode(ctx, userID, purpose)
+	return stored, store.DeleteCode(ctx, userID, purpose)
 }
 
 // IssueVerificationCode mails a fresh email-verification code to the account's address.
@@ -205,7 +222,7 @@ func (s *Service) IssueCode(ctx context.Context, userID int64, purpose, email st
 	if s.codes == nil {
 		return ErrMailUnavailable
 	}
-	code, err := s.issueCode(ctx, userID, purpose)
+	code, err := s.issueCode(ctx, userID, purpose, "")
 	if err != nil {
 		return err
 	}
@@ -230,7 +247,7 @@ func (s *Service) ConfirmCode(ctx context.Context, userID int64, purpose, code s
 	defer func() { _ = tx.Rollback(ctx) }()
 	txStore := s.codes.WithTx(tx)
 
-	consumeErr := s.consumeCodeTx(ctx, txStore, userID, purpose, code)
+	_, consumeErr := s.consumeCodeTx(ctx, txStore, userID, purpose, code)
 	if consumeErr != nil {
 		if errors.Is(consumeErr, ErrInvalidCode) {
 			// Same reasoning as ConfirmVerification: the failed guess must be kept, so the
@@ -258,7 +275,7 @@ func (s *Service) ConfirmVerification(ctx context.Context, userID int64, code st
 	txStore := s.codes.WithTx(tx)
 	txRepo := s.repo.WithTx(tx)
 
-	consumeErr := s.consumeCodeTx(ctx, txStore, userID, PurposeVerifyEmail, code)
+	_, consumeErr := s.consumeCodeTx(ctx, txStore, userID, PurposeVerifyEmail, code)
 	if consumeErr != nil {
 		if errors.Is(consumeErr, ErrInvalidCode) {
 			// The failed guess is kept: the attempt counter is what bounds guessing, and

@@ -48,13 +48,16 @@ func (s *QueriesCodeStore) Begin(ctx context.Context) (pgx.Tx, error) {
 	return s.pool.Begin(ctx)
 }
 
-// UpsertCode issues or replaces the outstanding code for one purpose.
-func (s *QueriesCodeStore) UpsertCode(ctx context.Context, userID int64, purpose, codeHash string, expiresAt time.Time) error {
+// UpsertCode issues or replaces the outstanding code for one purpose. target is the
+// address a change_email code was mailed to, and empty (stored NULL) for every other
+// purpose.
+func (s *QueriesCodeStore) UpsertCode(ctx context.Context, userID int64, purpose, codeHash, target string, expiresAt time.Time) error {
 	return s.q.UpsertEmailCode(ctx, db.UpsertEmailCodeParams{
-		UserID:    userID,
-		Purpose:   purpose,
-		CodeHash:  codeHash,
-		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
+		UserID:      userID,
+		Purpose:     purpose,
+		CodeHash:    codeHash,
+		ExpiresAt:   pgtype.Timestamptz{Time: expiresAt, Valid: true},
+		TargetEmail: pgtype.Text{String: target, Valid: target != ""},
 	})
 }
 
@@ -72,6 +75,7 @@ func (s *QueriesCodeStore) Code(ctx context.Context, userID int64, purpose strin
 		ExpiresAt: row.ExpiresAt.Time,
 		Attempts:  row.Attempts,
 		IssuedAt:  row.CreatedAt.Time,
+		Target:    row.TargetEmail.String,
 	}, nil
 }
 
@@ -89,6 +93,7 @@ func (s *QueriesCodeStore) GetEmailCodeForUpdate(ctx context.Context, userID int
 		ExpiresAt: row.ExpiresAt.Time,
 		Attempts:  row.Attempts,
 		IssuedAt:  row.CreatedAt.Time,
+		Target:    row.TargetEmail.String,
 	}, nil
 }
 

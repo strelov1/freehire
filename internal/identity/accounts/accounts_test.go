@@ -60,6 +60,11 @@ type fakeRepo struct {
 	resetHash          string
 	setPasswordVersion int32
 
+	// changedEmail records the address ChangeEmail moved the account to; changeEmailErr
+	// is what it answers instead, when set.
+	changedEmail   string
+	changeEmailErr error
+
 	// deletedOAuthGrantsForUser records every userID DeleteOAuthGrantsByUser was
 	// called with, in call order.
 	deletedOAuthGrantsForUser []int64
@@ -256,6 +261,16 @@ func (f *fakeRepo) ResetPassword(_ context.Context, _ int64, passwordHash string
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.resetHash = passwordHash
+	return f.setPasswordVersion, nil
+}
+
+func (f *fakeRepo) ChangeEmail(_ context.Context, _ int64, email string) (int32, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.changeEmailErr != nil {
+		return 0, f.changeEmailErr
+	}
+	f.changedEmail = email
 	return f.setPasswordVersion, nil
 }
 

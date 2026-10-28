@@ -112,6 +112,29 @@ SET password_hash = $2, token_version = token_version + 1
 WHERE id = $1
 RETURNING token_version;
 
+-- name: ChangeUserEmail :one
+-- Move the account to a new address after a mailed code proved control of it: the
+-- address is verified by that same code, and every session is revoked, since the address
+-- is a sign-in credential like the password.
+--
+-- The codes tied to the account's address are destroyed in the same statement. A pending
+-- password_reset code was mailed to the OLD address, and ResetPassword looks the account
+-- up by address and the code up by account — so once the account answers to the new
+-- address, a code sitting in the old mailbox would reset its password. Whoever still
+-- reads that mailbox must not keep a way back in. A data-modifying CTE for the same reason
+-- ResetUserPassword uses one: the cleanup cannot be separated from the change.
+--
+-- API keys survive, unlike a reset: the change was made from a session that just proved
+-- its credential, so the account has not changed hands.
+WITH dropped_codes AS (
+    DELETE FROM user_email_codes
+    WHERE user_id = $1 AND purpose IN ('verify_email', 'password_reset')
+)
+UPDATE users
+SET email = $2, email_verified = true, token_version = token_version + 1
+WHERE id = $1
+RETURNING token_version;
+
 -- name: ResetUserPassword :one
 -- Complete a reset-by-emailed-code: set the new hash, revoke every session, and mark
 -- the address verified — receiving the code IS proof of control, so a reset doubles as

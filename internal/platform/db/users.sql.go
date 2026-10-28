@@ -28,6 +28,42 @@ func (q *Queries) BumpUserTokenVersion(ctx context.Context, id int64) (int32, er
 	return token_version, err
 }
 
+const changeUserEmail = `-- name: ChangeUserEmail :one
+WITH dropped_codes AS (
+    DELETE FROM user_email_codes
+    WHERE user_id = $1 AND purpose IN ('verify_email', 'password_reset')
+)
+UPDATE users
+SET email = $2, email_verified = true, token_version = token_version + 1
+WHERE id = $1
+RETURNING token_version
+`
+
+type ChangeUserEmailParams struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+}
+
+// Move the account to a new address after a mailed code proved control of it: the
+// address is verified by that same code, and every session is revoked, since the address
+// is a sign-in credential like the password.
+//
+// The codes tied to the account's address are destroyed in the same statement. A pending
+// password_reset code was mailed to the OLD address, and ResetPassword looks the account
+// up by address and the code up by account — so once the account answers to the new
+// address, a code sitting in the old mailbox would reset its password. Whoever still
+// reads that mailbox must not keep a way back in. A data-modifying CTE for the same reason
+// ResetUserPassword uses one: the cleanup cannot be separated from the change.
+//
+// API keys survive, unlike a reset: the change was made from a session that just proved
+// its credential, so the account has not changed hands.
+func (q *Queries) ChangeUserEmail(ctx context.Context, arg ChangeUserEmailParams) (int32, error) {
+	row := q.db.QueryRow(ctx, changeUserEmail, arg.ID, arg.Email)
+	var token_version int32
+	err := row.Scan(&token_version)
+	return token_version, err
+}
+
 const clearUserPhoto = `-- name: ClearUserPhoto :exec
 UPDATE users
 SET photo_object_key = NULL, photo_uploaded_at = NULL
