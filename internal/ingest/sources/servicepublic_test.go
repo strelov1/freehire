@@ -218,3 +218,32 @@ func TestServicePublicParseURL(t *testing.T) {
 		}
 	}
 }
+
+// Over ten days of runs up to twelve hours apart, a window that fails on its first page — at any
+// one of the runs — leaves no page past the head unseen for as long as the sweep's grace.
+func TestServicePublicWindowOutlastsAFailedWindow(t *testing.T) {
+	gaps := []int{3, 12, 5, 3, 9, 3, 12, 7}
+	start := time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)
+	end := start.Add(10 * 24 * time.Hour)
+	worst := time.Duration(0)
+	for failed := 0; failed < 30; failed++ {
+		at := start
+		last := map[int]time.Time{}
+		for run := 0; at.Before(end); run++ {
+			window := servicepublicWindow(10, 2200, servicepublicWindowPages, at)
+			if run == failed {
+				window = nil // the window's first page failed, ending it
+			}
+			for _, p := range window {
+				if prev, ok := last[p]; ok && at.Sub(prev) > worst {
+					worst = at.Sub(prev)
+				}
+				last[p] = at
+			}
+			at = at.Add(time.Duration(gaps[run%len(gaps)]) * time.Hour)
+		}
+	}
+	if worst >= servicepublicSweepGrace {
+		t.Errorf("a page went unseen for %v, past the %v grace", worst, servicepublicSweepGrace)
+	}
+}

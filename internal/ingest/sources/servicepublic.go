@@ -68,9 +68,10 @@ const (
 	servicepublicWindowStep  = 50
 	// servicepublicWindowCycle is the granularity the window's cycle is rounded up to.
 	servicepublicWindowCycle = 500
-	// servicepublicSweepGrace leaves the window time to come round before a stored posting it
-	// has not re-listed is closed.
-	servicepublicSweepGrace = 72 * time.Hour
+	// servicepublicSweepGrace leaves the window two turns of its ~50-hour cycle before a stored
+	// posting it has not re-listed is closed: a window cut short by a failed page, or a run that
+	// comes very late, can miss a page for one turn.
+	servicepublicSweepGrace = 120 * time.Hour
 	// servicepublicMaxNewPerRun bounds the posting pages of one run: up to ~750 listing pages
 	// (~1-2 s each) and 600 posting pages at one a second, plus the writes, fit the 3,000 s run
 	// timeout this provider is scheduled with. A cold catalogue is taken newest first over many
