@@ -216,8 +216,8 @@ var specs = map[Step]spec{
 		heading:   "You don’t have to interview alone",
 		body: body("buddies", `
 {{template "p" "Somewhere on freehire, someone applied to the same companies you did — and one of them just had the interview you’re still waiting for."}}
-{{template "p" "Interview buddies lets you find them. Join under a random handle and you’ll see members looking for the same kind of role, in the same place, and how far they got: applied, interview, offer."}}
 {{template "image-link" (mailImageLink .BuddiesURL .BuddiesDemoURL "An example interview buddies feed: members applying and interviewing at the same companies, then a message asking how the interview went" 480)}}
+{{template "p" "Interview buddies lets you find them. Join under a random handle and you’ll see members looking for the same kind of role, in the same place, and how far they got: applied, interview, offer."}}
 {{template "lead" "Then ask the one who’s been there."}}
 {{template "p" "Send a short first message — how the loop went, what they asked, how long the silence lasted. They can reply or decline, and declining is silent."}}
 {{template "p" "Nobody sees your name, your email or your CV — only your handle, your role titles and your progress. Rejections never show up in the feed. It’s free."}}

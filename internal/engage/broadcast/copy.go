@@ -78,9 +78,9 @@ var campaigns = map[string]Campaign{
 		Heading:   "You don’t have to interview alone",
 		body: body("interview-buddies", `
 {{template "p" "Hi — something new I’d like you to try."}}
+{{template "image-link" (mailImageLink .BuddiesURL .BuddiesDemoURL "An example interview buddies feed: members applying and interviewing at the same companies, then a message asking how the interview went" 480)}}
 {{template "p" "Job hunting is mostly done alone, and the people who could help most — the ones going through the same interview loops at the same companies — have been invisible to you."}}
 {{template "p" "Interview buddies changes that. Join under a random handle and you’ll see members looking for the same kind of role, in the same place, who applied to the same companies in the last 90 days — and how far they got: applied, interview, offer."}}
-{{template "image-link" (mailImageLink .BuddiesURL .BuddiesDemoURL "An example interview buddies feed: members applying and interviewing at the same companies, then a message asking how the interview went" 480)}}
 {{template "lead" "Then message the one who just had the interview you’re preparing for."}}
 {{template "p" "Your name, email and CV stay hidden — others see your handle, your role titles and your progress, never a rejection. Block, report or leave at any time. It’s free for everyone."}}
 {{template "button" (mailLink .BuddiesURL "Find your interview buddies")}}
