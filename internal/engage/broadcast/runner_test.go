@@ -163,6 +163,25 @@ func TestSend_LinksBackThroughTheConfiguredOrigin(t *testing.T) {
 	}
 }
 
+// The interview-buddies letter's one button leads to the feature's landing, and the
+// plain-text body spells the same link out.
+func TestSend_InterviewBuddiesLinksTheLanding(t *testing.T) {
+	sender := &fakeSender{}
+	m := broadcast.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://preview.test", testLinks("https://preview.test"))
+	if err := m.Send(context.Background(), campaign(t, "interview-buddies"), 1, "someone@example.com"); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	sent := sender.sent[0]
+	if sent.subject != "Find people interviewing where you are" {
+		t.Errorf("subject = %q", sent.subject)
+	}
+	for name, body := range map[string]string{"html": sent.html, "text": sent.text} {
+		if !strings.Contains(body, "https://preview.test/features/interview-buddies") {
+			t.Errorf("%s body does not link the interview-buddies landing", name)
+		}
+	}
+}
+
 // testLinks signs the unsubscribe URLs a campaign carries. The secret only has to
 // clear emailprefs' length floor — nothing here verifies a token, it just has to be
 // mintable.

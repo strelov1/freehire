@@ -96,9 +96,9 @@ func (m *Mailer) Send(ctx context.Context, c Campaign, userID int64, to string) 
 	})
 }
 
-// assets is what the campaign templates render from: the image URLs, which depend on
-// the origin and so cannot be baked into the copy, and the two outward links that
-// ride beside their marks. Each link sits next to its own icon here because a
+// assets is what the campaign templates render from: the image URLs and the links into
+// the site, which depend on the origin and so cannot be baked into the copy, and the
+// two outward links that ride beside their marks. Each link sits next to its own icon here because a
 // campaign showing one mark and linking somewhere else is the mistake worth making
 // impossible.
 type assets struct {
@@ -107,6 +107,7 @@ type assets struct {
 	DiscordURL   string
 	LinkedInIcon string
 	LinkedInURL  string
+	BuddiesURL   string
 }
 
 func (m *Mailer) assets() assets {
@@ -116,6 +117,7 @@ func (m *Mailer) assets() assets {
 		DiscordURL:   mailtpl.DiscordURL,
 		LinkedInIcon: m.baseURL + "/email-icon-linkedin.png",
 		LinkedInURL:  mailtpl.LinkedInURL,
+		BuddiesURL:   m.baseURL + "/features/interview-buddies",
 	}
 }
 

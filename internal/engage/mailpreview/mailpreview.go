@@ -88,6 +88,7 @@ func Samples(baseURL string) ([]Sample, error) {
 // sender, so a sample is what production would send, not a hand-written copy of it.
 var renderers = []func(string) (Sample, error){
 	discordInviteSample,
+	interviewBuddiesSample,
 	welcomeSample,
 	advancedSearchSample,
 	noAlertSample,
@@ -182,6 +183,11 @@ func campaignSample(name, title, campaignName, baseURL string) (Sample, error) {
 func discordInviteSample(baseURL string) (Sample, error) {
 	return campaignSample("campaign-discord-invite", "Campaigns / Discord invite",
 		"discord-invite", baseURL)
+}
+
+func interviewBuddiesSample(baseURL string) (Sample, error) {
+	return campaignSample("campaign-interview-buddies", "Campaigns / Interview buddies",
+		"interview-buddies", baseURL)
 }
 
 // The signup sequence. Its Sender takes a Reply-To, which capture also satisfies —
