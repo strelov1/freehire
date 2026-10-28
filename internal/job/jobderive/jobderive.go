@@ -143,12 +143,10 @@ func Derive(in Input) Derived {
 	// stored row re-derived by backfill-derive keeps its published URL.
 	title := normalize.CleanTitle(in.Title)
 	// The adapter's own country lets a line that names only a place resolve it — a Buenos
-	// Aires barrio, a small or a contested town, the city's metro (location.ParseIn).
-	known := in.Countries
-	if len(known) == 0 {
-		known = in.FallbackCountries
-	}
-	geo := location.ParseIn(in.Location, known)
+	// Aires barrio, a small or a contested town, the city's metro (location.ParseIn). A
+	// structured country is final (it replaces the countries below); a fallback one is
+	// read only once it is what the posting ends up placed in, below.
+	geo := location.ParseIn(in.Location, in.Countries)
 	// Geography precedence: the location dictionary → a title-embedded restriction
 	// marker → an eligibility signal in the description → an explicit region-scoping
 	// statement in the description → the caller's FallbackCountries. When the location left the geography unpinned (no
@@ -185,6 +183,9 @@ func Derive(in Input) Derived {
 	if len(countries) == 0 && len(regions) == 0 && len(in.FallbackCountries) > 0 {
 		countries = in.FallbackCountries
 		regions = regionsForCountries(in.FallbackCountries)
+		if len(in.Countries) == 0 {
+			geo = location.ParseIn(in.Location, in.FallbackCountries)
+		}
 	}
 	// An explicit country signal is authoritative: it fully replaces the derived/US-override
 	// countries, the same way a stated work mode replaces the hint — and pulls its region

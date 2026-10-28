@@ -50,7 +50,10 @@ func TestArgentineLines(t *testing.T) {
 		{"Florida, Buenos Aires Province, Argentina", []string{"ar"}, []string{"Florida"}, baMetro}, // was the US state
 		{"Martínez, Argentina", []string{"ar"}, []string{"Martínez"}, baMetro},                      // was Martinez, CA
 		{"Ciudad Evita, Argentina", []string{"ar"}, []string{"Ciudad Evita"}, baMetro},              // was Cañada de Gómez
-		{"Pilar, Córdoba, Argentina", []string{"ar"}, []string{"Pilar"}, nil},                       // Córdoba's Pilar
+		// A name another Argentine place shares needs Buenos Aires itself in the line.
+		{"Pilar, Argentina", []string{"ar"}, []string{"Pilar"}, nil},
+		{"San Martín, Mendoza, Argentina", []string{"ar"}, nil, nil},
+		{"Pilar, Córdoba, Argentina", []string{"ar"}, []string{"Pilar"}, nil}, // Córdoba's Pilar
 		// A province named after its capital, after a town, is the province.
 		{"Rosario, Santa Fe, Argentina", []string{"ar"}, []string{"Rosario"}, []string{"Rosario (AR)"}},
 		{"Villa María, Córdoba, Argentina", []string{"ar"}, []string{"Villa María"}, []string{"Villa María (AR)"}},
@@ -124,6 +127,8 @@ func TestParseInResolvesBarePlaces(t *testing.T) {
 		{"Palermo", []string{"ar"}, []string{"Buenos Aires"}, []string{"Buenos Aires (AR)"}},
 		{"San Nicolás", []string{"ar"}, []string{"Buenos Aires"}, []string{"Buenos Aires (AR)"}},
 		{"Vicente López", []string{"ar"}, []string{"Vicente López"}, []string{"Buenos Aires (AR)"}},
+		{"Partido de General San Martín", []string{"ar"}, []string{"General San Martín"}, []string{"Buenos Aires (AR)"}},
+		{"Pilar", []string{"ar"}, []string{"Pilar"}, nil}, // Córdoba has one too
 		{"Rosario", []string{"ar"}, []string{"Rosario"}, []string{"Rosario (AR)"}},
 		{"Cordoba", []string{"ar"}, []string{"Córdoba"}, []string{"Córdoba (AR)"}},
 		// Without the hint, nothing changes.

@@ -174,7 +174,7 @@ func ParseIn(location string, known []string) Geo {
 				prevTok = tok
 				continue
 			}
-			if name := buenosAiresPlace(tok); name != "" {
+			if name := buenosAiresPlaceIn(tok, seg.namesBuenosAires); name != "" {
 				citySet[name] = struct{}{}
 				regionMetros[buenosAiresMetro] = struct{}{}
 				prevTok = tok

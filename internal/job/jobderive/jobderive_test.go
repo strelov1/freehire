@@ -993,4 +993,10 @@ func TestDerive_AdapterCountryResolvesABarePlace(t *testing.T) {
 	if !reflect.DeepEqual(got.Metros, []string{"Rosario (AR)"}) {
 		t.Errorf("metros %v, want [Rosario (AR)]", got.Metros)
 	}
+	// A fallback country the title overrules places nothing.
+	got = Derive(Input{Title: "Engineer [Remote-US]", Company: "Acme", Source: "whatjobs-ar", ExternalID: "1",
+		Location: "Palermo", FallbackCountries: []string{"ar"}})
+	if !reflect.DeepEqual(got.Countries, []string{"us"}) || len(got.Metros) != 0 || reflect.DeepEqual(got.Cities, []string{"Buenos Aires"}) {
+		t.Errorf("countries %v cities %v metros %v, want [us], no Buenos Aires", got.Countries, got.Cities, got.Metros)
+	}
 }

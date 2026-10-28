@@ -97,6 +97,20 @@ var buenosAiresTowns = map[string]string{
 	"don torcuato": "Don Torcuato", "boulogne sur mer": "Boulogne",
 }
 
+// sharedArgentineNames are the barrios and towns of Greater Buenos Aires whose name another
+// Argentine place also carries: Córdoba's Pilar, Tucumán's San Miguel, Mendoza's San
+// Martín, Santa Fe's Avellaneda, San Justo and San Cristóbal, Corrientes' Bella Vista and
+// Ituzaingó, San Luis' Merlo, Catamarca's San Fernando. "Pilar, Argentina" may be either,
+// so these need the line to name Buenos Aires itself — the city, the province, the
+// conurbation or one of its zones — or to write the partido ("Partido de General San
+// Martín"). Accent-folded.
+var sharedArgentineNames = map[string]bool{
+	"pilar": true, "san miguel": true, "san martin": true, "general san martin": true,
+	"avellaneda": true, "san justo": true, "san cristobal": true, "bella vista": true,
+	"ituzaingo": true, "merlo": true, "san fernando": true, "san isidro": true,
+	"belgrano": true, "flores": true, "caseros": true, "san andres": true,
+}
+
 // buenosAiresMetroRegions name the conurbation itself: they state the country and the
 // capital's metro, and no city — a GBA posting may sit in any of its partidos.
 var buenosAiresMetroRegions = map[string]bool{
@@ -117,6 +131,9 @@ var buenosAiresContext = map[string]bool{
 	"ciudad de buenos aires": true, "buenos aires city": true,
 	"zona norte": true, "zona sur": true, "zona oeste": true,
 }
+
+// countryOnly are the buenosAiresContext tokens that name the country and nothing nearer.
+var countryOnly = map[string]bool{"argentina": true, "ar": true, "arg": true, "republica argentina": true}
 
 // argentinaNames are the tokens that place a line in Argentina, accent-folded.
 // A bare "AR" counts only inside a line every other token of which is a Buenos Aires place
@@ -164,10 +181,22 @@ func buenosAiresPlace(tok string) string {
 	return buenosAiresTowns[t]
 }
 
+// buenosAiresPlaceIn is buenosAiresPlace for a token of a line that names Buenos Aires
+// itself (namesBuenosAires) or not: a sharedArgentineNames place needs it, unless the
+// token writes its partido.
+func buenosAiresPlaceIn(tok string, namesBuenosAires bool) string {
+	if !namesBuenosAires && !strings.HasPrefix(tok, "partido de ") && sharedArgentineNames[argentineToken(tok)] {
+		return ""
+	}
+	return buenosAiresPlace(tok)
+}
+
 // lineInBuenosAires reports whether every token of the separator-normalized location s is
-// a Buenos Aires place, a buenosAiresContext token, or a work-mode word, and whether one
-// of them names Argentina. The first is what keeps "Pilar, Córdoba" out of the conurbation.
-func lineInBuenosAires(s string) (onlyBuenosAires, namesArgentina bool) {
+// a Buenos Aires place, a buenosAiresContext token, or a work-mode word; whether one of
+// them names Argentina; and whether one names Buenos Aires itself rather than only the
+// country. The first is what keeps "Pilar, Córdoba" out of the conurbation, the last what
+// keeps "Pilar, Argentina" out of it (sharedArgentineNames).
+func lineInBuenosAires(s string) (onlyBuenosAires, namesArgentina, namesBuenosAires bool) {
 	onlyBuenosAires = true
 	for _, tok := range strings.Split(s, ",") {
 		tok = stripWorkmodeWords(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(tok), parenMark)))
@@ -178,11 +207,14 @@ func lineInBuenosAires(s string) (onlyBuenosAires, namesArgentina bool) {
 		if argentinaNames[t] || buenosAiresMetroRegions[tok] {
 			namesArgentina = true
 		}
+		if (buenosAiresContext[t] || buenosAiresMetroRegions[tok]) && !countryOnly[t] {
+			namesBuenosAires = true
+		}
 		if !buenosAiresContext[t] && !buenosAiresMetroRegions[tok] && buenosAiresPlace(tok) == "" {
 			onlyBuenosAires = false
 		}
 	}
-	return onlyBuenosAires, namesArgentina
+	return onlyBuenosAires, namesArgentina, namesBuenosAires
 }
 
 // hasPlaceIn reports whether tok names a place the dictionary puts in country, through any

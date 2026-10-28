@@ -237,20 +237,23 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   state). A barrio is the city of Buenos Aires and a town of Greater Buenos Aires is itself,
   both in the metro "Buenos Aires (AR)", and only in a line that names nothing but Buenos
   Aires context (`lineInBuenosAires`), so "Palermo, Italia" and "San Cristóbal, Santa Fe"
-  keep their own reading. GBA/AMBA/Gran Buenos Aires state the country and the metro, no
+  keep their own reading; a name another Argentine place shares (Pilar, San Miguel, San
+  Martín, Avellaneda, `sharedArgentineNames`) needs Buenos Aires itself in the line, not just
+  the country. GBA/AMBA/Gran Buenos Aires state the country and the metro, no
   city. A province named after its capital is the province between two commas of a line
   ending in Argentina ("Rosario, Santa Fe, Argentina"). GHS-FUA labels Greater Mendoza and
   San Juan by a suburb; `metroLabelOverrides` renames them.
   **`ParseIn(line, countries)`** is how the adapter's country reaches the parser: when the
   line states none, it names a barrio, a contested or small town (in a one-place line only,
   so "Hermosillo, Sonora" does not name the town GeoNames calls Sonora) and the metro;
-  it never adds a country. `jobderive.Derive` passes `Countries`, else `FallbackCountries`.
+  it never adds a country. `jobderive.Derive` passes `Countries`, and `FallbackCountries`
+  only once the fallback is what places the posting (a title's "[Remote-US]" outranks it).
   Two country-code fixes came out of the same sample and are not Argentine: a colliding
   code after a US town only the small-places table knows is the state ("Atkins, AR" was
   Argentina — 195 lines in the sample), and a code between a town and a DIFFERENT country
   the town belongs to is that country's subdivision ("Zaragoza, AR, España" Aragón,
-  "Madrid, MD, Spain", "Jena, TH, Germany"). AR-placed lines: city 65.9% → 75.8%, metro
-  48.9% → 70.2%, "Buenos Aires (AR)" 31.7% → 45.3%.
+  "Madrid, MD, Spain", "Jena, TH, Germany"). AR-placed lines: city 65.9% → 75.6%, metro
+  48.9% → 69.1%, "Buenos Aires (AR)" 31.7% → 44.2%.
 - **Indian work-arrangement prose is a fourth phrase list** (`workmode_in.go`), read only
   when none of the English, German, Dutch, Spanish and Portuguese ones matched. "WFO"/"work from office" is onsite;
   counted office days decide the rest ("3 days WFO", "Hybrid (3 days office)" → hybrid;
