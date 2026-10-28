@@ -144,6 +144,42 @@ WHERE u.email_verified
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
 
+-- name: ListBuddiesCandidates :many
+-- Greeted a while ago: an introduction to interview buddies. It skips three kinds
+-- of account, each of which already knows the feature or has already been pitched it:
+--
+--   * one with a buddy_members row, active or left — a member, or someone who joined
+--     and chose to leave, does not need the feature explained;
+--   * one the one-off 'interview-buddies' broadcast already reached — the same pitch
+--     twice, once as an announcement and once as a "did you know", reads as nobody
+--     keeping track.
+--
+-- Its window is its own (BuddiesWindowDays), not the shared one: the letter goes out
+-- on day 14, which the shared 14-day window never reaches, and widening the shared
+-- window would hand every earlier step's query accounts aged 14-21 days that never got
+-- those steps — the tailor letter shipped after they aged out, so they would all get it.
+SELECT u.id, u.email
+FROM users u
+JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.email_verified
+  AND u.created_at > now() - make_interval(days => sqlc.arg(window_days)::int)
+  AND w.sent_at < now() - make_interval(days => sqlc.arg(after_days)::int)
+  AND COALESCE(ns.news_email_enabled, true)
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_members bm WHERE bm.user_id = u.id
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM broadcast_emails be
+      WHERE be.user_id = u.id AND be.campaign = 'interview-buddies'
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM onboarding_emails oe
+      WHERE oe.user_id = u.id AND oe.step = 'buddies'
+  )
+ORDER BY u.created_at
+LIMIT sqlc.arg(max_rows)::int;
+
 -- name: RecordOnboardingEmail :exec
 -- Closes out one (user, step) whether or not the send worked; `error` carries the
 -- transport failure when it did not. ON CONFLICT DO NOTHING makes a double run

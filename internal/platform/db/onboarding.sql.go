@@ -61,6 +61,74 @@ func (q *Queries) ListAdvancedSearchCandidates(ctx context.Context, arg ListAdva
 	return items, nil
 }
 
+const listBuddiesCandidates = `-- name: ListBuddiesCandidates :many
+SELECT u.id, u.email
+FROM users u
+JOIN onboarding_emails w ON w.user_id = u.id AND w.step = 'welcome'
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+WHERE u.email_verified
+  AND u.created_at > now() - make_interval(days => $1::int)
+  AND w.sent_at < now() - make_interval(days => $2::int)
+  AND COALESCE(ns.news_email_enabled, true)
+  AND NOT EXISTS (
+      SELECT 1 FROM buddy_members bm WHERE bm.user_id = u.id
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM broadcast_emails be
+      WHERE be.user_id = u.id AND be.campaign = 'interview-buddies'
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM onboarding_emails oe
+      WHERE oe.user_id = u.id AND oe.step = 'buddies'
+  )
+ORDER BY u.created_at
+LIMIT $3::int
+`
+
+type ListBuddiesCandidatesParams struct {
+	WindowDays int32 `json:"window_days"`
+	AfterDays  int32 `json:"after_days"`
+	MaxRows    int32 `json:"max_rows"`
+}
+
+type ListBuddiesCandidatesRow struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+}
+
+// Greeted a while ago: an introduction to interview buddies. It skips three kinds
+// of account, each of which already knows the feature or has already been pitched it:
+//
+//   - one with a buddy_members row, active or left — a member, or someone who joined
+//     and chose to leave, does not need the feature explained;
+//   - one the one-off 'interview-buddies' broadcast already reached — the same pitch
+//     twice, once as an announcement and once as a "did you know", reads as nobody
+//     keeping track.
+//
+// Its window is its own (BuddiesWindowDays), not the shared one: the letter goes out
+// on day 14, which the shared 14-day window never reaches, and widening the shared
+// window would hand every earlier step's query accounts aged 14-21 days that never got
+// those steps — the tailor letter shipped after they aged out, so they would all get it.
+func (q *Queries) ListBuddiesCandidates(ctx context.Context, arg ListBuddiesCandidatesParams) ([]ListBuddiesCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listBuddiesCandidates, arg.WindowDays, arg.AfterDays, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddiesCandidatesRow{}
+	for rows.Next() {
+		var i ListBuddiesCandidatesRow
+		if err := rows.Scan(&i.ID, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listExtensionCandidates = `-- name: ListExtensionCandidates :many
 SELECT u.id, u.email
 FROM users u

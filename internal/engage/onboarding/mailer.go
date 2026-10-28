@@ -1,4 +1,4 @@
-// Package onboarding sends the founder's signup sequence: six mails over a new
+// Package onboarding sends the founder's signup sequence: seven mails over a new
 // account's first days, written in the first person and inviting a reply.
 //
 // It is deliberately unlike the other mail features in this codebase. A digest or a
@@ -13,7 +13,8 @@
 // The sequence is: welcome (immediately), advanced_search (day 3, everyone),
 // no_alert (day 6, only if the account never created an alert), extension (day 8,
 // everyone), open_source (day 10, everyone), tailor (day 12, only accounts not on a
-// paid tier). Runner owns when; this file owns what they say.
+// paid tier), buddies (day 14, only accounts that never joined interview buddies and
+// were not sent its broadcast). Runner owns when; this file owns what they say.
 package onboarding
 
 import (
@@ -46,6 +47,7 @@ const (
 	StepExtension      Step = "extension"
 	StepOpenSource     Step = "open_source"
 	StepTailor         Step = "tailor"
+	StepBuddies        Step = "buddies"
 )
 
 // Links the sequence points at. They are constants rather than configuration
@@ -124,6 +126,7 @@ type content struct {
 	AdvancedSearchURL string
 	ExtensionURL      string
 	TailorURL         string
+	BuddiesURL        string
 	PricingURL        string
 	StoreURL          string
 	FirefoxURL        string
@@ -166,6 +169,7 @@ func (m *Mailer) content() content {
 		AdvancedSearchURL: m.baseURL + "/features/advanced-search?utm_source=email",
 		ExtensionURL:      m.baseURL + "/features/extension?utm_source=email",
 		TailorURL:         m.baseURL + "/features/tailor?utm_source=email",
+		BuddiesURL:        m.baseURL + "/features/interview-buddies?utm_source=email",
 		PricingURL:        m.baseURL + "/pricing?utm_source=email",
 		StoreURL:          storeURL,
 		FirefoxURL:        firefoxURL,

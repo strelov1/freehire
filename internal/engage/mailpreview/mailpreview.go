@@ -94,6 +94,7 @@ var renderers = []func(string) (Sample, error){
 	extensionSample,
 	openSourceSample,
 	tailorSample,
+	buddiesSample,
 	verificationSample,
 	passwordResetSample,
 	emailChangeSample,
@@ -214,6 +215,10 @@ func openSourceSample(baseURL string) (Sample, error) {
 
 func tailorSample(baseURL string) (Sample, error) {
 	return onboardingSample("onboarding-tailor", "Onboarding / 6 · CV tailoring", onboarding.StepTailor, baseURL)
+}
+
+func buddiesSample(baseURL string) (Sample, error) {
+	return onboardingSample("onboarding-buddies", "Onboarding / 7 · Interview buddies", onboarding.StepBuddies, baseURL)
 }
 
 func verificationSample(baseURL string) (Sample, error) {

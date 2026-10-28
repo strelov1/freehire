@@ -17,6 +17,7 @@ type Store interface {
 	ListExtensionCandidates(ctx context.Context, arg db.ListExtensionCandidatesParams) ([]db.ListExtensionCandidatesRow, error)
 	ListOpenSourceCandidates(ctx context.Context, arg db.ListOpenSourceCandidatesParams) ([]db.ListOpenSourceCandidatesRow, error)
 	ListTailorCandidates(ctx context.Context, arg db.ListTailorCandidatesParams) ([]db.ListTailorCandidatesRow, error)
+	ListBuddiesCandidates(ctx context.Context, arg db.ListBuddiesCandidatesParams) ([]db.ListBuddiesCandidatesRow, error)
 	RecordOnboardingEmail(ctx context.Context, arg db.RecordOnboardingEmailParams) error
 }
 
@@ -36,6 +37,15 @@ type Config struct {
 	ExtensionAfterDays      int32
 	OpenSourceAfterDays     int32
 	TailorAfterDays         int32
+	// BuddiesAfterDays is the interview-buddies letter's delay, on the same clock
+	// and under the same strictly-increasing rule as the steps above.
+	BuddiesAfterDays int32
+	// BuddiesWindowDays is the buddies step's own window, used instead of WindowDays.
+	// The letter goes out on day 14, which the shared 14-day window never reaches.
+	// Widening the shared window instead would hand every earlier step accounts aged
+	// 14-21 days that never got it: the tailor letter shipped after those accounts
+	// aged out, so all of them would receive it at once, as would any late welcome.
+	BuddiesWindowDays int32
 	// MaxPerStep caps one pass per step. A cap is what keeps a backlog — or a bug
 	// in the candidate query — from becoming one enormous send.
 	MaxPerStep int32
@@ -43,7 +53,8 @@ type Config struct {
 
 // DefaultConfig is the shipped schedule: greet immediately, show the filter panel on
 // day 3, ask about the missing alert on day 6, introduce the extension on day 8, talk
-// about the project on day 10.
+// about the project on day 10, introduce tailoring on day 12, introduce interview
+// buddies on day 14.
 func DefaultConfig() Config {
 	return Config{
 		WindowDays:              14,
@@ -52,6 +63,8 @@ func DefaultConfig() Config {
 		ExtensionAfterDays:      8,
 		OpenSourceAfterDays:     10,
 		TailorAfterDays:         12,
+		BuddiesAfterDays:        14,
+		BuddiesWindowDays:       21,
 		MaxPerStep:              200,
 	}
 }
@@ -83,7 +96,7 @@ type Stats struct {
 func (r *Runner) Run(ctx context.Context) (Stats, error) {
 	stats := Stats{Sent: map[Step]int{}, Failed: map[Step]int{}}
 
-	for _, step := range []Step{StepWelcome, StepAdvancedSearch, StepNoAlert, StepExtension, StepOpenSource, StepTailor} {
+	for _, step := range []Step{StepWelcome, StepAdvancedSearch, StepNoAlert, StepExtension, StepOpenSource, StepTailor, StepBuddies} {
 		recipients, err := r.candidates(ctx, step)
 		if err != nil {
 			return stats, fmt.Errorf("onboarding: listing %s candidates: %w", step, err)
@@ -185,6 +198,21 @@ func (r *Runner) candidates(ctx context.Context, step Step) ([]recipient, error)
 		rows, err := r.store.ListTailorCandidates(ctx, db.ListTailorCandidatesParams{
 			WindowDays: r.cfg.WindowDays,
 			AfterDays:  r.cfg.TailorAfterDays,
+			MaxRows:    r.cfg.MaxPerStep,
+		})
+		if err != nil {
+			return nil, err
+		}
+		out := make([]recipient, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, recipient{userID: row.ID, email: row.Email})
+		}
+		return out, nil
+
+	case StepBuddies:
+		rows, err := r.store.ListBuddiesCandidates(ctx, db.ListBuddiesCandidatesParams{
+			WindowDays: r.cfg.BuddiesWindowDays,
+			AfterDays:  r.cfg.BuddiesAfterDays,
 			MaxRows:    r.cfg.MaxPerStep,
 		})
 		if err != nil {

@@ -13,10 +13,10 @@ import (
 
 // fakeStore serves fixed candidate lists and records what was written back.
 type fakeStore struct {
-	welcome, advancedSearch, noAlert, extension, openSource, tailor []int64
-	recorded                                                        []db.RecordOnboardingEmailParams
-	listErr                                                         error
-	recordErr                                                       error
+	welcome, advancedSearch, noAlert, extension, openSource, tailor, buddies []int64
+	recorded                                                                 []db.RecordOnboardingEmailParams
+	listErr                                                                  error
+	recordErr                                                                error
 
 	// params captures what the runner asked for, so the tests can assert on the
 	// window and caps rather than trusting them.
@@ -25,6 +25,7 @@ type fakeStore struct {
 	noAlertParams        db.ListNoAlertCandidatesParams
 	extensionParams      db.ListExtensionCandidatesParams
 	tailorParams         db.ListTailorCandidatesParams
+	buddiesParams        db.ListBuddiesCandidatesParams
 }
 
 func rows(ids []int64) []db.ListWelcomeCandidatesRow {
@@ -80,6 +81,15 @@ func (s *fakeStore) ListTailorCandidates(_ context.Context, arg db.ListTailorCan
 	out := make([]db.ListTailorCandidatesRow, 0, len(s.tailor))
 	for _, id := range s.tailor {
 		out = append(out, db.ListTailorCandidatesRow{ID: id, Email: "user@example.test"})
+	}
+	return out, nil
+}
+
+func (s *fakeStore) ListBuddiesCandidates(_ context.Context, arg db.ListBuddiesCandidatesParams) ([]db.ListBuddiesCandidatesRow, error) {
+	s.buddiesParams = arg
+	out := make([]db.ListBuddiesCandidatesRow, 0, len(s.buddies))
+	for _, id := range s.buddies {
+		out = append(out, db.ListBuddiesCandidatesRow{ID: id, Email: "user@example.test"})
 	}
 	return out, nil
 }
@@ -210,11 +220,17 @@ func TestRun_MailsCarryTheReplyToAddress(t *testing.T) {
 }
 
 func TestRun_EachStepHasItsOwnSubjectAndBothBodies(t *testing.T) {
-	store := &fakeStore{welcome: []int64{1}, advancedSearch: []int64{4}, noAlert: []int64{2}, openSource: []int64{3}}
+	store := &fakeStore{
+		welcome: []int64{1}, advancedSearch: []int64{4}, noAlert: []int64{2}, extension: []int64{5},
+		openSource: []int64{3}, tailor: []int64{6}, buddies: []int64{7},
+	}
 	sender := &fakeSender{}
 
 	if _, err := newRunner(store, sender).Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+	if len(sender.sent) != 7 {
+		t.Fatalf("sent %d mails, want one per step", len(sender.sent))
 	}
 
 	seen := map[string]bool{}
@@ -276,5 +292,64 @@ func TestRun_LaterStepsArePacedFromTheGreeting(t *testing.T) {
 	if cfg.TailorAfterDays >= cfg.WindowDays {
 		t.Errorf("tailor at day %d never fires inside a %d-day window",
 			cfg.TailorAfterDays, cfg.WindowDays)
+	}
+	if store.buddiesParams.AfterDays != cfg.BuddiesAfterDays {
+		t.Fatalf("buddies delay = %d, want %d", store.buddiesParams.AfterDays, cfg.BuddiesAfterDays)
+	}
+	if cfg.TailorAfterDays >= cfg.BuddiesAfterDays {
+		t.Errorf("step delays must increase: tailor %d, buddies %d",
+			cfg.TailorAfterDays, cfg.BuddiesAfterDays)
+	}
+	if cfg.BuddiesAfterDays >= cfg.BuddiesWindowDays {
+		t.Errorf("buddies at day %d never fires inside its %d-day window",
+			cfg.BuddiesAfterDays, cfg.BuddiesWindowDays)
+	}
+}
+
+// The buddies letter is due on day 14, past the shared window, so it reads its own.
+// The shared window must stay where it is: widened, every earlier step's query would
+// reach accounts aged 14-21 days that never got those steps (the tailor letter shipped
+// after they aged out), and mail them all at once.
+func TestRun_BuddiesStepHasItsOwnWindow(t *testing.T) {
+	store := &fakeStore{}
+	if _, err := newRunner(store, &fakeSender{}).Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	cfg := onboarding.DefaultConfig()
+	if store.buddiesParams.WindowDays != cfg.BuddiesWindowDays {
+		t.Errorf("buddies window = %d days, want %d", store.buddiesParams.WindowDays, cfg.BuddiesWindowDays)
+	}
+	if store.tailorParams.WindowDays != cfg.WindowDays {
+		t.Errorf("tailor window = %d days, want the shared %d", store.tailorParams.WindowDays, cfg.WindowDays)
+	}
+	if cfg.WindowDays != 14 {
+		t.Errorf("shared window = %d days; widening it re-mails earlier steps to older accounts", cfg.WindowDays)
+	}
+	if store.buddiesParams.MaxRows != cfg.MaxPerStep {
+		t.Errorf("buddies cap = %d, want %d", store.buddiesParams.MaxRows, cfg.MaxPerStep)
+	}
+}
+
+// The letter links the feature's landing, in both bodies.
+func TestRun_BuddiesLetterLinksTheLanding(t *testing.T) {
+	store := &fakeStore{buddies: []int64{9}}
+	sender := &fakeSender{}
+	if _, err := newRunner(store, sender).Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(sender.sent) != 1 {
+		t.Fatalf("sent %d mails, want 1", len(sender.sent))
+	}
+	m := sender.sent[0]
+	if m.subject != "Someone just had the interview you’re preparing for" {
+		t.Errorf("subject = %q", m.subject)
+	}
+	for name, body := range map[string]string{"html": m.html, "text": m.text} {
+		if !strings.Contains(body, "https://freehire.me/features/interview-buddies") {
+			t.Errorf("%s body does not link the interview-buddies landing", name)
+		}
+	}
+	if len(store.recorded) != 1 || store.recorded[0].Step != string(onboarding.StepBuddies) {
+		t.Errorf("recorded = %+v, want one 'buddies' ledger row", store.recorded)
 	}
 }

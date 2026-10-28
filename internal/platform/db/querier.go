@@ -3667,6 +3667,20 @@ type Querier interface {
 	// all, because the only thing that creates the row is a page behind the login.
 	// Migration 0153 split the two.
 	ListBroadcastCandidates(ctx context.Context, arg ListBroadcastCandidatesParams) ([]ListBroadcastCandidatesRow, error)
+	// Greeted a while ago: an introduction to interview buddies. It skips three kinds
+	// of account, each of which already knows the feature or has already been pitched it:
+	//
+	//   * one with a buddy_members row, active or left — a member, or someone who joined
+	//     and chose to leave, does not need the feature explained;
+	//   * one the one-off 'interview-buddies' broadcast already reached — the same pitch
+	//     twice, once as an announcement and once as a "did you know", reads as nobody
+	//     keeping track.
+	//
+	// Its window is its own (BuddiesWindowDays), not the shared one: the letter goes out
+	// on day 14, which the shared 14-day window never reaches, and widening the shared
+	// window would hand every earlier step's query accounts aged 14-21 days that never got
+	// those steps — the tailor letter shipped after they aged out, so they would all get it.
+	ListBuddiesCandidates(ctx context.Context, arg ListBuddiesCandidatesParams) ([]ListBuddiesCandidatesRow, error)
 	// How the other side of each of the viewer's buddy conversations is drawn: handle and card
 	// inputs, and whether they may be shown at all. They may while both sides are active
 	// members and no block stands between them in either direction; otherwise the

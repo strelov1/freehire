@@ -203,4 +203,39 @@ var specs = map[Step]spec{
 				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
 		},
 	},
+
+	// The interview-buddies letter claims only what the feature's landing claims. It is
+	// honest about the limits of the anonymity: others see the handle, the role titles
+	// as written, and the progress through each application — never the name, email or
+	// CV. It says the feature is free, and it is skipped for accounts that already
+	// joined (or left), since explaining a feature to its own members reads as nobody
+	// looking.
+	StepBuddies: {
+		subject:   "Someone just had the interview you’re preparing for",
+		preheader: "Find people applying to the same companies — anonymously, for free.",
+		heading:   "You don’t have to interview alone",
+		body: body("buddies", `
+{{template "p" "Somewhere on freehire, someone applied to the same companies you did — and one of them just had the interview you’re still waiting for."}}
+{{template "p" "Interview buddies lets you find them. Join under a random handle and you’ll see members looking for the same kind of role, in the same place, and how far they got: applied, interview, offer."}}
+{{template "lead" "Then ask the one who’s been there."}}
+{{template "p" "Send a short first message — how the loop went, what they asked, how long the silence lasted. They can reply or decline, and declining is silent."}}
+{{template "p" "Nobody sees your name, your email or your CV — only your handle, your role titles and your progress. Rejections never show up in the feed. It’s free."}}
+{{template "button" (mailLink .BuddiesURL "Find your interview buddies")}}
+{{template "muted" "If something stopped you from joining, reply — I read every reply myself."}}`),
+		text: func(base string) string {
+			return "Somewhere on freehire, someone applied to the same companies you did — and one of them just\n" +
+				"had the interview you're still waiting for.\n\n" +
+				"Interview buddies lets you find them. Join under a random handle and you'll see members\n" +
+				"looking for the same kind of role, in the same place, and how far they got: applied,\n" +
+				"interview, offer.\n\n" +
+				"Then ask the one who's been there.\n\n" +
+				"Send a short first message — how the loop went, what they asked, how long the silence\n" +
+				"lasted. They can reply or decline, and declining is silent.\n\n" +
+				"Nobody sees your name, your email or your CV — only your handle, your role titles and your\n" +
+				"progress. Rejections never show up in the feed. It's free.\n\n" +
+				"Find your interview buddies: " + base + "/features/interview-buddies\n\n" +
+				"If something stopped you from joining, reply — I read every reply myself.\n\n" +
+				"— Ilya Strelov, building freehire\n" + mailtpl.LinkedInURL + "\n"
+		},
+	},
 }
