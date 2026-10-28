@@ -32,8 +32,9 @@
     let timer: ReturnType<typeof setInterval> | undefined;
     let tick = 0;
     const start = () => {
-      tick = 0;
-      step = 1;
+      // Keep the finished state for the hold ticks, then restart from one entry.
+      tick = REPLY;
+      step = REPLY;
       timer = setInterval(() => {
         tick = (tick + 1) % (REPLY + HOLD_TICKS);
         step = Math.min(tick + 1, REPLY);
@@ -68,7 +69,7 @@
     <span>freehire · Interview buddies</span>
     <span class="flex items-center gap-2">
       <span class="relative flex size-2">
-        <span class="absolute inline-flex size-full animate-ping rounded-full bg-brand opacity-75"></span>
+        <span class="absolute inline-flex size-full motion-safe:animate-ping rounded-full bg-brand opacity-75"></span>
         <span class="relative inline-flex size-2 rounded-full bg-brand"></span>
       </span>
       live · example
@@ -117,9 +118,9 @@
           ? 'opacity-100'
           : 'invisible opacity-0'}"
       >
-        <span class="size-1.5 animate-bounce rounded-full bg-muted-foreground"></span>
-        <span class="size-1.5 animate-bounce rounded-full bg-muted-foreground delay-150"></span>
-        <span class="size-1.5 animate-bounce rounded-full bg-muted-foreground delay-300"></span>
+        <span class="size-1.5 motion-safe:animate-bounce rounded-full bg-muted-foreground"></span>
+        <span class="size-1.5 motion-safe:animate-bounce rounded-full bg-muted-foreground delay-150"></span>
+        <span class="size-1.5 motion-safe:animate-bounce rounded-full bg-muted-foreground delay-300"></span>
         <span class="ml-1 text-xs text-muted-foreground">typing…</span>
       </div>
       <div

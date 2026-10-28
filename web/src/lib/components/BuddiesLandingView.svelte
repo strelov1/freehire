@@ -8,7 +8,7 @@
 
   const steps = [
     { n: '01', title: 'Join', body: 'One click. You get a random handle like amber-heron-42 — no name, no photo.' },
-    { n: '02', title: 'Meet people like you', body: 'Members ranked by the same role, the same country and region, and the companies you both applied to in the last 90 days.' },
+    { n: '02', title: 'Meet people like you', body: 'Members ranked by the same category, the same country and region, and the companies you both applied to in the last 90 days.' },
     { n: '03', title: 'Follow their progress', body: 'A feed of who applied where and who reached the interview or the offer, by day.' },
     { n: '04', title: "Ask the one who's been there", body: 'Invite a member to chat with a first message of up to 500 characters. Declining is silent.' },
   ];
@@ -17,7 +17,7 @@
     {
       key: 'seen',
       title: 'Others see',
-      items: ['Your handle', 'Role titles', 'Category and country', 'Applications and interview or offer moves, with company and day'],
+      items: ['Your handle', 'Role titles', 'Category, seniority, skills and country', 'Applications and interview or offer moves, with company and day'],
       chip: 'border-success-strong/50 text-success-strong',
     },
     {
@@ -31,7 +31,7 @@
   const controls = [
     { title: 'Block', body: 'Ends the conversation for good and hides you from each other everywhere.' },
     { title: 'Report', body: 'Sends the conversation to our moderators.' },
-    { title: 'Leave', body: 'Hides you and closes your chats until you come back — with the same handle.' },
+    { title: 'Leave', body: 'Hides you and closes your chats. Come back any time with the same handle.' },
   ];
 </script>
 
@@ -99,7 +99,7 @@
   <!-- Control -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="you stay in control" />
-    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Every exit is one click.</h2>
+    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Leave, block or report at any time.</h2>
     <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
       {#each controls as c (c.title)}
         <div class="bg-background p-6 sm:p-7">

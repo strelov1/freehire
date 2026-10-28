@@ -10,7 +10,7 @@ export const BUDDIES_FAQ: FaqItem[] = [
   {
     question: 'Will my employer or a recruiter see this?',
     answer:
-      'No. Buddy pages are visible only to signed-in members of the network — not to search engines, not to recruiters, and not in the public Talent Network catalogue. You appear under a random handle, separate from any other name you use on freehire.',
+      'No. Buddy pages are visible only to signed-in members of the network — not to search engines, not to recruiters, and not in the public Talent Network catalogue. You appear under a random handle, separate from your Talent Network handle and username.',
   },
   {
     question: 'What exactly do other members see about me?',
@@ -20,7 +20,7 @@ export const BUDDIES_FAQ: FaqItem[] = [
   {
     question: 'Can I keep one application out of the feed?',
     answer:
-      'Yes. Every application has a switch to hide it from the buddy feed, and postings you pasted in privately never appear there at all.',
+      'Yes. Each application you track has a switch to hide it from the buddy feed, and postings you pasted in privately never appear there at all.',
   },
   {
     question: "What if someone messages me in a way I don't like?",
@@ -39,6 +39,6 @@ export const BUDDIES_FAQ: FaqItem[] = [
   {
     question: 'Will I know when someone writes to me?',
     answer:
-      'Yes. An unread message is announced by email, Telegram if you linked it, and in the app. The notice says only that a message is waiting — never what it says.',
+      'Yes. An unread message is announced by email (unless you turned activity emails off), Telegram if you linked it, and in the app. The notice says only that a message is waiting — never what it says.',
   },
 ];

@@ -40,11 +40,14 @@ describe('BuddiesHeroDemo', () => {
     expect(slot('typing').className).toContain('invisible');
   });
 
-  it('starts from one entry once visible, then adds the next', () => {
+  it('keeps the finished state once visible, then restarts from one entry and adds the next', () => {
     vi.useFakeTimers();
     mockMotion(false);
     render(BuddiesHeroDemo);
     observed?.([{ isIntersecting: true }]);
+    flushSync();
+    expect(slot('reply').className).not.toContain('invisible');
+    vi.advanceTimersByTime(1800 * 2); // the hold ticks, matching STEP_MS and HOLD_TICKS
     flushSync();
     expect(entry('amber-heron-42').className).toContain('opacity-100');
     expect(entry('tidy-kestrel-318').className).toContain('opacity-0');
