@@ -41,7 +41,7 @@
 </svelte:head>
 
 <div class="flex flex-col gap-4">
-  <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
+  <h1 class="text-2xl font-semibold tracking-tight max-lg:sr-only">{s.title}</h1>
 
   <TabStrip {tabs} {active} label={s.tablistLabel} panelId={PANEL_ID} />
 

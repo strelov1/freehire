@@ -94,7 +94,7 @@
   class="transition-[padding-right] duration-200 motion-reduce:transition-none"
   style:padding-right={dockOffset() ? `${dockOffset()}px` : undefined}
 >
-  <div class="mx-auto w-full max-w-6xl px-4 py-6">
+  <div class="mx-auto w-full max-w-6xl px-4 py-3 lg:py-6">
     <!-- No signed-out branch here: +layout.server.ts redirects an anonymous visitor to
          /signin before this renders, so the shell only ever draws for a session. -->
 
@@ -122,13 +122,17 @@
          not a burger: the site header already carries one, and two identical icons a row
          apart read as the same control. The accessible name keeps the visible label in it
          (WCAG 2.5.3), prefixed so a screen reader hears what the button switches. The
-         negative margin lines the section icon up with the page heading below. -->
+         negative margin lines the section icon up with the content below.
+
+         It is also the section's visible title below lg: each section's own heading and
+         description carry `max-lg:sr-only`, since repeating the name this button already
+         shows only pushed the content down on a phone. -->
     <button
       type="button"
       onclick={() => (drawerOpen = true)}
       aria-haspopup="dialog"
       aria-expanded={drawerOpen}
-      class="-ml-3 mb-4 flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
+      class="-ml-3 mb-2 flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
     >
       <span class="sr-only">{s.shell.accountSections}:</span>
       {#if activeItem}

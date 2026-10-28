@@ -16,7 +16,7 @@
 <div class="max-w-4xl">
   <!-- The title sits here rather than inside InboxView so it is present while the view
        is still loading, the way every other /my/* section titles itself. -->
-  <div class="mb-6 flex flex-col gap-1">
+  <div class="mb-6 flex flex-col gap-1 max-lg:sr-only">
     <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
     <p class="text-sm text-muted-foreground">
       {s.description}

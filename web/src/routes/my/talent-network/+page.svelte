@@ -76,7 +76,7 @@
 <!-- The account shell (my/+layout) owns the container, auth gate, and noindex;
      an inner max-width keeps the content readable within the content column. -->
 <div class="flex max-w-2xl flex-col gap-4">
-  <div class="flex flex-col gap-1">
+  <div class="flex flex-col gap-1 max-lg:sr-only">
     <h1 class="text-2xl font-semibold tracking-tight">Talent Network</h1>
     <p class="text-sm text-muted-foreground">
       Get discovered without applying anywhere: appear in a public catalogue recruiters

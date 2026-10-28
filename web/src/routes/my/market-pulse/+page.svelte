@@ -118,7 +118,7 @@
 {#if !isAuthenticated()}
   <p class="py-12 text-center text-sm text-muted-foreground">{s.signedOut}</p>
 {:else}
-  <div class="mb-6 flex flex-col gap-1">
+  <div class="mb-6 flex flex-col gap-1 max-lg:sr-only">
     <h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
     <p class="text-sm text-muted-foreground">
       {s.subtitle}

@@ -45,8 +45,8 @@
 
 <svelte:head><title>{s.headTitle}</title></svelte:head>
 
-<h1 class="mb-1 text-2xl font-semibold tracking-tight">{s.title}</h1>
-<p class="mb-6 text-sm text-muted-foreground">{s.subtitle}</p>
+<h1 class="mb-1 text-2xl max-lg:sr-only font-semibold tracking-tight">{s.title}</h1>
+<p class="mb-6 text-sm text-muted-foreground max-lg:sr-only">{s.subtitle}</p>
 
 <section class="mb-8 rounded-lg border border-border">
   <div class="flex flex-wrap items-center justify-between gap-3 p-4">
