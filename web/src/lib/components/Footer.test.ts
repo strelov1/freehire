@@ -70,10 +70,12 @@ describe('Footer store buttons', () => {
     expect(APP_STORE_URL).not.toMatch(/apps\.apple\.com\/[a-z]{2}\//);
   });
 
-  it('takes the Chrome Web Store URL from #lib/extensionLinks rather than spelling it again', () => {
-    expect(SOURCE).toContain("import { EXTENSION_STORE_URL } from '#lib/extensionLinks.js'");
+  it('takes both extension store URLs from #lib/extensionLinks rather than spelling them again', () => {
+    expect(SOURCE).toContain("import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js'");
     expect(SOURCE).toContain('href: EXTENSION_STORE_URL');
+    expect(SOURCE).toContain('href: EXTENSION_FIREFOX_URL');
     expect(SOURCE).not.toContain('chromewebstore.google.com');
+    expect(SOURCE).not.toContain('addons.mozilla.org');
   });
 
   it('links Dictionary immediately after Skills glossary', () => {
