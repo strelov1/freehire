@@ -26,12 +26,17 @@
   // returns focus to whatever opened it. Minimized chats stack as bars above the list.
   // On a wide screen the windows sit beside the list and nothing is modal.
   //
-  // The list polls every 30 s while the page is visible and the dock is on screen; each
-  // open window's pane polls its own messages. Minimizing a window unmounts its pane, so a
-  // minimized chat costs nothing; its unsent draft is kept in `messagingDock`.
+  // The close button on the list bar dismisses the whole dock, windows included, for the
+  // tab's session; a new unread message or a "Message" control brings it back.
+  //
+  // The list polls every 30 s while the page is visible and the dock could be on screen
+  // (a dismissed one too, so a new message can bring it back); each open window's pane
+  // polls its own messages. Minimizing a window unmounts its pane, so a minimized chat
+  // costs nothing; its unsent draft is kept in `messagingDock`.
   const LIST_POLL_MS = 30000;
 
   const shown = $derived(messagingDock.shownOn(page.url.pathname));
+  const available = $derived(messagingDock.availableOn(page.url.pathname));
   const unread = $derived(totalUnread(messagingDock.conversations));
   // Tailwind's `sm` breakpoint, which is where the layout below switches.
   const wide = new MediaQuery('min-width: 40rem', true);
@@ -51,7 +56,7 @@
   const openers: Record<number, HTMLElement | null> = {};
 
   $effect(() => {
-    if (!shown || !visible) return;
+    if (!available || !visible) return;
     void messagingDock.refresh().catch(() => { /* the next poll catches up */ });
     const timer = setInterval(() => void messagingDock.refresh().catch(() => {}), LIST_POLL_MS);
     return () => clearInterval(timer);
@@ -222,21 +227,31 @@
     {/each}
 
     <section bind:this={listEl} aria-label="Conversations" class="pointer-events-auto w-72 rounded-t-lg border border-b-0 border-border bg-background shadow-lg">
-      <button
-        bind:this={listToggle}
-        type="button"
-        class="flex min-h-11 w-full items-center justify-between gap-2 rounded-t-lg px-3 py-2.5 text-sm font-semibold hover:bg-accent"
-        aria-expanded={messagingDock.expanded}
-        aria-controls="messaging-dock-list"
-        onclick={() => (messagingDock.expanded = !messagingDock.expanded)}
-      >
-        <span class="flex items-center gap-2">
-          <MessageSquare class="size-4" aria-hidden="true" />
-          Messaging
-          <UnreadBadge count={unread} />
-        </span>
-        {#if messagingDock.expanded}<ChevronDown class="size-4" aria-hidden="true" />{:else}<ChevronUp class="size-4" aria-hidden="true" />{/if}
-      </button>
+      <div class="flex items-center gap-1 pr-1">
+        <button
+          bind:this={listToggle}
+          type="button"
+          class="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-2 rounded-tl-lg px-3 py-2.5 text-sm font-semibold hover:bg-accent"
+          aria-expanded={messagingDock.expanded}
+          aria-controls="messaging-dock-list"
+          onclick={() => (messagingDock.expanded = !messagingDock.expanded)}
+        >
+          <span class="flex items-center gap-2">
+            <MessageSquare class="size-4" aria-hidden="true" />
+            Messaging
+            <UnreadBadge count={unread} />
+          </span>
+          {#if messagingDock.expanded}<ChevronDown class="size-4" aria-hidden="true" />{:else}<ChevronUp class="size-4" aria-hidden="true" />{/if}
+        </button>
+        <button
+          type="button"
+          class="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground sm:size-8"
+          aria-label="Close messaging"
+          onclick={() => messagingDock.dismiss()}
+        >
+          <X class="size-4" aria-hidden="true" />
+        </button>
+      </div>
       {#if messagingDock.expanded}
         <div id="messaging-dock-list" class="max-h-96 overflow-y-auto border-t border-border">
           {#if messagingDock.conversations.length === 0}<p class="p-3 text-sm text-muted-foreground">No conversations yet.</p>{/if}

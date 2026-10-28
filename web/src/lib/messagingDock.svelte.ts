@@ -23,19 +23,30 @@ import {
   dockHiddenOn,
   type DockWindow,
   DraftBook,
+  keepDismissal,
   openDockWindow,
   parseDockWindows,
   pruneDockWindows,
   setDockWindowMinimized,
+  totalUnread,
 } from '#lib/messagingDock.js';
 import type { Conversation } from '#lib/types.js';
 import { UserResource } from '#lib/userResource.svelte.js';
 
 const WINDOWS_KEY = 'hire.messaging-dock-windows';
+const DISMISSED_KEY = 'hire.messaging-dock-dismissed';
 
 function readWindows(): DockWindow[] {
   if (!browser) return [];
   try { return parseDockWindows(sessionStorage.getItem(WINDOWS_KEY)); } catch { return []; }
+}
+
+function readDismissed(): number | null {
+  if (!browser) return null;
+  try {
+    const n = Number(sessionStorage.getItem(DISMISSED_KEY) ?? NaN);
+    return Number.isInteger(n) && n >= 0 ? n : null;
+  } catch { return null; }
 }
 
 class MessagingDockStore extends UserResource<Conversation[]> {
@@ -43,6 +54,9 @@ class MessagingDockStore extends UserResource<Conversation[]> {
   #windows = $state.raw<DockWindow[]>(readWindows());
   #generation = 0;
   #drafts = new DraftBook();
+  /** The unread total when the reader closed the dock, or null while it is not dismissed.
+   *  Kept for the tab's session; a newer unread message or opening a conversation lifts it. */
+  #dismissedAt = $state<number | null>(readDismissed());
   /** Whether the dock's conversation list is unfolded. */
   expanded = $state(false);
   /** The buddy the first-message dialog is aimed at, or null when it is closed. */
@@ -58,6 +72,7 @@ class MessagingDockStore extends UserResource<Conversation[]> {
 
   protected apply(data: Conversation[]): void {
     this.#conversations = data;
+    this.#setDismissed(keepDismissal(this.#dismissedAt, totalUnread(data)));
     // A declined or blocked conversation leaves the list; its window goes with it. Only
     // pruned against a list that was actually read, so a restored window survives until then.
     this.#setWindows(pruneDockWindows(this.#windows, new Set(data.map((c) => c.id))));
@@ -70,6 +85,7 @@ class MessagingDockStore extends UserResource<Conversation[]> {
     this.#drafts.clear();
     this.expanded = false;
     this.inviteHandle = null;
+    this.#setDismissed(null);
   }
 
   /** Re-read the list now. Rejects on a failure, so a caller with its own error state can
@@ -82,8 +98,18 @@ class MessagingDockStore extends UserResource<Conversation[]> {
     this.markLoaded();
   }
 
-  /** Whether the dock renders on this page at all. */
-  shownOn(pathname: string): boolean { return this.#conversations.length > 0 && !dockHiddenOn(pathname); }
+  /** Whether this page has a dock at all, dismissed or not — what keeps the list polling,
+   *  so a new message can bring a dismissed dock back. */
+  availableOn(pathname: string): boolean { return this.#conversations.length > 0 && !dockHiddenOn(pathname); }
+
+  /** Whether the dock renders on this page. */
+  shownOn(pathname: string): boolean { return this.availableOn(pathname) && this.#dismissedAt === null; }
+
+  /** Close the whole dock until a new unread message arrives or a conversation is opened. */
+  dismiss(): void {
+    this.expanded = false;
+    this.#setDismissed(totalUnread(this.#conversations));
+  }
 
   /** How much of the bottom-right corner the dock takes on this page. */
   cornerOn(pathname: string): DockCorner {
@@ -96,6 +122,7 @@ class MessagingDockStore extends UserResource<Conversation[]> {
 
   /** Open a conversation's chat window (restoring it when minimized). */
   openConversation(id: number): void {
+    this.#setDismissed(null);
     this.#setWindows(openDockWindow(this.#windows, id));
   }
 
@@ -122,6 +149,15 @@ class MessagingDockStore extends UserResource<Conversation[]> {
 
   setMinimized(id: number, minimized: boolean): void {
     this.#setWindows(setDockWindowMinimized(this.#windows, id, minimized));
+  }
+
+  #setDismissed(at: number | null): void {
+    this.#dismissedAt = at;
+    if (!browser) return;
+    try {
+      if (at === null) sessionStorage.removeItem(DISMISSED_KEY);
+      else sessionStorage.setItem(DISMISSED_KEY, String(at));
+    } catch { /* storage unavailable: the dismissal lasts for this page load */ }
   }
 
   #setWindows(windows: DockWindow[]): void {

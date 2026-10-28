@@ -6,6 +6,7 @@ import {
   dockReserveClass,
   dockToastOffsetClass,
   DraftBook,
+  keepDismissal,
   mobileSheetId,
   openDockWindow,
   parseDockWindows,
@@ -111,5 +112,21 @@ describe('drafts', () => {
     expect(drafts.get(1)).toBe('');
     drafts.clear();
     expect(drafts.get(2)).toBe('');
+  });
+});
+
+describe('keepDismissal', () => {
+  it('stays dismissed while no new unread message arrives', () => {
+    expect(keepDismissal(2, 2)).toBe(2);
+  });
+  it('comes back for a message that arrived after the dismissal', () => {
+    expect(keepDismissal(2, 3)).toBeNull();
+  });
+  it('lowers the mark when a conversation is read elsewhere, so the next message still counts', () => {
+    expect(keepDismissal(2, 0)).toBe(0);
+    expect(keepDismissal(keepDismissal(2, 0), 1)).toBeNull();
+  });
+  it('leaves an undismissed dock alone', () => {
+    expect(keepDismissal(null, 5)).toBeNull();
   });
 });

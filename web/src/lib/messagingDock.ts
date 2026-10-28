@@ -59,6 +59,15 @@ export function parseDockWindows(raw: string | null, max = MAX_DOCK_WINDOWS): Do
   }
 }
 
+/** The unread total a dismissal still covers after a fresh read of the list: `null` once a
+ *  message arrived that the reader has not seen dismissed (the dock comes back for it),
+ *  otherwise the lower of the two, so a conversation read elsewhere does not let the next
+ *  message hide behind the old count. */
+export function keepDismissal(dismissedAt: number | null, unread: number): number | null {
+  if (dismissedAt === null || unread > dismissedAt) return null;
+  return unread;
+}
+
 /** The dock stays off the buddies section's own page, whose Chats tab is the full-size
  *  list and pane — two copies of one conversation on one screen would each poll and
  *  mark it read. Every other page, the member pages included, gets the dock. */

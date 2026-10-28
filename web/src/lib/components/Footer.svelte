@@ -2,7 +2,7 @@
   import { APP_STORE_URL } from '#lib/appLinks.js';
   import { resolve } from '$app/paths';
   import { reopen } from '#lib/consent.svelte.js';
-  import { EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
   import { POPULAR_COLLECTIONS } from '#lib/popularCollections.js';
   import { SOCIAL_LINKS } from '#lib/socialLinks.js';
   import { ProviderIcon } from '#lib/ui/index.js';
@@ -109,6 +109,14 @@
     dark: 'https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1196233&theme=dark&t=1785605357228',
   };
 
+  // The GitHub Trending badge, copied verbatim from Trendshift's own embed snippet. It
+  // ships one variant only (white card, purple border), which reads on both themes.
+  const trendshift = {
+    href: 'https://trendshift.io/repositories/55060?utm_source=repository-badge&utm_medium=badge&utm_campaign=badge-repository-55060',
+    alt: 'strelov1/freehire | Trendshift',
+    src: 'https://trendshift.io/api/badge/repositories/55060',
+  };
+
   // Where the product can be installed, beside the Product Hunt badge rather than in
   // a link column: these are downloads, not navigation, and a store button among a
   // list of page links reads as neither.
@@ -134,6 +142,12 @@
       kicker: 'Available in the',
       name: 'Chrome Web Store',
       href: EXTENSION_STORE_URL,
+    },
+    {
+      provider: 'firefox',
+      kicker: 'Get the add-on for',
+      name: 'Firefox',
+      href: EXTENSION_FIREFOX_URL,
     },
   ];
 
@@ -191,22 +205,23 @@
         </ul>
       </nav>
 
-      <!-- The badge and the two store buttons share one row, centred rather than
-           stretched: the badge is a fixed 54px image, the buttons sit on the spacing
-           scale at h-14 (56px), and 1px above and below is invisible. Do NOT "fix" that
-           to h-[54px] — check:tokens refuses an arbitrary value here, which is the whole
-           reason these are 56px. Wrapping, so a narrow viewport stacks them rather than
-           shrinking any. -->
-      <div class="mt-8 flex flex-wrap items-center gap-3">
+      <!-- The two badges and the store buttons are one size, w-64 h-14 (256x56): the
+           badges are ~250x54 images, so object-contain scales them to the box instead
+           of an arbitrary h-[54px], which check:tokens refuses. A wide viewport wraps
+           them; a narrow one scrolls them sideways as a carousel, bleeding to the
+           screen edge, so no button is squeezed or stacked into a tall column. -->
+      <div
+        class="no-scrollbar -mx-4 mt-8 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+      >
         <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Product Hunt page opened in a new tab; not an internal route -->
-        <a href={productHunt.href} target="_blank" rel="noopener noreferrer" class="inline-block">
+        <a href={productHunt.href} target="_blank" rel="noopener noreferrer" class="h-14 w-64 shrink-0 snap-start">
           <img
             src={productHunt.light}
             alt={productHunt.alt}
             width="250"
             height="54"
             loading="lazy"
-            class="dark:hidden"
+            class="size-full object-contain dark:hidden"
           />
           <img
             src={productHunt.dark}
@@ -214,7 +229,19 @@
             width="250"
             height="54"
             loading="lazy"
-            class="hidden dark:block"
+            class="hidden size-full object-contain dark:block"
+          />
+        </a>
+
+        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external Trendshift page opened in a new tab; not an internal route -->
+        <a href={trendshift.href} target="_blank" rel="noopener noreferrer" class="h-14 w-64 shrink-0 snap-start">
+          <img
+            src={trendshift.src}
+            alt={trendshift.alt}
+            width="250"
+            height="55"
+            loading="lazy"
+            class="size-full object-contain"
           />
         </a>
 
@@ -223,7 +250,7 @@
           <a href={store.href}
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex h-14 items-center gap-3 rounded-lg border border-border px-4 text-foreground transition-colors hover:bg-muted"
+            class="inline-flex h-14 w-64 shrink-0 snap-start items-center gap-3 rounded-lg border border-border px-4 text-foreground transition-colors hover:bg-muted"
           >
             <ProviderIcon provider={store.provider} class="size-7 shrink-0" />
             <span class="flex flex-col leading-tight">
