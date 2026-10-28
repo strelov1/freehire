@@ -399,6 +399,11 @@ var atsBoards = []struct{ host, source, mode string }{
 	// framatome-career, dassault-aviation-cand), which is why the host and not a label is kept.
 	{"talent-soft.com", "talentsoft", modeHost},
 	{"profils.org", "talentsoft", modeHost},
+	// DigitalRecruiters (Cegid, France): a career site is a host, almost always the employer's
+	// own (careers.segulatechnologies.com) and so not derivable; the few on the vendor's domain
+	// are <tenant>-careers.digitalrecruiters.com. The adapter reads the vendor API keyed by that
+	// host, so the board is the whole host.
+	{"digitalrecruiters.com", "digitalrecruiters", modeHost},
 	// Bizneo HR (Spain): a career site is a host under bizneo.cloud — usually
 	// <company>.careers.ats.bizneo.cloud, sometimes a vanity label (jobs.abeienergy.bizneo.cloud) —
 	// and the adapter lists <board>/jobs, so the board is the whole host. The vendor's bizneo.com
@@ -1546,7 +1551,10 @@ var platformLabelsByApex = map[string][]string{
 	"rexx-recruitment": {"www", "cdn"},
 	"hiringroom.com":   {"www", "ve", "api-ve", "contacto-comercial"},
 	"recruiterbox.com": {"www", "developers", "go"}, // the vendor's marketing, API docs and campaign hosts
-	"easyapply.co":     {"www"},                     // www.easyapply.co 404s; every tenant is a bare label
+	"easyapply.co":     {"www"},
+	// The vendor's marketing, training and help-centre hosts, and the CNAME target every
+	// employer domain points at.
+	"digitalrecruiters.com": {"www", "resources", "academy", "external-career", "status"}, // www.easyapply.co 404s; every tenant is a bare label
 	// www is the vendor's marketing site; demo is its sample board for a fictional "Acme".
 	"jobspage.co": {"www", "demo"},
 	// www is the vendor's marketing site (an unknown tenant redirects to its "job-not-found"

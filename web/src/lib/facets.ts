@@ -441,6 +441,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   talentclue: 'Talent Clue',
   velorahr: 'Velora HR',
   talentsoft: 'Talentsoft',
+  digitalrecruiters: 'DigitalRecruiters',
   darwinbox: 'Darwinbox',
   greythr: 'greytHR',
   helixjobs: 'helixjobs',

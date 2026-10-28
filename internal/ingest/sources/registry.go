@@ -784,6 +784,15 @@ func All(c HTTPClient) map[string]Source {
 	} else {
 		registry["empregos"] = NewEmpregos(NewLongTimeoutClient())
 	}
+	// DigitalRecruiters (Cegid, France): board = the careers HOST, almost always the employer's
+	// own domain, read through the vendor's public JSON API at one request a second. A 1,000-posting
+	// listing page measured 6-33 s to answer (2026-10-28), past the standard 15s client timeout.
+	// See digitalrecruiters.go.
+	if c == nil {
+		registry["digitalrecruiters"] = NewDigitalrecruiters(nil)
+	} else {
+		registry["digitalrecruiters"] = NewDigitalrecruiters(NewLongTimeoutClient())
+	}
 	// HumanBit's listing page is a single, unpaginated ~5.6 MB payload that measured ~18s to
 	// fetch — past the standard 15s client timeout, which made every crawl fail
 	// intermittently with "context deadline exceeded" in production. Swap in the
