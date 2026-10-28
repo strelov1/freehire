@@ -27,24 +27,6 @@ const drProbeAPI = "https://api.digitalrecruiters.com"
 
 var drProbeBoard = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
 
-// drProbeLocales mirrors the adapter's site-locale-to-API-locale map, language first.
-var drProbeLocales = map[string]string{
-	"cs": "cs_CZ", "da": "da_DK", "de": "de_DE", "en": "en_GB", "es": "es_ES", "it": "it_IT",
-	"ja": "ja_JP", "ko": "ko_KR", "fr": "fr_FR", "nl": "nl_BE", "pl": "pl_PL", "pt": "pt_PT",
-	"ro": "ro_RO", "sv": "sv_SE", "tr": "tr_TR",
-}
-
-func drProbeLocale(code string) string {
-	code = strings.ReplaceAll(strings.TrimSpace(code), "-", "_")
-	if strings.Contains(code, "_") {
-		return code
-	}
-	if l, ok := drProbeLocales[code]; ok {
-		return l
-	}
-	return code
-}
-
 func (digitalrecruitersProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
 	board = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(board), "/"))
 	if !drProbeBoard.MatchString(board) {
@@ -67,7 +49,7 @@ func (digitalrecruitersProber) probe(ctx context.Context, c httpClient, board st
 	if !site.IsOnline || site.IsInternal || site.DefaultLocale.ISOCode == "" {
 		return "", 0, nil
 	}
-	locale := drProbeLocale(site.DefaultLocale.ISOCode)
+	locale := sources.DigitalrecruitersAPILocale(site.DefaultLocale.ISOCode)
 	var firstOwn int64
 	owned, read := 0, 0
 	for page := 1; page <= 50; page++ {

@@ -204,8 +204,8 @@ func TestDigitalrecruitersBudgetDefers(t *testing.T) {
 }
 
 func TestDigitalrecruitersAPILocale(t *testing.T) {
-	for in, want := range map[string]string{"fr": "fr_FR", "fr_CA": "fr_CA", "de_CH": "de_CH", "en": "en_GB", "fr-CH": "fr_CH", "nl": "nl_BE", "xx": "xx"} {
-		if got := drAPILocale(in); got != want {
+	for in, want := range map[string]string{"fr": "fr_FR", "fr_CA": "fr_CA", "de_CH": "de_CH", "en": "en_GB", "fr-CH": "fr_CH", "nl": "nl_BE", "en_US": "en_GB", "es_MX": "es_ES", "xx": "xx"} {
+		if got := DigitalrecruitersAPILocale(in); got != want {
 			t.Errorf("%q = %q, want %q", in, got, want)
 		}
 	}

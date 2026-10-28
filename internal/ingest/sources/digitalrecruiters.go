@@ -103,9 +103,10 @@ var drLocales = map[string]string{
 	"ro": "ro_RO", "sv": "sv_SE", "tr": "tr_TR", "zh_CN": "zh_CN", "zh_HK": "zh_HK",
 }
 
-// drAPILocale maps a site locale code to the API's, as the site app does: the full code, then
-// its language, then the code itself.
-func drAPILocale(code string) string {
+// DigitalrecruitersAPILocale maps a site locale code to the API's, as the site app does: the
+// full code, then its language, then the code itself. Exported for cmd/harvest-boards' prober,
+// which must ask the API in the same locale.
+func DigitalrecruitersAPILocale(code string) string {
 	code = strings.ReplaceAll(strings.TrimSpace(code), "-", "_")
 	if l, ok := drLocales[code]; ok {
 		return l
@@ -194,7 +195,7 @@ func (s digitalrecruiters) FetchNew(ctx context.Context, e CompanyEntry, seen fu
 	if err != nil {
 		return nil, err
 	}
-	locale := drAPILocale(site.DefaultLocale.ISOCode)
+	locale := DigitalrecruitersAPILocale(site.DefaultLocale.ISOCode)
 	postings, err := s.list(ctx, board, locale, site.DefaultLocale.ISOCode)
 	if err != nil {
 		return nil, err
