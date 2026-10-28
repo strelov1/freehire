@@ -908,6 +908,10 @@ func All(c HTTPClient) map[string]Source {
 	// enumerated from the web app's search API, each new posting's body read from its posting API.
 	// See bumeran.go.
 	registry["bumeran"] = NewBumeran(c)
+	// Choisir le service public: the French civil service's own job board, enumerated from its
+	// paginated offer list (head plus a moving refresh window), each new posting's body read from
+	// its page. See servicepublic.go.
+	registry["servicepublic"] = NewServicePublic(c)
 	// Free-Work: France's IT-only job board (freelance missions and employment), enumerated from
 	// its public API, each new posting's body read from its own resource. See freework.go.
 	registry["freework"] = NewFreeWork(c)
