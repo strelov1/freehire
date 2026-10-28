@@ -201,8 +201,8 @@ func (s francetravail) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error)
 	if total > len(w.offers) && total-len(w.offers) > total/100 {
 		log.Printf("francetravail: %s: the search matched %d offers and the walk read %d", dep, total, len(w.offers))
 	}
-	if w.truncated > 0 {
-		log.Printf("francetravail: %s: %d offers past the result window of a one-minute slice were not read", dep, w.truncated)
+	if w.truncated > 0 || w.cappedSlices > 0 {
+		log.Printf("francetravail: %s: %d one-minute slices reached the result window; %d offers past it were not read (more where a slice stated no total)", dep, w.cappedSlices, w.truncated)
 	}
 	jobs := make([]Job, 0, len(w.offers))
 	for _, o := range w.offers {
@@ -220,6 +220,8 @@ type francetravailWalk struct {
 	seen      map[string]bool
 	offers    []francetravailOffer
 	truncated int
+	// cappedSlices counts the one-minute slices that still reached the result window.
+	cappedSlices int
 }
 
 // window reads the offers created in [from, to) — the whole département when both are zero —
@@ -251,7 +253,12 @@ func (w *francetravailWalk) window(ctx context.Context, from, to time.Time) (int
 			}
 			return total, nil
 		}
-		w.truncated += total - francetravailWindow
+		// A one-minute slice past the window is a bulk upload; its first 1,150 offers are read
+		// rather than failing the whole département, and the run says what it could not read.
+		w.cappedSlices++
+		if stated {
+			w.truncated += total - francetravailWindow
+		}
 	}
 	w.keep(first.Results)
 	// The window's last page starts at 1,000, not at the next multiple of 150 (1,050), which the
