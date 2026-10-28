@@ -172,6 +172,12 @@ func parseHiringRoomCards(fragment string) ([]hiringroomCard, error) {
 // hydrate reads the vacancy page of each vacancy the catalogue lacks. A page that could not be
 // read is deferred to a later run rather than stored body-less; a crawl that listed new vacancies
 // and read none of them fails.
+//
+// A page the platform answers 404/410 for is not unreadable but unpublished: a tenant can switch
+// its public portal off (its /jobs then 404s, /portal still redirects there) while the pager
+// keeps listing every vacancy, and each vacancy page 404s. Measured 2026-10-28 on 71 of 317
+// Argentine and Latin American tenants. Those vacancies are skipped and do not count towards the
+// "read none" failure — the platform has answered that there is nothing public to read.
 func (s hiringroom) hydrate(ctx context.Context, board string, e CompanyEntry, cards []hiringroomCard, seen func(string) bool) ([]Job, error) {
 	var wanted, read atomic.Int64
 	jobs := fetchDetails(cards, defaultDetailWorkers, func(c hiringroomCard) (Job, bool) {
@@ -182,9 +188,11 @@ func (s hiringroom) hydrate(ctx context.Context, board string, e CompanyEntry, c
 		wanted.Add(1)
 		root, err := s.http.GetHTML(ctx, link)
 		if err != nil {
-			if detailUnreadable(err) {
-				log.Printf("hiringroom: %s: %v; deferring", link, err)
+			if !detailUnreadable(err) {
+				wanted.Add(-1) // unpublished, not unreadable (see above)
+				return Job{}, false
 			}
+			log.Printf("hiringroom: %s: %v; deferring", link, err)
 			return Job{}, false
 		}
 		desc, ok := hiringroomDescription(root)

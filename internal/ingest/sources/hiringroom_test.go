@@ -46,6 +46,8 @@ type hrFake struct {
 	pages map[string]string
 	forms []url.Values
 	gets  []string
+	// missing is the status a GET for an unserved URL answers; 0 means 500.
+	missing int
 }
 
 func (f *hrFake) PostFormJSON(_ context.Context, u string, v url.Values, out any) error {
@@ -61,9 +63,30 @@ func (f *hrFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
 	f.gets = append(f.gets, u)
 	body, ok := f.pages[u]
 	if !ok {
-		return nil, &StatusError{Method: "GET", Code: 500, URL: u}
+		code := f.missing
+		if code == 0 {
+			code = 500
+		}
+		return nil, &StatusError{Method: "GET", Code: code, URL: u}
 	}
 	return html.Parse(strings.NewReader(body))
+}
+
+// A tenant whose public portal is off still lists its vacancies through the pager, and every
+// vacancy page 404s. That is an answer — nothing is published — so the crawl yields nothing and
+// does not fail.
+func TestHiringRoomUnpublishedVacanciesAreNotAFailure(t *testing.T) {
+	f := &hrFake{missing: 404, pages: map[string]string{
+		hrStefPage + "1": hrFixture(t, "stefanini_page1.json"),
+		hrStefPage + "2": hrFixture(t, "stefanini_page2.json"),
+	}}
+	jobs, err := NewHiringRoom(f).Fetch(context.Background(), CompanyEntry{Board: "stefaniniitsolutionsperu", Company: "Stefanini"})
+	if err != nil {
+		t.Fatalf("an all-404 board failed: %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("jobs = %+v", jobs)
+	}
 }
 
 func TestHiringRoomCardsReadTitleAndTags(t *testing.T) {
