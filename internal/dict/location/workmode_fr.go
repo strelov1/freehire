@@ -25,8 +25,11 @@ import "strings"
 //   - bare "à distance", "100 % à distance" and "distanciel": "formation à distance" (an
 //     apprenticeship's school days, ~900 postings), "une formation flexible, 100 % à
 //     distance", "vente à distance", "assistance à distance".
-//   - "télétravail : 100": "prime télétravail : 100 € / mois", "télétravail : 100 %
-//     présentiel pendant les 3 premiers mois".
+//   - "télétravail : 100" and "télétravail à 100" without the percent sign: "prime
+//     télétravail : 100 € / mois", "télétravail : 100 % présentiel pendant les 3 premiers
+//     mois".
+//   - "remote-friendly" and "fonctionnement hybride": a culture and a system's design as
+//     often as the job's arrangement.
 //   - bare "présentiel" and "en présentiel": "entretien en présentiel", "formations en
 //     présentiel" — the interview and the training, not the job.
 //   - bare "hybride", "mode hybride" and "modèle hybride": "véhicules hybrides", "cloud
@@ -41,7 +44,7 @@ var frenchWorkModePhrases = []struct {
 }{
 	{"remote", []string{
 		"100% teletravail", "100 % teletravail", "100% en teletravail", "100 % en teletravail",
-		"teletravail a 100",
+		"teletravail a 100%", "teletravail a 100 %",
 		"teletravail total", "teletravail complet", "teletravail integral",
 		"entierement en teletravail", "totalement en teletravail", "full teletravail",
 		"full-remote", "100% remote", "100 % remote", "entierement a distance",
@@ -58,7 +61,6 @@ var frenchWorkModePhrases = []struct {
 		"subvention teletravail", "indemnite teletravail", "prime teletravail",
 		"teletravail : hybride", "teletravail: hybride", "travail hybride",
 		"mode de travail hybride", "organisation hybride", "rythme hybride",
-		"fonctionnement hybride", "remote friendly", "remote-friendly",
 		"jours sur site", "jours de presence", "jours au bureau", "jours en presentiel",
 	}},
 	{"onsite", []string{
@@ -67,12 +69,21 @@ var frenchWorkModePhrases = []struct {
 		"pas de teletravail", "aucun teletravail", "sans teletravail",
 		"pas de possibilite de teletravail", "aucune possibilite de teletravail",
 		"teletravail : non", "teletravail: non", "teletravail non autorise",
+		"teletravail possible : non", "teletravail possible: non",
 		"teletravail non possible", "teletravail non prevu", "teletravail impossible",
 		"pas teletravaillable", "non teletravaillable",
 		"poste en presentiel", "lieu du poste : en presentiel",
 		"sur site uniquement", "uniquement sur site",
 	}},
 }
+
+// frenchOnsiteTotality states the job is wholly on site, and outranks the office days a
+// hybrid phrase counts: "évoluerez dans un cadre hybride, mais le poste est 100% sur
+// site", "3 jours sur site … présence sur site uniquement". It is read after the remote
+// list and before the hybrid one.
+var frenchOnsiteTotality = []string{"100% sur site", "100 % sur site", "sur site uniquement",
+	"uniquement sur site", "100% en presentiel", "100 % en presentiel", "100% presentiel",
+	"100 % presentiel", "100% sur place", "100 % sur place"}
 
 // frenchNegations, found just before a remote or hybrid phrase in its clause, turn it into
 // its opposite ("pas de possibilité de télétravail", "sans télétravail régulier").
@@ -96,20 +107,29 @@ const frenchNegationWindow = 24
 var frenchGuards = phraseGuards{negations: frenchNegations, refusals: frenchRefusals,
 	perks: frenchPerks, negationWindow: frenchNegationWindow}
 
-// frenchWorkModeTriggers gate the fold, spelled the way both the accented and the bare
-// form begin.
-var frenchWorkModeTriggers = []string{"teletravail", "télétravail", "remote", "hybride",
-	"presentiel", "présentiel", "sur site", "sur place", "distance", "teletravaill",
-	"télétravaill"}
+// frenchWorkModeTriggers gate the phrase walk, spelled without accents: they are read on
+// the folded text.
+var frenchWorkModeTriggers = []string{"teletravail", "remote", "hybride", "presentiel",
+	"sur site", "sur place", "distance"}
 
 // frenchWorkMode derives a work mode from French arrangement prose, "" when none of
 // frenchWorkModePhrases is stated. lower is the description already lowercased.
-func frenchWorkMode(desc, lower string) string {
-	if !containsAny(lower, frenchWorkModeTriggers) {
+//
+// The triggers are checked on the decoded text: a description may spell its accents as
+// HTML entities ("t&eacute;l&eacute;travail").
+func frenchWorkMode(desc string) string {
+	text := strings.ReplaceAll(dropAccents(foldMarkup(desc)), "’", "'")
+	if !containsAny(text, frenchWorkModeTriggers) {
 		return ""
 	}
-	text := strings.ReplaceAll(dropAccents(foldMarkup(desc)), "’", "'")
 	for _, wm := range frenchWorkModePhrases {
+		if wm.mode == "hybrid" {
+			for _, p := range frenchOnsiteTotality {
+				if guardedPhraseMatches(text, p, "onsite", frenchGuards) {
+					return "onsite"
+				}
+			}
+		}
 		for _, p := range wm.phrases {
 			if guardedPhraseMatches(text, p, wm.mode, frenchGuards) {
 				return wm.mode
