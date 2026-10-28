@@ -35,6 +35,25 @@ func TestEmploymentType(t *testing.T) {
 		{"fellowship beats contract", "PhD Fellowship", "A 3-year fixed-term fellowship position.", "fellowship"},
 		{"fellowship manager is staff, not fellowship", "Fellowship Manager, Anywhere", "Runs our fellowship program full-time.", "full_time"},
 		{"fellowship program coordinator is staff", "Fellowship Program Coordinator", "Coordinates the fellowship program.", ""},
+		// French contract labels (2026-10-28, over the French crawl).
+		{"cdi", "Développeur Python F/H", "Modalités du poste : poste en CDI, à pourvoir à Rennes.", "full_time"},
+		{"cdd", "Conseiller de vente H/F - CDD 35H", "Rejoignez notre boutique.", "contract"},
+		{"interim", "Charpentier H/F", "Dans le cadre d'une mission d'intérim, renouvelable.", "contract"},
+		{"cdd beats a cdi in prose", "Vendeur H/F", "CDD de 3 mois pouvant déboucher sur un CDI.", "contract"},
+		{"part-time label", "Vendeur(se)", "Type d'emploi : CDI à temps partiel, 25h.", "part_time"},
+		{"part-time title", "Épicerie Commis temps partiel jour", "Rejoignez l'équipe.", "part_time"},
+		{"full-time label", "Agent d'accueil", "Type d'emploi : Temps plein.", "full_time"},
+		{"part-time in a perks list is no contract", "Collaborateur comptable", "Organisation autonome (télétravail, forfait jours, temps partiel…).", ""},
+		{"stage title", "Stage - Assistant(e) Communication Interne H/F", "Rejoignez l'équipe.", "internship"},
+		{"alternance title", "Gestionnaire de Paie en alternance F/H", "Un contrat sur 2 ans.", "internship"},
+		{"apprenticeship contract", "Assistant comptable", "Un(e) assistant(e) en contrat d'apprentissage, BTS CG.", "internship"},
+		{"internship beats cdi", "Stagiaire Data F/H", "Stage de 6 mois, possibilité de CDI ensuite.", "internship"},
+		// The trainee words in a body are about everything else.
+		{"experience counting alternance", "Ingénieur PLM (H/F)", "Expérience de 3 ans minimum (alternance comprise).", ""},
+		{"supervising trainees", "Technicien de laboratoire", "Capacité à encadrer des stagiaires.", ""},
+		{"machine learning", "Data Scientist", "Connaissances en apprentissage automatique.", ""},
+		{"english stage", "Account Executive - Early Stage", "Join an early-stage startup.", ""},
+		{"stage manager", "Stage Manager", "Run the theatre's productions.", ""},
 		{"fellowship mention far from staff word still counts", "AI Policy Fellowship", strings.Repeat("Research the impact of AI governance policy. ", 20) + "Reports to the Program Manager.", "fellowship"},
 	}
 	for _, c := range cases {

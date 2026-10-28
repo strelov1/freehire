@@ -218,6 +218,8 @@ linters:
         - constitucion
         - monserrat
         # Spanish field names in the Bumeran adapter's API structs.
+        # French contract vocabulary (internal/job/jobfacts).
+        - apprentie
         - descripcion
         - denominacion
         - internacional
