@@ -57,12 +57,14 @@
     class="fixed inset-0 z-40 animate-modal-fade bg-black/40 lg:hidden"
   ></button>
   <!-- A modal dialog: focusTrap moves focus in, keeps Tab inside, and returns it
-       to the host's trigger when the drawer closes. -->
+       to the host's trigger when the drawer closes. The page opts into
+       `viewport-fit=cover`, so a full-height sheet pinned to the left edge pads itself
+       clear of the home indicator below and, in landscape, the notch beside it. -->
   <div
     role="dialog"
     aria-modal="true"
     aria-labelledby={titleId}
-    class="fixed left-0 top-0 z-50 flex h-full w-64 animate-sheet-in-left flex-col gap-1 overflow-y-auto border-r border-border bg-background p-2 lg:hidden"
+    class="fixed left-0 top-0 z-50 flex h-full w-64 animate-sheet-in-left flex-col gap-1 overflow-y-auto border-r border-border bg-background p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pl-[max(0.5rem,env(safe-area-inset-left))] pt-[max(0.5rem,env(safe-area-inset-top))] lg:hidden"
     {@attach focusTrap()}
     {@attach (el) => {
       // Twenty sections outgrow a short phone, and the drawer opens at its top: bring the
@@ -76,11 +78,13 @@
         type="button"
         aria-label={s.rail.closeMenu}
         onclick={close}
-        class="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+        class="-mr-1 flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground pointer-coarse:size-11"
       >
         <X class="size-4" />
       </button>
     </div>
+    <!-- Under a finger every row and the close button reach 44px; a mouse in a narrow
+         window keeps the denser list, since twenty rows at 44px scroll on most screens. -->
     <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
       {#each navItems as item (item.href)}
         {@const active = isSectionActive(path, item.href)}
@@ -90,7 +94,7 @@
           aria-current={active ? 'page' : undefined}
           onclick={close}
           class={cn(
-            'flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
+            'flex items-center gap-3 rounded-md px-3 py-2 transition-colors pointer-coarse:min-h-11',
             active
               ? 'bg-secondary text-secondary-foreground'
               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
