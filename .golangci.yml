@@ -229,6 +229,8 @@ linters:
         # French contract labels in the Talentsoft adapter ("temps partiel", "indépendant").
         - partiel
         - independant
+        # The "Employeur :" card label in the Choisir le service public adapter.
+        - employeur
         # Argentine place names (internal/dict/location/location_ar.go).
         - microcentro
         - constitucion
