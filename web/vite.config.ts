@@ -117,6 +117,13 @@ export default defineConfig({
           // forbid legacy plugin/embed vectors.
           'base-uri': ['self'],
           'object-src': ['none'],
+          // No third-party page may frame ours: a signed-in session behind an invisible
+          // iframe is the clickjacking setup (a "submit application" or "delete" click
+          // landed on our button through someone else's page). Nothing legitimate frames
+          // freehire — the extension uses a side panel, not an iframe. This only works as
+          // a response header, never in a <meta> CSP, so it holds because no route is
+          // prerendered; a prerendered page would ship without it.
+          'frame-ancestors': ['self'],
           // img-src is the layer under the assistant's markdown sanitizer. The chat
           // renders model output with {@html}, and model output is untrusted — it reads
           // job descriptions, browsed pages and other attacker-controlled text — so an

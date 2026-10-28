@@ -186,9 +186,25 @@ const attribution: Handle = async ({ event, resolve }) => {
   return response;
 };
 
+// Switch off the powerful browser features no page uses, so a script that ever got in
+// (or a frame we embed) cannot ask for them. The microphone stays open to our own
+// origin: the assistant's dictation and voice call need it.
+const PERMISSIONS_POLICY = 'camera=(), microphone=(self), geolocation=(), payment=(), usb=()';
+
+const permissionsPolicy: Handle = async ({ event, resolve }) => {
+  const response = await resolve(event);
+  // Only a document is governed by the policy; other responses (a redirect, a proxied
+  // body) may carry immutable headers and gain nothing from it.
+  if (response.headers.get('content-type')?.includes('text/html')) {
+    response.headers.set('permissions-policy', PERMISSIONS_POLICY);
+  }
+  return response;
+};
+
 // sentryHandle scopes each SSR request; it is a passthrough when init was skipped.
 export const handle = sequence(
   Sentry.sentryHandle(),
+  permissionsPolicy,
   preloadPolicy,
   locale,
   cacheControl,
