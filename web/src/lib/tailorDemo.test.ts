@@ -43,4 +43,12 @@ describe('demo copy', () => {
       for (const k of b.keywords) expect(b.after.toLowerCase(), k).toContain(k.toLowerCase());
     }
   });
+
+  // An after line may restate a fact its before line holds, never add one. The highlighted
+  // words are the ones the candidate already had on the page before the rewrite.
+  it('highlights only words the before line already contained', () => {
+    for (const b of DEMO_BULLETS) {
+      for (const k of b.keywords) expect(b.before.toLowerCase(), k).toContain(k.toLowerCase());
+    }
+  });
 });

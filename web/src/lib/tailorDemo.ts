@@ -16,19 +16,19 @@ export const DEMO_REQUIREMENTS = [
 export const DEMO_BULLETS = [
   {
     req: 'kafka',
-    before: 'Backend work for the checkout team (Go, Kafka).',
+    before: 'Checkout team: on-call, bug fixes; built the Kafka event pipeline in Go.',
     after: 'Built the Kafka event pipeline behind checkout, in Go.',
     keywords: ['Kafka'],
   },
   {
     req: 'payments',
-    before: 'Various backend tasks, incl. ledger migration to Postgres.',
+    before: 'Various backend tasks, incl. migrating the payment ledger to Postgres.',
     after: 'Migrated the payment ledger to Postgres.',
     keywords: ['payment'],
   },
   {
     req: 'mentoring',
-    before: 'Code reviews, onboarding new hires.',
+    before: 'Code reviews; mentored two new engineers through onboarding.',
     after: 'Mentored new engineers through onboarding and code review.',
     keywords: ['Mentored'],
   },
@@ -40,13 +40,13 @@ export const DEMO_ASKED = 'k8s';
 // Job match before any edit, then after each rewritten bullet.
 export const DEMO_SCORES = [54, 68, 79, 86];
 
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Splits text into runs, flagging the ones that match any of the words (case-insensitive). */
 export function highlight(text: string, words: string[]): { text: string; hit: boolean }[] {
   if (words.length === 0) return [{ text, hit: false }];
   const lower = new Set(words.map((w) => w.toLowerCase()));
-  const re = new RegExp(`(${words.map(escape).join('|')})`, 'gi');
+  const re = new RegExp(`(${words.map(escapeRegExp).join('|')})`, 'gi');
   return text
     .split(re)
     .filter((part) => part !== '')
