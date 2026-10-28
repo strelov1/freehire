@@ -86,6 +86,12 @@ var scraplingProviders = map[string]scraplingProvider{
 	"turijobs": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewTurijobs(NewClient(), f)
 	}},
+	// Cloudflare answers 403 to a plain client from the crawl host on every path, sitemap
+	// included; the impersonating fetcher is served from the crawl host's own IP, with an
+	// occasional 403 the adapter retries (measured 2026-10-28).
+	"cadremploi": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewCadremploi(f)
+	}},
 	// The crawl host's IP times out; the impersonating fetcher through the proxy is served.
 	"kontur": {scraplingRoute{scraplingfetch.ModeHTTP, true}, func(f *Client) Source {
 		return NewKontur(f)
