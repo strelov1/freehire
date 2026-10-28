@@ -1,0 +1,277 @@
+{
+ "aviso": {
+  "fechaPublicacion": "27-10-2026",
+  "fechaHoraPublicacion": "27-10-2026 18:17:45",
+  "fechaFinalizacion": "26-12-2026",
+  "fechaModificado": "27-10-2026 18:17:45",
+  "estado": "activo",
+  "titulo": "Analista Contable",
+  "descripcion": "<p>Somos una empresa dedicada a la elaboración y comercialización de productos alimenticios que trabaja en el país desde hace más de 100 años.</p><p>Nuestra capacidad para innovar a lo largo del tiempo nos ha llevado a ser el mayor proveedor de insumos para la industria de la panificación y la pastelería en nuestro país, siendo líderes en cada una de nuestras líneas: levaduras, margarinas, grasas, aceites, malteados, mejoradores y otros ingredientes para panificación y pastelería.</p><p>En esta oportunidad nos encontramos en la búsqueda de una persona para ocupar el rol de <strong>Analista Contable.</strong></p><p><strong>Responsabilidades</strong></p><ul> <li>Ejecutar los procesos del cierre mensual y anual de las operaciones.</li> <li>Realizar el análisis de cuentas contables.</li> <li>Realizar el armado de balaces y conciliaciones bancarias..</li> <li>Cumplir con los requerimientos de normas de Control Interno, dando cumplimiento a auditorías.</li> <li>Colaborar en el armado de estados contables.</li></ul><p><strong>Requisitos</strong></p><ul> <li>Contador Público (Graduado).</li> <li>Experiencia de al menos 2 años en roles similares.</li> <li>Manejo de sistema SAP.</li> <li>Ingles intermedio. (deseable).</li></ul><p><br /></p><p>¿Querés sumarte al equipo de Finanzas? ¡Esta es tu oportunidad! &#x1f680;</p><p>Te estamos buscando.</p>",
+  "aptoDiscapacitados": false,
+  "cantidadVacantes": 1,
+  "empresa": {
+   "denominacion": "Calsa",
+   "logoURL": "https://imgbum.jobscdn.com/portal/img/empresas/1/static/logoMainPic_13480239_bum_v53a9dfb8.jpg",
+   "confidencial": false,
+   "cantidadEmpleados": 750,
+   "gptwUrl": null,
+   "id": 13480239,
+   "rangoEmpleados": "Entre 501 y 1000",
+   "videoUrl": null,
+   "inclusiva": false,
+   "busquedaActiva": false,
+   "validada": null,
+   "empresaPro": false,
+   "descripcion": "Somos una empresa dedicada a la elaboración y comercialización de productos alimenticios que trabaja en el país desde hace más de 100 años.\n \nNuestra capacidad para innovar a lo largo del tiempo nos ha llevado a ser el mayor proveedor de insumos para la industria de la panificación y la pastelería en nuestro país, siendo líderes en cada una de nuestras líneas: levaduras, margarinas, grasas, aceites, malteados, mejoradores y otros ingredientes para panificación y pastelería.\n",
+   "ciudad": "Lanús",
+   "provincia": "Capital Federal",
+   "industria": "Alimenticia"
+  },
+  "localizacion": {
+   "paisId": 1,
+   "paisIdSemantico": "argentina",
+   "zonaId": 1,
+   "provinciaId": 29,
+   "provinciaIdSemantico": "argentina|buenos-aires",
+   "localidadId": 7,
+   "localidadIdSemantico": "argentina|buenos-aires|capital-federal",
+   "direccion": null,
+   "detalle": "Capital Federal, Buenos Aires, Argentina",
+   "id": 7,
+   "localidadStringId": "capital-federal",
+   "provinciaStringId": "buenos-aires",
+   "paisStringId": "argentina",
+   "localidadDetalle": "Capital Federal",
+   "provinciaDetalle": "Buenos Aires",
+   "paisDetalle": "Argentina"
+  },
+  "area": {
+   "id": 1,
+   "nombre": "Administración, Contabilidad y Finanzas",
+   "idSemantico": "administracion-contabilidad-y-finanzas",
+   "stringId": "administracion-contabilidad-y-finanzas"
+  },
+  "subArea": {
+   "id": 58,
+   "nombre": "Contabilidad",
+   "idSemantico": "administracion-contabilidad-y-finanzas|contabilidad",
+   "stringId": "contabilidad"
+  },
+  "requisitos": {
+   "edad": {
+    "excluyente": false,
+    "edadMinima": 24,
+    "edadMaxima": 40
+   },
+   "residencia": null,
+   "experiencia": {
+    "excluyente": false,
+    "minimo": 36
+   },
+   "genero": null,
+   "educacion": {
+    "excluyente": false,
+    "tipoEstudio": {
+     "id": 3,
+     "nombre": "Universitario"
+    },
+    "estadoEstudio": {
+     "id": 2,
+     "nombre": "Graduado"
+    }
+   },
+   "salario": {
+    "excluyente": false,
+    "salarioMinimo": null,
+    "salarioMaximo": null,
+    "frecuenciaPago": null,
+    "tipo": null,
+    "solicitarCandidato": true
+   },
+   "idiomas": [
+    {
+     "excluyente": false,
+     "idioma": {
+      "id": 1,
+      "nombre": "Inglés"
+     },
+     "nivel": {
+      "id": 11,
+      "nombre": "Intermedio"
+     }
+    }
+   ],
+   "conocimientos": [
+    {
+     "excluyente": false,
+     "grupo": {
+      "id": 3,
+      "nombre": "Informatica"
+     },
+     "tipo": {
+      "id": 1006,
+      "nombre": "Bases de Datos"
+     },
+     "calificador": {
+      "id": 19,
+      "nombre": "Seniority"
+     },
+     "conocimientoEspecifico": {
+      "nombre": "Ingres",
+      "id": 327
+     },
+     "nivel": {
+      "id": 1,
+      "nombre": "Intermedio"
+     }
+    },
+    {
+     "excluyente": false,
+     "grupo": {
+      "id": 3,
+      "nombre": "Informatica"
+     },
+     "tipo": {
+      "id": 1019,
+      "nombre": "SAP"
+     },
+     "calificador": {
+      "id": 19,
+      "nombre": "Seniority"
+     },
+     "conocimientoEspecifico": {
+      "nombre": "SAP",
+      "id": 853
+     },
+     "nivel": {
+      "id": 1,
+      "nombre": "Intermedio"
+     }
+    },
+    {
+     "excluyente": false,
+     "grupo": {
+      "id": 4,
+      "nombre": "Habilidades"
+     },
+     "tipo": {
+      "id": 1106,
+      "nombre": "Aptitudes técnicas"
+     },
+     "calificador": {
+      "id": 20,
+      "nombre": "No aplica"
+     },
+     "conocimientoEspecifico": {
+      "nombre": "Contabilidad",
+      "id": 742
+     },
+     "nivel": {
+      "id": 13,
+      "nombre": "No aplica"
+     }
+    }
+   ],
+   "detalleSalario": {
+    "excluyente": false,
+    "salarioMinimo": null,
+    "salarioMaximo": null,
+    "frecuenciaPago": null,
+    "tipo": null,
+    "solicitarCandidato": true
+   }
+  },
+  "preguntas": [
+   {
+    "simple": {
+     "id": 49906956,
+     "texto": "¿Contas con experiencia en conciliaciones bancarias, armado de balance y carga de asientos?"
+    }
+   },
+   {
+    "simple": {
+     "id": 49906957,
+     "texto": "¿Posee manejo de sistema SAP?"
+    }
+   },
+   {
+    "simple": {
+     "id": 49906958,
+     "texto": "¿Cuál es tu remuneración bruta pretendida?"
+    }
+   }
+  ],
+  "tipoTrabajo": {
+   "id": 2,
+   "nombre": "Full-time",
+   "idSemantico": "full-time",
+   "stringId": "full-time"
+  },
+  "planPublicacion": {
+   "id": 70,
+   "nombre": "Simples"
+  },
+  "nivelLaboral": {
+   "nombre": "Semi Sr",
+   "idSemantico": "semi-sr",
+   "id": 8,
+   "stringId": "semi-sr"
+  },
+  "redireccionURL": null,
+  "origenAviso": "PORTAL",
+  "modalidadTrabajo": {
+   "id": 3,
+   "nombre": "Híbrido",
+   "idSemantico": "hibrido",
+   "stringId": "hibrido"
+  },
+  "puesto": {
+   "puestoId": 186,
+   "nombre": "Analista Contable",
+   "tieneEstadisticas": true,
+   "linkSeoSalario": "/salarios/contabilidad/analista-contable_186.html"
+  },
+  "tipoContratacion": {
+   "id": 1,
+   "nombre": "Indeterminado",
+   "idSemantico": "indeterminado"
+  },
+  "encabezado": null,
+  "beneficios": null,
+  "altaRevisionPerfiles": false,
+  "postulacionRapida": false,
+  "beneficiosNormalizados": [],
+  "id": 1118498914,
+  "descripcionSimple": "<p>Somos una empresa dedicada a la elaboración y comercialización de productos alimenticios que trabaja en el país desde hace más de 100 años.</p><p>Nuestra capacidad para innovar a lo largo del tiempo nos ha llevado a ser el mayor proveedor de insumos para la industria de la panificación y la pastelería en nuestro país, siendo líderes en cada una de nuestras líneas: levaduras, margarinas, grasas, aceites, malteados, mejoradores y otros ingredientes para panificación y pastelería.</p><p>En esta oportunidad nos encontramos en la búsqueda de una persona para ocupar el rol de <strong>Analista Contable.</strong></p><p><strong>Responsabilidades</strong></p><ul> <li>Ejecutar los procesos del cierre mensual y anual de las operaciones.</li> <li>Realizar el análisis de cuentas contables.</li> <li>Realizar el armado de balaces y conciliaciones bancarias..</li> <li>Cumplir con los requerimientos de normas de Control Interno, dando cumplimiento a auditorías.</li> <li>Colaborar en el armado de estados contables.</li></ul><p><strong>Requisitos</strong></p><ul> <li>Contador Público (Graduado).</li> <li>Experiencia de al menos 2 años en roles similares.</li> <li>Manejo de sistema SAP.</li> <li>Ingles intermedio. (deseable).</li></ul><p><br /></p><p>¿Querés sumarte al equipo de Finanzas? ¡Esta es tu oportunidad! &#x1f680;</p><p>Te estamos buscando.</p>",
+  "tipoAviso": "simple",
+  "filtersApplied": [
+   {
+    "type": "subarea",
+    "id": "contabilidad",
+    "name": "Contabilidad"
+   },
+   {
+    "type": "tipo_trabajo",
+    "id": "full-time",
+    "name": "Full-time"
+   },
+   {
+    "id": "provincia",
+    "value": 7
+   },
+   {
+    "type": "modalidad_trabajo",
+    "id": "hibrido",
+    "name": "Híbrido"
+   },
+   {
+    "type": "area",
+    "id": "administracion-contabilidad-y-finanzas",
+    "name": "Administración, Contabilidad y Finanzas"
+   }
+  ],
+  "seoFriendlyUrl": "/empleos/analista-contable-calsa-1118498914.html"
+ },
+ "productoLookAndFeel": null,
+ "avisosSimilares": []
+}

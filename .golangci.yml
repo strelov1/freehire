@@ -214,6 +214,10 @@ linters:
         - microcentro
         - constitucion
         - monserrat
+        # Spanish field names in the Bumeran adapter's API structs.
+        - descripcion
+        - denominacion
+        - internacional
         # Spanish skill vocabulary (internal/dict/skilltag/dictionaries.go, batch 8).
         - integracion
         - versiones

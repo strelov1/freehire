@@ -1,0 +1,156 @@
+{
+ "aviso": {
+  "fechaPublicacion": "07-10-2026",
+  "fechaHoraPublicacion": "07-10-2026 15:37:12",
+  "fechaFinalizacion": "06-12-2026",
+  "fechaModificado": "07-10-2026 15:37:12",
+  "estado": "activo",
+  "titulo": "Asesor/a de Ventas",
+  "descripcion": "<p><strong>Asesor/a de Ventas</strong></p><p><strong>Resumen del Puesto</strong></p><p>Estamos en la búsqueda de un/a <strong>Asesor/a de Ventas</strong> con conocimiento en el área de salud y/o deporte (EXCLUYENTE)</p><p><strong>Requisitos</strong></p><ul> <li>Experiencia previa en roles de ventas.</li> <li>Conocimiento y/o experiencia en el área de salud y/o deporte.</li> <li>Excelentes habilidades de comunicación, negociación y persuasión.</li> <li>Orientación a resultados y al logro de objetivos.</li> <li>Disponibilidad para trabajar a tiempo completo.</li></ul>",
+  "aptoDiscapacitados": false,
+  "cantidadVacantes": 1,
+  "empresa": {
+   "denominacion": "Nutrishop ",
+   "logoURL": null,
+   "confidencial": false,
+   "cantidadEmpleados": 30,
+   "gptwUrl": null,
+   "id": 13394450,
+   "rangoEmpleados": "Entre 11 y 50",
+   "videoUrl": null,
+   "inclusiva": false,
+   "busquedaActiva": false,
+   "validada": false,
+   "empresaPro": false,
+   "descripcion": null,
+   "ciudad": null,
+   "provincia": null,
+   "industria": "Alimenticia"
+  },
+  "localizacion": {
+   "paisId": 1,
+   "paisIdSemantico": "argentina",
+   "zonaId": 1,
+   "provinciaId": 29,
+   "provinciaIdSemantico": "argentina|buenos-aires",
+   "localidadId": 7,
+   "localidadIdSemantico": "argentina|buenos-aires|capital-federal",
+   "direccion": null,
+   "detalle": "Capital Federal, Buenos Aires, Argentina",
+   "id": 7,
+   "localidadStringId": "capital-federal",
+   "provinciaStringId": "buenos-aires",
+   "paisStringId": "argentina",
+   "localidadDetalle": "Capital Federal",
+   "provinciaDetalle": "Buenos Aires",
+   "paisDetalle": "Argentina"
+  },
+  "area": {
+   "id": 6,
+   "nombre": "Comercial, Ventas y Negocios",
+   "idSemantico": "comercial-ventas-y-negocios",
+   "stringId": "comercial-ventas-y-negocios"
+  },
+  "subArea": {
+   "id": 35,
+   "nombre": "Ventas",
+   "idSemantico": "comercial-ventas-y-negocios|ventas",
+   "stringId": "ventas"
+  },
+  "requisitos": {
+   "edad": null,
+   "residencia": null,
+   "experiencia": null,
+   "genero": null,
+   "educacion": null,
+   "salario": {
+    "excluyente": false,
+    "salarioMinimo": 1200000,
+    "salarioMaximo": 1300000,
+    "frecuenciaPago": {
+     "id": 4,
+     "nombre": "por Mes"
+    },
+    "tipo": "BRUTO",
+    "solicitarCandidato": false
+   },
+   "idiomas": null,
+   "conocimientos": null,
+   "detalleSalario": {
+    "excluyente": false,
+    "salarioMinimo": 1200000,
+    "salarioMaximo": 1300000,
+    "frecuenciaPago": {
+     "id": 4,
+     "nombre": "por Mes"
+    },
+    "tipo": "BRUTO",
+    "solicitarCandidato": false
+   }
+  },
+  "preguntas": [],
+  "tipoTrabajo": {
+   "id": 2,
+   "nombre": "Full-time",
+   "idSemantico": "full-time",
+   "stringId": "full-time"
+  },
+  "planPublicacion": {
+   "id": 2001,
+   "nombre": "Freemium"
+  },
+  "nivelLaboral": null,
+  "redireccionURL": null,
+  "origenAviso": "PORTAL",
+  "modalidadTrabajo": {
+   "id": 1,
+   "nombre": "Presencial",
+   "idSemantico": "presencial",
+   "stringId": "presencial"
+  },
+  "puesto": {
+   "puestoId": 504,
+   "nombre": "Asesor Comercial",
+   "tieneEstadisticas": true,
+   "linkSeoSalario": "/salarios/ventas/asesor-comercial_504.html"
+  },
+  "tipoContratacion": null,
+  "encabezado": null,
+  "beneficios": null,
+  "altaRevisionPerfiles": false,
+  "postulacionRapida": false,
+  "beneficiosNormalizados": [],
+  "id": 1118468906,
+  "descripcionSimple": "<p><strong>Asesor/a de Ventas</strong></p><p><strong>Resumen del Puesto</strong></p><p>Estamos en la búsqueda de un/a <strong>Asesor/a de Ventas</strong> con conocimiento en el área de salud y/o deporte (EXCLUYENTE)</p><p><strong>Requisitos</strong></p><ul> <li>Experiencia previa en roles de ventas.</li> <li>Conocimiento y/o experiencia en el área de salud y/o deporte.</li> <li>Excelentes habilidades de comunicación, negociación y persuasión.</li> <li>Orientación a resultados y al logro de objetivos.</li> <li>Disponibilidad para trabajar a tiempo completo.</li></ul>",
+  "tipoAviso": "freemium",
+  "filtersApplied": [
+   {
+    "type": "subarea",
+    "id": "ventas",
+    "name": "Ventas"
+   },
+   {
+    "type": "tipo_trabajo",
+    "id": "full-time",
+    "name": "Full-time"
+   },
+   {
+    "id": "provincia",
+    "value": 7
+   },
+   {
+    "type": "modalidad_trabajo",
+    "id": "presencial",
+    "name": "Presencial"
+   },
+   {
+    "type": "area",
+    "id": "comercial-ventas-y-negocios",
+    "name": "Comercial, Ventas y Negocios"
+   }
+  ],
+  "seoFriendlyUrl": "/empleos/asesor-a-de-ventas-nutrishop-1118468906.html"
+ },
+ "productoLookAndFeel": null,
+ "avisosSimilares": []
+}
