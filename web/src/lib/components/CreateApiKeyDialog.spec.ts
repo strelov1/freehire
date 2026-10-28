@@ -121,7 +121,7 @@ describe('CreateApiKeyDialog', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Confirm with google' }));
 
-    expect(begin).toHaveBeenCalledWith('google', '/my/api-keys', {
+    expect(begin).toHaveBeenCalledWith('google', '/my/integrations/api-keys', {
       surface: 'create-api-key',
       name: 'CI bot',
       days: 0,
@@ -142,7 +142,7 @@ describe('CreateApiKeyDialog', () => {
 
     await fireEvent.click(await screen.findByRole('button', { name: 'Confirm with google' }));
 
-    expect(begin).toHaveBeenCalledWith('google', '/my/api-keys', {
+    expect(begin).toHaveBeenCalledWith('google', '/my/integrations/api-keys', {
       surface: 'create-api-key',
       name: 'My laptop',
       days: 0,

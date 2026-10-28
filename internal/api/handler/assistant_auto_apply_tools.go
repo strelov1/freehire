@@ -50,7 +50,7 @@ func (h *assistantHandlers) autoApplyMCPTools() []assistant.Tool {
 // person turns it on, because the agent can only relay that — it cannot flip it.
 const agentsMayApplyOff = "auto-apply by connected agents is turned off for this account. " +
 	"Ask the person to turn on \"Let connected agents apply for me\" on freehire, under " +
-	"Account → API keys (/my/api-keys), then try again"
+	"Account → Integrations → API keys (/my/integrations/api-keys), then try again"
 
 // requireAgentsMayApply refuses unless the account switched agents_may_apply on.
 func (h *assistantHandlers) requireAgentsMayApply(ctx context.Context, userID int64) error {

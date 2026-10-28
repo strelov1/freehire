@@ -30,6 +30,6 @@ export const accountLinks = [
   { href: '/my/assistant', label: 'Agent', icon: Bot },
   { href: '/my/cvs', label: 'Tailor', icon: ScrollText },
   { href: '/my/notifications/searches', label: 'Search alerts', icon: BellRing },
-  { href: '/my/api-keys', label: 'API keys', icon: KeyRound },
+  { href: '/my/integrations/api-keys', label: 'API keys', icon: KeyRound },
   { href: '/my/submissions', label: 'My submissions', icon: FileText },
 ] as const satisfies readonly HeaderAccountLink[];

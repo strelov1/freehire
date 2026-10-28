@@ -16,9 +16,8 @@ import (
 
 // wttj adapts Welcome to the Jungle (welcometothejungle.com), a large European job board that
 // lists postings from many employers. Board-based aggregator: a board is one of WTTJ's own
-// profession SUB-CATEGORY references (e.g. "software-web-development-iMzA4"), which is how the
-// crawl stays on the technical slice of a general-population board — the platform files every
-// posting under exactly one sub-category, so the boards partition rather than overlap.
+// profession SUB-CATEGORY references (e.g. "software-web-development-iMzA4"). The platform files
+// every posting under exactly one sub-category, so the boards partition rather than overlap.
 //
 // The listing is the public Algolia index the site's own search page queries. Its search key is
 // published at /api/env and is fetched fresh on every crawl rather than hard-coded, because it is

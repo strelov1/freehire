@@ -21,8 +21,6 @@ export const messages = defineMessages(
       '/my/mentorship': 'Mentorship',
       '/my/notifications': 'Notifications',
       '/my/integrations': 'Integrations',
-      '/my/api-keys': 'API keys',
-      '/my/webhook': 'Webhook',
       '/my/submissions': 'My submissions',
       '/my/contributions': 'Contributions',
       '/my/employer': 'Employer',
@@ -56,8 +54,6 @@ export const messages = defineMessages(
         '/my/mentorship': 'Менторство',
         '/my/notifications': 'Уведомления',
         '/my/integrations': 'Интеграции',
-        '/my/api-keys': 'API-ключи',
-        '/my/webhook': 'Вебхук',
         // Vacancies the user submitted for review — not posts they published.
         '/my/submissions': 'Мои вакансии',
         // The section is "Contribute a board": paste a job link so we crawl a

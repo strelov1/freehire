@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '#lib/types.js';
-import ChangeEmail from './ChangeEmail.svelte';
+import ChangeEmail from './ChangeEmailDialog.svelte';
 
 const { requestEmailChange, confirmEmailChange, reauthenticatePassword, invalidateAll, user } =
   vi.hoisted(() => ({
@@ -41,15 +41,16 @@ beforeEach(() => {
 });
 
 async function requestCode(address: string): Promise<void> {
+  await fireEvent.click(screen.getByRole('button', { name: 'Change email' }));
   await fireEvent.input(screen.getByLabelText('New email'), { target: { value: address } });
   await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'hunter2' } });
   await fireEvent.click(screen.getByRole('button', { name: 'Send confirmation code' }));
 }
 
-describe('security page — email change', () => {
+describe('security page — email change dialog', () => {
   it('confirms identity, mails the new address, then applies the code', async () => {
-    render(ChangeEmail);
-    expect(screen.getByText('old@example.test')).toBeTruthy();
+    const onchanged = vi.fn();
+    render(ChangeEmail, { onchanged });
 
     await requestCode(' new@example.test ');
 
@@ -58,9 +59,9 @@ describe('security page — email change', () => {
     expect(requestEmailChange).toHaveBeenCalledWith('new@example.test');
 
     await fireEvent.input(screen.getByLabelText('Code'), { target: { value: '123456' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Change email' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
 
-    await waitFor(() => expect(screen.getByText(/Email changed/)).toBeTruthy());
+    await waitFor(() => expect(onchanged).toHaveBeenCalled());
     expect(confirmEmailChange).toHaveBeenCalledWith('123456');
     expect(invalidateAll).toHaveBeenCalled();
   });
@@ -93,7 +94,7 @@ describe('security page — email change', () => {
     await requestCode('new@example.test');
     await waitFor(() => expect(screen.getByLabelText('Code')).toBeTruthy());
     await fireEvent.input(screen.getByLabelText('Code'), { target: { value: '000000' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Change email' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
 
     await waitFor(() => expect(screen.getByText(/That code is wrong or has expired/)).toBeTruthy());
     expect(screen.getByLabelText('Code')).toBeTruthy();

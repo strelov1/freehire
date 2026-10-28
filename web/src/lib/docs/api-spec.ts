@@ -78,7 +78,7 @@ export const OVERVIEW: Overview[] = [
       'Authenticated endpoints accept either the browser session cookie (set by ' +
         'sign-in, same-origin) or a personal API key sent as a Bearer token — see the ' +
         'authentication model below. Keys are created in your account, at ' +
-        '[freehire.me/my/api-keys](https://freehire.me/my/api-keys), not through this API.',
+        '[freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys), not through this API.',
     ],
   },
   {
@@ -174,7 +174,7 @@ export const OVERVIEW: Overview[] = [
         'the browser session cookie, and additionally require a freshly proven identity — ' +
         'a password re-entry or a sign-in-provider check — that a script has no way to ' +
         'supply. Create and revoke keys in your account instead, at ' +
-        '[freehire.me/my/api-keys](https://freehire.me/my/api-keys); the plaintext token is ' +
+        '[freehire.me/my/integrations/api-keys](https://freehire.me/my/integrations/api-keys); the plaintext token is ' +
         'shown exactly once, at creation, so store it then.',
       'The `/jobs/{slug}/fit` endpoints are pre-rename aliases of ' +
         '`/jobs/{slug}/match-analysis` and hit the same handlers. They still work, ' +

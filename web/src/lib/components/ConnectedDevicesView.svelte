@@ -161,7 +161,7 @@
     <ConfirmIdentity
       bind:this={revokeIdentity}
       bind:password={revokePassword}
-      returnTo="/my/api-keys"
+      returnTo="/my/integrations/api-keys"
       prompt={s.revokeDialog.confirmPrompt}
       draft={() => ({ surface: 'revoke-oauth-grant', grantId: revokeTarget?.id ?? 0 })}
       active={confirmRevokeOpen}

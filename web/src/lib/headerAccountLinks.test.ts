@@ -22,7 +22,7 @@ describe('headerAccountLinks', () => {
       '/my/assistant',
       '/my/cvs',
       '/my/notifications/searches',
-      '/my/api-keys',
+      '/my/integrations/api-keys',
       '/my/submissions',
     ]);
   });

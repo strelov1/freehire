@@ -1,0 +1,95 @@
+{
+ "@context": "/contexts/JobPosting",
+ "@id": "/job_postings",
+ "@type": "hydra:Collection",
+ "hydra:totalItems": 11643,
+ "hydra:member": [
+  {
+   "@id": "/job_postings/developpeur-data-stage-python-java",
+   "@type": "JobPosting",
+   "id": 687964,
+   "title": "Développeur Data Stage / Python-Java",
+   "slug": "developpeur-data-stage-python-java",
+   "remoteMode": "partial",
+   "location": {
+    "@type": "Location",
+    "@id": "/.well-known/genid/1d26f478c2620550c049",
+    "countryCode": "FR",
+    "label": "Île-de-France, France"
+   },
+   "company": {
+    "@id": "/companies/r-s-telecom",
+    "@type": "Company",
+    "name": "R&S TELECOM"
+   },
+   "publishedAt": "2026-10-28T13:08:12+01:00"
+  },
+  {
+   "@id": "/job_postings/developpeur-fullstack-devops-7",
+   "@type": "JobPosting",
+   "id": 663470,
+   "title": "Développeur fullstack/ DevOps",
+   "slug": "developpeur-fullstack-devops-7",
+   "remoteMode": "partial",
+   "location": {
+    "@type": "Location",
+    "@id": "/.well-known/genid/43555a8833e5238b69cb",
+    "countryCode": "FR",
+    "label": "Ramonville-Saint-Agne, Occitanie"
+   },
+   "company": {
+    "@id": "/companies/freelancerepublik-2",
+    "@type": "Company",
+    "name": "ODHCOM - FREELANCEREPUBLIK"
+   },
+   "publishedAt": "2026-10-28T13:06:16+01:00"
+  },
+  {
+   "@id": "/job_postings/architecte-de-solutions-metiers",
+   "@type": "JobPosting",
+   "id": 683664,
+   "title": "Architecte des SIC, architecture solutions métiers (Cloud)",
+   "slug": "architecte-de-solutions-metiers",
+   "remoteMode": null,
+   "location": {
+    "@type": "Location",
+    "@id": "/.well-known/genid/9b3849ae96c4f8828f74",
+    "countryCode": "CH",
+    "label": "Genève, Suisse"
+   },
+   "company": {
+    "@id": "/companies/avanda",
+    "@type": "Company",
+    "name": "Avanda"
+   },
+   "publishedAt": "2026-10-28T13:03:33+01:00"
+  },
+  {
+   "@id": "/job_postings/responsable-qualite-logiciel-1",
+   "@type": "JobPosting",
+   "id": 683665,
+   "title": "Responsable Qualité Logiciel",
+   "slug": "responsable-qualite-logiciel-1",
+   "remoteMode": null,
+   "location": {
+    "@type": "Location",
+    "@id": "/.well-known/genid/540d58cc8a68ac1b230f",
+    "countryCode": "CH",
+    "label": "Genève, Suisse"
+   },
+   "company": {
+    "@id": "/companies/avanda",
+    "@type": "Company",
+    "name": "Avanda"
+   },
+   "publishedAt": "2026-10-28T13:03:33+01:00"
+  }
+ ],
+ "hydra:view": {
+  "@id": "/job_postings?itemsPerPage=4&properties%5B%5D=id&properties%5B%5D=slug&properties%5B%5D=title&properties%5B%5D=publishedAt&properties%5B%5D=remoteMode&properties%5Bcompany%5D%5B%5D=name&properties%5Blocation%5D%5B%5D=label&properties%5Blocation%5D%5B%5D=countryCode&page=1",
+  "@type": "hydra:PartialCollectionView",
+  "hydra:first": "/job_postings?itemsPerPage=4&properties%5B%5D=id&properties%5B%5D=slug&properties%5B%5D=title&properties%5B%5D=publishedAt&properties%5B%5D=remoteMode&properties%5Bcompany%5D%5B%5D=name&properties%5Blocation%5D%5B%5D=label&properties%5Blocation%5D%5B%5D=countryCode&page=1",
+  "hydra:last": "/job_postings?itemsPerPage=4&properties%5B%5D=id&properties%5B%5D=slug&properties%5B%5D=title&properties%5B%5D=publishedAt&properties%5B%5D=remoteMode&properties%5Bcompany%5D%5B%5D=name&properties%5Blocation%5D%5B%5D=label&properties%5Blocation%5D%5B%5D=countryCode&page=2911",
+  "hydra:next": "/job_postings?itemsPerPage=4&properties%5B%5D=id&properties%5B%5D=slug&properties%5B%5D=title&properties%5B%5D=publishedAt&properties%5B%5D=remoteMode&properties%5Bcompany%5D%5B%5D=name&properties%5Blocation%5D%5B%5D=label&properties%5Blocation%5D%5B%5D=countryCode&page=2"
+ }
+}

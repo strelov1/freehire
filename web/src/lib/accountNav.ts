@@ -51,15 +51,13 @@ export const accountNav = [
   // The notification center: delivery history, saved-search alerts, and the
   // account-level reminder/nudge settings, as three tabs of one section.
   { href: '/my/notifications', label: 'Notifications' },
-  // Connect/disconnect surface for third-party accounts: Google (Gmail + Calendar)
-  // and Telegram (the alert bot, decoupled from any one saved search). Each
-  // connection's own domain page keeps a short status line pointing here instead of
-  // duplicating the connect/disconnect UI.
+  // Everything that connects the account to something outside it, as three tabs:
+  // third-party accounts — Google (Gmail + Calendar) and Telegram (the alert bot,
+  // decoupled from any one saved search) — API keys, and the saved-search webhook (one
+  // URL + secret per account, signed HTTP POSTs on the same matches email/Telegram
+  // alerts carry). Each connection's own domain page keeps a short status line pointing
+  // here instead of duplicating the connect/disconnect UI.
   { href: '/my/integrations', label: 'Integrations' },
-  { href: '/my/api-keys', label: 'API keys' },
-  // The saved-search webhook destination: one URL + secret per account, signed
-  // HTTP POSTs on the same matches email/Telegram alerts already carry.
-  { href: '/my/webhook', label: 'Webhook' },
   { href: '/my/submissions', label: 'My submissions' },
   // Paste a job link we don't have yet; a supported, novel link adds a board we don't crawl.
   { href: '/my/contributions', label: 'Contributions' },
@@ -74,8 +72,8 @@ export const accountNav = [
   // which is an unrelated feature — two sections sharing a name would be a menu nobody
   // can navigate.
   { href: '/my/invite', label: 'Invite a friend' },
-  // Password and sessions: change the password, and sign out everywhere when a
-  // device is lost or a session is suspect.
+  // Email, password and sessions: change the address or the password, and sign out
+  // everywhere when a device is lost or a session is suspect.
   { href: '/my/security', label: 'Security' },
 ] as const;
 

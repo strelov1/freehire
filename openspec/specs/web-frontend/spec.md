@@ -286,7 +286,7 @@ are unaffected.
 
 ### Requirement: API key management page
 
-The SPA SHALL provide an API-keys management page at `/my/api-keys`, reachable
+The SPA SHALL provide an API-keys management page at `/my/integrations/api-keys`, reachable
 from the authenticated user menu, where a signed-in user can list, create, and
 revoke their API keys. The list SHALL show each key's name, display prefix,
 created time, last-used time (or "never"), and expiry. Creating a key SHALL
@@ -299,7 +299,7 @@ users.
 #### Scenario: Reaching the page from the user menu
 
 - **WHEN** a signed-in user opens the user menu and selects "API keys"
-- **THEN** the SPA navigates to `/my/api-keys` and lists the user's keys with name,
+- **THEN** the SPA navigates to `/my/integrations/api-keys` and lists the user's keys with name,
   prefix, created, last-used, and expiry
 
 #### Scenario: Creating a key reveals the secret once

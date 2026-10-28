@@ -225,7 +225,7 @@
     <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">Start with the free API, ship with a key.</h2>
     <div class="mt-8 flex flex-wrap justify-center gap-3">
       <Button href="#plans" variant="primary" size="lg">Choose a plan</Button>
-      <Button href={resolve('/my/api-keys')} variant="outline" size="lg">Your API keys</Button>
+      <Button href={resolve('/my/integrations/api-keys')} variant="outline" size="lg">Your API keys</Button>
     </div>
   </section>
 </div>

@@ -20,7 +20,7 @@ class Notifications extends UserResource<Loaded> {
   #telegram = $state.raw<TelegramStatus>(disabled);
   #subs = $state.raw<Subscription[]>([]);
   // The account's webhook destination, if any — read here (rather than only on
-  // /my/webhook) so AlertChannels can tell whether the `webhook` chip has anywhere
+  // /my/integrations/webhook) so AlertChannels can tell whether the `webhook` chip has anywhere
   // to point before offering it.
   #webhook = $state.raw<WebhookConfig | null>(null);
   // Whether the mobile app has registered a device — push reaches nothing else,

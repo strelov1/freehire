@@ -1002,7 +1002,7 @@ components:
       type: http
       scheme: bearer
       description: |
-        A full-access API key (`fhk_…`) from https://freehire.me/my/api-keys. Optional:
+        A full-access API key (`fhk_…`) from https://freehire.me/my/integrations/api-keys. Optional:
         it raises the rate limit to the account's API plan and changes nothing else.
   responses:
     Error:

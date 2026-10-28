@@ -51,7 +51,7 @@
   <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
     Needs your own
     <a
-      href={resolve('/my/api-keys')}
+      href={resolve('/my/integrations/api-keys')}
       class="font-medium text-foreground underline-offset-4 hover:underline">API key</a
     > and the CLI installed and signed in — setup and the rest of the commands are on the
     <a href={resolve('/cli')} class="font-medium text-foreground underline-offset-4 hover:underline"

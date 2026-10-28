@@ -56,7 +56,7 @@ async function main() {
   // prose while saying they are unavailable. A green check that had come to mean the
   // opposite of its name is worse than no check.
   assert('does not document key management as an endpoint', !a.includes('## API keys'));
-  assert('sends the reader to the account surface', a.includes('freehire.me/my/api-keys'));
+  assert('sends the reader to the account surface', a.includes('freehire.me/my/integrations/api-keys'));
 
   // Deprecated endpoints render a note naming the replacement. No shipped endpoint
   // currently carries `deprecated`, so this exercises the mechanism on a synthetic
