@@ -728,6 +728,14 @@ func All(c HTTPClient) map[string]Source {
 	if key := os.Getenv("REED_API_KEY"); c == nil || key != "" {
 		registry["reed"] = NewReed(c, key)
 	}
+	// France Travail's credential is an OAuth2 client pair issued to an application registered
+	// on francetravail.io; both must be set, and the transport must answer the search's 204.
+	if id, secret := os.Getenv("FRANCE_TRAVAIL_CLIENT_ID"), os.Getenv("FRANCE_TRAVAIL_CLIENT_SECRET"); c == nil || (id != "" && secret != "") {
+		ft, ok := c.(francetravailHTTP)
+		if c == nil || ok {
+			registry["francetravail"] = NewFranceTravail(ft, id, secret)
+		}
+	}
 	// Adzuna's credential is an app_id/app_key pair rather than a single key; both must be set.
 	if appID, appKey := os.Getenv("ADZUNA_APP_ID"), os.Getenv("ADZUNA_APP_KEY"); c == nil || (appID != "" && appKey != "") {
 		registry["adzuna"] = NewAdzuna(c, appID, appKey)

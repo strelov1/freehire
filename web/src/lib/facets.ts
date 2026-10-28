@@ -480,6 +480,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   infoempleo: 'Infoempleo',
   bumeran: 'Bumeran',
   servicepublic: 'Choisir le service public',
+  francetravail: 'France Travail',
   freework: 'Free-Work',
   cadremploi: 'Cadremploi',
   jobteaser: 'JobTeaser',
