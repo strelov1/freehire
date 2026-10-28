@@ -899,6 +899,9 @@ func All(c HTTPClient) map[string]Source {
 	// posting pages need the Scrapling tier (see scraplingProviders), so over this plain client
 	// only the sitemap is read. See turijobs.go.
 	registry["turijobs"] = NewTurijobs(c, c)
+	// Taleez: a French ATS with no per-customer listing, enumerated from its job sitemap, each
+	// new posting read from its page's schema.org JobPosting. See taleez.go.
+	registry["taleez"] = NewTaleez(c, c)
 	// SAPO Emprego: a Portuguese general job board, enumerated from its offers sitemap, each new
 	// posting's facts read from its page's schema.org JobPosting. See sapoemprego.go.
 	registry["sapoemprego"] = NewSapoEmprego(c)

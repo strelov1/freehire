@@ -1147,6 +1147,14 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **Posters are hotel groups and restaurants** (Meliá, Barceló, Hesperia, Vértice); the chains that run their own ATS are left to the coverage gate after the fact, since the gate cannot be asked before the page names them.
 - **The run is bounded**: one request a second, two workers, at most `turijobsMaxNewPerRun` (600) unseen pages a run, newest id first, stopping 5 minutes before the run's deadline.
 
+**Taleez traps** (`taleez`; live-verified 2026-10-28 from a residential IP and the crawl host):
+
+- **A French ATS with no per-customer listing**: `taleez.com/careers/<slug>` answers 404 and `<slug>.taleez.com` is wildcard DNS, so the provider is boardless and the posting set is `/sitemap-job.xml` (12,136 `/apply/<token>` URLs on 2026-10-28, no `lastmod`, OLDEST first — the adapter reverses it). robots.txt allows ClaudeBot and disallows `/api/`, `/feeds/` and `/widgets/`; none is read.
+- **The token is the identity**: a short id (`fmudc`) or a title slug, equal to the JobPosting's `identifier.value`. A removed token answers **404**; a 200 without a JobPosting counts as no answer.
+- **The page's schema.org JobPosting is the posting**: `description` plus a separate `qualifications` block, `hiringOrganization.name` (the employer), `datePosted` with a `+0200` offset, `employmentType` as a list in which `TEMPORARY` is a French CDD and states nothing on its own.
+- **Marked `aggregator` only because it serves many employers under one provider** (that is what keeps it in the source facet); its URLs are the employers' own application pages. Not `fullCatalog`: nothing states how many postings the sitemap should hold.
+- **The run is bounded**: one request a second (a quick burst drew a refused connection), two workers, `hydrationLanes` of 900 newest + 300 backlog unseen pages a run, stopping 5 minutes before the deadline.
+
 **SpainJobs.io traps** (`spainjobs`; live-verified 2026-10-27 from a residential IP):
 
 - **An English-language board that gathers Spanish employers' own career-page postings** and rewrites each in English (Spanish under `/es/`; the page says "This job advert was originally written in Spanish"), with the employer's own apply link. 92,666 postings across ~3.5k employers on 2026-10-27, ~2k new a day. `robots.txt` allows everything but `/api/`, search and `_rsc` URLs, names no Claude agent and sets `Content-Signal: ai-input=yes`. Plain HTTP passes.
