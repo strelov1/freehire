@@ -4,6 +4,9 @@
   import TailorLandingView from '#lib/components/TailorLandingView.svelte';
   import { faqPageJsonLd, jsonLdScript } from '#lib/seo.js';
   import { TAILOR_FAQ } from '#lib/tailorFaq.js';
+  import type { PageData } from './$types';
+
+  const { data }: { data: PageData } = $props();
 
   const canonical = $derived(`${page.url.origin}/features/tailor`);
   // The FAQ block and this payload render from the same TAILOR_FAQ array, so the
@@ -12,8 +15,8 @@
 </script>
 
 <Seo
-  title="CV tailoring — rewrite your CV for one job, inventing nothing | freehire"
-  description="freehire reframes your CV toward a single vacancy: it reads the match analysis, pulls forward the experience you already have but buried, asks about anything your history doesn't support, and exports an ATS-readable PDF. Drive it in the browser or from the CLI."
+  title="CV tailoring — your CV rewritten for each job, nothing made up | freehire"
+  description="freehire rewrites your CV for one vacancy at a time: it brings your relevant work forward in the job's own words, asks you about anything your history doesn't support, and shows the job match rising. ATS-readable PDF. Part of Pro."
   {canonical}
 />
 
@@ -23,5 +26,5 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-6xl px-4 py-6">
-  <TailorLandingView />
+  <TailorLandingView price={data.price} />
 </div>

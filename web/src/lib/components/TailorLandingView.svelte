@@ -1,103 +1,110 @@
 <script lang="ts">
-  import TailorWorkspacePreview from './TailorWorkspacePreview.svelte';
   import { resolve } from '$app/paths';
-  import { Button } from '#lib/ui/index.js';
+  import ProCheckoutButton from './ProCheckoutButton.svelte';
+  import TailorHeroDemo from './TailorHeroDemo.svelte';
   import { NumberedGrid, SectionLabel } from '#lib/ui/index.js';
+  import { priceLabel } from '#lib/proPrice.js';
+  import { PRO_PERKS } from '#lib/proPerks.js';
+  import { DEMO_BULLETS, DEMO_ROLE, highlight } from '#lib/tailorDemo.js';
   import { TAILOR_FAQ } from '#lib/tailorFaq.js';
+  import type { PublicPrice } from '#lib/types.js';
 
-  // The requirement split the tailoring context hands the agent. This is the
-  // whole honesty argument of the feature, so it leads the page: what your
-  // history covers is reframed, what it doesn't is asked about, never written.
+  const { price }: { price: PublicPrice | null } = $props();
+
+  const facts = ['3.3M+ live jobs', 'ATS-readable PDF', '9 templates', 'Open source · 3.2k★'];
+
   const split = [
     {
       key: 'have',
-      title: 'Already yours, buried',
-      body: 'Requirements your history covers but the CV states in passing, or three roles down. These get pulled forward and said plainly.',
+      title: "You have it, it's just buried",
+      body: 'Things the job asks for that your history already covers, but your CV mentions in passing or three roles down. These get brought forward and said plainly.',
       sample: ['Kafka at scale', 'Payments migrations', 'Mentoring'],
     },
     {
       key: 'gap',
-      title: 'Not yours yet',
-      body: "Requirements nothing in your history supports. The agent asks you before anything is written — it cannot fill these in on its own.",
+      title: "You don't have it yet",
+      body: 'Things nothing in your history supports. The agent asks you about them. It cannot write them in on its own.',
       sample: ['Kubernetes operators', 'Rust'],
     },
   ];
 
-  // The parts of the CV an edit can address (internal/cvedit). Listed so the page's "you can
-  // see every edit" claim is concrete rather than a mood — and every one of them is recorded
-  // in the CV's history, where it can be undone on its own.
-  const ops = [
-    'summary',
-    'experience[i].bullets[j]',
-    'experience[i].stack[j]',
-    'skills[i].items[j]',
-    'projects[i].bullets[j]',
-    'education[i].degree',
-    'certifications[i].issuer',
-    'style.font_size',
+  const steps = [
+    { n: '01', title: 'Pick a job', body: 'Any live posting in the catalogue. Tailoring always works toward one real vacancy, not a pasted description.' },
+    { n: '02', title: 'See the match', body: 'The match analysis scores your CV against the job and names what is missing. That is what the agent works from.' },
+    { n: '03', title: 'Tailor with the agent, or by hand', body: 'It proposes one edit at a time and you watch the CV change. The editor is right there, so you can overrule anything.' },
+    { n: '04', title: 'Download the PDF', body: 'Pick a template and export. Your original CV stays untouched; this job gets its own copy.' },
   ];
 
-  const steps = [
-    {
-      n: '01',
-      title: 'Analyse the match',
-      body: 'Run the AI match analysis on the vacancy. It scores the match dimension by dimension and names what is missing — the reasoning the tailored CV will work from.',
-    },
-    {
-      n: '02',
-      title: 'Tailor from the result',
-      body: 'One click copies your base CV into a new one bound to that vacancy. Your original is untouched; each job gets its own copy, so nothing you tailor bleeds into the next application.',
-    },
-    {
-      n: '03',
-      title: 'Edit with the agent, or by hand',
-      body: 'The agent reads the analysis and your CV before it says anything, then proposes edits one at a time. The editor is right there — you can overrule any of it and type your own.',
-    },
-    {
-      n: '04',
-      title: 'Export',
-      body: 'Pick a template and download the PDF. Switching templates never touches the content, so you can see the same CV three ways before you send it.',
-    },
-  ];
+  // Every cell must be true for every product in its column. "Varies" where a category
+  // differs product to product; never a guess. No product is named.
+  const priceCell = $derived(price ? `${priceLabel(price)} / month` : 'Pro plan');
+  const compare = $derived([
+    { row: 'Works from a real, live job posting', us: 'Yes', chat: 'You paste it in', builder: 'You paste it in' },
+    { row: "Won't add experience you don't have", us: 'Enforced in code', chat: 'Depends on your prompt', builder: 'Varies' },
+    { row: 'Job match score, before and after', us: 'Yes', chat: 'No', builder: 'Varies' },
+    { row: 'ATS-readable PDF', us: 'Yes', chat: 'You format it', builder: 'Varies' },
+    { row: 'Every edit visible and undoable', us: 'Yes', chat: 'Rewrites the whole text', builder: 'Varies' },
+    { row: 'Price', us: priceCell, chat: 'Varies', builder: 'Varies' },
+  ]);
 </script>
 
 <div class="flex flex-col">
-  <!-- Hero. Left: the pitch. Right: the workspace, as three columns. -->
-  <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-[1.05fr_0.95fr]">
+  <!-- Hero -->
+  <section class="dot-grid -mx-4 grid items-center gap-12 px-4 pb-16 pt-8 lg:grid-cols-2">
     <div>
-      <SectionLabel text="cv tailoring" />
-      <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-[1.0] tracking-tighter sm:text-6xl">
-        Rewrite your CV for one job. Invent nothing.
+      <SectionLabel text="cv tailoring · pro" />
+      <h1 class="mt-6 max-w-2xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
+        Your CV, rewritten for this job. Nothing made up.
       </h1>
       <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-        A generic CV loses to a specific one, and a fabricated one loses the interview. freehire
-        reframes what you have actually done toward the vacancy in front of you — pulling the
-        relevant work forward, saying it in the job's own terms, and asking you about anything it
-        cannot find in your history.
+        freehire reads the vacancy, brings your relevant work forward in the job's own words, and
+        asks you about anything it can't find in your history.
       </p>
       <div class="mt-9 flex flex-wrap items-center gap-3">
-        <Button href={resolve('/jobs')} variant="primary" size="lg">Find a job to tailor for</Button>
-        <Button href={resolve('/my/cvs')} variant="outline" size="lg">Your CVs</Button>
+        <ProCheckoutButton {price} />
+        <a href="#how-it-works" class="text-sm font-medium text-muted-foreground hover:text-foreground">See how it works ↓</a>
       </div>
+      <p class="mt-3 text-xs text-muted-foreground">Cancel any time · Your original CV is never touched.</p>
     </div>
-
-    <TailorWorkspacePreview />
+    <TailorHeroDemo />
   </section>
 
-  <!-- The split. The argument for why this isn't a lying machine. -->
-  <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="reframe, don't fabricate" />
-    <div class="mt-6 max-w-2xl">
-      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">
-        It knows the difference between burying something and not having it.
-      </h2>
-      <p class="mt-5 leading-relaxed text-muted-foreground">
-        Before the agent writes a word, it reads the match analysis for this vacancy and sorts the
-        job's requirements into two piles. That split is the whole feature: one pile is editing,
-        the other is a question.
-      </p>
-    </div>
+  <!-- Fact strip -->
+  <ul class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-4">
+    {#each facts as f (f)}
+      <li class="bg-background px-4 py-3 text-center text-sm font-medium">{f}</li>
+    {/each}
+  </ul>
 
+  <!-- Before and after -->
+  <section class="py-16 sm:py-20">
+    <SectionLabel text="before → after" />
+    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+      Same facts. Said for this job.
+    </h2>
+    <p class="mt-3 text-sm text-muted-foreground">
+      Example, tailored for <span class="font-medium text-foreground">{DEMO_ROLE}</span>. Highlighted words come from the vacancy.
+    </p>
+    <ol class="mt-8 grid gap-4">
+      {#each DEMO_BULLETS as b (b.req)}
+        <li class="grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
+          <p class="bg-background p-4 text-sm text-muted-foreground line-through decoration-muted-foreground/40">{b.before}</p>
+          <p class="bg-background p-4 text-sm">
+            {#each highlight(b.after, b.keywords) as part, i (i)}
+              {#if part.hit}<mark class="rounded bg-brand/15 px-0.5 text-foreground">{part.text}</mark>{:else}{part.text}{/if}
+            {/each}
+          </p>
+        </li>
+      {/each}
+    </ol>
+  </section>
+
+  <!-- Honesty split -->
+  <section class="border-t border-border py-16 sm:py-20">
+    <SectionLabel text="it doesn't make things up" />
+    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
+      It knows the difference between burying something and not having it.
+    </h2>
     <div class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each split as s (s.key)}
         <div class="bg-background p-6 sm:p-7">
@@ -105,123 +112,94 @@
           <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
           <div class="mt-4 flex flex-wrap gap-2">
             {#each s.sample as item (item)}
-              <span
-                class="rounded-md border px-2 py-0.5 font-mono text-xs {s.key === 'have'
-                  ? 'border-success-strong/50 text-success-strong'
-                  : 'border-warning/50 text-warning-strong'}"
-              >
-                {item}
-              </span>
+              <span class="rounded-md border px-2 py-0.5 font-mono text-xs {s.key === 'have' ? 'border-success-strong/50 text-success-strong' : 'border-warning/50 text-warning-strong'}">{item}</span>
             {/each}
           </div>
         </div>
       {/each}
     </div>
-
-    <p class="mt-6 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-      The rule holds below the interface too: an achievement a model inferred is stored marked as
-      the model's, and cannot be written into a CV until you confirm it. That check lives in the
-      code, not in the agent's instructions — which is the difference between a safeguard and a
-      request.
+    <p class="mt-6 max-w-3xl text-sm text-muted-foreground">
+      This rule lives in the code, not in the agent's instructions, and the code is open source.
     </p>
   </section>
 
-  <!-- How it works. -->
-  <section class="border-t border-border py-16 sm:py-20">
+  <!-- How it works -->
+  <section id="how-it-works" class="scroll-mt-20 border-t border-border py-16 sm:py-20">
     <SectionLabel text="how it works" />
     <NumberedGrid items={steps} class="mt-10 sm:grid-cols-2" />
   </section>
 
-  <!-- Edits you can see. -->
+  <!-- What Pro gets you -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="every edit, one at a time" />
+    <SectionLabel text="pro" />
     <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
       <div>
         <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-          No wholesale rewrite to proofread.
+          Tailoring is part of Pro{price ? ` — ${priceLabel(price)} a month` : ''}.
         </h2>
-        <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          The agent cannot replace your CV in one move. It edits through a deliberately narrow
-          vocabulary — one field, one bullet, one ordering at a time — so every change is visible in
-          the live preview as it lands, and reversible if you disagree. Type over any of it: the
-          editor and the agent write to the same document.
-        </p>
-        <div class="mt-8 flex flex-wrap gap-3">
-          <Button href={resolve('/my/cvs')} variant="primary" size="lg">Open your CVs</Button>
-          <Button href={resolve('/cli')} variant="ghost" size="lg">Drive it from the CLI</Button>
+        <p class="mt-4 max-w-md text-muted-foreground">Cancel any time. Search, alerts and tracking stay free.</p>
+        <div class="mt-8 flex flex-wrap items-center gap-3">
+          <ProCheckoutButton {price} />
+          <a href={resolve('/pricing')} class="text-sm font-medium text-muted-foreground hover:text-foreground">Compare plans</a>
         </div>
       </div>
-
-      <div class="flex flex-wrap gap-2">
-        {#each ops as op (op)}
-          <span class="rounded-md border border-border bg-background/60 px-2.5 py-1 font-mono text-xs text-muted-foreground">
-            {op}
-          </span>
+      <ul class="grid gap-px overflow-hidden rounded-xl border border-border bg-border">
+        {#each PRO_PERKS as perk (perk.text)}
+          <li class="bg-background">
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- PRO_PERKS hrefs are built with resolve() in proPerks.ts -->
+            <a href={perk.href} class="block px-5 py-4 text-sm font-medium hover:bg-secondary/50">{perk.text}</a>
+          </li>
         {/each}
-      </div>
+      </ul>
     </div>
   </section>
 
-  <!-- Export. -->
+  <!-- Comparison -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="export" />
-    <div class="mt-6 max-w-2xl">
-      <h2 class="text-3xl font-semibold tracking-tight sm:text-4xl">A PDF a parser can read.</h2>
-      <p class="mt-5 leading-relaxed text-muted-foreground">
-        The CV is typeset into a clean single-column PDF with real text — no tables, no side
-        columns, no words baked into an image — so the ATS on the other end reads what you see.
-        Templates change the typography, never the content, so you can look at the same CV three
-        ways before sending it.
-      </p>
+    <SectionLabel text="compared" />
+    <h2 class="mt-6 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Why not just ask a chatbot?</h2>
+    <div class="mt-10 overflow-x-auto rounded-xl border border-border">
+      <table class="w-full min-w-xl text-left text-sm">
+        <thead class="bg-secondary/50 text-xs uppercase tracking-wide text-muted-foreground">
+          <tr>
+            <th scope="col" class="px-4 py-3 font-medium"><span class="sr-only">Feature</span></th>
+            <th scope="col" class="px-4 py-3 font-semibold text-foreground">freehire</th>
+            <th scope="col" class="px-4 py-3 font-medium">Pasting into a chatbot</th>
+            <th scope="col" class="px-4 py-3 font-medium">A CV builder</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          {#each compare as c (c.row)}
+            <tr>
+              <th scope="row" class="px-4 py-3 font-medium">{c.row}</th>
+              <td class="px-4 py-3 font-medium text-success-strong">{c.us}</td>
+              <td class="px-4 py-3 text-muted-foreground">{c.chat}</td>
+              <td class="px-4 py-3 text-muted-foreground">{c.builder}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
     </div>
   </section>
 
-  <!-- Terminal. -->
+  <!-- Founder note -->
   <section class="border-t border-border py-16 sm:py-20">
-    <SectionLabel text="from the terminal" />
-    <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:items-center">
-      <div>
-        <h2 class="max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-          Or hand the loop to your own agent.
-        </h2>
-        <p class="mt-5 max-w-md leading-relaxed text-muted-foreground">
-          The same flow runs on the freehire CLI with one API key, so a harness you wrote can tailor
-          the CV instead: read the analysis, read the document, apply patches, render. Same rules —
-          the split is in the context it reads, so your agent inherits the honesty constraint rather
-          than being trusted with it.
-        </p>
-        <div class="mt-8 flex flex-wrap gap-3">
-          <Button href={resolve('/cli')} variant="primary" size="lg">Get the CLI</Button>
-          <Button href={resolve('/docs/api')} variant="ghost" size="lg">API reference</Button>
-        </div>
-      </div>
-
-      <figure class="overflow-hidden rounded-xl border border-border bg-secondary/60 font-mono text-sm shadow-sm">
-        <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
-          <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
-          terminal
-        </figcaption>
-        <pre class="overflow-x-auto p-4 leading-relaxed"><span class="text-muted-foreground"># what to reframe toward, and what to ask about</span>
-freehire <span class="text-foreground">cv context &lt;cv-id&gt;</span>
-
-<span class="text-muted-foreground"># the document as JSON</span>
-freehire <span class="text-foreground">cv get &lt;cv-id&gt;</span>
-
-<span class="text-muted-foreground"># one field-level edit</span>
-freehire <span class="text-foreground">cv edit &lt;cv-id&gt; --op set --path 'experience[0].bullets[1]' --value '…'</span>
-
-<span class="text-muted-foreground"># the PDF</span>
-freehire <span class="text-foreground">cv render &lt;cv-id&gt; --out cv.pdf</span></pre>
-      </figure>
-    </div>
+    <figure class="mx-auto max-w-2xl">
+      <blockquote class="text-xl leading-relaxed tracking-tight sm:text-2xl">
+        Most AI CV tools will happily write that you led a Kubernetes migration you never touched.
+        It reads well right up to the first interview question about it. So the agent here works the
+        other way round: it only uses what you actually did, and when the job asks for something it
+        can't find in your history, it asks you instead of writing it. That rule lives in the code,
+        not in a prompt, and the code is open for you to check.
+      </blockquote>
+      <figcaption class="mt-6 text-sm text-muted-foreground">— Ilya Strelov, founder</figcaption>
+    </figure>
   </section>
 
   <!-- FAQ. Visible answers and the FAQPage JSON-LD share TAILOR_FAQ. -->
   <section class="border-t border-border py-16 sm:py-20">
     <SectionLabel text="faq" />
-    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">
-      Frequently asked questions.
-    </h2>
+    <h2 class="mt-6 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Questions people ask before buying.</h2>
     <dl class="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
       {#each TAILOR_FAQ as item (item.question)}
         <div class="bg-background p-6 sm:p-7">
@@ -232,17 +210,14 @@ freehire <span class="text-foreground">cv render &lt;cv-id&gt; --out cv.pdf</spa
     </dl>
   </section>
 
-  <!-- Closing CTA. -->
+  <!-- Closing CTA -->
   <section class="border-t border-border py-16 sm:py-20">
     <div class="flex flex-col items-start gap-4 rounded-xl border border-border bg-secondary/40 p-6 sm:p-8">
       <h2 class="text-2xl font-semibold tracking-tight">Stop sending the same CV everywhere.</h2>
-      <p class="max-w-xl leading-relaxed text-muted-foreground">
-        Find a job worth the effort, run the match analysis, and tailor from it. Ten minutes per
-        application, and nothing on the page that you did not do.
-      </p>
-      <div class="flex flex-wrap gap-3">
-        <Button href={resolve('/jobs')} variant="primary" size="lg">Browse jobs</Button>
-        <Button href={resolve('/my/cvs')} variant="outline" size="lg">Your CVs</Button>
+      <p class="max-w-xl text-muted-foreground">One job, one tailored CV, and nothing on it you didn't do.</p>
+      <div class="flex flex-wrap items-center gap-3">
+        <ProCheckoutButton {price} />
+        <a href={resolve('/jobs')} class="text-sm font-medium text-muted-foreground hover:text-foreground">Browse jobs first</a>
       </div>
     </div>
   </section>
