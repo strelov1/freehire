@@ -96,7 +96,9 @@
       // The resend is gated like the first request; a proof that lapsed meanwhile sends the
       // member back to the first step, where ConfirmIdentity can ask again.
       if (err instanceof ApiError && err.status === 428) {
-        identity?.refused();
+        // ConfirmIdentity is not mounted on this step, so its `refused()` cannot drop the
+        // hint; dropping it here is what makes it ask again when the address step remounts it.
+        forgetRecentAuthExpiry();
         step = 'address';
       }
       errorKey = keyFor(err, false);
@@ -112,17 +114,20 @@
     busy = true;
     try {
       await api.confirmEmailChange(code.trim());
-      // The change revoked every session generation, and the recent-auth proof with it.
-      forgetRecentAuthExpiry();
-      await invalidateAll();
-      changed = true;
-      step = 'address';
-      email = code = '';
     } catch (err) {
       errorKey = keyFor(err, true);
-    } finally {
       busy = false;
+      return;
     }
+    // Committed: the code is spent, so from here nothing may read as a failed change.
+    // The change revoked every session generation, and the recent-auth proof with it.
+    forgetRecentAuthExpiry();
+    changed = true;
+    step = 'address';
+    email = code = '';
+    busy = false;
+    // Best-effort: re-resolve the session so the new address shows everywhere.
+    await invalidateAll().catch(() => {});
   }
 
   function startOver() {

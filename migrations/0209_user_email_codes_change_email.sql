@@ -12,7 +12,7 @@
 -- NULL for every other purpose. user_email_codes is small and short-lived (a row lives at
 -- most 15 minutes), so the constraint rewrite is effectively instant — see 0176.
 ALTER TABLE public.user_email_codes
-    ADD COLUMN target_email text;
+    ADD COLUMN IF NOT EXISTS target_email text;
 
 ALTER TABLE public.user_email_codes
     DROP CONSTRAINT IF EXISTS user_email_codes_purpose_check;
