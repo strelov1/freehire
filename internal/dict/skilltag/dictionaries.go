@@ -1765,7 +1765,9 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"déploiement continu", "ci-cd"}, {"deploiement continu", "ci-cd"},
 	{"intégration et déploiement continus", "ci-cd"},
 	{"integration et deploiement continus", "ci-cd"},
-	{"livraison continue", "ci-cd"},
+	// Not bare "livraison continue": a delivery round promises it too, as "entrega continua".
+	{"intégration et livraison continues", "ci-cd"},
+	{"integration et livraison continues", "ci-cd"},
 	{"infrastructure en tant que code", "infrastructure-as-code"},
 	{"tests unitaires", "unit-testing"}, {"test unitaire", "unit-testing"},
 	{"tests d'intégration", "integration-testing"}, {"tests d'integration", "integration-testing"},
@@ -1818,6 +1820,7 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"bases de données relationnelles", "rdbms"}, {"bases de donnees relationnelles", "rdbms"},
 	{"base de données relationnelle", "rdbms"},
 	{"bases de données vectorielles", "vector-databases"},
+	{"bases de donnees vectorielles", "vector-databases"},
 	{"tests d'intrusion", "penetration-testing"}, {"test d'intrusion", "penetration-testing"},
 	{"tests d’intrusion", "penetration-testing"},
 	{"tests de pénétration", "penetration-testing"},

@@ -18,7 +18,9 @@ func TestParse_FrenchMarket(t *testing.T) {
 	}{
 		{"ci-cd", "Construire les chaînes d'intégration et de déploiement continu (CI/CD)", []string{"ci-cd"}, nil},
 		{"ci-cd plural", "La démarche DevOps : intégration et déploiement continus.", []string{"ci-cd"}, nil},
-		{"ci-cd delivery", "Automatiser la livraison continue des services sur GCP", []string{"ci-cd"}, nil},
+		{"ci-cd delivery", "Mettre en place l'intégration et livraison continues des services", []string{"ci-cd"}, nil},
+		{"delivery round", "Chauffeur livreur : livraison continue de nos clients en tournée.", nil, []string{"ci-cd"}},
+		{"vector db unaccented", "Utilisation de bases de donnees vectorielles pour le RAG", []string{"vector-databases"}, nil},
 		{"observability", "Monitoring / observabilité : Prometheus, Grafana", []string{"observability"}, nil},
 		{"genai", "Maîtrise des technologies de l'IA générative appliquées au développement", []string{"generative-ai"}, nil},
 		{"tests", "Élaborer les tests unitaires et les tests d'intégration ; tests automatisés",
