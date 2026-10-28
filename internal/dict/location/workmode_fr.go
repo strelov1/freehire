@@ -79,8 +79,8 @@ var frenchWorkModePhrases = []struct {
 
 // frenchOnsiteTotality states the job is wholly on site, and outranks the office days a
 // hybrid phrase counts: "évoluerez dans un cadre hybride, mais le poste est 100% sur
-// site", "3 jours sur site … présence sur site uniquement". It is read after the remote
-// list and before the hybrid one.
+// site". It is read after the remote list and before the hybrid one, under the same
+// guards as a remote phrase: "pas 100 % sur site" states no totality.
 var frenchOnsiteTotality = []string{"100% sur site", "100 % sur site", "sur site uniquement",
 	"uniquement sur site", "100% en presentiel", "100 % en presentiel", "100% presentiel",
 	"100 % presentiel", "100% sur place", "100 % sur place"}
@@ -125,16 +125,39 @@ func frenchWorkMode(desc string) string {
 	for _, wm := range frenchWorkModePhrases {
 		if wm.mode == "hybrid" {
 			for _, p := range frenchOnsiteTotality {
-				if guardedPhraseMatches(text, p, "onsite", frenchGuards) {
+				if guardedPhraseMatches(text, p, "totality", frenchGuards) && !frenchOnsiteBounded(text, p) {
 					return "onsite"
 				}
 			}
 		}
 		for _, p := range wm.phrases {
-			if guardedPhraseMatches(text, p, wm.mode, frenchGuards) {
+			if guardedPhraseMatches(text, p, wm.mode, frenchGuards) && (wm.mode != "onsite" || !frenchOnsiteBounded(text, p)) {
 				return wm.mode
 			}
 		}
 	}
 	return ""
+}
+
+// frenchOnsiteBounds mark an onsite statement that holds only for a period: "pas de
+// télétravail pendant la période de formation", "100 % présentiel les 3 premiers mois".
+var frenchOnsiteBounds = []string{"periode d'essai", "periode de formation", "periode d'integration",
+	"premiers mois", "premieres semaines", "pendant la formation", "durant la formation"}
+
+// frenchOnsiteBounded reports whether every occurrence of the onsite phrase p sits in a
+// sentence that bounds it to a period, so the posting states no lasting arrangement.
+func frenchOnsiteBounded(text, p string) bool {
+	found := false
+	for from := 0; ; {
+		i := strings.Index(text[from:], p)
+		if i < 0 {
+			return found
+		}
+		start, end := from+i, from+i+len(p)
+		from = end
+		if !containsAny(sentenceAround(text, start, end), frenchOnsiteBounds) {
+			return false
+		}
+		found = true
+	}
 }

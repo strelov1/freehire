@@ -34,6 +34,8 @@ func TestFrenchWorkModeFromDescription(t *testing.T) {
 		// A negation or a refusal withdraws a remote or hybrid phrase.
 		{"Il n'y a pas de possibilité de télétravail sur ce poste.", "onsite"},
 		{"Télétravail possible : non.", "onsite"},
+		{"Télétravail partiel possible ; pas 100 % sur site.", "hybrid"},
+		{"Pas de télétravail pendant la période de formation.", ""},
 		{"Évoluerez dans un cadre hybride, mais le poste est 100% sur site à Longueuil.", "onsite"},
 		{"Le poste est basé à Lyon, avec t&eacute;l&eacute;travail partiel possible.", "hybrid"},
 		{"Prime télétravail à 100 € par an.", "hybrid"},
