@@ -75,7 +75,8 @@ func newTestServicePublic(f *servicepublicFake) servicepublic {
 		windowPages:    servicepublicWindowPages,
 		maxNewPerRun:   servicepublicMaxNewPerRun,
 		deadlineMargin: servicepublicDeadlineMargin,
-		now:            time.Now,
+		// The window's offset is zero at the epoch, so a short list's window starts at page 1.
+		now: func() time.Time { return time.Unix(0, 0) },
 	}
 }
 
@@ -173,19 +174,27 @@ func TestServicePublicPageWithoutBodyIsNoAnswer(t *testing.T) {
 	}
 }
 
+// Three days of three-hourly runs re-list every page past the head even while the head and the
+// page count move between runs — which they do, and which an offset taken modulo either breaks.
 func TestServicePublicWindowComesRound(t *testing.T) {
 	seen := map[int]bool{}
 	start := time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)
-	for h := 0; h < 24; h += 3 {
-		for _, p := range servicepublicWindow(10, 2160, servicepublicWindowPages, start.Add(time.Duration(h)*time.Hour)) {
-			if p <= 10 || p > 2160 {
-				t.Fatalf("window page %d outside (10, 2160]", p)
+	maxHead, minPages := 0, 1<<30
+	for run := 0; run < 24; run++ {
+		head := 3 + run%7
+		pages := 2160 + run*6
+		maxHead, minPages = max(maxHead, head), min(minPages, pages)
+		for _, p := range servicepublicWindow(head, pages, servicepublicWindowPages, start.Add(time.Duration(run*3)*time.Hour)) {
+			if p <= head || p > pages {
+				t.Fatalf("window page %d outside (%d, %d]", p, head, pages)
 			}
 			seen[p] = true
 		}
 	}
-	if len(seen) != 2150 {
-		t.Errorf("a day of three-hourly windows read %d of the 2,150 pages after the head", len(seen))
+	for p := maxHead + 1; p <= minPages; p++ {
+		if !seen[p] {
+			t.Fatalf("page %d never re-listed in three days", p)
+		}
 	}
 }
 

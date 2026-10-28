@@ -59,9 +59,11 @@ const (
 	// a few pages, and a cold start reads this many before turning to the window.
 	servicepublicHeadPages = 150
 	// servicepublicWindowPages is the refresh window: 300 pages a run, advanced by 100 pages an
-	// hour, comes round the whole ~2,200-page list in under a day at a three-hour cadence.
+	// hour, comes round a ~2,500-page cycle in about a day at a three-hour cadence.
 	servicepublicWindowPages = 300
 	servicepublicWindowStep  = 100
+	// servicepublicWindowCycle is the granularity the window's cycle is rounded up to.
+	servicepublicWindowCycle = 500
 	// servicepublicSweepGrace leaves the window three turns to come round before a stored
 	// posting it has not re-listed is closed.
 	servicepublicSweepGrace = 72 * time.Hour
@@ -250,19 +252,24 @@ func (s servicepublic) list(ctx context.Context, seen func(string) bool) ([]serv
 	return out, nil
 }
 
-// servicepublicWindow is the run's refresh window: windowPages pages after the head, starting
-// at an offset that advances by servicepublicWindowStep every hour and wraps around the pages
-// after the head.
+// servicepublicWindow is the run's refresh window: up to windowPages absolute page numbers past
+// the head, at an offset that advances by servicepublicWindowStep every hour around a cycle of
+// the page count rounded up to the next 500. The cycle must not follow the head or the exact page
+// count, both of which move between runs (the head ends wherever known postings begin, the list
+// grows ~50 pages a day): an offset taken modulo a value that moves by one jumps to an arbitrary
+// page, and consecutive windows stop sweeping the list in order. Rounded up, the cycle changes
+// only every ten days or so, and the pages of the cycle past the list's end are skipped.
 func servicepublicWindow(head, pages, windowPages int, now time.Time) []int {
-	rest := pages - head
-	if rest <= 0 || windowPages <= 0 {
+	if pages <= head || windowPages <= 0 {
 		return nil
 	}
-	n := min(windowPages, rest)
-	start := int((now.Unix() / 3600 * servicepublicWindowStep) % int64(rest))
-	out := make([]int, 0, n)
-	for i := 0; i < n; i++ {
-		out = append(out, head+1+(start+i)%rest)
+	cycle := (pages/servicepublicWindowCycle + 1) * servicepublicWindowCycle
+	start := int((now.Unix() / 3600 * servicepublicWindowStep) % int64(cycle))
+	var out []int
+	for i := 0; i < windowPages; i++ {
+		if p := 1 + (start+i)%cycle; p > head && p <= pages {
+			out = append(out, p)
+		}
 	}
 	return out
 }
