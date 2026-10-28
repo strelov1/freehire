@@ -21,7 +21,7 @@ import (
 // verbatim — the same capabilities the in-app assistant exposes, not a second
 // implementation of them. Which of them are served is mcpAccountTools' answer.
 func mountMCPAccount(api fiber.Router, mw middleware, assistants *assistantHandlers, frontendOrigin string) {
-	tools := mcpAccountTools(assistants)
+	tools := mcpAccountTools(assistants, frontendOrigin)
 	// Same reasoning as the public /mcp mount: agentSearchLimiter bounds how
 	// hard a machine may ask, applied here too since every tool still reaches
 	// the catalogue and the tracking board. Authentication runs as a real
@@ -40,9 +40,10 @@ func mountMCPAccount(api fiber.Router, mw middleware, assistants *assistantHandl
 // there is no card renderer, so a model obeying that description shows the
 // person nothing at all. Without the tool, the model writes the links
 // search_jobs already hands it.
-func mcpAccountTools(assistants *assistantHandlers) []assistant.Tool {
+func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.Tool {
 	all := append(assistants.assistantDiscoveryTools(), assistants.assistantTrackingTools()...)
 	all = append(all, assistants.autoApplyMCPTools()...)
+	all = append(all, assistants.subscriptionMCPTools(origin)...)
 	return slices.DeleteFunc(all, func(t assistant.Tool) bool { return t.Name == presentJobsToolName })
 }
 

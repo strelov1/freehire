@@ -40,7 +40,8 @@ func (r *QueriesRepository) List(ctx context.Context, userID int64) ([]Subscript
 				Active:        row.Active,
 				CreatedAt:     pgconv.TimePtr(row.CreatedAt),
 			},
-			SavedSearchName: row.SavedSearchName,
+			SavedSearchName:  row.SavedSearchName,
+			SavedSearchQuery: row.SavedSearchQuery,
 		}
 	}
 	return out, nil

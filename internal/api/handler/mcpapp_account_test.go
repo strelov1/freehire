@@ -104,8 +104,15 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"answer_bank_save":      assistant.EffectOverwrites,
 		"answer_bank_delete":    assistant.EffectOverwrites,
 		"screening_answers_set": assistant.EffectOverwrites,
+
+		"list_subscriptions":   assistant.EffectReads,
+		"subscription_updates": assistant.EffectReads,
+		// Adds a saved search (or reuses one) and a subscription; removes nothing.
+		"subscribe": assistant.EffectAdds,
+		// Deletes the subscription and its match record.
+		"unsubscribe": assistant.EffectOverwrites,
 	}
-	for _, tool := range mcpAccountTools(&assistantHandlers{}) {
+	for _, tool := range mcpAccountTools(&assistantHandlers{}, testMCPOrigin) {
 		effect, known := want[tool.Name]
 		if !known {
 			t.Errorf("%s: served on the MCP account server but not classified here", tool.Name)
@@ -126,7 +133,7 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 // writing job links; served to Claude or ChatGPT it would leave the person seeing no
 // vacancies at all.
 func TestMCPAccountTools_LeavesOutPresentJobs(t *testing.T) {
-	tools := mcpAccountTools(&assistantHandlers{})
+	tools := mcpAccountTools(&assistantHandlers{}, testMCPOrigin)
 	for _, tool := range tools {
 		if tool.Name == presentJobsToolName {
 			t.Fatalf("%s is served on the MCP account server, which has no card renderer", presentJobsToolName)

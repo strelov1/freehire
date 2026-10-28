@@ -36,7 +36,7 @@ type mcpToolCaller struct {
 
 func newMCPToolCaller(t *testing.T, h *assistantHandlers, userID int64) *mcpToolCaller {
 	t.Helper()
-	server := mcpapp.NewAccountServer(mcpAccountTools(h), userID, testMCPOrigin)
+	server := mcpapp.NewAccountServer(mcpAccountTools(h, testMCPOrigin), userID, testMCPOrigin)
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	go func() { _ = server.Run(context.Background(), serverTransport) }()
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).

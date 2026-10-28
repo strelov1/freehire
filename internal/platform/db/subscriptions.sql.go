@@ -275,6 +275,42 @@ func (q *Queries) ExpireStaleSubscriptionMatches(ctx context.Context, arg Expire
 	return result.RowsAffected(), nil
 }
 
+const getAlertChannelState = `-- name: GetAlertChannelState :one
+SELECT COALESCE(ns.alerts_email_enabled, true)::boolean AS email_alerts_enabled,
+       EXISTS(SELECT 1 FROM telegram_links tl WHERE tl.user_id = u.id) AS telegram_linked,
+       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = u.id) AS has_push_device,
+       COALESCE(wc.enabled, false)::boolean AS webhook_enabled
+FROM users u
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+LEFT JOIN webhook_configs wc ON wc.user_id = u.id
+WHERE u.id = $1
+`
+
+type GetAlertChannelStateRow struct {
+	EmailAlertsEnabled bool `json:"email_alerts_enabled"`
+	TelegramLinked     bool `json:"telegram_linked"`
+	HasPushDevice      bool `json:"has_push_device"`
+	WebhookEnabled     bool `json:"webhook_enabled"`
+}
+
+// Which delivery channels can actually reach this account right now — the same live
+// checks the delivery worker makes before sending (GetSubscriptionForDelivery's
+// telegram_chat_id, has_push_device and webhook_url/enabled, and
+// ListActiveSubscriptions' alerts_email_enabled gate on the email channel). The signed-in
+// MCP server reads it so an agent can only subscribe on a channel that will deliver,
+// instead of creating a subscription whose matches are soft-skipped forever.
+func (q *Queries) GetAlertChannelState(ctx context.Context, id int64) (GetAlertChannelStateRow, error) {
+	row := q.db.QueryRow(ctx, getAlertChannelState, id)
+	var i GetAlertChannelStateRow
+	err := row.Scan(
+		&i.EmailAlertsEnabled,
+		&i.TelegramLinked,
+		&i.HasPushDevice,
+		&i.WebhookEnabled,
+	)
+	return i, err
+}
+
 const getJobsForDigest = `-- name: GetJobsForDigest :many
 SELECT id, title, company, public_slug, url, posted_at,
        COALESCE((enrichment->>'salary_min')::int, 0)::int AS salary_min,
@@ -468,6 +504,123 @@ func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubs
 			&i.Destination,
 			&i.StartAt,
 			&i.Query,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubscriptionDeliveryStats = `-- name: ListSubscriptionDeliveryStats :many
+SELECT m.subscription_id,
+       count(*) FILTER (WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL) AS pending,
+       max(m.notified_at)::timestamptz AS last_delivered_at
+FROM subscription_matches m
+JOIN subscriptions s ON s.id = m.subscription_id
+WHERE s.user_id = $1
+GROUP BY m.subscription_id
+`
+
+type ListSubscriptionDeliveryStatsRow struct {
+	SubscriptionID  int64              `json:"subscription_id"`
+	Pending         int64              `json:"pending"`
+	LastDeliveredAt pgtype.Timestamptz `json:"last_delivered_at"`
+}
+
+// Per subscription of one account: how many matches still wait to be delivered and when
+// one was last delivered. "Pending" is the claim's own predicate (not notified, failed or
+// expired), so the figure is what the next digest will draw from. A subscription with no
+// match yet has no row; the caller reads that as zero and never.
+func (q *Queries) ListSubscriptionDeliveryStats(ctx context.Context, userID int64) ([]ListSubscriptionDeliveryStatsRow, error) {
+	rows, err := q.db.Query(ctx, listSubscriptionDeliveryStats, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubscriptionDeliveryStatsRow{}
+	for rows.Next() {
+		var i ListSubscriptionDeliveryStatsRow
+		if err := rows.Scan(&i.SubscriptionID, &i.Pending, &i.LastDeliveredAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubscriptionUpdates = `-- name: ListSubscriptionUpdates :many
+SELECT m.subscription_id, ss.name AS saved_search_name, m.matched_at, m.notified_at,
+       j.title, j.company, j.location, j.public_slug, j.posted_at
+FROM subscription_matches m
+JOIN subscriptions s ON s.id = m.subscription_id
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+JOIN jobs j ON j.id = m.job_id
+WHERE s.user_id = $1
+  AND ($2::bigint IS NULL OR s.id = $2::bigint)
+  AND m.matched_at >= $3::timestamptz
+  AND j.closed_at IS NULL
+  AND NOT j.is_private
+ORDER BY m.matched_at DESC, m.job_id DESC
+LIMIT $4
+`
+
+type ListSubscriptionUpdatesParams struct {
+	UserID         int64              `json:"user_id"`
+	SubscriptionID pgtype.Int8        `json:"subscription_id"`
+	Since          pgtype.Timestamptz `json:"since"`
+	RowLimit       int32              `json:"row_limit"`
+}
+
+type ListSubscriptionUpdatesRow struct {
+	SubscriptionID  int64              `json:"subscription_id"`
+	SavedSearchName string             `json:"saved_search_name"`
+	MatchedAt       pgtype.Timestamptz `json:"matched_at"`
+	NotifiedAt      pgtype.Timestamptz `json:"notified_at"`
+	Title           string             `json:"title"`
+	Company         string             `json:"company"`
+	Location        string             `json:"location"`
+	PublicSlug      string             `json:"public_slug"`
+	PostedAt        pgtype.Timestamptz `json:"posted_at"`
+}
+
+// The postings the notify worker matched to one account's subscriptions since a moment,
+// newest match first — the ledger the digests are built from, read rather than re-run,
+// so "what is new" answers exactly what the alerts were (or will be) about. Scoped to the
+// owner in SQL; subscription_id narrows to one when given. A posting that has closed
+// since is left out: it is no longer something to apply to. So is a private posting, which
+// the matcher never records (it reads the public index) and which must not reach anyone else. Delivery state is returned
+// so the reader can tell an already-mailed match from one still queued.
+func (q *Queries) ListSubscriptionUpdates(ctx context.Context, arg ListSubscriptionUpdatesParams) ([]ListSubscriptionUpdatesRow, error) {
+	rows, err := q.db.Query(ctx, listSubscriptionUpdates,
+		arg.UserID,
+		arg.SubscriptionID,
+		arg.Since,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSubscriptionUpdatesRow{}
+	for rows.Next() {
+		var i ListSubscriptionUpdatesRow
+		if err := rows.Scan(
+			&i.SubscriptionID,
+			&i.SavedSearchName,
+			&i.MatchedAt,
+			&i.NotifiedAt,
+			&i.Title,
+			&i.Company,
+			&i.Location,
+			&i.PublicSlug,
+			&i.PostedAt,
 		); err != nil {
 			return nil, err
 		}

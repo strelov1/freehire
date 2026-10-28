@@ -71,10 +71,12 @@ type Subscription struct {
 }
 
 // SubscriptionListItem is a subscription joined to its saved search's display name, so the
-// "My subscriptions" view can label each toggle.
+// "My subscriptions" view can label each toggle, and its stored query, so a surface that
+// cannot render the filter panel (the signed-in MCP server) can say what it selects.
 type SubscriptionListItem struct {
 	Subscription
-	SavedSearchName string
+	SavedSearchName  string
+	SavedSearchQuery string
 }
 
 // Repository is the persistence contract, user-scoped. Create maps a unique

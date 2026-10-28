@@ -316,3 +316,54 @@ ORDER BY ss.name;
 UPDATE subscriptions
 SET active = false
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) AND channel = 'email' AND active;
+
+-- name: GetAlertChannelState :one
+-- Which delivery channels can actually reach this account right now — the same live
+-- checks the delivery worker makes before sending (GetSubscriptionForDelivery's
+-- telegram_chat_id, has_push_device and webhook_url/enabled, and
+-- ListActiveSubscriptions' alerts_email_enabled gate on the email channel). The signed-in
+-- MCP server reads it so an agent can only subscribe on a channel that will deliver,
+-- instead of creating a subscription whose matches are soft-skipped forever.
+SELECT COALESCE(ns.alerts_email_enabled, true)::boolean AS email_alerts_enabled,
+       EXISTS(SELECT 1 FROM telegram_links tl WHERE tl.user_id = u.id) AS telegram_linked,
+       EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = u.id) AS has_push_device,
+       COALESCE(wc.enabled, false)::boolean AS webhook_enabled
+FROM users u
+LEFT JOIN notification_settings ns ON ns.user_id = u.id
+LEFT JOIN webhook_configs wc ON wc.user_id = u.id
+WHERE u.id = $1;
+
+-- name: ListSubscriptionDeliveryStats :many
+-- Per subscription of one account: how many matches still wait to be delivered and when
+-- one was last delivered. "Pending" is the claim's own predicate (not notified, failed or
+-- expired), so the figure is what the next digest will draw from. A subscription with no
+-- match yet has no row; the caller reads that as zero and never.
+SELECT m.subscription_id,
+       count(*) FILTER (WHERE m.notified_at IS NULL AND m.failed_at IS NULL AND m.expired_at IS NULL) AS pending,
+       max(m.notified_at)::timestamptz AS last_delivered_at
+FROM subscription_matches m
+JOIN subscriptions s ON s.id = m.subscription_id
+WHERE s.user_id = $1
+GROUP BY m.subscription_id;
+
+-- name: ListSubscriptionUpdates :many
+-- The postings the notify worker matched to one account's subscriptions since a moment,
+-- newest match first — the ledger the digests are built from, read rather than re-run,
+-- so "what is new" answers exactly what the alerts were (or will be) about. Scoped to the
+-- owner in SQL; subscription_id narrows to one when given. A posting that has closed
+-- since is left out: it is no longer something to apply to. So is a private posting, which
+-- the matcher never records (it reads the public index) and which must not reach anyone else. Delivery state is returned
+-- so the reader can tell an already-mailed match from one still queued.
+SELECT m.subscription_id, ss.name AS saved_search_name, m.matched_at, m.notified_at,
+       j.title, j.company, j.location, j.public_slug, j.posted_at
+FROM subscription_matches m
+JOIN subscriptions s ON s.id = m.subscription_id
+JOIN saved_searches ss ON ss.id = s.saved_search_id
+JOIN jobs j ON j.id = m.job_id
+WHERE s.user_id = sqlc.arg(user_id)
+  AND (sqlc.narg(subscription_id)::bigint IS NULL OR s.id = sqlc.narg(subscription_id)::bigint)
+  AND m.matched_at >= sqlc.arg(since)::timestamptz
+  AND j.closed_at IS NULL
+  AND NOT j.is_private
+ORDER BY m.matched_at DESC, m.job_id DESC
+LIMIT sqlc.arg(row_limit);

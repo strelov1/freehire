@@ -2299,6 +2299,13 @@ type Querier interface {
 	GetActiveUserByIdentity(ctx context.Context, arg GetActiveUserByIdentityParams) (GetActiveUserByIdentityRow, error)
 	// Whether a connected MCP agent may act on this account's auto-apply attempts (migration 0196).
 	GetAgentsMayApply(ctx context.Context, id int64) (bool, error)
+	// Which delivery channels can actually reach this account right now — the same live
+	// checks the delivery worker makes before sending (GetSubscriptionForDelivery's
+	// telegram_chat_id, has_push_device and webhook_url/enabled, and
+	// ListActiveSubscriptions' alerts_email_enabled gate on the email channel). The signed-in
+	// MCP server reads it so an agent can only subscribe on a channel that will deliver,
+	// instead of creating a subscription whose matches are soft-skipped forever.
+	GetAlertChannelState(ctx context.Context, id int64) (GetAlertChannelStateRow, error)
 	// The caller's own current stage for a job, or pgx.ErrNoRows when no application row
 	// exists yet — the check behind "put the job on the board at stage preparing when auto-apply
 	// starts, but never move a job already on the board" (auto-apply-review-tracking): a NULL
@@ -4803,6 +4810,19 @@ type Querier interface {
 	// The API product's columns (0184) are here for the same reason: an API subscriber holds no
 	// Pro or Ultra entitlement at all.
 	ListSubscribersNearProExpiryStripe(ctx context.Context, arg ListSubscribersNearProExpiryStripeParams) ([]ListSubscribersNearProExpiryStripeRow, error)
+	// Per subscription of one account: how many matches still wait to be delivered and when
+	// one was last delivered. "Pending" is the claim's own predicate (not notified, failed or
+	// expired), so the figure is what the next digest will draw from. A subscription with no
+	// match yet has no row; the caller reads that as zero and never.
+	ListSubscriptionDeliveryStats(ctx context.Context, userID int64) ([]ListSubscriptionDeliveryStatsRow, error)
+	// The postings the notify worker matched to one account's subscriptions since a moment,
+	// newest match first — the ledger the digests are built from, read rather than re-run,
+	// so "what is new" answers exactly what the alerts were (or will be) about. Scoped to the
+	// owner in SQL; subscription_id narrows to one when given. A posting that has closed
+	// since is left out: it is no longer something to apply to. So is a private posting, which
+	// the matcher never records (it reads the public index) and which must not reach anyone else. Delivery state is returned
+	// so the reader can tell an already-mailed match from one still queued.
+	ListSubscriptionUpdates(ctx context.Context, arg ListSubscriptionUpdatesParams) ([]ListSubscriptionUpdatesRow, error)
 	// The caller's subscriptions joined to each saved search's display name and query,
 	// newest first — the "My subscriptions" view.
 	ListSubscriptions(ctx context.Context, userID int64) ([]ListSubscriptionsRow, error)

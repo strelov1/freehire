@@ -13,6 +13,14 @@ a catalogue view. Authentication for it is a Fiber middleware in
 `internal/api/handler/mcpapp_account.go`, ahead of this package's own code — see
 `AccountUserIDHeader`'s doc comment in `account.go` for why.
 
+The account server's job-alert tools (`subscribe`, `list_subscriptions`, `unsubscribe`,
+`subscription_updates`, in `internal/api/handler/assistant_subscription_tools.go`) save a
+search and subscribe it through `savedsearch.Service` and `subscription.Service` — the
+website's alert button's own use cases, so `search.Narrows` and the push-device rule are
+enforced once. A subscription is only created on a channel the delivery worker would
+actually reach (`GetAlertChannelState`); "what is new" reads `subscription_matches`, the
+ledger the digests are built from, rather than re-running the search.
+
 ## Why there are two MCP servers
 
 `internal/api/ojcpmcp` serves the Open Job Context Protocol. This one serves OpenAI's Apps
