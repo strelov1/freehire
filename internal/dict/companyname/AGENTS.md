@@ -52,7 +52,8 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
   its purpose — "Student Casual"; a name split by "|" is read part by part), Dayforce's `candidateCorrespondenceClientName` in the
   careers page's Next.js data (a department such as "Human Resources" is refused), UKG's
   header-logo alt text ("Default Brand" refused, a " Brand" tail cut), Taleo's footer
-  copyright, falling back to its header-logo alt text. Workday was tried and is absent on
+  copyright, falling back to its header-logo alt text, HiringRoom's portal title
+  (`¡Oportunidades de Empleo en {Name}!` or `{Name} | Portal externo`). Workday was tried and is absent on
   purpose; ADP is not in this registry either, because it states the employer nowhere but in
   the posting text — see below;
   the constructor's comment says why for each.
