@@ -106,6 +106,8 @@ func TestRecognize(t *testing.T) {
 		{"werecruit listing", "https://careers.werecruit.io/fr/axiom-services", "werecruit", "fr/axiom-services", "https://careers.werecruit.io/fr/axiom-services", true},
 		{"werecruit only a locale segment", "https://careers.werecruit.io/en", "", "", "", false},
 		{"werecruit bare host", "https://careers.werecruit.io/", "", "", "", false},
+		{"werecruit redirect page is not a tenant", "https://careers.werecruit.io/en/redirectToPage", "", "", "", false},
+		{"werecruit redirect page with a query", "https://careers.werecruit.io/fr/redirecttopage?to=offers", "", "", "", false},
 
 		// pathlocale — Rippling: an optional leading xx-XX locale segment is skipped; canonical
 		// collapses to the board root so a locale-prefixed vacancy, a bare vacancy, and the

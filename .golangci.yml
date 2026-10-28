@@ -261,6 +261,8 @@ linters:
         - economisch
         - defensie
         - ierland
+        # French work-arrangement vocabulary (internal/dict/location/workmode_fr.go).
+        - partiel
         # Spanish title vocabulary (internal/dict/classify/spanish.go).
         - bomberos
         - clientes

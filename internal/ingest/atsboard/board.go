@@ -993,6 +993,14 @@ var noBoardFirstSegments = map[string][]string{
 	"ats.rippling.com": {"jobs"},
 }
 
+// noBoardTenantSegments lists, per matched host entry in modePathPair, the words that sit where
+// the TENANT does (<locale>/<word>) but are the platform's own pages. werecruit's
+// /<locale>/redirectToPage is its post-login redirect: read as a board it is "en/redirectToPage",
+// whose probe 404s (found in the French employer harvest, 2026-10-28). Compared lower-cased.
+var noBoardTenantSegments = map[string][]string{
+	"careers.werecruit.io": {"redirecttopage"},
+}
+
 // allowedFirstSegments lists, per matched host entry in modeAllowedFirstSegment, the ONLY leading
 // path segments that carry a board behind them — the inverse of reservedSegments: everything NOT
 // in this list is declined outright rather than skipped to reach a tenant. Dover's job board and
@@ -1240,6 +1248,9 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		segs := strings.Split(strings.Trim(u.Path, "/"), "/")
 		if len(segs) < 2 || segs[0] == "" || segs[1] == "" {
 			return "", "", "", false // bare host or a locale with no tenant
+		}
+		if slices.Contains(noBoardTenantSegments[apex], strings.ToLower(segs[1])) {
+			return "", "", "", false // the platform's own page in the tenant's place
 		}
 		board = segs[0] + "/" + segs[1]
 		u.RawQuery, u.Fragment = "", ""

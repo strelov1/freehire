@@ -250,3 +250,29 @@ func TestCadremploiAllChallengedFailsTheCrawl(t *testing.T) {
 		t.Fatal("a crawl that read no page did not fail")
 	}
 }
+
+// A real salary-bearing page, read the way production reads it: through the page's JSON-LD.
+func TestCadremploiSalaryFromThePage(t *testing.T) {
+	raw, err := os.ReadFile("testdata/cadremploi/posting_salary.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := html.Parse(strings.NewReader(string(raw)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ld cadremploiLD
+	if !ldJobPosting(root, &ld) {
+		t.Fatal("fixture carries no JobPosting")
+	}
+	j, ok := cadremploiJob(ld, cadremploiPosting{id: "156476199571990130"})
+	if !ok {
+		t.Fatal("posting rejected")
+	}
+	if j.Title != "Chef de Mission Comptable H/F" || j.Company != "CABEXPERTS RECRUTEMENT" {
+		t.Errorf("title/company = %q / %q", j.Title, j.Company)
+	}
+	if j.SalaryMin == nil || *j.SalaryMin != 33000 || *j.SalaryMax != 43000 || j.SalaryCurrency != "EUR" || j.SalaryPeriod != "year" {
+		t.Errorf("salary = %v-%v %q %q, want 33000-43000 EUR year", j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod)
+	}
+}
