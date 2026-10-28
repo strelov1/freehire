@@ -169,6 +169,12 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   Spanish-language postings: work mode from any source 48.7% → 56.8%; the description list
   agrees with the adapter's structured value on 86% of the rows that carry both, and most of
   the rest are the adapter's value contradicting the posting's own text.
+  Argentina (2026-10-27, 6,145 postings) states the model as an "esquema" ("esquema de
+  empleo: presencial", "esquema remoto") or a "jornada laboral", writes "Modalidad : híbrida"
+  with a space before the colon, and gives a share ("40% presencial", "80% remoto"), which
+  is hybrid (`officeShare`). A remote model "con 1/2 asistencias semanales" is hybrid.
+  "Ubicación: Remoto" is absent: Torre's template writes it above hybrid postings.
+  Description-derived work mode 35.2% → 40.3%.
 - **Portuguese work-arrangement prose** (`workmode_pt.go`) is read after the Spanish list,
   which already reads the shared phrases ("100% remoto", "modelo híbrido", "100%
   presencial"). Brazilian postings state the model in a labelled line ("Modelo de

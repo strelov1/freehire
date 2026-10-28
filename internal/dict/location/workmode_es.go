@@ -1,6 +1,7 @@
 package location
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -57,6 +58,12 @@ var spanishWorkModePhrases = []struct {
 		"posicion es remota", "posicion remota", "puesto remoto", "rol remoto",
 		"100% home office", "100 % home office", "full home office", "home office 100%",
 		"100% desde casa", "100 % desde casa",
+		// Argentina states the model as an "esquema" or a "jornada laboral". "Ubicación:
+		// remoto" is absent: Torre's template writes it above a hybrid posting's own
+		// "Modalidad de trabajo: híbrido".
+		"esquema remoto", "esquema de trabajo remoto", "esquema de empleo: remoto",
+		"esquema de trabajo: remoto", "modalidad de trabajo remota", "modalidad laboral: remota",
+		"modalidad laboral: remoto", "modalidad es remota", "trabajo remoto 100%",
 	}},
 	{"hybrid", []string{
 		"modalidad hibrida", "modalidad hibrido", "modalidad: hibrida", "modalidad: hibrido",
@@ -80,6 +87,12 @@ var spanishWorkModePhrases = []struct {
 		"opcion de teletrabajo", "posibilidad de teletrabajo", "politica de teletrabajo",
 		"ayuda al teletrabajo", "apoyo de home office", "opcion de home office",
 		"teletrabajo",
+		// Argentina's "esquema" and "jornada laboral" forms.
+		"esquema de empleo: hibrido", "esquema de trabajo: hibrido", "esquema de trabajo hibrido",
+		"modalidad laboral: hibrida", "modalidad laboral: hibrido", "jornada laboral hibrida",
+		"jornada laboral: hibrida", "modalidad es hibrida", "ubicacion: hibrido",
+		// The plural only: Mexico's "bono de asistencia semanal" is an attendance bonus.
+		"ubicacion: hibrida", "asistencias semanales",
 	}},
 	{"onsite", []string{
 		"100% presencial", "100 % presencial", "totalmente presencial",
@@ -88,6 +101,9 @@ var spanishWorkModePhrases = []struct {
 		"puesto presencial", "posicion presencial",
 		"sin teletrabajo", "sin opcion de teletrabajo", "sin posibilidad de teletrabajo",
 		"no hay teletrabajo", "no se ofrece teletrabajo", "sin home office",
+		"esquema presencial", "esquema de empleo: presencial", "esquema de trabajo: presencial",
+		"jornada laboral: presencial", "jornada laboral presencial", "modalidad laboral: presencial",
+		"modalidad: presencialidad", "presencial 100%", "ubicacion: presencial",
 	}},
 }
 
@@ -109,8 +125,12 @@ const spanishNegationWindow = 20
 
 // spanishRefusals, found just AFTER a remote or hybrid phrase in the same sentence,
 // withdraw it ("teletrabajo/remoto no corresponde", "teletrabajo: no disponible").
+//
+// Weekly office visits after a remote phrase withdraw it too, and the hybrid list then
+// reads them: "modalidad de trabajo remota con 1/2 asistencias semanales en CABA" is
+// hybrid.
 var spanishRefusals = []string{"no es posible", "no disponible", "no aplica",
-	"no corresponde", "no se contempla", "no esta disponible"}
+	"no corresponde", "no se contempla", "no esta disponible", "asistencias semanales"}
 
 // spanishPerks, in the same sentence as a remote or hybrid phrase, make it a BOUNDED
 // perk rather than the arrangement: "teletrabajo completo en verano, Navidad y Semana
@@ -135,7 +155,9 @@ func spanishWorkMode(desc, lower string) string {
 	if !containsAny(lower, spanishWorkModeTriggers) {
 		return ""
 	}
-	text := dropAccents(foldMarkup(desc))
+	// "Modalidad de trabajo : híbrida": a space before the colon is common enough in
+	// Argentine postings to fold away.
+	text := strings.ReplaceAll(dropAccents(foldMarkup(desc)), " :", ":")
 	for _, wm := range spanishWorkModePhrases {
 		for _, p := range wm.phrases {
 			if guardedPhraseMatches(text, p, wm.mode, spanishGuards) {
@@ -143,8 +165,16 @@ func spanishWorkMode(desc, lower string) string {
 			}
 		}
 	}
+	if officeShare.MatchString(text) {
+		return "hybrid"
+	}
 	return ""
 }
+
+// officeShare is a share of the week in the office or at home below a hundred percent —
+// "Híbrido (40% presencial)", "Modalidad: 80% remoto" — which is hybrid. A hundred percent
+// is read by the phrase list ("100% remoto", "100% presencial").
+var officeShare = regexp.MustCompile(`(?:^|[^\d])[1-9]\d? ?% (?:presencial|presencialidad|remoto|remota|en remoto|home office|teletrabajo)\b`)
 
 // dropAccents removes the combining marks from text, so "híbrida" reads "hibrida" and
 // "días" reads "dias".
