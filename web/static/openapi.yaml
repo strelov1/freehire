@@ -151,7 +151,7 @@ info:
     Facets with a fixed vocabulary (`work_mode`, `regions`, `seniority`,
     `category`, `employment_type`, `education_level`, `company_type`,
     `company_size`, `salary_period`, `relocation`, `english_level`, `role_type`,
-    `ai_archetype`, `domains`, `reality`, `skills` and the boolean facets) still
+    `source_type`, `ai_archetype`, `domains`, `reality`, `skills` and the boolean facets) still
     apply a value outside it — so `?work_mode=foo` answers `total: 0`, which reads
     exactly like an empty market. `meta.ignored_values` names such values per
     parameter (the `_exclude` form under its own name):
@@ -221,6 +221,7 @@ paths:
         - $ref: "#/components/parameters/Collections"
         - $ref: "#/components/parameters/Reality"
         - $ref: "#/components/parameters/Source"
+        - $ref: "#/components/parameters/SourceType"
         - $ref: "#/components/parameters/CompanySlug"
         - $ref: "#/components/parameters/EmploymentType"
         - $ref: "#/components/parameters/Relocation"
@@ -248,6 +249,7 @@ paths:
         - $ref: "#/components/parameters/RoleTypeExclude"
         - $ref: "#/components/parameters/SkillsExclude"
         - $ref: "#/components/parameters/SourceExclude"
+        - $ref: "#/components/parameters/SourceTypeExclude"
         - $ref: "#/components/parameters/CompanySlugExclude"
       responses:
         "200":
@@ -308,6 +310,7 @@ paths:
         - $ref: "#/components/parameters/Collections"
         - $ref: "#/components/parameters/Reality"
         - $ref: "#/components/parameters/Source"
+        - $ref: "#/components/parameters/SourceType"
         - $ref: "#/components/parameters/CompanySlug"
         - $ref: "#/components/parameters/EmploymentType"
         - $ref: "#/components/parameters/Relocation"
@@ -335,6 +338,7 @@ paths:
         - $ref: "#/components/parameters/RoleTypeExclude"
         - $ref: "#/components/parameters/SkillsExclude"
         - $ref: "#/components/parameters/SourceExclude"
+        - $ref: "#/components/parameters/SourceTypeExclude"
         - $ref: "#/components/parameters/CompanySlugExclude"
       responses:
         "200":
@@ -567,6 +571,7 @@ paths:
         - $ref: "#/components/parameters/Collections"
         - $ref: "#/components/parameters/Reality"
         - $ref: "#/components/parameters/Source"
+        - $ref: "#/components/parameters/SourceType"
         - $ref: "#/components/parameters/CompanySlug"
         - $ref: "#/components/parameters/EmploymentType"
         - $ref: "#/components/parameters/Relocation"
@@ -1730,6 +1735,55 @@ components:
         items:
           type: string
       description: Skill slugs to exclude.
+    SourceType:
+      name: source_type
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - ats
+            - company
+            - aggregator
+            - social
+      description: |
+        What kind of source the posting was read from:
+
+        - `ats` — a multi-tenant applicant tracking system (`greenhouse`, `lever`,
+          `workday`, …), so the employer's own posting;
+        - `company` — one employer's own careers site, or a vacancy a verified
+          employer published on freehire;
+        - `aggregator` — a board that republishes postings from many companies
+          (`adzuna`, `whatjobs`, …);
+        - `social` — a posting shared in a community channel (Hacker News "Who is
+          hiring?", Telegram).
+
+        Repeated values are ORed: `source_type=ats&source_type=company` keeps the
+        original postings only. A source none of these describes (a hand-curated
+        import, a pasted link) carries no value and is left out by any positive
+        `source_type` filter; reach it through `source`. Duplicates across sources are
+        already collapsed to one canonical posting, so this narrows WHERE postings
+        come from rather than removing copies.
+    SourceTypeExclude:
+      name: source_type_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - ats
+            - company
+            - aggregator
+            - social
+      description: >-
+        Source types to exclude. `source_type_exclude=aggregator` drops every
+        aggregator's posting, the shortest way to ask for originals.
     SourceExclude:
       name: source_exclude
       in: query

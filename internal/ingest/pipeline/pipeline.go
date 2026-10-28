@@ -867,7 +867,7 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 }
 
 // aggregatorGate reports whether the ingest-time coverage gate applies to e's board: a
-// Coverage port must be wired AND the provider must be a KindAggregator (an ATS or
+// Coverage port must be wired AND the provider must be an aggregator (an ATS or
 // single-company board is never gated, regardless of what Coverage would report — see
 // TestRunIgnoresCoverageForATSProvider). When it applies, it also returns the aggregator
 // provider list both callers need to pass to CoverageLookup. The classification MUST come
@@ -879,7 +879,7 @@ func (r Runner) aggregatorGate(e sources.CompanyEntry) (aggregators []string, ap
 		return nil, false
 	}
 	taxonomy := sources.Taxonomy()
-	if sources.ProviderKind(taxonomy, e.Provider) != sources.KindAggregator {
+	if !sources.IsAggregator(taxonomy, e.Provider) {
 		return nil, false
 	}
 	return sources.AggregatorProviders(taxonomy), true

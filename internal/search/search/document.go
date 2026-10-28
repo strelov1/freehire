@@ -74,6 +74,12 @@ type JobDocument struct {
 	// needs no jobs column and no cmd/backfill-derive pass — a reindex is what
 	// reaches existing postings.
 	RoleType string `json:"role_type"`
+	// SourceType is what kind of source the posting was read from — one of
+	// vocab.SourceTypeValues, or empty for a source no kind describes (a manual import, a
+	// pasted link). The classifier is sources.ProviderKind, which this package may not
+	// import, so the caller resolves it and FromJob takes it as a parameter. Like RoleType
+	// it lives on the document only and backs the `source_type` facet.
+	SourceType string `json:"source_type,omitempty"`
 	// AIInterview is true when the job's company carries at least one un-retracted
 	// AI-interview report, derived at index time from the embedded view's count.
 	//
@@ -152,7 +158,11 @@ const DescEmbedder = "desc"
 // ChunkVectorsForJobs); nil for a job nobody has embedded, which clears any stored ones.
 // It is a parameter rather than something a writer attaches afterwards because a writer
 // that forgot would not fail — it would silently erase the vectors already in the index.
-func FromJob(j db.Job, desc [][]float32) (JobDocument, error) {
+//
+// sourceType is the job's source kind (see JobDocument.SourceType), a parameter for the
+// same reason: a writer that forgot would silently drop the posting out of every
+// `source_type` filter.
+func FromJob(j db.Job, desc [][]float32, sourceType string) (JobDocument, error) {
 	view, err := jobview.FromRow(j)
 	if err != nil {
 		return JobDocument{}, err
@@ -166,6 +176,7 @@ func FromJob(j db.Job, desc [][]float32) (JobDocument, error) {
 		Job:         view,
 		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
 		RoleType:    roletype.Derive(j.Title),
+		SourceType:  sourceType,
 		AIInterview: view.AIInterviewReports > 0,
 	}
 	if eff := jobview.EffectivePostedAt(j.PostedAt, j.CreatedAt, time.Now()); eff.Valid {

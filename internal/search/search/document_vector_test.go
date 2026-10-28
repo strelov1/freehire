@@ -10,7 +10,7 @@ import (
 )
 
 func TestFromJobCarriesTheSkillVector(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "erlang"}}, nil)
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "erlang"}}, nil, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestFromJobCarriesTheSkillVector(t *testing.T) {
 // `_vectors` leaves the old one in place and the posting keeps ranking by skills it no
 // longer has — verified against a live engine. An explicit null is what clears it.
 func TestFromJobWithNoRecognisedSkillsClearsTheVector(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"definitely-not-a-skill"}}, nil)
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"definitely-not-a-skill"}}, nil, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestFromJobWithNoRecognisedSkillsClearsTheVector(t *testing.T) {
 }
 
 func TestFromJobWithNoSkillsClearsTheVector(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, nil)
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, nil, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestFromJobWithNoSkillsClearsTheVector(t *testing.T) {
 // TestFromJobVectorSerialisesUnderTheReservedKey pins the wire contract: Meilisearch
 // reads document vectors from the reserved `_vectors` object, keyed by embedder name.
 func TestFromJobVectorSerialisesUnderTheReservedKey(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go"}}, nil)
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go"}}, nil, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestFromJobVectorSerialisesUnderTheReservedKey(t *testing.T) {
 // defect the ballast exists to fix, reintroduced silently. Assert the stored vector
 // carries it.
 func TestFromJobUsesTheJobSideConstructor(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "docker"}}, nil)
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"go", "docker"}}, nil, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestDocumentVectorsKeysMatchEmbedders(t *testing.T) {
 // vectors under the embedder — in chunk order.
 func TestFromJobCarriesTheDescriptionVectors(t *testing.T) {
 	desc := [][]float32{{1, 0}, {0, 1}}
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, desc)
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, desc, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestFromJobCarriesTheDescriptionVectors(t *testing.T) {
 // A job nobody has embedded sends an explicit null: omitting the key would reject the
 // document, and a stale set left behind would keep matching a description that changed.
 func TestFromJobWithNoChunksClearsTheDescriptionVectors(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, nil)
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer"}, nil, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}

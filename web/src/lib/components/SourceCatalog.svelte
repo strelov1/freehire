@@ -19,7 +19,7 @@
   let query = $state('');
 
   // The order the groups are read in: the platforms most of the catalogue comes through,
-  // then the republishers, then single employers, then whatever is not a crawl adapter.
+  // then the republishers, then single employers, then community channels, then whatever none of those describes.
   const GROUPS: { kind: ProviderKind; title: string; blurb: string }[] = [
     {
       kind: 'ats',
@@ -37,9 +37,14 @@
       blurb: "A single employer's own careers site, read directly.",
     },
     {
+      kind: 'social',
+      title: 'Community channels',
+      blurb: 'Postings shared in community threads and chats, such as Hacker News and Telegram.',
+    },
+    {
       kind: 'other',
       title: 'Other sources',
-      blurb: 'Not crawl adapters — extraction pipelines and hand-curated intake.',
+      blurb: 'Hand-curated intake and pasted links.',
     },
   ];
 
@@ -231,7 +236,7 @@
                       {/if}
                     {:else if entry.health}
                       never read successfully
-                    {:else if entry.kind === 'other'}
+                    {:else if !entry.adapter}
                       not a crawl adapter
                     {:else}
                       <!-- A registered adapter with no health record yet. It is emphatically

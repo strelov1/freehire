@@ -1360,7 +1360,7 @@ export type HealthStatus = 'operational' | 'degraded' | 'down';
 
 /** How a source is shaped: a multi-tenant ATS platform, a many-company job
  *  aggregator, a single company's own careers page, or an unclassified source. */
-export type ProviderKind = 'ats' | 'aggregator' | 'company' | 'other';
+export type ProviderKind = 'ats' | 'aggregator' | 'company' | 'social' | 'other';
 
 /** One provider's health on the public /status page: board counts, freshness, and
  *  the derived status. Sanitized — no error text or board identifiers are exposed.
@@ -1459,6 +1459,9 @@ interface SourceHealth {
 export interface SourceEntry {
   source: string;
   kind: ProviderKind;
+  /** Whether the source is a crawl adapter; false for the Telegram pipeline, employer
+   *  vacancies and hand-curated intake, which have no board to crawl. */
+  adapter: boolean;
   jobs: SourceJobs | null;
   health: SourceHealth | null;
 }

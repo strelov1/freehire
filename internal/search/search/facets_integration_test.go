@@ -59,7 +59,7 @@ func TestIntegration_FacetCounts(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -142,7 +142,7 @@ func TestIntegration_IsTechFilter(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}

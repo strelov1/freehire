@@ -107,8 +107,14 @@ func TestBuildSourceEntriesHasNoHealthBlockWithoutAHealthRecord(t *testing.T) {
 	if !ok {
 		t.Fatal("a source with postings but no adapter was dropped")
 	}
-	if tg.Kind != sources.KindOther {
-		t.Errorf("telegram kind = %q, want %q", tg.Kind, sources.KindOther)
+	if tg.Kind != sources.KindSocial {
+		t.Errorf("telegram kind = %q, want %q", tg.Kind, sources.KindSocial)
+	}
+	if tg.Adapter {
+		t.Error("telegram is reported as a crawl adapter; the page would say it was never crawled")
+	}
+	if !got["greenhouse"].Adapter {
+		t.Error("greenhouse is not reported as a crawl adapter")
 	}
 	if tg.Health != nil {
 		t.Errorf("telegram carries a health verdict %+v, want none", tg.Health)

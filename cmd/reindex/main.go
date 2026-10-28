@@ -536,6 +536,10 @@ func buildClosureGeoLookup(ctx context.Context, q *db.Queries) (closureGeoLookup
 // counts); closed, private, or category-unresolved jobs become deletions so they
 // leave the index (the index contains only open, non-private jobs that are either
 // categorized or confirmed technical — see the job-search spec).
+// sourceTypeOf is each source's `source_type` document attribute, resolved once from the
+// adapter taxonomy (which needs no credential, so every host answers alike).
+var sourceTypeOf = sources.SourceTypes(sources.Taxonomy())
+
 func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, desc map[int64][][]float32, now time.Time) ([]search.JobDocument, []int64, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
@@ -558,7 +562,7 @@ func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, desc m
 		if lookup != nil {
 			repost, mass = lookup(j.CompanySlug, j.RoleFingerprint.String)
 		}
-		doc, err := search.FromJob(j, desc[j.ID])
+		doc, err := search.FromJob(j, desc[j.ID], sourceTypeOf(j.Source))
 		if err != nil {
 			return nil, nil, err
 		}

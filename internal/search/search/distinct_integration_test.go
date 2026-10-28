@@ -43,7 +43,8 @@ func TestIntegration_DistinctCount(t *testing.T) {
 				ID: id, Title: "Go Engineer", Company: fmt.Sprintf("Co %d", i),
 				CompanySlug: fmt.Sprintf("co-%d", i), PublicSlug: fmt.Sprintf("j%d", id),
 				Category: category,
-			}, nil)
+			}, nil, "")
+
 			if err != nil {
 				t.Fatalf("FromJob: %v", err)
 			}

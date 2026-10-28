@@ -14,7 +14,7 @@ import (
 // wiring: that the value jobview computed reaches the document JSON unchanged.
 func TestFromJob_AutoApplyAvailable(t *testing.T) {
 	for _, provider := range []string{"greenhouse", "lever", "ashby", "workable"} {
-		doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: provider}, nil)
+		doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: provider}, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob(%q, nil): %v", provider, err)
 		}
@@ -26,7 +26,7 @@ func TestFromJob_AutoApplyAvailable(t *testing.T) {
 
 func TestFromJob_AutoApplyAvailable_NotEligibleProvider(t *testing.T) {
 	for _, provider := range []string{"recruitee", "djinni", ""} {
-		doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: provider}, nil)
+		doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: provider}, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob(%q, nil): %v", provider, err)
 		}
@@ -53,7 +53,7 @@ func marshalToMap(t *testing.T, doc JobDocument) map[string]any {
 }
 
 func TestFromJob_AutoApplyAvailable_OmittedFromJSONWhenFalse(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: "recruitee"}, nil)
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: "recruitee"}, nil, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestFromJob_AutoApplyAvailable_OmittedFromJSONWhenFalse(t *testing.T) {
 }
 
 func TestFromJob_AutoApplyAvailable_PresentInJSONWhenTrue(t *testing.T) {
-	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: "greenhouse"}, nil)
+	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Source: "greenhouse"}, nil, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}

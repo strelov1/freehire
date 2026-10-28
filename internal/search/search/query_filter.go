@@ -19,7 +19,10 @@ import (
 // facets served top-level, so they filter on a bare attribute. Repeated params
 // (?seniority=a&seniority=b) are ORed.
 var StringFacets = map[string]string{
-	"source":          "source",
+	"source": "source",
+	// Written on the document at index time from sources.ProviderKind (see
+	// JobDocument.SourceType); `source_type_exclude=aggregator` is the "originals only" ask.
+	"source_type":     "source_type",
 	"company_slug":    "company_slug",
 	"regions":         "regions",
 	"work_mode":       "work_mode",

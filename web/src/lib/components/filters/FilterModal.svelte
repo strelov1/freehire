@@ -201,6 +201,7 @@
     // The Minimum skill match threshold lives at the top of the Skills pane, so it
     // counts toward that tab's badge alongside the skills facet selections.
     if (e.key === 'skills') return selCount(f, 'skills') + (matchAvailable && draftMinMatch != null ? 1 : 0);
+    if (e.key === 'source') return selCount(f, 'source_type') + selCount(f, 'source');
     return selCount(f, e.facetParam ?? e.key);
   }
 
@@ -598,6 +599,11 @@
         aria-valuetext={draftMinMatch != null ? `${draftMinMatch}% or more` : 'Any'}
         class="mb-6 h-6 w-full accent-primary"
       />
+    {/if}
+    {#if entry.key === 'source'}
+      <!-- The kind of source sits above the source picker: "everything but aggregators"
+           is one pill here, where it would be a hundred source exclusions below. -->
+      <div class="mb-6"><ChipFacet store={staged} param="source_type" label="Source type" counts={c} /></div>
     {/if}
     {#if def}<FacetSection {def} store={staged} counts={c} expand empty={entry.key === 'skills' ? unrecognizedSkill : undefined} />{/if}
     {#if entry.key === 'skills'}{@render recognizeLink('skill', '?tab=skill')}{/if}

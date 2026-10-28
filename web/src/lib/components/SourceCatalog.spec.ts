@@ -8,6 +8,7 @@ vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/
 function entry(over: Partial<SourceEntry> & { source: string }): SourceEntry {
   return {
     kind: 'ats',
+    adapter: true,
       jobs: null,
     health: null,
     ...over,
@@ -144,7 +145,7 @@ describe('SourceCatalog', () => {
     render(SourceCatalog, {
       sources: [
         entry({ source: 'greenhouse', kind: 'ats', health: null }),
-        entry({ source: 'telegram', kind: 'other', health: null }),
+        entry({ source: 'telegram', kind: 'social', adapter: false, health: null }),
       ],
     });
 

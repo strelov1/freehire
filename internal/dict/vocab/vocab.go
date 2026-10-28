@@ -41,7 +41,13 @@ var (
 	// as proof of the opposite is exactly the inference the dictionaries in this
 	// repo are forbidden to make. An unresolved posting means "no marker found",
 	// never "individual contributor" — see internal/dict/roletype.
-	RoleTypeValues       = []string{"people_manager"}
+	RoleTypeValues = []string{"people_manager"}
+	// SourceTypeValues classify where a posting was read: a multi-tenant ATS, one
+	// employer's own careers site (or a vacancy a verified employer published here),
+	// a multi-company aggregator, or a community channel. The classifier is
+	// sources.ProviderKind; a source it cannot place (a manual import, a pasted link)
+	// carries no value, so it is reachable only through the `source` facet.
+	SourceTypeValues     = []string{"ats", "company", "aggregator", "social"}
 	EnglishLevelValues   = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
 	EducationLevelValues = []string{"none", "bachelor", "master", "phd"}
 	CategoryValues       = []string{

@@ -54,6 +54,7 @@ var closedFacets = map[string]func(string) bool{
 	"relocation":      oneOf(vocab.RelocationValues),
 	"english_level":   oneOf(vocab.EnglishLevelValues),
 	"role_type":       oneOf(vocab.RoleTypeValues),
+	"source_type":     oneOf(vocab.SourceTypeValues),
 	"ai_archetype":    oneOf(vocab.AIArchetypeValues),
 	"domains":         oneOf(vocab.DomainValues),
 	"reality": oneOf([]string{

@@ -61,6 +61,9 @@ func (hackernews) boardless() {}
 // Every post names its own employer.
 func (hackernews) aggregator() {}
 
+// social: a posting here is a comment in the monthly "Who is hiring?" thread.
+func (hackernews) social() {}
+
 // Both threads are read whole every run and a failed read fails the crawl.
 func (hackernews) fullCatalog() {}
 

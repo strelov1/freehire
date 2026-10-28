@@ -72,6 +72,10 @@ type Importer struct {
 // that has a crawler but no single-page adapter; a nil registry disables that step and is
 // what tests with a canned page pass. The resolver order itself lives in
 // linksource.ImportRegistry, so it is stated once.
+// sourceTypeOf is each source's `source_type` search attribute, resolved once from the
+// adapter taxonomy (which needs no credential, so every host answers alike).
+var sourceTypeOf = sources.SourceTypes(sources.Taxonomy())
+
 func New(pool *pgxpool.Pool, q *db.Queries, idx *search.Client, c linksource.Client, ingest map[string]sources.Source, boards BoardResolver) *Importer {
 	return &Importer{
 		pool:   pool,
@@ -320,7 +324,7 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 		log.Printf("linkimport: chunk vectors for job %d: %v", saved.Job.ID, err)
 		return
 	}
-	doc, err := search.FromJob(saved.Job, desc[saved.Job.ID])
+	doc, err := search.FromJob(saved.Job, desc[saved.Job.ID], sourceTypeOf(saved.Job.Source))
 	if err != nil {
 		log.Printf("linkimport: build index doc for job %d: %v", saved.Job.ID, err)
 		return

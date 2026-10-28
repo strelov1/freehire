@@ -126,6 +126,7 @@ function buildJobCatalog(): FilterSearchHit[] {
   pushFacet(hits, 'industry', 'domains');
   pushFacet(hits, 'industry', 'company_type');
   pushFacet(hits, 'industry', 'collections', JOB_COLLECTION, 'Collection');
+  pushFacet(hits, 'source', 'source_type');
   for (const [value, label] of Object.entries(SOURCE_LABELS)) {
     hits.push(optionHit('source', 'source', 'Source', { value, label }));
   }

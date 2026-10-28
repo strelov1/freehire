@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -32,6 +33,10 @@ type clusterKey struct {
 	companySlug     string
 	roleFingerprint string
 }
+
+// sourceTypeOf is each source's `source_type` document attribute, resolved once from the
+// adapter taxonomy (which needs no credential, so every host answers alike).
+var sourceTypeOf = sources.SourceTypes(sources.Taxonomy())
 
 func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	// Resolve every job's role-cluster counts (and, for clusters with more than one open
@@ -118,7 +123,7 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 		if search.CategoryUnresolved(job) || search.DescriptionMissing(job) {
 			continue
 		}
-		doc, err := search.FromJob(job, desc[job.ID])
+		doc, err := search.FromJob(job, desc[job.ID], sourceTypeOf(job.Source))
 		if err != nil {
 			return fmt.Errorf("build document (job %d): %w", job.ID, err)
 		}

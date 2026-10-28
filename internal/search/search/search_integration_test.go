@@ -100,7 +100,7 @@ func TestIntegration_EnsureIndexIndexAndSearch(t *testing.T) {
 
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -264,7 +264,7 @@ func TestSearchFiltersBySkillsFacet(t *testing.T) {
 
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -313,7 +313,7 @@ func TestSearchFiltersByPostedWithinDays(t *testing.T) {
 
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -364,7 +364,7 @@ func TestSearchFiltersByCollectionsFacet(t *testing.T) {
 
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -398,7 +398,7 @@ func toDocs(t *testing.T, jobs []db.Job) []JobDocument {
 	t.Helper()
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -495,7 +495,7 @@ func TestSearchQFieldsRestrictsMatchingOnRealEngine(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -629,7 +629,7 @@ func TestIntegration_ExperienceIncludeUnspecified(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -680,7 +680,7 @@ func TestIntegration_SeniorityIncludeUnspecified(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -736,7 +736,7 @@ func TestIntegration_ExperienceOnlySeniorityUnspecified(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}

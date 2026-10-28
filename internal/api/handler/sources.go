@@ -31,6 +31,11 @@ import (
 type sourceEntry struct {
 	Source string `json:"source"`
 	Kind   string `json:"kind"`
+	// Adapter is whether the source is a crawl adapter at all. Kind no longer answers it:
+	// the Telegram pipeline is social and employer-published vacancies are company, yet
+	// neither has a board to crawl, so a missing health record means "nothing to crawl"
+	// for them and "not crawled yet" for an adapter.
+	Adapter bool `json:"adapter"`
 	// No logo field. A source's brand mark is resolved client-side from its DISPLAY NAME,
 	// which the SPA already owns. Publishing a host was tried and served the WRONG brand:
 	// an ATS posting's URL is usually on the employer's own domain, so the sample taken for
@@ -120,9 +125,10 @@ func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealt
 
 	entries := make([]sourceEntry, 0, len(names))
 	for _, name := range names {
-		entry := sourceEntry{Source: name, Kind: sources.ProviderKind(reg, name)}
+		_, adapter := reg[name]
+		entry := sourceEntry{Source: name, Kind: sources.ProviderKind(reg, name), Adapter: adapter}
 		if row, ok := bySnapshot[name]; ok {
-			entry.Jobs = jobsBlock(row, entry.Kind)
+			entry.Jobs = jobsBlock(row, sources.IsAggregator(reg, name))
 		}
 		if row, ok := byHealth[name]; ok {
 			entry.Health = healthBlock(row, now)
@@ -135,13 +141,13 @@ func buildSourceEntries(reg map[string]sources.Source, health []db.ProviderHealt
 // jobsBlock renders one snapshot row, attaching the overlap figures only where they mean
 // anything. Unmatched is computed here rather than stored, so it cannot drift from the
 // raw count it is a remainder of.
-func jobsBlock(row db.SourceStat, kind string) *sourceJobs {
+func jobsBlock(row db.SourceStat, aggregator bool) *sourceJobs {
 	jobs := &sourceJobs{Open: row.OpenJobs, MeasuredAt: row.MeasuredAt.Time.Format(time.RFC3339)}
 	if row.BrowsableJobs.Valid {
 		n := row.BrowsableJobs.Int64
 		jobs.Browsable = &n
 	}
-	if kind == sources.KindAggregator {
+	if aggregator {
 		matched := row.AtsMatchedJobs
 		unmatched := row.OpenJobs - matched
 		jobs.ATSMatched = &matched

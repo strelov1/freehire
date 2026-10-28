@@ -82,11 +82,12 @@
     ats: 'ATS',
     aggregator: 'Aggregators',
     company: 'Company pages',
+    social: 'Social',
     other: 'Other',
   };
   // Order the kind chips deliberately (ATS first — the bulk), then filter to those
   // that actually appear in the data.
-  const KIND_ORDER: ProviderKind[] = ['ats', 'aggregator', 'company', 'other'];
+  const KIND_ORDER: ProviderKind[] = ['ats', 'aggregator', 'company', 'social', 'other'];
 
   const nf = new Intl.NumberFormat('en');
 

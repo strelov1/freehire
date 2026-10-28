@@ -83,6 +83,15 @@ func AggregatorProviders(reg map[string]Source) []string {
 	return out
 }
 
+// IsAggregator reports whether reg's adapter for provider carries the aggregator marker —
+// the question the dedup, coverage and overlap passes ask, which is not the same as
+// ProviderKind == KindAggregator: a social adapter (hackernews) is an aggregator to them and
+// social to a reader. reg must be Taxonomy(), for the reason ProviderKind gives.
+func IsAggregator(reg map[string]Source, provider string) bool {
+	_, ok := reg[provider].(aggregator)
+	return ok
+}
+
 // BoardKeyedProviders returns the sorted provider names in reg whose adapter is addressed by
 // a board id — every adapter that is not boardless. A caller that wants to say something about
 // ONE board (cmd/harvest-boards validating a candidate) needs this: a boardless adapter serves

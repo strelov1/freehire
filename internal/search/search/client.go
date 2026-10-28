@@ -708,6 +708,9 @@ func facetSettings() *meilisearch.Settings {
 			// the facet hard-500s /api/v1/jobs/facets for every caller, so the settings
 			// patch goes out BEFORE the binary flips.
 			"role_type",
+			// source_type is written at index time from the job's source (see
+			// JobDocument.SourceType). The settings-before-binary order above applies.
+			"source_type",
 			// requires_clearance is a jobs column served top-level, so it filters on the
 			// bare attribute like is_tech. It is written true-or-absent, never false: a
 			// posting with no stated requirement omits the attribute entirely, which is

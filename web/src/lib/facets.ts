@@ -18,13 +18,13 @@ import {
   WORK_MODE_VALUES, SENIORITY_VALUES, CATEGORY_VALUES,
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
   COMPANY_TYPE_VALUES, DOMAIN_VALUES, INDUSTRY_VALUES, FACET_ALIASES,
-  AI_ARCHETYPE_VALUES, SKILL_LABELS, INDUSTRY_LABELS, ROLE_TYPE_VALUES,
+  AI_ARCHETYPE_VALUES, SKILL_LABELS, INDUSTRY_LABELS, ROLE_TYPE_VALUES, SOURCE_TYPE_VALUES,
 } from './generated/contracts';
 import { fuzzyMatch } from './fuzzy';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
-  RELOCATION_LABELS, AI_ARCHETYPE_LABELS, ROLE_TYPE_LABELS, titleCase,
+  RELOCATION_LABELS, AI_ARCHETYPE_LABELS, ROLE_TYPE_LABELS, SOURCE_TYPE_LABELS, titleCase,
 } from './labels';
 import { COLLECTIONS } from './collections';
 import { TIMEZONE_REGIONS } from './talentFacetModel';
@@ -543,6 +543,7 @@ export const CATEGORY_OPTIONS: FacetOption[] = CATEGORY;
 // not a dynamic (distribution-driven) control like role/skills.
 const AI_ARCHETYPE: FacetOption[] = options(AI_ARCHETYPE_VALUES, AI_ARCHETYPE_LABELS);
 const ROLE_TYPE: FacetOption[] = options(ROLE_TYPE_VALUES, ROLE_TYPE_LABELS);
+const SOURCE_TYPE: FacetOption[] = options(SOURCE_TYPE_VALUES, SOURCE_TYPE_LABELS);
 
 // Work-mode and region options, exported for the profile's location preferences editor so
 // it shares the filter panel's vocabulary/order instead of duplicating it.
@@ -833,5 +834,6 @@ export const FACETS: FacetDef[] = [
   { param: 'reality', label: 'Posting reality', control: 'pills', options: REALITY, excludable: true },
   { param: 'salary_currency', label: 'Currency', control: 'pills', options: CURRENCY, excludable: true },
   { param: 'company_slug', label: 'Company', control: 'remote', excludable: true, placeholder: 'Search companies', remote: companySearch },
+  { param: 'source_type', label: 'Source type', control: 'pills', options: SOURCE_TYPE, excludable: true },
   { param: 'source', label: 'Source', control: 'select', dynamic: true, excludable: true, placeholder: 'Search sources', entityLogos: true },
 ];

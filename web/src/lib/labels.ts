@@ -48,6 +48,14 @@ export const SENIORITY_LABELS: Record<string, string> = { c_level: 'C-level' };
 // which must never be labelled "Individual contributor" anywhere.
 export const ROLE_TYPE_LABELS: Record<string, string> = { people_manager: 'People manager' };
 
+// Source kinds (vocab.SourceTypeValues), as sources.ProviderKind assigns them.
+export const SOURCE_TYPE_LABELS: Record<string, string> = {
+  ats: 'ATS',
+  company: 'Company site',
+  aggregator: 'Aggregator',
+  social: 'Social',
+};
+
 // English proficiency levels (vocab.EnglishLevelValues); `none` is the
 // no-requirement sentinel — detail pages filter it out before rendering.
 export const ENGLISH_LEVEL_LABELS: Record<string, string> = {

@@ -449,6 +449,9 @@ func genVocab() string {
 	// value, and the absence of one means "no management marker", never
 	// "individual contributor" — nothing in the SPA may label it as the latter.
 	b.WriteString(emitVocab("RoleType", "ROLE_TYPE_VALUES", vocab.RoleTypeValues))
+	// The source-type vocabulary (sources.ProviderKind's searchable kinds), so the Source
+	// pane's pills cannot offer a kind no document carries.
+	b.WriteString(emitVocab("SourceType", "SOURCE_TYPE_VALUES", vocab.SourceTypeValues))
 	// The ghost criterion vocabulary. Generated for the same reason the mail signals are,
 	// with a sharper edge: the job page draws one gauge segment per criterion the payload
 	// says fired, and the rows accounting for them come from the SPA's own list. A

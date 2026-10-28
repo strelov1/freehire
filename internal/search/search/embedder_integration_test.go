@@ -82,7 +82,7 @@ func TestIntegration_VectorSearchRanksByTheSkillVector(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j, nil)
+		d, err := FromJob(j, nil, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -119,7 +119,7 @@ func TestIntegration_LosingSkillsClearsTheStoredVector(t *testing.T) {
 		PublicSlug: "go-acme-a", Category: "backend", Description: "Build things.",
 		Skills: []string{"go", "docker"}}
 
-	withSkills, err := FromJob(job, nil)
+	withSkills, err := FromJob(job, nil, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestIntegration_LosingSkillsClearsTheStoredVector(t *testing.T) {
 
 	// The same job, re-indexed with its skills gone.
 	job.Skills = nil
-	cleared, err := FromJob(job, nil)
+	cleared, err := FromJob(job, nil, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestIntegration_DescEmbedderSurvivesSettingsAndHoldsEveryChunk(t *testing.T
 	job := db.Job{ID: 1, Title: "Go Engineer", Company: "Acme", Location: "Berlin",
 		PublicSlug: "go-acme-a", Category: "backend", Description: "Build things.",
 		Skills: []string{"go"}}
-	doc, err := FromJob(job, [][]float32{unitDesc(0), unitDesc(1), unitDesc(2)})
+	doc, err := FromJob(job, [][]float32{unitDesc(0), unitDesc(1), unitDesc(2)}, "")
 	if err != nil {
 		t.Fatalf("FromJob: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestIntegration_RepushKeepsBothEmbeddersInStep(t *testing.T) {
 	desc := [][]float32{unitDesc(0), unitDesc(1)}
 	push := func(j db.Job, d [][]float32) {
 		t.Helper()
-		doc, err := FromJob(j, d)
+		doc, err := FromJob(j, d, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
@@ -300,7 +300,7 @@ func TestIntegration_HybridSearchFindsByMeaning(t *testing.T) {
 	}
 	docs := make([]JobDocument, 0, len(jobs))
 	for _, j := range jobs {
-		d, err := FromJob(j.job, j.desc)
+		d, err := FromJob(j.job, j.desc, "")
 		if err != nil {
 			t.Fatalf("FromJob: %v", err)
 		}
