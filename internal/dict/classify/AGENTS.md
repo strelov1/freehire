@@ -344,6 +344,15 @@ seniority 6.9% → 11.0%, and 74 semi-senior titles moved from senior to middle.
 recruitee, jobindex, gupy, smartrecruiters) category 68.0% → 71.2%; every newly resolved
 title was hand-checked and the misreadings found became vetoes.
 
+**Argentina** (2026-10-27, 5,225 Spanish-language postings placed there; category 84.2% →
+84.9%, seniority 23.1% → 23.6% — the Spanish table already covered most of it). Added the
+rioplatense trades (`preventista`, `promovendedor`, `clarkista`, `cadete`, `changarín`,
+`mucama`, `plegador`, `despachante de aduana`), "Gerente General" as c_level, and two
+position rules: a title that OPENS with "Líder" is the lead (elsewhere the word praises the
+employer, "Empresa Líder"), and an opening "Ssr" is the grade even beside Next.js (the
+rendering guard used to cut it). Bare "Mozo/a" stays logistics: in Spain it is the
+warehouse hand, in Argentina the waiter, and the title alone cannot tell them apart.
+
 ## Portuguese heads and fields
 
 Portuguese titles have the Spanish shape — "Auxiliar de Serviços Gerais", "Analista de

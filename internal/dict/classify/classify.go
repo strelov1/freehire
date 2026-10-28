@@ -86,7 +86,7 @@ func matchSeniority(lower string) string {
 	for _, desk := range earlyCareersDeskPatterns {
 		lower = desk.ReplaceAllString(lower, " ")
 	}
-	if ssrRendering.MatchString(lower) {
+	if ssrRendering.MatchString(lower) && !openingSSR.MatchString(lower) {
 		lower = ssrWord.ReplaceAllString(lower, " ")
 	}
 	lower = semiSenior.ReplaceAllString(lower, "ssr")
@@ -132,6 +132,9 @@ var semiSenior = regexp.MustCompile(`\bsemi[\s-]?(?:senior|sr)\b`)
 var (
 	ssrRendering = regexp.MustCompile(`\b(?:next\.?js|nuxt|ssg|csr|server[\s-]side|rendering)\b`)
 	ssrWord      = regexp.MustCompile(`\bssr\b`)
+	// openingSSR is a title that opens with the grade ("Ssr Fullstack Developer (Node.js +
+	// Next.js)"): rendering is never the first word of a job title.
+	openingSSR = regexp.MustCompile(`^\W*ssr\b`)
 )
 
 // Categories resolves every category the text mentions — each alias that occurs as a
