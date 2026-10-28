@@ -78,13 +78,15 @@
         type="button"
         aria-label={s.rail.closeMenu}
         onclick={close}
-        class="-mr-1 flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground pointer-coarse:size-11"
+        class="-mr-1 flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground any-pointer-coarse:size-11"
       >
         <X class="size-4" />
       </button>
     </div>
-    <!-- Under a finger every row and the close button reach 44px; a mouse in a narrow
-         window keeps the denser list, since twenty rows at 44px scroll on most screens. -->
+    <!-- Wherever touch is available, every row and the close button reach 44px:
+         `any-pointer`, not `pointer`, so a touchscreen laptop whose primary pointer is its
+         trackpad still counts. A mouse-only narrow window keeps the denser list, since
+         twenty rows at 44px scroll on most screens. -->
     <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
       {#each navItems as item (item.href)}
         {@const active = isSectionActive(path, item.href)}
@@ -94,7 +96,7 @@
           aria-current={active ? 'page' : undefined}
           onclick={close}
           class={cn(
-            'flex items-center gap-3 rounded-md px-3 py-2 transition-colors pointer-coarse:min-h-11',
+            'flex items-center gap-3 rounded-md px-3 py-2 transition-colors any-pointer-coarse:min-h-11',
             active
               ? 'bg-secondary text-secondary-foreground'
               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
