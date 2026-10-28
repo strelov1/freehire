@@ -406,6 +406,31 @@ func TestRunReportsOnlyTheBoardsItFinishedBeforeItsDeadline(t *testing.T) {
 	}
 }
 
+// deadlineErrSource fails its fetch with the context's error once the run's deadline has
+// passed — an adapter whose last request was refused for want of time.
+type deadlineErrSource struct{ provider string }
+
+func (s deadlineErrSource) Provider() string { return s.provider }
+
+func (s deadlineErrSource) Fetch(ctx context.Context, _ sources.CompanyEntry) ([]sources.Job, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// A fetch that ERRORS because the deadline passed is interrupted too, not failed: counting it
+// failed reported 160 healthy DigitalRecruiters sites as broken on its first crawl (2026-10-28).
+func TestRunCountsAFetchTheDeadlineEndedAsInterrupted(t *testing.T) {
+	r := Runner{Registry: registry(deadlineErrSource{provider: "workday"}), Store: &fakeStore{}}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	stats, _ := r.Run(ctx, []sources.CompanyEntry{{Company: "Slow Co", Provider: "workday", Board: "slow"}})
+	got := stats["workday"]
+	if got.Interrupted != 1 || got.Failed != 0 {
+		t.Errorf("Interrupted = %d, Failed = %d; want 1 and 0", got.Interrupted, got.Failed)
+	}
+}
+
 // deadlineStreamingSource emits one posting, then holds the stream open until the run's context
 // ends and returns cleanly — a stream that would have gone on emitting had it been given time.
 type deadlineStreamingSource struct{ provider string }

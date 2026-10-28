@@ -615,6 +615,12 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 	}
 
 	raw, seen, deferred, err := r.fetchBoard(ctx, e, src)
+	if err != nil && ctx.Err() != nil {
+		// The run's context ended under the fetch: running out of time is not the board's
+		// failure, the same reading markInterrupted gives a board that returned in time.
+		log.Printf("ingest: %s board %q (%s) interrupted by the run's end: %v", e.Provider, e.Board, e.Company, err)
+		return Stats{Interrupted: 1}
+	}
 	if err != nil {
 		// Log the cause so a failed board is diagnosable (the source error carries
 		// the HTTP status / timeout); the run still isolates and continues.
