@@ -5,9 +5,8 @@
   import { ArrowRight, X } from '@lucide/svelte';
   import { currentUser } from '#lib/auth.svelte.js';
   import { dismissCliBanner, loadCliBannerDismissed, cliBannerDismissed } from '#lib/cliBanner.svelte.js';
-  import { sourceLogoUrl } from '#lib/logo.js';
   import { isAccountArea } from '#lib/shellLayout.js';
-  import { EntityLogo, buttonVariants, cn } from '#lib/ui/index.js';
+  import { buttonVariants, cn } from '#lib/ui/index.js';
 
   // A strip under the header pointing at /mcp (it pointed at /cli until the hosted MCP
   // connectors became the main way in). It asks until the account connects an agent;
@@ -29,10 +28,11 @@
     loadCliBannerDismissed();
   });
 
-  // The agents the strip names, shown as an overlapping stack of their marks (the same
-  // avatar-stack CountryFlagStack draws for flags) instead of a sentence that wrapped to
-  // four lines on a phone. Resolved by domain, as on /mcp, because "Cursor" by name
-  // alone is ambiguous to the logo proxy.
+  // The agents the strip names — Claude, ChatGPT, Cursor and Grok — drawn as one
+  // animated stack in /brands/agent-logos.svg instead of a sentence that wrapped to four
+  // lines on a phone. One file rather than four proxied logos: the marks are fixed brand
+  // art, and the lift animation runs inside the SVG with no script.
+
   // Not inside the account area. Someone in /my/** has an account and came to work in it;
   // an MCP pitch there is one more band between the header and their page, and on a phone
   // that chrome had pushed the content halfway down the screen. Decided by the URL, which
@@ -42,17 +42,6 @@
   // Gone for good once the account holds an API key or MCP grant. The user is resolved
   // in the root layout's server load, so the server leaves the strip out of the markup.
   const agentConnected = $derived(currentUser()?.agent_connected ?? false);
-
-  // `logo` overrides the proxy where it resolves the wrong mark: by name and domain it
-  // returns xAI's wordmark for Grok, so Grok Bot ships its own round mark.
-  // `mono`: a black-on-transparent mark that disappears on the dark theme's background,
-  // so it is inverted there; coloured marks stay as their brands draw them.
-  const agents: { name: string; domain: string; logo?: string; mono?: boolean }[] = [
-    { name: 'Claude', domain: 'claude.ai' },
-    { name: 'ChatGPT', domain: 'chatgpt.com', mono: true },
-    { name: 'Cursor', domain: 'cursor.com' },
-    { name: 'Grok Bot', domain: 'grok.com', logo: '/brands/grok.png', mono: true },
-  ];
 </script>
 
 {#if !inAccountArea && !agentConnected && !cliBannerDismissed()}
@@ -63,25 +52,13 @@
            them; their names live in the stack's label, so the sentence can stay short. -->
       <p class="line-clamp-2 min-w-0 flex-1 leading-snug text-muted-foreground">
         <span class="font-medium text-foreground">Search jobs inside your AI agent.</span>
-        <span
-          role="img"
-          aria-label="Claude, ChatGPT, Cursor and Grok"
-          class="mx-1 inline-flex items-center align-middle"
-        >
-          {#each agents as agent, i (agent.domain)}
-            <span
-              class={['inline-flex rounded-full ring-2 ring-background', i > 0 && '-ml-1']}
-              style:z-index={agents.length - i}
-            >
-              <EntityLogo
-                name={agent.name}
-                src={agent.logo ?? sourceLogoUrl(agent.name, agent.domain) ?? undefined}
-                size="xs"
-                class={agent.mono ? 'dark:invert' : undefined}
-              />
-            </span>
-          {/each}
-        </span>
+        <img
+          src="/brands/agent-logos.svg"
+          alt="Claude, ChatGPT, Cursor and Grok"
+          width="135"
+          height="53"
+          class="mx-1 -my-1 inline-block h-7 w-auto align-middle"
+        />
         <span class="hidden md:inline">Connect over MCP — free, no account needed to search.</span>
       </p>
 
