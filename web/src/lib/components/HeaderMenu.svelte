@@ -3,7 +3,7 @@
   import { afterNavigate } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { toPath } from '#lib/pathname.js';
-  import { Menu, X, Sun, Moon, CircleUser, SquarePlus, ShieldCheck, LogOut, LogIn } from '@lucide/svelte';
+  import { Menu, X, Sun, Moon, SquarePlus, ShieldCheck, LogOut, LogIn } from '@lucide/svelte';
   import { isAuthenticated, currentUser, logout as doLogout } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { themeStore } from '#lib/theme.svelte.js';
@@ -18,7 +18,11 @@
   import { ensureAccountSetupLoaded, setupOutstanding } from '#lib/accountSetup.svelte.js';
   import { ProviderIcon } from '#lib/ui/index.js';
   import { NAV } from '#lib/siteNav.js';
-  import { accountLinks } from '#lib/headerAccountLinks.js';
+  import { visibleAccountNav } from '#lib/accountNav.js';
+  import { accountNavIcons } from '#lib/accountNavIcons.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { messages as shellMessages, navLabel } from '#lib/i18n/shell.js';
+  import { t } from '#lib/i18n/t.js';
   import { DISCORD_URL } from '#lib/socialLinks.js';
 
   // This menu carries the site nav and the theme toggle on every viewport; on
@@ -53,6 +57,11 @@
   const isDark = $derived(themeStore.isDark);
   const email = $derived(currentUser()?.email ?? '');
   const isModerator = $derived(currentUser()?.role === 'moderator');
+
+  // The account items are the sidebar's own list — same sections, order, icons and labels
+  // — read from accountNav rather than a curated copy, which is how the two drifted apart.
+  const shell = $derived(t(shellMessages, locale()));
+  const accountItems = $derived(visibleAccountNav(isModerator, currentUser()?.beta_tester ?? false));
 
   // Static nav (always shown) and the signed-in account items (shown only when
   // authenticated). Moderation is gated on the moderator role at render time.
@@ -291,30 +300,23 @@
         <!-- Mobile-only: the account section moved to HeaderProfileMenu on desktop
              (openspec/changes/split-header-profile-menu), so this stays scoped to
              the drawer via sm:hidden rather than removed — the mobile drawer's
-             markup and item list are otherwise unchanged. accountLinks — the
-             personal items in the same order as the account sidebar (Profile is
-             rendered separately just above them, so the full run reads Profile ·
-             Activity · Tracking · Inbox · …) — is shared with HeaderProfileMenu's
-             desktop panel via #lib/headerAccountLinks, so the two cannot drift
-             apart. "Submit a job" below is a create action, split off from the
+             markup is otherwise unchanged. The account items are the sidebar's own
+             list (accountNav), the same one HeaderProfileMenu's desktop panel reads,
+             so neither can drift from the sidebar. "Submit a job" below is a create action, split off from the
              "My submissions" reading item it used to sit next to. -->
         <div class="sm:hidden">
           {#if isAuthenticated()}
-            <a
-              href={resolve('/my/profile')}
-              role="menuitem"
-              onclick={() => (open = false)}
-              class={linkClass('/my/profile')}
-              title={email}
-            >
-              <CircleUser class="size-4 shrink-0" />
-              Profile
-            </a>
-            {#each accountLinks as link (link.href)}
-              {@const Icon = link.icon}
-              <a href={resolve(toPath(link.href))} role="menuitem" onclick={() => (open = false)} class={linkClass(link.href)}>
+            {#each accountItems as item (item.href)}
+              {@const Icon = accountNavIcons[item.href]}
+              <a
+                href={resolve(toPath(item.href))}
+                role="menuitem"
+                onclick={() => (open = false)}
+                class={linkClass(item.href)}
+                title={item.href === '/my/profile' ? email : undefined}
+              >
                 <Icon class="size-4 shrink-0" />
-                {link.label}
+                {navLabel(shell, item.href, item.label)}
               </a>
             {/each}
 
