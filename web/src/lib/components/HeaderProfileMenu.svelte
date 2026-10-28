@@ -117,23 +117,27 @@
         role="menu"
         aria-label="Profile"
         {@attach menuNav({ onclose: closeSelf })}
-        class="profile-panel absolute right-0 top-full z-50 mt-2 w-56 overflow-y-auto rounded-md border border-border bg-background py-1 shadow-lg"
+        class="profile-panel absolute right-0 top-full z-50 mt-2 flex w-56 flex-col rounded-md border border-border bg-background py-1 shadow-lg"
       >
-        {#each accountItems as item (item.href)}
-          {@const Icon = accountNavIcons[item.href]}
-          <a
-            href={resolve(toPath(item.href))}
-            role="menuitem"
-            onclick={() => (open = false)}
-            class={rowBase}
-            title={item.href === '/my/profile' ? email : undefined}
-          >
-            <Icon class="size-4 shrink-0" />
-            {navLabel(shell, item.href, item.label)}
-          </a>
-        {/each}
+        <!-- Only the sections scroll: the actions below stay in view, so Log out never
+             needs a scroll to reach — the reason this menu was split off at all. -->
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          {#each accountItems as item (item.href)}
+            {@const Icon = accountNavIcons[item.href]}
+            <a
+              href={resolve(toPath(item.href))}
+              role="menuitem"
+              onclick={() => (open = false)}
+              class={rowBase}
+              title={item.href === '/my/profile' ? email : undefined}
+            >
+              <Icon class="size-4 shrink-0" />
+              {navLabel(shell, item.href, item.label)}
+            </a>
+          {/each}
+        </div>
 
-        <div class="my-1 h-px bg-border"></div>
+        <div class="my-1 h-px shrink-0 bg-border"></div>
         <a href={resolve('/submit')} role="menuitem" onclick={() => (open = false)} class={rowBase}>
           <SquarePlus class="size-4 shrink-0" />
           Submit a job
@@ -165,7 +169,7 @@
 
 <style>
   /* The panel lists every account section, which can be taller than a short window;
-     it scrolls inside the viewport instead of running off the bottom of it. */
+     it stays inside the viewport, and its section list scrolls instead. */
   .profile-panel {
     max-height: calc(100dvh - 5rem);
   }

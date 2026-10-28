@@ -37,6 +37,14 @@ describe('HeaderProfileMenu', () => {
     }
   });
 
+  // The section list can outgrow a short window; only it scrolls, so Log out stays in view.
+  it('scrolls the section list, not the actions below it', () => {
+    const list = SOURCE.indexOf('overflow-y-auto');
+    const close = SOURCE.indexOf('</div>', SOURCE.indexOf('{/each}', list));
+    expect(list).toBeGreaterThan(-1);
+    expect(close).toBeLessThan(SOURCE.indexOf('Submit a job'));
+  });
+
   it('gates Moderation on the moderator role', () => {
     expect(SOURCE).toContain('{#if isModerator}');
   });
