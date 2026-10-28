@@ -1118,6 +1118,7 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **`modalidadTrabajo: "Presencial"` is the form's default** (85% of the pool, including titles that say "Home office" or "(Remoto)"), so only `Remoto` (1.8%) and `Híbrido` (13.6%) are mapped.
 - **Salary is structured, monthly, gross and unlabelled as to currency**: `salarioMinimo`/`salarioMaximo` with `frecuenciaPago: "por Mes"`. Posters type placeholders (1, 2, 11111, 99999, a range opening at 1), so both ends must reach 100,000 before it is stored as ARS a month.
 - **Area 19 ("Tecnología, Sistemas y Telecomunicaciones", 414 postings, 4.6%) sets `IsTechHint`**, except its subareas Telecomunicaciones (107, field work) and Data Entry (2608).
+
 **Computrabajo traps** (`computrabajo`, Redarbor's general job board at `<cc>.computrabajo.com`, board = the country subdomain, `ar` only so far; live-verified 2026-10-28 from a residential IP and the crawl host):
 
 - **Not Pandapé.** `pandapelatam` is Redarbor's ATS (`<tenant>.pandape.computrabajo.com`); its tenants publish here among thousands of other employers, which is one reason the adapter is `CoverageGated`. Most posters are agencies (ADN, Grupo Gestión, Adecco, Manpower).
