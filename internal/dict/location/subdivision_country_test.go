@@ -25,6 +25,8 @@ func TestSubdivisionCodeBeforeAnotherCountry(t *testing.T) {
 		// The token after the code must close the location: here it is a city that the
 		// curated table also knows, and the line is a repeated US location.
 		{"Naples, FL, Naples, FL, US", []string{"us"}},
+		// A closing city is not a closing country, even one the curated table places.
+		{"London, ON, Manchester", []string{"ca", "gb"}},
 		// A code that spells the closing country is that country, not a subdivision to drop.
 		{"Herzliya, IL, IL", []string{"il", "us"}},
 		// The same codes in their own country, or with no country after them.

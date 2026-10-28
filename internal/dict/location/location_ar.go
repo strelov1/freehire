@@ -271,6 +271,11 @@ func foreignSubdivisionCode(code, prevTok, closing string) bool {
 	// A code that spells the closing country itself ("Herzliya, IL, IL") is that country,
 	// which the ordinary reading already gives.
 	country := countryOf(closing)
+	// nameToCountry holds curated cities as well as countries: "London, ON, Manchester"
+	// closes on a city of Britain, not on Britain, and keeps Ontario.
+	if ce, ok := cityDict[closing]; ok && ce.Country == country && !regionNotCity[closing] {
+		return false
+	}
 	return owner != "" && country != "" && owner != country && country != code &&
 		isRecognizedCityOf(prevTok, country) && !isRecognizedCityOf(prevTok, owner)
 }
