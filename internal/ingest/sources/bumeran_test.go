@@ -16,6 +16,8 @@ import (
 // two. Any other posting answers 404, as a gone one does.
 type bumeranFake struct {
 	listErr error
+	// laterErr fails every listing page after the first.
+	laterErr error
 	// expired makes the posting API answer the fixture with estado "vencido".
 	expired bool
 
@@ -40,7 +42,10 @@ func (f *bumeranFake) PostJSONWithHeaders(_ context.Context, u string, h map[str
 		return f.listErr
 	}
 	if !strings.Contains(u, "&page=0&") {
-		return json.Unmarshal([]byte(`{"total":3,"content":[]}`), v)
+		if f.laterErr != nil {
+			return f.laterErr
+		}
+		return json.Unmarshal([]byte(`{"total":6,"content":[]}`), v)
 	}
 	return bumeranFixture("testdata/bumeran/list.json", v)
 }
@@ -203,6 +208,16 @@ func TestBumeranListingFailureFailsTheCrawl(t *testing.T) {
 	f := &bumeranFake{listErr: errors.New("403")}
 	if _, err := newTestBumeran(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
 		t.Fatal("a failed first listing page did not fail the crawl")
+	}
+}
+
+// A listing cut short must not pass for a whole one: the company-scoped sweep would close the
+// postings of the employers it saw on the pages it never read.
+func TestBumeranLaterListingFailureFailsTheCrawl(t *testing.T) {
+	f := &bumeranFake{laterErr: errors.New("502")}
+	s := newTestBumeran(f)
+	if _, err := s.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
+		t.Fatal("a failed second listing page did not fail the crawl")
 	}
 }
 

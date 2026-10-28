@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -29,7 +28,7 @@ import (
 // The listing is the web app's own search API, 100 postings a request, newest first; it carries
 // everything but a usable body (its "detalle" is the body with every tag and line break
 // stripped). The body, salary and experience come from the posting API, bought only for postings
-// the catalogue lacks, newest id first, within a per-run budget; the rest are refreshed by
+// the catalogue lacks, newest first, within a per-run budget; the rest are refreshed by
 // identity.
 type bumeran struct {
 	http           HeaderJSONPoster
@@ -153,7 +152,7 @@ func (s bumeran) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 }
 
 // FetchNewGated walks the whole search, refreshes the postings already stored, and reads up to
-// maxNewPerRun of the rest, newest id first. A posting the pipeline will discard anyway is judged
+// maxNewPerRun of the rest, newest first. A posting the pipeline will discard anyway is judged
 // on its search result and yielded body-less without a request; one with a hidden employer is
 // dropped before any. A posting whose body cannot be read is not yielded; a later run tries again.
 func (s bumeran) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
@@ -226,33 +225,30 @@ func (s bumeran) nearDeadline(ctx context.Context) bool {
 }
 
 // list walks the search until a page carries no result or the search's own total is read, and
-// returns the named-employer postings newest id first. The first page failing fails the crawl; a
-// later one ends the walk with what was read, since the adapter is not swept by source.
+// returns the named-employer postings in the search's own order, newest first. Ids do not order
+// them: a ZonaJobs-born posting's 7-digit id is older-looking than any Bumeran one. Any page
+// failing fails the crawl — a partial listing would let the company-scoped sweep close the
+// postings of the employers it did see on the pages it did not.
 func (s bumeran) list(ctx context.Context) ([]bumeranCard, error) {
 	seen := make(map[int64]bool)
 	var out []bumeranCard
 	read := 0
 	for page := 0; page < s.maxPages; page++ {
 		if err := s.limiter.Wait(ctx); err != nil {
-			if page == 0 {
-				return nil, err
-			}
-			break
+			return nil, err
 		}
 		var p bumeranPage
 		body := map[string]any{"filtros": []any{}, "query": "", "internacional": false}
 		if err := s.http.PostJSONWithHeaders(ctx, fmt.Sprintf(bumeranListURL, bumeranPageSize, page), bumeranHeaders, body, &p); err != nil {
-			if page == 0 {
-				return nil, fmt.Errorf("bumeran: listing: %w", err)
-			}
-			log.Printf("bumeran: listing page %d failed; keeping the %d postings read: %v", page, len(out), err)
-			break
+			return nil, fmt.Errorf("bumeran: listing page %d: %w", page, err)
 		}
 		if len(p.Content) == 0 {
 			if page == 0 {
 				return nil, fmt.Errorf("bumeran: listing carries no posting")
 			}
-			break
+			// Postings closing during the walk shift the pages, so the end can come a little
+			// before the total stated on page 0.
+			return out, nil
 		}
 		for _, c := range p.Content {
 			read++
@@ -263,11 +259,10 @@ func (s bumeran) list(ctx context.Context) ([]bumeranCard, error) {
 			out = append(out, c)
 		}
 		if p.Total > 0 && read >= p.Total {
-			break
+			return out, nil
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].ID > out[j].ID })
-	return out, nil
+	return nil, fmt.Errorf("bumeran: listing still not exhausted after %d pages", s.maxPages)
 }
 
 // bumeranHiddenEmployer reports whether a posting hides its employer: the confidential flag
