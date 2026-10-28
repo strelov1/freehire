@@ -72,11 +72,31 @@ func (s hiringroom) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 	if !hiringroomBoard.MatchString(board) {
 		return nil, fmt.Errorf("hiringroom: board %q is not a tenant label", e.Board)
 	}
+	if off, err := s.portalOff(ctx, board); err != nil || off {
+		return nil, err
+	}
 	cards, err := s.list(ctx, board)
 	if err != nil {
 		return nil, err
 	}
 	return s.hydrate(ctx, board, e, cards, seen)
+}
+
+// portalOff reports whether the tenant has switched its public portal off. Such a tenant's
+// pager still lists every vacancy while /jobs and every vacancy page answer 404, so without
+// this check each run would request every listed vacancy only to be told it is not public —
+// 388 requests a run for one tenant measured on 2026-10-28, when 63 of 357 harvested tenants
+// had their portal off. /jobs is the legacy portal and redirects to /portal on the newer
+// layout, so it answers for both.
+func (s hiringroom) portalOff(ctx context.Context, board string) (bool, error) {
+	_, err := s.http.GetHTML(ctx, "https://"+board+".hiringroom.com/jobs")
+	if err == nil {
+		return false, nil
+	}
+	if !detailUnreadable(err) {
+		return true, nil
+	}
+	return false, fmt.Errorf("hiringroom: portal: %w", err)
 }
 
 func (s hiringroom) list(ctx context.Context, board string) ([]hiringroomCard, error) {

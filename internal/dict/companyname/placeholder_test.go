@@ -302,3 +302,30 @@ func TestPlaceholderTaleoPrefersTheFooter(t *testing.T) {
 		}
 	}
 }
+
+// Live-verified 2026-10-28: the legacy /jobs page titles itself "¡Oportunidades de Empleo en
+// {Name}!", the newer /portal (where /jobs redirects) "{Name} | Portal externo".
+func TestPlaceholderHiringRoomReadsBothPortalTitles(t *testing.T) {
+	getter := fakeHTTP{
+		"https://agd.hiringroom.com/jobs": `<html><head><title>¡Oportunidades de Empleo en Aceitera General Deheza S.A.!</title></head></html>`,
+		"https://x28.hiringroom.com/jobs": `<html><head><title>X-28 Alarmas | Portal externo</title></head></html>`,
+	}
+	reg := NewPlaceholderRegistry(getter)
+	for board, want := range map[string]string{"agd": "Aceitera General Deheza S.A.", "x28": "X-28 Alarmas"} {
+		got, err := reg["hiringroom"].Name(context.Background(), board)
+		if err != nil || got != want {
+			t.Errorf("Name(%s) = %q, %v; want %q", board, got, err, want)
+		}
+	}
+}
+
+func TestExtractHiringRoomTitleRefusesOtherPages(t *testing.T) {
+	for _, title := range []string{"Error 404 - La página no existe", "", "HiringRoom"} {
+		if got := ExtractHiringRoomTitle(title); got != "" {
+			t.Errorf("ExtractHiringRoomTitle(%q) = %q, want none", title, got)
+		}
+	}
+	if got := ExtractHiringRoomTitle("¡Oportunidades de Empleo en AFP HABITAT !"); got != "AFP HABITAT" {
+		t.Errorf("trailing space before ! = %q", got)
+	}
+}

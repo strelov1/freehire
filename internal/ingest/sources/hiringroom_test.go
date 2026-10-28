@@ -19,6 +19,9 @@ import (
 
 const hrStefPage = "https://stefaniniitsolutionsperu.hiringroom.com/jobs/getVacanciesForPortal/"
 
+// hrStefPortal is the tenant's public portal; a served one means the portal is on.
+const hrStefPortal = "https://stefaniniitsolutionsperu.hiringroom.com/jobs"
+
 func hrFixture(t *testing.T, name string) string {
 	t.Helper()
 	b, err := os.ReadFile("testdata/hiringroom/" + name)
@@ -77,7 +80,7 @@ func (f *hrFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
 // does not fail.
 func TestHiringRoomUnpublishedVacanciesAreNotAFailure(t *testing.T) {
 	f := &hrFake{missing: 404, pages: map[string]string{
-		hrStefPage + "1": hrFixture(t, "stefanini_page1.json"),
+		hrStefPortal: "<html></html>", hrStefPage + "1": hrFixture(t, "stefanini_page1.json"),
 		hrStefPage + "2": hrFixture(t, "stefanini_page2.json"),
 	}}
 	jobs, err := NewHiringRoom(f).Fetch(context.Background(), CompanyEntry{Board: "stefaniniitsolutionsperu", Company: "Stefanini"})
@@ -143,6 +146,7 @@ func TestHiringRoomDescriptionJoinsSections(t *testing.T) {
 func TestHiringRoomFetchWalksToTheTotal(t *testing.T) {
 	vacancy := "https://stefaniniitsolutionsperu.hiringroom.com/jobs/get_vacancy/"
 	f := &hrFake{pages: map[string]string{
+		hrStefPortal:                         "<html></html>",
 		hrStefPage + "1":                     hrFixture(t, "stefanini_page1.json"),
 		hrStefPage + "2":                     hrFixture(t, "stefanini_page2.json"),
 		vacancy + "66984666bb7169324800e116": hrFixture(t, "emblue_vacancy.html"),
@@ -171,17 +175,17 @@ func TestHiringRoomFetchFails(t *testing.T) {
 	ctx := context.Background()
 	e := CompanyEntry{Board: "stefaniniitsolutionsperu", Company: "Stefanini"}
 	// The second page fails before the total is reached.
-	f := &hrFake{pages: map[string]string{hrStefPage + "1": hrFixture(t, "stefanini_page1.json")}}
+	f := &hrFake{pages: map[string]string{hrStefPortal: "<html></html>", hrStefPage + "1": hrFixture(t, "stefanini_page1.json")}}
 	if _, err := NewHiringRoom(f).Fetch(ctx, e); err == nil {
 		t.Error("a walk short of the total succeeded")
 	}
 	// A page that repeats the previous one adds nothing.
-	f = &hrFake{pages: map[string]string{hrStefPage + "1": hrFixture(t, "stefanini_page1.json"), hrStefPage + "2": hrFixture(t, "stefanini_page1.json")}}
+	f = &hrFake{pages: map[string]string{hrStefPortal: "<html></html>", hrStefPage + "1": hrFixture(t, "stefanini_page1.json"), hrStefPage + "2": hrFixture(t, "stefanini_page1.json")}}
 	if _, err := NewHiringRoom(f).Fetch(ctx, e); err == nil {
 		t.Error("a repeated page succeeded")
 	}
 	// Every new vacancy unreadable.
-	f = &hrFake{pages: map[string]string{hrStefPage + "1": hrFixture(t, "stefanini_page1.json"), hrStefPage + "2": hrFixture(t, "stefanini_page2.json")}}
+	f = &hrFake{pages: map[string]string{hrStefPortal: "<html></html>", hrStefPage + "1": hrFixture(t, "stefanini_page1.json"), hrStefPage + "2": hrFixture(t, "stefanini_page2.json")}}
 	if _, err := NewHiringRoom(f).Fetch(ctx, e); err == nil {
 		t.Error("a crawl that read no vacancy page succeeded")
 	}
@@ -193,5 +197,23 @@ func TestHiringRoomFetchFails(t *testing.T) {
 func TestHiringRoomIsFullBoardListing(t *testing.T) {
 	if _, ok := NewHiringRoom(nil).(fullBoardListing); !ok {
 		t.Fatal("hiringroom must claim fullBoardListing")
+	}
+}
+
+// A tenant whose public portal is off answers 404 on /jobs; the crawl stops there, before the
+// pager and before any vacancy page.
+func TestHiringRoomPortalOffYieldsNothing(t *testing.T) {
+	f := &hrFake{missing: 404, pages: map[string]string{hrStefPage + "1": hrFixture(t, "stefanini_page1.json")}}
+	jobs, err := NewHiringRoom(f).Fetch(context.Background(), CompanyEntry{Board: "stefaniniitsolutionsperu", Company: "Stefanini"})
+	if err != nil || len(jobs) != 0 {
+		t.Fatalf("jobs = %+v, err = %v", jobs, err)
+	}
+	if len(f.forms) != 0 || len(f.gets) != 1 {
+		t.Errorf("a portal-off tenant was listed: forms=%d gets=%v", len(f.forms), f.gets)
+	}
+	// Any other failure to read the portal fails the crawl rather than reading as "off".
+	f = &hrFake{pages: map[string]string{}}
+	if _, err := NewHiringRoom(f).Fetch(context.Background(), CompanyEntry{Board: "stefaniniitsolutionsperu", Company: "Stefanini"}); err == nil {
+		t.Error("an unreadable portal succeeded")
 	}
 }

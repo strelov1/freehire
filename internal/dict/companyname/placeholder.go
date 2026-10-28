@@ -38,6 +38,10 @@ import (
 //     legal line, where the alt text is whatever a designer typed ("The black version of the
 //     Stantec logo"). The section's <title> is "Job Search" on every one.
 //
+// Measured 2026-10-28 on hiringroom's placeholder boards (the Argentina harvest wrote 352 tenant
+// labels as their company): the portal titles itself with the employer's name on both layouts
+// (ExtractHiringRoomTitle). A tenant whose public portal is off answers 404 and stays as it is.
+//
 // Deliberately absent, each having been tried against live boards: adp (neither the listing nor the requisition detail names the client), and workday (the
 // detail's hiringOrganization is a per-posting legal entity — Dover's postings name
 // "Engineered Controls International, LLC" — so it would split one employer per subsidiary).
@@ -51,7 +55,21 @@ func NewPlaceholderRegistry(http httpGetter) Registry {
 		"dayforce": dayforceResolver{http: http},
 		"ukg":      ukgResolver{http: http},
 		"taleo":    taleoResolver{http: http},
+		// The portal's /jobs redirects to /portal on the newer layout; the client follows it.
+		"hiringroom": newTitleResolver(http, "https://%s.hiringroom.com/jobs", ExtractHiringRoomTitle),
 	}
+}
+
+// ExtractHiringRoomTitle reads the employer from a HiringRoom portal's <title>, which has one
+// shape per portal layout: "¡Oportunidades de Empleo en {Name}!" on the legacy /jobs page and
+// "{Name} | Portal externo" on the newer /portal. Anything else (an error page) is refused.
+func ExtractHiringRoomTitle(title string) string {
+	title = strings.TrimSpace(html.UnescapeString(title))
+	const lead = "¡Oportunidades de Empleo en "
+	if rest, ok := strings.CutPrefix(title, lead); ok {
+		return clean(strings.TrimSuffix(strings.TrimSpace(rest), "!"))
+	}
+	return ExtractSuffixName(title, " | Portal externo")
 }
 
 // AcceptPlaceholder decodes and validates a candidate resolved for a placeholder board. No
