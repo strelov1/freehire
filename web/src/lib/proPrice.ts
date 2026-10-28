@@ -6,7 +6,9 @@ export function proMonthlyPrice(plans: PlansMatrix | null): PublicPrice | null {
   return plans?.prices.find((p) => p.tier === 'pro' && p.interval === 'month') ?? null;
 }
 
-/** "$5" rather than "$5.00": a whole price reads as one on a call to action. */
+/** "$5" rather than "$5.00": a whole price reads as one on a call to action. Formatted in
+ *  English like the landings that show it: the server writes the label and the browser
+ *  hydrates it, and a runtime-locale format would render "5,00 $" for a German browser. */
 export function priceLabel(p: PublicPrice): string {
-  return formatMinorUnits(p.amount_cents, p.currency).replace(/[.,]00$/, '');
+  return formatMinorUnits(p.amount_cents, p.currency, 'en-US').replace(/\.00$/, '');
 }

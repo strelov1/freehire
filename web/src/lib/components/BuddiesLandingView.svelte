@@ -85,6 +85,7 @@
   <!-- How it works -->
   <section id="how-it-works" class="scroll-mt-20 py-16 sm:py-20">
     <SectionLabel text="how it works" />
+    <h2 class="mt-6 max-w-2xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">From a handle to a conversation.</h2>
     <NumberedGrid items={steps} class="mt-10 sm:grid-cols-2" />
   </section>
 

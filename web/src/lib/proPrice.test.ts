@@ -23,4 +23,18 @@ describe('priceLabel', () => {
   it('keeps real cents', () => {
     expect(priceLabel(price({ amount_cents: 499 }))).toBe('$4.99');
   });
+  // The server renders the label and the browser hydrates it; a visitor whose browser
+  // speaks German must get the same "$5" the server wrote, not "5 $".
+  it('reads the same whatever the runtime locale', () => {
+    const original = Intl.NumberFormat;
+    const german = function (_locales?: string | string[], options?: Intl.NumberFormatOptions) {
+      return new original(_locales ?? 'de-DE', options);
+    } as unknown as typeof Intl.NumberFormat;
+    Intl.NumberFormat = german;
+    try {
+      expect(priceLabel(price({ amount_cents: 500 }))).toBe('$5');
+    } finally {
+      Intl.NumberFormat = original;
+    }
+  });
 });

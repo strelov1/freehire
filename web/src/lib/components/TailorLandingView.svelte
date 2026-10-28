@@ -132,6 +132,7 @@
   <!-- How it works -->
   <section id="how-it-works" class="scroll-mt-20 border-t border-border py-16 sm:py-20">
     <SectionLabel text="how it works" />
+    <h2 class="mt-6 max-w-2xl text-balance text-3xl font-semibold tracking-tight sm:text-4xl">From a posting to a PDF.</h2>
     <NumberedGrid items={steps} class="mt-10 sm:grid-cols-2" />
   </section>
 

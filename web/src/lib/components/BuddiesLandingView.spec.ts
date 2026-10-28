@@ -25,4 +25,15 @@ describe('BuddiesLandingView', () => {
     render(BuddiesLandingView);
     for (const f of BUDDIES_FAQ) expect(screen.getByText(f.question)).toBeTruthy();
   });
+  // Screen readers navigate by the outline; the how-it-works steps (h3) need an h2 above them.
+  it('never skips a heading level', () => {
+    const { container } = render(BuddiesLandingView);
+    let previous = 1;
+    for (const h of container.querySelectorAll('h1, h2, h3, h4')) {
+      const level = Number(h.tagName[1]);
+      expect(level - previous, `${h.tagName} "${h.textContent?.trim()}"`).toBeLessThanOrEqual(1);
+      previous = level;
+    }
+    expect(screen.getByRole('heading', { level: 2, name: 'From a handle to a conversation.' })).toBeTruthy();
+  });
 });

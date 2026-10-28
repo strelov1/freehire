@@ -3,6 +3,7 @@
      question rather than written in. Illustrative — the copy is DEMO_* in tailorDemo.ts.
      Rendered on the server, and under reduced motion, as its finished state. -->
 <script lang="ts">
+  import { MediaQuery } from 'svelte/reactivity';
   import {
     DEMO_ASKED,
     DEMO_BULLETS,
@@ -15,6 +16,8 @@
   const HOLD_TICKS = 2;
   const LAST = DEMO_BULLETS.length;
   const ASKED_LABEL = DEMO_REQUIREMENTS.find((r) => r.id === DEMO_ASKED)?.label;
+
+  const reduced = new MediaQuery('prefers-reduced-motion: reduce');
 
   let step = $state(LAST);
   let root: HTMLElement | undefined = $state();
@@ -29,12 +32,18 @@
   }
 
   $effect(() => {
-    if (!root || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    // Read here so the effect re-runs, and tears the loop down, when the preference flips.
+    if (!root) return;
+    if (reduced.current) {
+      step = LAST;
+      return;
+    }
     let timer: ReturnType<typeof setInterval> | undefined;
     let tick = 0;
     const start = () => {
-      tick = 0;
-      step = 0;
+      // Keep the finished state the server rendered for the hold ticks, then restart.
+      tick = LAST;
+      step = LAST;
       timer = setInterval(() => {
         tick = (tick + 1) % (LAST + 1 + HOLD_TICKS);
         step = Math.min(tick, LAST);
