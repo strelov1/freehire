@@ -13,13 +13,16 @@ a catalogue view. Authentication for it is a Fiber middleware in
 `internal/api/handler/mcpapp_account.go`, ahead of this package's own code — see
 `AccountUserIDHeader`'s doc comment in `account.go` for why.
 
-The account server's job-alert tools (`subscribe`, `list_subscriptions`, `unsubscribe`,
-`subscription_updates`, in `internal/api/handler/assistant_subscription_tools.go`) save a
-search and subscribe it through `savedsearch.Service` and `subscription.Service` — the
-website's alert button's own use cases, so `search.Narrows` and the push-device rule are
-enforced once. A subscription is only created on a channel the delivery worker would
-actually reach (`GetAlertChannelState`); "what is new" reads `subscription_matches`, the
-ledger the digests are built from, rather than re-running the search.
+The account server's job-alert tools (`subscribe`, `list_subscriptions`,
+`update_subscription`, `unsubscribe`, `subscription_updates`, in
+`internal/api/handler/assistant_subscription_tools.go`) address an ALERT by its saved search
+id: one saved search over any filters, delivered on one subscriptions row per channel —
+the website's own model. Every write goes through `savedsearch.Service` and
+`subscription.Service`, the alert controls' own use cases, so `search.Narrows` and the
+push-device rule are enforced once. A channel is only added where the delivery worker
+would actually reach (`GetAlertChannelState`). Digest timing is account-wide on the
+website, so it is shown but not changed here. "What is new" reads `subscription_matches`,
+the ledger the digests are built from, rather than re-running the search.
 
 ## Why there are two MCP servers
 

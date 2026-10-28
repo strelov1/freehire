@@ -556,14 +556,14 @@ func (q *Queries) ListSubscriptionDeliveryStats(ctx context.Context, userID int6
 }
 
 const listSubscriptionUpdates = `-- name: ListSubscriptionUpdates :many
-SELECT m.subscription_id, ss.name AS saved_search_name, m.matched_at, m.notified_at,
+SELECT m.subscription_id, ss.id AS saved_search_id, ss.name AS saved_search_name, m.matched_at, m.notified_at,
        j.title, j.company, j.location, j.public_slug, j.posted_at
 FROM subscription_matches m
 JOIN subscriptions s ON s.id = m.subscription_id
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 JOIN jobs j ON j.id = m.job_id
 WHERE s.user_id = $1
-  AND ($2::bigint IS NULL OR s.id = $2::bigint)
+  AND ($2::bigint IS NULL OR ss.id = $2::bigint)
   AND m.matched_at >= $3::timestamptz
   AND j.closed_at IS NULL
   AND NOT j.is_private
@@ -572,14 +572,15 @@ LIMIT $4
 `
 
 type ListSubscriptionUpdatesParams struct {
-	UserID         int64              `json:"user_id"`
-	SubscriptionID pgtype.Int8        `json:"subscription_id"`
-	Since          pgtype.Timestamptz `json:"since"`
-	RowLimit       int32              `json:"row_limit"`
+	UserID        int64              `json:"user_id"`
+	SavedSearchID pgtype.Int8        `json:"saved_search_id"`
+	Since         pgtype.Timestamptz `json:"since"`
+	RowLimit      int32              `json:"row_limit"`
 }
 
 type ListSubscriptionUpdatesRow struct {
 	SubscriptionID  int64              `json:"subscription_id"`
+	SavedSearchID   int64              `json:"saved_search_id"`
 	SavedSearchName string             `json:"saved_search_name"`
 	MatchedAt       pgtype.Timestamptz `json:"matched_at"`
 	NotifiedAt      pgtype.Timestamptz `json:"notified_at"`
@@ -593,14 +594,14 @@ type ListSubscriptionUpdatesRow struct {
 // The postings the notify worker matched to one account's subscriptions since a moment,
 // newest match first — the ledger the digests are built from, read rather than re-run,
 // so "what is new" answers exactly what the alerts were (or will be) about. Scoped to the
-// owner in SQL; subscription_id narrows to one when given. A posting that has closed
+// owner in SQL; saved_search_id narrows to one alert (every channel it is delivered on). A posting that has closed
 // since is left out: it is no longer something to apply to. So is a private posting, which
 // the matcher never records (it reads the public index) and which must not reach anyone else. Delivery state is returned
 // so the reader can tell an already-mailed match from one still queued.
 func (q *Queries) ListSubscriptionUpdates(ctx context.Context, arg ListSubscriptionUpdatesParams) ([]ListSubscriptionUpdatesRow, error) {
 	rows, err := q.db.Query(ctx, listSubscriptionUpdates,
 		arg.UserID,
-		arg.SubscriptionID,
+		arg.SavedSearchID,
 		arg.Since,
 		arg.RowLimit,
 	)
@@ -613,6 +614,7 @@ func (q *Queries) ListSubscriptionUpdates(ctx context.Context, arg ListSubscript
 		var i ListSubscriptionUpdatesRow
 		if err := rows.Scan(
 			&i.SubscriptionID,
+			&i.SavedSearchID,
 			&i.SavedSearchName,
 			&i.MatchedAt,
 			&i.NotifiedAt,

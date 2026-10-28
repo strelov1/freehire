@@ -4836,7 +4836,7 @@ type Querier interface {
 	// The postings the notify worker matched to one account's subscriptions since a moment,
 	// newest match first — the ledger the digests are built from, read rather than re-run,
 	// so "what is new" answers exactly what the alerts were (or will be) about. Scoped to the
-	// owner in SQL; subscription_id narrows to one when given. A posting that has closed
+	// owner in SQL; saved_search_id narrows to one alert (every channel it is delivered on). A posting that has closed
 	// since is left out: it is no longer something to apply to. So is a private posting, which
 	// the matcher never records (it reads the public index) and which must not reach anyone else. Delivery state is returned
 	// so the reader can tell an already-mailed match from one still queued.

@@ -111,6 +111,8 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"subscribe": assistant.EffectAdds,
 		// Deletes the subscription and its match record.
 		"unsubscribe": assistant.EffectOverwrites,
+		// Replaces the alert's search, name, channels or paused state.
+		"update_subscription": assistant.EffectOverwrites,
 	}
 	for _, tool := range mcpAccountTools(&assistantHandlers{}, testMCPOrigin) {
 		effect, known := want[tool.Name]

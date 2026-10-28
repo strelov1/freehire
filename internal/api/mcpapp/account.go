@@ -36,8 +36,9 @@ const accountServerInstructions = "This server acts as the signed-in freehire ac
 	"pending_review, show the person what will be sent and record their decision with " +
 	"auto_apply_review. Answers you save are sent to employers in the person's name — never " +
 	"invent one. " +
-	"Job alerts: subscribe delivers a search's new postings by email, Telegram, the app or a " +
-	"webhook, never to this chat; subscription_updates reads what they matched."
+	"Job alerts are saved searches over any filters, delivered by email, Telegram, the app or a " +
+	"webhook, never to this chat: subscribe creates one, update_subscription changes it, " +
+	"subscription_updates reads what they matched."
 
 // NewAccountServer builds the per-request signed-in MCP server for one resolved
 // user. tools is the caller's assistantDiscoveryTools() + assistantTrackingTools()

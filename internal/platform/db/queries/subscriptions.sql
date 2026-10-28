@@ -350,18 +350,18 @@ GROUP BY m.subscription_id;
 -- The postings the notify worker matched to one account's subscriptions since a moment,
 -- newest match first — the ledger the digests are built from, read rather than re-run,
 -- so "what is new" answers exactly what the alerts were (or will be) about. Scoped to the
--- owner in SQL; subscription_id narrows to one when given. A posting that has closed
+-- owner in SQL; saved_search_id narrows to one alert (every channel it is delivered on). A posting that has closed
 -- since is left out: it is no longer something to apply to. So is a private posting, which
 -- the matcher never records (it reads the public index) and which must not reach anyone else. Delivery state is returned
 -- so the reader can tell an already-mailed match from one still queued.
-SELECT m.subscription_id, ss.name AS saved_search_name, m.matched_at, m.notified_at,
+SELECT m.subscription_id, ss.id AS saved_search_id, ss.name AS saved_search_name, m.matched_at, m.notified_at,
        j.title, j.company, j.location, j.public_slug, j.posted_at
 FROM subscription_matches m
 JOIN subscriptions s ON s.id = m.subscription_id
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 JOIN jobs j ON j.id = m.job_id
 WHERE s.user_id = sqlc.arg(user_id)
-  AND (sqlc.narg(subscription_id)::bigint IS NULL OR s.id = sqlc.narg(subscription_id)::bigint)
+  AND (sqlc.narg(saved_search_id)::bigint IS NULL OR ss.id = sqlc.narg(saved_search_id)::bigint)
   AND m.matched_at >= sqlc.arg(since)::timestamptz
   AND j.closed_at IS NULL
   AND NOT j.is_private

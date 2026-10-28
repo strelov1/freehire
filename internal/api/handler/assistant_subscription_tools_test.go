@@ -10,22 +10,55 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-func TestSubscriptionSearch_DropsUnknownValuesAndRefusesUnknownNames(t *testing.T) {
-	vals, ignored, err := subscriptionSearch(" rust ", assistantFilterArgs{
-		"skills":    {"go", "golangg", "go"},
-		"work_mode": {"remote", "sometimes"},
+func ptr[T any](v T) *T { return &v }
+
+func TestApplyAlertSearch_DropsUnknownValuesAndRefusesUnknownNames(t *testing.T) {
+	vals, ignored, err := applyAlertSearch(nil, alertSearchArgs{
+		Query: ptr(" rust "),
+		Filters: &assistantFilterArgs{
+			"skills":    {"go", "golangg", "go"},
+			"work_mode": {"remote", "sometimes"},
+		},
+		SalaryMin: ptr(80000),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := encodeSavedQuery(vals); got != "q=rust&skills=go&work_mode=remote" {
+	if got := encodeSavedQuery(vals); got != "q=rust&salary_min=80000&skills=go&work_mode=remote" {
 		t.Errorf("query = %q", got)
 	}
 	if strings.Join(ignored, " ") != "skills=golangg work_mode=sometimes" {
 		t.Errorf("ignored = %v", ignored)
 	}
-	if _, _, err := subscriptionSearch("", assistantFilterArgs{"specializations": {"x"}}); err == nil {
+	if _, _, err := applyAlertSearch(nil, alertSearchArgs{Filters: &assistantFilterArgs{"specializations": {"x"}}}); err == nil {
 		t.Error("an unknown filter name must be refused, as search_jobs refuses it")
+	}
+}
+
+// An update replaces only what it names: new filters replace the facets but keep the
+// text, the salary bound and what only the website sets; a 0 bound clears it.
+func TestApplyAlertSearch_PartialUpdate(t *testing.T) {
+	base := parseSavedQuery("q=backend&skills=go,rust&salary_min=80000&skills_exclude=php&visa_sponsorship=true")
+	vals, _, err := applyAlertSearch(base, alertSearchArgs{Filters: &assistantFilterArgs{"seniority": {"senior"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := encodeSavedQuery(vals); got != "q=backend&salary_min=80000&seniority=senior&skills_exclude=php&visa_sponsorship=true" {
+		t.Errorf("filters update = %q", got)
+	}
+	vals, _, _ = applyAlertSearch(base, alertSearchArgs{SalaryMin: ptr(0)})
+	if vals.Has("salary_min") || len(vals["skills"]) != 2 {
+		t.Errorf("salary clear = %v", vals)
+	}
+}
+
+func TestAlertSearchOf_IsTheShapeTheToolsTake(t *testing.T) {
+	got := alertSearchOf("q=backend&skills=go,rust&salary_min=80000&skills_exclude=php&sort=posted_at:desc")
+	if got.Query != "backend" || strings.Join(got.Filters["skills"], ",") != "go,rust" || got.SalaryMin != 80000 {
+		t.Errorf("search = %+v", got)
+	}
+	if len(got.Other) != 1 || got.Other["skills_exclude"] != "php" {
+		t.Errorf("other = %v, want only the website-only exclusion", got.Other)
 	}
 }
 
@@ -70,7 +103,7 @@ func TestFoldUpdates_OnePostingPerSlug(t *testing.T) {
 	if len(out) != 2 || !truncated {
 		t.Fatalf("out = %d truncated = %v, want 2 and true", len(out), truncated)
 	}
-	if !out[0].Delivered || len(out[0].Subscriptions) != 1 || out[0].URL != "https://freehire.me/jobs/a" {
+	if !out[0].Delivered || len(out[0].Alerts) != 1 || out[0].URL != "https://freehire.me/jobs/a" {
 		t.Errorf("folded = %+v", out[0])
 	}
 }
