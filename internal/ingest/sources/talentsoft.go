@@ -331,7 +331,8 @@ type talentsoftDimValue struct {
 // talentsoftSplitSlack is how far a split's values may fall short of the slice they split: a
 // posting filed under no value of a field counts in the total and under none of its values.
 // Safran's 2,104 permanent European postings sum to 2,103 by job family (2026-10-28); EDF's
-// 1,997 sum to 1,934 by region, the rest being filed under a country alone. What a split
+// 1,997 sum to 1,934 by region in its search form's counts (a live walk of those regions read
+// 1,904, postings moving between the two reads), the rest being filed under a country alone. What a split
 // leaves out is not read, and the walk's own 90% floor bounds the whole loss.
 func talentsoftSplitSlack(total int) int { return max(2, total*5/100) }
 
