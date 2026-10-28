@@ -14,6 +14,7 @@
   const STEP_MS = 1800;
   const HOLD_TICKS = 2;
   const LAST = DEMO_BULLETS.length;
+  const ASKED_LABEL = DEMO_REQUIREMENTS.find((r) => r.id === DEMO_ASKED)?.label;
 
   let step = $state(LAST);
   let root: HTMLElement | undefined = $state();
@@ -65,8 +66,8 @@
     <span>example</span>
   </figcaption>
   <p class="sr-only">
-    An example: the agent rewrites three CV bullets toward a backend payments role, the job match
-    rises from {DEMO_SCORES[0]} to {DEMO_SCORES[LAST]}, and it asks about Kubernetes operators
+    An example: the agent rewrites {LAST} CV bullets toward a backend payments role, the job match
+    rises from {DEMO_SCORES[0]} to {DEMO_SCORES[LAST]}, and it asks about {ASKED_LABEL}
     instead of writing them in.
   </p>
   <div aria-hidden="true" class="grid gap-px bg-border sm:grid-cols-5">
@@ -85,7 +86,7 @@
           ? 'opacity-100'
           : 'invisible opacity-0'}"
       >
-        Kubernetes operators: not in your history — asked you first.
+        {ASKED_LABEL}: not in your history — asked you first.
       </p>
     </div>
     <div class="relative bg-background p-4 sm:col-span-3">

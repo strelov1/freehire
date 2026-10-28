@@ -11,7 +11,7 @@
   import type { PublicPrice } from '#lib/types.js';
   import { Button } from '#lib/ui/index.js';
 
-  const { price, size = 'lg' }: { price: PublicPrice | null; size?: 'lg' | 'md' } = $props();
+  const { price }: { price: PublicPrice | null } = $props();
 
   let busy = $state(false);
   let error = $state<string | null>(null);
@@ -35,10 +35,10 @@
 </script>
 
 {#if price}
-  <Button variant="primary" {size} disabled={busy} onclick={checkout}>
+  <Button variant="primary" size="lg" disabled={busy} onclick={checkout}>
     Get Pro — {priceLabel(price)}/mo
   </Button>
   {#if error}<p class="w-full text-sm text-destructive" role="alert">{error}</p>{/if}
 {:else}
-  <Button href={resolve('/pricing')} variant="primary" {size}>See Pro plans</Button>
+  <Button href={resolve('/pricing')} variant="primary" size="lg">See Pro plans</Button>
 {/if}

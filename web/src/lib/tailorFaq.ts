@@ -30,7 +30,7 @@ export const TAILOR_FAQ: FaqItem[] = [
   {
     question: 'How much does it cost, and how do I cancel?',
     answer:
-      'Tailoring is part of Pro, which also covers cover letters, the AI assistant and auto-apply. It is billed monthly and you can cancel any time from your plan page; Pro stays on until the end of the period you paid for.',
+      'Tailoring is part of Pro, which also covers cover letters, the AI assistant and auto-apply. It is billed monthly or yearly and you can cancel any time from your plan page; Pro stays on until the end of the period you paid for.',
   },
   {
     question: 'What happens to my data?',

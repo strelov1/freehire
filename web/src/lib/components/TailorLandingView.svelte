@@ -18,7 +18,7 @@
       key: 'have',
       title: "You have it, it's just buried",
       body: 'Things the job asks for that your history already covers, but your CV mentions in passing or three roles down. These get brought forward and said plainly.',
-      sample: ['Kafka at scale', 'Payments migrations', 'Mentoring'],
+      sample: ['Kafka', 'Payments migrations', 'Mentoring'],
     },
     {
       key: 'gap',
@@ -192,7 +192,7 @@
   <section class="border-t border-border py-16 sm:py-20">
     <figure class="mx-auto max-w-2xl">
       <blockquote class="text-xl leading-relaxed tracking-tight sm:text-2xl">
-        Most AI CV tools will happily write that you led a Kubernetes migration you never touched.
+        It is easy for an AI to write that you led a Kubernetes migration you never touched.
         It reads well right up to the first interview question about it. So the agent here works the
         other way round: it only uses what you actually did, and when the job asks for something it
         can't find in your history, it asks you instead of writing it. That rule lives in the code,

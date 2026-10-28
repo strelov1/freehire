@@ -1,5 +1,4 @@
-// The Pro monthly price as the backend's plan matrix states it — the one source both
-// /pricing and the feature landings quote, so no page carries its own number.
+// The Pro monthly price as the backend's plan matrix states it, for feature landings that quote it.
 import { formatMinorUnits } from './money';
 import type { PlansMatrix, PublicPrice } from './types';
 

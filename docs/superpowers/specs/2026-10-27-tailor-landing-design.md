@@ -10,9 +10,9 @@ reads like an engineering note: path syntax (`experience[i].bullets[j]`), a CLI 
 paragraphs, and no price. It never shows a CV getting better.
 
 The redesign shows the result, states the price, and answers the buyer's fears.
-References for the target: niceresu.me (a demo of the real product, price in the hero,
-comparison table, founder note, objection-handling FAQ) and enhancv.com (before and after
-copy, visible scores).
+References: two well-known CV-builder landings — one showing a recording of the real
+product, price in the hero, a comparison table, a founder note and an objection-handling
+FAQ; the other showing before-and-after copy and visible scores.
 
 ## Constraints
 
@@ -58,7 +58,7 @@ copy, visible scores).
    "—" where we don't know, never a guess.
 8. **Founder note.** A short note in the first person, signed "Ilya Strelov, founder":
 
-   > Most AI CV tools will happily write that you led a Kubernetes migration you never
+   > It is easy for an AI to write that you led a Kubernetes migration you never
    > touched. It reads well right up to the first interview question about it. So the agent
    > here works the other way round: it only uses what you actually did, and when the job
    > asks for something it can't find in your history, it asks you instead of writing it.
