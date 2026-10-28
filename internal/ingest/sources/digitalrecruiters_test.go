@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -220,5 +221,45 @@ func TestDigitalrecruitersRejectsANonHostBoard(t *testing.T) {
 	}
 	if len(f.reqs) != 0 {
 		t.Errorf("requests sent: %q", f.reqs)
+	}
+}
+
+func TestDigitalrecruitersRunBudgetSpansBoards(t *testing.T) {
+	f := newDRFake(t)
+	s := newDRTest(f)
+	s.runBudget = new(atomic.Int64)
+	s.runBudget.Store(1)
+	seenNone := func(string) bool { return false }
+	for range 2 {
+		if _, err := s.FetchNew(context.Background(), CompanyEntry{Board: drTestBoard}, seenNone); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The site owns three new postings, and it is crawled twice (two boards, in a real run):
+	// the run's single read is spent once, and the rest wait for a later run.
+	reads := 0
+	for _, r := range f.reqs {
+		if strings.Contains(r, drListingPath+"/") {
+			reads++
+		}
+	}
+	if reads != 1 {
+		t.Fatalf("%d posting reads, want the run budget's 1", reads)
+	}
+}
+
+// refusingLimiter answers the way rate.Limiter does when no slot opens before the deadline.
+type refusingLimiter struct{}
+
+func (refusingLimiter) Wait(context.Context) error {
+	return errors.New("rate: Wait(n=1) would exceed context deadline")
+}
+
+func TestDigitalrecruitersWaitSitsOutAnUnreachableDeadline(t *testing.T) {
+	s := digitalrecruiters{limiter: refusingLimiter{}}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := s.wait(ctx); !errors.Is(err, context.DeadlineExceeded) || ctx.Err() == nil {
+		t.Fatalf("wait = %v (ctx %v); want the context's own deadline error, returned once it has passed", err, ctx.Err())
 	}
 }

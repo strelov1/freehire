@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/strelov1/freehire/internal/dict/location"
@@ -40,11 +41,15 @@ import (
 // and two boards storing one posting would be a duplicate the pipeline cannot see.
 //
 // The API host publishes no robots.txt; the sites declare "Crawl-delay: 10" and are not read.
-// Every request of the run goes through one limiter at drVendorRate.
+// Every request of the run goes through one limiter at drVendorRate, so the run's posting reads
+// are bounded across ALL boards (runBudget), not only per board: the first crawl spent its 40
+// minutes hydrating the first ~45 sites, 300 postings each, and 160 sites never got their
+// listing read before the deadline (2026-10-28).
 type digitalrecruiters struct {
 	http           digitalrecruitersHTTP
 	limiter        waiter
 	maxNewPerRun   int
+	runBudget      *atomic.Int64
 	deadlineMargin time.Duration
 }
 
@@ -60,6 +65,7 @@ func NewDigitalrecruiters(c digitalrecruitersHTTP) Source {
 		http:           c,
 		limiter:        rate.NewLimiter(drVendorRate, 1),
 		maxNewPerRun:   drMaxNewPerBoard,
+		runBudget:      drRunBudget(),
 		deadlineMargin: drDeadlineMargin,
 	}
 }
@@ -80,8 +86,12 @@ const (
 	// drMaxPages bounds the walk; needing more fails the crawl.
 	drMaxPages = 50
 	// drMaxNewPerBoard bounds the postings one site hydrates in a run, so a 3,000-posting site
-	// does not spend the run's whole one-request-a-second budget.
-	drMaxNewPerBoard = 300
+	// does not spend the run's whole budget.
+	drMaxNewPerBoard = 150
+	// drMaxNewPerRun bounds the postings the whole run hydrates. At one request a second the
+	// ~350 sites' listings take two requests each (~12 minutes); 1,200 posting reads (20
+	// minutes) leave the rest of the 50-minute run for the pipeline's writes and slow pages.
+	drMaxNewPerRun = 1200
 	// drDeadlineMargin is the time hydration leaves the pipeline to write what it read.
 	drDeadlineMargin = 5 * time.Minute
 )
@@ -217,21 +227,37 @@ func (s digitalrecruiters) FetchNew(ctx context.Context, e CompanyEntry, seen fu
 		log.Printf("digitalrecruiters: board %q: hydration budget %d reached; %d new postings deferred to a later run",
 			board, s.maxNewPerRun, deferred)
 	}
-	outOfTime := 0
+	outOfTime, outOfBudget := 0, 0
 	for _, p := range fresh {
-		if s.nearDeadline(ctx) {
+		switch {
+		case s.nearDeadline(ctx):
 			outOfTime++
+			continue
+		case !s.spend():
+			outOfBudget++
 			continue
 		}
 		if j, ok := s.detail(ctx, board, locale, e, p); ok {
 			jobs = append(jobs, j)
 		}
 	}
-	if outOfTime > 0 {
-		log.Printf("digitalrecruiters: board %q: %d new postings left unread as the run neared its deadline, deferred to later runs",
-			board, outOfTime)
+	if outOfTime > 0 || outOfBudget > 0 {
+		log.Printf("digitalrecruiters: board %q: %d new postings left unread (%d near the run's deadline, %d past the run's budget of %d), deferred to later runs",
+			board, outOfTime+outOfBudget, outOfTime, outOfBudget, drMaxNewPerRun)
 	}
 	return jobs, nil
+}
+
+// drRunBudget is a fresh run-wide posting budget; the registry builds the adapter once per run.
+func drRunBudget() *atomic.Int64 {
+	b := new(atomic.Int64)
+	b.Store(drMaxNewPerRun)
+	return b
+}
+
+// spend takes one posting read from the run-wide budget, reporting false once it is gone.
+func (s digitalrecruiters) spend() bool {
+	return s.runBudget == nil || s.runBudget.Add(-1) >= 0
 }
 
 // nearDeadline reports whether the run's deadline is closer than the margin hydration leaves to
@@ -241,12 +267,19 @@ func (s digitalrecruiters) nearDeadline(ctx context.Context) bool {
 	return ok && time.Until(d) < s.deadlineMargin
 }
 
-// wait spaces every request of the run.
+// wait spaces every request of the run. When the limiter can already tell that no slot opens
+// before the run's deadline it refuses at once, ahead of the deadline itself; this request is
+// then never going to be sent, so wait sits the deadline out and returns the context's own
+// error, which the pipeline reads as an interrupted board rather than a failed one.
 func (s digitalrecruiters) wait(ctx context.Context) error {
 	if s.limiter == nil {
 		return nil
 	}
-	return s.limiter.Wait(ctx)
+	if err := s.limiter.Wait(ctx); err != nil {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return nil
 }
 
 // site reads the careers-site configuration. A site the platform does not know (404) or has
