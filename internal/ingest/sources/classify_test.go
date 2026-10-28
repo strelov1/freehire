@@ -81,7 +81,9 @@ func TestSourceTypesLeavesUnclassifiedSourcesBlank(t *testing.T) {
 	if got := typeOf("greenhouse"); got != KindATS {
 		t.Errorf("greenhouse = %q, want %q", got, KindATS)
 	}
-	if got := typeOf("weblink"); got != "" {
-		t.Errorf("weblink = %q, want blank: an unclassified source carries no source_type", got)
+	for _, source := range []string{"weblink", "sitemapldjson"} {
+		if got := typeOf(source); got != "" {
+			t.Errorf("%s = %q, want blank: an unclassified source carries no source_type", source, got)
+		}
 	}
 }

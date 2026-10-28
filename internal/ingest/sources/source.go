@@ -273,6 +273,11 @@ type aggregator interface{ aggregator() }
 // postings as copies, but what it IS to a reader choosing sources is a community channel.
 type social interface{ social() }
 
+// unknownOrigin marks a generic adapter whose board can be any site — an employer's, an ATS
+// tenant's or a job board's — so the adapter alone cannot say what kind of source a posting
+// came from. ProviderKind answers KindOther for it rather than guessing.
+type unknownOrigin interface{ unknownOrigin() }
+
 // selfClosing marks an adapter that closes its own removed postings (via a Job with
 // Removed set, emitted from its stream) and therefore must be excluded from the post-run
 // unseen sweep. Such a source re-reports only changed postings each run, so the sweep's

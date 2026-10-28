@@ -9,7 +9,8 @@ import "github.com/strelov1/freehire/internal/job/job"
 //     (apple, google, sber, …);
 //   - anything with a per-tenant board is a multi-tenant ATS platform
 //     (greenhouse, lever, workday, …);
-//   - a social adapter, or the Telegram extraction pipeline, reads community channels.
+//   - a social adapter, or the Telegram extraction pipeline, reads community channels;
+//   - a generic adapter whose board can be any site (sitemapldjson) is KindOther.
 //
 // The four kinds a document can carry are vocab.SourceTypeValues; KindOther is never
 // written onto one.
@@ -43,6 +44,9 @@ func ProviderKind(reg map[string]Source, provider string) string {
 		}
 		return KindOther
 	}
+	if _, ok := src.(unknownOrigin); ok {
+		return KindOther
+	}
 	if _, ok := src.(social); ok {
 		return KindSocial
 	}
@@ -67,9 +71,14 @@ func SourceTypes(reg map[string]Source) func(source string) string {
 	for provider := range nonAdapterKinds {
 		types[provider] = ProviderKind(reg, provider)
 	}
-	// Every other source resolves to "" through the map miss: ProviderKind would call it
-	// KindOther, which no document carries.
-	return func(source string) string { return types[source] }
+	return func(source string) string {
+		// KindOther, and every source neither loop saw, carries no value: no document
+		// carries "other", so a filter cannot be offered for it.
+		if kind := types[source]; kind != KindOther {
+			return kind
+		}
+		return ""
+	}
 }
 
 // EmployerURLProviders names the providers whose stored job URL really is the employer's own

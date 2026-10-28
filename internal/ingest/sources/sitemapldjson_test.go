@@ -288,8 +288,11 @@ func TestSitemapLDJSONRegisteredAsHydratingBoard(t *testing.T) {
 	if _, ok := src.(fullBoardListing); ok {
 		t.Fatal("sitemapldjson claims fullBoardListing")
 	}
-	if kind := ProviderKind(All(nil), "sitemapldjson"); kind != KindATS {
-		t.Fatalf("ProviderKind = %q, want %q", kind, KindATS)
+	// A sitemap can belong to an employer, an ATS tenant or a job board, so the adapter
+	// says nothing about where a posting came from — and an `ats` label would put a job
+	// board's postings behind the "originals only" filter.
+	if kind := ProviderKind(All(nil), "sitemapldjson"); kind != KindOther {
+		t.Fatalf("ProviderKind = %q, want %q", kind, KindOther)
 	}
 }
 
