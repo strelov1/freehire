@@ -298,3 +298,41 @@ func TestIntegration_ClosingAJobRemovesItsDocument(t *testing.T) {
 		t.Errorf("search_delete_outbox has %d rows, want 0 (drained)", n)
 	}
 }
+
+// A crawled posting its source has not shown for longer than search.UnseenWindow never
+// enters the index, while a fresh posting in the same wave does — the drain asks the same
+// search.Withheld the full rebuild does.
+func TestIntegration_SearchDrainSkipsAPostingItsSourceStoppedShowing(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := testdb.Pool(t)
+
+	client := search.NewClient(meiliURL, key)
+	if err := client.EnsureIndex(ctx); err != nil {
+		t.Fatalf("EnsureIndex: %v", err)
+	}
+
+	freshID := seedJob(t, pool, "fresh", "Platform Engineer", "acme", "fp-fresh", []string{}, nil)
+	staleID := seedJob(t, pool, "stale", "Data Engineer", "acme", "fp-stale", []string{}, nil)
+	if _, err := pool.Exec(ctx,
+		`UPDATE jobs SET source = 'greenhouse',
+		        last_seen_at = CASE WHEN id = $2 THEN now() - interval '15 days' ELSE now() END
+		  WHERE id = ANY($1)`,
+		[]int64{freshID, staleID}, staleID); err != nil {
+		t.Fatalf("stamp last_seen_at: %v", err)
+	}
+	enqueue(t, pool, freshID)
+	enqueue(t, pool, staleID)
+
+	runner := searchdrain.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: db.New(pool)}}
+	if _, err := runner.Run(ctx, searchdrain.RunOptions{BatchSize: 500, LeaseSeconds: 180, MaxAttempts: 3}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if found, _ := meiliDoc(t, meiliURL, key, freshID); !found {
+		t.Fatalf("fresh job %d not indexed", freshID)
+	}
+	if found, _ := meiliDoc(t, meiliURL, key, staleID); found {
+		t.Errorf("job %d its source stopped showing 15 days ago reached the index", staleID)
+	}
+}

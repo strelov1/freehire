@@ -2,12 +2,20 @@ package handler
 
 import (
 	"context"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/search/search"
 )
+
+// unseenWindows is search's unseen-posting rule, resolved once from the adapter taxonomy:
+// a recommendation must not send anyone to a posting search itself withholds because its
+// source stopped listing it.
+var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow))
 
 // defaultSimilarLimit / maxSimilarLimit bound how many neighbours the similar-jobs
 // endpoint returns: a small default sized for a "Similar jobs" row on the detail
@@ -71,6 +79,10 @@ type similarReader interface {
 // similar_jobs; each passes its own visibility rule, and the app's is stricter (it also
 // drops duplicates, as every one of its tools does).
 //
+// Whatever show admits, a neighbour its source has stopped listing is dropped too
+// (search.UnseenWindows): it is withheld from search, and a recommendation is a search
+// result by another name. The posting's own page still serves it.
+//
 // It fetches the whole stored (nearest-first, capped at cmd/similar-backfill's -similar
 // count) list, not just the first `limit` ids: some may turn out closed or dangling, and
 // truncating before the filter would silently starve a limit=maxSimilarLimit request even
@@ -91,9 +103,10 @@ func similarViews(ctx context.Context, q similarReader, id int64, limit int, sho
 		return nil, err
 	}
 
+	now := time.Now()
 	byID := make(map[int64]int, len(rows))
 	for i, row := range rows {
-		if show(row) {
+		if show(row) && !unseenWindows.Unseen(row, now) {
 			byID[row.ID] = i
 		}
 	}

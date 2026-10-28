@@ -45,6 +45,9 @@ func (himalayas) boardless() {}
 
 func (himalayas) aggregator() {}
 
+// himalayas pages only its freshest slice per run; cmd/liveness checks the site's own sitemap.
+func (himalayas) livenessProbed() {}
+
 // himalayasResponse is one offset page: the postings plus the catalogue-wide total used to
 // decide whether another page is due.
 type himalayasResponse struct {

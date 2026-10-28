@@ -38,6 +38,10 @@ type clusterKey struct {
 // adapter taxonomy (which needs no credential, so every host answers alike).
 var sourceTypeOf = sources.SourceTypes(sources.Taxonomy())
 
+// unseenWindows is how long each crawled source's postings may go unseen before search
+// withholds them (search.Withheld), resolved once from the same adapter taxonomy.
+var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow))
+
 func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	// Resolve every job's role-cluster counts (and, for clusters with more than one open
 	// row, geography) in two queries scoped to the whole wave instead of one
@@ -111,16 +115,15 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	}
 
 	docs := make([]search.JobDocument, 0, len(jobs))
+	now := time.Now()
 	for _, job := range jobs {
-		// A job whose category neither the title dictionary nor the LLM ever resolved AND
-		// whose is_tech is not confidently true (search.CategoryUnresolved), or one with no
-		// posting body at all (search.DescriptionMissing), never enters the index — see
-		// cmd/reindex's splitJobs for the same rules applied to the full-rebuild path. This
-		// skips rather than deletes: if the row is a rare pre-existing index entry from
-		// before these rules existed, it goes stale here the same way a closed job's does
-		// between drain waves (internal/search/searchdrain/AGENTS.md) — the next full
-		// reindex swap is the reconciler for both.
-		if search.CategoryUnresolved(job) || search.DescriptionMissing(job) {
+		// A job search withholds — no resolved category, no posting body, or a source that
+		// stopped showing it (search.Withheld) — never enters the index; cmd/reindex's
+		// splitJobs applies the same predicate to the full-rebuild path. This skips rather
+		// than deletes: an entry already in the index goes stale here the same way a closed
+		// job's does between drain waves (internal/search/searchdrain/AGENTS.md) — the next
+		// full reindex swap is the reconciler for both.
+		if search.Withheld(job, now, unseenWindows) {
 			continue
 		}
 		doc, err := search.FromJob(job, desc[job.ID], sourceTypeOf(job.Source))
@@ -133,7 +136,7 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 				repost, mass = c.RepostCount, c.MassCount
 			}
 		}
-		reality := jobview.ClassifyReality(job, time.Now(), int(repost), int(mass))
+		reality := jobview.ClassifyReality(job, now, int(repost), int(mass))
 		doc.Reality = &reality
 		if g, ok := geo[job.ID]; ok {
 			doc.MergeClosureGeography(jobview.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})

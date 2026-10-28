@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"testing"
@@ -115,6 +116,40 @@ func TestSplitJobs_BodylessJobsDeletedNotIndexed(t *testing.T) {
 	}
 	if got, want := deleteIDs, []int64{2, 3}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("deleteIDs = %v, want %v", got, want)
+	}
+}
+
+// A crawled posting its source has not shown for longer than search.UnseenWindow leaves the
+// index — the safety net for a board whose failing crawl never swept it — while a source no
+// adapter re-crawls (telegram) and a source whose unseen reading is not evidence (adzuna,
+// judged by its own liveness probe) keep theirs.
+func TestSplitJobs_UnseenPostingsDeletedNotIndexed(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	stale := pgtype.Timestamptz{Time: now.Add(-search.UnseenWindow - time.Hour), Valid: true}
+	fresh := pgtype.Timestamptz{Time: now.Add(-time.Hour), Valid: true}
+	job := func(id int64, source string, seen pgtype.Timestamptz) db.Job {
+		return db.Job{ID: id, Source: source, Title: "Backend Engineer", PublicSlug: fmt.Sprintf("j-%d", id),
+			Category: "backend", Description: "<p>Build things.</p>", LastSeenAt: seen}
+	}
+
+	docs, deleteIDs, err := splitJobs([]db.Job{
+		job(1, "greenhouse", fresh),
+		job(2, "greenhouse", stale),
+		job(3, "telegram", stale),
+		job(4, "adzuna", stale),
+	}, nil, nil, nil, now)
+	if err != nil {
+		t.Fatalf("splitJobs: %v", err)
+	}
+	var indexed []int64
+	for _, d := range docs {
+		indexed = append(indexed, d.ID)
+	}
+	if want := []int64{1, 3, 4}; !reflect.DeepEqual(indexed, want) {
+		t.Fatalf("indexed = %v, want %v", indexed, want)
+	}
+	if want := []int64{2}; !reflect.DeepEqual(deleteIDs, want) {
+		t.Fatalf("deleteIDs = %v, want %v", deleteIDs, want)
 	}
 }
 

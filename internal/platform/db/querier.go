@@ -6270,8 +6270,8 @@ type Querier interface {
 	// the wider table scope did all three: 294,021 company URLs in the sitemap of which
 	// most rendered "0 open jobs", `remote_regions` offering regions whose jobs the click
 	// through could not find, and Stripe listed at 570 on /companies against 444 on its
-	// own page. The three predicates below are the ones cmd/reindex's splitJobs applies
-	// on top of closed/duplicate; keep the two in step.
+	// own page. The four predicates below (private, body, category, unseen) are the ones
+	// cmd/reindex's splitJobs applies on top of closed/duplicate; keep the two in step.
 	//
 	// industries_derived (see derived_eligible/derived_ind below) is a SECOND-ORDER
 	// derivation — computed from this pass's own `dom` and the company's curated
@@ -6280,6 +6280,12 @@ type Querier interface {
 	// internal/dict/industrytag.DomainIndustryPairs(), passed as parameters so this query
 	// has exactly one copy of the domain→industry table to read, not a second one typed
 	// into SQL.
+	//
+	// `unseen_sources`/`unseen_seconds` are search.Withheld's unseen rule as parallel arrays
+	// (internal/ingest/sources.UnseenWindows, resolved by the caller): a posting whose source is
+	// listed and has not shown it for longer than that many seconds is not in search, so it is
+	// not counted here either. A source not listed is never excluded on this ground — the same
+	// reading search gives it.
 	// gov marks a company whose open jobs come from an exclusively-government source
 	// (usajobs = US federal, neogov = US state/local gov ATS). Generic ATS (workday,
 	// greenhouse, …) carry government jobs too, so they are deliberately NOT a signal.

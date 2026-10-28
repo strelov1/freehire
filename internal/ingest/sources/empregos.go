@@ -96,6 +96,10 @@ func (empregos) boardless() {}
 // Thousands of employers post here, each named per posting.
 func (empregos) aggregator() {}
 
+// empregos cannot prove it read the postings that name no state, so an unseen one may be live;
+// cmd/liveness follows a removed posting's redirect to /404.
+func (empregos) livenessProbed() {}
+
 type empregosFilter struct {
 	FacetItem   int    `json:"facetItem"`
 	Description string `json:"description"`

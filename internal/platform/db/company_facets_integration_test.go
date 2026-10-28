@@ -172,6 +172,50 @@ func TestRefreshCompanyFacetsCountsConfirmedTechnicalJobs(t *testing.T) {
 	}
 }
 
+// TestRefreshCompanyFacetsSkipsUnseenPostings pins the count in step with search.Withheld's
+// unseen rule: a posting its source has not shown for longer than that source's window is
+// not in search, so it is not counted either — while a source given no window (telegram:
+// nothing re-crawls it) keeps its stale posting counted.
+func TestRefreshCompanyFacetsSkipsUnseenPostings(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	if _, err := pool.Exec(ctx, "TRUNCATE companies, jobs RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	insertCompany(t, pool, "acme", "Acme")
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug, regions, countries,
+		                   enrichment, description, category, last_seen_at)
+		 VALUES ('greenhouse', 'acme:1', 'http://example.test/1', 'Backend Engineer', 'job-1', 'acme',
+		         '{europe}', '{de}', '{}', 'We are hiring.', 'backend', now() - interval '1 day'),
+		        ('greenhouse', 'acme:2', 'http://example.test/2', 'Data Engineer', 'job-2', 'acme',
+		         '{americas}', '{us}', '{}', 'We are hiring.', 'data', now() - interval '15 days'),
+		        ('telegram', 'chan:3', 'http://example.test/3', 'QA Engineer', 'job-3', 'acme',
+		         '{asia}', '{sg}', '{}', 'We are hiring.', 'qa', now() - interval '40 days')`); err != nil {
+		t.Fatalf("insert jobs: %v", err)
+	}
+
+	if _, err := q.RefreshCompanyFacets(ctx, RefreshCompanyFacetsParams{
+		UnseenSources: []string{"greenhouse"},
+		UnseenSeconds: []int64{14 * 24 * 3600},
+	}); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	var jobCount int
+	if err := pool.QueryRow(ctx, "SELECT job_count FROM companies WHERE slug = 'acme'").Scan(&jobCount); err != nil {
+		t.Fatalf("read job_count: %v", err)
+	}
+	if jobCount != 2 {
+		t.Errorf("job_count = %d, want 2 (the fresh greenhouse posting and the telegram one)", jobCount)
+	}
+	if got := companyTextArray(t, pool, "acme", "regions"); !slices.Equal(got, []string{"asia", "europe"}) {
+		t.Errorf("regions = %v, want [asia europe] — the unseen posting's region must not be offered", got)
+	}
+}
+
 // TestRefreshCompanyFacetsIndustriesDerived covers the #2088 remainder: the
 // industries_derived column bakes both the #2082 precedence (a curated company is
 // never matched through its domains) and the new domain-count threshold (a company

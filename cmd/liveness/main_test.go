@@ -9,6 +9,19 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
+// A source this worker probes is one whose crawl cannot re-list every live posting, so search
+// must not withhold its postings for going unseen — the probe is what closes the dead ones.
+// The adapter's livenessProbed marker is what tells search that; a member added here without
+// it would have its live postings hidden after two weeks.
+func TestProbedSourcesAreSparedSearchsUnseenRule(t *testing.T) {
+	windows := sources.UnseenWindows(sources.Taxonomy(), time.Hour)
+	for _, p := range probeDespiteRegistered {
+		if w, ok := windows[p]; ok {
+			t.Errorf("%q is probed here but search withholds its postings after %v unseen — add the livenessProbed marker to its adapter", p, w)
+		}
+	}
+}
+
 func TestMatchingProvidersMatchesBareAndDashedMembers(t *testing.T) {
 	providers := []string{"whatjobs", "whatjobs-de", "whatjobs-uk", "himalayas", "whatjobsomething"}
 	got := matchingProviders(providers, []string{"whatjobs"})

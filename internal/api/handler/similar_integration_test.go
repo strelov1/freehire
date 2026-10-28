@@ -67,16 +67,22 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 	closedID := seedJob("gh:closed", "neighbour-closed-cccc9999", "Closed Neighbour", true)
 	privateID := seedPrivateJob("gh:private", "neighbour-private-dddd8888", "Private Neighbour")
 	const danglingID int64 = 987654321 // never inserted: simulates a hard-deleted stale entry.
+	// Open, but its source has not listed it for longer than search.UnseenWindow, so search
+	// withholds it and a recommendation must not send anyone to it either.
+	unseenID := seedJob("gh:unseen", "neighbour-unseen-ffff7777", "Unseen Neighbour", false)
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET last_seen_at = now() - interval '15 days' WHERE id = $1`, unseenID); err != nil {
+		t.Fatalf("age the unseen neighbour: %v", err)
+	}
 
-	// Interleave the closed, private and dangling ids among the open ones so a passing
-	// test proves order preservation AND graceful dropping at once, not just one or the
-	// other: the stored order is
-	//   [open0, open1, closed, open2, dangling, private, open3, open4, open5, open6, open7]
+	// Interleave the closed, private, unseen and dangling ids among the open ones so a
+	// passing test proves order preservation AND graceful dropping at once, not just one or
+	// the other: the stored order is
+	//   [open0, open1, closed, open2, dangling, private, open3, unseen, open4, open5, open6, open7]
 	// and the only correct filtered-and-reordered output is the open ids in their
-	// original relative order with the other three removed.
+	// original relative order with the other four removed.
 	similarJobIDs := []int64{
 		openIDs[0], openIDs[1], closedID, openIDs[2], danglingID, privateID,
-		openIDs[3], openIDs[4], openIDs[5], openIDs[6], openIDs[7],
+		openIDs[3], unseenID, openIDs[4], openIDs[5], openIDs[6], openIDs[7],
 	}
 	if _, err := pool.Exec(ctx,
 		`UPDATE jobs SET similar_job_ids = $1::bigint[], similar_computed_at = now() WHERE id = $2`,
@@ -140,7 +146,7 @@ func TestSimilarJobsEndToEnd(t *testing.T) {
 		}
 	}
 
-	t.Run("default limit: closed, private and dangling neighbours dropped, order preserved", func(t *testing.T) {
+	t.Run("default limit: closed, private, unseen and dangling neighbours dropped, order preserved", func(t *testing.T) {
 		resp, body := get("/api/v1/jobs/" + knownSlug + "/similar")
 		if resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("status = %d, want 200", resp.StatusCode)
