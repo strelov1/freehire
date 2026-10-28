@@ -406,23 +406,34 @@ func TestRunReportsOnlyTheBoardsItFinishedBeforeItsDeadline(t *testing.T) {
 	}
 }
 
-// deadlineErrSource fails its fetch with the context's error once the run's deadline has
-// passed — an adapter whose last request was refused for want of time.
-type deadlineErrSource struct{ provider string }
+// deadlineErrSource fails its fetch with the context's error once the run's context has ended
+// — an adapter whose last request was refused for want of time. started is closed when the
+// fetch begins, so the test ends the context under a fetch that is surely in flight.
+type deadlineErrSource struct {
+	provider string
+	started  chan struct{}
+}
 
 func (s deadlineErrSource) Provider() string { return s.provider }
 
 func (s deadlineErrSource) Fetch(ctx context.Context, _ sources.CompanyEntry) ([]sources.Job, error) {
+	close(s.started)
 	<-ctx.Done()
 	return nil, ctx.Err()
 }
 
-// A fetch that ERRORS because the deadline passed is interrupted too, not failed: counting it
-// failed reported 160 healthy DigitalRecruiters sites as broken on its first crawl (2026-10-28).
+// A fetch that ERRORS because the run's context ended is interrupted too, not failed: counting
+// it failed is what reported 160 DigitalRecruiters sites as broken on its first crawl
+// (2026-10-28).
 func TestRunCountsAFetchTheDeadlineEndedAsInterrupted(t *testing.T) {
-	r := Runner{Registry: registry(deadlineErrSource{provider: "workday"}), Store: &fakeStore{}}
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	src := deadlineErrSource{provider: "workday", started: make(chan struct{})}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}}
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	go func() {
+		<-src.started
+		cancel()
+	}()
 
 	stats, _ := r.Run(ctx, []sources.CompanyEntry{{Company: "Slow Co", Provider: "workday", Board: "slow"}})
 	got := stats["workday"]
