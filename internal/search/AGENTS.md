@@ -29,8 +29,10 @@ by the caller because this block may not import `ingest`). `Withheld` is the ONE
 SQL and the similar-jobs list applies the unseen half. The unseen rule is evaluated when a
 document is written, never at query time: the crawl's liveness refresh pushes nothing to
 `search_outbox`, so an indexed `last_seen_at` would freeze and hide live postings. A
-posting therefore leaves and returns with the full rebuild, and **turning the rebuild timer
-off freezes the rule** — nothing new is hidden or restored until it runs again. See
+posting therefore leaves and returns with the full rebuild. **With the rebuild timer off,
+documents already in the index are no longer reconciled**: one that goes unseen stays
+searchable and one listed again stays hidden until a rebuild runs, while the drain and
+`linkimport` keep applying the rule to whatever they push. See
 [docs/agents/job-lifecycle.md](../../docs/agents/job-lifecycle.md) for which sources are
 exempt and why.
 
