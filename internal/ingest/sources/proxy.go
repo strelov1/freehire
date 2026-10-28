@@ -108,9 +108,10 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 	// rotatingProxyProviders.
 	"cake": func(c HTTPClient) Source { return NewCake(c) },
 	// net-empregos.com serves both crawl hosts' datacenter IPs its candidate LOGIN page (HTTP
-	// 200) in place of every posting page, whatever the User-Agent, while its feeds still answer;
-	// both proxies are served the posting (measured 2026-10-27). NewNetEmpregos takes a
-	// TextGetter.
+	// 200) in place of every posting page, whatever the User-Agent, while its feeds still answer.
+	// It walls an exit by volume: the fixed proxy exit was served the posting on a lone request
+	// and walled ~40 requests into a crawl, so the provider rides the rotating gateway (see
+	// rotatingProxyProviders). NewNetEmpregos takes a TextGetter.
 	"netempregos": func(c HTTPClient) Source { return NewNetEmpregos(c) },
 	"naukri": func(c HTTPClient) Source {
 		return NewNaukri(pacedNaukriGetter(withUserAgent(c, naukriUserAgent)))
@@ -138,7 +139,12 @@ var proxiedProviders = map[string]func(HTTPClient) Source{
 //
 // cake (proxied): one exit is refused after ~40 requests a minute, and a crawl is ~800 searches
 // plus a detail per new posting, all stateless — so each request takes a fresh exit.
-var rotatingProxyProviders = map[string]bool{"naukri": true, "workable": true, "cake": true}
+//
+// netempregos (proxied): the site answers an exit that has read too many postings with its
+// candidate login page instead of the posting. On 2026-10-28 the fixed exit was walled ~40
+// requests into a run (41 login pages in the first 2.5 minutes), while five consecutive requests
+// through the rotating gateway were all served the posting. Every request is a stateless GET.
+var rotatingProxyProviders = map[string]bool{"naukri": true, "workable": true, "cake": true, "netempregos": true}
 
 // proxyFor is the proxy a provider's proxy lane egresses through: the rotating gateway for the
 // rotatingProxyProviders when one is configured, the fixed exit otherwise.

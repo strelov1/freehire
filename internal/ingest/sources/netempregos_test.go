@@ -18,8 +18,11 @@ import (
 type netempregosFake struct {
 	rssErr  error
 	pageErr error
-	// wall serves the candidate login page for every posting, as the site does to a datacenter IP.
-	wall bool
+	// wall serves the candidate login page for every posting, as the site does to a walled exit;
+	// wallOnce serves it to the first request for each posting only.
+	wall     bool
+	wallOnce bool
+	walled   map[string]bool
 
 	mu    sync.Mutex
 	pages []string
@@ -42,7 +45,14 @@ func (f *netempregosFake) GetText(_ context.Context, u string) (string, error) {
 		if f.pageErr != nil {
 			return "", f.pageErr
 		}
-		if f.wall {
+		f.mu.Lock()
+		walled := f.wall || (f.wallOnce && !f.walled[u])
+		if f.walled == nil {
+			f.walled = map[string]bool{}
+		}
+		f.walled[u] = true
+		f.mu.Unlock()
+		if walled {
 			raw, err := os.ReadFile("testdata/netempregos/login.html")
 			return string(raw), err
 		}
@@ -206,5 +216,17 @@ func TestNetEmpregosLoginWallIsNotGone(t *testing.T) {
 	_, err := newTestNetEmpregos(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
 	if err == nil || !strings.Contains(err.Error(), "none answered") {
 		t.Fatalf("err = %v, want the run to fail", err)
+	}
+}
+
+// A walled exit is asked again: through the rotating gateway the retry leaves from a fresh one.
+func TestNetEmpregosRetriesTheLoginWall(t *testing.T) {
+	f := &netempregosFake{wallOnce: true}
+	jobs, err := newTestNetEmpregos(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 3 {
+		t.Errorf("kept %d jobs, want the three the site holds, each read on its second attempt", len(jobs))
 	}
 }

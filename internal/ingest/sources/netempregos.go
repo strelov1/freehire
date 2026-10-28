@@ -344,6 +344,28 @@ type netempregosLD struct {
 // is gone — a 404/410, or the netempregosInactive notice; an error is the absence of an answer,
 // including a page that is neither a posting nor that notice.
 func (s netempregos) detail(ctx context.Context, p netempregosPosting) (Job, bool, error) {
+	var err error
+	for range netempregosWallAttempts {
+		var job Job
+		var ok bool
+		job, ok, err = s.detailOnce(ctx, p)
+		if !errors.Is(err, errNetempregosWall) {
+			return job, ok, err
+		}
+	}
+	return Job{}, false, err
+}
+
+// netempregosWallAttempts is how many times a posting is asked for while the answer is the login
+// wall. The crawl rides the rotating gateway, so each attempt leaves from a fresh exit, and ~18%
+// of exits were already walled (7 of 40 sequential requests, 2026-10-28).
+const netempregosWallAttempts = 3
+
+// errNetempregosWall is the candidate login page served in place of a posting to an exit that
+// has read too many.
+var errNetempregosWall = errors.New("served the login wall")
+
+func (s netempregos) detailOnce(ctx context.Context, p netempregosPosting) (Job, bool, error) {
 	page, err := s.get(ctx, p.url)
 	if err != nil {
 		var se *StatusError
@@ -359,13 +381,17 @@ func (s netempregos) detail(ctx context.Context, p netempregosPosting) (Job, boo
 	var ld netempregosLD
 	if !ldJobPosting(root, &ld) {
 		// Only the site's own notice says the posting is gone. Any other page without a
-		// JobPosting is not an answer: a datacenter IP is served the candidate LOGIN page
-		// (HTTP 200) for every posting, and reading that as "gone" made a whole run read 1,500
-		// pages and store nothing without a single error.
+		// JobPosting is not an answer: a walled exit is served the candidate LOGIN page (HTTP
+		// 200) for every posting, and reading that as "gone" made a whole run read 1,500 pages
+		// and store nothing without a single error.
 		if strings.Contains(page, netempregosInactive) {
 			return Job{}, false, nil
 		}
-		return Job{}, false, fmt.Errorf("page carries no JobPosting (%q)", titleText(root))
+		title := titleText(root)
+		if strings.Contains(strings.ToLower(title), "login") {
+			return Job{}, false, fmt.Errorf("%w (%q)", errNetempregosWall, title)
+		}
+		return Job{}, false, fmt.Errorf("page carries no JobPosting (%q)", title)
 	}
 	job, ok := netempregosJob(ld, p)
 	return job, ok, nil
