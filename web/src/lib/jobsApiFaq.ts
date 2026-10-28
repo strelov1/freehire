@@ -8,7 +8,7 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'Can I use the freehire API in a commercial product?',
     answer:
-      'Yes, with an API plan. A plan licenses you to store the postings you read and show them in your own product — a job board, a recruiting tool, an agent you sell. Without a plan the API is for personal and non-commercial use. Either way you may not resell the raw data as a dataset or feed of its own, and each posting you show links back to its freehire page or credits "via freehire.me".',
+      'Yes, with an API plan. A plan licenses you to store the postings you read and show them in your own product — a job board, a recruiting tool, an agent you sell. Without a plan the API is for personal and non-commercial use. Either way you may not resell the raw data as a dataset or feed of its own.',
   },
   {
     question: 'Do I pay per job, per record or per request?',

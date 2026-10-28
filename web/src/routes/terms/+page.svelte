@@ -10,7 +10,7 @@
   const canonical = $derived(`${page.url.origin}/terms`);
 
   // Static effective date — bump whenever the terms change.
-  const lastUpdated = 'October 26, 2026';
+  const lastUpdated = 'October 28, 2026';
 </script>
 
 <Seo
@@ -96,8 +96,7 @@
         including a commercial one. You may also keep a history of it for analysis over time and
         use it to build, train and evaluate statistical or machine-learning models. You may not
         resell or redistribute the raw data — as a download, a dataset, or an API or feed whose
-        purpose is to hand the postings on to other services. Every posting you show must link to
-        its page on freehire.me or carry the credit "via freehire.me". When the plan ends, stop
+        purpose is to hand the postings on to other services. When the plan ends, stop
         showing the postings in your product; you may keep what you stored for your own internal
         analysis. What you derived from the data — aggregated figures, trends, indicators and the
         models you trained — stays yours, and you may keep using it, commercially too, as long as

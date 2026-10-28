@@ -192,11 +192,10 @@
   <section class="border-t border-border py-14 sm:py-16">
     <SectionLabel text="the licence" />
     <h2 class="mt-6 max-w-2xl text-2xl font-semibold tracking-tight sm:text-3xl">
-      What a plan lets you do, in five lines.
+      What a plan lets you do, in four lines.
     </h2>
     <ul class="mt-8 flex max-w-2xl flex-col gap-3 text-muted-foreground">
       <li><span class="text-foreground">Store</span> what you read and <span class="text-foreground">show</span> it in your own product, commercial or not.</li>
-      <li><span class="text-foreground">Link</span> each posting you show to its freehire page, or credit “via freehire.me”.</li>
       <li><span class="text-foreground">Don’t resell</span> the raw data as a dataset, download or feed of its own.</li>
       <li><span class="text-foreground">Analyse</span> it over time and train your own models on it.</li>
       <li><span class="text-foreground">When the plan ends</span>, stop showing the postings. What you derived from them — figures, trends, models — stays yours.</li>
