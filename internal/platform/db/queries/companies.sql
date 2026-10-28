@@ -177,11 +177,24 @@ WHERE slug = $1;
 -- from jobs (slug = company_slug, name = company), so after a slug-builder change
 -- re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
 -- name variants; ON CONFLICT folds collisions and refreshes existing rows.
+--
+-- Only a slug that is missing or whose name differs reaches the INSERT. This statement
+-- runs for about an hour on prod in one transaction and holds a lock on every row it
+-- writes until it commits, while ingest's UpsertJob upserts into companies on every
+-- posting — rewriting the ~750k unchanged rows stalled the crawl fleet behind it
+-- (2026-10-28). The filter must sit HERE, not in an ON CONFLICT ... WHERE: Postgres
+-- locks the conflicting row before it evaluates that WHERE, so the lock would remain.
 INSERT INTO companies (slug, name)
-SELECT DISTINCT ON (company_slug) company_slug, company
-FROM jobs
-WHERE company_slug <> ''
-ORDER BY company_slug
+SELECT j.company_slug, j.company
+FROM (
+    SELECT DISTINCT ON (company_slug) company_slug, company
+    FROM jobs
+    WHERE company_slug <> ''
+    ORDER BY company_slug
+) j
+WHERE NOT EXISTS (
+    SELECT 1 FROM companies c WHERE c.slug = j.company_slug AND c.name = j.company
+)
 ON CONFLICT (slug) DO UPDATE SET
     name       = EXCLUDED.name,
     updated_at = now();
