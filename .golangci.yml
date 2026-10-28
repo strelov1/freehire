@@ -210,6 +210,10 @@ linters:
         # Catalan/Spanish words in the Feina Activa adapter's salary line and fixture.
         - anual
         - individuales
+        # Argentine place names (internal/dict/location/location_ar.go).
+        - microcentro
+        - constitucion
+        - monserrat
         # Spanish skill vocabulary (internal/dict/skilltag/dictionaries.go, batch 8).
         - integracion
         - versiones

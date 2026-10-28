@@ -200,11 +200,30 @@ var foreignSubdivisionNames = map[string]string{
 	"antioquia": "co", "valle del cauca": "co", "cundinamarca": "co", "atlántico": "co",
 	"atlantico": "co", "risaralda": "co", "boyacá": "co", "boyaca": "co", "tolima": "co",
 	"huila": "co", "quindío": "co", "quindio": "co", "norte de santander": "co",
-	// Argentina and Chile — the capital districts and their conurbations.
-	"caba": "ar", "capital federal": "ar", "ciudad autónoma de buenos aires": "ar",
-	"ciudad autonoma de buenos aires": "ar", "gran buenos aires": "ar", "gba": "ar",
-	"provincia de buenos aires": "ar",
-	"región metropolitana":      "cl", "region metropolitana": "cl",
+	// Argentina — the capital city under its own names (cityOverrides gives it the city),
+	// and the provinces whose name has no second reading this catalogue meets. Withheld:
+	// "Misiones" (a Paraguayan department), "Río Negro" (a Uruguayan one), "Santa Cruz" and
+	// "Tierra del Fuego" (Bolivia, Chile), "La Rioja" and "Córdoba" (Spain), and "Formosa",
+	// "Corrientes" and "Entre Ríos" (towns elsewhere: Entre Rios is in Paraná and Bahia).
+	// The conurbation (GBA, AMBA) is a metro region, read in location_ar.go.
+	"caba": "ar", "c.a.b.a.": "ar", "c.a.b.a": "ar", "capital federal": "ar",
+	"ciudad autónoma de buenos aires": "ar", "ciudad autonoma de buenos aires": "ar",
+	"ciudad de buenos aires": "ar", "buenos aires city": "ar",
+	"provincia de buenos aires": "ar", "buenos aires province": "ar",
+	"pcia. de buenos aires": "ar", "chaco": "ar", "chubut": "ar", "jujuy": "ar",
+	"catamarca": "ar", "santiago del estero": "ar",
+	"santa fe province": "ar", "provincia de santa fe": "ar", "mendoza province": "ar",
+	"provincia de mendoza": "ar", "santiago del estero province": "ar",
+	"entre ríos province": "ar", "entre rios province": "ar", "chaco province": "ar",
+	"chubut province": "ar", "neuquén province": "ar", "neuquen province": "ar",
+	"provincia de neuquén": "ar", "salta province": "ar", "provincia de salta": "ar",
+	"tucumán province": "ar", "tucuman province": "ar", "provincia de tucumán": "ar",
+	"jujuy province": "ar", "misiones province": "ar", "corrientes province": "ar",
+	"san juan province": "ar", "san luis province": "ar", "río negro province": "ar",
+	"rio negro province": "ar", "la pampa province": "ar", "catamarca province": "ar",
+	"formosa province": "ar", "santa cruz province": "ar", "tierra del fuego province": "ar",
+	// Chile.
+	"región metropolitana": "cl", "region metropolitana": "cl",
 	"región metropolitana de santiago": "cl",
 }
 
@@ -240,7 +259,10 @@ var regionNotCity = map[string]bool{
 	"antioquia": true, "valle del cauca": true, "cundinamarca": true, "atlántico": true,
 	"atlantico": true, "risaralda": true, "boyacá": true, "boyaca": true, "tolima": true,
 	"huila": true, "quindío": true, "quindio": true, "norte de santander": true,
-	"d.c.": true, "caba": true,
+	"d.c.": true,
+	// Entre Ríos, which is not a country name here (see above), is GeoNames' alias of
+	// Ribeirão Preto, so it names no city either.
+	"entre rios": true, "entre ríos": true,
 	// The Brazilian states and Portuguese islands the city table reads as a town ("Ceará"
 	// is an alias of Fortaleza, "Madeira" of Tabira, "Rio Grande do Sul" a prefix of Rio
 	// Grande).

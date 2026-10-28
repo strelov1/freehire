@@ -167,6 +167,8 @@ func sameName(name, tok string) bool {
 type tokenLocation struct {
 	text                             string // the location's own lowercased text
 	namesBrazil, namesIndia, namesUS bool
+	// onlyBuenosAires and namesArgentina: see lineInBuenosAires.
+	onlyBuenosAires, namesArgentina bool
 }
 
 // tokenLocations splits a lowercased line into the locations it lists — separated by ";"
@@ -181,6 +183,7 @@ func tokenLocations(lower, s string) []tokenLocation {
 		norm := separatorReplacer.Replace(strings.ReplaceAll(part, "(", "("+parenMark))
 		loc := tokenLocation{text: part, namesBrazil: lineNamesBrazil(norm), namesIndia: lineNamesIndia(norm),
 			namesUS: lineNamesUS(norm)}
+		loc.onlyBuenosAires, loc.namesArgentina = lineInBuenosAires(norm)
 		for range strings.Count(norm, ",") + 1 {
 			out = append(out, loc)
 		}
@@ -188,6 +191,7 @@ func tokenLocations(lower, s string) []tokenLocation {
 	if len(out) != n {
 		whole := tokenLocation{text: lower, namesBrazil: lineNamesBrazil(s), namesIndia: lineNamesIndia(s),
 			namesUS: lineNamesUS(s)}
+		whole.onlyBuenosAires, whole.namesArgentina = lineInBuenosAires(s)
 		out = out[:0]
 		for range n {
 			out = append(out, whole)

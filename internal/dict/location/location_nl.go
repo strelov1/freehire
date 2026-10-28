@@ -78,6 +78,8 @@ func provinceAfterCity(tok, lower string, first bool) bool {
 		return between || strings.Contains(lower, "españa/"+tok+"/") || strings.Contains(lower, "/"+tok+", españa")
 	case portugueseDistrictCapitals[tok]:
 		return between
+	case argentineProvinceCapitals[tok]:
+		return between && endsInArgentina(lower)
 	case mexicanStateCapitals[tok]:
 		return between || strings.HasSuffix(strings.TrimSpace(lower), ", "+tok)
 	}

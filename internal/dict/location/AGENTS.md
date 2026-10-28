@@ -228,6 +228,29 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   the Azores state Portugal. Portuguese city coverage 60.2% → 68.2%, two-city lines 4.1% →
   1.2%. Not seen in the sample, so not built: "Grande São Paulo", "ABC Paulista",
   "Região Metropolitana de …", "Grande Lisboa", a CEP before the town.
+- **Argentina** (`location_ar.go`, measured 2026-10-27 over ~12.3k open postings placed in
+  Argentina). Buenos Aires is rarely written "Buenos Aires": the autonomous city is "CABA",
+  "C.A.B.A.", "Capital Federal", "Ciudad de Buenos Aires" (city overrides; "CABA" was
+  GeoNames' alias of Chamba), pandapelatam writes a barrio ALONE ("Palermo", "San Nicolás",
+  "Recoleta") and the country only in its structured data, and the conurbation's towns are
+  under GeoNames' floor or under a namesake ("Martínez" was California's, "Florida" the US
+  state). A barrio is the city of Buenos Aires and a town of Greater Buenos Aires is itself,
+  both in the metro "Buenos Aires (AR)", and only in a line that names nothing but Buenos
+  Aires context (`lineInBuenosAires`), so "Palermo, Italia" and "San Cristóbal, Santa Fe"
+  keep their own reading. GBA/AMBA/Gran Buenos Aires state the country and the metro, no
+  city. A province named after its capital is the province between two commas of a line
+  ending in Argentina ("Rosario, Santa Fe, Argentina"). GHS-FUA labels Greater Mendoza and
+  San Juan by a suburb; `metroLabelOverrides` renames them.
+  **`ParseIn(line, countries)`** is how the adapter's country reaches the parser: when the
+  line states none, it names a barrio, a contested or small town (in a one-place line only,
+  so "Hermosillo, Sonora" does not name the town GeoNames calls Sonora) and the metro;
+  it never adds a country. `jobderive.Derive` passes `Countries`, else `FallbackCountries`.
+  Two country-code fixes came out of the same sample and are not Argentine: a colliding
+  code after a US town only the small-places table knows is the state ("Atkins, AR" was
+  Argentina — 195 lines in the sample), and a code between a town and a DIFFERENT country
+  the town belongs to is that country's subdivision ("Zaragoza, AR, España" Aragón,
+  "Madrid, MD, Spain", "Jena, TH, Germany"). AR-placed lines: city 65.9% → 75.8%, metro
+  48.9% → 70.2%, "Buenos Aires (AR)" 31.7% → 45.3%.
 - **Indian work-arrangement prose is a fourth phrase list** (`workmode_in.go`), read only
   when none of the English, German, Dutch, Spanish and Portuguese ones matched. "WFO"/"work from office" is onsite;
   counted office days decide the rest ("3 days WFO", "Hybrid (3 days office)" → hybrid;

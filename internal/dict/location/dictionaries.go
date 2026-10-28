@@ -60,6 +60,7 @@ func invertRegionCountries() map[string]string {
 var nameToCountry = map[string]string{
 	"united states": "us", "united states of america": "us",
 	"usa": "us", "us": "us", "u.s.": "us", "u.s.a.": "us",
+	"arg": "ar", // Workday's ISO-3 export ("BUENOS AIRES CITY, ARG", "ARG-Buenos Aires-Hybrid")
 	// Unambiguous US city-only strings the dict was missing (LLM-mined gaps).
 	"cupertino": "us", "chandler": "us", "schenectady": "us", "greenville": "us",
 	"little rock": "us", "oklahoma city": "us",
@@ -507,6 +508,14 @@ var cityOverrides = map[string]cityEntry{
 	"porto":       {Name: "Porto", Country: "pt"},
 	"oporto":      {Name: "Porto", Country: "pt"},
 	"bogota d.c.": {Name: "Bogotá", Country: "co"},
+	// The autonomous city of Buenos Aires under the names its own lines use. "CABA" was
+	// GeoNames' alias of Chamba, and each of these named the country and no city.
+	"caba":                   {Name: "Buenos Aires", Country: "ar"},
+	"c.a.b.a.":               {Name: "Buenos Aires", Country: "ar"},
+	"c.a.b.a":                {Name: "Buenos Aires", Country: "ar"},
+	"capital federal":        {Name: "Buenos Aires", Country: "ar"},
+	"ciudad de buenos aires": {Name: "Buenos Aires", Country: "ar"},
+	"buenos aires city":      {Name: "Buenos Aires", Country: "ar"},
 }
 
 // nameToRegion resolves macro-region names (and explicit open-anywhere markers)

@@ -979,3 +979,18 @@ func TestDeriveCarriesMetros(t *testing.T) {
 		t.Errorf("Metros = %v", d.Metros)
 	}
 }
+
+// An adapter that writes the place alone and the country beside it (pandapelatam's
+// "Palermo", a Buenos Aires barrio) gets the city and the metro the country implies.
+func TestDerive_AdapterCountryResolvesABarePlace(t *testing.T) {
+	got := Derive(Input{Title: "Analista", Company: "Acme", Source: "pandapelatam", ExternalID: "1",
+		Location: "Palermo", Countries: []string{"ar"}})
+	if !reflect.DeepEqual(got.Cities, []string{"Buenos Aires"}) || !reflect.DeepEqual(got.Metros, []string{"Buenos Aires (AR)"}) {
+		t.Errorf("cities %v metros %v, want [Buenos Aires] [Buenos Aires (AR)]", got.Cities, got.Metros)
+	}
+	got = Derive(Input{Title: "Analista", Company: "Acme", Source: "whatjobs-ar", ExternalID: "1",
+		Location: "Rosario", FallbackCountries: []string{"ar"}})
+	if !reflect.DeepEqual(got.Metros, []string{"Rosario (AR)"}) {
+		t.Errorf("metros %v, want [Rosario (AR)]", got.Metros)
+	}
+}

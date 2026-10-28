@@ -56,6 +56,9 @@ var cityAliasPins = map[string]cityEntry{
 // foldIndianName.
 var metroLabelOverrides = map[string]string{
 	"Rasapudipalem (IN)": "Visakhapatnam (IN)", // folded: see foldIndianName
+	// GHS-FUA labels Greater Mendoza and Greater San Juan by a suburb.
+	"Ciudad de Las Heras (AR)": "Mendoza (AR)",
+	"Rawson (AR)":              "San Juan (AR)",
 }
 
 // indianMetroRegions name a metropolitan region rather than a city. They state the

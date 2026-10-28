@@ -61,7 +61,7 @@ func TestSpanishAndLatinAmericanLines(t *testing.T) {
 		{"Bogotá, D.C.", []string{"co"}, []string{"Bogotá"}},
 		{"Bogotá D.C., Colombia", []string{"co"}, []string{"Bogotá"}},
 		{"Envigado, Antioquia, Colombia", []string{"co"}, []string{"Envigado"}},
-		{"CABA", []string{"ar"}, nil},
+		{"CABA", []string{"ar"}, []string{"Buenos Aires"}},
 		{"Región Metropolitana", []string{"cl"}, nil},
 		{"Panamá", []string{"pa"}, nil},
 		{"República Dominicana", []string{"do"}, nil},

@@ -56,6 +56,16 @@ var separatorReplacer = strings.NewReplacer(
 // resolves to the global region through the ordinary token loop below. A remote
 // marker alongside a real place ("US Remote") keeps that place, as before.
 func Parse(location string) Geo {
+	return ParseIn(location, nil)
+}
+
+// ParseIn is Parse for a line whose countries the caller already knows from a structured
+// signal — an adapter that writes the town alone and the country beside it (pandapelatam's
+// "Palermo"). When the line itself states no country, those countries let its bare place
+// names resolve the way a stated country would: a Buenos Aires barrio, a small or a
+// contested town, and the metro of a city. They are never added to Countries or Regions —
+// the caller owns that signal — and a line that states its own country ignores them.
+func ParseIn(location string, known []string) Geo {
 	lower := strings.ToLower(location)
 
 	// A token that opened a parenthesis is marked, so it can be told apart from a place
@@ -68,6 +78,15 @@ func Parse(location string) Geo {
 	// state (location_br.go), one that ends in India an Indian state code between its city
 	// and the country, and a province is told from a city within its own location only.
 	segs := tokenLocations(lower, s)
+	// The caller's countries; they stand in for the line's only where it states none (see
+	// ParseIn). The Buenos Aires rule may read them inside the loop: a line it applies to
+	// names nothing but Argentina.
+	hint := map[string]struct{}{}
+	for _, c := range known {
+		hint[c] = struct{}{}
+	}
+	_, hintAR := hint["ar"]
+	toks := strings.Split(s, ",")
 	// Metros a metropolitan-region token states without naming a city ("Delhi NCR").
 	regionMetros := map[string]struct{}{}
 
@@ -96,16 +115,19 @@ func Parse(location string) Geo {
 	// renamedContested holds the contested long-tail cities the line names by an alias of
 	// a differently named place, emitted after the loop only if the line states its country.
 	var renamedContested []cityEntry
-	// seenTok is whether a token came before this one: a province named after its capital
-	// is the province only after another place (provinceAfterCity).
-	seenTok := false
+	// placeToks counts the tokens left once work-mode words are cut. Whether one came before
+	// matters because a province named after its capital is the province only after another
+	// place (provinceAfterCity); the count, because the caller's countries name a pending or
+	// contested town only in a line that names nothing else: in "Hermosillo, Sonora" the
+	// second token is the state, not the small town GeoNames also calls Sonora.
+	placeToks := 0
 	// prevCountries are the countries the previous token stated through the curated
 	// tables, withdrawn when a Brazilian state code after it places that town in Brazil.
 	var prevCountries []string
 	// countryVotes counts the tokens that stated each country through the curated tables,
 	// so a withdrawal never removes a country another token also stated.
 	countryVotes := map[string]int{}
-	for i, tok := range strings.Split(s, ",") {
+	for i, tok := range toks {
 		seg := segs[i]
 		tok = strings.TrimSpace(tok)
 		tok, parenthetical := strings.CutPrefix(tok, parenMark)
@@ -124,8 +146,8 @@ func Parse(location string) Geo {
 		if tok == "" {
 			continue
 		}
-		first := !seenTok
-		seenTok = true
+		first := placeToks == 0
+		placeToks++
 		lastCountries := prevCountries
 		prevCountries = nil
 		// India's export, district and office shapes become the city they name (india.go);
@@ -141,6 +163,23 @@ func Parse(location string) Geo {
 			regionMetros[metro] = struct{}{}
 			prevTok = tok
 			continue
+		}
+		// The conurbation, a barrio and a town of Greater Buenos Aires, in a line that places
+		// them nowhere else (location_ar.go).
+		if seg.onlyBuenosAires && (seg.namesArgentina || hintAR) {
+			if buenosAiresMetroRegions[tok] {
+				countrySet["ar"] = struct{}{}
+				regionSet[countryToRegion["ar"]] = struct{}{}
+				regionMetros[buenosAiresMetro] = struct{}{}
+				prevTok = tok
+				continue
+			}
+			if name := buenosAiresPlace(tok); name != "" {
+				citySet[name] = struct{}{}
+				regionMetros[buenosAiresMetro] = struct{}{}
+				prevTok = tok
+				continue
+			}
 		}
 		if indianStateBetween(tok, prevTok, seg.namesIndia) {
 			countrySet["in"] = struct{}{}
@@ -175,6 +214,12 @@ func Parse(location string) Geo {
 			if code, ok := statedSubdivisionCode(tok); ok {
 				statedSubdivisions[code] = struct{}{}
 			}
+			prevTok = tok
+			continue
+		}
+		// "Zaragoza, AR, España", "Herisau, AR, CH": a code between a town and a different
+		// country is that country's subdivision (Aragón, Appenzell), not a second country.
+		if subdivisionBeforeCountry(tok, prevTok, nextToken(toks, i)) {
 			prevTok = tok
 			continue
 		}
@@ -320,9 +365,13 @@ func Parse(location string) Geo {
 
 	// Before the long-tail fallback below, never after: a pending city waits for a country
 	// the line STATED, and a country inferred from another city is not that.
-	resolvePending(pending, countrySet, citySet)
+	stated := countrySet
+	if len(stated) == 0 && placeToks == 1 {
+		stated = hint
+	}
+	resolvePending(pending, stated, citySet)
 	for _, ce := range renamedContested {
-		if _, stated := countrySet[ce.Country]; stated {
+		if _, ok := stated[ce.Country]; ok {
 			citySet[ce.Name] = struct{}{}
 		}
 	}
@@ -351,24 +400,40 @@ func Parse(location string) Geo {
 	// A metro needs one stated country: a line naming two cannot place a city in either
 	// without guessing.
 	var metros []string
-	if len(countrySet) == 1 && len(citySet) > 0 {
-		var country string
+	metroCountry := ""
+	if len(countrySet) == 1 {
 		for c := range countrySet {
-			country = c
+			metroCountry = c
 		}
+	} else if len(countrySet) == 0 && len(hint) == 1 {
+		for c := range hint {
+			metroCountry = c
+		}
+	}
+	if metroCountry != "" && len(citySet) > 0 {
 		metroSet := map[string]struct{}{}
 		for name := range citySet {
-			if v, ok := metroFor(name, country, statedSubdivisions); ok {
+			if v, ok := metroFor(name, metroCountry, statedSubdivisions); ok {
 				metroSet[v] = struct{}{}
 			}
 		}
 		metros = stringset.Sorted(metroSet)
 	}
-	if _, india := countrySet["in"]; india && len(countrySet) == 1 && len(regionMetros) > 0 {
-		for _, m := range metros {
-			regionMetros[m] = struct{}{}
+	// A metropolitan region the line named ("Delhi NCR", "GBA", a Buenos Aires barrio) adds
+	// its metro, in that metro's country only.
+	if metroCountry != "" && len(regionMetros) > 0 {
+		suffix := " (" + strings.ToUpper(metroCountry) + ")"
+		for m := range regionMetros {
+			if !strings.HasSuffix(m, suffix) {
+				delete(regionMetros, m)
+			}
 		}
-		metros = stringset.Sorted(regionMetros)
+		if len(regionMetros) > 0 {
+			for _, m := range metros {
+				regionMetros[m] = struct{}{}
+			}
+			metros = stringset.Sorted(regionMetros)
+		}
 	}
 
 	countries := stringset.Sorted(countrySet)
@@ -651,6 +716,11 @@ func subdivisionAccepted(code, cityTok string) bool {
 		return true
 	}
 	if isRecognizedUSCACity(cityTok) {
+		return true
+	}
+	// A US town below the main city table's floor ("Atkins, AR", "Mountain Home, AR"):
+	// the state, unless the colliding country has a place of that name too.
+	if _, us := smallPlaceCandidates(cityTok)["us"]; us && !hasPlaceIn(cityTok, code) {
 		return true
 	}
 	if _, stateFirst := stateFirstSubdivisions[code]; stateFirst && cityTok != "" {

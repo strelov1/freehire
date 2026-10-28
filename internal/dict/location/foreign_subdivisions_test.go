@@ -79,7 +79,10 @@ func TestSubdivisionCityAliasesAreDecided(t *testing.T) {
 		"oaxaca": true, "puebla": true, "querétaro": true, "queretaro": true,
 		"san luis potosí": true, "san luis potosi": true, "tlaxcala": true, "veracruz": true,
 		"zacatecas": true, "ciudad autónoma de buenos aires": true,
-		"ciudad autonoma de buenos aires": true,
+		"ciudad autonoma de buenos aires": true, "caba": true, "c.a.b.a.": true, "c.a.b.a": true,
+		"capital federal": true, "ciudad de buenos aires": true, "buenos aires city": true,
+		// Argentine provinces named after their capital.
+		"jujuy": true, "santiago del estero": true, "catamarca": true,
 	}
 	for name := range foreignSubdivisionNames {
 		ce, ok := cityDict[name]

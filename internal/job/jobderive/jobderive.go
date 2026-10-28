@@ -142,7 +142,13 @@ func Derive(in Input) Derived {
 	// (normalize.CleanTitle); the public slug below is still minted from in.Title, so a
 	// stored row re-derived by backfill-derive keeps its published URL.
 	title := normalize.CleanTitle(in.Title)
-	geo := location.Parse(in.Location)
+	// The adapter's own country lets a line that names only a place resolve it — a Buenos
+	// Aires barrio, a small or a contested town, the city's metro (location.ParseIn).
+	known := in.Countries
+	if len(known) == 0 {
+		known = in.FallbackCountries
+	}
+	geo := location.ParseIn(in.Location, known)
 	// Geography precedence: the location dictionary → a title-embedded restriction
 	// marker → an eligibility signal in the description → an explicit region-scoping
 	// statement in the description → the caller's FallbackCountries. When the location left the geography unpinned (no
