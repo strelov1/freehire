@@ -86,23 +86,31 @@ func run() int {
 		return 1
 	}
 
-	// The jobs now carry the canonical slug; re-key the derived catalogue and sweep the rows
-	// the re-key orphaned, exactly as cmd/backfill-company-names does after ITS re-key.
+	// The jobs now carry the canonical slug; give each canonical a company row and sweep the
+	// rows the re-key orphaned.
 	//
 	// This is not optional bookkeeping. Until the orphan row is gone, GET /companies/<retired>
 	// still FINDS a company — one with no jobs left — so it answers 200 instead of falling
 	// through to the alias lookup and the 301. The merge would look done and the redirect,
 	// which is the whole reason the alias row exists, would not be running.
-	if err := q.SyncCompaniesFromJobs(ctx); err != nil {
-		log.Printf("merge-companies: sync companies: %v", err)
-		return 1
-	}
-	orphans, err := q.DeleteOrphanCompanies(ctx)
+	//
+	// Scoped to the alias registry, NOT the full SyncCompaniesFromJobs + DeleteOrphanCompanies
+	// this used to run. That pair costs a whole-table pass whatever the wave's size, and on
+	// 2026-10-28 a 20-group run held its transaction for 56 minutes while every ingest
+	// UpsertJob queued behind it. The registry scope also heals a run killed before this step:
+	// its drained slugs are no longer in any plan, but they are in the registry.
+	created, err := q.InsertMissingCanonicalCompanies(ctx)
 	if err != nil {
-		log.Printf("merge-companies: delete orphan companies: %v", err)
+		log.Printf("merge-companies: insert canonical companies: %v", err)
 		return 1
 	}
-	log.Printf("merge-companies: reconciled the catalogue, %d company rows retired", orphans)
+	orphans, err := q.DeleteOrphanAliasCompanies(ctx)
+	if err != nil {
+		log.Printf("merge-companies: delete orphan alias companies: %v", err)
+		return 1
+	}
+	log.Printf("merge-companies: reconciled the catalogue, %d canonical rows created, %d retired rows removed",
+		created, orphans)
 
 	log.Printf("merge-companies: done. Job counts stay stale until cmd/recount-companies runs, " +
 		"and the search facet until the scheduled reindex — do NOT run a reindex by hand.")

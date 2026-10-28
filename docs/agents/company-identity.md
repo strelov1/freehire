@@ -143,9 +143,14 @@ nothing, and an interrupted wave resumes. The alias row is written BEFORE its jo
 killed between the two then leaves a slug that redirects to a company whose count is short,
 where the other order leaves a slug with no jobs and no record of where they went.
 
-A wave ends by reconciling the derived catalogue — `SyncCompaniesFromJobs` then
-`DeleteOrphanCompanies`, the same pair `cmd/backfill-company-names` runs after its own re-key.
-Skipping it looks harmless and is not: until the orphan row is gone, `GET /companies/<retired>`
+A wave ends by reconciling the derived catalogue — `InsertMissingCanonicalCompanies` (a row for
+each canonical slug that holds jobs and has none) then `DeleteOrphanAliasCompanies` (the row of
+each retired slug no job carries). Both are scoped to the alias REGISTRY, not to `jobs`: the
+full-table `SyncCompaniesFromJobs` + `DeleteOrphanCompanies` pair the worker used to run costs
+the same on a 20-group wave as on a 20k-group one, and on 2026-10-28 one held its transaction
+for 56 minutes while every ingest `UpsertJob` (which upserts `companies` too) queued behind it.
+The registry, rather than the current wave, so a run killed before this step is healed by the
+next one, whose plan no longer holds the drained slugs. Skipping it looks harmless and is not: until the orphan row is gone, `GET /companies/<retired>`
 still FINDS a company, one with no jobs left, so it answers 200 and never falls through to the
 alias lookup. The merge reads as done while the redirect it exists to serve is not running.
 

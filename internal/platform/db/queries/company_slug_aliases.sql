@@ -96,3 +96,38 @@ WHERE jobs.id IN (
 SELECT DISTINCT folded_key, canonical_slug
 FROM company_slug_aliases
 ORDER BY folded_key, canonical_slug;
+
+-- name: InsertMissingCanonicalCompanies :execrows
+-- The first half of the merge worker's catalogue reconcile: a companies row for every canonical
+-- slug that holds jobs and has none. A re-key moves jobs onto a canonical slug no crawl has
+-- written yet (the alias spelling was the one the source used), and without a row
+-- GET /companies/<canonical> is a 404 — the very page the alias 301s to.
+--
+-- Scoped to the alias REGISTRY, not to the whole jobs table. The full SyncCompaniesFromJobs
+-- this replaces costs the same on a 20-group wave as on a 20k-group one, and on 2026-10-28 one
+-- held its transaction for 56 minutes while every ingest UpsertJob — which upserts the same
+-- table — queued behind it. This reads only the canonicals that lack a row, through the
+-- company_slug index. The registry rather than the current wave, so a run interrupted before
+-- its reconcile is healed by the next one, whose plan no longer holds the drained slugs.
+INSERT INTO companies (slug, name)
+SELECT DISTINCT ON (j.company_slug) j.company_slug, j.company
+FROM jobs j
+WHERE j.company_slug IN (
+    SELECT a.canonical_slug
+    FROM company_slug_aliases a
+    WHERE NOT EXISTS (SELECT 1 FROM companies c WHERE c.slug = a.canonical_slug)
+)
+ORDER BY j.company_slug
+ON CONFLICT (slug) DO NOTHING;
+
+-- name: DeleteOrphanAliasCompanies :execrows
+-- The second half: drop the companies row of every retired slug that no job carries any more.
+-- Until it is gone GET /companies/<retired> still FINDS a company — one with no jobs — and
+-- answers 200 instead of falling through to the alias lookup and the 301. Scoped to the
+-- registry for the same reason as above; reference rows are kept, as DeleteOrphanCompanies
+-- keeps them.
+DELETE FROM companies c
+USING company_slug_aliases a
+WHERE c.slug = a.alias_slug
+  AND NOT c.is_reference
+  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug);

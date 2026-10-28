@@ -1758,6 +1758,12 @@ type Querier interface {
 	// but a deleted row is also what "Connected devices" stops listing, and what a
 	// reset should visibly answer for.
 	DeleteOAuthGrantsByUser(ctx context.Context, userID int64) error
+	// The second half: drop the companies row of every retired slug that no job carries any more.
+	// Until it is gone GET /companies/<retired> still FINDS a company — one with no jobs — and
+	// answers 200 instead of falling through to the alias lookup and the 301. Scoped to the
+	// registry for the same reason as above; reference rows are kept, as DeleteOrphanCompanies
+	// keeps them.
+	DeleteOrphanAliasCompanies(ctx context.Context) (int64, error)
 	// Drop companies no longer referenced by any job — the stale rows left behind
 	// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
 	// by the company-info backfill are preserved: they intentionally have no job, so
@@ -3215,6 +3221,18 @@ type Querier interface {
 	// matching, so no message lands after it. No row means the caller must look the
 	// conversation up to say why.
 	InsertMessage(ctx context.Context, arg InsertMessageParams) (InsertMessageRow, error)
+	// The first half of the merge worker's catalogue reconcile: a companies row for every canonical
+	// slug that holds jobs and has none. A re-key moves jobs onto a canonical slug no crawl has
+	// written yet (the alias spelling was the one the source used), and without a row
+	// GET /companies/<canonical> is a 404 — the very page the alias 301s to.
+	//
+	// Scoped to the alias REGISTRY, not to the whole jobs table. The full SyncCompaniesFromJobs
+	// this replaces costs the same on a 20-group wave as on a 20k-group one, and on 2026-10-28 one
+	// held its transaction for 56 minutes while every ingest UpsertJob — which upserts the same
+	// table — queued behind it. This reads only the canonicals that lack a row, through the
+	// company_slug index. The registry rather than the current wave, so a run interrupted before
+	// its reconcile is healed by the next one, whose plan no longer holds the drained slugs.
+	InsertMissingCanonicalCompanies(ctx context.Context) (int64, error)
 	// Reserves a company slug for a claim in progress. The UNIQUE(company_slug) constraint is
 	// the whole race guard: two concurrent claims on the same slug both attempt this insert, one
 	// succeeds, and the loser's caller maps the unique violation to a clean conflict — see
