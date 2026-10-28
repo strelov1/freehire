@@ -73,6 +73,9 @@ func WorkModeFromDescription(desc string) string {
 	if m := portugueseWorkMode(desc, lower); m != "" {
 		return m
 	}
+	if m := frenchWorkMode(desc, lower); m != "" {
+		return m
+	}
 	return indianWorkMode(desc, lower)
 }
 

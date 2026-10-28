@@ -195,6 +195,22 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   Portuguese prose meets that list first. Measured 2026-10-27 over 30,677 Brazilian and
   6,931 Portuguese postings, location plus description: work mode 4.9% → 14.7% (BR) and
   15.8% → 18.6% (PT); 24 of 17,500 control rows changed, all correct.
+- **French work-arrangement prose** (`workmode_fr.go`) is read after the Portuguese list.
+  French lists home working as a BENEFIT, as German does ("télétravail partiel possible",
+  "2 jours de télétravail par semaine", "accord/charte/politique de télétravail",
+  "subvention télétravail") — all hybrid; remote needs a stated totality ("100 %
+  télétravail", "télétravail total", "entièrement en télétravail", "full-remote"); onsite
+  is a stated refusal or totality ("pas de télétravail", "Télétravail : non", "100 % en
+  présentiel", Indeed's "Lieu du poste : En présentiel"). Absent: bare `télétravail`
+  (software that sells it), bare `à distance`, `100 % à distance` and `distanciel` (an
+  apprenticeship's school days — "formation à distance" sits on ~900 postings), bare
+  `présentiel` (the interview and the training), bare `hybride`, `mode hybride` and
+  `modèle hybride` (hybrid vehicles and clouds, a training format, a business model),
+  `télétravail : 100` ("prime télétravail : 100 € / mois"). Negations ("pas", "sans",
+  "aucun") reach 24 bytes back ("pas de possibilité de télétravail"); "-friendly" after a
+  remote phrase withdraws it ("100 % remote-friendly"); "les fêtes" bounds a perk.
+  Measured 2026-10-28 over 24,609 French-language postings: the description reader 0.4% →
+  12.3%; with the structured signal, 31.1% → 34.8%. Every changed control row was French.
 - **French location lines** (`location_fr.go`, the French block of
   `foreignSubdivisionNames`, measured 2026-10-28 over 33k postings placed in France). A
   compound town written with spaces for its hyphens ("Issy les Moulineaux", "Aix en
@@ -286,7 +302,7 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   "Madrid, MD, Spain", "Jena, TH, Germany"). AR-placed lines: city 65.9% → 75.6%, metro
   48.9% → 69.1%, "Buenos Aires (AR)" 31.7% → 44.2%.
 - **Indian work-arrangement prose is a fourth phrase list** (`workmode_in.go`), read only
-  when none of the English, German, Dutch, Spanish and Portuguese ones matched. "WFO"/"work from office" is onsite;
+  when none of the English, German, Dutch, Spanish, Portuguese and French ones matched. "WFO"/"work from office" is onsite;
   counted office days decide the rest ("3 days WFO", "Hybrid (3 days office)" → hybrid;
   "5 days work from office" → onsite; "2 days WFH" → hybrid); a "hybrid" just before an
   office marker keeps it hybrid. Bare "WFH" is NOT remote — it names a benefit ("occasional
