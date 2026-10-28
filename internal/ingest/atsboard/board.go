@@ -1551,10 +1551,10 @@ var platformLabelsByApex = map[string][]string{
 	"rexx-recruitment": {"www", "cdn"},
 	"hiringroom.com":   {"www", "ve", "api-ve", "contacto-comercial"},
 	"recruiterbox.com": {"www", "developers", "go"}, // the vendor's marketing, API docs and campaign hosts
-	"easyapply.co":     {"www"},
+	"easyapply.co":     {"www"},                     // www.easyapply.co 404s; every tenant is a bare label
 	// The vendor's marketing, training and help-centre hosts, and the CNAME target every
 	// employer domain points at.
-	"digitalrecruiters.com": {"www", "resources", "academy", "external-career", "status"}, // www.easyapply.co 404s; every tenant is a bare label
+	"digitalrecruiters.com": {"www", "resources", "academy", "external-career", "status"},
 	// www is the vendor's marketing site; demo is its sample board for a fictional "Acme".
 	"jobspage.co": {"www", "demo"},
 	// www is the vendor's marketing site (an unknown tenant redirects to its "job-not-found"
