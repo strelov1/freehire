@@ -86,13 +86,18 @@ func collapseFuzzyDuplicates(ctx context.Context, q fuzzyPassStore, workers int)
 		log.Printf("reindex: fuzzy pass resuming after %q: %d of %d companies left", after, len(companies), all)
 	}
 
+	// A failed save does not stop the walk — the next checkpoint may well land — but if the LAST
+	// one failed it is reported with the pass's outcome: the stored point is then stale, the next
+	// run goes back over ground already covered, and marker-only mode must exit non-zero on it.
+	var saveErr error
 	save := func(point string) {
 		// The run's own context is dead by the time the final save matters most — it is what
 		// the unit's SIGTERM cancelled — so the write gets a short one of its own.
 		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
-		if err := q.SetMarkerPassCursor(sctx, db.SetMarkerPassCursorParams{Pass: fuzzyPassName, AfterCompany: point}); err != nil {
-			log.Printf("reindex: fuzzy pass: save resume point %q: %v", point, err)
+		saveErr = q.SetMarkerPassCursor(sctx, db.SetMarkerPassCursorParams{Pass: fuzzyPassName, AfterCompany: point})
+		if saveErr != nil {
+			saveErr = fmt.Errorf("save resume point %q: %w", point, saveErr)
 		}
 	}
 	total, err := forEachCompany(ctx, companies, workers, func(ctx context.Context, company string) (int64, error) {
@@ -101,7 +106,7 @@ func collapseFuzzyDuplicates(ctx context.Context, q fuzzyPassStore, workers int)
 	if ctx.Err() == nil {
 		save("") // the walk reached the end: the next run starts from the top
 	}
-	return total, err
+	return total, errors.Join(err, saveErr)
 }
 
 func collapseFuzzyDuplicatesForCompany(ctx context.Context, q fuzzyDedupQuerier, company string) (int64, error) {

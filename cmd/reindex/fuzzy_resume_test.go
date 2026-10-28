@@ -18,6 +18,7 @@ type resumeFake struct {
 	companies []string
 	cursor    *string // nil: no row yet
 	cancelAt  string
+	saveErr   error
 	cancel    context.CancelFunc
 
 	mu      sync.Mutex
@@ -61,6 +62,9 @@ func (f *resumeFake) GetMarkerPassCursor(_ context.Context, pass string) (string
 func (f *resumeFake) SetMarkerPassCursor(_ context.Context, arg db.SetMarkerPassCursorParams) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.saveErr != nil {
+		return f.saveErr
+	}
 	f.writes = append(f.writes, arg.AfterCompany)
 	c := arg.AfterCompany
 	f.cursor = &c
@@ -114,5 +118,16 @@ func TestCollapseFuzzySavesItsProgressWhenCancelled(t *testing.T) {
 	}
 	if f.cursor == nil || *f.cursor != "b" {
 		t.Errorf("resume point writes %q, want the last to be %q — the last company finished before the cut", f.writes, "b")
+	}
+}
+
+// A resume point that could not be saved is a pass that did not do its job: the next run
+// starts from a stale point, or from the head again, and in marker-only mode that has to
+// reach the exit code rather than only the log.
+func TestCollapseFuzzyReportsAFailedSave(t *testing.T) {
+	f := &resumeFake{companies: []string{"a"}, saveErr: errors.New("connection reset")}
+
+	if _, err := collapseFuzzyDuplicates(context.Background(), f, 1); err == nil {
+		t.Fatal("err = nil, want the failed save reported")
 	}
 }
