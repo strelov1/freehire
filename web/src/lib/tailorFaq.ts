@@ -1,40 +1,45 @@
 // CV-tailoring landing FAQ — the single source for both the visible section
 // (TailorLandingView.svelte) and the FAQPage JSON-LD (routes/features/tailor).
 // Google requires the schema's answers to match the on-page text, so they share
-// this. Answers are written answer-first and stay honest to what the product
-// does (internal/cv, internal/experience, internal/matchanalysis).
+// this. Written around what stops a purchase, answer-first, and honest to what the
+// product does (internal/candidate/cvedit, internal/candidate/experience).
 
 import type { FaqItem } from './seo';
 
 export const TAILOR_FAQ: FaqItem[] = [
   {
-    question: 'Does it invent experience I do not have?',
+    question: 'Will a recruiter be able to tell an AI wrote it?',
     answer:
-      'No, and the design is what stops it rather than a promise. The tailoring context splits the job\'s requirements in two: the ones your history already covers but your CV buries, which the agent reframes, and the ones it does not, which the agent has to ask you about. Anything a model merely inferred is marked as such and cannot be written into a CV until you confirm it — the check lives in the service, not in a prompt.',
+      'The words are yours to begin with. The agent reorders and rephrases what you already did, in the vacancy\'s own terms, one edit at a time — and you can see, change or undo each of them. There is no wholesale rewrite in a generic voice to give it away.',
   },
   {
-    question: 'How do I start tailoring?',
+    question: 'Can it put things on my CV that aren\'t true?',
     answer:
-      'From a job. Run the AI match analysis on a vacancy, then tailor from its result — the analysis is what the tailored CV reframes toward, so the flow needs one first. freehire copies your base CV into a new one bound to that vacancy; your original is never edited.',
+      'No. Before it writes anything, it splits the job\'s requirements into what your history covers and what it does not. The first it brings forward; the second it asks you about. Anything a model merely inferred is stored as the model\'s and cannot go into a CV until you confirm it — that check is in the code, not in a prompt.',
   },
   {
-    question: 'What does it actually change?',
+    question: 'What happens to my original CV?',
     answer:
-      'One field at a time: the summary, a header field, a bullet, the order of bullets within a role, a skill group, or a role\'s technology line. Each edit is a single operation you can see and undo, not a wholesale rewrite you have to proofread against the original.',
+      'Nothing. Tailoring copies it into a new CV bound to one vacancy, so every application gets its own version and your base CV is never edited.',
   },
   {
-    question: 'Is the PDF ATS-friendly?',
+    question: 'Will an ATS read the PDF?',
     answer:
-      'Yes. The CV renders through a typesetting engine into a clean, single-column PDF with real text — no tables, no columns, no images behind the words — so a parser reads the same content you see. Pick from the template gallery; switching templates never touches the content.',
+      'Yes. The CV is typeset into a single-column PDF with real text — no tables, no side columns, no words inside an image — so the parser reads what you see. Templates change the typography, never the content.',
   },
   {
-    question: 'Can I do this from the terminal?',
+    question: 'How much does it cost, and how do I cancel?',
     answer:
-      'Yes. The freehire CLI drives the same flow: `cv context` prints the analysis to reframe toward, `cv get` dumps the document, `cv edit` applies one patch, and `cv render` downloads the PDF. Your own agent can run the whole loop with an API key.',
+      'Tailoring is part of Pro, which also covers cover letters, the AI assistant and auto-apply. It is billed monthly and you can cancel any time from your plan page; Pro stays on until the end of the period you paid for.',
   },
   {
-    question: 'What does it cost?',
+    question: 'What happens to my data?',
     answer:
-      "One of the day's CV editing sessions, the same allowance the match analysis draws its own from. Every plan has every feature; what differs is how much of each you can do in a day, and it starts over every night. Your plan page shows where you stand.",
+      'Your CV is used to tailor your applications and nothing else. Your contact details are never sent to the tailoring agent, and the whole codebase is open source, so you can check how it is handled.',
+  },
+  {
+    question: 'Can I drive it from my own agent or the terminal?',
+    answer:
+      'Yes. The freehire CLI runs the same loop with one API key — read the analysis, read the CV, apply one edit, render the PDF — under the same rules, so your agent cannot write in what you have not done either.',
   },
 ];
