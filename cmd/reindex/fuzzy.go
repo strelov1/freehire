@@ -98,6 +98,7 @@ func collapseFuzzyDuplicates(ctx context.Context, q fuzzyPassStore, workers int)
 		saveErr = q.SetMarkerPassCursor(sctx, db.SetMarkerPassCursorParams{Pass: fuzzyPassName, AfterCompany: point})
 		if saveErr != nil {
 			saveErr = fmt.Errorf("save resume point %q: %w", point, saveErr)
+			log.Printf("reindex: fuzzy pass: %v", saveErr) // now, not hours later: a killed run never returns it
 		}
 	}
 	total, err := forEachCompany(ctx, companies, workers, func(ctx context.Context, company string) (int64, error) {
