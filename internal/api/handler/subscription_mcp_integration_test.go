@@ -102,6 +102,7 @@ func TestSubscriptionMCP_SubscribeListUpdateUnsubscribe(t *testing.T) {
 	}
 	alert := got["alert"].(map[string]any)
 	alertID := alert["id"]
+	createdAt := alert["created_at"]
 	subID := int64(alert["channels"].([]any)[0].(map[string]any)["subscription_id"].(float64))
 
 	// The stored query is the website's form, so the website sees the same set.
@@ -175,6 +176,12 @@ func TestSubscriptionMCP_SubscribeListUpdateUnsubscribe(t *testing.T) {
 	// Once Telegram is linked: change a filter, rename, move to Telegram and pause, in one call.
 	if _, err := pool.Exec(ctx, `INSERT INTO telegram_links (user_id, chat_id) VALUES ($1, 4242)`, alice); err != nil {
 		t.Fatalf("link telegram: %v", err)
+	}
+	// Adding a channel does not move the alert's creation time to that moment.
+	if both := a.ok("update_subscription", map[string]any{
+		"id": alertID, "channels": []string{"email", "telegram"},
+	})["alert"].(map[string]any); both["created_at"] != createdAt {
+		t.Fatalf("created_at after adding a channel = %v, want %v", both["created_at"], createdAt)
 	}
 	upd := a.ok("update_subscription", map[string]any{
 		"id": alertID, "name": "Senior remote Go",

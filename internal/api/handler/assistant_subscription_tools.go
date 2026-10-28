@@ -443,6 +443,11 @@ func (h *assistantHandlers) alerts(ctx context.Context, userID int64) ([]alert, 
 			})
 		}
 		out[i].Channels = append(out[i].Channels, ch)
+		// The alert began with its first channel. Rows arrive newest first, so without this
+		// adding a channel would move the alert's creation to that moment.
+		if r.CreatedAt != nil && (out[i].CreatedAt == nil || r.CreatedAt.Before(*out[i].CreatedAt)) {
+			out[i].CreatedAt = r.CreatedAt
+		}
 	}
 	for i := range out {
 		slices.SortFunc(out[i].Channels, func(a, b alertChannel) int { return strings.Compare(a.Channel, b.Channel) })
