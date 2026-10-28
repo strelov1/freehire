@@ -222,11 +222,6 @@ func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoC
 			}
 			root, err := s.http.GetHTML(ctx, u)
 			if err != nil {
-				// Past a listing's end the site answers an empty page, or a 404 at its pager cap.
-				var se *StatusError
-				if errors.As(err, &se) && se.Code == http.StatusNotFound {
-					break
-				}
 				return nil, fmt.Errorf("computrabajo: %s page %d: %w", p.path, page, err)
 			}
 			cards := computrabajoCards(root, base)
@@ -237,6 +232,10 @@ func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoC
 					return nil, fmt.Errorf("computrabajo: %s page %d carries neither cards nor an empty result", p.path, page)
 				}
 				break
+			}
+			if page == computrabajoMaxPages {
+				// The site serves nothing past here, so the province cannot be read whole.
+				return nil, fmt.Errorf("computrabajo: %s runs past the %d-page pager cap", p.path, computrabajoMaxPages)
 			}
 			for _, c := range cards {
 				rank++
