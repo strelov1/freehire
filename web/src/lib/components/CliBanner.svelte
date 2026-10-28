@@ -49,18 +49,20 @@
     <div class="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-2 text-sm">
       <!-- Wraps to a second line on a phone rather than truncating the one sentence that
            says what the strip is for. The agents' marks follow the sentence that names
-           them; their names live in the stack's label, so the sentence can stay short. -->
-      <p class="line-clamp-2 min-w-0 flex-1 leading-snug text-muted-foreground">
+           them; their names live in the image's label, so the sentence can stay short.
+           The marks are a flex item of their own, not inline text: inside a line-clamped
+           paragraph the overflow clip cut the bottom off the stack whenever it wrapped. -->
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 leading-snug text-muted-foreground">
         <span class="font-medium text-foreground">Search jobs inside your AI agent.</span>
         <img
           src="/brands/agent-logos.svg"
           alt="Claude, ChatGPT, Gemini, Cursor and Grok"
           width="161"
           height="53"
-          class="mx-1 -my-1 inline-block h-7 w-auto align-middle"
+          class="-my-1 h-8 w-auto shrink-0"
         />
         <span class="hidden md:inline">Connect over MCP — free, no account needed to search.</span>
-      </p>
+      </div>
 
       <a
         href={resolve('/mcp')}
