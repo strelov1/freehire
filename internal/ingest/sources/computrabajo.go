@@ -185,9 +185,9 @@ func (s computrabajo) nearDeadline(ctx context.Context) bool {
 }
 
 // list reads the province filter and walks each province, returning the named-employer postings
-// ordered by their rank in their province. Reading the filter failing fails the crawl; a province
-// page failing ends that province's walk with what was read, since the adapter is not swept by
-// source and the next run reads it again.
+// ordered by their rank in their province. Any page failing fails the crawl: a partial listing
+// would let the company-scoped sweep close the postings of the employers it did see on the pages
+// it did not.
 func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoCard, error) {
 	base := computrabajoBase(country)
 	if err := s.limiter.Wait(ctx); err != nil {
@@ -209,7 +209,7 @@ func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoC
 		rank := 0
 		for page := 1; page <= pages; page++ {
 			if err := s.limiter.Wait(ctx); err != nil {
-				return out, nil
+				return nil, err
 			}
 			u := base + p.path
 			if page > 1 {
@@ -217,11 +217,12 @@ func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoC
 			}
 			root, err := s.http.GetHTML(ctx, u)
 			if err != nil {
+				// Past a listing's end the site answers an empty page, or a 404 at its pager cap.
 				var se *StatusError
-				if !errors.As(err, &se) || se.Code != http.StatusNotFound {
-					log.Printf("computrabajo: %s page %d failed; keeping what was read: %v", p.path, page, err)
+				if errors.As(err, &se) && se.Code == http.StatusNotFound {
+					break
 				}
-				break
+				return nil, fmt.Errorf("computrabajo: %s page %d: %w", p.path, page, err)
 			}
 			cards := computrabajoCards(root, base)
 			if len(cards) == 0 {

@@ -18,6 +18,8 @@ import (
 // posting pages of the first two. Any other posting answers 404, as a gone one does.
 type computrabajoFake struct {
 	filterErr error
+	// provinceErr fails every province page but La Rioja's first.
+	provinceErr error
 
 	mu   sync.Mutex
 	urls []string
@@ -43,6 +45,9 @@ func (f *computrabajoFake) GetHTML(_ context.Context, u string) (*html.Node, err
 	case u == base+"/empleos-en-la-rioja":
 		path = "testdata/computrabajo/province.html"
 	case strings.HasPrefix(u, base+"/empleos-en-"):
+		if f.provinceErr != nil {
+			return nil, f.provinceErr
+		}
 		path = "testdata/computrabajo/empty.html"
 	case strings.HasSuffix(u, ctGlobalMedica), strings.HasSuffix(u, ctSserrano):
 		path = "testdata/computrabajo/posting_" + u[len(u)-32:] + ".html"
@@ -155,6 +160,10 @@ func TestComputrabajoBudgetAndBoard(t *testing.T) {
 	}
 	if _, err := s.FetchNew(context.Background(), CompanyEntry{Board: "argentina"}, func(string) bool { return false }); err == nil {
 		t.Error("a board that is not a country subdomain was accepted")
+	}
+	f.provinceErr = errors.New("502")
+	if _, err := s.FetchNew(context.Background(), ctEntry, func(string) bool { return false }); err == nil {
+		t.Error("a failed province page did not fail the crawl")
 	}
 	f.filterErr = errors.New("403")
 	if _, err := s.FetchNew(context.Background(), ctEntry, func(string) bool { return false }); err == nil {
