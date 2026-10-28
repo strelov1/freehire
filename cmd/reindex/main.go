@@ -83,7 +83,7 @@ func run() int {
 	// CPU, so a few in flight cut its wall time several-fold; each holds a pool connection
 	// (database.defaultMaxConns is 10, one of them already the index lock's), so past that a
 	// higher value only queues on the pool.
-	fuzzyWorkers, err := worker.EnvInt64("REINDEX_FUZZY_WORKERS", 4)
+	fuzzyWorkers, err := worker.EnvInt32("REINDEX_FUZZY_WORKERS", 4)
 	if err != nil {
 		log.Printf("config: %v", err)
 		return 1
