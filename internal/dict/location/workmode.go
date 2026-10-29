@@ -51,7 +51,7 @@ var descriptionWorkModePhrases = []struct {
 // from vocab.WorkModeValues. The English phrases are tried first; German prose is read
 // only when none of them is stated (see germanWorkModePhrases), Dutch prose only
 // when neither is (see dutchWorkModePhrases), then Spanish (workmode_es.go), then
-// Portuguese (workmode_pt.go), then French and Polish, and the Indian register last
+// Portuguese (workmode_pt.go), then French, Croatian/Serbian and Polish, and the Indian register last
 // (workmode_in.go).
 func WorkModeFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
