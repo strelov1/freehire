@@ -325,7 +325,13 @@ func (s justjoinSite) detail(ctx context.Context, p justjoinPosting) (Job, bool,
 		return Job{}, false, nil
 	}
 	if ref, isRef := strings.CutPrefix(o.Body, "$"); isRef {
-		o.Body = nextFlightTextRows(flight)[ref]
+		// A reference the flight does not carry is a changed page, not an empty offer: it
+		// must stay an error, or every page could read as answered while yielding nothing.
+		row, found := nextFlightTextRows(flight)[ref]
+		if !found {
+			return Job{}, false, fmt.Errorf("body row %q not found in flight", ref)
+		}
+		o.Body = row
 	}
 	job, ok := s.job(o, p)
 	return job, ok, nil

@@ -225,3 +225,30 @@ func TestJustJoinPreferredPay(t *testing.T) {
 		t.Errorf("preferred = %v %v, want the B2B entry when no employment contract is stated", p, ok)
 	}
 }
+
+func TestJustJoinUnresolvedBodyRowIsNoAnswer(t *testing.T) {
+	raw, err := os.ReadFile("testdata/justjoin/offer_kamsoft.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Renaming the body row's id leaves the offer's "$81" reference pointing at nothing.
+	page := strings.Replace(string(raw), "\\n81:T", "\\n9f81:T", 1)
+	if page == string(raw) {
+		t.Fatal("fixture no longer carries the body row this test renames")
+	}
+	f := &justjoinTextFake{page: page}
+	s := NewJustJoin(f).(justjoinSite)
+	s.limiter = noWait{}
+	p, _ := s.parsePosting(sitemapLoc{Loc: "https://justjoin.it/job-offer/kamsoft-s-a--programista-programistka-net-katowice-net"})
+	if _, ok, err := s.detail(context.Background(), p); err == nil || ok {
+		t.Fatalf("detail = ok %v err %v, want an error for an unresolved body reference", ok, err)
+	}
+}
+
+// justjoinTextFake answers every page with one fixed body.
+type justjoinTextFake struct {
+	justjoinFake
+	page string
+}
+
+func (f *justjoinTextFake) GetText(context.Context, string) (string, error) { return f.page, nil }
