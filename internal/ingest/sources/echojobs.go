@@ -90,6 +90,9 @@ func (echojobs) aggregator() {}
 
 func (echojobs) sweepGrace() time.Duration { return echojobsSweepGrace }
 
+// echojobs reads only its freshness window of a far deeper feed; cmd/liveness GETs its job page.
+func (echojobs) livenessProbed() {}
+
 // Fetch fully hydrates every posting the sitemap walk finds within the freshness window. Unlike
 // FetchNew it has no seen-set to skip already-ingested postings — the sitemap carries no field a
 // cheaper "list-only" tier could serve any more, so there is nothing partial left to return.

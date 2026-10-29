@@ -174,3 +174,27 @@ func TestMCPAccountAlertTools_NameNoOtherTool(t *testing.T) {
 		}
 	}
 }
+
+// A full-scope API key reaches the account server so the local MCP package can manage job
+// alerts; auto-apply, which sends applications in the person's name and has never been open
+// to a key over REST, stays with the OAuth grant.
+func TestMCPKeyTools_ServeAlertsButNotAutoApply(t *testing.T) {
+	h := &assistantHandlers{}
+	served := map[string]bool{}
+	for _, tool := range mcpKeyTools(h, testMCPOrigin) {
+		served[tool.Name] = true
+	}
+	for _, tool := range h.subscriptionMCPTools(testMCPOrigin) {
+		if !served[tool.Name] {
+			t.Errorf("%s: a job-alert tool missing from the key's set", tool.Name)
+		}
+	}
+	for _, tool := range h.autoApplyMCPTools() {
+		if served[tool.Name] {
+			t.Errorf("%s: an auto-apply tool served to an API key", tool.Name)
+		}
+	}
+	if served[presentJobsToolName] {
+		t.Errorf("%s served to an API key", presentJobsToolName)
+	}
+}

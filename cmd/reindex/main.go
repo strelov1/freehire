@@ -609,31 +609,32 @@ func buildClosureGeoLookup(ctx context.Context, q *db.Queries) (closureGeoLookup
 	return func(ownerID int64) jobview.ClosureGeo { return m[ownerID] }, nil
 }
 
-// splitJobs partitions a batch from the reindex feed:
-// open, non-private, categorized-or-confirmed-technical jobs become index documents
-// (each carrying its reality signal, classified against `now` and its cluster
-// counts); closed, private, or category-unresolved jobs become deletions so they
-// leave the index (the index contains only open, non-private jobs that are either
-// categorized or confirmed technical — see the job-search spec).
 // sourceTypeOf is each source's `source_type` document attribute, resolved once from the
 // adapter taxonomy (which needs no credential, so every host answers alike).
 var sourceTypeOf = sources.SourceTypes(sources.Taxonomy())
 
+// unseenWindows is how long each crawled source's postings may go unseen before they leave
+// the index (search.Withheld), resolved once from the same adapter taxonomy.
+var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow))
+
+// splitJobs partitions a batch from the reindex feed:
+// open, non-private jobs search does not withhold become index documents (each
+// carrying its reality signal, classified against `now` and its cluster counts);
+// closed, private, or withheld jobs become deletions so they leave the index (see
+// search.Withheld and the job-search spec).
 func splitJobs(jobs []db.Job, lookup realityLookup, geo closureGeoLookup, desc map[int64][][]float32, now time.Time) ([]search.JobDocument, []int64, error) {
 	docs := make([]search.JobDocument, 0, len(jobs))
 	deleteIDs := make([]int64, 0, len(jobs))
 	for _, j := range jobs {
 		// A closed job, a non-canonical repost (duplicate_of set), a private job (the
-		// jd-tailor-intake path — visible only to its creator), a job whose category
-		// neither the title dictionary nor the LLM ever resolved and whose is_tech is
-		// not confidently true (search.CategoryUnresolved), or one with no posting body
-		// at all (search.DescriptionMissing) leaves the index: only the open,
-		// non-private, readable canonical row of each role cluster — categorized or
-		// confirmed technical — is searchable. Deleting (not just skipping) removes a
-		// row that was indexed before it was closed, demoted, marked private, or — for
-		// a job this run re-evaluates fresh every time — before this exclusion existed.
-		if j.ClosedAt.Valid || j.DuplicateOf.Valid || j.IsPrivate ||
-			search.CategoryUnresolved(j) || search.DescriptionMissing(j) {
+		// jd-tailor-intake path — visible only to its creator), or one search withholds —
+		// no resolved category, no posting body, or a source that stopped showing it
+		// (search.Withheld) — leaves the index: only the open, non-private, readable,
+		// still-listed canonical row of each role cluster is searchable. Deleting (not
+		// just skipping) removes a row that was indexed before it was closed, demoted,
+		// marked private, or — for a job this run re-evaluates fresh every time — before
+		// it went unseen or this exclusion existed.
+		if j.ClosedAt.Valid || j.DuplicateOf.Valid || j.IsPrivate || search.Withheld(j, now, unseenWindows) {
 			deleteIDs = append(deleteIDs, j.ID)
 			continue
 		}

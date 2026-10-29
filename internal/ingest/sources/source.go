@@ -319,6 +319,16 @@ type fullCatalog interface{ fullCatalog() }
 // See SweepGraceWindows.
 type sweepGrace interface{ sweepGrace() time.Duration }
 
+// livenessProbed marks an adapter whose crawl cannot re-list every live posting it holds — it
+// reads only the newest slice of a feed deeper than any run can walk, so an older posting is
+// never listed again however long it stays up — and whose removals are therefore judged by a
+// probe of the source's own page instead (cmd/liveness's probeDespiteRegistered,
+// cmd/adzuna-liveness). For such a source a stale last_seen_at says how old the posting is,
+// not whether it is gone, so search's unseen-posting rule leaves it to the probe (see
+// UnseenWindows). Grant it only together with a probe that actually closes the source's dead
+// postings: without one the marker is a promise nothing keeps.
+type livenessProbed interface{ livenessProbed() }
+
 // fullBoardListing marks an adapter whose Fetch structurally proves, for every board it
 // crawls, that it retrieved the board's full posting list — either by verifying a fetched
 // count against the source's own reported total, or by paginating to the source's natural

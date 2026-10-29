@@ -521,8 +521,8 @@ WHERE slug = sqlc.arg(slug);
 -- the wider table scope did all three: 294,021 company URLs in the sitemap of which
 -- most rendered "0 open jobs", `remote_regions` offering regions whose jobs the click
 -- through could not find, and Stripe listed at 570 on /companies against 444 on its
--- own page. The three predicates below are the ones cmd/reindex's splitJobs applies
--- on top of closed/duplicate; keep the two in step.
+-- own page. The four predicates below (private, body, category, unseen) are the ones
+-- cmd/reindex's splitJobs applies on top of closed/duplicate; keep the two in step.
 --
 -- industries_derived (see derived_eligible/derived_ind below) is a SECOND-ORDER
 -- derivation — computed from this pass's own `dom` and the company's curated
@@ -531,20 +531,36 @@ WHERE slug = sqlc.arg(slug);
 -- internal/dict/industrytag.DomainIndustryPairs(), passed as parameters so this query
 -- has exactly one copy of the domain→industry table to read, not a second one typed
 -- into SQL.
-WITH oj AS MATERIALIZED (
+--
+-- `unseen_sources`/`unseen_seconds` are search.Withheld's unseen rule as parallel arrays
+-- (internal/ingest/sources.UnseenWindows, resolved by the caller): a posting whose source is
+-- listed and has not shown it for longer than that many seconds is not in search, so it is
+-- not counted here either. A source not listed is never excluded on this ground — the same
+-- reading search gives it.
+WITH unseen_window AS (
+    -- Zipped by position for the same analyzer reason as domain_industry_map below.
+    SELECT s.source, w.seconds
+    FROM unnest(sqlc.arg('unseen_sources')::text[]) WITH ORDINALITY AS s(source, ord)
+    JOIN unnest(sqlc.arg('unseen_seconds')::bigint[]) WITH ORDINALITY AS w(seconds, ord)
+      ON w.ord = s.ord
+),
+oj AS MATERIALIZED (
     -- duplicate_of IS NULL counts one canonical job per role cluster, so the company
     -- job_count matches the collapsed /jobs and company lists (reposts share facets, so
     -- the DISTINCT region/country aggregates are unaffected — only the count changes).
-    SELECT company_slug, regions, countries, enrichment, work_mode, source
-    FROM jobs
-    WHERE closed_at IS NULL AND duplicate_of IS NULL AND company_slug <> ''
+    SELECT j.company_slug, j.regions, j.countries, j.enrichment, j.work_mode, j.source
+    FROM jobs j
+    LEFT JOIN unseen_window uw ON uw.source = j.source
+    WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND j.company_slug <> ''
+      -- search.UnseenWindows.Unseen: the source has stopped showing the posting.
+      AND (uw.source IS NULL OR j.last_seen_at >= now() - make_interval(secs => uw.seconds))
       -- Visible only to its creator (the jd-tailor-intake path).
-      AND NOT is_private
+      AND NOT j.is_private
       -- search.DescriptionMissing strips the body to plain text first, which SQL
       -- cannot reproduce, so a body that is only empty markup still counts here. That
       -- residual is small and self-limiting: such a company reaches the sitemap, and
       -- its page answers noindex off the same search that excluded the row.
-      AND description <> ''
+      AND j.description <> ''
       -- search.CategoryUnresolved: the column answers, or the enrichment does, or
       -- is_tech is confidently true (a confirmed-technical job — e.g. Profession's
       -- dedicated itdev/itops boards, issue #2601 — is never the undifferentiated
@@ -563,7 +579,7 @@ WITH oj AS MATERIALIZED (
       -- Manager"), and that dictionary is Go, not SQL. Such a posting is therefore
       -- searchable but not counted here. The residual is the price of not storing a
       -- derived column for one count; it under-counts a company, never invents one.
-      AND (category <> '' OR COALESCE(enrichment->>'category', '') NOT IN ('', 'other') OR is_tech IS TRUE)
+      AND (j.category <> '' OR COALESCE(j.enrichment->>'category', '') NOT IN ('', 'other') OR j.is_tech IS TRUE)
 ),
 counts AS (
     SELECT company_slug, count(*) AS cnt FROM oj GROUP BY company_slug

@@ -13,6 +13,13 @@ a catalogue view. Authentication for it is a Fiber middleware in
 `internal/api/handler/mcpapp_account.go`, ahead of this package's own code — see
 `AccountUserIDHeader`'s doc comment in `account.go` for why.
 
+It also admits a **full-scope API key** (`fhk_…`), the mirror of REST admitting an OAuth
+grant wherever a key goes. That is how the local npm server (`freehire-mcp`), which holds a
+key and no grant, manages job alerts through these same tools instead of a second
+implementation. A key is served everything a grant is EXCEPT the auto-apply tools
+(`mcpKeyTools`): those send applications in the person's name and have never been open to a
+key over REST. A narrow (`cv`) key is a 403.
+
 The account server's job-alert tools (`subscribe`, `list_subscriptions`,
 `update_subscription`, `unsubscribe`, `subscription_updates`, in
 `internal/api/handler/assistant_subscription_tools.go`) address an ALERT by its saved search

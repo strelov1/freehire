@@ -19,6 +19,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/application/jobtracking"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -138,5 +139,87 @@ func TestMCPAccountAuthenticate_InfraFailureIsA500NotA401(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusInternalServerError {
 		t.Errorf("status = %d, want 500 (an infra failure must not read as an invalid token)", resp.StatusCode)
+	}
+}
+
+// A full-scope API key is let in — the local MCP package holds a key, not a grant — and is
+// served the alert tools but not auto-apply; a narrow key is refused as insufficient scope.
+func TestMCPAccountByAPIKey(t *testing.T) {
+	ctx := context.Background()
+	pool := startPostgres(t)
+	queries := db.New(pool)
+	userID := seedOAuthUser(t, pool, "mcp-account-key@example.test")
+	if err := queries.SetUserEmailVerified(ctx, userID); err != nil {
+		t.Fatalf("SetUserEmailVerified: %v", err)
+	}
+	const fullKey, cvKey = "fhk_test-full-key", "fhk_test-cv-key"
+	for token, scope := range map[string]string{fullKey: auth.ScopeFull, cvKey: auth.ScopeCV} {
+		if _, err := queries.CreateAPIKey(ctx, db.CreateAPIKeyParams{
+			UserID: userID, Name: scope, TokenHash: auth.HashAPIKey(token), TokenPrefix: "fhk_test", Scope: scope,
+		}); err != nil {
+			t.Fatalf("CreateAPIKey(%s): %v", scope, err)
+		}
+	}
+
+	assistants := &assistantHandlers{
+		queries:  queries,
+		tracking: &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
+	}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	mountMCPAccount(app.Group("/api/v1"), middleware{}, assistants, testMCPOrigin)
+	server := httptest.NewServer(adaptor.FiberApp(app))
+	defer server.Close()
+
+	status := func(token string) int {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/api/v1/mcp/account", nil)
+		if err != nil {
+			t.Fatalf("NewRequest: %v", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("Do: %v", err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+	if got := status(cvKey); got != http.StatusForbidden {
+		t.Errorf("cv key: status = %d, want 403", got)
+	}
+	if got := status("fhk_no-such-key"); got != http.StatusUnauthorized {
+		t.Errorf("unknown key: status = %d, want 401", got)
+	}
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:   server.URL + "/api/v1/mcp/account",
+		HTTPClient: &http.Client{Transport: bearerRoundTripper{token: fullKey}},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer func() { _ = session.Close() }()
+
+	listed, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	served := map[string]bool{}
+	for _, tool := range listed.Tools {
+		served[tool.Name] = true
+	}
+	if !served["subscribe"] || !served["list_subscriptions"] {
+		t.Errorf("a full key is not served the alert tools: %v", served)
+	}
+	if served["auto_apply_start"] {
+		t.Error("a full key is served auto_apply_start")
+	}
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "list_subscriptions", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("list_subscriptions failed: %+v", res.Content)
 	}
 }

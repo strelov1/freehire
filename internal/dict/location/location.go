@@ -226,9 +226,24 @@ func ParseIn(location string, known []string) Geo {
 			prevTok = tok
 			continue
 		}
+		// A code that is both a US/CA subdivision and an ISO country code is the country
+		// when it closes a location opening with a city of that country ("Toronto, ON, CA",
+		// "Toronto, CA, CA", "Tel Aviv, IL, IL"); see countryCodeClosingCity.
+		if countryCodeClosingCity(tok, toks, segs, i) {
+			countrySet[tok] = struct{}{}
+			regionSet[countryToRegion[tok]] = struct{}{}
+			prevTok = tok
+			continue
+		}
 		if _, colliding := collidingSubdivisions[tok]; colliding && namesUS {
 			countrySet["us"] = struct{}{}
 			regionSet[countryToRegion["us"]] = struct{}{}
+			// "Paris, IL, US" is the Illinois town, as "Paris, TX" is the Texan one — when
+			// the US has a place of that name at all: "Jakarta, ID, United States" is no
+			// Idaho town, and a list of codes ("CL, CO, MX, US") names no town.
+			if !first && hasPlaceIn(prevTok, "us") {
+				withdrawNamesake("us", prevTok, lastCountries, countryVotes, countrySet, regionSet)
+			}
 			if code, ok := statedSubdivisionCode(tok); ok {
 				statedSubdivisions[code] = struct{}{}
 			}
@@ -239,8 +254,16 @@ func ParseIn(location string, known []string) Geo {
 		// country is that country's subdivision (Aragón, Appenzell), not a second country;
 		// so is a US/CA/Australian code before the country closing the location ("Breda,
 		// NB, Netherlands" is Noord-Brabant, not New Brunswick).
-		if subdivisionBeforeCountry(tok, prevTok, nextToken(toks, i)) ||
+		if next := nextToken(toks, i); subdivisionBeforeCountry(tok, prevTok, next) ||
 			foreignSubdivisionCode(tok, prevTok, closingToken(toks, segs, i)) {
+			// The next country's own state or province ("Valencia, CA, US", "Estevan, SK,
+			// Canada") is a stated subdivision, so a foreign namesake of the town goes.
+			if c, ok := subdivisionToCountry[tok]; ok && c == countryOf(next) {
+				if code, ok := statedSubdivisionCode(tok); ok {
+					statedSubdivisions[code] = struct{}{}
+				}
+				withdrawNamesake(c, prevTok, lastCountries, countryVotes, countrySet, regionSet)
+			}
 			prevTok = tok
 			continue
 		}
@@ -286,15 +309,9 @@ func ParseIn(location string, known []string) Geo {
 		}
 		resolved := resolveGeoToken(tok, prevTok, tokCountry, tokRegion)
 		// A US state or Canadian province after a town the curated tables placed elsewhere
-		// names that town's North American namesake: "Paris, TX", "London, ON", "Dublin,
-		// OH". The other country goes, unless another token also stated it — or the town
-		// is itself a province ("Saint-Laurent, Quebec, CA").
-		if code, ok := resolveSubdivision(tok, prevTok); ok && !first && len(lastCountries) > 0 && !slices.Contains(lastCountries, code) && !isSubdivisionName(prevTok) {
-			for _, c := range lastCountries {
-				if countryVotes[c]--; countryVotes[c] == 0 {
-					withdrawCountry(c, countrySet, regionSet)
-				}
-			}
+		// names that town's North American namesake (withdrawNamesake).
+		if code, ok := resolveSubdivision(tok, prevTok); ok && !first {
+			withdrawNamesake(code, prevTok, lastCountries, countryVotes, countrySet, regionSet)
 		}
 		// Recorded now, before any of the branches below (including the early
 		// "continue" on a resolved token) that would otherwise skip past the
@@ -1002,4 +1019,20 @@ func statedSubdivisionCode(tok string) (string, bool) {
 	}
 	code, ok := subdivisionCode[fields[len(fields)-1]]
 	return code, ok
+}
+
+// withdrawNamesake withdraws the countries the town before a US state or Canadian province
+// stated (lastCountries), when the subdivision's country code is not among them: "Paris,
+// TX", "London, ON", "Dublin, CA, US" name the North American namesake. A country another
+// token also stated stays, and so does a town that is itself a province ("Saint-Laurent,
+// Quebec, CA").
+func withdrawNamesake(code, town string, lastCountries []string, votes map[string]int, countrySet, regionSet map[string]struct{}) {
+	if len(lastCountries) == 0 || slices.Contains(lastCountries, code) || isSubdivisionName(town) {
+		return
+	}
+	for _, c := range lastCountries {
+		if votes[c]--; votes[c] == 0 {
+			withdrawCountry(c, countrySet, regionSet)
+		}
+	}
 }

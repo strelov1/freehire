@@ -7,10 +7,10 @@ import (
 
 // keyedProviders are the adapters whose crawl needs an environment credential. They are the
 // ones the two registries disagree about, so both tests below iterate exactly this set.
-// keyedProviders lists reed, usajobs and every whatjobs market provider — built from
+// keyedProviders lists reed, usajobs, francetravail and every whatjobs market provider — built from
 // whatjobsMarkets so a new market added there is covered here automatically.
 var keyedProviders = func() []string {
-	out := []string{"reed", "usajobs"}
+	out := []string{"reed", "usajobs", "francetravail"}
 	for _, m := range whatjobsMarkets {
 		out = append(out, m.provider)
 	}
@@ -23,6 +23,8 @@ func clearCrawlCredentials(t *testing.T) {
 	t.Helper()
 	t.Setenv("USAJOBS_API_KEY", "")
 	t.Setenv("REED_API_KEY", "")
+	t.Setenv("FRANCE_TRAVAIL_CLIENT_ID", "")
+	t.Setenv("FRANCE_TRAVAIL_CLIENT_SECRET", "")
 	t.Setenv("WHATJOBS_PUBLISHER_IDS", "")
 }
 

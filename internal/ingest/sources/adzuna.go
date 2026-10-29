@@ -80,6 +80,11 @@ func (adzuna) aggregator() {}
 
 func (adzuna) sweepGrace() time.Duration { return adzunaSweepGrace }
 
+// adzuna's crawl reads ~750 postings a run of a feed holding ~157k US it-jobs alone, so
+// unseen is not evidence there (57% of its live US feed is older than 21 days);
+// cmd/adzuna-liveness reads Adzuna's own /details page and closes on a 404/410.
+func (adzuna) livenessProbed() {}
+
 // adzunaID reads a posting's id, which the API emits as a JSON string for most postings but as a
 // bare JSON number for some (observed live 2026-08-08, gb/it-jobs page 7) — an upstream
 // inconsistency, not a documented alternate shape. A page hitting it must decode instead of

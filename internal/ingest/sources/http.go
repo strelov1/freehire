@@ -519,6 +519,28 @@ func (c *Client) GetJSONWithHeaders(ctx context.Context, url string, headers map
 	})
 }
 
+// GetJSONOrNoContent behaves like GetJSONWithHeaders, except that a 204 No Content answer is
+// a success that decodes nothing and reports false — for an API that answers an empty search
+// with 204 rather than an empty list (France Travail). Without it the empty body would read as a
+// dropped connection and be retried until the request failed.
+func (c *Client) GetJSONOrNoContent(ctx context.Context, url string, headers map[string]string, v any) (bool, error) {
+	found := false
+	err := c.do(ctx, request{
+		method:  http.MethodGet,
+		url:     url,
+		accept:  "application/json",
+		headers: headers,
+		decode: func(resp *http.Response) error {
+			if resp.StatusCode == http.StatusNoContent {
+				return nil
+			}
+			found = true
+			return json.NewDecoder(resp.Body).Decode(v)
+		},
+	})
+	return found, err
+}
+
 // GetJSONResolved fetches url and decodes its JSON body into v, additionally returning the
 // FINAL URL after redirects — the JSON counterpart of GetHTMLResolved, for adapters whose
 // platform answers "no such board" by redirecting rather than by a status code (BambooHR;

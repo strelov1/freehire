@@ -35,15 +35,36 @@ func (successfactors) Provider() string { return "successfactors" }
 func (successfactors) fullBoardListing() {}
 
 func (s successfactors) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+	return s.FetchNew(ctx, e, func(string) bool { return false })
+}
+
+// FetchNew is Fetch that spends a page request only on postings the catalogue does not hold.
+// The page is this adapter's whole cost — the sitemap names a posting and carries nothing
+// else — and re-reading every stored page on every run could not finish: measured
+// 2026-10-28, each of the three shards' 2400-second crawls reached ~350 of its ~850 boards,
+// every run for at least ten days ended on its deadline, and the eight boards in flight when
+// it did (jobs.lidl alone lists 21k postings) saved nothing. A seen posting is re-listed as a
+// SeenRefresh carrying the sitemap's identity — the sitemap itself proves the posting is
+// still published — so its liveness refreshes and its hydrated body and facets are kept.
+// The sitemap stays whole, so the board-scoped sweep still closes what it stopped listing.
+func (s successfactors) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	sitemapURL := fmt.Sprintf("https://%s/job_sitemap.xml", e.Board)
 	sitemap, err := getSitemap(ctx, s.http, sitemapURL)
 	if err != nil {
 		return nil, fmt.Errorf("successfactors: sitemap %s: %w", e.Board, err)
 	}
 
-	// Each job's title and description come from its own page fetch, fanned out under a
+	// Each new job's title and description come from its own page fetch, fanned out under a
 	// bounded worker pool; the sitemap's lastmod is carried as posted_at.
 	return fetchDetails(sitemap.URLs, defaultDetailWorkers, func(entry sitemapLoc) (Job, bool) {
+		if id := sfJobID(entry.Loc); id != "" && seen(id) {
+			return Job{
+				ExternalID:  id,
+				URL:         entry.Loc,
+				Company:     sfCompany(e, entry.Loc),
+				SeenRefresh: true,
+			}, true
+		}
 		return s.detail(ctx, e, entry)
 	}), nil
 }
@@ -58,17 +79,9 @@ func (s successfactors) detail(ctx context.Context, e CompanyEntry, entry sitema
 		return Job{}, false // no native id → would collide on the dedup key; skip it
 	}
 
-	// On a hub the configured company is only the hub's own name; the employer is the tenant
-	// the job URL names, resolved through the entry's curated map. An ordinary board keeps its
-	// configured company, whatever segments its URLs happen to carry. Resolved from the URL
-	// before the fetch, so an unreadable posting can still name the employer whose close scope
-	// it withholds.
-	company := e.Company
-	if e.Hub {
-		if name, ok := e.Tenants[sfTenant(entry.Loc)]; ok {
-			company = name
-		}
-	}
+	// Resolved from the URL before the fetch, so an unreadable posting can still name the
+	// employer whose close scope it withholds.
+	company := sfCompany(e, entry.Loc)
 
 	root, err := s.http.GetHTML(ctx, entry.Loc)
 	if err != nil {
@@ -104,6 +117,19 @@ var sfJobIDPattern = regexp.MustCompile(`/(\d+)(?:-[^/]*)?/?$`)
 // sfJobID extracts the native numeric posting id from a job page URL.
 func sfJobID(loc string) string {
 	return firstSubmatch(sfJobIDPattern, loc)
+}
+
+// sfCompany is the employer behind one posting. On a hub the configured company is only the
+// hub's own name; the employer is the tenant the job URL names, resolved through the entry's
+// curated map. An ordinary board keeps its configured company, whatever segments its URLs
+// happen to carry.
+func sfCompany(e CompanyEntry, loc string) string {
+	if e.Hub {
+		if name, ok := e.Tenants[sfTenant(loc)]; ok {
+			return name
+		}
+	}
+	return e.Company
 }
 
 // sfTenant returns the hub tenant a job URL belongs to: the first path segment, which is how a

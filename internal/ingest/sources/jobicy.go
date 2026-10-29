@@ -28,6 +28,9 @@ func (jobicy) boardless() {}
 
 func (jobicy) aggregator() {}
 
+// jobicy's feed carries only its newest postings; cmd/liveness reads the job page's 410.
+func (jobicy) livenessProbed() {}
+
 // jobicyPosting is one posting from the /api/v2 feed, body inline (no detail call).
 type jobicyPosting struct {
 	ID             int64  `json:"id"`

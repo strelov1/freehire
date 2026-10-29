@@ -1,0 +1,83 @@
+{
+  "resultats": [
+    {
+      "id": "198XKLM",
+      "intitule": "Développeur / Développeuse web (H/F)",
+      "description": "Au sein de notre équipe produit, vous développez nos applications web.\n\nVos missions :\n- concevoir les API\n- maintenir le front Vue.js",
+      "dateCreation": "2026-10-27T09:12:41.000Z",
+      "dateActualisation": "2026-10-27T09:12:42.000Z",
+      "lieuTravail": {
+        "libelle": "75 - PARIS 11",
+        "latitude": 48.8589,
+        "longitude": 2.3801,
+        "codePostal": "75011",
+        "commune": "75111"
+      },
+      "romeCode": "M1805",
+      "romeLibelle": "Études et développement informatique",
+      "appellationlibelle": "Développeur / Développeuse web",
+      "entreprise": {
+        "nom": "ACME LOGICIELS",
+        "description": "Éditeur de logiciels.",
+        "entrepriseAdaptee": false
+      },
+      "typeContrat": "CDI",
+      "typeContratLibelle": "Contrat à durée indéterminée",
+      "natureContrat": "Contrat travail",
+      "experienceExige": "E",
+      "experienceLibelle": "3 An(s)",
+      "salaire": {"libelle": "Annuel de 42000,00 Euros à 48000,00 Euros sur 12 mois", "commentaire": "selon profil"},
+      "dureeTravailLibelle": "35H Horaires normaux",
+      "dureeTravailLibelleConverti": "Temps plein",
+      "alternance": false,
+      "nombrePostes": 1,
+      "accessibleTH": false,
+      "qualificationCode": "9",
+      "qualificationLibelle": "Cadre",
+      "secteurActivite": "62",
+      "secteurActiviteLibelle": "Programmation informatique",
+      "origineOffre": {
+        "origine": "1",
+        "urlOrigine": "https://candidat.francetravail.fr/offres/recherche/detail/198XKLM"
+      },
+      "offresManqueCandidats": false
+    },
+    {
+      "id": "198XKLN",
+      "intitule": "Mécanicien de maintenance (F/H).",
+      "description": "Sous la responsabilité, vous avez une mission",
+      "dateCreation": "2026-10-26T18:11:41.000Z",
+      "lieuTravail": {"libelle": "75 - PARIS 15", "codePostal": "75015", "commune": "75115"},
+      "romeCode": "I1304",
+      "entreprise": {"nom": "RANDSTAD", "entrepriseAdaptee": false},
+      "typeContrat": "MIS",
+      "typeContratLibelle": "Mission intérimaire - 6 Mois",
+      "natureContrat": "Contrat travail",
+      "experienceExige": "S",
+      "experienceLibelle": "6 mois",
+      "salaire": {"libelle": "Horaire de 11.88 Euros sur 12 mois"},
+      "dureeTravailLibelleConverti": "Temps plein",
+      "alternance": false,
+      "origineOffre": {"origine": "1", "urlOrigine": "https://candidat.francetravail.fr/offres/recherche/detail/198XKLN"}
+    },
+    {
+      "id": "198XKLP",
+      "intitule": "Assistant (F/H)",
+      "description": "Rattaché au responsable",
+      "dateCreation": "2026-10-25T08:00:00.000Z",
+      "lieuTravail": {"libelle": "75 - PARIS 08"},
+      "romeCode": "M1607",
+      "entreprise": {"entrepriseAdaptee": false},
+      "typeContrat": "CDD",
+      "natureContrat": "Contrat travail",
+      "experienceExige": "D",
+      "salaire": [],
+      "alternance": false,
+      "origineOffre": {"origine": "1", "urlOrigine": "https://candidat.francetravail.fr/offres/recherche/detail/198XKLP"}
+    }
+  ],
+  "filtresPossibles": [
+    {"filtre": "typeContrat", "agregation": [{"valeurPossible": "CDI", "nbResultats": 1}, {"valeurPossible": "MIS", "nbResultats": 1}, {"valeurPossible": "CDD", "nbResultats": 1}]},
+    {"filtre": "experience", "agregation": [{"valeurPossible": "1", "nbResultats": 3}]}
+  ]
+}

@@ -147,6 +147,19 @@ titles and curated: catch-all nouns and civil-service ranks were dropped, entrie
 re-filed to their English twin, and a phrase that its own shorter aliases already resolve
 was pruned.
 
+The Croatian and Serbian vocabulary was contributed in #3778 as 3,512 whole titles; about
+one in five of those the table did not already read was filed away from its English
+twin. What was kept is the role noun or phrase inside them, in both standards (ijekavian
+savjetnik, ekavian savetnik), filed where its English twin is; the catch-all nouns were
+dropped as in #3518. Two nouns collide across
+languages: "predavač" is the Slovak shop assistant and the Croatian lecturer, so only the
+Croatian feminine "predavačica" is read as education. "Projektant" and "arhitekt" sit
+after the programmer nouns, so "projektant programer" stays software. Measured 2026-10-28:
+category 66.8% → 68.8% over 12,945 open hr/rs/ba/me postings; over 44,130 control postings
+from the rest of the region, 69 changed and all were hand-checked. Most were Polish,
+Czech and Slovak "projektant" titles (road, bridge and building-services design), now
+read as engineering_design.
+
 ## There is no management category
 
 `management` was retired. It held every title whose only resolved word was "manager" —

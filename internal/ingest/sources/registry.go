@@ -55,6 +55,39 @@ func SweepGraceWindows(reg map[string]Source) map[string]time.Duration {
 	return out
 }
 
+// UnseenWindows returns, per provider, how long one of its postings may go unseen by the
+// crawl before search stops showing it (the safety net for postings the post-run sweep never
+// closed, because no run proved it covered their board). Every crawled provider gets floor,
+// or its own sweepGrace when that is wider — a source whose sweep already waits longer has
+// said its unseen reading means nothing sooner. A provider is absent, and its postings are
+// never withheld on this ground, when last_seen_at going stale is not evidence for it:
+//
+//   - a self-closing adapter (see selfClosing) re-reports only CHANGED postings, so an
+//     untouched live one ages exactly like a removed one;
+//   - a livenessProbed adapter re-lists only the newest slice of its feed, and a probe of the
+//     source's own page closes what is really gone.
+//
+// A source with no adapter at all — Telegram, an employer's own vacancy, a moderator's or a
+// pasted-link import — is absent by construction: nothing re-crawls it, so its last_seen_at
+// never moves. reg must be Taxonomy(), so the answer does not vary with a host's credentials.
+func UnseenWindows(reg map[string]Source, floor time.Duration) map[string]time.Duration {
+	out := make(map[string]time.Duration, len(reg))
+	for name, src := range reg {
+		if _, ok := src.(selfClosing); ok {
+			continue
+		}
+		if _, ok := src.(livenessProbed); ok {
+			continue
+		}
+		window := floor
+		if s, ok := src.(sweepGrace); ok {
+			window = max(window, s.sweepGrace())
+		}
+		out[name] = window
+	}
+	return out
+}
+
 // FullBoardListingProviders returns, as a set, the provider names in reg whose adapter is
 // registered as structurally proving it lists a board to completion (see fullBoardListing).
 // cmd/ingest consults this as the sweep's fourth board-scope qualification gate: a provider
@@ -727,6 +760,14 @@ func All(c HTTPClient) map[string]Source {
 	}
 	if key := os.Getenv("REED_API_KEY"); c == nil || key != "" {
 		registry["reed"] = NewReed(c, key)
+	}
+	// France Travail's credential is an OAuth2 client pair issued to an application registered
+	// on francetravail.io; both must be set, and the transport must answer the search's 204.
+	if id, secret := os.Getenv("FRANCE_TRAVAIL_CLIENT_ID"), os.Getenv("FRANCE_TRAVAIL_CLIENT_SECRET"); c == nil || (id != "" && secret != "") {
+		ft, ok := c.(francetravailHTTP)
+		if c == nil || ok {
+			registry["francetravail"] = NewFranceTravail(ft, id, secret)
+		}
 	}
 	// Adzuna's credential is an app_id/app_key pair rather than a single key; both must be set.
 	if appID, appKey := os.Getenv("ADZUNA_APP_ID"), os.Getenv("ADZUNA_APP_KEY"); c == nil || (appID != "" && appKey != "") {

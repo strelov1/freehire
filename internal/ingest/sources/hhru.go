@@ -52,6 +52,10 @@ func (hh) Provider() string { return "hh" }
 // (professional_role id) to bound the crawl, so it is not boardless.
 func (hh) aggregator() {}
 
+// hh reads each role as only its newest ~2000 postings of the last 7 days, so a live posting
+// older than that is never listed again; cmd/liveness reads its archived flag off the page.
+func (hh) livenessProbed() {}
+
 // hh deliberately does NOT implement fullBoardListing. hh.ru's own search UI caps a query's
 // reachable depth at ~2000 results independent of a role's true count — see crawl's own comment
 // for the live 2026-09-08 confirmation against a currently-configured board — so this adapter

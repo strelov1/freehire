@@ -339,3 +339,105 @@ func TestSuccessFactorsEmptySitemapYieldsNoJobsNoError(t *testing.T) {
 		t.Fatalf("got %d jobs, want 0", len(jobs))
 	}
 }
+
+// SuccessFactors re-read every posting's page on every crawl, because the sitemap carries no
+// body: measured 2026-10-28, every one of the three shards' runs hit its deadline after ~350
+// of ~850 boards, and the eight boards in flight at the deadline — jobs.lidl alone lists 21k
+// postings — saved nothing. A posting the catalogue already holds is now re-listed as a
+// liveness refresh and costs no page request; only a new one is fetched.
+func TestSuccessFactorsFetchNewSkipsDetailForSeenPostings(t *testing.T) {
+	loc := "https://jobs.tetrapak.com/job/Munich-Engineer/12345/"
+	// No route for the page: requesting it would come back unreadable, which the test rejects.
+	fake := (&routedHTTP{}).route("/job_sitemap.xml", sfSitemapXML(loc))
+
+	src, ok := NewSuccessFactors(fake).(HydratingSource)
+	if !ok {
+		t.Fatal("successfactors should be a HydratingSource")
+	}
+	jobs, err := src.FetchNew(context.Background(), CompanyEntry{
+		Company: "Tetra Pak", Provider: "successfactors", Board: "jobs.tetrapak.com",
+	}, func(id string) bool { return id == "12345" })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("len(jobs) = %d, want 1: %+v", len(jobs), jobs)
+	}
+	j := jobs[0]
+	if !j.SeenRefresh || j.Unreadable {
+		t.Fatalf("job = %+v, want a SeenRefresh without a page request", j)
+	}
+	if j.ExternalID != "12345" || j.URL != loc || j.Company != "Tetra Pak" {
+		t.Errorf("identity = %q/%q/%q, want the sitemap's id and URL and the board's company", j.ExternalID, j.URL, j.Company)
+	}
+	if fake.calls != 1 {
+		t.Errorf("requests = %d, want 1 (the sitemap only)", fake.calls)
+	}
+}
+
+func TestSuccessFactorsFetchNewHydratesAnUnseenPosting(t *testing.T) {
+	loc := "https://jobs.tetrapak.com/job/Munich-Engineer/12345/"
+	fake := (&routedHTTP{}).
+		route("/job_sitemap.xml", sfSitemapXML(loc)).
+		route("/job/Munich-Engineer/12345", sfDetailHTML)
+
+	jobs, err := NewSuccessFactors(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{
+		Company: "Tetra Pak", Provider: "successfactors", Board: "jobs.tetrapak.com",
+	}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].SeenRefresh || jobs[0].Unreadable {
+		t.Fatalf("jobs = %+v, want one hydrated posting", jobs)
+	}
+	if jobs[0].Title != "Commissioning Engineer" || !strings.Contains(jobs[0].Description, "Build it.") {
+		t.Errorf("job = %+v, want the page's title and body", jobs[0])
+	}
+}
+
+// An unseen posting's page is still its only body, so the FAILED-vs-GONE rule holds on the
+// hydrating path: a failure is a marker, a 410 a drop.
+func TestSuccessFactorsFetchNewKeepsTheFailedVersusGoneRule(t *testing.T) {
+	lost := "https://jobs.tetrapak.com/job/Lost/222/"
+	gone := "https://jobs.tetrapak.com/job/Gone/333/"
+	fake := (&routedHTTP{}).
+		route("/job_sitemap.xml", sfSitemapXML(lost, gone)).
+		routeErr("/job/Gone/333", &StatusError{Method: "GET", Code: 410, URL: gone})
+
+	jobs, err := NewSuccessFactors(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{
+		Company: "Tetra Pak", Board: "jobs.tetrapak.com",
+	}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || !jobs[0].Unreadable || jobs[0].ExternalID != "222" {
+		t.Fatalf("jobs = %+v, want one Unreadable marker for 222 and nothing for the gone 333", jobs)
+	}
+}
+
+// A hub's seen posting keeps the employer its URL names, as a fetched one does.
+func TestSuccessFactorsFetchNewSeenHubPostingKeepsItsTenant(t *testing.T) {
+	loc := "https://jobsearch.createyourowncareer.com/Riverty/job/Berlin-Software-Engineer-10623/1425618633/"
+	fake := (&routedHTTP{}).route("/job_sitemap.xml", sfSitemapXML(loc))
+
+	jobs, err := NewSuccessFactors(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{
+		Company: "Bertelsmann", Board: "jobsearch.createyourowncareer.com",
+		Hub: true, Tenants: map[string]string{"Riverty": "Riverty"},
+	}, func(string) bool { return true })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 || !jobs[0].SeenRefresh || jobs[0].Company != "Riverty" {
+		t.Fatalf("jobs = %+v, want one SeenRefresh under the tenant Riverty", jobs)
+	}
+}
+
+// A sitemap failure still aborts FetchNew, exactly as it aborts Fetch: the fullBoardListing
+// claim holds on the hydrating path too.
+func TestSuccessFactorsFetchNewPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	if _, err := NewSuccessFactors(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "acme"},
+		func(string) bool { return false }); err == nil {
+		t.Fatal("FetchNew succeeded despite a listing error")
+	}
+}

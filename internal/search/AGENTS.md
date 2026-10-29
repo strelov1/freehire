@@ -19,6 +19,24 @@ reports the whole graph at once, including imports that exist only in test files
 `embedprogress` `facetsnapshot` `savedsearch` `search` `searchdrain` `searchintent`
 `similarjobs` `suggest`
 
+## What the jobs index withholds (`search.Withheld`)
+
+Beyond closed, duplicate and private rows, an open posting stays out of the index when it
+has no resolved category, no body, or a source that has not shown it for longer than its
+window (`search.UnseenWindow`, 14 days; per source from `sources.UnseenWindows`, passed in
+by the caller because this block may not import `ingest`). `Withheld` is the ONE predicate
+`cmd/reindex`, `cmd/search-drain` and `linkimport` ask; `RefreshCompanyFacets` mirrors it in
+SQL and the similar-jobs list applies the unseen half. The unseen rule is evaluated when a
+document is written, never at query time: the crawl's liveness refresh pushes nothing to
+`search_outbox`, so an indexed `last_seen_at` would freeze and hide live postings. A
+posting therefore leaves and returns with the full rebuild. **With the rebuild timer off,
+documents already in the index are no longer reconciled**: one that goes unseen stays
+searchable, and one listed again unchanged stays hidden until a rebuild runs — a content
+write queues it for the drain and restores it sooner. The drain and `linkimport` keep
+applying the rule to whatever they push. See
+[docs/agents/job-lifecycle.md](../../docs/agents/job-lifecycle.md) for which sources are
+exempt and why.
+
 ## The suggestions dictionary (`suggest`)
 
 The search box's completions, in a SEPARATE Meilisearch index (`suggestions`) built

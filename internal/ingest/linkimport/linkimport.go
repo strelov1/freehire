@@ -76,6 +76,10 @@ type Importer struct {
 // adapter taxonomy (which needs no credential, so every host answers alike).
 var sourceTypeOf = sources.SourceTypes(sources.Taxonomy())
 
+// unseenWindows is how long each crawled source's postings may go unseen before search
+// withholds them (search.Withheld), resolved once from the same adapter taxonomy.
+var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow))
+
 func New(pool *pgxpool.Pool, q *db.Queries, idx *search.Client, c linksource.Client, ingest map[string]sources.Source, boards BoardResolver) *Importer {
 	return &Importer{
 		pool:   pool,
@@ -296,16 +300,15 @@ func (im *Importer) unindex(ctx context.Context, id int64) {
 // import is an explicit act on one URL, so a re-import must (re)index an already-present
 // posting rather than silently no-op on an unchanged hash. The Meili upsert is idempotent.
 // A build or push failure is logged and swallowed — the job is already persisted and the
-// batch reindex reconciles. A non-canonical repost, a closed job, one whose category
-// neither the title dictionary nor the LLM ever resolved AND whose is_tech is not
-// confidently true (search.CategoryUnresolved), or one with no posting body at all
-// (search.DescriptionMissing) is never made searchable, matching cmd/reindex/cmd/search-drain.
+// batch reindex reconciles. A non-canonical repost, a closed job, or one search withholds
+// (search.Withheld: no resolved category, no posting body, or a source that stopped showing
+// it) is never made searchable, matching cmd/reindex/cmd/search-drain.
 // The category case is common here specifically: an import is a fresh URL, so enrichment has
 // usually not run yet — the job becomes searchable once the next full reindex re-evaluates it
 // with a category, or immediately if is_tech is already confidently true.
 func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 	if im.idx == nil || saved.Job.DuplicateOf.Valid || saved.Job.ClosedAt.Valid ||
-		search.CategoryUnresolved(saved.Job) || search.DescriptionMissing(saved.Job) {
+		search.Withheld(saved.Job, time.Now(), unseenWindows) {
 		return
 	}
 	// The job-reality signal needs this role's cluster counts; a lookup failure degrades

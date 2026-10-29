@@ -249,6 +249,57 @@ func subdivisionBeforeCountry(code, prevTok, next string) bool {
 	return hasPlaceIn(prevTok, country) && !hasPlaceIn(prevTok, code)
 }
 
+// countryCodeClosingCity reports whether tok (toks[i]), a code that is both a US/CA
+// subdivision and an ISO country code, is that COUNTRY because the location closes on it
+// and opens with a city the dictionary places there: "Toronto, ON, CA" and "Toronto, CA,
+// CA" are Canada, not California; "Tel Aviv, IL, IL" is Israel, not Illinois. It closes on
+// it when it is the location's last token after at least two others (the two-token "City,
+// CA" stays a state), or when the location's last token names that very country
+// ("Toronto, CA, Canada"). A code before it that is one of the country's own provinces
+// settles it whatever the town ("London, ON, CA"); one that is a subdivision of the other
+// reading ("Toronto, TX, CA") leaves both readings alone. Otherwise the location's first
+// place must be a curated or main-table city of the country and not of the subdivision's,
+// so "San Jose, CA, CA" stays Californian and a town nobody knows proves nothing.
+func countryCodeClosingCity(tok string, toks []string, segs []tokenLocation, i int) bool {
+	owner, ok := subdivisionToCountry[tok]
+	if !ok || len(tok) != 2 || owner == tok {
+		return false
+	}
+	if _, iso := countryToRegion[tok]; !iso {
+		return false
+	}
+	// The location's other place tokens, nearest first; a work-mode word is not a place.
+	var before, after []string
+	for j := i - 1; j >= 0 && segs[j] == segs[i]; j-- {
+		if t := stripWorkmodeWords(trimToken(toks[j])); t != "" {
+			before = append(before, t)
+		}
+	}
+	for j := i + 1; j < len(toks) && segs[j] == segs[i]; j++ {
+		if t := stripWorkmodeWords(trimToken(toks[j])); t != "" {
+			after = append(after, t)
+		}
+	}
+	switch {
+	case len(after) == 0 && len(before) >= 2:
+		switch prev := before[0]; {
+		case prev == tok:
+			// "Toronto, CA, CA": the code repeated; the city decides.
+		case subdivisionToCountry[prev] == owner:
+			return false
+		case subdivisionToCountry[prev] == tok:
+			// After one of the country's own provinces the code is the country whatever
+			// the town: "London, ON, CA" is London, Ontario.
+			return true
+		}
+	case len(after) == 1 && len(before) >= 1 && countryOf(after[0]) == tok:
+	default:
+		return false
+	}
+	city := before[len(before)-1]
+	return isRecognizedCityOf(city, tok) && !isRecognizedCityOf(city, owner) && !isSubdivisionName(city)
+}
+
 // foreignSubdivisionCode reports whether code, a US state, Canadian province or Australian
 // state code written between the town prevTok and the country closing its location, is
 // instead a subdivision of that country: "Breda, NB, Netherlands" is Noord-Brabant, not New

@@ -14,8 +14,10 @@ import (
 	"log"
 
 	"github.com/strelov1/freehire/internal/dict/industrytag"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 func main() {
@@ -31,9 +33,20 @@ func run() int {
 	defer cleanup()
 
 	mappingDomains, mappingIndustries := industrytag.DomainIndustryPairs()
+	// The count covers what search holds, so it takes search's unseen rule too: a posting
+	// its source stopped showing is withheld from the index (search.Withheld) and must not
+	// keep its employer at a number the company page contradicts.
+	var unseenSources []string
+	var unseenSeconds []int64
+	for source, window := range sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow) {
+		unseenSources = append(unseenSources, source)
+		unseenSeconds = append(unseenSeconds, int64(window.Seconds()))
+	}
 	updated, err := db.New(pool).RefreshCompanyFacets(ctx, db.RefreshCompanyFacetsParams{
 		MappingDomains:    mappingDomains,
 		MappingIndustries: mappingIndustries,
+		UnseenSources:     unseenSources,
+		UnseenSeconds:     unseenSeconds,
 	})
 	if err != nil {
 		log.Printf("recount-companies: %v", err)

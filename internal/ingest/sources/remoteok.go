@@ -28,6 +28,9 @@ func (remoteokSource) boardless() {}
 
 func (remoteokSource) aggregator() {}
 
+// remoteok's feed carries only its newest postings; cmd/liveness reads the job page's closed banner.
+func (remoteokSource) livenessProbed() {}
+
 // remoteokPosting is one posting from the /api feed. The feed's first element is a legal
 // notice (no id/slug); it is skipped by the empty-id guard in toJob.
 type remoteokPosting struct {
