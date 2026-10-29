@@ -627,13 +627,15 @@ func stripPlacePreposition(tok string) string {
 		if !allLeadWords(lead) {
 			return tok
 		}
-		rest := strings.Fields(stripWorkmodeWords(strings.Join(fields[k+1:], " ")))
-		if len(rest) > 1 && rest[0] == "the" {
-			rest = rest[1:]
-		}
-		name := strings.Join(rest, " ")
-		if namesPlace(name, len(lead) == 0 && f == "in") {
+		bareIn := len(lead) == 0 && f == "in"
+		// The name as written first ("The Woodlands" is a Texan town), then without the
+		// article ("the United States").
+		name := stripWorkmodeWords(strings.Join(fields[k+1:], " "))
+		if namesPlace(name, bareIn) {
 			return name
+		}
+		if rest, ok := strings.CutPrefix(name, "the "); ok && namesPlace(rest, bareIn) {
+			return rest
 		}
 	}
 	return tok

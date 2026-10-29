@@ -71,6 +71,8 @@ func TestPlaceAfterPrepositionNamesNoWrongCity(t *testing.T) {
 		"Remote in Market - Atlanta, Georgia - Atlanta, GA 30303": {"Atlanta"},
 		"IN Munster - 127103":  nil,
 		"Hybrid in Boston, MA": {"Boston"},
+		// The article is part of this name: not Singapore's Woodlands.
+		"Remote in The Woodlands, TX": {"The Woodlands"},
 	} {
 		if got := Parse(loc).Cities; !reflect.DeepEqual(got, want) {
 			t.Errorf("Parse(%q).Cities = %v, want %v", loc, got, want)
