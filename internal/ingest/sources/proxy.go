@@ -216,6 +216,19 @@ var refusalRetryProviders = map[string]func(HTTPClient) Source{
 // meant-to-be-proxied provider on the blocked direct IP. The proxy endpoint and its
 // credentials live entirely in the environment; nothing about the proxy is hardcoded.
 func ApplyProxyEgress(registry map[string]Source) error {
+	// MojPosao's Croatian market is refused by its CloudFront WAF on both crawl hosts and the
+	// fixed exit; its lane pins exits of the ROTATING gateway (mojposaoLane), so it needs only
+	// that gateway and is wired whether or not the fixed exit is configured. The Bosnian market
+	// stays direct.
+	if _, ok := registry["mojposao"]; ok {
+		rotating, err := rotatingProxy()
+		if err != nil {
+			return err
+		}
+		if rotating != nil {
+			registry["mojposao"] = newMojPosaoWithLane(NewClient(), newMojposaoLane(rotating))
+		}
+	}
 	raw := strings.TrimSpace(os.Getenv("SOURCES_PROXY_URL"))
 	if raw == "" {
 		return nil
@@ -263,12 +276,6 @@ func ApplyProxyEgress(registry map[string]Source) error {
 		if _, ok := registry[name]; ok {
 			registry[name] = build(seekDirect, seekNetwork)
 		}
-	}
-	// MojPosao's Croatian market is refused by its CloudFront WAF on both crawl hosts and the
-	// fixed exit; its lane pins exits of the ROTATING gateway (mojposaoLane). The Bosnian market
-	// stays direct.
-	if _, ok := registry["mojposao"]; ok && rotating != nil {
-		registry["mojposao"] = newMojPosaoWithLane(NewClient(), newMojposaoLane(rotating))
 	}
 	// Homerun keeps the direct IP and moves the rest of a run onto the ROTATING gateway after
 	// its edge first refuses the direct one (homerunEgress). Never the fixed exit: one address

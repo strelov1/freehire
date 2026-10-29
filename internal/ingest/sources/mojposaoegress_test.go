@@ -149,3 +149,15 @@ func TestMojPosaoSendsOnlyTheCroatianMarketThroughTheLane(t *testing.T) {
 		t.Errorf("ba: direct lists %d, bad headers lane/direct %d/%d", len(direct.lists), laneFake.badHeads, direct.badHeads)
 	}
 }
+
+func TestApplyProxyEgressWiresTheMojPosaoLaneWithoutTheFixedExit(t *testing.T) {
+	t.Setenv("SOURCES_PROXY_URL", "")
+	t.Setenv("SOURCES_ROTATING_PROXY_URL", "http://acct-rotate:secret@p.example:80")
+	reg := map[string]Source{"mojposao": NewMojPosao(NewClient())}
+	if err := ApplyProxyEgress(reg); err != nil {
+		t.Fatal(err)
+	}
+	if reg["mojposao"].(mojposao).lane == nil {
+		t.Error("the lane was not wired with only the rotating gateway configured")
+	}
+}
