@@ -15,6 +15,11 @@
 </script>
 
 <section class="flex flex-col gap-5 {extra}">
-  <AccountTimezone />
+  <!-- Same anchor as the Location section's timezone: an account with no profile sees this
+       form instead, so the "set your timezone" links must land here too. The two never
+       render on one page. -->
+  <div id="account-timezone" class="scroll-mt-20">
+    <AccountTimezone />
+  </div>
   <AccountLanguage />
 </section>
