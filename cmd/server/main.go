@@ -77,7 +77,7 @@ func main() {
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)
 	}
-	rateTiers, err := handler.RateTiersFromEnv(os.Getenv)
+	rateTiers, err := handler.RateTiersFromEnv(os.Getenv, cfg.StrictAnonLimits())
 	if err != nil {
 		log.Fatalf("invalid configuration: %v", err)
 	}

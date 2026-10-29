@@ -73,8 +73,9 @@ info:
 
     Send a full-access key as `Authorization: Bearer fhk_…` — or the access
     token of a signed-in MCP or CLI connection, `fhm_…` — and the budget is per
-    account rather than per address, shared by all of its keys and tokens and
-    by every endpoint above. Its size is the account's tier:
+    account rather than per address, shared by all of its full-access keys and
+    tokens and by every endpoint above. Its size is the account's tier (an embed
+    key is budgeted like no key):
 
     | Tier | Per minute | Per day |
     |---|---|---|

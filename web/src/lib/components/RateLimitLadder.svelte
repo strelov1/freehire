@@ -21,8 +21,8 @@
   <div class="flex flex-col gap-1">
     <h3 id="rate-limits-title" class="text-lg font-semibold">Rate limits</h3>
     <p class="text-sm text-muted-foreground">
-      A key is an API key or a signed-in MCP or CLI connection, and every key of one account shares
-      its budget. Without a key the budget is per address.
+      A key is a full-access API key or a signed-in MCP or CLI connection, and every key of one
+      account shares its budget. Without a key, or with an embed key, the budget is per address.
     </p>
   </div>
   <div class="overflow-x-auto">

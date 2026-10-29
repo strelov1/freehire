@@ -33,7 +33,7 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'Is there a free tier?',
     answer:
-      'Yes: the read API answers without a key, limited per address, for personal and non-commercial use. A free account’s key reads more, and Pro and Ultra more still; the rate table on this page lists every tier. It is the same API, so you can build against it for free and switch to a plan when you go live.',
+      'Yes: the read API answers without a key, limited per address, for personal and non-commercial use. A full-access key moves the budget from your address to your account, and Pro and Ultra raise it; the rate table on this page lists every tier. It is the same API, so you can build against it for free and switch to a plan when you go live.',
   },
   {
     question: 'How do I authenticate?',

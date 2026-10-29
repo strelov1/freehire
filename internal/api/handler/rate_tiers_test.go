@@ -17,7 +17,7 @@ func TestRateTiersFromEnv_Overrides(t *testing.T) {
 		"API_RATE_DATA_PER_MINUTE":   "7000",
 		"API_RATE_UNKNOWN_PER_DAY":   "1",
 		"API_RATE_ANONYMOUS_PER_DAY": "",
-	}))
+	}), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,10 +44,47 @@ func TestRateTiersFromEnv_RefusesWhatItCannotRead(t *testing.T) {
 		"API_RATE_ANONYMOUS_PER_DAY": "lots",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := RateTiersFromEnv(envOf(map[string]string{name: value}))
+			_, err := RateTiersFromEnv(envOf(map[string]string{name: value}), true)
 			if err == nil || !strings.Contains(err.Error(), name) {
 				t.Fatalf("err = %v, want a refusal naming %s", err, name)
 			}
 		})
+	}
+}
+
+// A ladder that makes a key worse than no key fails the boot, measured against the anonymous
+// mode the server will run in.
+func TestRateTiersFromEnv_RefusesAKeyWorseThanNone(t *testing.T) {
+	cases := []struct {
+		name   string
+		vars   map[string]string
+		strict bool
+		ok     bool
+	}{
+		{"a dropped zero", map[string]string{"API_RATE_FREE_PER_MINUTE": "60"}, false, false},
+		{"below the agent budget before strict", map[string]string{"API_RATE_PRO_PER_MINUTE": "299"}, false, false},
+		{"below the read budget before strict", map[string]string{"API_RATE_PRO_PER_MINUTE": "500"}, false, false},
+		{"fine under strict", map[string]string{"API_RATE_FREE_PER_MINUTE": "200"}, true, true},
+		{"below the anonymous minute under strict", map[string]string{"API_RATE_FREE_PER_MINUTE": "100"}, true, false},
+		{"below the anonymous day under strict", map[string]string{"API_RATE_ULTRA_PER_DAY": "1000"}, true, false},
+		{"a low day is not in force before strict", map[string]string{"API_RATE_ULTRA_PER_DAY": "1000"}, false, true},
+		{"no daily cap is never worse", map[string]string{"API_RATE_FREE_PER_DAY": "0"}, true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := RateTiersFromEnv(envOf(tc.vars), tc.strict)
+			if (err == nil) != tc.ok {
+				t.Fatalf("err = %v, want ok=%v", err, tc.ok)
+			}
+			if err != nil && !strings.Contains(err.Error(), "worse than none") {
+				t.Fatalf("err = %v, want it to say why", err)
+			}
+		})
+	}
+	if _, err := RateTiersFromEnv(envOf(nil), false); err != nil {
+		t.Fatalf("the shipped ladder before strict: %v", err)
+	}
+	if _, err := RateTiersFromEnv(envOf(nil), true); err != nil {
+		t.Fatalf("the shipped ladder under strict: %v", err)
 	}
 }

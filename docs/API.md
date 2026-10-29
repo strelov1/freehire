@@ -76,7 +76,7 @@ Errors use standard HTTP status codes: 400 (bad request / invalid value), 401 (m
 
 The public read endpoints answer without a key, limited per address — for personal and non-commercial use. Showing the postings in a product you offer to others needs an API plan. `GET /plans` reports the figures in force as `api_limits`; every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`, and a refusal is `429` with `Retry-After`.
 
-With a key the budget is per account instead, shared by all of its keys and by the access tokens of its signed-in MCP and CLI connections, and its size is the account's tier: a free account reads more than no key, Pro and Ultra more still, and an [API plan](https://freehire.me/jobs-api) the most, with no daily cap. `api_limits.tiers` lists every rung. Send the key as `Authorization: Bearer <token>`. An API plan also licenses the data for use in your own product, under the [data licence](https://freehire.me/terms#data-licence).
+With a full-access key the budget is per account instead, shared by all of its full-access keys and by the access tokens of its signed-in MCP and CLI connections, and its size is the account's tier: Pro and Ultra raise it, and an [API plan](https://freehire.me/jobs-api) raises it the most, with no daily cap. An embed key is budgeted like no key. `api_limits.tiers` lists every rung in force. Send the key as `Authorization: Bearer <token>`. An API plan also licenses the data for use in your own product, under the [data licence](https://freehire.me/terms#data-licence).
 
 ## Authentication model
 

@@ -79,8 +79,9 @@
       <p class="max-w-2xl text-balance text-muted-foreground">
         The read API is free without a key, up to {count(limits.anonymous_per_minute)} requests a
         minute{#if limits.anonymous_per_day > 0}&nbsp;and {count(limits.anonymous_per_day)} a day{/if}
-        per address. A free account's key reads more, and Pro and Ultra more still. For the most, and
-        for the right to use the data in a commercial product, pick a plan and send its key as
+        per address. A full-access key moves the budget to your account, and Pro and Ultra raise it.
+        For the most, and for the right to use the data in a commercial product, pick a plan and send
+        its key as
         <code class="text-sm">Authorization: Bearer</code>.
       </p>
     </header>

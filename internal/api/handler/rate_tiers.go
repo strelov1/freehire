@@ -85,7 +85,11 @@ func DefaultRateTiers() RateTiers {
 // A value that cannot be read fails the boot rather than falling back. The default is not a
 // safe answer to a typo here: an operator who set a figure would watch the server enforce a
 // different one with nothing saying so. A minute must be positive; a day of 0 lifts the cap.
-func RateTiersFromEnv(getenv func(string) string) (RateTiers, error) {
+//
+// So does a ladder that makes a key worse than no key under the anonymous mode it will run
+// in (strict is PUBLIC_ANON_LIMITS=strict): `API_RATE_FREE_PER_MINUTE=60` is far likelier a
+// dropped zero than a decision, and the server would otherwise enforce it in silence.
+func RateTiersFromEnv(getenv func(string) string, strict bool) (RateTiers, error) {
 	t := DefaultRateTiers()
 	for _, s := range rateTierSpecs {
 		l := t[s.tier]
@@ -97,7 +101,36 @@ func RateTiersFromEnv(getenv func(string) string) (RateTiers, error) {
 		}
 		t[s.tier] = l
 	}
+	if err := t.keyNeverWorse(strict); err != nil {
+		return nil, err
+	}
 	return t, nil
+}
+
+// keyNeverWorse refuses a keyed tier whose budget, in force, sits below what a caller with no
+// key gets: the larger per-route minute before strict, the anonymous tier's minute and day
+// under it.
+func (t RateTiers) keyNeverWorse(strict bool) error {
+	keyless := rateLimit{PerMinute: max(publicReadsPerMinute, agentSearchPerMinute)}
+	if strict {
+		keyless = t[rateAnonymous]
+	}
+	inForce := t.inForce(strict)
+	for _, s := range rateTierSpecs {
+		if s.tier == rateAnonymous {
+			continue
+		}
+		l := inForce[s.tier]
+		if l.PerMinute < keyless.PerMinute {
+			return fmt.Errorf("API_RATE_%s_PER_MINUTE is %d, below the %d a minute a caller without a key gets: a key must not be worse than none",
+				s.env, l.PerMinute, keyless.PerMinute)
+		}
+		if keyless.PerDay > 0 && l.PerDay > 0 && l.PerDay < keyless.PerDay {
+			return fmt.Errorf("API_RATE_%s_PER_DAY is %d, below the %d a day a caller without a key gets: a key must not be worse than none",
+				s.env, l.PerDay, keyless.PerDay)
+		}
+	}
+	return nil
 }
 
 // envOverride sets *dst from the variable when it is set, refusing a value below floor. Not
