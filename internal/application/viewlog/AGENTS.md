@@ -26,6 +26,8 @@ SSR→backend boundary) — lets us filter bots and cover anonymous + API unifor
   navigation", and an unrecognized value still says it. This is also what makes
   Speculation Rules safe to add later — a prerender carries the same header.
 
+- `jobs.view_count` also accrues agent views from `internal/application/agentview`; this package's `uniques` does not.
+
 **Deploy order matters:** the parser must ship BEFORE the nginx `log_format`
 change. It tolerates both formats, so parser-first is a no-op until nginx catches
 up; nginx-first would feed lines the old pattern cannot match, and a day that
