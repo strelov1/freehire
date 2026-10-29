@@ -213,14 +213,14 @@ func derivePass(ctx context.Context, queries passStore, concurrency int64, win s
 	// catalogue for the slugs that moved (and drop rows orphaned by the change) so company
 	// pages resolve. This runs even when the pass failed or was stopped: the rows it did
 	// move are committed, and leaving their companies unreconciled 404s every new slug —
-	// which is what a cancelled reconcile cost on 2026-10-28. A stopped run's context is
-	// already cancelled, so the reconcile gets a short detached one of its own.
-	rctx := ctx
-	if ctx.Err() != nil {
-		var cancel context.CancelFunc
-		rctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), reconcileGrace)
-		defer cancel()
-	}
+	// which is what a cancelled reconcile cost on 2026-10-28. So the reconcile runs on a
+	// detached context that the run's own stop (SIGTERM, timeout) ends only after a grace
+	// period — whether that stop came before the reconcile or arrives during it — rather
+	// than a fixed deadline a large ordinary reconcile could outlast.
+	rctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancel()
+	stop := context.AfterFunc(ctx, func() { time.AfterFunc(reconcileGrace, cancel) })
+	defer stop()
 	created, orphaned, rerr := reconcileMovedSlugs(rctx, queries, pass.MovedTo, pass.MovedFrom, reconcileChunk)
 	if created > 0 || orphaned > 0 {
 		log.Printf("backfill-derive: companies reconciled for %d new and %d old slugs: %d rows created, %d retired",
