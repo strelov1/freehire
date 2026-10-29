@@ -18,6 +18,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/identity/billing"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -63,8 +64,23 @@ func (r *checkRecorder) got() []check {
 type fakeKeyTiers struct {
 	mu      sync.Mutex
 	rows    map[string]db.ResolveAPIKeyTierRow
+	grants  map[string]db.ResolveOAuthGrantTierRow
 	err     error
 	lookups int
+}
+
+func (f *fakeKeyTiers) ResolveOAuthGrantTier(_ context.Context, hash string) (db.ResolveOAuthGrantTierRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lookups++
+	if f.err != nil {
+		return db.ResolveOAuthGrantTierRow{}, f.err
+	}
+	row, ok := f.grants[hash]
+	if !ok {
+		return db.ResolveOAuthGrantTierRow{}, pgx.ErrNoRows
+	}
+	return row, nil
 }
 
 func (f *fakeKeyTiers) ResolveAPIKeyTier(_ context.Context, hash string) (db.ResolveAPIKeyTierRow, error) {
@@ -88,6 +104,11 @@ func wellFormedKey(seed byte) string {
 	return "fhk_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{seed}, 32))
 }
 
+// wellFormedAccessToken mints a token with the shape of a real MCP or CLI access token.
+func wellFormedAccessToken(seed byte) string {
+	return "fhm_" + base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{seed}, 32))
+}
+
 var (
 	apiKeyToken  = wellFormedKey('a')
 	dataKeyToken = wellFormedKey('d')
@@ -95,6 +116,10 @@ var (
 	unpaidToken  = wellFormedKey('u')
 	unknownToken = wellFormedKey('x')
 	lapsedToken  = wellFormedKey('l')
+	proToken     = wellFormedKey('p')
+	ultraToken   = wellFormedKey('t')
+	mcpProToken  = wellFormedAccessToken('m')
+	mcpFreeToken = wellFormedAccessToken('f')
 )
 
 const gateIP = "203.0.113.9"
@@ -107,11 +132,18 @@ func paidKeys() *fakeKeyTiers {
 		auth.HashAPIKey(embedToken):   {UserID: 7, Scope: auth.ScopeEmbed, ApiUntilStripe: ts(future)},
 		auth.HashAPIKey(unpaidToken):  {UserID: 9, Scope: auth.ScopeFull},
 		auth.HashAPIKey(lapsedToken):  {UserID: 10, Scope: auth.ScopeFull, ApiUntilStripe: ts(gateNow.Add(-time.Hour))},
+		auth.HashAPIKey(proToken):     {UserID: 11, Scope: auth.ScopeFull, ProUntil: ts(future)},
+		// Ultra and Pro at once: the better plan wins.
+		auth.HashAPIKey(ultraToken): {UserID: 12, Scope: auth.ScopeFull, ProUntil: ts(future), UltraUntil: ts(future)},
+	}, grants: map[string]db.ResolveOAuthGrantTierRow{
+		oauth2server.HashToken(mcpProToken):  {UserID: 13, ProUntil: ts(future)},
+		oauth2server.HashToken(mcpFreeToken): {UserID: 14},
 	}}
 }
 
 func newTestGate(th ratelimit.Throttler, keys apiKeyTiers, strict bool, botSecret string) *publicGate {
-	g := newPublicGate(th, keys, publicGateConfig{Strict: strict, BotSecret: botSecret, PricingURL: "https://freehire.me/pricing#api"})
+	g := newPublicGate(th, keys, publicGateConfig{Strict: strict, Tiers: DefaultRateTiers().inForce(strict),
+		BotSecret: botSecret, Origin: "https://freehire.me"})
 	g.now = func() time.Time { return gateNow }
 	return g
 }
@@ -165,45 +197,99 @@ func TestPublicGate_StrictAnonymousIsSharedPerMinuteAndPerDay(t *testing.T) {
 	app := gateApp(newTestGate(rec, paidKeys(), true, ""))
 	gateGet(t, app, "/read", nil)
 	gateGet(t, app, "/agent", nil)
+	anon := DefaultRateTiers()[rateAnonymous]
 	one := []check{
-		{"anon:" + gateIP, anonPerMinute, time.Minute},
-		{"anonday:" + gateIP, anonPerDay, 24 * time.Hour},
+		{"anon:" + gateIP, anon.PerMinute, time.Minute},
+		{"anonday:" + gateIP, anon.PerDay, 24 * time.Hour},
 	}
 	if got := rec.got(); !equalChecks(got, append(one, one...)) {
 		t.Fatalf("checks = %+v, want the same two shared keys on both routes", got)
 	}
-	if anonPerMinute != 120 || anonPerDay != 2000 {
-		t.Fatalf("anonymous budgets = %d/min %d/day, the spec says 120 and 2000", anonPerMinute, anonPerDay)
+	if anon.PerMinute != 120 || anon.PerDay != 2000 {
+		t.Fatalf("anonymous budgets = %+v, the spec says 120 a minute and 2000 a day", anon)
 	}
 }
 
-func TestPublicGate_PaidKeysAreLimitedPerAccountAtTheirTier(t *testing.T) {
+// Every credential of an account — any API key, any MCP or CLI access token — draws on one
+// per-account budget at the account's tier, on both routes, before and after strict alike;
+// only the daily caps below the API product wait for strict.
+func TestPublicGate_KeysAreLimitedPerAccountAtTheirTier(t *testing.T) {
 	cases := []struct {
 		name  string
 		token string
-		want  check
+		user  string
+		tier  rateTier
 	}{
-		{"api tier", apiKeyToken, check{"paid:7", paidAPIPerMinute, time.Minute}},
-		{"data tier", dataKeyToken, check{"paid:8", paidDataPerMinute, time.Minute}},
+		{"api product", apiKeyToken, "7", rateAPI},
+		{"data product", dataKeyToken, "8", rateData},
+		{"key without a plan", unpaidToken, "9", rateFree},
+		{"lapsed api product", lapsedToken, "10", rateFree},
+		{"pro", proToken, "11", ratePro},
+		{"ultra beats pro", ultraToken, "12", rateUltra},
+		{"mcp token of a pro account", mcpProToken, "13", ratePro},
+		{"mcp token without a plan", mcpFreeToken, "14", rateFree},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			rec := &checkRecorder{}
-			app := gateApp(newTestGate(rec, paidKeys(), true, ""))
-			gateGet(t, app, "/read", bearer(tc.token))
-			gateGet(t, app, "/agent", bearer(tc.token))
-			if got := rec.got(); !equalChecks(got, []check{tc.want, tc.want}) {
-				t.Fatalf("checks = %+v, want one per-account budget across both routes", got)
-			}
-		})
-	}
-	if paidAPIPerMinute != 1200 || paidDataPerMinute != 6000 {
-		t.Fatalf("paid budgets = %d / %d, the spec says 1200 and 6000", paidAPIPerMinute, paidDataPerMinute)
+	for _, strict := range []bool{false, true} {
+		for _, tc := range cases {
+			t.Run(tc.name+"/strict="+strconv.FormatBool(strict), func(t *testing.T) {
+				rec := &checkRecorder{}
+				app := gateApp(newTestGate(rec, paidKeys(), strict, ""))
+				gateGet(t, app, "/read", bearer(tc.token))
+				gateGet(t, app, "/agent", bearer(tc.token))
+				l := DefaultRateTiers().inForce(strict)[tc.tier]
+				one := []check{{"acct:" + tc.user, l.PerMinute, time.Minute}}
+				if l.PerDay > 0 {
+					one = append(one, check{"acctday:" + tc.user, l.PerDay, 24 * time.Hour})
+				}
+				if got := rec.got(); !equalChecks(got, append(one, one...)) {
+					t.Fatalf("checks = %+v, want %+v on each route", got, one)
+				}
+			})
+		}
 	}
 }
 
-func TestPublicGate_KeysWithoutAPaidFullScopeAreAnonymous(t *testing.T) {
-	for _, token := range []string{embedToken, unpaidToken, unknownToken, lapsedToken, "fhk_not-a-real-shape"} {
+// A key is never worse than no key: every keyed tier's minute sits at or above the budget an
+// anonymous caller has on any route before strict. And the ladder climbs.
+func TestDefaultRateTiers_AKeyIsNeverWorseThanNone(t *testing.T) {
+	tiers := DefaultRateTiers()
+	for _, tier := range []rateTier{rateFree, ratePro, rateUltra, rateAPI, rateData} {
+		if tiers[tier].PerMinute < publicReadsPerMinute || tiers[tier].PerMinute < agentSearchPerMinute {
+			t.Errorf("%s = %+v, below the keyless budget", tier, tiers[tier])
+		}
+	}
+	for i := 1; i < len(rateTierSpecs); i++ {
+		if rateTierSpecs[i].def.PerMinute <= rateTierSpecs[i-1].def.PerMinute {
+			t.Errorf("%s does not climb above %s", rateTierSpecs[i].tier, rateTierSpecs[i-1].tier)
+		}
+	}
+	if tiers[rateAPI] != (rateLimit{PerMinute: 1200}) || tiers[rateData] != (rateLimit{PerMinute: 6000}) {
+		t.Errorf("api tiers = %+v / %+v, the plans on sale say 1200 and 6000 a minute with no daily cap", tiers[rateAPI], tiers[rateData])
+	}
+}
+
+// The daily caps below the API product wait for strict: without it a keyless caller has none,
+// and a key that carried one would be worse than no key for exactly the callers it is meant for.
+func TestRateTiers_DailyCapsArriveWithStrict(t *testing.T) {
+	def := DefaultRateTiers()
+	before, after := def.inForce(false), def.inForce(true)
+	for _, tier := range []rateTier{rateFree, ratePro, rateUltra} {
+		if before[tier].PerDay != 0 || before[tier].PerMinute != def[tier].PerMinute {
+			t.Errorf("%s before strict = %+v, want its minute and no daily cap", tier, before[tier])
+		}
+		if after[tier] != def[tier] {
+			t.Errorf("%s under strict = %+v, want %+v", tier, after[tier], def[tier])
+		}
+	}
+	for _, tier := range []rateTier{rateAnonymous, rateAPI, rateData} {
+		if before[tier] != def[tier] {
+			t.Errorf("%s before strict = %+v, want it untouched", tier, before[tier])
+		}
+	}
+}
+
+func TestPublicGate_UnresolvedOrEmbedKeysAreAnonymous(t *testing.T) {
+	for _, token := range []string{embedToken, unknownToken, "fhk_not-a-real-shape", wellFormedAccessToken('z'), "fhm_short"} {
 		t.Run(token, func(t *testing.T) {
 			rec := &checkRecorder{}
 			app := gateApp(newTestGate(rec, paidKeys(), true, ""))
@@ -276,14 +362,26 @@ func TestPublicGate_VerifiedBots(t *testing.T) {
 	}
 }
 
-func TestPublicGate_RefusalNamesThePaidPlans(t *testing.T) {
-	app := gateApp(newTestGate(&checkRecorder{refuse: true}, paidKeys(), true, ""))
-	code, body := gateGet(t, app, "/read", nil)
-	if code != fiber.StatusTooManyRequests {
-		t.Fatalf("status = %d, want 429", code)
+// A refused caller is pointed one rung up the ladder from where they stand.
+func TestPublicGate_RefusalNamesTheNextRung(t *testing.T) {
+	cases := []struct {
+		name    string
+		headers map[string]string
+		want    string
+	}{
+		{"anonymous", nil, "https://freehire.me/my/integrations/api-keys"},
+		{"free key", bearer(unpaidToken), "https://freehire.me/pricing"},
+		{"pro", bearer(proToken), "https://freehire.me/jobs-api"},
+		{"api product", bearer(apiKeyToken), "https://freehire.me/jobs-api"},
 	}
-	if !strings.Contains(body, "https://freehire.me/pricing#api") {
-		t.Fatalf("body %q does not point to the API plans", body)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := gateApp(newTestGate(&checkRecorder{refuse: true}, paidKeys(), true, ""))
+			code, body := gateGet(t, app, "/read", tc.headers)
+			if code != fiber.StatusTooManyRequests || !strings.Contains(body, tc.want) {
+				t.Fatalf("status %d body %q, want 429 naming %s", code, body, tc.want)
+			}
+		})
 	}
 }
 
@@ -318,28 +416,59 @@ func equalChecks(a, b []check) bool {
 }
 
 func TestAPILimitsViewReadsTheEnforcedBudgets(t *testing.T) {
-	legacy, strict := apiLimitsFor(false), apiLimitsFor(true)
+	tiers := DefaultRateTiers()
+	legacy, strict := apiLimitsFor(false, tiers.inForce(false)), apiLimitsFor(true, tiers.inForce(true))
 	if legacy.AnonymousPerMinute != publicReadsPerMinute || legacy.AnonymousPerDay != 0 {
 		t.Errorf("legacy anonymous = %+v", legacy)
 	}
-	if strict.AnonymousPerMinute != anonPerMinute || strict.AnonymousPerDay != anonPerDay {
+	if legacy.Tiers[0] != (rateTierView{Tier: rateAnonymous, PerMinute: publicReadsPerMinute}) {
+		t.Errorf("legacy ladder starts at %+v, want the anonymous budget in force", legacy.Tiers[0])
+	}
+	if legacy.Tiers[1] != (rateTierView{Tier: rateFree, PerMinute: tiers[rateFree].PerMinute}) {
+		t.Errorf("legacy free rung = %+v, want no daily cap before strict", legacy.Tiers[1])
+	}
+	anon := tiers[rateAnonymous]
+	if strict.AnonymousPerMinute != anon.PerMinute || strict.AnonymousPerDay != anon.PerDay {
 		t.Errorf("strict anonymous = %+v", strict)
 	}
-	if strict.APIPerMinute != paidAPIPerMinute || strict.DataPerMinute != paidDataPerMinute {
+	if strict.APIPerMinute != tiers[rateAPI].PerMinute || strict.DataPerMinute != tiers[rateData].PerMinute {
 		t.Errorf("paid = %+v", strict)
+	}
+	if len(strict.Tiers) != len(rateTierSpecs) {
+		t.Fatalf("ladder = %+v, want every tier", strict.Tiers)
+	}
+	for i, s := range rateTierSpecs {
+		if want := (rateTierView{Tier: s.tier, PerMinute: tiers[s.tier].PerMinute, PerDay: tiers[s.tier].PerDay}); strict.Tiers[i] != want {
+			t.Errorf("rung %d = %+v, want %+v", i, strict.Tiers[i], want)
+		}
 	}
 }
 
 func TestAPIPlanFrom(t *testing.T) {
-	future := gateNow.Add(time.Hour)
-	if got := apiPlanFrom(time.Time{}, time.Time{}, gateNow); got.Tier != billing.APITierNone || got.PerMinute != 0 || got.Until != nil {
-		t.Errorf("no product = %+v", got)
+	tiers := DefaultRateTiers()
+	future := ts(gateNow.Add(time.Hour))
+	cases := []struct {
+		name    string
+		row     db.GetUserAPIEntitlementRow
+		product billing.APITier
+		rate    rateTier
+	}{
+		{"nothing", db.GetUserAPIEntitlementRow{}, billing.APITierNone, rateFree},
+		{"pro", db.GetUserAPIEntitlementRow{ProUntil: future}, billing.APITierNone, ratePro},
+		{"api beats ultra", db.GetUserAPIEntitlementRow{ApiUntilStripe: future, UltraUntil: future}, billing.APITierAPI, rateAPI},
+		{"data", db.GetUserAPIEntitlementRow{ApiUntilStripe: future, ApiDataUntilStripe: future}, billing.APITierData, rateData},
 	}
-	if got := apiPlanFrom(future, time.Time{}, gateNow); got.Tier != billing.APITierAPI || got.PerMinute != paidAPIPerMinute || !got.Until.Equal(future) {
-		t.Errorf("api = %+v", got)
-	}
-	if got := apiPlanFrom(future, future, gateNow); got.Tier != billing.APITierData || got.PerMinute != paidDataPerMinute {
-		t.Errorf("data = %+v", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := apiPlanFrom(tc.row, tiers, gateNow)
+			if got.Tier != tc.product || got.RateTier != tc.rate ||
+				got.PerMinute != tiers[tc.rate].PerMinute || got.PerDay != tiers[tc.rate].PerDay {
+				t.Fatalf("got %+v, want product %q at rate %q", got, tc.product, tc.rate)
+			}
+			if (got.Until != nil) != (tc.product != billing.APITierNone) {
+				t.Fatalf("until = %v for product %q", got.Until, tc.product)
+			}
+		})
 	}
 }
 
@@ -352,8 +481,8 @@ func TestPublicGate_AdmittedStrictRequestReportsTheMinuteBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if got := resp.Header.Get("X-RateLimit-Limit"); got != strconv.Itoa(anonPerMinute) {
-		t.Fatalf("X-RateLimit-Limit = %q, want the minute budget %d", got, anonPerMinute)
+	if want := DefaultRateTiers()[rateAnonymous].PerMinute; resp.Header.Get("X-RateLimit-Limit") != strconv.Itoa(want) {
+		t.Fatalf("X-RateLimit-Limit = %q, want the minute budget %d", resp.Header.Get("X-RateLimit-Limit"), want)
 	}
 }
 
@@ -400,11 +529,11 @@ func TestPublicGate_LookupBudgetBoundsDatabaseReads(t *testing.T) {
 	}
 }
 
-func TestPublicGate_PaidRefusalCarriesNoUpsell(t *testing.T) {
+func TestPublicGate_TopTierRefusalCarriesNoUpsell(t *testing.T) {
 	app := gateApp(newTestGate(&checkRecorder{refuse: true}, paidKeys(), true, ""))
-	code, body := gateGet(t, app, "/read", bearer(apiKeyToken))
-	if code != fiber.StatusTooManyRequests || strings.Contains(body, "pricing") {
-		t.Fatalf("status %d body %q — a paying caller must not be told to buy a key", code, body)
+	code, body := gateGet(t, app, "/read", bearer(dataKeyToken))
+	if code != fiber.StatusTooManyRequests || strings.Contains(body, "freehire.me/") {
+		t.Fatalf("status %d body %q — the top tier has nowhere to be sent", code, body)
 	}
 }
 

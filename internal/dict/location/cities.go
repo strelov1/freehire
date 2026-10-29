@@ -34,7 +34,7 @@ type cityEntry struct {
 
 // cityDict maps a lowercase city alias to its canonical name + country, built once
 // at init from the embedded dataset with the curated overrides layered on top.
-var cityDict, cityRenamedFrom = pinCityAliases(loadCityDict(citiesTSV, cityOverrides))
+var cityDict, cityRenamedFrom = pinCityAliases(loadCityDict(citiesTSV, withSlovenianCities(cityOverrides)))
 
 // contestMark suffixes an alias in the dataset when more than one country claims it.
 // cmd/gen-cities computes this across the WHOLE GeoNames dump — hamlets included, which

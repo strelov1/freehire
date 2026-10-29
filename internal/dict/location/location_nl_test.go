@@ -85,6 +85,7 @@ func TestNormalizeCountryExonyms(t *testing.T) {
 		"Schweiz": "ch", "Suisse": "ch", "Svizzera": "ch", "Danmark": "dk", "Sverige": "se",
 		"España": "es", "Italia": "it", "Polska": "pl", "Eesti": "ee", "Česko": "cz",
 		"Verenigd Koninkrijk": "gb", "Duitsland": "de",
+		"Avstrija": "at", "Hrvaška": "hr", "Nemčija": "de", "Madžarska": "hu",
 	} {
 		if got := NormalizeCountry(name); got != want {
 			t.Errorf("NormalizeCountry(%q) = %q, want %q", name, got, want)

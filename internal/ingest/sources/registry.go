@@ -1053,6 +1053,10 @@ func All(c HTTPClient) map[string]Source {
 	// MojeDelo: Slovenia's largest general job board, enumerated from its SPA's own JSON search,
 	// each new posting's body read from the posting's API resource. See mojedelo.go.
 	registry["mojedelo"] = NewMojeDelo(c)
+	// Optius: a Slovenian general job board, walked through its paginated HTML listing one
+	// request at a time (it answers 429 to concurrency), each new posting's body read from its
+	// page. See optius.go.
+	registry["optius"] = NewOptius(c)
 	// Turijobs: the Spanish hospitality board, enumerated from its active-offers sitemap; its
 	// posting pages need the Scrapling tier (see scraplingProviders), so over this plain client
 	// only the sitemap is read. See turijobs.go.

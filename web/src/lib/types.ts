@@ -153,16 +153,30 @@ export interface PlansMatrix {
     anonymous_per_day: number;
     api_per_minute: number;
     data_per_minute: number;
+    /** The whole rate ladder, lowest first. Optional: a backend that predates it sends none. */
+    tiers?: RateTierLimit[];
   };
 }
 
-/** The caller's API product tier (`GET /api/v1/me/api-plan`). An empty `tier` means the
- *  account does not hold the product; `per_minute` is the rate its full-scope keys get on
- *  the public read API. */
+/** A rung of the public read API's rate ladder. */
+export type RateTier = 'anonymous' | 'free' | 'pro' | 'ultra' | 'api' | 'api_data';
+
+/** One rung's budget; `per_day` 0 is no daily cap. */
+export interface RateTierLimit {
+  tier: RateTier;
+  per_minute: number;
+  per_day: number;
+}
+
+/** The caller's API standing (`GET /api/v1/me/api-plan`). An empty `tier` means the account
+ *  does not hold the API product; `rate_tier` is the rung its full-scope keys and access
+ *  tokens stand on, and `per_minute`/`per_day` that rung's budget (`per_day` 0 is no cap). */
 export interface ApiPlan {
   tier: '' | 'api' | 'api_data';
-  per_minute: number;
   until?: string;
+  rate_tier: Exclude<RateTier, 'anonymous'>;
+  per_minute: number;
+  per_day: number;
 }
 
 /** One charge as the receipt list shows it (`GET /api/v1/billing/subscription`).

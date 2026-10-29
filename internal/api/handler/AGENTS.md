@@ -65,18 +65,24 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   Fiber decompresses an encoded body with no ceiling; behind an account that is tolerable,
   without one a single request is enough. Signed-in callers of the same route are not
   refused, so a client that gzips today keeps working.
-- **The one caller a public read tells apart is a paid API key, and `public_gate.go` does it
-  itself.** `publicReadLimiter`/`agentSearchLimiter`/`chatAgentLimiter` all go through one
-  gate: trusted peer or the Cloudflare verified-bot secret passes; a full-scope key of an
-  account holding the API product is budgeted per ACCOUNT at its tier's rate; everyone else
-  is anonymous (per-route budgets, or the shared 120/min + 2,000/day under
-  `PUBLIC_ANON_LIMITS=strict`). The key is looked up only when one is presented, only when
-  it has a minted key's shape, through a cache fake keys cannot evict, under a per-IP lookup
-  budget and a timeout — and any failure serves the request as anonymous rather than 503.
-  An embed key never gets the paid rate: it is published inside other sites by design. The
-  ChatGPT MCP surfaces (`chatAgentLimiter`) stay on the agent-search budget under strict,
-  because OpenAI's shared egress addresses would turn a per-IP daily cap into a cap on the
-  channel.
+- **A public read tells callers apart by the credential they present, and `public_gate.go`
+  does it itself.** `publicReadLimiter`/`agentSearchLimiter`/`chatAgentLimiter` all go through
+  one gate: trusted peer or the Cloudflare verified-bot secret passes; a full-scope API key
+  (`fhk_`) or a signed-in MCP/CLI access token (`fhm_`) is budgeted per ACCOUNT at its rate
+  tier — free, Pro, Ultra, API or Data (`rate_tiers.go`, each figure movable with
+  `API_RATE_<TIER>_PER_MINUTE`/`_PER_DAY`, read at boot, a bad value fails the boot); everyone
+  else is anonymous (per-route budgets, or the anonymous tier's shared budget under
+  `PUBLIC_ANON_LIMITS=strict`). Keyed tiers apply whether or not strict is on, which is why no
+  keyed minute may sit below the keyless per-route budget, and why the daily caps below the
+  API product wait for strict like the anonymous one (`RateTiers.inForce`, applied once in
+  `Register` so the gate, `/plans` and the API-keys page read one ladder) — tests hold both,
+  because a key worse than none is a key people delete. A refusal names the next rung up. The credential is
+  looked up only when one is presented, only when it has a minted token's shape, through a
+  cache fake tokens cannot evict, under a per-IP lookup budget and a timeout — and any failure
+  serves the request as anonymous rather than 503. An embed key never gets a keyed rate: it is
+  published inside other sites by design. The ChatGPT MCP surfaces (`chatAgentLimiter`) keep
+  the agent-search budget for ANONYMOUS callers under strict, because OpenAI's shared egress
+  addresses would turn a per-IP daily cap into a cap on the channel.
 - Services shared across features (résumé store, profile, plan, CV store/renderer,
   conversation store, match analyzer, contribution, moderation, the LLM spend resolver)
   are built once in `Register` and passed to each constructor; single-feature services are

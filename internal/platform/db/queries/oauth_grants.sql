@@ -40,6 +40,18 @@ WHERE oauth_grants.access_token_hash = $1
   AND oauth_grants.issued_token_version = users.token_version
 RETURNING oauth_grants.user_id;
 
+-- name: ResolveOAuthGrantTier :one
+-- ResolveAPIKeyTier's twin for an MCP or CLI access token: its owner and how far the owner's
+-- paid plans reach, for the public-read rate limiter. The same liveness rule as
+-- AuthenticateOAuthGrant, and read-only for the same reason ResolveAPIKeyTier is. No row
+-- covers unknown, expired and revoked alike.
+SELECT g.user_id, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
+FROM oauth_grants g
+JOIN users u ON u.id = g.user_id
+WHERE g.access_token_hash = $1
+  AND g.expires_at > now()
+  AND g.issued_token_version = u.token_version;
+
 -- name: ListOAuthGrantsByUser :many
 -- A user's connected devices, newest first. Metadata only — never the token
 -- hash. Joined to oauth_clients for the display name shown on the page.

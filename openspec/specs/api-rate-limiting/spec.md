@@ -154,7 +154,8 @@ office NAT sharing a budget — is one this endpoint has always carried.
 
 #### Scenario: A signed-in caller is budgeted by address like any other
 
-- **WHEN** two signed-in callers read a public endpoint from the same source address
+- **WHEN** two callers signed in by session cookie read a public endpoint from the same
+  source address
 - **THEN** they draw on the same budget
 
 #### Scenario: Exhausting the agent search budget leaves ordinary search available
@@ -172,6 +173,40 @@ office NAT sharing a budget — is one this endpoint has always carried.
 
 - **WHEN** two distinct callers each make requests to the same public read endpoint
 - **THEN** neither caller's requests count against the other's budget
+
+### Requirement: A keyed caller is limited per account at its rate tier
+
+A public read carrying a full-scope API key or a signed-in MCP or CLI access token as its
+Bearer credential SHALL be budgeted per ACCOUNT rather than per address, every key and token
+of the account sharing one budget across every public read route, at the account's rate
+tier: the API product's tier when the account holds it, otherwise Ultra, Pro or free. Each
+tier SHALL carry a per-minute budget and MAY carry a per-day one, and each figure SHALL be
+settable from the environment at boot, a value that cannot be read failing the boot.
+
+Keyed tiers SHALL apply whether or not the anonymous budgets are strict, and no keyed tier's
+per-minute budget SHALL sit below the per-address budget a keyless caller has on any route;
+the per-day caps of the tiers below the API product SHALL apply only while the anonymous
+budgets are strict, since a keyless caller carries no daily cap before that. A key worse than
+no key is a key its holder deletes. Nor SHALL a tier give less than the tier below it, per minute or per day: an
+upgrade that shrinks an allowance is the same mistake one rung up. A ladder configured
+otherwise SHALL fail the boot. A refused keyed caller SHALL be told the
+next tier up; the top tier is told none.
+
+#### Scenario: A free account's key reads more than no key
+
+- **WHEN** an account with no paid plan reads a public endpoint with its API key
+- **THEN** the request draws on the account's free-tier budget, not the address's
+
+#### Scenario: Every credential of an account shares one budget
+
+- **WHEN** one account reads with an API key and, at the same time, through a signed-in MCP
+  connection
+- **THEN** both draw on the same per-account budget
+
+#### Scenario: An embed key gets no keyed rate
+
+- **WHEN** a request carries an embed-scope key
+- **THEN** it is budgeted like a request with no key
 
 ### Requirement: Trusted internal callers are not rate-limited
 

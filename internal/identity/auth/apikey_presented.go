@@ -7,13 +7,13 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// PresentedAPIKey returns the freehire API key a request carries as its Bearer credential, and
-// whether it carries one at all. A Bearer session JWT (the extension's transport) is not a key.
+// PresentedBearer returns the Bearer credential a request carries, or "" when it carries none.
 // It authenticates nothing: it only names the token, for a caller that resolves it on its own
-// terms — the public-read rate limiter, which must not pay a lookup for a request with none.
-func PresentedAPIKey(c *fiber.Ctx) (string, bool) {
-	token := bearerToken(c)
-	return token, strings.HasPrefix(token, apiKeyPrefix)
+// terms — the public-read rate limiter, which tells an API key (WellFormedAPIKey) from an MCP
+// or CLI access token by shape and must not pay a lookup for anything else, a Bearer session
+// JWT (the extension's transport) included.
+func PresentedBearer(c *fiber.Ctx) string {
+	return bearerToken(c)
 }
 
 // apiKeyLen is the length of every key GenerateAPIKey mints: the prefix and 32 random bytes

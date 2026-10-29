@@ -82,20 +82,26 @@
 
   async function load() {
     status = 'loading';
+    void screeningStore.ensureLoaded();
+    void experienceBankStore.ensureLoaded();
     try {
-      await profileStore.ensureLoaded();
-      status = 'ready';
+      // The résumé is part of the gate, not a side load: the contact editors (CV summary,
+      // contacts, education) each PUT the WHOLE block built from its copy, so one opened
+      // before that copy arrives would save a partial block over the stored one and wipe
+      // every field it did not carry. ensureLoaded swallows a failure, so `loaded` is
+      // what says whether it arrived.
+      await Promise.all([profileStore.ensureLoaded(), resumeStore.ensureLoaded()]);
+      status = resumeStore.loaded ? 'ready' : 'error';
     } catch {
       status = 'error';
     }
-    void resumeStore.ensureLoaded();
-    void screeningStore.ensureLoaded();
-    void experienceBankStore.ensureLoaded();
   }
 
-  // (Re)load once the session resolves.
+  // (Re)load once the session resolves — and only then. `load` reads every store's
+  // `loaded` flag on its way in, and tracking those would re-run it (back to the spinner,
+  // unmounting the editors and whatever they held) each time a load finished.
   $effect(() => {
-    if (isAuthenticated()) void load();
+    if (isAuthenticated()) void untrack(() => load());
   });
 
   // Honour the URL's anchor once the gate opens. The browser and the router both resolve a

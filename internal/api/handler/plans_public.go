@@ -20,25 +20,47 @@ type plansHandlers struct {
 	apiLimits apiLimitsView
 }
 
-func newPlansHandlers(cfg plan.Config, svc *billing.Service, publicAnonStrict bool) *plansHandlers {
-	return &plansHandlers{plans: cfg, billing: svc, apiLimits: apiLimitsFor(publicAnonStrict)}
+func newPlansHandlers(cfg plan.Config, svc *billing.Service, publicAnonStrict bool, tiers RateTiers) *plansHandlers {
+	return &plansHandlers{plans: cfg, billing: svc, apiLimits: apiLimitsFor(publicAnonStrict, tiers)}
 }
 
-// apiLimitsView is what the API product's tiers allow, read from the SAME constants the
-// public-read gate enforces (public_gate.go) for the reason tierView gives. The anonymous
-// figures are the ones in force: before PUBLIC_ANON_LIMITS=strict they are the read route's
-// old per-minute budget and no daily cap (AnonymousPerDay 0).
+// apiLimitsView is what each rate tier allows on the public read API, read from the SAME
+// ladder the public-read gate enforces (public_gate.go) for the reason tierView gives. The
+// anonymous figures are the ones in force: before PUBLIC_ANON_LIMITS=strict they are the read
+// route's old per-minute budget and no daily cap (AnonymousPerDay 0).
+//
+// Tiers is the whole ladder, lowest first. The four flat fields predate it and stay for the
+// clients that read them.
 type apiLimitsView struct {
-	AnonymousPerMinute int `json:"anonymous_per_minute"`
-	AnonymousPerDay    int `json:"anonymous_per_day"`
-	APIPerMinute       int `json:"api_per_minute"`
-	DataPerMinute      int `json:"data_per_minute"`
+	AnonymousPerMinute int            `json:"anonymous_per_minute"`
+	AnonymousPerDay    int            `json:"anonymous_per_day"`
+	APIPerMinute       int            `json:"api_per_minute"`
+	DataPerMinute      int            `json:"data_per_minute"`
+	Tiers              []rateTierView `json:"tiers"`
 }
 
-func apiLimitsFor(strict bool) apiLimitsView {
-	v := apiLimitsView{AnonymousPerMinute: publicReadsPerMinute, APIPerMinute: paidAPIPerMinute, DataPerMinute: paidDataPerMinute}
+// rateTierView is one rung of the ladder. PerDay 0 is no daily cap.
+type rateTierView struct {
+	Tier      rateTier `json:"tier"`
+	PerMinute int      `json:"per_minute"`
+	PerDay    int      `json:"per_day"`
+}
+
+func apiLimitsFor(strict bool, tiers RateTiers) apiLimitsView {
+	anon := rateLimit{PerMinute: publicReadsPerMinute}
 	if strict {
-		v.AnonymousPerMinute, v.AnonymousPerDay = anonPerMinute, anonPerDay
+		anon = tiers[rateAnonymous]
+	}
+	v := apiLimitsView{
+		AnonymousPerMinute: anon.PerMinute, AnonymousPerDay: anon.PerDay,
+		APIPerMinute: tiers[rateAPI].PerMinute, DataPerMinute: tiers[rateData].PerMinute,
+	}
+	for _, s := range rateTierSpecs {
+		l := tiers[s.tier]
+		if s.tier == rateAnonymous {
+			l = anon
+		}
+		v.Tiers = append(v.Tiers, rateTierView{Tier: s.tier, PerMinute: l.PerMinute, PerDay: l.PerDay})
 	}
 	return v
 }

@@ -562,6 +562,45 @@ unresolved: the generic heads with no field, "Voditelj poslovnice/područja" (En
 "Branch/Area Manager" resolves nothing either), farm work, the casino's slot operator,
 and talentlyft titles stored with HTML entities ("Prodava&#x10D;").
 
+## Slovenian grades and fields
+
+Slovenian titles reach the BCS fallback and are read by its machinery (the folding and
+the inflected stems), but the words they need most are spelled otherwise: the senior is
+"višji", not "viši"; the junior "mlajši"; the shift lead a "vodja izmene"; the machine
+operator a "posluževalec" or "upravljalec". `slovenian.go` holds them in a table of their
+own, read after the BCS table resolved nothing, so no BCS answer changes. A noun with a
+fleeting "e" ("posluževalec", genitive "posluževalca") is listed in both stems.
+
+The main table's CEE block already read most Slovenian role nouns (#3518): measured
+2026-10-29 over 2,900 open MojeDelo postings and 3,621 ESS vacancies, 88% resolved a
+category. The rest were mostly generic heads with no field ("Svetovalec", "Strokovni
+sodelavec", "Vodja oddelka", "Referent", "Operater"), which stay unresolved as their
+English twins do. Added: the machine floor by its heads and processes (bending,
+injection moulding, casting, the foundry, production and galvanic lines), the
+engineers by discipline (civil, mechanical, quality, electronics, computer vision),
+the clinical laboratory, the centre for social work ("na CSD"; a bare "CSD" is also a
+hospital's sterile department), the pharmacy, the laundry, the call centre, the
+saldakonti desk, the auto electrician. "Poslovodja" is the store manager when written
+the Slovenian way; the BCS "poslovođa" stays unresolved, as #3778 left it (also a site
+foreman). "Projektni inženir" stays unresolved, as #3518 left it.
+
+Grades: višji/višja/višjega senior — never "višje"/"višjo", which are also "higher"
+("z višjo izobrazbo"); mlajši and začetnik junior; študentsko delo and pripravništvo
+intern (the Werkstudent twin); vodja izmene/skupine/ekipe, izmenovodja, skupinovodja and
+the "vodilni" engineer or developer lead; finančni direktor c_level. A bare "vodja" is
+any manager and states no grade, nor does a plain "direktor". The assistant or deputy
+of a lead ("Pomočnik vodje", "Namestnik vodje", "Pomočnik generalnega direktorja") is cut
+first.
+
+Measured 2026-10-29: MojeDelo category 88.4% → 90.8%, seniority 1.4% → 4.6%; ESS category
+88.1% → 90.9%, seniority 4.2% → 6.2%. Every changed title was hand-checked.
+
+`classify.IsTech` returning false for "PHP backend programer" is not a gap: it is the
+title-term detector that rescues a technical title resolving no category, and the
+programmer nouns are deliberately absent from it (a term there wins outright, and "CNC
+operater - programer" is a machine operator). Such a posting is technical through its
+category: `jobderive.deriveIsTech` reads `backend`/`qa` as `is_tech = true`.
+
 ## Serving: dict-only
 
 `jobview.FromRow` overwrites the nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM's value is never a fallback. They remain **nested under `enrichment`** so existing search facets, SPA, and generated contracts are unchanged.

@@ -77,6 +77,10 @@ func main() {
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid configuration: %v", err)
 	}
+	rateTiers, err := handler.RateTiersFromEnv(os.Getenv, cfg.StrictAnonLimits())
+	if err != nil {
+		log.Fatalf("invalid configuration: %v", err)
+	}
 
 	// Error reporting is optional and env-gated: no DSN ⇒ Init is a no-op. A
 	// malformed DSN is fatal — a misconfigured gateway must not boot silently.
@@ -377,6 +381,7 @@ func main() {
 		FrontendOrigin:              cfg.FrontendOrigin,
 		PublicAnonStrict:            cfg.StrictAnonLimits(),
 		VerifiedBotSecret:           cfg.VerifiedBotSecret,
+		RateTiers:                   rateTiers,
 		JWTSecret:                   cfg.JWTSecret,
 		JWTTTL:                      cfg.JWTTTL,
 		CookieSecure:                cfg.CookieSecure,

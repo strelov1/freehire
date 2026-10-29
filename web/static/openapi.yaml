@@ -69,15 +69,28 @@ info:
     2,000 per day per address**, shared by all of the endpoints above. `GET
     /plans` reports the figures in force (`api_limits`).
 
-    ### API plans
+    ### Keyed tiers
 
-    For more, send the full-access key of an account holding an
-    [API plan](https://freehire.me/pricing#api) as `Authorization: Bearer
-    fhk_…`. The budget is then per account rather than per address, shared by
-    all of its keys, with no daily cap: **1,200 requests per minute** on API,
-    **6,000** on Data. A plan also licenses the data for use in your own product
-    — see the [data licence](https://freehire.me/terms#data-licence). A key of
-    an account without a plan is limited like no key at all.
+    Send a full-access key as `Authorization: Bearer fhk_…` — or the access
+    token of a signed-in MCP or CLI connection, `fhm_…` — and the budget is per
+    account rather than per address, shared by all of its full-access keys and
+    tokens and by every endpoint above. Its size is the account's tier (an embed
+    key is budgeted like no key):
+
+    | Tier | Per minute | Per day |
+    |---|---|---|
+    | Free account | 600 | 10,000 |
+    | Pro | 800 | 30,000 |
+    | Ultra | 1,000 | 100,000 |
+    | [API plan](https://freehire.me/jobs-api) | 1,200 | no cap |
+    | [Data plan](https://freehire.me/jobs-api) | 6,000 | no cap |
+
+    The daily caps of the free, Pro and Ultra tiers arrive together with the
+    keyless daily cap above; until then those tiers carry their minute budget
+    only. These are the figures a deployment ships with; `GET /plans` reports
+    the ones in force (`api_limits.tiers`). An API plan also licenses the data for use in
+    your own product — see the
+    [data licence](https://freehire.me/terms#data-licence).
 
     Every response carries where you stand, so you never have to discover the
     ceiling by hitting it:

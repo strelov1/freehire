@@ -31,7 +31,12 @@ type smallPlace struct {
 // main one, and most processes that import this package (the API server among them)
 // never parse a location line that misses the main table.
 var smallPlaces = sync.OnceValue(func() map[string][]smallPlace {
-	return loadSmallPlaces(smallPlacesTSV)
+	places := loadSmallPlaces(smallPlacesTSV)
+	// The Slovenian places GeoNames' cities1000 lacks (location_si.go).
+	for alias, p := range slovenianSmallPlaceRows() {
+		places[alias] = append(places[alias], p)
+	}
+	return places
 })
 
 func loadSmallPlaces(tsv string) map[string][]smallPlace {

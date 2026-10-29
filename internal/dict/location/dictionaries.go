@@ -267,6 +267,9 @@ var nameToCountry = map[string]string{
 	"noreg": "no", "polska": "pl", "svizzera": "ch", "eesti": "ee", "slovenija": "si",
 	"slovensko": "sk", "česko": "cz", "česká republika": "cz", "éire": "ie",
 	"lietuva": "lt", "latvija": "lv", "hrvatska": "hr", "românia": "ro", "ελλάδα": "gr",
+	// Slovene, for the neighbours Slovenian boards post abroad to (Optius, 2026-10-29: 89
+	// postings filed under "Tujina", most of them "Avstrija, <town>").
+	"avstrija": "at", "hrvaška": "hr", "nemčija": "de", "madžarska": "hu",
 
 	// --- Beacon cities (high-frequency, unambiguous), region falls out of the code.
 	// North America (US).

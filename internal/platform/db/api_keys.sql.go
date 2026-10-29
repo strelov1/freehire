@@ -121,7 +121,7 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg DeleteAPIKeyParams) (int
 }
 
 const getUserAPIEntitlement = `-- name: GetUserAPIEntitlement :one
-SELECT api_until_stripe, api_data_until_stripe
+SELECT api_until_stripe, api_data_until_stripe, pro_until, ultra_until
 FROM users
 WHERE id = $1
 `
@@ -129,13 +129,21 @@ WHERE id = $1
 type GetUserAPIEntitlementRow struct {
 	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
 	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
+	ProUntil           pgtype.Timestamptz `json:"pro_until"`
+	UltraUntil         pgtype.Timestamptz `json:"ultra_until"`
 }
 
-// How far the account's API product subscriptions reach, for its own key-management page.
+// How far the account's paid plans reach, for its own key-management page: the API product
+// names the plan sold for reading, and all four decide the rate its keys get.
 func (q *Queries) GetUserAPIEntitlement(ctx context.Context, id int64) (GetUserAPIEntitlementRow, error) {
 	row := q.db.QueryRow(ctx, getUserAPIEntitlement, id)
 	var i GetUserAPIEntitlementRow
-	err := row.Scan(&i.ApiUntilStripe, &i.ApiDataUntilStripe)
+	err := row.Scan(
+		&i.ApiUntilStripe,
+		&i.ApiDataUntilStripe,
+		&i.ProUntil,
+		&i.UltraUntil,
+	)
 	return i, err
 }
 
@@ -187,7 +195,7 @@ func (q *Queries) ListAPIKeysByUser(ctx context.Context, userID int64) ([]ListAP
 }
 
 const resolveAPIKeyTier = `-- name: ResolveAPIKeyTier :one
-SELECT k.user_id, k.scope, u.api_until_stripe, u.api_data_until_stripe
+SELECT k.user_id, k.scope, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
 FROM api_keys k
 JOIN users u ON u.id = k.user_id
 WHERE k.token_hash = $1
@@ -199,10 +207,12 @@ type ResolveAPIKeyTierRow struct {
 	Scope              string             `json:"scope"`
 	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
 	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
+	ProUntil           pgtype.Timestamptz `json:"pro_until"`
+	UltraUntil         pgtype.Timestamptz `json:"ultra_until"`
 }
 
-// Resolve a presented token to its owner, the key's scope and how far the owner's API
-// subscription reaches, for the public-read rate limiter. Read-only on purpose: unlike
+// Resolve a presented token to its owner, the key's scope and how far the owner's paid
+// plans reach, for the public-read rate limiter. Read-only on purpose: unlike
 // AuthenticateAPIKey it does NOT touch last_used_at, because it runs on the hottest reads on
 // the site and its answer is cached. No row means unknown, revoked or expired.
 func (q *Queries) ResolveAPIKeyTier(ctx context.Context, tokenHash string) (ResolveAPIKeyTierRow, error) {
@@ -213,6 +223,8 @@ func (q *Queries) ResolveAPIKeyTier(ctx context.Context, tokenHash string) (Reso
 		&i.Scope,
 		&i.ApiUntilStripe,
 		&i.ApiDataUntilStripe,
+		&i.ProUntil,
+		&i.UltraUntil,
 	)
 	return i, err
 }

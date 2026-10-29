@@ -39,3 +39,24 @@ func TestGenerateAuthorizationCode(t *testing.T) {
 		t.Errorf("hash does not match HashToken(code)")
 	}
 }
+
+// A minted access token has the shape the rate limiter checks for before spending a lookup;
+// anything else — a code, an API key, a truncated or mangled token — does not.
+func TestWellFormedAccessToken(t *testing.T) {
+	token, _, err := oauth2server.GenerateAccessToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, _, err := oauth2server.GenerateAuthorizationCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !oauth2server.WellFormedAccessToken(token) {
+		t.Errorf("a minted token %q is not well formed", token)
+	}
+	for _, bad := range []string{"", code, "fhk_" + token[4:], token[:len(token)-1], token[:len(token)-1] + "!"} {
+		if oauth2server.WellFormedAccessToken(bad) {
+			t.Errorf("%q is well formed", bad)
+		}
+	}
+}

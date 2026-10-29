@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"strings"
 )
 
 // accessTokenPrefix marks an MCP access token so a leaked secret is recognizable,
@@ -20,6 +21,20 @@ const authorizationCodePrefix = "fhc_"
 // endpoint's response body) and its SHA-256 hash (the only thing persisted).
 func GenerateAccessToken() (token, hash string, err error) {
 	return generateOpaque(accessTokenPrefix)
+}
+
+// accessTokenLen is the length of every token GenerateAccessToken mints: the prefix and 32
+// random bytes in unpadded base64url.
+var accessTokenLen = len(accessTokenPrefix) + base64.RawURLEncoding.EncodedLen(32)
+
+// WellFormedAccessToken reports whether a token has the shape of an access token we mint.
+// Cheap and local, so a caller can refuse a made-up token before spending a database read.
+func WellFormedAccessToken(token string) bool {
+	if len(token) != accessTokenLen || !strings.HasPrefix(token, accessTokenPrefix) {
+		return false
+	}
+	_, err := base64.RawURLEncoding.DecodeString(token[len(accessTokenPrefix):])
+	return err == nil
 }
 
 // GenerateAuthorizationCode mints the single-use code redirected back to the

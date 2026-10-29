@@ -5,6 +5,7 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { formatMinorUnits } from '#lib/money.js';
   import { promptSignIn } from '#lib/signin.js';
+  import RateLimitLadder from './RateLimitLadder.svelte';
   import type { PlansMatrix, PublicPrice } from '#lib/types.js';
 
   // The API product: access to the public read API for software, sold apart from the plans
@@ -78,8 +79,10 @@
       <p class="max-w-2xl text-balance text-muted-foreground">
         The read API is free without a key, up to {count(limits.anonymous_per_minute)} requests a
         minute{#if limits.anonymous_per_day > 0}&nbsp;and {count(limits.anonymous_per_day)} a day{/if}
-        per address. For more, and for the right to use the data in a commercial product, pick a plan
-        and send its key as <code class="text-sm">Authorization: Bearer</code>.
+        per address. A full-access key moves the budget to your account, and Pro and Ultra raise it.
+        For the most, and for the right to use the data in a commercial product, pick a plan and send
+        its key as
+        <code class="text-sm">Authorization: Bearer</code>.
       </p>
     </header>
 
@@ -122,6 +125,9 @@
     </div>
     {#if error}
       <p class="text-center text-sm text-destructive" role="alert">{error}</p>
+    {/if}
+    {#if limits.tiers?.length}
+      <RateLimitLadder tiers={limits.tiers} />
     {/if}
     <p class="text-center text-sm text-muted-foreground">
       What the API carries and who it is for is on the <a
