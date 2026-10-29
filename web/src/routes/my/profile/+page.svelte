@@ -58,8 +58,10 @@
   <!-- `account-location` is the target of the setup checklist's location step (see
        accountCompleteness.ts). LocationPreferencesFields seeds its local edit state once
        from `profile`, on the explicit contract that the caller remounts it on a genuinely
-       different value — profileStore.refresh() (CV delete/upload) can replace `profile`
-       while this view is open, so key it on `updated_at`. -->
+       different value. profileStore.refresh() (CV delete/upload) can replace `profile`
+       while this view is open, so key it on the store's re-reads — not on `updated_at`,
+       which the card's own autosave also moves, and remounting on that reset a base-city
+       search mid-edit. -->
   <section id="account-location" class="mt-8 flex scroll-mt-20 flex-col gap-4 border-t border-border pt-6">
     <div class="flex items-baseline justify-between gap-3">
       <h2 class="flex items-center gap-2 text-base font-semibold">
@@ -67,7 +69,7 @@
       </h2>
       <SaveStatusLine status={locationStatus} />
     </div>
-    {#key profile.updated_at}
+    {#key profileStore.reads}
       <LocationCard {profile} status={locationStatus} onProfileChanged={handleSaved} />
     {/key}
 

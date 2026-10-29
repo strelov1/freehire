@@ -26,6 +26,7 @@ class ProfileStore extends UserResource<UserProfile | null> {
   // reactive too, so the filter modal can wait for the load to settle before showing
   // its "Apply my profile" action.
   #profile = $state.raw<UserProfile | null>(null);
+  #reads = $state(0);
 
   // Single-skill edits go one at a time: the endpoint replaces the whole row, so two
   // claims made a moment apart would otherwise both be assembled from the same
@@ -36,12 +37,20 @@ class ProfileStore extends UserResource<UserProfile | null> {
     return this.#profile;
   }
 
+  /** Counts the profile reads from the server (the first load and every refresh), but not
+   *  this tab's own writes. A form that seeds its edit state once keys on this to reseed
+   *  when the profile changed elsewhere, without remounting under its own autosave. */
+  get reads(): number {
+    return this.#reads;
+  }
+
   protected load(): Promise<UserProfile | null> {
     return api.getProfile();
   }
 
   protected apply(row: UserProfile | null) {
     this.#profile = row;
+    this.#reads++;
   }
 
   protected clearState() {
