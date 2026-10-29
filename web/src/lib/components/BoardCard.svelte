@@ -77,7 +77,11 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- The keyboard handler is `onkeydowncapture`, which the rule does not recognise. It
      has to be on the capture phase (see openOnKey), and Enter and Space were both
-     confirmed to open the application in a browser. -->
+     confirmed to open the application in a browser.
+
+     `relative` keeps the `sr-only` move hint inside the card. That hint is absolutely
+     positioned, and without a positioned ancestor it escaped the column's scroll box and
+     stretched the page by the column's full height: blank scrolling past the footer. -->
 <div
   role="button"
   tabindex="0"
@@ -85,7 +89,7 @@
   onkeydowncapture={openOnKey}
   aria-label="Open {title} at {company || 'unknown company'}"
   aria-describedby="{indicatorsId} {hintId}"
-  class="flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+  class="relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
   <span class="flex items-center gap-1.5 text-sm font-semibold">
     <EntityLogo name={company} src={companyLogoUrl(company) ?? undefined} shape="square" size="xs" />
