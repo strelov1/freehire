@@ -434,9 +434,13 @@ func ParseIn(location string, known []string) Geo {
 			continue
 		}
 		// The line's own country may have a place of the name too: "Valence, France" is
-		// Valence, where the table's first reading of "valence" is Valencia.
+		// Valence, where the table's first reading of "valence" is Valencia; "Ribnica,
+		// Slovenija" the Slovenian town below the main table's floor, where the table's
+		// reading is Rîbnița in Moldova (contestedSmallPlaces).
 		for c := range stated {
 			if name := contestedCityIn(h.tok, c); name != "" {
+				citySet[name] = struct{}{}
+			} else if name := contestedSmallPlaces[[2]string{h.tok, c}]; name != "" {
 				citySet[name] = struct{}{}
 			}
 		}
@@ -709,8 +713,10 @@ func namesPlace(name string, bareIn bool) bool {
 // contested city table.
 var (
 	areaPrefixes = []string{"großraum ", "grossraum ", "metropolregion ", "region ", "raum ",
-		"umkreis ", "standort ", "kanton ", "regio ", "omgeving "}
-	areaSuffixes = []string{" und umgebung", " und umland", " en omgeving", " e.o."}
+		"umkreis ", "standort ", "kanton ", "regio ", "omgeving ", "okolica ", "v okolici "}
+	areaSuffixes = []string{" und umgebung", " und umland", " en omgeving", " e.o.",
+		" in okolica", " z okolico", " z bližnjo okolico", " in bližnja okolica",
+		" in širša okolica", " z širšo okolico"}
 )
 
 // stripAreaWords removes one areaPrefixes word and one areaSuffixes phrase from a token.
