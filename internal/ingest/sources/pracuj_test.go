@@ -26,6 +26,9 @@ type pracujFake struct {
 	failListing bool
 	// failOffers fails every offer page.
 	failOffers bool
+	// limitAfter answers 429 to every offer page after this many have been served, as
+	// Cloudflare's rate limit does (0 = never).
+	limitAfter int
 
 	mu     sync.Mutex
 	asked  map[string]int
@@ -58,6 +61,9 @@ func (f *pracujFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
 		if f.failOffers {
 			return nil, &StatusError{Method: "GET", Code: 500, URL: u}
 		}
+		if f.limitAfter != 0 && len(f.offerRequests()) > f.limitAfter {
+			return nil, &StatusError{Method: "GET", Code: 429, URL: u}
+		}
 		file = pracujFakeOffers[u]
 		if file == "" {
 			return nil, &StatusError{Method: "GET", Code: 404, URL: u}
@@ -87,8 +93,9 @@ func (f *pracujFake) offerRequests() []string {
 
 func newTestPracuj(f *pracujFake) pracuj {
 	return pracuj{
-		http:    f,
-		limiter: rate.NewLimiter(rate.Inf, 1),
+		http:         f,
+		limiter:      rate.NewLimiter(rate.Inf, 1),
+		offerLimiter: rate.NewLimiter(rate.Inf, 1),
 		slices: []pracujSlice{
 			{categories: "5015,5016", tech: true},
 			{categories: "5022"},
@@ -338,5 +345,27 @@ func TestPracujSeniority(t *testing.T) {
 	}
 	if got := pracujSeniority([]int{20}); got != "" {
 		t.Errorf("manager = %q, want none", got)
+	}
+}
+
+func TestPracujStopsBuyingAtTheRateLimit(t *testing.T) {
+	f := &pracujFake{limitAfter: 1}
+	jobs, err := newTestPracuj(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The newest posting is read; the second answers 429 once, and the third is never asked.
+	if got := f.offerRequests(); len(got) != 2 {
+		t.Errorf("offer requests = %v, want the read one and the single refused one", got)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "70220000-56be-0050-3009-08df2855eb64" {
+		t.Errorf("jobs = %+v, want only the posting read before the limit", jobs)
+	}
+}
+
+func TestPracujFailsWhenRateLimitedFromTheStart(t *testing.T) {
+	f := &pracujFake{limitAfter: -1}
+	if _, err := newTestPracuj(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
+		t.Fatal("a run refused its first offer page read nothing and must fail")
 	}
 }

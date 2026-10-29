@@ -34,10 +34,14 @@ import (
 // server-rendered with its results in __NEXT_DATA__, walked in a few category slices because the
 // unfiltered search fails at depth; each new posting's body comes from its offer page's
 // __NEXT_DATA__, bought only for postings the catalogue lacks, newest first, within a per-run
-// budget. The rest are refreshed by identity.
+// budget and at the slow pace Cloudflare's rate limit on offer pages allows. The rest are
+// refreshed by identity.
 type pracuj struct {
 	http    HTMLGetter
 	limiter waiter
+	// offerLimiter paces the offer pages, which Cloudflare rate-limits on their own; see
+	// pracujOfferInterval.
+	offerLimiter waiter
 	// slices are the category filters the listing is walked in; see pracujSlices.
 	slices       []pracujSlice
 	pageSize     int
@@ -59,12 +63,19 @@ const (
 	// pracujPageSize is the largest page the search serves; a page is ~1.2 MB of HTML.
 	pracujPageSize = 100
 
-	// pracujRequestInterval paces every request of a run, listing and offer page alike, at one a
-	// second — a courtesy ceiling, not a measured limit.
+	// pracujRequestInterval paces the listing at one page a second — a courtesy ceiling, not a
+	// measured limit; ~560 listing pages a run drew no refusal.
 	pracujRequestInterval = time.Second
-	// pracujWorkers keeps two requests in flight: one round trip through the Scrapling tier is
-	// ~1-3 s, so a single worker would read well under the one-a-second pace.
+	// pracujWorkers keeps two listing requests in flight: one round trip through the Scrapling
+	// tier is ~1-3 s, so a single worker would read well under the one-a-second pace.
 	pracujWorkers = 2
+	// pracujOfferInterval paces the offer pages, one at a time. Cloudflare rate-limits them
+	// separately from the listing: the first production run read 114 offer pages at about one a
+	// second and every offer request after that answered 429 "Access denied" for over an hour,
+	// while the listing kept answering; the block lifted after about an hour. 170 offer pages at
+	// one every ~7.3 s (20 minutes) then drew no refusal, which rules out any "~100 per window"
+	// rule with a window over ~12 minutes; one every 8 s stays under every rule that run allows.
+	pracujOfferInterval = 8 * time.Second
 	// pracujRetries bounds how often a failed request is asked again. The search's server render
 	// sometimes answers 200 without its results (a deep page of the unfiltered search did so for
 	// about half the requests); within a category slice it did not in ~560 pages, and a second
@@ -74,11 +85,11 @@ const (
 	// pracujMaxPages is a safety ceiling per slice: the largest slice was 210 pages on
 	// 2026-10-29.
 	pracujMaxPages = 600
-	// pracujMaxNewPerRun bounds the offer pages of one run: ~560 listing pages and 2,000 offer
-	// pages (~470 KB each) at one request a second fill ~45 minutes, inside the 4,500 s run
-	// timeout the schedule gives this provider. A cold catalogue is taken in slices, newest
-	// first.
-	pracujMaxNewPerRun   = 2000
+	// pracujMaxNewPerRun bounds the offer pages of one run: the schedule's 4,500 s run timeout
+	// leaves the crawl 65 minutes once cmd/ingest keeps its 10-minute sweep reserve, and ~10
+	// minutes of listing, 360 offer pages at one every 8 s (48 minutes) and the 5-minute margin
+	// fit in that. A cold catalogue is taken in slices, newest first.
+	pracujMaxNewPerRun   = 360
 	pracujDeadlineMargin = 5 * time.Minute
 )
 
@@ -114,6 +125,7 @@ func NewPracuj(c HTMLGetter) Source {
 	return pracuj{
 		http:           c,
 		limiter:        rate.NewLimiter(rate.Every(pracujRequestInterval), 1),
+		offerLimiter:   rate.NewLimiter(rate.Every(pracujOfferInterval), 1),
 		slices:         pracujSlices,
 		pageSize:       pracujPageSize,
 		maxNewPerRun:   pracujMaxNewPerRun,
@@ -186,6 +198,10 @@ type pracujListPage struct {
 	Total    int             `json:"groupedOffersTotalCount"`
 }
 
+// errPracujRateLimited marks an offer page Cloudflare refused with 429: the start of a block on
+// every offer page, not a refusal of that one.
+var errPracujRateLimited = errors.New("offer pages rate-limited (429)")
+
 // errPracujNoResults marks a page the server rendered without the query it exists for. It is
 // not an answer — the same page asked again is normally served whole.
 var errPracujNoResults = errors.New("page rendered without its results")
@@ -236,13 +252,26 @@ func (s pracuj) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 		}
 		unseen = append(unseen, p)
 	}
-	var answered, outOfTime atomic.Int64
-	read := fetchDetails(unseen, pracujWorkers, func(p pracujPosting) (Job, bool) {
+	var answered, outOfTime, afterLimit atomic.Int64
+	var limited atomic.Bool
+	read := fetchDetails(unseen, 1, func(p pracujPosting) (Job, bool) {
+		if limited.Load() {
+			afterLimit.Add(1)
+			return Job{}, false
+		}
 		if s.nearDeadline(ctx) {
 			outOfTime.Add(1)
 			return Job{}, false
 		}
 		job, ok, err := s.detail(ctx, p)
+		if errors.Is(err, errPracujRateLimited) {
+			// Every offer request after the first refusal is refused too, and asking again
+			// only prolongs the block: stop buying for this run.
+			log.Printf("pracuj: offer pages rate-limited after %d read; the rest wait for a later run", answered.Load())
+			limited.Store(true)
+			afterLimit.Add(1)
+			return Job{}, false
+		}
 		if err != nil {
 			log.Printf("pracuj: posting %s failed; deferring: %v", p.GroupID, err)
 			return Job{}, false
@@ -250,13 +279,17 @@ func (s pracuj) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 		answered.Add(1)
 		return job, ok
 	})
-	// A crawl that read no page at all is broken, not quiet. "Answered" counts a posting the
-	// site reported gone; postings left for want of time are not failures.
+	// A crawl that read no page at all is broken, not quiet — a rate limit met before the first
+	// page included. "Answered" counts a posting the site reported gone; postings left for want
+	// of time are not failures.
 	if int64(len(unseen)) > outOfTime.Load() && answered.Load() == 0 {
-		return nil, fmt.Errorf("pracuj: requested %d offer pages and none answered", int64(len(unseen))-outOfTime.Load())
+		return nil, fmt.Errorf("pracuj: requested %d offer pages and none answered (rate-limited: %v)", int64(len(unseen))-outOfTime.Load(), limited.Load())
 	}
 	if n := outOfTime.Load(); n > 0 {
 		log.Printf("pracuj: %d new postings left unread as the run neared its deadline, deferred to later runs", n)
+	}
+	if n := afterLimit.Load(); n > 0 {
+		log.Printf("pracuj: %d new postings left unread after the rate limit, deferred to later runs", n)
 	}
 	if deferred > 0 {
 		log.Printf("pracuj: %d new postings past this run's bound of %d, deferred to later runs", deferred, s.maxNewPerRun)
@@ -419,6 +452,12 @@ func pracujRetryable(err error) bool {
 	return errors.As(err, &se) && (se.Code == http.StatusForbidden || se.Code == http.StatusTooManyRequests || se.Code >= 500)
 }
 
+// pracujOfferRetryable is pracujRetryable without the rate limit: a 429 on an offer page ends the
+// run's buying instead of being asked again.
+func pracujOfferRetryable(err error) bool {
+	return !errors.Is(err, errPracujRateLimited) && pracujRetryable(err)
+}
+
 func pracujClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // pracujOfferURL is an offer's page on the site's own host, or "" for anything else.
@@ -546,8 +585,15 @@ type pracujSection struct {
 // posting; an error is the absence of an answer.
 func (s pracuj) detail(ctx context.Context, p pracujPosting) (Job, bool, error) {
 	var o pracujOffer
-	err := s.retry(ctx, func() error {
+	err := retryWhile(ctx, pracujRetries, s.retryBackoff, pracujOfferRetryable, func() error {
+		if err := s.offerLimiter.Wait(ctx); err != nil {
+			return err
+		}
 		nd, err := s.nextData(ctx, pracujOfferURL(p.Offers[0]))
+		var se *StatusError
+		if errors.As(err, &se) && se.Code == http.StatusTooManyRequests {
+			return errPracujRateLimited
+		}
 		if err != nil {
 			return err
 		}
