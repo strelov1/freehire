@@ -31,10 +31,17 @@ func TestEmploymentTypePolish(t *testing.T) {
 		{"Stażystka/Stażysta w obszarze ryzyka kredytowego", "", "internship"},
 		{"Praktykant/ka (branża mostowa)", "", "internship"},
 		{"Asystent", "Oferujemy płatny staż w oparciu o umowę zlecenie.", "internship"},
+		// A title's own share outranks a later full-time option; "zł" ends on a letter
+		// RE2's \b cannot see; an English "Full-time" outranks a body's internship words.
+		{"Kasjer – 1/2 etatu", "Możliwość przejścia na pełny etat po okresie próbnym.", "part_time"},
+		{"Developer", "Stawka: 160 zł/h netto (B2B).", "contract"},
+		{"Senior Engineer - Full-time", "Previous experience includes płatny staż.", "full_time"},
 		// "Staż pracy" is work experience, and B2B a business model.
 		{"Kierownik sklepu", "Nagroda za staż pracy, karta sportowa.", ""},
 		{"Handlowiec", "Sprzedaż B2B do klientów z branży logistycznej.", ""},
 		{"Key Account Manager", "Znajomość modeli sprzedażowych i kontraktowych B2B.", ""},
+		{"Handlowiec", "Sprzedajemy oprogramowanie w modelu B2B.", ""},
+		{"Developer", "Zatrudnienie w modelu B2B, stawka godzinowa.", "contract"},
 	}
 	for _, c := range cases {
 		if got := EmploymentType(c.title, c.desc); got != c.want {
