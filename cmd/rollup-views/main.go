@@ -15,6 +15,10 @@
 // the baseline. Either way the per-file cursor makes re-runs idempotent. Where no
 // log dir exists (local/dev) it is a clean no-op. It is a run-once-and-exit worker
 // (cron-scheduled daily), exiting non-zero on failure so cron can alert.
+//
+// A second pass reads internal/application/agentview's day files under
+// AGENT_VIEW_LOG_DIR (postings served to agents over MCP, OJCP and the agent search)
+// and applies them to job_daily_views.agent_uniques and jobs.view_count.
 package main
 
 import (
@@ -66,15 +70,25 @@ func run() int {
 	}
 	if len(files) == 0 {
 		log.Printf("rollup-views: no rotated logs to process in %s", dir)
-		return 0
+	} else {
+		nFiles, nViews, err := process(ctx, pool, files)
+		if err != nil {
+			log.Printf("process: %v", err)
+			return 1
+		}
+		log.Printf("rollup-views: processed %d file(s), applied %d view(s)", nFiles, nViews)
 	}
 
-	nFiles, nViews, err := process(ctx, pool, files)
-	if err != nil {
-		log.Printf("process: %v", err)
-		return 1
+	// The agent pass is independent of nginx: no rotated access log is not a reason to
+	// skip the agent days. Unset, the log is not configured and there is nothing to read.
+	if agentDir := os.Getenv("AGENT_VIEW_LOG_DIR"); agentDir != "" {
+		nFiles, nViews, err := processAgent(ctx, pool, agentDir, time.Now())
+		if err != nil {
+			log.Printf("agent views: %v", err)
+			return 1
+		}
+		log.Printf("rollup-views: agent views: processed %d file(s), applied %d view(s)", nFiles, nViews)
 	}
-	log.Printf("rollup-views: processed %d file(s), applied %d view(s)", nFiles, nViews)
 	return 0
 }
 
