@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { siClaude, siCursor, type SimpleIcon } from 'simple-icons';
+  import { siClaude, siCursor } from 'simple-icons';
+  import { CHATGPT_APP_URL, OPENAI_MARK } from '#lib/appLinks.js';
   import { sourceLogoUrl } from '#lib/logo.js';
   import { announce } from '#lib/announce.svelte.js';
   import { glyphColorFor } from '#lib/markColor.js';
@@ -46,7 +47,8 @@
     logo?: string;
     // A black-on-transparent mark, inverted on the dark theme where it would vanish.
     mono?: boolean;
-    directory?: { url: string; brand: SimpleIcon; note: string };
+    // `viewBox` only for a mark not drawn in simple-icons' 24-unit box.
+    directory?: { url: string; brand: { hex: string; path: string; viewBox?: string }; note: string };
     steps: string[];
     file?: string;
     snippet?: (url: string) => string;
@@ -74,6 +76,12 @@
       label: 'ChatGPT',
       domain: 'chatgpt.com',
       mono: true,
+      // The published app is the no-sign-in connector; the steps below still add either one.
+      directory: {
+        url: CHATGPT_APP_URL,
+        brand: OPENAI_MARK,
+        note: 'One click, search with no sign-in',
+      },
       steps: [
         'Open Settings, then Apps & Connectors.',
         'Under Advanced settings, turn on Developer mode.',
@@ -177,7 +185,7 @@
           style:background-color="#{d.brand.hex}"
           style:color={glyphColorFor(`#${d.brand.hex}`)}
         >
-          <svg viewBox="0 0 24 24" class="size-4 fill-current" aria-hidden="true"><path d={d.brand.path} /></svg>
+          <svg viewBox={d.brand.viewBox ?? '0 0 24 24'} class="size-4 fill-current" aria-hidden="true"><path d={d.brand.path} /></svg>
           Add to {selected?.label} ↗
         </a>
         <!-- eslint-enable svelte/no-navigation-without-resolve -->
@@ -224,7 +232,7 @@
               style:background-color="#{h.directory.brand.hex}"
               style:color={glyphColorFor(`#${h.directory.brand.hex}`)}
             >
-              <svg viewBox="0 0 24 24" class="size-4 fill-current" aria-hidden="true"
+              <svg viewBox={h.directory.brand.viewBox ?? '0 0 24 24'} class="size-4 fill-current" aria-hidden="true"
                 ><path d={h.directory.brand.path} /></svg
               >
               Add to {h.label} ↗

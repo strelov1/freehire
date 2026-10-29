@@ -27,7 +27,7 @@ export const AGENTS_FAQ: FaqItem[] = [
   {
     question: 'Can ChatGPT use freehire?',
     answer:
-      'Yes. There is a published custom GPT wired to the freehire API, and searching in it needs no setup. To save, apply and track, paste your own API key into the GPT authentication field. You can also import the OpenAPI schema into an Action of your own.',
+      'Yes. freehire is in the ChatGPT app directory: add it in one click and search the catalogue with no account. To save, apply and track from ChatGPT, add the account connector, which signs in with freehire, or paste your own API key into the older custom GPT. You can also import the OpenAPI schema into an Action of your own.',
   },
   {
     question: 'Can my agent apply to jobs for me?',

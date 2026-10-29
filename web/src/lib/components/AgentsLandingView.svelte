@@ -2,12 +2,12 @@
   import { resolve } from '$app/paths';
   import { announce } from '#lib/announce.svelte.js';
   import { AGENTS_FAQ } from '#lib/agentsFaq.js';
+  import { CHATGPT_APP_URL } from '#lib/appLinks.js';
   import { CLI_REPO, MCP_REPO } from '#lib/cliLinks.js';
   import { Button, SectionLabel } from '#lib/ui/index.js';
 
   const LLMS_TXT = 'https://freehire.me/llms.txt';
   const OPENAPI = 'https://freehire.me/openapi.yaml';
-  const GPT_URL = 'https://chatgpt.com/g/g-6a5281b64948819193bf3a1021e075da-freehire';
   const CLAUDE_CONNECTOR_URL = 'https://claude.ai/directory/freehire';
   // A third-party, open-source Claude Code job-search framework that ships a
   // freehire search skill — the ready-made path for someone who wants a whole
@@ -303,9 +303,9 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
         <span class="font-mono text-sm text-muted-foreground">03</span>
         <h3 class="mt-3 text-lg font-semibold tracking-tight">ChatGPT</h3>
         <p class="mt-3 text-sm leading-relaxed text-muted-foreground">
-          A published custom GPT is already wired to the same API, and searching in it needs no
-          setup at all. Paste your own key into its authentication field and it can save, apply and
-          move stages too. Prefer to build your own? The
+          freehire is in ChatGPT's app directory: one click adds it, and searching needs no account.
+          To save, apply and move stages, add the account connector, or paste your own key into the
+          older custom GPT. Prefer to build your own? The
           <!-- eslint-disable svelte/no-navigation-without-resolve -- absolute URL to the served schema file, not a SvelteKit route -->
           <a
             href={OPENAPI}
@@ -320,10 +320,10 @@ freehire search <span class="text-foreground">"golang"</span> --remote --region 
           triage on this track.
         </p>
         <div class="mt-auto flex flex-wrap gap-3 pt-6">
-          <Button href={resolve('/chatgpt')} variant="outline" size="md">ChatGPT guide</Button>
-          <Button href={GPT_URL} target="_blank" rel="noopener noreferrer" variant="ghost" size="md">
-            Open the GPT ↗
+          <Button href={CHATGPT_APP_URL} target="_blank" rel="noopener noreferrer" variant="outline" size="md">
+            Add to ChatGPT ↗
           </Button>
+          <Button href={resolve('/chatgpt')} variant="ghost" size="md">ChatGPT guide</Button>
         </div>
       </div>
     </div>

@@ -7,8 +7,8 @@
 </script>
 
 <Seo
-  title="freehire GPT — search and track jobs inside ChatGPT"
-  description="A custom GPT wired to the freehire job API, so you can search IT jobs, open postings and companies, and track your applications from a ChatGPT conversation. Free and open source."
+  title="freehire for ChatGPT — search IT jobs inside ChatGPT"
+  description="Add the freehire app to ChatGPT in one click and search the live IT job catalogue from a chat: jobs as cards, salary ranges, similar roles and which postings are still open. Free, no account needed."
   {canonical}
 />
 
