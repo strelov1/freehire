@@ -27,6 +27,19 @@ import (
 //   - "pvt" is the South-Asian private-company form and nothing else: every catalogue name
 //     ending in it (measured 2026-10-27) is an Indian "Pvt", "Pvt Ltd" or "(Pvt) Ltd"
 //     employer, and before it was listed "Zoho Corporation Pvt" keyed apart from Zoho.
+//   - The European and Latin-American forms on the second line (freehire#3876) were measured
+//     2026-10-29 against the companies an unsuffixed spelling already holds: Microsoft
+//     s.r.o., Accenture Kft., JYSK d.o.o., Airbus S.A.S., Accenture LTDA and Davita SAS each
+//     keyed apart from their own employer. Of the ~1,000 merges they produce, the wrong ones
+//     sampled are the generic-name kind every form risks ("Hit d.d." onto HIT Inc, "SOLVO
+//     S.A.S" onto a Russian Солво), not a word the form shares with ordinary names. Measured
+//     and LEFT OUT for exactly that: "ad" (the Serbian a.d., but "Canopy A&D" reads as it),
+//     "sc" (Mexican S.C., and the South Carolina at the end of a US place name), "pt"
+//     (Indonesian PT, and physical therapy), "sia" (seven companies, none merged, and a name).
+//     "oo" is the tail of the Polish "Sp. z o.o." — see [formQualifiers] for the rest of it.
+//
+// A letters-only comparison sees only ASCII, so a form spelled with other letters lands on
+// whatever is left: the Estonian "OÜ" reads "o" and is not listed, the ASCII "OU" is.
 //
 // "Private" is the same form written out, and it is NOT listed, because unlike "pvt" it is an
 // ordinary word: "Julius Baer Private" and "Private Equity Partners" are names, not forms. It
@@ -50,6 +63,10 @@ var legalSuffixes = map[string]struct{}{
 	"inc": {}, "incorporated": {}, "plc": {}, "llp": {}, "lp": {}, "cic": {}, "cio": {},
 	"srl": {}, "pty": {}, "pte": {}, "pvt": {}, "bv": {}, "nv": {}, "aps": {},
 	"ab": {}, "ag": {}, "kg": {}, "oy": {}, "sa": {}, "as": {}, "se": {}, "co": {},
+	"doo": {}, "jdoo": {}, "dd": {}, "sro": {}, "kft": {}, "zrt": {}, "nyrt": {}, "ood": {},
+	"eood": {}, "ead": {}, "shpk": {}, "oyj": {}, "asa": {}, "uab": {}, "ou": {}, "ehf": {},
+	"sl": {}, "ltda": {}, "lda": {}, "sas": {}, "sarl": {}, "sagl": {}, "bvba": {}, "ug": {},
+	"bhd": {}, "oo": {},
 }
 
 // CompanySlug is [Slug] with any trailing corporate forms removed: "Arch Capital Group Ltd."
@@ -69,7 +86,7 @@ var legalSuffixes = map[string]struct{}{
 func CompanySlug(name string) string { return trimTail(name, IsLegalFormBefore, true) }
 
 // formQualifiers are the words that are a corporate form only as the first half of a compound,
-// directly before one of [qualifiedForms]: the Indian and Sri Lankan "Private Limited", and its
+// directly before the form it qualifies: the Indian and Sri Lankan "Private Limited", and its
 // abbreviation "(P) Ltd".
 //
 // They cannot join [legalSuffixes], which strips a word wherever it ends a name, because both
@@ -82,15 +99,26 @@ func CompanySlug(name string) string { return trimTail(name, IsLegalFormBefore, 
 //
 // The qualified form must itself have been STRIPPED, not merely be the next word, so "Private
 // Bank" and "Private Limited Partners" keep their "Private".
-var formQualifiers = map[string]struct{}{"private": {}, "p": {}}
-
-// qualifiedForms are the forms a [formQualifiers] word may stand in front of.
-var qualifiedForms = map[string]struct{}{"limited": {}, "ltd": {}}
+//
+// The same rule carries the other multi-word forms, each word keyed to the one it may precede:
+// the Malaysian "Sdn Bhd", and the Polish "Sp. z o.o." with its spelled-out "Spółka z o.o."
+// (as letters "spka") and the half-glued "Sp.z o.o.". Since each word needs the next one already
+// stripped, the walk takes "o.o.", then "z", then "Sp." — and "Generation Z" keeps its "Z".
+// "Sp. z.o.o." is not reached: "z.o.o." is the letters "zoo", which ends real names.
+var formQualifiers = map[string]map[string]struct{}{
+	"private": {"limited": {}, "ltd": {}},
+	"p":       {"limited": {}, "ltd": {}},
+	"sdn":     {"bhd": {}},
+	"z":       {"oo": {}},
+	"sp":      {"z": {}},
+	"spka":    {"z": {}},
+	"spz":     {"oo": {}},
+}
 
 // IsLegalFormBefore is [IsLegalForm] for a word read in its place: next is the word right after
 // it, which the caller has ALREADY stripped as a form ("" when word is the last word, or the
 // word after it was kept). It answers yes for everything IsLegalForm does, and for a
-// [formQualifiers] word standing directly before one of [qualifiedForms].
+// [formQualifiers] word standing directly before a form it qualifies.
 //
 // It is exported for the callers that walk a name's tail with their own word breaks and must
 // stay on the company key's vocabulary (merge-companies' nameWords, mailmatch's stripLegalForm):
@@ -102,9 +130,8 @@ func IsLegalFormBefore(word, next string) bool {
 	if next == "" {
 		return false
 	}
-	_, qualifier := formQualifiers[letters(word)]
-	_, qualified := qualifiedForms[letters(next)]
-	return qualifier && qualified
+	_, qualified := formQualifiers[letters(word)][letters(next)]
+	return qualified
 }
 
 // boardNameTails are the tails an ATS board id drops that the company key must keep. They are
