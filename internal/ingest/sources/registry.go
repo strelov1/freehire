@@ -1006,6 +1006,10 @@ func All(c HTTPClient) map[string]Source {
 	// SAPO Emprego: a Portuguese general job board, enumerated from its offers sitemap, each new
 	// posting's facts read from its page's schema.org JobPosting. See sapoemprego.go.
 	registry["sapoemprego"] = NewSapoEmprego(c)
+	// Pracuj.pl: Poland's largest general job board, enumerated from its server-rendered search
+	// in category slices, each new posting's body read from its offer page's __NEXT_DATA__.
+	// Behind Cloudflare: crawled through the Scrapling tier (scraplingProviders). See pracuj.go.
+	registry["pracuj"] = NewPracuj(c)
 	// Net-Empregos: a Portuguese general job board, enumerated from its sitemap and RSS feeds,
 	// each new posting's body read from its page's schema.org JobPosting. See netempregos.go.
 	registry["netempregos"] = NewNetEmpregos(c)

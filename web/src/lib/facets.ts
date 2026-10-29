@@ -487,6 +487,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   francetravail: 'France Travail',
   freework: 'Free-Work',
   cadremploi: 'Cadremploi',
+  pracuj: 'Pracuj.pl',
   jobteaser: 'JobTeaser',
   itjobs: 'ITJobs.pt',
   feinaactiva: 'Feina Activa',
