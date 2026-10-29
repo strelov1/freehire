@@ -1,6 +1,7 @@
 <script lang="ts">
   import AccountTimezone from '#lib/components/AccountTimezone.svelte';
   import LocationCard from '#lib/components/profile/LocationCard.svelte';
+  import CompletenessBadge from '#lib/components/profile/CompletenessBadge.svelte';
   import { profileStore } from '#lib/profile.svelte.js';
   import { handleSaved } from '../actions';
 
@@ -12,6 +13,10 @@
      its own doc comment) — profileStore.refresh() (CV delete/upload) can replace
      `profile` while this view is open, so key it on `updated_at`. -->
 {#if profile}
+  <div class="mb-4">
+    <CompletenessBadge section="location" />
+  </div>
+
   {#key profile.updated_at}
     <LocationCard {profile} onProfileChanged={handleSaved} />
   {/key}

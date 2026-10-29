@@ -7,6 +7,9 @@ export const messages = defineMessages(
     title: 'Profile',
     description: 'Your CV, skills and role — measured against live market demand.',
     loadError: "Couldn't load your profile.",
+    completeness: {
+      summary: '{filled}/{total} sections',
+    },
     tabs: {
       profile: 'Profile',
       contacts: 'Contacts',
@@ -23,6 +26,9 @@ export const messages = defineMessages(
       title: 'Профиль',
       description: 'Ваше резюме, навыки и роль — в сравнении с живым спросом рынка.',
       loadError: 'Не удалось загрузить профиль.',
+      completeness: {
+        summary: 'Заполнено: {filled}/{total}',
+      },
       tabs: {
         profile: 'Профиль',
         contacts: 'Контакты',

@@ -3,6 +3,7 @@
   import { askCvRefresh } from '#lib/cvRefreshDialog.svelte.js';
   import { BASE_REFRESH_MESSAGE, offerCvRefresh } from '#lib/cvRefreshOffer.js';
   import { errorMessage } from '#lib/utils.js';
+  import CompletenessBadge from '#lib/components/profile/CompletenessBadge.svelte';
   import ExperienceBankView from '#lib/components/ExperienceBankView.svelte';
   import { messages } from './messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -32,6 +33,10 @@
     });
   }
 </script>
+
+<div class="mb-4">
+  <CompletenessBadge section="experience" />
+</div>
 
 {#if actionError}
   <p class="mb-4 text-sm text-destructive">{actionError}</p>

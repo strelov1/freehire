@@ -1,0 +1,113 @@
+// How complete the candidate profile is, decided in one place.
+//
+// Keyed by SECTION rather than by tab: the profile's routes and its content do not
+// line up one-to-one (the default section holds the CV, the role and the summary),
+// and a section is what a caller actually wants to report on.
+//
+// Pure by design (no Svelte, no network): every input is data the profile layout has
+// already loaded, which is also why this needs no endpoint of its own. The one input
+// that is not part of that layout's own reads — the screening answers — comes from the
+// shared ScreeningStore the layout warms alongside the profile and résumé.
+
+import type { Answers } from './generated/contracts.js';
+import type { CandidateContacts, ResumeMeta, UserProfile } from './types.js';
+
+/** The sections this measures. `avoid` is deliberately absent: its exclusion lists are
+ *  optional preferences, so an empty one must never read as a missing part of a profile. */
+export type CompletenessSection =
+  | 'contacts'
+  | 'location'
+  | 'skills'
+  | 'experience'
+  | 'education'
+  | 'screening'
+  | 'summary';
+
+/** The sections a profile is measured against. Location is deliberately absent: it is
+ *  optional, so it is reported in the shape but never lowers the count. */
+const COUNTED_SECTIONS: readonly CompletenessSection[] = [
+  'contacts',
+  'skills',
+  'experience',
+  'education',
+  'screening',
+  'summary',
+];
+
+/** The denominator the "x/6 sections" summary uses. */
+export const PROFILE_SECTION_TOTAL = COUNTED_SECTIONS.length;
+
+export interface ProfileCompleteness extends Record<CompletenessSection, boolean> {
+  /** How many sections are satisfied, out of `total`. */
+  filled: number;
+  total: number;
+}
+
+export interface ProfileCompletenessInput {
+  profile: UserProfile | null;
+  /** `GET /me/resume`: the contact block and the structured CV the sections read. */
+  resume?: ResumeMeta | null;
+  /** `GET /me/screening-answers`: the answer bank behind the Screening section. */
+  screening?: Answers | null;
+}
+
+function nonEmpty(value: string | undefined | null): boolean {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+/** Location is optional, but it still reports its real value. The "Where you're based"
+ *  fields the job filter reads are the structured country + city; a candidate who has
+ *  only put a free-text place in their contact block still counts as having stated where
+ *  they are, since that block is already loaded on this page. */
+function hasLocation(profile: UserProfile | null, contacts: CandidateContacts | null): boolean {
+  const base = profile?.location_preferences?.base;
+  if (nonEmpty(base?.country) && nonEmpty(base?.city)) return true;
+  return nonEmpty(contacts?.location);
+}
+
+/** Any stated answer counts. `false` is a real answer ("no visa sponsorship needed"), so
+ *  presence is tested against undefined rather than truthiness. */
+function hasAnyScreeningAnswer(answers: Answers | null): boolean {
+  if (!answers) return false;
+  return Object.values(answers).some((value) =>
+    Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null,
+  );
+}
+
+/** What each section needs before it reads as filled, from data already loaded. */
+export function getProfileCompleteness({
+  profile,
+  resume = null,
+  screening = null,
+}: ProfileCompletenessInput): ProfileCompleteness {
+  // The CV structure travels beside the profile without its contact fields; fall back to
+  // the résumé's own copy when the profile has no current structure.
+  const cv = profile?.cv ?? resume?.structured ?? null;
+  const contacts = resume?.contacts ?? null;
+  const structured = resume?.structured ?? null;
+
+  // "Name + email": the candidate-owned block wins, because the Contacts editor writes
+  // it — but a CV that has been parsed and not yet edited only has the structured copy.
+  const name = nonEmpty(contacts?.full_name) ? contacts?.full_name : structured?.full_name;
+  const email = nonEmpty(contacts?.email) ? contacts?.email : structured?.email;
+
+  const sections: Record<CompletenessSection, boolean> = {
+    contacts: nonEmpty(name) && nonEmpty(email),
+    // Optional. The key stays in the shape so its badge can render the real state, but
+    // location is absent from COUNTED_SECTIONS and so never moves `filled` or `total`.
+    location: hasLocation(profile, contacts),
+    skills: (profile?.skills.length ?? 0) > 0,
+    experience: (cv?.experience?.length ?? 0) > 0,
+    // Education is candidate-owned on the contacts block (the Education card edits that)
+    // and falls back to the CV parse for a résumé nobody has corrected yet.
+    education: (contacts?.education?.length ?? 0) > 0 || (cv?.education?.length ?? 0) > 0,
+    screening: hasAnyScreeningAnswer(screening),
+    summary: nonEmpty(cv?.summary) || nonEmpty(contacts?.summary),
+  };
+
+  return {
+    ...sections,
+    filled: COUNTED_SECTIONS.filter((section) => sections[section]).length,
+    total: PROFILE_SECTION_TOTAL,
+  };
+}

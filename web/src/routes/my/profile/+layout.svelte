@@ -13,12 +13,14 @@
   } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { Badge, TabStrip, tabStripId } from '#lib/ui/index.js';
   import { activeRouteTab } from '#lib/routeTabs.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { t } from '#lib/i18n/t.js';
+  import { format, t } from '#lib/i18n/t.js';
+  import { profileCompleteness } from '#lib/profileCompleteness.svelte.js';
   import { resumeStore } from '#lib/resume.svelte.js';
+  import { screeningStore } from '#lib/screening.svelte.js';
   import AccountPreferences from '#lib/components/AccountPreferences.svelte';
   import AccountSetupCard from '#lib/components/AccountSetupCard.svelte';
   import ProfileForm from '#lib/components/ProfileForm.svelte';
@@ -59,6 +61,7 @@
   const s = $derived(t(messages, locale()));
   const profile = $derived(profileStore.profile);
   const resumeMeta = $derived(resumeStore.meta);
+  const completeness = $derived(profileCompleteness());
   const activeSectionId = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'profile'));
   const tabs = $derived(
     SECTIONS.map((sec) => ({ ...sec, label: s.tabs[sec.id], href: resolve(sec.href) })),
@@ -75,6 +78,7 @@
       status = 'error';
     }
     void resumeStore.ensureLoaded();
+    void screeningStore.ensureLoaded();
   }
 
   // (Re)load once the session resolves.
@@ -147,6 +151,23 @@
   <div class="mb-6">
     <AccountSetupCard />
   </div>
+
+  <!-- The overall count reads the same helper the per-section badges do, so the two
+       cannot disagree. It sits above the strip rather than inside it: the strip is
+       navigation, and this is a measurement of the whole profile. -->
+  {#if completeness}
+    <div class="mb-3 flex justify-end">
+      <Badge
+        variant={completeness.filled === completeness.total ? 'brand' : 'outline'}
+        class="tabular-nums"
+      >
+        {format(s.completeness.summary, {
+          filled: String(completeness.filled),
+          total: String(completeness.total),
+        })}
+      </Badge>
+    </div>
+  {/if}
 
   <TabStrip
     {tabs}

@@ -1,23 +1,20 @@
 <script lang="ts">
-  import { api } from '#lib/api.js';
+  import CompletenessBadge from '#lib/components/profile/CompletenessBadge.svelte';
   import ScreeningAnswersForm from '#lib/components/ScreeningAnswersForm.svelte';
-  import type { Answers } from '#lib/generated/contracts.js';
+  import { screeningStore } from '#lib/screening.svelte.js';
 
-  let screeningAnswers = $state<Answers | null>(null);
+  const answers = $derived(screeningStore.answers);
 
-  // Best-effort — a failure here leaves the section blank on next load rather than
-  // erroring the whole page.
-  async function loadScreeningAnswers() {
-    try {
-      screeningAnswers = await api.getScreeningAnswers();
-    } catch {
-      screeningAnswers = null;
-    }
-  }
-
+  // Already warmed by the profile layout (the completeness summary counts this section);
+  // ensureLoaded is a no-op when that read has landed, and the fallback when the route is
+  // reached directly during a fresh session.
   $effect(() => {
-    void loadScreeningAnswers();
+    void screeningStore.ensureLoaded();
   });
 </script>
 
-<ScreeningAnswersForm answers={screeningAnswers} onSaved={() => void loadScreeningAnswers()} />
+<div class="mb-4">
+  <CompletenessBadge section="screening" />
+</div>
+
+<ScreeningAnswersForm {answers} onSaved={() => void screeningStore.refresh()} />

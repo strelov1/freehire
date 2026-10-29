@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resumeStore } from '#lib/resume.svelte.js';
+  import CompletenessBadge from '#lib/components/profile/CompletenessBadge.svelte';
   import CvSummaryCard from '#lib/components/profile/CvSummaryCard.svelte';
   import ProfileForm from '#lib/components/ProfileForm.svelte';
   import RoleCard from '#lib/components/profile/RoleCard.svelte';
@@ -13,6 +14,10 @@
 </script>
 
 {#if profile}
+  <div class="mb-4">
+    <CompletenessBadge section="summary" />
+  </div>
+
   {#key profile.updated_at}
     <ProfileForm
       {profile}
