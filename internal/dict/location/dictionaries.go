@@ -524,6 +524,11 @@ var cityOverrides = map[string]cityEntry{
 	"capital federal":        {Name: "Buenos Aires", Country: "ar"},
 	"ciudad de buenos aires": {Name: "Buenos Aires", Country: "ar"},
 	"buenos aires city":      {Name: "Buenos Aires", Country: "ar"},
+	// Łódź with one diacritic dropped and the other kept: "Lodz" resolves, these did not.
+	"lódz": {Name: "Łódź", Country: "pl"},
+	"łodź": {Name: "Łódź", Country: "pl"},
+	"lodź": {Name: "Łódź", Country: "pl"},
+	"łodz": {Name: "Łódź", Country: "pl"},
 }
 
 // nameToRegion resolves macro-region names (and explicit open-anywhere markers)

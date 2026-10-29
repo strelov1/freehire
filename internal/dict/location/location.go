@@ -182,6 +182,13 @@ func ParseIn(location string, known []string) Geo {
 			prevTok = tok
 			continue
 		}
+		if metro, ok := polishMetroRegions[tok]; ok {
+			countrySet["pl"] = struct{}{}
+			regionSet[countryToRegion["pl"]] = struct{}{}
+			regionMetros[metro] = struct{}{}
+			prevTok = tok
+			continue
+		}
 		// The conurbation, a barrio and a town of Greater Buenos Aires, in a line that places
 		// them nowhere else (location_ar.go).
 		if seg.onlyBuenosAires && (seg.namesArgentina || hintAR) {
@@ -724,10 +731,10 @@ func stripAreaWords(tok string) string {
 
 // postalPrefixRE matches a continental postal code written BEFORE its town: German and
 // Austrian/Swiss style, optionally behind a country letter ("85462 Eitting", "CH-3400
-// Burgdorf", "A-1010 Wien", "D-80331 München"). The code states no country on its own —
+// Burgdorf", "A-1010 Wien", "D-80331 München"), or Polish ("02-797 Warszawa"). The code states no country on its own —
 // four and five digits are half of Europe's formats — so it is only cut away for the town
 // to resolve. A US ZIP comes after its state and is untouched (isUSZip).
-var postalPrefixRE = regexp.MustCompile(`^(?:[a-z]{1,2}-)?\d{4,5}\s+(\pL.*)$`)
+var postalPrefixRE = regexp.MustCompile(`^(?:[a-z]{1,2}-)?(?:\d{4,5}|\d{2}-\d{3})\s+(\pL.*)$`)
 
 // dutchPostcodeRE matches the Dutch postcode before its town: four digits and two
 // letters ("1012 AB Amsterdam", "3011AA Rotterdam"). Like postalPrefixRE it states no

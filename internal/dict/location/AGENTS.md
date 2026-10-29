@@ -251,6 +251,16 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   remote phrase withdraws it ("100 % remote-friendly"); "les fêtes" bounds a perk.
   Measured 2026-10-28 over 24,609 French-language postings: the description reader 0.4% →
   12.3%; with the structured signal, 31.1% → 34.8%. Every changed control row was French.
+- **Polish location lines** (`location_pl.go`, the Polish block of
+  `foreignSubdivisionNames`, measured 2026-10-29 over 15,488 postings placed in Poland).
+  The country was already read on 99.6% and a city on ~97% of lines naming more than
+  "Poland" (4.5k nofluffjobs/whatjobs-pl lines say only that). eures writes a street
+  address with the postcode before the town ("Klimczaka 2, 02-797 Warszawa, Polska"), which
+  `postalPrefixRE` now cuts. "Trójmiasto"/"Tricity" and "Śląsk"/"GZM" are metros with no
+  city (`polishMetroRegions`, the Delhi NCR shape; the bare English "Silesia" is Czech
+  too). A voivodeship alone ("Mazowieckie", "Lesser Poland Voivodeship") states Poland.
+  "Lódz"/"Łodź" are Łódź. No location line in the sample carried a locative ("w
+  Warszawie"), so none is read. "Lublin, US" and "Warsaw, IN" already resolved to the US.
 - **French location lines** (`location_fr.go`, the French block of
   `foreignSubdivisionNames`, measured 2026-10-28 over 33k postings placed in France). A
   compound town written with spaces for its hyphens ("Issy les Moulineaux", "Aix en
