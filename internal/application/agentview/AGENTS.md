@@ -14,7 +14,9 @@ every MCP call is a POST to one URL and a search answer is a list.
 - **Never log what nginx already counts.** `GET /api/v1/jobs/<slug>` is in `uniques`
   already; recording it here would count one read twice.
 - **One file per UTC day** (`agent-views-YYYY-MM-DD.jsonl`), named by each event's own
-  timestamp. No logrotate; the rollup reads only finished days.
+  timestamp. No logrotate; the rollup reads only finished days, and only `SettleAfter`
+  past their end — the writer drops an event later than `lateWriteCutoff` for its day, so
+  a file the rollup claimed never changes afterwards.
 - **Two kinds, one count.** `kind` (`search`/`detail`) stays in the log for analysis;
   `Aggregate` dedups on `(viewer, job, day)` alone.
 - **Dropping beats blocking.** A full buffer drops the event and counts it.

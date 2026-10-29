@@ -53,6 +53,15 @@ func TestListFilesSkipsTodayAndStrangers(t *testing.T) {
 	if len(files) != 2 || filepath.Base(files[0].Path) != "agent-views-2026-10-26.jsonl" || filepath.Base(files[1].Path) != "agent-views-2026-10-27.jsonl" {
 		t.Errorf("files = %+v", files)
 	}
+
+	// Just after midnight yesterday has not settled: the writer may still append to it.
+	files, err = ListFiles(dir, time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC).Add(SettleAfter-time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || filepath.Base(files[0].Path) != "agent-views-2026-10-26.jsonl" {
+		t.Errorf("before settling, files = %+v", files)
+	}
 }
 
 func TestListFilesOfAMissingDirectoryIsEmpty(t *testing.T) {

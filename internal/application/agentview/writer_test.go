@@ -17,11 +17,14 @@ func TestAnUnsetDirectoryIsANoOpWriter(t *testing.T) {
 	w.Close()
 }
 
+// clockAt is a writer clock stopped at t.
+func clockAt(t time.Time) func() time.Time { return func() time.Time { return t } }
+
 func TestEachEventIsOneLineInItsDaysFile(t *testing.T) {
 	dir := t.TempDir()
-	w := NewWriter(dir)
 	day1 := time.Date(2026, 10, 27, 23, 59, 0, 0, time.UTC)
 	day2 := time.Date(2026, 10, 28, 0, 1, 0, 0, time.UTC)
+	w := newWriter(dir, clockAt(day2))
 	w.Write(Event{TS: day1, Kind: KindSearch, Surface: SurfaceMCP, Viewer: "v", JobIDs: []int64{1, 2}})
 	w.Write(Event{TS: day2, Kind: KindDetail, Surface: SurfaceMCP, Viewer: "v", JobIDs: []int64{1}})
 	w.Close()
@@ -72,8 +75,9 @@ func TestAWriteAfterCloseIsDroppedNotAPanic(t *testing.T) {
 
 func TestAWriterCreatesAMissingDirectory(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "not", "yet")
-	w := NewWriter(dir)
-	w.Write(Event{TS: time.Date(2026, 10, 28, 1, 0, 0, 0, time.UTC), Kind: KindSearch, Surface: SurfaceMCP, Viewer: "v", JobIDs: []int64{1}})
+	ts := time.Date(2026, 10, 28, 1, 0, 0, 0, time.UTC)
+	w := newWriter(dir, clockAt(ts))
+	w.Write(Event{TS: ts, Kind: KindSearch, Surface: SurfaceMCP, Viewer: "v", JobIDs: []int64{1}})
 	w.Close()
 
 	b, err := os.ReadFile(filepath.Join(dir, "agent-views-2026-10-28.jsonl"))
@@ -82,5 +86,28 @@ func TestAWriterCreatesAMissingDirectory(t *testing.T) {
 	}
 	if n := strings.Count(string(b), "\n"); n != 1 {
 		t.Errorf("%d lines, want 1", n)
+	}
+}
+
+func TestAnEventTooLateForItsDayIsDropped(t *testing.T) {
+	// Once its day may have been rolled up, an append would change the file the rollup
+	// already claimed and have the whole day counted again.
+	dir := t.TempDir()
+	ts := time.Date(2026, 10, 27, 23, 59, 0, 0, time.UTC)
+	w := newWriter(dir, clockAt(time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC).Add(lateWriteCutoff+time.Second)))
+	w.Write(Event{TS: ts, Kind: KindSearch, Surface: SurfaceMCP, Viewer: "v", JobIDs: []int64{1}})
+	w.Close()
+
+	if _, err := os.Stat(filepath.Join(dir, FileName(ts))); !os.IsNotExist(err) {
+		t.Errorf("late event reached its day's file (stat err %v)", err)
+	}
+	if w.Dropped() != 1 {
+		t.Errorf("Dropped() = %d, want the late event counted", w.Dropped())
+	}
+}
+
+func TestTheWriterStopsBeforeTheRollupReads(t *testing.T) {
+	if lateWriteCutoff >= SettleAfter {
+		t.Fatalf("lateWriteCutoff %v must be below SettleAfter %v", lateWriteCutoff, SettleAfter)
 	}
 }

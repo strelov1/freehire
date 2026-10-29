@@ -7,11 +7,18 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // bufferSize bounds how many events may wait for the disk. A full buffer drops the
 // newest event: a lost view costs a number, a blocked request costs a caller.
 const bufferSize = 4096
+
+// lateWriteCutoff is how long after its UTC day ends an event may still be appended to
+// that day's file. Past it the event is dropped: the rollup reads a day once SettleAfter
+// has passed, and a line appended after that read would change the file's signature and
+// have the whole day counted a second time. It must stay below SettleAfter.
+const lateWriteCutoff = 10 * time.Minute
 
 // Writer appends events to one file per UTC day under dir. One goroutine owns the files;
 // handlers only send on a channel. Each event is a single write(2) of one line to an
@@ -19,6 +26,7 @@ const bufferSize = 4096
 // server instances can share a day's file without interleaving lines.
 type Writer struct {
 	dir     string
+	now     func() time.Time
 	ch      chan Event
 	dropped atomic.Int64
 	done    chan struct{}
@@ -30,13 +38,17 @@ type Writer struct {
 
 // NewWriter starts a writer under dir, or returns nil (a no-op Sink) when dir is empty.
 func NewWriter(dir string) *Writer {
+	return newWriter(dir, time.Now)
+}
+
+func newWriter(dir string, now func() time.Time) *Writer {
 	if dir == "" {
 		return nil
 	}
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		log.Printf("agentview: create %s: %v", dir, err)
 	}
-	w := &Writer{dir: dir, ch: make(chan Event, bufferSize), done: make(chan struct{})}
+	w := &Writer{dir: dir, now: now, ch: make(chan Event, bufferSize), done: make(chan struct{})}
 	go w.run()
 	return w
 }
@@ -59,7 +71,8 @@ func (w *Writer) Write(e Event) {
 	}
 }
 
-// Dropped is how many events were dropped since start: by a full buffer, or after Close.
+// Dropped is how many events were dropped since start: by a full buffer, after Close, or
+// too late for their day's file.
 func (w *Writer) Dropped() int64 {
 	if w == nil {
 		return 0
@@ -87,6 +100,11 @@ func (w *Writer) run() {
 	files := dayWriter{dir: w.dir}
 	defer files.close()
 	for e := range w.ch {
+		dayEnd := e.TS.UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)
+		if w.now().Sub(dayEnd) > lateWriteCutoff {
+			w.dropped.Add(1)
+			continue
+		}
 		files.write(e)
 	}
 }

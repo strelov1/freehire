@@ -18,7 +18,13 @@ type DayFile struct {
 	Day  time.Time
 }
 
-// ListFiles returns the day files under dir for days before now's UTC day, oldest first.
+// SettleAfter is how long after its UTC day ends a day file is first read. The writer
+// stops appending to a day lateWriteCutoff after it ends, so a file read past this is
+// final, and the signature the rollup claims for it never changes afterwards.
+const SettleAfter = 30 * time.Minute
+
+// ListFiles returns the day files under dir whose day ended at least SettleAfter before
+// now, oldest first.
 // Today's file is still being written, so it is never offered. A missing dir is an empty
 // answer: where the log is not configured there is nothing to roll up.
 func ListFiles(dir string, now time.Time) ([]DayFile, error) {
@@ -29,7 +35,8 @@ func ListFiles(dir string, now time.Time) ([]DayFile, error) {
 		}
 		return nil, err
 	}
-	today := now.UTC().Truncate(24 * time.Hour)
+	// A day is finished when it ended SettleAfter ago, i.e. it lies before this cut's day.
+	cut := now.UTC().Add(-SettleAfter).Truncate(24 * time.Hour)
 	var out []DayFile
 	for _, e := range entries {
 		n := e.Name()
@@ -37,7 +44,7 @@ func ListFiles(dir string, now time.Time) ([]DayFile, error) {
 			continue
 		}
 		day, err := time.Parse(dayLayout, strings.TrimSuffix(strings.TrimPrefix(n, filePrefix), fileSuffix))
-		if err != nil || !day.Before(today) {
+		if err != nil || !day.Before(cut) {
 			continue
 		}
 		out = append(out, DayFile{Path: filepath.Join(dir, n), Day: day})
