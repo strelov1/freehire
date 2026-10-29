@@ -8,7 +8,6 @@
     Contact,
     GraduationCap,
     MapPin,
-    Settings as SettingsIcon,
     Tags,
     User,
   } from '@lucide/svelte';
@@ -42,7 +41,8 @@
   // scans the same way collapsed; `TabStrip` owns the overflow behaviour on a narrow
   // viewport. CV readiness is deliberately not one of these — it's not
   // published yet; it still works at /my/profile/cv-readiness for anyone who holds
-  // the link, nothing here links to it.
+  // the link, nothing here links to it. There is no Settings section: the timezone sits in
+  // Location and the language on /my/security (see profile/settings/+page.ts).
   const SECTIONS = [
     { id: 'profile', href: '/my/profile', icon: User },
     { id: 'contacts', href: '/my/profile/contacts', icon: Contact },
@@ -52,7 +52,6 @@
     { id: 'experience', href: '/my/profile/experience', icon: Briefcase },
     { id: 'education', href: '/my/profile/education', icon: GraduationCap },
     { id: 'screening', href: '/my/profile/screening', icon: ClipboardList },
-    { id: 'settings', href: '/my/profile/settings', icon: SettingsIcon },
   ] as const;
 
   const PANEL_ID = 'profile-panel';

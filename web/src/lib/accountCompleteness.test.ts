@@ -104,7 +104,7 @@ describe('stepLeadsSomewhere', () => {
 
   it('sends every step onward from a section that is not its own', () => {
     for (const step of accountSteps(empty)) {
-      expect(stepLeadsSomewhere(step, step.href, '/my/profile/settings')).toBe(true);
+      expect(stepLeadsSomewhere(step, step.href, '/my/profile/contacts')).toBe(true);
     }
   });
 

@@ -8,9 +8,9 @@
   // features when they are one group of settings, so each row carries only its own
   // heading and control (see AccountTimezone / AccountLanguage).
   //
-  // Rendered in two places — the profile's Settings section and the first-time set-up
-  // form, which is that section before there are sections — so account settings never
-  // wait on a CV upload to become reachable.
+  // Rendered only by the first-time set-up form, so account settings never wait on a CV
+  // upload to become reachable. Once a profile exists they live apart: the timezone in the
+  // profile's Location section, the language on /my/security.
   let { class: extra = '' }: { class?: string } = $props();
 </script>
 

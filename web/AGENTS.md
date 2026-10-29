@@ -30,7 +30,7 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   must not break the page.
 - `MatchSummary.svelte` is the compact sidebar summary (overall % + verdict + top gap)
   linking to the full analysis in the `/tailor/[slug]` workspace — it never computes inline.
-- The profile headshot (`HeadshotField.svelte`, profile Settings tab) is one image per member,
+- The profile headshot (`HeadshotField.svelte`, in `ProfileForm` on the profile's main tab) is one image per member,
   reused by every CV. `GET /api/v1/me/photo` is metadata — the bytes are the `/image`
   sub-resource, and the URL carries `?v=<uploaded_at>` because it is otherwise stable. The
   control renders nothing when `enabled` is false (object storage unconfigured).

@@ -16,7 +16,6 @@ export const messages = defineMessages(
       experience: 'Experience',
       education: 'Education',
       screening: 'Screening answers',
-      settings: 'Settings',
     },
   },
   {
@@ -33,7 +32,6 @@ export const messages = defineMessages(
         experience: 'Опыт',
         education: 'Образование',
         screening: 'Ответы на вопросы',
-        settings: 'Настройки',
       },
     },
   },

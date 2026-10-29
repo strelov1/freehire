@@ -10,7 +10,7 @@
   // Editable form for the six screening questions that repeat across ATS application
   // forms (work authorization, visa sponsorship, desired salary, notice period,
   // willingness to relocate, 18+) plus the standing privacy consent — see internal/screeninganswers/AGENTS.md. Standalone
-  // section on the profile page's Settings tab, its own heading and its own save action,
+  // section on the profile's Screening answers tab, its own heading and its own save action,
   // deliberately separate from ProfileForm (a different lifecycle: these are facts the
   // candidate states directly, not a CV/skills targeting profile).
   let { answers = null, onSaved }: { answers?: Answers | null; onSaved?: () => void } = $props();
