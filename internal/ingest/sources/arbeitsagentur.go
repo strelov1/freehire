@@ -56,8 +56,9 @@ type arbeitsagenturSearch struct {
 }
 
 // arbeitsagenturPosting is one search result. ExterneURL is present when the posting is
-// re-listed from another board; such postings are dropped. Homeofficemoeglich is carried
-// directly on the search result — unlike the description, it needs no detail fetch.
+// re-listed from another board; such postings are dropped. Homeofficemoeglich says home office
+// is POSSIBLE; the share of it, when the employer states one, is only on the detail (see
+// arbeitsagenturWorkMode).
 type arbeitsagenturPosting struct {
 	Referenznummer              string                   `json:"referenznummer"`
 	StellenangebotsTitel        string                   `json:"stellenangebotsTitel"`
@@ -79,9 +80,12 @@ type arbeitsagenturAdresse struct {
 	Land   string `json:"land"`
 }
 
-// arbeitsagenturDetail is the jobdetails endpoint's response — only the field this adapter needs.
+// arbeitsagenturDetail is the jobdetails endpoint's response — only the fields this adapter
+// needs. Homeofficeprozent is set only when the posting's homeofficetyp is ANGABE_IN_PROZENT;
+// the other value, NACH_VEREINBARUNG ("by arrangement"), states no share.
 type arbeitsagenturDetail struct {
 	StellenangebotsBeschreibung string `json:"stellenangebotsBeschreibung"`
+	Homeofficeprozent           int    `json:"homeofficeprozent"`
 }
 
 // description is the sanitized posting body. The Stellenbeschreibung is plain text (newline
@@ -125,6 +129,7 @@ func (arbeitsagentur) searchURL(berufsfeld string, page int) string {
 
 func (a arbeitsagentur) toJob(ctx context.Context, p arbeitsagenturPosting) Job {
 	d := a.detail(ctx, p.Referenznummer)
+	mode := arbeitsagenturWorkMode(p.Homeofficemoeglich, d.Homeofficeprozent)
 	return Job{
 		ExternalID:  p.Referenznummer,
 		URL:         arbeitsagenturDetailPageURL + p.Referenznummer,
@@ -132,9 +137,26 @@ func (a arbeitsagentur) toJob(ctx context.Context, p arbeitsagenturPosting) Job 
 		Company:     strings.TrimSpace(p.Firma),
 		Location:    arbeitsagenturLocation(p.Stellenlokationen),
 		Description: d.description(),
-		Remote:      p.Homeofficemoeglich,
-		WorkMode:    workModeFromRemote(p.Homeofficemoeglich),
+		Remote:      mode == "remote",
+		WorkMode:    mode,
 		PostedAt:    arbeitsagenturDate(p.DatumErsteVeroeffentlichung),
+	}
+}
+
+// arbeitsagenturWorkMode maps the home-office flag and the detail's stated share to a work
+// mode. homeofficemoeglich means home office is POSSIBLE at a posting that names an on-site
+// location — German ads list it as a benefit, which is hybrid — so only a stated 100% is
+// remote. Measured 2026-10-29 over 305 first-party home-office postings: 228 "by arrangement"
+// (no share) and 77 with a share, 11 of them 100%. No home office maps to nothing rather than
+// onsite: an unset form field cannot be told from a choice.
+func arbeitsagenturWorkMode(homeOffice bool, percent int) string {
+	switch {
+	case !homeOffice:
+		return ""
+	case percent >= 100:
+		return "remote"
+	default:
+		return "hybrid"
 	}
 }
 

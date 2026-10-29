@@ -230,7 +230,7 @@ func taleezJob(ld taleezLD, p taleezPosting) (Job, bool) {
 		Company:        company,
 		Description:    body,
 		PostedAt:       parseRFC3339OrDate(strings.TrimSpace(ld.DatePosted)),
-		EmploymentType: taleezEmploymentType(ld.EmploymentType),
+		EmploymentType: schemaFixedTermEmploymentType(ld.EmploymentType),
 	}
 	var places []string
 	for _, pl := range ld.JobLocation {
@@ -248,27 +248,4 @@ func taleezJob(ld taleezLD, p taleezPosting) (Job, bool) {
 		j.WorkMode, j.Remote = "remote", true
 	}
 	return j, true
-}
-
-// taleezEmploymentType reads employmentType, a list. TEMPORARY is a French fixed-term contract
-// (CDD) — an employment, not contract work — so it states nothing on its own; the first value
-// that does decide wins.
-func taleezEmploymentType(raw json.RawMessage) string {
-	var types []string
-	if err := json.Unmarshal(raw, &types); err != nil {
-		var one string
-		if json.Unmarshal(raw, &one) != nil {
-			return ""
-		}
-		types = []string{one}
-	}
-	for _, t := range types {
-		if strings.EqualFold(strings.TrimSpace(t), "TEMPORARY") {
-			continue
-		}
-		if et := schemaEmploymentType(t); et != "" {
-			return et
-		}
-	}
-	return ""
 }

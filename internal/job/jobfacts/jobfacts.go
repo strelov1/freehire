@@ -80,6 +80,26 @@ var (
 	reContractFR   = regexp.MustCompile(`\b(cdd|int[ée]rimaire|mission d'int[ée]rim|en int[ée]rim)\b|\bintérim\b`)
 	reFullTimeFR   = regexp.MustCompile(`\bcdi\b|\b(?:cdd|poste|contrat|emploi)\s*(?:[:\-–]\s*)?(?:à |a |en )?temps[ -](?:plein|complet)\b`)
 	reHoursTitleFR = regexp.MustCompile(`\b(temps[ -]partiel|mi-temps|temps[ -]plein|temps[ -]complet)\b`)
+	// Polish contract types, stated as a label ("Forma zatrudnienia: umowa o pracę",
+	// "Rodzaj umowy: B2B", "Wymiar etatu: pełny etat") or in the offer ("zatrudnienie w
+	// oparciu o umowę zlecenie"). An "umowa o pracę" (UoP) is the employment contract and,
+	// like the CDI, full time unless a part-time share is stated; B2B, the civil-law
+	// "umowa zlecenie" and "umowa o dzieło", a replacement and a fixed-term contract are
+	// contract; a paid internship and the "umowa o staż" are the internship.
+	//
+	// Each needs its contract word. A bare "B2B" is the business model as often ("sprzedaż
+	// B2B", "klientów B2B"), so it counts only as the contract ("umowa B2B", "kontrakt
+	// B2B", "na B2B", "forma współpracy: B2B", a salary "PLN/MD (B2B)"). A bare "staż" is
+	// work experience ("nagroda za staż pracy", "staż pracy min. 3 lata"), so the body
+	// counts it only in a contract phrase; the title's "Staż", "Stażysta", "Praktykant" and
+	// "Praktyki" count as they stand. RE2's \b is ASCII-only, so a word ending in a Polish
+	// letter spells its end out.
+	reTraineeTitlePL  = regexp.MustCompile(`(?:^|[^\p{L}])(?:staż|stażyst\p{L}*|praktykant\p{L}*|praktyki|program staż\p{L}*)(?:$|[^\p{L}])`)
+	reTraineeBodyPL   = regexp.MustCompile(`umow\p{L}* o staż|płatn\p{L}* staż|program\p{L}* stażow|ofert\p{L}* stażu|praktyk\p{L}* studenck`)
+	rePartTimePL      = regexp.MustCompile(`niepełn\p{L}* (?:etat|wymiar)|częś\p{L}* etatu|pół etatu|\b[1-4]/[2-5] etatu|\b(?:[1-9]\d)\s?% etatu|\b0[,.]\d+ etatu|praca dodatkowa`)
+	rePolishFullShare = regexp.MustCompile(`(?:^|[^\p{L}])(?:pełn\p{L}* etat|pełen etat|cały etat|pełn\p{L}* wymiar)`)
+	reFullTimePL      = regexp.MustCompile(`umow\p{L}* o prac[eęy]|\buop\b|(?:^|[^\p{L}])(?:pełn\p{L}* etat|pełen etat|pełn\p{L}* wymiar\p{L}*|cały etat)|na czas nieokreślony`)
+	reContractPL      = regexp.MustCompile(`umow\p{L}*[ -]zleceni|umow\p{L}* o dzieło|(?:umow\p{L}*|kontrakt|kontraktu|kontraktem|współprac\p{L}*|na|on|w oparciu o|(?:zatrudnieni\p{L}*|współprac\p{L}*|prac\p{L}*) w modelu)\s+b2b\b|(?:forma|rodzaj)\s+(?:współpracy|zatrudnienia|umowy)\s*:\s*(?:kontrakt\s+)?b2b\b|(?:pln|zł|zl|eur)(?:$|[^\p{L}])[^\n.]{0,30}\(b2b\)|umow\p{L}* na zastępstwo|czas określony|kontrakt gospodarcz`)
 	// reFellowshipStaffRole excludes a "fellowship" mention that names the staff job
 	// running the program rather than the fellow's own position — e.g. "Fellowship
 	// Manager", "Fellowship Program Coordinator". Those are ordinary full-time/contract
@@ -99,7 +119,8 @@ func EmploymentType(title, description string) string {
 	switch {
 	case reFellowship.MatchString(s) && !reFellowshipStaffRole.MatchString(s):
 		return "fellowship"
-	case reInternship.MatchString(s) || reTraineeBodyFR.MatchString(s) || frenchTraineeTitle(t):
+	case reInternship.MatchString(s) || reTraineeBodyFR.MatchString(s) || frenchTraineeTitle(t) ||
+		reTraineeTitlePL.MatchString(t):
 		return "internship"
 	}
 	// A French title's own label is the advertised role's, and outranks a body that may
@@ -118,6 +139,28 @@ func EmploymentType(title, description string) string {
 	case reContract.MatchString(s) || reContractShorthand.MatchString(s) || reContractFR.MatchString(s):
 		return "contract"
 	case reFullTime.MatchString(s) || reFullTimeFR.MatchString(s):
+		return "full_time"
+	}
+	return polishEmploymentType(t, s)
+}
+
+// polishEmploymentType reads the Polish contract words (rePartTimePL and its siblings)
+// of the lowercased title t and posting s, "" when none is stated. It runs after every
+// English and French reading, so a body's internship phrase ("płatny staż") cannot
+// outrank an English "Full-time". A title's own share is the advertised role's; in the
+// body a share counts only when no full post is offered beside it ("pełny etat lub 3/4
+// etatu" is a choice, read as the employment contract).
+func polishEmploymentType(t, s string) string {
+	switch {
+	case reTraineeBodyPL.MatchString(s):
+		return "internship"
+	case rePartTimePL.MatchString(t):
+		return "part_time"
+	case rePartTimePL.MatchString(s) && !rePolishFullShare.MatchString(s):
+		return "part_time"
+	case reContractPL.MatchString(s):
+		return "contract"
+	case reFullTimePL.MatchString(s):
 		return "full_time"
 	}
 	return ""

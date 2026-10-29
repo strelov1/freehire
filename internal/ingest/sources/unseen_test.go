@@ -65,7 +65,7 @@ func TestLivenessProbedProvidersAreTheProbedOnes(t *testing.T) {
 		}
 	}
 	slices.Sort(got)
-	want := []string{"adzuna", "echojobs", "empregos", "hh", "himalayas", "jobicy", "remoteok"}
+	want := []string{"adzuna", "djinni", "echojobs", "empregos", "hh", "himalayas", "jobicy", "remoteok"}
 	if !slices.Equal(got, want) {
 		t.Errorf("livenessProbed providers = %v, want %v", got, want)
 	}

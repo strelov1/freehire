@@ -81,6 +81,51 @@ func TestDarwinboxFetchMapsTheListing(t *testing.T) {
 	}
 }
 
+// The jd arrives entity-encoded on most tenants, encoded twice on some postings, and as live
+// HTML on others (alljobs_escaping.json is one of each, captured live 2026-10-29). Every shape
+// must reach the catalogue as markup, never as visible "<p>" literals.
+func TestDarwinboxDescriptionDecodesEveryEscapingShape(t *testing.T) {
+	b, err := os.ReadFile("testdata/darwinbox/alljobs_escaping.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &darwinboxPoster{pages: map[int]string{1: string(b)}}
+	jobs, err := NewDarwinbox(p).Fetch(context.Background(), CompanyEntry{Board: "hoh.darwinbox.in"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"a6a81c4d39608d": "<b>Job Description: </b>",      // encoded twice
+		"67878ab164b89":  "<b>Job Description :</b>",      // live HTML
+		"a6ad5a69b6a9cc": "<p>Channel Partner Sourcing –", // encoded once
+	}
+	if len(jobs) != len(want) {
+		t.Fatalf("got %d jobs, want %d", len(jobs), len(want))
+	}
+	for _, j := range jobs {
+		if !strings.Contains(j.Description, want[j.ExternalID]) {
+			t.Errorf("%s: description lacks %q: %.200q", j.ExternalID, want[j.ExternalID], j.Description)
+		}
+		if strings.Contains(j.Description, "&lt;") || strings.Contains(j.Description, "&amp;lt;") {
+			t.Errorf("%s: description still carries encoded markup: %.200q", j.ExternalID, j.Description)
+		}
+	}
+}
+
+// Decoding turns text into live markup, so the sanitizer must run on the decoded body: an
+// encoded script or event handler must not survive in either encoding depth.
+func TestDarwinboxDescriptionSanitizesAfterDecoding(t *testing.T) {
+	for name, jd := range map[string]string{
+		"encoded once":  `&lt;p onclick=&quot;x()&quot;&gt;Hi&lt;/p&gt;&lt;script&gt;alert(1)&lt;/script&gt;`,
+		"encoded twice": `&amp;lt;p onclick=&amp;quot;x()&amp;quot;&amp;gt;Hi&amp;lt;/p&amp;gt;&amp;lt;script&amp;gt;alert(1)&amp;lt;/script&amp;gt;`,
+	} {
+		got := darwinboxJob("https://x.darwinbox.in", "X", darwinboxPosting{ID: "1", JD: jd}).Description
+		if got != "<p>Hi</p>" {
+			t.Errorf("%s: description = %q, want %q", name, got, "<p>Hi</p>")
+		}
+	}
+}
+
 // Paging ends at an empty page, and only a walk that adds up to the declared total succeeds.
 func TestDarwinboxFetchWalksPagesToTheDeclaredTotal(t *testing.T) {
 	row := func(id string) string {

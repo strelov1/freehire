@@ -991,6 +991,21 @@ var wordAliases = map[string]string{
 	"conteneurisation":  "containerization",
 	"datavisualisation": "data-visualization",
 	"sgbdr":             "rdbms",
+
+	// batch 11 (2026-10-29, Polish market) — the Polish single words, in the cases the
+	// crawl carries. See engineeringPhraseAliases for the phrases.
+	"mikroserwis": "microservices", "mikroserwisy": "microservices",
+	"mikroserwisów": "microservices", "mikroserwisach": "microservices",
+	"mikroserwisami": "microservices", "mikroserwisowa": "microservices",
+	"mikroserwisowej": "microservices", "mikroserwisową": "microservices",
+	"mikroserwisowym": "microservices", "mikroserwisowych": "microservices",
+	"mikrousługi": "microservices", "mikrousług": "microservices",
+	"mikrousługach": "microservices", "mikrousługowej": "microservices",
+	"mikrousługową":  "microservices",
+	"konteneryzacja": "containerization", "konteneryzacji": "containerization",
+	"konteneryzacją": "containerization", "konteneryzację": "containerization",
+	"obserwowalność": "observability", "obserwowalności": "observability",
+	"obserwowalnością": "observability",
 }
 
 // ambiguousWords marks the wordAliases keys whose word-pass match is "weak": Parse
@@ -1013,6 +1028,9 @@ var wordAliases = map[string]string{
 // "react native", "spring boot", expressjs, "ruby on rails"), so a genuinely-named
 // stack is never gated. Membership is per-alias, not per-canonical; value is unused.
 var ambiguousWords = map[string]bool{
+	// Polish "konteneryzacja" containerizes freight as well as software ("konteneryzacja
+	// ładunków"), so it needs a technical token beside it.
+	"konteneryzacja": true, "konteneryzacji": true, "konteneryzacją": true, "konteneryzację": true,
 	// English-word collisions
 	"react":     true,
 	"swift":     true,
@@ -1825,6 +1843,46 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"tests d’intrusion", "penetration-testing"},
 	{"tests de pénétration", "penetration-testing"},
 	{"services rest", "rest"},
+	// batch 11 (2026-10-29, Polish market), mined from 9,835 open Polish-language
+	// postings (erecruiter, traffit, nofluffjobs, solidjobs, smartrecruiters, teamtailor,
+	// recruitee, eures, whatjobs-pl). Polish inflects, so each practice lists the cases
+	// the crawl carries. Left out: the nominative "systemy wbudowane" (an agency's "our
+	// services: … systemy wbudowane" boilerplate on every one of its postings; the
+	// requirement's own cases stay), bare "sztuczna inteligencja" and
+	// "cyberbezpieczeństwo" (an employer's pitch or sector more often than the craft, as
+	// in French), and "bazy danych", "analiza danych", "zarządzanie danymi" and "jakość
+	// danych" (a clerk's duty as often, or no canonical). "Sieci komputerowe" is in
+	// nonCorroboratingPhrases (an electrician installs them too), and the bare
+	// "konteneryzacja" in ambiguousWords (freight is containerized too).
+	{"testy jednostkowe", "unit-testing"}, {"testów jednostkowych", "unit-testing"}, {"testach jednostkowych", "unit-testing"}, {"testami jednostkowymi", "unit-testing"}, {"testow jednostkowych", "unit-testing"},
+	{"testy integracyjne", "integration-testing"}, {"testów integracyjnych", "integration-testing"}, {"testach integracyjnych", "integration-testing"}, {"testami integracyjnymi", "integration-testing"}, {"testow integracyjnych", "integration-testing"},
+	{"testy automatyczne", "test-automation"}, {"testów automatycznych", "test-automation"}, {"testach automatycznych", "test-automation"}, {"testami automatycznymi", "test-automation"}, {"testow automatycznych", "test-automation"}, {"automatyzacja testów", "test-automation"}, {"automatyzacji testów", "test-automation"}, {"automatyzację testów", "test-automation"}, {"automatyzacją testów", "test-automation"}, {"automatyzacji testow", "test-automation"}, {"testowania automatycznego", "test-automation"},
+	{"testy penetracyjne", "penetration-testing"}, {"testów penetracyjnych", "penetration-testing"}, {"testach penetracyjnych", "penetration-testing"},
+	{"ciągła integracja", "ci-cd"}, {"ciągłej integracji", "ci-cd"}, {"ciaglej integracji", "ci-cd"}, {"ciągłe wdrażanie", "ci-cd"}, {"ciągłego wdrażania", "ci-cd"}, {"ciągłemu wdrażaniu", "ci-cd"},
+	{"infrastruktura jako kod", "infrastructure-as-code"}, {"infrastruktury jako kodu", "infrastructure-as-code"}, {"infrastrukturą jako kod", "infrastructure-as-code"}, {"infrastrukturą jako kodem", "infrastructure-as-code"},
+	// Only the genitive ("system kontroli wersji"): a document controller writes the
+	// nominative, "kontrola wersji dokumentów".
+	{"kontroli wersji", "version-control"},
+	{"wzorce projektowe", "design-patterns"}, {"wzorców projektowych", "design-patterns"}, {"wzorcach projektowych", "design-patterns"}, {"wzorcami projektowymi", "design-patterns"}, {"wzorcow projektowych", "design-patterns"},
+	{"programowanie obiektowe", "oop"}, {"programowania obiektowego", "oop"}, {"programowaniu obiektowym", "oop"}, {"programowaniem obiektowym", "oop"},
+	{"systemy rozproszone", "distributed-systems"}, {"systemów rozproszonych", "distributed-systems"}, {"systemach rozproszonych", "distributed-systems"}, {"systemami rozproszonymi", "distributed-systems"}, {"systemow rozproszonych", "distributed-systems"},
+	{"systemów wbudowanych", "embedded-systems"}, {"systemach wbudowanych", "embedded-systems"}, {"systemami wbudowanymi", "embedded-systems"}, {"systemow wbudowanych", "embedded-systems"},
+	{"architektura sterowana zdarzeniami", "event-driven-architecture"}, {"architektury sterowanej zdarzeniami", "event-driven-architecture"}, {"architekturze sterowanej zdarzeniami", "event-driven-architecture"}, {"architekturą sterowaną zdarzeniami", "event-driven-architecture"},
+	{"relacyjne bazy danych", "rdbms"}, {"relacyjnych baz danych", "rdbms"}, {"relacyjnymi bazami danych", "rdbms"}, {"relacyjnych bazach danych", "rdbms"}, {"relacyjną bazą danych", "rdbms"}, {"relacyjnej bazy danych", "rdbms"}, {"relacyjna baza danych", "rdbms"},
+	{"bazy wektorowe", "vector-databases"}, {"baz wektorowych", "vector-databases"}, {"bazami wektorowymi", "vector-databases"}, {"bazach wektorowych", "vector-databases"}, {"wektorowe bazy danych", "vector-databases"}, {"wektorowych baz danych", "vector-databases"},
+	{"hurtownia danych", "data-warehousing"}, {"hurtowni danych", "data-warehousing"}, {"hurtownie danych", "data-warehousing"}, {"hurtowniami danych", "data-warehousing"}, {"hurtowniach danych", "data-warehousing"}, {"hurtownię danych", "data-warehousing"}, {"hurtownią danych", "data-warehousing"},
+	{"modelowanie danych", "data-modeling"}, {"modelowania danych", "data-modeling"}, {"modelowaniu danych", "data-modeling"}, {"modelowaniem danych", "data-modeling"},
+	{"inżynieria danych", "data-engineering"}, {"inżynierii danych", "data-engineering"}, {"inżynierią danych", "data-engineering"}, {"inzynierii danych", "data-engineering"},
+	{"potoki danych", "data-pipelines"}, {"potoków danych", "data-pipelines"}, {"potokach danych", "data-pipelines"}, {"potokami danych", "data-pipelines"}, {"potok danych", "data-pipelines"}, {"potoku danych", "data-pipelines"},
+	{"wizualizacja danych", "data-visualization"}, {"wizualizacji danych", "data-visualization"}, {"wizualizacją danych", "data-visualization"}, {"wizualizację danych", "data-visualization"},
+	{"uczenie maszynowe", "machine-learning"}, {"uczenia maszynowego", "machine-learning"}, {"uczeniem maszynowym", "machine-learning"}, {"uczeniu maszynowym", "machine-learning"},
+	{"uczenie głębokie", "deep-learning"}, {"uczenia głębokiego", "deep-learning"}, {"głębokie uczenie", "deep-learning"}, {"głębokiego uczenia", "deep-learning"},
+	{"generatywna sztuczna inteligencja", "generative-ai"}, {"generatywnej sztucznej inteligencji", "generative-ai"}, {"generatywną sztuczną inteligencję", "generative-ai"}, {"generatywna ai", "generative-ai"}, {"generatywnej ai", "generative-ai"}, {"generatywną ai", "generative-ai"}, {"generatywne ai", "generative-ai"},
+	{"duże modele językowe", "llm"}, {"dużych modeli językowych", "llm"}, {"dużych modelach językowych", "llm"}, {"dużymi modelami językowymi", "llm"},
+	{"przetwarzanie języka naturalnego", "nlp"}, {"przetwarzania języka naturalnego", "nlp"},
+	{"widzenie komputerowe", "computer-vision"}, {"widzenia komputerowego", "computer-vision"},
+	{"bezpieczeństwo aplikacji", "application-security"}, {"bezpieczeństwa aplikacji", "application-security"}, {"bezpieczeństwem aplikacji", "application-security"},
+	{"sieci komputerowe", "networking"}, {"sieci komputerowych", "networking"}, {"sieciach komputerowych", "networking"},
 }
 
 // professionalPhraseAliases is the non-engineering half of the IT-company role
@@ -2075,6 +2133,8 @@ var occupationalSafetyPhraseAliases = []phraseAlias{
 // requirement, and marketing postings carry that phrasing at scale.
 var nonCorroboratingPhrases = func() map[string]bool {
 	out := map[string]bool{
+		// An electrician installs "sieci komputerowe" too (batch 11).
+		"networking":                     true,
 		"technical-seo":                  true,
 		"link-building":                  true,
 		"paid-social":                    true,

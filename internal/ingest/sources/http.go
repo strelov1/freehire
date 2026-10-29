@@ -363,7 +363,7 @@ func newSingleUseConnClient() *Client {
 	return c
 }
 
-// browserUserAgent is a plain desktop Chrome string, for the one provider whose edge refuses
+// BrowserUserAgent is a plain desktop Chrome string, for the one provider whose edge refuses
 // every client that identifies itself.
 //
 // This is not a preference. Measured against 4dayweek.io on 2026-09-07, on the path its own
@@ -377,24 +377,27 @@ func newSingleUseConnClient() *Client {
 // Keep this for providers that ALLOW the path in robots.txt and refuse the client anyway. It is
 // not a way around a Disallow: the fix for a disallowed path is to use an allowed one, which is
 // exactly what the 4dayweek adapter now does.
-const browserUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+//
+// Exported for cmd/liveness, whose 4dayweek probe reads the same allowed /api/v2 path from
+// behind the same edge.
+const BrowserUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
 
-// newBrowserUAClient is NewClient with browserUserAgent — same guarded transport, same retry
+// newBrowserUAClient is NewClient with BrowserUserAgent — same guarded transport, same retry
 // budget, same everything else. Unexported, unlike newCookieClient's and
 // newSingleUseConnClient's wrappers: those are exported because host tools reuse them, and
 // nothing outside this package needs this one.
 func newBrowserUAClient() *Client {
 	c := NewClient()
-	c.userAgent = browserUserAgent
+	c.userAgent = BrowserUserAgent
 	return c
 }
 
 // macBrowserUserAgent is a desktop Chrome string on macOS, for Feishu Hire (feishujobs), whose
 // edge filters on the operating system in the string. Measured 2026-10-15 against the job
 // search on both jobs.bytedance.com and a customer's <tenant>.jobs.feishu.cn: the project's own
-// string, browserUserAgent (Linux), a Windows Chrome string and Go's default were all answered
+// string, BrowserUserAgent (Linux), a Windows Chrome string and Go's default were all answered
 // 405 with an empty body, while "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)" alone was
-// served. Neither robots.txt disallows the API path; the same line as browserUserAgent holds.
+// served. Neither robots.txt disallows the API path; the same line as BrowserUserAgent holds.
 const macBrowserUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
 
 // newMacBrowserUAClient is NewClient with macBrowserUserAgent — same guarded transport, same
@@ -425,7 +428,7 @@ func withUserAgent(c HTTPClient, ua string) HTTPClient {
 // Measured 2026-10-15 against OCC Mundial's search pages (www.occ.com.mx/empleos/, which
 // robots.txt allows): "freehire/0.1 (+https://freehire.me)", a bare "Mozilla/5.0" and the
 // project string with "Mozilla/5.0" appended were all answered 403, while this string was
-// served. It still names us, so prefer it to browserUserAgent wherever it is enough.
+// served. It still names us, so prefer it to BrowserUserAgent wherever it is enough.
 const compatibleUserAgent = "Mozilla/5.0 (compatible; freehire/0.1; +https://freehire.me)"
 
 // NewCompatibleUAClient is NewClient with compatibleUserAgent — same guarded transport, same
@@ -440,7 +443,7 @@ func NewCompatibleUAClient() *Client {
 // crawlerUserAgent identifies as Googlebot, for the one provider whose edge does the OPPOSITE
 // of blocking bots: energyjobline.com's job-detail pages server-render their schema.org
 // JobPosting ld+json only for a recognised search-crawler User-Agent. Both the project's own
-// "freehire/0.1 (+https://freehire.me)" and a plain desktop browser string (browserUserAgent)
+// "freehire/0.1 (+https://freehire.me)" and a plain desktop browser string (BrowserUserAgent)
 // get a client-rendered shell with no ld+json at all — verified live 2026-10-07. The site's own
 // robots.txt does not disallow the /job/ path, and SSR'ing only for crawlers is how it gets
 // Google's job rich snippets in the first place, so this is the intended way to read exactly
@@ -562,13 +565,18 @@ func (c *Client) GetJSONResolved(ctx context.Context, url string, v any) (string
 	return final, err
 }
 
+// xmlAccept is the Accept header of the XML getters. Naming text/xml beside application/xml is
+// what some servers require: Dualoo's sitemaps answer 406 to application/xml alone, because
+// they serve text/xml (2026-10-29).
+const xmlAccept = "application/xml, text/xml"
+
 // GetXML fetches url and decodes its XML body into v (used by adapters whose platform
 // publishes an XML feed, e.g. Personio).
 func (c *Client) GetXML(ctx context.Context, url string, v any) error {
 	return c.do(ctx, request{
 		method: http.MethodGet,
 		url:    url,
-		accept: "application/xml",
+		accept: xmlAccept,
 		decode: func(resp *http.Response) error {
 			return xml.NewDecoder(resp.Body).Decode(v)
 		},
@@ -585,7 +593,7 @@ func (c *Client) GetXMLResolved(ctx context.Context, url string, v any) (string,
 	err := c.do(ctx, request{
 		method: http.MethodGet,
 		url:    url,
-		accept: "application/xml",
+		accept: xmlAccept,
 		decode: func(resp *http.Response) error {
 			// Recorded before the decode so a redirect that landed on HTML still reports
 			// where it went, rather than only that the decode failed.

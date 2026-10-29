@@ -59,6 +59,10 @@ var hardExpired = regexp.MustCompile(`(?i)` + strings.Join([]string{
 	// probably filled." — the extra "post" between "job" and "is closed" is why the more
 	// general pattern above doesn't already cover it.
 	`this job post is closed`,
+	// djinni's alert on a removed posting, which still answers 200 with the full page around
+	// it. Measured 2026-10-29: on all 94 such pages in a 120-posting sample of stale djinni
+	// rows, and on none of the live ones.
+	`the job ad is no longer active`,
 	`job (listing )?not found`,
 	`the page you are looking for doesn.t exist`,
 	`applications?\s+(?:(?:have|are|is)\s+)?closed`,

@@ -143,7 +143,7 @@ func clinchSplitSlug(slug string) (title, locationText string) {
 
 // clinchFormatLocation joins the location tail into a comma-separated, title-cased string,
 // keeping a recognized multi-word place ("mountain view", "united states") together as one
-// segment while a token the dictionary does not resolve ("masovian", "voivodeship") stands
+// segment ("masovian voivodeship" too) while a token the dictionary does not resolve stands
 // alone. The result reads cleanly AND re-resolves through location.Parse for the geo facet.
 func clinchFormatLocation(tokens []string) string {
 	var segs []string

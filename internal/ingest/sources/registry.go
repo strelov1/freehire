@@ -449,6 +449,9 @@ func All(c HTTPClient) map[string]Source {
 		// page's Next.js flight. See justjoin.go.
 		NewJustJoin(c),
 		NewRocketJobs(c),
+		// Centralna Baza Ofert Pracy (oferty.praca.gov.pl): Poland's public job board, listed whole
+		// from the portal's search API, whose rows carry the full offer. See cbop.go.
+		NewCBOP(c),
 		NewWantapply(c),
 		NewInfoJobs(c),
 		NewJobtech(c),
@@ -1003,9 +1006,19 @@ func All(c HTTPClient) map[string]Source {
 	// Taleez: a French ATS with no per-customer listing, enumerated from its job sitemap, each
 	// new posting read from its page's schema.org JobPosting. See taleez.go.
 	registry["taleez"] = NewTaleez(c, c)
+	// Dualoo: a Swiss ATS for SMEs and municipalities, enumerated from its per-customer sitemaps,
+	// each new posting read from its page's schema.org JobPosting. See dualoo.go.
+	registry["dualoo"] = NewDualoo(c, c)
+	// Refline: a Swiss ATS strong in the public sector, enumerated from the sitemaps robots.txt
+	// names, each job read from one publication's schema.org JobPosting. See refline.go.
+	registry["refline"] = NewRefline(c, c, c)
 	// SAPO Emprego: a Portuguese general job board, enumerated from its offers sitemap, each new
 	// posting's facts read from its page's schema.org JobPosting. See sapoemprego.go.
 	registry["sapoemprego"] = NewSapoEmprego(c)
+	// Pracuj.pl: Poland's largest general job board, enumerated from its server-rendered search
+	// in category slices, each new posting's body read from its offer page's __NEXT_DATA__.
+	// Behind Cloudflare: crawled through the Scrapling tier (scraplingProviders). See pracuj.go.
+	registry["pracuj"] = NewPracuj(c)
 	// Net-Empregos: a Portuguese general job board, enumerated from its sitemap and RSS feeds,
 	// each new posting's body read from its page's schema.org JobPosting. See netempregos.go.
 	registry["netempregos"] = NewNetEmpregos(c)
@@ -1093,7 +1106,7 @@ func singleUseConnSource[T any](c HTTPClient, build func(T) Source) Source {
 // browserUASource builds a registry entry for an adapter whose platform refuses any client
 // that identifies itself, on a path that platform's own robots.txt allows (4dayweek). It
 // mirrors cookieSessionSource exactly, including its nil-transport case for the taxonomy path.
-// See browserUserAgent for the measurement, and for the line this does NOT cross.
+// See BrowserUserAgent for the measurement, and for the line this does NOT cross.
 func browserUASource[T any](c HTTPClient, build func(T) Source) Source {
 	if c == nil {
 		var zero T

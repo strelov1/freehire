@@ -181,8 +181,8 @@ type Source interface {
 
 // StreamingSource is a Source that can also stream its postings to a sink as it crawls, so the
 // pipeline persists them incrementally rather than buffering the whole board until Fetch
-// returns. An adapter with an expensive per-posting detail fan-out (eightfold, whose large
-// catalogues take many minutes under the source's rate limit) implements it so a long crawl's
+// returns. An adapter with an expensive per-posting detail fan-out (taleo, whose large
+// catalogues take many minutes to crawl) implements it so a long crawl's
 // progress is saved as it goes — partial work survives an interrupted or rate-limited run, and
 // the catalogue converges across runs. emit is called once per ready posting and may be called
 // concurrently. FetchStream returns an error only for a board-level failure (e.g. the listing

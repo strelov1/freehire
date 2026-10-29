@@ -501,6 +501,51 @@ reads it as data engineering. Still unresolved: tender and public-procurement de
 claims handling ("obsługa szkód"), "Doradca Klienta" with no field, and the aerospace
 research centre's engineers named by subject alone.
 
+## Croatian and Serbian heads and fields
+
+`bcs.go` is the fallback for Croatian, Serbian, Bosnian and Montenegrin titles, one
+language family and one table, read after every other table resolved nothing. The main
+table already lists BCS role nouns (#3797), but only as nominative surface forms, and BCS
+inflects: the field after a generic head stands in the genitive, locative or
+instrumental ("Voditelj trgovine", "Radnik u proizvodnji", "Specijalist za podršku
+klijentima"). So an alias may end a word in `*`, a stem that takes one of a closed list of
+case and gender endings (`bcsEndings`). The title is folded first: Serbian Cyrillic
+transliterated by the official mapping, the gender forms cut ("(m/ž)", "Voditelj/ica",
+"INŽENJER/KA"), diacritics dropped and đ written "dj". The main table is asked again of the
+transliterated, gender-cut title.
+
+Bands as in Spanish: open applications, scholarships and the mystery shopper are vetoed,
+and head-and-field pairs that differ from the field come first (business development is
+sales, the site engineer industrial engineering, the claims handler finance); then the role
+nouns in their inflected and feminine forms; then the fields; then the desk words. A
+generic head with no field — voditelj, specijalist, referent, suradnik, operater,
+tehničar, inženjer — resolves nothing.
+
+**Cyrillic.** A title is transliterated only when it shows it is Serbian: a letter only
+Serbian and Macedonian use (ђ ј љ њ ћ џ) or a Serbian role word no other Cyrillic language
+spells (`serbianCyrillicCue`: програмер, возач, продавац, конобар…). Russian and Ukrainian
+titles spelled only with shared letters ("Шеф-повар", "Контролер", "Аналитик в
+логистику", "Кухар") read as BCS words once transliterated and changed category, so the
+gate exists; a Latin title carrying a Cyrillic homoglyph ("CEO (СЕО)") is not touched.
+
+Grades (`bcsSeniorityTable`): pripravnik, praksa, praktikant and stažist are intern and
+outrank the lead; mlađi, niži and početnik junior; viši/viša and stariji senior ("više" is
+also "more", so it is absent); vođa, voditelj tima/smjene, šef and vodeći lead. "Vođa" and
+"šef" are matched with their diacritics: the Slovenian "vodja" is any manager. Only the
+general, executive and financial directors and the management board are c_level; the
+assistant or deputy of a lead or executive is cut first.
+
+Measured 2026-10-29 over 1,921 open BCS-language postings placed in hr/rs/ba/me
+(talentlyft, eures, zohorecruit, smartrecruiters, teamtailor, recruitee, manatal,
+workday, bamboohr): category 63.2% → 79.1%, seniority 2.4% → 6.7%. Over 45,088 control
+titles (hh, trudvsem, djinni, peopleforce, getmatch, geekjob, hurma, greenhouse, lever,
+teamtailor, xing, traffit, erecruiter, nofluffjobs, solidjobs, infojobs, wttj,
+startupjobs) no Russian or Ukrainian title changed; 28 changed, all CNC, "Logistik" and
+"medicine" titles in German, Polish, Spanish, Swedish and English, read correctly. Still
+unresolved: the generic heads with no field, "Voditelj poslovnice/područja" (English
+"Branch/Area Manager" resolves nothing either), farm work, the casino's slot operator,
+and talentlyft titles stored with HTML entities ("Prodava&#x10D;").
+
 ## Serving: dict-only
 
 `jobview.FromRow` overwrites the nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM's value is never a fallback. They remain **nested under `enrichment`** so existing search facets, SPA, and generated contracts are unchanged.

@@ -183,6 +183,9 @@ linters:
       # Real words in other languages (board-ingest dictionaries, non-English test
       # fixtures), not English typos.
       ignore-rules:
+        # Croatian and Serbian country names (location_bcs.go).
+        - austrija
+        - estonija
         - pretens
         - nationalit
         - administrativo

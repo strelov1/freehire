@@ -92,6 +92,12 @@ var scraplingProviders = map[string]scraplingProvider{
 	"cadremploi": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
 		return NewCadremploi(f)
 	}},
+	// Cloudflare answers 403 to a plain client from the crawl host on every path, robots.txt
+	// included; the impersonating fetcher is served from the crawl host's own IP, listing and
+	// offer pages alike (measured 2026-10-29, ~1-3 s a page).
+	"pracuj": {scraplingRoute{scraplingfetch.ModeHTTP, false}, func(f *Client) Source {
+		return NewPracuj(f)
+	}},
 	// Only the posting pages: a Cloudflare challenge answers 403 to a plain client and to the
 	// impersonating fetcher alike (1 of 5 served direct, a third to four in five over the
 	// rotating proxy at ~225 KB a refusal), and the browser passes 18 of 18 from the crawl host's

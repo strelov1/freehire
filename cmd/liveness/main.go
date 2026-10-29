@@ -13,7 +13,8 @@
 // echojobs.io's, so its candidates are checked against echojobs.io's own per-posting
 // API instead (see echojobs.go); hh.ru's pages embed an "archived" phrase even when live, so
 // its candidates are read for the page's own archived flag instead, one page a second (see
-// hh.go). A source with the same leak but NO evidence a probe
+// hh.go); djinni, 4dayweek and torre are paced the same way, each against its own evidence
+// (djinni.go, fourdayweek.go, torre.go). A source with the same leak but NO evidence a probe
 // could ever read — see expireDespiteRegistered — falls back to the same age-based
 // guess as unsignalledSources instead of a verdict.)
 //
@@ -28,6 +29,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"slices"
@@ -98,8 +100,10 @@ const expiryWindow = 45 * 24 * time.Hour
 // staleCutoff), so this only ever picks up what the sweep structurally cannot reach
 // rather than racing it. empregos leaks the same way for a different reason: its crawl reads
 // every posting that names a state but cannot prove it read the rest (see empregos.go), so it
-// is not fullCatalog and its sweep is company-scoped too.
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos"}
+// is not fullCatalog and its sweep is company-scoped too. So do djinni (its listing names only
+// the last month), 4dayweek (its list feed omits postings the site still serves) and torre
+// (its sitemap still names a few closed postings) — none of them fullCatalog, all boardless.
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
 // plain-GET-then-Classify probe as every orphan candidate — their job pages answer a
@@ -109,6 +113,19 @@ var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remote
 // evidence path decided on a case-by-case basis — there is no generic per-source plugin
 // here by design, since a GET probe is not guaranteed to work for any given source.
 var probeDespiteRegisteredGET = []string{"jobicy", "remoteok", "empregos"}
+
+// pacedPasses are the probeDespiteRegistered members probed one request at a time rather than
+// on the fan-out: each meters the host the crawl reads it from (see paced.go), and each reads
+// its own evidence — hh's archived flag, djinni's page through the shared Classify, 4dayweek's
+// per-posting API, torre's page state.
+func pacedPasses(client *http.Client) []pacedPass {
+	return []pacedPass{
+		hhPass(client, hhVacancyPage),
+		djinniPass(client),
+		fourDayWeekPass(client, fourDayWeekJobAPI),
+		torrePass(client, torrePostPage),
+	}
+}
 
 // staleCutoff mirrors cmd/ingest's staleAfter (the sweep's own "unseen" window) via the
 // shared sources.DefaultSweepGrace symbol: a probeDespiteRegistered job only becomes a
@@ -277,7 +294,12 @@ func run() int {
 		log.Printf("select stale registered candidates: %v", err)
 		return 1
 	}
-	var getProbeStale, himalayasStale, echojobsStale, hhStale []candidate
+	// Probes go out on safehttp: orphan-job URLs come from attacker-influenced sources
+	// (telegram posts), so the probe must refuse internal/metadata targets.
+	client := safehttp.NewClient(probeTimeout)
+	paced := pacedPasses(client)
+	var getProbeStale, himalayasStale, echojobsStale []candidate
+	pacedStale := make(map[string][]candidate)
 	for _, c := range staleCandidates {
 		switch {
 		case slices.Contains(probeDespiteRegisteredGET, c.Source):
@@ -286,8 +308,8 @@ func run() int {
 			himalayasStale = append(himalayasStale, staleCandidate(c))
 		case c.Source == "echojobs":
 			echojobsStale = append(echojobsStale, staleCandidate(c))
-		case c.Source == "hh":
-			hhStale = append(hhStale, staleCandidate(c))
+		case slices.ContainsFunc(paced, func(p pacedPass) bool { return p.source == c.Source }):
+			pacedStale[c.Source] = append(pacedStale[c.Source], staleCandidate(c))
 		default:
 			// Unreachable in practice — every probeDespiteRegistered member is one of
 			// the branches above — but a candidate silently going unverified
@@ -297,9 +319,13 @@ func run() int {
 			log.Printf("liveness: %s has no wired evidence path for probeDespiteRegistered — skipping %s", c.Source, c.PublicSlug)
 		}
 	}
-	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources) + %d stale candidates from %d registered sources (%d GET, %d himalayas, %d echojobs, %d hh)",
+	pacedCounts := make([]string, 0, len(paced))
+	for _, p := range paced {
+		pacedCounts = append(pacedCounts, fmt.Sprintf("%d %s", len(pacedStale[p.source]), p.source))
+	}
+	log.Printf("liveness: %d orphan candidates (excluding %d ATS providers + %d unsignalled sources) + %d stale candidates from %d registered sources (%d GET, %d himalayas, %d echojobs, %s)",
 		orphanCount, len(atsProviders), len(unsignalledSources), len(staleCandidates), len(probeDespiteRegistered),
-		len(getProbeStale), len(himalayasStale), len(echojobsStale), len(hhStale))
+		len(getProbeStale), len(himalayasStale), len(echojobsStale), strings.Join(pacedCounts, ", "))
 	if *sourceFilter != "" {
 		log.Printf("liveness: restricted to source %q for this run", *sourceFilter)
 	}
@@ -342,9 +368,6 @@ func run() int {
 			expiredRegistered, int(expiryWindow.Hours()/24), int(unseenFor.Hours()/24), len(sourcesToExpireDespiteRegistered))
 	}
 
-	// Probe targets are orphan-job URLs that originated from attacker-influenced
-	// sources (telegram posts), so the probe must refuse internal/metadata targets.
-	client := safehttp.NewClient(probeTimeout)
 	var st stats
 
 	// Each candidate set is judged by the evidence its source actually has, and every call
@@ -360,8 +383,9 @@ func run() int {
 	// probeDespiteRegisteredGET for why these two can't share the GET probe above.
 	applyHimalayasVerdicts(ctx, client, queries, himalayasStale, &st)
 	st.applyVerdicts(ctx, queries, echojobsStale, echoJobsJudge(client))
-	// Last, because it is the slow one: hh is probed one page a second (see hh.go).
-	applyHHVerdicts(ctx, client, queries, hhStale, &st, hhVacancyPage, hhProbeInterval)
+	// Last, because they are the slow ones: each paces itself against its own site (see
+	// paced.go), side by side so the run lasts as long as the slowest of them.
+	st.applyPacedPasses(ctx, queries, pacedStale, paced)
 
 	probed, closed, struck, failed := st.probed.Load(), st.closed.Load(), st.struck.Load(), st.failed.Load()
 	log.Printf("liveness done: probed=%d closed=%d struck=%d failed=%d", probed, closed, struck, failed)

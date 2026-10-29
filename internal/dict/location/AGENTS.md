@@ -251,6 +251,16 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   remote phrase withdraws it ("100 % remote-friendly"); "les fêtes" bounds a perk.
   Measured 2026-10-28 over 24,609 French-language postings: the description reader 0.4% →
   12.3%; with the structured signal, 31.1% → 34.8%. Every changed control row was French.
+- **Polish location lines** (`location_pl.go`, the Polish block of
+  `foreignSubdivisionNames`, measured 2026-10-29 over 15,488 postings placed in Poland).
+  The country was already read on 99.6% and a city on ~97% of lines naming more than
+  "Poland" (4.5k nofluffjobs/whatjobs-pl lines say only that). eures writes a street
+  address with the postcode before the town ("Klimczaka 2, 02-797 Warszawa, Polska"), which
+  `postalPrefixRE` now cuts. "Trójmiasto"/"Tricity" and "Śląsk"/"GZM" are metros with no
+  city (`polishMetroRegions`, the Delhi NCR shape; the bare English "Silesia" is Czech
+  too). A voivodeship alone ("Mazowieckie", "Lesser Poland Voivodeship") states Poland.
+  "Lódz"/"Łodź" are Łódź. No location line in the sample carried a locative ("w
+  Warszawie"), so none is read. "Lublin, US" and "Warsaw, IN" already resolved to the US.
 - **French location lines** (`location_fr.go`, the French block of
   `foreignSubdivisionNames`, measured 2026-10-28 over 33k postings placed in France). A
   compound town written with spaces for its hyphens ("Issy les Moulineaux", "Aix en
@@ -349,6 +359,18 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   WFH"), a shift or the staff an HR role manages as often as the arrangement — so only
   anchored forms ("permanent WFH", "WFH / Remote", "Location: WFH") are. Measured
   2026-10-25: description-derived work mode on Indian postings 8.6% → 10.7%.
+- **Croatian, Serbian, Bosnian and Montenegrin location lines** (`location_bcs.go`, merged
+  into `nameToCountry` at init): the country names in both standards, with and without
+  diacritics and in Serbian Cyrillic ("Srbija", "Njemačka"/"Nemačka", "Crna Gora", "BiH"),
+  so a Serbian or Croatian board's posting abroad is not filed under its fallback country;
+  Workday's ISO-3 "SRB"/"HRV"/"BIH"/"MNE"; the twenty Croatian counties with and without
+  "županija"; Vojvodina, Republika Srpska and the Croatian regions (not "Istra", a Russian
+  town too). "Kosovo" is
+  `regionNotCity` (it was Kosovo Polje). `cityOverrides` pins Pula, Dubrovnik, Leskovac and
+  Sombor (GeoNames gives each alias a hamlet abroad, so they stated no country), the
+  locative ("u Beogradu", "Novom Sadu") and Cyrillic "Панчево". "SAD" (USA) and "Island"
+  (Iceland) are absent: English words. Sólides writes "Town, ST", and a small town's "BA"
+  or "RS" read as Bosnia or Serbia, so the adapter appends "Brasil" after the state.
 - `work_mode` is dict-only — `jobview` serves the `jobs` column alone, the LLM's `enrichment.work_mode` is never merged in (it stays raw in the JSONB).
 - `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`): the dictionary wins when it pins a place, and the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket, so a dictionary-silent remote role still gets a geographic reach rather than none. This is the one deliberate exception to dict-only among the facets.
 
