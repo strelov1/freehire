@@ -90,7 +90,11 @@
     exchange: 'Google did not finish handing over access. Try connecting again.',
   });
   const GMAIL_CONNECT_ERRORS = connectErrors('Gmail');
-  const CALENDAR_CONNECT_ERRORS = connectErrors('Calendar');
+  const CALENDAR_CONNECT_ERRORS: Record<string, string> = {
+    ...connectErrors('Calendar'),
+    partial:
+      'Google connected Calendar without every permission. Connect again and keep every box ticked: interviews need to read your calendar, Meet links need to add events.',
+  };
   let googleNotice = $state<{ ok: boolean; text: string } | null>(null);
 
   function readGoogleVerdict() {

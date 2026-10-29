@@ -235,6 +235,22 @@ type oauthCallbackFlow struct {
 	persist      func(ctx context.Context, userID int64, refreshTokenEnc string, scopes []string) error
 }
 
+// errPartialCalendarGrant is what the calendar persist step returns when Google granted
+// only part of the consent. The grant is still stored — what it does cover keeps working
+// — but the caller is told, not shown a success notice for features that cannot run.
+var errPartialCalendarGrant = errors.New("google granted only part of the calendar consent")
+
+// checkCalendarGrant reports errPartialCalendarGrant when Google granted the calendar
+// consent without one of its scopes, which its consent screen lets a person untick. An
+// empty list means the response did not say, which is not evidence of a partial grant.
+func checkCalendarGrant(scopes []string) error {
+	if len(scopes) > 0 && (!slices.Contains(scopes, gmailsync.CalendarScope) ||
+		!slices.Contains(scopes, gmailsync.CalendarEventsScope)) {
+		return errPartialCalendarGrant
+	}
+	return nil
+}
+
 // runOAuthCallback is the shared body every callback below delegates to. A declined
 // consent echoes the state and carries ?error=access_denied instead of a code, so the
 // state check alone cannot stand in for reading it: treating a missing code as "nothing
@@ -270,6 +286,9 @@ func (h *inboxHandlers) runOAuthCallback(c *fiber.Ctx, flow oauthCallbackFlow) e
 		return redirect(flow.errorParam+"=exchange", err)
 	}
 	if err := flow.persist(c.Context(), userID, enc, scopes); err != nil {
+		if errors.Is(err, errPartialCalendarGrant) {
+			return redirect(flow.errorParam+"=partial", err)
+		}
 		return redirect(flow.errorParam+"=exchange", err)
 	}
 	return c.Redirect(h.frontendOrigin+integrationsPath+"?"+flow.successQuery, fiber.StatusFound)
@@ -345,7 +364,10 @@ func (h *inboxHandlers) CalendarCallback(c *fiber.Ctx) error {
 			// still exists because grants made before the consents merged hold
 			// calendar.readonly for interviews alone; only cmd/mentor-busy-sync reads it,
 			// and only for accounts that are mentors.
-			return h.queries.SetMentorBusySyncOptedIn(ctx, userID)
+			if err := h.queries.SetMentorBusySyncOptedIn(ctx, userID); err != nil {
+				return err
+			}
+			return checkCalendarGrant(scopes)
 		},
 	})
 }

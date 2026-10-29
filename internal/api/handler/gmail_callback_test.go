@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -175,5 +176,64 @@ func TestGoogleCallbacksReportARefusalInsteadOfClaimingSuccess(t *testing.T) {
 				t.Errorf("Location = %q, want %q", got, want)
 			}
 		})
+	}
+}
+
+// Google's consent screen lets a person untick one of the calendar consent's scopes. The
+// grant is kept, but the callback must not report success for features it cannot run.
+func TestCheckCalendarGrant(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		scopes  []string
+		partial bool
+	}{
+		{"both granted", []string{gmailsync.CalendarScope, gmailsync.CalendarEventsScope}, false},
+		{"read declined", []string{gmailsync.CalendarEventsScope}, true},
+		{"write declined", []string{gmailsync.CalendarScope}, true},
+		{"response did not say", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := errors.Is(checkCalendarGrant(tc.scopes), errPartialCalendarGrant); got != tc.partial {
+				t.Errorf("partial = %v, want %v", got, tc.partial)
+			}
+		})
+	}
+}
+
+func TestOAuthCallbackReportsAPartialGrant(t *testing.T) {
+	cipher, err := tokencrypt.New([]byte(strings.Repeat("k", 32)))
+	if err != nil {
+		t.Fatalf("cipher: %v", err)
+	}
+	const frontend = "https://freehire.me"
+	h := newInboxHandlers(nil, nil, gmailsync.NewConnector("id", "secret", frontend), cipher, frontend, true, "")
+	iss := auth.NewIssuer(testGmailSecret, time.Hour)
+	token, err := iss.Issue(1, testTokenVersion)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/cb", auth.OptionalCookieAuth(iss, testVersions), func(c *fiber.Ctx) error {
+		return h.runOAuthCallback(c, oauthCallbackFlow{
+			name: "test", stateCookie: calendarStateCookieName,
+			errorParam: "calendar_error", successQuery: "calendar=connected",
+			exchange: func(context.Context, string) (string, []string, error) {
+				return "refresh", []string{gmailsync.CalendarScope}, nil
+			},
+			persist: func(_ context.Context, _ int64, _ string, scopes []string) error {
+				return checkCalendarGrant(scopes)
+			},
+		})
+	})
+
+	r := httptest.NewRequestWithContext(context.Background(), "GET", "/cb?state=abc&code=xyz", nil)
+	r.Header.Set("Cookie", auth.CookieName+"="+token+"; "+calendarStateCookieName+"=abc")
+	resp, err := app.Test(r, -1)
+	if err != nil {
+		t.Fatalf("callback: %v", err)
+	}
+	defer resp.Body.Close()
+	if got, want := resp.Header.Get("Location"), frontend+"/my/integrations?calendar_error=partial"; got != want {
+		t.Errorf("Location = %q, want %q", got, want)
 	}
 }
