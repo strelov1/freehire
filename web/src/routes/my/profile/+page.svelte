@@ -3,7 +3,6 @@
   import { resumeStore } from '#lib/resume.svelte.js';
   import AccountTimezone from '#lib/components/AccountTimezone.svelte';
   import CandidateContactsEditor from '#lib/components/CandidateContactsEditor.svelte';
-  import CompletenessBadge from '#lib/components/profile/CompletenessBadge.svelte';
   import CvSummaryCard from '#lib/components/profile/CvSummaryCard.svelte';
   import LocationCard from '#lib/components/profile/LocationCard.svelte';
   import ProfileForm from '#lib/components/ProfileForm.svelte';
@@ -23,10 +22,6 @@
 </script>
 
 {#if profile}
-  <div class="mb-4">
-    <CompletenessBadge section="summary" />
-  </div>
-
   {#key profile.updated_at}
     <ProfileForm
       {profile}
@@ -51,10 +46,6 @@
   </div>
 
   <div id="account-contacts" class="mt-8 scroll-mt-20 border-t border-border pt-6">
-    <div class="mb-4">
-      <CompletenessBadge section="contacts" />
-    </div>
-
     <CandidateContactsEditor
       contacts={resumeMeta?.contacts ?? null}
       onSaved={(saved) => resumeStore.noteContactsSaved(saved)}
@@ -70,9 +61,6 @@
     <h2 class="flex items-center gap-2 text-base font-semibold">
       <MapPin class="size-4.5" />{s.headings.location}
     </h2>
-    <div>
-      <CompletenessBadge section="location" />
-    </div>
     {#key profile.updated_at}
       <LocationCard {profile} onProfileChanged={handleSaved} />
     {/key}

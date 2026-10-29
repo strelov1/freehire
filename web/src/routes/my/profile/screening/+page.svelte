@@ -1,5 +1,4 @@
 <script lang="ts">
-  import CompletenessBadge from '#lib/components/profile/CompletenessBadge.svelte';
   import ScreeningAnswersForm from '#lib/components/ScreeningAnswersForm.svelte';
   import { screeningStore } from '#lib/screening.svelte.js';
 
@@ -12,9 +11,5 @@
     void screeningStore.ensureLoaded();
   });
 </script>
-
-<div class="mb-4">
-  <CompletenessBadge section="screening" />
-</div>
 
 <ScreeningAnswersForm {answers} onSaved={() => void screeningStore.refresh()} />

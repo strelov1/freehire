@@ -30,6 +30,23 @@ function setup(active = 'one') {
 }
 
 describe('TabStrip', () => {
+  it('marks a tab that wants attention with a dot a screen reader hears as words', () => {
+    const { getAllByRole } = render(TabStrip, {
+      tabs: [
+        { id: 'one', label: 'One' },
+        { id: 'two', label: 'Two', attention: 'not filled in' },
+      ],
+      active: 'one',
+      label: 'Demo sections',
+      panelId: 'demo-panel',
+    });
+    const [plain, marked] = getAllByRole('tab');
+
+    expect(marked?.textContent).toContain('not filled in');
+    expect(marked?.querySelector('[data-attention]')).not.toBeNull();
+    expect(plain?.querySelector('[data-attention]')).toBeNull();
+  });
+
   it('makes only the active tab reachable by Tab, the roving tabindex', () => {
     const { tabs } = setup('two');
 

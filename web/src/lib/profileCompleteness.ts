@@ -10,32 +10,17 @@
 // shared ScreeningStore the layout warms alongside the profile and résumé.
 
 import type { Answers } from './generated/contracts.js';
-import type { CandidateContacts, ExperienceBank, ResumeMeta, UserProfile } from './types.js';
+import type { ExperienceBank, ResumeMeta, UserProfile } from './types.js';
 
-/** The sections this measures. `avoid` is deliberately absent: its exclusion lists are
- *  optional preferences, so an empty one must never read as a missing part of a profile. */
-export type CompletenessSection =
-  | 'contacts'
-  | 'location'
-  | 'skills'
-  | 'experience'
-  | 'education'
-  | 'screening'
-  | 'summary';
+/** The sections a profile is measured against. Location and Avoid are deliberately
+ *  absent: both are optional, so an empty one must never read as a missing part of a
+ *  profile. */
+const SECTIONS = ['contacts', 'skills', 'experience', 'education', 'screening', 'summary'] as const;
 
-/** The sections a profile is measured against. Location is deliberately absent: it is
- *  optional, so it is reported in the shape but never lowers the count. */
-const COUNTED_SECTIONS: readonly CompletenessSection[] = [
-  'contacts',
-  'skills',
-  'experience',
-  'education',
-  'screening',
-  'summary',
-];
+export type CompletenessSection = (typeof SECTIONS)[number];
 
 /** The denominator the "x/6 sections" summary uses. */
-export const PROFILE_SECTION_TOTAL = COUNTED_SECTIONS.length;
+export const PROFILE_SECTION_TOTAL = SECTIONS.length;
 
 export interface ProfileCompleteness extends Record<CompletenessSection, boolean> {
   /** How many sections are satisfied, out of `total`. */
@@ -55,16 +40,6 @@ export interface ProfileCompletenessInput {
 
 function nonEmpty(value: string | undefined | null): boolean {
   return typeof value === 'string' && value.trim() !== '';
-}
-
-/** Location is optional, but it still reports its real value. The "Where you're based"
- *  fields the job filter reads are the structured country + city; a candidate who has
- *  only put a free-text place in their contact block still counts as having stated where
- *  they are, since that block is already loaded on this page. */
-function hasLocation(profile: UserProfile | null, contacts: CandidateContacts | null): boolean {
-  const base = profile?.location_preferences?.base;
-  if (nonEmpty(base?.country) && nonEmpty(base?.city)) return true;
-  return nonEmpty(contacts?.location);
 }
 
 /** Any stated answer counts. `false` is a real answer ("no visa sponsorship needed"), so
@@ -96,9 +71,6 @@ export function getProfileCompleteness({
 
   const sections: Record<CompletenessSection, boolean> = {
     contacts: nonEmpty(name) && nonEmpty(email),
-    // Optional. The key stays in the shape so its badge can render the real state, but
-    // location is absent from COUNTED_SECTIONS and so never moves `filled` or `total`.
-    location: hasLocation(profile, contacts),
     skills: (profile?.skills.length ?? 0) > 0,
     // The bank, not the CV parse: it is what the Experience tab lists, and a role added
     // there by hand exists in no parse.
@@ -115,7 +87,7 @@ export function getProfileCompleteness({
 
   return {
     ...sections,
-    filled: COUNTED_SECTIONS.filter((section) => sections[section]).length,
+    filled: SECTIONS.filter((section) => sections[section]).length,
     total: PROFILE_SECTION_TOTAL,
   };
 }

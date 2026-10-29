@@ -10,6 +10,7 @@ export const messages = defineMessages(
     loadError: "Couldn't load your profile.",
     completeness: {
       summary: '{filled}/{total} sections',
+      incomplete: 'not filled in',
     },
     tabs: {
       profile: 'Profile',
@@ -29,6 +30,7 @@ export const messages = defineMessages(
       loadError: 'Не удалось загрузить профиль.',
       completeness: {
         summary: 'Заполнено: {filled}/{total}',
+        incomplete: 'не заполнено',
       },
       tabs: {
         profile: 'Профиль',

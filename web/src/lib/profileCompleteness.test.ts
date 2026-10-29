@@ -63,11 +63,10 @@ const complete = (input: Parameters<typeof getProfileCompleteness>[0]) =>
   getProfileCompleteness(input);
 
 describe('getProfileCompleteness', () => {
-  it('reports an empty profile as 0 of 6, with location false', () => {
+  it('reports an empty profile as 0 of 6', () => {
     const marks = complete({ profile: null });
     expect(marks).toMatchObject({
       contacts: false,
-      location: false,
       skills: false,
       experience: false,
       education: false,
@@ -79,16 +78,17 @@ describe('getProfileCompleteness', () => {
     expect(marks.total).toBe(6);
   });
 
-  // Location reports its real value but is not one of the counted sections, so stating
-  // it alone moves the badge and not the count.
-  it('reports a location-only profile as location true but still 0 of 6', () => {
-    const marks = complete({ profile: profile({ location_preferences: locationPrefs() }) });
-    expect(marks.location).toBe(true);
+  // Location is optional, so stating it neither counts nor is ever asked for.
+  it('never counts a location', () => {
+    const marks = complete({
+      profile: profile({ location_preferences: locationPrefs() }),
+      resume: resume({ contacts: { location: 'Lisbon, Portugal' } }),
+    });
     expect(marks.filled).toBe(0);
-    expect(marks.total).toBe(6);
+    expect(Object.keys(marks)).not.toContain('location');
   });
 
-  it('reports a full profile without a location as 6 of 6, location false', () => {
+  it('reports a full profile as 6 of 6', () => {
     const marks = complete({
       profile: fullProfile(),
       resume: fullResume,
@@ -97,7 +97,6 @@ describe('getProfileCompleteness', () => {
     });
     expect(marks).toMatchObject({
       contacts: true,
-      location: false,
       skills: true,
       experience: true,
       education: true,
@@ -106,40 +105,6 @@ describe('getProfileCompleteness', () => {
     });
     expect(marks.filled).toBe(6);
     expect(marks.total).toBe(6);
-  });
-
-  it('reports a full profile with a location as 6 of 6, location true', () => {
-    const marks = complete({
-      profile: fullProfile({ location_preferences: locationPrefs() }),
-      resume: fullResume,
-      screening: fullScreening,
-      experience: bankWithRole,
-    });
-    expect(marks.location).toBe(true);
-    expect(marks.filled).toBe(6);
-    expect(marks.total).toBe(6);
-  });
-
-  it('needs BOTH the structured country and city for a location', () => {
-    const countryOnly = complete({
-      profile: profile({ location_preferences: locationPrefs({ base: { country: 'PT' } }) }),
-    });
-    const cityOnly = complete({
-      profile: profile({ location_preferences: locationPrefs({ base: { city: 'Lisbon' } }) }),
-    });
-    expect(countryOnly.location).toBe(false);
-    expect(cityOnly.location).toBe(false);
-  });
-
-  // The contact block already carries a free-text place, so it is a valid fallback when
-  // the structured block states no base.
-  it('falls back to the contact block free-text location', () => {
-    const marks = complete({
-      profile: profile(),
-      resume: resume({ contacts: { location: 'Lisbon, Portugal' } }),
-    });
-    expect(marks.location).toBe(true);
-    expect(marks.filled).toBe(0);
   });
 
   it('reports a partial profile without counting the sections it has not reached', () => {
@@ -153,7 +118,7 @@ describe('getProfileCompleteness', () => {
     expect(marks.education).toBe(false);
     expect(marks.screening).toBe(false);
     expect(marks.summary).toBe(false);
-    expect(marks.filled).toBe(1); // skills only — location is uncounted
+    expect(marks.filled).toBe(1); // skills only
   });
 
   it('needs BOTH a name and an email for contacts, from the contacts block or the CV parse', () => {

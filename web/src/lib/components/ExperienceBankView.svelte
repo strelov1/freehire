@@ -45,7 +45,7 @@
   let bank = $state<ExperienceBank | null>(null);
 
   /** Every read goes through here so the shared store gets it too, and the profile's
-   *  completeness badge follows edits and assistant turns alike. The token makes the
+   *  completeness dot follows edits and assistant turns alike. The token makes the
    *  store drop a read that started before a sign-out. */
   async function readBank(): Promise<ExperienceBank> {
     const token = experienceBankStore.readToken();

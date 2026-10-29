@@ -10,6 +10,7 @@
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
   import { profileCompleteness } from '#lib/profileCompleteness.svelte.js';
+  import type { CompletenessSection } from '#lib/profileCompleteness.js';
   import { resumeStore } from '#lib/resume.svelte.js';
   import { experienceBankStore } from '#lib/experienceBank.svelte.js';
   import { screeningStore } from '#lib/screening.svelte.js';
@@ -51,13 +52,30 @@
 
   const PANEL_ID = 'profile-panel';
 
+  // The counted sections each tab holds. A tab with any of them still empty carries a dot;
+  // a filled one carries nothing, since "done" needs no announcement.
+  const TAB_SECTIONS: Record<(typeof SECTIONS)[number]['id'], readonly CompletenessSection[]> = {
+    profile: ['summary', 'contacts'],
+    skills: ['skills'],
+    experience: ['experience', 'education'],
+    screening: ['screening'],
+  };
+
   const s = $derived(t(messages, locale()));
   const profile = $derived(profileStore.profile);
   const resumeMeta = $derived(resumeStore.meta);
   const completeness = $derived(profileCompleteness());
   const activeSectionId = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'profile'));
   const tabs = $derived(
-    SECTIONS.map((sec) => ({ ...sec, label: s.tabs[sec.id], href: resolve(sec.href) })),
+    SECTIONS.map((sec) => ({
+      ...sec,
+      label: s.tabs[sec.id],
+      href: resolve(sec.href),
+      attention:
+        completeness && TAB_SECTIONS[sec.id].some((section) => !completeness[section])
+          ? s.completeness.incomplete
+          : undefined,
+    })),
   );
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
@@ -178,15 +196,13 @@
     <AccountSetupCard />
   </div>
 
-  <!-- The overall count reads the same helper the per-section badges do, so the two
-       cannot disagree. It sits above the strip rather than inside it: the strip is
-       navigation, and this is a measurement of the whole profile. -->
-  {#if completeness}
+  <!-- The overall count reads the same helper the tab dots do, so the two cannot
+       disagree. Shown only while something is missing — a finished profile needs no
+       scoreboard. It sits above the strip rather than inside it: the strip is navigation,
+       and this is a measurement of the whole profile. -->
+  {#if completeness && completeness.filled < completeness.total}
     <div class="mb-3 flex justify-end">
-      <Badge
-        variant={completeness.filled === completeness.total ? 'brand' : 'outline'}
-        class="tabular-nums"
-      >
+      <Badge variant="outline" class="tabular-nums">
         {format(s.completeness.summary, {
           filled: String(completeness.filled),
           total: String(completeness.total),

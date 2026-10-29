@@ -869,8 +869,9 @@
       "props": [
         {
           "name": "tabs",
-          "type": "readonly { id: T; label: string; icon?: LucideIcon; href?: string }[]",
-          "required": true
+          "type": "readonly { id: T; label: string; icon?: LucideIcon; href?: string; attention?: string }[]",
+          "required": true,
+          "description": "attention puts a quiet brand dot after the label (something on that tab still wants the reader); the string is what a screen reader hears in its place."
         },
         {
           "name": "active",

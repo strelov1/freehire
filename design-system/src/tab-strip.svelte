@@ -38,7 +38,12 @@
     panelId,
     class: extra,
   }: {
-    tabs: readonly { id: T; label: string; icon?: LucideIcon; href?: string }[];
+    /**
+     * `attention` puts a quiet dot after a tab's label — something on that tab still wants
+     * the reader (a section not filled in). The string is what a screen reader hears in the
+     * dot's place, since a dot alone says nothing to one.
+     */
+    tabs: readonly { id: T; label: string; icon?: LucideIcon; href?: string; attention?: string }[];
     active: T;
     /**
      * Commits a selection. Optional, and unused by a strip of `href` tabs — there the
@@ -192,6 +197,10 @@
   {@const Icon = t.icon}
   {#if Icon}<Icon class="size-4" aria-hidden="true" />{/if}
   {t.label}
+  {#if t.attention}
+    <span data-attention class="size-1.5 rounded-full bg-brand" aria-hidden="true"></span>
+    <span class="sr-only">({t.attention})</span>
+  {/if}
 {/snippet}
 
 <div class={cn('relative', extra)}>

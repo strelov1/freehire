@@ -3,7 +3,7 @@
 // told somebody who had added a role by hand that the section was not filled.
 //
 // ExperienceBankView owns its own copy (it re-reads after every edit and after each
-// assistant turn) and publishes each fresh read here through `accept`, so the badge
+// assistant turn) and publishes each fresh read here through `accept`, so the tab dot
 // follows every change without a second request.
 //
 // SSR-safe and auth-agnostic (see UserResource): the load is a browser-only no-op and
@@ -38,7 +38,7 @@ class ExperienceBankStore extends UserResource<ExperienceBank | null> {
     return this.generation;
   }
 
-  /** Take a read the bank view already made, so the badge follows it for free — unless
+  /** Take a read the bank view already made, so the tab dot follows it for free — unless
    *  the user signed out while it was in flight. */
   accept(bank: ExperienceBank, token: number): void {
     if (token !== this.generation) return;
