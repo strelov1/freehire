@@ -1233,6 +1233,14 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **Marked `aggregator` only because it serves many employers under one provider** (that is what keeps it in the source facet); its URLs are the employers' own application pages. Not `fullCatalog`: nothing states how many postings the sitemap should hold.
 - **The run is bounded**: one request a second (a quick burst drew a refused connection), two workers, `hydrationLanes` of 900 newest + 300 backlog unseen pages a run, stopping 5 minutes before the deadline.
 
+**Prospective traps** (`prospective`; live-verified 2026-10-29):
+
+- **JobCloud's Swiss ATS behind big employers' own career domains** (jobs.coopjobs.ch, jobs.admin.ch, jobs.stadlerrail.ch, jobs.usz.ch, jobs.fenaco.com), all a front end over one public JSON API on `ohws.prospective.ch`. The board is a **MEDIUM id**, one publication channel of a customer; there is no list of them, so they were found by sweeping ids 1,000,000–1,009,999 (and 1–2,999) at one a second — an unknown medium answers **400**, a known empty one `{"total":0}`.
+- **One customer runs several media that list the same jobs** (Coop 1000103 and 1000192; the federal administration in three languages, 1000624/5/6), and regional portals (jobiq.ch) re-list hospitals' jobs. The job `id` is global, so two boards listing it would be one row flipping between boards: **onboard one medium per job set** (drop any medium whose ids another board already covers).
+- **The listing states `total` and is read whole** (`fullBoardListing`), in pages of 200 on the long-timeout client — 1,000 of Coop's jobs took 66 s. `lang=` does not filter.
+- **The body is in tenant-defined `sza_*` fields** (introduction, tasks, requirements, benefits, company profile …); the page's JobPosting `description` is sometimes only the intro and a contact (fenaco). **The employer is NOT in the listing** — a group's medium carries its subsidiaries (Volg, LANDI, TRAVECO under fenaco; SECO, fedpol under the federal administration) — so each new job is hydrated from `/public/v1/jobs/<viewkey>` for `hiringOrganization`, `datePosted` and `employmentType`. Titles may carry `<BR />`.
+- **A job whose directlink is `/public/v1/redirect/…/external_url` is hosted elsewhere** (medium 1001986: 6,368 HGK jobs on hgk.de) and is skipped.
+
 **Dualoo traps** (`dualoo`; live-verified 2026-10-29):
 
 - **A Swiss ATS for SMEs, municipalities and care homes, all on `jobs.dualoo.com`**: a posting is `/portal/<code>/<uuid>/detail` under its employer's careers portal or `/link/<uuid>/detail`, and one posting is often listed in BOTH forms — the UUID is the identity, the portal URL is kept. Boardless: `/sitemap_index.xml` names one sitemap per customer (472, ~8.9k postings on 2026-10-29).

@@ -875,6 +875,16 @@ func All(c HTTPClient) map[string]Source {
 	} else {
 		registry["digitalrecruiters"] = NewDigitalrecruiters(NewLongTimeoutClient())
 	}
+	// Prospective (JobCloud, Switzerland): board = a MEDIUM id, read through the vendor's public
+	// JSON API at one request a second, each new job's employer from its page's JobPosting. A
+	// listing page of 1,000 measured 66 s (2026-10-29), so pages are 200 on the long-timeout
+	// client. See prospective.go.
+	if c == nil {
+		registry["prospective"] = NewProspective(nil, nil)
+	} else {
+		lc := NewLongTimeoutClient()
+		registry["prospective"] = NewProspective(lc, lc)
+	}
 	// HumanBit's listing page is a single, unpaginated ~5.6 MB payload that measured ~18s to
 	// fetch — past the standard 15s client timeout, which made every crawl fail
 	// intermittently with "context deadline exceeded" in production. Swap in the

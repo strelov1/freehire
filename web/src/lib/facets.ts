@@ -445,6 +445,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   digitalrecruiters: 'DigitalRecruiters',
   dualoo: 'Dualoo',
   refline: 'Refline',
+  prospective: 'Prospective',
   darwinbox: 'Darwinbox',
   greythr: 'greytHR',
   helixjobs: 'helixjobs',
