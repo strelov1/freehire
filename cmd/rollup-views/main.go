@@ -108,7 +108,9 @@ func process(ctx context.Context, pool *pgxpool.Pool, files []viewlog.LogFile) (
 		if done {
 			continue
 		}
-		applied, err := applyWithRetry(ctx, pool, q, f, counts, sig)
+		applied, err := applyWithRetry(ctx, filepath.Base(f.Path), func() (int, error) {
+			return applyFile(ctx, pool, q, f, counts, sig)
+		})
 		if err != nil {
 			return nFiles, nViews, err
 		}
@@ -124,20 +126,21 @@ func process(ctx context.Context, pool *pgxpool.Pool, files []viewlog.LogFile) (
 // ordinary contention is wrong and the run should say so rather than grind.
 const deadlockRetries = 3
 
-// applyWithRetry runs applyFile, re-attempting it when PostgreSQL aborts the
-// transaction to break a deadlock.
+// applyWithRetry runs apply — one file's all-or-nothing transaction — re-attempting it
+// when PostgreSQL aborts the transaction to break a deadlock. name labels the file in
+// the log and the error. Both passes (nginx and agent views) go through it.
 //
 // A deadlock says nothing was wrong with the work — only that two writers wanted the
-// same rows in opposite orders — and applyFile is all-or-nothing: the file's counts
+// same rows in opposite orders — and apply is all-or-nothing: the file's counts
 // and its processed-file mark commit together, so an aborted attempt leaves no
 // partial state and a retry cannot double-count. Treating 40P01 as fatal is what
 // stopped the view rollup for two days in September 2026 while every other worker
 // carried on and nothing looked broken.
-func applyWithRetry(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f viewlog.LogFile, counts map[string]map[string]viewlog.Counts, sig int64) (int, error) {
+func applyWithRetry(ctx context.Context, name string, apply func() (int, error)) (int, error) {
 	var err error
 	for attempt := 1; attempt <= deadlockRetries; attempt++ {
 		var applied int
-		applied, err = applyFile(ctx, pool, q, f, counts, sig)
+		applied, err = apply()
 		if err == nil {
 			return applied, nil
 		}
@@ -145,7 +148,7 @@ func applyWithRetry(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f vi
 			return 0, err
 		}
 		log.Printf("rollup-views: %s: deadlock on attempt %d/%d, retrying: %v",
-			filepath.Base(f.Path), attempt, deadlockRetries, err)
+			name, attempt, deadlockRetries, err)
 
 		// Backs off, and jitters, because the writer we lost to is most likely one of
 		// the ingest runs that share this slot — retrying instantly would just re-enter
@@ -158,7 +161,7 @@ func applyWithRetry(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f vi
 		}
 	}
 	return 0, fmt.Errorf("apply %s: still deadlocking after %d attempts: %w",
-		filepath.Base(f.Path), deadlockRetries, err)
+		name, deadlockRetries, err)
 }
 
 // aggregateFile opens a rotated file, aggregates its views, and computes the cursor

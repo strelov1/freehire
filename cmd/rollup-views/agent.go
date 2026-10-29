@@ -6,7 +6,6 @@ import (
 	"hash/fnv"
 	"io"
 	"log"
-	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/platform/db"
-	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
 // agentLogRetention is how long a day's agent-view file is kept after the run that
@@ -45,7 +43,9 @@ func processAgent(ctx context.Context, pool *pgxpool.Pool, dir string, now time.
 		if done {
 			continue
 		}
-		applied, err := applyAgentWithRetry(ctx, pool, q, f.Path, counts, sig)
+		applied, err := applyWithRetry(ctx, filepath.Base(f.Path), func() (int, error) {
+			return applyAgentFile(ctx, pool, q, f.Path, counts, sig)
+		})
 		if err != nil {
 			return nFiles, nViews, err
 		}
@@ -83,30 +83,6 @@ func aggregateAgentFile(path string) (map[time.Time]map[int64]int, int64, error)
 		log.Printf("rollup-views: %s: skipped %d unreadable line(s) of %d", filepath.Base(path), stats.Bad, stats.Lines)
 	}
 	return counts, int64(h.Sum64()), nil
-}
-
-// applyAgentWithRetry is applyWithRetry's twin for the agent pass; see its comment for
-// why a deadlock is retried rather than fatal.
-func applyAgentWithRetry(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, path string, counts map[time.Time]map[int64]int, sig int64) (int, error) {
-	var err error
-	for attempt := 1; attempt <= deadlockRetries; attempt++ {
-		var applied int
-		applied, err = applyAgentFile(ctx, pool, q, path, counts, sig)
-		if err == nil {
-			return applied, nil
-		}
-		if !pgerr.IsDeadlock(err) {
-			return 0, err
-		}
-		log.Printf("rollup-views: %s: deadlock on attempt %d/%d, retrying: %v", filepath.Base(path), attempt, deadlockRetries, err)
-		delay := time.Duration(attempt) * 2 * time.Second
-		select {
-		case <-ctx.Done():
-			return 0, ctx.Err()
-		case <-time.After(delay + time.Duration(rand.Int64N(int64(time.Second)))):
-		}
-	}
-	return 0, fmt.Errorf("apply %s: still deadlocking after %d attempts: %w", filepath.Base(path), deadlockRetries, err)
 }
 
 // applyAgentFile applies one file's counts and marks it processed in one transaction.
