@@ -68,15 +68,20 @@ func run() int {
 	if !*backfill {
 		files = uncompressed(files)
 	}
+	// A failed nginx pass still fails the run, but only after the agent pass: a rotated
+	// file that cannot be read is listed again on every run, and returning here would
+	// hold the agent days back for as long as it stays broken.
+	exit := 0
 	if len(files) == 0 {
 		log.Printf("rollup-views: no rotated logs to process in %s", dir)
 	} else {
 		nFiles, nViews, err := process(ctx, pool, files)
 		if err != nil {
 			log.Printf("process: %v", err)
-			return 1
+			exit = 1
+		} else {
+			log.Printf("rollup-views: processed %d file(s), applied %d view(s)", nFiles, nViews)
 		}
-		log.Printf("rollup-views: processed %d file(s), applied %d view(s)", nFiles, nViews)
 	}
 
 	// The agent pass is independent of nginx: no rotated access log is not a reason to
@@ -89,7 +94,7 @@ func run() int {
 		}
 		log.Printf("rollup-views: agent views: processed %d file(s), applied %d view(s)", nFiles, nViews)
 	}
-	return 0
+	return exit
 }
 
 // process applies every not-yet-processed file, skipping those already in the
