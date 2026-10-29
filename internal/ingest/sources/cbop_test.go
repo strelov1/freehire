@@ -19,12 +19,14 @@ import (
 // service cannot render: any page containing one answers status 500 with a null payload, as
 // the real service does.
 type cbopFake struct {
-	rows   []cbopOffer
-	total  int
-	refuse map[int]bool
-	err    error
-	mu     sync.Mutex
-	asked  []string
+	// shortPage answers that page with a single row, as a service that broke mid-walk might.
+	shortPage int
+	rows      []cbopOffer
+	total     int
+	refuse    map[int]bool
+	err       error
+	mu        sync.Mutex
+	asked     []string
 }
 
 func newCBOPFake(t *testing.T, total int) *cbopFake {
@@ -51,6 +53,9 @@ func (f *cbopFake) PostJSON(_ context.Context, raw string, _, v any) error {
 	p, _ := strconv.Atoi(u.Query().Get("page"))
 	size, _ := strconv.Atoi(u.Query().Get("size"))
 	var content []map[string]any
+	if f.shortPage > 0 && p == f.shortPage && size > 1 {
+		size = 1
+	}
 	for off := p * size; off < (p+1)*size && off < f.total; off++ {
 		if f.refuse[off] {
 			return json.Unmarshal([]byte(`{"status":500,"msg":"Błąd wewnętrzny systemu!","payload":null}`), v)
@@ -161,5 +166,13 @@ func TestCBOPShare(t *testing.T) {
 		if got := cbopEmploymentType(cbopOffer{Kind: "OFERTA_PRACY", Hours: in}); got != want {
 			t.Errorf("%q -> %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestCBOPFailsWhenAMiddlePageAnswersShort(t *testing.T) {
+	f := newCBOPFake(t, 500)
+	f.shortPage = 2
+	if _, err := newTestCBOP(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Fatal("a walk that a short middle page ended early must fail the crawl")
 	}
 }

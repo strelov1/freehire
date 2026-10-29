@@ -39,6 +39,9 @@ const (
 	// cbopMaxUnreadShare bounds the rows a walk may lose to refused single-row reads before the
 	// listing is no longer the whole catalogue: 5 of 18,290 were on 2026-10-29.
 	cbopMaxUnreadShare = 0.01
+	// cbopMaxShortShare bounds how far short of page 0's stated total a walk may end before it
+	// is taken for a page that answered short, not for offers withdrawn mid-walk.
+	cbopMaxShortShare = 0.02
 	// cbopRequestInterval paces every request — a courtesy ceiling, not a measured limit.
 	cbopRequestInterval = time.Second
 )
@@ -124,8 +127,11 @@ func (s cbop) list(ctx context.Context) ([]cbopOffer, error) {
 		return nil, fmt.Errorf("cbop: search page 0 refused")
 	}
 	total := first.Payload.Page.TotalElements
+	read := len(first.Payload.Page.Content)
 	add(first.Payload.Page.Content)
-	for p := 1; p*cbopPageSize < total; p++ {
+	// The walk ends where the service does — at a page shorter than the page size — rather
+	// than at page 0's total, which moves while the walk runs.
+	for p := 1; read%cbopPageSize == 0 && read > 0; p++ {
 		if p >= cbopMaxPages {
 			return nil, fmt.Errorf("cbop: search still not exhausted after %d pages", p)
 		}
@@ -134,10 +140,19 @@ func (s cbop) list(ctx context.Context) ([]cbopOffer, error) {
 			return nil, err
 		}
 		unread += lost
+		read += len(rows) + lost
 		add(rows)
+		if len(rows)+lost < cbopPageSize {
+			break
+		}
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("cbop: search names no offer")
+	}
+	// A page that answered short in the middle ends the walk early; the count read against the
+	// stated total is what catches it. The total moves by a few dozen during a walk.
+	if float64(read) < (1-cbopMaxShortShare)*float64(total) {
+		return nil, fmt.Errorf("cbop: walk ended after %d of %d offers", read, total)
 	}
 	if float64(unread) > cbopMaxUnreadShare*float64(total) {
 		return nil, fmt.Errorf("cbop: %d of %d offers could not be read", unread, total)
