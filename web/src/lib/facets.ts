@@ -656,7 +656,9 @@ const COMPANY_SIZE: FacetOption[] = ['1-10', '11-50', '51-200', '201-500', '501-
 );
 
 // The ISO 3166-1 alpha-2 code set — the country vocabulary the location dictionary
-// draws from. The company country facet is a static searchable select over this
+// draws from — plus 'xk', Kosovo's user-assigned code: ISO has not assigned it, but
+// the location dictionary emits it and Intl names it, so leaving it out made Kosovo
+// the one country a posting could carry and no picker could select (freehire#3847). The company country facet is a static searchable select over this
 // (labelled via countryLabel), not a live distribution: the companies list is plain
 // SQL with no facet-count endpoint yet, so options carry no counts.
 const ISO_COUNTRY_CODES = [
@@ -675,7 +677,7 @@ const ISO_COUNTRY_CODES = [
   'sa', 'sb', 'sc', 'sd', 'se', 'sg', 'sh', 'si', 'sj', 'sk', 'sl', 'sm', 'sn', 'so', 'sr', 'ss',
   'st', 'sv', 'sx', 'sy', 'sz', 'tc', 'td', 'tf', 'tg', 'th', 'tj', 'tk', 'tl', 'tm', 'tn', 'to',
   'tr', 'tt', 'tv', 'tw', 'tz', 'ua', 'ug', 'um', 'us', 'uy', 'uz', 'va', 'vc', 've', 'vg', 'vi',
-  'vn', 'vu', 'wf', 'ws', 'ye', 'yt', 'za', 'zm', 'zw',
+  'vn', 'vu', 'wf', 'ws', 'xk', 'ye', 'yt', 'za', 'zm', 'zw',
 ];
 /** Turn an English display name into a URL segment: strip diacritics, lowercase, and
  *  collapse every run of non-alphanumerics into one hyphen. Local to the country
@@ -704,7 +706,7 @@ export interface SlugifiedCountry {
 //
 // Two codes are refused a slug:
 //   - one countryLabel only ECHOES (it returns the uppercased code when Intl has no
-//     name, e.g. the user-assigned 'xk'); an echo is not a name, and indexing it
+//     name — a runtime whose ICU predates a code); an echo is not a name, and indexing it
 //     would mint a URL out of a two-letter non-word.
 //   - both members of any pair that slugify alike. Handing the slug to whichever
 //     came first in the list would be an arbitrary choice made silently, so the

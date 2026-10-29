@@ -338,6 +338,7 @@ export const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
   vu: [-15.4, 166.9],
   wf: [-14.3, -178.1],
   ws: [-13.6, -172.4],
+  xk: [42.6, 20.9],
   ye: [15.3, 45.9],
   yt: [-12.8, 45.2],
   za: [-29.7, 23.7],

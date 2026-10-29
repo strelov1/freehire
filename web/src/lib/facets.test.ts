@@ -7,6 +7,7 @@ import {
   countryFromSlug,
   countryLabel,
   countrySlug,
+  COUNTRY_OPTIONS,
   dynamicLabel,
   FACETS,
   slugifiedCountries,
@@ -134,6 +135,15 @@ describe('collapseCities', () => {
     ]);
 
     expect(options).toHaveLength(2);
+  });
+});
+
+describe('the country options', () => {
+  it('offers Kosovo, which the location dictionary emits though ISO never assigned it', () => {
+    // 'xk' is user-assigned, so an ISO-only list silently left out the one country a
+    // posting could carry and no picker could select (freehire#3847).
+    expect(COUNTRY_OPTIONS.find((o) => o.value === 'xk')?.label).toBe('Kosovo');
+    expect(countryFromSlug('kosovo')).toBe('xk');
   });
 });
 
