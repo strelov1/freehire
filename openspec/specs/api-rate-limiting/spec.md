@@ -184,8 +184,10 @@ tier SHALL carry a per-minute budget and MAY carry a per-day one, and each figur
 settable from the environment at boot, a value that cannot be read failing the boot.
 
 Keyed tiers SHALL apply whether or not the anonymous budgets are strict, and no keyed tier's
-per-minute budget SHALL sit below the per-address budget a keyless caller has on any route:
-a key worse than no key is a key its holder deletes. A refused keyed caller SHALL be told the
+per-minute budget SHALL sit below the per-address budget a keyless caller has on any route;
+the per-day caps of the tiers below the API product SHALL apply only while the anonymous
+budgets are strict, since a keyless caller carries no daily cap before that. A key worse than
+no key is a key its holder deletes. A refused keyed caller SHALL be told the
 next tier up; the top tier is told none.
 
 #### Scenario: A free account's key reads more than no key

@@ -99,7 +99,7 @@ type publicGateConfig struct {
 	// each route's previous per-minute budget for a caller with no key; keyed tiers apply either
 	// way, which is why their minute never sits below that previous budget.
 	Strict bool
-	// Tiers is every tier's budget (RateTiersFromEnv).
+	// Tiers is every tier's budget, already in force for Strict (RateTiers.inForce).
 	Tiers RateTiers
 	// BotSecret is VERIFIED_BOT_SECRET; empty disables the verified-bot exemption.
 	BotSecret string
@@ -129,9 +129,6 @@ type cachedCredential struct {
 }
 
 func newPublicGate(throttler ratelimit.Throttler, keys apiKeyTiers, cfg publicGateConfig) *publicGate {
-	if cfg.Tiers == nil {
-		cfg.Tiers = DefaultRateTiers()
-	}
 	return &publicGate{throttler: throttler, keys: keys, cfg: cfg, now: time.Now,
 		hits: map[string]cachedCredential{}, misses: map[string]time.Time{}}
 }

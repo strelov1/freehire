@@ -84,8 +84,10 @@ info:
     | [API plan](https://freehire.me/jobs-api) | 1,200 | no cap |
     | [Data plan](https://freehire.me/jobs-api) | 6,000 | no cap |
 
-    These are the figures a deployment ships with; `GET /plans` reports the ones
-    in force (`api_limits.tiers`). An API plan also licenses the data for use in
+    The daily caps of the free, Pro and Ultra tiers arrive together with the
+    keyless daily cap above; until then those tiers carry their minute budget
+    only. These are the figures a deployment ships with; `GET /plans` reports
+    the ones in force (`api_limits.tiers`). An API plan also licenses the data for use in
     your own product — see the
     [data licence](https://freehire.me/terms#data-licence).
 

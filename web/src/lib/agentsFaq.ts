@@ -37,6 +37,6 @@ export const AGENTS_FAQ: FaqItem[] = [
   {
     question: 'Is there a rate limit for agents?',
     answer:
-      'Yes, and every response reports where you stand in the X-RateLimit-Remaining header. Without a key, ordinary reads get 600 requests per minute per address and the agent search endpoint gets 300. Signed in through MCP or the CLI, or with a free API key, the budget is per account and larger: 600 a minute and 10,000 a day, more on Pro and Ultra, and most on the API plans. Read the header and pace yourself rather than waiting for a 429.',
+      'Yes, and every response reports where you stand in the X-RateLimit-Remaining header. Without a key, ordinary reads get 600 requests per minute per address and the agent search endpoint gets 300. Signed in through MCP or the CLI, or with a free API key, the budget is per account instead: 600 a minute shared by both, more on Pro and Ultra, and most on the API plans. Read the header and pace yourself rather than waiting for a 429.',
   },
 ];

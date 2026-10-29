@@ -534,6 +534,9 @@ func Register(app *fiber.App, cfg Config) {
 	if cfg.RateTiers == nil {
 		cfg.RateTiers = DefaultRateTiers()
 	}
+	// One ladder for the gate, /plans and the API-keys page alike, so none of them can state a
+	// cap the others do not apply.
+	cfg.RateTiers = cfg.RateTiers.inForce(cfg.PublicAnonStrict)
 	queries := db.New(cfg.Pool)
 	a := &API{
 		pool:         cfg.Pool,

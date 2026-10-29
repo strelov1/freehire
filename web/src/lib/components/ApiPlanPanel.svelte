@@ -43,8 +43,9 @@
     {#if plan.value.tier}
       <p class="text-sm text-muted-foreground">{activeLine(plan.value)}</p>
     {:else}
-      {#if rateLine(plan.value)}
-        <p class="text-sm">{rateLine(plan.value)}</p>
+      {@const rate = rateLine(plan.value)}
+      {#if rate}
+        <p class="text-sm">{rate}</p>
       {/if}
       <p class="text-sm text-muted-foreground">{s.none}</p>
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() is applied; the rule cannot see through the appended section anchor -->

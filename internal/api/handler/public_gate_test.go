@@ -142,7 +142,8 @@ func paidKeys() *fakeKeyTiers {
 }
 
 func newTestGate(th ratelimit.Throttler, keys apiKeyTiers, strict bool, botSecret string) *publicGate {
-	g := newPublicGate(th, keys, publicGateConfig{Strict: strict, BotSecret: botSecret, Origin: "https://freehire.me"})
+	g := newPublicGate(th, keys, publicGateConfig{Strict: strict, Tiers: DefaultRateTiers().inForce(strict),
+		BotSecret: botSecret, Origin: "https://freehire.me"})
 	g.now = func() time.Time { return gateNow }
 	return g
 }
@@ -210,9 +211,9 @@ func TestPublicGate_StrictAnonymousIsSharedPerMinuteAndPerDay(t *testing.T) {
 }
 
 // Every credential of an account — any API key, any MCP or CLI access token — draws on one
-// per-account budget at the account's tier, on both routes, before and after strict alike.
+// per-account budget at the account's tier, on both routes, before and after strict alike;
+// only the daily caps below the API product wait for strict.
 func TestPublicGate_KeysAreLimitedPerAccountAtTheirTier(t *testing.T) {
-	tiers := DefaultRateTiers()
 	cases := []struct {
 		name  string
 		token string
@@ -235,7 +236,7 @@ func TestPublicGate_KeysAreLimitedPerAccountAtTheirTier(t *testing.T) {
 				app := gateApp(newTestGate(rec, paidKeys(), strict, ""))
 				gateGet(t, app, "/read", bearer(tc.token))
 				gateGet(t, app, "/agent", bearer(tc.token))
-				l := tiers[tc.tier]
+				l := DefaultRateTiers().inForce(strict)[tc.tier]
 				one := []check{{"acct:" + tc.user, l.PerMinute, time.Minute}}
 				if l.PerDay > 0 {
 					one = append(one, check{"acctday:" + tc.user, l.PerDay, 24 * time.Hour})
@@ -264,6 +265,26 @@ func TestDefaultRateTiers_AKeyIsNeverWorseThanNone(t *testing.T) {
 	}
 	if tiers[rateAPI] != (rateLimit{PerMinute: 1200}) || tiers[rateData] != (rateLimit{PerMinute: 6000}) {
 		t.Errorf("api tiers = %+v / %+v, the plans on sale say 1200 and 6000 a minute with no daily cap", tiers[rateAPI], tiers[rateData])
+	}
+}
+
+// The daily caps below the API product wait for strict: without it a keyless caller has none,
+// and a key that carried one would be worse than no key for exactly the callers it is meant for.
+func TestRateTiers_DailyCapsArriveWithStrict(t *testing.T) {
+	def := DefaultRateTiers()
+	before, after := def.inForce(false), def.inForce(true)
+	for _, tier := range []rateTier{rateFree, ratePro, rateUltra} {
+		if before[tier].PerDay != 0 || before[tier].PerMinute != def[tier].PerMinute {
+			t.Errorf("%s before strict = %+v, want its minute and no daily cap", tier, before[tier])
+		}
+		if after[tier] != def[tier] {
+			t.Errorf("%s under strict = %+v, want %+v", tier, after[tier], def[tier])
+		}
+	}
+	for _, tier := range []rateTier{rateAnonymous, rateAPI, rateData} {
+		if before[tier] != def[tier] {
+			t.Errorf("%s before strict = %+v, want it untouched", tier, before[tier])
+		}
 	}
 }
 
@@ -396,12 +417,15 @@ func equalChecks(a, b []check) bool {
 
 func TestAPILimitsViewReadsTheEnforcedBudgets(t *testing.T) {
 	tiers := DefaultRateTiers()
-	legacy, strict := apiLimitsFor(false, tiers), apiLimitsFor(true, tiers)
+	legacy, strict := apiLimitsFor(false, tiers.inForce(false)), apiLimitsFor(true, tiers.inForce(true))
 	if legacy.AnonymousPerMinute != publicReadsPerMinute || legacy.AnonymousPerDay != 0 {
 		t.Errorf("legacy anonymous = %+v", legacy)
 	}
 	if legacy.Tiers[0] != (rateTierView{Tier: rateAnonymous, PerMinute: publicReadsPerMinute}) {
 		t.Errorf("legacy ladder starts at %+v, want the anonymous budget in force", legacy.Tiers[0])
+	}
+	if legacy.Tiers[1] != (rateTierView{Tier: rateFree, PerMinute: tiers[rateFree].PerMinute}) {
+		t.Errorf("legacy free rung = %+v, want no daily cap before strict", legacy.Tiers[1])
 	}
 	anon := tiers[rateAnonymous]
 	if strict.AnonymousPerMinute != anon.PerMinute || strict.AnonymousPerDay != anon.PerDay {

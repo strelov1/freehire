@@ -33,11 +33,12 @@ type rateLimit struct {
 // rateTierSpecs is the ladder, lowest first, with each tier's environment name and the figure
 // it ships with.
 //
-// A key is never worse than no key: the keyed tiers' minute sits at or above the anonymous
-// budget a route had before PUBLIC_ANON_LIMITS=strict (600), so holding one pays the day it is
-// minted, and the same figures stay right once strict lowers the anonymous tier. The daily caps
-// are what stop a mirror; the API tiers carry none because a mirror is what they are sold to.
-// The anonymous figures apply only under strict (see publicGate.enforce).
+// A key is never worse than no key on any route: the keyed tiers' minute sits at or above the
+// largest per-route budget a keyless caller had before PUBLIC_ANON_LIMITS=strict (600), so
+// holding one pays the day it is minted, and the same figures stay right once strict lowers the
+// anonymous tier. The daily caps are what stop a mirror, and they wait for strict like the
+// anonymous one does (inForce): a key with a cap beside an address without one is a key a
+// mirror deletes. The API tiers carry none because a mirror is what they are sold to.
 var rateTierSpecs = []struct {
 	tier rateTier
 	env  string
@@ -53,6 +54,21 @@ var rateTierSpecs = []struct {
 
 // RateTiers is every tier's budget, as the server enforces it and /plans publishes it.
 type RateTiers map[rateTier]rateLimit
+
+// inForce is the ladder as it applies under the given anonymous mode. Without strict a keyless
+// caller has no daily cap, so neither does a keyed tier below the API product: the caps arrive
+// together, the day the anonymous one does. The anonymous rung itself is not consulted then —
+// the gate keeps the legacy per-route budgets — so it is left as configured.
+func (t RateTiers) inForce(strict bool) RateTiers {
+	out := RateTiers{}
+	for tier, l := range t {
+		if !strict && (tier == rateFree || tier == ratePro || tier == rateUltra) {
+			l.PerDay = 0
+		}
+		out[tier] = l
+	}
+	return out
+}
 
 // DefaultRateTiers is the ladder as it ships.
 func DefaultRateTiers() RateTiers {
@@ -84,7 +100,9 @@ func RateTiersFromEnv(getenv func(string) string) (RateTiers, error) {
 	return t, nil
 }
 
-// envOverride sets *dst from the variable when it is set, refusing a value below floor.
+// envOverride sets *dst from the variable when it is set, refusing a value below floor. Not
+// worker.EnvInt64: that reader takes positive integers only, and a day of 0 is a real setting
+// here — no daily cap.
 func envOverride(getenv func(string) string, name string, floor int, dst *int) error {
 	raw := strings.TrimSpace(getenv(name))
 	if raw == "" {

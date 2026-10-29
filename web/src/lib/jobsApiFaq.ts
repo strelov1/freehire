@@ -33,12 +33,12 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'Is there a free tier?',
     answer:
-      'Yes: the read API answers without a key, limited per address, for personal and non-commercial use. It is the same API, so you can build against it for free and switch to a key when you go live.',
+      'Yes: the read API answers without a key, limited per address, for personal and non-commercial use. A free account’s key reads more, and Pro and Ultra more still; the rate table on this page lists every tier. It is the same API, so you can build against it for free and switch to a plan when you go live.',
   },
   {
     question: 'How do I authenticate?',
     answer:
-      'Create a full-access key on your API keys page and send it as an Authorization: Bearer header. All keys of an account share the plan’s budget, and every response carries X-RateLimit-Limit, X-RateLimit-Remaining and X-RateLimit-Reset so you can pace yourself.',
+      'Create a full-access key on your API keys page and send it as an Authorization: Bearer header. All keys of an account — and its signed-in MCP and CLI connections — share one budget, sized by the account’s tier, and every response carries X-RateLimit-Limit, X-RateLimit-Remaining and X-RateLimit-Reset so you can pace yourself.',
   },
   {
     question: 'How fresh is the data, and do closed jobs disappear?',

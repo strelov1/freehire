@@ -73,8 +73,10 @@ Fiber HTTP handlers: feature handler structs, route registration, auth surface, 
   `API_RATE_<TIER>_PER_MINUTE`/`_PER_DAY`, read at boot, a bad value fails the boot); everyone
   else is anonymous (per-route budgets, or the anonymous tier's shared budget under
   `PUBLIC_ANON_LIMITS=strict`). Keyed tiers apply whether or not strict is on, which is why no
-  keyed minute may sit below the keyless per-route budget — a test holds that, because a key
-  worse than none is a key people delete. A refusal names the next rung up. The credential is
+  keyed minute may sit below the keyless per-route budget, and why the daily caps below the
+  API product wait for strict like the anonymous one (`RateTiers.inForce`, applied once in
+  `Register` so the gate, `/plans` and the API-keys page read one ladder) — tests hold both,
+  because a key worse than none is a key people delete. A refusal names the next rung up. The credential is
   looked up only when one is presented, only when it has a minted token's shape, through a
   cache fake tokens cannot evict, under a per-IP lookup budget and a timeout — and any failure
   serves the request as anonymous rather than 503. An embed key never gets a keyed rate: it is
