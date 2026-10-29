@@ -320,10 +320,10 @@ func IsLegalForm(word string) bool {
 }
 
 // accentedForms are the corporate forms whose letters are not all ASCII, matched as the whole
-// lowercased word past any punctuation around it. [letters] cannot carry them: it keeps ASCII only, so "OÜ" reads "o". Folding
-// accents inside letters instead was measured and refused (2026-10-29): it transliterates
-// Cyrillic too, and "ООО "САС"" and "ООО "АГ"" both became `ooo` — two employers on one key —
-// while initials like "С.А." started reading as forms.
+// lowercased word past any punctuation around it. [letters] cannot carry them: it keeps ASCII
+// only, so "OÜ" reads "o". Folding accents inside letters instead was measured and refused
+// (2026-10-29): it transliterates Cyrillic too, and "ООО "САС"" and "ООО "АГ"" both became
+// `ooo` — two employers on one key — while initials like "С.А." started reading as forms.
 var accentedForms = map[string]struct{}{"oü": {}}
 
 // notLetter trims what may surround an [accentedForms] word — "OÜ.", "(OÜ)" — the way
