@@ -1186,6 +1186,31 @@ var ambiguousWords = map[string]bool{
 	"adas":      true,
 }
 
+// properNounWords are the ambiguousWords whose technology is a proper noun — "React",
+// "Swift", "Rust", "Spring", "Express" — while the English word they collide with is
+// written in lowercase mid-sentence: "ability to react quickly", "a swift turnaround",
+// "by spring 2027", "inspect for rust", "express interest". Parse counts such a word
+// only when the original text writes it with a leading capital (React, REACT), on top
+// of the corroboration every ambiguous word needs. Corroboration alone was not enough:
+// a support posting that says "react quickly" and names Zendesk, or a data director's
+// "rather than react to decisions" beside "machine learning", has a strong match and
+// so kept react.
+//
+// Measured on a 1% sample of open prod postings (2026-10-29), among those tagged with
+// the word, the share whose text never capitalizes it: react 101/1150, express
+// 185/348, spring 39/757, swift 32/168, rust 6/177 — and reading them, essentially
+// every one was the English word (the lowercase framework spellings react.js, reactjs
+// and "react native" are separate strong aliases and unaffected). Membership is
+// measured, not assumed: a collision word that is routinely written lowercase as the
+// technology (gin, fiber in Go code) does not belong here.
+var properNounWords = map[string]bool{
+	"react":   true,
+	"swift":   true,
+	"rust":    true,
+	"spring":  true,
+	"express": true,
+}
+
 // phraseAlias is a punctuated or multi-word term matched against the normalized
 // text with whole-term boundaries (the phrase pass). Canonicals are facet-safe
 // slugs (cpp, csharp, ci-cd) rather than the raw punctuated form.

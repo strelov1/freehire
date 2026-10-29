@@ -8,6 +8,7 @@ Deterministic skill tagging feeds a Meilisearch facet (`jobs.skills` text[], not
 - Parses job description at ingest, persists to `jobs.skills` (text array of canonical skill names). Stored beside, not inside, the `enrichment` JSONB blob — `cmd/enrich` never clobbers it.
 - `jobview.FromRow` serves `jobs.skills` directly as the top-level `skills` field (**dict-only** — enrichment.skills excluded from served facet, kept raw in JSONB).
 - Indexed as a Meilisearch facet; dictionary change needs `cmd/backfill-derive` + `cmd/reindex` to reach existing jobs.
+- **Ambiguous words need corroboration; proper-noun ones also need a capital.** A word in `ambiguousWords` (react, networking, sap) tags only beside a strong match. The `properNounWords` subset (react, swift, rust, spring, express) must also appear capitalized somewhere in the text (`React`, `REACT`): a support posting naming Zendesk still writes "react quickly" in lowercase, and corroboration alone kept that tag. `Canonicalize` applies neither rule.
 
 ## The three sides of a canonical
 
