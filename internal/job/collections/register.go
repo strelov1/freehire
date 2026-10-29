@@ -23,20 +23,24 @@ func RegisterSlug(name string) string {
 	return normalize.CompanySlug(name)
 }
 
-// significantFields splits name on WHITESPACE and drops one trailing legal-form
-// token. Only RequireCountry uses it, to judge how specific a register name is.
+// significantFields splits name on WHITESPACE and drops the trailing legal-form
+// tokens, as many as the company key drops: "Nova Sdn Bhd" and "Nova Pty Ltd" are one
+// significant token, the same `nova` CompanySlug keys them at. Only RequireCountry uses
+// it, to judge how specific a register name is.
 //
 // It deliberately does not reuse normalize.CompanySlug's word breaks, which split on
 // punctuation too: "T-Mobile Inc" must count as ONE significant token, or a
 // single-token name would look specific enough to skip its headquarters check. The
-// form test is shared (normalize.IsLegalForm) even though the tokenization is not —
+// form test is shared (normalize.IsLegalFormBefore) even though the tokenization is not —
 // the list is what had to stop being duplicated, not the splitting.
 func significantFields(name string) []string {
 	fields := strings.Fields(name)
-	if len(fields) < 2 || !normalize.IsLegalForm(fields[len(fields)-1]) {
-		return fields
+	next := ""
+	for len(fields) > 1 && normalize.IsLegalFormBefore(fields[len(fields)-1], next) {
+		next = fields[len(fields)-1]
+		fields = fields[:len(fields)-1]
 	}
-	return fields[:len(fields)-1]
+	return fields
 }
 
 // ukWorkRoutes are the GOV.UK sponsorship routes that mean a licence useful to a

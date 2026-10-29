@@ -124,7 +124,8 @@ var formQualifiers = map[string]map[string]struct{}{
 // [formQualifiers] word standing directly before a form it qualifies.
 //
 // It is exported for the callers that walk a name's tail with their own word breaks and must
-// stay on the company key's vocabulary (merge-companies' nameWords, mailmatch's stripLegalForm):
+// stay on the company key's vocabulary (merge-companies' nameWords, mailmatch's stripLegalForm,
+// collections' significantFields):
 // a walk that asked IsLegalForm alone would leave "Private" behind where the key drops it.
 func IsLegalFormBefore(word, next string) bool {
 	if IsLegalForm(word) {
@@ -207,9 +208,10 @@ func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark
 // which 82 catalogue companies carry (2026-10-29). Split there, it is two words of the letter
 // "o", and a lone "o" cannot be a form — it would strip the end of any name with an initial.
 // Closing the gap before the walk turns it into the "o.o." [formQualifiers] already reads.
-// It is anchored to the end of the name and needs the "z" before it, so only that tail moves:
+// It is anchored to the end of the name (past a closing bracket, "Acme (Sp. z o. o.)") and
+// needs the "z" before it, so only that tail moves:
 // the spaced Balkan "d. o. o." would otherwise close up to "d o.o.", which reads as no form.
-var spacedPolishTail = regexp.MustCompile(`(?i)([\s.]z\s+)o\.\s+o\.?\s*$`)
+var spacedPolishTail = regexp.MustCompile(`(?i)([\s.]z\s+)o\.\s+o\.?[\s)\]]*$`)
 
 // dropApostrophes removes the possessive/elision marks a name carries so they cannot become
 // word breaks in the key. "Kohl's" is one word and belongs at `kohls`, which is also what a

@@ -369,3 +369,16 @@ func TestWithoutCountrySuffix(t *testing.T) {
 		}
 	}
 }
+
+func TestRequireCountry_CompoundFormLeavesOneSignificantToken(t *testing.T) {
+	// "Nova Sdn Bhd" and "Nova Private Limited" key at `nova` — the whole compound form is
+	// stripped — so the gate must count them as single-token too, or the second form word
+	// would pass for part of the name and skip the headquarters check.
+	gate := RequireCountry("GB")
+	elsewhere := Company{Slug: "nova", Countries: []string{"GB", "MY"}, HQCountry: "MY"}
+	for _, name := range []string{"Nova Sdn Bhd", "Nova Private Limited", "Nova Pty Ltd"} {
+		if gate(elsewhere, Record{Name: name}) {
+			t.Errorf("%q was admitted on the country facet alone", name)
+		}
+	}
+}
