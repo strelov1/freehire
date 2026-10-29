@@ -527,6 +527,7 @@ var cityOverrides = map[string]cityEntry{
 	"u kragujevcu":  {Name: "Kragujevac", Country: "rs"},
 	"u zadru":       {Name: "Zadar", Country: "hr"},
 	"banjoj luci":   {Name: "Banja Luka", Country: "ba"},
+	"segedin":       {Name: "Szeged", Country: "hu"}, // the Serbian exonym
 	"u banjoj luci": {Name: "Banja Luka", Country: "ba"},
 	"frankfurt":     {Name: "Frankfurt", Country: "de"}, // GeoNames: "Frankfurt am Main"
 	"cologne":       {Name: "Cologne", Country: "de"},   // GeoNames: "Köln"

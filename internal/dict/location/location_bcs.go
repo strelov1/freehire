@@ -62,6 +62,16 @@ var bcsCountryNames = map[string]string{
 	"kipar": "cy", "кипар": "cy",
 	"kanada": "ca", "australija": "au", "аустралија": "au",
 	"ujedinjeni arapski emirati": "ae", "уједињени арапски емирати": "ae",
+	// Farther afield, as infostud's postings abroad name them ("Libija", "Jerevan,
+	// Jermenija").
+	"libija": "ly", "либија": "ly", "egipat": "eg", "alžir": "dz", "alzir": "dz",
+	"maroko": "ma", "katar": "qa", "kuvajt": "kw", "saudijska arabija": "sa",
+	"izrael": "il", "jermenija": "am", "gruzija": "ge", "azerbejdžan": "az",
+	"azerbejdzan": "az", "kazahstan": "kz", "bjelorusija": "by", "belorusija": "by",
+	"moldavija": "md", "letonija": "lv", "kina": "cn", "indija": "in",
+	"novi zeland": "nz", "lihtenštajn": "li", "lihtenstajn": "li",
+	"južna srbija": "rs", "juzna srbija": "rs", "zapadna srbija": "rs",
+	"šumadija": "rs", "sumadija": "rs",
 	// Serbia's provinces and regions, Bosnia's entities, Croatia's regions. "Istra" is
 	// absent: it is also a Russian town.
 	"vojvodina": "rs", "војводина": "rs",

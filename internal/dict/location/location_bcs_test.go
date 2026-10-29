@@ -29,6 +29,10 @@ func TestBCSLines(t *testing.T) {
 		{"Švajcarska", []string{"ch"}, nil},
 		{"Švicarska", []string{"ch"}, nil},
 		{"Severna Makedonija", []string{"mk"}, nil},
+		{"Libija", []string{"ly"}, nil},
+		{"Jerevan, Jermenija", []string{"am"}, []string{"Yerevan"}},
+		{"Segedin", []string{"hu"}, []string{"Szeged"}},
+		{"Zapadna Srbija", []string{"rs"}, nil},
 		{"Austrija, Njemačka, HR", []string{"at", "de", "hr"}, nil},
 		// Workday's ISO-3 export.
 		{"SERBIA VIRTUAL, SRB", []string{"rs"}, nil},
