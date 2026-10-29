@@ -469,6 +469,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   builtin: 'Built In',
   xing: 'XING',
   jobsch: 'jobs.ch',
+  swissdevjobs: 'SwissDevJobs',
   onapply: 'onapply',
   workwise: 'Workwise',
   werkenvoornederland: 'Werken voor Nederland',

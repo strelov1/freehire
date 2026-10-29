@@ -224,6 +224,12 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **Remote is almost never structured.** The only signal is the `working-from-home` benefit (rare), read as hybrid; ~10% mention home office or télétravail in prose, which the pipeline reads.
 - **Employment type: Festanstellung (permanent) says nothing of the hours.** `employmentTypeIds` 1 Temporär / 2 Freelance → contract, 3 Praktikum → internship, 4 Nebenerwerb → part time, 5 Festanstellung → full time only when the workload is exactly 100%, part time when it tops out below; "80-100%" is neither. 6 Lehrstelle (an apprenticeship) maps to nothing.
 - **The location is the city names only.** A canton code ("BE", "AG") reads as a country to the location dictionary; `locations[].countryCode` sets `Countries` when present (missing on ~15% of places and on most jobup postings) and `FallbackCountries` is `ch`.
+**SwissDevJobs traps** (`swissdevjobs`, swissdevjobs.ch; live-verified 2026-10-29 from the crawl host):
+
+- **Reachable from the crawl host only.** From a residential IP every path, robots.txt included, is a Cloudflare challenge; from the crawl host plain HTTP under the project's own User-Agent answers 200. robots.txt disallows `/api/` for Meta's crawler alone.
+- **The whole catalogue is one request**, `/api/jobsLight`: 228 postings from 95 employers on 2026-10-29, everything but the body. A row with `isPaused` is skipped. The body comes from the posting page `/jobs/<jobUrl>`, whose `window.__detailedJob` is plain JSON with `description`, `responsibilitiesTextArea` and `requirementsMustTextArea` as plain text (bullets as "- "), each kept under its own heading. A page flagged `isDisabledOrOutdated` is not yielded.
+- **Salary on 227 of 228**: `annualSalaryFrom`/`annualSalaryTo`, yearly CHF. `workplace` is hybrid 74%, office 22%, remote 3.5%. `expLevel` Junior/Regular/Senior/Lead maps to junior/middle/senior/lead.
+- **IT-only**, so every posting sets `IsTechHint` except the `business` category (sales and business development, 4 postings). 62% apply on the employer's site (`redirectJobUrl`, often an ATS we crawl — hence the coverage gate), 38% by e-mail through the board.
 
 **Taleo Business Edition traps** (`taleobe`; live-verified 2026-10-20 from a residential IP, not yet from the crawl host):
 

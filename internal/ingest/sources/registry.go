@@ -988,6 +988,9 @@ func All(c HTTPClient) map[string]Source {
 	// Free-Work: France's IT-only job board (freelance missions and employment), enumerated from
 	// its public API, each new posting's body read from its own resource. See freework.go.
 	registry["freework"] = NewFreeWork(c)
+	// SwissDevJobs: Switzerland's IT-only job board, enumerated from its public jobsLight feed, each
+	// new posting's body read from its page's server-rendered state. See swissdevjobs.go.
+	registry["swissdevjobs"] = NewSwissDevJobs(c)
 	// Cadremploi: France's job board for managers and professionals, enumerated from its paged
 	// online-postings sitemap, each new posting's body read from its page's schema.org JobPosting.
 	// Behind Cloudflare: crawled through the Scrapling tier (scraplingProviders). See cadremploi.go.
