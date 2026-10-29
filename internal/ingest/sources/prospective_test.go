@@ -146,13 +146,29 @@ func TestProspectiveRejectsNonMediumBoard(t *testing.T) {
 	}
 }
 
-func TestProspectiveUnreadablePageIsAMarker(t *testing.T) {
+func TestProspectivePageWithoutJobPostingKeepsTheListing(t *testing.T) {
 	s := prospective{pages: emptyPageGetter{}, limiter: noWait{}}
+	job := prospectiveJob{ViewKey: "00000000-0000-4000-8000-000000000001", Title: "Logistiker/in EFZ", StartDate: "2026-10-28T12:58:19Z",
+		Szas: map[string]any{"sza_tasks": "<ul><li>Waren annehmen</li></ul>", "sza_location.city": "Sursee", "sza_location.country": "Schweiz"}}
+	j, ok := s.detail(context.Background(), CompanyEntry{Company: "fenaco"}, prospectivePosting{id: "1", url: "https://jobs.fenaco.com/x", job: job})
+	if !ok || j.Unreadable || j.Company != "fenaco" || j.Location != "Sursee" || j.PostedAt == nil || !strings.Contains(j.Description, "Waren annehmen") {
+		t.Errorf("job = %+v ok = %v, want the listing's job under the board's employer", j, ok)
+	}
+}
+
+func TestProspectiveFailedPageIsAMarker(t *testing.T) {
+	s := prospective{pages: failingPages{}, limiter: noWait{}}
 	j, ok := s.detail(context.Background(), CompanyEntry{Company: "UPZ"},
 		prospectivePosting{id: "1", url: "https://jobs.example.ch/x", job: prospectiveJob{ViewKey: "00000000-0000-4000-8000-000000000001"}})
 	if !ok || !j.Unreadable {
 		t.Errorf("job = %+v ok = %v, want an unreadable marker", j, ok)
 	}
+}
+
+type failingPages struct{}
+
+func (failingPages) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	return nil, &StatusError{Method: "GET", Code: 503, URL: u}
 }
 
 func TestProspectiveTitleDropsMarkup(t *testing.T) {

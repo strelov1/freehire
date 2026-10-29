@@ -104,11 +104,12 @@ type prospectiveListing struct {
 
 // prospectiveJob is one listed job.
 type prospectiveJob struct {
-	ID      string            `json:"id"`
-	ViewKey string            `json:"viewkey"`
-	Title   string            `json:"title"`
-	Szas    map[string]any    `json:"szas"`
-	Links   map[string]string `json:"links"`
+	ID        string            `json:"id"`
+	ViewKey   string            `json:"viewkey"`
+	Title     string            `json:"title"`
+	StartDate string            `json:"start_date"`
+	Szas      map[string]any    `json:"szas"`
+	Links     map[string]string `json:"links"`
 }
 
 // prospectivePosting is a listed job the medium hosts, with its public address.
@@ -282,7 +283,7 @@ type prospectiveLD struct {
 }
 
 // detail buys one job's page. A 404/410 drops it (withdrawn since the listing); any other
-// failure, or a page without a JobPosting, is an unreadable marker.
+// failure is an unreadable marker.
 func (s prospective) detail(ctx context.Context, e CompanyEntry, p prospectivePosting) (Job, bool) {
 	if err := s.wait(ctx); err != nil {
 		return unreadableDetail(p.id, p.url, e.Company), true
@@ -294,10 +295,11 @@ func (s prospective) detail(ctx context.Context, e CompanyEntry, p prospectivePo
 		}
 		return Job{}, false
 	}
+	// Some customers' pages carry no JobPosting at all (fenaco, Helvetia, Bühler, 11 of 137
+	// media on 2026-10-29). The listing already holds the body, so such a job keeps the board's
+	// employer and the listing's dates rather than going unread forever.
 	var ld prospectiveLD
-	if !ldJobPosting(root, &ld) {
-		return unreadableDetail(p.id, p.url, e.Company), true
-	}
+	ldJobPosting(root, &ld)
 	j, ok := prospectiveToJob(e, p, ld)
 	if !ok {
 		return unreadableDetail(p.id, p.url, e.Company), true
@@ -357,7 +359,7 @@ func prospectiveToJob(e CompanyEntry, p prospectivePosting, ld prospectiveLD) (J
 		Title:          title,
 		Company:        company,
 		Description:    description,
-		PostedAt:       NotFuture(parseRFC3339OrDate(strings.TrimSpace(ld.DatePosted))),
+		PostedAt:       NotFuture(parseRFC3339OrDate(firstNonEmpty(strings.TrimSpace(ld.DatePosted), strings.TrimSpace(p.job.StartDate)))),
 		EmploymentType: schemaFixedTermEmploymentType(ld.EmploymentType),
 	}
 	j.Location, j.Countries = prospectiveLocation(p.job.Szas)
