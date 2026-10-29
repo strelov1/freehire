@@ -658,6 +658,11 @@ var openingPolishLider = regexp.MustCompile(`^[^\p{L}\p{N}]*lider(?:ka)?\b`)
 // before the grade match.
 var assistantOfPolishLead = regexp.MustCompile(`\b(?:asystent\p{L}*|zastepc\p{L}*|zastepczyni|sekretar\p{L}*)\s+(?:(?:i|lub)\s+\p{L}+\s+)?(?:prezes\p{L}*|wiceprezes\p{L}*|dyrektor\p{L}*|kierownik\p{L}*|kierowniczk\p{L}*|lider\p{L}*|koordynator\p{L}*)(?:\s+(?:zespol\p{L}*|generaln\p{L}*|finansow\p{L}*|wykonawcz\p{L}*|zarzadu))?|\bds\s+(?:\p{L}+\s+i\s+)?(?:staz\p{L}*|praktyk\p{L}*)`)
 
+// polishElderly is the elderly person a carer looks after — "Opiekunka osoby starszej",
+// "Opiekun osób starszych", "Opieka nad starszą panią" — whose "starszy" is an age, not
+// the grade.
+var polishElderly = regexp.MustCompile(`\b(?:osob\p{L}*|pan\p{L}*|ludzi|pacjent\p{L}*|senior\p{L}*)\s+starsz\p{L}*|\bstarsz\p{L}*\s+(?:osob\p{L}*|pan\p{L}*|ludzi|pacjent\p{L}*|wiek\p{L}*|dzieci|mieszkan\p{L}*)`)
+
 // matchPolishSeniority resolves the grade of a lowercased title the other tables left
 // unresolved.
 func matchPolishSeniority(lower string) string {
@@ -665,6 +670,7 @@ func matchPolishSeniority(lower string) string {
 		return ""
 	}
 	folded := assistantOfPolishLead.ReplaceAllString(foldPolish(lower), " ")
+	folded = polishElderly.ReplaceAllString(folded, " ")
 	if openingPolishLider.MatchString(folded) {
 		return "lead"
 	}

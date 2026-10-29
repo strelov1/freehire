@@ -98,6 +98,10 @@ func TestPolishHeadsAndFields(t *testing.T) {
 		{"Asystent kierownika zespołu", "", ""},
 		{"Koordynator ds. staży i praktyk", "", ""},
 		{"Inżynier ML", "", ""},
+		// An elderly person's age is not the grade.
+		{"Opiekunka osoby starszej (k/m)", "healthcare", ""},
+		{"Opiekun / Opiekunka osób starszych - Niemcy", "healthcare", ""},
+		{"Opieka nad starszą panią w Warszawie", "", ""},
 	}
 	for _, c := range cases {
 		got := Parse(c.title)
