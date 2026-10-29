@@ -90,3 +90,22 @@ Shipped services on Docker and Kubernetes.
 		t.Errorf("Parse not deterministic:\n d1=%v b1=%v a1=%v\n d2=%v b2=%v a2=%v", d1, b1, a1, d2, b2, a2)
 	}
 }
+
+// A Skills section is a list, not prose, so a lowercase "react" there names the
+// framework; the body keeps the prose rule, where it is the English verb.
+func TestParse_LowercaseDeclaredSkillsKeepProperNouns(t *testing.T) {
+	cv := `Skills
+react, typescript
+
+Experience
+Learned to react quickly to incidents in TypeScript services.
+`
+	declared, body, _ := Parse(cv)
+
+	if !contains(declared, "react") {
+		t.Errorf("declared = %v, want it to contain react", declared)
+	}
+	if contains(body, "react") {
+		t.Errorf("body = %v, want it NOT to contain react", body)
+	}
+}

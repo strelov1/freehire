@@ -145,6 +145,7 @@ type Option func(*options)
 type options struct {
 	resumeAcronyms  bool
 	acronymCategory string
+	skillList       bool
 }
 
 // WithResumeAcronyms enables the résumé-scoped acronym tier (resumeAcronyms, e.g.
@@ -163,6 +164,15 @@ func WithResumeAcronyms() Option {
 // caller omits it, so the tier stays off by default.
 func WithAcronymCategory(category string) Option {
 	return func(o *options) { o.acronymCategory = category }
+}
+
+// WithSkillList tells a Parse call that the text is a list of skill names — a CV's
+// Skills section, an aggregator's structured skill tags — rather than prose. It turns
+// off the proper-noun capital rule (properNounWords): a list carries no English verb
+// for "react" to be, so a lowercase "react, typescript" names the framework. The
+// corroboration rule still applies.
+func WithSkillList() Option {
+	return func(o *options) { o.skillList = true }
 }
 
 // Parse scans free text and returns the curated canonical skill slugs it contains,
@@ -226,11 +236,21 @@ func Parse(text string, opts ...Option) []string {
 			}
 		}
 	}
+	// Whether a proper-noun word is written only in lowercase, decided once per word
+	// however often it recurs.
+	lowercaseOnly := map[string]bool{}
 	for _, tok := range wordTokens(norm) {
 		if c, ok := wordAliases[tok]; ok {
 			if ambiguousWords[tok] {
-				if properNounWords[tok] && !writtenCapitalized(cased, tok) {
-					continue
+				if properNounWords[tok] && !o.skillList {
+					lower, seen := lowercaseOnly[tok]
+					if !seen {
+						lower = !writtenCapitalized(cased, tok)
+						lowercaseOnly[tok] = lower
+					}
+					if lower {
+						continue
+					}
 				}
 				weak[c] = struct{}{}
 			} else {

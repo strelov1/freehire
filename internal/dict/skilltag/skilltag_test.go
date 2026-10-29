@@ -766,6 +766,20 @@ func TestParse_ProperNounWordsNeedACapital(t *testing.T) {
 	}
 }
 
+// A skill list carries no English verb for "react" to be, so WithSkillList keeps a
+// lowercase proper-noun word; corroboration still applies.
+func TestParse_WithSkillListKeepsLowercaseProperNouns(t *testing.T) {
+	if got := Parse("react typescript spring java", WithSkillList()); !slices.Equal(got, []string{"java", "react", "spring", "typescript"}) {
+		t.Errorf("Parse(list, WithSkillList()) = %v, want [java react spring typescript]", got)
+	}
+	if got := Parse("react typescript"); slices.Contains(got, "react") {
+		t.Errorf("Parse(prose) = %v, must NOT contain react", got)
+	}
+	if got := Parse("react", WithSkillList()); got != nil {
+		t.Errorf("Parse(lone ambiguous word, WithSkillList()) = %v, want nil (still needs corroboration)", got)
+	}
+}
+
 // Job-posting boilerplate that happens to spell a tech name. Unlike the collisions
 // above — which read as ordinary English anywhere — these are the words that recur in
 // the prose of NON-TECHNICAL postings specifically: an "agile" retail supervisor, the
