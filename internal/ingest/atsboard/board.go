@@ -513,6 +513,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	// https://<board>/job_sitemap.xml. Sites on an employer's own domain stay underivable, and so
 	// does the legacy careerNN.sapsf.* "career?company=<id>" section, which serves no sitemap.
 	{"jobs.hr.cloud.sap", "successfactors", modeTenantHost},
+	// SuccessFactors' recruiting-marketing sites on the jobs2web.com domain (assaabloy.jobs2web.com),
+	// which serve the same job_sitemap.xml. Staging copies live one label deeper
+	// (<tenant>.stage.jobs2web.com) and so are not a tenant; stage. and www. are the vendor's own.
+	{"jobs2web.com", "successfactors", modeTenantHost},
 	// Phenom career sites on the vendor's own domains — each answers the /widgets API the adapter
 	// calls, verified live. A site on the employer's own domain (careers.cisco.com) is not
 	// derivable from its URL; boardresolve identifies those from the page.
@@ -1545,6 +1549,7 @@ var platformLabels = map[string]bool{
 var platformLabelsByApex = map[string][]string{
 	"hrmdirect.com": {"apply"},
 	"potok.io":      {"www", "stages", "qa", "sentry"},
+	"jobs2web.com":  {"www", "stage"},
 	"eploy":         {"www"}, // www.eploy.com is the vendor's marketing site
 	"dvinci-hr":     {"www"},
 	"dvinci-easy":   {"www"},
