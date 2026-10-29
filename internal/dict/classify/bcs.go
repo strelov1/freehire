@@ -271,7 +271,7 @@ var bcsCategoryTable = []aliasEntry{
 	{"opst* prijav*", categoryNone},
 	{"stipendij*", categoryNone},
 	{"stipendist*", categoryNone},
-	{"tajn* kup*", categoryNone},
+	{"tajn* kupac*", categoryNone},
 	{"tajn* kupc*", categoryNone},
 	// The software engineer by another name: full-stack ("cjeloviti razvoj"), the
 	// computer and IT engineer, software development.
@@ -425,9 +425,8 @@ var bcsCategoryTable = []aliasEntry{
 	// Band 3. The fields.
 	{"prodaj*", "sales"},
 	{"prodajn*", "sales"},
-	{"kljucn* kup*", "sales"},
+	{"kljucn* kupac*", "sales"},
 	{"kljucn* kupc*", "sales"},
-	{"kljucn* kupaca", "sales"},
 	{"trgovin*", "retail"},
 	{"prodavaonic*", "retail"},
 	{"prodavnic*", "retail"},
@@ -519,10 +518,10 @@ var bcsCategoryTable = []aliasEntry{
 	{"pozivn* centr*", "support"},
 	{"pozivn* centar", "support"},
 	{"call centar", "support"},
-	{"iskustv* kupaca", "support"},
+	{"iskustv* kupac*", "support"},
 	{"iskustv* korisnik*", "support"},
 	{"prigovor*", "support"},
-	{"odnos* s kup*", "support"},
+	{"odnos* s kupac*", "support"},
 	{"odnos* s kupc*", "support"},
 	{"obezbedjenj*", "public_safety"},
 	{"obezbjedjenj*", "public_safety"},
