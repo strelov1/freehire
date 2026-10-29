@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,6 +81,34 @@ func TestProcessAgentAppliesFinishedDaysOnce(t *testing.T) {
 		t.Errorf("second run applied %d files, want 0", nFiles)
 	}
 	check()
+}
+
+func TestProcessAgentAppliesTheDaysAfterAnUnreadableOne(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Pool(t)
+
+	var id int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO jobs (source, external_id, url, title, public_slug, company_slug)
+		 VALUES ('test', 'x2', 'http://example.test', 'A job', 'job-x2', 'acme') RETURNING id`).Scan(&id); err != nil {
+		t.Fatalf("insert job: %v", err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "agent-views-2026-10-25.jsonl"), []byte("not json\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	good := `{"ts":"2026-10-26T10:00:00Z","kind":"detail","surface":"mcp","viewer":"a","job_ids":[` + itoa(id) + `]}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "agent-views-2026-10-26.jsonl"), []byte(good), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	nFiles, nViews, err := processAgent(ctx, pool, dir, time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC))
+	if err == nil || !strings.Contains(err.Error(), "agent-views-2026-10-25.jsonl") {
+		t.Errorf("err = %v, want the unreadable day named", err)
+	}
+	if nFiles != 1 || nViews != 1 {
+		t.Errorf("got %d files / %d views, want the later day applied (1 / 1)", nFiles, nViews)
+	}
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }

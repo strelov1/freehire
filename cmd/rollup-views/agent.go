@@ -23,40 +23,48 @@ import (
 // applied it — the retention nginx's own logs have.
 const agentLogRetention = 14 * 24 * time.Hour
 
-// processAgent applies every finished, not-yet-applied day of the agent-view log, then
-// removes the files past retention. The cursor is the same content-signature table the
-// nginx pass uses, claimed inside each file's transaction, so a re-run applies nothing twice.
+// processAgent applies every finished, not-yet-applied day of the agent-view log and
+// removes the applied files past retention. The cursor is the same content-signature
+// table the nginx pass uses, claimed inside each file's transaction, so a re-run applies
+// nothing twice.
 func processAgent(ctx context.Context, pool *pgxpool.Pool, dir string, now time.Time) (nFiles, nViews int, err error) {
 	files, err := agentview.ListFiles(dir, now)
 	if err != nil {
 		return 0, 0, err
 	}
 	q := db.New(pool)
+	// A file that fails is reported and kept, and the files after it still apply: the days
+	// are independent, so one unreadable day must not hold every later one back.
+	var errs []error
 	for _, f := range files {
-		counts, sig, err := aggregateAgentFile(f.Path)
-		if err != nil {
-			return nFiles, nViews, err
-		}
-		applied, err := applyWithRetry(ctx, filepath.Base(f.Path), func() (int, error) {
-			return applyAgentFile(ctx, pool, q, f.Path, counts, sig)
-		})
-		if errors.Is(err, errAlreadyApplied) {
+		applied, err := applyAgentDay(ctx, pool, q, f.Path)
+		switch {
+		case errors.Is(err, errAlreadyApplied):
+		case err != nil:
+			errs = append(errs, fmt.Errorf("%s: %w", filepath.Base(f.Path), err))
 			continue
+		default:
+			nFiles++
+			nViews += applied
 		}
-		if err != nil {
-			return nFiles, nViews, err
-		}
-		nFiles++
-		nViews += applied
-	}
-	for _, f := range files {
 		if now.Sub(f.Day) > agentLogRetention {
 			if err := os.Remove(f.Path); err != nil {
 				log.Printf("rollup-views: remove %s: %v", filepath.Base(f.Path), err)
 			}
 		}
 	}
-	return nFiles, nViews, nil
+	return nFiles, nViews, errors.Join(errs...)
+}
+
+// applyAgentDay reads one day file and applies it, retrying a deadlock.
+func applyAgentDay(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, path string) (int, error) {
+	counts, sig, err := aggregateAgentFile(path)
+	if err != nil {
+		return 0, err
+	}
+	return applyWithRetry(ctx, filepath.Base(path), func() (int, error) {
+		return applyAgentFile(ctx, pool, q, path, counts, sig)
+	})
 }
 
 // aggregateAgentFile reads one day file and its cursor signature in one pass. A file
@@ -74,7 +82,7 @@ func aggregateAgentFile(path string) (map[time.Time]map[int64]int, int64, error)
 		return nil, 0, err
 	}
 	if stats.Lines > 0 && stats.Bad == stats.Lines {
-		return nil, 0, fmt.Errorf("%s: none of %d lines could be read", filepath.Base(path), stats.Lines)
+		return nil, 0, fmt.Errorf("none of %d lines could be read", stats.Lines)
 	}
 	if stats.Bad > 0 {
 		log.Printf("rollup-views: %s: skipped %d unreadable line(s) of %d", filepath.Base(path), stats.Bad, stats.Lines)
