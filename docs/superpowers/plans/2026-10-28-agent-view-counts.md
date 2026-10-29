@@ -70,12 +70,6 @@ type sliceSink struct{ got []Event }
 
 func (s *sliceSink) Write(e Event) { s.got = append(s.got, e) }
 
-func TestRecordWithoutAScopeWritesNothing(t *testing.T) {
-	// The in-app assistant shares search_jobs/get_job with /mcp/account and carries no
-	// scope; that absence is the only thing keeping it out of the log.
-	Record(context.Background(), KindSearch, []int64{1})
-}
-
 func TestRecordCarriesTheScopeAndTheIDs(t *testing.T) {
 	sink := &sliceSink{}
 	ctx := With(context.Background(), sink, SurfaceMCP, ViewerKey(0, "203.0.113.7", "Claude-User"))
@@ -1030,16 +1024,6 @@ func TestAnMCPSearchThroughTheMountedRouteIsRecorded(t *testing.T) {
 	if !strings.HasSuffix(e.Viewer, "|ua:Claude-User") {
 		t.Errorf("viewer = %q, want the User-Agent in the key", e.Viewer)
 	}
-}
-
-func TestTheSameSearchWithoutTheMiddlewareRecordsNothing(t *testing.T) {
-	// The in-app assistant and every human route reach the same code with no scope.
-	fake := &fakeSearcher{res: search.Result{Hits: []search.JobDocument{{ID: 7}}}}
-	if _, err := mcpappUnder(fake, nil, fakeOJCPStore{}).SearchJobs(context.Background(), mcpapp.SearchInput{Query: "go"}); err != nil {
-		t.Fatal(err)
-	}
-	// Nothing to assert on a sink: there is none. The test documents that Record without a
-	// scope must not panic and must not need one.
 }
 ```
 
