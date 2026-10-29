@@ -88,16 +88,47 @@
   $effect(() => {
     const hash = page.url.hash.slice(1);
     if (status !== 'ready' || !hash || hash === untrack(() => scrolledToHash)) return;
+    let release: (() => void) | undefined;
     // The section that owns the anchor renders in the same tick this effect runs, so wait
     // for the DOM to catch up rather than querying a target that does not exist yet.
     void tick().then(() => {
       const target = document.getElementById(hash);
       if (!target) return;
       scrolledToHash = hash;
-      target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+      release = scrollAndHold(target);
     });
+    return () => release?.();
   });
 
+  // The sections load their own data after the gate opens, so the page is still growing when
+  // the first scroll is computed — and a scroll clamped to the shorter page stops short of
+  // its target (measured: /my/profile#account-location stopped ~770px short). So scroll
+  // again whenever the target moves on the page or the page's height changes, until the
+  // reader scrolls on their own or a few seconds pass. Checked per frame rather than with a
+  // ResizeObserver: the body is pinned to the window's height and the content overflows
+  // it, so no single box both grows and covers what loads above the target. Returns the
+  // release, for when the anchor or the page goes away first.
+  const HOLD_MS = 3000;
+  const READER_SCROLLS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+  function scrollAndHold(target: HTMLElement): () => void {
+    const until = performance.now() + HOLD_MS;
+    let last = '';
+    let frame = requestAnimationFrame(function check() {
+      const place = `${target.getBoundingClientRect().top + scrollY}|${document.documentElement.scrollHeight}`;
+      if (place !== last) {
+        last = place;
+        target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+      }
+      if (performance.now() < until) frame = requestAnimationFrame(check);
+      else release();
+    });
+    for (const type of READER_SCROLLS) addEventListener(type, release, { passive: true });
+    function release() {
+      cancelAnimationFrame(frame);
+      for (const type of READER_SCROLLS) removeEventListener(type, release);
+    }
+    return release;
+  }
 </script>
 
 <svelte:head>
