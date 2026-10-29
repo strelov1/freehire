@@ -41,6 +41,7 @@ func TestSeniorityFromDescription(t *testing.T) {
 		{"mentoring in an earlier list item", "<li>Mentor peers</li><li>Entry-level position</li>", "junior"},
 		{"mentoring on an earlier plain-text line", "- Mentor peers\n- Entry-level position", "junior"},
 		{"mentorship is a benefit, not a role", "We offer mentorship in this entry-level position.", "junior"},
+		{"entity semicolon is not a clause break", "Mentor&nbsp;junior-level engineers.", ""},
 		{"inline tag inside the governed phrase", "Mentor <strong>junior-level</strong> engineers.", ""},
 		{"our staff", "We care deeply about our staff and culture.", ""},
 		{"principal component analysis", "Experience with principal component analysis.", ""},

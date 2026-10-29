@@ -1,6 +1,7 @@
 package classify
 
 import (
+	"html"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
@@ -166,7 +167,9 @@ func notMentored(s string, start, end int) bool {
 	for lo > 0 && s[lo-1] != ' ' { // never start the window inside a word
 		lo--
 	}
-	before := s[lo:start]
+	// Decoded first, so an entity's own semicolon ("mentor&nbsp;junior-level") is not
+	// taken for a clause break.
+	before := html.UnescapeString(s[lo:start])
 	for _, b := range clauseBreaks {
 		if i := strings.LastIndex(before, b); i >= 0 {
 			before = before[i+len(b):]
