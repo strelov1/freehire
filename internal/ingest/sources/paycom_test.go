@@ -263,6 +263,19 @@ func TestPaycomFetchFailsAListingShortOfItsTotal(t *testing.T) {
 	}
 }
 
+// An answer without the stated total is not a listing that ends here: read as a total of 0 it
+// would end the walk on page one and hand the board scope a partial board.
+func TestPaycomFetchFailsAPreviewsAnswerWithoutItsCount(t *testing.T) {
+	fake := &paycomFake{
+		pages: map[string]string{"/portal/CK/jobs/1": paycomPortalPage},
+		gets:  map[string]string{"/api/ats/job-postings/": `{"jobPosting":{"jobId":1,"jobTitle":"Paralegal"}}`},
+		posts: map[string]string{"/api/ats/job-posting-previews/search": `{"jobPostingPreviews":[{"jobId":1}]}`},
+	}
+	if jobs, err := NewPaycom(fake).Fetch(context.Background(), CompanyEntry{Board: "CK"}); err == nil {
+		t.Errorf("Fetch = %d jobs and no error, want a failed crawl", len(jobs))
+	}
+}
+
 // A posting the platform answers 404 for is gone ("Active job posting not found") and is
 // dropped; a detail this crawl merely could not read is an Unreadable marker, so the sweep does
 // not read it as a removal.

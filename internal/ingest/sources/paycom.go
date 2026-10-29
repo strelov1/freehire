@@ -106,7 +106,9 @@ func (s paycom) listJobIDs(ctx context.Context, mantle string, auth map[string]s
 	for page := 0; page < paycomMaxPages; page++ {
 		body := paycomSearchBody(page*paycomPageSize, paycomPageSize)
 		var resp struct {
-			Count    int `json:"jobPostingPreviewsCount"`
+			// A pointer, so an answer that omits the total cannot read as a stated total of 0
+			// and end the walk on its first page as a "complete" listing.
+			Count    *int `json:"jobPostingPreviewsCount"`
 			Previews []struct {
 				JobID json.Number `json:"jobId"`
 			} `json:"jobPostingPreviews"`
@@ -120,11 +122,14 @@ func (s paycom) listJobIDs(ctx context.Context, mantle string, auth map[string]s
 				ids = append(ids, id)
 			}
 		}
-		if len(ids) >= resp.Count {
+		if resp.Count == nil {
+			return nil, fmt.Errorf("previews page %d states no jobPostingPreviewsCount", page)
+		}
+		if len(ids) >= *resp.Count {
 			return ids, nil
 		}
 		if len(resp.Previews) == 0 {
-			return nil, fmt.Errorf("previews page %d came back empty with %d of %d postings read", page, len(ids), resp.Count)
+			return nil, fmt.Errorf("previews page %d came back empty with %d of %d postings read", page, len(ids), *resp.Count)
 		}
 	}
 	return nil, fmt.Errorf("previews reached the %d-page cap with %d postings read", paycomMaxPages, len(ids))
