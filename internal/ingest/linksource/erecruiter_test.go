@@ -97,3 +97,21 @@ func TestResolveOnBoardDoesNotSubstituteAnotherErecruiterOffer(t *testing.T) {
 		t.Errorf("resolved %s, want nothing: the linked offer could not be read", job.ExternalID)
 	}
 }
+
+// Another query value that happens to equal a listed offer's id does not make that offer the
+// answer: its own URL names a different oid than the link does. 5011050 is listed, but its detail
+// answers with no posting; 5011939 is listed and readable.
+func TestResolveOnBoardIgnoresAQueryValueThatContradictsTheOid(t *testing.T) {
+	const board = "4D3DD27FCA3D40C79E01BEE9745902B7"
+	capture := &erecruiterCapture{t: t}
+	reg := map[string]sources.Source{"erecruiter": sources.NewErecruiter(capture)}
+
+	raw := "https://skk.erecruiter.pl/Offer.aspx?oid=5011050&cfg=" + board + "&ref=5011939"
+	job, ok, err := ResolveOnBoard(context.Background(), reg, "erecruiter", board, raw)
+	if err != nil {
+		t.Fatalf("ResolveOnBoard: %v", err)
+	}
+	if ok {
+		t.Errorf("resolved %s, want nothing: the link names oid 5011050", job.ExternalID)
+	}
+}

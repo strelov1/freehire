@@ -169,7 +169,7 @@ func pickPosting(jobs []sources.Job, raw string) (sources.Job, bool) {
 	}
 	for _, seg := range postingRefs(raw) {
 		for _, j := range jobs {
-			if j.Unreadable {
+			if j.Unreadable || !queryAgrees(raw, j.URL) {
 				continue
 			}
 			if segmentNamesID(seg, j.ExternalID) {
@@ -181,15 +181,19 @@ func pickPosting(jobs []sources.Job, raw string) (sources.Job, bool) {
 }
 
 // sameURL reports whether a link and a posting's URL address the same posting: equal once
-// normalized (normalizeURL), and no query parameter present in both carrying different values.
+// normalized (normalizeURL), and agreeing on every query parameter both carry (queryAgrees).
 func sameURL(raw, posting string) bool {
-	if normalizeURL(raw) != normalizeURL(posting) {
-		return false
-	}
+	return normalizeURL(raw) == normalizeURL(posting) && queryAgrees(raw, posting)
+}
+
+// queryAgrees reports whether no query parameter present in both URLs carries different values.
+// It vetoes the id match too: a query value on a link (a tracking ref, a sibling id) can equal
+// some other posting's id, and that posting's own URL then names a different oid than the link.
+func queryAgrees(raw, posting string) bool {
 	a, errA := url.Parse(strings.TrimSpace(raw))
 	b, errB := url.Parse(strings.TrimSpace(posting))
 	if errA != nil || errB != nil {
-		return false
+		return true // nothing to disagree with
 	}
 	qa, qb := a.Query(), b.Query()
 	for k, v := range qb {
