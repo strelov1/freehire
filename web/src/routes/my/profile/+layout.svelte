@@ -64,15 +64,19 @@
 
   async function load() {
     status = 'loading';
+    void screeningStore.ensureLoaded();
+    void experienceBankStore.ensureLoaded();
     try {
-      await profileStore.ensureLoaded();
-      status = 'ready';
+      // The résumé is part of the gate, not a side load: the contact editors (CV summary,
+      // contacts, education) each PUT the WHOLE block built from its copy, so one opened
+      // before that copy arrives would save a partial block over the stored one and wipe
+      // every field it did not carry. ensureLoaded swallows a failure, so `loaded` is
+      // what says whether it arrived.
+      await Promise.all([profileStore.ensureLoaded(), resumeStore.ensureLoaded()]);
+      status = resumeStore.loaded ? 'ready' : 'error';
     } catch {
       status = 'error';
     }
-    void resumeStore.ensureLoaded();
-    void screeningStore.ensureLoaded();
-    void experienceBankStore.ensureLoaded();
   }
 
   // (Re)load once the session resolves.
