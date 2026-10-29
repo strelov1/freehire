@@ -30,9 +30,8 @@ func TestSlovenianLines(t *testing.T) {
 		// Slovenia as an area, and the countries abroad in Slovenian.
 		{"Celotna Slovenija", []string{"si"}, nil},
 		{"Slovenija", []string{"si"}, nil},
-		{"Avstrija", []string{"at"}, nil},
-		{"Nemčija", []string{"de"}, nil},
-		{"Hrvaška", []string{"hr"}, nil},
+		{"Nemcija", []string{"de"}, nil},
+		{"Hrvaska", []string{"hr"}, nil},
 		// A town with town status names the city and states Slovenia, with and without
 		// its diacritics.
 		{"Kamnik", []string{"si"}, []string{"Kamnik"}},
@@ -99,6 +98,22 @@ func TestSlovenianLinesWithKnownCountry(t *testing.T) {
 		g := ParseIn(tt.location, []string{"si"})
 		if !reflect.DeepEqual(g.Cities, tt.cities) {
 			t.Errorf("ParseIn(%q, si) cities = %v, want %v", tt.location, g.Cities, tt.cities)
+		}
+	}
+}
+
+// TestSlovenianWorkModeLabels pins the Slovenian work-mode words a location line carries.
+func TestSlovenianWorkModeLabels(t *testing.T) {
+	tests := []struct{ location, want string }{
+		{"Delo od doma", "remote"},
+		{"Delo na daljavo", "remote"},
+		{"Ljubljana / možnost hibridnega dela", "hybrid"},
+		{"Maribor ali Ljubljana, v kombinaciji z delom od doma (hibridno)", "hybrid"},
+		{"Ljubljana", ""},
+	}
+	for _, tt := range tests {
+		if got := Parse(tt.location).WorkMode; got != tt.want {
+			t.Errorf("Parse(%q).WorkMode = %q, want %q", tt.location, got, tt.want)
 		}
 	}
 }

@@ -10,7 +10,7 @@ import "strings"
 //   - a statistical or traditional REGION in place of a town ("Osrednjeslovenska",
 //     "Savinjska", "Gorenjska regija", "Jugovzhodna Slovenija" — 136 of the lines);
 //   - the country written as an area ("Celotna Slovenija", "po celi Sloveniji") and the
-//     countries abroad in Slovenian ("Avstrija", "Nemčija");
+//     countries abroad in Slovenian ("Nemcija", "Francija");
 //   - the area around a town ("Ljubljana in okolica", "Celje z okolico", "okolica
 //     Celja", the last with the town in the genitive);
 //   - a Ljubljana district after the city ("Ljubljana Črnuče", "Ljubljana Šiška");
@@ -25,15 +25,17 @@ import "strings"
 // except those another country also has a place of: see slovenianTowns.
 
 // slovenianCountryNames are the countries in Slovenian, where the BCS names
-// (bcsCountryNames) spell them differently, and Slovenia written as an area. Absent on
+// (bcsCountryNames) spell them differently, and Slovenia written as an area. "Avstrija",
+// "Hrvaška", "Nemčija" and "Madžarska" go into nameToCountry with the Optius adapter
+// (#3867); their spellings without diacritics are here. Absent on
 // purpose: "Tujina" (abroad) names no country; "ZDA" (the United States) and the plain
 // "Svica" (Switzerland) are also villages in Switzerland and Croatia; "Kras", "Primorska"
 // and "Štajerska" are below, withheld.
 var slovenianCountryNames = map[string]string{
 	"celotna slovenija": "si", "cela slovenija": "si", "vsa slovenija": "si",
 	"po celi sloveniji": "si", "po vsej sloveniji": "si", "republika slovenija": "si",
-	"avstrija": "at", "nemčija": "de", "nemcija": "de",
-	"hrvaška": "hr", "hrvaska": "hr", "madžarska": "hu", "madzarska": "hu",
+	"nemcija": "de",
+	"hrvaska": "hr", "madzarska": "hu",
 	"švica": "ch", "francija": "fr", "slovaška": "sk", "slovaska": "sk",
 	"romunija": "ro", "bolgarija": "bg", "grčija": "gr", "grcija": "gr",
 	"bosna in hercegovina": "ba", "črna gora": "me",
@@ -257,6 +259,9 @@ func init() {
 		}
 		nameToCountry[name] = country
 	}
+	// MojeDelo's and Optius's remote label, as a whole line.
+	remoteLabels["delo od doma"] = true
+	remoteLabels["delo na daljavo"] = true
 	for name, country := range slovenianCountryNames {
 		add(name, country)
 	}

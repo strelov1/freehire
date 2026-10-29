@@ -55,6 +55,8 @@ var slovenianCategoryTable = []aliasEntry{
 	{"upravljavec stroj*", "manufacturing"},
 	{"upravljavc* stroj*", "manufacturing"},
 	{"upravljalec naprav*", "manufacturing"},
+	{"upravljalec linij*", "manufacturing"},
+	{"upravljalc* linij*", "manufacturing"},
 	{"zagarist*", "manufacturing"},
 	{"logisticn* delavec", "logistics"},
 	{"logisticn* delavc*", "logistics"},

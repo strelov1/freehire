@@ -13,6 +13,7 @@ func TestParse_SlovenianHeadsAndFields(t *testing.T) {
 		{"Upravljalec stroja I (m/ž)", "manufacturing"},
 		{"Upravljavec strojev za obdelavo lesa (m/ž) v okolici Celja", "manufacturing"},
 		{"Upravljalec proizvodne linije (m/ž)", "manufacturing"},
+		{"Upravljalec linije", "manufacturing"},
 		{"Upravljalec robotizirane linije (m/ž)", "manufacturing"},
 		{"UPRAVLJALEC AVTOMATSKE GALVANSKE LINIJE", "manufacturing"},
 		{"Operater za brizganje plastike (m/ž)", "manufacturing"},

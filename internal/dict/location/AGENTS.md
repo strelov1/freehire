@@ -395,7 +395,9 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   small-places table. What read nothing: the twelve statistical regions and the
   traditional ones ("Osrednjeslovenska", "Gorenjska regija", "Jugovzhodna Slovenija",
   "Posavje"), which now state Slovenia and no city; "Celotna Slovenija" and the countries
-  abroad in Slovenian ("Avstrija", "Nemčija"); the area around a town ("Ljubljana in
+  abroad in Slovenian ("Francija", "Slovaška"; "Avstrija", "Nemčija", "Hrvaška" and
+  "Madžarska" came with the Optius adapter); the whole-line remote labels "Delo od doma"
+  and "Delo na daljavo" (`remoteLabels`; "hibridno" already read as hybrid); the area around a town ("Ljubljana in
   okolica", "Celje z okolico", "okolica Celja" with the town in the genitive —
   `areaPrefixes`/`areaSuffixes` and the genitive forms); a Ljubljana district after the
   city ("Ljubljana Črnuče"); ESS's administrative unit "Šentjur pri Celju"; and the
