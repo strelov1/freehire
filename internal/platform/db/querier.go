@@ -2960,7 +2960,8 @@ type Querier interface {
 	// Lock today's counter for the consumption transaction. EnsureUsageDay guarantees the row
 	// exists, so this never returns no-rows on that path.
 	GetUsageDayForUpdate(ctx context.Context, arg GetUsageDayForUpdateParams) (int64, error)
-	// How far the account's API product subscriptions reach, for its own key-management page.
+	// How far the account's paid plans reach, for its own key-management page: the API product
+	// names the plan sold for reading, and all four decide the rate its keys get.
 	GetUserAPIEntitlement(ctx context.Context, id int64) (GetUserAPIEntitlementRow, error)
 	// The user's cached CV ATS qualitative review (content-quality + findings), or NULL
 	// when none has been computed. Derived only — never the raw CV text.
@@ -6650,8 +6651,8 @@ type Querier interface {
 	// what stops a group repeated inside one verbose title from outranking a real
 	// cluster. A second count(DISTINCT id) would only add a per-group sort.
 	ResidualTitleGroups(ctx context.Context, arg ResidualTitleGroupsParams) ([]ResidualTitleGroupsRow, error)
-	// Resolve a presented token to its owner, the key's scope and how far the owner's API
-	// subscription reaches, for the public-read rate limiter. Read-only on purpose: unlike
+	// Resolve a presented token to its owner, the key's scope and how far the owner's paid
+	// plans reach, for the public-read rate limiter. Read-only on purpose: unlike
 	// AuthenticateAPIKey it does NOT touch last_used_at, because it runs on the hottest reads on
 	// the site and its answer is cached. No row means unknown, revoked or expired.
 	ResolveAPIKeyTier(ctx context.Context, tokenHash string) (ResolveAPIKeyTierRow, error)
@@ -6672,6 +6673,11 @@ type Querier interface {
 	ResolveCompanySlugAliases(ctx context.Context, foldedKeys []string) ([]ResolveCompanySlugAliasesRow, error)
 	// Mark a report handled. An already resolved report keeps its first resolver and time.
 	ResolveConversationReport(ctx context.Context, arg ResolveConversationReportParams) (int64, error)
+	// ResolveAPIKeyTier's twin for an MCP or CLI access token: its owner and how far the owner's
+	// paid plans reach, for the public-read rate limiter. The same liveness rule as
+	// AuthenticateOAuthGrant, and read-only for the same reason ResolveAPIKeyTier is. No row
+	// covers unknown, expired and revoked alike.
+	ResolveOAuthGrantTier(ctx context.Context, accessTokenHash string) (ResolveOAuthGrantTierRow, error)
 	// Mark a sent request contacted or declined, recording the acting referrer and time. The
 	// status='sent' guard makes it race-safe: whichever referrer acts first wins; a second
 	// attempt matches no row (mapped to "already resolved").

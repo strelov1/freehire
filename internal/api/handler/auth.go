@@ -43,7 +43,9 @@ type oauthRegistry interface {
 // host-only, for dev); the same set gates requestOrigin (see
 // auth.CookieDomainForHost).
 type authHandlers struct {
-	queries       *db.Queries
+	queries *db.Queries
+	// rateTiers is the public-read ladder, for the key-management page's own rate.
+	rateTiers     RateTiers
 	issuer        *auth.Issuer
 	cookieSecure  bool
 	cookieDomains []string

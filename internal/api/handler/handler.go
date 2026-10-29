@@ -377,8 +377,11 @@ type Config struct {
 	FrontendOrigin string
 	// PublicAnonStrict and VerifiedBotSecret configure the public-read gate (public_gate.go):
 	// the strict anonymous budgets, and the Cloudflare verified-bot exemption.
-	PublicAnonStrict    bool
-	VerifiedBotSecret   string
+	PublicAnonStrict  bool
+	VerifiedBotSecret string
+	// RateTiers is every public-read rate tier's budget (RateTiersFromEnv); nil is the
+	// shipped ladder.
+	RateTiers           RateTiers
 	JWTSecret           string
 	JWTTTL              time.Duration
 	CookieSecure        bool
@@ -528,6 +531,9 @@ type Config struct {
 // allowlist is not credentialed — it only permits non-credentialed cross-origin
 // reads of the public endpoints.
 func Register(app *fiber.App, cfg Config) {
+	if cfg.RateTiers == nil {
+		cfg.RateTiers = DefaultRateTiers()
+	}
 	queries := db.New(cfg.Pool)
 	a := &API{
 		pool:         cfg.Pool,
@@ -538,6 +544,7 @@ func Register(app *fiber.App, cfg Config) {
 	authH := newAuthHandlers(queries, cfg.Pool, cfg.Throttler, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
 		servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
 	authH.authV2Enabled = cfg.AuthV2Enabled
+	authH.rateTiers = cfg.RateTiers
 	authH.mobileCallbacks = cfg.MobileAuthCallbacks
 	authH.mobileAuth = mobileauth.NewStore(cfg.Pool)
 	authH.recentAuth = recentauth.NewStore(cfg.Pool, cfg.RecentAuthTTL)
@@ -677,7 +684,7 @@ func Register(app *fiber.App, cfg Config) {
 	// here rather than passed to a constructor that already takes ten arguments.
 	authH.withInvites(promoSvc)
 	// Public: a pricing page that needs an account cannot do a pricing page's job.
-	plansH := newPlansHandlers(cfg.Plan, billingSvc, cfg.PublicAnonStrict)
+	plansH := newPlansHandlers(cfg.Plan, billingSvc, cfg.PublicAnonStrict, cfg.RateTiers)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, plans)
 	// The CV store is shared: the CV surface owns the write path, referrals render from it
 	// and autofill reads the base CV's contact header out of it. AGENTS.md puts shared
@@ -1039,9 +1046,10 @@ func Register(app *fiber.App, cfg Config) {
 		outboundFetch:  contributionLimiter(cfg.Throttler),
 		throttler:      cfg.Throttler,
 		public: newPublicGate(cfg.Throttler, queries, publicGateConfig{
-			Strict:     cfg.PublicAnonStrict,
-			BotSecret:  cfg.VerifiedBotSecret,
-			PricingURL: strings.TrimRight(cfg.FrontendOrigin, "/") + "/pricing#api",
+			Strict:    cfg.PublicAnonStrict,
+			Tiers:     cfg.RateTiers,
+			BotSecret: cfg.VerifiedBotSecret,
+			Origin:    strings.TrimRight(cfg.FrontendOrigin, "/"),
 		}),
 	}
 

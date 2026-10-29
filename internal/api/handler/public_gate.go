@@ -14,26 +14,20 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/identity/auth"
-	"github.com/strelov1/freehire/internal/identity/billing"
+	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// The commercial API's budgets (openspec/changes/commercial-api-paid-keys).
+// The budgets themselves are the rate-tier ladder (rate_tiers.go).
 //
-// Anonymous: measured on prod for 2026-10-19, 34 of 24,859 API-calling IPs made more than
-// 2,000 requests that day, and they were catalogue mirrors; the ai-job-search skill's IPs
-// average 14 a day but burst to 200–300 a minute. So the DAY cap is what stops a mirror, and
+// Anonymous, under strict: measured on prod for 2026-10-19, 34 of 24,859 API-calling IPs made
+// more than 2,000 requests that day, and they were catalogue mirrors; the ai-job-search skill's
+// IPs average 14 a day but burst to 200–300 a minute. So the DAY cap is what stops a mirror, and
 // the minute cap is set where a skill burst degrades into Retry-After rather than breaking.
-// Both are shared by the read and agent-search routes, so switching routes does not double a
-// caller's allowance.
 //
-// Paid: per ACCOUNT, all of its keys drawing on one budget.
-const (
-	anonPerMinute     = 120
-	anonPerDay        = 2000
-	paidAPIPerMinute  = 1200
-	paidDataPerMinute = 6000
-)
+// Every tier's budget is shared by the read and agent-search routes, so switching routes does
+// not double a caller's allowance. A keyed tier is per ACCOUNT: all of its keys and access
+// tokens draw on one budget.
 
 // verifiedBotHeader is set by a Cloudflare Transform Rule when cf.client.bot is true, carrying
 // a secret. The origin also listens publicly, so the header means nothing unless its value is
@@ -83,21 +77,34 @@ var (
 	chatAgentBudget = publicBudget{name: agentSearchBudget.name, perMinute: agentSearchPerMinute, legacyOnly: true}
 )
 
-// apiKeyTiers resolves a presented key to its owner and the owner's API entitlement.
+// apiKeyTiers resolves a presented credential — an API key, or an MCP or CLI access token — to
+// its owner and how far the owner's paid plans reach.
 type apiKeyTiers interface {
 	ResolveAPIKeyTier(ctx context.Context, tokenHash string) (db.ResolveAPIKeyTierRow, error)
+	ResolveOAuthGrantTier(ctx context.Context, tokenHash string) (db.ResolveOAuthGrantTierRow, error)
+}
+
+// resolvedCredential is what the gate keeps about a credential it has looked up: whose it is,
+// whether it may carry a tier at all, and the plan horizons the tier is read from per request.
+type resolvedCredential struct {
+	userID                                    int64
+	full                                      bool
+	apiUntil, dataUntil, proUntil, ultraUntil time.Time
 }
 
 // publicGateConfig is what the environment decides about the gate.
 type publicGateConfig struct {
-	// Strict applies the shared 120/min + 2,000/day anonymous budgets (PUBLIC_ANON_LIMITS=strict).
-	// Off keeps each route's previous per-minute budget, so paid plans can go on sale before the
-	// free tier tightens.
+	// Strict applies the anonymous tier's shared budget (PUBLIC_ANON_LIMITS=strict). Off keeps
+	// each route's previous per-minute budget for a caller with no key; keyed tiers apply either
+	// way, which is why their minute never sits below that previous budget.
 	Strict bool
+	// Tiers is every tier's budget (RateTiersFromEnv).
+	Tiers RateTiers
 	// BotSecret is VERIFIED_BOT_SECRET; empty disables the verified-bot exemption.
 	BotSecret string
-	// PricingURL is named in a 429, so a refused caller learns how to stop being refused.
-	PricingURL string
+	// Origin is the site's address. A 429 names the next rung up from it, so a refused caller
+	// learns how to stop being refused.
+	Origin string
 }
 
 // publicGate is the rate limiter of every public read route: one place that decides which
@@ -111,18 +118,21 @@ type publicGate struct {
 
 	lookups singleflight.Group
 	mu      sync.Mutex
-	hits    map[string]cachedKeyTier
+	hits    map[string]cachedCredential
 	misses  map[string]time.Time
 }
 
-type cachedKeyTier struct {
-	row     db.ResolveAPIKeyTierRow
+type cachedCredential struct {
+	cred    resolvedCredential
 	expires time.Time
 }
 
 func newPublicGate(throttler ratelimit.Throttler, keys apiKeyTiers, cfg publicGateConfig) *publicGate {
+	if cfg.Tiers == nil {
+		cfg.Tiers = DefaultRateTiers()
+	}
 	return &publicGate{throttler: throttler, keys: keys, cfg: cfg, now: time.Now,
-		hits: map[string]cachedKeyTier{}, misses: map[string]time.Time{}}
+		hits: map[string]cachedCredential{}, misses: map[string]time.Time{}}
 }
 
 // limiter is the middleware a public read route mounts for its budget class.
@@ -137,16 +147,14 @@ func (g *publicGate) limiter(b publicBudget) fiber.Handler {
 		if ratelimit.TrustedPeer(c) || g.verifiedBot(c) {
 			return c.Next()
 		}
-		userID, tier := g.paidTier(c)
+		userID, tier := g.callerTier(c)
 		if userID != 0 {
 			c.Locals(localsGateKeyUser, userID)
 		}
 		if err := g.enforce(c, b, userID, tier); err != nil {
-			// The upsell names the paid plans to an ANONYMOUS caller only: a paying one who
-			// ran out already holds a key, and telling them to use one reads as a bug.
-			if tier == billing.APITierNone && isTooManyRequests(err) && g.cfg.PricingURL != "" {
+			if path, next := nextRung(tier); next != "" && isTooManyRequests(err) && g.cfg.Origin != "" {
 				return fiber.NewError(fiber.StatusTooManyRequests,
-					"too many requests, please try again later — for higher limits use an API key: "+g.cfg.PricingURL)
+					"too many requests, please try again later — for higher limits "+next+": "+g.cfg.Origin+path)
 			}
 			return err
 		}
@@ -154,42 +162,52 @@ func (g *publicGate) limiter(b publicBudget) fiber.Handler {
 	}
 }
 
-func (g *publicGate) enforce(c *fiber.Ctx, b publicBudget, userID int64, tier billing.APITier) error {
-	if tier != billing.APITierNone {
-		return ratelimit.Enforce(c, g.throttler, "paid:"+strconv.FormatInt(userID, 10), paidPerMinute(tier), time.Minute)
+// nextRung is where a refused caller of a tier can go for a bigger budget, and what to call it,
+// or "" at the top of the ladder.
+func nextRung(tier rateTier) (path, next string) {
+	switch tier {
+	case rateAnonymous:
+		return "/my/integrations/api-keys", "sign in and use a free API key"
+	case rateFree:
+		return "/pricing", "upgrade to Pro"
+	case ratePro, rateUltra, rateAPI:
+		return "/jobs-api", "see the API plans"
+	}
+	return "", ""
+}
+
+func (g *publicGate) enforce(c *fiber.Ctx, b publicBudget, userID int64, tier rateTier) error {
+	if tier != rateAnonymous {
+		id := strconv.FormatInt(userID, 10)
+		return g.enforceMinuteAndDay(c, "acct:"+id, "acctday:"+id, g.cfg.Tiers[tier])
 	}
 	ip := c.IP()
 	if !g.cfg.Strict || b.legacyOnly {
 		return ratelimit.Enforce(c, g.throttler, b.name+":"+ip, b.perMinute, time.Minute)
 	}
-	// The minute FIRST, so a request it refuses never reaches the day: GCRA charges only what
-	// it admits, and a skill bursting past the minute cap would otherwise burn its daily
-	// allowance on refusals within minutes. On an admitted request the response reports the
-	// minute's budget — the one a client paces against and the one that refuses it first.
-	minuteKey, dayKey := "anon:"+ip, "anonday:"+ip
-	minute, minuteKnown := ratelimit.Check(c, g.throttler, minuteKey, anonPerMinute, time.Minute)
+	return g.enforceMinuteAndDay(c, "anon:"+ip, "anonday:"+ip, g.cfg.Tiers[rateAnonymous])
+}
+
+// enforceMinuteAndDay applies a tier's two budgets; a PerDay of 0 is no daily cap.
+//
+// The minute FIRST, so a request it refuses never reaches the day: GCRA charges only what it
+// admits, and a skill bursting past the minute cap would otherwise burn its daily allowance on
+// refusals within minutes. On an admitted request the response reports the minute's budget —
+// the one a client paces against and the one that refuses it first.
+func (g *publicGate) enforceMinuteAndDay(c *fiber.Ctx, minuteKey, dayKey string, l rateLimit) error {
+	minute, minuteKnown := ratelimit.Check(c, g.throttler, minuteKey, l.PerMinute, time.Minute)
 	if minuteKnown && !minute.Allowed {
 		return ratelimit.Apply(c, minute, minuteKey, time.Minute)
 	}
-	if day, dayKnown := ratelimit.Check(c, g.throttler, dayKey, anonPerDay, 24*time.Hour); dayKnown && !day.Allowed {
-		return ratelimit.Apply(c, day, dayKey, 24*time.Hour)
+	if l.PerDay > 0 {
+		if day, dayKnown := ratelimit.Check(c, g.throttler, dayKey, l.PerDay, 24*time.Hour); dayKnown && !day.Allowed {
+			return ratelimit.Apply(c, day, dayKey, 24*time.Hour)
+		}
 	}
 	if minuteKnown {
 		return ratelimit.Apply(c, minute, minuteKey, time.Minute)
 	}
 	return nil
-}
-
-// paidPerMinute is the public-read rate an API tier buys; zero for no tier.
-func paidPerMinute(tier billing.APITier) int {
-	switch tier {
-	case billing.APITierData:
-		return paidDataPerMinute
-	case billing.APITierAPI:
-		return paidAPIPerMinute
-	default:
-		return 0
-	}
 }
 
 func isTooManyRequests(err error) bool {
@@ -204,27 +222,60 @@ func (g *publicGate) verifiedBot(c *fiber.Ctx) bool {
 	return subtle.ConstantTimeCompare([]byte(c.Get(verifiedBotHeader)), []byte(g.cfg.BotSecret)) == 1
 }
 
-// paidTier is the account and API tier behind the request's key, or APITierNone when the
-// request carries no key, a key of another scope, a key of an account without the product, or
-// a key that could not be resolved. Only a full-scope key counts: an embed key is published
-// inside third-party pages by design, and a paid rate on it would be anyone's for the copying.
-func (g *publicGate) paidTier(c *fiber.Ctx) (int64, billing.APITier) {
-	token, ok := auth.PresentedAPIKey(c)
-	if !ok || g.keys == nil || !auth.WellFormedAPIKey(token) {
-		return 0, billing.APITierNone
+// callerTier is the account and rate tier behind the request's credential, or (0,
+// rateAnonymous) when it carries none, one of another scope, or one that could not be resolved.
+// Two credentials count: an API key and an MCP or CLI access token, which act as the same
+// account on every REST route (apiKeys.AuthenticateAPIKey). Only a full-scope key counts: an
+// embed key is published inside third-party pages by design, and a keyed rate on it would be
+// anyone's for the copying.
+func (g *publicGate) callerTier(c *fiber.Ctx) (int64, rateTier) {
+	token := auth.PresentedBearer(c)
+	if g.keys == nil {
+		return 0, rateAnonymous
 	}
-	row, known := g.resolve(c, auth.HashAPIKey(token))
-	if !known || row.Scope != auth.ScopeFull {
-		return 0, billing.APITierNone
+	var cred resolvedCredential
+	var known bool
+	switch {
+	case auth.WellFormedAPIKey(token):
+		cred, known = g.resolve(c, auth.HashAPIKey(token), g.lookupAPIKey)
+	case oauth2server.WellFormedAccessToken(token):
+		cred, known = g.resolve(c, oauth2server.HashToken(token), g.lookupAccessToken)
 	}
-	return row.UserID, billing.APITierOf(row.ApiUntilStripe.Time, row.ApiDataUntilStripe.Time, g.now())
+	if !known || !cred.full {
+		return 0, rateAnonymous
+	}
+	return cred.userID, accountRateTier(cred.apiUntil, cred.dataUntil, cred.proUntil, cred.ultraUntil, g.now())
 }
 
-// resolve looks a key up through the caches. The tier itself is resolved per request from the
-// cached timestamps, so a subscription lapsing mid-entry is seen at once; what the cache
-// delays is only a CHANGE to the account. A lookup that errored is not cached — the database
-// being down must not pin a paying key to the anonymous rate for a minute after it recovers.
-func (g *publicGate) resolve(c *fiber.Ctx, hash string) (db.ResolveAPIKeyTierRow, bool) {
+func (g *publicGate) lookupAPIKey(ctx context.Context, hash string) (resolvedCredential, error) {
+	row, err := g.keys.ResolveAPIKeyTier(ctx, hash)
+	if err != nil {
+		return resolvedCredential{}, err
+	}
+	return resolvedCredential{userID: row.UserID, full: row.Scope == auth.ScopeFull,
+		apiUntil: row.ApiUntilStripe.Time, dataUntil: row.ApiDataUntilStripe.Time,
+		proUntil: row.ProUntil.Time, ultraUntil: row.UltraUntil.Time}, nil
+}
+
+// lookupAccessToken resolves an MCP or CLI token, which is always full scope: an OAuth grant has
+// no narrower variant to request.
+func (g *publicGate) lookupAccessToken(ctx context.Context, hash string) (resolvedCredential, error) {
+	row, err := g.keys.ResolveOAuthGrantTier(ctx, hash)
+	if err != nil {
+		return resolvedCredential{}, err
+	}
+	return resolvedCredential{userID: row.UserID, full: true,
+		apiUntil: row.ApiUntilStripe.Time, dataUntil: row.ApiDataUntilStripe.Time,
+		proUntil: row.ProUntil.Time, ultraUntil: row.UltraUntil.Time}, nil
+}
+
+// resolve looks a credential up through the caches. The tier itself is resolved per request
+// from the cached timestamps, so a subscription lapsing mid-entry is seen at once; what the
+// cache delays is only a CHANGE to the account. A lookup that errored is not cached — the
+// database being down must not pin a paying key to the anonymous rate for a minute after it
+// recovers. The two credential kinds share the caches: their hashes cannot collide, since the
+// tokens carry different prefixes.
+func (g *publicGate) resolve(c *fiber.Ctx, hash string, lookup func(context.Context, string) (resolvedCredential, error)) (resolvedCredential, bool) {
 	now := g.now()
 	g.mu.Lock()
 	hit, isHit := g.hits[hash]
@@ -232,16 +283,16 @@ func (g *publicGate) resolve(c *fiber.Ctx, hash string) (db.ResolveAPIKeyTierRow
 	g.mu.Unlock()
 	switch {
 	case isHit && now.Before(hit.expires):
-		return hit.row, true
+		return hit.cred, true
 	case isMiss && now.Before(missAt.Add(keyTierTTL)):
-		return db.ResolveAPIKeyTierRow{}, false
+		return resolvedCredential{}, false
 	}
 
 	// An uncached lookup spends the caller's lookup budget. Out of it, the key is simply not
 	// resolved this time: the request is served as anonymous, which is what it would be if
 	// the key were fake, and a real key gets resolved on a later request.
 	if !g.lookupAllowed(c) {
-		return db.ResolveAPIKeyTierRow{}, false
+		return resolvedCredential{}, false
 	}
 
 	// One lookup per key at a time: when a busy paid key's entry expires, its concurrent
@@ -249,16 +300,16 @@ func (g *publicGate) resolve(c *fiber.Ctx, hash string) (db.ResolveAPIKeyTierRow
 	v, err, _ := g.lookups.Do(hash, func() (any, error) {
 		ctx, cancel := context.WithTimeout(c.Context(), keyLookupTimeout)
 		defer cancel()
-		return g.keys.ResolveAPIKeyTier(ctx, hash)
+		return lookup(ctx, hash)
 	})
 	switch {
 	case err == nil:
-		row := v.(db.ResolveAPIKeyTierRow)
+		cred := v.(resolvedCredential)
 		g.mu.Lock()
-		g.hits[hash] = cachedKeyTier{row: row, expires: now.Add(keyTierTTL)}
+		g.hits[hash] = cachedCredential{cred: cred, expires: now.Add(keyTierTTL)}
 		delete(g.misses, hash)
 		g.mu.Unlock()
-		return row, true
+		return cred, true
 	case errors.Is(err, pgx.ErrNoRows):
 		g.mu.Lock()
 		if len(g.misses) >= missCacheMax {
@@ -268,7 +319,7 @@ func (g *publicGate) resolve(c *fiber.Ctx, hash string) (db.ResolveAPIKeyTierRow
 		delete(g.hits, hash)
 		g.mu.Unlock()
 	}
-	return db.ResolveAPIKeyTierRow{}, false
+	return resolvedCredential{}, false
 }
 
 // lookupAllowed spends one of the caller's uncached-lookup budget. It is a ratelimit.Check and

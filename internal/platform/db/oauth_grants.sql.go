@@ -213,3 +213,37 @@ func (q *Queries) ListOAuthGrantsByUser(ctx context.Context, userID int64) ([]Li
 	}
 	return items, nil
 }
+
+const resolveOAuthGrantTier = `-- name: ResolveOAuthGrantTier :one
+SELECT g.user_id, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
+FROM oauth_grants g
+JOIN users u ON u.id = g.user_id
+WHERE g.access_token_hash = $1
+  AND g.expires_at > now()
+  AND g.issued_token_version = u.token_version
+`
+
+type ResolveOAuthGrantTierRow struct {
+	UserID             int64              `json:"user_id"`
+	ApiUntilStripe     pgtype.Timestamptz `json:"api_until_stripe"`
+	ApiDataUntilStripe pgtype.Timestamptz `json:"api_data_until_stripe"`
+	ProUntil           pgtype.Timestamptz `json:"pro_until"`
+	UltraUntil         pgtype.Timestamptz `json:"ultra_until"`
+}
+
+// ResolveAPIKeyTier's twin for an MCP or CLI access token: its owner and how far the owner's
+// paid plans reach, for the public-read rate limiter. The same liveness rule as
+// AuthenticateOAuthGrant, and read-only for the same reason ResolveAPIKeyTier is. No row
+// covers unknown, expired and revoked alike.
+func (q *Queries) ResolveOAuthGrantTier(ctx context.Context, accessTokenHash string) (ResolveOAuthGrantTierRow, error) {
+	row := q.db.QueryRow(ctx, resolveOAuthGrantTier, accessTokenHash)
+	var i ResolveOAuthGrantTierRow
+	err := row.Scan(
+		&i.UserID,
+		&i.ApiUntilStripe,
+		&i.ApiDataUntilStripe,
+		&i.ProUntil,
+		&i.UltraUntil,
+	)
+	return i, err
+}
