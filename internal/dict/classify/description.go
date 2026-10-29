@@ -139,7 +139,9 @@ func SeniorityFromDescription(desc string) string {
 // junior off that line. Every senior posting that mentors says so, so the guard reads
 // only the two entry grades — a higher grade's phrases are not what a role mentors.
 var mentorVerbs = []string{
-	"mentor", "mentors", "mentoring", "mentorship",
+	// No "mentorship": the noun is a benefit the role receives ("we offer mentorship in
+	// this entry-level position"), not a role it plays.
+	"mentor", "mentors", "mentoring",
 	"coach", "coaches", "coaching",
 	"guide", "guides", "guiding",
 	"supervise", "supervises", "supervising",
@@ -149,8 +151,13 @@ var mentorVerbs = []string{
 // mentorWindow is how far before a grade phrase a mentoring verb still governs it.
 const mentorWindow = 40
 
+// clauseBreaks end the stretch a mentoring verb governs: sentence punctuation, a line
+// break, and the block-level tags a list item or paragraph opens and closes with. An
+// inline tag ("mentor <strong>junior-level</strong> engineers") is not one.
+var clauseBreaks = []string{".", ";", "!", "?", "\n", "<li", "</li", "<p", "</p", "<br", "<div", "</div"}
+
 // notMentored is wordmatch.UnicodeBoundary that also refuses a match a mentoring verb
-// governs: one within mentorWindow bytes before it in the same sentence or list item.
+// governs: one within mentorWindow bytes before it, with no clauseBreaks between them.
 func notMentored(s string, start, end int) bool {
 	if !wordmatch.UnicodeBoundary(s, start, end) {
 		return false
@@ -160,8 +167,10 @@ func notMentored(s string, start, end int) bool {
 		lo--
 	}
 	before := s[lo:start]
-	if i := strings.LastIndexAny(before, ".;!?>"); i >= 0 {
-		before = before[i+1:]
+	for _, b := range clauseBreaks {
+		if i := strings.LastIndex(before, b); i >= 0 {
+			before = before[i+len(b):]
+		}
 	}
 	for _, v := range mentorVerbs {
 		if wordmatch.Contains(before, v, wordmatch.UnicodeBoundary) {
