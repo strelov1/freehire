@@ -5,6 +5,7 @@ package sources
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
@@ -358,3 +359,34 @@ type livenessProbed interface{ livenessProbed() }
 // grantable on the same evidence. See habrcareer.go's fullCatalog Fetch for the pattern
 // (any page failure is a hard error, never a partial result) and FullBoardListingProviders.
 type fullBoardListing interface{ fullBoardListing() }
+
+// emptyBoardListing marks a fullBoardListing adapter whose Fetch returns an EMPTY list only when
+// the source itself stated that the board carries no postings, so a finished crawl that listed
+// nothing may close the board's stored postings through the ordinary board-scoped close.
+// fullBoardListing alone does not prove that: its bar is about a listing being read to its END,
+// and an answer that never had a listing in it — a challenge page, an HTML error page served
+// with 200, a JSON envelope without its posting collection, a page whose markup moved so that
+// nothing parses — ends a walk on its first page and looks exactly like an empty board. Without
+// this marker such a board's last postings stayed open until the empty-feed net closed them 30
+// days later (cmd/close-chronic-boards); with it, a wrongly granted adapter would close a live
+// board's whole catalogue on the 48h window.
+//
+// The bar: a non-2xx answer is a failed Fetch, an answer that does not decode as the source's
+// listing is a failed Fetch, and an answer that decodes but carries no posting collection at
+// all (the key absent or null) is a failed Fetch too (errListingAbsent) — only the collection
+// present and empty is an empty board. A source that answers an UNKNOWN board with an empty
+// listing (SmartRecruiters' totalFound=0 for any company identifier, measured 2026-10-29) does
+// not qualify: the empty answer is then also what a failed lookup looks like. An HTML-scraped
+// listing does not qualify either, since zero links parsed is what moved markup looks like.
+// Granted per adapter after that check, never by sweeping the fullBoardListing set — a test
+// holds every member to fullBoardListing and to the default sweep window. See
+// EmptyBoardListingProviders.
+type emptyBoardListing interface{ emptyBoardListing() }
+
+// errListingAbsent is the failed Fetch an emptyBoardListing adapter returns when its listing
+// response decoded without the collection the source lists postings in. An empty board answers
+// with the collection present and empty; an answer without it is not that answer, and treating
+// it as one would close the board.
+func errListingAbsent(provider, board, field string) error {
+	return fmt.Errorf("%s: board %s: the listing response carries no %q collection", provider, board, field)
+}

@@ -37,6 +37,10 @@ func (recruitee) Provider() string { return "recruitee" }
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
 func (recruitee) fullBoardListing() {}
 
+// emptyBoardListing: an unknown board answers 404, and an emptied one
+// answers 200 with "offers": [] (2026-10-29); an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
+func (recruitee) emptyBoardListing() {}
+
 func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	url := fmt.Sprintf(recruiteeBaseURL, e.Board)
 
@@ -59,6 +63,9 @@ func (r recruitee) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 	if err := r.http.GetJSON(ctx, url, &resp); err != nil {
 		return nil, fmt.Errorf("recruitee: fetch board %s: %w", e.Board, err)
+	}
+	if resp.Offers == nil {
+		return nil, errListingAbsent("recruitee", e.Board, "offers")
 	}
 
 	jobs := make([]Job, 0, len(resp.Offers))

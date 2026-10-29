@@ -31,6 +31,11 @@ func (bambooHR) Provider() string { return "bamboohr" }
 // See the fullBoardListing interface for the bar.
 func (bambooHR) fullBoardListing() {}
 
+// emptyBoardListing: an unknown board redirects to an HTML page (ErrBoardGone
+// or a decode failure), and an emptied one answers 200 with "result": [] (2026-10-29); an
+// envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
+func (bambooHR) emptyBoardListing() {}
+
 // bambooHRBoardGone reports whether a careers-list request was redirected off the board's
 // own careers path, and to where. That is how BambooHR says it is not serving a board: the
 // request answers 302, the client follows it, and the JSON decode fails on HTML.
@@ -103,6 +108,9 @@ func (b bambooHR) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			return nil, fmt.Errorf("bamboohr: board %q: %w (redirected to %s)", e.Board, ErrBoardGone, dest)
 		}
 		return nil, fmt.Errorf("bamboohr: list board %s: %w", e.Board, err)
+	}
+	if list.Result == nil {
+		return nil, errListingAbsent("bamboohr", e.Board, "result")
 	}
 
 	// Each posting's description comes from its own detail request, fanned out under a

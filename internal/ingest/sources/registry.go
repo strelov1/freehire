@@ -115,6 +115,19 @@ func FullBoardListingProviders(reg map[string]Source) map[string]bool {
 	return out
 }
 
+// EmptyBoardListingProviders returns the provider names in reg whose adapter carries the
+// emptyBoardListing marker: a finished crawl of one of their boards that listed nothing is
+// evidence the board is empty, so cmd/ingest admits it to the board-scoped close.
+func EmptyBoardListingProviders(reg map[string]Source) map[string]bool {
+	out := make(map[string]bool)
+	for name, src := range reg {
+		if _, ok := src.(emptyBoardListing); ok {
+			out[name] = true
+		}
+	}
+	return out
+}
+
 // AggregatorProviders returns the sorted provider names in reg that aggregate postings
 // from many companies (see aggregator). The cross-source dedup pass uses this to tell an
 // aggregator copy (which may be suppressed) from a first-party ATS posting (which wins).

@@ -119,6 +119,23 @@ func boardQualifies(e sources.CompanyEntry, st Stats) bool {
 	return e.Board != "" && st.Failed == 0 && st.Interrupted == 0 && boardReachedPostings(st) && boardReadWhatItListed(st)
 }
 
+// boardListedEmpty reports whether a board's crawl FINISHED and its listing named no posting at
+// all — the shape a board takes once its employer has taken every posting down. boardQualifies
+// refuses it, because on most adapters an empty answer cannot be told from a crawl that silently
+// broke; the board's last postings then stayed open until the empty-feed net (cmd/close-chronic-
+// boards, 30 days) reached them. Reported apart from QualifyingBoards so cmd/ingest can admit it
+// to the board-scoped close only for a provider whose adapter is registered as telling the two
+// apart (sources.emptyBoardListing).
+//
+// The same conditions boardQualifies reads, minus the yield: the board was crawled (not skipped
+// as Cooled or Quiet), its crawl did not fail, and the run's context did not cut it short.
+// "Named no posting" is boardListedAnyPosting's generous reading, so a board whose every posting
+// was unreadable, skipped or rejected is NOT empty — its listing named something.
+func boardListedEmpty(e sources.CompanyEntry, st Stats) bool {
+	return e.Board != "" && st.Failed == 0 && st.Interrupted == 0 && st.Cooled == 0 && st.Quiet == 0 &&
+		!boardListedAnyPosting(st)
+}
+
 // providerBoard identifies a board by name alone, ignoring region — the key the board-scoped
 // close's SQL predicate is forced to use, since externalid.Namespace does not encode region.
 // Deliberately NOT the existing boardKey{provider, board, region}: that type identifies one

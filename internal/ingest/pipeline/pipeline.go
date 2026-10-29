@@ -256,6 +256,11 @@ type Stats struct {
 	// scope input (freehire#2328): cmd/ingest still gates a board-scoped close on the
 	// provider's adapter carrying the fullBoardListing marker before using any of these.
 	QualifyingBoards []string
+	// EmptyBoards lists the boards this run crawled to completion whose listing named no
+	// posting at all — see boardListedEmpty. cmd/ingest adds them to the board scope only for a
+	// provider whose adapter is registered as proving an empty answer (emptyBoardListing on top
+	// of fullBoardListing); for every other provider an empty answer may be a broken crawl.
+	EmptyBoards []string
 	// UnprovenCompanies lists the company slugs whose postings this run may NOT be used as
 	// evidence to close, because a board they are filed under did not read what it listed
 	// (boardReadWhatItListed). cmd/ingest subtracts them from the crawled-company scope of
@@ -287,6 +292,7 @@ func (s *Stats) add(o Stats) {
 	s.Unreadable += o.Unreadable
 	s.Interrupted += o.Interrupted
 	s.QualifyingBoards = append(s.QualifyingBoards, o.QualifyingBoards...)
+	s.EmptyBoards = append(s.EmptyBoards, o.EmptyBoards...)
 	s.UnprovenCompanies = append(s.UnprovenCompanies, o.UnprovenCompanies...)
 	s.SkippedBoards = append(s.SkippedBoards, o.SkippedBoards...)
 }
@@ -420,8 +426,13 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 			if !already {
 				boardStats = r.ingestBoard(ctx, e)
 			}
-			if boardQualifies(e, boardStats) && !ambiguous[providerBoard{e.Provider, e.Board}] {
-				boardStats.QualifyingBoards = append(boardStats.QualifyingBoards, e.Board)
+			if !ambiguous[providerBoard{e.Provider, e.Board}] {
+				switch {
+				case boardQualifies(e, boardStats):
+					boardStats.QualifyingBoards = append(boardStats.QualifyingBoards, e.Board)
+				case boardListedEmpty(e, boardStats):
+					boardStats.EmptyBoards = append(boardStats.EmptyBoards, e.Board)
+				}
 			}
 			crawled.Add(1)
 

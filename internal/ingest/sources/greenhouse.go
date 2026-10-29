@@ -32,6 +32,10 @@ func (greenhouse) Provider() string { return "greenhouse" }
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
 func (greenhouse) fullBoardListing() {}
 
+// emptyBoardListing: an unknown board answers 404, and an emptied one
+// answers 200 with "jobs": [] (skedda, 2026-10-29); an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
+func (greenhouse) emptyBoardListing() {}
+
 func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	url := fmt.Sprintf("%s/%s/jobs?content=true", greenhouseBaseURL, e.Board)
 
@@ -40,6 +44,9 @@ func (g greenhouse) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 	if err := g.http.GetJSON(ctx, url, &resp); err != nil {
 		return nil, fmt.Errorf("greenhouse: fetch board %s: %w", e.Board, err)
+	}
+	if resp.Jobs == nil {
+		return nil, errListingAbsent("greenhouse", e.Board, "jobs")
 	}
 
 	jobs := make([]Job, 0, len(resp.Jobs))

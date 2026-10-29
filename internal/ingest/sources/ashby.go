@@ -23,6 +23,10 @@ func (ashby) Provider() string { return "ashby" }
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
 func (ashby) fullBoardListing() {}
 
+// emptyBoardListing: an unknown board answers 404, and an emptied one
+// answers 200 with "jobs": [] (umbrel, 2026-10-29); an envelope without the array fails Fetch. See the emptyBoardListing interface for the bar.
+func (ashby) emptyBoardListing() {}
+
 func (a ashby) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// includeCompensation=true is required — omitted, the API silently drops the
 	// compensation object entirely rather than erroring (confirmed live 2026-08-14).
@@ -33,6 +37,9 @@ func (a ashby) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 	if err := a.http.GetJSON(ctx, url, &resp); err != nil {
 		return nil, fmt.Errorf("ashby: fetch board %s: %w", e.Board, err)
+	}
+	if resp.Jobs == nil {
+		return nil, errListingAbsent("ashby", e.Board, "jobs")
 	}
 
 	jobs := make([]Job, 0, len(resp.Jobs))
