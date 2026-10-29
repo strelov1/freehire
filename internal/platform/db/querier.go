@@ -7168,10 +7168,10 @@ type Querier interface {
 	// leave an orphaned Google event. No WHERE beyond the id — this always follows a
 	// successful CreateMentorBooking for the same row, in the same request.
 	SetMentorBookingCalendarEvent(ctx context.Context, arg SetMentorBookingCalendarEventParams) error
-	// Records that a mentor completed the busy-sync connect flow's own callback. Set only
-	// there, never inferred from `scopes` alone: calendar.readonly is the same scope the
-	// unrelated candidate-side calendar grant already requests, so scope presence cannot
-	// tell the two purposes apart (see mentor-calendar-busy-sync's design.md).
+	// Records that the account completed the calendar connect flow, whose one consent covers
+	// busy-time sync. Set only there, never inferred from `scopes` alone: a calendar grant
+	// made before the calendar consents merged holds calendar.readonly for interviews only,
+	// so scope presence cannot tell the two apart.
 	SetMentorBusySyncOptedIn(ctx context.Context, userID int64) error
 	// The mentor's own switch. Deliberately independent of status: pausing and resuming
 	// need no moderator, and neither may alter what the moderator decided.

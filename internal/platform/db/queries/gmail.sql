@@ -53,10 +53,10 @@ FROM gmail_connections
 WHERE status = 'connected' AND email <> '';
 
 -- name: SetMentorBusySyncOptedIn :exec
--- Records that a mentor completed the busy-sync connect flow's own callback. Set only
--- there, never inferred from `scopes` alone: calendar.readonly is the same scope the
--- unrelated candidate-side calendar grant already requests, so scope presence cannot
--- tell the two purposes apart (see mentor-calendar-busy-sync's design.md).
+-- Records that the account completed the calendar connect flow, whose one consent covers
+-- busy-time sync. Set only there, never inferred from `scopes` alone: a calendar grant
+-- made before the calendar consents merged holds calendar.readonly for interviews only,
+-- so scope presence cannot tell the two apart.
 UPDATE gmail_connections SET mentor_busy_sync_opted_in = true WHERE user_id = $1;
 
 -- name: ListMentorBusySyncConnections :many
