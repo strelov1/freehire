@@ -469,3 +469,11 @@ func TestOnlySlugs_KeepsWholeGroupsHoldingAListedSlug(t *testing.T) {
 		t.Errorf("kept %v, want %v", canons, want)
 	}
 }
+
+func TestNameWords_SpacedPolishFormIsNotNameWords(t *testing.T) {
+	// The company key strips "Sp. z o. o." whole; counted here as four more words, a one-word
+	// name would pass for a multi-word one when the canonical member is elected.
+	if got := nameWords("DollarTree Sp. z o. o."); got != 1 {
+		t.Errorf("nameWords = %d, want 1", got)
+	}
+}

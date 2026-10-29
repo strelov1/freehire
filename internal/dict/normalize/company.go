@@ -105,7 +105,7 @@ func CompanySlug(name string) string { return trimTail(name, IsLegalFormBefore, 
 // the Malaysian "Sdn Bhd", and the Polish "Sp. z o.o." with its spelled-out "Spółka z o.o."
 // and the half-glued "Sp.z o.o.". Since each word needs the next one already stripped, the walk
 // takes "o.o.", then "z", then "Sp." — and "Generation Z" keeps its "Z". The spaced "o. o." is
-// closed up before the walk (see [spacedPolishTail]). "Sp. z.o.o." is not reached: "z.o.o." is
+// closed up before the walk (see [CloseSpacedForms]). "Sp. z.o.o." is not reached: "z.o.o." is
 // the letters "zoo", which ends real names.
 var formQualifiers = map[string]map[string]struct{}{
 	"private": {"limited": {}, "ltd": {}},
@@ -125,7 +125,7 @@ var formQualifiers = map[string]map[string]struct{}{
 //
 // It is exported for the callers that walk a name's tail with their own word breaks and must
 // stay on the company key's vocabulary (merge-companies' nameWords, mailmatch's stripLegalForm,
-// collections' significantFields):
+// collections' significantFields) — each after [CloseSpacedForms]:
 // a walk that asked IsLegalForm alone would leave "Private" behind where the key drops it.
 func IsLegalFormBefore(word, next string) bool {
 	if IsLegalForm(word) {
@@ -191,7 +191,7 @@ func BoardNameSlug(name string) string {
 // be recognised without either half being a form on its own.
 func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark bool) string {
 	rest, mark := trimJapaneseForms(name)
-	rest = spacedPolishTail.ReplaceAllString(rest, "${1}o.o.")
+	rest = CloseSpacedForms(rest)
 	words := strings.FieldsFunc(dropApostrophes(rest), isWordBreak)
 	next := ""
 	for len(words) > 1 && isTail(words[len(words)-1], next) {
@@ -204,13 +204,21 @@ func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark
 	return Slug(strings.Join(words, " "))
 }
 
-// spacedPolishTail matches the Polish "o.o." written with a space inside it, "Sp. z o. o.",
+// CloseSpacedForms closes up the Polish "o.o." written with a space inside it, "Sp. z o. o.",
 // which 82 catalogue companies carry (2026-10-29). Split there, it is two words of the letter
 // "o", and a lone "o" cannot be a form — it would strip the end of any name with an initial.
 // Closing the gap before the walk turns it into the "o.o." [formQualifiers] already reads.
 // It is anchored to the end of the name (past a closing bracket, "Acme (Sp. z o. o.)") and
-// needs the "z" before it, so only that tail moves:
-// the spaced Balkan "d. o. o." would otherwise close up to "d o.o.", which reads as no form.
+// needs the "z" before it, so only that tail moves: the spaced Balkan "d. o. o." would
+// otherwise close up to "d o.o.", which reads as no form.
+//
+// Every walk over a name's tail calls it before splitting the name into words, for the same
+// reason each asks [IsLegalFormBefore]: a walk that skipped it would count "o." "o." as two
+// name words where the company key drops them.
+func CloseSpacedForms(name string) string {
+	return spacedPolishTail.ReplaceAllString(name, "${1}o.o.")
+}
+
 var spacedPolishTail = regexp.MustCompile(`(?i)([\s\p{Zs}.]z[\s\p{Zs}]+)o\.[\s\p{Zs}]+o\.?[\s\p{Zs})\]]*$`)
 
 // dropApostrophes removes the possessive/elision marks a name carries so they cannot become

@@ -64,6 +64,7 @@ var nameSuffixes = []string{
 // companies are written that way. A name of one word is never stripped, so a sender called
 // "Limited" survives.
 func stripLegalForm(s string) string {
+	s = normalize.CloseSpacedForms(s)
 	next := ""
 	for {
 		trimmed := trimTrailingPunct(s)

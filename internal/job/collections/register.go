@@ -34,7 +34,7 @@ func RegisterSlug(name string) string {
 // form test is shared (normalize.IsLegalFormBefore) even though the tokenization is not —
 // the list is what had to stop being duplicated, not the splitting.
 func significantFields(name string) []string {
-	fields := strings.Fields(name)
+	fields := strings.Fields(normalize.CloseSpacedForms(name))
 	next := ""
 	for len(fields) > 1 && normalize.IsLegalFormBefore(fields[len(fields)-1], next) {
 		next = fields[len(fields)-1]

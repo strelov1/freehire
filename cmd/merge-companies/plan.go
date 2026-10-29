@@ -252,7 +252,7 @@ func electCanonical(members []company, frozen map[string]bool) string {
 // distinction a slug cannot preserve, since Slug renders every one of them as a hyphen, and it
 // is the whole reason this reads the name.
 func nameWords(name string) int {
-	fields := strings.FieldsFunc(name, func(r rune) bool {
+	fields := strings.FieldsFunc(normalize.CloseSpacedForms(name), func(r rune) bool {
 		return unicode.IsSpace(r) || r == '-'
 	})
 	next := ""
