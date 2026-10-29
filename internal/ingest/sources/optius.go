@@ -45,12 +45,12 @@ const (
 	// optiusMaxPages is a safety ceiling on one listing walk: 66 pages on 2026-10-29. Reaching
 	// it fails the crawl rather than ending the walk as a success.
 	optiusMaxPages = 300
-	// optiusRequestInterval paces every request of a run at most one a second. Each page takes
-	// ~3 s to render anyway and one request is in flight at a time, so this only bounds a burst
-	// of fast answers.
-	optiusRequestInterval = time.Second
+	// optiusRequestInterval paces every request of a run, listing and posting page alike, at one
+	// every three seconds. One request is in flight at a time, yet a walk paced at one a second
+	// drew a 429 by its twelfth page, while requests back to back at ~4 s each never did.
+	optiusRequestInterval = 3 * time.Second
 	// optiusMaxNewPerRun bounds the posting pages one run reads. The listing walk takes ~5
-	// minutes and a posting page ~3 s, so 400 pages fit the scheduler's 2,400 s crawl budget
+	// minutes and a posting page ~3.5 s, so 400 pages fit the scheduler's 2,400 s crawl budget
 	// with the writes after them. A cold catalogue (~1.3k) is taken over a few runs.
 	optiusMaxNewPerRun   = 400
 	optiusDeadlineMargin = 5 * time.Minute
@@ -338,7 +338,7 @@ func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 	}
 	var ld optiusLD
 	hasLD := ldJobPosting(root, &ld)
-	section := optiusDetailSection(root)
+	section := firstByClass(root, "job-detail-col") // the page's main column
 	if section == nil && !hasLD {
 		if firstByClass(root, "result-count") != nil {
 			return Job{}, false, nil
@@ -365,22 +365,6 @@ func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 		}
 	}
 	return j, true, nil
-}
-
-// optiusDetailSection finds the posting page's main column, <section class="job-detail-col">.
-func optiusDetailSection(root *html.Node) *html.Node {
-	var found *html.Node
-	walk(root, func(n *html.Node) bool {
-		if found != nil {
-			return false
-		}
-		if n.Type == html.ElementNode && n.Data == "section" && HasClass(n, "job-detail-col") {
-			found = n
-			return false
-		}
-		return true
-	})
-	return found
 }
 
 // optiusBody renders the posting from the page's main column: the employer's introduction
