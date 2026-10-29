@@ -51,7 +51,7 @@ func Parse(cvText string) (declared, body, all []string) {
 			bodyLines = append(bodyLines, line)
 		}
 	}
-	declared = skilltag.Parse(strings.Join(skillsLines, "\n"), skilltag.WithResumeAcronyms())
+	declared = skilltag.Parse(strings.Join(skillsLines, "\n"), skilltag.WithResumeAcronyms(), skilltag.WithSkillList())
 	body = skilltag.Parse(strings.Join(bodyLines, "\n"), skilltag.WithResumeAcronyms())
 	return declared, body, union(declared, body)
 }

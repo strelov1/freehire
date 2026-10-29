@@ -5,6 +5,7 @@
   import { BASE_REFRESH_MESSAGE, offerCvRefresh } from '#lib/cvRefreshOffer.js';
   import { errorMessage } from '#lib/utils.js';
   import EducationCard from '#lib/components/profile/EducationCard.svelte';
+  import CompletenessBadge from '#lib/components/profile/CompletenessBadge.svelte';
   import ExperienceBankView from '#lib/components/ExperienceBankView.svelte';
   import { messages } from './messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -36,6 +37,10 @@
   }
 </script>
 
+<div class="mb-4">
+  <CompletenessBadge section="experience" />
+</div>
+
 {#if actionError}
   <p class="mb-4 text-sm text-destructive">{actionError}</p>
 {/if}
@@ -47,6 +52,10 @@
 <!-- Education used to be a tab of its own; /my/profile/education redirects here. The card
      carries its own headings. -->
 <div id="account-education" class="mt-8 scroll-mt-20 border-t border-border pt-6">
+  <div class="mb-4">
+    <CompletenessBadge section="education" />
+  </div>
+
   <EducationCard
     structured={resumeMeta?.structured ?? null}
     contacts={resumeMeta?.contacts ?? null}

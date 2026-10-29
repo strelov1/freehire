@@ -174,5 +174,5 @@ func humanbitEmploymentType(types []string) string {
 // so, like there, the entries are mined via Parse rather than matched whole, and joined
 // into one blob first to keep that mining ability across entry boundaries.
 func humanbitSkills(skills []string) []string {
-	return skilltag.Parse(strings.Join(skills, " "))
+	return skilltag.Parse(strings.Join(skills, " "), skilltag.WithSkillList())
 }

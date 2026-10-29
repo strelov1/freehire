@@ -352,6 +352,27 @@ var coreCategoryTable = []aliasEntry{
 	// dictionary reads on its own. Only the engineering seats resolve.
 	{"hálózati mérnök", "network_engineering"},
 	{"hálózati rendszermérnök", "network_engineering"},
+	// The back end of a can plant, a body shop or a store is an area of the site, and
+	// the trade working it says so: Crown Holdings' "Back End Operator/Mechanic/
+	// Maintainer", a collision shop's "Back-End Estimator", a "Backend Retail
+	// Assistant". Each is filed with its English twin, ahead of the bare alias below —
+	// the "front end cashier" pins' shape. The SHIFT spelling ("Back End Days") is not
+	// a pin but a cut (backEndShiftPatterns), because the role beside it varies. A
+	// bare "back-end associate" is deliberately absent: "associate" names no category
+	// of its own, and prod carries "Back-end Developer Associate" too.
+	{"back end operator", "manufacturing"},
+	{"back-end operator", "manufacturing"},
+	{"back end mechanic", "skilled_trades"},
+	{"back-end mechanic", "skilled_trades"},
+	{"back end maintainer", "skilled_trades"},
+	{"back-end maintainer", "skilled_trades"},
+	{"back end estimator", "skilled_trades"},
+	{"back-end estimator", "skilled_trades"},
+	{"back end collision estimator", "skilled_trades"},
+	{"back-end collision estimator", "skilled_trades"},
+	{"backend retail", "retail"},
+	{"back end retail", "retail"},
+	{"back-end retail", "retail"},
 	{"backend", "backend"},
 	{"back-end", "backend"},
 	{"back end", "backend"},

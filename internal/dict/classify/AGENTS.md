@@ -111,6 +111,22 @@ because the cashier was turned away. Before adding a broad technical alias, run 
 against the titles the filter used to refuse — the ingest log's `rejected N/M postings
 as non-technical, e.g. ...` lines carry two per board.
 
+"Back end" is the same trap twice over (measured 2026-10-29 over the open `backend`
+population). In a US plant, hospital or care home it is a SHIFT — the
+Wednesday-to-Saturday half of a compressed work week ("Registered Nurse - Back End Days",
+"Direct Support Professional Back End (Night)") — and in a can plant, body shop or store
+it is an AREA ("Back End Operator", "Back-End Estimator", "Backend Retail Assistant").
+The two are handled differently because they differ in what decides the category:
+
+- The shift names no category, so `backEndShiftPatterns` CUTS it before the category
+  walk and the rest of the title decides. This is the one category-side mask, and it is
+  the opposite case from `categoryNone`: there, exposing the aliases below is the bug;
+  here it is the point. The pattern needs "back end" directly beside a day/night/shift/
+  relief word, so "Backend Developer - Night Shift" keeps its reading.
+- The area is named by the trade working it, so those phrases are PINNED to their
+  English twin's category ahead of the bare alias, the "front end cashier" shape. Bare
+  "back-end associate" is not pinned: "associate" names no category.
+
 ## Central and Eastern Europe
 
 Polish, Czech, Slovak, Slovenian, Croatian, Serbian, Ukrainian and Bulgarian titles have

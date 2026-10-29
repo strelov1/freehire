@@ -74,6 +74,7 @@ import (
 	"maps"
 	"math"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -221,10 +222,12 @@ func derivePass(ctx context.Context, queries passStore, concurrency int64, win s
 	defer cancel()
 	stop := context.AfterFunc(ctx, func() { time.AfterFunc(reconcileGrace, cancel) })
 	defer stop()
-	created, orphaned, rerr := reconcileMovedSlugs(rctx, queries, pass.MovedTo, pass.MovedFrom, reconcileChunk)
-	if created > 0 || orphaned > 0 {
-		log.Printf("backfill-derive: companies reconciled for %d new and %d old slugs: %d rows created, %d retired",
-			len(pass.MovedTo), len(pass.MovedFrom), created, orphaned)
+	rec, rerr := reconcileMovedSlugs(rctx, queries, pass, reconcileChunk)
+	orphaned := rec.orphaned
+	if rec != (reconciled{}) {
+		log.Printf("backfill-derive: companies reconciled for %d new and %d old slugs: "+
+			"%d rows created, %d redirects recorded (of %d eligible), %d retired",
+			len(pass.MovedTo), len(pass.MovedFrom), rec.created, rec.aliased, len(pass.Aliases), rec.orphaned)
 	}
 	switch {
 	case err != nil && rerr != nil:
@@ -250,35 +253,56 @@ const reconcileChunk = 500
 // companyReconciler is the write side of the companies reconcile, narrowed so the chunking
 // can be tested without a database.
 type companyReconciler interface {
+	InsertDerivedCompanySlugAliases(ctx context.Context, arg db.InsertDerivedCompanySlugAliasesParams) (int64, error)
 	InsertMissingCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
 	DeleteOrphanCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
 }
 
-// reconcileMovedSlugs gives each slug the run moved jobs ONTO a companies row, then drops
-// the rows of the slugs it moved jobs AWAY from that no job carries any more.
+// reconciled is what one reconcile wrote.
+type reconciled struct{ created, aliased, orphaned int64 }
+
+// reconcileMovedSlugs gives each slug the run moved jobs ONTO a companies row, records the
+// redirects the run earned (old slug -> new, see movedSlugs.add), then drops the rows of the
+// slugs it moved jobs AWAY from that no job carries any more.
 //
 // Scoped to those slugs and chunked, NOT the whole-table SyncCompaniesFromJobs +
 // DeleteOrphanCompanies pair this used to run. That pair is one statement each, and the
 // sync ran about an hour in one transaction on prod: every row it inserted stayed locked
 // until it committed, and ingest's UpsertJob, which upserts the same rows, queued behind
 // it — up to 140 waiters, the crawl fleet writing nothing, on 2026-10-28 and again on the
-// 29th. Inserts go first, so a slug that is both (a swap) keeps its row.
-func reconcileMovedSlugs(ctx context.Context, r companyReconciler, movedTo, movedFrom []string, chunk int) (created, orphaned int64, err error) {
-	for part := range slices.Chunk(movedTo, chunk) {
+// 29th. The order is the durability story: a canonical row exists before anything redirects
+// to it, and a redirect exists before the old row it replaces is dropped — the same reason
+// cmd/merge-companies writes its alias before it moves a job.
+func reconcileMovedSlugs(ctx context.Context, r companyReconciler, pass backfillRun, chunk int) (reconciled, error) {
+	var out reconciled
+	for part := range slices.Chunk(pass.MovedTo, chunk) {
 		n, err := r.InsertMissingCompaniesForSlugs(ctx, part)
 		if err != nil {
-			return created, orphaned, fmt.Errorf("insert companies: %w", err)
+			return out, fmt.Errorf("insert companies: %w", err)
 		}
-		created += n
+		out.created += n
 	}
-	for part := range slices.Chunk(movedFrom, chunk) {
+	for part := range slices.Chunk(pass.Aliases, chunk) {
+		var arg db.InsertDerivedCompanySlugAliasesParams
+		for _, a := range part {
+			arg.AliasSlugs = append(arg.AliasSlugs, a.Alias)
+			arg.CanonicalSlugs = append(arg.CanonicalSlugs, a.Canonical)
+			arg.FoldedKeys = append(arg.FoldedKeys, a.FoldedKey)
+		}
+		n, err := r.InsertDerivedCompanySlugAliases(ctx, arg)
+		if err != nil {
+			return out, fmt.Errorf("record company slug aliases: %w", err)
+		}
+		out.aliased += n
+	}
+	for part := range slices.Chunk(pass.MovedFrom, chunk) {
 		n, err := r.DeleteOrphanCompaniesForSlugs(ctx, part)
 		if err != nil {
-			return created, orphaned, fmt.Errorf("delete orphan companies: %w", err)
+			return out, fmt.Errorf("delete orphan companies: %w", err)
 		}
-		orphaned += n
+		out.orphaned += n
 	}
-	return created, orphaned, nil
+	return out, nil
 }
 
 // runOutcome turns what a run managed into the one line it prints and the code it exits
@@ -476,13 +500,33 @@ func (p *pendingRows) oldest() (int64, bool) {
 type movedSlugs struct {
 	mu       sync.Mutex
 	from, to map[string]struct{}
+	// aliases holds, per slug moved away from, the redirect it would earn — or a nil entry
+	// once any row disqualified it.
+	aliases map[string]*slugAlias
+}
+
+// slugAlias is a retirement the pass records in company_slug_aliases, so the old company
+// URL 301s to the new one instead of serving an empty page.
+type slugAlias struct {
+	Alias, Canonical, FoldedKey string
 }
 
 func newMovedSlugs() *movedSlugs {
-	return &movedSlugs{from: make(map[string]struct{}), to: make(map[string]struct{})}
+	return &movedSlugs{
+		from: make(map[string]struct{}), to: make(map[string]struct{}),
+		aliases: make(map[string]*slugAlias),
+	}
 }
 
-func (m *movedSlugs) add(from, to string) {
+// add records one moved row. name is the row's company name, the one both slugs were
+// derived from.
+//
+// A slug earns an alias only when EVERY row moved off it qualifies: its slug was minted from
+// this same name by an older rule (normalize.SlugPredatesRule, the test cmd/merge-companies
+// plans a lone company by), and all of them landed on ONE new slug under one folded key. A
+// slug a renamed employer left behind, or one two employers shared under the old rule and
+// now split, is a judgement — so it gets no redirect, the line company-identity.md draws.
+func (m *movedSlugs) add(from, to, name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if from != "" {
@@ -491,6 +535,48 @@ func (m *movedSlugs) add(from, to string) {
 	if to != "" {
 		m.to[to] = struct{}{}
 	}
+	if from == "" || to == "" {
+		return
+	}
+	cand, seen := m.aliases[from]
+	key := normalize.CompanyKey(name)
+	switch {
+	case seen && cand == nil:
+		// already disqualified
+	case !normalize.SlugPredatesRule(from, name):
+		m.aliases[from] = nil
+	case !seen:
+		m.aliases[from] = &slugAlias{Alias: from, Canonical: to, FoldedKey: key}
+	case cand.Canonical != to || cand.FoldedKey != key:
+		m.aliases[from] = nil
+	}
+}
+
+// qualifiedAliases is called only after the pool has joined.
+//
+// A folded key the run would point at two DIFFERENT canons drops every alias on it: ingest
+// resolves a spelling by that key, and one key must name one canon. The statement guards the
+// registry's existing rows, but not two rows arriving in the same batch.
+func (m *movedSlugs) qualifiedAliases() []slugAlias {
+	canonOf := map[string]string{}
+	conflicted := map[string]bool{}
+	for _, a := range m.aliases {
+		if a == nil {
+			continue
+		}
+		if c, seen := canonOf[a.FoldedKey]; seen && c != a.Canonical {
+			conflicted[a.FoldedKey] = true
+		}
+		canonOf[a.FoldedKey] = a.Canonical
+	}
+	var out []slugAlias
+	for _, a := range m.aliases {
+		if a != nil && !conflicted[a.FoldedKey] {
+			out = append(out, *a)
+		}
+	}
+	slices.SortFunc(out, func(a, b slugAlias) int { return strings.Compare(a.Alias, b.Alias) })
+	return out
 }
 
 // sorted is called only after the pool has joined.
@@ -505,6 +591,8 @@ type backfillRun struct {
 	// onto, sorted — the scope of the companies reconcile that follows the pass. SlugsMoved
 	// counts ROWS; these are slugs, typically far fewer.
 	MovedFrom, MovedTo []string
+	// Aliases are the moves that earned a redirect (see movedSlugs.add).
+	Aliases []slugAlias
 	// ResumeID is the id a follow-up run must be given as fromID — the first row this
 	// one did not finish. Zero means the pass reached the end of the table with nothing
 	// outstanding: an operator needs to tell "there is more" from "that was all" without
@@ -713,7 +801,7 @@ func backfillWindow(ctx context.Context, store deriveStore, concurrency int64, w
 				atomic.AddInt64(&updatedN, 1)
 				if slugMoved {
 					atomic.AddInt64(&slugsN, 1)
-					moved.add(j.CompanySlug, params.CompanySlug)
+					moved.add(j.CompanySlug, params.CompanySlug, j.Company)
 				}
 			}
 		}()
@@ -742,6 +830,7 @@ func backfillWindow(ctx context.Context, store deriveStore, concurrency int64, w
 		SlugsMoved: int(slugsN),
 		MovedFrom:  moved.sorted(moved.from),
 		MovedTo:    moved.sorted(moved.to),
+		Aliases:    moved.qualifiedAliases(),
 		ResumeID:   resumeID,
 	}, runErr
 }

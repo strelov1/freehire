@@ -188,5 +188,5 @@ func pyjamahrEmploymentType(t string) string {
 // "cross-functional collaboration"), the same shape humanbitSkills/micro1Skills already
 // document needing mining rather than whole-string matching.
 func pyjamahrSkills(skills []string) []string {
-	return skilltag.Parse(strings.Join(skills, " "))
+	return skilltag.Parse(strings.Join(skills, " "), skilltag.WithSkillList())
 }

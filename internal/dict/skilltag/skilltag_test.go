@@ -709,6 +709,77 @@ func TestParse_AmbiguousCorroboration(t *testing.T) {
 	}
 }
 
+// The framework names react/swift/rust/spring/express are proper nouns — "React",
+// "Swift" — while the English words they collide with are written in lowercase in the
+// middle of a sentence: "ability to react quickly", "a swift turnaround", "express
+// interest". Corroboration alone cannot tell them apart, because a non-technical
+// posting still names tools (Zendesk, HubSpot) or a broad phrase (machine learning)
+// that lifts the gate. Both prod cases below were tagged react before the fix
+// (2026-10-29): a client support specialist and a data director.
+func TestParse_ProperNounWordsNeedACapital(t *testing.T) {
+	cases := []struct {
+		name   string
+		in     string
+		want   []string
+		absent []string
+	}{
+		{"react verb beside support tools", "Ability to react quickly. We use Zendesk and HubSpot.",
+			[]string{"hubspot", "zendesk"}, []string{"react"}},
+		{"react verb beside machine learning", "shape priorities rather than react to decisions. analytics, machine learning",
+			[]string{"machine-learning"}, []string{"react"}},
+		{"client support specialist (Mapon)", "Client Support Specialist. Ability to react quickly and concentrate in stressful situations. Knowledge of Salesforce.",
+			[]string{"salesforce"}, []string{"react"}},
+		{"swift adjective beside a tech token", "Ensure a swift turnaround on tickets in Jira and Salesforce.",
+			[]string{"jira", "salesforce"}, []string{"swift"}},
+		{"express verb beside a tech token", "To express interest, apply here. Our backend runs on Python.",
+			[]string{"python"}, []string{"express"}},
+		{"spring season beside a tech token", "Complete your PhD by spring 2027. Python and SQL required.",
+			[]string{"python", "sql"}, []string{"spring"}},
+		{"rust corrosion beside a tech token", "Check the pumps for rust; log findings in SAP and Excel via Python.",
+			[]string{"python"}, []string{"rust"}},
+
+		{"react + typescript", "Experience with React and TypeScript", []string{"react", "typescript"}, nil},
+		{"react list", "React, Redux, Node.js", []string{"react", "redux", "nodejs"}, nil},
+		{"react all caps", "SENIOR REACT DEVELOPER, TYPESCRIPT", []string{"react", "typescript"}, nil},
+		{"capital beats a lowercase verb elsewhere", "We react fast to feedback. Stack: React and TypeScript.",
+			[]string{"react", "typescript"}, nil},
+		{"swift + ios", "Swift developer building for iOS.", []string{"swift", "ios"}, nil},
+		{"spring + java", "Java 17 with Spring and Hibernate.", []string{"spring", "java"}, nil},
+		{"express + nodejs", "APIs in Express on Node.js.", []string{"express", "nodejs"}, nil},
+		{"rust + kubernetes", "Services in Rust deployed on Kubernetes.", []string{"rust", "kubernetes"}, nil},
+		{"lowercase unambiguous forms stay strong", "we build with reactjs and react.js", []string{"react"}, nil},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Parse(c.in)
+			for _, w := range c.want {
+				if !slices.Contains(got, w) {
+					t.Errorf("Parse(%q) = %v, missing %q", c.in, got, w)
+				}
+			}
+			for _, a := range c.absent {
+				if slices.Contains(got, a) {
+					t.Errorf("Parse(%q) = %v, must NOT contain %q", c.in, got, a)
+				}
+			}
+		})
+	}
+}
+
+// A skill list carries no English verb for "react" to be, so WithSkillList keeps a
+// lowercase proper-noun word; corroboration still applies.
+func TestParse_WithSkillListKeepsLowercaseProperNouns(t *testing.T) {
+	if got := Parse("react typescript spring java", WithSkillList()); !slices.Equal(got, []string{"java", "react", "spring", "typescript"}) {
+		t.Errorf("Parse(list, WithSkillList()) = %v, want [java react spring typescript]", got)
+	}
+	if got := Parse("react typescript"); slices.Contains(got, "react") {
+		t.Errorf("Parse(prose) = %v, must NOT contain react", got)
+	}
+	if got := Parse("react", WithSkillList()); got != nil {
+		t.Errorf("Parse(lone ambiguous word, WithSkillList()) = %v, want nil (still needs corroboration)", got)
+	}
+}
+
 // Job-posting boilerplate that happens to spell a tech name. Unlike the collisions
 // above — which read as ordinary English anywhere — these are the words that recur in
 // the prose of NON-TECHNICAL postings specifically: an "agile" retail supervisor, the

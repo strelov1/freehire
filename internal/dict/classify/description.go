@@ -1,6 +1,7 @@
 package classify
 
 import (
+	"html"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/wordmatch"
@@ -115,15 +116,75 @@ func NonTechFromDescription(desc string) string {
 // SeniorityFromDescription derives a seniority grade from a job description's prose,
 // returning "" when no anchored grade statement is present. It is the lower-priority
 // seniority source (after the title dictionary), so it only fills a value the title
-// left empty. Values are from vocab.SeniorityValues.
+// left empty. Values are from vocab.SeniorityValues. An entry grade a mentoring verb
+// governs is passed over (notMentored).
 func SeniorityFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, g := range descriptionSeniorityPhrases {
+		boundary := wordmatch.UnicodeBoundary
+		if g.grade == "junior" || g.grade == "intern" {
+			boundary = notMentored
+		}
 		for _, p := range g.phrases {
-			if wordmatch.Contains(lower, p, wordmatch.UnicodeBoundary) {
+			if wordmatch.Contains(lower, p, boundary) {
 				return g.grade
 			}
 		}
 	}
 	return ""
+}
+
+// mentorVerbs are the words that make an entry grade the people a role looks after
+// rather than the role itself: "serves as a guide and mentor for junior-level software
+// development engineers" is a prod "Backend Software Engineer 3" posting, served as
+// junior off that line. Every senior posting that mentors says so, so the guard reads
+// only the two entry grades — a higher grade's phrases are not what a role mentors.
+var mentorVerbs = []string{
+	// No "mentorship": the noun is a benefit the role receives ("we offer mentorship in
+	// this entry-level position"), not a role it plays.
+	"mentor", "mentors", "mentoring", "mentored",
+	"coach", "coaches", "coaching", "coached",
+	"guide", "guides", "guiding", "guided",
+	"supervise", "supervises", "supervising", "supervised",
+	"teach", "teaches", "teaching", "taught",
+}
+
+// mentorWindow is how far before a grade phrase a mentoring verb still governs it.
+const mentorWindow = 40
+
+// clauseBreaks end the stretch a mentoring verb governs: sentence punctuation, a line
+// break, and the block-level tags a list item or paragraph opens and closes with. An
+// inline tag ("mentor <strong>junior-level</strong> engineers") is not one.
+var clauseBreaks = []string{".", ";", "!", "?", "\n", "<li", "</li", "<p", "</p", "<br", "<div", "</div"}
+
+// notMentored is wordmatch.UnicodeBoundary that also refuses a match a mentoring verb
+// governs: one within mentorWindow bytes before it, with no clauseBreaks between them.
+func notMentored(s string, start, end int) bool {
+	if !wordmatch.UnicodeBoundary(s, start, end) {
+		return false
+	}
+	lo := max(0, start-mentorWindow)
+	for lo > 0 && wordByte(s[lo-1]) { // never start the window inside a word
+		lo--
+	}
+	// Decoded first, so an entity's own semicolon ("mentor&nbsp;junior-level") is not
+	// taken for a clause break.
+	before := html.UnescapeString(s[lo:start])
+	for _, b := range clauseBreaks {
+		if i := strings.LastIndex(before, b); i >= 0 {
+			before = before[i+len(b):]
+		}
+	}
+	for _, v := range mentorVerbs {
+		if wordmatch.Contains(before, v, wordmatch.UnicodeBoundary) {
+			return false
+		}
+	}
+	return true
+}
+
+// wordByte reports whether b can sit inside a word: an ASCII letter or digit, or a byte
+// of a multi-byte rune. Anything else (a space, the "&" and ";" of an entity) ends one.
+func wordByte(b byte) bool {
+	return b >= 0x80 || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
 }

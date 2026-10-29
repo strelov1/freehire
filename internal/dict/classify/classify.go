@@ -46,7 +46,7 @@ func Parse(title string) Classification {
 // non-technical but filed nowhere — which the ingest filter refuses.
 func matchCategory(lower string) string {
 	lower = unchefFrench(ptGenderSuffix.Replace(lower))
-	c := matchOrdered(lower, categoryTable)
+	c := matchOrdered(cutBackEndShifts(lower), categoryTable)
 	if c == "" {
 		// Nothing in the main table: try the German compound heads (german.go),
 		// then the Dutch ones (dutch.go), then the Danish ones (danish.go), then the
@@ -81,6 +81,37 @@ func matchCategory(lower string) string {
 		return ""
 	}
 	return c
+}
+
+// backEndShiftPatterns are the "back end" that names a SHIFT, not server-side software.
+// A US plant, hospital or care home running a compressed work week splits it into a
+// front end (Sunday to Wednesday) and a back end (Wednesday to Saturday), and its
+// titles carry the half beside the day or night it works: "Registered Nurse - Back End
+// Days", "Direct Support Professional Back End (Night)", "Manufacturing Technician
+// (Nights - Back End)", "Machine Operator - Back End Relief". Measured 2026-10-29, the
+// shift was the largest non-software population the bare "back end" alias filed as
+// backend.
+//
+// The shift is cut before the category match, so the rest of the title decides —
+// the opposite of a categoryNone pin, and on purpose: categoryNone stops the walk
+// because exposing the aliases below would be wrong, while a shift names no category
+// at all and the role noun beside it ("Registered Nurse", "Machine Operator") is
+// exactly what should be read. Each span is matched whole on word boundaries, so a
+// software title is untouched unless "back end" sits directly beside a shift word:
+// "Backend Developer - Night Shift" keeps its reading.
+var backEndShiftPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\bback[\s-]?end[\s,()-]*(?:days?|nights?|shift|relief)\b`),
+	regexp.MustCompile(`\b(?:days?|nights?|cww)[\s,()-]*back[\s-]?end\b`),
+}
+
+// cutBackEndShifts replaces every backEndShiftPatterns span with a space, keeping the
+// word boundaries of the surrounding terms. Parse and Categories both apply it, so a
+// CV line "Registered Nurse - Back End Days" is not read as backend either.
+func cutBackEndShifts(lower string) string {
+	for _, shift := range backEndShiftPatterns {
+		lower = shift.ReplaceAllString(lower, " ")
+	}
+	return lower
 }
 
 // matchSeniority resolves the grade of an already-lowercased title, first cutting
@@ -169,7 +200,7 @@ var (
 // A blind alias contributes nothing here either: categoryNone is not a category, so it
 // is dropped rather than surfaced as a value in a CV profile.
 func Categories(text string) []string {
-	out := matchAllOrdered(strings.ToLower(text), categoryTable)
+	out := matchAllOrdered(cutBackEndShifts(strings.ToLower(text)), categoryTable)
 	return slices.DeleteFunc(out, func(c string) bool { return c == categoryNone })
 }
 

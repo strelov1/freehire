@@ -145,6 +145,7 @@ type Option func(*options)
 type options struct {
 	resumeAcronyms  bool
 	acronymCategory string
+	skillList       bool
 }
 
 // WithResumeAcronyms enables the résumé-scoped acronym tier (resumeAcronyms, e.g.
@@ -165,6 +166,15 @@ func WithAcronymCategory(category string) Option {
 	return func(o *options) { o.acronymCategory = category }
 }
 
+// WithSkillList tells a Parse call that the text is a list of skill names — a CV's
+// Skills section, an aggregator's structured skill tags — rather than prose. It turns
+// off the proper-noun capital rule (properNounWords): a list carries no English verb
+// for "react" to be, so a lowercase "react, typescript" names the framework. The
+// corroboration rule still applies.
+func WithSkillList() Option {
+	return func(o *options) { o.skillList = true }
+}
+
 // Parse scans free text and returns the curated canonical skill slugs it contains,
 // sorted and deduplicated. Returns nil when nothing resolves. It runs three passes
 // that union into a set: a case-preserving acronym pass over the HTML-stripped
@@ -176,7 +186,9 @@ func WithAcronymCategory(category string) Option {
 // ambiguousWords (react/swift/spring/networking/…) — an English word that doubles
 // as a tech name — and it tags ONLY when the text also carries at least one strong
 // match (corroboration). So "must react to changes" on a non-tech post drops react,
-// while "React and TypeScript" keeps it. Unambiguous forms (reactjs, "react native",
+// while "React and TypeScript" keeps it. The proper-noun subset (properNounWords)
+// must also be written with a leading capital somewhere in the text, because a
+// non-tech post that names Zendesk still says "react quickly" in lowercase. Unambiguous forms (reactjs, "react native",
 // "spring boot") stay strong, so a genuinely-named stack never needs corroboration.
 func Parse(text string, opts ...Option) []string {
 	var o options
@@ -224,9 +236,22 @@ func Parse(text string, opts ...Option) []string {
 			}
 		}
 	}
+	// Whether a proper-noun word is written only in lowercase, decided once per word
+	// however often it recurs.
+	lowercaseOnly := map[string]bool{}
 	for _, tok := range wordTokens(norm) {
 		if c, ok := wordAliases[tok]; ok {
 			if ambiguousWords[tok] {
+				if properNounWords[tok] && !o.skillList {
+					lower, seen := lowercaseOnly[tok]
+					if !seen {
+						lower = !writtenCapitalized(cased, tok)
+						lowercaseOnly[tok] = lower
+					}
+					if lower {
+						continue
+					}
+				}
 				weak[c] = struct{}{}
 			} else {
 				strong[c] = struct{}{}
@@ -245,6 +270,15 @@ func Parse(text string, opts ...Option) []string {
 		strong[c] = struct{}{}
 	}
 	return stringset.Sorted(strong)
+}
+
+// writtenCapitalized reports whether the case-preserved text carries word as a
+// standalone token with a leading capital — Title case ("React") or all caps
+// ("REACT"). word is a lowercase ASCII properNounWords key.
+func writtenCapitalized(cased, word string) bool {
+	title := strings.ToUpper(word[:1]) + word[1:]
+	return wordmatch.Contains(cased, title, wordmatch.UnicodeBoundary) ||
+		wordmatch.Contains(cased, strings.ToUpper(word), wordmatch.UnicodeBoundary)
 }
 
 // matchAcronyms adds the canonical of each acronym whose exact surface form occurs

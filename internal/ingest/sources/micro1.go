@@ -148,7 +148,7 @@ func micro1WorkMode(locationType string) string {
 // downside (a lone ambiguous entry needs a second strong term) is the accepted trade-off
 // for it here, same as it always was.
 func micro1Skills(skills []string) []string {
-	return skilltag.Parse(strings.Join(skills, " "))
+	return skilltag.Parse(strings.Join(skills, " "), skilltag.WithSkillList())
 }
 
 // micro1PostPattern captures the posting UUID from a canonical board posting URL
