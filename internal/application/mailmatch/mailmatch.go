@@ -126,11 +126,11 @@ func fromSubject(subject string) string {
 	s := strings.ToLower(strings.TrimSpace(subject))
 	if strings.HasPrefix(s, "your ") && strings.HasSuffix(s, " application") {
 		mid := strings.TrimSuffix(strings.TrimPrefix(s, "your "), " application")
-		return cleanCompany(mid)
+		return cleanCompany(stripLegalForm(mid))
 	}
 	for _, p := range subjectPrefixes {
 		if strings.HasPrefix(s, p) {
-			return cleanCompany(strings.TrimPrefix(s, p))
+			return cleanCompany(stripLegalForm(strings.TrimPrefix(s, p)))
 		}
 	}
 	return ""
