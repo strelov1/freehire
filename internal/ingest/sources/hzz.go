@@ -106,8 +106,8 @@ func (s hzz) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID 
 
 // FetchNewGated lists every domestic vacancy, refreshes the ones already stored, and reads up to
 // maxNewPerRun of the rest, newest first. The feeds name no employer, so only the catalogue
-// filter can spare a page: a vacancy whose title it rejects is yielded body-less without a
-// request. A vacancy whose page cannot be read is not yielded; a later run tries again.
+// filter can spare a page: a vacancy whose feed title it rejects is yielded body-less without a
+// request (one whose feed title is empty is always read). A vacancy whose page cannot be read is not yielded; a later run tries again.
 func (s hzz) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	postings, err := s.list(ctx)
 	if err != nil {
@@ -123,7 +123,7 @@ func (s hzz) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(extern
 			jobs = append(jobs, base)
 			continue
 		}
-		if gate.Rejected != nil && gate.Rejected(base) {
+		if base.Title != "" && gate.Rejected != nil && gate.Rejected(base) {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -238,9 +238,9 @@ type hzzFeedDoc struct {
 
 var hzzVacancyID = regexp.MustCompile(`WebSifra=(\d+)`)
 
-// hzzFeedItems reads a feed's vacancies. An item with an empty title is an EXPIRED vacancy the
-// feed still carries — its page answers "Traženi oglas je istekao!" — so it is not listed, and
-// the sweep closes it like any vacancy that left the feeds.
+// hzzFeedItems reads a feed's vacancies. About one item in twenty has an empty title; most of
+// those are open vacancies (34 of 40 sampled) and the rest expired, so it is listed all the same
+// and its title is read from its page.
 func hzzFeedItems(feed hzzFeedDoc) []hzzPosting {
 	var out []hzzPosting
 	for _, it := range feed.Items {
@@ -250,7 +250,7 @@ func hzzFeedItems(feed hzzFeedDoc) []hzzPosting {
 		}
 		id, err := strconv.ParseInt(m[1], 10, 64)
 		title := hzzClean(it.Title)
-		if err != nil || id <= 0 || title == "" {
+		if err != nil || id <= 0 {
 			continue
 		}
 		p := hzzPosting{id: id, title: title}

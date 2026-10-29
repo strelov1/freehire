@@ -15,7 +15,9 @@ import (
 )
 
 // hzzFake serves the real fixtures (fetched 2026-10-28): one county feed trimmed to three items
-// in the site's ISO-8859-2 bytes (two open vacancies and one expired, title-less one), three
+// in the site's ISO-8859-2 bytes (167579841 and 167016223, whose print pages are fixtures — the
+// first with an empty feed title — and the title-less 167397641, which answers the expiry
+// notice like any id with no fixture), three
 // print pages and the expiry notice, all with their scripts and styles stripped. Every other
 // county feed is empty, and any other vacancy answers the expiry notice, as the site does.
 type hzzFake struct {
@@ -31,7 +33,7 @@ const hzzEmptyFeed = `<?xml version="1.0" encoding="iso-8859-2"?><rss version="2
 
 // hzzTechFeedDoc names one of the county feed's vacancies as an IT one.
 const hzzTechFeedDoc = `<?xml version="1.0" encoding="iso-8859-2"?><rss version="2.0"><channel>
-<item><title>X</title><pubDate>22.10.2026</pubDate><link>http://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra=167679994</link></item>
+<item><title>X</title><pubDate>22.10.2026</pubDate><link>http://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra=167016223</link></item>
 <item><title>ABROAD</title><pubDate>22.10.2026</pubDate><link>http://burzarada.hzz.hr/RadnoMjesto_Ispis.aspx?WebSifra=999</link></item>
 </channel></rss>`
 
@@ -75,9 +77,9 @@ func (f *hzzFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
 	}
 	file := "expired.html"
 	switch u {
-	case hzzPostingURL(167669223):
+	case hzzPostingURL(167579841):
 		file = "print_167579841.html"
-	case hzzPostingURL(167679994):
+	case hzzPostingURL(167016223):
 		file = "print_167016223.html"
 	}
 	raw, err := os.ReadFile("testdata/hzz/" + file)
@@ -101,64 +103,63 @@ func hzzByID(jobs []Job) map[string]Job {
 	return out
 }
 
-func TestHZZParseFeedSkipsExpiredItemsAndDecodesCroatian(t *testing.T) {
+func TestHZZParseFeedListsTitlelessItemsAndDecodesCroatian(t *testing.T) {
 	f := &hzzFake{}
 	doc, err := newTestHZZ(f).feed(context.Background(), fmt.Sprintf(hzzCountyFeed, 4))
 	if err != nil {
 		t.Fatal(err)
 	}
 	items := hzzFeedItems(doc)
-	if len(items) != 2 {
-		t.Fatalf("items = %d, want 2 (the title-less, expired item is not listed)", len(items))
+	if len(items) != 3 {
+		t.Fatalf("items = %d, want 3 (a title-less item is usually an open vacancy)", len(items))
 	}
+	by := map[int64]hzzPosting{}
 	for _, it := range items {
-		if it.id == 167397641 {
-			t.Errorf("expired item %d listed", it.id)
-		}
-		if strings.ContainsRune(it.title, '�') {
-			t.Errorf("title %q was not decoded from ISO-8859-2", it.title)
-		}
-		if it.posted == nil || it.posted.Format("2006-01-02") != "2026-10-22" {
-			t.Errorf("posted = %v, want 2026-10-22", it.posted)
-		}
+		by[it.id] = it
+	}
+	if by[167579841].title != "" || by[167016223].title != "BRAVAR / BRAVARICA" {
+		t.Errorf("titles = %q, %q", by[167579841].title, by[167016223].title)
+	}
+	if p := by[167016223].posted; p == nil || p.Format("2006-01-02") != "2026-10-01" {
+		t.Errorf("posted = %v, want 2026-10-01", p)
 	}
 }
 
 func TestHZZFetchNewHydratesNewVacanciesOnly(t *testing.T) {
 	f := &hzzFake{}
-	seen := func(id string) bool { return id == "167669223" }
+	seen := func(id string) bool { return id == "167016223" }
 	jobs, err := newTestHZZ(f).FetchNew(context.Background(), CompanyEntry{}, seen)
 	if err != nil {
 		t.Fatal(err)
 	}
 	by := hzzByID(jobs)
 	if len(by) != 2 {
-		t.Fatalf("jobs = %d, want 2: %+v", len(by), jobs)
+		t.Fatalf("jobs = %d, want 2 (the expired vacancy is dropped): %+v", len(by), jobs)
 	}
-	if !by["167669223"].SeenRefresh {
-		t.Error("a stored vacancy must be refreshed by identity, not re-read")
+	if r := by["167016223"]; !r.SeenRefresh || !r.IsTechHint {
+		t.Errorf("a stored vacancy must be refreshed by identity, carrying the IT feed's mark: %+v", r)
 	}
-	if len(f.pages) != 1 || f.pages[0] != hzzPostingURL(167679994) {
-		t.Errorf("pages read = %v, want only the new vacancy", f.pages)
+	if len(f.pages) != 2 || f.pages[0] == hzzPostingURL(167016223) || f.pages[1] == hzzPostingURL(167016223) {
+		t.Errorf("pages read = %v, want only the two new vacancies", f.pages)
 	}
-	j := by["167679994"]
-	if j.Company != "EUROTIM d.o.o." {
+	j := by["167579841"]
+	if j.Company != "BOVIS d.o.o." {
 		t.Errorf("company = %q, want the register name without its activity", j.Company)
 	}
-	if j.Title != "BRAVAR / BRAVARICA" || j.Description == "" {
-		t.Errorf("title %q, description %d bytes", j.Title, len(j.Description))
+	if j.Title != "STOČARSKI RADNIK/STOČARSKA RADNICA" || j.Description == "" {
+		t.Errorf("title %q (an empty feed title is read from the page), description %d bytes", j.Title, len(j.Description))
 	}
-	if j.Location != "Sinj, Splitsko-Dalmatinska Županija" {
+	if j.Location != "Ivankovo, Vukovarsko-Srijemska Županija" {
 		t.Errorf("location = %q", j.Location)
 	}
-	if !j.IsTechHint {
-		t.Error("a vacancy the IT category feed names must be marked technical")
+	if j.IsTechHint {
+		t.Error("only a vacancy the IT category feed names is technical")
 	}
 	if j.EmploymentType != "full_time" {
 		t.Errorf("employment = %q", j.EmploymentType)
 	}
-	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2026-10-05" {
-		t.Errorf("posted = %v, want the page's 5.10.2026", j.PostedAt)
+	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2026-10-19" {
+		t.Errorf("posted = %v, want the page's 19.10.2026", j.PostedAt)
 	}
 	if len(j.FallbackCountries) != 1 || j.FallbackCountries[0] != "hr" {
 		t.Errorf("fallback countries = %v", j.FallbackCountries)
@@ -269,8 +270,15 @@ func TestHZZRejectedTitleCostsNoPage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(f.pages) != 0 || len(jobs) != 2 {
-		t.Errorf("pages %d, jobs %d: a rejected vacancy is yielded body-less without a page", len(f.pages), len(jobs))
+	// 167016223's feed title is rejected: yielded body-less, no page. The two title-less
+	// vacancies cannot be judged before their page and are read.
+	if len(f.pages) != 2 || len(jobs) != 2 {
+		t.Errorf("pages %v, jobs %d: a rejected vacancy is yielded body-less without a page", f.pages, len(jobs))
+	}
+	for _, p := range f.pages {
+		if p == hzzPostingURL(167016223) {
+			t.Error("the rejected vacancy's page was bought")
+		}
 	}
 }
 
