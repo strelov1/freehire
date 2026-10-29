@@ -133,6 +133,7 @@ var polishCategoryTable = []aliasEntry{
 	{"wdrozen* system* erp", "customer_success"},
 	{"wdrozen* erp", "customer_success"},
 	{"konsultant* w zespol* obslug* telefoniczn*", "support"},
+	{"konsultant* telefoniczn*", "support"}, // the call centre ("Call Center Agent")
 	// The IT service engineer and the helpdesk, before the plain service engineer.
 	{"serwis* it", "it_support"},
 	{"specjalist* ds it", "it_support"}, // "IT Specialist"
