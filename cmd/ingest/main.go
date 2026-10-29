@@ -330,6 +330,10 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 	// sweepableBoards for the full gate, including why a sweepGrace or fullCatalog provider is
 	// excluded even when registered.
 	fullBoardListing := sources.FullBoardListingProviders(registry)
+	// A sliceBoardListing provider (e.g. whatjobs) reads each board only to a page budget, so it
+	// cannot prove a full listing — but its grace window absorbs that, so its finished boards
+	// close within themselves on that window (see sweepableBoards).
+	sliceBoardListing := sources.SliceBoardListingProviders(registry)
 	for _, provider := range sweepableProviders(runStats) {
 		if selfClosing[provider] {
 			continue
@@ -360,10 +364,10 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 		// company's slug never re-enters companySlugs, so its row never closes under either
 		// scope so far. This closes it directly, per board the run structurally proved it
 		// covered (runStats[provider].QualifyingBoards) on a provider whose adapter is
-		// registered as listing a board to completion — see sweepableBoards for the full gate.
-		// Reuses this provider's own cutoff: a board-scope candidate is by construction never
-		// a sweepGrace provider, so the window is always the default here.
-		boards := sweepableBoards(runStats[provider], hasGrace, fullCatalog[provider], fullBoardListing[provider], crossShardAmbiguousBoards)
+		// registered as listing a board to completion, or as a bounded slice whose grace window
+		// stands in for that proof — see sweepableBoards for the full gate. Reuses this
+		// provider's own cutoff: the default for a complete listing, the grace window for a slice.
+		boards := sweepableBoards(runStats[provider], hasGrace, fullCatalog[provider], fullBoardListing[provider], sliceBoardListing[provider], crossShardAmbiguousBoards)
 		if len(boards) > 0 {
 			boardClosed, boardFailed := sweepBoards(ctx, queries, provider, cutoff, boards)
 			log.Printf("closed %d stale %s jobs across %d finished board(s) (unseen for %s)", boardClosed, provider, len(boards), window)
@@ -498,7 +502,7 @@ func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cuto
 
 // sweepableBoards returns, sorted and de-duplicated, the boards of one provider the
 // board-scoped close may retire this run: those the run structurally proved it covered
-// (stats.QualifyingBoards, see pipeline.boardQualifies), gated on three pre-resolved,
+// (stats.QualifyingBoards, see pipeline.boardQualifies), gated on four pre-resolved,
 // per-provider facts the caller has already looked up — the same convention sweepBySource
 // uses, rather than this function re-deriving them from the raw registry maps itself.
 //
@@ -513,6 +517,13 @@ func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cuto
 // fullCatalog adapters are boardless besides, so this exclusion is belt-and-braces). Callers
 // gate on shouldSweep first, same as sweepBySource.
 //
+// sliceBoardListing is the other way in, and it requires hasGrace instead of excluding it: such
+// an adapter (whatjobs) reads a board only to a page budget, so it never proves a full listing,
+// and the grace window is what stands in for the proof — the board-scoped close then runs on
+// that window, not the default, so a posting that merely sat past the budget is back before it
+// ends. Without it a whatjobs posting closed only through the company scope, which leaked every
+// posting whose company had drifted out of all the keyword slices (sources.sliceBoardListing).
+//
 // crossShardAmbiguous excludes a board name this run's own Stats saw as unambiguous but that
 // is region-ambiguous across the FULL, unsharded catalog (pipeline.AmbiguousBoardNames,
 // computed by the caller before sharding): sources.Config.Shard groups boards by company
@@ -524,8 +535,10 @@ func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cuto
 // De-duplication guards against a board legitimately appearing twice in one run (a repeated
 // board-file entry, or one board id recurring across independent regional slices) double-
 // counting the close and its log line.
-func sweepableBoards(stats pipeline.Stats, hasGrace, fullCatalog, fullBoardListing bool, crossShardAmbiguous map[string]bool) []string {
-	if !fullBoardListing || hasGrace || fullCatalog {
+func sweepableBoards(stats pipeline.Stats, hasGrace, fullCatalog, fullBoardListing, sliceBoardListing bool, crossShardAmbiguous map[string]bool) []string {
+	complete := fullBoardListing && !hasGrace
+	slice := sliceBoardListing && hasGrace
+	if fullCatalog || (!complete && !slice) {
 		return nil
 	}
 	boards := slices.Clone(stats.QualifyingBoards)

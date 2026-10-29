@@ -200,6 +200,12 @@ func (whatjobs) aggregator() {}
 // wider than the sweep default. See whatjobsSweepGrace.
 func (whatjobs) sweepGrace() time.Duration { return whatjobsSweepGrace }
 
+// A keyword board is read only to whatjobsMaxPages or until relevance collapses, so it never
+// proves it listed the whole keyword; the grace window absorbs that, and a stored posting a
+// finished keyword board has not listed for whatjobsSweepGrace is closed per board. See
+// sliceBoardListing.
+func (whatjobs) sliceBoardListing() {}
+
 // whatjobsPosting is the part of a feed posting worth reading. snippet is the FULL description HTML
 // despite its name and despite the vendor's documentation, which calls it a highlighted excerpt.
 //

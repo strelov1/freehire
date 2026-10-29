@@ -713,3 +713,32 @@ func TestWhatJobsDeclaresWideSweepGrace(t *testing.T) {
 		t.Errorf("sweepGrace() = %v, want 14 days", got)
 	}
 }
+
+// A whatjobs keyword board is read only to a page budget, so it can never earn fullBoardListing —
+// yet its stored ids are namespaced by keyword, so a posting a finished board has stopped listing
+// can be closed per board once the grace window has ruled out mere page drift. Each market is its
+// own provider, so each must carry the marker.
+func TestWhatJobsMarketsCloseByBoardOnTheirGraceWindow(t *testing.T) {
+	got := SliceBoardListingProviders(Taxonomy())
+	for _, m := range whatjobsMarkets {
+		if !got[m.provider] {
+			t.Errorf("SliceBoardListingProviders() lacks %q", m.provider)
+		}
+	}
+	if got["greenhouse"] {
+		t.Error("SliceBoardListingProviders() must not contain a complete-listing provider like greenhouse")
+	}
+}
+
+// The marker admits a truncated crawl to the board scope, so it is only sound on a window that
+// outlasts the crawl's page drift: a member without its own sweepGrace would close on the 48-hour
+// default every posting that merely sat past a keyword's page budget for two days.
+func TestSliceBoardListingRequiresASweepGrace(t *testing.T) {
+	reg := Taxonomy()
+	grace := SweepGraceWindows(reg)
+	for provider := range SliceBoardListingProviders(reg) {
+		if _, ok := grace[provider]; !ok {
+			t.Errorf("%q is a sliceBoardListing provider but declares no sweepGrace", provider)
+		}
+	}
+}

@@ -40,6 +40,19 @@ func FullCatalogProviders(reg map[string]Source) []string {
 	return out
 }
 
+// SliceBoardListingProviders returns, as a set, the provider names in reg whose boards are
+// bounded slices the board-scoped close may act on over the provider's sweepGrace window (see
+// sliceBoardListing).
+func SliceBoardListingProviders(reg map[string]Source) map[string]bool {
+	out := make(map[string]bool)
+	for name, src := range reg {
+		if _, ok := src.(sliceBoardListing); ok {
+			out[name] = true
+		}
+	}
+	return out
+}
+
 // SweepGraceWindows returns the post-run sweep window each adapter in reg declares in place of
 // the default — wider for a slice-crawled source that can't yet tell drift from removal, narrower
 // for a full-board source whose unseen reading is already evidence (see sweepGrace). cmd/ingest

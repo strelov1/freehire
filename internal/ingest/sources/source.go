@@ -296,6 +296,21 @@ type selfClosing interface{ selfClosing() }
 // this reason. See FullCatalogProviders.
 type fullCatalog interface{ fullCatalog() }
 
+// sliceBoardListing marks a sweepGrace adapter whose boards are bounded SLICES rather than
+// complete listings — whatjobs, where a board is a search keyword read up to a page budget or
+// until relevance collapses — and admits it to the post-run sweep's board-scoped close ON ITS
+// GRACE WINDOW. Its stored ids are board-namespaced like every other provider's, so a posting a
+// keyword board stopped listing is visible per board; what it lacks is fullBoardListing's proof
+// that one crawl read the whole board, and the grace window stands in for that proof: a posting
+// that merely sat past the budget comes back within it, one the keyword stopped carrying does
+// not. Without the marker such a provider closed only through the company scope, which leaked
+// every posting whose company had drifted out of every slice — measured 2026-10-28, 5,835 of
+// whatjobs-uk's 5,880 open postings unseen past the 14-day grace belonged to a company no run
+// that day wrote, and only cmd/liveness's 45-day age rule ever reached them. Granting it to an
+// adapter without a sweepGrace would close on the 48h default every posting past the budget, so
+// a test holds every member to one. See SliceBoardListingProviders.
+type sliceBoardListing interface{ sliceBoardListing() }
+
 // sweepGrace marks an adapter that needs the post-run unseen sweep to wait a DIFFERENT length of
 // time than the 48h default before closing its jobs, and reports how long. The default is sized
 // for "many crawl cycles at the hourly per-provider cadence" (see DefaultSweepGrace); an adapter

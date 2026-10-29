@@ -155,11 +155,11 @@ func TestSweepableCompanies(t *testing.T) {
 func TestSweepableBoards(t *testing.T) {
 	noneAmbiguous := map[string]bool{}
 	cases := []struct {
-		name                                    string
-		stats                                   pipeline.Stats
-		hasGrace, fullCatalog, fullBoardListing bool
-		crossShardAmbiguous                     map[string]bool
-		want                                    []string
+		name                                                       string
+		stats                                                      pipeline.Stats
+		hasGrace, fullCatalog, fullBoardListing, sliceBoardListing bool
+		crossShardAmbiguous                                        map[string]bool
+		want                                                       []string
 	}{
 		{
 			name:             "registered provider's qualifying boards are returned sorted",
@@ -197,6 +197,23 @@ func TestSweepableBoards(t *testing.T) {
 			want:             nil,
 		},
 		{
+			// whatjobs: a keyword board read to a page budget never proves a full listing, but its
+			// grace window absorbs the drift past that budget, so its finished boards close on it.
+			name:              "a sliceBoardListing provider's boards are returned on its grace window",
+			stats:             pipeline.Stats{QualifyingBoards: []string{"data engineer"}},
+			hasGrace:          true,
+			sliceBoardListing: true,
+			want:              []string{"data engineer"},
+		},
+		{
+			// Without a grace window the slice marker would close on the 48h default whatever sat
+			// past the page budget for two days.
+			name:              "a sliceBoardListing provider without a grace window gets none",
+			stats:             pipeline.Stats{QualifyingBoards: []string{"data engineer"}},
+			sliceBoardListing: true,
+			want:              nil,
+		},
+		{
 			// The cross-shard case (freehire#2328 review): a board name this provider's run
 			// saw as unambiguous (it only ever crawled one of its regions) can still be
 			// region-ambiguous across the FULL, unsharded catalog — sources.Config.Shard
@@ -215,7 +232,7 @@ func TestSweepableBoards(t *testing.T) {
 			if ambiguous == nil {
 				ambiguous = noneAmbiguous
 			}
-			got := sweepableBoards(tc.stats, tc.hasGrace, tc.fullCatalog, tc.fullBoardListing, ambiguous)
+			got := sweepableBoards(tc.stats, tc.hasGrace, tc.fullCatalog, tc.fullBoardListing, tc.sliceBoardListing, ambiguous)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("sweepableBoards() = %v, want %v", got, tc.want)
 			}
