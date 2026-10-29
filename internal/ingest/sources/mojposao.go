@@ -19,35 +19,50 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
-// mojposao adapts MojPosao (mojposao.hr), Croatia's largest commercial job board, run by Alma
-// Career on its "borg" platform. Every trade, ~6% IT. It is boardless and an aggregator — the
-// employer is read per posting. See the "MojPosao traps" section of AGENTS.md for the
-// measurements behind each rule.
+// mojposao adapts MojPosao, Alma Career's job board on its "borg" platform: mojposao.hr,
+// Croatia's largest commercial board (every trade, ~6% IT), and its Bosnian sibling mojposao.ba.
+// A board is the market's domain; both serve the same API, which picks the market by the x-app
+// header. It is an aggregator — the employer is read per posting. See the "MojPosao traps"
+// section of AGENTS.md for the measurements behind each rule.
 //
 // The listing is the web app's own search API, 100 postings a request; it names the title,
 // employer and place of every open posting but carries only a snippet of the body. The body,
 // category, work arrangement and salary come from the posting API, bought only for postings the
 // catalogue lacks, within a per-run budget; the rest are refreshed by identity.
 type mojposao struct {
-	get            JSONGetter
+	get            HeaderJSONGetter
 	limiter        waiter
 	maxNewPerRun   int
 	maxPages       int
 	deadlineMargin time.Duration
 }
 
+// mojposaoMarket is one market of the platform: the site origin, the x-app value its API proxy
+// keys the market on, and the country its postings are in unless they say otherwise.
+type mojposaoMarket struct {
+	origin, app, country string
+}
+
+// mojposaoMarkets are the boards. Without the x-app header the proxy answers the Croatian pool
+// whatever the host, so the header is sent on every request.
+var mojposaoMarkets = map[string]mojposaoMarket{
+	"mojposao.hr": {origin: "https://mojposao.hr", app: "mojposao.hr", country: "hr"},
+	"mojposao.ba": {origin: "https://www.mojposao.ba", app: "mojposao.ba", country: "ba"},
+}
+
+func (m mojposaoMarket) headers() map[string]string { return map[string]string{"x-app": m.app} }
+
 const (
-	mojposaoBaseURL = "https://mojposao.hr"
-	// mojposaoListURL is the whole open catalogue, 100 postings a page, pages counted from 1.
-	mojposaoListURL   = mojposaoBaseURL + "/api/proxy/jobs/search?page=%d"
-	mojposaoDetailURL = mojposaoBaseURL + "/api/proxy/jobs/%s"
+	// mojposaoListPath is a market's whole open catalogue, 100 postings a page, pages from 1.
+	mojposaoListPath   = "/api/proxy/jobs/search?page=%d"
+	mojposaoDetailPath = "/api/proxy/jobs/%s"
 
 	// mojposaoRequestInterval paces every request of a run at one a second — robots.txt asks for
 	// a one-second crawl delay.
 	mojposaoRequestInterval = time.Second
 	mojposaoDetailWorkers   = 2
-	// mojposaoMaxPages is a safety ceiling: the catalogue was 1,449 postings (15 pages) on
-	// 2026-10-28.
+	// mojposaoMaxPages is a safety ceiling: the Croatian catalogue was 1,449 postings (15 pages)
+	// on 2026-10-28, the Bosnian one 531.
 	mojposaoMaxPages = 100
 	// mojposaoMaxNewPerRun bounds the posting requests of one run: ~15 listing requests and
 	// 1,200 posting requests at one a second sit well inside the scheduler's default 2,400 s
@@ -60,7 +75,7 @@ const (
 )
 
 // NewMojPosao builds the adapter over the given client.
-func NewMojPosao(c JSONGetter) Source {
+func NewMojPosao(c HeaderJSONGetter) Source {
 	return mojposao{
 		get:            c,
 		limiter:        rate.NewLimiter(rate.Every(mojposaoRequestInterval), 1),
@@ -71,9 +86,6 @@ func NewMojPosao(c JSONGetter) Source {
 }
 
 func (mojposao) Provider() string { return "mojposao" }
-
-// One national catalogue, no per-tenant id.
-func (mojposao) boardless() {}
 
 // Thousands of employers post here, each named per posting.
 func (mojposao) aggregator() {}
@@ -105,11 +117,14 @@ func (o *mojposaoOrg) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(b, (*plain)(o))
 }
 
+// mojposaoPage is one search page. Postings come grouped by employer, and the employer is named
+// on the posting in the Croatian market but only on the group in the Bosnian one.
 type mojposaoPage struct {
 	Total      int `json:"total"`
 	TotalPages int `json:"totalPages"`
 	Items      []struct {
-		Jobs []mojposaoCard `json:"jobs"`
+		Organization mojposaoOrg    `json:"organization"`
+		Jobs         []mojposaoCard `json:"jobs"`
 	} `json:"items"`
 }
 
@@ -122,6 +137,7 @@ type mojposaoDetail struct {
 	Description  string `json:"description"`
 	Requirements string `json:"requirements"`
 	Benefits     string `json:"benefits"`
+	HTML         string `json:"html"`
 	PublishedAt  string `json:"publishedAt"`
 	Location     struct {
 		Items []struct {
@@ -157,8 +173,12 @@ func (s mojposao) FetchNew(ctx context.Context, e CompanyEntry, seen func(extern
 // maxNewPerRun of the rest, newest first. A posting the pipeline will discard anyway is judged on
 // its search result and yielded body-less without a request. A posting whose body cannot be read
 // is not yielded; a later run tries again.
-func (s mojposao) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
-	cards, err := s.list(ctx)
+func (s mojposao) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
+	m, ok := mojposaoMarkets[strings.ToLower(strings.TrimSpace(e.Board))]
+	if !ok {
+		return nil, fmt.Errorf("mojposao: board %q is not a market domain", e.Board)
+	}
+	cards, err := s.list(ctx, m)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +193,7 @@ func (s mojposao) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 	var jobs []Job
 	var unseen []mojposaoCard
 	for _, c := range cards {
-		base := mojposaoBaseJob(c)
+		base := mojposaoBaseJob(c, m)
 		if seen(base.ExternalID) {
 			base.SeenRefresh = true
 			jobs = append(jobs, base)
@@ -202,7 +222,7 @@ func (s mojposao) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 			outOfTime.Add(1)
 			return Job{}, false
 		}
-		job, ok, err := s.detail(ctx, c)
+		job, ok, err := s.detail(ctx, m, c)
 		if err != nil {
 			log.Printf("mojposao: posting %s failed; deferring: %v", c.ID, err)
 			return Job{}, false
@@ -236,7 +256,7 @@ func (s mojposao) nearDeadline(ctx context.Context) bool {
 // posting. Any page failing fails the crawl — a partial listing would let the company-scoped
 // sweep close the postings of the employers it did see on the pages it did not — and so does a
 // page inside the stated range that carries nothing.
-func (s mojposao) list(ctx context.Context) ([]mojposaoCard, error) {
+func (s mojposao) list(ctx context.Context, m mojposaoMarket) ([]mojposaoCard, error) {
 	seen := make(map[string]bool)
 	var out []mojposaoCard
 	pages := 1
@@ -248,7 +268,7 @@ func (s mojposao) list(ctx context.Context) ([]mojposaoCard, error) {
 			return nil, err
 		}
 		var p mojposaoPage
-		if err := s.get.GetJSON(ctx, fmt.Sprintf(mojposaoListURL, page), &p); err != nil {
+		if err := s.get.GetJSONWithHeaders(ctx, m.origin+fmt.Sprintf(mojposaoListPath, page), m.headers(), &p); err != nil {
 			return nil, fmt.Errorf("mojposao: listing page %d: %w", page, err)
 		}
 		n := 0
@@ -266,6 +286,9 @@ func (s mojposao) list(ctx context.Context) ([]mojposaoCard, error) {
 		}
 		for _, g := range p.Items {
 			for _, c := range g.Jobs {
+				if c.Organization.Name == "" {
+					c.Organization = g.Organization
+				}
 				if c.ID == "" || seen[c.ID] || mojposaoClean(c.Title) == "" || mojposaoClean(c.Organization.Name) == "" {
 					continue
 				}
@@ -281,23 +304,23 @@ func mojposaoClean(s string) string { return strings.Join(strings.Fields(s), " "
 
 // mojposaoPostingURL is the posting's public page. The page resolves by the id; the slug is the
 // site's own.
-func mojposaoPostingURL(id, slug string) string {
+func mojposaoPostingURL(m mojposaoMarket, id, slug string) string {
 	if slug = strings.TrimSpace(slug); slug == "" {
-		return mojposaoBaseURL + "/posao/" + id
+		return m.origin + "/posao/" + id
 	}
-	return mojposaoBaseURL + "/posao/" + id + "/" + slug
+	return m.origin + "/posao/" + id + "/" + slug
 }
 
 // mojposaoBaseJob is the body-less Job a search result alone supports: the identity, and the
 // facts the gate judges on.
-func mojposaoBaseJob(c mojposaoCard) Job {
+func mojposaoBaseJob(c mojposaoCard, m mojposaoMarket) Job {
 	j := Job{
 		ExternalID:        c.ID,
-		URL:               mojposaoPostingURL(c.ID, c.Slug),
+		URL:               mojposaoPostingURL(m, c.ID, c.Slug),
 		Title:             mojposaoClean(c.Title),
 		Company:           mojposaoClean(c.Organization.Name),
 		Location:          mojposaoClean(c.Location),
-		FallbackCountries: []string{"hr"},
+		FallbackCountries: []string{m.country},
 	}
 	if t, ok := mojposaoTime(c.PublishedAt); ok {
 		j.PostedAt = NotFuture(&t)
@@ -308,12 +331,12 @@ func mojposaoBaseJob(c mojposaoCard) Job {
 // detail reads one posting. ok=false with a nil error is the site's answer that the posting is
 // gone (404/410, or no longer active) or carries no usable posting; an error is the absence of an
 // answer.
-func (s mojposao) detail(ctx context.Context, c mojposaoCard) (Job, bool, error) {
+func (s mojposao) detail(ctx context.Context, m mojposaoMarket, c mojposaoCard) (Job, bool, error) {
 	if err := s.limiter.Wait(ctx); err != nil {
 		return Job{}, false, err
 	}
 	var d mojposaoDetail
-	if err := s.get.GetJSON(ctx, fmt.Sprintf(mojposaoDetailURL, c.ID), &d); err != nil {
+	if err := s.get.GetJSONWithHeaders(ctx, m.origin+fmt.Sprintf(mojposaoDetailPath, c.ID), m.headers(), &d); err != nil {
 		var se *StatusError
 		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
 			return Job{}, false, nil
@@ -323,14 +346,14 @@ func (s mojposao) detail(ctx context.Context, c mojposaoCard) (Job, bool, error)
 	if !d.IsActive {
 		return Job{}, false, nil
 	}
-	job, ok := mojposaoJob(d, c)
+	job, ok := mojposaoJob(d, c, m)
 	return job, ok, nil
 }
 
 // mojposaoJob maps a posting and its search result to a Job. ok is false for one with no title,
 // employer or body.
-func mojposaoJob(d mojposaoDetail, c mojposaoCard) (Job, bool) {
-	j := mojposaoBaseJob(c)
+func mojposaoJob(d mojposaoDetail, c mojposaoCard, m mojposaoMarket) (Job, bool) {
+	j := mojposaoBaseJob(c, m)
 	if t := mojposaoClean(d.Title); t != "" {
 		j.Title = t
 	}
@@ -342,7 +365,7 @@ func mojposaoJob(d mojposaoDetail, c mojposaoCard) (Job, bool) {
 		return Job{}, false
 	}
 	if d.Slug != "" {
-		j.URL = mojposaoPostingURL(c.ID, d.Slug)
+		j.URL = mojposaoPostingURL(m, c.ID, d.Slug)
 	}
 	if place := mojposaoClean(d.Location.Summary); place != "" {
 		j.Location = place
@@ -363,11 +386,20 @@ func mojposaoJob(d mojposaoDetail, c mojposaoCard) (Job, bool) {
 }
 
 // mojposaoBody joins the posting's three text sections under the headings the site's own page
-// gives them, and leads with the salary line the page shows when the employer published one.
+// gives them, and leads with the salary line the page shows when the employer published one. A
+// posting whose sections are all empty — every Bosnian one sampled — carries its body only as the
+// designed HTML ad, which is read instead.
 func mojposaoBody(d mojposaoDetail) string {
 	var b strings.Builder
 	if line := mojposaoSalaryLine(d); line != "" {
 		b.WriteString("<p>" + line + "</p>")
+	}
+	if strings.TrimSpace(d.Description+d.Requirements+d.Benefits) == "" {
+		if strings.TrimSpace(d.HTML) == "" {
+			return ""
+		}
+		b.WriteString(d.HTML)
+		return sanitizeHTML(b.String())
 	}
 	for _, sec := range []struct{ heading, text string }{
 		{"", d.Description},

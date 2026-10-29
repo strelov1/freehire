@@ -970,8 +970,9 @@ func All(c HTTPClient) map[string]Source {
 	// enumerated from the web app's search API, each new posting's body read from its posting API.
 	// See bumeran.go.
 	registry["bumeran"] = NewBumeran(c)
-	// MojPosao: Croatia's largest commercial job board (Alma Career), enumerated from the web app's
-	// search API, each new posting's body read from its posting API. See mojposao.go.
+	// MojPosao: Alma Career's job board, board = market domain (mojposao.hr Croatia's largest
+	// commercial board, mojposao.ba Bosnia's), enumerated from the web app's search API, each new
+	// posting's body read from its posting API. See mojposao.go.
 	registry["mojposao"] = NewMojPosao(c)
 	// Choisir le service public: the French civil service's own job board, enumerated from its
 	// paginated offer list (head plus a moving refresh window), each new posting's body read from

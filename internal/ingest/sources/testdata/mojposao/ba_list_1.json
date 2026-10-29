@@ -1,0 +1,89 @@
+{
+ "total": 2,
+ "totalPages": 1,
+ "items": [
+  {
+   "id": "service_209390",
+   "format": "EXCLUSIVE-HOME",
+   "organization": {
+    "id": "ba82fc85-5744-11f0-8432-42010a9c0013",
+    "name": "Best & Team d.o.o",
+    "slug": "best-team-d-o-o",
+    "logoUrl": "https://poslodavci.mojposao.ba/company/332673/logo/214x97.jpg",
+    "badges": []
+   },
+   "jobs": [
+    {
+     "id": "28faa831-c966-11f1-a8c0-42010a9c001a",
+     "title": "Reisekaufmann / Reisekauffrau (m/w/d)     ",
+     "isActive": true,
+     "slug": "reisekaufmann--reisekauffrau-mwd",
+     "description": "",
+     "startsAt": "2026-10-15T22:00:00.000Z",
+     "endsAt": "2026-11-14T22:59:59.000Z",
+     "publishedAt": "2026-10-15T22:00:00.000Z",
+     "location": "Sarajevo, Tuzla",
+     "format": {
+      "id": 4,
+      "name": "EXCLUSIVE-HOME",
+      "homepage": true
+     },
+     "isEndNear": false,
+     "isGuestApplicationEnabled": false,
+     "applicationType": "phone",
+     "salary": null,
+     "tags": [],
+     "badges": [],
+     "statusId": 4,
+     "workTypes": []
+    }
+   ]
+  },
+  {
+   "id": "service_209022",
+   "format": "EXCLUSIVE-HOME",
+   "organization": {
+    "id": "19b2c423-5744-11f0-8432-42010a9c0013",
+    "name": "CCC d.o.o. Sarajevo a member of TELUS Digital",
+    "slug": "ccc-d-o-o-sarajevo-a-member-of-telus-digital",
+    "logoUrl": "https://poslodavci.mojposao.ba/company/505847/logo/214x97.jpg",
+    "badges": [
+     {
+      "id": 71,
+      "image": "https://poslodavci.mojposao.ba/np_TOP3.png",
+      "content": "<a target=\"blank_\" href=\"https://wwww.najpozeljnijiposlodavac.ba\">Top 3 najpoželjnija poslodavca 2025. u BPO sektoru po izboru posjetitelja portala MojPosao.ba</a>",
+      "isActive": true
+     }
+    ]
+   },
+   "jobs": [
+    {
+     "id": "a82dfb9e-be57-11f1-a8c0-42010a9c001a",
+     "title": " Home Office Kundenberater (m/w/d) - Onlineversandhandel ",
+     "isActive": true,
+     "slug": "home-office-kundenberater-mwd---onlineversandhandel",
+     "description": "",
+     "startsAt": "2026-10-05T04:36:10.000Z",
+     "endsAt": "2026-11-01T21:59:59.000Z",
+     "publishedAt": "2026-10-05T04:36:10.000Z",
+     "location": "Bosna i Hercegovina",
+     "format": {
+      "id": 4,
+      "name": "EXCLUSIVE-HOME",
+      "homepage": true
+     },
+     "isEndNear": false,
+     "isGuestApplicationEnabled": false,
+     "applicationType": "phone",
+     "salary": null,
+     "tags": [],
+     "badges": [],
+     "statusId": 4,
+     "workTypes": [
+      "on-site"
+     ]
+    }
+   ]
+  }
+ ]
+}

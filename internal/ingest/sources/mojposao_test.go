@@ -23,18 +23,26 @@ type mojposaoFake struct {
 	emptyGroups bool
 	inactive    bool
 
-	mu      sync.Mutex
-	lists   []string
-	details []string
+	mu       sync.Mutex
+	lists    []string
+	details  []string
+	badHeads int
 }
 
-func (f *mojposaoFake) GetJSON(_ context.Context, u string, v any) error {
+func (f *mojposaoFake) GetJSONWithHeaders(_ context.Context, u string, h map[string]string, v any) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	ba := strings.HasPrefix(u, "https://www.mojposao.ba/")
+	if want := map[bool]string{false: "mojposao.hr", true: "mojposao.ba"}[ba]; h["x-app"] != want {
+		f.badHeads++
+	}
 	if strings.Contains(u, "/jobs/search?") {
 		f.lists = append(f.lists, u)
 		if f.listErr != nil {
 			return f.listErr
+		}
+		if ba {
+			return mojposaoFixture("testdata/mojposao/ba_list_1.json", v)
 		}
 		if strings.HasSuffix(u, "page=1") {
 			return mojposaoFixture("testdata/mojposao/list_1.json", v)
@@ -77,6 +85,8 @@ func newTestMojPosao(f *mojposaoFake) mojposao {
 	return mojposao{get: f, limiter: noWait{}, maxNewPerRun: mojposaoMaxNewPerRun, maxPages: mojposaoMaxPages, deadlineMargin: mojposaoDeadlineMargin}
 }
 
+var mojposaoHR = CompanyEntry{Board: "mojposao.hr"}
+
 const (
 	mojposaoITID     = "2d1f3532-d1f5-11f1-8b88-0280a8fb46bd"
 	mojposaoGrossID  = "ddefa77b-d2b0-11f1-8b88-0280a8fb46bd"
@@ -87,7 +97,7 @@ const (
 
 func TestMojPosaoHydratesNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	f := &mojposaoFake{}
-	jobs, err := newTestMojPosao(f).FetchNew(context.Background(), CompanyEntry{}, func(id string) bool { return id == mojposaoSeenID })
+	jobs, err := newTestMojPosao(f).FetchNew(context.Background(), mojposaoHR, func(id string) bool { return id == mojposaoSeenID })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +137,7 @@ func TestMojPosaoHydratesNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	if it.PostedAt == nil || it.PostedAt.UTC().Format("2006-01-02 15:04") != "2026-10-27 11:20" {
 		t.Errorf("posted at = %v", it.PostedAt)
 	}
-	if it.URL != mojposaoBaseURL+"/posao/"+mojposaoITID+"/senior-inzenjer-za-vmware-nsx-i-avi-load-balancer-m-z" {
+	if it.URL != "https://mojposao.hr/posao/"+mojposaoITID+"/senior-inzenjer-za-vmware-nsx-i-avi-load-balancer-m-z" {
 		t.Errorf("url = %q", it.URL)
 	}
 
@@ -148,12 +158,53 @@ func TestMojPosaoHydratesNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	if len(f.details) != 3 {
 		t.Errorf("posting requests = %v, want only the three unseen named postings", f.details)
 	}
+	if f.badHeads != 0 {
+		t.Errorf("%d requests went out without the market's x-app header", f.badHeads)
+	}
+}
+
+func TestMojPosaoBosnianMarket(t *testing.T) {
+	f := &mojposaoFake{}
+	jobs, err := newTestMojPosao(f).FetchNew(context.Background(), CompanyEntry{Board: "mojposao.ba"}, func(string) bool { return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want both Bosnian postings: %+v", len(jobs), jobs)
+	}
+	for _, j := range jobs {
+		if j.Company == "" {
+			t.Errorf("posting %s lost the employer its group names", j.ExternalID)
+		}
+		if !strings.HasPrefix(j.URL, "https://www.mojposao.ba/posao/"+j.ExternalID+"/") {
+			t.Errorf("url = %q, want the Bosnian host", j.URL)
+		}
+		if len(j.FallbackCountries) != 1 || j.FallbackCountries[0] != "ba" {
+			t.Errorf("fallback countries = %v", j.FallbackCountries)
+		}
+		if len(j.Description) < 500 {
+			t.Errorf("posting %s: the html-only body was not read: %q", j.ExternalID, j.Description)
+		}
+	}
+	if f.badHeads != 0 {
+		t.Errorf("%d requests went out without the market's x-app header", f.badHeads)
+	}
+}
+
+func TestMojPosaoRejectsAnUnknownBoard(t *testing.T) {
+	f := &mojposaoFake{}
+	if _, err := newTestMojPosao(f).FetchNew(context.Background(), CompanyEntry{Board: "mojposao.rs"}, func(string) bool { return false }); err == nil {
+		t.Error("an unknown market was crawled")
+	}
+	if len(f.lists) != 0 {
+		t.Errorf("requests went out for an unknown market: %v", f.lists)
+	}
 }
 
 func TestMojPosaoDoesNotJudgeTheCatalogueFilterOnTheCard(t *testing.T) {
 	f := &mojposaoFake{}
 	gate := DetailGate{Rejected: func(Job) bool { return true }}
-	if _, err := newTestMojPosao(f).FetchNewGated(context.Background(), CompanyEntry{}, func(string) bool { return false }, gate); err != nil {
+	if _, err := newTestMojPosao(f).FetchNewGated(context.Background(), mojposaoHR, func(string) bool { return false }, gate); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.details) != 4 {
@@ -166,7 +217,7 @@ func TestMojPosaoGateSkipsCoveredEmployers(t *testing.T) {
 	gate := DetailGate{Covered: func(cs []string) map[string]bool {
 		return map[string]bool{"KONČAR - Digital d.o.o.": true}
 	}}
-	jobs, err := newTestMojPosao(f).FetchNewGated(context.Background(), CompanyEntry{}, func(string) bool { return false }, gate)
+	jobs, err := newTestMojPosao(f).FetchNewGated(context.Background(), mojposaoHR, func(string) bool { return false }, gate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +241,7 @@ func TestMojPosaoListingFailuresFailTheCrawl(t *testing.T) {
 		"empty groups":     {emptyGroups: true},
 	}
 	for name, f := range cases {
-		if _, err := newTestMojPosao(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
+		if _, err := newTestMojPosao(f).FetchNew(context.Background(), mojposaoHR, func(string) bool { return false }); err == nil {
 			t.Errorf("%s: a cut-short listing was reported as a success", name)
 		}
 	}
@@ -198,7 +249,7 @@ func TestMojPosaoListingFailuresFailTheCrawl(t *testing.T) {
 
 func TestMojPosaoInactivePostingIsGoneNotAFailure(t *testing.T) {
 	f := &mojposaoFake{inactive: true}
-	jobs, err := newTestMojPosao(f).FetchNew(context.Background(), CompanyEntry{}, func(id string) bool { return id == mojposaoSeenID })
+	jobs, err := newTestMojPosao(f).FetchNew(context.Background(), mojposaoHR, func(id string) bool { return id == mojposaoSeenID })
 	if err != nil {
 		t.Fatalf("inactive postings are answers, not failures: %v", err)
 	}
@@ -211,7 +262,7 @@ func TestMojPosaoBudgetBuysNewestFirst(t *testing.T) {
 	f := &mojposaoFake{}
 	s := newTestMojPosao(f)
 	s.maxNewPerRun = 1
-	if _, err := s.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err != nil {
+	if _, err := s.FetchNew(context.Background(), mojposaoHR, func(string) bool { return false }); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.details) != 1 || !strings.HasSuffix(f.details[0], mojposaoGrossID) {
