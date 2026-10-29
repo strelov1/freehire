@@ -68,6 +68,14 @@ func TestWorkModeFromDescription(t *testing.T) {
 		{"hybrid cloud", "You will manage our hybrid cloud infrastructure.", ""},
 		{"remote server", "Debug issues on a remote server over SSH.", ""},
 		{"remote team", "Collaborate with a remote team across time zones.", ""},
+		// A remote phrase qualifying TEAMS in the plural describes teams in general — the
+		// candidate's past, the people they will work with — not this posting. Verbatim
+		// from a prod "Senior Product Designer - Barcelona Hybrid" served as remote.
+		{"fully remote teams", "<li>Experience working with distributed or fully remote teams</li>", ""},
+		{"remote-first teams", "You have led remote-first teams before.", ""},
+		{"a fully remote team is a statement", "We are a fully remote team spread across Europe.", "remote"},
+		{"remote teams guard does not block a later statement", "Experience with fully remote " +
+			"teams. This is a fully remote position.", "remote"},
 		{"bare in office", "Free snacks in office and a great culture.", ""},
 		{"incidental from our office", "Enjoy free lunch from our office cafeteria.", ""},
 		{"no arrangement phrase", "We build payments infrastructure in Go.", ""},

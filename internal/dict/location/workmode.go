@@ -171,7 +171,8 @@ func startsWordAny(s string, from int, words []string) bool {
 
 // phraseMatches reports whether p occurs in text (already lowercased) unguarded. A
 // travelPerkPhrases match that IS qualified, or an allowancePhrases match that counts a
-// perk ("45 work-from-anywhere days"), does not end the search for p — the same
+// perk ("45 work-from-anywhere days"), or any match qualifying collectiveNouns ("fully
+// remote teams"), does not end the search for p — the same
 // "scan past a qualified match" property RemoteContradicted's loop has for denial phrases
 // (see TestRemoteContradictedReadsPastAQualifiedDenial): a description may hedge one
 // occurrence of "work from anywhere" as a bounded perk and state another, unqualified one
@@ -187,8 +188,8 @@ func phraseMatches(text, p string) bool {
 		}
 		start, end := offset+i, offset+i+len(p)
 		perk := (guarded && travelPerkQualified(text, start, end)) ||
-			(allowancePhrases[p] && countsAllowance(text[end:]))
-		if !perk {
+			(allowancePhrases[p] && opensWithNoun(text[end:], allowanceUnits))
+		if !perk && !opensWithNoun(text[end:], collectiveNouns) {
 			return true
 		}
 		offset = end
@@ -227,12 +228,20 @@ var allowancePhrases = map[string]bool{
 // allowanceUnits are the nouns a counted home-working perk is measured in.
 var allowanceUnits = []string{"days", "day", "weeks", "week"}
 
-// countsAllowance reports whether rest (the lowercased text right after a phrase) opens with
-// an allowanceUnits noun as a whole word. "day-to-day" is not a unit: "work from home
-// day-to-day" states the arrangement, so a hyphen or letter after the noun rules it out.
-func countsAllowance(rest string) bool {
+// collectiveNouns are the plural nouns an arrangement phrase can qualify without stating
+// this posting's arrangement: "experience working with distributed or fully remote teams"
+// describes teams in general — the candidate's past, the people they will meet — and was
+// served as remote on a prod posting whose own title said "Barcelona Hybrid". Only the
+// plural: "we are a fully remote team" is the employer describing itself, which is the
+// statement the phrase list exists to read.
+var collectiveNouns = []string{"teams"}
+
+// opensWithNoun reports whether rest (the lowercased text right after a phrase) opens with
+// one of nouns as a whole word. "day-to-day" is not a unit: "work from home day-to-day"
+// states the arrangement, so a hyphen or letter after the noun rules it out.
+func opensWithNoun(rest string, nouns []string) bool {
 	rest = strings.TrimLeft(rest, " ")
-	for _, u := range allowanceUnits {
+	for _, u := range nouns {
 		if !strings.HasPrefix(rest, u) {
 			continue
 		}

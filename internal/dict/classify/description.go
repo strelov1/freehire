@@ -115,15 +115,58 @@ func NonTechFromDescription(desc string) string {
 // SeniorityFromDescription derives a seniority grade from a job description's prose,
 // returning "" when no anchored grade statement is present. It is the lower-priority
 // seniority source (after the title dictionary), so it only fills a value the title
-// left empty. Values are from vocab.SeniorityValues.
+// left empty. Values are from vocab.SeniorityValues. An entry grade a mentoring verb
+// governs is passed over (notMentored).
 func SeniorityFromDescription(desc string) string {
 	lower := strings.ToLower(desc)
 	for _, g := range descriptionSeniorityPhrases {
+		boundary := wordmatch.UnicodeBoundary
+		if g.grade == "junior" || g.grade == "intern" {
+			boundary = notMentored
+		}
 		for _, p := range g.phrases {
-			if wordmatch.Contains(lower, p, wordmatch.UnicodeBoundary) {
+			if wordmatch.Contains(lower, p, boundary) {
 				return g.grade
 			}
 		}
 	}
 	return ""
+}
+
+// mentorVerbs are the words that make an entry grade the people a role looks after
+// rather than the role itself: "serves as a guide and mentor for junior-level software
+// development engineers" is a prod "Backend Software Engineer 3" posting, served as
+// junior off that line. Every senior posting that mentors says so, so the guard reads
+// only the two entry grades — a higher grade's phrases are not what a role mentors.
+var mentorVerbs = []string{
+	"mentor", "mentors", "mentoring", "mentorship",
+	"coach", "coaches", "coaching",
+	"guide", "guides", "guiding",
+	"supervise", "supervises", "supervising",
+	"teach", "teaches", "teaching",
+}
+
+// mentorWindow is how far before a grade phrase a mentoring verb still governs it.
+const mentorWindow = 40
+
+// notMentored is wordmatch.UnicodeBoundary that also refuses a match a mentoring verb
+// governs: one within mentorWindow bytes before it in the same sentence or list item.
+func notMentored(s string, start, end int) bool {
+	if !wordmatch.UnicodeBoundary(s, start, end) {
+		return false
+	}
+	lo := max(0, start-mentorWindow)
+	for lo > 0 && s[lo-1] != ' ' { // never start the window inside a word
+		lo--
+	}
+	before := s[lo:start]
+	if i := strings.LastIndexAny(before, ".;!?>"); i >= 0 {
+		before = before[i+1:]
+	}
+	for _, v := range mentorVerbs {
+		if wordmatch.Contains(before, v, wordmatch.UnicodeBoundary) {
+			return false
+		}
+	}
+	return true
 }

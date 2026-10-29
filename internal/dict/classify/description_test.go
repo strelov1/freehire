@@ -30,6 +30,15 @@ func TestSeniorityFromDescription(t *testing.T) {
 		{"senior management", "You will collaborate with senior management.", ""},
 		{"lead the team", "You will lead the team of five engineers.", ""},
 		{"junior colleagues", "Mentor junior colleagues across the org.", ""},
+		// A junior grade the role MENTORS is the people around it, not the role. The first
+		// is verbatim from a prod "Backend Software Engineer 3" posting that served as junior.
+		{"mentor for junior-level", "<li>Serves as a guide and mentor for junior-level software " +
+			"development engineers.</li>", ""},
+		{"coaching entry-level", "You will be coaching entry-level analysts on our methods.", ""},
+		{"supervise interns", "Supervise the internship program and its cohort.", ""},
+		{"mentoring in an earlier sentence", "Mentoring is part of our culture. This is an " +
+			"entry-level position.", "junior"},
+		{"mentoring in an earlier list item", "<li>Mentor peers</li><li>Entry-level position</li>", "junior"},
 		{"our staff", "We care deeply about our staff and culture.", ""},
 		{"principal component analysis", "Experience with principal component analysis.", ""},
 		{"report to head of", "You will report to the Head of Product.", ""},
