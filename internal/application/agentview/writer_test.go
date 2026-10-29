@@ -70,3 +70,18 @@ func TestAWriteAfterCloseIsDroppedNotAPanic(t *testing.T) {
 		t.Errorf("Dropped() = %d, want the late write counted", w.Dropped())
 	}
 }
+
+func TestAWriterCreatesAMissingDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "not", "yet")
+	w := NewWriter(dir)
+	w.Write(Event{TS: time.Date(2026, 10, 28, 1, 0, 0, 0, time.UTC), Kind: KindSearch, Surface: SurfaceMCP, Viewer: "v", JobIDs: []int64{1}})
+	w.Close()
+
+	b, err := os.ReadFile(filepath.Join(dir, "agent-views-2026-10-28.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(b), "\n"); n != 1 {
+		t.Errorf("%d lines, want 1", n)
+	}
+}

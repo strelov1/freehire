@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/api/mcpapp"
+	"github.com/strelov1/freehire/internal/api/ojcpmcp"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -210,5 +211,49 @@ func TestANilSinkRecordsNothingAndPassesThrough(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Errorf("status = %d", resp.StatusCode)
+	}
+}
+
+// ojcpMCPCall posts one tools/call to a mounted /ojcp/mcp route and drains the answer.
+func ojcpMCPCall(t *testing.T, app *fiber.App, body string) {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/ojcp/mcp", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("User-Agent", "Claude-User")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+}
+
+func TestAnOJCPMCPCallThroughTheMountedRouteIsRecorded(t *testing.T) {
+	sink := &recordingSink{}
+	store := fakeOJCPStore{
+		job:     db.Job{ID: 7, PublicSlug: "go-dev-x", Title: "Go Dev", Company: "Acme", Source: "greenhouse"},
+		formErr: pgx.ErrNoRows,
+	}
+	fake := &fakeSearcher{res: search.SearchResult{Hits: []search.JobDocument{{ID: 7}, {ID: 9}}}}
+	h := newOJCPHandlers(fake, store, "https://freehire.me", nil)
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.All("/ojcp/mcp", agentViews(sink, agentview.SurfaceOJCP), adaptor.HTTPHandler(ojcpmcp.Handler(h, h.origin)))
+
+	ojcpMCPCall(t, app, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_jobs","arguments":{"query":"go"}}}`)
+	if len(sink.got) != 1 {
+		t.Fatalf("events after search = %d, want 1", len(sink.got))
+	}
+	e := sink.got[0]
+	if e.Kind != agentview.KindSearch || e.Surface != agentview.SurfaceOJCP || len(e.JobIDs) != 2 || e.JobIDs[0] != 7 {
+		t.Errorf("search event = %+v", e)
+	}
+
+	ojcpMCPCall(t, app, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_job_detail","arguments":{"job_id":"go-dev-x"}}}`)
+	if len(sink.got) != 2 {
+		t.Fatalf("events after detail = %d, want 2", len(sink.got))
+	}
+	e = sink.got[1]
+	if e.Kind != agentview.KindDetail || e.Surface != agentview.SurfaceOJCP || len(e.JobIDs) != 1 || e.JobIDs[0] != 7 {
+		t.Errorf("detail event = %+v", e)
 	}
 }

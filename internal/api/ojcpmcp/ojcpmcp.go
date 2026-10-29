@@ -74,10 +74,17 @@ type employerContextInput struct {
 
 // Handler builds the HTTP handler serving the OJCP tools over MCP's streamable transport.
 // Mount it with Fiber's adaptor at the path the manifest declares as `mcp_endpoint`.
+//
+// It is stateless, as the ChatGPT app's server is (see mcpapp.Handler). A stateful session
+// derives its tool contexts from the `initialize` request, whose fasthttp RequestCtx the
+// adaptor's server recycles once that request ends — so a later call would read another
+// request's user values, and the agent view counts would be attributed to the wrong request
+// or lost. All three tools are reads (a request in, an answer out, nothing remembered
+// between calls), so statelessness costs nothing and each call carries its own context.
 func Handler(r Reader, origin string) http.Handler {
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return newServer(r, origin)
-	}, nil)
+	}, &mcp.StreamableHTTPOptions{Stateless: true})
 }
 
 // readOnly is every tool's annotation block, written once. All three read a catalogue that

@@ -17,8 +17,9 @@ import (
 // the SDK — so Fiber handlers and MCP tools reach it alike. A nil sink records nothing.
 //
 // The viewer is the account when one is known — a signed-in caller, or on /mcp/account
-// the header mcpAccountAuthenticate has already overwritten with a verified id — and otherwise the client IP (c.IP(), already resolved from the
-// trusted proxy's X-Real-IP) with the User-Agent.
+// the header mcpAccountAuthenticate has already overwritten with a verified id — and
+// otherwise the client IP (c.IP(), already resolved from the trusted proxy's X-Real-IP)
+// with the User-Agent.
 func agentViews(sink agentview.Sink, surface string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if sink == nil {

@@ -34,6 +34,9 @@ func NewWriter(dir string) *Writer {
 	if dir == "" {
 		return nil
 	}
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		log.Printf("agentview: create %s: %v", dir, err)
+	}
 	return newWriter(dir, bufferSize)
 }
 
@@ -103,6 +106,9 @@ type dayWriter struct {
 	dir  string
 	f    *os.File
 	name string
+	// failed is the file name an open last failed for, so a missing or unwritable
+	// directory logs once per day's file rather than once per event.
+	failed string
 }
 
 func (d *dayWriter) write(e Event) {
@@ -115,7 +121,10 @@ func (d *dayWriter) write(e Event) {
 		d.name = n
 		d.f, err = os.OpenFile(filepath.Join(d.dir, n), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o640)
 		if err != nil {
-			log.Printf("agentview: open %s: %v", n, err)
+			if d.failed != n {
+				log.Printf("agentview: open %s: %v", n, err)
+				d.failed = n
+			}
 			d.name = "" // retry the open on the next event
 			return
 		}
