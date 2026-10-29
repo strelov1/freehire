@@ -10,6 +10,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/strelov1/freehire/internal/api/ratelimit"
@@ -249,24 +250,21 @@ func (g *publicGate) callerTier(c *fiber.Ctx) (int64, rateTier) {
 
 func (g *publicGate) lookupAPIKey(ctx context.Context, hash string) (resolvedCredential, error) {
 	row, err := g.keys.ResolveAPIKeyTier(ctx, hash)
-	if err != nil {
-		return resolvedCredential{}, err
-	}
-	return resolvedCredential{userID: row.UserID, full: row.Scope == auth.ScopeFull,
-		apiUntil: row.ApiUntilStripe.Time, dataUntil: row.ApiDataUntilStripe.Time,
-		proUntil: row.ProUntil.Time, ultraUntil: row.UltraUntil.Time}, nil
+	return credentialOf(row.UserID, row.Scope == auth.ScopeFull,
+		row.ApiUntilStripe, row.ApiDataUntilStripe, row.ProUntil, row.UltraUntil), err
 }
 
 // lookupAccessToken resolves an MCP or CLI token, which is always full scope: an OAuth grant has
 // no narrower variant to request.
 func (g *publicGate) lookupAccessToken(ctx context.Context, hash string) (resolvedCredential, error) {
 	row, err := g.keys.ResolveOAuthGrantTier(ctx, hash)
-	if err != nil {
-		return resolvedCredential{}, err
-	}
-	return resolvedCredential{userID: row.UserID, full: true,
-		apiUntil: row.ApiUntilStripe.Time, dataUntil: row.ApiDataUntilStripe.Time,
-		proUntil: row.ProUntil.Time, ultraUntil: row.UltraUntil.Time}, nil
+	return credentialOf(row.UserID, true,
+		row.ApiUntilStripe, row.ApiDataUntilStripe, row.ProUntil, row.UltraUntil), err
+}
+
+func credentialOf(userID int64, full bool, api, data, pro, ultra pgtype.Timestamptz) resolvedCredential {
+	return resolvedCredential{userID: userID, full: full,
+		apiUntil: api.Time, dataUntil: data.Time, proUntil: pro.Time, ultraUntil: ultra.Time}
 }
 
 // resolve looks a credential up through the caches. The tier itself is resolved per request

@@ -216,9 +216,6 @@ func (h *authHandlers) GetAPIPlan(c *fiber.Ctx) error {
 }
 
 func apiPlanFrom(row db.GetUserAPIEntitlementRow, tiers RateTiers, now time.Time) apiPlanResponse {
-	if tiers == nil {
-		tiers = DefaultRateTiers()
-	}
 	apiUntil, dataUntil := row.ApiUntilStripe.Time, row.ApiDataUntilStripe.Time
 	rt := accountRateTier(apiUntil, dataUntil, row.ProUntil.Time, row.UltraUntil.Time, now)
 	out := apiPlanResponse{Tier: billing.APITierOf(apiUntil, dataUntil, now), RateTier: rt,

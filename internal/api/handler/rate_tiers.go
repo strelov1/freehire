@@ -73,24 +73,29 @@ func RateTiersFromEnv(getenv func(string) string) (RateTiers, error) {
 	t := DefaultRateTiers()
 	for _, s := range rateTierSpecs {
 		l := t[s.tier]
-		minuteVar, dayVar := "API_RATE_"+s.env+"_PER_MINUTE", "API_RATE_"+s.env+"_PER_DAY"
-		if raw := strings.TrimSpace(getenv(minuteVar)); raw != "" {
-			n, err := strconv.Atoi(raw)
-			if err != nil || n <= 0 {
-				return nil, fmt.Errorf("%s must be a positive integer, got %q", minuteVar, raw)
-			}
-			l.PerMinute = n
+		if err := envOverride(getenv, "API_RATE_"+s.env+"_PER_MINUTE", 1, &l.PerMinute); err != nil {
+			return nil, err
 		}
-		if raw := strings.TrimSpace(getenv(dayVar)); raw != "" {
-			n, err := strconv.Atoi(raw)
-			if err != nil || n < 0 {
-				return nil, fmt.Errorf("%s must be a non-negative integer (0 for no daily cap), got %q", dayVar, raw)
-			}
-			l.PerDay = n
+		if err := envOverride(getenv, "API_RATE_"+s.env+"_PER_DAY", 0, &l.PerDay); err != nil {
+			return nil, err
 		}
 		t[s.tier] = l
 	}
 	return t, nil
+}
+
+// envOverride sets *dst from the variable when it is set, refusing a value below floor.
+func envOverride(getenv func(string) string, name string, floor int, dst *int) error {
+	raw := strings.TrimSpace(getenv(name))
+	if raw == "" {
+		return nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < floor {
+		return fmt.Errorf("%s must be an integer of at least %d, got %q", name, floor, raw)
+	}
+	*dst = n
+	return nil
 }
 
 // accountRateTier is the tier an account's credential earns: the API product first, since it
