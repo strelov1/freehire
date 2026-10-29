@@ -431,7 +431,18 @@ ORDER BY j.source;
 --
 -- Its own query rather than ListSourceStats, which serves the public /api/v1/sources and
 -- should not change shape for an operator's gauge.
-SELECT source, open_jobs, missing_work_mode_jobs, missing_geo_jobs, missing_company_jobs,
-       unseen_7d_jobs, posted_over_60d_jobs, measured_at
+--
+-- A row whose counts are NULL predates migration 0213 and has not been rebuilt since: it is
+-- skipped rather than published as zeros, which would read as "nothing missing". The
+-- rebuild writes all five together, so testing one is enough; the COALESCEs only tell sqlc
+-- the columns are non-null here.
+SELECT source, open_jobs,
+       coalesce(missing_work_mode_jobs, 0)::bigint AS missing_work_mode_jobs,
+       coalesce(missing_geo_jobs, 0)::bigint       AS missing_geo_jobs,
+       coalesce(missing_company_jobs, 0)::bigint   AS missing_company_jobs,
+       coalesce(unseen_7d_jobs, 0)::bigint         AS unseen_7d_jobs,
+       coalesce(posted_over_60d_jobs, 0)::bigint   AS posted_over_60d_jobs,
+       measured_at
 FROM source_stats
+WHERE missing_work_mode_jobs IS NOT NULL
 ORDER BY source;

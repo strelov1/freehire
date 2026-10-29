@@ -8,11 +8,14 @@
 -- deserves an alert belongs to the alert rule, since several sources are legitimately
 -- geo-less or never re-listed.
 --
--- NOT NULL DEFAULT 0 is a metadata-only change, and the table holds one row per source.
--- The default only covers the rows already there until the next rebuild rewrites them.
+-- NULLABLE, and NULL means NOT YET MEASURED — the browsable_jobs rule, for the same reason.
+-- The rows already in the table were measured before these columns existed; a default of 0
+-- would have queue-metrics publish "nothing missing" for every source, under their old
+-- measured_at, until the next rebuild. The rebuild always writes all five, and
+-- SourceQualityMetrics skips a row that has none.
 ALTER TABLE source_stats
-    ADD COLUMN missing_work_mode_jobs bigint NOT NULL DEFAULT 0,
-    ADD COLUMN missing_geo_jobs       bigint NOT NULL DEFAULT 0,
-    ADD COLUMN missing_company_jobs   bigint NOT NULL DEFAULT 0,
-    ADD COLUMN unseen_7d_jobs         bigint NOT NULL DEFAULT 0,
-    ADD COLUMN posted_over_60d_jobs   bigint NOT NULL DEFAULT 0;
+    ADD COLUMN missing_work_mode_jobs bigint,
+    ADD COLUMN missing_geo_jobs       bigint,
+    ADD COLUMN missing_company_jobs   bigint,
+    ADD COLUMN unseen_7d_jobs         bigint,
+    ADD COLUMN posted_over_60d_jobs   bigint;

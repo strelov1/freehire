@@ -7421,6 +7421,11 @@ type Querier interface {
 	//
 	// Its own query rather than ListSourceStats, which serves the public /api/v1/sources and
 	// should not change shape for an operator's gauge.
+	//
+	// A row whose counts are NULL predates migration 0213 and has not been rebuilt since: it is
+	// skipped rather than published as zeros, which would read as "nothing missing". The
+	// rebuild writes all five together, so testing one is enough; the COALESCEs only tell sqlc
+	// the columns are non-null here.
 	SourceQualityMetrics(ctx context.Context) ([]SourceQualityMetricsRow, error)
 	// Record that this posting's role was not found on its company's own board, as of now.
 	// Re-stamped on every run, so the reader can ignore a stamp that has aged out and a

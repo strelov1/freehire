@@ -82,11 +82,11 @@ VALUES (
     sqlc.arg('ats_matched_jobs'),
     sqlc.narg('browsable_jobs'),
     sqlc.arg('measured_at'),
-    sqlc.arg('missing_work_mode_jobs'),
-    sqlc.arg('missing_geo_jobs'),
-    sqlc.arg('missing_company_jobs'),
-    sqlc.arg('unseen_7d_jobs'),
-    sqlc.arg('posted_over_60d_jobs')
+    sqlc.arg('missing_work_mode_jobs')::bigint,
+    sqlc.arg('missing_geo_jobs')::bigint,
+    sqlc.arg('missing_company_jobs')::bigint,
+    sqlc.arg('unseen_7d_jobs')::bigint,
+    sqlc.arg('posted_over_60d_jobs')::bigint
 );
 
 -- name: ListSourceStats :many

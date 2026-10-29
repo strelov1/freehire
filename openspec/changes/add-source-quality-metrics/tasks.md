@@ -1,6 +1,6 @@
 ## 1. Measure
 
-- [x] 1.1 Migration `0213_source_stats_quality.sql`: five `bigint NOT NULL DEFAULT 0`
+- [x] 1.1 Migration `0213_source_stats_quality.sql`: five nullable `bigint` (NULL = not yet measured)
   columns on `source_stats`. `pnpm check:sql`.
 - [x] 1.2 Extend `AggregateOpenJobsBySource` with the five `FILTER` counts and
   `InsertSourceStat` with the columns; `make sqlc`.

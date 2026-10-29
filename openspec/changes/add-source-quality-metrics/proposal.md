@@ -28,7 +28,7 @@ show is still open. Both are measurable per source from columns we already store
 
 ## Impact
 
-- Migration 0213 (five `bigint NOT NULL DEFAULT 0` columns on a ~400-row table).
+- Migration 0213 (five nullable `bigint` columns, NULL = not yet measured on a ~400-row table).
 - `internal/platform/db/queries/source_stats.sql`, `metrics.sql`; `internal/ingest/sourcestats`;
   `cmd/queue-metrics`.
 - No new scan of `jobs`, no new worker, no public API change.

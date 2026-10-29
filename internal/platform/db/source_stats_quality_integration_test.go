@@ -7,6 +7,9 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestAggregateOpenJobsBySourceCountsQualityGaps(t *testing.T) {
@@ -76,5 +79,34 @@ func TestAggregateOpenJobsBySourceCountsQualityGaps(t *testing.T) {
 	}
 	if got != want {
 		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+}
+
+// A row measured before migration 0213 carries NULL counts until the next rebuild, and must
+// not be published: as zeros it would read as "nothing missing" for every source.
+func TestSourceQualityMetricsSkipsUnmeasuredRows(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "TRUNCATE source_stats"); err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO source_stats (source, open_jobs, ats_matched_jobs) VALUES ('premigration', 10, 0)`); err != nil {
+		t.Fatalf("seed unmeasured row: %v", err)
+	}
+	if err := q.InsertSourceStat(ctx, InsertSourceStatParams{
+		Source: "rebuilt", OpenJobs: 10, MeasuredAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		MissingGeoJobs: 4,
+	}); err != nil {
+		t.Fatalf("insert rebuilt row: %v", err)
+	}
+
+	rows, err := q.SourceQualityMetrics(ctx)
+	if err != nil {
+		t.Fatalf("source quality metrics: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Source != "rebuilt" || rows[0].MissingGeoJobs != 4 || rows[0].MissingWorkModeJobs != 0 {
+		t.Errorf("got %+v, want only the rebuilt row", rows)
 	}
 }

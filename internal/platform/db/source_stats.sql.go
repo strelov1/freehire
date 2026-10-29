@@ -127,11 +127,11 @@ VALUES (
     $3,
     $4,
     $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10
+    $6::bigint,
+    $7::bigint,
+    $8::bigint,
+    $9::bigint,
+    $10::bigint
 )
 `
 
