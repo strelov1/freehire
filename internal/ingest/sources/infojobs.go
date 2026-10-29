@@ -265,7 +265,10 @@ func (s infojobs) listPageOnce(ctx context.Context, page int) (infojobsListProps
 	if err != nil {
 		return props, err
 	}
-	return props, infojobsDecodeProps(text, &props)
+	if err := infojobsDecodeProps(text, &props); err != nil {
+		return props, err
+	}
+	return props, nil
 }
 
 // infojobsPropsMarker matches the `window.__INITIAL_PROPS__ = JSON.parse(` assignment; the JSON
