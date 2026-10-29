@@ -24,7 +24,7 @@ func (q *Queries) IsViewLogFileProcessed(ctx context.Context, signature int64) (
 	return exists, err
 }
 
-const markViewLogFileProcessed = `-- name: MarkViewLogFileProcessed :exec
+const markViewLogFileProcessed = `-- name: MarkViewLogFileProcessed :execrows
 INSERT INTO processed_view_logs (signature, filename)
 VALUES ($1, $2)
 ON CONFLICT (signature) DO NOTHING
@@ -36,10 +36,15 @@ type MarkViewLogFileProcessedParams struct {
 }
 
 // Cursor write: mark a rotated file applied. Idempotent — a concurrent/rerun mark
-// is a no-op, so the file is never double-applied.
-func (q *Queries) MarkViewLogFileProcessed(ctx context.Context, arg MarkViewLogFileProcessedParams) error {
-	_, err := q.db.Exec(ctx, markViewLogFileProcessed, arg.Signature, arg.Filename)
-	return err
+// is a no-op. It reports whether THIS call claimed the file, so a pass that marks
+// first, inside the transaction that applies the counts, applies a file at most
+// once even when two runs race past the IsViewLogFileProcessed read.
+func (q *Queries) MarkViewLogFileProcessed(ctx context.Context, arg MarkViewLogFileProcessedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markViewLogFileProcessed, arg.Signature, arg.Filename)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const resolveSlugsToJobIDs = `-- name: ResolveSlugsToJobIDs :many

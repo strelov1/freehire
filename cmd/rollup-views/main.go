@@ -218,7 +218,7 @@ func applyFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f viewlog
 			return 0, batchErr
 		}
 	}
-	if err := qtx.MarkViewLogFileProcessed(ctx, db.MarkViewLogFileProcessedParams{
+	if _, err := qtx.MarkViewLogFileProcessed(ctx, db.MarkViewLogFileProcessedParams{
 		Signature: sig, Filename: filepath.Base(f.Path),
 	}); err != nil {
 		return 0, err

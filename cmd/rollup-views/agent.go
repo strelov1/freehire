@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -24,7 +25,7 @@ const agentLogRetention = 14 * 24 * time.Hour
 
 // processAgent applies every finished, not-yet-applied day of the agent-view log, then
 // removes the files past retention. The cursor is the same content-signature table the
-// nginx pass uses, so a re-run applies nothing twice.
+// nginx pass uses, claimed inside each file's transaction, so a re-run applies nothing twice.
 func processAgent(ctx context.Context, pool *pgxpool.Pool, dir string, now time.Time) (nFiles, nViews int, err error) {
 	files, err := agentview.ListFiles(dir, now)
 	if err != nil {
@@ -36,16 +37,12 @@ func processAgent(ctx context.Context, pool *pgxpool.Pool, dir string, now time.
 		if err != nil {
 			return nFiles, nViews, err
 		}
-		done, err := q.IsViewLogFileProcessed(ctx, sig)
-		if err != nil {
-			return nFiles, nViews, err
-		}
-		if done {
-			continue
-		}
 		applied, err := applyWithRetry(ctx, filepath.Base(f.Path), func() (int, error) {
 			return applyAgentFile(ctx, pool, q, f.Path, counts, sig)
 		})
+		if errors.Is(err, errAlreadyApplied) {
+			continue
+		}
 		if err != nil {
 			return nFiles, nViews, err
 		}
@@ -85,7 +82,12 @@ func aggregateAgentFile(path string) (map[time.Time]map[int64]int, int64, error)
 	return counts, int64(h.Sum64()), nil
 }
 
-// applyAgentFile applies one file's counts and marks it processed in one transaction.
+// errAlreadyApplied reports a file another run has already claimed.
+var errAlreadyApplied = errors.New("agent view file already applied")
+
+// applyAgentFile claims one file's signature and applies its counts in one transaction.
+// The claim comes FIRST: a run that loses it to another run waits on that run's row and
+// then adds nothing, where a read-then-apply would let both add the day's counts.
 func applyAgentFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, path string, counts map[time.Time]map[int64]int, sig int64) (int, error) {
 	params, total := buildAgentParams(counts)
 	tx, err := pool.Begin(ctx)
@@ -94,6 +96,15 @@ func applyAgentFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, path
 	}
 	defer tx.Rollback(ctx)
 	qtx := q.WithTx(tx)
+	claimed, err := qtx.MarkViewLogFileProcessed(ctx, db.MarkViewLogFileProcessedParams{
+		Signature: sig, Filename: filepath.Base(path),
+	})
+	if err != nil {
+		return 0, err
+	}
+	if claimed == 0 {
+		return 0, errAlreadyApplied
+	}
 	if len(params) > 0 {
 		br := qtx.ApplyDailyAgentView(ctx, params)
 		var batchErr error
@@ -108,11 +119,6 @@ func applyAgentFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, path
 		if batchErr != nil {
 			return 0, batchErr
 		}
-	}
-	if err := qtx.MarkViewLogFileProcessed(ctx, db.MarkViewLogFileProcessedParams{
-		Signature: sig, Filename: filepath.Base(path),
-	}); err != nil {
-		return 0, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return 0, err

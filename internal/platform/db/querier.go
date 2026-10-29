@@ -5397,8 +5397,10 @@ type Querier interface {
 	// the same transaction as the extracted jobs' UpsertJob calls.
 	MarkTelegramPostExtracted(ctx context.Context, arg MarkTelegramPostExtractedParams) error
 	// Cursor write: mark a rotated file applied. Idempotent — a concurrent/rerun mark
-	// is a no-op, so the file is never double-applied.
-	MarkViewLogFileProcessed(ctx context.Context, arg MarkViewLogFileProcessedParams) error
+	// is a no-op. It reports whether THIS call claimed the file, so a pass that marks
+	// first, inside the transaction that applies the counts, applies a file at most
+	// once even when two runs race past the IsViewLogFileProcessed read.
+	MarkViewLogFileProcessed(ctx context.Context, arg MarkViewLogFileProcessedParams) (int64, error)
 	// The upper bound of the id-range walk above. MAX over a source is an index scan on
 	// (source, external_id)'s table, not a count of matching rows, so it is cheap even when the
 	// source holds millions.

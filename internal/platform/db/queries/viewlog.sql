@@ -42,9 +42,11 @@ SELECT EXISTS(
     SELECT 1 FROM processed_view_logs WHERE signature = sqlc.arg('signature')
 );
 
--- name: MarkViewLogFileProcessed :exec
+-- name: MarkViewLogFileProcessed :execrows
 -- Cursor write: mark a rotated file applied. Idempotent — a concurrent/rerun mark
--- is a no-op, so the file is never double-applied.
+-- is a no-op. It reports whether THIS call claimed the file, so a pass that marks
+-- first, inside the transaction that applies the counts, applies a file at most
+-- once even when two runs race past the IsViewLogFileProcessed read.
 INSERT INTO processed_view_logs (signature, filename)
 VALUES (sqlc.arg('signature'), sqlc.arg('filename'))
 ON CONFLICT (signature) DO NOTHING;

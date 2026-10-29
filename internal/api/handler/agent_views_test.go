@@ -257,3 +257,29 @@ func TestAnOJCPMCPCallThroughTheMountedRouteIsRecorded(t *testing.T) {
 		t.Errorf("detail event = %+v", e)
 	}
 }
+
+func TestAnAgentViewBehindAVerifiedKeyIsCountedAsItsAccount(t *testing.T) {
+	// The public gate verifies a presented key for its rate budget; the view scope must
+	// reuse that identity, or every account behind one address and client counts as one.
+	sink := &recordingSink{}
+	g := newTestGate(&checkRecorder{}, paidKeys(), false, "")
+	app := fiber.New(fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor})
+	app.Get("/agent", g.limiter(agentSearchBudget), agentViews(sink, agentview.SurfaceAgentAPI),
+		func(c *fiber.Ctx) error {
+			agentview.Record(c.Context(), agentview.KindSearch, []int64{1})
+			return c.SendStatus(fiber.StatusOK)
+		})
+
+	gateGet(t, app, "/agent", bearer(unpaidToken))
+	gateGet(t, app, "/agent", bearer(unknownToken))
+
+	if len(sink.got) != 2 {
+		t.Fatalf("events = %d, want 2", len(sink.got))
+	}
+	if got := sink.got[0].Viewer; got != "user:9" {
+		t.Errorf("verified key viewer = %q, want user:9", got)
+	}
+	if got := sink.got[1].Viewer; !strings.HasPrefix(got, "ip:"+gateIP) {
+		t.Errorf("unknown key viewer = %q, want the address", got)
+	}
+}

@@ -35,7 +35,9 @@ func TestProcessAgentAppliesFinishedDaysOnce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "agent-views-2026-10-26.jsonl"), []byte(past), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	now := time.Now()
+	// Fixed, inside the fixture's retention: a wall clock would let the first run delete the
+	// file once it ages out, and the second run would then pass without reaching the cursor.
+	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
 	today := line(now.UTC().Format(time.RFC3339), "detail", "c")
 	if err := os.WriteFile(filepath.Join(dir, agentview.FileName(now)), []byte(today), 0o644); err != nil {
 		t.Fatal(err)

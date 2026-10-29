@@ -60,6 +60,11 @@ const keyLookupsPerMinute = 30
 // of fake ones can never evict them.
 const missCacheMax = 10_000
 
+// localsGateKeyUser carries the owner of a full-scope key the gate verified. It is NOT
+// auth.LocalsUserID: a public route stays unauthenticated, and this only lets what counts the
+// request (agentViews) tell one account from another behind a shared address.
+const localsGateKeyUser = "public_gate_key_user"
+
 // publicBudget is one public-read route class's anonymous budget before the strict switch.
 type publicBudget struct {
 	name      string
@@ -133,6 +138,9 @@ func (g *publicGate) limiter(b publicBudget) fiber.Handler {
 			return c.Next()
 		}
 		userID, tier := g.paidTier(c)
+		if userID != 0 {
+			c.Locals(localsGateKeyUser, userID)
+		}
 		if err := g.enforce(c, b, userID, tier); err != nil {
 			// The upsell names the paid plans to an ANONYMOUS caller only: a paying one who
 			// ran out already holds a key, and telling them to use one reads as a bug.
