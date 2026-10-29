@@ -2,6 +2,7 @@ package linksource
 
 import (
 	"context"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -120,14 +121,14 @@ func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, source, 
 // takes a seen predicate; supplying one that reports every posting EXCEPT the one raw points at as
 // already seen limits hydration to just that posting — the mirror image of how
 // pipeline.Runner.fetchBoard uses the same predicate to skip postings the store already has. The
-// target's external id is guessed from raw's path segments, the same heuristic pickPosting's id
-// fallback uses to identify a posting once the board is in hand.
+// target's external id is guessed from raw's path segments and query values (postingRefs), the
+// same heuristic pickPosting's id fallback uses to identify a posting once the board is in hand.
 func fetchForResolve(ctx context.Context, adapter sources.Source, e sources.CompanyEntry, raw string) ([]sources.Job, error) {
 	hs, hydrating := adapter.(sources.HydratingSource)
 	if !hydrating {
 		return adapter.Fetch(ctx, e)
 	}
-	want := pathSegmentsFromEnd(raw)
+	want := postingRefs(raw)
 	seen := func(externalID string) bool {
 		return !slices.ContainsFunc(want, func(seg string) bool { return segmentNamesID(seg, externalID) })
 	}
@@ -146,6 +147,11 @@ func segmentNamesID(seg, id string) bool {
 // locale prefix, a slug that changed after the title was edited), but the id in the last path
 // segment survives all of those.
 //
+// A URL only identifies a posting when no other posting on the board shares it. The comparison
+// drops the query, so on a platform that names the posting ONLY in the query — eRecruiter's
+// Offer.aspx?oid=<id>, the same path for every offer — every posting compares equal and the URL
+// pass would hand back the board's first row. Such a link is matched by its id instead.
+//
 // An Unreadable marker is never a match. It carries a posting's identity WITHOUT its detail,
 // so it answers both predicates — and it is not the safe near-miss SeenRefresh is here, it is
 // the opposite: the marker exists precisely because that posting could not be read, which for
@@ -154,15 +160,16 @@ func segmentNamesID(seg, id string) bool {
 // URL whose honest answer is "we could not read a vacancy from that url".
 func pickPosting(jobs []sources.Job, raw string) (sources.Job, bool) {
 	want := normalizeURL(raw)
+	var byURL []sources.Job
 	for _, j := range jobs {
-		if j.Unreadable {
-			continue
-		}
-		if normalizeURL(j.URL) == want {
-			return j, true
+		if !j.Unreadable && normalizeURL(j.URL) == want {
+			byURL = append(byURL, j)
 		}
 	}
-	for _, seg := range pathSegmentsFromEnd(raw) {
+	if len(byURL) == 1 {
+		return byURL[0], true
+	}
+	for _, seg := range postingRefs(raw) {
 		for _, j := range jobs {
 			if j.Unreadable {
 				continue
@@ -185,6 +192,23 @@ func normalizeURL(raw string) string {
 	}
 	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
 	return host + strings.TrimSuffix(u.Path, "/")
+}
+
+// postingRefs returns what in a link may name the posting's id, in the order to try them: the
+// path segments last-first, then the query values. Most platforms put the id in the path; a few
+// name it only in the query (eRecruiter's oid), and a query value that names no posting on the
+// board matches nothing.
+func postingRefs(raw string) []string {
+	refs := pathSegmentsFromEnd(raw)
+	u, err := url.Parse(raw)
+	if err != nil {
+		return refs
+	}
+	q := u.Query()
+	for _, k := range slices.Sorted(maps.Keys(q)) {
+		refs = append(refs, q[k]...)
+	}
+	return refs
 }
 
 // pathSegmentsFromEnd returns a URL's path segments last-first — the order to look for a
