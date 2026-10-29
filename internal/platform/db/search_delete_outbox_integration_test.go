@@ -163,6 +163,15 @@ func seedUnreachableProvider(t *testing.T, pool *pgxpool.Pool) {
 	seedSafetyNetBoardHealth(t, pool, "", 20, "90 days", "90 days")
 }
 
+func seedRetiredBoard(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`INSERT INTO boards (provider, board, region, company, status, surface)
+		 VALUES ('greenhouse', 'acme', '', 'Acme', 'retired', 'curator')`); err != nil {
+		t.Fatalf("seed retired board: %v", err)
+	}
+}
+
 func seedEmptyFeedBoard(t *testing.T, pool *pgxpool.Pool) {
 	seedSafetyNetBoardHealth(t, pool, "acme", 0, "1 hour", "60 days")
 }
@@ -267,6 +276,16 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 		// The chronic pair was missing from this list until the empty-feed pair was added
 		// beside it: a hand-written enumeration only covers what someone remembered to add,
 		// which is the failure this test's own doc records for cmd/liveness.
+		// A curator's retirement (boardcatalog.Retire), gated on the board being retired now.
+		{"CloseRetiredBoardJobs", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseRetiredBoardJobs(ctx, CloseRetiredBoardJobsParams{
+				Source:       "greenhouse",
+				BoardPattern: externalid.BoardPattern("acme"),
+				Board:        "acme",
+				Region:       "",
+			})
+			return err
+		}, seedRetiredBoard},
 		{"CloseChronicBoardJobs", func(ctx context.Context, q *Queries, _ int64) error {
 			_, err := q.CloseChronicBoardJobs(ctx, CloseChronicBoardJobsParams{
 				Source:       "greenhouse",

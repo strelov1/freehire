@@ -26,6 +26,16 @@ SET status = 'retired'
 WHERE provider = $1 AND lower(board) = lower($2) AND region = $3
   AND status IN ('pending', 'active');
 
+-- name: GetRetiredBoardName :one
+-- The stored spelling of a retired board, matched case-insensitively like RetireBoard. The
+-- spelling matters: postings are namespaced with it (externalid.Namespace), and LIKE is
+-- case-sensitive, so a close scoped by what a curator typed would silently miss them.
+-- Newest first, because retirement releases the identity and a board can be retired twice.
+SELECT board FROM boards
+WHERE provider = $1 AND lower(board) = lower($2) AND region = $3 AND status = 'retired'
+ORDER BY id DESC
+LIMIT 1;
+
 -- name: ListActiveBoardsForProvider :many
 -- The boards cmd/ingest crawls for one provider: pending (unproven, still crawled) and
 -- active. Ordered by id for a stable crawl order across runs.

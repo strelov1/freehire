@@ -896,6 +896,28 @@ type Querier interface {
 	//
 	// :one rather than :execrows because the CTE moves the row count out of the command tag.
 	CloseMisattributedSourceJobs(ctx context.Context, arg CloseMisattributedSourceJobsParams) (int64, error)
+	// Closes the open postings of a board a curator retired (boardcatalog.Retire). Nothing else
+	// ever would: a retired board is never crawled again, so no sweep runs for it; Retire
+	// deletes its board_health row, which is the only evidence the chronic-board safety net
+	// closes from; and its source is still a registered provider, which cmd/liveness leaves to
+	// the sweep. aijobs kept 2,569 open postings for eight weeks after its retirement that way
+	// (freehire#3796).
+	//
+	// board_pattern is externalid.BoardPattern of the STORED spelling (GetRetiredBoardName). A
+	// boardless provider's board is '' and its pattern ':%' matches exactly the ':<id>' keys it
+	// stores, nothing a board-scoped sibling stored.
+	//
+	// Both guards ride the statement so it cannot act on a stale read: the board must be retired
+	// now, and no live board of the same name may exist in ANY region — external_id carries no
+	// region, so while a sibling region is live its postings and the retired one's are
+	// indistinguishable, the same refusal the sweep's ambiguousRegionBoards makes.
+	//
+	// closed_reason is 'board_retired' (migration 0212), never 'board_unreachable': a curator
+	// deciding a board is gone is a different mechanism from 60 days of failed crawls.
+	//
+	// The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
+	// this statement to stay atomic with the close and exact.
+	CloseRetiredBoardJobs(ctx context.Context, arg CloseRetiredBoardJobsParams) (int64, error)
 	// The same age rule as CloseStaleUnsignalledJobs, for a source that IS re-crawled but
 	// whose postings a probe can never judge — whatjobs today, whose stored url is the ad
 	// network's own tracking landing page and answers identically whether or not the posting
@@ -2809,6 +2831,11 @@ type Querier interface {
 	// service; the Mark* queries are additionally scoped to status='pending' as defense-in-depth
 	// against a concurrent second decision.
 	GetReport(ctx context.Context, id int64) (GetReportRow, error)
+	// The stored spelling of a retired board, matched case-insensitively like RetireBoard. The
+	// spelling matters: postings are namespaced with it (externalid.Namespace), and LIKE is
+	// case-sensitive, so a close scoped by what a curator typed would silently miss them.
+	// Newest first, because retirement releases the identity and a board can be retired twice.
+	GetRetiredBoardName(ctx context.Context, arg GetRetiredBoardNameParams) (string, error)
 	// Fetch one of a user's saved searches, owner-scoped. Used by
 	// internal/engage/subscription to read the stored query when subscribing. No
 	// matching row (wrong id or another user's) returns no row.

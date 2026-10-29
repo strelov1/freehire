@@ -127,8 +127,8 @@ func TestInsertAcceptsResubmissionAfterRetirement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Insert: %v", err)
 	}
-	if found, err := repo.Retire(ctx, first.Provider, first.Board, first.Region); err != nil || !found {
-		t.Fatalf("Retire = %v,%v, want found", found, err)
+	if got, err := repo.Retire(ctx, first.Provider, first.Board, first.Region); err != nil || !got.Retired {
+		t.Fatalf("Retire = %+v,%v, want retired", got, err)
 	}
 
 	again, err := NewInserter(repo, sources.Taxonomy()).Insert(ctx, in, StatusActive)
@@ -160,8 +160,8 @@ func TestRetireDeletesTheBoardsHealthRow(t *testing.T) {
 		t.Fatalf("seed board_health: %v", err)
 	}
 
-	if found, err := repo.Retire(ctx, b.Provider, b.Board, b.Region); err != nil || !found {
-		t.Fatalf("Retire = %v,%v, want found", found, err)
+	if got, err := repo.Retire(ctx, b.Provider, b.Board, b.Region); err != nil || !got.Retired {
+		t.Fatalf("Retire = %+v,%v, want retired", got, err)
 	}
 
 	var n int

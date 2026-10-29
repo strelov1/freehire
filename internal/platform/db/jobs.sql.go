@@ -678,6 +678,77 @@ func (q *Queries) CloseMisattributedSourceJobs(ctx context.Context, arg CloseMis
 	return count, err
 }
 
+const closeRetiredBoardJobs = `-- name: CloseRetiredBoardJobs :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'board_retired',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = $1
+      AND external_id LIKE $2
+      AND EXISTS (
+          SELECT 1 FROM boards b
+          WHERE b.provider = $1
+            AND b.board = $3
+            AND b.region = $4
+            AND b.status = 'retired'
+      )
+      AND NOT EXISTS (
+          SELECT 1 FROM boards b
+          WHERE b.provider = $1
+            AND lower(b.board) = lower($3)
+            AND b.status IN ('pending', 'active')
+      )
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
+`
+
+type CloseRetiredBoardJobsParams struct {
+	Source       string `json:"source"`
+	BoardPattern string `json:"board_pattern"`
+	Board        string `json:"board"`
+	Region       string `json:"region"`
+}
+
+// Closes the open postings of a board a curator retired (boardcatalog.Retire). Nothing else
+// ever would: a retired board is never crawled again, so no sweep runs for it; Retire
+// deletes its board_health row, which is the only evidence the chronic-board safety net
+// closes from; and its source is still a registered provider, which cmd/liveness leaves to
+// the sweep. aijobs kept 2,569 open postings for eight weeks after its retirement that way
+// (freehire#3796).
+//
+// board_pattern is externalid.BoardPattern of the STORED spelling (GetRetiredBoardName). A
+// boardless provider's board is ” and its pattern ':%' matches exactly the ':<id>' keys it
+// stores, nothing a board-scoped sibling stored.
+//
+// Both guards ride the statement so it cannot act on a stale read: the board must be retired
+// now, and no live board of the same name may exist in ANY region — external_id carries no
+// region, so while a sibling region is live its postings and the retired one's are
+// indistinguishable, the same refusal the sweep's ambiguousRegionBoards makes.
+//
+// closed_reason is 'board_retired' (migration 0212), never 'board_unreachable': a curator
+// deciding a board is gone is a different mechanism from 60 days of failed crawls.
+//
+// The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
+// this statement to stay atomic with the close and exact.
+func (q *Queries) CloseRetiredBoardJobs(ctx context.Context, arg CloseRetiredBoardJobsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, closeRetiredBoardJobs,
+		arg.Source,
+		arg.BoardPattern,
+		arg.Board,
+		arg.Region,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const closeStaleUnseenUnprobeableJobs = `-- name: CloseStaleUnseenUnprobeableJobs :one
 WITH closed AS (
     UPDATE jobs

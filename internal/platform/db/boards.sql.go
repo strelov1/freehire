@@ -33,6 +33,30 @@ func (q *Queries) ActivateBoard(ctx context.Context, arg ActivateBoardParams) (i
 	return result.RowsAffected(), nil
 }
 
+const getRetiredBoardName = `-- name: GetRetiredBoardName :one
+SELECT board FROM boards
+WHERE provider = $1 AND lower(board) = lower($2) AND region = $3 AND status = 'retired'
+ORDER BY id DESC
+LIMIT 1
+`
+
+type GetRetiredBoardNameParams struct {
+	Provider string `json:"provider"`
+	Lower    string `json:"lower"`
+	Region   string `json:"region"`
+}
+
+// The stored spelling of a retired board, matched case-insensitively like RetireBoard. The
+// spelling matters: postings are namespaced with it (externalid.Namespace), and LIKE is
+// case-sensitive, so a close scoped by what a curator typed would silently miss them.
+// Newest first, because retirement releases the identity and a board can be retired twice.
+func (q *Queries) GetRetiredBoardName(ctx context.Context, arg GetRetiredBoardNameParams) (string, error) {
+	row := q.db.QueryRow(ctx, getRetiredBoardName, arg.Provider, arg.Lower, arg.Region)
+	var board string
+	err := row.Scan(&board)
+	return board, err
+}
+
 const insertBoard = `-- name: InsertBoard :one
 INSERT INTO boards (provider, board, region, company, hub, tenants, url, status,
                      submitted_by, surface, rejected_reason, activated_at)

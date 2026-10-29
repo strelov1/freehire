@@ -22,6 +22,14 @@ absorbed the recognized half of `internal/ingest/contribution`'s lifecycle.
   place, and does not occupy the identity — so re-adding a board that was retired by
   mistake is never blocked by its own retirement. Same for `rejected`: a corrected
   resubmission after a validation failure is never blocked by the earlier typo.
+- **Retiring a board closes its open postings** (`closed_reason = 'board_retired'`), because
+  nothing else ever will: no crawl runs for it, `Retire` deletes its `board_health` row
+  (the only evidence `cmd/close-chronic-boards` closes from), and its source is still a
+  registered provider, which `cmd/liveness` leaves to the sweep. aijobs kept 2,569 open
+  postings for eight weeks after its 2026-09-07 retirement that way (freehire#3796).
+  Retiring an already-retired board closes what an earlier retirement left open. The close
+  refuses while the same board name is live in another region — `external_id` carries no
+  region, so the two regions' postings cannot be told apart.
 
 ## Duplicate identity is TWO checks, and only one of them is the index
 `boards_identity_key` is `UNIQUE (provider, lower(board), region) WHERE status IN

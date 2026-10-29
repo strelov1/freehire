@@ -5,7 +5,9 @@
 // candidate is validated and printed before anything is persisted. A curator-added board
 // starts at status='active' (a curator addition is already verified, so there is no
 // unproven pending period to model, unlike a crowdsourced contribution). Retiring a board
-// sets its status to 'retired' rather than deleting the row, preserving history.
+// sets its status to 'retired' rather than deleting the row, preserving history, and closes
+// the board's open postings ('board_retired'), since nothing will crawl or close them again.
+// Retiring an already-retired board closes whatever its earlier retirement left open.
 //
 // A crowdsourced board is seeded with a company placeholder derived from the board slug
 // (boardcatalog.PlaceholderCompany) — a URL-only submission never carries the real
@@ -127,7 +129,7 @@ func addBoard(ctx context.Context, pool *pgxpool.Pool, in boardcatalog.InsertInp
 // runRetire mirrors runAdd's split: it reports, then under apply delegates to
 // retireBoard over a real database connection.
 func runRetire(provider, board, region string, apply bool) int {
-	log.Printf("add-board: would retire provider=%s board=%s region=%q", provider, board, region)
+	log.Printf("add-board: would retire provider=%s board=%s region=%q and close its open postings", provider, board, region)
 	if !apply {
 		log.Print("add-board: dry run, nothing written. Re-run with --apply to retire.")
 		return 0
@@ -168,16 +170,22 @@ func renameBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, regio
 
 func retireBoard(ctx context.Context, pool *pgxpool.Pool, provider, board, region string) int {
 	repo := boardcatalog.NewQueriesRepository(db.New(pool))
-	found, err := repo.Retire(ctx, provider, board, region)
+	got, err := repo.Retire(ctx, provider, board, region)
 	if err != nil {
 		log.Printf("add-board: retire: %v", err)
 		return 1
 	}
-	if !found {
-		log.Printf("add-board: no live (pending/active) board matches provider=%s board=%s region=%q — nothing retired",
+	switch {
+	case got.Retired:
+		log.Printf("add-board: retired provider=%s board=%s region=%q, closed %d open postings",
+			provider, board, region, got.Closed)
+	case got.AlreadyRetired:
+		log.Printf("add-board: provider=%s board=%s region=%q was already retired, closed %d open postings it left behind",
+			provider, board, region, got.Closed)
+	default:
+		log.Printf("add-board: no board matches provider=%s board=%s region=%q — nothing retired",
 			provider, board, region)
 		return 1
 	}
-	log.Printf("add-board: retired provider=%s board=%s region=%q", provider, board, region)
 	return 0
 }

@@ -1724,6 +1724,57 @@ WITH closed AS (
 )
 SELECT count(*) FROM closed;
 
+-- name: CloseRetiredBoardJobs :one
+-- Closes the open postings of a board a curator retired (boardcatalog.Retire). Nothing else
+-- ever would: a retired board is never crawled again, so no sweep runs for it; Retire
+-- deletes its board_health row, which is the only evidence the chronic-board safety net
+-- closes from; and its source is still a registered provider, which cmd/liveness leaves to
+-- the sweep. aijobs kept 2,569 open postings for eight weeks after its retirement that way
+-- (freehire#3796).
+--
+-- board_pattern is externalid.BoardPattern of the STORED spelling (GetRetiredBoardName). A
+-- boardless provider's board is '' and its pattern ':%' matches exactly the ':<id>' keys it
+-- stores, nothing a board-scoped sibling stored.
+--
+-- Both guards ride the statement so it cannot act on a stale read: the board must be retired
+-- now, and no live board of the same name may exist in ANY region — external_id carries no
+-- region, so while a sibling region is live its postings and the retired one's are
+-- indistinguishable, the same refusal the sweep's ambiguousRegionBoards makes.
+--
+-- closed_reason is 'board_retired' (migration 0212), never 'board_unreachable': a curator
+-- deciding a board is gone is a different mechanism from 60 days of failed crawls.
+--
+-- The search_delete_outbox CTE is copied verbatim from CloseUnseenJobs: the enqueue must ride
+-- this statement to stay atomic with the close and exact.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at     = now(),
+        closed_reason = 'board_retired',
+        updated_at    = now()
+    WHERE closed_at IS NULL
+      AND source = sqlc.arg(source)
+      AND external_id LIKE sqlc.arg(board_pattern)
+      AND EXISTS (
+          SELECT 1 FROM boards b
+          WHERE b.provider = sqlc.arg(source)
+            AND b.board = sqlc.arg(board)
+            AND b.region = sqlc.arg(region)
+            AND b.status = 'retired'
+      )
+      AND NOT EXISTS (
+          SELECT 1 FROM boards b
+          WHERE b.provider = sqlc.arg(source)
+            AND lower(b.board) = lower(sqlc.arg(board))
+            AND b.status IN ('pending', 'active')
+      )
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
+
 -- name: CloseChronicBoardJobs :one
 -- The chronic-board safety net (openspec change close-chronically-unreachable-boards, issue
 -- #2017), board-scoped: closes every open job of ONE board that board_health.ListChronicBoards

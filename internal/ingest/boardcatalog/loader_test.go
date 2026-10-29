@@ -20,7 +20,7 @@ func (f *fakeRepo) InsertRow(context.Context, InsertInput, Status, string) (Boar
 func (f *fakeRepo) Activate(context.Context, string, string, string) (bool, error) {
 	panic("not used by loader tests")
 }
-func (f *fakeRepo) Retire(context.Context, string, string, string) (bool, error) {
+func (f *fakeRepo) Retire(context.Context, string, string, string) (Retirement, error) {
 	panic("not used by loader tests")
 }
 func (f *fakeRepo) Rename(context.Context, string, string, string, string) (bool, error) {

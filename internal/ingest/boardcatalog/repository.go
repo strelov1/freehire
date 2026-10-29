@@ -7,10 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/externalid"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
@@ -32,9 +34,10 @@ type Repository interface {
 	// that is already active, retired, rejected, or does not exist is left untouched
 	// (found=false) — the caller need not check first.
 	Activate(ctx context.Context, provider, board, region string) (found bool, err error)
-	// Retire marks a live (pending or active) board retired without deleting its row.
-	// found=false when no such live board exists.
-	Retire(ctx context.Context, provider, board, region string) (found bool, err error)
+	// Retire marks a live (pending or active) board retired without deleting its row, and
+	// closes the open postings it leaves behind. On a board that is already retired it
+	// closes whatever that earlier retirement left open; see Retirement.
+	Retire(ctx context.Context, provider, board, region string) (Retirement, error)
 	// Rename corrects a live board's company name — for a crowdsourced row seeded with
 	// PlaceholderCompany, once a curator knows the real one. found=false when no such
 	// live board exists.
@@ -202,21 +205,50 @@ func (r *QueriesRepository) Activate(ctx context.Context, provider, board, regio
 	return n > 0, nil
 }
 
-func (r *QueriesRepository) Retire(ctx context.Context, provider, board, region string) (bool, error) {
+// Retirement is what Retire did.
+type Retirement struct {
+	// Retired is true when a live board was retired by this call.
+	Retired bool
+	// AlreadyRetired is true when no live board matched but a retired one did.
+	AlreadyRetired bool
+	// Closed counts the board's open postings this call closed.
+	Closed int64
+}
+
+func (r *QueriesRepository) Retire(ctx context.Context, provider, board, region string) (Retirement, error) {
+	var out Retirement
 	n, err := r.q.RetireBoard(ctx, db.RetireBoardParams{Provider: provider, Lower: board, Region: region})
 	if err != nil {
-		return false, err
+		return out, err
 	}
-	if n == 0 {
-		return false, nil
+	out.Retired = n > 0
+	if out.Retired {
+		// A retired board is never crawled again, so its board_health row could never clear
+		// the normal way (a successful crawl) — left in place it shows as permanently
+		// unhealthy on the public /status page.
+		if _, err := r.q.DeleteBoardHealth(ctx, db.DeleteBoardHealthParams{Provider: provider, Board: board, Region: region}); err != nil {
+			return out, err
+		}
 	}
-	// A retired board is never crawled again, so its board_health row could never clear
-	// the normal way (a successful crawl) — left in place it shows as permanently
-	// unhealthy on the public /status page. The catalog retirement above already
-	// persisted regardless of what happens here; a failure just surfaces to the caller
-	// as found=true, err!=nil rather than silently leaving stale health behind.
-	_, err = r.q.DeleteBoardHealth(ctx, db.DeleteBoardHealthParams{Provider: provider, Board: board, Region: region})
-	return true, err
+
+	// Deleting that row also removes the only evidence the chronic-board safety net closes
+	// from, so the board's open postings are closed here or never (CloseRetiredBoardJobs).
+	// The close keys on the stored spelling, which the postings were namespaced with.
+	stored, err := r.q.GetRetiredBoardName(ctx, db.GetRetiredBoardNameParams{Provider: provider, Lower: board, Region: region})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, nil
+	}
+	if err != nil {
+		return out, err
+	}
+	out.AlreadyRetired = !out.Retired
+	out.Closed, err = r.q.CloseRetiredBoardJobs(ctx, db.CloseRetiredBoardJobsParams{
+		Source:       provider,
+		BoardPattern: externalid.BoardPattern(stored),
+		Board:        stored,
+		Region:       region,
+	})
+	return out, err
 }
 
 func (r *QueriesRepository) Rename(ctx context.Context, provider, board, region, company string) (bool, error) {
