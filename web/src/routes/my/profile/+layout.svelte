@@ -79,9 +79,11 @@
     }
   }
 
-  // (Re)load once the session resolves.
+  // (Re)load once the session resolves — and only then. `load` reads every store's
+  // `loaded` flag on its way in, and tracking those would re-run it (back to the spinner,
+  // unmounting the editors and whatever they held) each time a load finished.
   $effect(() => {
-    if (isAuthenticated()) void load();
+    if (isAuthenticated()) void untrack(() => load());
   });
 
   // Honour the URL's anchor once the gate opens. The browser and the router both resolve a
