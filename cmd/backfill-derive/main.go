@@ -199,22 +199,49 @@ func run() int {
 // derivePass runs the scan and, when a slug moved, reconciles the companies catalogue
 // derived from it. It returns whatever it managed before failing, so the caller still
 // holds the resume point when a later step is the thing that failed.
-func derivePass(ctx context.Context, queries *db.Queries, concurrency int64, win scanWindow) (backfillRun, int64, error) {
+// passStore is what derivePass needs: the scan's store plus the reconcile's writer.
+// *db.Queries satisfies it.
+type passStore interface {
+	deriveStore
+	companyReconciler
+}
+
+func derivePass(ctx context.Context, queries passStore, concurrency int64, win scanWindow) (backfillRun, int64, error) {
 	pass, err := backfillPass(ctx, queries, concurrency, win)
-	if err != nil {
-		return pass, 0, err
-	}
 
 	// A slug rewrite re-keys jobs.company_slug; reconcile the derived companies
 	// catalogue for the slugs that moved (and drop rows orphaned by the change) so company
-	// pages resolve.
-	created, orphaned, err := reconcileMovedSlugs(ctx, queries, pass.MovedTo, pass.MovedFrom, reconcileChunk)
+	// pages resolve. This runs even when the pass failed or was stopped: the rows it did
+	// move are committed, and leaving their companies unreconciled 404s every new slug —
+	// which is what a cancelled reconcile cost on 2026-10-28. A stopped run's context is
+	// already cancelled, so the reconcile gets a short detached one of its own.
+	rctx := ctx
+	if ctx.Err() != nil {
+		var cancel context.CancelFunc
+		rctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), reconcileGrace)
+		defer cancel()
+	}
+	created, orphaned, rerr := reconcileMovedSlugs(rctx, queries, pass.MovedTo, pass.MovedFrom, reconcileChunk)
 	if created > 0 || orphaned > 0 {
 		log.Printf("backfill-derive: companies reconciled for %d new and %d old slugs: %d rows created, %d retired",
 			len(pass.MovedTo), len(pass.MovedFrom), created, orphaned)
 	}
-	return pass, orphaned, err
+	switch {
+	case err != nil && rerr != nil:
+		// The pass's error decides the exit and the resume report; the reconcile's is
+		// still worth a line.
+		log.Printf("backfill-derive: companies reconcile after a failed pass: %v", rerr)
+		return pass, orphaned, err
+	case err != nil:
+		return pass, orphaned, err
+	default:
+		return pass, orphaned, rerr
+	}
 }
+
+// reconcileGrace bounds the reconcile of a run that was stopped (SIGTERM, timeout): long
+// enough for a few thousand slugs in chunks, short of systemd's stop timeout.
+const reconcileGrace = 60 * time.Second
 
 // reconcileChunk is how many slugs one reconcile statement covers. Each statement is its
 // own transaction, so this bounds how long any companies row stays locked against ingest.

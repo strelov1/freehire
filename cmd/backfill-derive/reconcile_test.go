@@ -88,3 +88,38 @@ func TestBackfillReportsMovedSlugs(t *testing.T) {
 		t.Errorf("SlugsMoved = %d, want 3 rows", pass.SlugsMoved)
 	}
 }
+
+// failingStore lets the first derived write through and fails the rest.
+type failingStore struct {
+	*fakeStore
+	*fakeReconciler
+	writes int
+}
+
+func (f *failingStore) UpdateJobDerived(ctx context.Context, arg db.UpdateJobDerivedParams) error {
+	f.writes++
+	if f.writes > 1 {
+		return errors.New("write failed")
+	}
+	return f.fakeStore.UpdateJobDerived(ctx, arg)
+}
+
+// A pass that fails part-way still reconciles the slugs it DID move: those rows are
+// committed, and skipping their reconcile 404s every new slug.
+func TestDerivePassReconcilesAfterAFailedPass(t *testing.T) {
+	jobs := []db.Job{
+		{ID: 1, Title: "Go Developer", Company: "Acme", Source: "manual", ExternalID: "1", CompanySlug: "acme-old"},
+		{ID: 2, Title: "Go Developer", Company: "Beta", Source: "manual", ExternalID: "2", CompanySlug: "beta-old"},
+	}
+	store := &failingStore{fakeStore: &fakeStore{jobs: jobs}, fakeReconciler: &fakeReconciler{}}
+	_, _, err := derivePass(context.Background(), store, 1, scanWindow{})
+	if err == nil || err.Error() != "write failed" {
+		t.Fatalf("err = %v, want the pass's own error", err)
+	}
+	if want := [][]string{{"acme"}}; !reflect.DeepEqual(store.inserts, want) {
+		t.Errorf("inserts = %v, want %v", store.inserts, want)
+	}
+	if want := [][]string{{"acme-old"}}; !reflect.DeepEqual(store.deletes, want) {
+		t.Errorf("deletes = %v, want %v", store.deletes, want)
+	}
+}
