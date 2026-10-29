@@ -59,6 +59,84 @@ func TestAnMCPSearchThroughTheMountedRouteIsRecorded(t *testing.T) {
 	}
 }
 
+// mcpCall posts one tools/call to a mounted /mcp route and drains the answer.
+func mcpCall(t *testing.T, app *fiber.App, ua, body string) {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodPost, "/mcp", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("User-Agent", ua)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+}
+
+func mountedMCP(sink agentview.Sink, store fakeOJCPStore) *fiber.App {
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.All("/mcp", agentViews(sink, agentview.SurfaceMCP),
+		adaptor.HTTPHandler(mcpapp.Handler(mcpappUnder(&fakeSearcher{}, nil, store), "")))
+	return app
+}
+
+const getJobCall = `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_job","arguments":{"slug":"go-dev-x"}}}`
+
+func TestAnMCPGetJobThroughTheMountedRouteIsRecorded(t *testing.T) {
+	sink := &recordingSink{}
+	store := fakeOJCPStore{
+		job:     db.Job{ID: 7, PublicSlug: "go-dev-x", Title: "Go Dev", Company: "Acme", Source: "greenhouse"},
+		formErr: pgx.ErrNoRows,
+	}
+	mcpCall(t, mountedMCP(sink, store), "Claude-User", getJobCall)
+
+	if len(sink.got) != 1 {
+		t.Fatalf("events = %d, want 1", len(sink.got))
+	}
+	e := sink.got[0]
+	if e.Kind != agentview.KindDetail || e.Surface != agentview.SurfaceMCP || len(e.JobIDs) != 1 || e.JobIDs[0] != 7 {
+		t.Errorf("event = %+v", e)
+	}
+}
+
+func TestAPostingRefusedToAgentsIsNotRecorded(t *testing.T) {
+	sink := &recordingSink{}
+	private := db.Job{ID: 7, PublicSlug: "go-dev-x", IsPrivate: true}
+
+	mcpCall(t, mountedMCP(sink, fakeOJCPStore{job: private}), "Claude-User", getJobCall)
+	mcpCall(t, mountedMCP(sink, fakeOJCPStore{jobErr: pgx.ErrNoRows}), "Claude-User", getJobCall)
+
+	h := newOJCPHandlers(&fakeSearcher{}, fakeOJCPStore{job: private}, "https://freehire.me", nil)
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/ojcp/v1/jobs/:slug", agentViews(sink, agentview.SurfaceOJCP), h.OJCPJobDetail)
+	doGet(t, app, "/ojcp/v1/jobs/go-dev-x")
+
+	if len(sink.got) != 0 {
+		t.Errorf("events = %+v, want none for a posting the agent was not shown", sink.got)
+	}
+}
+
+func TestASpoofedAccountHeaderOnAPublicSurfaceIsIgnored(t *testing.T) {
+	sink := &recordingSink{}
+	app := fiber.New()
+	app.Get("/x", agentViews(sink, agentview.SurfaceMCP), func(c *fiber.Ctx) error {
+		agentview.Record(c.Context(), agentview.KindDetail, []int64{1})
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/x", nil)
+	req.Header.Set(mcpapp.AccountUserIDHeader, "42")
+	req.Header.Set("User-Agent", "bot")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if len(sink.got) != 1 || !strings.HasPrefix(sink.got[0].Viewer, "ip:") || !strings.HasSuffix(sink.got[0].Viewer, "|ua:bot") {
+		t.Errorf("events = %+v, want an ip|ua viewer, not user:42", sink.got)
+	}
+}
+
 func TestAnOJCPDetailIsRecorded(t *testing.T) {
 	sink := &recordingSink{}
 	store := fakeOJCPStore{

@@ -58,3 +58,15 @@ func TestAFullBufferDropsInsteadOfBlocking(t *testing.T) {
 	w.resume()
 	w.Close()
 }
+
+func TestAWriteAfterCloseIsDroppedNotAPanic(t *testing.T) {
+	w := NewWriter(t.TempDir())
+	w.Close()
+
+	w.Write(Event{TS: time.Now().UTC(), Kind: KindDetail, JobIDs: []int64{1}})
+	w.Close() // idempotent
+
+	if w.Dropped() != 1 {
+		t.Errorf("Dropped() = %d, want the late write counted", w.Dropped())
+	}
+}

@@ -23,6 +23,10 @@ type Writer struct {
 	dropped atomic.Int64
 	done    chan struct{}
 	gate    sync.Mutex // held by pause() in tests to stall the drain
+	// mu orders Write against Close: a Write after Close would send on a closed channel,
+	// and a server whose shutdown timed out still has handlers in flight.
+	mu     sync.RWMutex
+	closed bool
 }
 
 // NewWriter starts a writer under dir, or returns nil (a no-op Sink) when dir is empty.
@@ -44,6 +48,12 @@ func (w *Writer) Write(e Event) {
 	if w == nil {
 		return
 	}
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if w.closed {
+		w.dropped.Add(1)
+		return
+	}
 	select {
 	case w.ch <- e:
 	default:
@@ -59,12 +69,18 @@ func (w *Writer) Dropped() int64 {
 	return w.dropped.Load()
 }
 
-// Close flushes the queued events and stops the writer. Safe on a nil Writer.
+// Close flushes the queued events and stops the writer. Safe on a nil Writer, safe to
+// call twice, and a Write after it is dropped (and counted) rather than a panic.
 func (w *Writer) Close() {
 	if w == nil {
 		return
 	}
-	close(w.ch)
+	w.mu.Lock()
+	if !w.closed {
+		w.closed = true
+		close(w.ch)
+	}
+	w.mu.Unlock()
 	<-w.done
 }
 
