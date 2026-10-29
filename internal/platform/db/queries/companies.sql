@@ -240,13 +240,26 @@ SET company = @name,
 WHERE company_slug = @old_slug
   AND company ~ '^[a-z0-9._-]+$';
 
--- name: RenamePlaceholderBoardJobs :execrows
+-- name: RenamePlaceholderBoardJobs :many
 -- Apply a resolved display name to every stored job of ONE board whose company is still that
 -- board's placeholder (see ListPlaceholderCompanyBoards). board_pattern is
 -- externalid.BoardPattern(board), the board's external_id namespace, so only this board's rows
 -- move. Needed beside the board write because a crawl only REWRITES a posting that changed — an
 -- unchanged one is refreshed for liveness and keeps the placeholder, and a closed one is never
 -- seen again. Guarded on the old name, so a re-run writes nothing.
+--
+-- Returns the company_slug each moved job carried BEFORE the write, one row per job: the rows
+-- are matched by board and name, not by slug, and an alias the merge worker recorded may have
+-- re-keyed them away from the slug the placeholder name folds to — the caller sweeps exactly
+-- these for orphaned companies rows.
+WITH moved AS (
+    SELECT j.id, j.company_slug
+    FROM jobs j
+    WHERE j.source = sqlc.arg(source)
+      AND j.external_id LIKE sqlc.arg(board_pattern)
+      AND j.company = sqlc.arg(old_name)
+    FOR UPDATE
+)
 UPDATE jobs
 SET company = sqlc.arg(name),
     company_slug = sqlc.arg(new_slug),
@@ -256,9 +269,9 @@ SET company = sqlc.arg(name),
     -- list may have excluded the OLD company.
     similar_computed_at = NULL,
     updated_at = now()
-WHERE source = sqlc.arg(source)
-  AND external_id LIKE sqlc.arg(board_pattern)
-  AND company = sqlc.arg(old_name);
+FROM moved
+WHERE jobs.id = moved.id
+RETURNING moved.company_slug AS old_slug;
 
 -- name: ListPlaceholderBoardDescriptions :many
 -- A few of one board's stored posting bodies, open ones first, for a placeholder whose ATS

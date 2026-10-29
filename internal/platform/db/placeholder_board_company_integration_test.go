@@ -74,15 +74,16 @@ func TestRenamePlaceholderBoardJobs(t *testing.T) {
 	otherSource := seed("paylocity", board+":3", board)
 	renamed := seed("ukgready", board+":4", "Someone Else")
 
-	n, err := q.RenamePlaceholderBoardJobs(ctx, RenamePlaceholderBoardJobsParams{
+	oldSlugs, err := q.RenamePlaceholderBoardJobs(ctx, RenamePlaceholderBoardJobsParams{
 		Name: "Oceanside Museum Of Art", NewSlug: "oceanside-museum-of-art",
 		Source: "ukgready", BoardPattern: board + ":%", OldName: board,
 	})
 	if err != nil {
 		t.Fatalf("RenamePlaceholderBoardJobs: %v", err)
 	}
-	if n != 1 {
-		t.Errorf("rows = %d, want 1", n)
+	// The slug the moved row carried BEFORE the write, which the caller sweeps for orphans.
+	if len(oldSlugs) != 1 || oldSlugs[0] != "secure-saashr-com-oma" {
+		t.Errorf("old slugs = %q, want [secure-saashr-com-oma]", oldSlugs)
 	}
 
 	for id, want := range map[int64]string{

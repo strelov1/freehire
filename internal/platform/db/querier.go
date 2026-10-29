@@ -6496,7 +6496,12 @@ type Querier interface {
 	// move. Needed beside the board write because a crawl only REWRITES a posting that changed — an
 	// unchanged one is refreshed for liveness and keeps the placeholder, and a closed one is never
 	// seen again. Guarded on the old name, so a re-run writes nothing.
-	RenamePlaceholderBoardJobs(ctx context.Context, arg RenamePlaceholderBoardJobsParams) (int64, error)
+	//
+	// Returns the company_slug each moved job carried BEFORE the write, one row per job: the rows
+	// are matched by board and name, not by slug, and an alias the merge worker recorded may have
+	// re-keyed them away from the slug the placeholder name folds to — the caller sweeps exactly
+	// these for orphaned companies rows.
+	RenamePlaceholderBoardJobs(ctx context.Context, arg RenamePlaceholderBoardJobsParams) ([]string, error)
 	// Carry a display name cmd/backfill-company-names resolved back to the board it came
 	// from. An adapter copies boards.company onto every posting and the job upsert writes
 	// `company = EXCLUDED.company`, so a rename applied to jobs alone is undone by the

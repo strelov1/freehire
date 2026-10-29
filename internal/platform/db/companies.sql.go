@@ -1207,7 +1207,15 @@ func (q *Queries) RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFa
 	return result.RowsAffected(), nil
 }
 
-const renamePlaceholderBoardJobs = `-- name: RenamePlaceholderBoardJobs :execrows
+const renamePlaceholderBoardJobs = `-- name: RenamePlaceholderBoardJobs :many
+WITH moved AS (
+    SELECT j.id, j.company_slug
+    FROM jobs j
+    WHERE j.source = $3
+      AND j.external_id LIKE $4
+      AND j.company = $5
+    FOR UPDATE
+)
 UPDATE jobs
 SET company = $1,
     company_slug = $2,
@@ -1217,9 +1225,9 @@ SET company = $1,
     -- list may have excluded the OLD company.
     similar_computed_at = NULL,
     updated_at = now()
-WHERE source = $3
-  AND external_id LIKE $4
-  AND company = $5
+FROM moved
+WHERE jobs.id = moved.id
+RETURNING moved.company_slug AS old_slug
 `
 
 type RenamePlaceholderBoardJobsParams struct {
@@ -1236,8 +1244,13 @@ type RenamePlaceholderBoardJobsParams struct {
 // move. Needed beside the board write because a crawl only REWRITES a posting that changed — an
 // unchanged one is refreshed for liveness and keeps the placeholder, and a closed one is never
 // seen again. Guarded on the old name, so a re-run writes nothing.
-func (q *Queries) RenamePlaceholderBoardJobs(ctx context.Context, arg RenamePlaceholderBoardJobsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, renamePlaceholderBoardJobs,
+//
+// Returns the company_slug each moved job carried BEFORE the write, one row per job: the rows
+// are matched by board and name, not by slug, and an alias the merge worker recorded may have
+// re-keyed them away from the slug the placeholder name folds to — the caller sweeps exactly
+// these for orphaned companies rows.
+func (q *Queries) RenamePlaceholderBoardJobs(ctx context.Context, arg RenamePlaceholderBoardJobsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, renamePlaceholderBoardJobs,
 		arg.Name,
 		arg.NewSlug,
 		arg.Source,
@@ -1245,9 +1258,21 @@ func (q *Queries) RenamePlaceholderBoardJobs(ctx context.Context, arg RenamePlac
 		arg.OldName,
 	)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var old_slug string
+		if err := rows.Scan(&old_slug); err != nil {
+			return nil, err
+		}
+		items = append(items, old_slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const renameSlugCompany = `-- name: RenameSlugCompany :execrows

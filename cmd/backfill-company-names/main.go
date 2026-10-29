@@ -162,20 +162,20 @@ func run() int {
 	})
 	boardsApplied, boardsFailed := applyRenames(ctx, boardRenames, func(ctx context.Context, r placeholderRename) (bool, error) {
 		var (
-			slug    string
-			changed bool
+			slug     string
+			oldSlugs []string
 		)
 		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 			var err error
-			slug, changed, err = writePlaceholderRename(ctx, queries.WithTx(tx), r)
+			slug, oldSlugs, err = writePlaceholderRename(ctx, queries.WithTx(tx), r)
 			return err
 		})
-		if err == nil && changed {
-			movedTo = append(movedTo, slug)
-			// The slug the pipeline wrote for the placeholder name, as the alias record reads it.
-			movedFrom = append(movedFrom, normalize.CompanySlug(r.oldName))
+		if err != nil || len(oldSlugs) == 0 {
+			return false, err
 		}
-		return changed, err
+		movedTo = append(movedTo, slug)
+		movedFrom = append(movedFrom, oldSlugs...)
+		return true, nil
 	})
 
 	// jobs now carry the resolved names/slugs; re-key the derived catalogue and sweep the rows

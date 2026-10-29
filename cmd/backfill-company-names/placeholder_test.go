@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/dict/companyname"
@@ -49,9 +50,10 @@ func (f *fakePlaceholderWriter) ResolveCompanySlugAliases(_ context.Context, key
 	return out, nil
 }
 
-func (f *fakePlaceholderWriter) RenamePlaceholderBoardJobs(_ context.Context, arg db.RenamePlaceholderBoardJobsParams) (int64, error) {
+func (f *fakePlaceholderWriter) RenamePlaceholderBoardJobs(_ context.Context, arg db.RenamePlaceholderBoardJobsParams) ([]string, error) {
 	f.calls = append(f.calls, "jobs "+arg.Source+" "+arg.BoardPattern+" "+arg.OldName+"->"+arg.Name+" ("+arg.NewSlug+")")
-	return 3, nil
+	// One slug per moved job; an alias re-keyed one of them away from the placeholder's fold.
+	return []string{"secure-saashr-com-1553aps", "saashr-legacy", "secure-saashr-com-1553aps"}, nil
 }
 
 func (f *fakePlaceholderWriter) RenameSlugBoardCompany(_ context.Context, arg db.RenameSlugBoardCompanyParams) (int64, error) {
@@ -71,9 +73,9 @@ func TestWritePlaceholderRename(t *testing.T) {
 	f := &fakePlaceholderWriter{alias: map[string]string{"coppermooncafes": "copper-moon"}, boardRows: 1}
 	r := placeholderRename{provider: "ukgready", board: "secure.saashr.com/1553aps", oldName: "secure.saashr.com/1553aps", name: "Copper Moon Cafes LLC"}
 
-	slug, changed, err := writePlaceholderRename(context.Background(), f, r)
-	if err != nil || !changed || slug != "copper-moon" {
-		t.Fatalf("writePlaceholderRename = %q, %v, %v; want copper-moon, true, nil", slug, changed, err)
+	slug, oldSlugs, err := writePlaceholderRename(context.Background(), f, r)
+	if wantOld := []string{"saashr-legacy", "secure-saashr-com-1553aps"}; err != nil || slug != "copper-moon" || !slices.Equal(oldSlugs, wantOld) {
+		t.Fatalf("writePlaceholderRename = %q, %q, %v; want copper-moon, %q, nil", slug, oldSlugs, err, wantOld)
 	}
 	want := []string{
 		"jobs ukgready secure.saashr.com/1553aps:% secure.saashr.com/1553aps->Copper Moon Cafes LLC (copper-moon)",
