@@ -251,6 +251,24 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   remote phrase withdraws it ("100 % remote-friendly"); "les fêtes" bounds a perk.
   Measured 2026-10-28 over 24,609 French-language postings: the description reader 0.4% →
   12.3%; with the structured signal, 31.1% → 34.8%. Every changed control row was French.
+- **Polish work-arrangement prose** (`workmode_pl.go`) is read after the French list, on
+  text folded with its diacritics dropped and "ł" written "l". Polish states the model in a
+  labelled line ("Tryb pracy: zdalny", "Model pracy: hybrydowy", "Lokalizacja: 100%
+  zdalnie"), and solidjobs' template writes "Praca zdalna: w całości / hybrydowo / możliwa
+  częściowo / brak" (remote / hybrid / hybrid / onsite). "Możliwość pracy zdalnej" and "N
+  dni w biurze" are a benefit beside an office, hybrid; remote needs a totality ("100%
+  zdalnie", "w pełni zdalna"). A choice of models ("możliwość pracy stacjonarnej, zdalnej
+  lub hybrydowej") and a share below 100% ("80% zdalnie") are hybrid, read before the
+  list. Absent: bare `praca zdalna`/`zdalnie` ("Praca zdalna: brak", "rekrutacja zdalna",
+  "zdalne wsparcie"), bare `stacjonarnie` (a tutoring platform's "lekcje online lub
+  stacjonarnie", "sprzedaż stacjonarna" in shops), bare `hybrydowy` (clouds, cars). The
+  hiring process ("Rekrutacja: 100% zdalna", "proces rekrutacyjny", "rozmowa") and a
+  platform or cloud ("platformy w modelu hybrydowym oraz multi-cloud") withdraw a phrase
+  like a negation; "dni w roku" bounds a perk. Measured 2026-10-29 over 9,835
+  Polish-language postings: the description reader 0.8% → 36.2%; with the structured
+  signal and the location marker, 24.4% → 46.4%. Where the posting also carries a
+  structured mode the two agree in 1,225 of 1,333; most of the rest offer a choice the
+  structured flag records as remote.
 - **Polish location lines** (`location_pl.go`, the Polish block of
   `foreignSubdivisionNames`, measured 2026-10-29 over 15,488 postings placed in Poland).
   The country was already read on 99.6% and a city on ~97% of lines naming more than
