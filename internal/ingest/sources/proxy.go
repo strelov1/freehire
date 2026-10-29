@@ -264,6 +264,12 @@ func ApplyProxyEgress(registry map[string]Source) error {
 			registry[name] = build(seekDirect, seekNetwork)
 		}
 	}
+	// MojPosao's Croatian market is refused by its CloudFront WAF on both crawl hosts and the
+	// fixed exit; its lane pins exits of the ROTATING gateway (mojposaoLane). The Bosnian market
+	// stays direct.
+	if _, ok := registry["mojposao"]; ok && rotating != nil {
+		registry["mojposao"] = newMojPosaoWithLane(NewClient(), newMojposaoLane(rotating))
+	}
 	// Homerun keeps the direct IP and moves the rest of a run onto the ROTATING gateway after
 	// its edge first refuses the direct one (homerunEgress). Never the fixed exit: one address
 	// is exactly what Homerun blocks once a run's volume has landed on it.

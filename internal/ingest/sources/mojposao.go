@@ -30,7 +30,10 @@ import (
 // category, work arrangement and salary come from the posting API, bought only for postings the
 // catalogue lacks, within a per-run budget; the rest are refreshed by identity.
 type mojposao struct {
-	get            HeaderJSONGetter
+	get HeaderJSONGetter
+	// lane reaches the markets whose edge refuses the crawl hosts (mojposao.hr); nil when no
+	// rotating gateway is configured, and those markets then go direct and fail.
+	lane           *mojposaoLane
 	limiter        waiter
 	maxNewPerRun   int
 	maxPages       int
@@ -38,15 +41,17 @@ type mojposao struct {
 }
 
 // mojposaoMarket is one market of the platform: the site origin, the x-app value its API proxy
-// keys the market on, and the country its postings are in unless they say otherwise.
+// keys the market on, the country its postings are in unless they say otherwise, and whether its
+// edge refuses the crawl hosts so that it must go through the proxy lane.
 type mojposaoMarket struct {
 	origin, app, country string
+	proxied              bool
 }
 
 // mojposaoMarkets are the boards. Without the x-app header the proxy answers the Croatian pool
 // whatever the host, so the header is sent on every request.
 var mojposaoMarkets = map[string]mojposaoMarket{
-	"mojposao.hr": {origin: "https://mojposao.hr", app: "mojposao.hr", country: "hr"},
+	"mojposao.hr": {origin: "https://mojposao.hr", app: "mojposao.hr", country: "hr", proxied: true},
 	"mojposao.ba": {origin: "https://www.mojposao.ba", app: "mojposao.ba", country: "ba"},
 }
 
@@ -83,6 +88,21 @@ func NewMojPosao(c HeaderJSONGetter) Source {
 		maxPages:       mojposaoMaxPages,
 		deadlineMargin: mojposaoDeadlineMargin,
 	}
+}
+
+// newMojPosaoWithLane is the adapter with its proxy lane, as ApplyProxyEgress builds it.
+func newMojPosaoWithLane(c HeaderJSONGetter, lane *mojposaoLane) Source {
+	s := NewMojPosao(c).(mojposao)
+	s.lane = lane
+	return s
+}
+
+// getter is the transport a market is reached through.
+func (s mojposao) getter(m mojposaoMarket) HeaderJSONGetter {
+	if m.proxied && s.lane != nil {
+		return s.lane
+	}
+	return s.get
 }
 
 func (mojposao) Provider() string { return "mojposao" }
@@ -178,6 +198,9 @@ func (s mojposao) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(e
 	if !ok {
 		return nil, fmt.Errorf("mojposao: board %q is not a market domain", e.Board)
 	}
+	if m.proxied && s.lane != nil {
+		defer s.lane.report()
+	}
 	cards, err := s.list(ctx, m)
 	if err != nil {
 		return nil, err
@@ -268,7 +291,7 @@ func (s mojposao) list(ctx context.Context, m mojposaoMarket) ([]mojposaoCard, e
 			return nil, err
 		}
 		var p mojposaoPage
-		if err := s.get.GetJSONWithHeaders(ctx, m.origin+fmt.Sprintf(mojposaoListPath, page), m.headers(), &p); err != nil {
+		if err := s.getter(m).GetJSONWithHeaders(ctx, m.origin+fmt.Sprintf(mojposaoListPath, page), m.headers(), &p); err != nil {
 			return nil, fmt.Errorf("mojposao: listing page %d: %w", page, err)
 		}
 		n := 0
@@ -336,7 +359,7 @@ func (s mojposao) detail(ctx context.Context, m mojposaoMarket, c mojposaoCard) 
 		return Job{}, false, err
 	}
 	var d mojposaoDetail
-	if err := s.get.GetJSONWithHeaders(ctx, m.origin+fmt.Sprintf(mojposaoDetailPath, c.ID), m.headers(), &d); err != nil {
+	if err := s.getter(m).GetJSONWithHeaders(ctx, m.origin+fmt.Sprintf(mojposaoDetailPath, c.ID), m.headers(), &d); err != nil {
 		var se *StatusError
 		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
 			return Job{}, false, nil
