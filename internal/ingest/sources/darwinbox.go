@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"fmt"
+	"html"
 	"regexp"
 	"strings"
 
@@ -117,7 +118,7 @@ func darwinboxJob(base, company string, p darwinboxPosting) Job {
 		Title:          strings.TrimSpace(p.Title),
 		Company:        company,
 		Location:       loc,
-		Description:    sanitizeHTML(p.JD),
+		Description:    darwinboxDescription(p.JD),
 		EmploymentType: darwinboxEmploymentType(p.EmpTypeName),
 		PostedAt:       parseEpochSeconds(p.PostedOn),
 	}
@@ -133,6 +134,23 @@ func darwinboxJob(base, company string, p darwinboxPosting) Job {
 		j.Countries = []string{c}
 	}
 	return j
+}
+
+// darwinboxDoubleEncodedTagOpener counts tag openers encoded twice ("&amp;lt;p", "&amp;lt;/p").
+var darwinboxDoubleEncodedTagOpener = regexp.MustCompile(`&amp;lt;/?[a-zA-Z]`)
+
+// darwinboxDescription decodes the jd before sanitizing it. Most postings serve it
+// entity-encoded ("&lt;p&gt;"), some encoded twice ("&amp;lt;p&amp;gt;") and a few as live HTML —
+// measured 2026-10-29 over seven tenants' first pages: 441 once, 5 twice, 6 live. A body whose
+// twice-encoded openers outweigh every other kind loses its outer layer first; unescapeEncodedHTML
+// then decodes a once-encoded body and leaves live HTML (and an encoded example inside it) alone.
+// sanitizeHTML must run last: decoding is what turns the text into live markup.
+func darwinboxDescription(jd string) string {
+	double := len(darwinboxDoubleEncodedTagOpener.FindAllStringIndex(jd, -1))
+	if double > len(encodedTagOpener.FindAllStringIndex(jd, -1))+len(liveTagOpener.FindAllStringIndex(jd, -1)) {
+		jd = html.UnescapeString(jd)
+	}
+	return sanitizeHTML(unescapeEncodedHTML(jd))
 }
 
 // darwinboxEmploymentType maps the tenant's own employee-type label. Tenants name these after
