@@ -157,7 +157,10 @@
           collapsed ? 'lg:w-14' : 'lg:w-56',
         )}
       >
-        <div class="sticky top-6 flex flex-col gap-1">
+        <!-- top-20 clears the sticky site header (h-14), the offset every other sticky
+             side panel uses; at top-6 the collapse toggle sat behind it. Capped to the
+             window and scrollable, so on a short window the last links stay reachable. -->
+        <div class="sticky top-20 flex max-h-[calc(100vh-6.5rem)] flex-col gap-1 overflow-y-auto">
           <button
             type="button"
             onclick={toggleNav}
