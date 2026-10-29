@@ -17,6 +17,8 @@ import (
 type erecruiterCapture struct {
 	t       *testing.T
 	details []string
+	// lastPageOnly serves the capture's one-offer third page as the whole board.
+	lastPageOnly bool
 }
 
 func (c *erecruiterCapture) read(name string) string {
@@ -28,6 +30,12 @@ func (c *erecruiterCapture) read(name string) string {
 }
 
 func (c *erecruiterCapture) GetText(_ context.Context, url string) (string, error) {
+	if c.lastPageOnly {
+		if strings.HasSuffix(url, "pn=1") {
+			return c.read("echo_list_p3.jsonp"), nil
+		}
+		return `({"htm":""})`, nil
+	}
 	for _, p := range []string{"1", "2", "3"} {
 		if strings.HasSuffix(url, "pn="+p) {
 			return c.read("echo_list_p" + p + ".jsonp"), nil
@@ -69,5 +77,23 @@ func TestResolveOnBoardResolvesAnErecruiterOfferByItsOid(t *testing.T) {
 	}
 	if len(capture.details) != 1 || capture.details[0] != "5011939" {
 		t.Errorf("details read = %v, want only the linked offer", capture.details)
+	}
+}
+
+// When the offer the oid names is gone, the link resolves to nothing — never to another offer that
+// happens to share the Offer.aspx path, even when it is the only other offer on the board.
+func TestResolveOnBoardDoesNotSubstituteAnotherErecruiterOffer(t *testing.T) {
+	const board = "4D3DD27FCA3D40C79E01BEE9745902B7"
+	capture := &erecruiterCapture{t: t, lastPageOnly: true}
+	reg := map[string]sources.Source{"erecruiter": sources.NewErecruiter(capture)}
+
+	// The board now lists only offer 4987752; the link names 5011050, closed since it was shared.
+	raw := "https://skk.erecruiter.pl/Offer.aspx?oid=5011050&cfg=" + board + "&ejoId=623224&ejorId=322754&comId=20002054"
+	job, ok, err := ResolveOnBoard(context.Background(), reg, "erecruiter", board, raw)
+	if err != nil {
+		t.Fatalf("ResolveOnBoard: %v", err)
+	}
+	if ok {
+		t.Errorf("resolved %s, want nothing: the linked offer could not be read", job.ExternalID)
 	}
 }

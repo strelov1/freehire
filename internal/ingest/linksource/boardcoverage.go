@@ -147,10 +147,10 @@ func segmentNamesID(seg, id string) bool {
 // locale prefix, a slug that changed after the title was edited), but the id in the last path
 // segment survives all of those.
 //
-// A URL only identifies a posting when no other posting on the board shares it. The comparison
-// drops the query, so on a platform that names the posting ONLY in the query — eRecruiter's
-// Offer.aspx?oid=<id>, the same path for every offer — every posting compares equal and the URL
-// pass would hand back the board's first row. Such a link is matched by its id instead.
+// The URL comparison ignores the query, except that a parameter both URLs carry must agree. A
+// pasted link's tracking parameters are noise, but a platform that names the posting ONLY in the
+// query — eRecruiter's Offer.aspx?oid=<id>, the same path for every offer — is identified by
+// exactly that parameter, and ignoring it handed back whichever offer came first.
 //
 // An Unreadable marker is never a match. It carries a posting's identity WITHOUT its detail,
 // so it answers both predicates — and it is not the safe near-miss SeenRefresh is here, it is
@@ -159,15 +159,13 @@ func segmentNamesID(seg, id string) bool {
 // no title, which job.New rejects as an invalid draft, which reaches the reader as a 500 on a
 // URL whose honest answer is "we could not read a vacancy from that url".
 func pickPosting(jobs []sources.Job, raw string) (sources.Job, bool) {
-	want := normalizeURL(raw)
-	var byURL []sources.Job
 	for _, j := range jobs {
-		if !j.Unreadable && normalizeURL(j.URL) == want {
-			byURL = append(byURL, j)
+		if j.Unreadable {
+			continue
 		}
-	}
-	if len(byURL) == 1 {
-		return byURL[0], true
+		if sameURL(raw, j.URL) {
+			return j, true
+		}
 	}
 	for _, seg := range postingRefs(raw) {
 		for _, j := range jobs {
@@ -180,6 +178,26 @@ func pickPosting(jobs []sources.Job, raw string) (sources.Job, bool) {
 		}
 	}
 	return sources.Job{}, false
+}
+
+// sameURL reports whether a link and a posting's URL address the same posting: equal once
+// normalized (normalizeURL), and no query parameter present in both carrying different values.
+func sameURL(raw, posting string) bool {
+	if normalizeURL(raw) != normalizeURL(posting) {
+		return false
+	}
+	a, errA := url.Parse(strings.TrimSpace(raw))
+	b, errB := url.Parse(strings.TrimSpace(posting))
+	if errA != nil || errB != nil {
+		return false
+	}
+	qa, qb := a.Query(), b.Query()
+	for k, v := range qb {
+		if w, ok := qa[k]; ok && !slices.Equal(v, w) {
+			return false
+		}
+	}
+	return true
 }
 
 // normalizeURL reduces a posting URL to what identifies it: scheme-less, lowercased host with
