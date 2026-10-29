@@ -59,6 +59,27 @@ type ingestVolume struct {
 	distinctPostings int64
 }
 
+// qualityChecks names the per-source quality counts, in the order sourceQuality.gaps holds
+// them. It is the `check` label's whole vocabulary, a cross-repository contract like every
+// name here: the alert rules in freehire-ops select on these strings. What each one counts
+// is AggregateOpenJobsBySource's to say.
+var qualityChecks = [...]string{"missing_work_mode", "missing_geo", "missing_company", "unseen_7d", "posted_over_60d"}
+
+// sourceQuality is one source's open postings and how many of them fail each quality check,
+// as cmd/rollup-stats last measured them.
+//
+// It catches what neither the board families nor the ingest pair can: a source whose crawls
+// succeed and whose rows are unique, but whose rows are EMPTY where it matters. Measured on
+// 2026-10-29, successfactors carried ~98% of its open postings with no location at all, and
+// hrmdirect had listed nothing for eight days while every crawl succeeded and all of its
+// postings stayed on the site.
+type sourceQuality struct {
+	source     string
+	openJobs   int64
+	gaps       [len(qualityChecks)]int64
+	measuredAt time.Time
+}
+
 // notifyBacklog is the subscription-digest backlog of one deliverability state: how many
 // active subscriptions have an undelivered match, and how old the oldest such match is.
 type notifyBacklog struct {
@@ -86,6 +107,7 @@ type snapshot struct {
 	// families are one measurement published twice and cannot disagree.
 	providers []providerHealth
 	ingest    []ingestVolume
+	sources   []sourceQuality
 }
 
 // fleet is the whole board fleet, summed from the per-provider rows rather than measured
@@ -250,6 +272,30 @@ func render(s snapshot) string {
 		for _, v := range s.ingest {
 			fmt.Fprintf(&b, "freehire_ingest_distinct_postings{provider=%q} %d\n", v.provider, v.distinctPostings)
 		}
+	}
+
+	// Per-source quality: raw counts beside their denominator, never a share — which share
+	// of which source deserves a page is the alert rule's call, since several sources are
+	// legitimately geo-less or never re-listed (telegram reads ~100% unseen forever). The
+	// rule watches a share CHANGE, so a permanent level stays quiet.
+	//
+	// The measurement time is published once: the whole snapshot is rebuilt in one
+	// transaction, so every row carries the same one. It is what tells a rollup that has
+	// stopped from a fleet that simply has not changed. With no snapshot all three families
+	// are omitted — nothing was measured, and a fleet of zeros would claim otherwise.
+	if len(s.sources) > 0 {
+		writeHeader(&b, "freehire_source_open_jobs", "Open postings a source carries, as the per-source snapshot last measured them.")
+		for _, q := range s.sources {
+			fmt.Fprintf(&b, "freehire_source_open_jobs{source=%q} %d\n", q.source, q.openJobs)
+		}
+		writeHeader(&b, "freehire_source_quality_gap", "Open postings of a source that fail a quality check.")
+		for _, q := range s.sources {
+			for i, check := range qualityChecks {
+				fmt.Fprintf(&b, "freehire_source_quality_gap{source=%q,check=%q} %d\n", q.source, check, q.gaps[i])
+			}
+		}
+		writeHeader(&b, "freehire_source_stats_measured_timestamp_seconds", "Unix time the per-source snapshot was measured.")
+		fmt.Fprintf(&b, "freehire_source_stats_measured_timestamp_seconds %d\n", s.sources[0].measuredAt.Unix())
 	}
 
 	return b.String()

@@ -546,3 +546,71 @@ func TestRenderPublishesAnEmptyFleetAsZeroes(t *testing.T) {
 		t.Errorf("first-listed family must be omitted with no providers\ngot:\n%s", got)
 	}
 }
+
+func qualitySnapshot() snapshot {
+	s := fullSnapshot()
+	measured := time.Unix(1792000000, 0)
+	s.sources = []sourceQuality{
+		// The spike's two findings: a source with no geography at all, and one whose
+		// crawl stopped listing anything while its postings stayed open.
+		{source: "hrmdirect", openJobs: 90000, gaps: [len(qualityChecks)]int64{80000, 3000, 0, 90000, 1200}, measuredAt: measured},
+		{source: "successfactors", openJobs: 488000, gaps: [len(qualityChecks)]int64{400000, 476000, 0, 5800, 0}, measuredAt: measured},
+	}
+	return s
+}
+
+// Counts, never shares, and one family keyed by check: the alert rule divides by
+// freehire_source_open_jobs and owns the threshold, the argument
+// TestRenderIngestDuplication makes for the ingest pair.
+func TestRenderSourceQuality(t *testing.T) {
+	got := render(qualitySnapshot())
+	for _, want := range []string{
+		`freehire_source_open_jobs{source="successfactors"} 488000`,
+		`freehire_source_quality_gap{source="hrmdirect",check="missing_work_mode"} 80000`,
+		`freehire_source_quality_gap{source="successfactors",check="missing_geo"} 476000`,
+		`freehire_source_quality_gap{source="successfactors",check="missing_company"} 0`,
+		`freehire_source_quality_gap{source="hrmdirect",check="unseen_7d"} 90000`,
+		`freehire_source_quality_gap{source="hrmdirect",check="posted_over_60d"} 1200`,
+		"freehire_source_stats_measured_timestamp_seconds 1792000000",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("exposition missing %q\ngot:\n%s", want, got)
+		}
+	}
+}
+
+// No snapshot yet (a fresh install, or the migration landed before the first rollup):
+// nothing was measured, so nothing is published — not a fleet of zeros.
+func TestRenderOmitsSourceQualityWithoutASnapshot(t *testing.T) {
+	got := render(fullSnapshot())
+	for _, name := range []string{"freehire_source_open_jobs", "freehire_source_quality_gap", "freehire_source_stats_measured"} {
+		if strings.Contains(got, name) {
+			t.Errorf("exposition carries %s with no snapshot", name)
+		}
+	}
+}
+
+func TestRenderSourceQualityIsWellFormed(t *testing.T) {
+	s := qualitySnapshot()
+	parser := expfmt.NewTextParser(model.UTF8Validation)
+	families, err := parser.TextToMetricFamilies(strings.NewReader(render(s)))
+	if err != nil {
+		t.Fatalf("rendered exposition does not parse: %v", err)
+	}
+	for name, samples := range map[string]int{
+		"freehire_source_open_jobs":                        len(s.sources),
+		"freehire_source_quality_gap":                      len(s.sources) * len(qualityChecks),
+		"freehire_source_stats_measured_timestamp_seconds": 1,
+	} {
+		family, ok := families[name]
+		if !ok {
+			t.Fatalf("parsed exposition is missing family %s", name)
+		}
+		if got := len(family.GetMetric()); got != samples {
+			t.Errorf("%s has %d samples, want %d", name, got, samples)
+		}
+		if family.GetType() != dto.MetricType_GAUGE {
+			t.Errorf("%s parsed as %v, want GAUGE", name, family.GetType())
+		}
+	}
+}

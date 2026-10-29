@@ -84,7 +84,7 @@ func Union(sets ...[]string) []string {
 // `previous` is the snapshot this run replaces. It is read for its KEYS only — every
 // figure is re-measured — so a source that has gone quiet keeps reporting a measured zero
 // instead of disappearing. See Union for why all three sets are needed.
-func Rows(registry []string, agg []db.AggregateOpenJobsBySourceRow, previous []db.SourceStat, browsable BrowsableCounts, measuredAt time.Time) []db.InsertSourceStatParams {
+func Rows(registry []string, agg []db.AggregateOpenJobsBySourceRow, previous []db.ListSourceStatsRow, browsable BrowsableCounts, measuredAt time.Time) []db.InsertSourceStatParams {
 	scanned := make(map[string]db.AggregateOpenJobsBySourceRow, len(agg))
 	for _, r := range agg {
 		scanned[r.Source] = r
@@ -100,6 +100,12 @@ func Rows(registry []string, agg []db.AggregateOpenJobsBySourceRow, previous []d
 			OpenJobs:       got.OpenJobs,
 			AtsMatchedJobs: got.AtsMatchedJobs,
 			MeasuredAt:     pgtype.Timestamptz{Time: measuredAt, Valid: true},
+
+			MissingWorkModeJobs: got.MissingWorkModeJobs,
+			MissingGeoJobs:      got.MissingGeoJobs,
+			MissingCompanyJobs:  got.MissingCompanyJobs,
+			Unseen7dJobs:        got.Unseen7dJobs,
+			PostedOver60dJobs:   got.PostedOver60dJobs,
 		}
 		if count, ok := browsable.lookup(source); ok {
 			row.BrowsableJobs = pgtype.Int8{Int64: count, Valid: true}
@@ -110,7 +116,7 @@ func Rows(registry []string, agg []db.AggregateOpenJobsBySourceRow, previous []d
 }
 
 // snapshotNames is the source keys a stored snapshot holds.
-func snapshotNames(rows []db.SourceStat) []string {
+func snapshotNames(rows []db.ListSourceStatsRow) []string {
 	out := make([]string, len(rows))
 	for i, r := range rows {
 		out[i] = r.Source

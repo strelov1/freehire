@@ -15,16 +15,27 @@ const aggregateOpenJobsBySource = `-- name: AggregateOpenJobsBySource :many
 
 SELECT source,
        count(*)::bigint                                                    AS open_jobs,
-       (count(*) FILTER (WHERE duplicate_of_aggregator IS NOT NULL))::bigint AS ats_matched_jobs
+       (count(*) FILTER (WHERE duplicate_of_aggregator IS NOT NULL))::bigint AS ats_matched_jobs,
+       (count(*) FILTER (WHERE work_mode = ''))::bigint                    AS missing_work_mode_jobs,
+       (count(*) FILTER (WHERE coalesce(cardinality(countries), 0) = 0
+                           AND coalesce(cardinality(regions), 0) = 0))::bigint AS missing_geo_jobs,
+       (count(*) FILTER (WHERE company_slug = ''))::bigint                 AS missing_company_jobs,
+       (count(*) FILTER (WHERE last_seen_at < now() - interval '7 days'))::bigint AS unseen_7d_jobs,
+       (count(*) FILTER (WHERE coalesce(posted_at, created_at) < now() - interval '60 days'))::bigint AS posted_over_60d_jobs
 FROM jobs
 WHERE closed_at IS NULL AND NOT is_private
 GROUP BY source
 `
 
 type AggregateOpenJobsBySourceRow struct {
-	Source         string `json:"source"`
-	OpenJobs       int64  `json:"open_jobs"`
-	AtsMatchedJobs int64  `json:"ats_matched_jobs"`
+	Source              string `json:"source"`
+	OpenJobs            int64  `json:"open_jobs"`
+	AtsMatchedJobs      int64  `json:"ats_matched_jobs"`
+	MissingWorkModeJobs int64  `json:"missing_work_mode_jobs"`
+	MissingGeoJobs      int64  `json:"missing_geo_jobs"`
+	MissingCompanyJobs  int64  `json:"missing_company_jobs"`
+	Unseen7dJobs        int64  `json:"unseen_7d_jobs"`
+	PostedOver60dJobs   int64  `json:"posted_over_60d_jobs"`
 }
 
 // Per-source snapshot (source_stats): the measurement cmd/rollup-stats takes on each run
@@ -59,6 +70,13 @@ type AggregateOpenJobsBySourceRow struct {
 // No index backs this. It is one sequential scan per rollup-stats run (every 3 hours, on a
 // worker that already sweeps `jobs` several times per run), and an index on jobs(source)
 // would be built and maintained on an 11M-row table to serve exactly one query.
+//
+// The five quality counts (migration 0213) ride the same scan for the same reason: every
+// column they read is narrow, so each FILTER costs CPU on a row already read, not a second
+// pass. "Has no description" is deliberately NOT among them — see above. An unseen posting
+// is measured from last_seen_at, which a crawl refreshes for every posting it lists, so a
+// source whose crawl never re-lists (telegram) reads high here permanently; the alert rule
+// watches the change, not the level.
 func (q *Queries) AggregateOpenJobsBySource(ctx context.Context) ([]AggregateOpenJobsBySourceRow, error) {
 	rows, err := q.db.Query(ctx, aggregateOpenJobsBySource)
 	if err != nil {
@@ -68,7 +86,16 @@ func (q *Queries) AggregateOpenJobsBySource(ctx context.Context) ([]AggregateOpe
 	items := []AggregateOpenJobsBySourceRow{}
 	for rows.Next() {
 		var i AggregateOpenJobsBySourceRow
-		if err := rows.Scan(&i.Source, &i.OpenJobs, &i.AtsMatchedJobs); err != nil {
+		if err := rows.Scan(
+			&i.Source,
+			&i.OpenJobs,
+			&i.AtsMatchedJobs,
+			&i.MissingWorkModeJobs,
+			&i.MissingGeoJobs,
+			&i.MissingCompanyJobs,
+			&i.Unseen7dJobs,
+			&i.PostedOver60dJobs,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -91,22 +118,34 @@ func (q *Queries) DeleteAllSourceStats(ctx context.Context) error {
 }
 
 const insertSourceStat = `-- name: InsertSourceStat :exec
-INSERT INTO source_stats (source, open_jobs, ats_matched_jobs, browsable_jobs, measured_at)
+INSERT INTO source_stats (source, open_jobs, ats_matched_jobs, browsable_jobs, measured_at,
+                          missing_work_mode_jobs, missing_geo_jobs, missing_company_jobs,
+                          unseen_7d_jobs, posted_over_60d_jobs)
 VALUES (
     $1,
     $2,
     $3,
     $4,
-    $5
+    $5,
+    $6,
+    $7,
+    $8,
+    $9,
+    $10
 )
 `
 
 type InsertSourceStatParams struct {
-	Source         string             `json:"source"`
-	OpenJobs       int64              `json:"open_jobs"`
-	AtsMatchedJobs int64              `json:"ats_matched_jobs"`
-	BrowsableJobs  pgtype.Int8        `json:"browsable_jobs"`
-	MeasuredAt     pgtype.Timestamptz `json:"measured_at"`
+	Source              string             `json:"source"`
+	OpenJobs            int64              `json:"open_jobs"`
+	AtsMatchedJobs      int64              `json:"ats_matched_jobs"`
+	BrowsableJobs       pgtype.Int8        `json:"browsable_jobs"`
+	MeasuredAt          pgtype.Timestamptz `json:"measured_at"`
+	MissingWorkModeJobs int64              `json:"missing_work_mode_jobs"`
+	MissingGeoJobs      int64              `json:"missing_geo_jobs"`
+	MissingCompanyJobs  int64              `json:"missing_company_jobs"`
+	Unseen7dJobs        int64              `json:"unseen_7d_jobs"`
+	PostedOver60dJobs   int64              `json:"posted_over_60d_jobs"`
 }
 
 // Second half of the atomic rebuild: one row per source in the UNION of the adapter
@@ -131,6 +170,11 @@ func (q *Queries) InsertSourceStat(ctx context.Context, arg InsertSourceStatPara
 		arg.AtsMatchedJobs,
 		arg.BrowsableJobs,
 		arg.MeasuredAt,
+		arg.MissingWorkModeJobs,
+		arg.MissingGeoJobs,
+		arg.MissingCompanyJobs,
+		arg.Unseen7dJobs,
+		arg.PostedOver60dJobs,
 	)
 	return err
 }
@@ -141,17 +185,25 @@ FROM source_stats
 ORDER BY source
 `
 
+type ListSourceStatsRow struct {
+	Source         string             `json:"source"`
+	OpenJobs       int64              `json:"open_jobs"`
+	AtsMatchedJobs int64              `json:"ats_matched_jobs"`
+	BrowsableJobs  pgtype.Int8        `json:"browsable_jobs"`
+	MeasuredAt     pgtype.Timestamptz `json:"measured_at"`
+}
+
 // The whole snapshot. Aggregate only — per-source counts, no record-level data. A few hundred rows, so it is read whole and joined in Go against
 // the adapter registry rather than filtered here.
-func (q *Queries) ListSourceStats(ctx context.Context) ([]SourceStat, error) {
+func (q *Queries) ListSourceStats(ctx context.Context) ([]ListSourceStatsRow, error) {
 	rows, err := q.db.Query(ctx, listSourceStats)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []SourceStat{}
+	items := []ListSourceStatsRow{}
 	for rows.Next() {
-		var i SourceStat
+		var i ListSourceStatsRow
 		if err := rows.Scan(
 			&i.Source,
 			&i.OpenJobs,

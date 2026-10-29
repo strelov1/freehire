@@ -32,6 +32,8 @@ type fakeQueries struct {
 	health       []db.ProviderIngestHealthRow
 	ingest       []db.IngestDuplicationMetricsRow
 	ingestErr    error
+	quality      []db.SourceQualityMetricsRow
+	qualityErr   error
 	notify       []db.NotifyBacklogMetricsRow
 	newestErr    error
 	searchErr    error
@@ -91,6 +93,10 @@ func (f fakeQueries) ProviderIngestHealth(context.Context) ([]db.ProviderIngestH
 
 func (f fakeQueries) IngestDuplicationMetrics(context.Context) ([]db.IngestDuplicationMetricsRow, error) {
 	return f.ingest, f.ingestErr
+}
+
+func (f fakeQueries) SourceQualityMetrics(context.Context) ([]db.SourceQualityMetricsRow, error) {
+	return f.quality, f.qualityErr
 }
 
 func populatedQueries() fakeQueries {
@@ -407,5 +413,35 @@ func TestCollectTreatsAMissingDeliverabilityStateAsZero(t *testing.T) {
 	}
 	if snap.notifyUndeliverable.pendingSubscriptions != 48 {
 		t.Errorf("undeliverable = %+v, want 48 pending", snap.notifyUndeliverable)
+	}
+}
+
+// The snapshot is carried through untouched, every check under its own name, and the
+// measurement time with it — that time is the only thing that tells a stopped rollup from
+// a source that simply has not changed.
+func TestCollectCarriesSourceQuality(t *testing.T) {
+	measured := time.Unix(1792000000, 0)
+	q := fakeQueries{quality: []db.SourceQualityMetricsRow{{
+		Source: "successfactors", OpenJobs: 488000,
+		MissingWorkModeJobs: 1, MissingGeoJobs: 2, MissingCompanyJobs: 3, Unseen7dJobs: 4, PostedOver60dJobs: 5,
+		MeasuredAt: pgtype.Timestamptz{Time: measured, Valid: true},
+	}}}
+	got, err := collect(context.Background(), q)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	want := []sourceQuality{{
+		source: "successfactors", openJobs: 488000,
+		gaps: [len(qualityChecks)]int64{1, 2, 3, 4, 5}, measuredAt: measured,
+	}}
+	if !reflect.DeepEqual(got.sources, want) {
+		t.Errorf("sources = %+v, want %+v", got.sources, want)
+	}
+}
+
+func TestCollectFailsWhenSourceQualityFails(t *testing.T) {
+	q := fakeQueries{qualityErr: errors.New("boom")}
+	if _, err := collect(context.Background(), q); err == nil {
+		t.Fatal("collect returned no error when the source-quality query failed")
 	}
 }

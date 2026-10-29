@@ -30,6 +30,7 @@ type metricsQueries interface {
 	ProviderIngestHealth(context.Context) ([]db.ProviderIngestHealthRow, error)
 	NotifyBacklogMetrics(context.Context) ([]db.NotifyBacklogMetricsRow, error)
 	IngestDuplicationMetrics(context.Context) ([]db.IngestDuplicationMetricsRow, error)
+	SourceQualityMetrics(context.Context) ([]db.SourceQualityMetricsRow, error)
 }
 
 // collect runs one measurement pass. Any query failure aborts the pass: a partial
@@ -141,6 +142,23 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		}
 	}
 
+	// Read from the snapshot cmd/rollup-stats rebuilds, not measured here: the measurement
+	// is a full scan of the open catalogue. Carried untouched, like the ingest pair above.
+	quality, err := q.SourceQualityMetrics(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("source quality metrics: %w", err)
+	}
+	sources := make([]sourceQuality, len(quality))
+	for i, r := range quality {
+		sources[i] = sourceQuality{
+			source:   r.Source,
+			openJobs: r.OpenJobs,
+			// In qualityChecks order.
+			gaps:       [len(qualityChecks)]int64{r.MissingWorkModeJobs, r.MissingGeoJobs, r.MissingCompanyJobs, r.Unseen7dJobs, r.PostedOver60dJobs},
+			measuredAt: r.MeasuredAt.Time,
+		}
+	}
+
 	return snapshot{
 		// Every queue in the pipeline, because a queue this worker does not measure has
 		// no signal at all: each of these is drained by a worker that exits 0 whether it
@@ -173,6 +191,7 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		newestJob:           newestJob,
 		providers:           providers,
 		ingest:              ingest,
+		sources:             sources,
 	}, nil
 }
 

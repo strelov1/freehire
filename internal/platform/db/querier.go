@@ -117,6 +117,13 @@ type Querier interface {
 	// No index backs this. It is one sequential scan per rollup-stats run (every 3 hours, on a
 	// worker that already sweeps `jobs` several times per run), and an index on jobs(source)
 	// would be built and maintained on an 11M-row table to serve exactly one query.
+	//
+	// The five quality counts (migration 0213) ride the same scan for the same reason: every
+	// column they read is narrow, so each FILTER costs CPU on a row already read, not a second
+	// pass. "Has no description" is deliberately NOT among them — see above. An unseen posting
+	// is measured from last_seen_at, which a crawl refreshes for every posting it lists, so a
+	// source whose crawl never re-lists (telegram) reads high here permanently; the alert rule
+	// watches the change, not the level.
 	AggregateOpenJobsBySource(ctx context.Context) ([]AggregateOpenJobsBySourceRow, error)
 	// Fold a follow-on edit into the newest revision: replace what it does, restate its
 	// description and the reason for the change, but LEAVE inverse alone. The inverse still leads
@@ -4897,7 +4904,7 @@ type Querier interface {
 	ListSlugLikeCompaniesForBackfill(ctx context.Context) ([]ListSlugLikeCompaniesForBackfillRow, error)
 	// The whole snapshot. Aggregate only — per-source counts, no record-level data. A few hundred rows, so it is read whole and joined in Go against
 	// the adapter registry rather than filtered here.
-	ListSourceStats(ctx context.Context) ([]SourceStat, error)
+	ListSourceStats(ctx context.Context) ([]ListSourceStatsRow, error)
 	// "My submissions": one user's submissions, newest first, whatever their status.
 	// LEFT JOIN the minted job (present only once approved) to surface its public_slug,
 	// so the UI can link an approved submission straight to its live vacancy page.
@@ -7404,6 +7411,17 @@ type Querier interface {
 	// scoped to the caller and idempotent. Returns 0 rows only when it is not the
 	// caller's message (→ 404).
 	SoftDeleteEmail(ctx context.Context, arg SoftDeleteEmailParams) (int64, error)
+	// Each source's open postings and the five quality counts beside them, as cmd/rollup-stats
+	// last measured them (see AggregateOpenJobsBySource and migration 0213), plus when.
+	//
+	// Reads the snapshot, never `jobs`: the measurement is a full scan of the open catalogue,
+	// which costs minutes on a loaded host and runs every 3 hours, while this worker runs every
+	// minute and must stay a few milliseconds. measured_at is published so a rollup that has
+	// stopped running shows up as an ageing snapshot rather than as frozen, plausible counts.
+	//
+	// Its own query rather than ListSourceStats, which serves the public /api/v1/sources and
+	// should not change shape for an operator's gauge.
+	SourceQualityMetrics(ctx context.Context) ([]SourceQualityMetricsRow, error)
 	// Record that this posting's role was not found on its company's own board, as of now.
 	// Re-stamped on every run, so the reader can ignore a stamp that has aged out and a
 	// worker that has stopped falls silent instead of accusing from a frozen snapshot.

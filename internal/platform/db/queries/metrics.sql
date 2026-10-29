@@ -419,3 +419,19 @@ WHERE j.closed_at IS NULL
   AND j.url <> ''
 GROUP BY j.source
 ORDER BY j.source;
+
+-- name: SourceQualityMetrics :many
+-- Each source's open postings and the five quality counts beside them, as cmd/rollup-stats
+-- last measured them (see AggregateOpenJobsBySource and migration 0213), plus when.
+--
+-- Reads the snapshot, never `jobs`: the measurement is a full scan of the open catalogue,
+-- which costs minutes on a loaded host and runs every 3 hours, while this worker runs every
+-- minute and must stay a few milliseconds. measured_at is published so a rollup that has
+-- stopped running shows up as an ageing snapshot rather than as frozen, plausible counts.
+--
+-- Its own query rather than ListSourceStats, which serves the public /api/v1/sources and
+-- should not change shape for an operator's gauge.
+SELECT source, open_jobs, missing_work_mode_jobs, missing_geo_jobs, missing_company_jobs,
+       unseen_7d_jobs, posted_over_60d_jobs, measured_at
+FROM source_stats
+ORDER BY source;

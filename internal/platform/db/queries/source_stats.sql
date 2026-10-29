@@ -32,9 +32,22 @@
 -- No index backs this. It is one sequential scan per rollup-stats run (every 3 hours, on a
 -- worker that already sweeps `jobs` several times per run), and an index on jobs(source)
 -- would be built and maintained on an 11M-row table to serve exactly one query.
+--
+-- The five quality counts (migration 0213) ride the same scan for the same reason: every
+-- column they read is narrow, so each FILTER costs CPU on a row already read, not a second
+-- pass. "Has no description" is deliberately NOT among them — see above. An unseen posting
+-- is measured from last_seen_at, which a crawl refreshes for every posting it lists, so a
+-- source whose crawl never re-lists (telegram) reads high here permanently; the alert rule
+-- watches the change, not the level.
 SELECT source,
        count(*)::bigint                                                    AS open_jobs,
-       (count(*) FILTER (WHERE duplicate_of_aggregator IS NOT NULL))::bigint AS ats_matched_jobs
+       (count(*) FILTER (WHERE duplicate_of_aggregator IS NOT NULL))::bigint AS ats_matched_jobs,
+       (count(*) FILTER (WHERE work_mode = ''))::bigint                    AS missing_work_mode_jobs,
+       (count(*) FILTER (WHERE coalesce(cardinality(countries), 0) = 0
+                           AND coalesce(cardinality(regions), 0) = 0))::bigint AS missing_geo_jobs,
+       (count(*) FILTER (WHERE company_slug = ''))::bigint                 AS missing_company_jobs,
+       (count(*) FILTER (WHERE last_seen_at < now() - interval '7 days'))::bigint AS unseen_7d_jobs,
+       (count(*) FILTER (WHERE coalesce(posted_at, created_at) < now() - interval '60 days'))::bigint AS posted_over_60d_jobs
 FROM jobs
 WHERE closed_at IS NULL AND NOT is_private
 GROUP BY source;
@@ -60,13 +73,20 @@ DELETE FROM source_stats;
 --
 -- browsable_jobs is NULL when Meilisearch could not be reached. Never 0: see the
 -- migration's comment.
-INSERT INTO source_stats (source, open_jobs, ats_matched_jobs, browsable_jobs, measured_at)
+INSERT INTO source_stats (source, open_jobs, ats_matched_jobs, browsable_jobs, measured_at,
+                          missing_work_mode_jobs, missing_geo_jobs, missing_company_jobs,
+                          unseen_7d_jobs, posted_over_60d_jobs)
 VALUES (
     sqlc.arg('source'),
     sqlc.arg('open_jobs'),
     sqlc.arg('ats_matched_jobs'),
     sqlc.narg('browsable_jobs'),
-    sqlc.arg('measured_at')
+    sqlc.arg('measured_at'),
+    sqlc.arg('missing_work_mode_jobs'),
+    sqlc.arg('missing_geo_jobs'),
+    sqlc.arg('missing_company_jobs'),
+    sqlc.arg('unseen_7d_jobs'),
+    sqlc.arg('posted_over_60d_jobs')
 );
 
 -- name: ListSourceStats :many

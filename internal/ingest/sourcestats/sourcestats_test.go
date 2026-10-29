@@ -68,7 +68,7 @@ func TestRowsKeepsASourceThatHasGoneQuiet(t *testing.T) {
 	// the registry nor the scan. Without the previous snapshot in the union it disappears
 	// from the page the moment its last posting closes, which is the same silent drop the
 	// union exists to prevent, one closure later.
-	previous := []db.SourceStat{
+	previous := []db.ListSourceStatsRow{
 		{Source: "greenhouse", OpenJobs: 10},
 		{Source: "telegram", OpenJobs: 3},
 	}
@@ -154,5 +154,20 @@ func TestRowsIsOrderedBySource(t *testing.T) {
 		if order[i] != want[i] {
 			t.Fatalf("order = %v, want %v", order, want)
 		}
+	}
+}
+
+func TestRowsCarriesTheQualityCounts(t *testing.T) {
+	// Distinct values, so a count wired to the wrong column lands on the wrong number.
+	agg := []db.AggregateOpenJobsBySourceRow{{
+		Source: "greenhouse", OpenJobs: 100,
+		MissingWorkModeJobs: 1, MissingGeoJobs: 2, MissingCompanyJobs: 3, Unseen7dJobs: 4, PostedOver60dJobs: 5,
+	}}
+
+	got := bySource(Rows([]string{"greenhouse"}, agg, nil, Unmeasured(), measuredAt))["greenhouse"]
+
+	if got.MissingWorkModeJobs != 1 || got.MissingGeoJobs != 2 || got.MissingCompanyJobs != 3 ||
+		got.Unseen7dJobs != 4 || got.PostedOver60dJobs != 5 {
+		t.Errorf("quality counts not carried through: %+v", got)
 	}
 }

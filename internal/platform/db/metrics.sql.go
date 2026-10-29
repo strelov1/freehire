@@ -679,3 +679,60 @@ func (q *Queries) SemanticOutboxMetrics(ctx context.Context) (SemanticOutboxMetr
 	err := row.Scan(&i.Depth, &i.DeadLetters, &i.OldestAgeSeconds)
 	return i, err
 }
+
+const sourceQualityMetrics = `-- name: SourceQualityMetrics :many
+SELECT source, open_jobs, missing_work_mode_jobs, missing_geo_jobs, missing_company_jobs,
+       unseen_7d_jobs, posted_over_60d_jobs, measured_at
+FROM source_stats
+ORDER BY source
+`
+
+type SourceQualityMetricsRow struct {
+	Source              string             `json:"source"`
+	OpenJobs            int64              `json:"open_jobs"`
+	MissingWorkModeJobs int64              `json:"missing_work_mode_jobs"`
+	MissingGeoJobs      int64              `json:"missing_geo_jobs"`
+	MissingCompanyJobs  int64              `json:"missing_company_jobs"`
+	Unseen7dJobs        int64              `json:"unseen_7d_jobs"`
+	PostedOver60dJobs   int64              `json:"posted_over_60d_jobs"`
+	MeasuredAt          pgtype.Timestamptz `json:"measured_at"`
+}
+
+// Each source's open postings and the five quality counts beside them, as cmd/rollup-stats
+// last measured them (see AggregateOpenJobsBySource and migration 0213), plus when.
+//
+// Reads the snapshot, never `jobs`: the measurement is a full scan of the open catalogue,
+// which costs minutes on a loaded host and runs every 3 hours, while this worker runs every
+// minute and must stay a few milliseconds. measured_at is published so a rollup that has
+// stopped running shows up as an ageing snapshot rather than as frozen, plausible counts.
+//
+// Its own query rather than ListSourceStats, which serves the public /api/v1/sources and
+// should not change shape for an operator's gauge.
+func (q *Queries) SourceQualityMetrics(ctx context.Context) ([]SourceQualityMetricsRow, error) {
+	rows, err := q.db.Query(ctx, sourceQualityMetrics)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SourceQualityMetricsRow{}
+	for rows.Next() {
+		var i SourceQualityMetricsRow
+		if err := rows.Scan(
+			&i.Source,
+			&i.OpenJobs,
+			&i.MissingWorkModeJobs,
+			&i.MissingGeoJobs,
+			&i.MissingCompanyJobs,
+			&i.Unseen7dJobs,
+			&i.PostedOver60dJobs,
+			&i.MeasuredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
