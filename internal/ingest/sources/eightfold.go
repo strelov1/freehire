@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"time"
@@ -120,8 +121,7 @@ func (s eightfold) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // FetchNew lists the whole board but spends a detail request only on a position the catalogue
 // does not hold, and on at most eightfoldMaxNewPerBoard of those per run. A seen position comes
 // back as a SeenRefresh carrying the listing's identity, so its liveness refreshes and its
-// stored body is kept; a new position past the bound is left for a later run, which the
-// pipeline reads as pending work rather than a quiet board.
+// stored body is kept; an unseen position past the bound is left for a later run (see crawl).
 //
 // The detail was this adapter's whole cost: the list serves ten positions per request and the
 // detail one, all under a ~1 req/s pace shared by every board in a shard. Re-reading every
@@ -133,7 +133,21 @@ func (s eightfold) FetchNew(ctx context.Context, e CompanyEntry, seen func(exter
 }
 
 // crawl is the walk behind Fetch and FetchNew: list the board, refresh the seen positions from
-// the listing alone, and hydrate up to maxNew of the rest, in listing order.
+// the listing alone, and hydrate up to maxNew of the rest. The unseen positions past maxNew
+// are not yielded, so the pipeline reads the board as having pending work rather than as quiet.
+//
+// The budget goes to a random sample rather than the listing's first positions: a position the
+// catalogue filter rejects is never stored, so it stays unseen, and a fixed prefix of those would
+// take the budget on every run and starve the positions behind it.
+//
+// Not yielding is safe because an unseen position is almost always a new one. The exceptions are
+// the stored rows the seen set withholds (INGEST_REFETCH_ALL, the hydration-retry window,
+// BODY_REFRESH_DAYS): one left out of the sample gets no liveness refresh this run. Yielding it
+// list-only instead would be worse — UpsertJob keeps a stored body but re-derives every facet
+// from the empty one — and a SeenRefresh cannot be sent for a position that may not be stored. A
+// withheld row the sample misses is refreshed by the next run that samples it or no longer
+// withholds it, and one the 48h unseen sweep closes in between reopens when it is hydrated. A
+// repair run under INGEST_REFETCH_ALL reaches at most maxNew positions per board, so repeat it.
 func (s eightfold) crawl(ctx context.Context, e CompanyEntry, seen func(string) bool, maxNew int) ([]Job, error) {
 	b, err := parseEightfoldBoard(e.Board)
 	if err != nil {
@@ -144,28 +158,30 @@ func (s eightfold) crawl(ctx context.Context, e CompanyEntry, seen func(string) 
 		return nil, err
 	}
 	var (
-		refreshed []Job
-		unseen    []eightfoldPosition
+		jobs   []Job
+		unseen []eightfoldPosition
 	)
 	for _, p := range positions {
 		id := strconv.FormatInt(p.ID, 10)
-		if seen(id) {
-			refreshed = append(refreshed, Job{
-				ExternalID:  id,
-				URL:         firstNonEmpty(p.CanonicalPositionURL, eightfoldPositionURL(b, id)),
-				Title:       strings.TrimSpace(p.Name),
-				Company:     e.Company,
-				SeenRefresh: true,
-			})
+		if !seen(id) {
+			unseen = append(unseen, p)
 			continue
 		}
-		if len(unseen) < maxNew {
-			unseen = append(unseen, p)
-		}
+		jobs = append(jobs, Job{
+			ExternalID:  id,
+			URL:         firstNonEmpty(p.CanonicalPositionURL, eightfoldPositionURL(b, id)),
+			Title:       strings.TrimSpace(p.Name),
+			Company:     e.Company,
+			SeenRefresh: true,
+		})
+	}
+	if len(unseen) > maxNew {
+		rand.Shuffle(len(unseen), func(i, j int) { unseen[i], unseen[j] = unseen[j], unseen[i] })
+		unseen = unseen[:maxNew]
 	}
 	hydrated := fetchDetails(unseen, eightfoldDetailWorkers,
 		func(p eightfoldPosition) (Job, bool) { return s.detail(ctx, e, b, p) })
-	return append(hydrated, refreshed...), nil
+	return append(jobs, hydrated...), nil
 }
 
 // getJSONRetrying GETs url, retrying rate-limit responses (403/429) with exponential backoff

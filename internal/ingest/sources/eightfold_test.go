@@ -442,6 +442,33 @@ func TestEightfoldFetchNewBoundsNewDetailsPerBoard(t *testing.T) {
 	}
 }
 
+// The budget is spent on a random sample of the unseen positions, not on a fixed prefix of the
+// listing: a position the catalogue filter rejects is never stored, so it stays unseen, and a
+// fixed prefix of such positions would hold the budget on every run and starve the rest.
+func TestEightfoldFetchNewSamplesTheBudgetAcrossRuns(t *testing.T) {
+	var positions []string
+	for i := 1; i <= 2*eightfoldMaxNewPerBoard; i++ {
+		positions = append(positions, `{"id": `+strconv.Itoa(i)+`, "name": "Role", "locations": ["Remote"]}`)
+	}
+	list := eightfoldList(len(positions), positions...)
+	hydratedPastPrefix := false
+	for run := 0; run < 5 && !hydratedPastPrefix; run++ {
+		fake := &rateLimitedHTTP{list: list, detail: `{"job_description": "<p>d</p>"}`}
+		jobs, err := eightfold{http: fake}.FetchNew(context.Background(), eightfoldEntry, func(string) bool { return false })
+		if err != nil {
+			t.Fatalf("FetchNew: %v", err)
+		}
+		for _, j := range jobs {
+			if n, _ := strconv.Atoi(j.ExternalID); n > eightfoldMaxNewPerBoard && j.Description != "" {
+				hydratedPastPrefix = true
+			}
+		}
+	}
+	if !hydratedPastPrefix {
+		t.Error("five runs hydrated only the listing's first positions; the budget must reach past the prefix")
+	}
+}
+
 // FetchNew keeps the listing's all-or-nothing contract the fullBoardListing marker rests on.
 func TestEightfoldFetchNewPropagatesAListingError(t *testing.T) {
 	fake := &fakeHTTP{err: errors.New("boom")}
