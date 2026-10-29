@@ -217,7 +217,7 @@ func swissdevjobsBaseJob(r swissdevjobsJob) Job {
 // (13 of 140 on the first production run), and which address does so varies from request to
 // request — the same posting rendered under /fr/jobs/ moments after /jobs/ and /de/jobs/ had
 // not — so a placeholder is retried under the next address before the posting is deferred.
-var swissdevjobsDetailPaths = []string{"/jobs/", "/de/jobs/", "/fr/jobs/"}
+var swissdevjobsDetailPaths = []string{"/jobs/", "/de/jobs/", "/fr/jobs/"} // the first is r.url()
 
 // errSwissdevjobsPlaceholder is a page served without its posting state.
 var errSwissdevjobsPlaceholder = errors.New("page carries a placeholder instead of the posting state")
@@ -225,19 +225,28 @@ var errSwissdevjobsPlaceholder = errors.New("page carries a placeholder instead 
 // detail fetches the posting page and reads its state. A posting the site no longer carries
 // answers 404, or a page whose posting is flagged outdated, and is not yielded.
 func (s swissdevjobs) detail(ctx context.Context, r swissdevjobsJob) (Job, bool, error) {
-	var d swissdevjobsJob
-	var err error
-	for _, path := range swissdevjobsDetailPaths {
-		if d, err = s.state(ctx, swissdevjobsBase+path+r.Slug); !errors.Is(err, errSwissdevjobsPlaceholder) {
-			break
-		}
-	}
+	d, err := s.state(ctx, r.url())
 	if err != nil {
 		var se *StatusError
 		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
 			return Job{}, false, nil
 		}
-		return Job{}, false, err
+		// Only the canonical address answers for the posting's existence; after a placeholder
+		// any failure of another address leaves the posting deferred, never gone.
+		for _, path := range swissdevjobsDetailPaths[1:] {
+			if !errors.Is(err, errSwissdevjobsPlaceholder) {
+				break
+			}
+			var alt swissdevjobsJob
+			if alt, err = s.state(ctx, swissdevjobsBase+path+r.Slug); err == nil {
+				d = alt
+				break
+			}
+			err = errSwissdevjobsPlaceholder
+		}
+		if err != nil {
+			return Job{}, false, err
+		}
 	}
 	if d.ID != r.ID {
 		return Job{}, false, fmt.Errorf("page state is posting %q", d.ID)

@@ -170,6 +170,13 @@ func TestSwissDevJobsPlaceholderPageIsRetriedUnderTheNextAddress(t *testing.T) {
 		t.Errorf("url = %q; want the canonical /jobs/ address", j.URL)
 	}
 
+	// A localized address that answers 404 after a placeholder is passed over, not read as gone.
+	f.pages[swissdevjobsBase+"/fr/jobs/"+slug] = f.pages[swissdevjobsBase+"/de/jobs/"+slug]
+	delete(f.pages, swissdevjobsBase+"/de/jobs/"+slug)
+	if _, ok, err := newTestSwissdevjobs(f).detail(context.Background(), r); err != nil || !ok {
+		t.Fatalf("detail = ok %v, err %v; want the posting from /fr/jobs/ past a 404 on /de/jobs/", ok, err)
+	}
+
 	// A placeholder under every address defers the posting rather than reading it as gone.
 	for _, p := range swissdevjobsDetailPaths {
 		f.pages[swissdevjobsBase+p+slug] = `<script>window.__detailedJob = "JOB_PLACEHOLDER"</script>`
