@@ -44,6 +44,9 @@
   let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const hasTimezone = $derived(Boolean(currentUser()?.timezone));
+  // Where the timezone is set: the profile's Location section, scrolled to the control.
+  // resolve()'s base plus a plain #anchor suffix (no dynamic segment to resolve).
+  const timezoneHref = `${resolve('/my/profile/location')}#account-timezone`;
 
   $effect(() => {
     if (isAuthenticated()) void load();
@@ -281,7 +284,8 @@
       </p>
       {#if digestFrequency === 'daily' && !hasTimezone}
         <p class="text-xs text-muted-foreground">
-          Set your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/profile')}>timezone</a> so the digest time means your own local time — until then it's read as UTC.
+          <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
+          Set your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}>timezone</a> so the digest time means your own local time — until then it's read as UTC.
         </p>
       {/if}
     </div>
@@ -323,7 +327,8 @@
         </div>
         {#if !hasTimezone}
           <p class="pl-12 text-xs text-muted-foreground">
-            Set your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/profile')}>timezone</a> so this means your own local time — until then it's read as UTC.
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- timezoneHref wraps resolve(); the rule can't see through the appended #anchor -->
+            Set your <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={timezoneHref}>timezone</a> so this means your own local time — until then it's read as UTC.
           </p>
         {/if}
       {/if}
