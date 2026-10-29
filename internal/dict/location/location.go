@@ -496,7 +496,7 @@ func ParseIn(location string, known []string) Geo {
 	}
 
 	countries := stringset.Sorted(countrySet)
-	regions := stringset.Sorted(regionSet)
+	regions := WithoutShadowedGlobal(countries, stringset.Sorted(regionSet), lower)
 	mode := detectWorkMode(cutIndiaWidePhrases(lower))
 
 	return Geo{
