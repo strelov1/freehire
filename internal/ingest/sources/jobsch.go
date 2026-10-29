@@ -432,6 +432,9 @@ func (s jobsch) detail(ctx context.Context, p jobschPosting) (Job, bool, error) 
 		if err := json.Unmarshal(q.State.Data, &v); err != nil {
 			return Job{}, false, err
 		}
+		if v.ID != p.id {
+			return Job{}, false, fmt.Errorf("page state is posting %q", v.ID)
+		}
 		job, ok := jobschDetail(v, p)
 		return job, ok, nil
 	}
@@ -483,7 +486,7 @@ func jobschDetail(v jobschVacancy, p jobschPosting) (Job, bool) {
 	title := jobschClean(v.Title)
 	company := jobschClean(v.Company.Name)
 	body := sanitizeHTML(v.Text)
-	if !v.Active || v.ID != p.id || title == "" || company == "" || strings.TrimSpace(body) == "" {
+	if !v.Active || title == "" || company == "" || strings.TrimSpace(body) == "" {
 		return Job{}, false
 	}
 	site := jobschSites[p.site]
