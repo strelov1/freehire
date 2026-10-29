@@ -134,8 +134,8 @@
       onCvUploaded={handleCvUploaded}
       onCvDeleted={handleCvDeleted}
     />
-    <!-- Set-up is Settings before there are views, so account-level (not candidate-profile)
-         settings live here too rather than waiting on a CV upload. -->
+    <!-- Account-level (not candidate-profile) settings live here too, so they never wait on
+         a CV upload; once a profile exists they move to Location and /my/security. -->
     <AccountPreferences class="mt-6" />
   </div>
 {:else}

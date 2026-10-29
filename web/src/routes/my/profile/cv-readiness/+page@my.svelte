@@ -167,7 +167,7 @@
         <ATSReportView report={ats.report} action={reviewAction} />
       </div>
     {:else}
-      <!-- No CV yet: uploaded from the profile's Settings section. -->
+      <!-- No CV yet: uploaded from the profile's main section. -->
       <div class="flex flex-col items-start gap-2 rounded-xl border border-dashed border-border p-6">
         <p class="text-sm font-medium">{s.noCv.title}</p>
         <p class="text-sm text-muted-foreground">
