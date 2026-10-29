@@ -157,6 +157,10 @@ func buildSystemPrompt(askGeo bool) string {
 	b.WriteString("\nsalary_min and salary_max are WHOLE units of the currency. ")
 	b.WriteString("Round a fractional rate to the nearest whole unit and NEVER strip the ")
 	b.WriteString("decimal point: an hourly \"$26.08\" is 26 (with salary_period=hour), never 2608.\n")
+	// A Polish B2B day rate is written per man-day ("1000-1300 PLN/MD"), and the model
+	// read it as a monthly salary.
+	b.WriteString("A rate per man-day (\"PLN/MD\", \"zł/md\", \"/MD\", \"stawka dzienna\") is ")
+	b.WriteString("salary_period=day, never month.\n")
 
 	if askGeo {
 		b.WriteString("\nregions is the job's geographic area, for ANY work mode — a remote role's ")
