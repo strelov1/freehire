@@ -498,6 +498,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   taleez: 'Taleez',
   sapoemprego: 'SAPO Emprego',
   netempregos: 'Net-Empregos',
+  hzz: 'HZZ (Burza rada)',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

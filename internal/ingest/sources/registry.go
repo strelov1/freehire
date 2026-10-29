@@ -1022,6 +1022,10 @@ func All(c HTTPClient) map[string]Source {
 	// Net-Empregos: a Portuguese general job board, enumerated from its sitemap and RSS feeds,
 	// each new posting's body read from its page's schema.org JobPosting. See netempregos.go.
 	registry["netempregos"] = NewNetEmpregos(c)
+	// HZZ: the Croatian Employment Service's job exchange, enumerated from its county RSS feeds,
+	// each new vacancy's employer and body read from its print page. The site answers nothing
+	// without the session cookie its first response sets, hence the cookie client. See hzz.go.
+	registry["hzz"] = cookieSessionSource[hzzGetter](c, NewHZZ)
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the
