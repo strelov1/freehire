@@ -267,7 +267,7 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   like a negation; "dni w roku" bounds a perk. Measured 2026-10-29 over 9,835
   Polish-language postings: the description reader 0.8% → 36.2%; with the structured
   signal and the location marker, 24.4% → 46.4%. Where the posting also carries a
-  structured mode the two agree in 1,225 of 1,333; most of the rest offer a choice the
+  structured mode the two agree in 1,205 of 1,323; most of the rest offer a choice the
   structured flag records as remote.
 - **Polish location lines** (`location_pl.go`, the Polish block of
   `foreignSubdivisionNames`, measured 2026-10-29 over 15,488 postings placed in Poland).
