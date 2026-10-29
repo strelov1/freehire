@@ -1783,6 +1783,9 @@ type Querier interface {
 	// by the company-info backfill are preserved: they intentionally have no job, so
 	// the NOT is_reference guard keeps the backfill directory from being swept away.
 	DeleteOrphanCompanies(ctx context.Context) (int64, error)
+	// DeleteOrphanCompanies narrowed to the given slugs: the other half of cmd/backfill-derive's
+	// scoped reconcile, for the slugs its re-key moved jobs AWAY from. Reference rows stay.
+	DeleteOrphanCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
 	// Removes tickets once their receipt has been checked, regardless of outcome
 	// (delivered, pruned-as-dead, or any other terminal receipt status) — this
 	// queue has no retry bookkeeping of its own; an unprocessed batch (e.g. Expo
@@ -3261,6 +3264,17 @@ type Querier interface {
 	// row is not named after whichever variant the scan met first. Private rows are skipped: a JD
 	// one user pasted in must not name a public company (see ListSlugLikeCompaniesForBackfill).
 	InsertMissingCanonicalCompanies(ctx context.Context) (int64, error)
+	// A companies row for each of the given slugs that jobs carry and companies lacks: the
+	// scoped half of the reconcile cmd/backfill-derive runs after it re-keys jobs onto new slugs.
+	// The caller passes the slugs it moved, a bounded chunk at a time, so each statement is its
+	// own short transaction. SyncCompaniesFromJobs did this for the whole table in ONE
+	// transaction that ran about an hour, and a row it inserted stayed locked until it committed
+	// — so every ingest UpsertJob for that company, which upserts the same row, queued behind it
+	// (2026-10-28/29, up to 140 waiters).
+	//
+	// The name is the most recent public one, as ListCompaniesForMerge reads it; a JD one user
+	// pasted in (is_private) must not name a public company.
+	InsertMissingCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
 	// Reserves a company slug for a claim in progress. The UNIQUE(company_slug) constraint is
 	// the whole race guard: two concurrent claims on the same slug both attempt this insert, one
 	// succeeds, and the loser's caller maps the unique violation to a clean conflict — see

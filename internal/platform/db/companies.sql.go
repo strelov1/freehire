@@ -232,6 +232,23 @@ func (q *Queries) DeleteOrphanCompanies(ctx context.Context) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const deleteOrphanCompaniesForSlugs = `-- name: DeleteOrphanCompaniesForSlugs :execrows
+DELETE FROM companies c
+WHERE c.slug = ANY($1::text[])
+  AND NOT c.is_reference
+  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug)
+`
+
+// DeleteOrphanCompanies narrowed to the given slugs: the other half of cmd/backfill-derive's
+// scoped reconcile, for the slugs its re-key moved jobs AWAY from. Reference rows stay.
+func (q *Queries) DeleteOrphanCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOrphanCompaniesForSlugs, slugs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const estimateHiringCompanies = `-- name: EstimateHiringCompanies :one
 SELECT estimate_hiring_companies()::bigint
 `
@@ -363,6 +380,35 @@ func (q *Queries) GetCompany(ctx context.Context, slug string) (Company, error) 
 		&i.CompanyDescriptionCheckedAt,
 	)
 	return i, err
+}
+
+const insertMissingCompaniesForSlugs = `-- name: InsertMissingCompaniesForSlugs :execrows
+INSERT INTO companies (slug, name)
+SELECT DISTINCT ON (j.company_slug) j.company_slug, j.company
+FROM jobs j
+WHERE j.company_slug = ANY($1::text[])
+  AND NOT j.is_private
+  AND NOT EXISTS (SELECT 1 FROM companies c WHERE c.slug = j.company_slug)
+ORDER BY j.company_slug, j.created_at DESC, j.id DESC
+ON CONFLICT (slug) DO NOTHING
+`
+
+// A companies row for each of the given slugs that jobs carry and companies lacks: the
+// scoped half of the reconcile cmd/backfill-derive runs after it re-keys jobs onto new slugs.
+// The caller passes the slugs it moved, a bounded chunk at a time, so each statement is its
+// own short transaction. SyncCompaniesFromJobs did this for the whole table in ONE
+// transaction that ran about an hour, and a row it inserted stayed locked until it committed
+// — so every ingest UpsertJob for that company, which upserts the same row, queued behind it
+// (2026-10-28/29, up to 140 waiters).
+//
+// The name is the most recent public one, as ListCompaniesForMerge reads it; a JD one user
+// pasted in (is_private) must not name a public company.
+func (q *Queries) InsertMissingCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error) {
+	result, err := q.db.Exec(ctx, insertMissingCompaniesForSlugs, slugs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listCompanies = `-- name: ListCompanies :many

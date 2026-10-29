@@ -62,8 +62,7 @@
 // either answer.
 //
 // When a company slug moves (a deliberate slug-builder change), the run re-keys the companies
-// catalogue afterwards (SyncCompaniesFromJobs + DeleteOrphanCompanies), exactly as the
-// former cmd/reslug did. Follow the run with a reindex (make reindex), whose
+// catalogue afterwards — only for the slugs it moved, in chunks (reconcileMovedSlugs). Follow the run with a reindex (make reindex), whose
 // duplicate_of recompute then collapses any newly-clustered reposts and unions their
 // geography onto each canon.
 package main
@@ -72,6 +71,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 	"math"
 	"slices"
 	"sync"
@@ -103,8 +103,7 @@ const progressEvery = 100_000
 // table by keyset and rewrite a row's derived columns. *db.Queries satisfies it;
 // tests use a fake. UpdateJobDerived is called concurrently by the worker pool, and
 // pgxpool hands each goroutine its own connection, so the store must be safe for
-// concurrent use. The companies reconcile (SyncCompaniesFromJobs /
-// DeleteOrphanCompanies) is deliberately not here — it runs once, single-threaded,
+// concurrent use. The companies reconcile (reconcileMovedSlugs) is deliberately not here — it runs once, single-threaded,
 // after the pass.
 type deriveStore interface {
 	// The three reads worker.NewFullScanReader needs: the wide keyset batch, the id-only
@@ -207,19 +206,52 @@ func derivePass(ctx context.Context, queries *db.Queries, concurrency int64, win
 	}
 
 	// A slug rewrite re-keys jobs.company_slug; reconcile the derived companies
-	// catalogue to match (and drop rows orphaned by the change) so company pages
-	// resolve. Skip the whole-table sync when no slug moved.
-	if pass.SlugsMoved == 0 {
-		return pass, 0, nil
+	// catalogue for the slugs that moved (and drop rows orphaned by the change) so company
+	// pages resolve.
+	created, orphaned, err := reconcileMovedSlugs(ctx, queries, pass.MovedTo, pass.MovedFrom, reconcileChunk)
+	if created > 0 || orphaned > 0 {
+		log.Printf("backfill-derive: companies reconciled for %d new and %d old slugs: %d rows created, %d retired",
+			len(pass.MovedTo), len(pass.MovedFrom), created, orphaned)
 	}
-	if err := queries.SyncCompaniesFromJobs(ctx); err != nil {
-		return pass, 0, fmt.Errorf("sync companies: %w", err)
+	return pass, orphaned, err
+}
+
+// reconcileChunk is how many slugs one reconcile statement covers. Each statement is its
+// own transaction, so this bounds how long any companies row stays locked against ingest.
+const reconcileChunk = 500
+
+// companyReconciler is the write side of the companies reconcile, narrowed so the chunking
+// can be tested without a database.
+type companyReconciler interface {
+	InsertMissingCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
+	DeleteOrphanCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
+}
+
+// reconcileMovedSlugs gives each slug the run moved jobs ONTO a companies row, then drops
+// the rows of the slugs it moved jobs AWAY from that no job carries any more.
+//
+// Scoped to those slugs and chunked, NOT the whole-table SyncCompaniesFromJobs +
+// DeleteOrphanCompanies pair this used to run. That pair is one statement each, and the
+// sync ran about an hour in one transaction on prod: every row it inserted stayed locked
+// until it committed, and ingest's UpsertJob, which upserts the same rows, queued behind
+// it — up to 140 waiters, the crawl fleet writing nothing, on 2026-10-28 and again on the
+// 29th. Inserts go first, so a slug that is both (a swap) keeps its row.
+func reconcileMovedSlugs(ctx context.Context, r companyReconciler, movedTo, movedFrom []string, chunk int) (created, orphaned int64, err error) {
+	for part := range slices.Chunk(movedTo, chunk) {
+		n, err := r.InsertMissingCompaniesForSlugs(ctx, part)
+		if err != nil {
+			return created, orphaned, fmt.Errorf("insert companies: %w", err)
+		}
+		created += n
 	}
-	orphaned, err := queries.DeleteOrphanCompanies(ctx)
-	if err != nil {
-		return pass, 0, fmt.Errorf("delete orphan companies: %w", err)
+	for part := range slices.Chunk(movedFrom, chunk) {
+		n, err := r.DeleteOrphanCompaniesForSlugs(ctx, part)
+		if err != nil {
+			return created, orphaned, fmt.Errorf("delete orphan companies: %w", err)
+		}
+		orphaned += n
 	}
-	return pass, orphaned, nil
+	return created, orphaned, nil
 }
 
 // runOutcome turns what a run managed into the one line it prints and the code it exits
@@ -412,9 +444,40 @@ func (p *pendingRows) oldest() (int64, bool) {
 	return lo, found
 }
 
+// movedSlugs collects the distinct slugs a run moved jobs from and to. Guarded, because the
+// worker pool records into it concurrently.
+type movedSlugs struct {
+	mu       sync.Mutex
+	from, to map[string]struct{}
+}
+
+func newMovedSlugs() *movedSlugs {
+	return &movedSlugs{from: make(map[string]struct{}), to: make(map[string]struct{})}
+}
+
+func (m *movedSlugs) add(from, to string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if from != "" {
+		m.from[from] = struct{}{}
+	}
+	if to != "" {
+		m.to[to] = struct{}{}
+	}
+}
+
+// sorted is called only after the pool has joined.
+func (m *movedSlugs) sorted(set map[string]struct{}) []string {
+	return slices.Sorted(maps.Keys(set))
+}
+
 // backfillRun is what one bounded pass did, and where the next one starts.
 type backfillRun struct {
 	Scanned, Updated, SlugsMoved int
+	// MovedFrom and MovedTo are the distinct company slugs the run moved jobs away from and
+	// onto, sorted — the scope of the companies reconcile that follows the pass. SlugsMoved
+	// counts ROWS; these are slugs, typically far fewer.
+	MovedFrom, MovedTo []string
 	// ResumeID is the id a follow-up run must be given as fromID — the first row this
 	// one did not finish. Zero means the pass reached the end of the table with nothing
 	// outstanding: an operator needs to tell "there is more" from "that was all" without
@@ -484,6 +547,7 @@ func backfillWindow(ctx context.Context, store deriveStore, concurrency int64, w
 	defer cancel()
 
 	var scannedN, updatedN, slugsN int64
+	moved := newMovedSlugs()
 	var errOnce sync.Once
 	var runErr error
 	fail := func(e error) {
@@ -622,6 +686,7 @@ func backfillWindow(ctx context.Context, store deriveStore, concurrency int64, w
 				atomic.AddInt64(&updatedN, 1)
 				if slugMoved {
 					atomic.AddInt64(&slugsN, 1)
+					moved.add(j.CompanySlug, params.CompanySlug)
 				}
 			}
 		}()
@@ -648,6 +713,8 @@ func backfillWindow(ctx context.Context, store deriveStore, concurrency int64, w
 		Scanned:    int(scannedN),
 		Updated:    int(updatedN),
 		SlugsMoved: int(slugsN),
+		MovedFrom:  moved.sorted(moved.from),
+		MovedTo:    moved.sorted(moved.to),
 		ResumeID:   resumeID,
 	}, runErr
 }
