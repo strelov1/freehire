@@ -52,3 +52,15 @@ func TestParse_NonSoftwareBackEnd(t *testing.T) {
 		}
 	}
 }
+
+// Categories reads a CV the same way: a shift is no backend experience.
+func TestCategories_BackEndShift(t *testing.T) {
+	got := Categories("Registered Nurse - Back End Days")
+	if len(got) != 1 || got[0] != "healthcare" {
+		t.Errorf("Categories = %v, want [healthcare]", got)
+	}
+	got = Categories("Backend Developer - Night Shift")
+	if len(got) != 1 || got[0] != "backend" {
+		t.Errorf("Categories = %v, want [backend]", got)
+	}
+}
