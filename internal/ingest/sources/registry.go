@@ -636,6 +636,10 @@ func All(c HTTPClient) map[string]Source {
 		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
 		// See xing.go.
 		NewXing(c),
+		// jobs.ch / jobup.ch: JobCloud's two Swiss national boards, one posting pool enumerated from
+		// both job sitemaps plus the newest date-sorted search pages, each new posting's body read
+		// from its page's server-rendered state. See jobsch.go.
+		NewJobsCh(c),
 		// onapply: a German ATS whose vendor-wide job board exposes one keyless search index
 		// over every tenant, each hit carrying the whole posting. See onapply.go.
 		NewOnapply(c),
