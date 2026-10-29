@@ -1,0 +1,110 @@
+{
+ "data": {
+  "isMoreThan30DaysAllowed": false,
+  "id": "404b5144-b14c-43cf-b450-69fb444880c2",
+  "title": "Slikopleskar-Fasader v Nemčiji m/ž",
+  "adSummary": "Obvladaš slikopleskarska in fasaderska dela, ti kakovostna izvedba ni tuja in iščeš stabilno delo skozi vse leto? Za priznano slovensko gradbeno podjetje iščemo izkušene slikopleskarje in fasaderje za dolgoročno delo pri gradnji objektov v Nemčiji.",
+  "startDate": "2026-10-22T22:00:00.000Z",
+  "endDate": "2026-11-06T22:59:59.000Z",
+  "repostingDate": null,
+  "repostingDates": [],
+  "dateCreated": "2026-10-23T06:48:48.848Z",
+  "dateUpdated": "2026-10-23T07:54:01.061Z",
+  "aboutTheCompany": null,
+  "waysToApply": null,
+  "companyUserCreationStep": "finished",
+  "jobAdAdditionalFeatures": [],
+  "graphicAdSummary": null,
+  "jobDescription": "<ul><li><p>Izvajanje slikopleskarskih del v stanovanjskih objektih</p></li><li><p>Priprava površin za barvanje</p></li><li><p>Kitanje, glajenje in brušenje površin</p></li><li><p>Grundiranje in barvanje različnih površin</p></li><li><p>Izvajanje fasaderskih del na stanovanjskih objektih</p></li><li><p>Priprava fasadnih površin v skladu z zahtevami</p></li><li><p>Skrb za kakovost, natančnost in urejenost delovnega mesta</p></li><li><p>Upoštevanje navodil vodje ekipe in pravil varnega dela</p></li></ul><p></p>",
+  "jobLocation": "abroad",
+  "jobLocationInput": null,
+  "probationPeriod": 3,
+  "status": "published",
+  "url": "https://masterjob.si/?post_type=oglas&p=6494",
+  "weExpect": "<ul><li><p>Izkušnje s slikopleskarskimi in/ali fasaderskimi deli</p></li><li><p>Samostojnost pri izvajanju del</p></li><li><p>Občutek za kakovostno končno obdelavo</p></li><li><p>Zanesljivost in pripravljenost na timsko delo</p></li><li><p>Pogovorno znanje nemškega jezika</p></li><li><p>Pripravljenost na dolgoročno delo v Nemčiji</p></li></ul><p></p>",
+  "weOffer": "<ul><li><p>Dolgoročno delo skozi vse leto</p></li><li><p>Delo v Münchnu in okolici</p></li><li><p>Brezplačna nastanitev v bližini delovnega območja</p></li><li><p>Organiziran prevoz na delo s službenimi vozili</p></li><li><p>Plačilo od 16 € neto na uro</p></li><li><p>Možnost dodatnega zaslužka z nadurami</p></li></ul><p>Ste se prepoznali v zgornjem oglasu?</p><p>Potem pošljite svojo prijavo z življenjepisom preko portala <a target=\"_blank\" rel=\"noopener noreferrer nofollow\" href=\"http://MojeDelo.com\">MojeDelo.com</a> ali preko naše spletne strani <a target=\"_blank\" rel=\"noopener noreferrer nofollow\" href=\"http://www.masterjob.si\">www.masterjob.si</a>.</p><p>Za več informacij pokličite na mobilno številko 030 461 036 (Mladen).</p>",
+  "company": {
+   "id": "427f9f5d-fc77-4ed8-a93e-d749a3b36291",
+   "name": "Masterjob d.o.o.",
+   "description": "",
+   "industry": null,
+   "town": {
+    "id": "bd8064f6-6b76-4cc0-8a1f-4e308de6b5a9",
+    "name": "Maribor",
+    "translation": "Maribor",
+    "municipality": "Maribor"
+   },
+   "country": {
+    "id": "04918cba-37dd-452e-b018-ab9411354123",
+    "name": "Slovenia",
+    "translation": "Slovenija"
+   },
+   "websites": [
+    {
+     "id": "cae7fc68-5786-4cae-8166-c0a7d15fd4be",
+     "url": "https://www.masterjob.si"
+    }
+   ],
+   "aboutCompany": null,
+   "mainActivities": null,
+   "vatNumber": "53468554",
+   "postalCode": "2000",
+   "address": "Titova cesta 2a"
+  },
+  "anonymizedCompany": null,
+  "town": {
+   "id": "c0f6f48b-0ec9-41d3-9226-2163b86c9a94",
+   "translation": "München",
+   "name": "München"
+  },
+  "country": null,
+  "salary": null,
+  "jobAdTranslation": {
+   "id": "2dc736e9-bd26-4774-acb4-179eee025dd7",
+   "languageTaxonomyId": "4ba92d15-49c1-4aab-97f3-86ede9dcf237"
+  },
+  "totalWorkExperience": {
+   "id": "592f33c4-99c6-4886-96b6-cc55ed53b7c5",
+   "translation": "1+ do 3 leta",
+   "name": "1+ to 3 years"
+  },
+  "languageRequired": null,
+  "educationLevels": [
+   {
+    "id": "3c95b2b0-356e-4e56-b783-160cc4fb9c57",
+    "translation": "dokončana poklicna šola (2 leti)"
+   }
+  ],
+  "employmentTypes": [
+   {
+    "id": "8a0a644f-addc-4610-a241-fe55b4f03b23",
+    "translation": "Redno, nedoločen d. č."
+   }
+  ],
+  "jobCategories": [
+   {
+    "id": "968fdb69-b37b-41da-b7f7-1f7bc32c7cbf",
+    "translation": "Gradbeništvo, Arhitektura, Geodezija"
+   }
+  ],
+  "regions": [],
+  "workModes": [],
+  "jobAdCvReminder": null,
+  "workTime": {
+   "id": "1fd68d19-bfb0-4f74-b7c1-5ad83c51f546",
+   "translation": "Polni delovni čas",
+   "name": "Full time"
+  },
+  "jobAdType": {
+   "id": "7e2a1e06-06d2-4c29-8a77-8a5fb074e81a",
+   "key": "premium",
+   "type": "job_ad_type",
+   "price": "690.00"
+  },
+  "primaryJobCategory": null,
+  "applicationType": "redirect_to_url",
+  "genderDisplay": "male_female_other",
+  "appliedAt": null,
+  "isSaved": false
+ }
+}

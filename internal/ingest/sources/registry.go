@@ -1050,6 +1050,9 @@ func All(c HTTPClient) map[string]Source {
 	// Feina Activa: the Catalan public employment service's job board, read in full from its
 	// own JSON listing and streamed page by page. See feinaactiva.go.
 	registry["feinaactiva"] = NewFeinaActiva(c)
+	// MojeDelo: Slovenia's largest general job board, enumerated from its SPA's own JSON search,
+	// each new posting's body read from the posting's API resource. See mojedelo.go.
+	registry["mojedelo"] = NewMojeDelo(c)
 	// Turijobs: the Spanish hospitality board, enumerated from its active-offers sitemap; its
 	// posting pages need the Scrapling tier (see scraplingProviders), so over this plain client
 	// only the sitemap is read. See turijobs.go.

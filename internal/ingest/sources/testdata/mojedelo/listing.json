@@ -1,0 +1,447 @@
+{
+ "data": {
+  "items": [
+   {
+    "appliedAt": null,
+    "isSaved": false,
+    "id": "6d0cb158-1242-4f65-8953-bf31776bdffb",
+    "jbqId": "290489",
+    "title": "KV  monter hladilnih naprav",
+    "adSummary": "V podjetju ALPFRIGO d.o.o. iščemo zanesljivo osebo za delovno mesto KV  MONTER HLADILNIH NAPRAV. Vabimo vas, da postanete del izkušene proizvodne ekipe, kjer boste izvajali zahtevnejše montaže in proizvodnjo sestavnih delov.",
+    "startDate": "2026-10-12T22:00:00.000Z",
+    "repostingDate": null,
+    "grossHourlyRate": null,
+    "town": {
+     "id": "0cab60f6-94c3-485e-9ed2-3827307ca730",
+     "municipality": {
+      "id": "65986c92-1ea6-4068-9316-1304c1452263",
+      "name": "Logatec",
+      "region": {
+       "id": "d1dce9b1-9fa4-438b-b582-10d371d442e6",
+       "name": "Osrednjeslovenska",
+       "translation": "Osrednjeslovenska"
+      },
+      "translation": "Logatec"
+     },
+     "name": "Logatec",
+     "translation": "Logatec"
+    },
+    "country": {
+     "countryCode": "SI",
+     "id": "04918cba-37dd-452e-b018-ab9411354123",
+     "translation": "Slovenija"
+    },
+    "regions": [
+     {
+      "id": "d1dce9b1-9fa4-438b-b582-10d371d442e6",
+      "translation": "Osrednjeslovenska"
+     }
+    ],
+    "workModes": [
+     {
+      "id": "fc5ecf91-f559-40d3-8213-64572c8c2074",
+      "translation": "Na delovnem mestu"
+     }
+    ],
+    "careerFair": null,
+    "jobAdType": {
+     "id": "7e2a1e06-06d2-4c29-8a77-8a5fb074e81a",
+     "key": "premium",
+     "type": "job_ad_type",
+     "price": "690.00"
+    },
+    "badges": [],
+    "jobLocationInput": null,
+    "applicationType": "apply_via_jb",
+    "genderDisplay": "male_female_other",
+    "company": {
+     "id": "7b10b3ec-111f-428c-b367-736f0cd1f5df",
+     "name": "ALPFRIGO d.o.o. ",
+     "logotype": {
+      "id": "980e3507-e803-481a-b8e9-31c1cca29b77",
+      "originalName": "ALPFRIGO.png",
+      "url": "https://api.mojedelo.com/uploaded-files/private/png/2025/8/8/124b73a2-b716-4828-a952-1e0ec9babd7a.png"
+     },
+     "coverImage": {
+      "id": "184f18ca-6b6b-41c3-916f-165b81037845",
+      "originalName": "5708ac704b6244a88677fe9f9568d390.png",
+      "url": "https://api.mojedelo.com/./uploaded-files/public/png/2015/10/7/5708ac704b6244a88677fe9f9568d390.png"
+     },
+     "badges": [],
+     "canSeekersApplyToCompany": false
+    },
+    "anonymizedCompany": null,
+    "primaryJobCategory": null,
+    "jobCategories": [
+     {
+      "id": "31d1ec20-03e0-4ff2-b50b-7b1c1f16016b",
+      "translation": "Proizvodnja"
+     }
+    ]
+   },
+   {
+    "appliedAt": null,
+    "isSaved": false,
+    "id": "03397102-366c-42db-b653-4c094e131b6b",
+    "jbqId": "293415",
+    "title": "Svetovalec v klicnem centru (m/ž)",
+    "adSummary": "Podjetje z dolgoletno tradicijo zagotavljanja raznolike in pestre ponudbe prehranskih dopolnil in naravne kozmetike v svoje kroge vabi odgovorne, komunikativne in pozitivne posameznike, da se pridružijo njihovi ekipi na delovnem mestu »Svetovalec v klicnem centru (m/ž)«.",
+    "startDate": "2026-10-28T23:00:00.000Z",
+    "repostingDate": null,
+    "grossHourlyRate": null,
+    "town": {
+     "id": "ad03c9f7-f25b-4584-bb60-833b231b328b",
+     "municipality": {
+      "id": "f4b5ca4e-56ff-4d98-a5f7-8cf360780b8a",
+      "name": "Ljubljana",
+      "region": {
+       "id": "d1dce9b1-9fa4-438b-b582-10d371d442e6",
+       "name": "Osrednjeslovenska",
+       "translation": "Osrednjeslovenska"
+      },
+      "translation": "Ljubljana"
+     },
+     "name": "Ljubljana",
+     "translation": "Ljubljana"
+    },
+    "country": {
+     "countryCode": "SI",
+     "id": "04918cba-37dd-452e-b018-ab9411354123",
+     "translation": "Slovenija"
+    },
+    "regions": [
+     {
+      "id": "d1dce9b1-9fa4-438b-b582-10d371d442e6",
+      "translation": "Osrednjeslovenska"
+     }
+    ],
+    "workModes": [
+     {
+      "id": "fc5ecf91-f559-40d3-8213-64572c8c2074",
+      "translation": "Na delovnem mestu"
+     }
+    ],
+    "careerFair": null,
+    "jobAdType": {
+     "id": "7e2a1e06-06d2-4c29-8a77-8a5fb074e81a",
+     "key": "premium",
+     "type": "job_ad_type",
+     "price": "690.00"
+    },
+    "badges": [
+     {
+      "id": "c15314b7-89c7-4f87-876f-7784c8be862f",
+      "dateCreated": "2025-07-27T10:35:49.610Z",
+      "dateUpdated": "2025-07-27T10:35:55.066Z",
+      "name": "Ugledni delodajalec 2024",
+      "type": "employer+ad",
+      "url": "https://www.mojedelo.com/delodajalci/znamka-delodajalca/ugledni-delodajalec",
+      "openInNewTab": true,
+      "isActive": true,
+      "pictureId": "195e9c72-129f-49cb-92b9-e04bce47ceb7",
+      "picture": {
+       "id": "195e9c72-129f-49cb-92b9-e04bce47ceb7",
+       "originalName": "badge-ugledni_delodajalec_2024.png",
+       "mimeType": "image/png",
+       "domain": "https://api.mojedelo.com/",
+       "destination": "./uploaded-files/private/png/2025/7/27",
+       "fileName": "586c5590-2531-4d9b-9322-19d48cb93ee4.png",
+       "path": "uploaded-files/private/png/2025/7/27/586c5590-2531-4d9b-9322-19d48cb93ee4.png",
+       "size": 3502,
+       "height": null,
+       "width": null,
+       "type": "picture",
+       "status": "draft",
+       "dateCreated": null,
+       "dateUpdated": null,
+       "parentId": null,
+       "userId": null,
+       "uploadedByUserId": null,
+       "companyUserProfilePictureId": null,
+       "url": "https://api.mojedelo.com/uploaded-files/private/png/2025/7/27/586c5590-2531-4d9b-9322-19d48cb93ee4.png"
+      },
+      "mobilePictureId": null,
+      "mobilePicture": null,
+      "tenantId": "5947a585-ad25-47dc-bff3-f08620d1ce17"
+     },
+     {
+      "id": "d65381b8-770b-4f1b-acc5-c148281b0f8e",
+      "dateCreated": "2026-03-26T11:15:54.218Z",
+      "dateUpdated": "2026-03-30T13:10:58.688Z",
+      "name": "Ugledni delodajalec 2025",
+      "type": "employer+ad",
+      "url": "https://www.mojedelo.com/ugledni-delodajalec/",
+      "openInNewTab": true,
+      "isActive": true,
+      "pictureId": "1a62b038-60d7-4aab-bb48-dcd8dcb5471f",
+      "picture": {
+       "id": "1a62b038-60d7-4aab-bb48-dcd8dcb5471f",
+       "originalName": "badges_web_UGLEDNI_SLO_228 x 40.png",
+       "mimeType": "image/png",
+       "domain": "https://api.mojedelo.com/",
+       "destination": "./uploaded-files/private/png/2026/3/30",
+       "fileName": "ef56a216-d487-41a4-9152-7d036fc59177.png",
+       "path": "uploaded-files/private/png/2026/3/30/ef56a216-d487-41a4-9152-7d036fc59177.png",
+       "size": 13204,
+       "height": null,
+       "width": null,
+       "type": "picture",
+       "status": "draft",
+       "dateCreated": null,
+       "dateUpdated": null,
+       "parentId": null,
+       "userId": null,
+       "uploadedByUserId": null,
+       "companyUserProfilePictureId": null,
+       "url": "https://api.mojedelo.com/uploaded-files/private/png/2026/3/30/ef56a216-d487-41a4-9152-7d036fc59177.png"
+      },
+      "mobilePictureId": null,
+      "mobilePicture": null,
+      "tenantId": "5947a585-ad25-47dc-bff3-f08620d1ce17"
+     }
+    ],
+    "jobLocationInput": "Ljubljana",
+    "applicationType": "redirect_to_url",
+    "genderDisplay": "male_female_other",
+    "company": {
+     "id": "7c9bb739-077e-4758-aa3d-90f289d2e0a1",
+     "name": "ADECCO H.R. d.o.o.",
+     "logotype": {
+      "id": "d57ce315-e9df-41a2-9631-788c4384b404",
+      "originalName": "ADECCO H.R..png",
+      "url": "https://api.mojedelo.com/uploaded-files/private/png/2025/8/8/b99fb3a1-38dc-4fa2-b21d-1c455b4e57b9.png"
+     },
+     "coverImage": {
+      "id": null,
+      "originalName": null,
+      "url": null
+     },
+     "badges": [],
+     "canSeekersApplyToCompany": true
+    },
+    "anonymizedCompany": null,
+    "primaryJobCategory": null,
+    "jobCategories": [
+     {
+      "id": "075171ea-d2c3-46f5-baac-e565ab556bda",
+      "translation": "Prodaja, Nabava, Podporne službe"
+     }
+    ]
+   },
+   {
+    "appliedAt": null,
+    "isSaved": false,
+    "id": "a0e919fa-03b4-4ec0-8a88-13fa948ab455",
+    "jbqId": "289068",
+    "title": "Hišnik / vzdrževalec poslovne stavbe (m/ž)",
+    "adSummary": "Za našega naročnika v Ljubljani iščemo zanesljivo, samostojno in tehnično usmerjeno osebo za skrb za vzdrževanje ter urejenost poslovne stavbe. Delo poteka v sodelovanju z upravnikom stavbe, ki bo tudi vaš neposredni nadrejeni.",
+    "startDate": "2026-10-05T22:00:00.000Z",
+    "repostingDate": null,
+    "grossHourlyRate": null,
+    "town": {
+     "id": "ad03c9f7-f25b-4584-bb60-833b231b328b",
+     "municipality": {
+      "id": "f4b5ca4e-56ff-4d98-a5f7-8cf360780b8a",
+      "name": "Ljubljana",
+      "region": {
+       "id": "d1dce9b1-9fa4-438b-b582-10d371d442e6",
+       "name": "Osrednjeslovenska",
+       "translation": "Osrednjeslovenska"
+      },
+      "translation": "Ljubljana"
+     },
+     "name": "Ljubljana",
+     "translation": "Ljubljana"
+    },
+    "country": {
+     "countryCode": "SI",
+     "id": "04918cba-37dd-452e-b018-ab9411354123",
+     "translation": "Slovenija"
+    },
+    "regions": [
+     {
+      "id": "9c7bb46c-13fd-47de-b0ec-40f14b4cf391",
+      "translation": "Gorenjska"
+     },
+     {
+      "id": "d1dce9b1-9fa4-438b-b582-10d371d442e6",
+      "translation": "Osrednjeslovenska"
+     }
+    ],
+    "workModes": [],
+    "careerFair": null,
+    "jobAdType": {
+     "id": "41de72c7-ffb7-42a1-8c73-3689ae3ba940",
+     "key": "executive-plus",
+     "type": "job_ad_type",
+     "price": "1090.00"
+    },
+    "badges": [],
+    "jobLocationInput": null,
+    "applicationType": "apply_via_jb",
+    "genderDisplay": "male_female_other",
+    "company": {
+     "id": "88406ccc-778d-47b9-bdf8-f20686c05bc8",
+     "name": "Styria digital marketplaces d.o.o.",
+     "badges": [],
+     "canSeekersApplyToCompany": false,
+     "logotype": {
+      "id": null,
+      "originalName": null,
+      "url": "https://api.mojedelo.com/uploaded-files/private/png/2025/7/27/aaaaf056-e6ad-41b1-a407-2a368406ed0b.png"
+     },
+     "coverImage": {
+      "id": null,
+      "originalName": null,
+      "url": null
+     }
+    },
+    "anonymizedCompany": {
+     "id": "88406ccc-778d-47b9-bdf8-f20686c05bc8",
+     "name": "Styria digital marketplaces d.o.o.",
+     "badges": [],
+     "canSeekersApplyToCompany": false,
+     "logotype": {
+      "id": null,
+      "originalName": null,
+      "url": "https://api.mojedelo.com/uploaded-files/private/png/2025/7/27/aaaaf056-e6ad-41b1-a407-2a368406ed0b.png"
+     },
+     "coverImage": {
+      "id": null,
+      "originalName": null,
+      "url": null
+     }
+    },
+    "primaryJobCategory": {
+     "id": "932f5373-3171-4b66-b026-847191deb3f0",
+     "translation": "Nepremičnine"
+    },
+    "jobCategories": [
+     {
+      "id": "c2519898-bf56-421b-94c6-6ed17d9f73ac",
+      "translation": "Strojništvo, Metalurgija, Rudarstvo"
+     },
+     {
+      "id": "e0f824d5-692f-4314-bc4e-97eaedde1b16",
+      "translation": "Energetika, Elektronika, Telekomunikacije"
+     }
+    ]
+   },
+   {
+    "appliedAt": null,
+    "isSaved": false,
+    "id": "404b5144-b14c-43cf-b450-69fb444880c2",
+    "jbqId": "292460",
+    "title": "Slikopleskar-Fasader v Nemčiji m/ž",
+    "adSummary": "Obvladaš slikopleskarska in fasaderska dela, ti kakovostna izvedba ni tuja in iščeš stabilno delo skozi vse leto? Za priznano slovensko gradbeno podjetje iščemo izkušene slikopleskarje in fasaderje za dolgoročno delo pri gradnji objektov v Nemčiji.",
+    "startDate": "2026-10-22T22:00:00.000Z",
+    "repostingDate": null,
+    "grossHourlyRate": null,
+    "town": {
+     "id": "c0f6f48b-0ec9-41d3-9226-2163b86c9a94",
+     "municipality": {
+      "region": {}
+     },
+     "name": "München",
+     "translation": "München"
+    },
+    "country": null,
+    "regions": [],
+    "workModes": [],
+    "careerFair": null,
+    "jobAdType": {
+     "id": "7e2a1e06-06d2-4c29-8a77-8a5fb074e81a",
+     "key": "premium",
+     "type": "job_ad_type",
+     "price": "690.00"
+    },
+    "badges": [],
+    "jobLocationInput": null,
+    "applicationType": "redirect_to_url",
+    "genderDisplay": "male_female_other",
+    "company": {
+     "id": "427f9f5d-fc77-4ed8-a93e-d749a3b36291",
+     "name": "Masterjob d.o.o.",
+     "logotype": {
+      "id": "778057f9-8a3b-4e7f-bbf2-f11578298f71",
+      "originalName": "logotipi template.png",
+      "url": "https://api.mojedelo.com/uploaded-files/private/png/2025/7/29/c94c4b31-86f5-43f9-bd9c-1aefe6a12621.png"
+     },
+     "coverImage": {
+      "id": null,
+      "originalName": null,
+      "url": null
+     },
+     "badges": [],
+     "canSeekersApplyToCompany": false
+    },
+    "anonymizedCompany": null,
+    "primaryJobCategory": null,
+    "jobCategories": [
+     {
+      "id": "968fdb69-b37b-41da-b7f7-1f7bc32c7cbf",
+      "translation": "Gradbeništvo, Arhitektura, Geodezija"
+     }
+    ]
+   },
+   {
+    "appliedAt": null,
+    "isSaved": false,
+    "id": "934adb93-aed8-4151-8b11-0e9ea5316b7d",
+    "jbqId": "288817",
+    "title": "Delavec v lesni proizvodnji (m/ž)",
+    "adSummary": "Če si želite dolgoročno in stabilno zaposlitev v Avstriji (Tilmitsch 8434, okolica Lipnice), se prijavite na delovno mesto \"Delavec v lesni proizvodnji\".\nPrednost imajo kandidati, ki lahko z delom pričnejo takoj!",
+    "startDate": "2026-10-04T22:00:00.000Z",
+    "repostingDate": null,
+    "grossHourlyRate": null,
+    "country": {
+     "countryCode": "AT",
+     "id": "426f8131-52bf-4f1e-bfbb-155c747d9731",
+     "translation": "Avstrija"
+    },
+    "regions": [],
+    "workModes": [],
+    "careerFair": null,
+    "jobAdType": {
+     "id": "7e2a1e06-06d2-4c29-8a77-8a5fb074e81a",
+     "key": "premium",
+     "type": "job_ad_type",
+     "price": "690.00"
+    },
+    "badges": [],
+    "jobLocationInput": "Tilmitsch ali Gleinstätten",
+    "applicationType": "apply_via_jb",
+    "genderDisplay": "male_female_other",
+    "company": {
+     "id": "ef95ef4e-77f6-43e0-9578-56bc88a3e3bc",
+     "name": "Trummer kadrovska agencija d.o.o.",
+     "logotype": {
+      "id": "1a426cd4-64e8-41a9-8349-85d9fa6426fc",
+      "originalName": "trumm-cropped.png",
+      "url": "https://api.mojedelo.com/uploaded-files/private/png/2026/5/4/c5835c86-42e6-4104-9668-81f5c36365e3.png"
+     },
+     "coverImage": {
+      "id": "8211f4d9-1b46-4b9f-a252-cdd90d4a1980",
+      "originalName": "cc5a2332114f4e5abfaa15321ba40e82.png",
+      "url": "https://api.mojedelo.com/./uploaded-files/public/png/2013/2/11/cc5a2332114f4e5abfaa15321ba40e82.png"
+     },
+     "badges": [],
+     "canSeekersApplyToCompany": true
+    },
+    "anonymizedCompany": null,
+    "primaryJobCategory": null,
+    "jobCategories": [
+     {
+      "id": "31d1ec20-03e0-4ff2-b50b-7b1c1f16016b",
+      "translation": "Proizvodnja"
+     },
+     {
+      "id": "58037458-64fd-4057-85ea-2fc363a6a59f",
+      "translation": "Tehnične storitve, Inženiring, Lesarstvo, Tekstilna industrija"
+     }
+    ]
+   }
+  ],
+  "total": 5
+ }
+}

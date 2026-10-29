@@ -1,0 +1,134 @@
+{
+ "data": {
+  "isMoreThan30DaysAllowed": false,
+  "id": "934adb93-aed8-4151-8b11-0e9ea5316b7d",
+  "title": "Delavec v lesni proizvodnji (m/ž)",
+  "adSummary": "Če si želite dolgoročno in stabilno zaposlitev v Avstriji (Tilmitsch 8434, okolica Lipnice), se prijavite na delovno mesto \"Delavec v lesni proizvodnji\".\nPrednost imajo kandidati, ki lahko z delom pričnejo takoj!",
+  "startDate": "2026-10-04T22:00:00.000Z",
+  "endDate": "2026-11-03T22:59:59.000Z",
+  "repostingDate": null,
+  "repostingDates": [],
+  "dateCreated": "2026-10-05T08:31:30.358Z",
+  "dateUpdated": "2026-10-05T08:44:00.015Z",
+  "aboutTheCompany": "<p style=\"line-height: 23px\"><span style=\"font-size: 16px\"><strong>TRUMMER kadrovska agencija d.o.o.</strong> je hčerinsko podjetje avstrijskega družinskega podjetja <strong>TRUMMER Montage &amp; Personal GmbH</strong>, ki že več kot 35 let uspešno deluje na področju kadrovanja. Sodelovanje z več kot 800 podjetji iz Avstrije nam omogoča zaposlovanje različnih profilov skozi vse leto, saj se delovna mesta konstantno zapolnjujejo in tudi odpirajo. Pošljite nam vaš življenjepis ali nas kontaktirajte preko drugih kanalov. Veseli bomo vašega klica in prijave.</span></p>",
+  "waysToApply": null,
+  "companyUserCreationStep": "finished",
+  "jobAdAdditionalFeatures": [
+   {
+    "id": "5e521ec5-8a11-4e50-937a-f9d6fa61f08d",
+    "key": "email-applications",
+    "name": "Prejemanje prijav na e-mail",
+    "type": "additional_feature",
+    "price": "10.00"
+   }
+  ],
+  "graphicAdSummary": null,
+  "jobDescription": "<p><strong>Če si želite dolgoročno in stabilno zaposlitev v Avstriji (Tilmitsch ali Gleinstätten, okolica Lipnice), se prijavite na delovno mesto \"Delavec v lesni proizvodnji\"</strong>. Prednost imajo kandidati, ki lahko z delom pričnejo takoj!</p><p><strong>Delovne naloge:</strong></p><ul><li><p>obdelava lesa – strojna in ročna</p></li><li><p>posluževanje strojev (sodobne naprave in CNC stroji)</p></li><li><p>površinska obdelava (brušenje, lakiranje in oljenje)</p></li><li><p>sestavljanje posameznih konstrukcij po načrtu</p></li><li><p>druge naloge po navodilu nadrejenega</p></li></ul><p></p>",
+  "jobLocation": "abroad",
+  "jobLocationInput": "Tilmitsch ali Gleinstätten",
+  "probationPeriod": 1,
+  "status": "published",
+  "url": null,
+  "weExpect": "<ul><li><p>izkušnje z delom v proizvodnji</p></li><li><p>poznavanje/razumevanje delovnih nalog na področju lesarstva, mizarstva, obdelave in predelave lesa</p></li><li><p>odgovornost, zanesljivost, sposobnost dela v timu</p></li><li><p>znanje nemškega jezika</p></li><li><p>izpit B kategorije in lastni prevoz</p></li><li><p>državljanstvo EU, oz. dovoljenje za delo v Avstriji</p></li></ul><p></p>",
+  "weOffer": "<ul><li><p>dolgoročno zaposlitev za polni delovni čas (38ur/teden)</p></li><li><p>delovnik 4 dni v tednu od ponedeljka do četrtka od 06:00 – 16:00</p></li><li><p>socialna varnost</p></li><li><p>individualno svetovanje in podporo</p></li></ul><p><strong>Mesečno plačilo po avstrijski kolektivni pogodbi:</strong></p><ul><li><p>14,84 €/h bruto</p></li><li><p>zdravstveno in pokojninsko zavarovanje v Avstriji</p></li><li><p>13. in 14. plačo</p></li></ul><p><strong>Kontakt za več informacij:<br>MARIBOR<br></strong>040 696 695 (Ana)<br>040 416 111 (Mojca)<br><strong>MURSKA SOBOTA</strong><br>040 858 139 (Aleš)<br>040 416 220 (Martina)</p>",
+  "company": {
+   "id": "ef95ef4e-77f6-43e0-9578-56bc88a3e3bc",
+   "name": "Trummer kadrovska agencija d.o.o.",
+   "description": "TRUMMER kadrovska agencija d.o.o. je hčerinsko podjetje avstrijskega družinskega podjetja TRUMMER Montage & Personal GmbH, ki že več kot 30 let uspešno deluje na področju kadrovanja. Sodelovanje z več kot 800 podjetji iz Avstrije nam omogoča zaposlovanje različnih profilov skozi vse leto, saj se delovna mesta konstantno zapolnjujejo in tudi odpirajo. Najboljše globalne prakse tako združujemo z lokalnim znanjem ter vam nudimo strokovno vodenje skozi celoten postopek zaposlovanja.\r\nV Sloveniji imamo dve poslovalnici; v Mariboru na Loški ulici 13 in Murski Soboti na Ulici Štefana Kovača 16, kjer so vam naši kadrovski svetovalci zmeraj na voljo za vsa vprašanja v zvezi z delom v tujini.\r\n",
+   "industry": {
+    "id": "b728f0f5-d3d9-4fc0-83a1-d1b29f448ac5",
+    "name": "ADMINISTRATIVE AND SUPPORT SERVICE ACTIVITIES",
+    "translation": "DRUGE RAZNOVRSTNE POSLOVNE DEJAVNOSTI"
+   },
+   "town": {
+    "id": "bd8064f6-6b76-4cc0-8a1f-4e308de6b5a9",
+    "name": "Maribor",
+    "translation": "Maribor",
+    "municipality": "Maribor"
+   },
+   "country": {
+    "id": "04918cba-37dd-452e-b018-ab9411354123",
+    "name": "Slovenia",
+    "translation": "Slovenija"
+   },
+   "websites": [
+    {
+     "id": "ff9aa8a0-d93f-4d80-a695-2d5a682ef6e3",
+     "url": "https://trummer.eu"
+    }
+   ],
+   "aboutCompany": "<p style=\"line-height: 23px\"><span style=\"font-size: 16px\"><strong>TRUMMER kadrovska agencija d.o.o.</strong> je hčerinsko podjetje avstrijskega družinskega podjetja <strong>TRUMMER Montage &amp; Personal GmbH</strong>, ki že več kot 35 let uspešno deluje na področju kadrovanja. Sodelovanje z več kot 800 podjetji iz Avstrije nam omogoča zaposlovanje različnih profilov skozi vse leto, saj se delovna mesta konstantno zapolnjujejo in tudi odpirajo. Pošljite nam vaš življenjepis ali nas kontaktirajte preko drugih kanalov. Veseli bomo vašega klica in prijave.</span></p>",
+   "mainActivities": "<p style=\"line-height: 23px\"><span style=\"font-size: 16px\">Na podlagi sklenjene koncesije opravljamo dejavnost zagotavljanja dela delavcev uporabniku (posredovanje), iskanje in selekcijo kadrov ter druge kadrovske storitve.</span></p>",
+   "vatNumber": "58472053",
+   "postalCode": "2000",
+   "address": "Beloruska ulica 5"
+  },
+  "anonymizedCompany": null,
+  "town": null,
+  "country": {
+   "id": "426f8131-52bf-4f1e-bfbb-155c747d9731",
+   "translation": "Avstrija",
+   "name": "Austria"
+  },
+  "salary": null,
+  "jobAdTranslation": {
+   "id": "82f33693-1135-4a64-b16f-f32498da7f6b",
+   "languageTaxonomyId": "4ba92d15-49c1-4aab-97f3-86ede9dcf237"
+  },
+  "totalWorkExperience": {
+   "id": "592f33c4-99c6-4886-96b6-cc55ed53b7c5",
+   "translation": "1+ do 3 leta",
+   "name": "1+ to 3 years"
+  },
+  "languageRequired": null,
+  "educationLevels": [
+   {
+    "id": "492c95ab-d9bf-48d0-b91f-e8e12326d735",
+    "translation": "dokončana osnovna šola"
+   },
+   {
+    "id": "f17e7b91-bf91-4656-a8b1-b83701b6c346",
+    "translation": "8 razredov osnovne šole ali manj"
+   }
+  ],
+  "employmentTypes": [
+   {
+    "id": "2720dae8-824a-454f-b6a4-724ab5d3fb8f",
+    "translation": "Redno, določen d. č."
+   },
+   {
+    "id": "8a0a644f-addc-4610-a241-fe55b4f03b23",
+    "translation": "Redno, nedoločen d. č."
+   }
+  ],
+  "jobCategories": [
+   {
+    "id": "31d1ec20-03e0-4ff2-b50b-7b1c1f16016b",
+    "translation": "Proizvodnja"
+   },
+   {
+    "id": "58037458-64fd-4057-85ea-2fc363a6a59f",
+    "translation": "Tehnične storitve, Inženiring, Lesarstvo, Tekstilna industrija"
+   }
+  ],
+  "regions": [],
+  "workModes": [],
+  "jobAdCvReminder": null,
+  "workTime": {
+   "id": "1fd68d19-bfb0-4f74-b7c1-5ad83c51f546",
+   "translation": "Polni delovni čas",
+   "name": "Full time"
+  },
+  "jobAdType": {
+   "id": "7e2a1e06-06d2-4c29-8a77-8a5fb074e81a",
+   "key": "premium",
+   "type": "job_ad_type",
+   "price": "690.00"
+  },
+  "primaryJobCategory": null,
+  "applicationType": "apply_via_jb",
+  "genderDisplay": "male_female_other",
+  "appliedAt": null,
+  "isSaved": false
+ }
+}
