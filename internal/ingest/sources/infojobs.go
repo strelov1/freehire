@@ -181,11 +181,11 @@ const infojobsListWorkers = 3
 // there are; the rest are fetched concurrently, in page order, and an offer that shifted to the
 // next page while the crawl ran is kept once.
 //
-// Any page that fails — a request error, or the bot-challenge page that carries no props blob —
-// fails the whole crawl, as does a listing longer than the ceiling: infojobs is swept, so a
-// partial list would close every offer past the cut. Measured 2026-10-20 through the proxy on a
-// plain client, the sixth consecutive page was a challenge, and an earlier "keep what was
-// gathered" rule closed 300.
+// Any page that still fails after its attempts — a request error, or the bot-challenge page that
+// carries no props blob — fails the whole crawl, as does a listing longer than the ceiling:
+// infojobs is swept, so a partial list would close every offer past the cut. Measured 2026-10-20
+// through the proxy on a plain client, the sixth consecutive page was a challenge, and an earlier
+// "keep what was gathered" rule closed 300.
 func (s infojobs) crawl(ctx context.Context) ([]infojobsOffer, error) {
 	first, err := s.listPage(ctx, 1)
 	if err != nil {
@@ -235,17 +235,37 @@ func (s infojobs) crawl(ctx context.Context) ([]infojobsOffer, error) {
 	return offers, nil
 }
 
-// listPage fetches and decodes one listing page.
+// infojobsListAttempts is how many times one listing page is sent before the crawl gives up.
+// Through the Scrapling tier a failed navigation retires its browser session, so a retry opens
+// on the next sticky exit IP. Measured 2026-10-26..28 on the crawl host, every failed run died on
+// the first page of a freshly opened session — pages 1, 501 and 1001, against the service's
+// 500-page session life — while the pages around it were served: some exits never finish
+// loading the page (a 90 s timeout), and one such page used to fail the whole ~2.9k-page walk.
+const infojobsListAttempts = 3
+
+// listPage fetches and decodes one listing page, sending it again on failure.
 func (s infojobs) listPage(ctx context.Context, page int) (infojobsListProps, error) {
+	var err error
+	for attempt := 1; attempt <= infojobsListAttempts; attempt++ {
+		props, perr := s.listPageOnce(ctx, page)
+		if perr == nil {
+			return props, nil
+		}
+		err = perr
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return infojobsListProps{}, fmt.Errorf("infojobs: listing page %d: %w", page, err)
+}
+
+func (s infojobs) listPageOnce(ctx context.Context, page int) (infojobsListProps, error) {
 	var props infojobsListProps
 	text, err := s.http.GetText(ctx, fmt.Sprintf(infojobsListURL, page))
 	if err != nil {
-		return props, fmt.Errorf("infojobs: listing page %d: %w", page, err)
+		return props, err
 	}
-	if err := infojobsDecodeProps(text, &props); err != nil {
-		return props, fmt.Errorf("infojobs: listing page %d: %w", page, err)
-	}
-	return props, nil
+	return props, infojobsDecodeProps(text, &props)
 }
 
 // infojobsPropsMarker matches the `window.__INITIAL_PROPS__ = JSON.parse(` assignment; the JSON

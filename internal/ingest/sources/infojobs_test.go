@@ -33,6 +33,8 @@ type infojobsHTTP struct {
 	details   map[string]string
 	failList  bool
 	delay     time.Duration
+	// flaky is how many times each listing page fails before it is served.
+	flaky map[int]int
 
 	mu       sync.Mutex
 	got      []string
@@ -59,6 +61,15 @@ func (f *infojobsHTTP) GetText(_ context.Context, url string) (string, error) {
 		page := 1
 		if m := infojobsPageRE.FindStringSubmatch(url); m != nil {
 			page, _ = strconv.Atoi(m[1])
+		}
+		f.mu.Lock()
+		failing := f.flaky[page] > 0
+		if failing {
+			f.flaky[page]--
+		}
+		f.mu.Unlock()
+		if failing {
+			return "", errors.New("infojobsHTTP: browser fetch timed out")
 		}
 		if body, ok := f.listPages[page]; ok {
 			return body, nil
@@ -285,6 +296,42 @@ func TestInfojobsCrawlFailsWhenAnyLaterPageFails(t *testing.T) {
 	}}
 	if _, err := (infojobs{http: http}).crawl(context.Background()); err == nil {
 		t.Fatal("want the crawl to fail when one page is the bot challenge")
+	}
+}
+
+// A listing page that fails is sent again: through the Scrapling tier a failed navigation
+// retires its browser session, so the next attempt opens on another exit IP. Measured on prod
+// 2026-10-26..28, every failed run died on the first page of a freshly opened session (pages 1,
+// 501, 1001 against a 500-page session life) while the pages around it were served.
+func TestInfojobsCrawlRetriesAFailedPage(t *testing.T) {
+	http := &infojobsHTTP{
+		listPages: map[int]string{
+			1: ijListPage(t, 6, "A", "B"),
+			2: ijListPage(t, 6, "C", "D"),
+			3: ijListPage(t, 6, "E", "F"),
+		},
+		flaky: map[int]int{1: infojobsListAttempts - 1, 3: infojobsListAttempts - 1},
+	}
+	offers, err := infojobs{http: http}.crawl(context.Background())
+	if err != nil {
+		t.Fatalf("crawl: %v", err)
+	}
+	if len(offers) != 6 {
+		t.Errorf("got %d offers, want 6", len(offers))
+	}
+}
+
+// A page that keeps failing past the attempts still fails the crawl.
+func TestInfojobsCrawlFailsAPageThatKeepsFailing(t *testing.T) {
+	http := &infojobsHTTP{
+		listPages: map[int]string{1: ijListPage(t, 4, "A", "B"), 2: ijListPage(t, 4, "C", "D")},
+		flaky:     map[int]int{2: infojobsListAttempts},
+	}
+	if _, err := (infojobs{http: http}).crawl(context.Background()); err == nil {
+		t.Fatal("want the crawl to fail when a page fails every attempt")
+	}
+	if len(http.got) != 1+infojobsListAttempts {
+		t.Errorf("sent %d requests, want %d", len(http.got), 1+infojobsListAttempts)
 	}
 }
 
