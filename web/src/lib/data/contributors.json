@@ -13,6 +13,50 @@
       "recentPullRequests": []
     },
     {
+      "login": "adesh-codes-ui",
+      "id": 343610543,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/343610543?u=141bd2db48eee404fcca51cda74fb5440e83f5df&v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-10-26T16:11:48Z",
+      "lastContributionAt": "2026-10-26T16:11:48Z",
+      "mergedPullRequests": 1,
+      "openedIssues": 0,
+      "recentPullRequests": [
+        {
+          "number": 3654,
+          "title": "fix(discover-workstream): trim title suffix when it matches at position 0",
+          "mergedAt": "2026-10-26T16:11:48Z",
+          "url": "https://github.com/strelov1/freehire/pull/3654"
+        }
+      ]
+    },
+    {
+      "login": "ADHI020905",
+      "id": 178139550,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/178139550?u=a06decea3dc186d2a9ec9a1228e93e9c60f56310&v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-10-27T16:10:38Z",
+      "lastContributionAt": "2026-10-27T23:52:24Z",
+      "mergedPullRequests": 2,
+      "openedIssues": 0,
+      "recentPullRequests": [
+        {
+          "number": 3700,
+          "title": "fix: improve stripSQLComments to also strip block comments and prevent false positives",
+          "mergedAt": "2026-10-27T23:52:24Z",
+          "url": "https://github.com/strelov1/freehire/pull/3700"
+        },
+        {
+          "number": 3693,
+          "title": "fix: improve stripSQLComments to also strip block comments",
+          "mergedAt": "2026-10-27T16:10:38Z",
+          "url": "https://github.com/strelov1/freehire/pull/3693"
+        }
+      ]
+    },
+    {
       "login": "aleganza",
       "id": 73157384,
       "avatarUrl": "https://avatars.githubusercontent.com/u/73157384?u=e495bdbb5c70f4269889d99f1fd29ced5f5deb86&v=4",
@@ -155,129 +199,129 @@
       "accountType": "Bot",
       "role": "contributor",
       "firstContributionAt": "2026-06-15T03:15:26Z",
-      "lastContributionAt": "2026-10-21T01:52:10Z",
-      "mergedPullRequests": 242,
+      "lastContributionAt": "2026-10-26T19:30:12Z",
+      "mergedPullRequests": 263,
       "openedIssues": 0,
       "recentPullRequests": [
         {
-          "number": 3355,
-          "title": "Bump pytest from 8.4.2 to 9.0.3 in /services/scrapling-fetch",
-          "mergedAt": "2026-10-21T01:52:10Z",
-          "url": "https://github.com/strelov1/freehire/pull/3355"
+          "number": 3658,
+          "title": "Bump github.com/valyala/fasthttp from 1.74.0 to 1.76.0",
+          "mergedAt": "2026-10-26T19:30:12Z",
+          "url": "https://github.com/strelov1/freehire/pull/3658"
         },
         {
-          "number": 3307,
-          "title": "Bump @lucide/svelte from 1.45.0 to 1.58.0 in /design-system",
-          "mergedAt": "2026-10-20T11:53:05Z",
-          "url": "https://github.com/strelov1/freehire/pull/3307"
+          "number": 3661,
+          "title": "Bump satori from 0.62.0 to 0.63.0 in /web",
+          "mergedAt": "2026-10-26T19:30:04Z",
+          "url": "https://github.com/strelov1/freehire/pull/3661"
         },
         {
-          "number": 3301,
-          "title": "Bump @scalar/server-side-rendering from 0.1.58 to 0.1.60 in /web",
-          "mergedAt": "2026-10-20T02:11:37Z",
-          "url": "https://github.com/strelov1/freehire/pull/3301"
+          "number": 3662,
+          "title": "Bump eslint from 10.12.0 to 10.13.0 in /design-system",
+          "mergedAt": "2026-10-26T19:29:57Z",
+          "url": "https://github.com/strelov1/freehire/pull/3662"
         },
         {
-          "number": 3310,
-          "title": "Bump svelte-eslint-parser from 1.8.1 to 1.9.0 in /design-system",
-          "mergedAt": "2026-10-20T00:52:28Z",
-          "url": "https://github.com/strelov1/freehire/pull/3310"
+          "number": 3659,
+          "title": "Bump typescript-eslint from 8.71.2 to 8.72.0 in /design-system",
+          "mergedAt": "2026-10-26T18:11:28Z",
+          "url": "https://github.com/strelov1/freehire/pull/3659"
         },
         {
-          "number": 3303,
-          "title": "Bump github.com/aws/aws-sdk-go-v2/service/sesv2 from 1.77.0 to 1.79.1",
-          "mergedAt": "2026-10-20T00:48:59Z",
-          "url": "https://github.com/strelov1/freehire/pull/3303"
+          "number": 3657,
+          "title": "Bump github.com/alicebob/miniredis/v2 from 2.39.0 to 2.40.0",
+          "mergedAt": "2026-10-26T18:09:39Z",
+          "url": "https://github.com/strelov1/freehire/pull/3657"
         },
         {
-          "number": 3300,
-          "title": "Bump @sentry/sveltekit from 11.4.0 to 11.8.0 in /web",
-          "mergedAt": "2026-10-20T00:44:04Z",
-          "url": "https://github.com/strelov1/freehire/pull/3300"
+          "number": 3660,
+          "title": "Bump @scalar/api-reference from 1.69.2 to 1.75.0 in /web",
+          "mergedAt": "2026-10-26T18:09:26Z",
+          "url": "https://github.com/strelov1/freehire/pull/3660"
         },
         {
-          "number": 3309,
-          "title": "Bump @storybook/addon-themes from 10.5.10 to 10.6.1 in /design-system",
-          "mergedAt": "2026-10-20T00:29:30Z",
-          "url": "https://github.com/strelov1/freehire/pull/3309"
+          "number": 3532,
+          "title": "Bump svelte-dnd-action from 0.9.79 to 0.9.80 in /web",
+          "mergedAt": "2026-10-25T13:26:32Z",
+          "url": "https://github.com/strelov1/freehire/pull/3532"
         },
         {
-          "number": 3308,
-          "title": "Bump typescript-eslint from 8.70.1 to 8.71.2 in /design-system",
-          "mergedAt": "2026-10-20T00:29:23Z",
-          "url": "https://github.com/strelov1/freehire/pull/3308"
+          "number": 3528,
+          "title": "Bump github.com/prometheus/common from 0.72.0 to 0.72.1",
+          "mergedAt": "2026-10-25T13:02:53Z",
+          "url": "https://github.com/strelov1/freehire/pull/3528"
         },
         {
-          "number": 3306,
-          "title": "Bump @playwright/test from 1.64.0 to 1.64.1 in /web",
-          "mergedAt": "2026-10-20T00:29:17Z",
-          "url": "https://github.com/strelov1/freehire/pull/3306"
+          "number": 3529,
+          "title": "Bump github.com/gowebpki/jcs from 1.0.0 to 1.0.2",
+          "mergedAt": "2026-10-25T13:02:45Z",
+          "url": "https://github.com/strelov1/freehire/pull/3529"
         },
         {
-          "number": 3305,
-          "title": "Bump github.com/prometheus/client_golang from 1.24.1 to 1.25.0",
-          "mergedAt": "2026-10-20T00:29:09Z",
-          "url": "https://github.com/strelov1/freehire/pull/3305"
+          "number": 3531,
+          "title": "Bump github.com/minio/minio-go/v7 from 7.3.0 to 7.4.1",
+          "mergedAt": "2026-10-25T13:02:36Z",
+          "url": "https://github.com/strelov1/freehire/pull/3531"
         },
         {
-          "number": 3304,
-          "title": "Bump oxlint and eslint-plugin-oxlint in /design-system",
-          "mergedAt": "2026-10-20T00:29:01Z",
-          "url": "https://github.com/strelov1/freehire/pull/3304"
+          "number": 3533,
+          "title": "Bump flag-icons from 7.5.0 to 7.6.0 in /design-system",
+          "mergedAt": "2026-10-25T13:02:21Z",
+          "url": "https://github.com/strelov1/freehire/pull/3533"
         },
         {
-          "number": 3302,
-          "title": "Bump satori from 0.47.1 to 0.62.0 in /web",
-          "mergedAt": "2026-10-20T00:28:51Z",
-          "url": "https://github.com/strelov1/freehire/pull/3302"
+          "number": 3534,
+          "title": "Bump jsdom from 30.1.1 to 30.1.3 in /design-system",
+          "mergedAt": "2026-10-25T13:02:12Z",
+          "url": "https://github.com/strelov1/freehire/pull/3534"
         },
         {
-          "number": 3298,
-          "title": "Bump github.com/aws/aws-sdk-go-v2/config from 1.33.6 to 1.33.9",
-          "mergedAt": "2026-10-20T00:28:38Z",
-          "url": "https://github.com/strelov1/freehire/pull/3298"
+          "number": 3535,
+          "title": "Bump github.com/aws/aws-sdk-go-v2/service/sqs from 1.52.1 to 1.52.4",
+          "mergedAt": "2026-10-25T13:02:03Z",
+          "url": "https://github.com/strelov1/freehire/pull/3535"
         },
         {
-          "number": 3297,
-          "title": "Bump happy-dom from 20.14.6 to 21.0.3 in /extension",
-          "mergedAt": "2026-10-20T00:28:31Z",
-          "url": "https://github.com/strelov1/freehire/pull/3297"
+          "number": 3536,
+          "title": "Bump isomorphic-dompurify from 4.4.0 to 4.6.0 in /web",
+          "mergedAt": "2026-10-25T13:01:54Z",
+          "url": "https://github.com/strelov1/freehire/pull/3536"
         },
         {
-          "number": 3296,
-          "title": "Bump @types/node from 26.6.1 to 26.6.5 in /web",
-          "mergedAt": "2026-10-20T00:28:24Z",
-          "url": "https://github.com/strelov1/freehire/pull/3296"
+          "number": 3537,
+          "title": "Bump posthog-js from 1.435.7 to 1.438.12 in /web",
+          "mergedAt": "2026-10-25T13:01:46Z",
+          "url": "https://github.com/strelov1/freehire/pull/3537"
         },
         {
-          "number": 3295,
-          "title": "Bump github.com/redis/go-redis/v9 from 9.22.0 to 9.23.0",
-          "mergedAt": "2026-10-20T00:27:53Z",
-          "url": "https://github.com/strelov1/freehire/pull/3295"
+          "number": 3539,
+          "title": "Bump @scalar/types from 0.22.4 to 0.24.0 in /web",
+          "mergedAt": "2026-10-25T13:01:38Z",
+          "url": "https://github.com/strelov1/freehire/pull/3539"
         },
         {
-          "number": 3181,
-          "title": "Bump vite-plugin-pwa from 1.3.0 to 2.0.0 in /web",
-          "mergedAt": "2026-10-14T10:49:13Z",
-          "url": "https://github.com/strelov1/freehire/pull/3181"
+          "number": 3540,
+          "title": "Bump svelte-check from 4.7.6 to 4.7.7 in /design-system",
+          "mergedAt": "2026-10-25T13:01:29Z",
+          "url": "https://github.com/strelov1/freehire/pull/3540"
         },
         {
-          "number": 3183,
-          "title": "Bump golang.org/x/crypto from 0.57.0 to 0.58.0",
-          "mergedAt": "2026-10-14T10:48:58Z",
-          "url": "https://github.com/strelov1/freehire/pull/3183"
+          "number": 3541,
+          "title": "Bump actions/setup-python from 6.3.0 to 7.0.0",
+          "mergedAt": "2026-10-25T13:01:22Z",
+          "url": "https://github.com/strelov1/freehire/pull/3541"
         },
         {
-          "number": 3185,
-          "title": "Bump @scalar/server-side-rendering from 0.1.49 to 0.1.58 in /web",
-          "mergedAt": "2026-10-14T10:48:18Z",
-          "url": "https://github.com/strelov1/freehire/pull/3185"
+          "number": 3542,
+          "title": "Bump simple-icons from 16.30.0 to 16.35.0 in /web",
+          "mergedAt": "2026-10-25T13:01:14Z",
+          "url": "https://github.com/strelov1/freehire/pull/3542"
         },
         {
-          "number": 3180,
-          "title": "Bump github.com/getsentry/sentry-go/fiber from 0.49.0 to 0.50.0",
-          "mergedAt": "2026-10-14T10:48:12Z",
-          "url": "https://github.com/strelov1/freehire/pull/3180"
+          "number": 3549,
+          "title": "Bump happy-dom from 21.0.3 to 21.0.4 in /extension",
+          "mergedAt": "2026-10-25T13:01:06Z",
+          "url": "https://github.com/strelov1/freehire/pull/3549"
         }
       ]
     },
@@ -448,6 +492,31 @@
       "recentPullRequests": []
     },
     {
+      "login": "itsmesherry",
+      "id": 122811504,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/122811504?u=7a47ed90be5289df9bcbaa03dafa28c9f3accc4a&v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-10-25T15:17:48Z",
+      "lastContributionAt": "2026-10-27T23:51:03Z",
+      "mergedPullRequests": 2,
+      "openedIssues": 1,
+      "recentPullRequests": [
+        {
+          "number": 3725,
+          "title": "Give form Save buttons the brand fill and keep dialog titles clear of the close button",
+          "mergedAt": "2026-10-27T23:51:03Z",
+          "url": "https://github.com/strelov1/freehire/pull/3725"
+        },
+        {
+          "number": 3591,
+          "title": "Accept an uploaded résumé at auto-apply's start gate",
+          "mergedAt": "2026-10-25T18:07:44Z",
+          "url": "https://github.com/strelov1/freehire/pull/3591"
+        }
+      ]
+    },
+    {
       "login": "jaymeklein",
       "id": 18254213,
       "avatarUrl": "https://avatars.githubusercontent.com/u/18254213?u=4b012b3add9ffce65671c4e1ba1496378bb39606&v=4",
@@ -478,9 +547,9 @@
       "accountType": "User",
       "role": "contributor",
       "firstContributionAt": "2026-10-22T10:14:57Z",
-      "lastContributionAt": "2026-10-24T15:42:45Z",
+      "lastContributionAt": "2026-10-28T14:55:08Z",
       "mergedPullRequests": 0,
-      "openedIssues": 4,
+      "openedIssues": 11,
       "recentPullRequests": []
     },
     {
@@ -511,6 +580,25 @@
           "title": "Respect seniority preferences in profile-derived searches",
           "mergedAt": "2026-10-17T02:40:53Z",
           "url": "https://github.com/strelov1/freehire/pull/3237"
+        }
+      ]
+    },
+    {
+      "login": "lab1207",
+      "id": 166456890,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/166456890?u=a7b9b76d0a5f1ea826d2d1908f58cb6da61fd89f&v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-10-21T15:07:39Z",
+      "lastContributionAt": "2026-10-21T15:07:39Z",
+      "mergedPullRequests": 1,
+      "openedIssues": 0,
+      "recentPullRequests": [
+        {
+          "number": 3407,
+          "title": "fix(web): drop a swipe card whose job is gone instead of restoring it",
+          "mergedAt": "2026-10-21T15:07:39Z",
+          "url": "https://github.com/strelov1/freehire/pull/3407"
         }
       ]
     },
@@ -613,15 +701,40 @@
       ]
     },
     {
+      "login": "nkomarov",
+      "id": 620930,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/620930?u=ab7fe04e0c1360dead57aaa928b5e0796c03d160&v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-10-26T12:52:46Z",
+      "lastContributionAt": "2026-10-26T15:44:25Z",
+      "mergedPullRequests": 2,
+      "openedIssues": 3,
+      "recentPullRequests": [
+        {
+          "number": 3651,
+          "title": "Search: resolve city filter values through the location dictionary",
+          "mergedAt": "2026-10-26T15:44:25Z",
+          "url": "https://github.com/strelov1/freehire/pull/3651"
+        },
+        {
+          "number": 3652,
+          "title": "Autofill: test the filler against captured German Personio and softgarden forms",
+          "mergedAt": "2026-10-26T13:37:54Z",
+          "url": "https://github.com/strelov1/freehire/pull/3652"
+        }
+      ]
+    },
+    {
       "login": "oguzzkd",
       "id": 194520597,
       "avatarUrl": "https://avatars.githubusercontent.com/u/194520597?u=5e93e752cd54048430f5fe0546d3f6f86436d5cc&v=4",
       "accountType": "User",
       "role": "contributor",
       "firstContributionAt": "2026-10-21T11:32:32Z",
-      "lastContributionAt": "2026-10-21T11:32:32Z",
+      "lastContributionAt": "2026-10-26T16:13:55Z",
       "mergedPullRequests": 0,
-      "openedIssues": 1,
+      "openedIssues": 2,
       "recentPullRequests": []
     },
     {
@@ -632,6 +745,18 @@
       "role": "contributor",
       "firstContributionAt": "2026-09-29T16:34:09Z",
       "lastContributionAt": "2026-09-29T16:34:09Z",
+      "mergedPullRequests": 0,
+      "openedIssues": 1,
+      "recentPullRequests": []
+    },
+    {
+      "login": "ShreyanshAtru",
+      "id": 79184646,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/79184646?u=4f072b576636376f674cf70685a3a7f9150562f5&v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-10-24T18:36:25Z",
+      "lastContributionAt": "2026-10-24T18:36:25Z",
       "mergedPullRequests": 0,
       "openedIssues": 1,
       "recentPullRequests": []
@@ -681,129 +806,129 @@
       "accountType": "User",
       "role": "maintainer",
       "firstContributionAt": "2026-06-11T03:56:53Z",
-      "lastContributionAt": "2026-10-24T18:14:05Z",
-      "mergedPullRequests": 3017,
+      "lastContributionAt": "2026-10-29T02:06:01Z",
+      "mergedPullRequests": 3254,
       "openedIssues": 94,
       "recentPullRequests": [
         {
-          "number": 3519,
-          "title": "Read more Oracle site-name shapes, and the parts of a piped one",
-          "mergedAt": "2026-10-24T18:14:05Z",
-          "url": "https://github.com/strelov1/freehire/pull/3519"
+          "number": 3803,
+          "title": "List each EURES country's whole catalogue, not a three-day window",
+          "mergedAt": "2026-10-29T02:06:01Z",
+          "url": "https://github.com/strelov1/freehire/pull/3803"
         },
         {
-          "number": 3517,
-          "title": "Crawl Pandapé LatAm with the compatible User-Agent",
-          "mergedAt": "2026-10-24T14:34:27Z",
-          "url": "https://github.com/strelov1/freehire/pull/3517"
+          "number": 3795,
+          "title": "Read a country named after a preposition in a location line",
+          "mergedAt": "2026-10-29T01:27:33Z",
+          "url": "https://github.com/strelov1/freehire/pull/3795"
         },
         {
-          "number": 3516,
-          "title": "Resolve categories for Central and Eastern European job titles",
-          "mergedAt": "2026-10-24T13:43:55Z",
-          "url": "https://github.com/strelov1/freehire/pull/3516"
+          "number": 3802,
+          "title": "Close stale whatjobs postings per keyword board on the grace window",
+          "mergedAt": "2026-10-29T01:18:06Z",
+          "url": "https://github.com/strelov1/freehire/pull/3802"
         },
         {
-          "number": 3515,
-          "title": "Crawl Pandapé's Latin-American tenants as pandapelatam",
-          "mergedAt": "2026-10-24T13:34:33Z",
-          "url": "https://github.com/strelov1/freehire/pull/3515"
+          "number": 3799,
+          "title": "Retry a failed infojobs listing page",
+          "mergedAt": "2026-10-29T01:15:52Z",
+          "url": "https://github.com/strelov1/freehire/pull/3799"
         },
         {
-          "number": 3511,
-          "title": "Add Data Analytics and Product Management collections",
-          "mergedAt": "2026-10-24T12:46:32Z",
-          "url": "https://github.com/strelov1/freehire/pull/3511"
+          "number": 3794,
+          "title": "Read a closing ISO code as the country and drop a US town's foreign namesake",
+          "mergedAt": "2026-10-29T01:02:40Z",
+          "url": "https://github.com/strelov1/freehire/pull/3794"
         },
         {
-          "number": 3512,
-          "title": "Fix UI audit findings: keyboard, labels, contrast, touch, modals",
-          "mergedAt": "2026-10-24T12:44:44Z",
-          "url": "https://github.com/strelov1/freehire/pull/3512"
+          "number": 3800,
+          "title": "Fetch a SuccessFactors page only for postings not yet stored",
+          "mergedAt": "2026-10-29T01:02:29Z",
+          "url": "https://github.com/strelov1/freehire/pull/3800"
         },
         {
-          "number": 3509,
-          "title": "Resolve placeholder names for Dayforce and UKG boards",
-          "mergedAt": "2026-10-24T11:58:00Z",
-          "url": "https://github.com/strelov1/freehire/pull/3509"
+          "number": 3796,
+          "title": "Hide postings their source stopped showing from search",
+          "mergedAt": "2026-10-29T00:24:54Z",
+          "url": "https://github.com/strelov1/freehire/pull/3796"
         },
         {
-          "number": 3508,
-          "title": "Widen the LinkedIn harvest into thin markets and key companies right",
-          "mergedAt": "2026-10-24T11:41:10Z",
-          "url": "https://github.com/strelov1/freehire/pull/3508"
+          "number": 3769,
+          "title": "Add the France Travail adapter (keyed Offres d'emploi v2 API)",
+          "mergedAt": "2026-10-29T00:19:23Z",
+          "url": "https://github.com/strelov1/freehire/pull/3769"
         },
         {
-          "number": 3507,
-          "title": "Redirect a retired company slug's OG image instead of failing",
-          "mergedAt": "2026-10-24T11:39:15Z",
-          "url": "https://github.com/strelov1/freehire/pull/3507"
+          "number": 3797,
+          "title": "Read Croatian and Serbian job titles for category",
+          "mergedAt": "2026-10-29T00:09:44Z",
+          "url": "https://github.com/strelov1/freehire/pull/3797"
         },
         {
-          "number": 3506,
-          "title": "Order the footer's popular collections by what visitors search for",
-          "mergedAt": "2026-10-24T11:30:38Z",
-          "url": "https://github.com/strelov1/freehire/pull/3506"
+          "number": 3793,
+          "title": "Let a full-scope API key into the signed-in MCP server",
+          "mergedAt": "2026-10-28T23:48:04Z",
+          "url": "https://github.com/strelov1/freehire/pull/3793"
         },
         {
-          "number": 3505,
-          "title": "Give every job facet a sidebar chip; archive search-box-operators",
-          "mergedAt": "2026-10-24T11:20:16Z",
-          "url": "https://github.com/strelov1/freehire/pull/3505"
+          "number": 3792,
+          "title": "Harden and typeset the tailoring and interview buddies landings",
+          "mergedAt": "2026-10-28T22:59:35Z",
+          "url": "https://github.com/strelov1/freehire/pull/3792"
         },
         {
-          "number": 3504,
-          "title": "Link /mcp from the footer",
-          "mergedAt": "2026-10-24T11:07:28Z",
-          "url": "https://github.com/strelov1/freehire/pull/3504"
+          "number": 3790,
+          "title": "Run the fuzzy dedup pass concurrently and resume it across runs",
+          "mergedAt": "2026-10-28T21:30:24Z",
+          "url": "https://github.com/strelov1/freehire/pull/3790"
         },
         {
-          "number": 3503,
-          "title": "Crawl InfoJobs Brasil, one board per federative unit",
-          "mergedAt": "2026-10-24T10:48:00Z",
-          "url": "https://github.com/strelov1/freehire/pull/3503"
+          "number": 3791,
+          "title": "Answer why a buddy would help, on the landing and in the onboarding letter",
+          "mergedAt": "2026-10-28T21:08:28Z",
+          "url": "https://github.com/strelov1/freehire/pull/3791"
         },
         {
-          "number": 3502,
-          "title": "Record board health after the crawl deadline",
-          "mergedAt": "2026-10-24T09:02:11Z",
-          "url": "https://github.com/strelov1/freehire/pull/3502"
+          "number": 3789,
+          "title": "Skip an empty DigitalRecruiters ad instead of failing its site",
+          "mergedAt": "2026-10-28T21:00:09Z",
+          "url": "https://github.com/strelov1/freehire/pull/3789"
         },
         {
-          "number": 3501,
-          "title": "Fit an empregos run inside its budget",
-          "mergedAt": "2026-10-24T08:38:43Z",
-          "url": "https://github.com/strelov1/freehire/pull/3501"
+          "number": 3788,
+          "title": "Forbid framing and switch off unused browser features",
+          "mergedAt": "2026-10-28T19:19:51Z",
+          "url": "https://github.com/strelov1/freehire/pull/3788"
         },
         {
-          "number": 3500,
-          "title": "301 a placeholder company's old page to its resolved name",
-          "mergedAt": "2026-10-24T08:19:21Z",
-          "url": "https://github.com/strelov1/freehire/pull/3500"
+          "number": 3787,
+          "title": "Announce interview buddies by email: onboarding letter and a one-off campaign",
+          "mergedAt": "2026-10-28T19:04:34Z",
+          "url": "https://github.com/strelov1/freehire/pull/3787"
         },
         {
-          "number": 3499,
-          "title": "Hold the slug pass to the same per-source bound",
-          "mergedAt": "2026-10-24T04:34:44Z",
-          "url": "https://github.com/strelov1/freehire/pull/3499"
+          "number": 3786,
+          "title": "Budget DigitalRecruiters posting reads across the whole run",
+          "mergedAt": "2026-10-28T19:03:36Z",
+          "url": "https://github.com/strelov1/freehire/pull/3786"
         },
         {
-          "number": 3498,
-          "title": "Bound the placeholder pass per provider, not across the run",
-          "mergedAt": "2026-10-24T03:16:16Z",
-          "url": "https://github.com/strelov1/freehire/pull/3498"
+          "number": 3785,
+          "title": "Read a US/CA code before another country as that country's subdivision",
+          "mergedAt": "2026-10-28T18:17:51Z",
+          "url": "https://github.com/strelov1/freehire/pull/3785"
         },
         {
-          "number": 3497,
-          "title": "Hold the Pandapé harvest to the crawl's 2 req/s",
-          "mergedAt": "2026-10-24T02:50:53Z",
-          "url": "https://github.com/strelov1/freehire/pull/3497"
+          "number": 3784,
+          "title": "Read a hardware front end as hardware, not web frontend",
+          "mergedAt": "2026-10-28T17:49:52Z",
+          "url": "https://github.com/strelov1/freehire/pull/3784"
         },
         {
-          "number": 3496,
-          "title": "Accept title:, company: and source: operators in the search box",
-          "mergedAt": "2026-10-24T02:47:40Z",
-          "url": "https://github.com/strelov1/freehire/pull/3496"
+          "number": 3783,
+          "title": "Resolve Zoho Recruit placeholder company names",
+          "mergedAt": "2026-10-28T17:44:15Z",
+          "url": "https://github.com/strelov1/freehire/pull/3783"
         }
       ]
     },
@@ -847,6 +972,25 @@
           "title": "Generate the ghost criterion vocabulary from internal/ghost",
           "mergedAt": "2026-08-13T19:50:25Z",
           "url": "https://github.com/strelov1/freehire/pull/1880"
+        }
+      ]
+    },
+    {
+      "login": "UsmanGhias",
+      "id": 99526697,
+      "avatarUrl": "https://avatars.githubusercontent.com/u/99526697?u=b0189407a033294552ee931c2150f0394df5158e&v=4",
+      "accountType": "User",
+      "role": "contributor",
+      "firstContributionAt": "2026-10-27T16:34:22Z",
+      "lastContributionAt": "2026-10-27T16:34:22Z",
+      "mergedPullRequests": 1,
+      "openedIssues": 0,
+      "recentPullRequests": [
+        {
+          "number": 3688,
+          "title": "feat(dict): add odoo, duckdb, deepseek, dspy, litellm, sglang, and mastra skills",
+          "mergedAt": "2026-10-27T16:34:22Z",
+          "url": "https://github.com/strelov1/freehire/pull/3688"
         }
       ]
     },
