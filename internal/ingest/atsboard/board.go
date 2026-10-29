@@ -1549,7 +1549,7 @@ var platformLabels = map[string]bool{
 var platformLabelsByApex = map[string][]string{
 	"hrmdirect.com": {"apply"},
 	"potok.io":      {"www", "stages", "qa", "sentry"},
-	"jobs2web.com":  {"www", "stage"},
+	"jobs2web.com":  {"www", "stage", "feeds"},
 	"eploy":         {"www"}, // www.eploy.com is the vendor's marketing site
 	"dvinci-hr":     {"www"},
 	"dvinci-easy":   {"www"},
@@ -1616,7 +1616,18 @@ func platformHost(host, apex string) bool {
 	if !ok {
 		return false
 	}
+	if p := platformLabelPatternsByApex[apex]; p != nil && p.MatchString(label) {
+		return true
+	}
 	return platformLabels[label] || slices.Contains(platformLabelsByApex[apex], label)
+}
+
+// platformLabelPatternsByApex is platformLabelsByApex for vendor hosts that come numbered, which a
+// fixed list cannot name: SuccessFactors runs its production data centres' Command Center as
+// bizx<N>.jobs2web.com (bizx12.jobs2web.com/commandcenter) and serves recruiting-marketing map
+// tiles from rmk-map-<N>.jobs2web.com — neither is a customer's career site.
+var platformLabelPatternsByApex = map[string]*regexp.Regexp{
+	"jobs2web.com": regexp.MustCompile(`^(?:bizx[0-9]*|rmk-map-[0-9]+)$`),
 }
 
 // paradoxSite matches a Paradox career-site slug ("ChickenSaladChick1", "2ndFamily28").
