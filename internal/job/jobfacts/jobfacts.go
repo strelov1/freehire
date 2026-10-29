@@ -120,7 +120,7 @@ func EmploymentType(title, description string) string {
 	case reFellowship.MatchString(s) && !reFellowshipStaffRole.MatchString(s):
 		return "fellowship"
 	case reInternship.MatchString(s) || reTraineeBodyFR.MatchString(s) || frenchTraineeTitle(t) ||
-		reTraineeTitlePL.MatchString(t):
+		reTraineeTitlePL.MatchString(t) || reTraineeTitleBCS.MatchString(t):
 		return "internship"
 	}
 	// A French title's own label is the advertised role's, and outranks a body that may
@@ -130,15 +130,16 @@ func EmploymentType(title, description string) string {
 		return h
 	}
 	switch {
-	case rePartTime.MatchString(s) || rePartTimeFR.MatchString(s):
+	case rePartTime.MatchString(s) || rePartTimeFR.MatchString(s) || bcsLabel(s, rePartTimeBCS):
 		return "part_time"
 	case reContractFR.MatchString(t):
 		return "contract"
 	case reFullTimeFR.MatchString(t):
 		return "full_time"
-	case reContract.MatchString(s) || reContractShorthand.MatchString(s) || reContractFR.MatchString(s):
+	case reContract.MatchString(s) || reContractShorthand.MatchString(s) || reContractFR.MatchString(s) ||
+		bcsLabel(s, reContractBCS):
 		return "contract"
-	case reFullTime.MatchString(s) || reFullTimeFR.MatchString(s):
+	case reFullTime.MatchString(s) || reFullTimeFR.MatchString(s) || bcsLabel(s, reFullTimeBCS):
 		return "full_time"
 	}
 	return polishEmploymentType(t, s)
@@ -181,6 +182,46 @@ func frenchHoursTitle(title string) string {
 		return "full_time"
 	}
 	return "part_time"
+}
+
+// Croatian, Serbian and Bosnian contract types, which a posting states as a phrase
+// ("ugovor o radu na neodređeno vrijeme", "Radni odnos: puno radno vreme", "ugovor na
+// određeno s mogućnošću produljenja"). The indefinite contract is the permanent one
+// (full_time, as a French CDI), the fixed-term contract and the work contract ("ugovor
+// o djelu", "autorski ugovor") are contract, and "nepuno radno vrijeme" is part-time.
+// The fixed-term contract outranks the permanent one, as everywhere above: "na određeno
+// vrijeme, uz mogućnost zasnivanja radnog odnosa na neodređeno" is fixed-term today.
+//
+// A phrase followed by "ili" offers both and states neither ("na određeno ili na
+// neodređeno vrijeme" in a civil-service eligibility clause, "na puno ili nepuno radno
+// vrijeme", "na određeno / neodređeno vrijeme"), see bcsLabel. The trainee words count
+// in the TITLE only: a body says "praksa" for good practice, "pripravnik" for a junior
+// colleague's mentoring, and a civil-service notice cites the "pripravnički staž" in the
+// eligibility rules it shares across all the posts it lists. "Skraćeno radno vrijeme" and "pola
+// radnog vremena" are absent: both are a parent's benefit in a perks list.
+var (
+	rePartTimeBCS     = regexp.MustCompile(`\bnepuno radno vr(?:ij)?eme\b`)
+	reContractBCS     = regexp.MustCompile(`\bna odre(?:đ|dj|d)eno\b|\bugovor(?:u|a)? (?:o d(?:j)?elu|na odre(?:đ|dj|d)eno)\b|\bautorski ugovor\b`)
+	reFullTimeBCS     = regexp.MustCompile(`\bna neodre(?:đ|dj|d)eno\b|\bpuno radno vr(?:ij)?eme\b|\bstalni ugovor\b|\bstalni radni odnos\b`)
+	reTraineeTitleBCS = regexp.MustCompile(`\b(?:pripravni(?:k|ca|ci)|praksa|praktikant(?:ica)?|sta(?:ž|z)ist(?:a|kinja)?)\b`)
+)
+
+// bcsLabel reports whether re matches s at a place neither preceded nor followed by
+// "ili" (or) or a slash, which would offer both arrangements: "na određeno ili na
+// neodređeno vrijeme", "na puno ili nepuno radno vrijeme", "Vrsta ugovora: na određeno
+// vrijeme / neodređeno vrijeme".
+func bcsLabel(s string, re *regexp.Regexp) bool {
+	for _, m := range re.FindAllStringIndex(s, -1) {
+		before := strings.TrimSuffix(strings.TrimRight(s[:m[0]], " "), " na")
+		rest := strings.TrimLeft(s[m[1]:], " ")
+		rest = strings.TrimPrefix(strings.TrimPrefix(rest, "vrijeme "), "vreme ")
+		alternative := strings.HasSuffix(before, " ili") || strings.HasSuffix(before, "/") ||
+			strings.HasPrefix(rest, "ili ") || strings.HasPrefix(rest, "/")
+		if !alternative {
+			return true
+		}
+	}
+	return false
 }
 
 // EducationLevel resolves the required education from the description, returning
