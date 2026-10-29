@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getProfileCompleteness, PROFILE_SECTION_TOTAL } from './profileCompleteness';
-import type { LocationPreferences, ResumeMeta, UserProfile } from './types';
+import type { ExperienceBank, LocationPreferences, ResumeMeta, UserProfile } from './types';
 
 // The section predicates are the whole point of the module, so they are asserted one at
 // a time: a section that silently reads as filled is a profile that claims to be complete
@@ -41,7 +41,6 @@ const locationPrefs = (patch: Partial<LocationPreferences> = {}): LocationPrefer
 const fullProfile = (patch: Partial<UserProfile> = {}): UserProfile =>
   profile({
     skills: ['go', 'sql'],
-    cv: { experience: [{ title: 'Engineer' }] },
     ...patch,
   });
 
@@ -55,6 +54,10 @@ const fullResume = resume({
 });
 
 const fullScreening = { notice_period_days: 30 };
+
+/** A bank holding one role, the shape the Experience tab lists. */
+const bankWithRole = { employments: [{ atoms: [] }], unplaced: [] } as unknown as ExperienceBank;
+const emptyBank: ExperienceBank = { employments: [], unplaced: [] };
 
 const complete = (input: Parameters<typeof getProfileCompleteness>[0]) =>
   getProfileCompleteness(input);
@@ -90,6 +93,7 @@ describe('getProfileCompleteness', () => {
       profile: fullProfile(),
       resume: fullResume,
       screening: fullScreening,
+      experience: bankWithRole,
     });
     expect(marks).toMatchObject({
       contacts: true,
@@ -109,6 +113,7 @@ describe('getProfileCompleteness', () => {
       profile: fullProfile({ location_preferences: locationPrefs() }),
       resume: fullResume,
       screening: fullScreening,
+      experience: bankWithRole,
     });
     expect(marks.location).toBe(true);
     expect(marks.filled).toBe(6);
@@ -167,18 +172,40 @@ describe('getProfileCompleteness', () => {
     expect(nameOnly.contacts).toBe(false);
   });
 
-  it('counts experience and education from one entry, never from an empty list', () => {
-    const none = complete({
-      profile: profile({ cv: { experience: [], education: [] } }),
+  it('counts experience from the bank the tab shows, never from the CV parse', () => {
+    const parsedOnly = complete({
+      profile: profile({ cv: { experience: [{ title: 'Engineer' }] } }),
+      experience: emptyBank,
     });
-    expect(none.experience).toBe(false);
+    expect(parsedOnly.experience).toBe(false);
+
+    expect(complete({ profile: profile(), experience: bankWithRole }).experience).toBe(true);
+    const unplaced = { employments: [], unplaced: [{}] } as unknown as ExperienceBank;
+    expect(complete({ profile: profile(), experience: unplaced }).experience).toBe(true);
+  });
+
+  it('counts education from one entry, never from an empty list', () => {
+    const none = complete({ profile: profile({ cv: { education: [] } }) });
     expect(none.education).toBe(false);
 
-    const oneEach = complete({
-      profile: profile({ cv: { experience: [{ title: 'Engineer' }], education: [{ degree: 'BSc' }] } }),
+    const one = complete({ profile: profile({ cv: { education: [{ degree: 'BSc' }] } }) });
+    expect(one.education).toBe(true);
+  });
+
+  // Clearing a field leaves no value behind, so only the flag tells a deliberate clear
+  // from a field nobody has edited — and the parse must not fill it back in.
+  it('honours an explicit clear of the summary and education over the CV parse', () => {
+    const parsed = profile({ cv: { summary: 'From the CV.', education: [{ degree: 'BSc' }] } });
+    const cleared = complete({
+      profile: parsed,
+      resume: resume({ contacts: { summary: '', summary_set: true, education: [], education_set: true } }),
     });
-    expect(oneEach.experience).toBe(true);
-    expect(oneEach.education).toBe(true);
+    expect(cleared.summary).toBe(false);
+    expect(cleared.education).toBe(false);
+
+    const untouched = complete({ profile: parsed, resume: resume({ contacts: {} }) });
+    expect(untouched.summary).toBe(true);
+    expect(untouched.education).toBe(true);
   });
 
   it('treats a stated false as a screening answer', () => {

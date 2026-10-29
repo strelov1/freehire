@@ -20,6 +20,7 @@
   import { format, t } from '#lib/i18n/t.js';
   import { profileCompleteness } from '#lib/profileCompleteness.svelte.js';
   import { resumeStore } from '#lib/resume.svelte.js';
+  import { experienceBankStore } from '#lib/experienceBank.svelte.js';
   import { screeningStore } from '#lib/screening.svelte.js';
   import AccountPreferences from '#lib/components/AccountPreferences.svelte';
   import AccountSetupCard from '#lib/components/AccountSetupCard.svelte';
@@ -79,6 +80,7 @@
     }
     void resumeStore.ensureLoaded();
     void screeningStore.ensureLoaded();
+    void experienceBankStore.ensureLoaded();
   }
 
   // (Re)load once the session resolves.

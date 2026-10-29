@@ -27,6 +27,7 @@
   import PeriodDateInput from '#lib/components/PeriodDateInput.svelte';
   import { profileKickoff } from '#lib/assistant/presets.js';
   import { findFirstUnconfirmed, isUnconfirmed, sortNeedsAttentionFirst } from '#lib/experienceBank.js';
+  import { experienceBankStore } from '#lib/experienceBank.svelte.js';
   import { nextResumePollDelayMs, type CvParseState } from '#lib/onboardingResumeWait.js';
   import type {
     ExperienceAtom,
@@ -42,6 +43,11 @@
   let { onBankMutated }: { onBankMutated?: () => void } = $props();
 
   let bank = $state<ExperienceBank | null>(null);
+  // Every fresh read reaches the shared store, so the profile's completeness badge
+  // follows edits and assistant turns alike.
+  $effect(() => {
+    if (bank) experienceBankStore.accept(bank);
+  });
   let loading = $state(true);
   let loadError = $state('');
   const actionError = new ActionError();

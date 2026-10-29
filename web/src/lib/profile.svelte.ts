@@ -48,19 +48,6 @@ class ProfileStore extends UserResource<UserProfile | null> {
     this.#profile = null;
   }
 
-  /** Re-fetch the profile from the server without going through the write path — what a
-   *  CV delete/upload triggers, since those change server-derived fields (`cv`) that no
-   *  profile-store write method touches. Best-effort: a failure leaves the previous copy
-   *  in place. */
-  async refresh(): Promise<void> {
-    try {
-      this.#profile = await api.getProfile();
-      this.markLoaded();
-    } catch {
-      // best-effort — keep whatever was last read.
-    }
-  }
-
   /** Create-or-replace the profile. `seniorities` are the desired experience levels (may be
    *  empty). `excludedSkills`/`excludedSources`/`excludedCompanies` are what to avoid (each
    *  may be empty). `location` is the optional location-preferences block (null clears it).

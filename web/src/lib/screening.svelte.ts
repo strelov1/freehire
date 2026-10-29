@@ -21,15 +21,17 @@ class ScreeningStore extends UserResource<Answers | null> {
     return this.#answers;
   }
 
-  // The endpoint is best-effort on the profile: a failure must leave the section blank
-  // rather than error the page. Returning null (instead of letting the base swallow the
-  // rejection and continue leaving `loaded` false) lets completeness settle on "not
-  // filled" instead of hiding its summary forever.
+  // The endpoint is best-effort on the profile: a failure must not error the page.
+  // Resolving with the copy already held (instead of letting the base swallow the
+  // rejection and leave `loaded` false) lets completeness settle on "not filled" rather
+  // than hiding its summary forever, and keeps a failed refresh after a save from
+  // blanking the form, which re-seeds itself from this value.
   protected async load(): Promise<Answers | null> {
     try {
       return await api.getScreeningAnswers();
-    } catch {
-      return null;
+    } catch (err) {
+      console.warn('screening answers: load failed', err);
+      return this.#answers;
     }
   }
 
@@ -39,17 +41,6 @@ class ScreeningStore extends UserResource<Answers | null> {
 
   protected clearState() {
     this.#answers = null;
-  }
-
-  /** Re-fetch after a write. `ensureLoaded` no-ops once loaded, so a save has to say so
-   *  explicitly. Best-effort: a failure keeps the previous copy rather than blanking it. */
-  async refresh(): Promise<void> {
-    try {
-      this.#answers = await api.getScreeningAnswers();
-      this.markLoaded();
-    } catch {
-      // best-effort: keep whatever was last read.
-    }
   }
 }
 

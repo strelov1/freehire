@@ -6,6 +6,7 @@
 // anyway, so a second reader costs nothing.
 
 import { getProfileCompleteness, type ProfileCompleteness } from './profileCompleteness';
+import { experienceBankStore } from './experienceBank.svelte';
 import { profileStore } from './profile.svelte';
 import { resumeStore } from './resume.svelte';
 import { screeningStore } from './screening.svelte';
@@ -17,10 +18,17 @@ import { screeningStore } from './screening.svelte';
  *  that most sections are missing — for the moment the résumé request takes — is worse
  *  than showing the indicator a beat later. */
 export function profileCompleteness(): ProfileCompleteness | null {
-  if (!profileStore.loaded || !resumeStore.loaded || !screeningStore.loaded) return null;
+  if (
+    !profileStore.loaded ||
+    !resumeStore.loaded ||
+    !screeningStore.loaded ||
+    !experienceBankStore.loaded
+  )
+    return null;
   return getProfileCompleteness({
     profile: profileStore.profile,
     resume: resumeStore.meta,
     screening: screeningStore.answers,
+    experience: experienceBankStore.bank,
   });
 }

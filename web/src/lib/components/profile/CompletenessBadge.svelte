@@ -18,23 +18,23 @@
 
   // Location is optional, so an empty one is neutral rather than a defect. Every other
   // section keeps the filled/missing pair.
-  const optional = $derived(section === 'location');
-  const variant = $derived(
-    optional ? (filled ? 'brand' : 'outline') : filled ? 'brand' : 'missing',
-  );
-  const label = $derived(
-    optional ? (filled ? s.optionalFilled : s.optionalEmpty) : filled ? s.filled : s.empty,
-  );
+  const look = $derived.by(() => {
+    if (filled) {
+      return { variant: 'brand', label: section === 'location' ? s.optionalFilled : s.filled } as const;
+    }
+    if (section === 'location') return { variant: 'outline', label: s.optionalEmpty } as const;
+    return { variant: 'missing', label: s.empty } as const;
+  });
 </script>
 
 {#if filled !== null}
-  <Badge {variant} class="gap-1">
+  <Badge variant={look.variant} class="gap-1">
     {#if filled}
       <Check class="size-3.5" aria-hidden="true" />
     {:else}
       <Circle class="size-3.5" aria-hidden="true" />
     {/if}
     <span class="sr-only">{s.sections[section]}:</span>
-    {label}
+    {look.label}
   </Badge>
 {/if}

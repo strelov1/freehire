@@ -50,18 +50,6 @@ class ResumeStore extends UserResource<ResumeMeta | null> {
     this.#justUploaded = true;
     void this.refresh();
   }
-
-  /** Re-fetch after a write (upload, contacts edit, parse retry). `ensureLoaded` would
-   *  no-op once loaded, so a mutation has to say so explicitly. Best-effort: a failure
-   *  leaves the previous copy in place rather than blanking the section. */
-  async refresh(): Promise<void> {
-    try {
-      this.#meta = await api.getResume();
-      this.markLoaded();
-    } catch {
-      // best-effort: keep whatever was last read.
-    }
-  }
 }
 
 export const resumeStore = new ResumeStore();

@@ -65,13 +65,36 @@ export abstract class UserResource<T> {
         this.apply(data);
         this.#loaded = true;
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         // best-effort: a failed load just leaves the empty/default state.
+        console.warn('user store: load failed', err);
       })
       .finally(() => {
         if (gen === this.#generation) this.#loading = null;
       });
     return this.#loading;
+  }
+
+  /** Re-fetch now, whatever `ensureLoaded` already did. Rejects on a failure, for a
+   *  caller with its own error state. Generation-guarded like the first load: a read
+   *  still in flight when the user signs out must not repopulate the store with their
+   *  data for whoever signs in next on the same tab. */
+  protected async reload(): Promise<void> {
+    const gen = this.#generation;
+    const data = await this.load();
+    if (gen !== this.#generation) return;
+    this.apply(data);
+    this.#loaded = true;
+  }
+
+  /** Re-fetch after a write, which `ensureLoaded` would no-op once loaded. Best-effort:
+   *  a failure keeps the previous copy rather than blanking it. */
+  async refresh(): Promise<void> {
+    try {
+      await this.reload();
+    } catch (err) {
+      console.warn('user store: refresh failed', err);
+    }
   }
 
   /** Drop cached data + the loaded flag on sign-out, so the next user loads their own. */

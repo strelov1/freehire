@@ -10,7 +10,7 @@
 // shared ScreeningStore the layout warms alongside the profile and résumé.
 
 import type { Answers } from './generated/contracts.js';
-import type { CandidateContacts, ResumeMeta, UserProfile } from './types.js';
+import type { CandidateContacts, ExperienceBank, ResumeMeta, UserProfile } from './types.js';
 
 /** The sections this measures. `avoid` is deliberately absent: its exclusion lists are
  *  optional preferences, so an empty one must never read as a missing part of a profile. */
@@ -49,6 +49,8 @@ export interface ProfileCompletenessInput {
   resume?: ResumeMeta | null;
   /** `GET /me/screening-answers`: the answer bank behind the Screening section. */
   screening?: Answers | null;
+  /** `GET /me/experience`: the bank the Experience tab shows. */
+  experience?: ExperienceBank | null;
 }
 
 function nonEmpty(value: string | undefined | null): boolean {
@@ -79,6 +81,7 @@ export function getProfileCompleteness({
   profile,
   resume = null,
   screening = null,
+  experience = null,
 }: ProfileCompletenessInput): ProfileCompleteness {
   // The CV structure travels beside the profile without its contact fields; fall back to
   // the résumé's own copy when the profile has no current structure.
@@ -97,12 +100,17 @@ export function getProfileCompleteness({
     // location is absent from COUNTED_SECTIONS and so never moves `filled` or `total`.
     location: hasLocation(profile, contacts),
     skills: (profile?.skills.length ?? 0) > 0,
-    experience: (cv?.experience?.length ?? 0) > 0,
-    // Education is candidate-owned on the contacts block (the Education card edits that)
-    // and falls back to the CV parse for a résumé nobody has corrected yet.
-    education: (contacts?.education?.length ?? 0) > 0 || (cv?.education?.length ?? 0) > 0,
+    // The bank, not the CV parse: it is what the Experience tab lists, and a role added
+    // there by hand exists in no parse.
+    experience: (experience?.employments.length ?? 0) > 0 || (experience?.unplaced.length ?? 0) > 0,
+    // Education and the summary are candidate-owned on the contacts block and fall back to
+    // the CV parse for a résumé nobody has corrected yet — unless the candidate cleared
+    // the field, which the `*_set` flag records (an emptied field leaves no value behind).
+    education:
+      (contacts?.education?.length ?? 0) > 0 ||
+      (!contacts?.education_set && (cv?.education?.length ?? 0) > 0),
     screening: hasAnyScreeningAnswer(screening),
-    summary: nonEmpty(cv?.summary) || nonEmpty(contacts?.summary),
+    summary: nonEmpty(contacts?.summary) || (!contacts?.summary_set && nonEmpty(cv?.summary)),
   };
 
   return {

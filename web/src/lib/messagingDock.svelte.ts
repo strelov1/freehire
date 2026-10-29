@@ -52,7 +52,6 @@ function readDismissed(): number | null {
 class MessagingDockStore extends UserResource<Conversation[]> {
   #conversations = $state.raw<Conversation[]>([]);
   #windows = $state.raw<DockWindow[]>(readWindows());
-  #generation = 0;
   #drafts = new DraftBook();
   /** The newest message time the reader had seen when they closed the dock, or null while
    *  it is not dismissed. Kept for the tab's session; a newer unread message or opening a
@@ -80,7 +79,6 @@ class MessagingDockStore extends UserResource<Conversation[]> {
   }
 
   protected clearState(): void {
-    this.#generation++;
     this.#conversations = [];
     this.#setWindows([]);
     this.#drafts.clear();
@@ -91,12 +89,8 @@ class MessagingDockStore extends UserResource<Conversation[]> {
 
   /** Re-read the list now. Rejects on a failure, so a caller with its own error state can
    *  show it; a poll can ignore it. */
-  async refresh(): Promise<void> {
-    const generation = this.#generation;
-    const data = await this.load();
-    if (generation !== this.#generation) return; // signed out (or reset) meanwhile
-    this.apply(data);
-    this.markLoaded();
+  override refresh(): Promise<void> {
+    return this.reload();
   }
 
   /** Whether this page has a dock at all, dismissed or not — what keeps the list polling,
