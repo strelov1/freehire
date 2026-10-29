@@ -1199,6 +1199,21 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **Marked `aggregator` only because it serves many employers under one provider** (that is what keeps it in the source facet); its URLs are the employers' own application pages. Not `fullCatalog`: nothing states how many postings the sitemap should hold.
 - **The run is bounded**: one request a second (a quick burst drew a refused connection), two workers, `hydrationLanes` of 900 newest + 300 backlog unseen pages a run, stopping 5 minutes before the deadline.
 
+**Dualoo traps** (`dualoo`; live-verified 2026-10-29):
+
+- **A Swiss ATS for SMEs, municipalities and care homes, all on `jobs.dualoo.com`**: a posting is `/portal/<code>/<uuid>/detail` under its employer's careers portal or `/link/<uuid>/detail`, and one posting is often listed in BOTH forms — the UUID is the identity, the portal URL is kept. Boardless: `/sitemap_index.xml` names one sitemap per customer (472, ~8.9k postings on 2026-10-29).
+- **The vendor's own test tenants publish to the live index** (`michele-testing-ag` with 39 duplicated postings, `test-language-prod`, date-named smoke tests like `25-1-26-dualoo-ag`); `dualooTestSitemap` skips them by sitemap name. `dualoo-ag` itself is a real employer.
+- **The sitemaps answer 406 to `Accept: application/xml` alone** (they serve `text/xml`), which is why the shared XML getters now send `application/xml, text/xml`.
+- **robots.txt disallows the apply forms and ~550 portals by code; the sitemap index names none of those portals**, so walking the index reads only what robots allows. Do not add a portal-page listing next to it without re-checking that list.
+- **The JobPosting splits the body into self-headed blocks**: `description`, `responsibilities` ("Ihre Aufgaben"), `skills` ("Ihr Profil"), `jobBenefits` ("Wir bieten") — concatenated as they come. `TEMPORARY` is a fixed-term ("befristet") post and states nothing on its own. A removed posting answers **404**.
+- **The listing alone is ~470 requests**: everything is paced at one a second (about eight minutes of listing), then `hydrationLanes` of 900 newest + 300 backlog unseen pages, stopping 5 minutes before the deadline. A customer sitemap that fails is skipped, not fatal — its postings are simply unlisted for a run — unless every one fails.
+
+**Refline traps** (`refline`; live-verified 2026-10-29):
+
+- **A Swiss ATS strong in the public sector** (cantons, municipalities, hospitals, Empa/PSI/WSL, ZKB), all on `apply.refline.ch`: a customer portal is `/<customer>/search.html`, a posting `/<customer>/<job>/pub/<publication>/index.html`. **One job is published several times** — per channel (`pub/1`, `pub/6`) and per language (`pub/de`, `pub/it`, `pub/rm`) — so the identity is `<customer>/<job>` and the adapter keeps the lowest numeric publication, else the lowest language code.
+- **Boardless, from the sitemaps robots.txt names** (`rec01/0` … `rec02/9`; robots disallows `rec01/1` and `rec03/1` and lists neither). 1,735 jobs across 120 customers on 2026-10-29; Common Crawl saw 149 customer ids, so a few customers keep their portal out of the sitemaps. There is no job API or feed.
+- **The title arrives HTML-escaped** (`REST &amp; AbaReport`). An unknown job id answers **200 with an empty page**, not a 404, so a page without a JobPosting is no answer rather than a removal.
+
 **SpainJobs.io traps** (`spainjobs`; live-verified 2026-10-27 from a residential IP):
 
 - **An English-language board that gathers Spanish employers' own career-page postings** and rewrites each in English (Spanish under `/es/`; the page says "This job advert was originally written in Spanish"), with the employer's own apply link. 92,666 postings across ~3.5k employers on 2026-10-27, ~2k new a day. `robots.txt` allows everything but `/api/`, search and `_rsc` URLs, names no Claude agent and sets `Content-Signal: ai-input=yes`. Plain HTTP passes.

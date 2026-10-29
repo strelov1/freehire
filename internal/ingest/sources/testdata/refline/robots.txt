@@ -1,0 +1,8 @@
+User-Agent: *
+Allow: /
+Disallow: /rec01/1/
+
+Sitemap: https://apply.refline.ch/rec01/0/sitemap.xml
+# 230/1/ demo, no indexing
+Sitemap: https://apply.refline.ch/rec01/2/sitemap.xml
+sitemap: https://other.example/sitemap.xml

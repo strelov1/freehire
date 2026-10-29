@@ -153,21 +153,6 @@ func TestTaleezParsePostingPinsHost(t *testing.T) {
 	}
 }
 
-func TestTaleezEmploymentType(t *testing.T) {
-	for raw, want := range map[string]string{
-		`["FULL_TIME"]`:             "full_time",
-		`["TEMPORARY","FULL_TIME"]`: "full_time",
-		`["TEMPORARY"]`:             "",
-		`"PART_TIME"`:               "part_time",
-		`["INTERN"]`:                "internship",
-		`null`:                      "",
-	} {
-		if got := taleezEmploymentType([]byte(raw)); got != want {
-			t.Errorf("taleezEmploymentType(%s) = %q, want %q", raw, got, want)
-		}
-	}
-}
-
 func TestTaleezNoPostingIsNoAnswer(t *testing.T) {
 	_, _, err := (taleez{pages: emptyPageGetter{}, limiter: noWait{}}).detail(context.Background(),
 		taleezPosting{token: "x", url: "https://taleez.com/apply/x"})

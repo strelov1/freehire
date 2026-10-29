@@ -1003,6 +1003,12 @@ func All(c HTTPClient) map[string]Source {
 	// Taleez: a French ATS with no per-customer listing, enumerated from its job sitemap, each
 	// new posting read from its page's schema.org JobPosting. See taleez.go.
 	registry["taleez"] = NewTaleez(c, c)
+	// Dualoo: a Swiss ATS for SMEs and municipalities, enumerated from its per-customer sitemaps,
+	// each new posting read from its page's schema.org JobPosting. See dualoo.go.
+	registry["dualoo"] = NewDualoo(c, c)
+	// Refline: a Swiss ATS strong in the public sector, enumerated from the sitemaps robots.txt
+	// names, each job read from one publication's schema.org JobPosting. See refline.go.
+	registry["refline"] = NewRefline(c, c, c)
 	// SAPO Emprego: a Portuguese general job board, enumerated from its offers sitemap, each new
 	// posting's facts read from its page's schema.org JobPosting. See sapoemprego.go.
 	registry["sapoemprego"] = NewSapoEmprego(c)

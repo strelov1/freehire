@@ -562,13 +562,18 @@ func (c *Client) GetJSONResolved(ctx context.Context, url string, v any) (string
 	return final, err
 }
 
+// xmlAccept is the Accept header of the XML getters. Naming text/xml beside application/xml is
+// what some servers require: Dualoo's sitemaps answer 406 to application/xml alone, because
+// they serve text/xml (2026-10-29).
+const xmlAccept = "application/xml, text/xml"
+
 // GetXML fetches url and decodes its XML body into v (used by adapters whose platform
 // publishes an XML feed, e.g. Personio).
 func (c *Client) GetXML(ctx context.Context, url string, v any) error {
 	return c.do(ctx, request{
 		method: http.MethodGet,
 		url:    url,
-		accept: "application/xml",
+		accept: xmlAccept,
 		decode: func(resp *http.Response) error {
 			return xml.NewDecoder(resp.Body).Decode(v)
 		},
@@ -585,7 +590,7 @@ func (c *Client) GetXMLResolved(ctx context.Context, url string, v any) (string,
 	err := c.do(ctx, request{
 		method: http.MethodGet,
 		url:    url,
-		accept: "application/xml",
+		accept: xmlAccept,
 		decode: func(resp *http.Response) error {
 			// Recorded before the decode so a redirect that landed on HTML still reports
 			// where it went, rather than only that the decode failed.
