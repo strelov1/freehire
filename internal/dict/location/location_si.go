@@ -112,8 +112,11 @@ var ljubljanaDistricts = []string{
 // name a line writes: municipalities whose seat GeoNames names otherwise or puts under its
 // floor, and the villages MojeDelo's postings name. Like the table, each names a city only
 // once the line has stated Slovenia (or the caller's countries do), so a namesake abroad
-// costs nothing. A bare municipality name is read as the municipality's seat
-// ("Brezovica" is Brezovica pri Ljubljani; the other Brezovicas are villages). A
+// costs nothing. A municipality is named as itself ("Bohinj", "Loška Dolina", "Bloke"),
+// not as its seat, whose name is often a generic one ("Nova Vas", "Videm") shared with
+// villages elsewhere in Slovenia — except where the seat's name is the municipality's
+// with a qualifier, which GeoNames already uses ("Brezovica" is Brezovica pri Ljubljani,
+// "Lenart" Lenart v Slovenskih Goricah; the other Brezovicas are villages). A
 // municipality written "A - B" splits into its two places at the separator, so the
 // halves are listed.
 var slovenianSmallPlaces = map[string]string{
