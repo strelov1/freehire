@@ -30,9 +30,10 @@ import (
 //	GET /public/v1/jobs/<viewkey>                                 one posting page (JobPosting)
 //
 // The board is the MEDIUM id — one publication channel of a customer (its careers site, its
-// intranet, a regional portal such as jobiq.ch); one customer often runs several media that list
-// the same jobs, so boards are chosen so that no two list the same posting. The listing states
-// its total and is read whole (fullBoardListing) and carries each job's body in tenant-defined
+// intranet, a regional portal such as jobiq.ch); one customer often runs several media that
+// republish the same vacancies, each under its own job id, so boards are chosen so that no two
+// list the same vacancy. The listing is read
+// whole, to its natural end (fullBoardListing), and carries each job's body in tenant-defined
 // sza_* fields. It does NOT name the employer — a group's medium lists its subsidiaries' jobs
 // (fenaco: Volg, LANDI, Ernst Sutter) — so each new job is hydrated from its page's schema.org
 // JobPosting for hiringOrganization, datePosted and employmentType.
@@ -45,6 +46,7 @@ type prospective struct {
 	http           JSONGetter
 	pages          HTMLGetter
 	limiter        waiter
+	pageSize       int
 	maxNewPerBoard int
 	runBudget      *atomic.Int64
 	deadlineMargin time.Duration
@@ -81,6 +83,7 @@ func NewProspective(api JSONGetter, pages HTMLGetter) Source {
 		http:           api,
 		pages:          pages,
 		limiter:        rate.NewLimiter(prospectiveRate, 1),
+		pageSize:       prospectivePageSize,
 		maxNewPerBoard: prospectiveMaxNewPerBoard,
 		runBudget:      b,
 		deadlineMargin: prospectiveDeadlineMargin,
@@ -89,8 +92,8 @@ func NewProspective(api JSONGetter, pages HTMLGetter) Source {
 
 func (prospective) Provider() string { return "prospective" }
 
-// fullBoardListing: the listing is read whole and checked against the total the API states; any
-// shortfall fails the crawl. See the fullBoardListing interface.
+// fullBoardListing: the listing is walked to its natural end, a short page, and any page failing
+// fails the crawl. See the fullBoardListing interface and list.
 func (prospective) fullBoardListing() {}
 
 // prospectiveListing is one page of a medium's listing.
@@ -196,8 +199,12 @@ func (s prospective) wait(ctx context.Context) error {
 	return nil
 }
 
-// list reads the medium's whole listing and checks it against the stated total. A medium the
-// API does not know answers 400 (or 404), which is the board gone.
+// list reads the medium's whole listing, page by page until a short page — the listing's natural
+// end. Any page failing fails the crawl: a truncated walk would read as closures. The stated
+// total is NOT the check: it differs from what the listing returns by a job or two even on a
+// single page (2026-10-29: 12 of 165 media, 21 stated and 20 listed), so an exact match would
+// fail those boards on every run. A medium the API does not know answers 400 (or 404), which is
+// the board gone.
 func (s prospective) list(ctx context.Context, board string) ([]prospectivePosting, error) {
 	var all []prospectiveJob
 	total := -1
@@ -208,7 +215,7 @@ func (s prospective) list(ctx context.Context, board string) ([]prospectivePosti
 		if err := s.wait(ctx); err != nil {
 			return nil, err
 		}
-		q := url.Values{"lang": {"de"}, "limit": {strconv.Itoa(prospectivePageSize)}, "offset": {strconv.Itoa(page * prospectivePageSize)}}
+		q := url.Values{"lang": {"de"}, "limit": {strconv.Itoa(s.pageSize)}, "offset": {strconv.Itoa(page * s.pageSize)}}
 		var resp prospectiveListing
 		err := s.http.GetJSON(ctx, prospectiveAPI+"/medium/"+board+"/jobs?"+q.Encode(), &resp)
 		var se *StatusError
@@ -222,18 +229,16 @@ func (s prospective) list(ctx context.Context, board string) ([]prospectivePosti
 		}
 		total = *resp.Total
 		all = append(all, resp.Jobs...)
-		if len(all) >= total || len(resp.Jobs) == 0 {
+		if len(resp.Jobs) < s.pageSize {
 			break
 		}
-	}
-	if len(all) != total {
-		return nil, fmt.Errorf("prospective: medium %s: read %d jobs of the %d it states", board, len(all), total)
 	}
 	var out []prospectivePosting
 	seen := map[string]bool{}
 	external := 0
 	for _, j := range all {
 		id := strings.TrimSpace(j.ID)
+		// An id can repeat across pages when the listing shifts between two requests.
 		if id == "" || seen[id] || !prospectiveViewKey.MatchString(j.ViewKey) {
 			continue
 		}
@@ -244,6 +249,9 @@ func (s prospective) list(ctx context.Context, board string) ([]prospectivePosti
 			continue
 		}
 		out = append(out, prospectivePosting{id: id, url: link, job: j})
+	}
+	if len(seen) != total {
+		log.Printf("prospective: medium %s: listed %d jobs, the answer states %d", board, len(seen), total)
 	}
 	if external > 0 {
 		log.Printf("prospective: medium %s: %d jobs hosted on another platform, skipped", board, external)

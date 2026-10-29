@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -17,7 +16,8 @@ import (
 // jobs plus one hosted elsewhere, its total set to match, and one real posting page trimmed to
 // its JobPosting. Any other medium answers 400, as an unknown medium does; any other page 404.
 type prospectiveFake struct {
-	total *int // overrides the stated total when set
+	total     *int // overrides the stated total when set
+	failLater bool // fail every page after the first
 
 	mu    sync.Mutex
 	pages []string
@@ -30,11 +30,10 @@ func (f *prospectiveFake) GetJSON(_ context.Context, u string, v any) error {
 		return &StatusError{Method: "GET", Code: 400, URL: u}
 	}
 	if !strings.Contains(u, "offset=0") {
-		total := 3
-		if f.total != nil {
-			total = *f.total
+		if f.failLater {
+			return &StatusError{Method: "GET", Code: 502, URL: u}
 		}
-		return json.Unmarshal([]byte(fmt.Sprintf(`{"total":%d,"jobs":[]}`, total)), v)
+		return json.Unmarshal([]byte(`{"total":3,"jobs":[]}`), v)
 	}
 	raw, err := os.ReadFile("testdata/prospective/medium.json")
 	if err != nil {
@@ -116,12 +115,21 @@ func TestProspectiveHydratesNewJobsAndRefreshesSeen(t *testing.T) {
 	}
 }
 
-func TestProspectiveShortListingFailsTheBoard(t *testing.T) {
+func TestProspectiveLaterPageFailureFailsTheBoard(t *testing.T) {
+	s := newTestProspective(&prospectiveFake{failLater: true})
+	s.pageSize = 3 // the fixture's first page is then full, so the walk asks for a second
+	_, err := s.FetchNew(context.Background(), CompanyEntry{Board: prospectiveFakeMedium}, func(string) bool { return true })
+	if err == nil || !strings.Contains(err.Error(), "page 1") {
+		t.Errorf("err = %v, want the failed second page to fail the board", err)
+	}
+}
+
+func TestProspectiveStatedTotalIsNotTheCheck(t *testing.T) {
 	four := 4
-	_, err := newTestProspective(&prospectiveFake{total: &four}).FetchNew(context.Background(),
+	jobs, err := newTestProspective(&prospectiveFake{total: &four}).FetchNew(context.Background(),
 		CompanyEntry{Board: prospectiveFakeMedium}, func(string) bool { return true })
-	if err == nil || !strings.Contains(err.Error(), "read 3 jobs of the 4") {
-		t.Errorf("err = %v, want the shortfall reported", err)
+	if err != nil || len(jobs) != 2 {
+		t.Errorf("jobs = %d err = %v, want the two hosted jobs from a short first page", len(jobs), err)
 	}
 }
 
