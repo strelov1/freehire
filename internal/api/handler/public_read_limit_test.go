@@ -253,7 +253,7 @@ func publicReadRoutes(t *testing.T, throttler ratelimit.Throttler) (map[string]*
 		// service behind it the route answers 501 past its limiter.
 		"directApplyHandlers": mount((&directApplyHandlers{}).register),
 		"mountMCPAccount": mount(func(r fiber.Router, m middleware) {
-			mountMCPAccount(r, m, &assistantHandlers{}, testMCPOrigin)
+			mountMCPAccount(r, m, &assistantHandlers{}, testMCPOrigin, nil)
 		}),
 	}, iss
 }

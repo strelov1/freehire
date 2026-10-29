@@ -19,9 +19,12 @@ type Settings struct {
 	// MetricsPort, if set, serves /metrics on its own listener instead of the
 	// main API port — so an internal-only firewall rule for this port never
 	// exposes the rest of the API surface too. Empty disables /metrics.
-	MetricsPort    string
-	DatabaseURL    string
-	FrontendOrigin string
+	MetricsPort string
+	// AgentViewLogDir is where the server writes internal/application/agentview's day files.
+	// Unset, nothing is written.
+	AgentViewLogDir string
+	DatabaseURL     string
+	FrontendOrigin  string
 
 	// PublicAnonLimits selects the anonymous public-read budgets: "" keeps each route's
 	// previous per-minute budget, "strict" applies the shared 120/min + 2,000/day per IP
@@ -422,6 +425,7 @@ func Load() Settings {
 		LLM:                   LoadLLM(),
 		Port:                  env("PORT", "8080"),
 		MetricsPort:           os.Getenv("METRICS_PORT"),
+		AgentViewLogDir:       os.Getenv("AGENT_VIEW_LOG_DIR"),
 		DatabaseURL:           env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
 		FrontendOrigin:        env("FRONTEND_ORIGIN", "http://localhost:5173"),
 		PublicAnonLimits:      strings.TrimSpace(os.Getenv("PUBLIC_ANON_LIMITS")),

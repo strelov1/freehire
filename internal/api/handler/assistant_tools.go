@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
@@ -188,6 +189,7 @@ func (h *assistantHandlers) searchJobsTool() assistant.Tool {
 			if err := h.search.hydrateDescriptions(ctx, res.Hits); err != nil {
 				return nil, err
 			}
+			agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 			jobs := make([]jobview.Job, len(res.Hits))
 			for i, hit := range res.Hits {
 				hit.Description = formatDescription(hit.Description, "markdown")
@@ -224,6 +226,7 @@ func (h *assistantHandlers) getJobTool() assistant.Tool {
 			if err != nil {
 				return nil, fmt.Errorf("no vacancy with slug %q", in.Slug)
 			}
+			agentview.Record(ctx, agentview.KindDetail, []int64{job.ID})
 			view, err := jobview.FromRow(job)
 			if err != nil {
 				return nil, err

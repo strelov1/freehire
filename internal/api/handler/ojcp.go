@@ -13,6 +13,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/ojcp"
 	"github.com/strelov1/freehire/internal/api/ojcpmcp"
+	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -34,8 +35,10 @@ type ojcpStore interface {
 }
 
 type ojcpHandlers struct {
-	search searcher
-	store  ojcpStore
+	// agentViews receives the postings served; nil records nothing.
+	agentViews agentview.Sink
+	search     searcher
+	store      ojcpStore
 	// attachReality hangs the posting-reality signal on a view. It is a FIELD, not a method
 	// calling a package function, because the real lookup needs the concrete *db.Queries
 	// (ghostEvidenceFor takes one, not a port) and a test must still be able to drive the
@@ -85,15 +88,16 @@ func (h *ojcpHandlers) register(api fiber.Router, mw middleware) {
 	// agent-search one: these calls cost what /agent/jobs/search costs, and the manifest
 	// declares that figure — a limit declared and not enforced breaks a MUST in the spec.
 	limit := ojcpRateLimited(agentSearchLimiter(mw.public))
-	api.Post("/ojcp/v1/search", limit, h.OJCPSearchJobs)
-	api.Get("/ojcp/v1/jobs/:slug", limit, h.OJCPJobDetail)
+	views := agentViews(h.agentViews, agentview.SurfaceOJCP)
+	api.Post("/ojcp/v1/search", limit, views, h.OJCPSearchJobs)
+	api.Get("/ojcp/v1/jobs/:slug", limit, views, h.OJCPJobDetail)
 	api.Get("/ojcp/v1/employers/:slug", limit, h.OJCPEmployerContext)
 
 	// The MCP transport, mounted through Fiber's own adapter for a net/http handler. It
 	// serves the SAME methods the three routes above call, so the two cannot answer one
 	// question differently. `All` because MCP's streamable transport uses POST to call and
 	// GET to open the server-to-client stream.
-	api.All("/ojcp/mcp", limit, adaptor.HTTPHandler(ojcpmcp.Handler(h, h.origin)))
+	api.All("/ojcp/mcp", limit, views, adaptor.HTTPHandler(ojcpmcp.Handler(h, h.origin)))
 
 	// The manifest, rendered. It is served to an agent at /.well-known/ojcp.json, which the
 	// SPA proxies to this route — nginx sends /api/ here and everything else to the Node
@@ -216,6 +220,7 @@ func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (
 		jobs = append(jobs, h.projector.JobPosting(hit.Job, nil))
 	}
 
+	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 	return ojcp.SearchJobsResponse{
 		Query:             values.Get("q"),
 		TotalResults:      int(res.Total),
@@ -261,6 +266,7 @@ func (h *ojcpHandlers) JobDetail(ctx context.Context, ojcpID string) (ojcp.JobDe
 		h.attachReality(ctx, row, &view)
 	}
 
+	agentview.Record(ctx, agentview.KindDetail, []int64{row.ID})
 	return ojcp.JobDetailResponse{
 		Job: h.projector.JobPosting(view, h.applyFormFor(ctx, row.ID)),
 	}.Finalize(), nil

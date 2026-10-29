@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/api/mcpapp"
+	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/cache"
@@ -40,6 +41,8 @@ type mcpappStore interface {
 }
 
 type mcpappHandlers struct {
+	// agentViews receives the postings served; nil records nothing.
+	agentViews    agentview.Sink
 	search        searcher
 	companySearch companySearcher
 	store         mcpappStore
@@ -86,7 +89,7 @@ func (h *mcpappHandlers) register(api fiber.Router, mw middleware) {
 	// Public and unauthenticated like the other job reads, under the same agent-search rate
 	// limit the OJCP endpoints use. A separate figure here would be a second answer to "how
 	// hard may a machine ask", with nothing deciding which one is right.
-	api.All("/mcp", chatAgentLimiter(mw.public), adaptor.HTTPHandler(mcpapp.Handler(h, h.origin)))
+	api.All("/mcp", chatAgentLimiter(mw.public), agentViews(h.agentViews, agentview.SurfaceMCP), adaptor.HTTPHandler(mcpapp.Handler(h, h.origin)))
 }
 
 // SearchJobs answers `search_jobs`.
@@ -124,6 +127,7 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 		jobs = append(jobs, h.projector.JobSummary(hit.Job))
 	}
 
+	agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 	return mcpapp.SearchJobsResult{
 		Query:             values.Get("q"),
 		Total:             int(res.Total),
@@ -161,6 +165,7 @@ func (h *mcpappHandlers) JobDetail(ctx context.Context, slug string) (mcpapp.Job
 	if h.attachReality != nil {
 		h.attachReality(ctx, row, &view)
 	}
+	agentview.Record(ctx, agentview.KindDetail, []int64{row.ID})
 	return h.projector.JobDetail(view, h.applyFormFor(ctx, row.ID)), nil
 }
 

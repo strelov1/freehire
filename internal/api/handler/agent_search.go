@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
@@ -36,6 +37,7 @@ func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 		return err
 	}
 	res := out.res
+	agentview.Record(c.Context(), agentview.KindSearch, hitIDs(res.Hits))
 
 	if len(res.Hits) > 0 {
 		if err := h.hydrateDescriptions(c.Context(), res.Hits); err != nil {

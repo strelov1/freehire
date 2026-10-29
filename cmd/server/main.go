@@ -32,6 +32,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/ojcp"
 	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/api/realtime"
+	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
@@ -359,8 +360,18 @@ func main() {
 	embedProgress := embedprogress.NewSampler(db.New(pool), cache.NewRedisCache(redisClient), time.Now)
 	go embedProgress.Run(ctx, embedprogress.SampleInterval)
 
+	// Postings served to agents, logged for cmd/rollup-views (internal/application/agentview).
+	// Closed explicitly after app.Shutdown below, not deferred: a Write after Close panics,
+	// and only once the server has stopped serving can none arrive.
+	var agentViews agentview.Sink
+	var agentViewWriter *agentview.Writer
+	if agentViewWriter = agentview.NewWriter(cfg.AgentViewLogDir); agentViewWriter != nil {
+		agentViews = agentViewWriter
+	}
+
 	handler.Register(app, handler.Config{
 		Pool:                        pool,
+		AgentViews:                  agentViews,
 		Throttler:                   throttler,
 		Cache:                       cache.NewRedisCache(redisClient),
 		FrontendOrigin:              cfg.FrontendOrigin,
@@ -456,6 +467,8 @@ func main() {
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
+	// Flushes the buffered agent-view events; no handler can write after the shutdown above.
+	agentViewWriter.Close()
 }
 
 // buildDiscordLinker adapts discordlink.NewFromSettings to what the handler config takes.

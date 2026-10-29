@@ -13,6 +13,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/api/mcpapp"
+	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 )
@@ -22,7 +23,7 @@ import (
 // verbatim — the same capabilities the in-app assistant exposes, not a second
 // implementation of them. Which of them are served is mcpAccountTools' answer for
 // an OAuth grant and mcpKeyTools' for a full-scope API key.
-func mountMCPAccount(api fiber.Router, mw middleware, assistants *assistantHandlers, frontendOrigin string) {
+func mountMCPAccount(api fiber.Router, mw middleware, assistants *assistantHandlers, frontendOrigin string, sink agentview.Sink) {
 	granted := adaptor.HTTPHandler(mcpapp.AccountHandler(mcpAccountTools(assistants, frontendOrigin), frontendOrigin))
 	keyed := adaptor.HTTPHandler(mcpapp.AccountHandler(mcpKeyTools(assistants, frontendOrigin), frontendOrigin))
 	// Same reasoning as the public /mcp mount: agentSearchLimiter bounds how
@@ -32,6 +33,7 @@ func mountMCPAccount(api fiber.Router, mw middleware, assistants *assistantHandl
 	// unexpected failure authenticating the token (not merely an unknown one)
 	// reaches Sentry the normal way — see mcpAccountAuthenticate.
 	api.All("/mcp/account", chatAgentLimiter(mw.public), mcpAccountAuthenticate(assistants, frontendOrigin),
+		agentViews(sink, agentview.SurfaceMCPAccount),
 		func(c *fiber.Ctx) error {
 			if viaKey, _ := c.Locals(localsMCPAccountViaKey).(bool); viaKey {
 				return keyed(c)

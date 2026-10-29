@@ -57,7 +57,7 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	mountMCPAccount(api, middleware{}, assistants, testMCPOrigin)
+	mountMCPAccount(api, middleware{}, assistants, testMCPOrigin, nil)
 
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	defer server.Close()
@@ -126,7 +126,7 @@ func TestMCPAccountAuthenticate_InfraFailureIsA500NotA401(t *testing.T) {
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	mountMCPAccount(api, middleware{}, assistants, testMCPOrigin)
+	mountMCPAccount(api, middleware{}, assistants, testMCPOrigin, nil)
 
 	pool.Close() // simulate the database going away, not an unknown token
 
@@ -166,7 +166,7 @@ func TestMCPAccountByAPIKey(t *testing.T) {
 		tracking: &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	mountMCPAccount(app.Group("/api/v1"), middleware{}, assistants, testMCPOrigin)
+	mountMCPAccount(app.Group("/api/v1"), middleware{}, assistants, testMCPOrigin, nil)
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	defer server.Close()
 

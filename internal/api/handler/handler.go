@@ -22,6 +22,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/ojcp"
 	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/api/realtime"
+	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/application/mailrecall"
@@ -361,6 +362,9 @@ func ignoredJobValues(c *fiber.Ctx) map[string][]string {
 // search client (nil disables search).
 type Config struct {
 	Pool *pgxpool.Pool
+	// AgentViews receives the postings served to agents (internal/application/agentview).
+	// Optional: nil records nothing.
+	AgentViews agentview.Sink
 	// Throttler backs every rate-limited route in the API (internal/api/ratelimit).
 	// Required — there is no degraded/nil mode, unlike the optional dependencies
 	// below.
@@ -763,6 +767,7 @@ func Register(app *fiber.App, cfg Config) {
 	}
 	searchH := newSearchHandlers(jobSearch, facets, queries, cfg.Cache, profileSvc)
 	searchH.semantic = semantic
+	searchH.agentViews = cfg.AgentViews
 	// The OJCP read surface. It shares the search backend and the store with the handlers
 	// above rather than holding its own: an agent's question and a browser's must reach the
 	// same catalogue, or the two answers drift.
@@ -770,6 +775,7 @@ func Register(app *fiber.App, cfg Config) {
 	ojcpH.signer = cfg.OJCPSigner
 	ojcpH.anonStrict = cfg.PublicAnonStrict
 	ojcpH.semantic = semantic
+	ojcpH.agentViews = cfg.AgentViews
 	// The ChatGPT app's MCP surface. A SECOND MCP server beside the OJCP one, over the same
 	// search backend and the same store: that one renders a foreign schema for agents which
 	// branch on error codes, this one renders ours for a language model reading prose. They
@@ -778,6 +784,7 @@ func Register(app *fiber.App, cfg Config) {
 	mcpappH.facets = facets
 	mcpappH.cache = cfg.Cache
 	mcpappH.semantic = semantic
+	mcpappH.agentViews = cfg.AgentViews
 	// The completion dictionary. Left nil when search is unconfigured — same reason as
 	// jobSearch above: a nil *suggest.Service wrapped in the interface would be a
 	// non-nil interface, and the handler's "not configured" check would pass straight
@@ -1062,7 +1069,7 @@ func Register(app *fiber.App, cfg Config) {
 	// The signed-in MCP server (freehire#3114): bearer-gated by an MCP OAuth
 	// grant, reusing assistantH's own tool set so this surface and the in-app
 	// assistant can never disagree about what a tool does.
-	mountMCPAccount(api, mw, assistantH, cfg.FrontendOrigin)
+	mountMCPAccount(api, mw, assistantH, cfg.FrontendOrigin, cfg.AgentViews)
 	jobsH.register(api, mw)
 	companiesH.register(api, mw)
 	geoH.register(api, mw)

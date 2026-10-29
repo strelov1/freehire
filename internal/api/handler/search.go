@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/api/ojcp"
+	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
@@ -47,6 +48,8 @@ type searchHandlers struct {
 	// semantic answers /agent/jobs/search's opt-in `semantic=true`; shared with OJCP.
 	// The public /jobs/search never asks for it.
 	semantic semanticSearch
+	// agentViews receives the postings /agent/jobs/search serves; nil records nothing.
+	agentViews agentview.Sink
 }
 
 // profileReader loads a caller's profile. *userprofile.Service satisfies it; tests
@@ -80,7 +83,8 @@ func (h *searchHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/jobs/search", readLimit, mw.optional, h.SearchJobs)
 	// Agent search: same query as /jobs/search, but always full descriptions in a
 	// selectable format for programmatic consumers. Public, like the other reads.
-	api.Get("/agent/jobs/search", agentSearchLimiter(mw.public), h.AgentSearchJobs)
+	api.Get("/agent/jobs/search", agentSearchLimiter(mw.public),
+		agentViews(h.agentViews, agentview.SurfaceAgentAPI), h.AgentSearchJobs)
 	api.Get("/jobs/facets", readLimit, h.JobFacets)
 	api.Get("/jobs/:slug/similar", readLimit, h.SimilarJobs)
 }
