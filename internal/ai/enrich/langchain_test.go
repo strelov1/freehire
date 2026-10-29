@@ -122,6 +122,20 @@ func TestSystemPromptGuardsFractionalHourlySalary(t *testing.T) {
 	}
 }
 
+// A day rate written per man-day ("1000-1300 PLN/MD", "pln/md netto + VAT") is the
+// Polish B2B convention, and the model filed 22 of 155 traffit salaries under month.
+// The prompt must name the abbreviation and the period it means.
+func TestSystemPromptReadsManDayAsDay(t *testing.T) {
+	for _, askGeo := range []bool{true, false} {
+		p := buildSystemPrompt(askGeo)
+		for _, want := range []string{"PLN/MD", "salary_period=day"} {
+			if !strings.Contains(p, want) {
+				t.Errorf("askGeo=%v: man-day guard must mention %q, got:\n%s", askGeo, want, p)
+			}
+		}
+	}
+}
+
 // When the dictionary already pinned the job's geography, the LLM's countries/regions
 // are discarded by geoFacet, so the prompt must not ask for them — dropping the enum,
 // the exception block, the "Other keys" mention, and the geographic-area paragraph.

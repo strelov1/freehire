@@ -173,7 +173,7 @@ func TestClinchSplitSlug(t *testing.T) {
 			name:      "single-word city (Warsaw) splits cleanly, BE stays in title",
 			slug:      "software-engineer-payment-be-warsaw-masovian-voivodeship-poland",
 			wantTitle: "Software Engineer Payment Be",
-			wantLoc:   "Warsaw, Masovian, Voivodeship, Poland",
+			wantLoc:   "Warsaw, Masovian Voivodeship, Poland",
 		},
 		{
 			name:      "multiword city (Mountain View) is the cut point",
@@ -251,7 +251,7 @@ func TestClinchFetchParsesSitemapAndFiltersNonJobURLs(t *testing.T) {
 	if j.Company != "Waymo" {
 		t.Errorf("Company = %q", j.Company)
 	}
-	if j.Location != "Warsaw, Masovian, Voivodeship, Poland" {
+	if j.Location != "Warsaw, Masovian Voivodeship, Poland" {
 		t.Errorf("Location = %q", j.Location)
 	}
 	if j.Description != "" {

@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
+	"math/rand/v2"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -19,6 +20,15 @@ const eightfoldPageLimit = 10
 // below the shared defaultDetailWorkers — to keep the burst gentle and lean on backoff retry
 // (getJSONRetrying) for the rest, rather than slamming the cap and dropping postings.
 const eightfoldDetailWorkers = 2
+
+// eightfoldMaxNewPerBoard bounds how many unseen positions one board hydrates per run. Every
+// board of a shard shares one ~1 req/s pace (pacedEightfoldGetter) inside a ~2,400 s crawl
+// deadline, so a cold or long-unreached board (nvidia, ~2,500 positions) hydrated in full would
+// spend the whole shard's budget and, since a buffered board saves nothing until it returns,
+// save nothing either. At 250 such a board converges over a few runs while steady-state churn
+// (measured 2026-10-29: ~7k new positions a week across ~35k open, ~85 per shard run) never
+// reaches the bound.
+const eightfoldMaxNewPerBoard = 250
 
 // eightfoldMaxRetries bounds how many times a rate-limited (403/429) request is retried before
 // giving up. eightfoldRetryBase is the first backoff delay (doubled each attempt, capped).
@@ -102,37 +112,76 @@ type eightfoldDetail struct {
 	CanonicalPositionURL string `json:"canonicalPositionUrl"`
 }
 
-// Fetch buffers the whole board by collecting the streamed postings. The pipeline prefers
-// FetchStream (incremental save); Fetch stays for non-streaming callers and tests.
+// Fetch hydrates every listed position. Kept for callers that do not drive hydration (link
+// resolution, tests); ingest goes through FetchNew.
 func (s eightfold) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	var (
-		mu   sync.Mutex
-		jobs []Job
-	)
-	err := s.FetchStream(ctx, e, func(j Job) {
-		mu.Lock()
-		jobs = append(jobs, j)
-		mu.Unlock()
-	})
-	return jobs, err
+	return s.crawl(ctx, e, func(string) bool { return false }, math.MaxInt)
 }
 
-// FetchStream lists the board's positions, then fetches each one's detail concurrently and
-// emits the assembled Job the moment its detail completes — so the pipeline persists a long,
-// rate-limited crawl incrementally. A failed detail degrades to a list-only job (logged),
-// never a dropped posting; only a listing failure is returned as a board-level error.
-func (s eightfold) FetchStream(ctx context.Context, e CompanyEntry, emit func(Job)) error {
+// FetchNew lists the whole board but spends a detail request only on a position the catalogue
+// does not hold, and on at most eightfoldMaxNewPerBoard of those per run. A seen position comes
+// back as a SeenRefresh carrying the listing's identity, so its liveness refreshes and its
+// stored body is kept; an unseen position past the bound is left for a later run (see crawl).
+//
+// The detail was this adapter's whole cost: the list serves ten positions per request and the
+// detail one, all under a ~1 req/s pace shared by every board in a shard. Re-reading every
+// stored body each run kept 24 of 25 runs in the fortnight to 2026-10-29 on their crawl
+// deadline, the Microsoft board (~2,400 positions) never finished a crawl after 10-26, and a
+// board that never finishes never qualifies for the board-scoped sweep.
+func (s eightfold) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	return s.crawl(ctx, e, seen, eightfoldMaxNewPerBoard)
+}
+
+// crawl is the walk behind Fetch and FetchNew: list the board, refresh the seen positions from
+// the listing alone, and hydrate up to maxNew of the rest. The unseen positions past maxNew
+// are not yielded, so the pipeline reads the board as having pending work rather than as quiet.
+//
+// The budget goes to a random sample rather than the listing's first positions: a position the
+// catalogue filter rejects is never stored, so it stays unseen, and a fixed prefix of those would
+// take the budget on every run and starve the positions behind it.
+//
+// Not yielding is safe because an unseen position is almost always a new one. The exceptions are
+// the stored rows the seen set withholds (INGEST_REFETCH_ALL, the hydration-retry window,
+// BODY_REFRESH_DAYS): one left out of the sample gets no liveness refresh this run. Yielding it
+// list-only instead would be worse — UpsertJob keeps a stored body but re-derives every facet
+// from the empty one — and a SeenRefresh cannot be sent for a position that may not be stored. A
+// withheld row the sample misses is refreshed by the next run that samples it or no longer
+// withholds it, and one the 48h unseen sweep closes in between reopens when it is hydrated. A
+// repair run under INGEST_REFETCH_ALL reaches at most maxNew positions per board, so repeat it.
+func (s eightfold) crawl(ctx context.Context, e CompanyEntry, seen func(string) bool, maxNew int) ([]Job, error) {
 	b, err := parseEightfoldBoard(e.Board)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	positions, err := s.listPositions(ctx, b)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fetchDetailsStream(positions, eightfoldDetailWorkers,
-		func(p eightfoldPosition) (Job, bool) { return s.detail(ctx, e, b, p) }, emit)
-	return nil
+	var (
+		jobs   []Job
+		unseen []eightfoldPosition
+	)
+	for _, p := range positions {
+		id := strconv.FormatInt(p.ID, 10)
+		if !seen(id) {
+			unseen = append(unseen, p)
+			continue
+		}
+		jobs = append(jobs, Job{
+			ExternalID:  id,
+			URL:         firstNonEmpty(p.CanonicalPositionURL, eightfoldPositionURL(b, id)),
+			Title:       strings.TrimSpace(p.Name),
+			Company:     e.Company,
+			SeenRefresh: true,
+		})
+	}
+	if len(unseen) > maxNew {
+		rand.Shuffle(len(unseen), func(i, j int) { unseen[i], unseen[j] = unseen[j], unseen[i] })
+		unseen = unseen[:maxNew]
+	}
+	hydrated := fetchDetails(unseen, eightfoldDetailWorkers,
+		func(p eightfoldPosition) (Job, bool) { return s.detail(ctx, e, b, p) })
+	return append(jobs, hydrated...), nil
 }
 
 // getJSONRetrying GETs url, retrying rate-limit responses (403/429) with exponential backoff
@@ -210,11 +259,18 @@ func (s eightfold) v2Page(ctx context.Context, b eightfoldBoard, start int) ([]e
 	return resp.Positions, resp.Count, nil
 }
 
+// eightfoldPositionURL is the public position page, the URL a posting falls back to when
+// neither the list nor the detail names a canonical one.
+func eightfoldPositionURL(b eightfoldBoard, id string) string {
+	return fmt.Sprintf("https://%s/careers/job/%s", b.host, id)
+}
+
 // detail fetches one position's detail and maps it to a Job. Metadata comes from the list
 // position; the description and canonical URL come from the detail (with the list position's
 // canonical URL and a host fallback for the URL). A failed detail request is isolated like
 // the justjoin/nofluffjobs siblings: logged and ingested list-only (no description) rather
-// than dropping the posting — a missing description back-fills on a later crawl.
+// than dropping the posting — the pipeline withholds a body-less row from the seen set for a
+// while, so a later crawl retries the detail.
 func (s eightfold) detail(ctx context.Context, e CompanyEntry, b eightfoldBoard, p eightfoldPosition) (Job, bool) {
 	id := strconv.FormatInt(p.ID, 10)
 	url := fmt.Sprintf("https://%s/api/apply/v2/jobs/%s?domain=%s", b.host, id, b.domain)
@@ -230,8 +286,7 @@ func (s eightfold) detail(ctx context.Context, e CompanyEntry, b eightfoldBoard,
 		postedTs = p.TCreate
 	}
 	pageURL := firstNonEmpty(
-		d.CanonicalPositionURL, p.CanonicalPositionURL,
-		fmt.Sprintf("https://%s/careers/job/%s", b.host, id))
+		d.CanonicalPositionURL, p.CanonicalPositionURL, eightfoldPositionURL(b, id))
 	return Job{
 		ExternalID:  id,
 		URL:         pageURL,

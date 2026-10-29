@@ -222,6 +222,34 @@ var foreignSubdivisionNames = map[string]string{
 	"san juan province": "ar", "san luis province": "ar", "río negro province": "ar",
 	"rio negro province": "ar", "la pampa province": "ar", "catamarca province": "ar",
 	"formosa province": "ar", "santa cruz province": "ar", "tierra del fuego province": "ar",
+	// Poland — the sixteen voivodeships, in Polish (adjective and "województwo" forms) and in
+	// English, as a location line names them beside or instead of a town ("Duchnice,
+	// Mazowieckie, Poland", "Gołków, Masovian Voivodeship, pl"). Absent: "Śląsk" and
+	// "Silesia" (a metro, see polishMetroRegions, and Czech Silesia), "Pomerania" (German
+	// Vorpommern), and the bare city names Lublin, Łódź and Opole, which the city table places.
+	"mazowieckie": "pl", "małopolskie": "pl", "malopolskie": "pl", "małopolska": "pl",
+	"malopolska": "pl", "dolnośląskie": "pl", "dolnoslaskie": "pl", "wielkopolskie": "pl",
+	"wielkopolska": "pl", "pomorskie": "pl", "zachodniopomorskie": "pl", "śląskie": "pl",
+	"slaskie": "pl", "łódzkie": "pl", "lodzkie": "pl", "lubelskie": "pl", "podkarpackie": "pl",
+	"świętokrzyskie": "pl", "swietokrzyskie": "pl", "warmińsko-mazurskie": "pl",
+	"warminsko-mazurskie": "pl", "kujawsko-pomorskie": "pl", "opolskie": "pl",
+	"lubuskie": "pl", "podlaskie": "pl",
+	"województwo mazowieckie": "pl", "województwo małopolskie": "pl",
+	"województwo dolnośląskie": "pl", "województwo wielkopolskie": "pl",
+	"województwo pomorskie": "pl", "województwo zachodniopomorskie": "pl",
+	"województwo śląskie": "pl", "województwo łódzkie": "pl", "województwo lubelskie": "pl",
+	"województwo podkarpackie": "pl", "województwo świętokrzyskie": "pl",
+	"województwo warmińsko-mazurskie": "pl", "województwo kujawsko-pomorskie": "pl",
+	"województwo opolskie": "pl", "województwo lubuskie": "pl", "województwo podlaskie": "pl",
+	"masovian voivodeship": "pl", "lesser poland voivodeship": "pl", "lesser poland": "pl",
+	"lower silesian voivodeship": "pl", "lower silesia": "pl", "greater poland voivodeship": "pl",
+	"greater poland": "pl", "pomeranian voivodeship": "pl", "west pomeranian voivodeship": "pl",
+	"silesian voivodeship": "pl", "łódź voivodeship": "pl", "lodz voivodeship": "pl",
+	"lublin voivodeship": "pl", "subcarpathian voivodeship": "pl",
+	"podkarpackie voivodeship": "pl", "świętokrzyskie voivodeship": "pl",
+	"holy cross voivodeship": "pl", "warmian-masurian voivodeship": "pl",
+	"kuyavian-pomeranian voivodeship": "pl", "opole voivodeship": "pl",
+	"lubusz voivodeship": "pl", "podlaskie voivodeship": "pl",
 	// France — the regions (current and pre-2016) and the departments a location line
 	// names beside or instead of a town ("Limoux, Occitanie", "Haute-Savoie, Auvergne-Rhône-Alpes,
 	// France", "PAYS DE LA LOIRE, France"). Withheld: Paris (the city), Vienne (Austria's capital in

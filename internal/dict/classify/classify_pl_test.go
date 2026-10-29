@@ -62,6 +62,7 @@ func TestPolishHeadsAndFields(t *testing.T) {
 		{"Operator/ Operatorka wózka jezdniowego Logistyka", "logistics", ""},
 		{"Inżynier / Inżynierka Serwisu Mobilnego", "industrial_engineering", ""},
 		{"Asystent/ka Zarządu (K/M)", "administration", ""},
+		{"Konsultant telefoniczny (K/M). Obsługa Klientów operatora sieci komórkowej.", "support", ""},
 		// The order of the bands: a role noun outranks the field it shares a title with.
 		{"Elektroradiolog / Elektroradiolożka z obsługą recepcji - Dental Sense", "healthcare", ""},
 		{"Ochrona danych osobowych - Główny specjalista ds. ochrony danych osobowych (m/k)", "legal", ""},

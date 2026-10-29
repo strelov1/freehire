@@ -106,6 +106,24 @@ email, no name, no file name, no résumé or message text. A failure reason SHAL
 be reported as a bounded code drawn from a closed set, never as a raw error
 message, so that a reworded error does not silently split a metric into two.
 
+Every explicit event SHALL also reach Google Analytics once consent has started it,
+with the same properties. `signup`, `checkout_start` and `subscribe` SHALL be sent to
+GA under its recommended names — `sign_up`, `begin_checkout`, `purchase` — so GA's
+built-in reports pick them up; every other event keeps its name. An event fired before
+GA starts SHALL NOT be held for it. The free-text search query (`q`) SHALL NOT be sent
+to GA: typed text can hold personal data, and PostHog, behind our own proxy, keeps it.
+
+#### Scenario: A funnel step reaches Google Analytics
+
+- **WHEN** consent has started the trackers and a `checkout_start` event is fired
+- **THEN** PostHog receives `checkout_start` and Google Analytics receives
+  `begin_checkout` with the same properties
+
+#### Scenario: An event before consent
+
+- **WHEN** an event is fired while Google Analytics has not been started
+- **THEN** nothing is sent to Google Analytics for it, then or later
+
 #### Scenario: A plan limit refuses a metered action
 
 - **WHEN** a metered feature answers 402 because the day's allowance is spent

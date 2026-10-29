@@ -477,3 +477,101 @@ func TestRunReportsNoBoardForAStreamTheDeadlineCutShort(t *testing.T) {
 		t.Errorf("Interrupted = %d, want 1", got.Interrupted)
 	}
 }
+
+// emptyDeadlineSource lists nothing, and for every board but "fast" only once the run's context
+// has ended — an empty answer the deadline may have cut short.
+type emptyDeadlineSource struct{ provider string }
+
+func (s emptyDeadlineSource) Provider() string { return s.provider }
+
+func (s emptyDeadlineSource) Fetch(ctx context.Context, e sources.CompanyEntry) ([]sources.Job, error) {
+	if e.Board != "fast" {
+		<-ctx.Done()
+	}
+	return nil, nil
+}
+
+// TestRunReportsAFinishedEmptyBoard: a board whose crawl finished and whose listing named nothing
+// is the shape of an employer that took every posting down. It never qualifies (an empty answer
+// may be a broken crawl on most adapters), but it is reported apart, so cmd/ingest can admit it
+// to the board scope for an adapter registered as proving an empty answer.
+func TestRunReportsAFinishedEmptyBoard(t *testing.T) {
+	r := Runner{Registry: registry(fakeSource{provider: "greenhouse"}), Store: &fakeStore{}}
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{{Company: "Acme", Provider: "greenhouse", Board: "acme"}})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := stats["greenhouse"]
+	if !slices.Equal(got.EmptyBoards, []string{"acme"}) {
+		t.Errorf("EmptyBoards = %v, want [acme]", got.EmptyBoards)
+	}
+	if len(got.QualifyingBoards) != 0 {
+		t.Errorf("QualifyingBoards = %v, want none — an empty board is reported apart", got.QualifyingBoards)
+	}
+}
+
+// A board whose listing NAMED postings is not empty, whatever became of them: one whose every
+// posting went unread or failed to save proves nothing at all.
+func TestRunDoesNotReportABoardThatListedSomethingAsEmpty(t *testing.T) {
+	cases := map[string]Runner{
+		"unreadable": {Registry: registry(fakeSource{provider: "greenhouse", jobs: unreadableBoard("Acme", 3, 3)}), Store: &fakeStore{}},
+		"save fails": {Registry: registry(fakeSource{provider: "greenhouse", jobs: []sources.Job{{ExternalID: "1", Title: "Backend Engineer"}}}), Store: &fakeStore{err: errors.New("db down")}},
+	}
+	for name, r := range cases {
+		t.Run(name, func(t *testing.T) {
+			stats, err := r.Run(context.Background(), []sources.CompanyEntry{{Company: "Acme", Provider: "greenhouse", Board: "acme"}})
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if got := stats["greenhouse"]; len(got.EmptyBoards) != 0 || len(got.QualifyingBoards) != 0 {
+				t.Errorf("EmptyBoards = %v, QualifyingBoards = %v; want neither", got.EmptyBoards, got.QualifyingBoards)
+			}
+		})
+	}
+}
+
+// A failed crawl, a quiet-paused board, a boardless entry and a region-ambiguous board name are
+// not empty boards: none of them is a finished listing of one board that came back with nothing.
+func TestRunReportsNoEmptyBoardWithoutAFinishedCrawl(t *testing.T) {
+	quiet := &fakeHealth{cooldowns: map[string]time.Time{}, quiet: map[string]time.Time{"greenhouse/acme/": time.Now().Add(time.Hour)}}
+	one := []sources.CompanyEntry{{Company: "Acme", Provider: "greenhouse", Board: "acme"}}
+	cases := []struct {
+		name    string
+		runner  Runner
+		entries []sources.CompanyEntry
+	}{
+		{"failed", Runner{Registry: registry(fakeSource{provider: "greenhouse", err: errors.New("503")}), Store: &fakeStore{}}, one},
+		{"quiet", Runner{Registry: registry(fakeSource{provider: "greenhouse"}), Store: &fakeStore{}, BoardHealth: quiet}, one},
+		{"boardless", Runner{Registry: registry(fakeSource{provider: "greenhouse"}), Store: &fakeStore{}}, []sources.CompanyEntry{{Company: "Acme", Provider: "greenhouse"}}},
+		{"ambiguous region", Runner{Registry: registry(fakeSource{provider: "greenhouse"}), Store: &fakeStore{}}, []sources.CompanyEntry{
+			{Company: "Acme", Provider: "greenhouse", Board: "acme", Region: "us"},
+			{Company: "Acme", Provider: "greenhouse", Board: "acme", Region: "eu"},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stats, err := tc.runner.Run(context.Background(), tc.entries)
+			if err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if got := stats["greenhouse"].EmptyBoards; len(got) != 0 {
+				t.Errorf("EmptyBoards = %v, want none", got)
+			}
+		})
+	}
+}
+
+// An empty answer that arrived after the run's deadline may be the deadline cutting the listing
+// short, so only the board that finished in time is reported empty.
+func TestRunReportsNoEmptyBoardTheDeadlineCutShort(t *testing.T) {
+	r := Runner{Registry: registry(emptyDeadlineSource{provider: "greenhouse"}), Store: &fakeStore{}}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	stats, _ := r.Run(ctx, []sources.CompanyEntry{
+		{Company: "Fast Co", Provider: "greenhouse", Board: "fast"},
+		{Company: "Slow Co", Provider: "greenhouse", Board: "slow"},
+	})
+	if got := stats["greenhouse"].EmptyBoards; !slices.Equal(got, []string{"fast"}) {
+		t.Errorf("EmptyBoards = %v, want [fast]", got)
+	}
+}

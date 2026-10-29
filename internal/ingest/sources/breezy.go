@@ -33,6 +33,10 @@ func (breezy) Provider() string { return "breezy" }
 // interface for the bar.
 func (breezy) fullBoardListing() {}
 
+// emptyBoardListing: an unknown or retired board answers 404 with an HTML
+// page, and an emptied one answers 200 with a bare [] (2026-10-29); a null body fails Fetch. See the emptyBoardListing interface for the bar.
+func (breezy) emptyBoardListing() {}
+
 // breezyPosting is one item from the /json listing. The description is not here — it
 // lives on the position page (see detail).
 type breezyPosting struct {
@@ -55,6 +59,9 @@ func (b breezy) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	var postings []breezyPosting
 	if err := b.http.GetJSON(ctx, url, &postings); err != nil {
 		return nil, fmt.Errorf("breezy: list board %s: %w", e.Board, err)
+	}
+	if postings == nil {
+		return nil, errListingAbsent("breezy", e.Board, "postings")
 	}
 
 	return fetchDetails(postings, defaultDetailWorkers, func(p breezyPosting) (Job, bool) {

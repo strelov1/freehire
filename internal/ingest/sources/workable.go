@@ -23,6 +23,11 @@ func (workable) Provider() string { return "workable" }
 // array — no loop that could stop early. See the fullBoardListing interface for the bar.
 func (workable) fullBoardListing() {}
 
+// emptyBoardListing: an unknown account answers 404, and an emptied one
+// answers 200 with its account object and "jobs": [] (2026-10-29); an object without the array
+// fails Fetch. See the emptyBoardListing interface for the bar.
+func (workable) emptyBoardListing() {}
+
 func (w workable) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	url := fmt.Sprintf("%s/%s?details=true", workableBaseURL, e.Board)
 
@@ -42,6 +47,9 @@ func (w workable) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 	if err := w.http.GetJSON(ctx, url, &resp); err != nil {
 		return nil, fmt.Errorf("workable: fetch board %s: %w", e.Board, err)
+	}
+	if resp.Jobs == nil {
+		return nil, errListingAbsent("workable", e.Board, "jobs")
 	}
 
 	jobs := make([]Job, 0, len(resp.Jobs))

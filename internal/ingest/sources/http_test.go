@@ -178,6 +178,32 @@ func TestClientGetXMLDecodesAndSendsXMLAccept(t *testing.T) {
 	}
 }
 
+// The Croatian Employment Service serves its RSS as text/xml in ISO-8859-2 and answers 406 to
+// an Accept naming only application/xml.
+func TestClientGetXMLAcceptsTextXMLAndDeclaredCharset(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept"), "text/xml") {
+			w.WriteHeader(http.StatusNotAcceptable)
+			return
+		}
+		w.Header().Set("Content-Type", "text/xml")
+		// "Općina Šibenik" in ISO-8859-2: ć = 0xE6, Š = 0xA9.
+		_, _ = w.Write([]byte("<?xml version=\"1.0\" encoding=\"iso-8859-2\"?><root><name>Op\xe6ina \xa9ibenik</name></root>"))
+	}))
+	defer srv.Close()
+
+	c := &Client{httpClient: srv.Client()}
+	var out struct {
+		Name string `xml:"name"`
+	}
+	if err := c.GetXML(context.Background(), srv.URL, &out); err != nil {
+		t.Fatalf("GetXML: %v", err)
+	}
+	if out.Name != "Općina Šibenik" {
+		t.Errorf("decoded name = %q, want %q", out.Name, "Općina Šibenik")
+	}
+}
+
 func TestClientGetJSONRetriesOnServerError(t *testing.T) {
 	var attempts int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

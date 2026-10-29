@@ -991,6 +991,38 @@ var wordAliases = map[string]string{
 	"conteneurisation":  "containerization",
 	"datavisualisation": "data-visualization",
 	"sgbdr":             "rdbms",
+
+	// batch 11 (2026-10-29, Polish market) — the Polish single words, in the cases the
+	// crawl carries. See engineeringPhraseAliases for the phrases.
+	"mikroserwis": "microservices", "mikroserwisy": "microservices",
+	"mikroserwisów": "microservices", "mikroserwisach": "microservices",
+	"mikroserwisami": "microservices", "mikroserwisowa": "microservices",
+	"mikroserwisowej": "microservices", "mikroserwisową": "microservices",
+	"mikroserwisowym": "microservices", "mikroserwisowych": "microservices",
+	"mikrousługi": "microservices", "mikrousług": "microservices",
+	"mikrousługach": "microservices", "mikrousługowej": "microservices",
+	"mikrousługową":  "microservices",
+	"konteneryzacja": "containerization", "konteneryzacji": "containerization",
+	"konteneryzacją": "containerization", "konteneryzację": "containerization",
+	"obserwowalność": "observability", "obserwowalności": "observability",
+	"obserwowalnością": "observability",
+
+	// batch 12 (2026-10-29, Croatian, Serbian and Bosnian market), in the cases a posting
+	// writes them. See engineeringPhraseAliases for the phrases.
+	"mikroservisi":      "microservices",
+	"mikroservisa":      "microservices",
+	"mikroservisima":    "microservices",
+	"mikroservise":      "microservices",
+	"kontejnerizacija":  "containerization",
+	"kontejnerizacije":  "containerization",
+	"kontejnerizaciju":  "containerization",
+	"kontejnerizacijom": "containerization",
+	"kontejnerizaciji":  "containerization",
+	"virtualizacija":    "virtualization",
+	"virtualizacije":    "virtualization",
+	"virtualizaciju":    "virtualization",
+	"virtualizacijom":   "virtualization",
+	"virtualizaciji":    "virtualization",
 }
 
 // ambiguousWords marks the wordAliases keys whose word-pass match is "weak": Parse
@@ -1013,6 +1045,9 @@ var wordAliases = map[string]string{
 // "react native", "spring boot", expressjs, "ruby on rails"), so a genuinely-named
 // stack is never gated. Membership is per-alias, not per-canonical; value is unused.
 var ambiguousWords = map[string]bool{
+	// Polish "konteneryzacja" containerizes freight as well as software ("konteneryzacja
+	// ładunków"), so it needs a technical token beside it.
+	"konteneryzacja": true, "konteneryzacji": true, "konteneryzacją": true, "konteneryzację": true,
 	// English-word collisions
 	"react":     true,
 	"swift":     true,
@@ -1825,6 +1860,178 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"tests d’intrusion", "penetration-testing"},
 	{"tests de pénétration", "penetration-testing"},
 	{"services rest", "rest"},
+	// batch 11 (2026-10-29, Polish market), mined from 9,835 open Polish-language
+	// postings (erecruiter, traffit, nofluffjobs, solidjobs, smartrecruiters, teamtailor,
+	// recruitee, eures, whatjobs-pl). Polish inflects, so each practice lists the cases
+	// the crawl carries. Left out: the nominative "systemy wbudowane" (an agency's "our
+	// services: … systemy wbudowane" boilerplate on every one of its postings; the
+	// requirement's own cases stay), bare "sztuczna inteligencja" and
+	// "cyberbezpieczeństwo" (an employer's pitch or sector more often than the craft, as
+	// in French), and "bazy danych", "analiza danych", "zarządzanie danymi" and "jakość
+	// danych" (a clerk's duty as often, or no canonical). "Sieci komputerowe" is in
+	// nonCorroboratingPhrases (an electrician installs them too), and the bare
+	// "konteneryzacja" in ambiguousWords (freight is containerized too).
+	{"testy jednostkowe", "unit-testing"}, {"testów jednostkowych", "unit-testing"}, {"testach jednostkowych", "unit-testing"}, {"testami jednostkowymi", "unit-testing"}, {"testow jednostkowych", "unit-testing"},
+	{"testy integracyjne", "integration-testing"}, {"testów integracyjnych", "integration-testing"}, {"testach integracyjnych", "integration-testing"}, {"testami integracyjnymi", "integration-testing"}, {"testow integracyjnych", "integration-testing"},
+	{"testy automatyczne", "test-automation"}, {"testów automatycznych", "test-automation"}, {"testach automatycznych", "test-automation"}, {"testami automatycznymi", "test-automation"}, {"testow automatycznych", "test-automation"}, {"automatyzacja testów", "test-automation"}, {"automatyzacji testów", "test-automation"}, {"automatyzację testów", "test-automation"}, {"automatyzacją testów", "test-automation"}, {"automatyzacji testow", "test-automation"}, {"testowania automatycznego", "test-automation"},
+	{"testy penetracyjne", "penetration-testing"}, {"testów penetracyjnych", "penetration-testing"}, {"testach penetracyjnych", "penetration-testing"},
+	{"ciągła integracja", "ci-cd"}, {"ciągłej integracji", "ci-cd"}, {"ciaglej integracji", "ci-cd"}, {"ciągłe wdrażanie", "ci-cd"}, {"ciągłego wdrażania", "ci-cd"}, {"ciągłemu wdrażaniu", "ci-cd"},
+	{"infrastruktura jako kod", "infrastructure-as-code"}, {"infrastruktury jako kodu", "infrastructure-as-code"}, {"infrastrukturą jako kod", "infrastructure-as-code"}, {"infrastrukturą jako kodem", "infrastructure-as-code"},
+	// Only the genitive ("system kontroli wersji"): a document controller writes the
+	// nominative, "kontrola wersji dokumentów".
+	{"kontroli wersji", "version-control"},
+	{"wzorce projektowe", "design-patterns"}, {"wzorców projektowych", "design-patterns"}, {"wzorcach projektowych", "design-patterns"}, {"wzorcami projektowymi", "design-patterns"}, {"wzorcow projektowych", "design-patterns"},
+	{"programowanie obiektowe", "oop"}, {"programowania obiektowego", "oop"}, {"programowaniu obiektowym", "oop"}, {"programowaniem obiektowym", "oop"},
+	{"systemy rozproszone", "distributed-systems"}, {"systemów rozproszonych", "distributed-systems"}, {"systemach rozproszonych", "distributed-systems"}, {"systemami rozproszonymi", "distributed-systems"}, {"systemow rozproszonych", "distributed-systems"},
+	{"systemów wbudowanych", "embedded-systems"}, {"systemach wbudowanych", "embedded-systems"}, {"systemami wbudowanymi", "embedded-systems"}, {"systemow wbudowanych", "embedded-systems"},
+	{"architektura sterowana zdarzeniami", "event-driven-architecture"}, {"architektury sterowanej zdarzeniami", "event-driven-architecture"}, {"architekturze sterowanej zdarzeniami", "event-driven-architecture"}, {"architekturą sterowaną zdarzeniami", "event-driven-architecture"},
+	{"relacyjne bazy danych", "rdbms"}, {"relacyjnych baz danych", "rdbms"}, {"relacyjnymi bazami danych", "rdbms"}, {"relacyjnych bazach danych", "rdbms"}, {"relacyjną bazą danych", "rdbms"}, {"relacyjnej bazy danych", "rdbms"}, {"relacyjna baza danych", "rdbms"},
+	{"bazy wektorowe", "vector-databases"}, {"baz wektorowych", "vector-databases"}, {"bazami wektorowymi", "vector-databases"}, {"bazach wektorowych", "vector-databases"}, {"wektorowe bazy danych", "vector-databases"}, {"wektorowych baz danych", "vector-databases"},
+	{"hurtownia danych", "data-warehousing"}, {"hurtowni danych", "data-warehousing"}, {"hurtownie danych", "data-warehousing"}, {"hurtowniami danych", "data-warehousing"}, {"hurtowniach danych", "data-warehousing"}, {"hurtownię danych", "data-warehousing"}, {"hurtownią danych", "data-warehousing"},
+	{"modelowanie danych", "data-modeling"}, {"modelowania danych", "data-modeling"}, {"modelowaniu danych", "data-modeling"}, {"modelowaniem danych", "data-modeling"},
+	{"inżynieria danych", "data-engineering"}, {"inżynierii danych", "data-engineering"}, {"inżynierią danych", "data-engineering"}, {"inzynierii danych", "data-engineering"},
+	{"potoki danych", "data-pipelines"}, {"potoków danych", "data-pipelines"}, {"potokach danych", "data-pipelines"}, {"potokami danych", "data-pipelines"}, {"potok danych", "data-pipelines"}, {"potoku danych", "data-pipelines"},
+	{"wizualizacja danych", "data-visualization"}, {"wizualizacji danych", "data-visualization"}, {"wizualizacją danych", "data-visualization"}, {"wizualizację danych", "data-visualization"},
+	{"uczenie maszynowe", "machine-learning"}, {"uczenia maszynowego", "machine-learning"}, {"uczeniem maszynowym", "machine-learning"}, {"uczeniu maszynowym", "machine-learning"},
+	{"uczenie głębokie", "deep-learning"}, {"uczenia głębokiego", "deep-learning"}, {"głębokie uczenie", "deep-learning"}, {"głębokiego uczenia", "deep-learning"},
+	{"generatywna sztuczna inteligencja", "generative-ai"}, {"generatywnej sztucznej inteligencji", "generative-ai"}, {"generatywną sztuczną inteligencję", "generative-ai"}, {"generatywna ai", "generative-ai"}, {"generatywnej ai", "generative-ai"}, {"generatywną ai", "generative-ai"}, {"generatywne ai", "generative-ai"},
+	{"duże modele językowe", "llm"}, {"dużych modeli językowych", "llm"}, {"dużych modelach językowych", "llm"}, {"dużymi modelami językowymi", "llm"},
+	{"przetwarzanie języka naturalnego", "nlp"}, {"przetwarzania języka naturalnego", "nlp"},
+	{"widzenie komputerowe", "computer-vision"}, {"widzenia komputerowego", "computer-vision"},
+	{"bezpieczeństwo aplikacji", "application-security"}, {"bezpieczeństwa aplikacji", "application-security"}, {"bezpieczeństwem aplikacji", "application-security"},
+	{"sieci komputerowe", "networking"}, {"sieci komputerowych", "networking"}, {"sieciach komputerowych", "networking"},
+
+	// batch 12 (2026-10-29, Croatian, Serbian and Bosnian market), the BCS names of English
+	// canonicals measured over the open postings placed in hr/rs/ba/me. BCS inflects, so
+	// each term is listed in the cases a posting writes it in, in both standards
+	// (strojno/mašinsko učenje, sustav/sistem, sigurnost/bezbednost), with and without the
+	// diacritics (đ as "dj" and as "d"). Left out, as in the other languages: bare "baze
+	// podataka" and "analiza podataka" (no canonical), "umjetna inteligencija" (the English
+	// "artificial intelligence" is no alias either), "informacijska sigurnost" (an
+	// employer's department more often than the craft), "kontinuirana isporuka" (a
+	// delivery promise too) and "kontrola verzija" (a document controller's duty too).
+	{"strojno učenje", "machine-learning"}, {"strojno ucenje", "machine-learning"},
+	{"strojnog učenja", "machine-learning"}, {"strojnog ucenja", "machine-learning"},
+	{"strojnom učenju", "machine-learning"}, {"strojnom ucenju", "machine-learning"},
+	{"strojnim učenjem", "machine-learning"}, {"strojnim ucenjem", "machine-learning"},
+	{"mašinsko učenje", "machine-learning"}, {"masinsko ucenje", "machine-learning"},
+	{"mašinskog učenja", "machine-learning"}, {"masinskog ucenja", "machine-learning"},
+	{"mašinskom učenju", "machine-learning"}, {"masinskom ucenju", "machine-learning"},
+	{"mašinskim učenjem", "machine-learning"}, {"masinskim ucenjem", "machine-learning"},
+	{"duboko učenje", "deep-learning"}, {"duboko ucenje", "deep-learning"},
+	{"dubokog učenja", "deep-learning"}, {"dubokog ucenja", "deep-learning"},
+	{"dubokom učenju", "deep-learning"}, {"dubokom ucenju", "deep-learning"},
+	{"dubokim učenjem", "deep-learning"}, {"dubokim ucenjem", "deep-learning"},
+	{"generativna umjetna inteligencija", "generative-ai"},
+	{"generativne umjetne inteligencije", "generative-ai"},
+	{"generativnu umjetnu inteligenciju", "generative-ai"},
+	{"generativnoj umjetnoj inteligenciji", "generative-ai"},
+	{"generativna umetna inteligencija", "generative-ai"},
+	{"generativne umetne inteligencije", "generative-ai"},
+	{"generativna veštačka inteligencija", "generative-ai"},
+	{"generativna vestacka inteligencija", "generative-ai"},
+	{"generativne veštačke inteligencije", "generative-ai"},
+	{"generativne vestacke inteligencije", "generative-ai"},
+	{"generativnu veštačku inteligenciju", "generative-ai"},
+	{"generativnu vestacku inteligenciju", "generative-ai"}, {"generativni ai", "generative-ai"},
+	{"generativnog ai", "generative-ai"},
+	{"obrada prirodnog jezika", "nlp"}, {"obrade prirodnog jezika", "nlp"},
+	{"obradu prirodnog jezika", "nlp"}, {"obradi prirodnog jezika", "nlp"},
+	{"računalni vid", "computer-vision"}, {"racunalni vid", "computer-vision"},
+	{"računalnog vida", "computer-vision"}, {"racunalnog vida", "computer-vision"},
+	{"računalnom vidu", "computer-vision"}, {"racunalnom vidu", "computer-vision"},
+	{"računarski vid", "computer-vision"}, {"racunarski vid", "computer-vision"},
+	{"računarskog vida", "computer-vision"}, {"racunarskog vida", "computer-vision"},
+	{"kompjuterski vid", "computer-vision"}, {"kompjuterskog vida", "computer-vision"},
+	{"kibernetička sigurnost", "cybersecurity"}, {"kiberneticka sigurnost", "cybersecurity"},
+	{"kibernetičke sigurnosti", "cybersecurity"}, {"kiberneticke sigurnosti", "cybersecurity"},
+	{"kibernetičku sigurnost", "cybersecurity"}, {"kiberneticku sigurnost", "cybersecurity"},
+	{"kibernetičkoj sigurnosti", "cybersecurity"}, {"kibernetickoj sigurnosti", "cybersecurity"},
+	{"sajber bezbednost", "cybersecurity"}, {"sajber bezbednosti", "cybersecurity"},
+	{"cyber sigurnost", "cybersecurity"}, {"cyber sigurnosti", "cybersecurity"},
+	{"kibernetička bezbednost", "cybersecurity"}, {"kiberneticka bezbednost", "cybersecurity"},
+	{"kibernetičke bezbednosti", "cybersecurity"}, {"kiberneticke bezbednosti", "cybersecurity"},
+	{"mrežna sigurnost", "network-security"}, {"mrezna sigurnost", "network-security"},
+	{"mrežne sigurnosti", "network-security"}, {"mrezne sigurnosti", "network-security"},
+	{"mrežnu sigurnost", "network-security"}, {"mreznu sigurnost", "network-security"},
+	{"mrežnoj sigurnosti", "network-security"}, {"mreznoj sigurnosti", "network-security"},
+	{"mrežna bezbednost", "network-security"}, {"mrezna bezbednost", "network-security"},
+	{"mrežne bezbednosti", "network-security"}, {"mrezne bezbednosti", "network-security"},
+	{"kontinuirana integracija", "ci-cd"}, {"kontinuirane integracije", "ci-cd"},
+	{"kontinuiranu integraciju", "ci-cd"}, {"kontinuiranoj integraciji", "ci-cd"},
+	{"kontinualna integracija", "ci-cd"}, {"kontinualne integracije", "ci-cd"},
+	{"kontinualnu integraciju", "ci-cd"},
+	{"objektno orijentirano programiranje", "oop"}, {"objektno orijentiranog programiranja", "oop"},
+	{"objektno orijentiranom programiranju", "oop"}, {"objektno orijentisano programiranje", "oop"},
+	{"objektno orijentisanog programiranja", "oop"},
+	{"objektno orijentisanom programiranju", "oop"},
+	{"relacijska baza podataka", "rdbms"}, {"relacijske baze podataka", "rdbms"},
+	{"relacijsku bazu podataka", "rdbms"}, {"relacijskih baza podataka", "rdbms"},
+	{"relacijskim bazama podataka", "rdbms"}, {"relaciona baza podataka", "rdbms"},
+	{"relacione baze podataka", "rdbms"}, {"relacionu bazu podataka", "rdbms"},
+	{"relacionih baza podataka", "rdbms"}, {"relacionim bazama podataka", "rdbms"},
+	{"modeliranje podataka", "data-modeling"}, {"modeliranja podataka", "data-modeling"},
+	{"modeliranju podataka", "data-modeling"},
+	{"skladište podataka", "data-warehousing"}, {"skladiste podataka", "data-warehousing"},
+	{"skladišta podataka", "data-warehousing"}, {"skladista podataka", "data-warehousing"},
+	{"skladištu podataka", "data-warehousing"}, {"skladistu podataka", "data-warehousing"},
+	{"skladištima podataka", "data-warehousing"}, {"skladistima podataka", "data-warehousing"},
+	{"vizualizacija podataka", "data-visualization"},
+	{"vizualizacije podataka", "data-visualization"},
+	{"vizualizaciju podataka", "data-visualization"},
+	{"vizualizaciji podataka", "data-visualization"},
+	{"vizuelizacija podataka", "data-visualization"},
+	{"vizuelizacije podataka", "data-visualization"},
+	{"vizuelizaciju podataka", "data-visualization"},
+	{"znanost o podacima", "data-science"}, {"znanosti o podacima", "data-science"},
+	{"nauka o podacima", "data-science"}, {"nauke o podacima", "data-science"},
+	{"poslovna inteligencija", "business-intelligence"},
+	{"poslovne inteligencije", "business-intelligence"},
+	{"poslovnu inteligenciju", "business-intelligence"},
+	{"poslovnoj inteligenciji", "business-intelligence"},
+	{"ugrađeni sustavi", "embedded-systems"}, {"ugradjeni sustavi", "embedded-systems"},
+	{"ugradeni sustavi", "embedded-systems"}, {"ugrađenih sustava", "embedded-systems"},
+	{"ugradjenih sustava", "embedded-systems"}, {"ugradenih sustava", "embedded-systems"},
+	{"ugrađenim sustavima", "embedded-systems"}, {"ugradjenim sustavima", "embedded-systems"},
+	{"ugradenim sustavima", "embedded-systems"}, {"ugrađeni sistemi", "embedded-systems"},
+	{"ugradjeni sistemi", "embedded-systems"}, {"ugradeni sistemi", "embedded-systems"},
+	{"ugrađenih sistema", "embedded-systems"}, {"ugradjenih sistema", "embedded-systems"},
+	{"ugradenih sistema", "embedded-systems"}, {"ugrađenim sistemima", "embedded-systems"},
+	{"ugradjenim sistemima", "embedded-systems"}, {"ugradenim sistemima", "embedded-systems"},
+	{"distribuirani sustavi", "distributed-systems"},
+	{"distribuiranih sustava", "distributed-systems"},
+	{"distribuiranim sustavima", "distributed-systems"},
+	{"distribuirani sistemi", "distributed-systems"},
+	{"distribuiranih sistema", "distributed-systems"},
+	{"distribuiranim sistemima", "distributed-systems"},
+	{"jedinični testovi", "unit-testing"}, {"jedinicni testovi", "unit-testing"},
+	{"jediničnih testova", "unit-testing"}, {"jedinicnih testova", "unit-testing"},
+	{"jediničnim testovima", "unit-testing"}, {"jedinicnim testovima", "unit-testing"},
+	{"jedinično testiranje", "unit-testing"}, {"jedinicno testiranje", "unit-testing"},
+	{"jediničnog testiranja", "unit-testing"}, {"jedinicnog testiranja", "unit-testing"},
+	{"integracijsko testiranje", "integration-testing"},
+	{"integracijskog testiranja", "integration-testing"},
+	{"integracijski testovi", "integration-testing"},
+	{"integraciono testiranje", "integration-testing"},
+	{"integracioni testovi", "integration-testing"},
+	{"automatizacija testiranja", "test-automation"},
+	{"automatizacije testiranja", "test-automation"},
+	{"automatizaciju testiranja", "test-automation"},
+	{"automatizacijom testiranja", "test-automation"}, {"automatsko testiranje", "test-automation"},
+	{"automatskog testiranja", "test-automation"}, {"automatizirani testovi", "test-automation"},
+	{"automatiziranih testova", "test-automation"}, {"automatizovani testovi", "test-automation"},
+	{"automatizovanih testova", "test-automation"},
+	{"penetracijsko testiranje", "penetration-testing"},
+	{"penetracijskog testiranja", "penetration-testing"},
+	{"penetracijski testovi", "penetration-testing"},
+	{"penetraciono testiranje", "penetration-testing"},
+	{"penetracioni testovi", "penetration-testing"},
+	{"obrasci dizajna", "design-patterns"}, {"obrazaca dizajna", "design-patterns"},
+	{"dizajnerski obrasci", "design-patterns"}, {"dizajnerskih obrazaca", "design-patterns"},
+	{"infrastruktura kao kod", "infrastructure-as-code"},
+	{"infrastrukture kao koda", "infrastructure-as-code"},
+	{"mikroservisna arhitektura", "microservices"}, {"mikroservisne arhitekture", "microservices"},
+	{"mikroservisnu arhitekturu", "microservices"}, {"mikroservisnoj arhitekturi", "microservices"},
 }
 
 // professionalPhraseAliases is the non-engineering half of the IT-company role
@@ -2075,6 +2282,8 @@ var occupationalSafetyPhraseAliases = []phraseAlias{
 // requirement, and marketing postings carry that phrasing at scale.
 var nonCorroboratingPhrases = func() map[string]bool {
 	out := map[string]bool{
+		// An electrician installs "sieci komputerowe" too (batch 11).
+		"networking":                     true,
 		"technical-seo":                  true,
 		"link-building":                  true,
 		"paid-social":                    true,

@@ -31,6 +31,10 @@ func (lever) Provider() string { return "lever" }
 // the bar.
 func (lever) fullBoardListing() {}
 
+// emptyBoardListing: an unknown board answers 404, and an emptied one
+// answers 200 with a bare [] (2026-10-29); a null body fails Fetch. See the emptyBoardListing interface for the bar.
+func (lever) emptyBoardListing() {}
+
 func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	base := leverBaseURL
 	if e.Region == "eu" {
@@ -64,6 +68,9 @@ func (l lever) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}
 	if err := l.http.GetJSON(ctx, url, &postings); err != nil {
 		return nil, fmt.Errorf("lever: fetch board %s: %w", e.Board, err)
+	}
+	if postings == nil {
+		return nil, errListingAbsent("lever", e.Board, "postings")
 	}
 
 	jobs := make([]Job, 0, len(postings))

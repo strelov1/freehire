@@ -263,9 +263,28 @@ export function trackSignupIfNew(user: {
   track('signup', { method: user.has_password ? 'password' : 'oauth' });
 }
 
-/** Capture an explicit funnel event. Queued until the SDK has loaded. */
+// The funnel steps GA4 has built-in reports for go out under GA4's recommended names
+// (sign-ups, checkouts, purchases); every other event keeps its own. PostHog keeps the
+// original names, so its saved funnels are unaffected.
+const GA_EVENT_NAMES: Readonly<Record<string, string>> = {
+  signup: 'sign_up',
+  checkout_start: 'begin_checkout',
+  subscribe: 'purchase',
+};
+
+/** Capture an explicit funnel event in PostHog (queued until the SDK has loaded) and,
+ *  once consent has started it, in Google Analytics. An event fired before GA starts
+ *  is not held for it: GA only runs after consent, and an event from before that
+ *  choice is not one the visitor agreed to send.
+ *
+ *  GA never receives `q`, the text a visitor typed into search: it is the one free-text
+ *  property, so it can hold a name or an address, and Google's terms forbid sending
+ *  personal data. PostHog, behind our own proxy, keeps it. */
 export function track(event: string, props?: Record<string, unknown>): void {
   withPostHog((sdk) => sdk.capture(event, props));
+  if (!gaLoaded) return;
+  const { q: _q, ...gaProps } = props ?? {};
+  gtag('event', GA_EVENT_NAMES[event] ?? event, gaProps);
 }
 
 /** Bind analytics identity to a signed-in user by id only — never PII. */

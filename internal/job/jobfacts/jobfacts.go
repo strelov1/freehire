@@ -80,6 +80,26 @@ var (
 	reContractFR   = regexp.MustCompile(`\b(cdd|int[ée]rimaire|mission d'int[ée]rim|en int[ée]rim)\b|\bintérim\b`)
 	reFullTimeFR   = regexp.MustCompile(`\bcdi\b|\b(?:cdd|poste|contrat|emploi)\s*(?:[:\-–]\s*)?(?:à |a |en )?temps[ -](?:plein|complet)\b`)
 	reHoursTitleFR = regexp.MustCompile(`\b(temps[ -]partiel|mi-temps|temps[ -]plein|temps[ -]complet)\b`)
+	// Polish contract types, stated as a label ("Forma zatrudnienia: umowa o pracę",
+	// "Rodzaj umowy: B2B", "Wymiar etatu: pełny etat") or in the offer ("zatrudnienie w
+	// oparciu o umowę zlecenie"). An "umowa o pracę" (UoP) is the employment contract and,
+	// like the CDI, full time unless a part-time share is stated; B2B, the civil-law
+	// "umowa zlecenie" and "umowa o dzieło", a replacement and a fixed-term contract are
+	// contract; a paid internship and the "umowa o staż" are the internship.
+	//
+	// Each needs its contract word. A bare "B2B" is the business model as often ("sprzedaż
+	// B2B", "klientów B2B"), so it counts only as the contract ("umowa B2B", "kontrakt
+	// B2B", "na B2B", "forma współpracy: B2B", a salary "PLN/MD (B2B)"). A bare "staż" is
+	// work experience ("nagroda za staż pracy", "staż pracy min. 3 lata"), so the body
+	// counts it only in a contract phrase; the title's "Staż", "Stażysta", "Praktykant" and
+	// "Praktyki" count as they stand. RE2's \b is ASCII-only, so a word ending in a Polish
+	// letter spells its end out.
+	reTraineeTitlePL  = regexp.MustCompile(`(?:^|[^\p{L}])(?:staż|stażyst\p{L}*|praktykant\p{L}*|praktyki|program staż\p{L}*)(?:$|[^\p{L}])`)
+	reTraineeBodyPL   = regexp.MustCompile(`umow\p{L}* o staż|płatn\p{L}* staż|program\p{L}* stażow|ofert\p{L}* stażu|praktyk\p{L}* studenck`)
+	rePartTimePL      = regexp.MustCompile(`niepełn\p{L}* (?:etat|wymiar)|częś\p{L}* etatu|pół etatu|\b[1-4]/[2-5] etatu|\b(?:[1-9]\d)\s?% etatu|\b0[,.]\d+ etatu|praca dodatkowa`)
+	rePolishFullShare = regexp.MustCompile(`(?:^|[^\p{L}])(?:pełn\p{L}* etat|pełen etat|cały etat|pełn\p{L}* wymiar)`)
+	reFullTimePL      = regexp.MustCompile(`umow\p{L}* o prac[eęy]|\buop\b|(?:^|[^\p{L}])(?:pełn\p{L}* etat|pełen etat|pełn\p{L}* wymiar\p{L}*|cały etat)|na czas nieokreślony`)
+	reContractPL      = regexp.MustCompile(`umow\p{L}*[ -]zleceni|umow\p{L}* o dzieło|(?:umow\p{L}*|kontrakt|kontraktu|kontraktem|współprac\p{L}*|na|on|w oparciu o|(?:zatrudnieni\p{L}*|współprac\p{L}*|prac\p{L}*) w modelu)\s+b2b\b|(?:forma|rodzaj)\s+(?:współpracy|zatrudnienia|umowy)\s*:\s*(?:kontrakt\s+)?b2b\b|(?:pln|zł|zl|eur)(?:$|[^\p{L}])[^\n.]{0,30}\(b2b\)|umow\p{L}* na zastępstwo|czas określony|kontrakt gospodarcz`)
 	// reFellowshipStaffRole excludes a "fellowship" mention that names the staff job
 	// running the program rather than the fellow's own position — e.g. "Fellowship
 	// Manager", "Fellowship Program Coordinator". Those are ordinary full-time/contract
@@ -99,7 +119,8 @@ func EmploymentType(title, description string) string {
 	switch {
 	case reFellowship.MatchString(s) && !reFellowshipStaffRole.MatchString(s):
 		return "fellowship"
-	case reInternship.MatchString(s) || reTraineeBodyFR.MatchString(s) || frenchTraineeTitle(t):
+	case reInternship.MatchString(s) || reTraineeBodyFR.MatchString(s) || frenchTraineeTitle(t) ||
+		reTraineeTitlePL.MatchString(t) || reTraineeTitleBCS.MatchString(t):
 		return "internship"
 	}
 	// A French title's own label is the advertised role's, and outranks a body that may
@@ -109,15 +130,38 @@ func EmploymentType(title, description string) string {
 		return h
 	}
 	switch {
-	case rePartTime.MatchString(s) || rePartTimeFR.MatchString(s):
+	case rePartTime.MatchString(s) || rePartTimeFR.MatchString(s) || bcsLabel(s, rePartTimeBCS):
 		return "part_time"
 	case reContractFR.MatchString(t):
 		return "contract"
 	case reFullTimeFR.MatchString(t):
 		return "full_time"
-	case reContract.MatchString(s) || reContractShorthand.MatchString(s) || reContractFR.MatchString(s):
+	case reContract.MatchString(s) || reContractShorthand.MatchString(s) || reContractFR.MatchString(s) ||
+		bcsLabel(s, reContractBCS):
 		return "contract"
-	case reFullTime.MatchString(s) || reFullTimeFR.MatchString(s):
+	case reFullTime.MatchString(s) || reFullTimeFR.MatchString(s) || bcsLabel(s, reFullTimeBCS):
+		return "full_time"
+	}
+	return polishEmploymentType(t, s)
+}
+
+// polishEmploymentType reads the Polish contract words (rePartTimePL and its siblings)
+// of the lowercased title t and posting s, "" when none is stated. It runs after every
+// English and French reading, so a body's internship phrase ("płatny staż") cannot
+// outrank an English "Full-time". A title's own share is the advertised role's; in the
+// body a share counts only when no full post is offered beside it ("pełny etat lub 3/4
+// etatu" is a choice, read as the employment contract).
+func polishEmploymentType(t, s string) string {
+	switch {
+	case reTraineeBodyPL.MatchString(s):
+		return "internship"
+	case rePartTimePL.MatchString(t):
+		return "part_time"
+	case rePartTimePL.MatchString(s) && !rePolishFullShare.MatchString(s):
+		return "part_time"
+	case reContractPL.MatchString(s):
+		return "contract"
+	case reFullTimePL.MatchString(s):
 		return "full_time"
 	}
 	return ""
@@ -138,6 +182,46 @@ func frenchHoursTitle(title string) string {
 		return "full_time"
 	}
 	return "part_time"
+}
+
+// Croatian, Serbian and Bosnian contract types, which a posting states as a phrase
+// ("ugovor o radu na neodređeno vrijeme", "Radni odnos: puno radno vreme", "ugovor na
+// određeno s mogućnošću produljenja"). The indefinite contract is the permanent one
+// (full_time, as a French CDI), the fixed-term contract and the work contract ("ugovor
+// o djelu", "autorski ugovor") are contract, and "nepuno radno vrijeme" is part-time.
+// The fixed-term contract outranks the permanent one, as everywhere above: "na određeno
+// vrijeme, uz mogućnost zasnivanja radnog odnosa na neodređeno" is fixed-term today.
+//
+// A phrase followed by "ili" offers both and states neither ("na određeno ili na
+// neodređeno vrijeme" in a civil-service eligibility clause, "na puno ili nepuno radno
+// vrijeme", "na određeno / neodređeno vrijeme"), see bcsLabel. The trainee words count
+// in the TITLE only: a body says "praksa" for good practice, "pripravnik" for a junior
+// colleague's mentoring, and a civil-service notice cites the "pripravnički staž" in the
+// eligibility rules it shares across all the posts it lists. "Skraćeno radno vrijeme" and "pola
+// radnog vremena" are absent: both are a parent's benefit in a perks list.
+var (
+	rePartTimeBCS     = regexp.MustCompile(`\bnepuno radno vr(?:ij)?eme\b`)
+	reContractBCS     = regexp.MustCompile(`\bna odre(?:đ|dj|d)eno\b|\bugovor(?:u|a)? (?:o d(?:j)?elu|na odre(?:đ|dj|d)eno)\b|\bautorski ugovor\b`)
+	reFullTimeBCS     = regexp.MustCompile(`\bna neodre(?:đ|dj|d)eno\b|\bpuno radno vr(?:ij)?eme\b|\bstalni ugovor\b|\bstalni radni odnos\b`)
+	reTraineeTitleBCS = regexp.MustCompile(`\b(?:pripravni(?:k|ca|ci)|praksa|praktikant(?:ica)?|sta(?:ž|z)ist(?:a|kinja)?)\b`)
+)
+
+// bcsLabel reports whether re matches s at a place neither preceded nor followed by
+// "ili" (or) or a slash, which would offer both arrangements: "na određeno ili na
+// neodređeno vrijeme", "na puno ili nepuno radno vrijeme", "Vrsta ugovora: na određeno
+// vrijeme / neodređeno vrijeme".
+func bcsLabel(s string, re *regexp.Regexp) bool {
+	for _, m := range re.FindAllStringIndex(s, -1) {
+		before := strings.TrimSuffix(strings.TrimRight(s[:m[0]], " "), " na")
+		rest := strings.TrimLeft(s[m[1]:], " ")
+		rest = strings.TrimPrefix(strings.TrimPrefix(rest, "vrijeme "), "vreme ")
+		alternative := strings.HasSuffix(before, " ili") || strings.HasSuffix(before, "/") ||
+			strings.HasPrefix(rest, "ili ") || strings.HasPrefix(rest, "/")
+		if !alternative {
+			return true
+		}
+	}
+	return false
 }
 
 // EducationLevel resolves the required education from the description, returning

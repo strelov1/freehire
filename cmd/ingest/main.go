@@ -334,6 +334,9 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 	// cannot prove a full listing — but its grace window absorbs that, so its finished boards
 	// close within themselves on that window (see sweepableBoards).
 	sliceBoardListing := sources.SliceBoardListingProviders(registry)
+	// An emptyBoardListing provider's adapter answers an emptied board distinguishably from a
+	// failed fetch, so a finished board that listed nothing joins its board scope too.
+	emptyBoardListing := sources.EmptyBoardListingProviders(registry)
 	for _, provider := range sweepableProviders(runStats) {
 		if selfClosing[provider] {
 			continue
@@ -367,7 +370,13 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 		// registered as listing a board to completion, or as a bounded slice whose grace window
 		// stands in for that proof — see sweepableBoards for the full gate. Reuses this
 		// provider's own cutoff: the default for a complete listing, the grace window for a slice.
-		boards := sweepableBoards(runStats[provider], hasGrace, fullCatalog[provider], fullBoardListing[provider], sliceBoardListing[provider], crossShardAmbiguousBoards)
+		boards := sweepableBoards(runStats[provider], boardScope{
+			hasGrace:          hasGrace,
+			fullCatalog:       fullCatalog[provider],
+			fullBoardListing:  fullBoardListing[provider],
+			sliceBoardListing: sliceBoardListing[provider],
+			emptyBoardListing: emptyBoardListing[provider],
+		}, crossShardAmbiguousBoards)
 		if len(boards) > 0 {
 			boardClosed, boardFailed := sweepBoards(ctx, queries, provider, cutoff, boards)
 			log.Printf("closed %d stale %s jobs across %d finished board(s) (unseen for %s)", boardClosed, provider, len(boards), window)
@@ -500,11 +509,16 @@ func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cuto
 	return closed, failed
 }
 
+// boardScope is the per-provider registry facts sweepableBoards gates on, resolved by the caller
+// — the same convention sweepBySource uses, rather than re-deriving them from the raw registry
+// maps.
+type boardScope struct {
+	hasGrace, fullCatalog, fullBoardListing, sliceBoardListing, emptyBoardListing bool
+}
+
 // sweepableBoards returns, sorted and de-duplicated, the boards of one provider the
 // board-scoped close may retire this run: those the run structurally proved it covered
-// (stats.QualifyingBoards, see pipeline.boardQualifies), gated on four pre-resolved,
-// per-provider facts the caller has already looked up — the same convention sweepBySource
-// uses, rather than this function re-deriving them from the raw registry maps itself.
+// (stats.QualifyingBoards, see pipeline.boardQualifies), gated on the provider's markers.
 //
 // fullBoardListing must be true: a provider whose adapter is not registered as listing a
 // board to completion never contributes to the board scope, however its crawl went — see
@@ -532,16 +546,26 @@ func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cuto
 // own that the board is unambiguous. Refusing here is what catches what a single Run() call
 // structurally cannot.
 //
+// emptyBoardListing adds the boards the run finished whose listing named nothing
+// (stats.EmptyBoards, see pipeline.boardListedEmpty) — an employer that took every posting down.
+// boardQualifies refuses them, because on most adapters an empty answer cannot be told from a
+// broken crawl, and their last postings then waited 30 days for the empty-feed net; an adapter
+// carrying sources.emptyBoardListing has proven that it can tell them apart. Only on a complete
+// listing: a slice that came back empty says nothing about the rest of the board.
+//
 // De-duplication guards against a board legitimately appearing twice in one run (a repeated
 // board-file entry, or one board id recurring across independent regional slices) double-
 // counting the close and its log line.
-func sweepableBoards(stats pipeline.Stats, hasGrace, fullCatalog, fullBoardListing, sliceBoardListing bool, crossShardAmbiguous map[string]bool) []string {
-	complete := fullBoardListing && !hasGrace
-	slice := sliceBoardListing && hasGrace
-	if fullCatalog || (!complete && !slice) {
+func sweepableBoards(stats pipeline.Stats, scope boardScope, crossShardAmbiguous map[string]bool) []string {
+	complete := scope.fullBoardListing && !scope.hasGrace
+	slice := scope.sliceBoardListing && scope.hasGrace
+	if scope.fullCatalog || (!complete && !slice) {
 		return nil
 	}
 	boards := slices.Clone(stats.QualifyingBoards)
+	if complete && scope.emptyBoardListing {
+		boards = append(boards, stats.EmptyBoards...)
+	}
 	sort.Strings(boards)
 	boards = slices.Compact(boards)
 	boards = slices.DeleteFunc(boards, func(board string) bool { return crossShardAmbiguous[board] })

@@ -205,6 +205,11 @@ func Derive(in Input) Derived {
 	if r := location.NormalizeRegions(in.Regions); len(r) > 0 {
 		regions = r
 	}
+	// Parse already drops a global the location line contradicts; this applies the same
+	// rule to the final answer, whose countries and regions may come from a structured
+	// signal instead — an adapter's own country beside an "Anywhere" line, or a stored
+	// row's columns fed back by backfill-derive.
+	regions = location.WithoutShadowedGlobal(countries, regions, in.Location)
 	// An explicit city signal likewise replaces the dictionary's cities outright.
 	cities := geo.Cities
 	if len(in.Cities) > 0 {

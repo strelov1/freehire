@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"slices"
 	"strings"
 )
 
@@ -28,6 +29,30 @@ func schemaEmploymentType(t string) string {
 	default:
 		return ""
 	}
+}
+
+// schemaFixedTermEmploymentType reads employmentType, a string or a list, for boards whose
+// TEMPORARY is a fixed-term EMPLOYMENT (a French CDD, a Swiss "befristet" post) rather than
+// contract work, so it states nothing on its own; the first value that does decide wins.
+// Shared by taleez, dualoo and refline.
+func schemaFixedTermEmploymentType(raw json.RawMessage) string {
+	var types []string
+	if err := json.Unmarshal(raw, &types); err != nil {
+		var one string
+		if json.Unmarshal(raw, &one) != nil {
+			return ""
+		}
+		types = []string{one}
+	}
+	for _, t := range types {
+		if strings.EqualFold(strings.TrimSpace(t), "TEMPORARY") {
+			continue
+		}
+		if et := schemaEmploymentType(t); et != "" {
+			return et
+		}
+	}
+	return ""
 }
 
 // schemaScheduleType maps an employmentType that may be a string or a list, for the Dutch public
@@ -115,6 +140,23 @@ func (p *schemaPlaces) UnmarshalJSON(b []byte) error {
 	}
 	*p = []schemaPlace{one}
 	return nil
+}
+
+// schemaPlacesLocation renders a JobPosting's places as "Locality, Region" entries joined by
+// "; ", with the countries their addresses state. Shared by dualoo and refline.
+func schemaPlacesLocation(places schemaPlaces) (string, []string) {
+	var locs, countries []string
+	for _, pl := range places {
+		if loc := joinNonEmpty(pl.Address.AddressLocality, pl.Address.AddressRegion); loc != "" && !slices.Contains(locs, loc) {
+			locs = append(locs, loc)
+		}
+		for _, c := range countryFromCode(pl.Address.AddressCountry) {
+			if !slices.Contains(countries, c) {
+				countries = append(countries, c)
+			}
+		}
+	}
+	return strings.Join(locs, "; "), countries
 }
 
 // schemaNamedArea is one schema.org node that carries just a name — a Country, AdministrativeArea,

@@ -43,6 +43,48 @@ func TestRestrictionFromTitle(t *testing.T) {
 			nil, nil,
 		},
 		{
+			"closing bracket that is only a region",
+			"Staff Product Engineer, Frontend (LATAM)",
+			nil, []string{"latam"},
+		},
+		{
+			"closing bracket that is only a country",
+			"Senior Software Engineer, Applied AI (Netherlands)",
+			[]string{"nl"}, []string{"eu"},
+		},
+		{
+			"trailing dash segment that is only a country",
+			"Senior. QA Automation Engineer (Java-Playwright)-India",
+			[]string{"in"}, []string{"apac"},
+		},
+		{
+			"leading macro-region word",
+			"LATAM Senior QA Analyst (Data & ETL)",
+			nil, []string{"latam"},
+		},
+		{
+			// A bracket inside the title names a language's variety, not the role's place.
+			"inner bracket qualifying a language is ignored",
+			"Spanish (Latin America) Language Data Contributor",
+			nil, nil,
+		},
+		{
+			// A leading country is as often the market a role sells into.
+			"leading country word is ignored",
+			"Germany Sales Manager",
+			nil, nil,
+		},
+		{
+			"closing open-anywhere bracket without an anchor restricts nothing",
+			"Backend Engineer (Worldwide)",
+			nil, nil,
+		},
+		{
+			"trailing segment that is not only a place is ignored",
+			"Data Engineer - Germany or Remote EU",
+			nil, nil,
+		},
+		{
 			"empty title yields nothing",
 			"",
 			nil, nil,

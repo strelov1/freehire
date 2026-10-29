@@ -353,3 +353,127 @@ func TestEightfoldFetchRejectsBadBoard(t *testing.T) {
 		t.Fatal("Fetch with a board missing the domain half = nil error, want error")
 	}
 }
+
+// Eightfold must reach the pipeline as a HydratingSource and NOT as a StreamingSource: the
+// pipeline prefers FetchStream, which has no seen predicate, and re-reading every stored
+// posting's detail each run is what kept every run of 2026-10 on its crawl deadline.
+func TestEightfoldIsHydratingNotStreaming(t *testing.T) {
+	s := NewEightfold(nil)
+	if _, ok := s.(HydratingSource); !ok {
+		t.Error("eightfold should implement HydratingSource")
+	}
+	if _, ok := s.(StreamingSource); ok {
+		t.Error("eightfold must not implement StreamingSource — the pipeline would prefer it and lose the seen-skip")
+	}
+}
+
+// A posting the catalogue already holds is re-listed as a liveness refresh and costs no detail
+// request; only the unseen posting is hydrated.
+func TestEightfoldFetchNewSkipsDetailForSeenPostings(t *testing.T) {
+	fake := &rateLimitedHTTP{
+		list: eightfoldList(2,
+			`{"id": 111, "name": "Stored Role", "locations": ["Remote"]}`,
+			`{"id": 222, "name": "New Role", "locations": ["Remote"]}`),
+		detail: `{"job_description": "<p>fresh</p>"}`,
+	}
+	seen := func(id string) bool { return id == "111" }
+
+	jobs, err := eightfold{http: fake}.FetchNew(context.Background(), eightfoldEntry, seen)
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if fake.detailCalls != 1 {
+		t.Errorf("detailCalls = %d, want 1 (only the unseen posting is hydrated)", fake.detailCalls)
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	if len(byID) != 2 {
+		t.Fatalf("jobs = %+v, want both postings", jobs)
+	}
+	refresh := byID["111"]
+	if !refresh.SeenRefresh || refresh.Description != "" {
+		t.Errorf("seen posting = %+v, want a body-less SeenRefresh", refresh)
+	}
+	if refresh.Title != "Stored Role" || refresh.Company != "Microsoft" ||
+		refresh.URL != "https://apply.careers.microsoft.com/careers/job/111" {
+		t.Errorf("seen posting identity = %+v, want the listing's title, company and URL", refresh)
+	}
+	fresh := byID["222"]
+	if fresh.SeenRefresh || !strings.Contains(fresh.Description, "fresh") {
+		t.Errorf("unseen posting = %+v, want a hydrated job", fresh)
+	}
+}
+
+// A board with more new postings than one run may hydrate spends at most
+// eightfoldMaxNewPerBoard detail requests and leaves the rest for a later run, still
+// refreshing every stored posting — so a cold board converges over several runs instead of
+// holding the shard's whole request budget and saving nothing.
+func TestEightfoldFetchNewBoundsNewDetailsPerBoard(t *testing.T) {
+	var positions []string
+	for i := 1; i <= eightfoldMaxNewPerBoard+5; i++ {
+		positions = append(positions, `{"id": `+strconv.Itoa(i)+`, "name": "Role", "locations": ["Remote"]}`)
+	}
+	fake := &rateLimitedHTTP{
+		list:   eightfoldList(len(positions), positions...),
+		detail: `{"job_description": "<p>d</p>"}`,
+	}
+	// Two stored postings at the END of the listing: they must still be refreshed.
+	last, prev := strconv.Itoa(len(positions)), strconv.Itoa(len(positions)-1)
+	seen := func(id string) bool { return id == last || id == prev }
+
+	jobs, err := eightfold{http: fake}.FetchNew(context.Background(), eightfoldEntry, seen)
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if fake.detailCalls != eightfoldMaxNewPerBoard {
+		t.Errorf("detailCalls = %d, want %d", fake.detailCalls, eightfoldMaxNewPerBoard)
+	}
+	refreshed := 0
+	for _, j := range jobs {
+		if j.SeenRefresh {
+			refreshed++
+		}
+	}
+	if refreshed != 2 || len(jobs) != eightfoldMaxNewPerBoard+2 {
+		t.Errorf("got %d jobs (%d refreshes), want %d hydrated + 2 refreshes",
+			len(jobs), refreshed, eightfoldMaxNewPerBoard)
+	}
+}
+
+// The budget is spent on a random sample of the unseen positions, not on a fixed prefix of the
+// listing: a position the catalogue filter rejects is never stored, so it stays unseen, and a
+// fixed prefix of such positions would hold the budget on every run and starve the rest.
+func TestEightfoldFetchNewSamplesTheBudgetAcrossRuns(t *testing.T) {
+	var positions []string
+	for i := 1; i <= 2*eightfoldMaxNewPerBoard; i++ {
+		positions = append(positions, `{"id": `+strconv.Itoa(i)+`, "name": "Role", "locations": ["Remote"]}`)
+	}
+	list := eightfoldList(len(positions), positions...)
+	hydratedPastPrefix := false
+	for run := 0; run < 5 && !hydratedPastPrefix; run++ {
+		fake := &rateLimitedHTTP{list: list, detail: `{"job_description": "<p>d</p>"}`}
+		jobs, err := eightfold{http: fake}.FetchNew(context.Background(), eightfoldEntry, func(string) bool { return false })
+		if err != nil {
+			t.Fatalf("FetchNew: %v", err)
+		}
+		for _, j := range jobs {
+			if n, _ := strconv.Atoi(j.ExternalID); n > eightfoldMaxNewPerBoard && j.Description != "" {
+				hydratedPastPrefix = true
+			}
+		}
+	}
+	if !hydratedPastPrefix {
+		t.Error("five runs hydrated only the listing's first positions; the budget must reach past the prefix")
+	}
+}
+
+// FetchNew keeps the listing's all-or-nothing contract the fullBoardListing marker rests on.
+func TestEightfoldFetchNewPropagatesAListingError(t *testing.T) {
+	fake := &fakeHTTP{err: errors.New("boom")}
+	seen := func(string) bool { return true }
+	if _, err := NewEightfold(fake).(HydratingSource).FetchNew(context.Background(), eightfoldEntry, seen); err == nil {
+		t.Fatal("FetchNew succeeded despite a listing error")
+	}
+}

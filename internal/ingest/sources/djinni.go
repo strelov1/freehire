@@ -45,6 +45,11 @@ func (djinni) boardless() {}
 
 func (djinni) aggregator() {}
 
+// djinni's listing names only about the last month of postings (measured 2026-10-29: one stale
+// posting in eight was still live, every one of them posted earlier than that), so an older
+// live posting is never listed again; cmd/liveness reads the job page's inactive-ad alert.
+func (djinni) livenessProbed() {}
+
 // Fetch pages the listing from page 1 upward, mapping each page's JSON-LD JobPosting array to
 // jobs. It stops at the end of the feed, detected by the redirect: a past-the-end page 302s to
 // the bare listing (/jobs/), so the FINAL URL no longer carries the requested page marker.

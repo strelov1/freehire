@@ -109,12 +109,52 @@ func TestArbeitsagenturFetchMapsFirstPartyAndDropsExterne(t *testing.T) {
 	if j.PostedAt == nil || j.PostedAt.Format("2006-01-02") != "2026-07-18" {
 		t.Errorf("PostedAt = %v, want 2026-07-18", j.PostedAt)
 	}
-	// homeofficemoeglich:true (carried directly on the search result) → remote.
-	if !j.Remote || j.WorkMode != "remote" {
-		t.Errorf("home-office job: Remote=%v WorkMode=%q, want true/remote", j.Remote, j.WorkMode)
+	// homeofficemoeglich:true alone says home office is POSSIBLE, not that the role is remote.
+	if j.Remote || j.WorkMode != "hybrid" {
+		t.Errorf("home-office job: Remote=%v WorkMode=%q, want false/hybrid", j.Remote, j.WorkMode)
 	}
 	if ac := byID["AC-2"]; ac.Remote || ac.WorkMode != "" {
 		t.Errorf("non-home-office job AC-2: Remote=%v WorkMode=%q, want false/empty", ac.Remote, ac.WorkMode)
+	}
+}
+
+// TestArbeitsagenturWorkModeFromHomeOffice pins the home-office mapping against postings
+// captured live on 2026-10-29: the search result's homeofficemoeglich/homeofficetyp and the
+// detail's homeofficeprozent. Only a stated 100% is remote; any other home-office posting
+// sits at an on-site location and is hybrid; no home office states nothing.
+func TestArbeitsagenturWorkModeFromHomeOffice(t *testing.T) {
+	const page1 = `{"maxErgebnisse":4,"ergebnisliste":[
+	  {"referenznummer":"17751-44537925-1028-S","stellenangebotsTitel":"Datenschutzkoordinator (w/m/d)","firma":"Die Autobahn GmbH des Bundes Niederlassung Nordost Stolpe","stellenlokationen":[{"adresse":{"plz":"16540","ort":"Hohen Neuendorf","region":"BRANDENBURG","land":"DEUTSCHLAND"}}],"datumErsteVeroeffentlichung":"2026-10-29","homeofficemoeglich":true,"homeofficetyp":"NACH_VEREINBARUNG"},
+	  {"referenznummer":"10001-1003925365-S","stellenangebotsTitel":"2nd Level Support","firma":"Westhouse Professionals GmbH","stellenlokationen":[{"adresse":{"plz":"40764","ort":"Langenfeld (Rheinland)","region":"NORDRHEIN_WESTFALEN","land":"DEUTSCHLAND"}}],"datumErsteVeroeffentlichung":"2026-10-28","homeofficemoeglich":true,"homeofficetyp":"ANGABE_IN_PROZENT"},
+	  {"referenznummer":"19913-3085121793142000-S","stellenangebotsTitel":"NTT DATA Deutschland SE: Lead Forward Deployment Engineer (w/m/x) - AI & Enterprise Solutions","firma":"NTT DATA Deutschland SE","stellenlokationen":[{"adresse":{"plz":"20457","ort":"Hamburg","region":"HAMBURG","land":"DEUTSCHLAND"}}],"datumErsteVeroeffentlichung":"2026-10-28","homeofficemoeglich":true,"homeofficetyp":"ANGABE_IN_PROZENT"},
+	  {"referenznummer":"15861-44538481-1028-S","stellenangebotsTitel":"Abteilungsleitung Physical AI (m/w/d)","firma":"Fraunhofer-Gesellschaft e.V. Zentrale München","stellenlokationen":[{"adresse":{"plz":"53757","ort":"Sankt Augustin","region":"NORDRHEIN_WESTFALEN","land":"DEUTSCHLAND"}}],"datumErsteVeroeffentlichung":"2026-10-29","homeofficemoeglich":false}
+	]}`
+	fake := &arbeitsagenturFake{
+		searchByPage: map[int]string{1: page1},
+		detailByRef: map[string]string{
+			"17751-44537925-1028-S":    `{"homeofficemoeglich":true,"homeofficetyp":"NACH_VEREINBARUNG"}`,
+			"10001-1003925365-S":       `{"homeofficemoeglich":true,"homeofficetyp":"ANGABE_IN_PROZENT","homeofficeprozent":70}`,
+			"19913-3085121793142000-S": `{"homeofficemoeglich":true,"homeofficetyp":"ANGABE_IN_PROZENT","homeofficeprozent":100}`,
+			"15861-44538481-1028-S":    `{"homeofficemoeglich":false}`,
+		},
+	}
+	jobs, err := NewArbeitsagentur(fake).Fetch(context.Background(), CompanyEntry{Board: "Informatik"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	want := map[string]string{
+		"17751-44537925-1028-S":    "hybrid", // home office "by arrangement"
+		"10001-1003925365-S":       "hybrid", // 70% home office
+		"19913-3085121793142000-S": "remote", // 100% home office
+		"15861-44538481-1028-S":    "",       // no home office: silence, not on-site
+	}
+	if len(jobs) != len(want) {
+		t.Fatalf("len(jobs) = %d, want %d", len(jobs), len(want))
+	}
+	for _, j := range jobs {
+		if j.WorkMode != want[j.ExternalID] || j.Remote != (want[j.ExternalID] == "remote") {
+			t.Errorf("%s: WorkMode=%q Remote=%v, want %q", j.ExternalID, j.WorkMode, j.Remote, want[j.ExternalID])
+		}
 	}
 }
 

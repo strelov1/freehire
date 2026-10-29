@@ -73,7 +73,7 @@ func (s solides) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 			URL:         fmt.Sprintf("https://%s.vagas.solides.com.br/vaga/%d", e.Board, p.ID),
 			Title:       strings.TrimSpace(p.Title),
 			Company:     e.Company,
-			Location:    joinNonEmpty(p.City.Name, p.State.Code),
+			Location:    solidesLocation(p.City.Name, p.State.Code),
 			Description: sanitizeHTML(p.Description),
 			Remote:      p.HomeOffice,
 			// Sólides hosts Brazilian employers, and 2.6% of its open postings name no
@@ -85,6 +85,17 @@ func (s solides) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		})
 	}
 	return jobs, nil
+}
+
+// solidesLocation joins the city and the state code, and names Brazil after a state: the
+// code alone also spells a country (BA is Bosnia, RS Serbia), and the parser reads it as
+// the Brazilian state only when the line places it in Brazil or knows the town — which a
+// small town ("Luís Eduardo Magalhães, BA") is not.
+func solidesLocation(city, state string) string {
+	if state == "" {
+		return city
+	}
+	return joinNonEmpty(city, state, "Brasil")
 }
 
 // list pages through the tenant's postings, stopping at the response's totalPages.

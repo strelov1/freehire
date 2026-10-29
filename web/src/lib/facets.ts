@@ -442,6 +442,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   velorahr: 'Velora HR',
   talentsoft: 'Talentsoft',
   digitalrecruiters: 'DigitalRecruiters',
+  dualoo: 'Dualoo',
+  refline: 'Refline',
   darwinbox: 'Darwinbox',
   greythr: 'greytHR',
   helixjobs: 'helixjobs',
@@ -466,6 +468,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   infojobsbr: 'InfoJobs Brasil',
   builtin: 'Built In',
   xing: 'XING',
+  jobsch: 'jobs.ch',
+  swissdevjobs: 'SwissDevJobs',
   onapply: 'onapply',
   workwise: 'Workwise',
   werkenvoornederland: 'Werken voor Nederland',
@@ -477,6 +481,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   justjoin: 'Just Join IT',
   rocketjobs: 'RocketJobs',
   iimjobs: 'iimjobs',
+  cbop: 'Praca.gov.pl (CBOP)',
   shine: 'Shine.com',
   infostud: 'Poslovi Infostud',
   spainjobs: 'SpainJobs.io',
@@ -495,6 +500,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   taleez: 'Taleez',
   sapoemprego: 'SAPO Emprego',
   netempregos: 'Net-Empregos',
+  hzz: 'HZZ (Burza rada)',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

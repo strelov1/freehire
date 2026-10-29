@@ -41,3 +41,18 @@ func TestSchemaNamedAreasDecodesSingleObjectOrArray(t *testing.T) {
 		})
 	}
 }
+
+func TestSchemaFixedTermEmploymentType(t *testing.T) {
+	for raw, want := range map[string]string{
+		`["FULL_TIME"]`:             "full_time",
+		`["TEMPORARY","FULL_TIME"]`: "full_time",
+		`["TEMPORARY"]`:             "",
+		`"PART_TIME"`:               "part_time",
+		`["INTERN"]`:                "internship",
+		`null`:                      "",
+	} {
+		if got := schemaFixedTermEmploymentType([]byte(raw)); got != want {
+			t.Errorf("schemaFixedTermEmploymentType(%s) = %q, want %q", raw, got, want)
+		}
+	}
+}

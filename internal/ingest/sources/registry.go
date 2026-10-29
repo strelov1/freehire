@@ -115,6 +115,19 @@ func FullBoardListingProviders(reg map[string]Source) map[string]bool {
 	return out
 }
 
+// EmptyBoardListingProviders returns the provider names in reg whose adapter carries the
+// emptyBoardListing marker: a finished crawl of one of their boards that listed nothing is
+// evidence the board is empty, so cmd/ingest admits it to the board-scoped close.
+func EmptyBoardListingProviders(reg map[string]Source) map[string]bool {
+	out := make(map[string]bool)
+	for name, src := range reg {
+		if _, ok := src.(emptyBoardListing); ok {
+			out[name] = true
+		}
+	}
+	return out
+}
+
 // AggregatorProviders returns the sorted provider names in reg that aggregate postings
 // from many companies (see aggregator). The cross-source dedup pass uses this to tell an
 // aggregator copy (which may be suppressed) from a first-party ATS posting (which wins).
@@ -449,6 +462,9 @@ func All(c HTTPClient) map[string]Source {
 		// page's Next.js flight. See justjoin.go.
 		NewJustJoin(c),
 		NewRocketJobs(c),
+		// Centralna Baza Ofert Pracy (oferty.praca.gov.pl): Poland's public job board, listed whole
+		// from the portal's search API, whose rows carry the full offer. See cbop.go.
+		NewCBOP(c),
 		NewWantapply(c),
 		NewInfoJobs(c),
 		NewJobtech(c),
@@ -633,6 +649,10 @@ func All(c HTTPClient) map[string]Source {
 		// sitemaps and hydrating each new posting from the Apollo cache its page server-renders.
 		// See xing.go.
 		NewXing(c),
+		// jobs.ch / jobup.ch: JobCloud's two Swiss national boards, one posting pool enumerated from
+		// both job sitemaps plus the newest date-sorted search pages, each new posting's body read
+		// from its page's server-rendered state. See jobsch.go.
+		NewJobsCh(c),
 		// onapply: a German ATS whose vendor-wide job board exposes one keyless search index
 		// over every tenant, each hit carrying the whole posting. See onapply.go.
 		NewOnapply(c),
@@ -981,6 +1001,9 @@ func All(c HTTPClient) map[string]Source {
 	// Free-Work: France's IT-only job board (freelance missions and employment), enumerated from
 	// its public API, each new posting's body read from its own resource. See freework.go.
 	registry["freework"] = NewFreeWork(c)
+	// SwissDevJobs: Switzerland's IT-only job board, enumerated from its public jobsLight feed, each
+	// new posting's body read from its page's server-rendered state. See swissdevjobs.go.
+	registry["swissdevjobs"] = NewSwissDevJobs(c)
 	// Cadremploi: France's job board for managers and professionals, enumerated from its paged
 	// online-postings sitemap, each new posting's body read from its page's schema.org JobPosting.
 	// Behind Cloudflare: crawled through the Scrapling tier (scraplingProviders). See cadremploi.go.
@@ -1003,6 +1026,12 @@ func All(c HTTPClient) map[string]Source {
 	// Taleez: a French ATS with no per-customer listing, enumerated from its job sitemap, each
 	// new posting read from its page's schema.org JobPosting. See taleez.go.
 	registry["taleez"] = NewTaleez(c, c)
+	// Dualoo: a Swiss ATS for SMEs and municipalities, enumerated from its per-customer sitemaps,
+	// each new posting read from its page's schema.org JobPosting. See dualoo.go.
+	registry["dualoo"] = NewDualoo(c, c)
+	// Refline: a Swiss ATS strong in the public sector, enumerated from the sitemaps robots.txt
+	// names, each job read from one publication's schema.org JobPosting. See refline.go.
+	registry["refline"] = NewRefline(c, c, c)
 	// SAPO Emprego: a Portuguese general job board, enumerated from its offers sitemap, each new
 	// posting's facts read from its page's schema.org JobPosting. See sapoemprego.go.
 	registry["sapoemprego"] = NewSapoEmprego(c)
@@ -1013,6 +1042,10 @@ func All(c HTTPClient) map[string]Source {
 	// Net-Empregos: a Portuguese general job board, enumerated from its sitemap and RSS feeds,
 	// each new posting's body read from its page's schema.org JobPosting. See netempregos.go.
 	registry["netempregos"] = NewNetEmpregos(c)
+	// HZZ: the Croatian Employment Service's job exchange, enumerated from its county RSS feeds,
+	// each new vacancy's employer and body read from its print page. The site answers nothing
+	// without the session cookie its first response sets, hence the cookie client. See hzz.go.
+	registry["hzz"] = cookieSessionSource[hzzGetter](c, NewHZZ)
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the
@@ -1097,7 +1130,7 @@ func singleUseConnSource[T any](c HTTPClient, build func(T) Source) Source {
 // browserUASource builds a registry entry for an adapter whose platform refuses any client
 // that identifies itself, on a path that platform's own robots.txt allows (4dayweek). It
 // mirrors cookieSessionSource exactly, including its nil-transport case for the taxonomy path.
-// See browserUserAgent for the measurement, and for the line this does NOT cross.
+// See BrowserUserAgent for the measurement, and for the line this does NOT cross.
 func browserUASource[T any](c HTTPClient, build func(T) Source) Source {
 	if c == nil {
 		var zero T

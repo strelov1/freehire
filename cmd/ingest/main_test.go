@@ -155,23 +155,23 @@ func TestSweepableCompanies(t *testing.T) {
 func TestSweepableBoards(t *testing.T) {
 	noneAmbiguous := map[string]bool{}
 	cases := []struct {
-		name                                                       string
-		stats                                                      pipeline.Stats
-		hasGrace, fullCatalog, fullBoardListing, sliceBoardListing bool
-		crossShardAmbiguous                                        map[string]bool
-		want                                                       []string
+		name                string
+		stats               pipeline.Stats
+		scope               boardScope
+		crossShardAmbiguous map[string]bool
+		want                []string
 	}{
 		{
-			name:             "registered provider's qualifying boards are returned sorted",
-			stats:            pipeline.Stats{QualifyingBoards: []string{"zeta-inc", "acme-corp"}},
-			fullBoardListing: true,
-			want:             []string{"acme-corp", "zeta-inc"},
+			name:  "registered provider's qualifying boards are returned sorted",
+			scope: boardScope{fullBoardListing: true},
+			stats: pipeline.Stats{QualifyingBoards: []string{"zeta-inc", "acme-corp"}},
+			want:  []string{"acme-corp", "zeta-inc"},
 		},
 		{
-			name:             "duplicate boards are de-duplicated",
-			stats:            pipeline.Stats{QualifyingBoards: []string{"acme-corp", "acme-corp"}},
-			fullBoardListing: true,
-			want:             []string{"acme-corp"},
+			name:  "duplicate boards are de-duplicated",
+			scope: boardScope{fullBoardListing: true},
+			stats: pipeline.Stats{QualifyingBoards: []string{"acme-corp", "acme-corp"}},
+			want:  []string{"acme-corp"},
 		},
 		{
 			name:  "a provider not registered as fullBoardListing gets none",
@@ -181,37 +181,32 @@ func TestSweepableBoards(t *testing.T) {
 		{
 			// Distinguishes hasGrace from fullCatalog independently (both otherwise zero the
 			// result the same way), so a future edit transposing them at the call site fails.
-			name:             "a sweepGrace provider is excluded even if registered, and not for the fullCatalog reason",
-			stats:            pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
-			hasGrace:         true,
-			fullCatalog:      false,
-			fullBoardListing: true,
-			want:             nil,
+			name:  "a sweepGrace provider is excluded even if registered, and not for the fullCatalog reason",
+			scope: boardScope{hasGrace: true, fullCatalog: false, fullBoardListing: true},
+			stats: pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			want:  nil,
 		},
 		{
-			name:             "a fullCatalog provider is excluded even if registered, and not for the sweepGrace reason",
-			stats:            pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
-			hasGrace:         false,
-			fullCatalog:      true,
-			fullBoardListing: true,
-			want:             nil,
+			name:  "a fullCatalog provider is excluded even if registered, and not for the sweepGrace reason",
+			scope: boardScope{hasGrace: false, fullCatalog: true, fullBoardListing: true},
+			stats: pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			want:  nil,
 		},
 		{
 			// whatjobs: a keyword board read to a page budget never proves a full listing, but its
 			// grace window absorbs the drift past that budget, so its finished boards close on it.
-			name:              "a sliceBoardListing provider's boards are returned on its grace window",
-			stats:             pipeline.Stats{QualifyingBoards: []string{"data engineer"}},
-			hasGrace:          true,
-			sliceBoardListing: true,
-			want:              []string{"data engineer"},
+			name:  "a sliceBoardListing provider's boards are returned on its grace window",
+			scope: boardScope{hasGrace: true, sliceBoardListing: true},
+			stats: pipeline.Stats{QualifyingBoards: []string{"data engineer"}},
+			want:  []string{"data engineer"},
 		},
 		{
 			// Without a grace window the slice marker would close on the 48h default whatever sat
 			// past the page budget for two days.
-			name:              "a sliceBoardListing provider without a grace window gets none",
-			stats:             pipeline.Stats{QualifyingBoards: []string{"data engineer"}},
-			sliceBoardListing: true,
-			want:              nil,
+			name:  "a sliceBoardListing provider without a grace window gets none",
+			scope: boardScope{sliceBoardListing: true},
+			stats: pipeline.Stats{QualifyingBoards: []string{"data engineer"}},
+			want:  nil,
 		},
 		{
 			// The cross-shard case (freehire#2328 review): a board name this provider's run
@@ -220,8 +215,38 @@ func TestSweepableBoards(t *testing.T) {
 			// groups by company slug, not board, so the other region may be a different
 			// shard's problem entirely. sweepableBoards must refuse it regardless.
 			name:                "a board ambiguous across the full unsharded catalog is excluded even though this run's own Stats saw it as unambiguous",
+			scope:               boardScope{fullBoardListing: true},
 			stats:               pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
-			fullBoardListing:    true,
+			crossShardAmbiguous: map[string]bool{"acme-corp": true},
+			want:                nil,
+		},
+		{
+			// An employer that took every posting down: the run finished the board and its
+			// listing named nothing. An adapter that answers an emptied board distinguishably from
+			// a failed fetch closes it like any other finished board.
+			name:  "an emptyBoardListing provider's empty boards join its qualifying ones",
+			scope: boardScope{fullBoardListing: true, emptyBoardListing: true},
+			stats: pipeline.Stats{QualifyingBoards: []string{"zeta-inc"}, EmptyBoards: []string{"acme-corp"}},
+			want:  []string{"acme-corp", "zeta-inc"},
+		},
+		{
+			// fullBoardListing alone proves a listing was read to its end, not that an empty
+			// answer was a listing at all — a challenge page parses to nothing too.
+			name:  "a provider without emptyBoardListing gets none of its empty boards",
+			scope: boardScope{fullBoardListing: true},
+			stats: pipeline.Stats{QualifyingBoards: []string{"zeta-inc"}, EmptyBoards: []string{"acme-corp"}},
+			want:  []string{"zeta-inc"},
+		},
+		{
+			name:  "an empty board needs a complete listing, not a slice",
+			scope: boardScope{hasGrace: true, sliceBoardListing: true, emptyBoardListing: true},
+			stats: pipeline.Stats{EmptyBoards: []string{"data engineer"}},
+			want:  nil,
+		},
+		{
+			name:                "an empty board ambiguous across the unsharded catalog is excluded",
+			scope:               boardScope{fullBoardListing: true, emptyBoardListing: true},
+			stats:               pipeline.Stats{EmptyBoards: []string{"acme-corp"}},
 			crossShardAmbiguous: map[string]bool{"acme-corp": true},
 			want:                nil,
 		},
@@ -232,7 +257,7 @@ func TestSweepableBoards(t *testing.T) {
 			if ambiguous == nil {
 				ambiguous = noneAmbiguous
 			}
-			got := sweepableBoards(tc.stats, tc.hasGrace, tc.fullCatalog, tc.fullBoardListing, tc.sliceBoardListing, ambiguous)
+			got := sweepableBoards(tc.stats, tc.scope, ambiguous)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("sweepableBoards() = %v, want %v", got, tc.want)
 			}
