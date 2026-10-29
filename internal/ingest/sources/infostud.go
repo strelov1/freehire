@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 	"golang.org/x/time/rate"
 )
 
@@ -411,7 +413,7 @@ func infostudJob(p infostudPosting, c infostudCard) (Job, bool) {
 	if co := infostudClean(p.Company); co != "" {
 		j.Company = co
 	}
-	body := strings.TrimSpace(p.TextAd)
+	body := strings.TrimSpace(infostudDropHidden(p.TextAd))
 	if j.Title == "" || j.Company == "" || body == "" {
 		return Job{}, false
 	}
@@ -489,4 +491,52 @@ func infostudSalary(p infostudPosting) (lo int, hi *int, currency, period string
 		hi = &v
 	}
 	return lo, hi, currency, period, true
+}
+
+// infostudDropHidden removes the elements the page hides with an inline display:none. Every
+// posting's body carries one, a tracking watermark ("<li style="display:none;">Reference:
+// <token></li>"), and the sanitizer keeps the element while dropping the style that hid it.
+func infostudDropHidden(s string) string {
+	if !strings.Contains(strings.ToLower(s), "none") {
+		return s
+	}
+	nodes, err := html.ParseFragment(strings.NewReader(s), &html.Node{Type: html.ElementNode, Data: "div", DataAtom: atom.Div})
+	if err != nil {
+		return s
+	}
+	var drop func(n *html.Node)
+	drop = func(n *html.Node) {
+		for c := n.FirstChild; c != nil; {
+			next := c.NextSibling
+			if infostudHidden(c) {
+				n.RemoveChild(c)
+			} else {
+				drop(c)
+			}
+			c = next
+		}
+	}
+	var b strings.Builder
+	for _, n := range nodes {
+		if infostudHidden(n) {
+			continue
+		}
+		drop(n)
+		if err := html.Render(&b, n); err != nil {
+			return s
+		}
+	}
+	return b.String()
+}
+
+func infostudHidden(n *html.Node) bool {
+	if n.Type != html.ElementNode {
+		return false
+	}
+	for _, a := range n.Attr {
+		if a.Key == "style" && strings.Contains(strings.ReplaceAll(strings.ToLower(a.Val), " ", ""), "display:none") {
+			return true
+		}
+	}
+	return false
 }

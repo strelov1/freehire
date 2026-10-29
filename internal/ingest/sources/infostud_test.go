@@ -122,6 +122,11 @@ func TestInfostudFetchNewGated(t *testing.T) {
 	if plain.Company != "Triumf Refrigeration" || !strings.Contains(plain.Description, "knjigovođu") {
 		t.Errorf("Triumf company %q body %.80q", plain.Company, plain.Description)
 	}
+	for _, j := range []Job{remote, hybrid, plain} {
+		if strings.Contains(j.Description, "Reference:") {
+			t.Errorf("%s body keeps the hidden Reference watermark", j.ExternalID)
+		}
+	}
 	if plain.PostedAt == nil || plain.PostedAt.Format("2006-01-02") != "2026-10-26" {
 		t.Errorf("Triumf posted = %v, want 2026-10-26", plain.PostedAt)
 	}
@@ -245,5 +250,13 @@ func TestInfostudSalary(t *testing.T) {
 		if ok != c.ok || lo != c.lo || period != c.period || (hi == nil) != (c.hi == 0) || (hi != nil && *hi != c.hi) {
 			t.Errorf("%s: got %d-%v %q ok=%v", c.name, lo, hi, period, ok)
 		}
+	}
+}
+
+func TestInfostudDropHidden(t *testing.T) {
+	in := `<ul><li>Keep</li><li style="display:none;" class="x">Reference: abc</li></ul><div style="display: none"><ul></ul></div><p>Tail</p>`
+	got := infostudDropHidden(in)
+	if strings.Contains(got, "Reference") || strings.Contains(got, "display") || !strings.Contains(got, "<li>Keep</li>") || !strings.Contains(got, "<p>Tail</p>") {
+		t.Errorf("infostudDropHidden = %q", got)
 	}
 }
