@@ -101,7 +101,7 @@
   "web/src/routes/insights/companies/+page.svelte": 2,
   "web/src/routes/insights/roles/[category]/+page.svelte": 2,
   "web/src/routes/insights/skills/[category]/+page.svelte": 2,
-  "web/src/routes/my/+layout.svelte": 2,
+  "web/src/routes/my/+layout.svelte": 3,
   "web/src/routes/my/market-pulse/[skill]/+page.svelte": 1,
   "web/src/routes/my/market-pulse/+page.svelte": 2,
   "web/src/routes/my/profile/cv-readiness/+page@my.svelte": 2,
