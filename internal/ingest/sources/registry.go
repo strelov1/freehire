@@ -128,6 +128,24 @@ func EmptyBoardListingProviders(reg map[string]Source) map[string]bool {
 	return out
 }
 
+// ScopesBoardsByRegion reports whether src narrows a board to one region by its posting URLs
+// (RegionScopedBoards), so a board name repeated across its regions is not ambiguous.
+func ScopesBoardsByRegion(src Source) bool {
+	_, ok := src.(RegionScopedBoards)
+	return ok
+}
+
+// BoardURLPrefix returns the prefix every posting URL of src's board in region starts with, for
+// an adapter that scopes boards by region. ok is false for any other adapter, and for a region
+// the adapter does not know.
+func BoardURLPrefix(src Source, region string) (string, bool) {
+	rs, ok := src.(RegionScopedBoards)
+	if !ok {
+		return "", false
+	}
+	return rs.BoardURLPrefix(region)
+}
+
 // AggregatorProviders returns the sorted provider names in reg that aggregate postings
 // from many companies (see aggregator). The cross-source dedup pass uses this to tell an
 // aggregator copy (which may be suppressed) from a first-party ATS posting (which wins).

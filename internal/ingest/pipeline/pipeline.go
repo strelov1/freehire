@@ -255,12 +255,12 @@ type Stats struct {
 	// structurally PROVED it covered — see boardQualifies. It is the post-run sweep's board
 	// scope input (freehire#2328): cmd/ingest still gates a board-scoped close on the
 	// provider's adapter carrying the fullBoardListing marker before using any of these.
-	QualifyingBoards []string
+	QualifyingBoards []BoardRef
 	// EmptyBoards lists the boards this run crawled to completion whose listing named no
 	// posting at all — see boardListedEmpty. cmd/ingest adds them to the board scope only for a
 	// provider whose adapter is registered as proving an empty answer (emptyBoardListing on top
 	// of fullBoardListing); for every other provider an empty answer may be a broken crawl.
-	EmptyBoards []string
+	EmptyBoards []BoardRef
 	// UnprovenCompanies lists the company slugs whose postings this run may NOT be used as
 	// evidence to close, because a board they are filed under did not read what it listed
 	// (boardReadWhatItListed). cmd/ingest subtracts them from the crawled-company scope of
@@ -387,7 +387,7 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 	// Computed once up front: a board name this run's entries share across more than one
 	// region never qualifies for the board scope (see ambiguousRegionBoards) — the close
 	// query's pattern cannot distinguish which region proved coverage.
-	ambiguous := ambiguousRegionBoards(entries)
+	ambiguous := ambiguousRegionBoards(entries, r.Registry)
 
 	var (
 		mu     sync.Mutex
@@ -429,9 +429,9 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 			if !ambiguous[providerBoard{e.Provider, e.Board}] {
 				switch {
 				case boardQualifies(e, boardStats):
-					boardStats.QualifyingBoards = append(boardStats.QualifyingBoards, e.Board)
+					boardStats.QualifyingBoards = append(boardStats.QualifyingBoards, BoardRef{e.Board, e.Region})
 				case boardListedEmpty(e, boardStats):
-					boardStats.EmptyBoards = append(boardStats.EmptyBoards, e.Board)
+					boardStats.EmptyBoards = append(boardStats.EmptyBoards, BoardRef{e.Board, e.Region})
 				}
 			}
 			crawled.Add(1)

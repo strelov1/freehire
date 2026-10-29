@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -19,21 +20,35 @@ import (
 // /software-engineer-jobs/... answers 403 "Just a moment..."), but its own frontend search API does
 // not: /api/jobsearch/v5/search serves JSON to any client — no cookie, no credential and no
 // browser-shaped User-Agent.
-type seek struct {
-	provider          string
-	markets           map[string]seekMarket
-	maxPages          int
-	failAtPageCeiling bool
-	http              JSONGetter
-	details           *seekDetailNetwork
+//
+// seekCrawler is the protocol both providers share. Each provider is its own type over it —
+// seek and jobStreet — because the sweep markers differ and a marker is a method set, not a
+// field: SEEK AU/NZ reads only a window of each slice (sweepGrace), while JobStreet reads each
+// board to the total its search states (fullBoardListing, boardURLPrefix).
+type seekCrawler struct {
+	provider string
+	markets  map[string]seekMarket
+	maxPages int
+	// verifyTotal makes the walk a proof of the whole board: reaching the page ceiling, a later
+	// page failing, or a walk whose distinct postings differ from the search's stated totalCount
+	// all fail the crawl instead of returning what was gathered. JobStreet only.
+	verifyTotal bool
+	http        JSONGetter
+	details     *seekDetailNetwork
 }
+
+// seek is SEEK AU/NZ.
+type seek struct{ seekCrawler }
+
+// jobStreet is JobStreet (SG/MY/ID/PH) and JobsDB (HK/TH).
+type jobStreet struct{ seekCrawler }
 
 // NewSeek builds the SEEK adapter. The listing and the detail take SEPARATE transports because only
 // one of them needs pacing: the search listing is ~150 requests a run and has never been refused,
 // while the GraphQL detail is metered by a per-IP budget (see seekDetailInterval). sources.All hands
 // the bare client for the first and the network's one shared detail client for the second.
 func NewSeek(list JSONGetter, detail *seekDetailNetwork) Source {
-	return seek{provider: "seek", markets: seekMarkets, maxPages: seekMaxPages, http: list, details: detail}
+	return seek{seekCrawler{provider: "seek", markets: seekMarkets, maxPages: seekMaxPages, http: list, details: detail}}
 }
 
 // NewJobStreet builds the JobStreet/JobsDB adapter over the same SEEK frontend protocol.
@@ -41,7 +56,7 @@ func NewSeek(list JSONGetter, detail *seekDetailNetwork) Source {
 // different market hosts/site keys, so they are one implementation with a distinct provider
 // identity and board catalogue.
 func NewJobStreet(list JSONGetter, detail *seekDetailNetwork) Source {
-	return seek{provider: "jobstreet", markets: jobStreetMarkets, maxPages: jobStreetMaxPages, failAtPageCeiling: true, http: list, details: detail}
+	return jobStreet{seekCrawler{provider: "jobstreet", markets: jobStreetMarkets, maxPages: jobStreetMaxPages, verifyTotal: true, http: list, details: detail}}
 }
 
 // seekNetworkProviders are the adapters that share one seekDetailNetwork. ApplyProxyEgress rebuilds
@@ -51,13 +66,13 @@ var seekNetworkProviders = map[string]func(JSONGetter, *seekDetailNetwork) Sourc
 	"jobstreet": NewJobStreet,
 }
 
-func (s seek) Provider() string { return s.provider }
+func (s seekCrawler) Provider() string { return s.provider }
 
 // aggregator marks seek as a genuine multi-company aggregator: a vacancy an employer also posts on
 // its own ATS appears here too, so the cross-source dedup pass prefers the first-party copy. Unlike
 // the boardless aggregators seek still requires a board (the subclassification id) to bound the
 // crawl, so it is not boardless.
-func (seek) aggregator() {}
+func (seekCrawler) aggregator() {}
 
 // sweepGrace widens the unseen sweep because the crawl reaches only a SLICE of each subclassification:
 // SEEK stops serving results past roughly the 550th (see seekMaxPages), so the busiest slices — five
@@ -67,11 +82,26 @@ func (seek) aggregator() {}
 // back, writing a phantom removal into job_daily_stats each cycle. The marker is sound here because
 // liveness CANNOT be probed instead: SEEK's own job pages sit behind the same Cloudflare interstitial
 // as its search pages.
-func (s seek) sweepGrace() time.Duration {
-	if s.provider == "jobstreet" {
-		return DefaultSweepGrace
+func (seek) sweepGrace() time.Duration { return 14 * 24 * time.Hour }
+
+// fullBoardListing: JobStreet has no SEEK-style result window — live SG 6290 served 17 pages
+// to its natural end — and at pageSize 100 the search's totalCount equals the distinct postings
+// a full walk reads (2026-10-29: SG 6290 1,629 of 1,629, SG 6302 9/9, MY 6287 641/641, ID 6287
+// 686/686, HK 6281 3,694/3,694). The walk fails on a later page's error, on the page ceiling,
+// and on a distinct count that differs from the last page's totalCount. See the
+// fullBoardListing interface for the bar.
+func (jobStreet) fullBoardListing() {}
+
+// BoardURLPrefix: a JobStreet board id (an ICT subclassification) repeats in every market, and
+// external_id carries no market, so the board-scoped close narrows each board to its market
+// by the host its postings are served from (toJob builds every URL as host + "/job/" + id).
+// See the RegionScopedBoards interface.
+func (s jobStreet) BoardURLPrefix(region string) (string, bool) {
+	m, ok := s.markets[strings.ToLower(strings.TrimSpace(region))]
+	if !ok {
+		return "", false
 	}
-	return 14 * 24 * time.Hour
+	return m.host + "/job/", true
 }
 
 const (
@@ -119,11 +149,14 @@ var jobStreetMarkets = map[string]seekMarket{
 	"th": {host: "https://th.jobsdb.com", siteKey: "TH-Main", where: "Thailand"},
 }
 
-// seekSearchPage is the slice of a search response the adapter reads. totalCount is deliberately
-// absent: SEEK reports it as a function of pageSize (the same query answered 36 at pageSize=1, 688
+// seekSearchPage is the slice of a search response the adapter reads. SEEK AU/NZ's totalCount is
+// not a check: SEEK reports it as a function of pageSize (the same query answered 36 at pageSize=1, 688
 // at pageSize=20 and 666 at pageSize=100), so it can drive neither pagination nor a truncation check.
 type seekSearchPage struct {
 	Data []seekPosting `json:"data"`
+	// TotalCount is read only where it was measured to be exact (verifyTotal): JobStreet at
+	// pageSize 100. SEEK AU/NZ's varies with the page size, as above.
+	TotalCount int `json:"totalCount"`
 }
 
 // seekPosting is one search-result posting. It carries every field the adapter needs except the
@@ -161,7 +194,7 @@ type seekLocation struct {
 }
 
 // Fetch is the list-only crawl (no description).
-func (s seek) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
+func (s seekCrawler) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	m, postings, err := s.crawl(ctx, e)
 	if err != nil {
 		return nil, err
@@ -180,7 +213,7 @@ func (s seek) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // SeenRefresh, so the pipeline refreshes liveness without spending a detail request or wiping the
 // body hydrated when it was new. A single detail failure is isolated (logged, list-only fallback) —
 // a posting is never dropped over a missing description.
-func (s seek) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+func (s seekCrawler) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	m, postings, err := s.crawl(ctx, e)
 	if err != nil {
 		return nil, err
@@ -194,7 +227,7 @@ func (s seek) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID
 // discard them; only the body request is skipped. This matters especially for JobStreet, where
 // a first crawl spans tens of thousands of listings but a substantial share of employers are
 // already covered directly by freehire.
-func (s seek) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
+func (s seekCrawler) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(externalID string) bool, gate DetailGate) ([]Job, error) {
 	m, postings, err := s.crawl(ctx, e)
 	if err != nil {
 		return nil, err
@@ -208,7 +241,7 @@ func (s seek) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(exter
 	return s.hydrate(ctx, e, m, postings, seen, gate.Covered(names)), nil
 }
 
-func (s seek) hydrate(ctx context.Context, e CompanyEntry, m seekMarket, postings []seekPosting,
+func (s seekCrawler) hydrate(ctx context.Context, e CompanyEntry, m seekMarket, postings []seekPosting,
 	seen func(externalID string) bool, skip map[string]bool) []Job {
 	return fetchDetails(postings, defaultDetailWorkers, func(p seekPosting) (Job, bool) {
 		base, ok := p.toJob(m)
@@ -238,19 +271,43 @@ func (s seek) hydrate(ctx context.Context, e CompanyEntry, m seekMarket, posting
 }
 
 // crawl pages the search listing until a page yields no posting it has not already collected.
-func (s seek) crawl(ctx context.Context, e CompanyEntry) (seekMarket, []seekPosting, error) {
+//
+// With verifyTotal the walk must end with exactly the distinct postings the search states, and
+// one that does not is walked once more before the crawl fails: a posting listed or withdrawn
+// while the walk is under way shifts every later page by one, which leaves the count one off
+// without anything being wrong with the board. A second mismatch is not that.
+func (s seekCrawler) crawl(ctx context.Context, e CompanyEntry) (seekMarket, []seekPosting, error) {
 	m, ok := s.markets[strings.ToLower(strings.TrimSpace(e.Region))]
 	if !ok {
 		return seekMarket{}, nil, fmt.Errorf("%s: company %q has an unknown market (Region) %q", s.provider, e.Company, e.Region)
 	}
+	out, err := s.walk(ctx, e, m)
+	var miscount errSeekMiscount
+	if errors.As(err, &miscount) {
+		out, err = s.walk(ctx, e, m)
+	}
+	if err != nil {
+		return seekMarket{}, nil, err
+	}
+	return m, out, nil
+}
+
+// errSeekMiscount is a verifyTotal walk that reached the listing's end with a different number of
+// distinct postings than the search states.
+type errSeekMiscount struct{ msg string }
+
+func (e errSeekMiscount) Error() string { return e.msg }
+
+// walk is one pass over a board's search listing; see crawl.
+func (s seekCrawler) walk(ctx context.Context, e CompanyEntry, m seekMarket) ([]seekPosting, error) {
 	board := strings.TrimSpace(e.Board)
 	var out []seekPosting
 	seen := map[string]bool{}
 	for page := 1; page <= s.maxPages; page++ {
 		var resp seekSearchPage
 		if err := s.http.GetJSON(ctx, s.searchURL(m, board, page), &resp); err != nil {
-			if page == 1 {
-				return seekMarket{}, nil, fmt.Errorf("%s: search %s subclass %q page %d: %w", s.provider, e.Region, board, page, err)
+			if page == 1 || s.verifyTotal {
+				return nil, fmt.Errorf("%s: search %s subclass %q page %d: %w", s.provider, e.Region, board, page, err)
 			}
 			break
 		}
@@ -264,13 +321,17 @@ func (s seek) crawl(ctx context.Context, e CompanyEntry) (seekMarket, []seekPost
 			added++
 		}
 		if added == 0 { // empty page, repeated tail, or SEEK's result window exhausted
-			return m, out, nil
+			if s.verifyTotal && len(seen) != resp.TotalCount {
+				return nil, errSeekMiscount{fmt.Sprintf("%s: search %s subclass %q ended at page %d with %d distinct postings, the search states %d",
+					s.provider, e.Region, board, page, len(seen), resp.TotalCount)}
+			}
+			return out, nil
 		}
 	}
-	if s.failAtPageCeiling {
-		return seekMarket{}, nil, fmt.Errorf("%s: search %s subclass %q exceeded %d pages without reaching the end", s.provider, e.Region, board, s.maxPages)
+	if s.verifyTotal {
+		return nil, fmt.Errorf("%s: search %s subclass %q exceeded %d pages without reaching the end", s.provider, e.Region, board, s.maxPages)
 	}
-	return m, out, nil
+	return out, nil
 }
 
 // seekPrivateAdvertiser is the label SEEK shows for a posting whose employer stays anonymous. It is
@@ -343,7 +404,7 @@ func (p seekPosting) salaryParagraph() string {
 }
 
 // searchURL builds one page of a subclassification search, newest-first.
-func (seek) searchURL(m seekMarket, subclassification string, page int) string {
+func (seekCrawler) searchURL(m seekMarket, subclassification string, page int) string {
 	q := url.Values{}
 	q.Set("siteKey", m.siteKey)
 	q.Set("where", m.where)

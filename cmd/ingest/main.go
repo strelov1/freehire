@@ -18,6 +18,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log"
@@ -166,7 +167,7 @@ func run() int {
 	// Computed against the FULL, unsharded board list — see pipeline.AmbiguousBoardNames for
 	// why sharding (below) can otherwise hide a region-ambiguous board from the board-scoped
 	// close's per-run safety check.
-	crossShardAmbiguousBoards := pipeline.AmbiguousBoardNames(boards)
+	crossShardAmbiguousBoards := pipeline.AmbiguousBoardNames(boards, registry)
 
 	// Narrow to one board (optionally one region), if requested. A typo here must not look
 	// like a legitimate empty targeted run (see the sweep's own note on those below) — an
@@ -376,9 +377,10 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 			fullBoardListing:  fullBoardListing[provider],
 			sliceBoardListing: sliceBoardListing[provider],
 			emptyBoardListing: emptyBoardListing[provider],
+			regionScoped:      sources.ScopesBoardsByRegion(registry[provider]),
 		}, crossShardAmbiguousBoards)
 		if len(boards) > 0 {
-			boardClosed, boardFailed := sweepBoards(ctx, queries, provider, cutoff, boards)
+			boardClosed, boardFailed := sweepBoards(ctx, queries, provider, cutoff, boards, registry[provider])
 			log.Printf("closed %d stale %s jobs across %d finished board(s) (unseen for %s)", boardClosed, provider, len(boards), window)
 			if boardFailed > 0 {
 				failed++
@@ -469,12 +471,46 @@ func (b runBudget) sweepContext(parent context.Context, started time.Time) (cont
 	return context.WithDeadline(detached, started.Add(b.timeout))
 }
 
-// sweepBoards closes every qualifying board's unseen jobs in one statement — one scan of the
-// provider's open rows rather than one round trip per board (see CloseUnseenJobsForBoards for
-// the measurement). If that statement fails it falls back to one statement per board, so a row
-// Postgres cannot write (the 2026-08-11 incident sweepRowByRow exists for) blocks only its own
-// board rather than every board of the run. failed counts the boards whose close failed.
-func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, boards []string) (closed int64, failed int) {
+// sweepBoards closes every qualifying board's unseen jobs in one statement per url scope — one
+// scan of the provider's open rows rather than one round trip per board (see
+// CloseUnseenJobsForBoards for the measurement). Every provider but a region-scoped one has a
+// single scope, ”; a region-scoped one (jobstreet) gets one statement per region, narrowed to
+// the url prefix its postings live on (sources.BoardURLPrefix). sweepableBoards has already
+// cleared the region of every board of an unscoped provider.
+func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, boards []pipeline.BoardRef, src sources.Source) (closed int64, failed int) {
+	byScope := make(map[string][]string)
+	var scopes []string
+	for _, b := range boards {
+		urlPattern := ""
+		if b.Region != "" {
+			prefix, ok := sources.BoardURLPrefix(src, b.Region)
+			if !ok {
+				// The crawl itself fails on a region its adapter does not know, so this board
+				// cannot have qualified; refuse rather than close it unscoped.
+				failed++
+				log.Printf("close stale jobs (%s board %q): no url scope for region %q", provider, b.Board, b.Region)
+				continue
+			}
+			urlPattern = externalid.LikePrefix(prefix)
+		}
+		if _, seen := byScope[urlPattern]; !seen {
+			scopes = append(scopes, urlPattern)
+		}
+		byScope[urlPattern] = append(byScope[urlPattern], b.Board)
+	}
+	for _, urlPattern := range scopes {
+		n, f := sweepBoardScope(ctx, queries, provider, cutoff, byScope[urlPattern], urlPattern)
+		closed += n
+		failed += f
+	}
+	return closed, failed
+}
+
+// sweepBoardScope closes the unseen jobs of boards sharing one url scope in one statement. If
+// that statement fails it falls back to one statement per board, so a row Postgres cannot write
+// (the 2026-08-11 incident sweepRowByRow exists for) blocks only its own board rather than every
+// board of the run. failed counts the boards whose close failed.
+func sweepBoardScope(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, boards []string, urlPattern string) (closed int64, failed int) {
 	patterns := make([]string, len(boards))
 	for i, board := range boards {
 		patterns[i] = externalid.BoardPattern(board)
@@ -483,6 +519,7 @@ func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cuto
 		Source:        provider,
 		Cutoff:        cutoff,
 		BoardPatterns: patterns,
+		UrlPattern:    urlPattern,
 	})
 	if err == nil {
 		return closed, 0
@@ -498,6 +535,7 @@ func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cuto
 			Source:       provider,
 			Cutoff:       cutoff,
 			BoardPattern: patterns[i],
+			UrlPattern:   urlPattern,
 		})
 		if err != nil {
 			failed++
@@ -513,7 +551,7 @@ func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cuto
 // — the same convention sweepBySource uses, rather than re-deriving them from the raw registry
 // maps.
 type boardScope struct {
-	hasGrace, fullCatalog, fullBoardListing, sliceBoardListing, emptyBoardListing bool
+	hasGrace, fullCatalog, fullBoardListing, sliceBoardListing, emptyBoardListing, regionScoped bool
 }
 
 // sweepableBoards returns, sorted and de-duplicated, the boards of one provider the
@@ -553,10 +591,14 @@ type boardScope struct {
 // carrying sources.emptyBoardListing has proven that it can tell them apart. Only on a complete
 // listing: a slice that came back empty says nothing about the rest of the board.
 //
+// regionScoped keeps each board's region, for an adapter whose board ids repeat across regions
+// and whose close narrows each to its region by posting URL (sources.RegionScopedBoards). Every
+// other provider's region is cleared, so its board scope stays keyed on the board id alone.
+//
 // De-duplication guards against a board legitimately appearing twice in one run (a repeated
 // board-file entry, or one board id recurring across independent regional slices) double-
 // counting the close and its log line.
-func sweepableBoards(stats pipeline.Stats, scope boardScope, crossShardAmbiguous map[string]bool) []string {
+func sweepableBoards(stats pipeline.Stats, scope boardScope, crossShardAmbiguous map[string]bool) []pipeline.BoardRef {
 	complete := scope.fullBoardListing && !scope.hasGrace
 	slice := scope.sliceBoardListing && scope.hasGrace
 	if scope.fullCatalog || (!complete && !slice) {
@@ -566,9 +608,16 @@ func sweepableBoards(stats pipeline.Stats, scope boardScope, crossShardAmbiguous
 	if complete && scope.emptyBoardListing {
 		boards = append(boards, stats.EmptyBoards...)
 	}
-	sort.Strings(boards)
+	if !scope.regionScoped {
+		for i := range boards {
+			boards[i].Region = ""
+		}
+	}
+	slices.SortFunc(boards, func(a, b pipeline.BoardRef) int {
+		return cmp.Or(strings.Compare(a.Board, b.Board), strings.Compare(a.Region, b.Region))
+	})
 	boards = slices.Compact(boards)
-	boards = slices.DeleteFunc(boards, func(board string) bool { return crossShardAmbiguous[board] })
+	boards = slices.DeleteFunc(boards, func(b pipeline.BoardRef) bool { return crossShardAmbiguous[b.Board] })
 	if len(boards) == 0 {
 		return nil
 	}

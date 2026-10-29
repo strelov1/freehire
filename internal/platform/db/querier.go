@@ -1027,6 +1027,13 @@ type Querier interface {
 	// closed_reason stays 'unseen', not a new value: this is the same mechanism — a crawl of the
 	// place this posting lived did not list it — reaching rows its scope previously could not.
 	//
+	// url_pattern narrows the close to one REGION of a board, for an adapter whose board id repeats
+	// across regions while external_id carries no region (jobstreet: subclass "6290" is a board in
+	// six markets). Each region's postings live on that market's own host, so the pattern is the
+	// LIKE-escaped prefix of the region's posting URLs (sources.BoardURLPrefix); '' is no narrowing,
+	// which is every other provider. A predicate on the url rather than a region in external_id
+	// because the latter would re-key every stored row of the provider, and the dedup key with it.
+	//
 	// :one rather than :execrows because the CTE moves the row count out of the command tag.
 	// count(*) over the closed rows is the same int64 the caller already had.
 	CloseUnseenJobsForBoard(ctx context.Context, arg CloseUnseenJobsForBoardParams) (int64, error)
@@ -1043,6 +1050,9 @@ type Querier interface {
 	// single-board query takes them; LIKE ANY keeps the per-board predicate's semantics
 	// (escaping, the ":" terminator) without a second definition of the namespace. The
 	// removal enqueue rides the statement for the same reason it does in every close.
+	//
+	// url_pattern is CloseUnseenJobsForBoard's: '' for every provider but a region-scoped one, whose
+	// caller issues one statement per region, all of that region's boards in it.
 	CloseUnseenJobsForBoards(ctx context.Context, arg CloseUnseenJobsForBoardsParams) (int64, error)
 	// Company slugs with at least one OPEN aggregator posting — the drive list for the
 	// cross-source aggregator suppression pass. An open aggregator row is a candidate whether

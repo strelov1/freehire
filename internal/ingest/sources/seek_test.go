@@ -38,8 +38,11 @@ type seekFake struct {
 	searchByPage map[int][]seekPosting // page -> postings that page yields
 	searchErr    map[int]bool          // page -> GetJSON returns an error
 	searchURLs   []string              // search URLs requested, in order
-	detailByID   map[string]string     // job id -> the GraphQL content it answers
-	detailErr    map[string]bool       // job id -> PostJSON returns an error
+	// total, when set, is the totalCount every search page states; otherwise it is the number
+	// of distinct postings across searchByPage, which is what JobStreet states at pageSize 100.
+	total      *int
+	detailByID map[string]string // job id -> the GraphQL content it answers
+	detailErr  map[string]bool   // job id -> PostJSON returns an error
 	// The adapter fans its detail fetches out across a worker pool, so these recorders are written
 	// from several goroutines at once. Assertions read them after FetchNew has joined the pool.
 	mu         sync.Mutex
@@ -67,7 +70,21 @@ func (f *seekFake) GetJSON(_ context.Context, u string, v any) error {
 		return errSeekTest
 	}
 	out.Data = f.searchByPage[page]
+	out.TotalCount = f.statedTotal()
 	return nil
+}
+
+func (f *seekFake) statedTotal() int {
+	if f.total != nil {
+		return *f.total
+	}
+	ids := map[string]bool{}
+	for _, posts := range f.searchByPage {
+		for _, p := range posts {
+			ids[p.ID] = true
+		}
+	}
+	return len(ids)
 }
 
 // PostJSON serves the GraphQL detail. It records the job id every detail call asked for, so a test
@@ -573,8 +590,91 @@ func TestJobStreetIsRegisteredAsItsOwnAggregatorProvider(t *testing.T) {
 	if !slices.Contains(AggregatorProviders(Taxonomy()), "jobstreet") {
 		t.Error("jobstreet missing from AggregatorProviders")
 	}
-	if got := SweepGraceWindows(Taxonomy())["jobstreet"]; got != DefaultSweepGrace {
-		t.Errorf("jobstreet sweep grace = %v, want the %v default because its listing reaches a natural end", got, DefaultSweepGrace)
+	// Its listing reaches a natural end and states an exact total, so it closes per board on the
+	// default window — a declared grace (even one equal to the default) would bar the board scope.
+	if got, ok := SweepGraceWindows(Taxonomy())["jobstreet"]; ok {
+		t.Errorf("jobstreet declares a sweep grace of %v; it must sweep on the default window", got)
+	}
+	if !FullBoardListingProviders(Taxonomy())["jobstreet"] {
+		t.Error("jobstreet must carry fullBoardListing")
+	}
+	if FullBoardListingProviders(Taxonomy())["seek"] {
+		t.Error("seek must not carry fullBoardListing: its result window hides each busy slice's tail")
+	}
+}
+
+// A JobStreet board id repeats in every market and external_id carries no market, so the
+// board-scoped close narrows each board to its market by the host its postings live on. The
+// prefix must be exactly the one toJob builds the posting URL from, and distinct per market.
+func TestJobStreetScopesABoardToItsMarketByURL(t *testing.T) {
+	src := NewJobStreet(&seekFake{}, newSeekDetailNetwork(&seekFake{}, nil))
+	if !ScopesBoardsByRegion(src) {
+		t.Fatal("jobstreet must scope its boards by region")
+	}
+	prefixes := map[string]string{}
+	for region, m := range jobStreetMarkets {
+		prefix, ok := BoardURLPrefix(src, region)
+		if !ok {
+			t.Fatalf("no URL prefix for market %q", region)
+		}
+		job, ok := seekPost("123", "Engineer", "Co").toJob(m)
+		if !ok || !strings.HasPrefix(job.URL, prefix) {
+			t.Errorf("market %q: posting URL %q does not start with the prefix %q", region, job.URL, prefix)
+		}
+		if other, dup := prefixes[prefix]; dup {
+			t.Errorf("markets %q and %q share the prefix %q", other, region, prefix)
+		}
+		prefixes[prefix] = region
+	}
+	if _, ok := BoardURLPrefix(src, "au"); ok {
+		t.Error("a market jobstreet does not serve must have no prefix")
+	}
+	if ScopesBoardsByRegion(NewSeek(&seekFake{}, newSeekDetailNetwork(&seekFake{}, nil))) {
+		t.Error("seek must not scope by region: its boards are refused by the sweep grace anyway")
+	}
+}
+
+// fullBoardListing's bar for JobStreet: a walk that does not read the whole board fails the
+// crawl instead of handing the board scope a partial listing it would read as removals.
+func TestJobStreetFailsAWalkThatDidNotReadTheWholeBoard(t *testing.T) {
+	stated := 5
+	cases := map[string]*seekFake{
+		"a later page errors": {
+			searchByPage: map[int][]seekPosting{1: {seekPost("1", "A", "Co")}, 2: {seekPost("2", "B", "Co")}},
+			searchErr:    map[int]bool{2: true},
+		},
+		"the walk ends short of the stated total": {
+			searchByPage: map[int][]seekPosting{1: {seekPost("1", "A", "Co"), seekPost("2", "B", "Co")}},
+			total:        &stated,
+		},
+	}
+	for name, fake := range cases {
+		t.Run(name, func(t *testing.T) {
+			jobs, err := NewJobStreet(fake, newSeekDetailNetwork(fake, nil)).Fetch(context.Background(), CompanyEntry{Region: "sg", Board: "6290"})
+			if err == nil {
+				t.Errorf("Fetch = %d jobs and no error, want a failed crawl", len(jobs))
+			}
+		})
+	}
+}
+
+// A walk that reads exactly what the search states is complete, including an emptied board.
+func TestJobStreetAcceptsAWalkThatMatchesTheStatedTotal(t *testing.T) {
+	cases := map[string]map[int][]seekPosting{
+		"two pages": {1: {seekPost("1", "A", "Co"), seekPost("2", "B", "Co")}, 2: {seekPost("3", "C", "Co")}},
+		"empty":     {},
+	}
+	for name, pages := range cases {
+		t.Run(name, func(t *testing.T) {
+			fake := &seekFake{searchByPage: pages}
+			jobs, err := NewJobStreet(fake, newSeekDetailNetwork(fake, nil)).Fetch(context.Background(), CompanyEntry{Region: "sg", Board: "6290"})
+			if err != nil {
+				t.Fatalf("Fetch: %v", err)
+			}
+			if want := fake.statedTotal(); len(jobs) != want {
+				t.Errorf("len(jobs) = %d, want %d", len(jobs), want)
+			}
+		})
 	}
 }
 
@@ -699,7 +799,7 @@ func TestJobStreetPageCeilingFailsInsteadOfSilentlyTruncating(t *testing.T) {
 		2: {seekPost("2", "B", "Co")},
 		3: {seekPost("3", "Would prove there is more", "Co")},
 	}}
-	src := NewJobStreet(fake, newSeekDetailNetwork(fake, nil)).(seek)
+	src := NewJobStreet(fake, newSeekDetailNetwork(fake, nil)).(jobStreet)
 	src.maxPages = 2 // shrink the production safety ceiling to make the invariant cheap to test
 	jobs, err := src.Fetch(context.Background(), CompanyEntry{Region: "sg", Board: "6290"})
 	if err == nil {
@@ -750,5 +850,40 @@ func TestJobStreetFetchNewGatedSkipsCoveredEmployerDetail(t *testing.T) {
 		if j.ExternalID == "2" && !strings.Contains(j.Description, "new body") {
 			t.Errorf("uncovered posting description = %q, want hydrated body", j.Description)
 		}
+	}
+}
+
+// shiftedTotalFake states a total one higher than the listing on its first walk only — a
+// posting listed while that walk was under way.
+type shiftedTotalFake struct {
+	*seekFake
+	walks int
+}
+
+func (f *shiftedTotalFake) GetJSON(ctx context.Context, u string, v any) error {
+	if strings.Contains(u, "page=1&") {
+		f.walks++
+	}
+	if err := f.seekFake.GetJSON(ctx, u, v); err != nil {
+		return err
+	}
+	if f.walks == 1 {
+		v.(*seekSearchPage).TotalCount++
+	}
+	return nil
+}
+
+// A count one off is what a posting listed mid-walk looks like, so the board is walked once more
+// before the crawl fails; the second walk agreeing is a complete listing.
+func TestJobStreetRewalksABoardWhoseCountMovedMidWalk(t *testing.T) {
+	fake := &shiftedTotalFake{seekFake: &seekFake{searchByPage: map[int][]seekPosting{
+		1: {seekPost("1", "A", "Co"), seekPost("2", "B", "Co")},
+	}}}
+	jobs, err := NewJobStreet(fake, newSeekDetailNetwork(fake.seekFake, nil)).Fetch(context.Background(), CompanyEntry{Region: "sg", Board: "6290"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 2 || fake.walks != 2 {
+		t.Errorf("got %d jobs over %d walks, want 2 jobs over 2 walks", len(jobs), fake.walks)
 	}
 }

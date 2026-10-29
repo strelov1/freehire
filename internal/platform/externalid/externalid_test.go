@@ -39,3 +39,15 @@ func TestBoardIDPattern(t *testing.T) {
 		}
 	}
 }
+
+func TestLikePrefix(t *testing.T) {
+	cases := map[string]string{
+		"https://sg.jobstreet.com/job/": `https://sg.jobstreet.com/job/%`,
+		"https://a_b.example/x%":        `https://a\_b.example/x\%%`,
+	}
+	for prefix, want := range cases {
+		if got := LikePrefix(prefix); got != want {
+			t.Errorf("LikePrefix(%q) = %q, want %q", prefix, got, want)
+		}
+	}
+}

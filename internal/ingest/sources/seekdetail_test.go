@@ -192,7 +192,7 @@ func TestApplyProxyEgressGivesTheSeekNetworkOneProxyLane(t *testing.T) {
 	if err := ApplyProxyEgress(registry); err != nil {
 		t.Fatalf("ApplyProxyEgress: %v", err)
 	}
-	s, js := registry["seek"].(seek), registry["jobstreet"].(seek)
+	s, js := registry["seek"].(seek), registry["jobstreet"].(jobStreet)
 	if s.details != js.details {
 		t.Error("seek and jobstreet were given separate detail networks; a ban must be shared")
 	}

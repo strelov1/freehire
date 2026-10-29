@@ -360,6 +360,18 @@ type livenessProbed interface{ livenessProbed() }
 // (any page failure is a hard error, never a partial result) and FullBoardListingProviders.
 type fullBoardListing interface{ fullBoardListing() }
 
+// RegionScopedBoards marks an adapter whose board id repeats across REGIONS of one provider
+// (boards' UNIQUE(provider, lower(board), region)) while the stored external_id carries no
+// region — jobstreet's subclass "6290" is a board in six markets. The board-scoped close keys on
+// external_id alone, so such a board name is refused as ambiguous (pipeline.ambiguousRegionBoards)
+// unless the adapter can say where one region's postings live: BoardURLPrefix returns the prefix
+// every posting URL of that region starts with, which the close adds as a url predicate. It must
+// be exact — a prefix shared by two regions would let one region's crawl close the other's rows —
+// and ok=false for a region it does not know. See the package-level BoardURLPrefix.
+type RegionScopedBoards interface {
+	BoardURLPrefix(region string) (prefix string, ok bool)
+}
+
 // emptyBoardListing marks a fullBoardListing adapter whose Fetch returns an EMPTY list only when
 // the source itself stated that the board carries no postings, so a finished crawl that listed
 // nothing may close the board's stored postings through the ordinary board-scoped close.

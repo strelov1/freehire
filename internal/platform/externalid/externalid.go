@@ -37,6 +37,12 @@ var likeSpecial = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // The board name is escaped because LIKE would otherwise read parts of it as syntax: a third of
 // the workday board names carry an underscore (Capital_One), which matches any one character, so
 // an unescaped pattern would claim a sibling board's postings as this board's own.
+// LikePrefix is the LIKE pattern matching every string that starts with prefix, escaped the same
+// way — the board-scoped close's url predicate for a region-scoped board.
+func LikePrefix(prefix string) string {
+	return likeSpecial.Replace(prefix) + "%"
+}
+
 func BoardPattern(board string) string {
 	return likeSpecial.Replace(board) + ":%"
 }

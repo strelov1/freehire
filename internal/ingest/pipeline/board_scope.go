@@ -136,6 +136,15 @@ func boardListedEmpty(e sources.CompanyEntry, st Stats) bool {
 		!boardListedAnyPosting(st)
 }
 
+// BoardRef names one board a run crawled: its id and the region its catalogue entry carries.
+// The board-scoped close keys on the id alone for every provider whose board ids do not repeat
+// across regions; for one that does, the region is what lets the close narrow the board to the
+// market the run actually crawled (sources.BoardURLPrefix).
+type BoardRef struct {
+	Board  string
+	Region string
+}
+
 // providerBoard identifies a board by name alone, ignoring region — the key the board-scoped
 // close's SQL predicate is forced to use, since externalid.Namespace does not encode region.
 // Deliberately NOT the existing boardKey{provider, board, region}: that type identifies one
@@ -154,10 +163,14 @@ type providerBoard struct{ provider, board string }
 // one region's outcome alone risks closing postings only a DIFFERENT region's crawl keeps
 // alive, so an ambiguous board name never qualifies through this scope, regardless of how any
 // single region's crawl went — it falls back to the company scope instead.
-func ambiguousRegionBoards(entries []sources.CompanyEntry) map[providerBoard]bool {
+//
+// A provider whose adapter scopes boards by region (sources.ScopesBoardsByRegion — jobstreet,
+// whose subclass ids repeat in all six markets) is exempt: its close carries the region as a
+// predicate on the posting URL, so each region's crawl proves coverage of that region alone.
+func ambiguousRegionBoards(entries []sources.CompanyEntry, registry map[string]sources.Source) map[providerBoard]bool {
 	regions := make(map[providerBoard]map[string]bool)
 	for _, e := range entries {
-		if e.Board == "" {
+		if e.Board == "" || sources.ScopesBoardsByRegion(registry[e.Provider]) {
 			continue
 		}
 		pb := providerBoard{e.Provider, e.Board}
@@ -189,9 +202,9 @@ func ambiguousRegionBoards(entries []sources.CompanyEntry) map[providerBoard]boo
 //
 // Reports by board name alone, not by (provider, board): a caller crawls one provider per
 // run (cmd/ingest takes a single provider argument), so the provider component carries no
-// information here.
-func AmbiguousBoardNames(entries []sources.CompanyEntry) map[string]bool {
-	ambiguous := ambiguousRegionBoards(entries)
+// information here. registry exempts a region-scoped provider, as ambiguousRegionBoards does.
+func AmbiguousBoardNames(entries []sources.CompanyEntry, registry map[string]sources.Source) map[string]bool {
+	ambiguous := ambiguousRegionBoards(entries, registry)
 	names := make(map[string]bool, len(ambiguous))
 	for pb := range ambiguous {
 		names[pb.board] = true

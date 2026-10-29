@@ -159,23 +159,23 @@ func TestSweepableBoards(t *testing.T) {
 		stats               pipeline.Stats
 		scope               boardScope
 		crossShardAmbiguous map[string]bool
-		want                []string
+		want                []pipeline.BoardRef
 	}{
 		{
 			name:  "registered provider's qualifying boards are returned sorted",
 			scope: boardScope{fullBoardListing: true},
-			stats: pipeline.Stats{QualifyingBoards: []string{"zeta-inc", "acme-corp"}},
-			want:  []string{"acme-corp", "zeta-inc"},
+			stats: pipeline.Stats{QualifyingBoards: refs("zeta-inc", "acme-corp")},
+			want:  refs("acme-corp", "zeta-inc"),
 		},
 		{
 			name:  "duplicate boards are de-duplicated",
 			scope: boardScope{fullBoardListing: true},
-			stats: pipeline.Stats{QualifyingBoards: []string{"acme-corp", "acme-corp"}},
-			want:  []string{"acme-corp"},
+			stats: pipeline.Stats{QualifyingBoards: refs("acme-corp", "acme-corp")},
+			want:  refs("acme-corp"),
 		},
 		{
 			name:  "a provider not registered as fullBoardListing gets none",
-			stats: pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			stats: pipeline.Stats{QualifyingBoards: refs("acme-corp")},
 			want:  nil,
 		},
 		{
@@ -183,13 +183,13 @@ func TestSweepableBoards(t *testing.T) {
 			// result the same way), so a future edit transposing them at the call site fails.
 			name:  "a sweepGrace provider is excluded even if registered, and not for the fullCatalog reason",
 			scope: boardScope{hasGrace: true, fullCatalog: false, fullBoardListing: true},
-			stats: pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			stats: pipeline.Stats{QualifyingBoards: refs("acme-corp")},
 			want:  nil,
 		},
 		{
 			name:  "a fullCatalog provider is excluded even if registered, and not for the sweepGrace reason",
 			scope: boardScope{hasGrace: false, fullCatalog: true, fullBoardListing: true},
-			stats: pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			stats: pipeline.Stats{QualifyingBoards: refs("acme-corp")},
 			want:  nil,
 		},
 		{
@@ -197,15 +197,15 @@ func TestSweepableBoards(t *testing.T) {
 			// grace window absorbs the drift past that budget, so its finished boards close on it.
 			name:  "a sliceBoardListing provider's boards are returned on its grace window",
 			scope: boardScope{hasGrace: true, sliceBoardListing: true},
-			stats: pipeline.Stats{QualifyingBoards: []string{"data engineer"}},
-			want:  []string{"data engineer"},
+			stats: pipeline.Stats{QualifyingBoards: refs("data engineer")},
+			want:  refs("data engineer"),
 		},
 		{
 			// Without a grace window the slice marker would close on the 48h default whatever sat
 			// past the page budget for two days.
 			name:  "a sliceBoardListing provider without a grace window gets none",
 			scope: boardScope{sliceBoardListing: true},
-			stats: pipeline.Stats{QualifyingBoards: []string{"data engineer"}},
+			stats: pipeline.Stats{QualifyingBoards: refs("data engineer")},
 			want:  nil,
 		},
 		{
@@ -216,7 +216,7 @@ func TestSweepableBoards(t *testing.T) {
 			// shard's problem entirely. sweepableBoards must refuse it regardless.
 			name:                "a board ambiguous across the full unsharded catalog is excluded even though this run's own Stats saw it as unambiguous",
 			scope:               boardScope{fullBoardListing: true},
-			stats:               pipeline.Stats{QualifyingBoards: []string{"acme-corp"}},
+			stats:               pipeline.Stats{QualifyingBoards: refs("acme-corp")},
 			crossShardAmbiguous: map[string]bool{"acme-corp": true},
 			want:                nil,
 		},
@@ -226,29 +226,43 @@ func TestSweepableBoards(t *testing.T) {
 			// a failed fetch closes it like any other finished board.
 			name:  "an emptyBoardListing provider's empty boards join its qualifying ones",
 			scope: boardScope{fullBoardListing: true, emptyBoardListing: true},
-			stats: pipeline.Stats{QualifyingBoards: []string{"zeta-inc"}, EmptyBoards: []string{"acme-corp"}},
-			want:  []string{"acme-corp", "zeta-inc"},
+			stats: pipeline.Stats{QualifyingBoards: refs("zeta-inc"), EmptyBoards: refs("acme-corp")},
+			want:  refs("acme-corp", "zeta-inc"),
 		},
 		{
 			// fullBoardListing alone proves a listing was read to its end, not that an empty
 			// answer was a listing at all — a challenge page parses to nothing too.
 			name:  "a provider without emptyBoardListing gets none of its empty boards",
 			scope: boardScope{fullBoardListing: true},
-			stats: pipeline.Stats{QualifyingBoards: []string{"zeta-inc"}, EmptyBoards: []string{"acme-corp"}},
-			want:  []string{"zeta-inc"},
+			stats: pipeline.Stats{QualifyingBoards: refs("zeta-inc"), EmptyBoards: refs("acme-corp")},
+			want:  refs("zeta-inc"),
 		},
 		{
 			name:  "an empty board needs a complete listing, not a slice",
 			scope: boardScope{hasGrace: true, sliceBoardListing: true, emptyBoardListing: true},
-			stats: pipeline.Stats{EmptyBoards: []string{"data engineer"}},
+			stats: pipeline.Stats{EmptyBoards: refs("data engineer")},
 			want:  nil,
 		},
 		{
 			name:                "an empty board ambiguous across the unsharded catalog is excluded",
 			scope:               boardScope{fullBoardListing: true, emptyBoardListing: true},
-			stats:               pipeline.Stats{EmptyBoards: []string{"acme-corp"}},
+			stats:               pipeline.Stats{EmptyBoards: refs("acme-corp")},
 			crossShardAmbiguous: map[string]bool{"acme-corp": true},
 			want:                nil,
+		},
+		{
+			// jobstreet: subclass "6290" is a board in every market, so each finished (board,
+			// region) is its own scope, and the region survives to narrow the close by url.
+			name:  "a region-scoped provider keeps each board's region",
+			scope: boardScope{fullBoardListing: true, regionScoped: true},
+			stats: pipeline.Stats{QualifyingBoards: []pipeline.BoardRef{{Board: "6290", Region: "sg"}, {Board: "6290", Region: "my"}, {Board: "6290", Region: "sg"}}},
+			want:  []pipeline.BoardRef{{Board: "6290", Region: "my"}, {Board: "6290", Region: "sg"}},
+		},
+		{
+			name:  "any other provider's boards are keyed on the id alone",
+			scope: boardScope{fullBoardListing: true},
+			stats: pipeline.Stats{QualifyingBoards: []pipeline.BoardRef{{Board: "acme", Region: "us"}, {Board: "acme", Region: ""}}},
+			want:  refs("acme"),
 		},
 	}
 	for _, tc := range cases {
@@ -398,4 +412,16 @@ func defaultSeenPolicy() seenPolicy {
 		hydrationWindow: pipeline.HydrationRetryWindow,
 		bodies:          bodyRefresh{slices: 1, slot: bodyRefreshDisabledSlot},
 	}
+}
+
+// refs is boards without a region, the shape every provider but a region-scoped one reports.
+func refs(boards ...string) []pipeline.BoardRef {
+	if len(boards) == 0 {
+		return nil
+	}
+	out := make([]pipeline.BoardRef, len(boards))
+	for i, b := range boards {
+		out[i] = pipeline.BoardRef{Board: b}
+	}
+	return out
 }

@@ -938,6 +938,7 @@ WITH closed AS (
       AND source = $1
       AND last_seen_at < $2
       AND external_id LIKE $3
+      AND ($4::text = '' OR url LIKE $4::text)
     RETURNING id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
@@ -951,6 +952,7 @@ type CloseUnseenJobsForBoardParams struct {
 	Source       string             `json:"source"`
 	Cutoff       pgtype.Timestamptz `json:"cutoff"`
 	BoardPattern string             `json:"board_pattern"`
+	UrlPattern   string             `json:"url_pattern"`
 }
 
 // Board-scoped post-ingest sweep (see job-lifecycle spec, freehire#2328): close every open
@@ -984,10 +986,22 @@ type CloseUnseenJobsForBoardParams struct {
 // closed_reason stays 'unseen', not a new value: this is the same mechanism — a crawl of the
 // place this posting lived did not list it — reaching rows its scope previously could not.
 //
+// url_pattern narrows the close to one REGION of a board, for an adapter whose board id repeats
+// across regions while external_id carries no region (jobstreet: subclass "6290" is a board in
+// six markets). Each region's postings live on that market's own host, so the pattern is the
+// LIKE-escaped prefix of the region's posting URLs (sources.BoardURLPrefix); ” is no narrowing,
+// which is every other provider. A predicate on the url rather than a region in external_id
+// because the latter would re-key every stored row of the provider, and the dedup key with it.
+//
 // :one rather than :execrows because the CTE moves the row count out of the command tag.
 // count(*) over the closed rows is the same int64 the caller already had.
 func (q *Queries) CloseUnseenJobsForBoard(ctx context.Context, arg CloseUnseenJobsForBoardParams) (int64, error) {
-	row := q.db.QueryRow(ctx, closeUnseenJobsForBoard, arg.Source, arg.Cutoff, arg.BoardPattern)
+	row := q.db.QueryRow(ctx, closeUnseenJobsForBoard,
+		arg.Source,
+		arg.Cutoff,
+		arg.BoardPattern,
+		arg.UrlPattern,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -1003,6 +1017,7 @@ WITH closed AS (
       AND source = $1
       AND last_seen_at < $2
       AND external_id LIKE ANY($3::text[])
+      AND ($4::text = '' OR url LIKE $4::text)
     RETURNING id
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
@@ -1016,6 +1031,7 @@ type CloseUnseenJobsForBoardsParams struct {
 	Source        string             `json:"source"`
 	Cutoff        pgtype.Timestamptz `json:"cutoff"`
 	BoardPatterns []string           `json:"board_patterns"`
+	UrlPattern    string             `json:"url_pattern"`
 }
 
 // CloseUnseenJobsForBoard for every qualifying board of one run in ONE statement, so the
@@ -1031,8 +1047,16 @@ type CloseUnseenJobsForBoardsParams struct {
 // single-board query takes them; LIKE ANY keeps the per-board predicate's semantics
 // (escaping, the ":" terminator) without a second definition of the namespace. The
 // removal enqueue rides the statement for the same reason it does in every close.
+//
+// url_pattern is CloseUnseenJobsForBoard's: ” for every provider but a region-scoped one, whose
+// caller issues one statement per region, all of that region's boards in it.
 func (q *Queries) CloseUnseenJobsForBoards(ctx context.Context, arg CloseUnseenJobsForBoardsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, closeUnseenJobsForBoards, arg.Source, arg.Cutoff, arg.BoardPatterns)
+	row := q.db.QueryRow(ctx, closeUnseenJobsForBoards,
+		arg.Source,
+		arg.Cutoff,
+		arg.BoardPatterns,
+		arg.UrlPattern,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

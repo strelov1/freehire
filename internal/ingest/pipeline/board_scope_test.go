@@ -24,7 +24,7 @@ func TestRunReportsQualifyingBoardOnASuccessfulCrawl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got := stats["greenhouse"].QualifyingBoards; !slices.Contains(got, "acme") {
+	if got := boardNames(stats["greenhouse"].QualifyingBoards); !slices.Contains(got, "acme") {
 		t.Errorf("QualifyingBoards = %v, want it to contain %q", got, "acme")
 	}
 }
@@ -49,7 +49,7 @@ func TestRunExcludesABoardNameSharedAcrossRegions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got := stats["lever"].QualifyingBoards; slices.Contains(got, "acme") {
+	if got := boardNames(stats["lever"].QualifyingBoards); slices.Contains(got, "acme") {
 		t.Errorf("QualifyingBoards = %v, must not contain %q — its region is ambiguous this run", got, "acme")
 	}
 }
@@ -123,7 +123,7 @@ func TestRunReportsQualifyingBoardWhenEveryPostingWasRejected(t *testing.T) {
 	if got := stats["greenhouse"]; got.Rejected != 1 {
 		t.Fatalf("stats = %+v, want Rejected=1 (fixture assumption)", got)
 	}
-	if got := stats["greenhouse"].QualifyingBoards; !slices.Contains(got, "acme") {
+	if got := boardNames(stats["greenhouse"].QualifyingBoards); !slices.Contains(got, "acme") {
 		t.Errorf("QualifyingBoards = %v, want it to contain %q despite every posting being rejected", got, "acme")
 	}
 }
@@ -144,7 +144,7 @@ func TestRunReportsOnlyBoardsItActuallyCrawled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	got := stats["greenhouse"].QualifyingBoards
+	got := boardNames(stats["greenhouse"].QualifyingBoards)
 	if !slices.Contains(got, "acme") {
 		t.Errorf("QualifyingBoards = %v, want it to contain the crawled board %q", got, "acme")
 	}
@@ -214,7 +214,7 @@ func TestRunStillReportsABoardWhoseUnreadShareIsScattered(t *testing.T) {
 	if got.Unreadable != 1 {
 		t.Fatalf("stats = %+v, want Unreadable=1 (fixture assumption)", got)
 	}
-	if !slices.Contains(got.QualifyingBoards, "acme") {
+	if !slices.Contains(boardNames(got.QualifyingBoards), "acme") {
 		t.Errorf("QualifyingBoards = %v, want it to contain %q — one posting in a hundred is not a broken crawl",
 			got.QualifyingBoards, "acme")
 	}
@@ -251,7 +251,7 @@ func TestUnreadShareBoundary(t *testing.T) {
 			if got.Unreadable != tc.unread {
 				t.Fatalf("stats = %+v, want Unreadable=%d (fixture assumption)", got, tc.unread)
 			}
-			if has := slices.Contains(got.QualifyingBoards, "acme"); has != tc.qualifos {
+			if has := slices.Contains(boardNames(got.QualifyingBoards), "acme"); has != tc.qualifos {
 				t.Errorf("board qualifies = %v with %d of 100 unread, want %v — maxUnreadablePercent is %d",
 					has, tc.unread, tc.qualifos, maxUnreadablePercent)
 			}
@@ -312,7 +312,7 @@ func TestAmbiguousBoardNamesReportsBoardNameAlone(t *testing.T) {
 		{Company: "Acme EU", Provider: "workday", Board: "acme", Region: "eu"},
 		{Company: "Globex", Provider: "workday", Board: "globex", Region: "us"},
 	}
-	got := AmbiguousBoardNames(entries)
+	got := AmbiguousBoardNames(entries, nil)
 	if !got["acme"] {
 		t.Errorf("AmbiguousBoardNames(%v) = %v, want it to contain %q", entries, got, "acme")
 	}
@@ -392,10 +392,10 @@ func TestRunReportsOnlyTheBoardsItFinishedBeforeItsDeadline(t *testing.T) {
 		t.Fatalf("Run error = %v, want the deadline", err)
 	}
 	got := stats["workday"]
-	if !slices.Contains(got.QualifyingBoards, "fast") {
+	if !slices.Contains(boardNames(got.QualifyingBoards), "fast") {
 		t.Errorf("QualifyingBoards = %v, want the board finished before the deadline", got.QualifyingBoards)
 	}
-	if slices.Contains(got.QualifyingBoards, "slow") {
+	if slices.Contains(boardNames(got.QualifyingBoards), "slow") {
 		t.Errorf("QualifyingBoards = %v, must not contain a board the deadline cut short", got.QualifyingBoards)
 	}
 	if got.Interrupted != 1 {
@@ -502,7 +502,7 @@ func TestRunReportsAFinishedEmptyBoard(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	got := stats["greenhouse"]
-	if !slices.Equal(got.EmptyBoards, []string{"acme"}) {
+	if !slices.Equal(boardNames(got.EmptyBoards), []string{"acme"}) {
 		t.Errorf("EmptyBoards = %v, want [acme]", got.EmptyBoards)
 	}
 	if len(got.QualifyingBoards) != 0 {
@@ -571,7 +571,49 @@ func TestRunReportsNoEmptyBoardTheDeadlineCutShort(t *testing.T) {
 		{Company: "Fast Co", Provider: "greenhouse", Board: "fast"},
 		{Company: "Slow Co", Provider: "greenhouse", Board: "slow"},
 	})
-	if got := stats["greenhouse"].EmptyBoards; !slices.Equal(got, []string{"fast"}) {
+	if got := boardNames(stats["greenhouse"].EmptyBoards); !slices.Equal(got, []string{"fast"}) {
 		t.Errorf("EmptyBoards = %v, want [fast]", got)
+	}
+}
+
+// boardNames is refs' board ids, for assertions that do not care about the region.
+func boardNames(refs []BoardRef) []string {
+	names := make([]string, len(refs))
+	for i, r := range refs {
+		names[i] = r.Board
+	}
+	return names
+}
+
+// regionScopedSource is a fake adapter that narrows its boards to a region by posting URL, the
+// way jobstreet does.
+type regionScopedSource struct{ fakeSource }
+
+func (regionScopedSource) BoardURLPrefix(region string) (string, bool) {
+	return "https://" + region + ".example.com/job/", true
+}
+
+// A board id repeated across regions is ambiguous for an ordinary provider — the close cannot
+// tell which region proved coverage — but not for one whose close narrows each board to its
+// region: there every region's finished crawl qualifies its own (board, region).
+func TestRunQualifiesEachRegionOfARegionScopedBoard(t *testing.T) {
+	src := regionScopedSource{fakeSource{provider: "jobstreet", jobs: []sources.Job{{ExternalID: "1", Title: "Backend Engineer"}}}}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}}
+	entries := []sources.CompanyEntry{
+		{Company: "JobStreet SG", Provider: "jobstreet", Board: "6290", Region: "sg"},
+		{Company: "JobStreet MY", Provider: "jobstreet", Board: "6290", Region: "my"},
+	}
+	stats, err := r.Run(context.Background(), entries)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := stats["jobstreet"].QualifyingBoards
+	for _, want := range []BoardRef{{"6290", "sg"}, {"6290", "my"}} {
+		if !slices.Contains(got, want) {
+			t.Errorf("QualifyingBoards = %v, want it to contain %v", got, want)
+		}
+	}
+	if names := AmbiguousBoardNames(entries, registry(src)); len(names) != 0 {
+		t.Errorf("AmbiguousBoardNames = %v, want none for a region-scoped provider", names)
 	}
 }
