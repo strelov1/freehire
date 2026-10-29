@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
   import { currentUser } from '#lib/auth.svelte.js';
+  import AccountLanguage from '#lib/components/AccountLanguage.svelte';
   import DeleteAccountButton from '#lib/components/DeleteAccountButton.svelte';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
@@ -11,8 +12,10 @@
   import ChangePasswordDialog from './ChangePasswordDialog.svelte';
   import { messages } from './messages';
 
-  // Email, password and sessions. Every action is cookie-only server-side: an API key can
-  // neither change the email or password nor end a human's sessions.
+  // Email, password, language and sessions. Every action is cookie-only server-side: an API
+  // key can neither change the email or password nor end a human's sessions. Language lives
+  // here rather than in the profile because it is the account's, not the candidate's: it
+  // switches the whole /my interface and the language the assistant answers in.
   //
   // The page itself is a list of what the account has, each with one button; the forms
   // live in dialogs, so the page reads as a summary rather than three open forms.
@@ -74,6 +77,10 @@
   {#if notice}
     <p role="status" class="border-t border-border p-4 text-sm text-muted-foreground">{s[notice]}</p>
   {/if}
+</section>
+
+<section class="mb-8 rounded-lg border border-border p-4">
+  <AccountLanguage />
 </section>
 
 <section class="rounded-lg border border-border p-4">

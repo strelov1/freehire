@@ -24,7 +24,7 @@ describe('AccountLanguage — Russian locale', () => {
     expect(screen.getByText('Язык')).toBeTruthy();
     expect(
       screen.getByText(
-        'Ваш предпочитаемый язык для ассистента и резюме. Интерфейс аккаунта доступен на английском и русском.',
+        'Язык страниц аккаунта и ответов ассистента. Резюме и сопроводительные письма пишутся на языке вакансии. Интерфейс аккаунта доступен на английском и русском.',
       ),
     ).toBeTruthy();
     // The combobox's own input value mirrors the selected language's translated name.

@@ -4,7 +4,7 @@ export const messages = defineMessages(
   {
     headTitle: 'Security · freehire',
     title: 'Security',
-    subtitle: 'Your email, password, and the devices signed in to this account.',
+    subtitle: 'Your email, password, language, and the devices signed in to this account.',
     cancel: 'Cancel',
     emailChanged: 'Email changed. Other devices were signed out.',
     passwordChanged: 'Password changed. Other devices were signed out.',
@@ -71,7 +71,7 @@ export const messages = defineMessages(
       title: 'Безопасность',
       // "сессии", matching the `sessions.heading` below — the subtitle said
       // "сеансы" for the same thing.
-      subtitle: 'Почта, пароль и устройства, на которых выполнен вход.',
+      subtitle: 'Почта, пароль, язык и устройства, на которых выполнен вход.',
       cancel: 'Отмена',
       emailChanged: 'Почта изменена. Другие устройства вышли из аккаунта.',
       passwordChanged: 'Пароль изменён. Другие устройства вышли из аккаунта.',

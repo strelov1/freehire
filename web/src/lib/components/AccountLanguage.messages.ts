@@ -5,7 +5,7 @@ export const messages = defineMessages(
   {
     heading: 'Language',
     description:
-      'Your preferred language for the assistant and CV. The account interface is available in English and Russian.',
+      'The language of these account pages and of the assistant’s replies. CVs and cover letters follow each vacancy’s own language. The account interface is available in English and Russian.',
     saving: 'Saving…',
     saved: 'Saved',
     saveFailed: 'Could not save.',
@@ -31,7 +31,7 @@ export const messages = defineMessages(
     ru: {
       heading: 'Язык',
       description:
-        'Ваш предпочитаемый язык для ассистента и резюме. Интерфейс аккаунта доступен на английском и русском.',
+        'Язык страниц аккаунта и ответов ассистента. Резюме и сопроводительные письма пишутся на языке вакансии. Интерфейс аккаунта доступен на английском и русском.',
       saving: 'Сохраняем…',
       saved: 'Сохранено',
       saveFailed: 'Не удалось сохранить.',
