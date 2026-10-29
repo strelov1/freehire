@@ -50,6 +50,6 @@
   <EducationCard
     structured={resumeMeta?.structured ?? null}
     contacts={resumeMeta?.contacts ?? null}
-    onSaved={() => void resumeStore.refresh()}
+    onSaved={(saved) => resumeStore.noteContactsSaved(saved)}
   />
 </div>

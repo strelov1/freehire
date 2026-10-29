@@ -8,7 +8,10 @@
 
   const s = $derived(t(messages, locale()));
 
-  let { contacts = {}, onSaved }: { contacts?: CandidateContacts | null; onSaved?: () => void } =
+  let {
+    contacts = {},
+    onSaved,
+  }: { contacts?: CandidateContacts | null; onSaved?: (saved: CandidateContacts) => void } =
     $props();
 
   let fullName = $state(contacts?.full_name ?? '');
@@ -60,7 +63,7 @@
       // PUT replaces the whole owned block (identity + headline/summary/languages/
       // certifications) — spread the current one first so editing a contact field here
       // cannot wipe out an edit made in the CV summary section.
-      await api.putResumeContacts({
+      const saved = await api.putResumeContacts({
         ...contacts,
         full_name: fullName.trim(),
         email: email.trim(),
@@ -69,7 +72,7 @@
         links,
       });
       saveOutcome = 'saved';
-      onSaved?.();
+      onSaved?.(saved);
     } catch (e) {
       errorMessage = e instanceof Error ? e.message : null;
       saveOutcome = 'error';

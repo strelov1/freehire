@@ -37,7 +37,7 @@
     <CvSummaryCard
       structured={resumeMeta?.structured ?? null}
       contacts={resumeMeta?.contacts ?? null}
-      onSaved={() => void resumeStore.refresh()}
+      onSaved={(saved) => resumeStore.noteContactsSaved(saved)}
     />
   </div>
 
@@ -48,7 +48,7 @@
   <div id="account-contacts" class="mt-8 scroll-mt-20 border-t border-border pt-6">
     <CandidateContactsEditor
       contacts={resumeMeta?.contacts ?? null}
-      onSaved={() => void resumeStore.refresh()}
+      onSaved={(saved) => resumeStore.noteContactsSaved(saved)}
     />
   </div>
 

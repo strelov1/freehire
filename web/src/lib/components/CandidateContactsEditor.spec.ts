@@ -62,3 +62,19 @@ describe('CandidateContactsEditor — Russian locale', () => {
     expect(screen.getByText('Не удалось сохранить контакты.')).toBeTruthy();
   });
 });
+
+// The page applies what the PUT answered straight to the shared store, so the next save —
+// from this card or the CV summary beside it — starts from the block just written rather
+// than the copy from before it (a re-fetch still in flight would send the old one back).
+describe('CandidateContactsEditor — after a save', () => {
+  it('hands onSaved the block the server answered with', async () => {
+    const answered = { full_name: 'Ada', headline: 'Kept by the server' };
+    putResumeContacts.mockResolvedValue(answered);
+    const onSaved = vi.fn();
+    render(CandidateContactsEditor, { props: { contacts: { headline: 'Old' }, onSaved } });
+
+    await fireEvent.click(screen.getByText('Сохранить контакты'));
+
+    expect(onSaved).toHaveBeenCalledWith(answered);
+  });
+});
