@@ -499,6 +499,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   itjobs: 'ITJobs.pt',
   feinaactiva: 'Feina Activa',
   mojedelo: 'MojeDelo',
+  optius: 'Optius',
   turijobs: 'Turijobs',
   taleez: 'Taleez',
   sapoemprego: 'SAPO Emprego',
