@@ -180,16 +180,6 @@ func (h *inboxHandlers) register(api fiber.Router, mw middleware) {
 		// which a keyed client cannot complete.
 		api.Get("/me/calendar/connect", mw.cookie, h.CalendarConnect)
 		api.Get("/me/calendar/callback", mw.optionalCookie, h.CalendarCallback)
-		// A mentor's own write consent, beside the other two and never folded into
-		// either: it is the only one of the three that can create anything on someone
-		// else's calendar, so it gets its own explicit ask.
-		api.Get("/me/mentor-calendar/connect", mw.cookie, h.MentorCalendarConnect)
-		api.Get("/me/mentor-calendar/callback", mw.optionalCookie, h.MentorCalendarCallback)
-		// A mentor's own busy-sync consent, beside the other three: it shares
-		// calendar.readonly with the candidate's read-only flow above, but must be its
-		// own explicit ask — see gmail_connections.mentor_busy_sync_opted_in.
-		api.Get("/me/mentor-busy-sync/connect", mw.cookie, h.MentorBusySyncConnect)
-		api.Get("/me/mentor-busy-sync/callback", mw.optionalCookie, h.MentorBusySyncCallback)
 		api.Post("/me/gmail/sync", mw.key, h.SyncGmail)
 	}
 	// Hosted-mailbox option: status is always available (reports unavailable when
@@ -210,16 +200,6 @@ const gmailStateCookieName = "hire_gmail_state"
 // calendarStateCookieName carries the calendar-connect CSRF state, separate from the mail
 // one so two consents in flight cannot complete each other.
 const calendarStateCookieName = "hire_calendar_state"
-
-// mentorCalendarStateCookieName carries the mentor calendar-write consent's own CSRF
-// state — a third flow, separate from both the mail and the read-only calendar one, so
-// none of the three can complete another.
-const mentorCalendarStateCookieName = "hire_mentor_calendar_state"
-
-// mentorBusyStateCookieName carries the mentor busy-sync consent's own CSRF state — a
-// fourth flow, sharing calendar.readonly with the candidate's read-only calendar
-// connection but never its cookie, so completing one can never complete the other.
-const mentorBusyStateCookieName = "hire_mentor_busy_state"
 
 // integrationsPath is where both the mail and calendar OAuth callbacks land, success or
 // failure — the Integrations tab is the one surface that owns connect/disconnect for
@@ -242,7 +222,7 @@ func (h *inboxHandlers) GmailConnect(c *fiber.Ctx) error {
 // its own CSRF cookie, its own query-param vocabulary, and the two steps that are
 // genuinely its business — exchanging the code and persisting what came back. Everything
 // else (state verification, a declined-consent redirect, extracting the code, encrypting
-// the token, the final redirect) is identical across all four flows in this file and
+// the token, the final redirect) is identical across both flows in this file and
 // lives once, in runOAuthCallback.
 type oauthCallbackFlow struct {
 	// name identifies the flow in the server-side log line only — never shown to the
@@ -302,7 +282,7 @@ func (h *inboxHandlers) runOAuthCallback(c *fiber.Ctx, flow oauthCallbackFlow) e
 // is logged server-side first (like oauthFail), since the generic redirect
 // marker tells the user nothing.
 //
-// The only one of the four callbacks whose exchange needs a fourth return value (the
+// The only callback whose exchange needs a fourth return value (the
 // connected address) and whose persist step is two queries, not one — both threaded
 // through runOAuthCallback's shared shape via the closure below rather than widening
 // oauthCallbackFlow for a single caller.
@@ -342,8 +322,8 @@ func (h *inboxHandlers) CalendarConnect(c *fiber.Ctx) error {
 }
 
 // CalendarCallback finishes it: verify state, exchange the code, store the grant and note
-// that it now covers the calendar. Failures redirect with ?calendar_error and are logged
-// server-side first, exactly as the mail flow does — the marker tells the user nothing.
+// what it now covers. Failures redirect with ?calendar_error and are logged server-side
+// first, exactly as the mail flow does — the marker tells the user nothing.
 //
 // It lands back on Integrations rather than the tracking calendar: that is the surface
 // the connect was started from, same as the mail flow.
@@ -352,78 +332,19 @@ func (h *inboxHandlers) CalendarCallback(c *fiber.Ctx) error {
 		name: "calendar connect", stateCookie: calendarStateCookieName,
 		errorParam: "calendar_error", successQuery: "calendar=connected",
 		exchange: h.gmailConnector.ExchangeCalendar,
-		persist:  h.persistCalendarGrant,
-	})
-}
-
-// persistCalendarGrant records what a read-only-calendar-scoped grant covers — shared by
-// CalendarCallback and MentorCalendarCallback, whose only difference is which scope they
-// asked Google for. What Google says the grant covers, not what we asked for: the two
-// differ whenever a candidate declines part of a consent, and the record is what every
-// worker's filter reads.
-func (h *inboxHandlers) persistCalendarGrant(ctx context.Context, userID int64, enc string, scopes []string) error {
-	return h.queries.UpsertCalendarGrant(ctx, db.UpsertCalendarGrantParams{
-		UserID: userID, RefreshTokenEnc: enc, Scopes: scopes,
-	})
-}
-
-// MentorCalendarConnect starts a mentor's calendar.events write consent — its own
-// flow, own state cookie, distinct from both the mail and the read-only calendar one.
-func (h *inboxHandlers) MentorCalendarConnect(c *fiber.Ctx) error {
-	state, err := oauth.NewState()
-	if err != nil {
-		return err
-	}
-	oauth.SetStateCookieNamed(c, mentorCalendarStateCookieName, state, h.cookieSecure)
-	return c.Redirect(h.gmailConnector.MentorCalendarAuthCodeURL(state), fiber.StatusFound)
-}
-
-// MentorCalendarCallback finishes it: verify state, exchange the code, store the grant
-// and note that it now covers calendar.events. Failures redirect with
-// ?mentor_calendar_error and are logged server-side first, exactly as the other two
-// flows do — the marker tells the user nothing.
-//
-// It lands back on Integrations, the surface every connect flow here starts from.
-func (h *inboxHandlers) MentorCalendarCallback(c *fiber.Ctx) error {
-	return h.runOAuthCallback(c, oauthCallbackFlow{
-		name: "mentor calendar connect", stateCookie: mentorCalendarStateCookieName,
-		errorParam: "mentor_calendar_error", successQuery: "mentor_calendar=connected",
-		exchange: h.gmailConnector.ExchangeMentorCalendar,
-		persist:  h.persistCalendarGrant,
-	})
-}
-
-// MentorBusySyncConnect starts a mentor's busy-sync consent — its own flow, own state
-// cookie, sharing calendar.readonly with the candidate's read-only calendar flow but
-// never inferred from it (see gmail_connections.mentor_busy_sync_opted_in).
-func (h *inboxHandlers) MentorBusySyncConnect(c *fiber.Ctx) error {
-	state, err := oauth.NewState()
-	if err != nil {
-		return err
-	}
-	oauth.SetStateCookieNamed(c, mentorBusyStateCookieName, state, h.cookieSecure)
-	return c.Redirect(h.gmailConnector.MentorBusyAuthCodeURL(state), fiber.StatusFound)
-}
-
-// MentorBusySyncCallback finishes it: verify state, exchange the code, store the grant,
-// and record the explicit opt-in — the flag that tells this consent apart from an
-// unrelated calendar.readonly grant the account may already hold. Failures redirect with
-// ?mentor_busy_error and are logged server-side first, exactly as the other flows do.
-//
-// It lands back on Integrations, the surface every connect flow here starts from.
-func (h *inboxHandlers) MentorBusySyncCallback(c *fiber.Ctx) error {
-	return h.runOAuthCallback(c, oauthCallbackFlow{
-		name: "mentor busy sync connect", stateCookie: mentorBusyStateCookieName,
-		errorParam: "mentor_busy_error", successQuery: "mentor_busy=connected",
-		exchange: h.gmailConnector.ExchangeMentorBusy,
 		persist: func(ctx context.Context, userID int64, enc string, scopes []string) error {
-			if err := h.persistCalendarGrant(ctx, userID, enc, scopes); err != nil {
+			// What Google says the grant covers, not what we asked for: the two differ
+			// whenever someone declines part of a consent, and the record is what every
+			// worker's filter reads.
+			if err := h.queries.UpsertCalendarGrant(ctx, db.UpsertCalendarGrantParams{
+				UserID: userID, RefreshTokenEnc: enc, Scopes: scopes,
+			}); err != nil {
 				return err
 			}
-			// The explicit opt-in itself. persistCalendarGrant above records what the
-			// grant COVERS; this records that the mentor consented to THIS purpose with
-			// it — the distinction the design exists for, since covering
-			// calendar.readonly is not proof of that on its own.
+			// The one calendar consent covers a mentor's busy-time sync too. The flag
+			// still exists because grants made before the consents merged hold
+			// calendar.readonly for interviews alone; only cmd/mentor-busy-sync reads it,
+			// and only for accounts that are mentors.
 			return h.queries.SetMentorBusySyncOptedIn(ctx, userID)
 		},
 	})
@@ -455,11 +376,11 @@ func (h *inboxHandlers) GmailStatus(c *fiber.Ctx) error {
 		// no address behind it.
 		"connected": conn.Email != "", "email": conn.Email, "status": conn.Status, "available": h.gmailReady(),
 		// Whether this grant also covers the calendar. Read from the recorded scopes and
-		// not from the row's existence: the two consents are separate, so a connected
-		// mailbox says nothing about the calendar and a calendar grant may have no
-		// mailbox behind it at all.
+		// not from the row's existence: mail and calendar are separate consents, so a
+		// connected mailbox says nothing about the calendar and a calendar grant may have
+		// no mailbox behind it at all.
 		"calendar_connected": slices.Contains(conn.Scopes, gmailsync.CalendarScope),
-		// Whether this grant covers calendar.events — the mentor-only write consent
+		// Whether this grant covers calendar.events — the write scope
 		// mentor-google-meet-link reads to decide whether a booking gets an
 		// auto-generated Meet link and whether the profile's own link becomes optional.
 		// Gated on status too, unlike calendar_connected above: a mentor whose booking
@@ -469,10 +390,9 @@ func (h *inboxHandlers) GmailStatus(c *fiber.Ctx) error {
 		// every new booking silently landing with no link at all.
 		"mentor_calendar_connected": conn.Status == "connected" && slices.Contains(conn.Scopes, gmailsync.CalendarEventsScope),
 		// Whether this grant covers busy-sync. Gated on the explicit opt-in flag AND the
-		// scope AND status, unlike calendar_connected: the scope alone cannot tell this
-		// consent apart from the unrelated grant above (both request calendar.readonly),
-		// so the flag is what mentor_busy_sync_opted_in exists to answer — see
-		// mentor-calendar-busy-sync's design.md.
+		// scope AND status, unlike calendar_connected: a grant made before the calendar
+		// consents merged may hold calendar.readonly for interviews alone, and the flag
+		// is what tells it apart (see CalendarCallback).
 		"mentor_busy_sync_connected": conn.MentorBusySyncOptedIn && conn.Status == "connected" && slices.Contains(conn.Scopes, gmailsync.CalendarScope),
 	}})
 }

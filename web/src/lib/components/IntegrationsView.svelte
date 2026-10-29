@@ -29,9 +29,14 @@
   let confirmDisconnectOpen = $state(false);
 
   const hasGmail = $derived(!!gmail?.connected);
-  const hasCalendar = $derived(gmail?.calendar_connected === true);
-  const hasMentorCalendar = $derived(gmail?.mentor_calendar_connected === true);
-  const hasMentorBusySync = $derived(gmail?.mentor_busy_sync_connected === true);
+  // One consent covers every calendar use, so the row is connected only when the grant
+  // covers all of them. A grant made before the consents merged may hold just one part;
+  // it shows Connect, and reconnecting completes it.
+  const hasCalendar = $derived(
+    gmail?.calendar_connected === true &&
+      gmail?.mentor_calendar_connected === true &&
+      gmail?.mentor_busy_sync_connected === true,
+  );
 
   async function loadGmail() {
     gmailLoading = true;
@@ -85,8 +90,6 @@
     exchange: 'Google did not finish handing over access. Try connecting again.',
   });
   const GMAIL_CONNECT_ERRORS = connectErrors('Gmail');
-  // Shared with the mentor calendar flow below: both name the same product ("Calendar")
-  // to the reader, so the same messages apply to either failing.
   const CALENDAR_CONNECT_ERRORS = connectErrors('Calendar');
   let googleNotice = $state<{ ok: boolean; text: string } | null>(null);
 
@@ -94,8 +97,6 @@
     const params = page.url.searchParams;
     const gmailFailed = params.get('gmail_error');
     const calendarFailed = params.get('calendar_error');
-    const mentorCalendarFailed = params.get('mentor_calendar_error');
-    const mentorBusyFailed = params.get('mentor_busy_error');
     if (gmailFailed) {
       googleNotice = { ok: false, text: GMAIL_CONNECT_ERRORS[gmailFailed] ?? 'Connecting Gmail failed. Try again.' };
     } else if (calendarFailed) {
@@ -103,30 +104,10 @@
         ok: false,
         text: CALENDAR_CONNECT_ERRORS[calendarFailed] ?? 'Connecting Calendar failed. Try again.',
       };
-    } else if (mentorCalendarFailed) {
-      googleNotice = {
-        ok: false,
-        text: CALENDAR_CONNECT_ERRORS[mentorCalendarFailed] ?? 'Connecting Calendar failed. Try again.',
-      };
-    } else if (mentorBusyFailed) {
-      googleNotice = {
-        ok: false,
-        text: CALENDAR_CONNECT_ERRORS[mentorBusyFailed] ?? 'Connecting Calendar failed. Try again.',
-      };
     } else if (params.get('gmail') === 'connected') {
       googleNotice = { ok: true, text: 'Gmail connected — your ATS mail will show up in the Inbox shortly.' };
     } else if (params.get('calendar') === 'connected') {
       googleNotice = { ok: true, text: 'Calendar connected — accepted interviews will show up on the Tracking calendar.' };
-    } else if (params.get('mentor_calendar') === 'connected') {
-      googleNotice = {
-        ok: true,
-        text: 'Calendar connected — your mentorship bookings will get an automatic Meet link.',
-      };
-    } else if (params.get('mentor_busy') === 'connected') {
-      googleNotice = {
-        ok: true,
-        text: 'Calendar connected — your busy time will be kept out of your mentorship slots.',
-      };
     } else {
       return;
     }
@@ -367,35 +348,14 @@
           <p class="text-xs text-muted-foreground">Sync started — new mail will show up in the Inbox shortly.</p>
         {/if}
 
-        <!-- Calendar: a separate consent, so it needs its own status and its own connect. -->
+        <!-- Calendar: a separate consent from Mail, so it needs its own status and its own
+             connect. One consent for every calendar use, candidate and mentor alike. -->
         {@render googleConsentRow(
           'Calendar',
           hasCalendar,
-          'Accepted interviews appear on the Tracking calendar.',
-          'Connecting Mail does not grant this — it asks separately.',
+          'Accepted interviews appear on the Tracking calendar. Mentors get a Meet link on every booking, and their busy time stays out of their slots.',
+          'Show accepted interviews on the Tracking calendar. For mentors: a Meet link on every booking, and your busy time kept out of your slots.',
           '/api/v1/me/calendar/connect',
-        )}
-
-        <!-- Mentor calendar: a THIRD, separate write consent — never inferred from the
-             read-only Calendar grant above, which candidates connect for an unrelated
-             purpose and must not silently be handed write access over. -->
-        {@render googleConsentRow(
-          'Mentor calendar',
-          hasMentorCalendar,
-          'New mentorship bookings get an automatic Google Meet link.',
-          'For mentors: get an automatic Google Meet link on every booking instead of a fixed link.',
-          '/api/v1/me/mentor-calendar/connect',
-        )}
-
-        <!-- Mentor calendar sync: a FOURTH, separate consent — it shares the read-only
-             Calendar grant's own scope (Google has no narrower one for free/busy alone),
-             but must never be inferred from that unrelated grant. -->
-        {@render googleConsentRow(
-          'Mentor calendar sync',
-          hasMentorBusySync,
-          'Your busy time from Google Calendar is kept out of your mentorship slots.',
-          'For mentors: keep your existing Google Calendar commitments out of your mentorship slots.',
-          '/api/v1/me/mentor-busy-sync/connect',
         )}
       </div>
     {/if}

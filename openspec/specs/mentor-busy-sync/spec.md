@@ -10,26 +10,27 @@ without ever exposing what those commitments are.
 
 ### Requirement: A mentor may connect Google Calendar for busy-time sync
 
-The system SHALL let a signed-in mentor grant `calendar.readonly` through Google's
-incremental authorization, layered on the existing Google OAuth client the way the
-platform's other incremental grants are. This SHALL be its own consent, requested
-separately from — and never inferred from — any other Google grant the same account may
-already hold, including a read-only calendar grant made for an unrelated feature. On
-success the system MUST store the resulting refresh token, encrypted at rest, and mark
-the grant as covering `calendar.readonly` for this purpose.
+The system SHALL let a signed-in account grant `calendar.readonly` and `calendar.events`
+through ONE calendar consent on Google's incremental authorization, layered on the
+existing Google OAuth client the way the platform's other incremental grants are. That
+one consent SHALL cover every calendar use — interviews on the Tracking calendar, a
+mentor's Meet links, and a mentor's busy-time sync — and SHALL stay separate from the
+Gmail consent. On success the system MUST store the resulting refresh token, encrypted
+at rest, record the scopes Google granted, and mark the grant as opted in to busy-time
+sync. Only accounts that are mentors are ever synced.
 
-#### Scenario: A mentor connects Calendar for busy-time sync
+#### Scenario: A mentor connects Calendar
 
-- **WHEN** a signed-in mentor starts this connect flow and grants `calendar.readonly`
+- **WHEN** a signed-in mentor starts the calendar connect flow and grants it
 - **THEN** the callback exchanges the code, stores the refresh token encrypted, and the
   grant is recorded as covering busy-time sync
 
-#### Scenario: An unrelated Google connection does not imply this grant
+#### Scenario: A calendar grant from before the consents merged does not imply this grant
 
-- **WHEN** an account has previously connected Gmail, read-only calendar access for
-  another feature, or the mentor-calendar write grant, but has never completed this
-  connect flow
-- **THEN** the system does not treat that account as having opted in to busy-time sync
+- **WHEN** an account holds `calendar.readonly` from a calendar connect made before the
+  calendar consents were merged, and has not connected Calendar since
+- **THEN** the system does not treat that account as having opted in to busy-time sync,
+  and the Integrations page offers Connect so reconnecting completes the grant
 
 ### Requirement: A connected mentor's busy time is synced periodically
 

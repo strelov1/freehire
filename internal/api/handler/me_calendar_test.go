@@ -68,6 +68,9 @@ func TestCalendarConnect_SendsToGoogleForTheCalendarAlone(t *testing.T) {
 	if !strings.Contains(location, "calendar.readonly") {
 		t.Errorf("the consent did not ask for the calendar: %q", location)
 	}
+	if !strings.Contains(location, "calendar.events") {
+		t.Errorf("the consent did not ask for the write scope Meet links need: %q", location)
+	}
 	if strings.Contains(location, "gmail.readonly") {
 		t.Errorf("the calendar consent also asked for mail: %q", location)
 	}

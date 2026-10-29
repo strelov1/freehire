@@ -439,14 +439,12 @@ export interface GmailStatus {
    *  a connected mailbox says nothing about the calendar, and a calendar grant may have
    *  no mailbox behind it at all. */
   calendar_connected?: boolean;
-  /** Whether the same grant covers calendar.events — the mentor-only write consent that
+  /** Whether the same grant covers calendar.events — the write scope that
    *  auto-generates a Meet link per booking and makes the mentor profile's own meeting
-   *  link field optional. A third, separate consent from both fields above. */
+   *  link field optional. Asked for on the same consent as calendar_connected. */
   mentor_calendar_connected?: boolean;
-  /** Whether the mentor explicitly opted in to busy-time sync — a FOURTH consent that
-   *  shares calendar_connected's own scope (Google has no narrower one for free/busy
-   *  alone) but is never inferred from it: an unrelated calendar_connected grant made for
-   *  the tracking calendar above must not silently enroll a mentor's busy time here. */
+  /** Whether the grant enrolls a mentor's busy time in slot sync. Granted by the same
+   *  calendar consent; false for a calendar grant made before the consents merged. */
   mentor_busy_sync_connected?: boolean;
 }
 

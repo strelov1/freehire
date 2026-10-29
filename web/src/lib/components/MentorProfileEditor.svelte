@@ -315,7 +315,7 @@
         {:else}
           Meeting link — a room you own. Only booked seekers ever see it. Don't want to
           paste one? Connect <a class="underline" href={resolve('/my/integrations')}
-            >Mentor calendar</a
+            >Calendar</a
           > instead and we'll create a fresh Meet link for every booking.
         {/if}
       </span>

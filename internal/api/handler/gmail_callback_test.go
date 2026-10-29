@@ -64,7 +64,7 @@ func TestGmailCallbackStateMismatchRedirects(t *testing.T) {
 	}
 }
 
-// The same two guards (missing session, state mismatch) hold for every one of the four
+// The same two guards (missing session, state mismatch) hold for both
 // Google callbacks in this file, not just Gmail's — locked in here before any shared
 // refactor of their common prefix.
 func TestGoogleCallbacksGuardEveryFlow(t *testing.T) {
@@ -76,8 +76,6 @@ func TestGoogleCallbacksGuardEveryFlow(t *testing.T) {
 	}{
 		{"gmail", "/api/v1/me/gmail/callback", gmailStateCookieName, "gmail_error"},
 		{"calendar", "/api/v1/me/calendar/callback", calendarStateCookieName, "calendar_error"},
-		{"mentor calendar", "/api/v1/me/mentor-calendar/callback", mentorCalendarStateCookieName, "mentor_calendar_error"},
-		{"mentor busy sync", "/api/v1/me/mentor-busy-sync/callback", mentorBusyStateCookieName, "mentor_busy_error"},
 	} {
 		t.Run(tc.name+"/no session", func(t *testing.T) {
 			app, frontend := newGmailCallbackApp(t)
@@ -153,10 +151,6 @@ func TestGoogleCallbacksReportARefusalInsteadOfClaimingSuccess(t *testing.T) {
 		{"mail returned nothing", "/api/v1/me/gmail/callback", gmailStateCookieName, "", "gmail_error=exchange"},
 		{"calendar declined", "/api/v1/me/calendar/callback", calendarStateCookieName, "error=access_denied", "calendar_error=denied"},
 		{"calendar returned nothing", "/api/v1/me/calendar/callback", calendarStateCookieName, "", "calendar_error=exchange"},
-		{"mentor calendar declined", "/api/v1/me/mentor-calendar/callback", mentorCalendarStateCookieName, "error=access_denied", "mentor_calendar_error=denied"},
-		{"mentor calendar returned nothing", "/api/v1/me/mentor-calendar/callback", mentorCalendarStateCookieName, "", "mentor_calendar_error=exchange"},
-		{"mentor busy sync declined", "/api/v1/me/mentor-busy-sync/callback", mentorBusyStateCookieName, "error=access_denied", "mentor_busy_error=denied"},
-		{"mentor busy sync returned nothing", "/api/v1/me/mentor-busy-sync/callback", mentorBusyStateCookieName, "", "mentor_busy_error=exchange"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			app, frontend := newGmailCallbackApp(t)
