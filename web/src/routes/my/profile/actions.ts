@@ -1,8 +1,10 @@
 // Shared profile-section mutation callbacks. These touch only the existing app-wide
-// singleton stores (profileStore, resumeStore) — never local component state — so
-// they are plain functions rather than anything reactive, imported directly by
-// whichever leaf page needs them, the same way those stores themselves are imported.
+// singleton stores (profileStore, resumeStore, experienceBankStore) — never local
+// component state — so they are plain functions rather than anything reactive, imported
+// directly by whichever leaf page needs them, the same way those stores themselves are
+// imported.
 
+import { experienceBankStore } from '#lib/experienceBank.svelte.js';
 import { profileStore } from '#lib/profile.svelte.js';
 import { syncProfileAlert } from '#lib/profileAlertSync.js';
 import { resumeStore } from '#lib/resume.svelte.js';
@@ -13,8 +15,15 @@ export function handleSaved() {
   void syncProfileAlert();
 }
 
-export function handleCvUploaded() {
+// The upload answers before its background parse has run, and the summary, education and
+// experience that parse writes land seconds later — read by the cards on these pages and
+// by the tabs' completeness dots. So follow the parse, then re-read what it fed.
+export async function handleCvUploaded() {
   resumeStore.noteUpload();
+  if (await resumeStore.waitForParse()) {
+    void profileStore.refresh();
+    void experienceBankStore.refresh();
+  }
 }
 
 export function handleCvDeleted() {
