@@ -456,6 +456,51 @@ Portuguese titles read correctly. Still unresolved: a franchise's "Entrepreneur 
 manager immobilier" postings, "Boulanger" (English "Baker" resolves nothing either), and
 generic heads with no field.
 
+## Polish stems
+
+Polish titles have the head-and-field shape too ("Specjalista ds. sprzedaży", "Kierownik
+Działu Logistyki"), but Polish INFLECTS: a programista, programistka, programisty and
+programistów are one word, and the field after "ds." stands in the genitive. The main
+table's CEE block spells some surface forms; `polish.go` matches STEMS instead. Its
+aliases are whole words on the title `foldPolish` maps (lowercase, diacritics dropped,
+"ł" → "l", gender forms cut, "Mł."/"St." spelled out), and a word ending in `*` matches
+any word that starts with it — Polish inflects at the END of a word, the opposite of the
+German compound head. `TestPolishAliasesAreFolded` holds every alias to that space. It
+runs after the French table, and before it the main table is asked again of the
+gender-cut title ("Inżynier(-ka) Sieciowy(-a)").
+
+It reads only a title that looks Polish (`looksPolish`): a Polish letter, a "(K/M)"
+notice (it must carry the "k" — "(m/f/d)" is German), a Polish-only word, a
+masculine/feminine pair ("Ratownik / Ratowniczka"), a "/-ka" suffix, or a Polish case
+ending (`-owy/-owych` with a "w", which Czech and Slovak write with a "v"). The bare
+"operator", "administrator", "architekt", "technik", "inspektor" and "lider" are NOT
+cues: an English "$31/hr … Operator" title went to hr through them.
+
+Each answer follows the English twin: "Relationship Manager" is finance, so the bank's
+"budowania relacji z klientem zamożnym" is; "Implementation Consultant" customer success,
+"SAP Consultant" solutions engineering, "Machinist" (tokarz, frezer) skilled trades,
+"IT Specialist" it_support. Role nouns outrank fields ("Elektroradiolog z obsługą
+recepcji" is the radiographer); "darmowy transport" is a perk and "branża produkcyjna"
+the client's sector. Generic heads — specjalista, kierownik, koordynator, ekspert,
+asystent, konsultant, doradca, inżynier, operator — resolve nothing alone, and "Inżynier
+Systemów Hydraulicznych" is not the sysadmin's "inżynier systemowy".
+
+Grades (`polishSeniorityTable`): młodszy/Mł. junior (a bare "ml" is machine learning),
+starszy/St. senior, "Regular" middle, stażysta/praktykant/staż/praktyki intern,
+kierownik zespołu/lider zespołu/an opening "Lider"/wiodący lead, prezes and the general,
+executive and financial directors c_level. "Specjalista" is no grade, nor a plain
+"kierownik" or "dyrektor"; the assistant or deputy of a lead, and a desk that runs the
+internships, are cut first.
+
+Measured 2026-10-29 over 5,096 open postings with a Polish title (erecruiter, traffit,
+nofluffjobs, solidjobs, smartrecruiters, teamtailor, recruitee, eures): category 64.5% →
+84.1%, seniority 4.4% → 11.2%. Over 27,690 control titles (xing, wttj, infojobs, gupy,
+greenhouse, lever, coveto, profession, hh, recruitee, personio, workable) 4 changed, all
+Polish. "Data Warehouse" was filed under logistics catalogue-wide; the main table now
+reads it as data engineering. Still unresolved: tender and public-procurement desks,
+claims handling ("obsługa szkód"), "Doradca Klienta" with no field, and the aerospace
+research centre's engineers named by subject alone.
+
 ## Serving: dict-only
 
 `jobview.FromRow` overwrites the nested `enrichment.seniority`/`enrichment.category` with the `jobs` column — the dictionary always wins, the LLM's value is never a fallback. They remain **nested under `enrichment`** so existing search facets, SPA, and generated contracts are unchanged.

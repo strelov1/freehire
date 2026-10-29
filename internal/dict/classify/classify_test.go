@@ -65,7 +65,7 @@ func TestParse(t *testing.T) {
 		{"Softwareentwickler (m/w/d)", "", "software_engineering"},
 		{"Software-Entwickler (m/w/d)", "", "software_engineering"},
 		{"SPS-Programmierer (m/w/d)", "", ""},
-		{"Starszy Programista .NET z doświadczeniem w Power BI", "", "software_engineering"},
+		{"Starszy Programista .NET z doświadczeniem w Power BI", "senior", "software_engineering"},
 		{"Sviluppatore Software Junior", "junior", "software_engineering"},
 		{"Lead Senior Engineer", "lead", ""},
 		// Architecture and network engineering are their own categories.

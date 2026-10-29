@@ -2140,6 +2140,11 @@ var coreCategoryTable = []aliasEntry{
 	{"warehouse operator", "logistics"},
 	{"warehouse supervisor", "logistics"},
 	{"warehouse assistant", "logistics"},
+	// A DATA warehouse is the analytics store, never a building: "Data Warehouse
+	// Developer" and "Architekt IT – Data Warehouse" were filed with the forklift
+	// drivers. The architect resolves above, so only the remainder reaches these.
+	{"data warehouse", "data_engineering"},
+	{"data warehousing", "data_engineering"},
 	{"warehouse", "logistics"},
 	{"forklift operator", "logistics"},
 	{"truck unloader", "logistics"},

@@ -1,6 +1,6 @@
 // Package classify derives a job's seniority and role category deterministically
 // from its title. It is a curated dictionary, not a model: it resolves known
-// English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Japanese and Chinese title terms and emits nothing for what it cannot resolve
+// English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Japanese and Chinese title terms and emits nothing for what it cannot resolve
 // (it never guesses). Canonical values are drawn from the same controlled
 // vocabularies the enrichment contract defines (vocab.SeniorityValues /
 // vocab.CategoryValues), so the parser, the enrichment payload, and the search
@@ -52,7 +52,7 @@ func matchCategory(lower string) string {
 		// then the Dutch ones (dutch.go), then the Danish ones (danish.go), then the
 		// Spanish heads and fields (spanish.go), then the Portuguese ones
 		// (portuguese.go) — unless the Spanish table vetoed the title — then the
-		// French ones (french.go).
+		// French ones (french.go), then the Polish ones (polish.go).
 		if c := matchHeads(lower, germanCategoryTable); c != "" {
 			return c
 		}
@@ -68,6 +68,9 @@ func matchCategory(lower string) string {
 		}
 		if c == "" {
 			c = matchFrenchCategory(lower)
+		}
+		if c == "" {
+			c = matchPolishCategory(lower)
 		}
 	}
 	if c == categoryNone {
@@ -106,7 +109,7 @@ func matchSeniority(lower string) string {
 	// Nothing in the main table: try the Indian rungs and entry-hire words (india.go),
 	// then the German grade words and heads (german.go), then the Dutch ones (dutch.go),
 	// then the Danish ones (danish.go), then the Spanish ones (spanish.go), then the
-	// Portuguese ones (portuguese.go).
+	// Portuguese ones (portuguese.go), then the French and the Polish ones.
 	if s := matchOrdered(lower, indianSeniorityTable); s != "" {
 		return s
 	}
@@ -125,7 +128,10 @@ func matchSeniority(lower string) string {
 	if s := matchPortugueseSeniority(lower); s != "" {
 		return s
 	}
-	return matchFrenchSeniority(lower)
+	if s := matchFrenchSeniority(lower); s != "" {
+		return s
+	}
+	return matchPolishSeniority(lower)
 }
 
 // semiSenior is Latin America's spelled-out middle grade — "Semi Senior",
