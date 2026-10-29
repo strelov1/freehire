@@ -31,8 +31,9 @@ document is written, never at query time: the crawl's liveness refresh pushes no
 `search_outbox`, so an indexed `last_seen_at` would freeze and hide live postings. A
 posting therefore leaves and returns with the full rebuild. **With the rebuild timer off,
 documents already in the index are no longer reconciled**: one that goes unseen stays
-searchable and one listed again stays hidden until a rebuild runs, while the drain and
-`linkimport` keep applying the rule to whatever they push. See
+searchable, and one listed again unchanged stays hidden until a rebuild runs — a content
+write queues it for the drain and restores it sooner. The drain and `linkimport` keep
+applying the rule to whatever they push. See
 [docs/agents/job-lifecycle.md](../../docs/agents/job-lifecycle.md) for which sources are
 exempt and why.
 
