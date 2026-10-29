@@ -33,8 +33,15 @@ class ExperienceBankStore extends UserResource<ExperienceBank | null> {
     this.#bank = null;
   }
 
-  /** Take a read the bank view already made, so the badge follows it for free. */
-  accept(bank: ExperienceBank): void {
+  /** Taken before a read the bank view makes itself, and handed back with its result. */
+  readToken(): number {
+    return this.generation;
+  }
+
+  /** Take a read the bank view already made, so the badge follows it for free — unless
+   *  the user signed out while it was in flight. */
+  accept(bank: ExperienceBank, token: number): void {
+    if (token !== this.generation) return;
     this.#bank = bank;
     this.markLoaded();
   }

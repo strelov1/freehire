@@ -40,6 +40,12 @@ export abstract class UserResource<T> {
     return this.#loaded;
   }
 
+  /** Which signed-in session this store holds; reset() moves it on. For a store that also
+   *  accepts reads made outside it, so it can drop one that outlived a sign-out. */
+  protected get generation(): number {
+    return this.#generation;
+  }
+
   /** Fetch this resource's data (one or more API calls). */
   protected abstract load(): Promise<T>;
   /** Copy fetched data into reactive state. */
@@ -62,6 +68,7 @@ export abstract class UserResource<T> {
     this.#loading = this.load()
       .then((data) => {
         if (gen !== this.#generation) return; // reset() ran mid-load — discard stale data.
+        if (this.#loaded) return; // a refresh or a write landed first and is newer.
         this.apply(data);
         this.#loaded = true;
       })
