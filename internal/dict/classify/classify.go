@@ -1,6 +1,6 @@
 // Package classify derives a job's seniority and role category deterministically
 // from its title. It is a curated dictionary, not a model: it resolves known
-// English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Croatian and Serbian, Japanese and Chinese title terms and emits nothing for what it cannot resolve
+// English, Russian, German, Dutch, Danish, Spanish, Portuguese, French, Polish, Croatian and Serbian, Slovenian, Japanese and Chinese title terms and emits nothing for what it cannot resolve
 // (it never guesses). Canonical values are drawn from the same controlled
 // vocabularies the enrichment contract defines (vocab.SeniorityValues /
 // vocab.CategoryValues), so the parser, the enrichment payload, and the search

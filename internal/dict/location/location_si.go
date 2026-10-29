@@ -84,60 +84,92 @@ var slovenianTowns = []string{
 }
 
 // slovenianCityForms are the other spellings a Slovenian line names a city by: the
-// genitive after "okolica" ("okolica Celja", "okolica Ljubljane") and a Ljubljana
-// district after the city ("Ljubljana Črnuče"; "Ljubljana-Šiška" already reads through
-// the dash). The districts are the city's seventeen district communities and two
-// halves of Vižmarje-Brod; a district alone ("Center", "Rudnik", "Polje") names nothing.
+// genitive after "okolica" ("okolica Celja", "okolica Ljubljane") and an administrative
+// unit's name. ljubljanaDistricts adds a Ljubljana district after the city ("Ljubljana
+// Črnuče"; "Ljubljana-Šiška" already reads through the dash).
 var slovenianCityForms = map[string]string{
 	"ljubljane": "Ljubljana", "celja": "Celje", "kranja": "Kranj", "kopra": "Koper",
 	"ptuja": "Ptuj", "velenja": "Velenje", "novega mesta": "Novo Mesto",
 	"murske sobote": "Murska Sobota", "nove gorice": "Nova Gorica", "kamnika": "Kamnik",
 	"domžal": "Domžale", "škofje loke": "Škofja Loka",
+	// ESS names the place by its administrative unit, and Šentjur's still carries the
+	// town's former name.
+	"šentjur pri celju": "Šentjur",
 }
 
-// ljubljanaDistricts are the district communities of the City Municipality of Ljubljana.
+// ljubljanaDistricts are the seventeen district communities of the City Municipality of
+// Ljubljana and the two halves of Vižmarje-Brod, read only after "Ljubljana": a district
+// alone ("Center", "Rudnik", "Polje") names nothing.
 var ljubljanaDistricts = []string{
 	"bežigrad", "center", "črnuče", "dravlje", "golovec", "jarše", "moste", "polje",
 	"posavje", "rožnik", "rudnik", "sostro", "šentvid", "šiška", "trnovo", "vič",
 	"vižmarje", "brod", "vižmarje-brod",
 }
 
-// slovenianSmallPlaces are Slovenian places the small-places table lacks — municipality
-// seats and municipalities whose seat GeoNames names otherwise or puts under its floor,
-// and the villages MojeDelo's postings name — keyed by the name a line writes. Like the
-// table, each names a city only once the line has stated Slovenia (or the caller's
-// countries do), so a namesake abroad costs nothing. A second Slovenian place of the name
-// would, and none here has one of any size in GeoNames (Žirovnica and Pesnica have
-// hamlets of a few dozen people, as Ribnica does). A municipality written "A - B" splits into
-// its two places at the separator, so the halves are listed.
+// slovenianSmallPlaces are Slovenian places the small-places table lacks, keyed by the
+// name a line writes: municipalities whose seat GeoNames names otherwise or puts under its
+// floor, and the villages MojeDelo's postings name. Like the table, each names a city only
+// once the line has stated Slovenia (or the caller's countries do), so a namesake abroad
+// costs nothing. A bare municipality name is read as the municipality's seat
+// ("Brezovica" is Brezovica pri Ljubljani; the other Brezovicas are villages). A
+// municipality written "A - B" splits into its two places at the separator, so the
+// halves are listed.
 var slovenianSmallPlaces = map[string]string{
-	// Municipalities and seats.
-	"bohinj": "Bohinj", "bloke": "Bloke", "brezovica": "Brezovica pri Ljubljani",
-	"dobrepolje": "Dobrepolje", "videm-dobrepolje": "Dobrepolje", "duplek": "Duplek",
-	"polhov gradec": "Polhov Gradec", "gorje": "Gorje", "hajdina": "Hajdina",
-	"hoče": "Hoče", "zgornje hoče": "Zgornje Hoče", "kozina": "Kozina",
-	"hrpelje-kozina": "Hrpelje", "ig": "Ig", "jezersko": "Jezersko",
-	"kanal ob soči": "Kanal", "kungota": "Kungota", "lenart": "Lenart v Slovenskih Goricah",
-	"lenart v slov. goricah": "Lenart v Slovenskih Goricah", "ljubno": "Ljubno ob Savinji",
-	"loška dolina": "Loška Dolina",
-	"loški potok":  "Loški Potok", "lukovica": "Lukovica pri Domžalah",
-	"vogrsko": "Vogrsko", "šentilj": "Šentilj v Slov. Goricah",
-	"šentilj v slovenskih goricah": "Šentilj v Slov. Goricah",
-	"šmarješke toplice":            "Šmarješke Toplice", "sveti jurij ob ščavnici": "Sveti Jurij ob Ščavnici",
+	// Municipalities and their seats.
+	"bloke":                              "Bloke",
+	"bohinj":                             "Bohinj",
+	"brezovica":                          "Brezovica pri Ljubljani",
+	"dobrepolje":                         "Dobrepolje",
+	"duplek":                             "Duplek",
+	"gorje":                              "Gorje",
+	"hajdina":                            "Hajdina",
+	"hoče":                               "Hoče",
+	"hrpelje-kozina":                     "Hrpelje",
+	"ig":                                 "Ig",
+	"jezersko":                           "Jezersko",
+	"kanal ob soči":                      "Kanal",
+	"kozina":                             "Kozina",
+	"kungota":                            "Kungota",
+	"lenart":                             "Lenart v Slovenskih Goricah",
+	"lenart v slov. goricah":             "Lenart v Slovenskih Goricah",
+	"ljubno":                             "Ljubno ob Savinji",
+	"loška dolina":                       "Loška Dolina",
+	"loški potok":                        "Loški Potok",
+	"lukovica":                           "Lukovica pri Domžalah",
+	"polhov gradec":                      "Polhov Gradec",
+	"šentilj":                            "Šentilj v Slov. Goricah",
+	"šentilj v slovenskih goricah":       "Šentilj v Slov. Goricah",
+	"šmarješke toplice":                  "Šmarješke Toplice",
 	"sveta ana v slovenskih goricah":     "Sveta Ana v Slovenskih Goricah",
 	"sveta trojica v slovenskih goricah": "Sveta Trojica v Slovenskih Goricah",
 	"sveti andraž v slovenskih goricah":  "Sveti Andraž v Slovenskih Goricah",
+	"sveti jurij ob ščavnici":            "Sveti Jurij ob Ščavnici",
 	"sveti jurij v slovenskih goricah":   "Sveti Jurij v Slovenskih Goricah",
+	"videm-dobrepolje":                   "Dobrepolje",
+	"vogrsko":                            "Vogrsko",
+	"zgornje hoče":                       "Zgornje Hoče",
 	"žirovnica":                          "Žirovnica",
-	// Villages and business parks the postings name: the airport's village, a mill, a
-	// plant, a seaside resort's neighbour.
-	"brnik": "Zgornji Brnik", "zgornji brnik": "Zgornji Brnik", "brnik-aerodrom": "Zgornji Brnik",
-	"boštanj": "Boštanj", "dobruška vas": "Dobruška Vas", "volčja draga": "Volčja Draga",
-	"straža pri novem mestu": "Straža", "begunje na gorenjskem": "Begunje na Gorenjskem",
-	"prestranek": "Prestranek", "blanca": "Blanca", "planina pri sevnici": "Planina pri Sevnici",
-	"drenov grič": "Drenov Grič", "petrovče": "Petrovče", "otočec": "Otočec",
-	"latkova vas": "Latkova Vas", "batuje": "Batuje", "hotavlje": "Hotavlje",
-	"stranice": "Stranice", "podskrajnik": "Podskrajnik", "črni vrh nad idrijo": "Črni Vrh",
+	// Villages the postings name: the airport's village, mills, plants, a resort.
+	"batuje":                 "Batuje",
+	"begunje na gorenjskem":  "Begunje na Gorenjskem",
+	"blanca":                 "Blanca",
+	"boštanj":                "Boštanj",
+	"brnik":                  "Zgornji Brnik",
+	"brnik-aerodrom":         "Zgornji Brnik",
+	"črni vrh nad idrijo":    "Črni Vrh",
+	"dobruška vas":           "Dobruška Vas",
+	"drenov grič":            "Drenov Grič",
+	"hotavlje":               "Hotavlje",
+	"latkova vas":            "Latkova Vas",
+	"otočec":                 "Otočec",
+	"petrovče":               "Petrovče",
+	"planina pri sevnici":    "Planina pri Sevnici",
+	"podskrajnik":            "Podskrajnik",
+	"prestranek":             "Prestranek",
+	"stranice":               "Stranice",
+	"straža pri novem mestu": "Straža",
+	"volčja draga":           "Volčja Draga",
+	"zgornji brnik":          "Zgornji Brnik",
 }
 
 // contestedSmallPlaces names a contested main-table alias in a country whose own place of
@@ -145,8 +177,8 @@ var slovenianSmallPlaces = map[string]string{
 // "Ribnica, Slovenija" and MojeDelo's "Ribnica" (whose country is Slovenia) named no city.
 // Listed by hand, not read off the small-places table: that table keeps one row per name
 // and country, so it cannot tell a town from the several villages of its name ("Salem"
-// in the US), and "Ribnica" is checked: the municipality seat (3,600 people) beside two hamlets of 14
-// and 123.
+// in the US). "Ribnica" is checked: the municipality seat (3,600 people) beside two
+// hamlets of 14 and 123.
 var contestedSmallPlaces = map[[2]string]string{
 	{"ribnica", "si"}: "Ribnica",
 }

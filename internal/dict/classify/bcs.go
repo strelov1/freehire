@@ -226,7 +226,8 @@ var (
 
 // matchBCSCategory resolves the category of a lowercased title the other tables left
 // unresolved: the main table once more on the transliterated, gender-cut title, then
-// the BCS table on the folded one. A blind alias answers categoryNone.
+// the BCS table on the folded one, then the Slovenian table (slovenian.go). A blind alias
+// answers categoryNone.
 func matchBCSCategory(lower string) string {
 	g := foldBCSGender(lower)
 	if g != lower {
@@ -234,12 +235,17 @@ func matchBCSCategory(lower string) string {
 			return c
 		}
 	}
-	return matchBCSOrdered(bcsWords(g), bcsCategory)
+	words := bcsWords(g)
+	if c := matchBCSOrdered(words, bcsCategory); c != "" {
+		return c
+	}
+	return matchBCSOrdered(words, slovenianCategory)
 }
 
 // matchBCSSeniority resolves the grade of a lowercased title the other tables left
 // unresolved: the main table once more on the transliterated, gender-cut title, then
-// the BCS table with the assistants of a lead cut (bcsAssistantOfLead).
+// the BCS table with the assistants of a lead cut (bcsAssistantOfLead), then the
+// Slovenian table with its own (slovenianAssistantOfLead).
 func matchBCSSeniority(lower string) string {
 	g := foldBCSGender(lower)
 	if g != lower {
@@ -247,7 +253,10 @@ func matchBCSSeniority(lower string) string {
 			return s
 		}
 	}
-	return matchBCSOrdered(bcsWords(bcsAssistantOfLead.ReplaceAllString(g, " ")), bcsSeniority)
+	if s := matchBCSOrdered(bcsWords(bcsAssistantOfLead.ReplaceAllString(g, " ")), bcsSeniority); s != "" {
+		return s
+	}
+	return matchBCSOrdered(bcsWords(slovenianAssistantOfLead.ReplaceAllString(g, " ")), slovenianSeniority)
 }
 
 // bcsCategoryTable lists the BCS category aliases, in precedence order, on the folded

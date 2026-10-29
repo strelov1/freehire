@@ -56,6 +56,8 @@ func TestSlovenianLines(t *testing.T) {
 		{"Nova Gorica z bližnjo okolico", []string{"si"}, []string{"Nova Gorica"}},
 		{"okolica Celja", []string{"si"}, []string{"Celje"}},
 		{"Okolica Ljubljane", []string{"si"}, []string{"Ljubljana"}},
+		// ESS's administrative unit.
+		{"ŠENTJUR PRI CELJU", []string{"si"}, []string{"Šentjur"}},
 		// A Ljubljana district.
 		{"Ljubljana Črnuče", []string{"si"}, []string{"Ljubljana"}},
 		{"Ljubljana Siska", []string{"si"}, []string{"Ljubljana"}},

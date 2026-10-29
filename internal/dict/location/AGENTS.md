@@ -389,6 +389,31 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   locative ("u Beogradu", "Novom Sadu") and Cyrillic "Панчево". "SAD" (USA) and "Island"
   (Iceland) are absent: English words. Sólides writes "Town, ST", and a small town's "BA"
   or "RS" read as Bosnia or Serbia, so the adapter appends "Brasil" after the state.
+- **Slovenian location lines** (`location_si.go`, measured 2026-10-29 over 2,900 open
+  MojeDelo postings and 3,621 ESS vacancies). Both boards write the town alone and pass
+  Slovenia as the structured country, so `ParseIn` already named most towns through the
+  small-places table. What read nothing: the twelve statistical regions and the
+  traditional ones ("Osrednjeslovenska", "Gorenjska regija", "Jugovzhodna Slovenija",
+  "Posavje"), which now state Slovenia and no city; "Celotna Slovenija" and the countries
+  abroad in Slovenian ("Avstrija", "Nemčija"); the area around a town ("Ljubljana in
+  okolica", "Celje z okolico", "okolica Celja" with the town in the genitive —
+  `areaPrefixes`/`areaSuffixes` and the genitive forms); a Ljubljana district after the
+  city ("Ljubljana Črnuče"); ESS's administrative unit "Šentjur pri Celju"; and the
+  municipality seats and villages GeoNames' cities1000 lacks ("Hoče", "Kozina", "Boštanj",
+  "Brnik", "Lenart"), added to the small places (`slovenianSmallPlaces`: they still name a
+  city only beside Slovenia). "Ribnica" is Rîbnița in Moldova first, so a line placed in
+  Slovenia names the Slovenian town through `contestedSmallPlaces` — a hand list, because
+  the small-places table keeps one row per name and country and cannot tell a town from
+  its namesake villages ("Salem, MA"). The towns with TOWN STATUS below the main table's
+  floor (`slovenianTowns`, 51 of them: Kamnik, Krško, Škofja Loka…) are pinned as cities
+  that state Slovenia when nothing else in the line states a country, as a main-table
+  city does — except the nine another country also has a populated place of in GeoNames'
+  full dumps of the neighbours and cities500 (Jesenice, Ruše, Ribnica, Brežice, Žalec,
+  Tržič, Piran, Laško, Železniki). Withheld: bare "Koroška" and "Štajerska" (also Austrian
+  Carinthia and Styria in Slovenian), "Primorska", "Kras", "ZDA" and the plain "Svica"
+  (places elsewhere). MojeDelo lines placed (a city, or a stated country or region): 78.2%
+  → 91.3%, city 77.3% → 84.8%; with no structured country, country 45.3% → 73.2%. ESS:
+  placed 98.2% → 100%.
 - `work_mode` is dict-only — `jobview` serves the `jobs` column alone, the LLM's `enrichment.work_mode` is never merged in (it stays raw in the JSONB).
 - `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`): the dictionary wins when it pins a place, and the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket, so a dictionary-silent remote role still gets a geographic reach rather than none. This is the one deliberate exception to dict-only among the facets.
 
