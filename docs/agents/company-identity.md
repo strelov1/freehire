@@ -126,9 +126,13 @@ already stripped "Ltd" but not the "Pvt" or "Private" before it, so "Acme Pvt Lt
 `acme-pvt` — neither the plain slug nor the current key (1,936 companies, 2026-10-27). A stored
 slug that lies BETWEEN the two (the current key a prefix of it, it a prefix of the plain slug,
 compared folded and cut only at a word boundary) is planned the same way, since everything it
-carries beyond the key is a form. **Run that `--reason legal_form --apply` wave before the next
-`backfill-derive`**: the planner reads `jobs`, so a slug whose rows a re-derive has already
-moved is invisible to it, and its old URL is left with no alias to 301 from.
+carries beyond the key is a form. The test is `normalize.SlugPredatesRule`, and
+`backfill-derive` applies the SAME one when it re-keys a slug itself: it records the
+`legal_form` alias only when every row it moved off the old slug passes it and all of them land
+on one new slug, so the old URL 301s instead of serving an empty page. A slug a rename left
+behind, or one two employers shared under the old rule, gets no alias from it — that stays a
+judgement for this worker's reviewed waves. The statement also refuses an alias that would move
+a canon, point at a retired slug, or give a folded key a second canon.
 Any other slug that is not the plain slug of the latest name is left alone — it drifted because
 the source renamed the employer, which is a judgement, not a form.
 `--reason legal_form` takes only the groups whose every alias is that pure-rule class, so a

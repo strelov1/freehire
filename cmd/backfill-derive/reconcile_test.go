@@ -11,10 +11,19 @@ import (
 
 type fakeReconciler struct {
 	inserts, deletes [][]string
+	aliases          []db.InsertDerivedCompanySlugAliasesParams
+	calls            []string
 	failInsert       bool
 }
 
+func (f *fakeReconciler) InsertDerivedCompanySlugAliases(_ context.Context, arg db.InsertDerivedCompanySlugAliasesParams) (int64, error) {
+	f.calls = append(f.calls, "alias")
+	f.aliases = append(f.aliases, arg)
+	return int64(len(arg.AliasSlugs)), nil
+}
+
 func (f *fakeReconciler) InsertMissingCompaniesForSlugs(_ context.Context, slugs []string) (int64, error) {
+	f.calls = append(f.calls, "insert")
 	if f.failInsert {
 		return 0, errors.New("boom")
 	}
@@ -23,6 +32,7 @@ func (f *fakeReconciler) InsertMissingCompaniesForSlugs(_ context.Context, slugs
 }
 
 func (f *fakeReconciler) DeleteOrphanCompaniesForSlugs(_ context.Context, slugs []string) (int64, error) {
+	f.calls = append(f.calls, "delete")
 	f.deletes = append(f.deletes, slugs)
 	return 1, nil
 }
@@ -30,8 +40,10 @@ func (f *fakeReconciler) DeleteOrphanCompaniesForSlugs(_ context.Context, slugs 
 // The reconcile is many short statements, never one long one: that is the whole fix.
 func TestReconcileMovedSlugsChunks(t *testing.T) {
 	r := &fakeReconciler{}
-	created, orphaned, err := reconcileMovedSlugs(context.Background(), r,
-		[]string{"a", "b", "c", "d", "e"}, []string{"x", "y", "z"}, 2)
+	rec, err := reconcileMovedSlugs(context.Background(), r, backfillRun{
+		MovedTo: []string{"a", "b", "c", "d", "e"}, MovedFrom: []string{"x", "y", "z"},
+	}, 2)
+	created, orphaned := rec.created, rec.orphaned
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +59,7 @@ func TestReconcileMovedSlugsChunks(t *testing.T) {
 
 func TestReconcileMovedSlugsNothingMoved(t *testing.T) {
 	r := &fakeReconciler{}
-	if _, _, err := reconcileMovedSlugs(context.Background(), r, nil, nil, 500); err != nil {
+	if _, err := reconcileMovedSlugs(context.Background(), r, backfillRun{}, 500); err != nil {
 		t.Fatal(err)
 	}
 	if len(r.inserts)+len(r.deletes) != 0 {
@@ -59,7 +71,7 @@ func TestReconcileMovedSlugsNothingMoved(t *testing.T) {
 // missing would 404 both.
 func TestReconcileMovedSlugsStopsOnInsertError(t *testing.T) {
 	r := &fakeReconciler{failInsert: true}
-	if _, _, err := reconcileMovedSlugs(context.Background(), r, []string{"a"}, []string{"x"}, 500); err == nil {
+	if _, err := reconcileMovedSlugs(context.Background(), r, backfillRun{MovedTo: []string{"a"}, MovedFrom: []string{"x"}}, 500); err == nil {
 		t.Fatal("want an error")
 	}
 	if len(r.deletes) != 0 {
@@ -121,5 +133,66 @@ func TestDerivePassReconcilesAfterAFailedPass(t *testing.T) {
 	}
 	if want := [][]string{{"acme-old"}}; !reflect.DeepEqual(store.deletes, want) {
 		t.Errorf("deletes = %v, want %v", store.deletes, want)
+	}
+}
+
+// The order is what keeps every URL answering: the canonical row exists before a redirect
+// points at it, and the redirect exists before the old row goes.
+func TestReconcileMovedSlugsOrder(t *testing.T) {
+	r := &fakeReconciler{}
+	_, err := reconcileMovedSlugs(context.Background(), r, backfillRun{
+		MovedTo: []string{"acme"}, MovedFrom: []string{"acme-pvt"},
+		Aliases: []slugAlias{{Alias: "acme-pvt", Canonical: "acme", FoldedKey: "acme"}},
+	}, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"insert", "alias", "delete"}; !reflect.DeepEqual(r.calls, want) {
+		t.Errorf("calls = %v, want %v", r.calls, want)
+	}
+	want := db.InsertDerivedCompanySlugAliasesParams{
+		AliasSlugs: []string{"acme-pvt"}, CanonicalSlugs: []string{"acme"}, FoldedKeys: []string{"acme"},
+	}
+	if len(r.aliases) != 1 || !reflect.DeepEqual(r.aliases[0], want) {
+		t.Errorf("aliases = %+v, want %+v", r.aliases, want)
+	}
+}
+
+// A slug the rule moved under an unchanged name earns a redirect. One whose rows say the
+// employer was renamed, or that split between two new slugs, does not.
+func TestMovedSlugsAliasEligibility(t *testing.T) {
+	m := newMovedSlugs()
+	// Pure rule change: "Acme Pvt Ltd" was minted acme-pvt and now keys at acme.
+	m.add("acme-pvt", "acme", "Acme Pvt Ltd")
+	m.add("acme-pvt", "acme", "Acme Pvt Ltd")
+	// Renamed: the stored slug is not what any rule made of this name.
+	m.add("oldco", "newco", "NewCo")
+	// Split: one old slug, two new ones.
+	m.add("beta-pvt", "beta", "Beta Pvt Ltd")
+	m.add("beta-pvt", "beta-labs", "Beta Labs Pvt Ltd")
+	// Mixed: a qualifying row and a renamed one share the old slug.
+	m.add("gamma-pvt", "gamma", "Gamma Pvt Ltd")
+	m.add("gamma-pvt", "delta", "Delta")
+
+	got := m.qualifiedAliases()
+	want := []slugAlias{{Alias: "acme-pvt", Canonical: "acme", FoldedKey: "acme"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("aliases = %+v, want %+v", got, want)
+	}
+}
+
+// The pass hands its eligible redirects to the reconcile.
+func TestBackfillReportsEarnedAliases(t *testing.T) {
+	jobs := []db.Job{
+		{ID: 1, Title: "Go Developer", Company: "Acme Pvt Ltd", Source: "manual", ExternalID: "1", CompanySlug: "acme-pvt"},
+		{ID: 2, Title: "Go Developer", Company: "NewCo", Source: "manual", ExternalID: "2", CompanySlug: "oldco"},
+	}
+	pass, err := backfillPass(context.Background(), &fakeStore{jobs: jobs}, 2, scanWindow{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []slugAlias{{Alias: "acme-pvt", Canonical: "acme", FoldedKey: "acme"}}
+	if !reflect.DeepEqual(pass.Aliases, want) {
+		t.Errorf("Aliases = %+v, want %+v", pass.Aliases, want)
 	}
 }

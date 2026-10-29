@@ -74,6 +74,48 @@ func (q *Queries) InsertCompanySlugAlias(ctx context.Context, arg InsertCompanyS
 	return result.RowsAffected(), nil
 }
 
+const insertDerivedCompanySlugAliases = `-- name: InsertDerivedCompanySlugAliases :execrows
+INSERT INTO company_slug_aliases (alias_slug, canonical_slug, folded_key, reason)
+SELECT a.alias_slug, a.canonical_slug, a.folded_key, 'legal_form'
+FROM (
+    SELECT unnest($1::text[])     AS alias_slug,
+           unnest($2::text[]) AS canonical_slug,
+           unnest($3::text[])     AS folded_key
+) a
+WHERE a.alias_slug <> a.canonical_slug
+  AND NOT EXISTS (SELECT 1 FROM company_slug_aliases x WHERE x.canonical_slug = a.alias_slug)
+  AND NOT EXISTS (SELECT 1 FROM company_slug_aliases x WHERE x.alias_slug = a.canonical_slug)
+  AND NOT EXISTS (SELECT 1 FROM company_slug_aliases x
+                  WHERE x.folded_key = a.folded_key AND x.canonical_slug <> a.canonical_slug)
+ON CONFLICT (alias_slug) DO NOTHING
+`
+
+type InsertDerivedCompanySlugAliasesParams struct {
+	AliasSlugs     []string `json:"alias_slugs"`
+	CanonicalSlugs []string `json:"canonical_slugs"`
+	FoldedKeys     []string `json:"folded_keys"`
+}
+
+// Record the redirects cmd/backfill-derive earned when it re-keyed a company whose slug an older
+// rule had minted from the same name (normalize.SlugPredatesRule) — the retirement
+// cmd/merge-companies records for a lone company, reached here from the other side. Without
+// it /companies/<old> serves an empty page for a URL search engines and links still hold.
+//
+// Arrays of equal length, one alias per index, the caller bounds a chunk. Every guard keeps
+// the registry's invariants rather than trusting the caller:
+//   - DO NOTHING on alias_slug: the canon freezes at first merge.
+//   - the old slug must not be anyone's canon (a frozen canon never moves),
+//   - the new slug must not itself be retired (no chains: the 301 reads one hop),
+//   - the folded key must not already point at a DIFFERENT canon (one canon per key —
+//     ResolveCompanySlugAliases orders a violation away, it does not prevent it).
+func (q *Queries) InsertDerivedCompanySlugAliases(ctx context.Context, arg InsertDerivedCompanySlugAliasesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertDerivedCompanySlugAliases, arg.AliasSlugs, arg.CanonicalSlugs, arg.FoldedKeys)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertMissingCanonicalCompanies = `-- name: InsertMissingCanonicalCompanies :execrows
 INSERT INTO companies (slug, name)
 SELECT DISTINCT ON (j.company_slug) j.company_slug, j.company

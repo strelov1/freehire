@@ -3244,6 +3244,19 @@ type Querier interface {
 	// unique index on (user_id, feature, ref) WHERE kind='debit' guards against a double charge
 	// for the same ref even under a race.
 	InsertDebit(ctx context.Context, arg InsertDebitParams) error
+	// Record the redirects cmd/backfill-derive earned when it re-keyed a company whose slug an older
+	// rule had minted from the same name (normalize.SlugPredatesRule) — the retirement
+	// cmd/merge-companies records for a lone company, reached here from the other side. Without
+	// it /companies/<old> serves an empty page for a URL search engines and links still hold.
+	//
+	// Arrays of equal length, one alias per index, the caller bounds a chunk. Every guard keeps
+	// the registry's invariants rather than trusting the caller:
+	//   * DO NOTHING on alias_slug: the canon freezes at first merge.
+	//   * the old slug must not be anyone's canon (a frozen canon never moves),
+	//   * the new slug must not itself be retired (no chains: the 301 reads one hop),
+	//   * the folded key must not already point at a DIFFERENT canon (one canon per key —
+	//     ResolveCompanySlugAliases orders a violation away, it does not prevent it).
+	InsertDerivedCompanySlugAliases(ctx context.Context, arg InsertDerivedCompanySlugAliasesParams) (int64, error)
 	// The only insert. A claim already banked with a stronger provenance than
 	// agent_inferred is never touched — ON CONFLICT DO NOTHING behavior for every case
 	// except one: a claim first recorded as agent_inferred (the model's unconfirmed
