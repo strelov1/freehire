@@ -1,8 +1,10 @@
 <script lang="ts">
   import { api } from '#lib/api.js';
+  import { resumeStore } from '#lib/resume.svelte.js';
   import { askCvRefresh } from '#lib/cvRefreshDialog.svelte.js';
   import { BASE_REFRESH_MESSAGE, offerCvRefresh } from '#lib/cvRefreshOffer.js';
   import { errorMessage } from '#lib/utils.js';
+  import EducationCard from '#lib/components/profile/EducationCard.svelte';
   import CompletenessBadge from '#lib/components/profile/CompletenessBadge.svelte';
   import ExperienceBankView from '#lib/components/ExperienceBankView.svelte';
   import { messages } from './messages';
@@ -10,6 +12,7 @@
   import { t } from '#lib/i18n/t.js';
 
   const s = $derived(t(messages, locale()));
+  const resumeMeta = $derived(resumeStore.meta);
 
   // Scoped to this page rather than shared with sibling sections: a separate route
   // unmounts on navigation, so a stale error from one bank edit cannot keep showing
@@ -45,3 +48,17 @@
 <!-- What the product has recorded about what this person has done, and the only
      place they can correct or remove it. -->
 <ExperienceBankView onBankMutated={offerRefreshAfterBankEdit} />
+
+<!-- Education used to be a tab of its own; /my/profile/education redirects here. The card
+     carries its own headings. -->
+<div id="account-education" class="mt-8 scroll-mt-20 border-t border-border pt-6">
+  <div class="mb-4">
+    <CompletenessBadge section="education" />
+  </div>
+
+  <EducationCard
+    structured={resumeMeta?.structured ?? null}
+    contacts={resumeMeta?.contacts ?? null}
+    onSaved={(saved) => resumeStore.noteContactsSaved(saved)}
+  />
+</div>

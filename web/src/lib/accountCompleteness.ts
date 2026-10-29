@@ -16,7 +16,7 @@ import type { UserProfile } from './types';
  *  does not exist fails the build here, instead of rendering a link to a 404. Spelling
  *  the routes out keeps this module free of any SvelteKit import, which is what lets it
  *  be unit-tested in plain Node. */
-type SetupHref = '/my/profile' | '/my/profile/skills' | '/my/profile/location' | '/my/searches';
+type SetupHref = '/my/profile' | '/my/profile/skills' | '/my/searches';
 
 interface StepBase {
   /** Stable key. Used by tests and as the list key — never shown. */
@@ -26,7 +26,7 @@ interface StepBase {
 }
 
 /** A step done on `/my/profile` itself. The anchor is REQUIRED, and required by the type
- *  rather than by a test, because that route's default section holds three blocks and the
+ *  rather than by a test, because that route's default section holds several blocks and the
  *  setup card is the first of them: a step there that named no block would link to the
  *  page the reader is already looking at. The `id` is an opaque string rather than a type
  *  shared with the page — this module stays free of any SvelteKit import (see
@@ -121,7 +121,9 @@ export function accountSteps({
     {
       id: 'location',
       label: 'Set where and how you want to work',
-      href: '/my/profile/location',
+      // Location is a part of the Profile tab, below the Role card and Contacts.
+      href: '/my/profile',
+      anchorId: 'account-location',
       done: statesLocation(profile),
     },
   ];

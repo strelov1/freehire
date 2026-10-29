@@ -227,7 +227,7 @@
     formError = null;
     try {
       // Skills/sources/companies to avoid are not offered during this pre-profile
-      // set-up — they're edited on the dedicated Avoid tab once the profile exists.
+      // set-up — they're edited in the Avoid part of the Skills tab once the profile exists.
       await profileStore.save(specializations, skills, profile?.seniorities ?? [], [], [], [], location);
       onSaved?.();
     } catch (err) {

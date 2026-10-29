@@ -46,7 +46,7 @@
   const hasTimezone = $derived(Boolean(currentUser()?.timezone));
   // Where the timezone is set: the profile's Location section, scrolled to the control.
   // resolve()'s base plus a plain #anchor suffix (no dynamic segment to resolve).
-  const timezoneHref = `${resolve('/my/profile/location')}#account-timezone`;
+  const timezoneHref = `${resolve('/my/profile')}#account-timezone`;
 
   $effect(() => {
     if (isAuthenticated()) void load();

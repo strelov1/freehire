@@ -25,7 +25,7 @@
   }: {
     structured: ResumeStructured | null;
     contacts?: CandidateContacts | null;
-    onSaved?: () => void;
+    onSaved?: (saved: CandidateContacts) => void;
   } = $props();
 
   const education = $derived(structured?.education ?? []);
@@ -75,9 +75,9 @@
       // Owned even when `cleaned` is empty — otherwise clearing every row here is
       // indistinguishable, server-side, from never having edited Education at all, and the
       // CV's own education reappears on the next read (internal/resume/owned.go).
-      await api.putResumeContacts({ ...contacts, education: cleaned, education_set: true });
+      const saved = await api.putResumeContacts({ ...contacts, education: cleaned, education_set: true });
       editingEducation = false;
-      onSaved?.();
+      onSaved?.(saved);
       announce(s.saved);
     } catch (e) {
       educationError = e instanceof Error ? e.message : s.saveFailed;
@@ -107,7 +107,7 @@
     languagesBusy = true;
     languagesError = null;
     try {
-      await api.putResumeContacts({
+      const saved = await api.putResumeContacts({
         ...contacts,
         languages: languagesText
           .split('\n')
@@ -117,7 +117,7 @@
         languages_set: true,
       });
       editingLanguages = false;
-      onSaved?.();
+      onSaved?.(saved);
       announce(s.saved);
     } catch (e) {
       languagesError = e instanceof Error ? e.message : s.saveFailed;
@@ -147,7 +147,7 @@
     certificationsBusy = true;
     certificationsError = null;
     try {
-      await api.putResumeContacts({
+      const saved = await api.putResumeContacts({
         ...contacts,
         certifications: certificationsText
           .split('\n')
@@ -157,7 +157,7 @@
         certifications_set: true,
       });
       editingCertifications = false;
-      onSaved?.();
+      onSaved?.(saved);
       announce(s.saved);
     } catch (e) {
       certificationsError = e instanceof Error ? e.message : s.saveFailed;

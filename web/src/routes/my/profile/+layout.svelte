@@ -1,16 +1,7 @@
 <script lang="ts">
   import { tick, untrack, type Snippet } from 'svelte';
   import { scrollBehavior } from '#lib/motion.js';
-  import {
-    Ban,
-    Briefcase,
-    ClipboardList,
-    Contact,
-    GraduationCap,
-    MapPin,
-    Tags,
-    User,
-  } from '@lucide/svelte';
+  import { Briefcase, ClipboardList, Tags, User } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Badge, TabStrip, tabStripId } from '#lib/ui/index.js';
@@ -44,16 +35,17 @@
   // scans the same way collapsed; `TabStrip` owns the overflow behaviour on a narrow
   // viewport. CV readiness is deliberately not one of these — it's not
   // published yet; it still works at /my/profile/cv-readiness for anyone who holds
-  // the link, nothing here links to it. There is no Settings section: the timezone sits in
-  // Location and the language on /my/security (see profile/settings/+page.ts).
+  // the link, nothing here links to it.
+  //
+  // Four tabs, each holding its neighbours: Profile carries Contacts and Location (with the
+  // timezone), Skills carries Avoid, Experience carries Education. The old routes of the
+  // absorbed sections redirect to their anchors. There is no Settings section: the
+  // timezone sits in Location and the language on /my/security (see
+  // profile/settings/+page.ts).
   const SECTIONS = [
     { id: 'profile', href: '/my/profile', icon: User },
-    { id: 'contacts', href: '/my/profile/contacts', icon: Contact },
-    { id: 'location', href: '/my/profile/location', icon: MapPin },
     { id: 'skills', href: '/my/profile/skills', icon: Tags },
-    { id: 'avoid', href: '/my/profile/avoid', icon: Ban },
     { id: 'experience', href: '/my/profile/experience', icon: Briefcase },
-    { id: 'education', href: '/my/profile/education', icon: GraduationCap },
     { id: 'screening', href: '/my/profile/screening', icon: ClipboardList },
   ] as const;
 
@@ -102,15 +94,47 @@
   $effect(() => {
     const hash = page.url.hash.slice(1);
     if (status !== 'ready' || !hash || hash === untrack(() => scrolledToHash)) return;
+    let release: (() => void) | undefined;
     // The section that owns the anchor renders in the same tick this effect runs, so wait
     // for the DOM to catch up rather than querying a target that does not exist yet.
     void tick().then(() => {
       const target = document.getElementById(hash);
       if (!target) return;
       scrolledToHash = hash;
-      target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+      release = scrollAndHold(target);
     });
+    return () => release?.();
   });
+
+  // The sections load their own data after the gate opens, so the page is still growing when
+  // the first scroll is computed — and a scroll clamped to the shorter page stops short of
+  // its target (measured: /my/profile#account-location stopped ~770px short). So scroll
+  // again whenever the target moves on the page or the page's height changes, until the
+  // reader scrolls on their own or a few seconds pass. Checked per frame rather than with a
+  // ResizeObserver: the body is pinned to the window's height and the content overflows
+  // it, so no single box both grows and covers what loads above the target. Returns the
+  // release, for when the anchor or the page goes away first.
+  const HOLD_MS = 3000;
+  const READER_SCROLLS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+  function scrollAndHold(target: HTMLElement): () => void {
+    const until = performance.now() + HOLD_MS;
+    let last = '';
+    let frame = requestAnimationFrame(function check() {
+      const place = `${target.getBoundingClientRect().top + scrollY}|${document.documentElement.scrollHeight}`;
+      if (place !== last) {
+        last = place;
+        target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+      }
+      if (performance.now() < until) frame = requestAnimationFrame(check);
+      else release();
+    });
+    for (const type of READER_SCROLLS) addEventListener(type, release, { passive: true });
+    function release() {
+      cancelAnimationFrame(frame);
+      for (const type of READER_SCROLLS) removeEventListener(type, release);
+    }
+    return release;
+  }
 </script>
 
 <svelte:head>
@@ -141,7 +165,7 @@
       onCvDeleted={handleCvDeleted}
     />
     <!-- Account-level (not candidate-profile) settings live here too, so they never wait on
-         a CV upload; once a profile exists they move to Location and /my/security. -->
+         a CV upload; once a profile exists they move to Profile's Location part and /my/security. -->
     <AccountPreferences class="mt-6" />
   </div>
 {:else}

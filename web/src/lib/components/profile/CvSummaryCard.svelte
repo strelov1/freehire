@@ -33,7 +33,7 @@
   }: {
     structured: ResumeStructured | null;
     contacts?: CandidateContacts | null;
-    onSaved?: () => void;
+    onSaved?: (saved: CandidateContacts) => void;
   } = $props();
 
   // A current structured CV is the entry point, even if this particular parse had neither
@@ -63,7 +63,7 @@
     busy = true;
     error = null;
     try {
-      await api.putResumeContacts({
+      const saved = await api.putResumeContacts({
         ...contacts,
         headline: headline.trim(),
         summary: summary.trim(),
@@ -74,7 +74,7 @@
         summary_set: true,
       });
       editing = false;
-      onSaved?.();
+      onSaved?.(saved);
     } catch (e) {
       error = e instanceof Error ? e.message : s.saveFailed;
     } finally {
