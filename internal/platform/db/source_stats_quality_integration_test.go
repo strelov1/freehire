@@ -43,6 +43,13 @@ func TestAggregateOpenJobsBySourceCountsQualityGaps(t *testing.T) {
 			t.Fatalf("seed %s: %v", values, err)
 		}
 	}
+	// No posting date: its age falls back to when we first stored it.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO jobs (source, external_id, company_slug, work_mode, countries, url, title, public_slug, created_at)
+		 VALUES ('src', 'undated', 'acme', 'remote', '{de}', 'http://example.test', 'A job', 'job-undated',
+		         now() - interval '61 days')`); err != nil {
+		t.Fatalf("seed undated: %v", err)
+	}
 	// A closed posting with every gap is not part of the catalogue and counts nowhere.
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO jobs (source, external_id, url, title, public_slug, closed_at)
@@ -60,12 +67,12 @@ func TestAggregateOpenJobsBySourceCountsQualityGaps(t *testing.T) {
 	got := rows[0]
 	want := AggregateOpenJobsBySourceRow{
 		Source:              "src",
-		OpenJobs:            7,
+		OpenJobs:            8,
 		MissingWorkModeJobs: 1,
 		MissingGeoJobs:      1,
 		MissingCompanyJobs:  1,
 		Unseen7dJobs:        1,
-		PostedOver60dJobs:   1,
+		PostedOver60dJobs:   2,
 	}
 	if got != want {
 		t.Errorf("got  %+v\nwant %+v", got, want)
