@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -21,6 +22,7 @@ type euresFake struct {
 	gotBodies    []euresSearchRequest
 	searchPages  []int
 	detailCalls  []string
+	mu           sync.Mutex
 }
 
 func (f *euresFake) PostJSON(_ context.Context, _ string, body, v any) error {
@@ -48,7 +50,9 @@ func (f *euresFake) GetJSON(_ context.Context, url string, v any) error {
 	if i := strings.Index(id, "?"); i >= 0 {
 		id = id[:i]
 	}
+	f.mu.Lock() // fetchDetails calls GetJSON from several workers at once
 	f.detailCalls = append(f.detailCalls, id)
+	f.mu.Unlock()
 	if f.detailErr[id] {
 		return errors.New("detail boom")
 	}
@@ -166,6 +170,18 @@ func TestEuresToleratesAPostingWithdrawnMidWalk(t *testing.T) {
 	}
 	if len(jobs) != euresPageSize+2 {
 		t.Errorf("len(jobs) = %d, want %d", len(jobs), euresPageSize+2)
+	}
+}
+
+// A later page stating no results at all is a broken answer, not a withdrawal: taking its zero
+// as the bar would pass a walk that read a fraction of the board.
+func TestEuresFailsWhenALaterPageStatesNoResults(t *testing.T) {
+	fake := &euresFake{searchByPage: map[int]string{
+		1: euresFullPage(euresPageSize, 0, 120),
+		2: `{"numberRecords":0,"jvs":[]}`,
+	}}
+	if _, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "de"}); err == nil {
+		t.Fatal("Fetch read 50 of 120 stated postings and reported success on a zero-total page")
 	}
 }
 

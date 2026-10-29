@@ -315,6 +315,9 @@ func (e eures) list(ctx context.Context, country string) ([]euresVacancy, error)
 	if err != nil {
 		return nil, err
 	}
+	if recount.NumberRecords == 0 {
+		return nil, fmt.Errorf("the country's recount states no results after %d", first.NumberRecords)
+	}
 	if want := min(first.NumberRecords, recount.NumberRecords); len(out)+repeats < want {
 		return nil, fmt.Errorf("regions %v listed %d postings (%d repeated) of the country's %d", regions, len(out), repeats, want)
 	}
@@ -339,6 +342,12 @@ func (e eures) walk(ctx context.Context, location string, first euresSearchRespo
 			var err error
 			if resp, err = e.search(ctx, location, page); err != nil {
 				return nil, 0, err
+			}
+			// A withdrawal lowers the total by a posting or two; a page stating none at all
+			// after earlier ones stated some is a broken answer, and taking it as the bar
+			// would pass whatever the walk had read so far.
+			if resp.NumberRecords == 0 && want > 0 {
+				return nil, 0, fmt.Errorf("location %q: page %d states no results after earlier pages stated %d", location, page, want)
 			}
 			want = min(want, resp.NumberRecords)
 		}
