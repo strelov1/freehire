@@ -173,7 +173,7 @@ describe('DeleteAccountButton — surviving the provider round trip', () => {
 
     await fireEvent.click(await within(dialog()).findByRole('button', { name: 'Confirm with google' }));
 
-    expect(begin).toHaveBeenCalledWith('google', '/my/security', { surface: 'delete-account' });
+    expect(begin).toHaveBeenCalledWith('google', '/my/account', { surface: 'delete-account' });
   });
 
   it('reopens on return with the barrier re-armed rather than pre-cleared', async () => {

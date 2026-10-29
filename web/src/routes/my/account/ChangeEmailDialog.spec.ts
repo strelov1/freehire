@@ -47,7 +47,7 @@ async function requestCode(address: string): Promise<void> {
   await fireEvent.click(screen.getByRole('button', { name: 'Send confirmation code' }));
 }
 
-describe('security page — email change dialog', () => {
+describe('account page — email change dialog', () => {
   it('confirms identity, mails the new address, then applies the code', async () => {
     const onchanged = vi.fn();
     render(ChangeEmail, { onchanged });

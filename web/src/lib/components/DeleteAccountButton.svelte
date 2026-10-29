@@ -175,7 +175,7 @@
     <ConfirmIdentity
       bind:this={identity}
       bind:password
-      returnTo="/my/security"
+      returnTo="/my/account"
       draft={() => ({ surface: 'delete-account' })}
       prompt={s.confirmPrompt}
       active={open}

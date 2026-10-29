@@ -171,7 +171,7 @@
       <ConfirmIdentity
         bind:this={identity}
         bind:password
-        returnTo="/my/security"
+        returnTo="/my/account"
         draft={() => ({ surface: 'change-email', email: email.trim() })}
         prompt={s.email.confirmPrompt}
         active={open}

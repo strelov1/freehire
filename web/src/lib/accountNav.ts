@@ -69,9 +69,11 @@ export const accountNav = [
   // earned. The tab is named "Invite" and not "Referrals" because that word is taken above
   // by the employee-referral marketplace, an unrelated feature.
   { href: '/my/plan', label: 'Plan' },
-  // Email, password and sessions: change the address or the password, and sign out
-  // everywhere when a device is lost or a session is suspect.
-  { href: '/my/security', label: 'Security' },
+  // Email, password, language and sessions: change the address, the password or the
+  // interface language, and sign out everywhere when a device is lost or a session is
+  // suspect. Named Account rather than Security once the language moved in; /my/security
+  // redirects here.
+  { href: '/my/account', label: 'Account' },
 ] as const;
 
 export type AccountNavItem = (typeof accountNav)[number];

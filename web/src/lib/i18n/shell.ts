@@ -24,7 +24,7 @@ export const messages = defineMessages(
       '/my/contributions': 'Contributions',
       '/my/employer': 'Employer',
       '/my/plan': 'Plan',
-      '/my/security': 'Security',
+      '/my/account': 'Account',
     },
     shell: {
       expandSidebar: 'Expand sidebar',
@@ -61,7 +61,7 @@ export const messages = defineMessages(
         // "Пригласить друга" and not "Рефералы": that word is taken by the
         // employee-referral marketplace above, and two sections sharing a name
         // is a menu nobody can navigate.
-        '/my/security': 'Безопасность',
+        '/my/account': 'Аккаунт',
       },
       shell: {
         expandSidebar: 'Развернуть панель',

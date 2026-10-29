@@ -48,5 +48,5 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/contributions': Link2,
   '/my/employer': Building2,
   '/my/plan': Coins,
-  '/my/security': ShieldCheck,
+  '/my/account': ShieldCheck,
 };

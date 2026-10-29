@@ -81,7 +81,7 @@ describe('beginProviderReauthentication', () => {
     // the member confirms from an unrelated surface.
     storage.setItem(DRAFT_KEY, JSON.stringify({ surface: 'create-api-key', name: 'old', days: 0 }));
 
-    await beginProviderReauthentication('google', '/my/security');
+    await beginProviderReauthentication('google', '/my/account');
 
     expect(storage.getItem(DRAFT_KEY)).toBeNull();
   });
@@ -133,7 +133,7 @@ describe('consumeReauthDraft', () => {
     // Two surfaces on one route both consume on mount. Without the tag the first to run
     // swallows a draft it does not recognise and the one it belongs to never sees it —
     // a silent loss, which is the failure this whole change exists to end.
-    await beginProviderReauthentication('google', '/my/security', { surface: 'delete-account' });
+    await beginProviderReauthentication('google', '/my/account', { surface: 'delete-account' });
 
     expect(consumeReauthDraft('create-api-key')).toBeNull();
     expect(consumeReauthDraft('delete-account')).toEqual({ surface: 'delete-account' });

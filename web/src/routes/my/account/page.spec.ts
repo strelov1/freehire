@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '#lib/types.js';
-import SecurityPage from './+page.svelte';
+import AccountPage from './+page.svelte';
 
 // `keyFor` here knew 401 and 400 and nothing else, so a 428 — the one refusal this surface
 // can actually meet — came out as "Something went wrong. Please try again.", which is both
@@ -60,13 +60,13 @@ async function fillAndSubmit(): Promise<void> {
   await fireEvent.click(screen.getByRole('button', { name: 'Save password' }));
 }
 
-describe('security page — password change', () => {
+describe('account page — password change', () => {
   it('names the real remedy when the session cannot prove recent control', async () => {
     // A 428 here cannot mean "you have not confirmed": the current password IS the
     // confirmation and it was just accepted. It means the proof would not bind to this
     // session, and the only cure is signing in again.
     changePassword.mockRejectedValue(new StubApiError(428));
-    render(SecurityPage);
+    render(AccountPage);
 
     await fillAndSubmit();
 
@@ -76,7 +76,7 @@ describe('security page — password change', () => {
 
   it('still distinguishes a wrong current password', async () => {
     reauthenticatePassword.mockRejectedValue(new StubApiError(401));
-    render(SecurityPage);
+    render(AccountPage);
 
     await fillAndSubmit();
 
@@ -87,7 +87,7 @@ describe('security page — password change', () => {
   });
 
   it('confirms with the current password before changing it', async () => {
-    render(SecurityPage);
+    render(AccountPage);
 
     await fillAndSubmit();
 

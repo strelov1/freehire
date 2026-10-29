@@ -10,7 +10,7 @@
   //
   // Rendered only by the first-time set-up form, so account settings never wait on a CV
   // upload to become reachable. Once a profile exists they live apart: the timezone in the
-  // profile's Location section, the language on /my/security.
+  // profile's Location section, the language on /my/account.
   let { class: extra = '' }: { class?: string } = $props();
 </script>
 

@@ -41,7 +41,7 @@
   // Four tabs, each holding its neighbours: Profile carries Contacts and Location (with the
   // timezone), Skills carries Avoid, Experience carries Education. The old routes of the
   // absorbed sections redirect to their anchors. There is no Settings section: the
-  // timezone sits in Location and the language on /my/security (see
+  // timezone sits in Location and the language on /my/account (see
   // profile/settings/+page.ts).
   const SECTIONS = [
     { id: 'profile', href: '/my/profile', icon: User },
@@ -189,7 +189,7 @@
       onCvDeleted={handleCvDeleted}
     />
     <!-- Account-level (not candidate-profile) settings live here too, so they never wait on
-         a CV upload; once a profile exists they move to Profile's Location part and /my/security. -->
+         a CV upload; once a profile exists they move to Profile's Location part and /my/account. -->
     <AccountPreferences class="mt-6" />
   </div>
 {:else}

@@ -41,7 +41,7 @@ describe('accountNav config', () => {
   });
 
   it('offers a security section for email, password and session management', () => {
-    expect(accountNav.map((i) => i.href)).toContain('/my/security');
+    expect(accountNav.map((i) => i.href)).toContain('/my/account');
   });
 
   it('leads with the four everyday sections in use order', () => {
