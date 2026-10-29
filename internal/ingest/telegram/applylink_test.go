@@ -5,11 +5,21 @@ import (
 	"testing"
 )
 
+const (
+	eaURL       = "https://jobs.ea.com/en_US/careers/JobDetail/Software-Engineer-Intern/215949"
+	whatsappURL = "https://whatsapp.com/channel/0029Va9sXNw3AzNa6mBs060w"
+)
+
+// bare is a link whose text is its own address, the way Telegram renders a URL typed into
+// a post.
+func bare(u string) Link { return Link{Text: u, URL: u} }
+
 func TestApplyURL(t *testing.T) {
 	linkedin := Link{Text: "Apply Here", URL: "https://www.linkedin.com/jobs/view/4482431822/"}
 	tests := []struct {
 		name  string
 		links []Link
+		text  string
 		jobs  int
 		want  string
 	}{
@@ -81,10 +91,74 @@ func TestApplyURL(t *testing.T) {
 		{name: "multi-job post keeps the post", jobs: 2,
 			links: []Link{linkedin}},
 		{name: "no jobs", jobs: 0, links: []Link{linkedin}},
+
+		// A bare address the post LABELS as the way to apply.
+		{
+			// Report #156, t.me/goyalarsh/6410: the vacancy's URL behind "Link:", the channel's
+			// WhatsApp footer behind words that are not a label.
+			name: "bare address behind a Link label, beside a footer",
+			text: "Company: Electronic Arts\nRole: SDE Internship\nBatch: 2027/28 passouts\n\n" +
+				"Link: " + eaURL + "\n\nJoin " + whatsappURL + " for some cool opportunities.",
+			links: []Link{bare(eaURL), bare(whatsappURL)},
+			jobs:  1,
+			want:  eaURL,
+		},
+		{name: "apply label on the same line", jobs: 1,
+			text:  "Fleet Manager\n🔗 Apply here: http://jobs.example.ng/job/fleet-manager/",
+			links: []Link{bare("http://jobs.example.ng/job/fleet-manager/")},
+			want:  "http://jobs.example.ng/job/fleet-manager/"},
+		{
+			name: "apply label on the line above",
+			text: "Graduate Trainee\n\nSee full details and apply: \nhttps://jobs.example.com/trainee/\n\n" +
+				"Follow us on Telegram via:\nhttps://t.me/cv_2essence",
+			links: []Link{bare("https://jobs.example.com/trainee/"), bare("https://t.me/cv_2essence")},
+			jobs:  1,
+			want:  "https://jobs.example.com/trainee/",
+		},
+		{name: "a label is read by its last words", jobs: 1,
+			text:  "Junior QA\nFollow us on Twitter: https://x.com/acme\nApply link: https://acme.example.com/jobs/7",
+			links: []Link{bare("https://x.com/acme"), bare("https://acme.example.com/jobs/7")},
+			want:  "https://acme.example.com/jobs/7"},
+		{name: "a bare Link label must stand alone", jobs: 1,
+			text:  "Junior QA\nWhatsApp community link: https://chat.whatsapp.com/abc\nhttps://acme.example.com/jobs/7",
+			links: []Link{bare("https://chat.whatsapp.com/abc"), bare("https://acme.example.com/jobs/7")}},
+
+		// The post's only outbound link, standing on a line of its own.
+		{
+			// t.me/STEMJobsCR: a title, three facts and the URL, nothing else.
+			name: "sole address on its own line",
+			text: "🧑‍💼  |  Product Support Engineer\n\nEmpresa: Equifax\nUbicación: Pune\nTags: #soporte\n\n" +
+				"https://careers.equifax.com/en/jobs/j00178866/product-support-engineer/",
+			links: []Link{
+				{Text: "#soporte", URL: "?q=%23soporte"},
+				bare("https://careers.equifax.com/en/jobs/j00178866/product-support-engineer/"),
+			},
+			jobs: 1,
+			want: "https://careers.equifax.com/en/jobs/j00178866/product-support-engineer/",
+		},
+		{name: "sole address decorated only by an emoji", jobs: 1,
+			text:  "Intern JavaScript Developer\n👉 https://dou.ua/calendar/58283/?from=tg",
+			links: []Link{bare("https://dou.ua/calendar/58283/?from=tg")},
+			want:  "https://dou.ua/calendar/58283/?from=tg"},
+		{name: "sole address beside words is a footer", jobs: 1,
+			text:  "Backend Engineer, DM @hr\nJoin " + whatsappURL + " for some cool opportunities.",
+			links: []Link{bare(whatsappURL)}},
+		{name: "sole address naming a site, not a page", jobs: 1,
+			text:  "Backend Engineer at Acme\nhttps://acme.example.com/",
+			links: []Link{bare("https://acme.example.com/")}},
+		{name: "two unlabelled addresses are ambiguous", jobs: 1,
+			text:  "Backend Engineer\nhttps://acme.example.com/jobs/1\nhttps://acme.example.com/blog/2",
+			links: []Link{bare("https://acme.example.com/jobs/1"), bare("https://acme.example.com/blog/2")}},
+		{name: "a worded link is never taken for a sole address", jobs: 1,
+			text:  "Backend Engineer\nРазместить вакансию",
+			links: []Link{{Text: "Разместить вакансию", URL: "https://www.vseti.app/newcv"}}},
+		{name: "a labelled link still needs a single-vacancy post", jobs: 2,
+			text:  "Two roles\nLink: " + eaURL,
+			links: []Link{bare(eaURL)}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := applyURL(tc.links, tc.jobs); got != tc.want {
+			if got := applyURL(tc.text, tc.links, tc.jobs); got != tc.want {
 				t.Errorf("applyURL = %q, want %q", got, tc.want)
 			}
 		})
@@ -112,6 +186,20 @@ func TestDraftJobsUsesThePostsApplyLink(t *testing.T) {
 	}
 	if got.ExternalID != base+"/0" {
 		t.Errorf("ExternalID = %q, want %q", got.ExternalID, base+"/0")
+	}
+}
+
+// Report #156: the label that names the apply link lives in the post's TEXT, so draftJobs
+// must hand the text over, not only the links.
+func TestDraftJobsReadsTheLabelInThePostText(t *testing.T) {
+	post := pendingPost()
+	post.Text = "Company: Electronic Arts\nLink: " + eaURL + "\nJoin " + whatsappURL + " for more."
+	post.Links = []Link{bare(eaURL), bare(whatsappURL)}
+	built, _ := ExtractRunner{}.draftJobs(post, []ExtractedJob{
+		{Title: "Software Engineer Intern", Company: "Electronic Arts", Description: "C++."},
+	})
+	if len(built) != 1 || built[0].Fields().URL != eaURL {
+		t.Fatalf("built %+v, want one job at %q", built, eaURL)
 	}
 }
 

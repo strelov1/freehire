@@ -175,7 +175,7 @@ func (r ExtractRunner) draftJobs(post PendingPost, jobs []ExtractedJob) (built [
 	base := post.Channel + "/" + strconv.FormatInt(post.MsgID, 10)
 	// The URL is where an applicant goes: the post's own apply link when it names one, else
 	// the post. Identity stays the post's either way, so dedup is unaffected.
-	jobURL := applyURL(post.Links, len(jobs))
+	jobURL := applyURL(post.Text, post.Links, len(jobs))
 	if jobURL == "" {
 		jobURL = "https://t.me/" + base
 	}

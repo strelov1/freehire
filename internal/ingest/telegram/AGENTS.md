@@ -92,9 +92,28 @@ did admit it would have declined one.
 ## A job's URL: the apply link, else the post
 An LLM-extracted job's identity is always the post (`<channel>/<msg>/<i>`), but its URL is
 where an applicant goes: `applyURL` picks the post's own apply link when the post yields
-exactly ONE vacancy and a link's TEXT says apply ("Apply Here", "Откликнуться", "ссылке",
-"тут"...). Telegram hosts, hashtag searches and links whose text is a bare URL (the footer
-and ad links channels stamp on every post) never qualify, and a lone link with any other text
-is not guessed at — measured, those are company homepages and adverts as often as vacancies.
-A multi-vacancy post keeps the post as every job's URL: nothing says which link is whose.
-The rule reaches NEW extractions only; a stored row keeps the URL it was written with.
+exactly ONE vacancy and the post's layout says which link that is. Three readings, in order:
+
+1. **The link's text says apply** ("Apply Here", "Откликнуться", "ссылке", "тут"...). A link
+   whose text is a bare URL is refused by this reading — that is what footer and ad links
+   look like (wantapply.com would otherwise say "apply" by its own name) — and a worded link
+   saying anything else is not guessed at: measured, those are company homepages and adverts
+   as often as vacancies.
+2. **A label in front of a link says apply** — the last words before it on its line, or on
+   the nearest non-empty line above when it opens its line: "Link: https://jobs.ea.com/…",
+   "Apply here: …", "See full details and apply:". Only the label's END is read, and the bare
+   noun labels ("Link", "Ссылка") must be the label's only words, because "WhatsApp community
+   link:" ends in the same noun.
+3. **The post's only outbound link is a bare address on a line of its own** and names a page,
+   not a site. Measured 2026-10-29: 3,580 open single-job posts have that shape (STEMJobsCR
+   prints every vacancy so), and only 113 of their addresses recur in another post of the same
+   channel — mostly one vacancy posted twice. A footer prints its address beside words, so it
+   does not take this shape.
+
+Telegram hosts and hashtag searches never qualify. A multi-vacancy post keeps the post as
+every job's URL: nothing says which link is whose. The rule reaches NEW extractions only; a
+stored row keeps the URL it was written with, so a widened rule needs a one-off repair over
+`telegram_posts` (report #156 moved ~4.1k of 14.4k open t.me-URL rows this way). The
+identity stays the post's, so dedup and the 45-day age close (`cmd/liveness`, by SOURCE) are
+unaffected; a liveness probe of the external URLs would now be possible for the ATS-hosted
+ones, but not for the LinkedIn third of them (a login wall, not a verdict).
