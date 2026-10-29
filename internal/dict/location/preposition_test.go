@@ -43,6 +43,10 @@ func TestPlaceAfterPreposition(t *testing.T) {
 		// EMEA is no region of the vocabulary.
 		{"Remote in EMEA", nil, nil},
 		{"Engineering in Canada", nil, nil},
+		// A city of the main table reads like any other ("Recife" alone is Brazil); a state
+		// name stays with resolveSubdivision and names no town.
+		{"Remote in Recife", []string{"br"}, []string{"latam"}},
+		{"Anywhere in Oregon", []string{"us"}, []string{"north_america"}},
 		// A bare "IN" opening the line is also Indiana's code: "IN Lebanon" and "IN Angola"
 		// are Indiana towns, so a name the US has a town of is not read after it. A work
 		// mode before the preposition settles it.
@@ -55,6 +59,21 @@ func TestPlaceAfterPreposition(t *testing.T) {
 		g := Parse(tt.location)
 		if !reflect.DeepEqual(g.Countries, tt.countries) || !reflect.DeepEqual(g.Regions, tt.regions) {
 			t.Errorf("Parse(%q) = %v %v, want %v %v", tt.location, g.Countries, g.Regions, tt.countries, tt.regions)
+		}
+	}
+}
+
+// TestPlaceAfterPrepositionNamesNoWrongCity pins the two ways cutting a preposition could
+// name a city the line does not: an alternate GeoNames name ("market" is an alias of
+// Marquette) and an Indiana town after a bare "IN" that shares a foreign city's name.
+func TestPlaceAfterPrepositionNamesNoWrongCity(t *testing.T) {
+	for loc, want := range map[string][]string{
+		"Remote in Market - Atlanta, Georgia - Atlanta, GA 30303": {"Atlanta"},
+		"IN Munster - 127103":  nil,
+		"Hybrid in Boston, MA": {"Boston"},
+	} {
+		if got := Parse(loc).Cities; !reflect.DeepEqual(got, want) {
+			t.Errorf("Parse(%q).Cities = %v, want %v", loc, got, want)
 		}
 	}
 }

@@ -632,10 +632,9 @@ func stripPlacePreposition(tok string) string {
 			rest = rest[1:]
 		}
 		name := strings.Join(rest, " ")
-		if !namesPlace(name) || (len(lead) == 0 && f == "in" && hasPlaceIn(name, "us")) {
-			continue
+		if namesPlace(name, len(lead) == 0 && f == "in") {
+			return name
 		}
-		return name
 	}
 	return tok
 }
@@ -650,11 +649,25 @@ func allLeadWords(words []string) bool {
 	return true
 }
 
-// namesPlace reports whether name is a country, curated city or region name. A US state
-// or Canadian province is left out: resolveSubdivision already reads one closing a token
-// ("Remote in California"), and cut loose it would also name a town ("Oregon").
-func namesPlace(name string) bool {
+// namesPlace reports whether name is a country, city or region name. A US state or
+// Canadian province is left out: resolveSubdivision already reads one closing a token
+// ("Remote in California"), and cut loose it would also name a town ("Oregon"). A city of
+// the main table counts under its own name only, never an alternate one ("market" is
+// GeoNames' alias of Marquette). After a bare "IN", which is also Indiana's code, only a
+// curated name the US has no town of counts: "IN Lebanon", "IN Munster" are Indiana towns.
+func namesPlace(name string, bareIn bool) bool {
+	if isSubdivisionName(name) {
+		return false
+	}
+	if bareIn {
+		_, country := nameToCountry[name]
+		_, region := nameToRegion[name]
+		return (country || region) && !hasPlaceIn(name, "us")
+	}
 	if _, ok := nameToCountry[name]; ok {
+		return true
+	}
+	if ce, ok := cityDict[name]; ok && sameName(ce.Name, name) {
 		return true
 	}
 	_, ok := nameToRegion[name]
