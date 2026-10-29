@@ -161,3 +161,141 @@ func TestPaycomFetchKeepsTokenFailureDistinctFromBoardGone(t *testing.T) {
 		t.Errorf("err = %v, want a token failure, not ErrBoardGone", err)
 	}
 }
+
+// The notice changed wording in 2026-10 ("... does not exist or is unavailable at this time."),
+// and the old constant's trailing period stopped matching it, so every retired board failed on
+// the missing token instead.
+func TestPaycomFetchReportsBoardGoneUnderTheCurrentNotice(t *testing.T) {
+	page := `<div style="text-align: center; padding-top: 140px; font-size: 22px;">Job board does not exist or is unavailable at this time.</div>`
+	fake := &paycomFake{pages: map[string]string{"/portal/": page}}
+	if _, err := NewPaycom(fake).Fetch(context.Background(), CompanyEntry{Board: "deadkey"}); !errors.Is(err, ErrBoardGone) {
+		t.Fatalf("err = %v, want it to wrap ErrBoardGone", err)
+	}
+}
+
+func TestPaycomIsRegisteredAsFullBoardListing(t *testing.T) {
+	if _, ok := NewPaycom(nil).(fullBoardListing); !ok {
+		t.Error("paycom should implement the fullBoardListing marker")
+	}
+	if !FullBoardListingProviders(All(nil))["paycom"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include paycom")
+	}
+}
+
+// paycomPagedFake serves a board of n postings through the real skip/take paging, stating
+// count as the total, and lets a test break one page or one detail.
+type paycomPagedFake struct {
+	n, count   int
+	failPage   int // page whose search request errors; -1 for none
+	emptyPage  int // page that comes back with no previews; -1 for none
+	detailErrs map[string]error
+	posts      int
+}
+
+func (f *paycomPagedFake) GetText(context.Context, string) (string, error) {
+	return paycomPortalPage, nil
+}
+
+func (f *paycomPagedFake) PostJSONWithHeaders(_ context.Context, _ string, _ map[string]string, body, v any) error {
+	f.posts++
+	skip := body.(map[string]any)["skip"].(int)
+	page := skip / paycomPageSize
+	if page == f.failPage {
+		return &StatusError{Method: "POST", Code: 503}
+	}
+	var previews []string
+	for i := skip; i < f.n && i < skip+paycomPageSize && page != f.emptyPage; i++ {
+		previews = append(previews, fmt.Sprintf(`{"jobId":%d}`, 1000+i))
+	}
+	return json.Unmarshal([]byte(fmt.Sprintf(`{"jobPostingPreviewsCount":%d,"jobPostingPreviews":[%s]}`, f.count, strings.Join(previews, ","))), v)
+}
+
+func (f *paycomPagedFake) GetJSONWithHeaders(_ context.Context, url string, _ map[string]string, v any) error {
+	if strings.HasSuffix(url, "/company-name") {
+		return json.Unmarshal([]byte(`{"companyName":"Brown Sims PC"}`), v)
+	}
+	id := url[strings.LastIndex(url, "/")+1:]
+	if err, ok := f.detailErrs[id]; ok {
+		return err
+	}
+	if id == "2000" { // a 200 that carries no posting
+		return json.Unmarshal([]byte(`{}`), v)
+	}
+	return json.Unmarshal([]byte(fmt.Sprintf(`{"jobPosting":{"jobId":%s,"jobTitle":"Paralegal","location":"Houston, TX","description":"<p>x</p>"}}`, id)), v)
+}
+
+// A board longer than one page is read to the total its search states.
+func TestPaycomFetchReadsEveryPageToTheStatedTotal(t *testing.T) {
+	fake := &paycomPagedFake{n: 120, count: 120, failPage: -1, emptyPage: -1}
+	jobs, err := NewPaycom(fake).Fetch(context.Background(), CompanyEntry{Board: "CK"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 120 {
+		t.Errorf("got %d jobs, want 120", len(jobs))
+	}
+}
+
+// An emptied board states a total of zero, and that is a complete (empty) listing.
+func TestPaycomFetchReadsAnEmptyBoardAsEmpty(t *testing.T) {
+	fake := &paycomPagedFake{n: 0, count: 0, failPage: -1, emptyPage: -1}
+	jobs, err := NewPaycom(fake).Fetch(context.Background(), CompanyEntry{Board: "CK"})
+	if err != nil || len(jobs) != 0 {
+		t.Fatalf("Fetch = %d jobs, %v; want an empty listing", len(jobs), err)
+	}
+}
+
+// fullBoardListing's bar: a listing the crawl could not read to its stated total is a failed
+// Fetch, never a partial success the board-scoped close would read as removals.
+func TestPaycomFetchFailsAListingShortOfItsTotal(t *testing.T) {
+	cases := map[string]*paycomPagedFake{
+		"a later page errors":                    {n: 120, count: 120, failPage: 1, emptyPage: -1},
+		"a later page is empty before the total": {n: 120, count: 120, failPage: -1, emptyPage: 1},
+		"the first page errors":                  {n: 120, count: 120, failPage: 0, emptyPage: -1},
+		"the page cap comes first":               {n: (paycomMaxPages + 1) * paycomPageSize, count: (paycomMaxPages + 1) * paycomPageSize, failPage: -1, emptyPage: -1},
+	}
+	for name, fake := range cases {
+		t.Run(name, func(t *testing.T) {
+			if jobs, err := NewPaycom(fake).Fetch(context.Background(), CompanyEntry{Board: "CK"}); err == nil {
+				t.Errorf("Fetch = %d jobs and no error, want a failed crawl", len(jobs))
+			}
+		})
+	}
+}
+
+// A posting the platform answers 404 for is gone ("Active job posting not found") and is
+// dropped; a detail this crawl merely could not read is an Unreadable marker, so the sweep does
+// not read it as a removal.
+func TestPaycomFetchTellsAGoneDetailFromAnUnreadableOne(t *testing.T) {
+	fake := &paycomPagedFake{n: 4, count: 4, failPage: -1, emptyPage: -1, detailErrs: map[string]error{
+		"1001": &StatusError{Method: "GET", Code: 404},
+		"1002": &StatusError{Method: "GET", Code: 503},
+		"1003": errors.New("connection reset"),
+	}}
+	jobs, err := NewPaycom(fake).Fetch(context.Background(), CompanyEntry{Company: "Brown Sims", Board: "CK"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	got := map[string]bool{}
+	for _, j := range jobs {
+		got[j.ExternalID] = j.Unreadable
+	}
+	want := map[string]bool{"1000": false, "1002": true, "1003": true}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("ExternalID -> Unreadable = %v, want %v (1001 answered 404 and is dropped)", got, want)
+	}
+}
+
+// A 200 detail that carries no posting is unreadable, not gone.
+func TestPaycomFetchReadsAnEmptyDetailAsUnreadable(t *testing.T) {
+	fake := &paycomPagedFake{n: 1001, count: 1001, failPage: -1, emptyPage: -1}
+	jobs, err := NewPaycom(fake).Fetch(context.Background(), CompanyEntry{Board: "CK"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	for _, j := range jobs {
+		if j.ExternalID == "2000" && !j.Unreadable {
+			t.Error("posting 2000 answered 200 with no posting and must be Unreadable")
+		}
+	}
+}

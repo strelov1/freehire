@@ -39,13 +39,24 @@ func (paycom) Provider() string { return "paycom" }
 const (
 	paycomPortalBase = "https://www.paycomonline.net/v4/ats/web.php/portal"
 	paycomPageSize   = 50
-	// paycomMaxPages bounds pagination so a miscounted total can't loop forever.
+	// paycomMaxPages bounds pagination so a miscounted total can't loop forever. Reaching it
+	// before the stated total fails the crawl (fullBoardListing): the largest board measured
+	// 2026-10-29 stated 2,705 postings, 55 pages.
 	paycomMaxPages = 200
 	// paycomNoSuchBoard is the portal's own answer for a client key it no longer serves,
-	// delivered as a 122-byte page under HTTP 200. Matched on the sentence alone, without
-	// the surrounding markup, so restyling the notice does not silence the check.
-	paycomNoSuchBoard = "Job board does not exist."
+	// delivered as a short page under HTTP 200. Matched on the leading clause alone, without
+	// the surrounding markup or the rest of the sentence: the notice read "Job board does not
+	// exist." until 2026-10 and "Job board does not exist or is unavailable at this time." since,
+	// and the trailing period of the old constant silently stopped matching the new one.
+	paycomNoSuchBoard = "Job board does not exist"
 )
+
+// fullBoardListing: listJobIDs pages until the distinct ids read reach the total the search
+// states (jobPostingPreviewsCount), and fails the crawl on a page error, on a page that comes
+// back empty short of that total, and on reaching paycomMaxPages first. A posting whose detail
+// the platform answers 404 is dropped (its own "Active job posting not found"); any other
+// failed detail is an unreadableDetail marker. See the fullBoardListing interface for the bar.
+func (paycom) fullBoardListing() {}
 
 func (s paycom) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	// The SSR portal shell embeds the session JWT + the regional Mantle host; any job-id path
@@ -75,15 +86,21 @@ func (s paycom) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		company = cn.CompanyName
 	}
 
-	ids := s.listJobIDs(ctx, mantle, auth)
+	ids, err := s.listJobIDs(ctx, mantle, auth)
+	if err != nil {
+		return nil, fmt.Errorf("paycom: board %q: %w", e.Board, err)
+	}
 	return fetchDetails(ids, defaultDetailWorkers, func(id string) (Job, bool) {
 		return s.detail(ctx, e.Board, mantle, auth, company, id)
 	}), nil
 }
 
 // listJobIDs pages the previews search (skip/take) and returns every posting id, first-seen
-// order. A page that fails or yields nothing ends enumeration with the ids gathered so far.
-func (s paycom) listJobIDs(ctx context.Context, mantle string, auth map[string]string) []string {
+// order, once the distinct ids read reach the total the search states. Anything short of that
+// is an error rather than a partial listing: a failed page, a page that comes back empty before
+// the total, or the page cap. Until 2026-10-29 each of those ended enumeration with the ids
+// gathered so far, which is why paycom could not earn fullBoardListing.
+func (s paycom) listJobIDs(ctx context.Context, mantle string, auth map[string]string) ([]string, error) {
 	var ids []string
 	seen := make(map[string]bool)
 	for page := 0; page < paycomMaxPages; page++ {
@@ -95,10 +112,7 @@ func (s paycom) listJobIDs(ctx context.Context, mantle string, auth map[string]s
 			} `json:"jobPostingPreviews"`
 		}
 		if err := s.http.PostJSONWithHeaders(ctx, mantle+"/api/ats/job-posting-previews/search", auth, body, &resp); err != nil {
-			break
-		}
-		if len(resp.Previews) == 0 {
-			break
+			return nil, fmt.Errorf("previews page %d: %w", page, err)
 		}
 		for _, p := range resp.Previews {
 			if id := p.JobID.String(); id != "" && !seen[id] {
@@ -107,15 +121,21 @@ func (s paycom) listJobIDs(ctx context.Context, mantle string, auth map[string]s
 			}
 		}
 		if len(ids) >= resp.Count {
-			break
+			return ids, nil
+		}
+		if len(resp.Previews) == 0 {
+			return nil, fmt.Errorf("previews page %d came back empty with %d of %d postings read", page, len(ids), resp.Count)
 		}
 	}
-	return ids
+	return nil, fmt.Errorf("previews reached the %d-page cap with %d postings read", paycomMaxPages, len(ids))
 }
 
-// detail fetches one posting and maps it to a Job, returning ok=false when the fetch fails
-// or carries no posting, so the caller skips just that posting.
+// detail fetches one posting and maps it to a Job. A posting the platform answers 404/410 for
+// is gone and dropped (ok=false); any other failure, or a 200 that carries no posting, comes
+// back as an unreadableDetail marker — the detail is this adapter's only source for the posting,
+// and a dropped one would read as a posting taken down.
 func (s paycom) detail(ctx context.Context, board, mantle string, auth map[string]string, company, id string) (Job, bool) {
+	url := fmt.Sprintf("%s/%s/jobs/%s", paycomPortalBase, board, id)
 	var resp struct {
 		JobPosting struct {
 			JobID       json.Number `json:"jobId"`
@@ -127,15 +147,18 @@ func (s paycom) detail(ctx context.Context, board, mantle string, auth map[strin
 		} `json:"jobPosting"`
 	}
 	if err := s.http.GetJSONWithHeaders(ctx, fmt.Sprintf("%s/api/ats/job-postings/%s", mantle, id), auth, &resp); err != nil {
+		if detailUnreadable(err) {
+			return unreadableDetail(id, url, company), true
+		}
 		return Job{}, false
 	}
 	p := resp.JobPosting
-	if p.JobID.String() == "" {
-		return Job{}, false
+	if p.JobID.String() != id {
+		return unreadableDetail(id, url, company), true
 	}
 	return Job{
-		ExternalID:  p.JobID.String(),
-		URL:         fmt.Sprintf("%s/%s/jobs/%s", paycomPortalBase, board, p.JobID),
+		ExternalID:  id,
+		URL:         url,
 		Title:       p.JobTitle,
 		Company:     company,
 		Location:    p.Location,
