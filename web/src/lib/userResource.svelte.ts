@@ -87,15 +87,17 @@ export abstract class UserResource<T> {
   /** Re-fetch now, whatever `ensureLoaded` already did. Rejects on a failure, for a
    *  caller with its own error state. Generation-guarded like the first load: a read
    *  still in flight when the user signs out must not repopulate the store with their
-   *  data for whoever signs in next on the same tab. */
-  protected async reload(): Promise<void> {
+   *  data for whoever signs in next on the same tab. Resolves whether THIS read's answer
+   *  was applied — false when a reset or a newer read superseded it. */
+  protected async reload(): Promise<boolean> {
     const gen = this.#generation;
     const read = ++this.#latestRead;
     const data = await this.load();
     // A newer read started meanwhile: its answer is the current one, whichever lands first.
-    if (gen !== this.#generation || read !== this.#latestRead) return;
+    if (gen !== this.#generation || read !== this.#latestRead) return false;
     this.apply(data);
     this.#loaded = true;
+    return true;
   }
 
   /** Re-fetch after a write, which `ensureLoaded` would no-op once loaded. Best-effort:

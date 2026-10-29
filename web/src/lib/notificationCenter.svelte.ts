@@ -52,8 +52,8 @@ class NotificationCenter extends UserResource<Page> {
   /** Re-fetch the first page and unread count. Unlike ensureLoaded() (load-once),
    *  this always hits the network — called on the bell opening and after
    *  mark-all-read, so the badge and list reflect what the server has right now. */
-  override refresh(): Promise<void> {
-    return this.reload();
+  override async refresh(): Promise<void> {
+    await this.reload();
   }
 
   /** Mark one notification read: always calls the server (idempotent — safe even

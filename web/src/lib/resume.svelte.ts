@@ -63,9 +63,10 @@ class ResumeStore extends UserResource<ResumeMeta | null> {
       let status: string | undefined;
       try {
         // oxlint-disable-next-line no-await-in-loop -- a backoff poll is sequential by design
-        await this.reload();
-        if (!this.#meta?.present) return false;
-        status = this.#meta.parse_status;
+        // A read superseded by another says nothing either: the copy held may predate it.
+        if (!(await this.reload())) status = 'pending';
+        else if (!this.#meta?.present) return false;
+        else status = this.#meta.parse_status;
       } catch (err) {
         // A failed read says nothing about the parse; the copy held is from before it.
         console.warn('resume: parse poll failed', err);

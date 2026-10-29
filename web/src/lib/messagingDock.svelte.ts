@@ -89,8 +89,8 @@ class MessagingDockStore extends UserResource<Conversation[]> {
 
   /** Re-read the list now. Rejects on a failure, so a caller with its own error state can
    *  show it; a poll can ignore it. */
-  override refresh(): Promise<void> {
-    return this.reload();
+  override async refresh(): Promise<void> {
+    await this.reload();
   }
 
   /** Whether this page has a dock at all, dismissed or not — what keeps the list polling,

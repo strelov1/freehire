@@ -51,6 +51,26 @@ describe('resumeStore.waitForParse', () => {
     expect(getResume).toHaveBeenCalledTimes(4);
   });
 
+  it('treats a poll read superseded by another refresh as still pending', async () => {
+    let answerPoll!: (value: unknown) => void;
+    getResume
+      .mockResolvedValueOnce(meta('ok'))
+      .mockReturnValueOnce(new Promise((resolve) => (answerPoll = resolve)))
+      .mockResolvedValueOnce(meta('ok'))
+      .mockResolvedValue(meta('ok'));
+    await resumeStore.refresh(); // the copy held says 'ok'
+
+    const parsed = resumeStore.waitForParse();
+    await resumeStore.refresh(); // e.g. a contacts save, overtaking the poll's read
+    answerPoll(meta('pending'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getResume).toHaveBeenCalledTimes(3); // the poll did not stop on the cached 'ok'
+
+    await vi.runAllTimersAsync();
+    await expect(parsed).resolves.toBe(true);
+    expect(getResume).toHaveBeenCalledTimes(4);
+  });
+
   it('keeps the newer of two overlapping reads, whichever lands last', async () => {
     let answerOld!: (value: unknown) => void;
     getResume
