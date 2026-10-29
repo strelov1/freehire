@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   claimSignupOnce,
   cvUploadReason,
@@ -157,6 +157,48 @@ describe('Google Analytics bootstrap', () => {
     for (const entry of queued) {
       expect(Object.prototype.toString.call(entry)).toBe('[object Arguments]');
     }
+  });
+});
+
+describe('track → Google Analytics', () => {
+  // A fresh module per test: whether GA has been started is module state, and
+  // the bootstrap test above has already started it in the shared copy.
+  async function freshAnalytics() {
+    vi.resetModules();
+    Object.assign(globalThis, {
+      window: globalThis,
+      location: { hostname: 'freehire.me' },
+      document: { createElement: () => ({}), head: { appendChild: () => {} } },
+      dataLayer: [],
+    });
+    return import('./analytics');
+  }
+  const queued = () => (globalThis as { dataLayer?: unknown[] }).dataLayer ?? [];
+  const lastCommand = () => Array.from(queued().at(-1) as ArrayLike<unknown>);
+
+  it('sends nothing to GA before the trackers are started', async () => {
+    const analytics = await freshAnalytics();
+    analytics.track('job_apply', { slug: 'x' });
+    expect(queued()).toHaveLength(0);
+  });
+
+  it('forwards an event under its own name once GA is running', async () => {
+    const analytics = await freshAnalytics();
+    analytics.initTrackers({ key: '', apiHost: '/ingest' });
+    analytics.track('job_apply', { slug: 'x', source: 'greenhouse' });
+    expect(lastCommand()).toEqual(['event', 'job_apply', { slug: 'x', source: 'greenhouse' }]);
+    expect(Object.prototype.toString.call(queued().at(-1))).toBe('[object Arguments]');
+  });
+
+  it('renames the funnel steps to the events GA4 reports on', async () => {
+    const analytics = await freshAnalytics();
+    analytics.initTrackers({ key: '', apiHost: '/ingest' });
+    analytics.track('signup', { method: 'oauth' });
+    expect(lastCommand()).toEqual(['event', 'sign_up', { method: 'oauth' }]);
+    analytics.track('checkout_start', { price_id: 'default' });
+    expect(lastCommand()).toEqual(['event', 'begin_checkout', { price_id: 'default' }]);
+    analytics.track('subscribe', { plan: 'pro' });
+    expect(lastCommand()).toEqual(['event', 'purchase', { plan: 'pro' }]);
   });
 });
 
