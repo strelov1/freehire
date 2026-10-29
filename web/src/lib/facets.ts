@@ -503,6 +503,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   sapoemprego: 'SAPO Emprego',
   netempregos: 'Net-Empregos',
   hzz: 'HZZ (Burza rada)',
+  ess: 'ESS (Zavod RS za zaposlovanje)',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

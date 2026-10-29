@@ -1077,6 +1077,14 @@ func All(c HTTPClient) map[string]Source {
 	// each new vacancy's employer and body read from its print page. The site answers nothing
 	// without the session cookie its first response sets, hence the cookie client. See hzz.go.
 	registry["hzz"] = cookieSessionSource[hzzGetter](c, NewHZZ)
+	// ESS: the Employment Service of Slovenia's job search, read through the public JSON API its
+	// search page calls, each new vacancy's body from the detail endpoint. A listing page of 500
+	// takes ~8 s to answer, near the standard 15s client timeout. See ess.go.
+	if c == nil {
+		registry["ess"] = NewESS(nil)
+	} else {
+		registry["ess"] = NewESS(NewLongTimeoutClient())
+	}
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the

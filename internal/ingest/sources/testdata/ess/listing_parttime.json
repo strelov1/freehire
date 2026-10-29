@@ -1,0 +1,26 @@
+{
+ "steviloDelovnihMest": 1,
+ "seznamDelovnihMest": [
+  {
+   "idDelovnoMesto": "3499064",
+   "nazivDelovnegaMesta": "OSEBNI ASISTENT - M/Ž",
+   "delodajalec": "FRACTALS, Zavod za družbene inovacije",
+   "krajDM": "CERKNICA",
+   "trajanjeZaposlitve": "Določen čas (2 mes.)",
+   "delovniCas": "20 ur/teden",
+   "ravenIzobrazbe": "osnovnošolska",
+   "datumObjave": "2026-10-29T00:00:00+01:00",
+   "datumPrijaveDo": "2026-11-08T00:00:00+01:00",
+   "ikonaReferenca": "NE",
+   "zrszNapotovanje": "DA",
+   "topNapovedi": "DA",
+   "poklicniBarometer": "primanjkljaj",
+   "poklicniBarometer1": 1,
+   "poklic": "Osebni asistent za gibalno ovirano osebo",
+   "datumSpremembe": "2026-10-28T22:00:00+01:00",
+   "ikonaNegativnaReferenca": "NE",
+   "ikonaEURES": "NE",
+   "aktivenPDM": "DA"
+  }
+ ]
+}

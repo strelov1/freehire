@@ -1,0 +1,26 @@
+{
+ "steviloDelovnihMest": 1,
+ "seznamDelovnihMest": [
+  {
+   "idDelovnoMesto": "3488829",
+   "nazivDelovnegaMesta": "PROGRAMER APLIKACIJ VII/2 (I) - M/Ž",
+   "delodajalec": "NARODNA IN UNIVERZITETNA KNJIŽNICA",
+   "krajDM": "LJUBLJANA",
+   "trajanjeZaposlitve": "Nedoločen čas",
+   "delovniCas": "40 ur/teden",
+   "ravenIzobrazbe": "visokošolska 2.stopnje, visokošolska univerzitetna (prejšnja) ipd.",
+   "datumObjave": "2026-10-27T00:00:00+01:00",
+   "datumPrijaveDo": "2026-11-11T00:00:00+01:00",
+   "ikonaReferenca": "NE",
+   "zrszNapotovanje": "NE",
+   "topNapovedi": "NE",
+   "poklicniBarometer": "primanjkljaj",
+   "poklicniBarometer1": 1,
+   "poklic": "Programer",
+   "datumSpremembe": "2026-10-27T22:00:00+01:00",
+   "ikonaNegativnaReferenca": "NE",
+   "ikonaEURES": "NE",
+   "aktivenPDM": "DA"
+  }
+ ]
+}
