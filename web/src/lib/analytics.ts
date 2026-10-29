@@ -275,10 +275,16 @@ const GA_EVENT_NAMES: Readonly<Record<string, string>> = {
 /** Capture an explicit funnel event in PostHog (queued until the SDK has loaded) and,
  *  once consent has started it, in Google Analytics. An event fired before GA starts
  *  is not held for it: GA only runs after consent, and an event from before that
- *  choice is not one the visitor agreed to send. */
+ *  choice is not one the visitor agreed to send.
+ *
+ *  GA never receives `q`, the text a visitor typed into search: it is the one free-text
+ *  property, so it can hold a name or an address, and Google's terms forbid sending
+ *  personal data. PostHog, behind our own proxy, keeps it. */
 export function track(event: string, props?: Record<string, unknown>): void {
   withPostHog((sdk) => sdk.capture(event, props));
-  if (gaLoaded) gtag('event', GA_EVENT_NAMES[event] ?? event, props ?? {});
+  if (!gaLoaded) return;
+  const { q: _q, ...gaProps } = props ?? {};
+  gtag('event', GA_EVENT_NAMES[event] ?? event, gaProps);
 }
 
 /** Bind analytics identity to a signed-in user by id only — never PII. */

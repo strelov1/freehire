@@ -110,7 +110,8 @@ Every explicit event SHALL also reach Google Analytics once consent has started 
 with the same properties. `signup`, `checkout_start` and `subscribe` SHALL be sent to
 GA under its recommended names — `sign_up`, `begin_checkout`, `purchase` — so GA's
 built-in reports pick them up; every other event keeps its name. An event fired before
-GA starts SHALL NOT be held for it.
+GA starts SHALL NOT be held for it. The free-text search query (`q`) SHALL NOT be sent
+to GA: typed text can hold personal data, and PostHog, behind our own proxy, keeps it.
 
 #### Scenario: A funnel step reaches Google Analytics
 

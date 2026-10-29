@@ -200,6 +200,13 @@ describe('track → Google Analytics', () => {
     analytics.track('subscribe', { plan: 'pro' });
     expect(lastCommand()).toEqual(['event', 'purchase', { plan: 'pro' }]);
   });
+
+  it('keeps the typed search text out of GA', async () => {
+    const analytics = await freshAnalytics();
+    analytics.initTrackers({ key: '', apiHost: '/ingest' });
+    analytics.track('search', { q: 'jane.doe@example.com', facets: 2 });
+    expect(lastCommand()).toEqual(['event', 'search', { facets: 2 }]);
+  });
 });
 
 describe('isHandoffReferrer', () => {
