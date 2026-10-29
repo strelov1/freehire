@@ -16,7 +16,7 @@ export const messages = defineMessages(
     noCv: {
       title: 'Add your CV to score its ATS readiness',
       bodyLead: 'Upload your CV in',
-      link: 'profile settings',
+      link: 'your profile',
       bodyTail: "to check ATS readability and this role's keywords.",
     },
     filterDescription: "Compare your CV's keyword strength against a role, region or seniority you choose.",
@@ -33,7 +33,7 @@ export const messages = defineMessages(
       noCv: {
         title: 'Добавьте резюме, чтобы оценить его готовность для ATS',
         bodyLead: 'Загрузите резюме в',
-        link: 'настройках профиля',
+        link: 'профиле',
         bodyTail: 'чтобы проверить читаемость для ATS и совпадение с ключевыми словами этой роли.',
       },
       filterDescription: 'Сравните, насколько ключевые слова вашего резюме совпадают с ролью, регионом или уровнем, которые вы выберете.',
