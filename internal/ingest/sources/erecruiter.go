@@ -14,9 +14,12 @@ import (
 // erecruiter adapts eRecruiter Polska public per-company career boards ("Strona Kariera")
 // on skk.erecruiter.pl. The board is the company's cfg (a 32-hex config token embedded in
 // its careers page). The keyless list endpoint returns a JSONP body ({"htm":"<tr…>"}) of
-// offer rows carrying ids and a city cell but no description, so the adapter fetches each
-// offer's Offer.aspx detail page for the body. Boards are paged; page 1's hidden marker row
-// reports the total, giving a clean stop condition.
+// offer rows carrying ids, a title and a city cell but no description, so the body comes from
+// each offer's Offer.aspx detail page. That page is read once, for an offer the catalogue does
+// not hold yet (HydratingSource): a stored offer is re-listed as a SeenRefresh from its row, so
+// a crawl costs its list pages plus one request per NEW offer rather than one per offer —
+// ~160 boards on one host made the per-offer re-read ~8k requests a run. Boards are paged;
+// page 1's hidden marker row reports the total, giving a clean stop condition.
 type erecruiter struct {
 	http erecruiterHTTP
 }
@@ -32,6 +35,8 @@ type erecruiterHTTP interface {
 func NewErecruiter(c erecruiterHTTP) Source { return erecruiter{http: c} }
 
 func (erecruiter) Provider() string { return "erecruiter" }
+
+var _ HydratingSource = erecruiter{}
 
 const (
 	erecruiterBase = "https://skk.erecruiter.pl"
@@ -49,13 +54,22 @@ type erecruiterRow struct {
 	extID    string
 	regionID string
 	comID    string
-	title    string // list position cell — a fallback for the detail's #JobTitle
-	city     string // list city cell — a fallback for the detail's #WorkPlace
+	title    string // list position cell — a SeenRefresh title, and a fallback for #JobTitle
+	city     string // list city cell — a SeenRefresh location, and a fallback for #WorkPlace
 }
 
+// Fetch is the list-only fallback HydratingSource specifies for a caller with no seen set: it
+// hydrates every listed offer. FetchNew is the path ingest drives.
 func (e erecruiter) Fetch(ctx context.Context, entry CompanyEntry) ([]Job, error) {
+	return e.FetchNew(ctx, entry, func(string) bool { return false })
+}
+
+// FetchNew walks the board's list pages and fetches a detail page only for an offer the
+// catalogue does not hold. A seen offer yields its list row alone, flagged SeenRefresh, so the
+// pipeline refreshes its liveness without a request and without overwriting the stored body.
+func (e erecruiter) FetchNew(ctx context.Context, entry CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	var jobs []Job
-	total, seen := -1, 0 // total is unknown until page 1's marker row
+	total, listed := -1, 0 // total is unknown until page 1's marker row
 	for page := 1; page <= erecruiterMaxPages; page++ {
 		url := fmt.Sprintf("%s/GetHtml.ashx?cfg=%s&grid=rows&pn=%d", erecruiterBase, entry.Board, page)
 		body, err := e.http.GetText(ctx, url)
@@ -73,23 +87,40 @@ func (e erecruiter) Fetch(ctx context.Context, entry CompanyEntry) ([]Job, error
 			break // ran out of offers (an empty page or a marker-only past-the-end page)
 		}
 		for _, r := range rows {
+			if seen(r.offerID) {
+				jobs = append(jobs, Job{
+					ExternalID:  r.offerID,
+					URL:         erecruiterOfferURL(r, entry.Board),
+					Title:       r.title,
+					Company:     entry.Company,
+					Location:    r.city,
+					SeenRefresh: true,
+				})
+				continue
+			}
 			if j, ok := e.toJob(ctx, r, entry); ok {
 				jobs = append(jobs, j)
 			}
 		}
-		if seen += len(rows); total >= 0 && seen >= total {
+		if listed += len(rows); total >= 0 && listed >= total {
 			break
 		}
 	}
 	return jobs, nil
 }
 
+// erecruiterOfferURL is an offer's Offer.aspx detail URL — the page a hydration reads and the
+// URL every path stores, so a refresh and a hydration agree on it.
+func erecruiterOfferURL(r erecruiterRow, cfg string) string {
+	return fmt.Sprintf("%s/Offer.aspx?oid=%s&cfg=%s&ejoId=%s&ejorId=%s&comId=%s",
+		erecruiterBase, r.offerID, cfg, r.extID, r.regionID, r.comID)
+}
+
 // toJob fetches a row's Offer.aspx detail and maps it to a Job, returning ok=false when the
 // detail is unreachable or lacks a title/description (a dead or closed offer) — such a
 // posting is skipped without aborting the board.
 func (e erecruiter) toJob(ctx context.Context, r erecruiterRow, entry CompanyEntry) (Job, bool) {
-	url := fmt.Sprintf("%s/Offer.aspx?oid=%s&cfg=%s&ejoId=%s&ejorId=%s&comId=%s",
-		erecruiterBase, r.offerID, entry.Board, r.extID, r.regionID, r.comID)
+	url := erecruiterOfferURL(r, entry.Board)
 	root, err := e.http.GetHTML(ctx, url)
 	if err != nil {
 		return Job{}, false
@@ -304,8 +335,7 @@ func ProbeErecruiterBoard(ctx context.Context, http TextGetter, cfg string) (com
 		offers = total
 	}
 	r := rows[0]
-	page, err := http.GetText(ctx, fmt.Sprintf("%s/Offer.aspx?oid=%s&cfg=%s&ejoId=%s&ejorId=%s&comId=%s",
-		erecruiterBase, r.offerID, cfg, r.extID, r.regionID, r.comID))
+	page, err := http.GetText(ctx, erecruiterOfferURL(r, cfg))
 	if err != nil {
 		return "", offers, nil
 	}

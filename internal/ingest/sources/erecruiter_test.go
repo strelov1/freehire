@@ -279,3 +279,91 @@ func TestProbeErecruiterBoardKeepsALiveBoardWithoutAName(t *testing.T) {
 		t.Errorf("company/offers/err = %q/%d/%v, want \"\"/1/nil", company, offers, err)
 	}
 }
+
+// erecruiterRealFake serves the Echo Investment board as captured live on 2026-10-29: three
+// list pages (31 offers, the marker row stating tr=31) and the detail page of offer 5015393.
+func erecruiterRealFake(t *testing.T) *erecruiterFake {
+	t.Helper()
+	read := func(name string) string {
+		b, err := os.ReadFile("testdata/erecruiter/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	return &erecruiterFake{
+		list: map[string]string{
+			"pn=1": read("echo_list_p1.jsonp"),
+			"pn=2": read("echo_list_p2.jsonp"),
+			"pn=3": read("echo_list_p3.jsonp"),
+		},
+		detail: map[string]string{"oid=5015393": read("echo_offer_5015393.html")},
+	}
+}
+
+func TestErecruiterIsHydrating(t *testing.T) {
+	if _, ok := NewErecruiter(nil).(HydratingSource); !ok {
+		t.Fatal("erecruiter must be a HydratingSource: ~160 boards re-reading every detail is ~8k requests a run to one host")
+	}
+}
+
+// A seen offer costs no detail request: it comes back as a SeenRefresh carrying the list row's
+// identity, title and city, while only the one unseen offer is hydrated from its detail page.
+func TestErecruiterFetchNewHydratesOnlyUnseen(t *testing.T) {
+	const board = "4D3DD27FCA3D40C79E01BEE9745902B7"
+	fake := erecruiterRealFake(t)
+	hs, ok := NewErecruiter(fake).(HydratingSource)
+	if !ok {
+		t.Fatal("erecruiter is not a HydratingSource")
+	}
+	jobs, err := hs.FetchNew(context.Background(),
+		CompanyEntry{Company: "Echo Investment", Provider: "erecruiter", Board: board},
+		func(id string) bool { return id != "5015393" })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 31 {
+		t.Fatalf("len(jobs) = %d, want 31 (every listed offer, seen or not)", len(jobs))
+	}
+	if fake.detailCalls != 1 {
+		t.Errorf("detailCalls = %d, want 1 (only the unseen offer)", fake.detailCalls)
+	}
+	if fake.listCalls != 3 {
+		t.Errorf("listCalls = %d, want 3 (31 offers at 15 a page)", fake.listCalls)
+	}
+
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	fresh, ok := byID["5015393"]
+	if !ok || fresh.SeenRefresh {
+		t.Fatalf("offer 5015393 = %+v, want a hydrated (non-refresh) job", fresh)
+	}
+	if fresh.Description == "" || fresh.Title == "" {
+		t.Errorf("hydrated offer lacks title/body: %+v", fresh)
+	}
+
+	// 5015394 is the Warszawa variant of the same role (shared externalJobOfferId 625767).
+	ref, ok := byID["5015394"]
+	if !ok {
+		t.Fatal("seen offer 5015394 missing: a seen posting must still be yielded so its liveness is touched")
+	}
+	if !ref.SeenRefresh || ref.Description != "" {
+		t.Errorf("seen offer = %+v, want a body-less SeenRefresh", ref)
+	}
+	if ref.Title != "Młodszy Specjalista/Młodsza Specjalistka ds. ESG" || ref.Location != "Warszawa" || ref.Company != "Echo Investment" {
+		t.Errorf("seen offer identity = title %q location %q company %q", ref.Title, ref.Location, ref.Company)
+	}
+	// The refresh's URL is the same detail URL a hydrated row stores, so nothing about the
+	// stored identity moves.
+	wantURL := "https://skk.erecruiter.pl/Offer.aspx?oid=5015394&cfg=" + board + "&ejoId=625767&ejorId=323317&comId=20002054"
+	if ref.URL != wantURL {
+		t.Errorf("seen offer URL = %q, want %q", ref.URL, wantURL)
+	}
+	for _, j := range jobs {
+		if j.ExternalID != "5015393" && !j.SeenRefresh {
+			t.Errorf("offer %s was hydrated though seen", j.ExternalID)
+		}
+	}
+}

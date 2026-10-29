@@ -39,6 +39,13 @@ addressed by those id fields plus the board `cfg`.
 - **THEN** the resulting `Job` carries the posting's full sanitized description and the
   `Offer.aspx` URL as its canonical detail URL
 
+#### Scenario: Stored offer is not re-read
+
+- **WHEN** the crawl lists an offer the catalogue already holds for that board
+- **THEN** the adapter fetches no detail page for it and yields the list row as a
+  `SeenRefresh` (same `ExternalID` and `Offer.aspx` URL), so its liveness is refreshed
+  while its stored body is kept
+
 #### Scenario: Detail page missing
 
 - **WHEN** a posting's detail page is gone (the row references a closed offer)
