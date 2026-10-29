@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AccountTimezone from '#lib/components/AccountTimezone.svelte';
   import LocationCard from '#lib/components/profile/LocationCard.svelte';
   import { profileStore } from '#lib/profile.svelte.js';
   import { handleSaved } from '../actions';
@@ -15,3 +16,11 @@
     <LocationCard {profile} onProfileChanged={handleSaved} />
   {/key}
 {/if}
+
+<!-- The timezone belongs with where the candidate is: the Talent Network card shows it, and
+     digests and quiet hours are read in it. Outside the `{#key}` above, so a profile refresh
+     never remounts it mid-pick. `account-timezone` is the target of the notification
+     settings' "set your timezone" hint. -->
+<div id="account-timezone" class="mt-8 scroll-mt-20 border-t border-border pt-6">
+  <AccountTimezone />
+</div>
