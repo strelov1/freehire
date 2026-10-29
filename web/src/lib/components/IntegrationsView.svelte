@@ -252,36 +252,6 @@
   const CONNECTED_BADGE_CLASS = 'border-brand-ring/40 text-brand-strong';
 </script>
 
-{#snippet googleConsentRow(
-  label: string,
-  connected: boolean,
-  connectedText: string,
-  disconnectedText: string,
-  connectHref: string,
-)}
-  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-    <div class="min-w-0">
-      <div class="flex items-center gap-1.5 text-sm">
-        <CalendarDays class="h-3.5 w-3.5 text-muted-foreground" />
-        {label}
-        {#if connected}
-          <Badge variant="outline" class={CONNECTED_BADGE_CLASS}>Connected</Badge>
-        {/if}
-      </div>
-      <p class="text-xs text-muted-foreground">{connected ? connectedText : disconnectedText}</p>
-    </div>
-    {#if !connected && gmail?.available}
-      <!-- eslint-disable svelte/no-navigation-without-resolve -- an API route the browser must navigate to so Google can redirect it back, not a SvelteKit page to resolve -->
-      <a
-        href={connectHref}
-        class="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-        >Connect</a
-      >
-      <!-- eslint-enable svelte/no-navigation-without-resolve -->
-    {/if}
-  </div>
-{/snippet}
-
 <div class="flex flex-col gap-4">
   <div class="flex flex-col gap-1">
     <h2 class="text-lg font-semibold tracking-tight">Connected accounts</h2>
@@ -350,13 +320,35 @@
 
         <!-- Calendar: a separate consent from Mail, so it needs its own status and its own
              connect. One consent for every calendar use, candidate and mentor alike. -->
-        {@render googleConsentRow(
-          'Calendar',
-          hasCalendar,
-          'Accepted interviews appear on the Tracking calendar. Mentors get a Meet link on every booking, and their busy time stays out of their slots.',
-          'Show accepted interviews on the Tracking calendar. For mentors: a Meet link on every booking, and your busy time kept out of your slots.',
-          '/api/v1/me/calendar/connect',
-        )}
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5 text-sm">
+              <CalendarDays class="h-3.5 w-3.5 text-muted-foreground" />
+              Calendar
+              {#if hasCalendar}
+                <Badge variant="outline" class={CONNECTED_BADGE_CLASS}>Connected</Badge>
+              {/if}
+            </div>
+            <p class="text-xs text-muted-foreground">
+              {#if hasCalendar}
+                Accepted interviews appear on the Tracking calendar. Mentors get a Meet link on
+                every booking, and their busy time stays out of their slots.
+              {:else}
+                Show accepted interviews on the Tracking calendar. For mentors: a Meet link on
+                every booking, and your busy time kept out of your slots.
+              {/if}
+            </p>
+          </div>
+          {#if !hasCalendar && gmail?.available}
+            <!-- eslint-disable svelte/no-navigation-without-resolve -- an API route the browser must navigate to so Google can redirect it back, not a SvelteKit page to resolve -->
+            <a
+              href="/api/v1/me/calendar/connect"
+              class="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+              >Connect</a
+            >
+            <!-- eslint-enable svelte/no-navigation-without-resolve -->
+          {/if}
+        </div>
       </div>
     {/if}
 
