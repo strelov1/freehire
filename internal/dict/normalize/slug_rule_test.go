@@ -13,6 +13,7 @@ func TestSlugPredatesRule(t *testing.T) {
 		{"oldco", "NewCo", false},              // renamed: no rule made this slug of this name
 		{"acme-p", "Acme Pvt Ltd", false},      // cut inside a word
 		{"acme-holdings", "Acme Pvt Ltd", false},
+		{"ac-me", "Acme", false}, // the rule changes nothing here, so another spelling did
 	} {
 		if got := SlugPredatesRule(tc.stored, tc.name); got != tc.want {
 			t.Errorf("SlugPredatesRule(%q, %q) = %v, want %v", tc.stored, tc.name, got, tc.want)

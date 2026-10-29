@@ -29,8 +29,14 @@ func SlugPredatesRule(stored, name string) bool {
 	if derived == stored {
 		return false
 	}
-	folded := FoldSlug(stored)
 	plain := Slug(name)
+	if derived == plain {
+		// The rule makes nothing of this name that Slug does not, so it cannot be what moved
+		// the stored slug: one that differs (even only in word breaks, "ac-me" for "Acme")
+		// came from another spelling of the name — a judgement, not the rule.
+		return false
+	}
+	folded := FoldSlug(stored)
 	if folded == FoldSlug(plain) {
 		return true
 	}

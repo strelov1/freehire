@@ -553,10 +553,25 @@ func (m *movedSlugs) add(from, to, name string) {
 }
 
 // qualifiedAliases is called only after the pool has joined.
+//
+// A folded key the run would point at two DIFFERENT canons drops every alias on it: ingest
+// resolves a spelling by that key, and one key must name one canon. The statement guards the
+// registry's existing rows, but not two rows arriving in the same batch.
 func (m *movedSlugs) qualifiedAliases() []slugAlias {
+	canonOf := map[string]string{}
+	conflicted := map[string]bool{}
+	for _, a := range m.aliases {
+		if a == nil {
+			continue
+		}
+		if c, seen := canonOf[a.FoldedKey]; seen && c != a.Canonical {
+			conflicted[a.FoldedKey] = true
+		}
+		canonOf[a.FoldedKey] = a.Canonical
+	}
 	var out []slugAlias
 	for _, a := range m.aliases {
-		if a != nil {
+		if a != nil && !conflicted[a.FoldedKey] {
 			out = append(out, *a)
 		}
 	}

@@ -174,6 +174,11 @@ func TestMovedSlugsAliasEligibility(t *testing.T) {
 	m.add("gamma-pvt", "gamma", "Gamma Pvt Ltd")
 	m.add("gamma-pvt", "delta", "Delta")
 
+	// Same folded key, two canons: "Zeta Pvt Ltd" and "Ze Ta Pvt Ltd" both key at "zeta"
+	// but slug apart, so neither redirect is recorded.
+	m.add("zeta-pvt", "zeta", "Zeta Pvt Ltd")
+	m.add("ze-ta-pvt", "ze-ta", "Ze Ta Pvt Ltd")
+
 	got := m.qualifiedAliases()
 	want := []slugAlias{{Alias: "acme-pvt", Canonical: "acme", FoldedKey: "acme"}}
 	if !reflect.DeepEqual(got, want) {
