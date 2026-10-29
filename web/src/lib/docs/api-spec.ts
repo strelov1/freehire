@@ -136,8 +136,8 @@ export const OVERVIEW: Overview[] = [
       'With a full-access key the budget is per account instead, shared by all of its ' +
         'full-access keys and by the access tokens of its signed-in MCP and CLI ' +
         "connections, and its size is the account's tier: Pro and Ultra raise it, and the " +
-        '[API and Data plans](https://freehire.me/jobs-api) raise it further — by default ' +
-        'with no daily cap — Data the most. ' +
+        '[API and Data plans](https://freehire.me/jobs-api) raise it further. By default ' +
+        'the API and Data plans have no daily cap, and Data has the highest per-minute limit. ' +
         'An embed key is budgeted like no key. `api_limits.tiers` lists every rung in ' +
         'force. Send the key as ' +
         '`Authorization: Bearer <token>`. An API plan also licenses the data for use in ' +
