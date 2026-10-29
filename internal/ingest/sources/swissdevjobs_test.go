@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -14,11 +15,18 @@ type swissdevjobsFake struct {
 	t     *testing.T
 	pages map[string]string
 	fail  bool
+	mu    sync.Mutex
 	gets  []string
 }
 
-func (f *swissdevjobsFake) GetJSON(_ context.Context, u string, v any) error {
+func (f *swissdevjobsFake) record(u string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.gets = append(f.gets, u)
+}
+
+func (f *swissdevjobsFake) GetJSON(_ context.Context, u string, v any) error {
+	f.record(u)
 	if u != swissdevjobsListURL {
 		return &StatusError{Code: 404}
 	}
@@ -30,7 +38,7 @@ func (f *swissdevjobsFake) GetJSON(_ context.Context, u string, v any) error {
 }
 
 func (f *swissdevjobsFake) GetText(_ context.Context, u string) (string, error) {
-	f.gets = append(f.gets, u)
+	f.record(u)
 	if f.fail {
 		return "", &StatusError{Code: 503}
 	}

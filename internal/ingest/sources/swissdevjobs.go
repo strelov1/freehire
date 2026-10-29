@@ -234,7 +234,10 @@ func (s swissdevjobs) detail(ctx context.Context, r swissdevjobsJob) (Job, bool,
 	if err := json.NewDecoder(strings.NewReader(page[i+len(swissdevjobsDetailMarker):])).Decode(&d); err != nil {
 		return Job{}, false, fmt.Errorf("posting state: %w", err)
 	}
-	if d.ID != r.ID || d.Outdated || d.Paused {
+	if d.ID != r.ID {
+		return Job{}, false, fmt.Errorf("page state is posting %q", d.ID)
+	}
+	if d.Outdated || d.Paused {
 		return Job{}, false, nil
 	}
 	body := swissdevjobsBody(d)
