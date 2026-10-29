@@ -10,6 +10,8 @@
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import { profileStore } from '#lib/profile.svelte.js';
+  import { SaveStatus } from '#lib/saveStatus.svelte.js';
+  import SaveStatusLine from '#lib/components/SaveStatus.svelte';
   import { handleCvDeleted, handleCvUploaded, handleSaved } from './actions';
   import { messages } from './messages';
 
@@ -19,6 +21,7 @@
   const s = $derived(t(messages, locale()));
   const profile = $derived(profileStore.profile);
   const resumeMeta = $derived(resumeStore.meta);
+  const locationStatus = new SaveStatus();
 </script>
 
 {#if profile}
@@ -58,11 +61,14 @@
        different value — profileStore.refresh() (CV delete/upload) can replace `profile`
        while this view is open, so key it on `updated_at`. -->
   <section id="account-location" class="mt-8 flex scroll-mt-20 flex-col gap-4 border-t border-border pt-6">
-    <h2 class="flex items-center gap-2 text-base font-semibold">
-      <MapPin class="size-4.5" />{s.headings.location}
-    </h2>
+    <div class="flex items-baseline justify-between gap-3">
+      <h2 class="flex items-center gap-2 text-base font-semibold">
+        <MapPin class="size-4.5" />{s.headings.location}
+      </h2>
+      <SaveStatusLine status={locationStatus} />
+    </div>
     {#key profile.updated_at}
-      <LocationCard {profile} onProfileChanged={handleSaved} />
+      <LocationCard {profile} status={locationStatus} onProfileChanged={handleSaved} />
     {/key}
 
     <!-- The timezone belongs with where the candidate is: the Talent Network card shows it,

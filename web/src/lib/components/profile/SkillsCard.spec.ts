@@ -112,6 +112,7 @@ describe('SkillsCard — Russian locale', () => {
 
     await fireEvent.click(screen.getByTitle('go'));
 
-    expect(screen.getByText('Не удалось обновить go в вашем профиле. Попробуйте ещё раз.')).toBeTruthy();
+    expect(await screen.findByText('Не удалось сохранить go.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Повторить' })).toBeTruthy();
   });
 });

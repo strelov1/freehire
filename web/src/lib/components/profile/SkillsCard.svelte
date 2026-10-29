@@ -5,6 +5,7 @@
   import { profileStore } from '#lib/profile.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
+  import { SaveStatus } from '#lib/saveStatus.svelte.js';
   import { messages } from './SkillsCard.messages';
   import SkillsPicker from './SkillsPicker.svelte';
   import { announce } from '#lib/announce.svelte.js';
@@ -26,8 +27,7 @@
 
   // One write in flight at a time (mirrors JobMatch.svelte): a second toggle started before
   // the first settles would race against a profile row it hasn't seen yet.
-  let pending = $state(false);
-  let failed = $state<string | null>(null);
+  const status = new SaveStatus();
   // Set instead of attempting a doomed write: the server requires at least one skill on
   // every save, not just at creation (normalizeSkills in internal/userprofile), so removing
   // the one skill left would always 400.
@@ -36,35 +36,28 @@
   const isOnlySkill = (skill: string) => skills.length === 1 && skills.includes(skill);
 
   async function toggleSkill(skill: string) {
-    if (pending) return;
+    if (status.saving) return;
     if (skills.includes(skill) && isOnlySkill(skill)) {
       lastSkillBlocked = true;
       announce(s.lastSkillBlocked);
       return;
     }
-    pending = true;
-    failed = null;
     lastSkillBlocked = false;
     const removing = skills.includes(skill);
-    try {
-      await (removing ? profileStore.removeSkill(skill) : profileStore.addSkill(skill));
-      onProfileChanged?.();
-      announce(format(removing ? s.removed : s.added, { skill }));
-    } catch {
-      failed = skill;
-      announce(format(s.saveFailed, { skill }), 'assertive');
-    } finally {
-      pending = false;
-    }
+    await status.run(
+      async () => {
+        await (removing ? profileStore.removeSkill(skill) : profileStore.addSkill(skill));
+        onProfileChanged?.();
+      },
+      { saved: format(removing ? s.removed : s.added, { skill }), failed: format(s.saveFailed, { skill }) },
+    );
   }
 </script>
 
 <div class="flex flex-col gap-4">
-  <SkillsPicker {skills} onToggleSkill={toggleSkill} busy={pending} />
+  <SkillsPicker {skills} onToggleSkill={toggleSkill} busy={status.saving} {status} />
 
   {#if lastSkillBlocked}
     <p class="text-sm text-muted-foreground">{s.lastSkillBlocked}</p>
-  {:else if failed}
-    <p class="text-sm text-destructive">{format(s.saveFailed, { skill: failed })}</p>
   {/if}
 </div>

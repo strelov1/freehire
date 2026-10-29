@@ -12,8 +12,10 @@
   import type { FacetOption } from '#lib/facets.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
+  import type { SaveStatus } from '#lib/saveStatus.svelte.js';
   import { messages } from './SkillsPicker.messages';
   import RemoteSearchSelect from '../facets/RemoteSearchSelect.svelte';
+  import SaveStatusLine from '../SaveStatus.svelte';
 
   const s = $derived(t(messages, locale()));
 
@@ -21,10 +23,14 @@
     skills,
     onToggleSkill,
     busy = false,
+    status,
   }: {
     skills: string[];
     onToggleSkill: (skill: string) => void;
     busy?: boolean;
+    /** The autosaving Skills view's save state, shown on the label row. Set-up saves
+     *  with the whole form, so it passes none. */
+    status?: SaveStatus;
   } = $props();
 
   let skillDist = $state.raw<FacetOption[]>([]);
@@ -47,7 +53,10 @@
 <div class="flex flex-col gap-2 {busy ? 'pointer-events-none opacity-60' : ''}">
   <div class="flex items-baseline justify-between">
     <span class="text-sm font-medium">{s.heading}</span>
-    <span class="text-xs tabular-nums text-muted-foreground">{skills.length}</span>
+    <span class="flex items-baseline gap-3">
+      {#if status}<SaveStatusLine {status} />{/if}
+      <span class="text-xs tabular-nums text-muted-foreground">{skills.length}</span>
+    </span>
   </div>
   <RemoteSearchSelect
     search={searchSkills}

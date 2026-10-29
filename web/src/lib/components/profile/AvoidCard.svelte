@@ -9,7 +9,9 @@
   import { loadSkillDistribution, searchSkillOptions } from '#lib/skillDictionary.js';
   import { loadSourceDistribution } from '#lib/sourceDictionary.js';
   import { profileStore } from '#lib/profile.svelte.js';
+  import { SaveStatus } from '#lib/saveStatus.svelte.js';
   import RemoteSearchSelect from '../facets/RemoteSearchSelect.svelte';
+  import SaveStatusLine from '../SaveStatus.svelte';
   import { messages } from './AvoidCard.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
@@ -32,45 +34,50 @@
   const excludedSources = $derived(profileStore.profile?.excluded_sources ?? []);
   const excludedCompanies = $derived(profileStore.profile?.excluded_companies ?? []);
 
-  // One write in flight at a time, mirroring SkillsCard: a second toggle started before
-  // the first settles would race against a profile row it hasn't seen yet.
-  let pending = $state(false);
-  let failed = $state<string | null>(null);
+  // Each list reports on its own heading. Writes still go one at a time across all three,
+  // mirroring SkillsCard: they all replace the same profile row, so a second toggle started
+  // before the first settles would race against a row it hasn't seen yet.
+  const skillsStatus = new SaveStatus();
+  const sourcesStatus = new SaveStatus();
+  const companiesStatus = new SaveStatus();
+  const pending = $derived(skillsStatus.saving || sourcesStatus.saving || companiesStatus.saving);
 
   // Builds one list's toggle handler: avoid a value not yet excluded, unavoid one already
   // there. `list` is read lazily (a closure, not a captured array) so it always sees the
   // current profile, not the value at the time the handler was built.
   function makeToggle(
+    status: SaveStatus,
     list: () => string[],
     avoid: (v: string) => Promise<unknown>,
     unavoid: (v: string) => Promise<unknown>,
   ) {
     return async (value: string) => {
       if (pending) return;
-      pending = true;
-      failed = null;
-      try {
-        await (list().includes(value) ? unavoid(value) : avoid(value));
-        onProfileChanged?.();
-      } catch {
-        failed = value;
-      } finally {
-        pending = false;
-      }
+      const removing = list().includes(value);
+      await status.run(
+        async () => {
+          await (removing ? unavoid(value) : avoid(value));
+          onProfileChanged?.();
+        },
+        { failed: format(s.updateFailed, { value }) },
+      );
     };
   }
 
   const toggleExcludedSkill = makeToggle(
+    skillsStatus,
     () => excludedSkills,
     (v) => profileStore.avoidSkill(v),
     (v) => profileStore.unavoidSkill(v),
   );
   const toggleExcludedSource = makeToggle(
+    sourcesStatus,
     () => excludedSources,
     (v) => profileStore.avoidSource(v),
     (v) => profileStore.unavoidSource(v),
   );
   const toggleExcludedCompany = makeToggle(
+    companiesStatus,
     () => excludedCompanies,
     (v) => profileStore.avoidCompany(v),
     (v) => profileStore.unavoidCompany(v),
@@ -113,7 +120,10 @@
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
       <span class="text-sm font-medium">{s.skillsHeading}</span>
-      <span class="text-xs tabular-nums text-muted-foreground">{excludedSkills.length}</span>
+      <span class="flex items-baseline gap-3">
+        <SaveStatusLine status={skillsStatus} />
+        <span class="text-xs tabular-nums text-muted-foreground">{excludedSkills.length}</span>
+      </span>
     </div>
     <RemoteSearchSelect
       search={searchSkills}
@@ -131,7 +141,10 @@
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
       <span class="text-sm font-medium">{s.sourcesHeading}</span>
-      <span class="text-xs tabular-nums text-muted-foreground">{excludedSources.length}</span>
+      <span class="flex items-baseline gap-3">
+        <SaveStatusLine status={sourcesStatus} />
+        <span class="text-xs tabular-nums text-muted-foreground">{excludedSources.length}</span>
+      </span>
     </div>
     <RemoteSearchSelect
       search={searchSources}
@@ -148,7 +161,10 @@
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
       <span class="text-sm font-medium">{s.companiesHeading}</span>
-      <span class="text-xs tabular-nums text-muted-foreground">{excludedCompanies.length}</span>
+      <span class="flex items-baseline gap-3">
+        <SaveStatusLine status={companiesStatus} />
+        <span class="text-xs tabular-nums text-muted-foreground">{excludedCompanies.length}</span>
+      </span>
     </div>
     <RemoteSearchSelect
       search={companySearch}
@@ -161,7 +177,4 @@
     />
   </div>
 
-  {#if failed}
-    <p class="text-sm text-destructive">{format(s.updateFailed, { value: failed })}</p>
-  {/if}
 </div>

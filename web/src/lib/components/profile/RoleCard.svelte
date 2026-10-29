@@ -6,8 +6,10 @@
   import { CATEGORY_OPTIONS } from '#lib/facets.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
+  import { SaveStatus } from '#lib/saveStatus.svelte.js';
   import type { UserProfile } from '#lib/types.js';
   import SearchSelect from '../facets/SearchSelect.svelte';
+  import SaveStatusLine from '../SaveStatus.svelte';
   import SeniorityPills from './SeniorityPills.svelte';
 
   let {
@@ -21,13 +23,14 @@
     onProfileChanged?: () => void;
   } = $props();
 
+  // Each half saves on its own, so each reports on its own label row. `specError` is the
+  // limit check that stops a toggle before any write; a failed write is the status's.
   let specError = $state<string | null>(null);
-  let specBusy = $state(false);
-  let levelError = $state<string | null>(null);
-  let levelBusy = $state(false);
+  const specStatus = new SaveStatus();
+  const levelStatus = new SaveStatus();
 
   async function toggleSpecialization(value: string) {
-    if (specBusy) return;
+    if (specStatus.saving) return;
     const has = profile.specializations.includes(value);
     if (has && profile.specializations.length === 1) {
       specError = 'You need at least one role — add another before removing this one.';
@@ -38,18 +41,13 @@
       return;
     }
     specError = null;
-    specBusy = true;
     const next = has
       ? profile.specializations.filter((s) => s !== value)
       : [...profile.specializations, value];
-    try {
+    await specStatus.run(async () => {
       await profileStore.updateSpecializations(next);
       onProfileChanged?.();
-    } catch {
-      specError = 'Could not update your role. Try again.';
-    } finally {
-      specBusy = false;
-    }
+    });
   }
 
   // Level is a free multi-select with no floor, unlike the specializations above: someone
@@ -58,20 +56,14 @@
   // the wizard's answer permanent. The account-setup card simply re-opens its step when the
   // list empties, which is the honest reading of "no level stated".
   async function toggleSeniority(value: string) {
-    if (levelBusy) return;
-    levelError = null;
-    levelBusy = true;
+    if (levelStatus.saving) return;
     const next = profile.seniorities.includes(value)
       ? profile.seniorities.filter((s) => s !== value)
       : [...profile.seniorities, value];
-    try {
+    await levelStatus.run(async () => {
       await profileStore.updateSeniorities(next);
       onProfileChanged?.();
-    } catch {
-      levelError = 'Could not update your level. Try again.';
-    } finally {
-      levelBusy = false;
-    }
+    });
   }
 </script>
 
@@ -83,11 +75,14 @@
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
       <span class="text-sm font-medium">Roles</span>
-      <span class="text-xs tabular-nums text-muted-foreground">
-        {profile.specializations.length}/{MAX_SPECIALIZATIONS}
+      <span class="flex items-baseline gap-3">
+        <SaveStatusLine status={specStatus} />
+        <span class="text-xs tabular-nums text-muted-foreground">
+          {profile.specializations.length}/{MAX_SPECIALIZATIONS}
+        </span>
       </span>
     </div>
-    <div class={specBusy ? 'pointer-events-none opacity-60' : ''}>
+    <div class={specStatus.saving ? 'pointer-events-none opacity-60' : ''}>
       <SearchSelect
         options={CATEGORY_OPTIONS}
         include={profile.specializations}
@@ -107,11 +102,11 @@
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
       <span class="text-sm font-medium">Level</span>
-      <span class="text-xs text-muted-foreground">Pick every level you'd take</span>
+      <span class="flex items-baseline gap-3">
+        <SaveStatusLine status={levelStatus} />
+        <span class="text-xs text-muted-foreground">Pick every level you'd take</span>
+      </span>
     </div>
-    <SeniorityPills selected={profile.seniorities} onToggle={toggleSeniority} busy={levelBusy} />
-    {#if levelError}
-      <p class="text-xs text-destructive">{levelError}</p>
-    {/if}
+    <SeniorityPills selected={profile.seniorities} onToggle={toggleSeniority} busy={levelStatus.saving} />
   </div>
 </div>

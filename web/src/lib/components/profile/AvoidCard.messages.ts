@@ -8,7 +8,7 @@ export const messages = defineMessages(
     sourcesPlaceholder: 'Search sources to exclude',
     companiesHeading: 'Companies to avoid',
     companiesPlaceholder: 'Search companies to exclude',
-    updateFailed: 'Could not update {value} in your profile. Try again.',
+    updateFailed: "Couldn't save {value}.",
   },
   {
     ru: {
@@ -18,7 +18,7 @@ export const messages = defineMessages(
       sourcesPlaceholder: 'Найдите источник, чтобы исключить',
       companiesHeading: 'Компании для исключения',
       companiesPlaceholder: 'Найдите компанию, чтобы исключить',
-      updateFailed: 'Не удалось обновить «{value}» в профиле. Попробуйте ещё раз.',
+      updateFailed: 'Не удалось сохранить «{value}».',
     },
   },
 );

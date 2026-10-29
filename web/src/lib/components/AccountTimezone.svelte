@@ -1,11 +1,10 @@
 <script lang="ts">
-  import { Check } from '@lucide/svelte';
   import { currentUser, updateTimezone } from '#lib/auth.svelte.js';
-  import { ApiError } from '#lib/api.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
+  import { SaveStatus } from '#lib/saveStatus.svelte.js';
+  import SaveStatusLine from './SaveStatus.svelte';
   import { messages } from './AccountTimezone.messages';
-  import { announce } from '#lib/announce.svelte.js';
 
   const s = $derived(t(messages, locale()));
   // Names the <select> after the visible heading — it has no <label> of its own.
@@ -41,12 +40,7 @@
   }
 
   let value = $state(currentUser()?.timezone ?? detected);
-  let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  // The server's own message when it gave one; `null` means the generic fallback,
-  // resolved from `s` at render time so it follows a later locale change instead
-  // of freezing in whatever locale was resolved when the save failed.
-  let saveErrorMessage = $state<string | null>(null);
-  let savedTimer: ReturnType<typeof setTimeout> | undefined;
+  const status = new SaveStatus();
 
   // Re-seed from the session on a real identity change (sign-in/out, or this
   // component's own save round-tripping through invalidateAll) — keyed on email
@@ -94,24 +88,9 @@
   });
 
   async function save() {
-    if (!value) return;
-    saveState = 'saving';
-    saveErrorMessage = null;
-    try {
-      await updateTimezone(value);
-      if (destroyed) return;
-      saveState = 'saved';
-      announce(s.saved);
-      clearTimeout(savedTimer);
-      savedTimer = setTimeout(() => {
-        if (saveState === 'saved') saveState = 'idle';
-      }, 1500);
-    } catch (e) {
-      if (destroyed) return;
-      saveState = 'error';
-      saveErrorMessage = e instanceof ApiError ? e.message : null;
-      announce(saveErrorMessage ?? s.saveFailed, 'assertive');
-    }
+    const zone = value;
+    if (!zone) return;
+    await status.run(() => updateTimezone(zone), {}, destroyed);
   }
 </script>
 
@@ -127,13 +106,7 @@
       </p>
     </div>
 
-    {#if saveState === 'saving'}
-      <span class="text-xs text-muted-foreground">{s.saving}</span>
-    {:else if saveState === 'saved'}
-      <span class="flex items-center gap-1 text-xs text-brand-strong"><Check class="size-3.5" aria-hidden="true" /> {s.saved}</span>
-    {:else if saveState === 'error'}
-      <span class="text-xs text-destructive">{saveErrorMessage ?? s.saveFailed}</span>
-    {/if}
+    <SaveStatusLine {status} />
   </div>
 
   <select
