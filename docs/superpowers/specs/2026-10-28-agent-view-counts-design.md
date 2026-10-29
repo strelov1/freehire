@@ -35,13 +35,15 @@ One event per served response, from these call sites:
 
 | Surface (`surface`) | Search (`kind=search`) | Detail (`kind=detail`) |
 |---|---|---|
-| `mcp` — `/mcp` (`internal/api/handler/mcpapp.go`) | `search_jobs`, `similar_jobs` | `get_job` |
+| `mcp` — `/mcp` (`internal/api/handler/mcpapp.go`) | `search_jobs` | `get_job` |
 | `mcp_account` — `/mcp/account` (`assistant_tools.go`) | `search_jobs` | `get_job` |
 | `ojcp` — `/ojcp/v1/*` and `/ojcp/mcp` (`ojcp.go`) | `search` | `get_job_detail` |
 | `agent_api` — `/api/v1/agent/jobs/search` (`agent_search.go`) | yes | — |
 
 `check_jobs_open`, `my_jobs` and `subscription_updates` are not logged: the first
 returns status only, the other two return the caller's own saved state.
+`similar_jobs` is not logged either: its projection carries no job id, and threading
+one through for a single neighbours tool is not worth it yet.
 
 The `/api/v1/agent/jobs/search` hook sits in `agentSearch`, not in the shared
 `runJobSearch`, which also serves the SPA.
@@ -51,17 +53,30 @@ The `/api/v1/agent/jobs/search` hook sits in `agentSearch`, not in the shared
 JSON Lines, one object per event:
 
 ```json
-{"ts":"2026-10-28T14:03:11Z","kind":"search","surface":"mcp","viewer":"ip:203.0.113.7|ua:Claude-User","client":"claude-ai","job_ids":[123,456]}
+{"ts":"2026-10-28T14:03:11Z","kind":"search","surface":"mcp","viewer":"ip:203.0.113.7|ua:Claude-User","job_ids":[123,456]}
 ```
 
 - `viewer` is the dedup identity: `user:<id>` when the caller is signed in
   (`/mcp/account`, a key on `agent_api`), otherwise the client IP (`c.IP()`, which
   already resolves `X-Real-IP` from the trusted proxy) plus User-Agent, the same
   pair the nginx rollup dedups on.
-- `client` is the MCP `clientInfo.name` when the call carries one, else empty. It
-  is for analysis only and is not part of the dedup key.
+- There is no MCP client-name field. Both MCP servers are stateless, so the
+  `initialize` call's `clientInfo` is gone by the time a tool runs; the User-Agent
+  inside `viewer` already names the client (`Claude-User`, `openai-mcp`).
 - Job ids, not slugs: every call site already holds the id, and the rollup then
   needs no slug lookup.
+
+## How a call site knows it is an agent
+
+A Fiber middleware on each agent route stores a *scope* — the writer, the surface
+and the viewer — in the request's fasthttp user values (`c.Context().SetUserValue`).
+`fasthttp.RequestCtx` is a `context.Context` whose `Value` reads those user values,
+and `adaptor.HTTPHandler` passes that same context into the net/http request the MCP
+SDK serves, so the scope reaches a tool handler without any parameter threading.
+Call sites call `agentview.Record(ctx, kind, ids)`, which does nothing when the
+context carries no scope. That is what keeps the in-app assistant (which shares
+`search_jobs`/`get_job` with `/mcp/account`) and every non-agent route out of the
+log without a flag.
 
 ## Writer
 
