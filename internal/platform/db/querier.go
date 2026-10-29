@@ -3259,6 +3259,10 @@ type Querier interface {
 	//   * the same two rules hold WITHIN the batch, which the registry checks cannot see.
 	//   * the canon must have a companies row, or the 301 lands on a 404 (a canon carried only by
 	//     private rows gets none from InsertMissingCompaniesForSlugs).
+	//   * the old slug must carry no job at all. The pass decides from the rows IT saw, and a
+	//     bounded or stopped one (a window, a resume point, the closed-within cutoff) may not have
+	//     seen them all — an unvisited row could be another employer's. Only an emptied slug is
+	//     fully accounted for, and a slug still holding rows needs no redirect: its page exists.
 	InsertDerivedCompanySlugAliases(ctx context.Context, arg InsertDerivedCompanySlugAliasesParams) (int64, error)
 	// The only insert. A claim already banked with a stronger provenance than
 	// agent_inferred is never touched — ON CONFLICT DO NOTHING behavior for every case

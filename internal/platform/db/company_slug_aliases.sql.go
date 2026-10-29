@@ -87,6 +87,7 @@ WHERE a.alias_slug <> a.canonical_slug
   AND NOT EXISTS (SELECT 1 FROM batch b
                   WHERE b.canonical_slug = a.alias_slug OR b.alias_slug = a.canonical_slug)
   AND EXISTS (SELECT 1 FROM companies c WHERE c.slug = a.canonical_slug)
+  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = a.alias_slug)
   AND NOT EXISTS (SELECT 1 FROM company_slug_aliases x WHERE x.canonical_slug = a.alias_slug)
   AND NOT EXISTS (SELECT 1 FROM company_slug_aliases x WHERE x.alias_slug = a.canonical_slug)
   AND NOT EXISTS (SELECT 1 FROM company_slug_aliases x
@@ -115,6 +116,10 @@ type InsertDerivedCompanySlugAliasesParams struct {
 //   - the same two rules hold WITHIN the batch, which the registry checks cannot see.
 //   - the canon must have a companies row, or the 301 lands on a 404 (a canon carried only by
 //     private rows gets none from InsertMissingCompaniesForSlugs).
+//   - the old slug must carry no job at all. The pass decides from the rows IT saw, and a
+//     bounded or stopped one (a window, a resume point, the closed-within cutoff) may not have
+//     seen them all — an unvisited row could be another employer's. Only an emptied slug is
+//     fully accounted for, and a slug still holding rows needs no redirect: its page exists.
 func (q *Queries) InsertDerivedCompanySlugAliases(ctx context.Context, arg InsertDerivedCompanySlugAliasesParams) (int64, error) {
 	result, err := q.db.Exec(ctx, insertDerivedCompanySlugAliases, arg.AliasSlugs, arg.CanonicalSlugs, arg.FoldedKeys)
 	if err != nil {
