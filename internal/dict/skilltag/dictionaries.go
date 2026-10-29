@@ -1028,6 +1028,9 @@ var wordAliases = map[string]string{
 // "react native", "spring boot", expressjs, "ruby on rails"), so a genuinely-named
 // stack is never gated. Membership is per-alias, not per-canonical; value is unused.
 var ambiguousWords = map[string]bool{
+	// Polish "konteneryzacja" containerizes freight as well as software ("konteneryzacja
+	// ładunków"), so it needs a technical token beside it.
+	"konteneryzacja": true, "konteneryzacji": true, "konteneryzacją": true, "konteneryzację": true,
 	// English-word collisions
 	"react":     true,
 	"swift":     true,
@@ -1848,14 +1851,18 @@ var engineeringPhraseAliases = []phraseAlias{
 	// requirement's own cases stay), bare "sztuczna inteligencja" and
 	// "cyberbezpieczeństwo" (an employer's pitch or sector more often than the craft, as
 	// in French), and "bazy danych", "analiza danych", "zarządzanie danymi" and "jakość
-	// danych" (a clerk's duty as often, or no canonical).
+	// danych" (a clerk's duty as often, or no canonical). "Sieci komputerowe" is in
+	// nonCorroboratingPhrases (an electrician installs them too), and the bare
+	// "konteneryzacja" in ambiguousWords (freight is containerized too).
 	{"testy jednostkowe", "unit-testing"}, {"testów jednostkowych", "unit-testing"}, {"testach jednostkowych", "unit-testing"}, {"testami jednostkowymi", "unit-testing"}, {"testow jednostkowych", "unit-testing"},
 	{"testy integracyjne", "integration-testing"}, {"testów integracyjnych", "integration-testing"}, {"testach integracyjnych", "integration-testing"}, {"testami integracyjnymi", "integration-testing"}, {"testow integracyjnych", "integration-testing"},
 	{"testy automatyczne", "test-automation"}, {"testów automatycznych", "test-automation"}, {"testach automatycznych", "test-automation"}, {"testami automatycznymi", "test-automation"}, {"testow automatycznych", "test-automation"}, {"automatyzacja testów", "test-automation"}, {"automatyzacji testów", "test-automation"}, {"automatyzację testów", "test-automation"}, {"automatyzacją testów", "test-automation"}, {"automatyzacji testow", "test-automation"}, {"testowania automatycznego", "test-automation"},
 	{"testy penetracyjne", "penetration-testing"}, {"testów penetracyjnych", "penetration-testing"}, {"testach penetracyjnych", "penetration-testing"},
 	{"ciągła integracja", "ci-cd"}, {"ciągłej integracji", "ci-cd"}, {"ciaglej integracji", "ci-cd"}, {"ciągłe wdrażanie", "ci-cd"}, {"ciągłego wdrażania", "ci-cd"}, {"ciągłemu wdrażaniu", "ci-cd"},
 	{"infrastruktura jako kod", "infrastructure-as-code"}, {"infrastruktury jako kodu", "infrastructure-as-code"}, {"infrastrukturą jako kod", "infrastructure-as-code"}, {"infrastrukturą jako kodem", "infrastructure-as-code"},
-	{"kontrola wersji", "version-control"}, {"kontroli wersji", "version-control"}, {"kontrolą wersji", "version-control"},
+	// Only the genitive ("system kontroli wersji"): a document controller writes the
+	// nominative, "kontrola wersji dokumentów".
+	{"kontroli wersji", "version-control"},
 	{"wzorce projektowe", "design-patterns"}, {"wzorców projektowych", "design-patterns"}, {"wzorcach projektowych", "design-patterns"}, {"wzorcami projektowymi", "design-patterns"}, {"wzorcow projektowych", "design-patterns"},
 	{"programowanie obiektowe", "oop"}, {"programowania obiektowego", "oop"}, {"programowaniu obiektowym", "oop"}, {"programowaniem obiektowym", "oop"},
 	{"systemy rozproszone", "distributed-systems"}, {"systemów rozproszonych", "distributed-systems"}, {"systemach rozproszonych", "distributed-systems"}, {"systemami rozproszonymi", "distributed-systems"}, {"systemow rozproszonych", "distributed-systems"},
@@ -2126,6 +2133,8 @@ var occupationalSafetyPhraseAliases = []phraseAlias{
 // requirement, and marketing postings carry that phrasing at scale.
 var nonCorroboratingPhrases = func() map[string]bool {
 	out := map[string]bool{
+		// An electrician installs "sieci komputerowe" too (batch 11).
+		"networking":                     true,
 		"technical-seo":                  true,
 		"link-building":                  true,
 		"paid-social":                    true,

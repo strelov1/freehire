@@ -1032,7 +1032,7 @@ export const SKILL_ALIASES = {
   'vendor-management': ['vendor management'],
   'vercel': ['vercel'],
   'verilog': ['verilog'],
-  'version-control': ['control de versiones', 'controle de versao', 'controle de version', 'controle de versão', 'controlo de versoes', 'controlo de versões', 'contrôle de version', 'gestion de versions', 'gestionnaire de versions', 'kontrola wersji', 'kontroli wersji', 'kontrolą wersji', 'version control', 'versionamento de codigo', 'versionamento de código'],
+  'version-control': ['control de versiones', 'controle de versao', 'controle de version', 'controle de versão', 'controlo de versoes', 'controlo de versões', 'contrôle de version', 'gestion de versions', 'gestionnaire de versions', 'kontroli wersji', 'version control', 'versionamento de codigo', 'versionamento de código'],
   'vertex-ai': ['vertex ai'],
   'vhdl': ['vhdl'],
   'video-editing': ['video editing'],

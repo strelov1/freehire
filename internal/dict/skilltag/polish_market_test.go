@@ -33,6 +33,9 @@ func TestParse_PolishMarket(t *testing.T) {
 		{"agency services", "Nasze obszary działania to m.in.: doradztwo technologiczne, tworzenie oprogramowania, systemy wbudowane, rozwiązania chmurowe.",
 			nil, []string{"embedded-systems"}},
 		{"ai pitch", "Narzędzia oparte na sztucznej inteligencji wspierające codzienną pracę.", nil, []string{"ai"}},
+		{"freight", "Obsługa konteneryzacji ładunków w porcie morskim.", nil, []string{"containerization"}},
+		{"document control", "Kontrola wersji dokumentów i archiwizacja.", nil, []string{"version-control"}},
+		{"electrician", "Montaż instalacji elektrycznych i sieci komputerowe. Kontakt: Julia.", nil, []string{"julia"}},
 		{"cyber sector", "Międzynarodowa firma z branży cyberbezpieczeństwa i ochrony danych.", nil, []string{"cybersecurity"}},
 	}
 	for _, c := range cases {
