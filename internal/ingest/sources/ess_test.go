@@ -277,6 +277,26 @@ func TestESSListingFailures(t *testing.T) {
 			t.Fatal("want an error for an answer that carries no listing")
 		}
 	})
+	t.Run("a listing that ends short of its total fails the crawl", func(t *testing.T) {
+		s, fake := newTestESS(t)
+		fake.listing[essFakeKey("", "", 2)] = []byte(`{"steviloDelovnihMest":4,"seznamDelovnihMest":[]}`)
+		if _, err := s.FetchNew(context.Background(), CompanyEntry{Provider: "ess"}, func(string) bool { return false }); err == nil {
+			t.Fatal("want an error: an empty page short of the stated total is a truncated listing")
+		}
+	})
+	t.Run("an empty part-time slice states no working time", func(t *testing.T) {
+		s, fake := newTestESS(t)
+		delete(fake.listing, essFakeKey("", essPartTime, 1))
+		jobs, err := s.FetchNew(context.Background(), CompanyEntry{Provider: "ess"}, func(string) bool { return false })
+		if err != nil {
+			t.Fatalf("FetchNew: %v", err)
+		}
+		for _, j := range jobs {
+			if j.EmploymentType != "" {
+				t.Errorf("%s: employment=%q, want none from an empty slice", j.ExternalID, j.EmploymentType)
+			}
+		}
+	})
 	t.Run("a failed slice costs only its mark", func(t *testing.T) {
 		s, fake := newTestESS(t)
 		fake.listErr[essFakeKey(essITField, "", 1)] = errors.New("unexpected status 500")

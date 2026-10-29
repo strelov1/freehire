@@ -277,8 +277,10 @@ func (s ess) list(ctx context.Context) ([]essPosting, error) {
 		}
 	}
 	var partTime map[string]bool
-	if pt, err := s.walk(ctx, essSlice{workingTime: essPartTime}); err != nil {
-		log.Printf("ess: part-time slice failed; no working time is stated this run: %v", err)
+	// The slice normally holds ~200 vacancies: an empty one is a fault, and reading it would call
+	// every vacancy full time.
+	if pt, err := s.walk(ctx, essSlice{workingTime: essPartTime}); err != nil || len(pt) == 0 {
+		log.Printf("ess: part-time slice failed or came back empty; no working time is stated this run: %v", err)
 	} else {
 		partTime = make(map[string]bool, len(pt))
 		for _, c := range pt {
@@ -297,9 +299,9 @@ func (s ess) list(ctx context.Context) ([]essPosting, error) {
 	return out, nil
 }
 
-// walk reads one slice of the listing to its end: until a page comes back empty or the distinct
-// vacancies read reach the total the listing states. Any page failing fails the walk, and so
-// does reaching essMaxPages first. Vacancies are kept once each, in listing order.
+// walk reads one slice of the listing to its end: until the distinct vacancies read reach the
+// total the listing states. Any page failing fails the walk, and so does a page coming back
+// empty short of that total, or reaching essMaxPages first. Vacancies are kept once each, in listing order.
 func (s ess) walk(ctx context.Context, slice essSlice) ([]essCard, error) {
 	seenIDs := map[string]bool{}
 	var out []essCard
@@ -322,8 +324,11 @@ func (s ess) walk(ctx context.Context, slice essSlice) ([]essCard, error) {
 			seenIDs[c.ID] = true
 			out = append(out, c)
 		}
-		if len(resp.Postings) == 0 || len(out) >= *resp.Total {
+		if len(out) >= *resp.Total {
 			return out, nil
+		}
+		if len(resp.Postings) == 0 {
+			return nil, fmt.Errorf("ess: listing ended at %d vacancies, short of its stated total %d", len(out), *resp.Total)
 		}
 	}
 	return nil, fmt.Errorf("ess: listing still not at its end after %d pages", essMaxPages)
