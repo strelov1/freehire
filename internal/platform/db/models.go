@@ -909,7 +909,8 @@ type JobDailyView struct {
 	JobID   int64       `json:"job_id"`
 	Uniques int32       `json:"uniques"`
 	// Unique daily visitors counted from PAGE opens only, which are bot-filtered. The `uniques` column beside it fuses page opens with API reads, and API reads carry no bot filtering — so page_uniques is the only one of the two that describes people, and the only one safe to rank a public post on. Zero for every row written before migration 0138; deliberately not backfilled.
-	PageUniques int32 `json:"page_uniques"`
+	PageUniques  int32 `json:"page_uniques"`
+	AgentUniques int32 `json:"agent_uniques"`
 }
 
 type JobReminder struct {

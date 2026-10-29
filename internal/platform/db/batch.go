@@ -17,6 +17,68 @@ var (
 	ErrBatchAlreadyClosed = errors.New("batch already closed")
 )
 
+const applyDailyAgentView = `-- name: ApplyDailyAgentView :batchexec
+WITH ins AS (
+    INSERT INTO job_daily_views (day, job_id, uniques, agent_uniques)
+    VALUES ($3, $2, 0, $1)
+    ON CONFLICT (day, job_id)
+        DO UPDATE SET agent_uniques = job_daily_views.agent_uniques + EXCLUDED.agent_uniques
+)
+UPDATE jobs SET view_count = view_count + $1
+WHERE id = $2
+`
+
+type ApplyDailyAgentViewBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type ApplyDailyAgentViewParams struct {
+	Delta int32       `json:"delta"`
+	JobID int64       `json:"job_id"`
+	Day   pgtype.Date `json:"day"`
+}
+
+// Apply one (day, job) agent-view count additively: upsert job_daily_views.agent_uniques
+// and add the same delta to jobs.view_count. `uniques` is written as 0 on insert (it is
+// NOT NULL with no default) and never touched on conflict, so the nginx figures and
+// GET /api/v1/stats/catalog keep their meaning.
+func (q *Queries) ApplyDailyAgentView(ctx context.Context, arg []ApplyDailyAgentViewParams) *ApplyDailyAgentViewBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.Delta,
+			a.JobID,
+			a.Day,
+		}
+		batch.Queue(applyDailyAgentView, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &ApplyDailyAgentViewBatchResults{br, len(arg), false}
+}
+
+func (b *ApplyDailyAgentViewBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *ApplyDailyAgentViewBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
 const applyDailyView = `-- name: ApplyDailyView :batchexec
 WITH ins AS (
     INSERT INTO job_daily_views (day, job_id, uniques, page_uniques)
@@ -49,9 +111,10 @@ type ApplyDailyViewParams struct {
 // a job's day-rows, and additivity lets a day spanning two rotated files sum right.
 //
 // Two deltas, not one plus a breakdown. `total_delta` counts the visitors who
-// produced EITHER signal and is what `uniques` has always held — jobs.view_count and
-// GET /api/v1/stats/catalog both read from it, so it must not move. `page_delta`
-// counts the visitors who opened the PAGE, the only bot-filtered signal of the two.
+// produced EITHER signal and is what `uniques` has always held — GET /api/v1/stats/catalog
+// reads it, and jobs.view_count accrues it (plus ApplyDailyAgentView's agent views), so it
+// must not move. `page_delta` counts the visitors who opened the PAGE, the only
+// bot-filtered signal of the two.
 // A visitor who did both is one visitor in each, so the two do not sum with an API
 // count; the only relation between them is page_delta <= total_delta.
 func (q *Queries) ApplyDailyView(ctx context.Context, arg []ApplyDailyViewParams) *ApplyDailyViewBatchResults {
