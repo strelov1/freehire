@@ -62,13 +62,14 @@ var bcsCountryNames = map[string]string{
 	"kipar": "cy", "кипар": "cy",
 	"kanada": "ca", "australija": "au", "аустралија": "au",
 	"ujedinjeni arapski emirati": "ae", "уједињени арапски емирати": "ae",
-	// Serbia's provinces and regions, Bosnia's entities, Croatia's regions.
+	// Serbia's provinces and regions, Bosnia's entities, Croatia's regions. "Istra" is
+	// absent: it is also a Russian town.
 	"vojvodina": "rs", "војводина": "rs",
 	"republika srpska": "ba", "република српска": "ba",
 	"federacija bih": "ba", "federacija bosne i hercegovine": "ba",
 	"brčko distrikt": "ba", "brcko distrikt": "ba",
-	"dalmacija": "hr", "slavonija": "hr", "istra": "hr", "kvarner": "hr", "zagorje": "hr",
-	"međimurje": "hr", "medjimurje": "hr",
+	"dalmacija": "hr", "slavonija": "hr", "kvarner": "hr", "zagorje": "hr",
+	"međimurje": "hr", "medjimurje": "hr", "medimurje": "hr",
 }
 
 // croatianCounties are Croatia's twenty counties by their adjective, as a location line
@@ -83,12 +84,16 @@ var croatianCounties = []string{
 	"splitsko-dalmatinska", "istarska", "dubrovačko-neretvanska", "međimurska",
 }
 
-// bcsASCIIFold writes a BCS name without its diacritics, đ as "dj".
-var bcsASCIIFold = strings.NewReplacer("č", "c", "ć", "c", "š", "s", "ž", "z", "đ", "dj")
+// bcsASCIIFold writes a BCS name without its diacritics, đ as "dj"; bcsPlainFold writes
+// đ as a plain "d", the other spelling a line without diacritics uses ("Medimurska").
+var (
+	bcsASCIIFold = strings.NewReplacer("č", "c", "ć", "c", "š", "s", "ž", "z", "đ", "dj")
+	bcsPlainFold = strings.NewReplacer("č", "c", "ć", "c", "š", "s", "ž", "z", "đ", "d")
+)
 
 // bcsNotCity are names the city table reads as a town that state no city here:
 // "Kosovo" is an alias of Kosovo Polje, so "Pristina, Kosovo" named two cities.
-var bcsNotCity = []string{"kosovo", "косово", "istra", "dalmacija", "slavonija", "zagorje"}
+var bcsNotCity = []string{"kosovo", "косово", "dalmacija", "slavonija", "zagorje"}
 
 // init merges the BCS names into nameToCountry and regionNotCity. A name already in
 // nameToCountry is a programming error, as in foreignSubdivisionNames.
@@ -107,6 +112,7 @@ func init() {
 		for _, name := range []string{county, county + " županija"} {
 			names[name] = true
 			names[bcsASCIIFold.Replace(name)] = true
+			names[bcsPlainFold.Replace(name)] = true
 		}
 		for name := range names {
 			add(name, "hr")

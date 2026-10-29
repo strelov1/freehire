@@ -42,6 +42,9 @@ func TestBCSLines(t *testing.T) {
 		{"SPLITSKO-DALMATINSKA", []string{"hr"}, nil},
 		{"Primorsko-goranska zupanija", []string{"hr"}, nil},
 		{"GRAD ZAGREB", []string{"hr"}, []string{"Zagreb"}},
+		{"Medimurska zupanija", []string{"hr"}, nil},
+		{"Međimurje", []string{"hr"}, nil},
+		{"Istra, Russia", []string{"ru"}, []string{"Istra"}},
 		{"Vojvodina", []string{"rs"}, nil},
 		{"Republika Srpska", []string{"ba"}, nil},
 		// The locative a line puts a city in.

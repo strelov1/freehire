@@ -354,7 +354,8 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   diacritics and in Serbian Cyrillic ("Srbija", "Njemačka"/"Nemačka", "Crna Gora", "BiH"),
   so a Serbian or Croatian board's posting abroad is not filed under its fallback country;
   Workday's ISO-3 "SRB"/"HRV"/"BIH"/"MNE"; the twenty Croatian counties with and without
-  "županija"; Vojvodina, Republika Srpska and the Croatian regions. "Kosovo" is
+  "županija"; Vojvodina, Republika Srpska and the Croatian regions (not "Istra", a Russian
+  town too). "Kosovo" is
   `regionNotCity` (it was Kosovo Polje). `cityOverrides` pins Pula, Dubrovnik, Leskovac and
   Sombor (GeoNames gives each alias a hamlet abroad, so they stated no country), the
   locative ("u Beogradu", "Novom Sadu") and Cyrillic "Панчево". "SAD" (USA) and "Island"
