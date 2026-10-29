@@ -60,21 +60,21 @@ func run() int {
 	dir := envOr("VIEW_LOG_DIR", "/var/log/nginx")
 	base := envOr("VIEW_LOG_BASE", "access.log")
 
+	// A failed nginx pass still fails the run, but only after the agent pass: an unreadable
+	// log directory, or a rotated file that cannot be read, fails again on every run, and
+	// returning here would hold the agent days back for as long as it stays broken.
+	exit := 0
 	files, err := viewlog.RotatedFiles(dir, base)
-	if err != nil {
-		log.Printf("list logs in %s: %v", dir, err)
-		return 1
-	}
 	if !*backfill {
 		files = uncompressed(files)
 	}
-	// A failed nginx pass still fails the run, but only after the agent pass: a rotated
-	// file that cannot be read is listed again on every run, and returning here would
-	// hold the agent days back for as long as it stays broken.
-	exit := 0
-	if len(files) == 0 {
+	switch {
+	case err != nil:
+		log.Printf("list logs in %s: %v", dir, err)
+		exit = 1
+	case len(files) == 0:
 		log.Printf("rollup-views: no rotated logs to process in %s", dir)
-	} else {
+	default:
 		nFiles, nViews, err := process(ctx, pool, files)
 		if err != nil {
 			log.Printf("process: %v", err)
