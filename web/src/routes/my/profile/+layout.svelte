@@ -1,16 +1,7 @@
 <script lang="ts">
   import { tick, untrack, type Snippet } from 'svelte';
   import { scrollBehavior } from '#lib/motion.js';
-  import {
-    Ban,
-    Briefcase,
-    ClipboardList,
-    Contact,
-    GraduationCap,
-    MapPin,
-    Tags,
-    User,
-  } from '@lucide/svelte';
+  import { Briefcase, ClipboardList, Tags, User } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { TabStrip, tabStripId } from '#lib/ui/index.js';
@@ -41,16 +32,17 @@
   // scans the same way collapsed; `TabStrip` owns the overflow behaviour on a narrow
   // viewport. CV readiness is deliberately not one of these — it's not
   // published yet; it still works at /my/profile/cv-readiness for anyone who holds
-  // the link, nothing here links to it. There is no Settings section: the timezone sits in
-  // Location and the language on /my/security (see profile/settings/+page.ts).
+  // the link, nothing here links to it.
+  //
+  // Four tabs, each holding its neighbours: Profile carries Contacts and Location (with the
+  // timezone), Skills carries Avoid, Experience carries Education. The old routes of the
+  // absorbed sections redirect to their anchors. There is no Settings section: the
+  // timezone sits in Location and the language on /my/security (see
+  // profile/settings/+page.ts).
   const SECTIONS = [
     { id: 'profile', href: '/my/profile', icon: User },
-    { id: 'contacts', href: '/my/profile/contacts', icon: Contact },
-    { id: 'location', href: '/my/profile/location', icon: MapPin },
     { id: 'skills', href: '/my/profile/skills', icon: Tags },
-    { id: 'avoid', href: '/my/profile/avoid', icon: Ban },
     { id: 'experience', href: '/my/profile/experience', icon: Briefcase },
-    { id: 'education', href: '/my/profile/education', icon: GraduationCap },
     { id: 'screening', href: '/my/profile/screening', icon: ClipboardList },
   ] as const;
 
@@ -105,6 +97,7 @@
       target.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
     });
   });
+
 </script>
 
 <svelte:head>
@@ -135,7 +128,7 @@
       onCvDeleted={handleCvDeleted}
     />
     <!-- Account-level (not candidate-profile) settings live here too, so they never wait on
-         a CV upload; once a profile exists they move to Location and /my/security. -->
+         a CV upload; once a profile exists they move to Profile's Location part and /my/security. -->
     <AccountPreferences class="mt-6" />
   </div>
 {:else}

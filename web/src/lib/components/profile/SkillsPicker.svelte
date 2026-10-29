@@ -5,9 +5,9 @@
   // through `onToggleSkill` and shows whatever `skills` the caller currently holds; only the
   // skill dictionary (the typeahead's universe) is loaded here.
   //
-  // Skills to avoid live on the dedicated Avoid tab (AvoidCard.svelte), not here — they used
-  // to render as a second block in this component, but that coupled "what I have" and "what
-  // I avoid" into one control that only Skills needed to reach.
+  // Skills to avoid live in AvoidCard.svelte (the Avoid part of the Skills tab), not here —
+  // they used to render as a second block in this component, but that coupled "what I have"
+  // and "what I avoid" into one control that only Skills needed to reach.
   import { loadSkillDistribution, searchSkillOptions } from '#lib/skillDictionary.js';
   import type { FacetOption } from '#lib/facets.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';

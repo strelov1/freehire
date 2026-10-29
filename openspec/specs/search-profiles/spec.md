@@ -326,8 +326,9 @@ On save the system SHALL validate and normalize the block: work modes and region
 
 ### Requirement: Edit excluded skills, sources and companies in the profile UI
 
-The profile UI SHALL present a dedicated "Avoid" tab (`/my/profile/avoid`), separate
-from the "Skills" tab that holds the wanted-skills control, that lets a signed-in
+The profile UI SHALL present an "Avoid" part on the "Skills" tab
+(`/my/profile/skills#account-avoid`; the old `/my/profile/avoid` route redirects there),
+below and separate from the wanted-skills control, that lets a signed-in
 user manage three independent exclusion lists: skills to avoid, sources to avoid,
 and companies to avoid. Each control SHALL let the user add and remove entries and
 SHALL be pre-seeded with the user's currently saved excluded values when the tab is
@@ -342,32 +343,32 @@ general job-search source filter uses). The "companies to avoid" control SHALL b
 constrained to known company identities, resolved the same way the general job-search
 company filter resolves a company (by `company_slug`).
 
-The "Skills" tab SHALL NOT present a "skills to avoid" control — that control lives
-only on the Avoid tab.
+The wanted-skills control SHALL NOT include a "skills to avoid" control — that control
+lives only in the Avoid part.
 
 #### Scenario: Add an excluded skill and save
-- **WHEN** a signed-in user opens the Avoid tab, adds `php` to the "skills to avoid" control, and saves
+- **WHEN** a signed-in user opens the Avoid part of the Skills tab, adds `php` to the "skills to avoid" control, and saves
 - **THEN** the app calls `PUT /api/v1/me/profile` with `php` in `excluded_skills` and the saved profile reflects it
 
 #### Scenario: Add an excluded source and save
-- **WHEN** a signed-in user opens the Avoid tab, adds a source to the "sources to avoid" control, and saves
+- **WHEN** a signed-in user opens the Avoid part of the Skills tab, adds a source to the "sources to avoid" control, and saves
 - **THEN** the app calls `PUT /api/v1/me/profile` with that source in `excluded_sources` and the saved profile reflects it
 
 #### Scenario: Add an excluded company and save
-- **WHEN** a signed-in user opens the Avoid tab, adds a company to the "companies to avoid" control, and saves
+- **WHEN** a signed-in user opens the Avoid part of the Skills tab, adds a company to the "companies to avoid" control, and saves
 - **THEN** the app calls `PUT /api/v1/me/profile` with that company's slug in `excluded_companies` and the saved profile reflects it
 
 #### Scenario: Excluded values are pre-seeded when reopening the tab
-- **WHEN** a signed-in user who has saved `excluded_skills` `[php]`, `excluded_sources` `[greenhouse]`, and `excluded_companies` `[acme]` reopens the Avoid tab
+- **WHEN** a signed-in user who has saved `excluded_skills` `[php]`, `excluded_sources` `[greenhouse]`, and `excluded_companies` `[acme]` reopens the Avoid part of the Skills tab
 - **THEN** the three controls are pre-seeded with `php`, `greenhouse`, and `acme` respectively
 
 #### Scenario: Excluded values do not gate saving
 - **WHEN** a signed-in user has at least one specialization and one skill but no excluded skills, sources, or companies
 - **THEN** the Save control is enabled
 
-#### Scenario: The Skills tab no longer shows an avoid control
+#### Scenario: The wanted-skills control carries no avoid control
 - **WHEN** a signed-in user opens the "Skills" tab of their profile
-- **THEN** it shows only the wanted-skills control, with no "skills to avoid" control on that tab
+- **THEN** the wanted-skills control has no "skills to avoid" control inside it; that control appears only in the Avoid part below it
 
 ### Requirement: The profile asks where the user is, independently of how they work
 

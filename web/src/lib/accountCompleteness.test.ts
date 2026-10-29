@@ -47,8 +47,8 @@ describe('accountSteps', () => {
     }
   });
 
-  // skills and location are their own routes under /my/profile; cv and role are both on
-  // its default section, and alerts points at another page entirely. Notably NOT /my/cvs
+  // skills is its own route under /my/profile; cv, role and location are all on its
+  // default section, and alerts points at another page entirely. Notably NOT /my/cvs
   // for the CV step — that route is the per-vacancy builder and takes no upload.
   it('links each step straight to the route it is done on', () => {
     const hrefById = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.href]));
@@ -56,20 +56,20 @@ describe('accountSteps', () => {
       cv: '/my/profile',
       role: '/my/profile',
       skills: '/my/profile/skills',
-      location: '/my/profile/location',
+      location: '/my/profile',
       alerts: '/my/searches',
     });
   });
 
-  // /my/profile's default section holds three blocks and only one is the step, so both
-  // steps landing there name which. The other three routes ARE their step, so an anchor
+  // /my/profile's default section holds several blocks and only one is the step, so every
+  // step landing there names which. The other two routes ARE their step, so an anchor
   // would only point at the top of what is already the whole page.
-  it('anchors the two steps that share the crowded default section', () => {
+  it('anchors the three steps that share the crowded default section', () => {
     const byId = Object.fromEntries(accountSteps(empty).map((s) => [s.id, s.anchorId]));
     expect(byId.cv).toBe('account-cv');
     expect(byId.role).toBe('account-role');
     expect(byId.skills).toBeUndefined();
-    expect(byId.location).toBeUndefined();
+    expect(byId.location).toBe('account-location');
     expect(byId.alerts).toBeUndefined();
   });
 
@@ -95,16 +95,16 @@ describe('stepLeadsSomewhere', () => {
   it('sends an anchored step onward even from the page it lives on', () => {
     expect(stepLeadsSomewhere(byId('cv'), '/my/profile', '/my/profile')).toBe(true);
     expect(stepLeadsSomewhere(byId('role'), '/my/profile', '/my/profile')).toBe(true);
+    expect(stepLeadsSomewhere(byId('location'), '/my/profile', '/my/profile')).toBe(true);
   });
 
   it('refuses an unanchored step whose route is the one on screen', () => {
     expect(stepLeadsSomewhere(byId('skills'), '/my/profile/skills', '/my/profile/skills')).toBe(false);
-    expect(stepLeadsSomewhere(byId('location'), '/my/profile/location', '/my/profile/location')).toBe(false);
   });
 
   it('sends every step onward from a section that is not its own', () => {
     for (const step of accountSteps(empty)) {
-      expect(stepLeadsSomewhere(step, step.href, '/my/profile/contacts')).toBe(true);
+      expect(stepLeadsSomewhere(step, step.href, '/my/profile/screening')).toBe(true);
     }
   });
 
