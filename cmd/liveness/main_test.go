@@ -9,15 +9,39 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// A source this worker probes is one whose crawl cannot re-list every live posting, so search
-// must not withhold its postings for going unseen — the probe is what closes the dead ones.
-// The adapter's livenessProbed marker is what tells search that; a member added here without
-// it would have its live postings hidden after two weeks.
+// probedButWithheld names the probed sources search still withholds after two weeks unseen,
+// each with the reason the livenessProbed marker would be wrong for it.
+var probedButWithheld = map[string]string{
+	// The sitemap is the live catalogue, so a posting it stopped naming two weeks ago is gone;
+	// the probe only closes the last postings of companies the company-scoped sweep lost.
+	"torre": "the crawl re-lists every live posting",
+	// The feed omits a third of the postings the site still serves, which is the marker's case —
+	// but ~16k of the ~22k rows it had stopped listing when the probe landed were dead, and
+	// the probe reads ~6k a day, so the marker would put them back in search for days. Grant it
+	// once the backlog has been worked off and only the live tail is left unseen.
+	"4dayweek": "the probe's backlog is days deep",
+}
+
+// A source this worker probes is usually one whose crawl cannot re-list every live posting, so
+// search must not withhold its postings for going unseen — the probe is what closes the dead
+// ones. The adapter's livenessProbed marker is what tells search that; a member added here
+// without it would have its live postings hidden after two weeks, unless probedButWithheld
+// says why that is right for it.
 func TestProbedSourcesAreSparedSearchsUnseenRule(t *testing.T) {
 	windows := sources.UnseenWindows(sources.Taxonomy(), time.Hour)
 	for _, p := range probeDespiteRegistered {
-		if w, ok := windows[p]; ok {
-			t.Errorf("%q is probed here but search withholds its postings after %v unseen — add the livenessProbed marker to its adapter", p, w)
+		_, withheld := windows[p]
+		_, meant := probedButWithheld[p]
+		switch {
+		case withheld && !meant:
+			t.Errorf("%q is probed here but search withholds its postings after going unseen — add the livenessProbed marker to its adapter, or say why not in probedButWithheld", p)
+		case !withheld && meant:
+			t.Errorf("%q is in probedButWithheld but search no longer withholds it — drop the entry", p)
+		}
+	}
+	for p := range probedButWithheld {
+		if !slices.Contains(probeDespiteRegistered, p) {
+			t.Errorf("%q is in probedButWithheld but is not probed here — drop the entry", p)
 		}
 	}
 }

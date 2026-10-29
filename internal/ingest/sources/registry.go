@@ -1089,7 +1089,7 @@ func singleUseConnSource[T any](c HTTPClient, build func(T) Source) Source {
 // browserUASource builds a registry entry for an adapter whose platform refuses any client
 // that identifies itself, on a path that platform's own robots.txt allows (4dayweek). It
 // mirrors cookieSessionSource exactly, including its nil-transport case for the taxonomy path.
-// See browserUserAgent for the measurement, and for the line this does NOT cross.
+// See BrowserUserAgent for the measurement, and for the line this does NOT cross.
 func browserUASource[T any](c HTTPClient, build func(T) Source) Source {
 	if c == nil {
 		var zero T

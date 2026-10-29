@@ -72,6 +72,20 @@ func TestClassify(t *testing.T) {
 			wantReason:  "expired_body",
 		},
 		{
+			// djinni serves a removed posting as a healthy 200 whose only death signal is
+			// this alert, rendered with the template's own indentation around it.
+			name:     "djinni inactive-ad banner",
+			status:   200,
+			finalURL: "https://djinni.co/jobs/797771-digital-design-fpga-engineer/",
+			body: `<div class="alert alert-secondary" role="alert">
+      <div class="fw-medium">
+        The job ad is no longer active
+      </div>
+      <div>Look at the current <a href="/jobs/?primary_keyword=FPGA">FPGA jobs</a></div>`,
+			wantVerdict: Expired,
+			wantReason:  "expired_body",
+		},
+		{
 			name:        "german closed pattern",
 			status:      200,
 			finalURL:    "https://boards.example.com/jobs/123",

@@ -138,9 +138,16 @@ func TestHHVacancyID(t *testing.T) {
 	}
 }
 
+// fastHHPass is hhPass against a stub, without the one-second spacing.
+func fastHHPass(client *http.Client, pageTemplate string) pacedPass {
+	p := hhPass(client, pageTemplate)
+	p.interval = 1
+	return p
+}
+
 // A refusal stops the pass at once: the limit is per IP and shared with the crawl, so a run
 // that kept going would hold the crawl host in the captcha too.
-func TestApplyHHVerdictsStopsAtFirstRefusal(t *testing.T) {
+func TestHHPassStopsAtFirstRefusal(t *testing.T) {
 	var requests atomic.Int64
 	srv := hhServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		requests.Add(1)
@@ -152,7 +159,7 @@ func TestApplyHHVerdictsStopsAtFirstRefusal(t *testing.T) {
 		{id: 3, source: "hh", externalID: "96:3"},
 	}
 	var st stats
-	applyHHVerdicts(context.Background(), srv.Client(), nil, cands, &st, srv.URL+"/vacancy/%s", 1)
+	st.applyPaced(context.Background(), nil, cands, fastHHPass(srv.Client(), srv.URL+"/vacancy/%s"))
 	if n := requests.Load(); n != 1 {
 		t.Errorf("requests = %d, want 1 (stop at the first refusal)", n)
 	}
@@ -161,7 +168,7 @@ func TestApplyHHVerdictsStopsAtFirstRefusal(t *testing.T) {
 	}
 }
 
-func TestApplyHHVerdictsBoundsOneRun(t *testing.T) {
+func TestHHPassBoundsOneRun(t *testing.T) {
 	var requests atomic.Int64
 	srv := hhServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		requests.Add(1)
@@ -172,7 +179,7 @@ func TestApplyHHVerdictsBoundsOneRun(t *testing.T) {
 		cands[i] = candidate{id: int64(i), source: "hh", externalID: "96:1"}
 	}
 	var st stats
-	applyHHVerdicts(context.Background(), srv.Client(), nil, cands, &st, srv.URL+"/vacancy/%s", 1)
+	st.applyPaced(context.Background(), nil, cands, fastHHPass(srv.Client(), srv.URL+"/vacancy/%s"))
 	if n := requests.Load(); n != hhMaxProbesPerRun {
 		t.Errorf("requests = %d, want %d", n, hhMaxProbesPerRun)
 	}
