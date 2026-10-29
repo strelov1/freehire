@@ -6507,8 +6507,8 @@ type Querier interface {
 	// boardcatalog/AGENTS.md) is left alone.
 	RenameSlugBoardCompany(ctx context.Context, arg RenameSlugBoardCompanyParams) (int64, error)
 	// Apply a resolved display name to every job under a slug-like company and
-	// re-key its company_slug (computed by the caller via normalize.Slug), so the
-	// derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
+	// re-key its company_slug (computed by the caller via normalize.Slug); the caller then
+	// reconciles the touched slugs through SyncCompaniesForSlugs + DeleteOrphanCompaniesForSlugs.
 	// The name guard keeps a re-run from overwriting a name that is no longer a slug.
 	RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyParams) (int64, error)
 	// Write back what a refresh-token exchange returned.
@@ -7485,6 +7485,19 @@ type Querier interface {
 	// DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
 	// RecomputeRoleDuplicatesForCompanies so ATS reposts have already collapsed to their canon.
 	SuppressAggregatorDuplicatesForCompanies(ctx context.Context, arg SuppressAggregatorDuplicatesForCompaniesParams) (int64, error)
+	// SyncCompaniesFromJobs narrowed to the given slugs: gives each a companies row and the
+	// name its jobs now carry. cmd/backfill-company-names passes the slugs it renamed jobs onto,
+	// a bounded chunk at a time, so each statement is its own short transaction. It used to run
+	// the whole-table sync after every run — an hour in one transaction, holding a lock on
+	// every row it wrote against ingest's UpsertJob and blocking any migration on jobs — even
+	// on a run that renamed nothing (2026-10-29: every model call refused with 429, then the
+	// sync held jobs for an hour and kept migration 0212 out).
+	//
+	// Unlike InsertMissingCompaniesForSlugs this also rewrites the NAME of an existing row: a
+	// rename that keeps its slug ("afcb" -> "AFCB") changes nothing else. The filter sits
+	// outside the ON CONFLICT for the reason SyncCompaniesFromJobs gives. The name is the most
+	// recent public one; a JD one user pasted in (is_private) must not name a public company.
+	SyncCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
 	// Rebuild the companies catalogue from jobs. The companies table is derivable
 	// from jobs (slug = company_slug, name = company), so after a slug-builder change
 	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's

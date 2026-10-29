@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -179,5 +181,36 @@ func TestEachPerSource_BoundsEachSource(t *testing.T) {
 		if p > perSourceConcurrency {
 			t.Errorf("%s peaked at %d concurrent fetches, want at most %d", src, p, perSourceConcurrency)
 		}
+	}
+}
+
+type fakeReconciler struct{ calls []string }
+
+func (f *fakeReconciler) SyncCompaniesForSlugs(_ context.Context, slugs []string) (int64, error) {
+	f.calls = append(f.calls, "sync "+strings.Join(slugs, ","))
+	return int64(len(slugs)), nil
+}
+
+func (f *fakeReconciler) DeleteOrphanCompaniesForSlugs(_ context.Context, slugs []string) (int64, error) {
+	f.calls = append(f.calls, "delete "+strings.Join(slugs, ","))
+	return int64(len(slugs)), nil
+}
+
+// Syncs precede deletes and each chunk is its own statement; a run that renamed nothing
+// touches the catalogue not at all.
+func TestReconcileRenamedSlugs(t *testing.T) {
+	f := &fakeReconciler{}
+	orphaned, err := reconcileRenamedSlugs(context.Background(), f, []string{"a", "b", "c"}, []string{"x", "y"}, 2)
+	if err != nil || orphaned != 2 {
+		t.Fatalf("reconcileRenamedSlugs = %d, %v; want 2, nil", orphaned, err)
+	}
+	want := []string{"sync a,b", "sync c", "delete x,y"}
+	if !slices.Equal(f.calls, want) {
+		t.Fatalf("calls = %q, want %q", f.calls, want)
+	}
+
+	idle := &fakeReconciler{}
+	if _, err := reconcileRenamedSlugs(context.Background(), idle, nil, nil, 2); err != nil || len(idle.calls) != 0 {
+		t.Fatalf("empty run: calls = %q, err = %v; want none", idle.calls, err)
 	}
 }

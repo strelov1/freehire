@@ -12,8 +12,8 @@
 // applies it only when it passes the confidence gate (never guessing from the
 // slug). Each name is written to the board it came from before its jobs (see
 // writeRename) — otherwise the board's next crawl puts the slug back. Renames re-key
-// company_slug via normalize.Slug; the derived companies catalogue reconciles through
-// SyncCompaniesFromJobs + DeleteOrphanCompanies. Idempotent — a second run finds
+// company_slug via normalize.Slug; the derived companies catalogue reconciles for exactly the
+// slugs the run touched (reconcileRenamedSlugs). Idempotent — a second run finds
 // nothing slug-like left to fix. Follow with `make reindex` so corrected names reach
 // search.
 //
@@ -150,28 +150,39 @@ func run() int {
 		return 0
 	}
 
+	// The slugs the renames moved jobs onto and away from, for the companies reconcile below.
+	var movedTo, movedFrom []string
 	applied, failed := applyRenames(ctx, renames, func(ctx context.Context, r rename) (bool, error) {
-		return writeRename(ctx, queries, r)
+		changed, err := writeRename(ctx, queries, r)
+		if changed {
+			movedTo = append(movedTo, normalize.Slug(r.name))
+			movedFrom = append(movedFrom, r.oldSlug)
+		}
+		return changed, err
 	})
 	boardsApplied, boardsFailed := applyRenames(ctx, boardRenames, func(ctx context.Context, r placeholderRename) (bool, error) {
-		var changed bool
+		var (
+			slug    string
+			changed bool
+		)
 		err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 			var err error
-			changed, err = writePlaceholderRename(ctx, queries.WithTx(tx), r)
+			slug, changed, err = writePlaceholderRename(ctx, queries.WithTx(tx), r)
 			return err
 		})
+		if err == nil && changed {
+			movedTo = append(movedTo, slug)
+			// The slug the pipeline wrote for the placeholder name, as the alias record reads it.
+			movedFrom = append(movedFrom, normalize.CompanySlug(r.oldName))
+		}
 		return changed, err
 	})
 
-	// jobs now carry the resolved names/slugs; re-key the derived catalogue and
-	// sweep the rows orphaned by the re-key so company pages resolve.
-	if err := queries.SyncCompaniesFromJobs(ctx); err != nil {
-		log.Printf("sync companies: %v", err)
-		return 1
-	}
-	orphans, err := queries.DeleteOrphanCompanies(ctx)
+	// jobs now carry the resolved names/slugs; re-key the derived catalogue and sweep the rows
+	// orphaned by the re-key so company pages resolve.
+	orphans, err := reconcileRenamedSlugs(ctx, queries, movedTo, movedFrom, reconcileChunk)
 	if err != nil {
-		log.Printf("delete orphan companies: %v", err)
+		log.Printf("reconcile companies: %v", err)
 		return 1
 	}
 
@@ -179,6 +190,42 @@ func run() int {
 		len(rows), len(renames), applied, failed, stats.noSource, stats.rejected,
 		len(boards), len(boardRenames), boardsApplied, boardsFailed, unresolved, orphans)
 	return worker.ExitCode(failed+boardsFailed, 0)
+}
+
+// reconcileChunk is how many slugs one reconcile statement covers. Each statement is its own
+// transaction, so this bounds how long any companies row stays locked against ingest.
+const reconcileChunk = 500
+
+// companyReconciler is the write side of the companies reconcile, narrowed so the chunking
+// can be tested without a database.
+type companyReconciler interface {
+	SyncCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
+	DeleteOrphanCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
+}
+
+// reconcileRenamedSlugs gives each slug a rename moved jobs ONTO a companies row carrying the
+// new name, then drops the rows of the slugs it moved jobs AWAY from that no job carries any
+// more. Syncs go first, so a slug that is both keeps its row.
+//
+// Scoped to those slugs and chunked, NOT the whole-table SyncCompaniesFromJobs +
+// DeleteOrphanCompanies pair this used to run: that sync is one transaction of about an hour
+// on prod, and it ran even when the run renamed nothing — on 2026-10-29 every model call came
+// back 429 and the sync still held jobs for an hour, keeping a migration out. A run that
+// renamed nothing now writes nothing.
+func reconcileRenamedSlugs(ctx context.Context, r companyReconciler, movedTo, movedFrom []string, chunk int) (orphaned int64, err error) {
+	for part := range slices.Chunk(movedTo, chunk) {
+		if _, err := r.SyncCompaniesForSlugs(ctx, part); err != nil {
+			return orphaned, fmt.Errorf("sync companies: %w", err)
+		}
+	}
+	for part := range slices.Chunk(movedFrom, chunk) {
+		n, err := r.DeleteOrphanCompaniesForSlugs(ctx, part)
+		if err != nil {
+			return orphaned, fmt.Errorf("delete orphan companies: %w", err)
+		}
+		orphaned += n
+	}
+	return orphaned, nil
 }
 
 type rename struct {

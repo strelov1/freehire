@@ -71,9 +71,9 @@ func TestWritePlaceholderRename(t *testing.T) {
 	f := &fakePlaceholderWriter{alias: map[string]string{"coppermooncafes": "copper-moon"}, boardRows: 1}
 	r := placeholderRename{provider: "ukgready", board: "secure.saashr.com/1553aps", oldName: "secure.saashr.com/1553aps", name: "Copper Moon Cafes LLC"}
 
-	changed, err := writePlaceholderRename(context.Background(), f, r)
-	if err != nil || !changed {
-		t.Fatalf("writePlaceholderRename = %v, %v; want true, nil", changed, err)
+	slug, changed, err := writePlaceholderRename(context.Background(), f, r)
+	if err != nil || !changed || slug != "copper-moon" {
+		t.Fatalf("writePlaceholderRename = %q, %v, %v; want copper-moon, true, nil", slug, changed, err)
 	}
 	want := []string{
 		"jobs ukgready secure.saashr.com/1553aps:% secure.saashr.com/1553aps->Copper Moon Cafes LLC (copper-moon)",
@@ -92,7 +92,7 @@ func TestWritePlaceholderRename_BoardChangedMeanwhile(t *testing.T) {
 	f := &fakePlaceholderWriter{boardRows: 0}
 	r := placeholderRename{provider: "oracle", board: "a.oraclecloud.com/CX", oldName: "a.oraclecloud.com/CX", name: "Acme"}
 
-	if _, err := writePlaceholderRename(context.Background(), f, r); err == nil {
+	if _, _, err := writePlaceholderRename(context.Background(), f, r); err == nil {
 		t.Fatal("writePlaceholderRename: want an error when the board matched no row, got nil")
 	}
 }

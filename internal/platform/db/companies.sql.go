@@ -1271,8 +1271,8 @@ type RenameSlugCompanyParams struct {
 }
 
 // Apply a resolved display name to every job under a slug-like company and
-// re-key its company_slug (computed by the caller via normalize.Slug), so the
-// derived catalogue re-keys through SyncCompaniesFromJobs + DeleteOrphanCompanies.
+// re-key its company_slug (computed by the caller via normalize.Slug); the caller then
+// reconciles the touched slugs through SyncCompaniesForSlugs + DeleteOrphanCompaniesForSlugs.
 // The name guard keeps a re-run from overwriting a name that is no longer a slug.
 func (q *Queries) RenameSlugCompany(ctx context.Context, arg RenameSlugCompanyParams) (int64, error) {
 	result, err := q.db.Exec(ctx, renameSlugCompany, arg.Name, arg.NewSlug, arg.OldSlug)
@@ -1420,6 +1420,44 @@ type SetCompanyIndustriesParams struct {
 // consistent.
 func (q *Queries) SetCompanyIndustries(ctx context.Context, arg SetCompanyIndustriesParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setCompanyIndustries, arg.Industries, arg.Slug)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const syncCompaniesForSlugs = `-- name: SyncCompaniesForSlugs :execrows
+INSERT INTO companies (slug, name)
+SELECT j.company_slug, j.company
+FROM (
+    SELECT DISTINCT ON (company_slug) company_slug, company
+    FROM jobs
+    WHERE company_slug = ANY($1::text[])
+      AND NOT is_private
+    ORDER BY company_slug, created_at DESC, id DESC
+) j
+WHERE NOT EXISTS (
+    SELECT 1 FROM companies c WHERE c.slug = j.company_slug AND c.name = j.company
+)
+ON CONFLICT (slug) DO UPDATE SET
+    name       = EXCLUDED.name,
+    updated_at = now()
+`
+
+// SyncCompaniesFromJobs narrowed to the given slugs: gives each a companies row and the
+// name its jobs now carry. cmd/backfill-company-names passes the slugs it renamed jobs onto,
+// a bounded chunk at a time, so each statement is its own short transaction. It used to run
+// the whole-table sync after every run — an hour in one transaction, holding a lock on
+// every row it wrote against ingest's UpsertJob and blocking any migration on jobs — even
+// on a run that renamed nothing (2026-10-29: every model call refused with 429, then the
+// sync held jobs for an hour and kept migration 0212 out).
+//
+// Unlike InsertMissingCompaniesForSlugs this also rewrites the NAME of an existing row: a
+// rename that keeps its slug ("afcb" -> "AFCB") changes nothing else. The filter sits
+// outside the ON CONFLICT for the reason SyncCompaniesFromJobs gives. The name is the most
+// recent public one; a JD one user pasted in (is_private) must not name a public company.
+func (q *Queries) SyncCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error) {
+	result, err := q.db.Exec(ctx, syncCompaniesForSlugs, slugs)
 	if err != nil {
 		return 0, err
 	}
