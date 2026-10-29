@@ -26,6 +26,10 @@ func (erecruiterProber) probe(ctx context.Context, c httpClient, cfg string) (st
 	return sources.ProbeErecruiterBoard(ctx, c, cfg)
 }
 
+// maxRequestsPerSecond keeps a harvest polite toward skk.erecruiter.pl, the one host every
+// company's board is served from.
+func (erecruiterProber) maxRequestsPerSecond() float64 { return 1 }
+
 // recruitifyProber validates a Recruitify portal (the <board> of linkgroup.recruitify.ai) against
 // the API the adapter reads: the portal's config names the company, and the first listing page
 // proves it has openings. It mirrors internal/ingest/sources/recruitify.go, which is unexported.
@@ -58,6 +62,10 @@ func (recruitifyProber) probe(ctx context.Context, c httpClient, board string) (
 	}
 	return strings.TrimSpace(cfg.CompanyName), len(page), nil
 }
+
+// maxRequestsPerSecond holds a harvest to the crawl's own pace (recruitifyRequestInterval): one
+// API host answers every portal.
+func (recruitifyProber) maxRequestsPerSecond() float64 { return 2 }
 
 // discover enumerates candidate portals from Common Crawl's index of *.recruitify.ai.
 func (recruitifyProber) discover(ctx context.Context, c httpClient) ([]string, error) {

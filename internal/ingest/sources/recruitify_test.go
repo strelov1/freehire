@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -28,11 +29,11 @@ type fakeRecruitify struct {
 	origin string
 	routes map[string]string
 	fail   map[string]error
-	calls  int
+	calls  atomic.Int32 // detail fetches run concurrently
 }
 
 func (f *fakeRecruitify) GetJSONWithHeaders(_ context.Context, url string, headers map[string]string, v any) error {
-	f.calls++
+	f.calls.Add(1)
 	if err, ok := f.fail[url]; ok {
 		return err
 	}
@@ -78,8 +79,8 @@ func TestRecruitifyListingRefreshesSeenPostings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
 	}
-	if len(jobs) != 30 || fake.calls != 3 {
-		t.Fatalf("jobs/requests = %d/%d, want the listing's 30 postings from its three pages", len(jobs), fake.calls)
+	if len(jobs) != 30 || fake.calls.Load() != 3 {
+		t.Fatalf("jobs/requests = %d/%d, want the listing's 30 postings from its three pages", len(jobs), fake.calls.Load())
 	}
 	for _, j := range jobs {
 		if !j.SeenRefresh || j.ExternalID == "" || !strings.HasPrefix(j.URL, "https://motife.recruitify.ai/job/") {
