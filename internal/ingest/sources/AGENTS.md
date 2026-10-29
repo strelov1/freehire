@@ -224,6 +224,7 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **Remote is almost never structured.** The only signal is the `working-from-home` benefit (rare), read as hybrid; ~10% mention home office or télétravail in prose, which the pipeline reads.
 - **Employment type: Festanstellung (permanent) says nothing of the hours.** `employmentTypeIds` 1 Temporär / 2 Freelance → contract, 3 Praktikum → internship, 4 Nebenerwerb → part time, 5 Festanstellung → full time only when the workload is exactly 100%, part time when it tops out below; "80-100%" is neither. 6 Lehrstelle (an apprenticeship) maps to nothing.
 - **The location is the city names only.** A canton code ("BE", "AG") reads as a country to the location dictionary; `locations[].countryCode` sets `Countries` when present (missing on ~15% of places and on most jobup postings) and `FallbackCountries` is `ch`.
+
 **SwissDevJobs traps** (`swissdevjobs`, swissdevjobs.ch; live-verified 2026-10-29 from the crawl host):
 
 - **Reachable from the crawl host only.** From a residential IP every path, robots.txt included, is a Cloudflare challenge; from the crawl host plain HTTP under the project's own User-Agent answers 200. robots.txt disallows `/api/` for Meta's crawler alone.
