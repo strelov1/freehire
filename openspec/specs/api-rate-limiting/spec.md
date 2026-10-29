@@ -187,7 +187,9 @@ Keyed tiers SHALL apply whether or not the anonymous budgets are strict, and no 
 per-minute budget SHALL sit below the per-address budget a keyless caller has on any route;
 the per-day caps of the tiers below the API product SHALL apply only while the anonymous
 budgets are strict, since a keyless caller carries no daily cap before that. A key worse than
-no key is a key its holder deletes. A refused keyed caller SHALL be told the
+no key is a key its holder deletes. Nor SHALL a tier give less than the tier below it, per minute or per day: an
+upgrade that shrinks an allowance is the same mistake one rung up. A ladder configured
+otherwise SHALL fail the boot. A refused keyed caller SHALL be told the
 next tier up; the top tier is told none.
 
 #### Scenario: A free account's key reads more than no key

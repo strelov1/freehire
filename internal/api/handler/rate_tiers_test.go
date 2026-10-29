@@ -17,7 +17,7 @@ func TestRateTiersFromEnv_Overrides(t *testing.T) {
 		"API_RATE_DATA_PER_MINUTE":   "7000",
 		"API_RATE_UNKNOWN_PER_DAY":   "1",
 		"API_RATE_ANONYMOUS_PER_DAY": "",
-	}), true)
+	}), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,11 @@ func TestRateTiersFromEnv_RefusesAKeyWorseThanNone(t *testing.T) {
 		{"below the anonymous minute under strict", map[string]string{"API_RATE_FREE_PER_MINUTE": "100"}, true, false},
 		{"below the anonymous day under strict", map[string]string{"API_RATE_ULTRA_PER_DAY": "1000"}, true, false},
 		{"a low day is not in force before strict", map[string]string{"API_RATE_ULTRA_PER_DAY": "1000"}, false, true},
-		{"no daily cap is never worse", map[string]string{"API_RATE_FREE_PER_DAY": "0"}, true, true},
+		{"no daily cap is never worse", map[string]string{"API_RATE_FREE_PER_DAY": "0", "API_RATE_PRO_PER_DAY": "0", "API_RATE_ULTRA_PER_DAY": "0"}, true, true},
+		{"an upgrade that shrinks the day", map[string]string{"API_RATE_FREE_PER_DAY": "0"}, true, false},
+		{"an upgrade that shrinks the minute", map[string]string{"API_RATE_ULTRA_PER_MINUTE": "700"}, true, false},
+		{"a capped key beside an uncapped address", map[string]string{"API_RATE_ANONYMOUS_PER_DAY": "0"}, true, false},
+		{"an uncapped ladder beside an uncapped address", map[string]string{"API_RATE_ANONYMOUS_PER_DAY": "0", "API_RATE_FREE_PER_DAY": "0", "API_RATE_PRO_PER_DAY": "0", "API_RATE_ULTRA_PER_DAY": "0"}, true, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -107,13 +107,15 @@ func RateTiersFromEnv(getenv func(string) string, strict bool) (RateTiers, error
 	return t, nil
 }
 
-// keyNeverWorse refuses a keyed tier whose budget, in force, sits below what a caller with no
-// key gets: the larger per-route minute before strict, the anonymous tier's minute and day
-// under it.
+// keyNeverWorse refuses a ladder that steps down anywhere, in force: no keyed tier may give
+// less than a caller with no key gets (the larger per-route minute before strict, the
+// anonymous tier under it), and no tier may give less than the one below it — an upgrade that
+// shrinks an allowance is the same mistake one rung up. A day of 0 is no cap, so it outranks
+// every number.
 func (t RateTiers) keyNeverWorse(strict bool) error {
-	keyless := rateLimit{PerMinute: max(publicReadsPerMinute, agentSearchPerMinute)}
+	prev, prevName := rateLimit{PerMinute: max(publicReadsPerMinute, agentSearchPerMinute)}, "no key"
 	if strict {
-		keyless = t[rateAnonymous]
+		prev = t[rateAnonymous]
 	}
 	inForce := t.inForce(strict)
 	for _, s := range rateTierSpecs {
@@ -121,16 +123,36 @@ func (t RateTiers) keyNeverWorse(strict bool) error {
 			continue
 		}
 		l := inForce[s.tier]
-		if l.PerMinute < keyless.PerMinute {
-			return fmt.Errorf("API_RATE_%s_PER_MINUTE is %d, below the %d a minute a caller without a key gets: a key must not be worse than none",
-				s.env, l.PerMinute, keyless.PerMinute)
+		if l.PerMinute < prev.PerMinute {
+			return fmt.Errorf("API_RATE_%s_PER_MINUTE is %d, below the %d a minute of %s: a key must not be worse than none, nor a tier worse than the one below it",
+				s.env, l.PerMinute, prev.PerMinute, prevName)
 		}
-		if keyless.PerDay > 0 && l.PerDay > 0 && l.PerDay < keyless.PerDay {
-			return fmt.Errorf("API_RATE_%s_PER_DAY is %d, below the %d a day a caller without a key gets: a key must not be worse than none",
-				s.env, l.PerDay, keyless.PerDay)
+		if dayBelow(l.PerDay, prev.PerDay) {
+			return fmt.Errorf("API_RATE_%s_PER_DAY is %d, below the daily allowance of %s (%s): a key must not be worse than none, nor a tier worse than the one below it",
+				s.env, l.PerDay, prevName, dayString(prev.PerDay))
 		}
+		prev, prevName = l, string(s.tier)
 	}
 	return nil
+}
+
+// dayBelow reports whether a daily cap gives less than another, a cap of 0 being none.
+func dayBelow(day, than int) bool {
+	switch {
+	case day == 0:
+		return false
+	case than == 0:
+		return true
+	default:
+		return day < than
+	}
+}
+
+func dayString(day int) string {
+	if day == 0 {
+		return "no cap"
+	}
+	return strconv.Itoa(day)
 }
 
 // envOverride sets *dst from the variable when it is set, refusing a value below floor. Not
