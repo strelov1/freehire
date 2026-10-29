@@ -479,6 +479,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   justjoin: 'Just Join IT',
   rocketjobs: 'RocketJobs',
   iimjobs: 'iimjobs',
+  cbop: 'Praca.gov.pl (CBOP)',
   shine: 'Shine.com',
   infostud: 'Poslovi Infostud',
   spainjobs: 'SpainJobs.io',

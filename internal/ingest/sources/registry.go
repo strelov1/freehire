@@ -449,6 +449,9 @@ func All(c HTTPClient) map[string]Source {
 		// page's Next.js flight. See justjoin.go.
 		NewJustJoin(c),
 		NewRocketJobs(c),
+		// Centralna Baza Ofert Pracy (oferty.praca.gov.pl): Poland's public job board, listed whole
+		// from the portal's search API, whose rows carry the full offer. See cbop.go.
+		NewCBOP(c),
 		NewWantapply(c),
 		NewInfoJobs(c),
 		NewJobtech(c),
