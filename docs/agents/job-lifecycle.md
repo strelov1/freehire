@@ -1,7 +1,7 @@
 # Job lifecycle conventions
 
 ## Scope
-The open/closed state of a job row, the six mechanisms that write `closed_at`, and the filtering semantics that depend on it.
+The open/closed state of a job row, the seven mechanisms that write `closed_at`, and the filtering semantics that depend on it.
 
 ## Always true
 - A job is open while `closed_at IS NULL`. Closing is a soft state, and the lifecycle never deletes.
@@ -20,7 +20,7 @@ The open/closed state of a job row, the six mechanisms that write `closed_at`, a
 - An open posting its source has not shown for more than 14 days (`last_seen_at`) is **hidden from search, not closed** — see "The unseen safety net" below. It stays open, its page keeps serving, and it returns when its source lists it again.
 
 ## How it works
-Closing is a soft state on one column (`closed_at`) written by six independent mechanisms, each covering a gap the others can't reach. Five of them close on evidence; the age rule (4) closes on a guess, which is why every close now records which one wrote it. The two safety nets, (5) and (6), differ from the rest in what their evidence is ABOUT: the first four read a posting, while (5) and (6) read a board's history and close on what the crawl has been unable to learn for weeks — (5) because nothing could reach the board, (6) because everything reached it and found nothing there.
+Closing is a soft state on one column (`closed_at`) written by seven independent mechanisms, each covering a gap the others can't reach. Six of them close on evidence; the age rule (4) closes on a guess, which is why every close now records which one wrote it. The two safety nets, (5) and (6), differ from the rest in what their evidence is ABOUT: the first four read a posting, while (5) and (6) read a board's history and close on what the crawl has been unable to learn for weeks — (5) because nothing could reach the board, (6) because everything reached it and found nothing there.
 
 **(1) Ingest sweep** (`cmd/ingest`, `CloseUnseenJobs`): for board sources, the ingest write stamps `last_seen_at` every crawl — the cheap `RefreshUnchangedJob` on the common path, `UpsertJob` for a new, edited or reopening posting. The post-run sweep closes a provider's jobs unseen for 48h — if a posting drops off a board we crawl, it closes. A reappearing posting reopens via the upsert (the `ON CONFLICT` path clears `closed_at`). The sweep runs per provider, and only for providers that ingested at least one job, so a total crawl outage can't mass-close a catalogue. It is scoped to the `company_slug`s the run actually crawled, so a partial or targeted run closes only the companies it saw — a deliberate under-close that *leaks the last postings of a company that vanished from the feed entirely* (its slug drops out of the crawled set), since the scope can't tell "company gone" from "company not reached this run". A recency-budgeted aggregator (`himalayas` pages only its freshest slice per run — see `internal/ingest/sources/himalayas.go`) leaks this way routinely, not just on a company's actual last posting: any company that ages out of that window stops appearing in *any* future crawl, so its slug never re-enters scope again.
 
