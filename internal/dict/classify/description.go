@@ -142,11 +142,11 @@ func SeniorityFromDescription(desc string) string {
 var mentorVerbs = []string{
 	// No "mentorship": the noun is a benefit the role receives ("we offer mentorship in
 	// this entry-level position"), not a role it plays.
-	"mentor", "mentors", "mentoring",
-	"coach", "coaches", "coaching",
-	"guide", "guides", "guiding",
-	"supervise", "supervises", "supervising",
-	"teach", "teaches", "teaching",
+	"mentor", "mentors", "mentoring", "mentored",
+	"coach", "coaches", "coaching", "coached",
+	"guide", "guides", "guiding", "guided",
+	"supervise", "supervises", "supervising", "supervised",
+	"teach", "teaches", "teaching", "taught",
 }
 
 // mentorWindow is how far before a grade phrase a mentoring verb still governs it.
@@ -164,7 +164,7 @@ func notMentored(s string, start, end int) bool {
 		return false
 	}
 	lo := max(0, start-mentorWindow)
-	for lo > 0 && s[lo-1] != ' ' { // never start the window inside a word
+	for lo > 0 && wordByte(s[lo-1]) { // never start the window inside a word
 		lo--
 	}
 	// Decoded first, so an entity's own semicolon ("mentor&nbsp;junior-level") is not
@@ -181,4 +181,10 @@ func notMentored(s string, start, end int) bool {
 		}
 	}
 	return true
+}
+
+// wordByte reports whether b can sit inside a word: an ASCII letter or digit, or a byte
+// of a multi-byte rune. Anything else (a space, the "&" and ";" of an entity) ends one.
+func wordByte(b byte) bool {
+	return b >= 0x80 || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
 }
