@@ -196,9 +196,11 @@ func (s optius) list(ctx context.Context) ([]optiusCard, error) {
 	return cards, nil
 }
 
-// walk reads one listing to its end: the first page carrying no card. Only the site's own
-// listing page ends a walk — a cardless page without the result counter (a challenge or an
-// error page answered 200) is the absence of an answer and fails it.
+// walk reads one listing to its end: the first page carrying no card at an offset past the
+// total the page itself states. A cardless page without the result counter (a challenge or an
+// error page answered 200), or one short of the stated total, is not the listing's end and
+// fails the walk. The total is the cardless page's own, so postings that expired while the walk
+// ran do not fail it.
 func (s optius) walk(ctx context.Context, path string) ([]optiusCard, error) {
 	seen := make(map[string]bool)
 	var out []optiusCard
@@ -213,11 +215,15 @@ func (s optius) walk(ctx context.Context, path string) ([]optiusCard, error) {
 		if err != nil {
 			return nil, fmt.Errorf("optius: %s page %d: %w", path, page+1, err)
 		}
-		if firstByClass(root, "result-count") == nil {
+		total, ok := optiusTotal(root)
+		if !ok {
 			return nil, fmt.Errorf("optius: %s page %d is not a listing", path, page+1)
 		}
 		cards := optiusCards(root)
 		if len(cards) == 0 {
+			if offset := page * optiusPageSize; offset < total {
+				return nil, fmt.Errorf("optius: %s page %d is empty at offset %d of %d postings", path, page+1, offset, total)
+			}
 			return out, nil
 		}
 		for _, c := range cards {
@@ -228,6 +234,21 @@ func (s optius) walk(ctx context.Context, path string) ([]optiusCard, error) {
 			}
 		}
 	}
+}
+
+// optiusTotal reads the postings count a listing page states in its result counter; ok is
+// false for a page that is not a listing.
+func optiusTotal(root *html.Node) (int, bool) {
+	counter := firstByClass(root, "result-count")
+	if counter == nil {
+		return 0, false
+	}
+	span := firstByTag(counter, "span")
+	if span == nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(strings.ReplaceAll(optiusClean(textContent(span)), ".", ""))
+	return n, err == nil
 }
 
 // optiusCards reads the posting cards of one listing page.

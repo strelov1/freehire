@@ -22,6 +22,9 @@ type optiusFake struct {
 	pageErr error
 	// challenge answers the main listing's second page with a 200 that is not a listing.
 	challenge bool
+	// shortEnd answers the main listing's second page cardless while stating more postings
+	// than the first page carried.
+	shortEnd bool
 	// gone answers 404 for this posting id.
 	gone string
 
@@ -70,7 +73,11 @@ func (f *optiusFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	return html.Parse(strings.NewReader(string(raw)))
+	page := string(raw)
+	if f.shortEnd && path == "listing_end.html" {
+		page = strings.Replace(page, `color-dark-violet">4<`, `color-dark-violet">1310<`, 1)
+	}
+	return html.Parse(strings.NewReader(page))
 }
 
 func (f *optiusFake) postingRequests() int {
@@ -182,6 +189,13 @@ func TestOptiusFailsTheCrawlOnAPageThatIsNotAListing(t *testing.T) {
 	f := &optiusFake{challenge: true}
 	if _, err := newTestOptius(f).FetchNew(context.Background(), opEntry, func(string) bool { return false }); err == nil {
 		t.Fatal("a cardless page without the result counter is no answer, not the listing's end")
+	}
+}
+
+func TestOptiusFailsTheCrawlOnAnEmptyPageShortOfTheStatedTotal(t *testing.T) {
+	f := &optiusFake{shortEnd: true}
+	if _, err := newTestOptius(f).FetchNew(context.Background(), opEntry, func(string) bool { return false }); err == nil {
+		t.Fatal("a cardless page before the stated total is a truncated listing, not its end")
 	}
 }
 
