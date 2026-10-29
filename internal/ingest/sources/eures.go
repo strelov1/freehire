@@ -28,10 +28,31 @@ import (
 // description, unlike arbeitsagentur. A per-posting detail fetch is still made, but ONLY to
 // resolve a human-readable Location: the search result's own locationMap carries opaque NUTS
 // region codes, while the detail response's structured place data carries a real city name.
+// So it is a HydratingSource: the detail is fetched only for a posting the catalogue does not
+// hold, and a stored one is re-listed as a SeenRefresh.
 // The IT scope (ICT professionals + ICT technicians) is fixed in code as an ESCO/ISCO occupation
 // filter, never board-selectable, so every yielded Job carries IsTechHint.
+//
+// Every crawl lists a country's WHOLE catalogue, never a publication window. Until 2026-10-28
+// the search was narrowed to LAST_THREE_DAYS, so a posting older than three days was never
+// listed again by any crawl: measured that day, 40,170 of eures' 42,914 open postings were
+// posted before the window, and 22,356 Netherlands postings stood open against the 9,283 the
+// country actually carried. The unseen sweep could not tell those apart from removed postings,
+// so it closed the live ones of any company that happened to post again inside the window and
+// left the rest open forever. A full listing is ~52k postings across all countries, ~1,050
+// search pages answering in ~0.3 s each from the crawl host.
+//
+// The API pages no deeper than euresDepthCap results, and Germany alone carries ~21k. A
+// country past the cap is therefore listed through the sub-regions its own POSITION_LOCATION
+// facet names — NUTS-1 codes plus "<cc>-NS" for a posting that names no region, each queryable
+// as a location code (measured: every child's count matches its own query's total) — and the
+// deduplicated union must cover the country's total. That check, and the per-walk check
+// against the total the search states, are what earn the fullBoardListing marker.
 type eures struct {
 	http euresHTTP
+	// depthCap is the deepest result the search pages to (euresDepthCap; a field so tests can
+	// drive the partitioning path without ten thousand postings).
+	depthCap int
 }
 
 // euresHTTP is the transport eures needs: a JSON POST for the paginated search, a JSON GET for
@@ -52,23 +73,12 @@ const (
 	euresPortalURL = "https://europa.eu/eures/portal/jv-se/jv-details/"
 	// euresPageSize is the API's own maximum resultsPerPage.
 	euresPageSize = 50
-	// euresMaxPages backstops pagination at the API's measured ~10,000-result depth cap
-	// (confirmed live: page*resultsPerPage beyond it answers "Too many results were
-	// requested" instead of a page of results). Combined with euresPublicationPeriod, a
-	// crawl should exhaust its results well before this backstop; it exists so the adapter
-	// never issues the failing request even if a board's volume grows unexpectedly.
-	euresMaxPages = 10000 / euresPageSize
-	// euresPublicationPeriod bounds every search to a fresh window, the same role
-	// arbeitsagenturWithinDays plays there. LAST_THREE_DAYS was chosen because it keeps the
-	// largest observed country/occupation-group combination (Germany + ICT professionals,
-	// measured at ~6,100 records) comfortably under the depth cap, where LAST_WEEK
-	// (~10,500) does not fit. Sorting MOST_RECENT means that if some board still exceeds
-	// the cap, only the oldest tail of the window is missed for that run — it is picked up
-	// on the next run, well inside the window, since ingest runs far more often than every
-	// three days.
-	euresPublicationPeriod = "LAST_THREE_DAYS"
-	euresSortSearch        = "MOST_RECENT"
-	euresRequestLanguage   = "en"
+	// euresDepthCap is the API's measured result-depth cap (confirmed live: page*resultsPerPage
+	// beyond 10,000 answers "Too many results were requested" instead of a page of results).
+	// A query stating more than this is split by region, never walked part-way.
+	euresDepthCap        = 10000
+	euresSortSearch      = "MOST_RECENT"
+	euresRequestLanguage = "en"
 	// euresSessionID is a fixed constant: the field is required by the request schema but
 	// no auth/personalization semantics were observed against it.
 	euresSessionID = "freehire-ingest"
@@ -100,12 +110,17 @@ var euresCountryNames = map[string]string{
 }
 
 // NewEures builds the EURES adapter over the given client. Keyless: registers unconditionally.
-func NewEures(c euresHTTP) Source { return eures{http: c} }
+func NewEures(c euresHTTP) Source { return eures{http: c, depthCap: euresDepthCap} }
 
 func (eures) Provider() string { return "eures" }
 
 // aggregator marks eures for cross-source dedup suppression — see the eures doc comment.
 func (eures) aggregator() {}
+
+// fullBoardListing: every walk is checked against the total the search states, and a country
+// past the depth cap is split into regions whose union is checked against the country's total;
+// any shortfall fails the crawl. See the eures doc comment and the fullBoardListing interface.
+func (eures) fullBoardListing() {}
 
 // euresSearchRequest is one search request. Every filter array the adapter does not use is sent
 // as an explicit empty slice, matching the request schema's requirement that these fields be
@@ -117,7 +132,6 @@ type euresSearchRequest struct {
 	Page                                int      `json:"page"`
 	SortSearch                          string   `json:"sortSearch"`
 	Keywords                            []any    `json:"keywords"`
-	PublicationPeriod                   string   `json:"publicationPeriod"`
 	OccupationUris                      []string `json:"occupationUris"`
 	SkillUris                           []string `json:"skillUris"`
 	RequiredExperienceCodes             []string `json:"requiredExperienceCodes"`
@@ -133,14 +147,14 @@ type euresSearchRequest struct {
 	RequestLanguage                     string   `json:"requestLanguage"`
 }
 
-// euresSearchBody builds the request for one board's page.
-func euresSearchBody(board string, page int) euresSearchRequest {
+// euresSearchBody builds the request for one page of a location: a board's country code, or one
+// of its sub-region codes when the country is listed region by region.
+func euresSearchBody(location string, page int) euresSearchRequest {
 	return euresSearchRequest{
 		ResultsPerPage:                      euresPageSize,
 		Page:                                page,
 		SortSearch:                          euresSortSearch,
 		Keywords:                            []any{},
-		PublicationPeriod:                   euresPublicationPeriod,
 		OccupationUris:                      euresOccupationURIs,
 		SkillUris:                           []string{},
 		RequiredExperienceCodes:             []string{},
@@ -148,7 +162,7 @@ func euresSearchBody(board string, page int) euresSearchRequest {
 		SectorCodes:                         []string{},
 		EducationAndQualificationLevelCodes: []string{},
 		PositionOfferingCodes:               []string{},
-		LocationCodes:                       []string{strings.ToLower(strings.TrimSpace(board))},
+		LocationCodes:                       []string{location},
 		EuresFlagCodes:                      []string{},
 		OtherBenefitsCodes:                  []string{},
 		RequiredLanguages:                   []string{},
@@ -161,6 +175,36 @@ func euresSearchBody(board string, page int) euresSearchRequest {
 type euresSearchResponse struct {
 	NumberRecords int            `json:"numberRecords"`
 	Jvs           []euresVacancy `json:"jvs"`
+	Facets        struct {
+		PositionLocation struct {
+			Entries []euresFacetEntry `json:"facetEntriesList"`
+		} `json:"POSITION_LOCATION"`
+	} `json:"facets"`
+}
+
+// euresFacetEntry is one POSITION_LOCATION facet entry: a country and the sub-region codes the
+// postings matching the query carry under it.
+type euresFacetEntry struct {
+	Code     string `json:"code"`
+	Children []struct {
+		Code string `json:"code"`
+	} `json:"childrenList"`
+}
+
+// regions returns the sub-region codes the facet names under country.
+func (r euresSearchResponse) regions(country string) []string {
+	var out []string
+	for _, e := range r.Facets.PositionLocation.Entries {
+		if !strings.EqualFold(e.Code, country) {
+			continue
+		}
+		for _, c := range e.Children {
+			if c.Code != "" {
+				out = append(out, c.Code)
+			}
+		}
+	}
+	return out
 }
 
 // euresVacancy is one search result — already carrying the translated title/description, so no
@@ -201,36 +245,147 @@ type euresLocation struct {
 	AddressLines []string `json:"addressLines"`
 }
 
+// Fetch is the list-only fallback used when the pipeline cannot supply a seen set: it hydrates
+// every listed posting. FetchNew is the hydrating path ingest prefers.
 func (e eures) Fetch(ctx context.Context, entry CompanyEntry) ([]Job, error) {
-	var vacancies []euresVacancy
-	for page := 1; page <= euresMaxPages; page++ {
-		var resp euresSearchResponse
-		if err := e.http.PostJSON(ctx, euresSearchURL, euresSearchBody(entry.Board, page), &resp); err != nil {
-			return nil, fmt.Errorf("eures: search board %q page %d: %w", entry.Board, page, err)
-		}
-		vacancies = append(vacancies, resp.Jvs...)
-		if len(resp.Jvs) < euresPageSize || len(vacancies) >= resp.NumberRecords {
-			break
-		}
+	return e.FetchNew(ctx, entry, func(string) bool { return false })
+}
+
+// FetchNew lists the board's whole country and fetches a posting's detail only when the
+// catalogue does not hold it; a seen posting is re-listed as a SeenRefresh.
+func (e eures) FetchNew(ctx context.Context, entry CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
+	country := strings.ToLower(strings.TrimSpace(entry.Board))
+	vacancies, err := e.list(ctx, country)
+	if err != nil {
+		return nil, fmt.Errorf("eures: board %q: %w", entry.Board, err)
 	}
 	return fetchDetails(vacancies, defaultDetailWorkers, func(v euresVacancy) (Job, bool) {
+		if seen(v.ID) {
+			j := v.job()
+			j.SeenRefresh = true
+			return j, true
+		}
 		return e.toJob(ctx, entry.Board, v), true
 	}), nil
 }
 
-func (e eures) toJob(ctx context.Context, board string, v euresVacancy) Job {
-	return Job{
-		ExternalID:     v.ID,
-		URL:            euresPortalURL + v.ID + "?lang=en",
-		Title:          strings.TrimSpace(v.Title),
-		Company:        strings.TrimSpace(v.Employer.Name),
-		Description:    sanitizeHTML(v.Description),
-		Location:       e.resolveLocation(ctx, v.ID, board),
-		PostedAt:       euresPostedAt(v.CreationDate),
-		Countries:      euresCountries(v.LocationMap),
-		EmploymentType: euresEmploymentType(v.PositionOfferingCode, v.PositionScheduleCodes),
-		IsTechHint:     true,
+// list reads every posting of country: in one walk when the country fits under the depth cap,
+// otherwise region by region. A region walk proves only its own region, so the union must also
+// account for the country's total — the lower of the totals stated before and after the regions
+// are walked, so a posting withdrawn meanwhile does not fail the board. The union is counted in
+// distinct postings plus the repeats the region walks read: the search counts a posting it
+// indexes twice twice (see walk), so distinct postings alone can never reach such a total.
+func (e eures) list(ctx context.Context, country string) ([]euresVacancy, error) {
+	first, err := e.search(ctx, country, 1)
+	if err != nil {
+		return nil, err
 	}
+	if first.NumberRecords <= e.depthCap {
+		vs, _, err := e.walk(ctx, country, first)
+		return vs, err
+	}
+	regions := first.regions(country)
+	if len(regions) == 0 {
+		return nil, fmt.Errorf("%d postings exceed the %d-result depth cap and the search names no region to split them by", first.NumberRecords, e.depthCap)
+	}
+	var out []euresVacancy
+	listed := map[string]bool{}
+	repeats := 0
+	for _, region := range regions {
+		rfirst, err := e.search(ctx, region, 1)
+		if err != nil {
+			return nil, err
+		}
+		if rfirst.NumberRecords > e.depthCap {
+			return nil, fmt.Errorf("region %q: %d postings exceed the %d-result depth cap", region, rfirst.NumberRecords, e.depthCap)
+		}
+		vs, r, err := e.walk(ctx, region, rfirst)
+		if err != nil {
+			return nil, err
+		}
+		repeats += r
+		for _, v := range vs {
+			if !listed[v.ID] {
+				listed[v.ID] = true
+				out = append(out, v)
+			}
+		}
+	}
+	recount, err := e.search(ctx, country, 1)
+	if err != nil {
+		return nil, err
+	}
+	if want := min(first.NumberRecords, recount.NumberRecords); len(out)+repeats < want {
+		return nil, fmt.Errorf("regions %v listed %d postings (%d repeated) of the country's %d", regions, len(out), repeats, want)
+	}
+	return out, nil
+}
+
+// walk pages one location from its already-fetched first page to the search's natural end — a
+// short page — and fails unless the positions read reach the total the search states. It counts
+// POSITIONS, not distinct postings, because the search counts a posting it indexes twice twice:
+// measured live 2026-10-28, region "dea" stated 4,731 results and served 4,730 distinct ids on
+// every walk. The lowest total any page stated is the bar: a posting withdrawn mid-walk shifts
+// the pages and lowers the total together, while a truncated walk falls short of either. It
+// returns the distinct postings and how many positions repeated one already read.
+func (e eures) walk(ctx context.Context, location string, first euresSearchResponse) ([]euresVacancy, int, error) {
+	var out []euresVacancy
+	listed := map[string]bool{}
+	read := 0
+	want := first.NumberRecords
+	resp := first
+	for page := 1; ; page++ {
+		if page > 1 {
+			var err error
+			if resp, err = e.search(ctx, location, page); err != nil {
+				return nil, 0, err
+			}
+			want = min(want, resp.NumberRecords)
+		}
+		read += len(resp.Jvs)
+		for _, v := range resp.Jvs {
+			if !listed[v.ID] {
+				listed[v.ID] = true
+				out = append(out, v)
+			}
+		}
+		if len(resp.Jvs) < euresPageSize || page*euresPageSize >= e.depthCap {
+			break
+		}
+	}
+	if read < want {
+		return nil, 0, fmt.Errorf("location %q: read %d of the %d results the search states", location, read, want)
+	}
+	return out, read - len(out), nil
+}
+
+func (e eures) search(ctx context.Context, location string, page int) (euresSearchResponse, error) {
+	var resp euresSearchResponse
+	if err := e.http.PostJSON(ctx, euresSearchURL, euresSearchBody(location, page), &resp); err != nil {
+		return resp, fmt.Errorf("search %q page %d: %w", location, page, err)
+	}
+	return resp, nil
+}
+
+// job is the identity every path shares — the shape a SeenRefresh carries.
+func (v euresVacancy) job() Job {
+	return Job{
+		ExternalID: v.ID,
+		URL:        euresPortalURL + v.ID + "?lang=en",
+		Title:      strings.TrimSpace(v.Title),
+		Company:    strings.TrimSpace(v.Employer.Name),
+	}
+}
+
+func (e eures) toJob(ctx context.Context, board string, v euresVacancy) Job {
+	j := v.job()
+	j.Description = sanitizeHTML(v.Description)
+	j.Location = e.resolveLocation(ctx, v.ID, board)
+	j.PostedAt = euresPostedAt(v.CreationDate)
+	j.Countries = euresCountries(v.LocationMap)
+	j.EmploymentType = euresEmploymentType(v.PositionOfferingCode, v.PositionScheduleCodes)
+	j.IsTechHint = true
+	return j
 }
 
 // resolveLocation resolves a human-readable Location by fetching the posting's detail. A failed
