@@ -38,8 +38,9 @@ func TestEachEventIsOneLineInItsDaysFile(t *testing.T) {
 }
 
 func TestAFullBufferDropsInsteadOfBlocking(t *testing.T) {
-	w := newWriter(t.TempDir(), 1)
-	w.pause() // the drain goroutine holds off, so the buffer fills
+	// No drain goroutine, so nothing empties the one-slot buffer: the first event fills
+	// it and every later one must be dropped rather than wait.
+	w := &Writer{ch: make(chan Event, 1)}
 	done := make(chan struct{})
 	go func() {
 		for range 10 {
@@ -52,11 +53,9 @@ func TestAFullBufferDropsInsteadOfBlocking(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Write blocked on a full buffer")
 	}
-	if w.Dropped() == 0 {
-		t.Error("Dropped() = 0, want the overflow counted")
+	if got := w.Dropped(); got != 9 {
+		t.Errorf("Dropped() = %d, want 9", got)
 	}
-	w.resume()
-	w.Close()
 }
 
 func TestAWriteAfterCloseIsDroppedNotAPanic(t *testing.T) {

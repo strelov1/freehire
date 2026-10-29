@@ -22,7 +22,6 @@ type Writer struct {
 	ch      chan Event
 	dropped atomic.Int64
 	done    chan struct{}
-	gate    sync.Mutex // held by pause() in tests to stall the drain
 	// mu orders Write against Close: a Write after Close would send on a closed channel,
 	// and a server whose shutdown timed out still has handlers in flight.
 	mu     sync.RWMutex
@@ -37,11 +36,7 @@ func NewWriter(dir string) *Writer {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		log.Printf("agentview: create %s: %v", dir, err)
 	}
-	return newWriter(dir, bufferSize)
-}
-
-func newWriter(dir string, size int) *Writer {
-	w := &Writer{dir: dir, ch: make(chan Event, size), done: make(chan struct{})}
+	w := &Writer{dir: dir, ch: make(chan Event, bufferSize), done: make(chan struct{})}
 	go w.run()
 	return w
 }
@@ -64,7 +59,7 @@ func (w *Writer) Write(e Event) {
 	}
 }
 
-// Dropped is how many events a full buffer has cost since start.
+// Dropped is how many events were dropped since start: by a full buffer, or after Close.
 func (w *Writer) Dropped() int64 {
 	if w == nil {
 		return 0
@@ -87,17 +82,12 @@ func (w *Writer) Close() {
 	<-w.done
 }
 
-func (w *Writer) pause()  { w.gate.Lock() }
-func (w *Writer) resume() { w.gate.Unlock() }
-
 func (w *Writer) run() {
 	defer close(w.done)
 	files := dayWriter{dir: w.dir}
 	defer files.close()
 	for e := range w.ch {
-		w.gate.Lock()
 		files.write(e)
-		w.gate.Unlock()
 	}
 }
 
