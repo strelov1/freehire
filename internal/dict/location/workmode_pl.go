@@ -113,8 +113,9 @@ var polishGuards = phraseGuards{negations: polishNegations, refusals: polishRefu
 var polishWorkModeTriggers = []string{"zdaln", "hybrydow", "stacjonarn", "w biurze", "z biura"}
 
 // polishModeChoice offers the job in more than one model — "możliwość pracy stacjonarnej,
-// zdalnej lub hybrydowej", "praca zdalna lub hybrydowa" — which is a flexible arrangement,
-// read as hybrid before the phrase list, whose onsite "pracy stacjonarnej" it contains.
+// zdalnej lub hybrydowej", "praca w trybie zdalnym lub hybrydowym" — which is a flexible
+// arrangement, read as hybrid before the phrase list, whose remote and onsite phrases it
+// contains.
 var polishModeChoice = regexp.MustCompile(`\b(?:prac[aey]|pracowac|model\p{L}*|tryb\p{L}*|form\p{L}*)\s+(?:w\s+(?:trybie|modelu)\s+)?(?:stacjonarn|zdaln|hybrydow)\p{L}*(?:,\s*(?:stacjonarn|zdaln|hybrydow)\p{L}*)*\s+(?:lub|i|albo|badz)\s+(?:w\s+pelni\s+)?(?:stacjonarn|zdaln|hybrydow)`)
 
 // polishSplitWeek is a week split between the office and home stated as a share below a
@@ -129,17 +130,33 @@ func polishWorkMode(desc string) string {
 	if !containsAny(text, polishWorkModeTriggers) {
 		return ""
 	}
+	// A choice of models or a split week is read before the remote list, whose "praca w
+	// trybie zdalnym" sits inside "praca w trybie zdalnym lub hybrydowym".
+	if polishFlexible(text) {
+		return "hybrid"
+	}
 	for _, wm := range polishWorkModePhrases {
-		if wm.mode == "hybrid" && polishFlexible(text) {
-			return "hybrid"
-		}
 		for _, p := range wm.phrases {
-			if guardedPhraseMatches(text, p, wm.mode, polishGuards) {
+			// An onsite phrase that affirms the office is withdrawn by a denial ("nie
+			// oferujemy pracy stacjonarnej"), as a remote one is; the onsite phrases that
+			// are themselves a refusal of home working are not.
+			mode := wm.mode
+			if mode == "onsite" && !polishOnsiteRefusals[p] {
+				mode = "affirmed onsite"
+			}
+			if guardedPhraseMatches(text, p, mode, polishGuards) {
 				return wm.mode
 			}
 		}
 	}
 	return ""
+}
+
+// polishOnsiteRefusals are the onsite phrases that refuse home working rather than affirm
+// the office, so a negation inside them ("brak", "nie ma") is the statement itself.
+var polishOnsiteRefusals = map[string]bool{
+	"praca zdalna: brak": true, "brak mozliwosci pracy zdalnej": true,
+	"nie ma mozliwosci pracy zdalnej": true,
 }
 
 // polishFlexible reports a choice of models or a split week, each under the same guards

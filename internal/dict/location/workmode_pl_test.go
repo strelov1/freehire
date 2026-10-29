@@ -28,6 +28,7 @@ func TestPolishWorkModeFromDescription(t *testing.T) {
 		{"📍 Warszawa / hybrydowo (1 dzień w tygodniu z biura)", "hybrid"},
 		{"Elastyczne grafiki, możliwość pracy stacjonarnej, zdalnej lub hybrydowej.", "hybrid"},
 		{"Model pracy: 80% zdalnie, raz w tygodniu spotkanie zespołu.", "hybrid"},
+		{"Praca w trybie zdalnym lub hybrydowym.", "hybrid"},
 		// Onsite: a stated office model, the template's "brak".
 		{"Elastyczne godziny pracy (100%) Praca zdalna: brak Pakiet medyczny", "onsite"},
 		{"Lokalizacja i tryb pracy: ul. Spokojna 2 w Lublinie, praca stacjonarna", "onsite"},
@@ -40,6 +41,7 @@ func TestPolishWorkModeFromDescription(t *testing.T) {
 		{"Projekt skupia się na rozbudowie nowoczesnej platformy w modelu hybrydowym oraz multi-cloud.", ""},
 		{"Prowadzimy sprzedaż stacjonarną i online.", ""},
 		{"Nie oferujemy pracy hybrydowej.", ""},
+		{"Nie oferujemy pracy stacjonarnej.", ""},
 		{"Możliwość pracy zdalnej 20 dni w roku.", ""},
 	}
 	for _, c := range cases {
