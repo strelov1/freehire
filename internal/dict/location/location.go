@@ -182,7 +182,7 @@ func ParseIn(location string, known []string) Geo {
 			prevTok = tok
 			continue
 		}
-		if metro, ok := polishMetroRegions[tok]; ok {
+		if metro, ok := polishMetroRegion(tok, lower); ok {
 			countrySet["pl"] = struct{}{}
 			regionSet[countryToRegion["pl"]] = struct{}{}
 			regionMetros[metro] = struct{}{}

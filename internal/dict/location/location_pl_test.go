@@ -23,6 +23,8 @@ func TestPolishLines(t *testing.T) {
 		{"Trójmiasto, Poland", []string{"pl"}, nil, []string{"Gdańsk (PL)"}},
 		{"Tricity, Pomorskie, Poland", []string{"pl"}, nil, []string{"Gdańsk (PL)"}},
 		{"Śląsk", []string{"pl"}, nil, []string{"Katowice (PL)"}},
+		// The English "Tricity" is Chandigarh's too: Poland only in a Polish line.
+		{"Tricity, Chandigarh, India", []string{"in"}, []string{"Chandigarh"}, []string{"Chandigarh (IN)"}},
 		// A voivodeship alone states the country.
 		{"Mazowieckie", []string{"pl"}, nil, nil},
 		{"Lesser Poland Voivodeship", []string{"pl"}, nil, nil},
