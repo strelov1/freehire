@@ -211,7 +211,7 @@ func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark
 // It is anchored to the end of the name (past a closing bracket, "Acme (Sp. z o. o.)") and
 // needs the "z" before it, so only that tail moves:
 // the spaced Balkan "d. o. o." would otherwise close up to "d o.o.", which reads as no form.
-var spacedPolishTail = regexp.MustCompile(`(?i)([\s.]z\s+)o\.\s+o\.?[\s)\]]*$`)
+var spacedPolishTail = regexp.MustCompile(`(?i)([\s\p{Zs}.]z[\s\p{Zs}]+)o\.[\s\p{Zs}]+o\.?[\s\p{Zs})\]]*$`)
 
 // dropApostrophes removes the possessive/elision marks a name carries so they cannot become
 // word breaks in the key. "Kohl's" is one word and belongs at `kohls`, which is also what a
@@ -313,18 +313,22 @@ func IsLegalForm(word string) bool {
 	if _, ok := legalSuffixes[letters(word)]; ok {
 		return true
 	}
-	if _, ok := accentedForms[strings.ToLower(strings.TrimRight(word, "."))]; ok {
+	if _, ok := accentedForms[strings.ToLower(strings.TrimFunc(word, notLetter))]; ok {
 		return true
 	}
 	return isGluedForms(word)
 }
 
 // accentedForms are the corporate forms whose letters are not all ASCII, matched as the whole
-// lowercased word. [letters] cannot carry them: it keeps ASCII only, so "OÜ" reads "o". Folding
+// lowercased word past any punctuation around it. [letters] cannot carry them: it keeps ASCII only, so "OÜ" reads "o". Folding
 // accents inside letters instead was measured and refused (2026-10-29): it transliterates
 // Cyrillic too, and "ООО "САС"" and "ООО "АГ"" both became `ooo` — two employers on one key —
 // while initials like "С.А." started reading as forms.
 var accentedForms = map[string]struct{}{"oü": {}}
+
+// notLetter trims what may surround an [accentedForms] word — "OÜ.", "(OÜ)" — the way
+// [letters] ignores it for every other form.
+func notLetter(r rune) bool { return !unicode.IsLetter(r) }
 
 // isGluedForms reports whether a word is several forms joined by dots with no space, "Pvt.Ltd."
 // or "Pte.Ltd" — one word to the tail walk, since a dot is not a word break (it lives inside

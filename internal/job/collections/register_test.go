@@ -376,7 +376,7 @@ func TestRequireCountry_CompoundFormLeavesOneSignificantToken(t *testing.T) {
 	// would pass for part of the name and skip the headquarters check.
 	gate := RequireCountry("GB")
 	elsewhere := Company{Slug: "nova", Countries: []string{"GB", "MY"}, HQCountry: "MY"}
-	for _, name := range []string{"Nova Sdn Bhd", "Nova Private Limited", "Nova Pty Ltd"} {
+	for _, name := range []string{"Nova Sdn Bhd", "Nova Private Limited", "Nova Pty Ltd", "Nova (OÜ)"} {
 		if gate(elsewhere, Record{Name: name}) {
 			t.Errorf("%q was admitted on the country facet alone", name)
 		}

@@ -116,6 +116,8 @@ func TestCompanySlug(t *testing.T) {
 		{"polish o. o. spaced", "Grupa Allegro Sp. z o. o.", "grupa-allegro"},
 		{"polish o. o. spaced, capitals", "KPS FOOD SP. Z O. O.", "kps-food"},
 		{"polish o. o. spaced, bracketed", "Acme (Sp. z o. o.)", "acme"},
+		{"polish o. o. with a no-break space", "Acme Sp. z o.\u00a0o.", "acme"},
+		{"estonian oü, bracketed", "Acme (OÜ)", "acme"},
 		{"a spaced d. o. o. is left as it was", "Acme d. o. o.", "acme-d-o-o"},
 		{"estonian ou", "Shuttle99 OU", "shuttle99"},
 		{"estonian oü", "Shuttle99 OÜ", "shuttle99"},
