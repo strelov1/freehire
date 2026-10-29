@@ -212,27 +212,32 @@ func swissdevjobsBaseJob(r swissdevjobsJob) Job {
 	return job
 }
 
+// swissdevjobsDetailPaths are the posting page's addresses, tried in turn. The site sometimes
+// serves a page with its state left as the literal "JOB_PLACEHOLDER" instead of the posting
+// (13 of 140 on the first production run), and which address does so varies from request to
+// request — the same posting rendered under /fr/jobs/ moments after /jobs/ and /de/jobs/ had
+// not — so a placeholder is retried under the next address before the posting is deferred.
+var swissdevjobsDetailPaths = []string{"/jobs/", "/de/jobs/", "/fr/jobs/"}
+
+// errSwissdevjobsPlaceholder is a page served without its posting state.
+var errSwissdevjobsPlaceholder = errors.New("page carries a placeholder instead of the posting state")
+
 // detail fetches the posting page and reads its state. A posting the site no longer carries
 // answers 404, or a page whose posting is flagged outdated, and is not yielded.
 func (s swissdevjobs) detail(ctx context.Context, r swissdevjobsJob) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
+	var d swissdevjobsJob
+	var err error
+	for _, path := range swissdevjobsDetailPaths {
+		if d, err = s.state(ctx, swissdevjobsBase+path+r.Slug); !errors.Is(err, errSwissdevjobsPlaceholder) {
+			break
+		}
 	}
-	page, err := s.get.GetText(ctx, r.url())
 	if err != nil {
 		var se *StatusError
 		if errors.As(err, &se) && (se.Code == http.StatusNotFound || se.Code == http.StatusGone) {
 			return Job{}, false, nil
 		}
 		return Job{}, false, err
-	}
-	i := strings.Index(page, swissdevjobsDetailMarker)
-	if i < 0 {
-		return Job{}, false, errors.New("page carries no posting state")
-	}
-	var d swissdevjobsJob
-	if err := json.NewDecoder(strings.NewReader(page[i+len(swissdevjobsDetailMarker):])).Decode(&d); err != nil {
-		return Job{}, false, fmt.Errorf("posting state: %w", err)
 	}
 	if d.ID != r.ID {
 		return Job{}, false, fmt.Errorf("page state is posting %q", d.ID)
@@ -247,6 +252,33 @@ func (s swissdevjobs) detail(ctx context.Context, r swissdevjobsJob) (Job, bool,
 	job := swissdevjobsBaseJob(r)
 	job.Description = body
 	return job, true, nil
+}
+
+// state fetches one posting page and decodes its window.__detailedJob.
+func (s swissdevjobs) state(ctx context.Context, url string) (swissdevjobsJob, error) {
+	if err := s.limiter.Wait(ctx); err != nil {
+		return swissdevjobsJob{}, err
+	}
+	page, err := s.get.GetText(ctx, url)
+	if err != nil {
+		return swissdevjobsJob{}, err
+	}
+	i := strings.Index(page, swissdevjobsDetailMarker)
+	if i < 0 {
+		return swissdevjobsJob{}, errors.New("page carries no posting state")
+	}
+	raw := json.RawMessage{}
+	if err := json.NewDecoder(strings.NewReader(page[i+len(swissdevjobsDetailMarker):])).Decode(&raw); err != nil {
+		return swissdevjobsJob{}, fmt.Errorf("posting state: %w", err)
+	}
+	if len(raw) > 0 && raw[0] == '"' {
+		return swissdevjobsJob{}, errSwissdevjobsPlaceholder
+	}
+	var d swissdevjobsJob
+	if err := json.Unmarshal(raw, &d); err != nil {
+		return swissdevjobsJob{}, fmt.Errorf("posting state: %w", err)
+	}
+	return d, nil
 }
 
 // swissdevjobsBody joins the posting's three plain-text fields, each section under the heading

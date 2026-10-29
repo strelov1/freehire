@@ -155,3 +155,26 @@ func TestSwissDevJobsGonePostingIsNotYielded(t *testing.T) {
 		}
 	}
 }
+
+func TestSwissDevJobsPlaceholderPageIsRetriedUnderTheNextAddress(t *testing.T) {
+	f := newSwissdevjobsFake(t)
+	const slug = "isolutions-Senior-Software-Engineer-NET--Angular"
+	f.pages[swissdevjobsBase+"/de/jobs/"+slug] = f.pages[swissdevjobsBase+"/jobs/"+slug]
+	f.pages[swissdevjobsBase+"/jobs/"+slug] = `<html><head><script>window.__detailedJob = "JOB_PLACEHOLDER"</script></head></html>`
+	r := swissdevjobsJob{ID: sdjIsolutions, Slug: slug, Name: "x", Company: "isolutions"}
+	j, ok, err := newTestSwissdevjobs(f).detail(context.Background(), r)
+	if err != nil || !ok || j.Description == "" {
+		t.Fatalf("detail = ok %v, err %v; want the posting from /de/jobs/", ok, err)
+	}
+	if j.URL != swissdevjobsBase+"/jobs/"+slug {
+		t.Errorf("url = %q; want the canonical /jobs/ address", j.URL)
+	}
+
+	// A placeholder under every address defers the posting rather than reading it as gone.
+	for _, p := range swissdevjobsDetailPaths {
+		f.pages[swissdevjobsBase+p+slug] = `<script>window.__detailedJob = "JOB_PLACEHOLDER"</script>`
+	}
+	if _, _, err := newTestSwissdevjobs(f).detail(context.Background(), r); err == nil {
+		t.Fatal("want an error when every address serves the placeholder")
+	}
+}
