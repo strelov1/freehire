@@ -351,6 +351,9 @@ func All(c HTTPClient) map[string]Source {
 		NewZoho(c),
 		NewTraffit(c),
 		NewErecruiter(c),
+		// Recruitify (Poland): board = the <label>.recruitify.ai portal. One API host answers every
+		// portal by Origin, so the provider shares one pace (see recruitifyRequestInterval).
+		NewRecruitify(pacedRecruitifyGetter(c)),
 		NewQuickin(c),
 		NewSpark(c),
 		NewMindsight(c),

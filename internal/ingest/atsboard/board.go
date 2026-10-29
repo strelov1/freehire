@@ -283,6 +283,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"selfrecruit.ge", "selfrecruit", modeSubdomain},
 	{"talentlyft.com", "talentlyft", modeSubdomain},
 	{"traffit.com", "traffit", modeSubdomain},
+	// Recruitify (Polish): the portal is a label on recruitify.ai (linkgroup.recruitify.ai/job/<guid>).
+	// Vendor hosts are in platformLabelsByApex.
+	{"recruitify.ai", "recruitify", modeSubdomain},
 	{"applytojob.com", "jazzhr", modeSubdomain},
 	{"applicantpro.com", "applicantpro", modeSubdomain},
 	{"isolvedhire.com", "isolvedhire", modeSubdomain},
@@ -1586,6 +1589,8 @@ var platformLabelsByApex = map[string][]string{
 	// one feed host every tenant's feed is served from, and its asset hosts.
 	"homerun.co":    {"www", "try", "404", "feed", "static", "cdn"},
 	"easycruit.com": {"www"}, // Visma's EasyCruit product site
+	// Recruitify's marketing site, its API, and the vendor's video-interview and sourcing products.
+	"recruitify.ai": {"www", "api", "iview", "glb", "sourcingnow"},
 	// Oorwin's marketing site and the vendor's own demo/CRM portals, which answer the careers API
 	// with sample postings.
 	"oorwin.com":     {"www", "demous", "demoind", "demosg", "oorwincrm"},

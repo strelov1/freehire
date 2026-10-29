@@ -279,3 +279,35 @@ func ProbeErecruiterCfg(ctx context.Context, http TextGetter, cfg string) (int, 
 	}
 	return len(rows), nil
 }
+
+// erecruiterEmployerRe reads the employer from an offer page's meta description, which the
+// platform writes as "Praca w <employer>: <position> | Oferta pracy w …" on every template
+// measured (2026-10-28) — the list rows name no employer, and a board's display name is not
+// in its widget either.
+var erecruiterEmployerRe = regexp.MustCompile(`(?is)<meta\s+name="description"\s*content="Praca w ([^":<]+):`)
+
+// ProbeErecruiterBoard live-validates a cfg like ProbeErecruiterCfg and also names the employer,
+// read from the first offer's detail page: two requests, against the adapter's one list request
+// plus a detail per offer. company is "" when the detail cannot be read or names no employer,
+// which leaves the name to the caller rather than failing a board that is live.
+func ProbeErecruiterBoard(ctx context.Context, http TextGetter, cfg string) (company string, offers int, err error) {
+	body, err := http.GetText(ctx, fmt.Sprintf("%s/GetHtml.ashx?cfg=%s&grid=rows&pn=1", erecruiterBase, cfg))
+	if err != nil {
+		return "", 0, err
+	}
+	rows, total, err := parseErecruiterRows(body)
+	if err != nil || len(rows) == 0 {
+		return "", 0, err
+	}
+	offers = len(rows)
+	if total > offers {
+		offers = total
+	}
+	r := rows[0]
+	page, err := http.GetText(ctx, fmt.Sprintf("%s/Offer.aspx?oid=%s&cfg=%s&ejoId=%s&ejorId=%s&comId=%s",
+		erecruiterBase, r.offerID, cfg, r.extID, r.regionID, r.comID))
+	if err != nil {
+		return "", offers, nil
+	}
+	return strings.TrimSpace(html.UnescapeString(firstSubmatch(erecruiterEmployerRe, page))), offers, nil
+}

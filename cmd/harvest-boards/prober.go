@@ -899,6 +899,8 @@ var probers = map[string]prober{
 	"paycor":            paycorProber{},
 	"tenstreet":         tenstreetProber{},
 	"traffit":           traffitProber{},
+	"erecruiter":        erecruiterProber{},
+	"recruitify":        recruitifyProber{},
 	"isolvedhire":       isolvedProber{host: "isolvedhire.com"},
 	"applicantpro":      isolvedProber{host: "applicantpro.com"},
 	"apploi":            apploiProber{},

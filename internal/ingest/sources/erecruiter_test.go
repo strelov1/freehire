@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -245,5 +246,36 @@ func TestErecruiterFetchStopsOnEmptyPage(t *testing.T) {
 	}
 	if fake.listCalls != 2 {
 		t.Fatalf("listCalls = %d, want 2 (page 1 + the empty page 2)", fake.listCalls)
+	}
+}
+
+// TestProbeErecruiterBoardNamesTheEmployer reads the employer from the first offer's meta
+// description — the head of a real Offer.aspx page (Poczta Polska, captured 2026-10-28) — and
+// reports the list's grand total rather than the rows on page 1.
+func TestProbeErecruiterBoardNamesTheEmployer(t *testing.T) {
+	page, err := os.ReadFile("testdata/erecruiter/offer_head_pocztapolska.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := `<tr jobOfferId='1' offerId='5017297' externalJobOfferId='554974' externalJobOfferRegionId='276130' comId='18799200' skkResult='offer'><td class='skk_positionName'>MANAGER</td><td>Warszawa</td></tr>` +
+		`<tr tp='84' tr='840' pn='1' ps='10' style='display:none;'></tr>`
+	fake := &erecruiterFake{list: map[string]string{"pn=1": jsonp(rows), "oid=5017297": string(page)}}
+	company, offers, err := ProbeErecruiterBoard(context.Background(), fake, "993ad47d358f45b1b84493910533445b")
+	if err != nil {
+		t.Fatalf("ProbeErecruiterBoard: %v", err)
+	}
+	if company != "Poczta Polska Spółka Akcyjna" || offers != 840 {
+		t.Errorf("company/offers = %q/%d, want Poczta Polska Spółka Akcyjna/840", company, offers)
+	}
+}
+
+// TestProbeErecruiterBoardKeepsALiveBoardWithoutAName: a detail that names no employer leaves
+// the name empty; the board is still live.
+func TestProbeErecruiterBoardKeepsALiveBoardWithoutAName(t *testing.T) {
+	rows := `<tr jobOfferId='1' offerId='7' externalJobOfferId='8' externalJobOfferRegionId='9' comId='10' skkResult='offer'><td class='skk_positionName'>X</td><td>Y</td></tr>`
+	fake := &erecruiterFake{list: map[string]string{"pn=1": jsonp(rows), "oid=7": "<html></html>"}}
+	company, offers, err := ProbeErecruiterBoard(context.Background(), fake, "cfg")
+	if err != nil || company != "" || offers != 1 {
+		t.Errorf("company/offers/err = %q/%d/%v, want \"\"/1/nil", company, offers, err)
 	}
 }

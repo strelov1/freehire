@@ -300,6 +300,8 @@ func TestRecognize(t *testing.T) {
 		{"meincheckin login app is not a tenant", "https://www.mein-check-in.de/bm-login/favicon.ico", "", "", "", false},
 		{"meincheckin karriereportal is another product", "https://provinzial-karriereportal.mein-check-in.de/detail/2e069da5-a08b-11f1-9115-005056017160", "", "", "", false},
 		{"kenjo position", "https://ict-ds.kenjo.io/devops-engineer-m-w-d-44544", "kenjo", "ict-ds", "https://ict-ds.kenjo.io", true},
+		{"recruitify posting", "https://linkgroup.recruitify.ai/job/f5fd636f-9efb-4c23-bd96-9943ed166cf0", "recruitify", "linkgroup", "https://linkgroup.recruitify.ai", true},
+		{"recruitify api host is not a tenant", "https://api.recruitify.ai/apply/config", "", "", "", false},
 		{"oorwin career portal", "https://purpledrive.oorwin.com/careers", "oorwin", "purpledrive", "https://purpledrive.oorwin.com", true},
 		{"oorwin posting", "https://unicom.oorwin.com/careers/index.html#/job/details/e648ca1680f191584fa35225228b65a12fc4d821", "oorwin", "unicom", "https://unicom.oorwin.com", true},
 		{"oorwin marketing site is not a tenant", "https://www.oorwin.com/applicant-tracking-system", "", "", "", false},
