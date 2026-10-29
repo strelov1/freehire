@@ -70,8 +70,8 @@ func TestSolidesFetchMapsFieldsAndPaginates(t *testing.T) {
 	if be.Company != "Dynamox" {
 		t.Errorf("Company = %q, want configured company", be.Company)
 	}
-	if be.Location != "Florianópolis, SC" {
-		t.Errorf("Location = %q, want city.name + state.code joined", be.Location)
+	if be.Location != "Florianópolis, SC, Brasil" {
+		t.Errorf("Location = %q, want city.name + state.code + Brasil joined", be.Location)
 	}
 	if be.WorkMode != "hybrid" {
 		t.Errorf("WorkMode = %q, want hybrid from jobType hibrido", be.WorkMode)

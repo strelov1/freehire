@@ -349,6 +349,17 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   WFH"), a shift or the staff an HR role manages as often as the arrangement — so only
   anchored forms ("permanent WFH", "WFH / Remote", "Location: WFH") are. Measured
   2026-10-25: description-derived work mode on Indian postings 8.6% → 10.7%.
+- **Croatian, Serbian, Bosnian and Montenegrin location lines** (`location_bcs.go`, merged
+  into `nameToCountry` at init): the country names in both standards, with and without
+  diacritics and in Serbian Cyrillic ("Srbija", "Njemačka"/"Nemačka", "Crna Gora", "BiH"),
+  so a Serbian or Croatian board's posting abroad is not filed under its fallback country;
+  Workday's ISO-3 "SRB"/"HRV"/"BIH"/"MNE"; the twenty Croatian counties with and without
+  "županija"; Vojvodina, Republika Srpska and the Croatian regions. "Kosovo" is
+  `regionNotCity` (it was Kosovo Polje). `cityOverrides` pins Pula, Dubrovnik, Leskovac and
+  Sombor (GeoNames gives each alias a hamlet abroad, so they stated no country), the
+  locative ("u Beogradu", "Novom Sadu") and Cyrillic "Панчево". "SAD" (USA) and "Island"
+  (Iceland) are absent: English words. Sólides writes "Town, ST", and a small town's "BA"
+  or "RS" read as Bosnia or Serbia, so the adapter appends "Brasil" after the state.
 - `work_mode` is dict-only — `jobview` serves the `jobs` column alone, the LLM's `enrichment.work_mode` is never merged in (it stays raw in the JSONB).
 - `countries`/`regions` are a dict-then-LLM hybrid (`jobview.geoFacet`): the dictionary wins when it pins a place, and the LLM's `enrichment.countries`/`regions` fill only the unpinned (global/unspecified) bucket, so a dictionary-silent remote role still gets a geographic reach rather than none. This is the one deliberate exception to dict-only among the facets.
 
