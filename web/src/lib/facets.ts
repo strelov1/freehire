@@ -474,6 +474,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   meincheckin: 'CHECK-IN',
   instahyre: 'Instahyre',
   hirist: 'Hirist',
+  justjoin: 'Just Join IT',
+  rocketjobs: 'RocketJobs',
   iimjobs: 'iimjobs',
   shine: 'Shine.com',
   spainjobs: 'SpainJobs.io',

@@ -95,7 +95,13 @@ func decodeNextFlight(root *html.Node) (string, error) {
 		}
 		return true
 	})
-	matches := nextFlightPush.FindAllStringSubmatch(scripts.String(), -1)
+	return decodeNextFlightText(scripts.String())
+}
+
+// decodeNextFlightText is decodeNextFlight over raw page text, for an adapter that fetches the
+// page as text rather than as a parsed tree (a multi-hundred-KB page it only slices).
+func decodeNextFlightText(page string) (string, error) {
+	matches := nextFlightPush.FindAllStringSubmatch(page, -1)
 	if len(matches) == 0 {
 		return "", fmt.Errorf("no flight payload found")
 	}

@@ -444,6 +444,11 @@ func All(c HTTPClient) map[string]Source {
 		NewLandingJobs(c),
 		NewTheMuse(c),
 		NewNoFluffJobs(c),
+		// Just Join IT (justjoin.it) and its non-IT sibling RocketJobs (rocketjobs.pl): one
+		// platform, enumerated from each site's active-jobs sitemap, each new offer read from its
+		// page's Next.js flight. See justjoin.go.
+		NewJustJoin(c),
+		NewRocketJobs(c),
 		NewWantapply(c),
 		NewInfoJobs(c),
 		NewJobtech(c),
