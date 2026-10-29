@@ -150,14 +150,21 @@ WHERE c.slug = a.alias_slug
 --   * the new slug must not itself be retired (no chains: the 301 reads one hop),
 --   * the folded key must not already point at a DIFFERENT canon (one canon per key —
 --     ResolveCompanySlugAliases orders a violation away, it does not prevent it).
-INSERT INTO company_slug_aliases (alias_slug, canonical_slug, folded_key, reason)
-SELECT a.alias_slug, a.canonical_slug, a.folded_key, 'legal_form'
-FROM (
+--   * the same two rules hold WITHIN the batch, which the registry checks cannot see.
+--   * the canon must have a companies row, or the 301 lands on a 404 (a canon carried only by
+--     private rows gets none from InsertMissingCompaniesForSlugs).
+WITH batch AS (
     SELECT unnest(sqlc.arg(alias_slugs)::text[])     AS alias_slug,
            unnest(sqlc.arg(canonical_slugs)::text[]) AS canonical_slug,
            unnest(sqlc.arg(folded_keys)::text[])     AS folded_key
-) a
+)
+INSERT INTO company_slug_aliases (alias_slug, canonical_slug, folded_key, reason)
+SELECT a.alias_slug, a.canonical_slug, a.folded_key, 'legal_form'
+FROM batch a
 WHERE a.alias_slug <> a.canonical_slug
+  AND NOT EXISTS (SELECT 1 FROM batch b
+                  WHERE b.canonical_slug = a.alias_slug OR b.alias_slug = a.canonical_slug)
+  AND EXISTS (SELECT 1 FROM companies c WHERE c.slug = a.canonical_slug)
   AND NOT EXISTS (SELECT 1 FROM company_slug_aliases x WHERE x.canonical_slug = a.alias_slug)
   AND NOT EXISTS (SELECT 1 FROM company_slug_aliases x WHERE x.alias_slug = a.canonical_slug)
   AND NOT EXISTS (SELECT 1 FROM company_slug_aliases x

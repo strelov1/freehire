@@ -3256,6 +3256,9 @@ type Querier interface {
 	//   * the new slug must not itself be retired (no chains: the 301 reads one hop),
 	//   * the folded key must not already point at a DIFFERENT canon (one canon per key —
 	//     ResolveCompanySlugAliases orders a violation away, it does not prevent it).
+	//   * the same two rules hold WITHIN the batch, which the registry checks cannot see.
+	//   * the canon must have a companies row, or the 301 lands on a 404 (a canon carried only by
+	//     private rows gets none from InsertMissingCompaniesForSlugs).
 	InsertDerivedCompanySlugAliases(ctx context.Context, arg InsertDerivedCompanySlugAliasesParams) (int64, error)
 	// The only insert. A claim already banked with a stronger provenance than
 	// agent_inferred is never touched — ON CONFLICT DO NOTHING behavior for every case
