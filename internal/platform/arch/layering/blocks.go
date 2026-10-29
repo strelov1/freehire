@@ -187,7 +187,7 @@ var blocks = map[string][]string{
 		"wikicompany",
 	},
 	"application": {
-		"appevent", "apptimeline", "autoapply", "autoapplyorchestrate", "calmatch", "calsync",
+		"agentview", "appevent", "apptimeline", "autoapply", "autoapplyorchestrate", "calmatch", "calsync",
 		"deliverywindow", "followup", "gmailsync", "ical", "inbox", "jobtracking",
 		"mailbox", "mailclassify", "mailingest", "maillink", "mailmatch", "mailrecall", "mailtpl",
 		"userjob", "viewlog",
