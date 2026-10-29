@@ -197,11 +197,27 @@ func queryAgrees(raw, posting string) bool {
 	}
 	qa, qb := a.Query(), b.Query()
 	for k, v := range qb {
+		if trackingParam(k) {
+			continue
+		}
 		if w, ok := qa[k]; ok && !slices.Equal(v, w) {
 			return false
 		}
 	}
 	return true
+}
+
+// trackingParams are the query parameters that say how a link travelled rather than what it
+// points at, besides the utm_ family trackingParam matches by prefix. A stored posting URL can
+// carry them too (micro1 stores its utm_ referral values), so they must never veto a match.
+var trackingParams = map[string]bool{
+	"gclid": true, "fbclid": true, "msclkid": true, "trk": true, "gh_src": true,
+	"ref": true, "src": true, "source": true,
+}
+
+func trackingParam(k string) bool {
+	k = strings.ToLower(k)
+	return strings.HasPrefix(k, "utm_") || trackingParams[k]
 }
 
 // normalizeURL reduces a posting URL to what identifies it: scheme-less, lowercased host with
@@ -228,7 +244,9 @@ func postingRefs(raw string) []string {
 	}
 	q := u.Query()
 	for _, k := range slices.Sorted(maps.Keys(q)) {
-		refs = append(refs, q[k]...)
+		if !trackingParam(k) {
+			refs = append(refs, q[k]...)
+		}
 	}
 	return refs
 }

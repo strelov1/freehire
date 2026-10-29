@@ -115,3 +115,24 @@ func TestResolveOnBoardIgnoresAQueryValueThatContradictsTheOid(t *testing.T) {
 		t.Errorf("resolved %s, want nothing: the link names oid 5011050", job.ExternalID)
 	}
 }
+
+// Tracking parameters never decide identity: a posting stored with one campaign's utm values
+// still matches a link shared with another's, even when the URL is its only identifier.
+func TestResolveOnBoardIgnoresDifferingTrackingParameters(t *testing.T) {
+	board := &fakeBoard{
+		provider: "acmeats",
+		jobs: []sources.Job{
+			{ExternalID: "a1", URL: "https://jobs.acme.example/posting/go-engineer?utm_source=referral&utm_medium=share", Title: "Go Engineer"},
+		},
+	}
+	reg := map[string]sources.Source{"acmeats": board}
+
+	raw := "https://jobs.acme.example/posting/go-engineer?utm_source=linkedin&utm_medium=social&gclid=xyz"
+	job, ok, err := ResolveOnBoard(context.Background(), reg, "acmeats", "acme", raw)
+	if err != nil || !ok {
+		t.Fatalf("ResolveOnBoard = (ok %v, err %v), want the posting despite different tracking values", ok, err)
+	}
+	if job.Title != "Go Engineer" {
+		t.Errorf("resolved %+v", job)
+	}
+}
