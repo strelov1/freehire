@@ -26,14 +26,43 @@ describe('resumeStore.waitForParse', () => {
     getResume
       .mockResolvedValueOnce(meta('pending'))
       .mockResolvedValueOnce(meta('pending'))
-      .mockResolvedValueOnce(meta('done'));
+      .mockResolvedValueOnce(meta('ok'));
 
     const parsed = resumeStore.waitForParse();
     await vi.runAllTimersAsync();
 
     await expect(parsed).resolves.toBe(true);
     expect(getResume).toHaveBeenCalledTimes(3);
-    expect(resumeStore.meta?.parse_status).toBe('done');
+    expect(resumeStore.meta?.parse_status).toBe('ok');
+  });
+
+  it('treats a failed read as still pending, never as the parse having landed', async () => {
+    getResume
+      .mockResolvedValueOnce(meta('ok'))
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(meta('pending'))
+      .mockResolvedValueOnce(meta('ok'));
+    await resumeStore.refresh(); // the copy held from before the upload says 'ok'
+
+    const parsed = resumeStore.waitForParse();
+    await vi.runAllTimersAsync();
+
+    await expect(parsed).resolves.toBe(true);
+    expect(getResume).toHaveBeenCalledTimes(4);
+  });
+
+  it('keeps the newer of two overlapping reads, whichever lands last', async () => {
+    let answerOld!: (value: unknown) => void;
+    getResume
+      .mockReturnValueOnce(new Promise((resolve) => (answerOld = resolve)))
+      .mockResolvedValueOnce(meta('ok'));
+
+    const older = resumeStore.refresh();
+    await resumeStore.refresh();
+    answerOld(meta('pending'));
+    await older;
+
+    expect(resumeStore.meta?.parse_status).toBe('ok');
   });
 
   it('resolves false when the parse failed', async () => {

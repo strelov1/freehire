@@ -30,6 +30,8 @@ export abstract class UserResource<T> {
   // Bumped by reset(); a load resolving after a reset (a same-tab user handoff) is
   // discarded instead of repopulating with the previous user's data.
   #generation = 0;
+  // Numbers each reload(), so an older read that lands after a newer one is dropped.
+  #latestRead = 0;
 
   constructor() {
     registry.push(this as UserResource<unknown>);
@@ -88,8 +90,10 @@ export abstract class UserResource<T> {
    *  data for whoever signs in next on the same tab. */
   protected async reload(): Promise<void> {
     const gen = this.#generation;
+    const read = ++this.#latestRead;
     const data = await this.load();
-    if (gen !== this.#generation) return;
+    // A newer read started meanwhile: its answer is the current one, whichever lands first.
+    if (gen !== this.#generation || read !== this.#latestRead) return;
     this.apply(data);
     this.#loaded = true;
   }

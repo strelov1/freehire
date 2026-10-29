@@ -60,10 +60,18 @@ class ResumeStore extends UserResource<ResumeMeta | null> {
   async waitForParse(): Promise<boolean> {
     const generation = this.generation;
     for (let attempt = 0; ; attempt++) {
-      // oxlint-disable-next-line no-await-in-loop -- a backoff poll is sequential by design
-      await this.refresh();
+      let status: string | undefined;
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- a backoff poll is sequential by design
+        await this.reload();
+        if (!this.#meta?.present) return false;
+        status = this.#meta.parse_status;
+      } catch (err) {
+        // A failed read says nothing about the parse; the copy held is from before it.
+        console.warn('resume: parse poll failed', err);
+        status = 'pending';
+      }
       if (generation !== this.generation) return false;
-      const status = this.#meta?.parse_status;
       if (status !== 'pending') return status !== 'failed';
       const delay = nextResumePollDelayMs(attempt);
       if (delay === null) return false;
