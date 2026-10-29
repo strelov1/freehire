@@ -1,0 +1,119 @@
+{
+ "id": "2d1f3532-d1f5-11f1-8b88-0280a8fb46bd",
+ "original": 50440416,
+ "title": "Senior inženjer za VMware NSX i Avi Load Balancer  (m/ž)",
+ "slug": "senior-inzenjer-za-vmware-nsx-i-avi-load-balancer-m-z",
+ "location": {
+  "items": [
+   {
+    "address": "Zagreb County, Croatia"
+   },
+   {
+    "address": "Zagreb, Croatia"
+   }
+  ],
+  "summary": "Zagreb"
+ },
+ "description": "- izrada tehničkih rješenja za virtualne mreže, mikrosegmentaciju i raspodjelu prometa, uz razradu korisničkih zahtjeva i podršku prodaji\r\n- implementacija i održavanje NSX Managera, Edge klastera, transportnih čvorova, segmenata i Tier-0/Tier-1 pristupnika\r\n- projektiranje i provedba pravila distribuiranog i rubnog vatrozida te usklađivanje s fizičkom mrežom i potrebama aplikacija\r\n- implementacija i održavanje Avi Controllera i Service Engine komponenti, virtualnih usluga, poolova, provjera dostupnosti i TLS certifikata\r\n- samostalna dijagnostika složenih NSX i Avi incidenata, analiza temeljnog uzroka (RCA) i vođenje eskalacija prema proizvođaču\r\n- planiranje nadogradnji, migracija i proširenja uz provjeru kompatibilnosti, procjenu utjecaja, plan testiranja i podržane postupke oporavka\r\n- testiranje visoke dostupnosti i oporavka, upravljanje sigurnosnim kopijama konfiguracije te praćenje kapaciteta i životnog ciklusa certifikata\r\n- izrada izvedbene dokumentacije i operativnih uputa te suradnja s mrežnim, sigurnosnim i aplikacijskim timovima i prijenos znanja.",
+ "requirements": "- SSS, VŠS ili VSS tehničkog usmjerenja\r\n- najmanje pet godina iskustva u mrežnoj ili virtualizacijskoj infrastrukturi, od toga najmanje tri godine produkcijskog rada s VMware NSX-om\r\n- relevantna VMware/Broadcom certifikacija\r\n- poznavanje NSX arhitekture, transportnih zona i čvorova, overlay/underlay povezivosti, Tier-0/Tier-1 usmjeravanja i integracije s vSphereom\r\n- praktično znanje TCP/IP-a, VLAN-ova, MTU-a, BGP-a i ECMP-a te dijagnostike putanje prometa između fizičke i virtualne mreže\r\n- samostalan rad s distribuiranim vatrozidom, mikrosegmentacijom, sigurnosnim grupama i pravilima te analizom aplikacijskog prometa\r\n- produkcijsko iskustvo s Avi Controller klasterom, Service Engines/Groups, virtualnim uslugama, poolovima, health monitorima, perzistencijom sesija i TLS-om\r\n- dijagnostika pomoću CLI-ja, logova, packet capturea, NSX Traceflowa i Avi analitike te iskustvo s nadogradnjama, HA-om i oporavkom sustava\r\n- odgovornost, samostalnost i jasna komunikacija s korisnicima i kolegama \r\n- rad uključuje odlazak na lokacije korisnika, planirane zahvate izvan redovnog radnog vremena te pasivna dežurstva i intervencije prema rasporedu\r\n- aktivno znanje engleskog jezika\r\n- vozačka dozvola B kategorije.",
+ "isDesigned": true,
+ "benefits": "- moderno okruženje s fokusom na digitalne usluge, rješenja i tehnologije \r\n- nova KONČAR divizija - Digitalne platforme i rješenja \r\n- tim koji spaja provjerena rješenja u elektroenergetici, kritičnoj i urbanoj infrastrukturi s naprednim proizvodima \r\n- moderan i ugodan radni prostor u širem centru grada \r\n- pristup rijetkim domenskim znanjima \r\n- interna društvena događanja \r\n- briga o zdravlju, dopunsko zdravstveno osiguranje i redovni sistematski pregled \r\n- osiguran parking za bicikle \r\n- kantina u kampusu, dobre palačinke u blizini \r\n- …i još puno toga kroz KONČAR i kolektivni ugovor :).",
+ "html": "<style type=\"text/css\">\r\n</style>\r\n<article class=\"standard-html\" id=\"job-htmlad\">\r\n<div style=\"font-family: 'Verdana', sans-serif; font-size: 15px; line-height: 22px;\"><img src=\"https://storage.moj-posao.net/o/jobs-elements/koncar-elektroindustrija-header-03032023.png\" style=\"width: 100%;\" />\r\n<div style=\"padding: 4%; margin-top: -1%;\">\r\n<p><b>KONČAR - Digital d.o.o.</b> je IT tvrtka Grupe KONČAR. Razvijamo i integriramo kibernetički sigurna digitalna rješenja za upravljanje energetikom, kritičnom infrastrukturom i pametnim gradovima. Rješenja gradimo na znanstvenim istraživanjima, modernim tehnologijama i više od 40 godina iskustva. Za naše klijente vodimo projekte digitalne transformacije u području upravljanja energijom, vodom, naprednim gradovima, podatkovnim centrima, prometom i mobilnošću. <br></p>\r\n</div>\r\n\r\n<div style=\"padding: 4%; background-color: #0082ca; font-size: 20px; color: #FFF; text-align: center;\">\r\n<p><b>Senior inženjer za VMware NSX i Avi Load Balancer  (m/ž)</b></p>\r\n</div>\r\n\r\n<div style=\"padding: 4%;\">\r\n<p><strong><em>Opis posla:</em></strong></p>\r\n<ul><li>izrada tehničkih rješenja za virtualne mreže, mikrosegmentaciju i raspodjelu prometa, uz razradu korisničkih zahtjeva i podršku prodaji\r</li><li>implementacija i održavanje NSX Managera, Edge klastera, transportnih čvorova, segmenata i Tier-0/Tier-1 pristupnika\r</li><li>projektiranje i provedba pravila distribuiranog i rubnog vatrozida te usklađivanje s fizičkom mrežom i potrebama aplikacija\r</li><li>implementacija i održavanje Avi Controllera i Service Engine komponenti, virtualnih usluga, poolova, provjera dostupnosti i TLS certifikata\r</li><li>samostalna dijagnostika složenih NSX i Avi incidenata, analiza temeljnog uzroka (RCA) i vođenje eskalacija prema proizvođaču\r</li><li>planiranje nadogradnji, migracija i proširenja uz provjeru kompatibilnosti, procjenu utjecaja, plan testiranja i podržane postupke oporavka\r</li><li>testiranje visoke dostupnosti i oporavka, upravljanje sigurnosnim kopijama konfiguracije te praćenje kapaciteta i životnog ciklusa certifikata\r</li><li>izrada izvedbene dokumentacije i operativnih uputa te suradnja s mrežnim, sigurnosnim i aplikacijskim timovima i prijenos znanja.</li></ul>\r\n\r\n<p><strong><em>Uvjeti i očekivanja:</em></strong></p>\r\n<ul><li>SSS, VŠS ili VSS tehničkog usmjerenja\r</li><li>najmanje pet godina iskustva u mrežnoj ili virtualizacijskoj infrastrukturi, od toga najmanje tri godine produkcijskog rada s VMware NSX-om\r</li><li>relevantna VMware/Broadcom certifikacija\r</li><li>poznavanje NSX arhitekture, transportnih zona i čvorova, overlay/underlay povezivosti, Tier-0/Tier-1 usmjeravanja i integracije s vSphereom\r</li><li>praktično znanje TCP/IP-a, VLAN-ova, MTU-a, BGP-a i ECMP-a te dijagnostike putanje prometa između fizičke i virtualne mreže\r</li><li>samostalan rad s distribuiranim vatrozidom, mikrosegmentacijom, sigurnosnim grupama i pravilima te analizom aplikacijskog prometa\r</li><li>produkcijsko iskustvo s Avi Controller klasterom, Service Engines/Groups, virtualnim uslugama, poolovima, health monitorima, perzistencijom sesija i TLS-om\r</li><li>dijagnostika pomoću CLI-ja, logova, packet capturea, NSX Traceflowa i Avi analitike te iskustvo s nadogradnjama, HA-om i oporavkom sustava\r</li><li>odgovornost, samostalnost i jasna komunikacija s korisnicima i kolegama \r</li><li>rad uključuje odlazak na lokacije korisnika, planirane zahvate izvan redovnog radnog vremena te pasivna dežurstva i intervencije prema rasporedu\r</li><li>aktivno znanje engleskog jezika\r</li><li>vozačka dozvola B kategorije.</li></ul>\r\n\r\n<p><strong><em>Poželjno:</em></strong></p>\r\n<ul><li>relevantna VMware/Broadcom certifikacija: VCP-NV/VCAP-NV, VCAP-VCF Networking, VCP-VCF Administrator/Support ili VCP-PCS Admin, uz aktualno NSX iskustvo</li><li>VCAP-VCF Networking i dodatna certifikacija VCP – Avi Load Balancer Administrator</li><li>iskustvo s okruženjima na više lokacija, NSX Federationom i Avi GSLB-om</li><li>automatizacija putem REST API-ja, PowerCLI-ja, Pythona ili Ansiblea te napredne vDefend ili Avi WAF funkcije.</li></ul>\r\n\r\n<p><strong><em>Nudimo:</em></strong></p>\r\n<ul><li>moderno okruženje s fokusom na digitalne usluge, rješenja i tehnologije \r</li><li>nova KONČAR divizija - Digitalne platforme i rješenja \r</li><li>tim koji spaja provjerena rješenja u elektroenergetici, kritičnoj i urbanoj infrastrukturi s naprednim proizvodima \r</li><li>moderan i ugodan radni prostor u širem centru grada \r</li><li>pristup rijetkim domenskim znanjima \r</li><li>interna društvena događanja \r</li><li>briga o zdravlju, dopunsko zdravstveno osiguranje i redovni sistematski pregled \r</li><li>osiguran parking za bicikle \r</li><li>kantina u kampusu, dobre palačinke u blizini \r</li><li>…i još puno toga kroz KONČAR i kolektivni ugovor :).</li></ul>\r\n\r\n<p><strong><em>Prijava treba sadržavati:</em></strong></p>\r\n<ul><li>životopis </li><li>dokaz o certifikatima ako ih kandidat posjeduje</li></ul>\r\n\r\n<p style=\"margin-top: 3%\"><strong>Ukoliko želite postati dio našeg tima i prepoznajete se u oglasu, pošaljite nam svoj životopis putem</strong> <a href=\"https://mojposao.hr/posao/2d1f3532-d1f5-11f1-8b88-0280a8fb46bd/senior-inzenjer-za-vmware-nsx-i-avi-load-balancer-m-z/apply-external?source=details_design\" style=\"color: #0082ca;\"><b>linka za prijavu</b></a>.</p>\r\n\r\n<p>Uvažavamo raznolikost i osiguravamo jednake mogućnosti zapošljavanja svim kandidatima bez obzira na dob, spol, vjersko i seksualno opredjeljenje ili etničku pripadnost.</p>\r\n\r\n<p>Samo će odabrani kandidati biti pozvani u selekcijski postupak, koji može uključivati psihologijsku procjenu, intervju, procjenu stručnih znanja te znanja engleskog jezika, a o čemu će biti pravovremeno obaviješteni.</p>\r\n</div>\r\n</div>\r\n</article>",
+ "publishedAt": "2026-10-27T11:20:22.000Z",
+ "startsAt": "2026-10-27T11:20:23.000Z",
+ "endsAt": "2026-11-06T22:59:59.000Z",
+ "salary": null,
+ "numberOfWorkers": 0,
+ "organization": {
+  "id": "871afa70-6c21-11ef-b01f-02798cc052cf",
+  "name": "KONČAR - Digital d.o.o.",
+  "badges": [
+   {
+    "image": "https://storage.moj-posao.net/o/badges/badge-ppi.svg",
+    "content": "Prema mišljenju javnosti, nalazi se u TOP 20 <a target=\"_blank\" href=\"https://www.poslodavac.hr/\">Poslodavaca Prvog Izbora</a>"
+   },
+   {
+    "image": "https://storage.moj-posao.net/o/badges/badge-cpp.svg",
+    "content": "Nositelj <a target=\"_blank\" href=\"https://www.poslodavacpartner.org\">certifikata Poslodavac Partner</a> - certifikata za izvrsnost u upravljanju ljudskim resursima"
+   }
+  ],
+  "web": null,
+  "logoUrl": "https://images-preview.moj-posao.net/company-logo/32/3db215323-fit-200x144x100.png",
+  "hasProfile": false,
+  "slug": "koncar-digital-d-o-o"
+ },
+ "applicationTypes": [
+  {
+   "type": "external",
+   "data": {
+    "applicationLink": "https://koncar.hr/hr/karijere/senior-inzenjer-za-vmware-nsx-i-avi-load-balancer-mz"
+   }
+  }
+ ],
+ "languages": [
+  {
+   "id": "English",
+   "level": "B2"
+  }
+ ],
+ "driversLicense": {
+  "items": [
+   "B"
+  ],
+  "info": null
+ },
+ "educationLevel": {
+  "items": [
+   "High school",
+   "Master's degree",
+   "Bachelor's degree",
+   "Professional Bachelor (of)",
+   "Master's degree",
+   "Bachelor's degree"
+  ],
+  "info": null
+ },
+ "workTypes": [
+  "on-site"
+ ],
+ "employmentTypes": [
+  "Permanent"
+ ],
+ "digitalSkills": [],
+ "otherSkills": [],
+ "tags": [],
+ "position": {
+  "id": 1589,
+  "name": "IT specijalist"
+ },
+ "rootPosition": {
+  "id": 11,
+  "name": "IT, telekomunikacije"
+ },
+ "isActive": true,
+ "noindex": false,
+ "requiredWorkExperience": "5",
+ "employer": {
+  "name": "Končar - Digital d.o.o.",
+  "info": "<b>KONČAR - Digital d.o.o.</b> je IT tvrtka Grupe KONČAR. Razvijamo i integriramo kibernetički sigurna digitalna rješenja za upravljanje energetikom, kritičnom infrastrukturom i pametnim gradovima. Rješenja gradimo na znanstvenim istraživanjima, modernim tehnologijama i više od 40 godina iskustva. Za naše klijente vodimo projekte digitalne transformacije u području upravljanja energijom, vodom, naprednim gradovima, podatkovnim centrima, prometom i mobilnošću.",
+  "address": "Fallerovo šetalište 22, 10000 Zagreb"
+ },
+ "additionalPositions": [
+  {
+   "id": 11,
+   "name": "IT, telekomunikacije"
+  }
+ ],
+ "externalDetailsUrl": "",
+ "uuid": "2d1f3532-d1f5-11f1-8b88-0280a8fb46bd",
+ "hideApplicationLink": false,
+ "badges": [],
+ "format": {
+  "id": 5,
+  "name": "FEATURED-HOME",
+  "homepage": true,
+  "weightOrder": 2
+ },
+ "applicationsEnabledUntil": null,
+ "openGraph": null
+}

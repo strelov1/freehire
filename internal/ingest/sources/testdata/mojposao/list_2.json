@@ -1,0 +1,113 @@
+{
+ "totalPages": 2,
+ "total": 5,
+ "items": [
+  {
+   "id": "c7e6bb910c35ef3e229091b9aabb5f2a",
+   "jobs": [
+    {
+     "id": "1a07fbe4-d2ba-11f1-8b88-0280a8fb46bd",
+     "title": "System Administrator / IT Support Specialist (m/ž)",
+     "isActive": true,
+     "slug": "system-administrator-it-support-specialist-m-z",
+     "startsAt": "2026-11-07T22:59:59.000Z",
+     "endsAt": "2026-11-07T22:59:59.000Z",
+     "publishedAt": "2026-10-28T12:59:23.000Z",
+     "location": "Zagreb",
+     "format": {
+      "id": 5,
+      "name": "FEATURED-HOME",
+      "homepage": true,
+      "weightOrder": 2,
+      "hasImage": true
+     },
+     "isEndNear": false,
+     "isGuestApplicationEnabled": false,
+     "applicationType": "full",
+     "externalDetailsUrl": "",
+     "salary": {
+      "from": 0,
+      "to": 0,
+      "currency": "eur",
+      "tax": null
+     },
+     "tags": [],
+     "badges": [],
+     "jobGroups": [
+      {
+       "id": 732175,
+       "groupHash": "c7e6bb910c35ef3e229091b9aabb5f2a",
+       "position": 0,
+       "hidden": false,
+       "incognito": true,
+       "format": {
+        "id": 5,
+        "name": "FEATURED-HOME",
+        "homepage": true,
+        "weightOrder": 2,
+        "hasImage": true
+       }
+      }
+     ],
+     "organization": "incognito"
+    }
+   ]
+  },
+  {
+   "id": "2b206fc7045a8afc44ff7cd50c12c47c",
+   "jobs": [
+    {
+     "id": "80d956d8-c13f-4bb1-9922-206a1cce8159",
+     "title": "Prodajni savjetnik (m/ž)",
+     "isActive": true,
+     "slug": "prodajni-savjetnik-m-z",
+     "startsAt": "2026-11-07T22:59:59.000Z",
+     "endsAt": "2026-11-07T22:59:59.000Z",
+     "publishedAt": "2026-10-28T07:55:05.000Z",
+     "location": "Zagreb, Poreč",
+     "format": {
+      "id": 4,
+      "name": "EXCLUSIVE-HOME",
+      "homepage": true,
+      "weightOrder": 1,
+      "hasImage": true
+     },
+     "isEndNear": false,
+     "isGuestApplicationEnabled": false,
+     "applicationType": "full",
+     "externalDetailsUrl": "",
+     "salary": {
+      "from": 0,
+      "to": 0,
+      "currency": "eur",
+      "tax": null
+     },
+     "tags": [],
+     "badges": [],
+     "jobGroups": [
+      {
+       "id": 731586,
+       "groupHash": "2b206fc7045a8afc44ff7cd50c12c47c",
+       "position": 0,
+       "hidden": false,
+       "incognito": false,
+       "format": {
+        "id": 4,
+        "name": "EXCLUSIVE-HOME",
+        "homepage": true,
+        "weightOrder": 1,
+        "hasImage": true
+       }
+      }
+     ],
+     "organization": {
+      "id": "80d9461c-6c21-11ef-b01f-02798cc052cf",
+      "name": "Valamar Riviera d.d.",
+      "logoUrl": "https://images-preview.moj-posao.net/company-logo/23/414d84832-fit-200x144x100.png",
+      "badges": []
+     }
+    }
+   ]
+  }
+ ]
+}

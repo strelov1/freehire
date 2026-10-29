@@ -1,0 +1,187 @@
+{
+ "totalPages": 2,
+ "total": 5,
+ "items": [
+  {
+   "id": "d92d53caf75f0f271f0ff5d08a384297",
+   "jobs": [
+    {
+     "id": "2d1f3532-d1f5-11f1-8b88-0280a8fb46bd",
+     "title": "Senior inženjer za VMware NSX i Avi Load Balancer  (m/ž)",
+     "isActive": true,
+     "slug": "senior-inzenjer-za-vmware-nsx-i-avi-load-balancer-m-z",
+     "startsAt": "2026-11-06T22:59:59.000Z",
+     "endsAt": "2026-11-06T22:59:59.000Z",
+     "publishedAt": "2026-10-27T11:20:22.000Z",
+     "location": "Zagreb",
+     "format": {
+      "id": 5,
+      "name": "FEATURED-HOME",
+      "homepage": true,
+      "weightOrder": 2,
+      "hasImage": true
+     },
+     "isEndNear": false,
+     "isGuestApplicationEnabled": false,
+     "applicationType": "full",
+     "externalDetailsUrl": "",
+     "salary": {
+      "from": 0,
+      "to": 0,
+      "currency": "eur",
+      "tax": null
+     },
+     "tags": [],
+     "badges": [],
+     "jobGroups": [
+      {
+       "id": 731729,
+       "groupHash": "d92d53caf75f0f271f0ff5d08a384297",
+       "position": 0,
+       "hidden": false,
+       "incognito": false,
+       "format": {
+        "id": 5,
+        "name": "FEATURED-HOME",
+        "homepage": true,
+        "weightOrder": 2,
+        "hasImage": true
+       }
+      }
+     ],
+     "organization": {
+      "id": "871afa70-6c21-11ef-b01f-02798cc052cf",
+      "name": "KONČAR - Digital d.o.o.",
+      "logoUrl": "https://images-preview.moj-posao.net/company-logo/32/3db215323-fit-200x144x100.png",
+      "badges": [
+       {
+        "id": 1,
+        "image": "https://storage.moj-posao.net/o/badges/badge-ppi.svg",
+        "content": "Prema mišljenju javnosti, nalazi se u TOP 20 <a target=\"_blank\" href=\"https://www.poslodavac.hr/\">Poslodavaca Prvog Izbora</a>",
+        "isActive": true
+       },
+       {
+        "id": 3,
+        "image": "https://storage.moj-posao.net/o/badges/badge-cpp.svg",
+        "content": "Nositelj <a target=\"_blank\" href=\"https://www.poslodavacpartner.org\">certifikata Poslodavac Partner</a> - certifikata za izvrsnost u upravljanju ljudskim resursima",
+        "isActive": true
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "843d062fb469b0859f4972bb75bd6c25",
+   "jobs": [
+    {
+     "id": "ddefa77b-d2b0-11f1-8b88-0280a8fb46bd",
+     "title": "Operater za zaprimanje narudžbi (m/ž)",
+     "isActive": true,
+     "slug": "operater-za-zaprimanje-narudzbi-m-z",
+     "startsAt": "2026-11-07T22:59:59.000Z",
+     "endsAt": "2026-11-07T22:59:59.000Z",
+     "publishedAt": "2026-10-28T09:27:32.000Z",
+     "location": "Zagreb",
+     "format": {
+      "id": 5,
+      "name": "FEATURED-HOME",
+      "homepage": true,
+      "weightOrder": 2,
+      "hasImage": true
+     },
+     "isEndNear": false,
+     "isGuestApplicationEnabled": false,
+     "applicationType": "full",
+     "externalDetailsUrl": "",
+     "salary": {
+      "from": 1490,
+      "to": 0,
+      "currency": "eur",
+      "tax": null
+     },
+     "tags": [],
+     "badges": [],
+     "jobGroups": [
+      {
+       "id": 732099,
+       "groupHash": "843d062fb469b0859f4972bb75bd6c25",
+       "position": 0,
+       "hidden": false,
+       "incognito": false,
+       "format": {
+        "id": 5,
+        "name": "FEATURED-HOME",
+        "homepage": true,
+        "weightOrder": 2,
+        "hasImage": true
+       }
+      }
+     ],
+     "organization": {
+      "id": "7e2da9a9-6c21-11ef-b01f-02798cc052cf",
+      "name": "DEKRA za privremeno zapošljavanje d.o.o.",
+      "logoUrl": "https://images-preview.moj-posao.net/company-logo/d7/07d0ef7d-fit-300x300x100.png",
+      "badges": []
+     }
+    }
+   ]
+  },
+  {
+   "id": "f7faca62658360881502402119b5e07e",
+   "jobs": [
+    {
+     "id": "04815a32-1e75-4bf5-ab91-dbfef1896530",
+     "title": "Voditelj prodaje (m/ž)",
+     "isActive": true,
+     "slug": "voditelj-prodaje-m-z",
+     "startsAt": "2026-11-08T21:59:59.000Z",
+     "endsAt": "2026-11-08T21:59:59.000Z",
+     "publishedAt": "2026-10-09T04:13:15.000Z",
+     "location": "Ivanić-Grad",
+     "format": {
+      "id": 5,
+      "name": "FEATURED-HOME",
+      "homepage": true,
+      "weightOrder": 2,
+      "hasImage": true
+     },
+     "isEndNear": false,
+     "isGuestApplicationEnabled": false,
+     "applicationType": "full",
+     "externalDetailsUrl": "",
+     "salary": {
+      "from": 0,
+      "to": 0,
+      "currency": "eur",
+      "tax": null
+     },
+     "tags": [],
+     "badges": [],
+     "jobGroups": [
+      {
+       "id": 726261,
+       "groupHash": "f7faca62658360881502402119b5e07e",
+       "position": 0,
+       "hidden": false,
+       "incognito": false,
+       "format": {
+        "id": 5,
+        "name": "FEATURED-HOME",
+        "homepage": true,
+        "weightOrder": 2,
+        "hasImage": true
+       }
+      }
+     ],
+     "organization": {
+      "id": "84d8645f-6c21-11ef-b01f-02798cc052cf",
+      "name": "ATM Valve Solutions d.o.o.",
+      "logoUrl": "https://images-preview.moj-posao.net/company-logo/65/9f11ec56-fit-300x300x100.png",
+      "badges": []
+     }
+    }
+   ]
+  }
+ ]
+}
