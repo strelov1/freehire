@@ -17,9 +17,11 @@ import (
 type mojposaoFake struct {
 	listErr  error
 	laterErr error
-	// emptyLater serves the second page with no postings, as a truncated listing would.
-	emptyLater bool
-	inactive   bool
+	// emptyLater serves the second page with no postings, as a truncated listing would;
+	// emptyGroups serves it with employer groups that hold no posting.
+	emptyLater  bool
+	emptyGroups bool
+	inactive    bool
 
 	mu      sync.Mutex
 	lists   []string
@@ -39,6 +41,9 @@ func (f *mojposaoFake) GetJSON(_ context.Context, u string, v any) error {
 		}
 		if f.laterErr != nil {
 			return f.laterErr
+		}
+		if f.emptyGroups {
+			return json.Unmarshal([]byte(`{"totalPages":2,"items":[{"id":"x","jobs":[]}]}`), v)
 		}
 		if f.emptyLater {
 			return json.Unmarshal([]byte(`{"totalPages":2,"items":[]}`), v)
@@ -145,6 +150,17 @@ func TestMojPosaoHydratesNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	}
 }
 
+func TestMojPosaoDoesNotJudgeTheCatalogueFilterOnTheCard(t *testing.T) {
+	f := &mojposaoFake{}
+	gate := DetailGate{Rejected: func(Job) bool { return true }}
+	if _, err := newTestMojPosao(f).FetchNewGated(context.Background(), CompanyEntry{}, func(string) bool { return false }, gate); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.details) != 4 {
+		t.Errorf("posting requests = %v, want all four named postings bought: the card lacks the IT position", f.details)
+	}
+}
+
 func TestMojPosaoGateSkipsCoveredEmployers(t *testing.T) {
 	f := &mojposaoFake{}
 	gate := DetailGate{Covered: func(cs []string) map[string]bool {
@@ -171,6 +187,7 @@ func TestMojPosaoListingFailuresFailTheCrawl(t *testing.T) {
 		"first page":       {listErr: errors.New("boom")},
 		"later page":       {laterErr: errors.New("boom")},
 		"empty later page": {emptyLater: true},
+		"empty groups":     {emptyGroups: true},
 	}
 	for name, f := range cases {
 		if _, err := newTestMojPosao(f).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {

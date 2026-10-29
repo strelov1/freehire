@@ -179,7 +179,10 @@ func (s mojposao) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 			jobs = append(jobs, base)
 			continue
 		}
-		if covered[base.Company] || (gate.Rejected != nil && gate.Rejected(base)) {
+		// Only coverage is judged before the body is bought. The catalogue filter is not: the
+		// search result lacks the root position that sets IsTechHint, so a technical posting
+		// with a terse title would be turned away on the card that the posting itself admits.
+		if covered[base.Company] {
 			jobs = append(jobs, base)
 			continue
 		}
@@ -248,13 +251,18 @@ func (s mojposao) list(ctx context.Context) ([]mojposaoCard, error) {
 		if err := s.get.GetJSON(ctx, fmt.Sprintf(mojposaoListURL, page), &p); err != nil {
 			return nil, fmt.Errorf("mojposao: listing page %d: %w", page, err)
 		}
+		n := 0
+		for _, g := range p.Items {
+			n += len(g.Jobs)
+		}
+		if n == 0 {
+			return nil, fmt.Errorf("mojposao: listing page %d of %d carries no posting", page, pages)
+		}
 		if page == 1 {
-			if p.TotalPages <= 0 || len(p.Items) == 0 {
-				return nil, fmt.Errorf("mojposao: listing carries no posting")
+			if p.TotalPages <= 0 {
+				return nil, fmt.Errorf("mojposao: listing states no page count")
 			}
 			pages = p.TotalPages
-		} else if len(p.Items) == 0 {
-			return nil, fmt.Errorf("mojposao: listing page %d of %d carries no posting", page, pages)
 		}
 		for _, g := range p.Items {
 			for _, c := range g.Jobs {
