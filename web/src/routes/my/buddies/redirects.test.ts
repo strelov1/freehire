@@ -26,10 +26,16 @@ describe('/my/buddies redirects', () => {
     expect(target(() => listLoad({ url } as never))).toEqual({ status: 308, location: '/buddies' });
   });
 
-  it('sends a member page to the same member', () => {
-    expect(target(() => memberLoad({ params: { handle: 'amber-heron-42' } } as never))).toEqual({
+  it('keeps any other query on the feed redirect', () => {
+    const url = new URL('https://freehire.me/my/buddies?utm_source=email');
+    expect(target(() => listLoad({ url } as never))).toEqual({ status: 308, location: '/buddies?utm_source=email' });
+  });
+
+  it('sends a member page to the same member, query kept', () => {
+    const url = new URL('https://freehire.me/my/buddies/amber-heron-42?utm_source=email');
+    expect(target(() => memberLoad({ params: { handle: 'amber-heron-42' }, url } as never))).toEqual({
       status: 308,
-      location: '/buddies/amber-heron-42',
+      location: '/buddies/amber-heron-42?utm_source=email',
     });
   });
 });
