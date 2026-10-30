@@ -137,6 +137,15 @@ func TestCompanySlug(t *testing.T) {
 		{"polish sp.zo.o. glued", "BIANCO LOGISTIC SP.ZO.O.", "bianco-logistic"},
 		{"polish sp.z.o.o glued", "NoTiller sp.z.o.o", "notiller"},
 		{"polish spółka zo.o.", "ALDI Spółka zo.o.", "aldi"},
+		{"slovenian spaced d. d.", "Telekom Slovenije, d. d.", "telekom-slovenije"},
+		{"croatian spaced d. d.", "Banka Intesa Sanpaolo d. d.", "banka-intesa-sanpaolo"},
+		{"spaced d. d., capitals, no final dot", "PLODINE D. D", "plodine"},
+		{"spaced d. d. after initials", "Actual I.T. d. d.", "actual-i-t"},
+		{"spaced d. d. mid-name is left to the slug", "Acme d. d. Ljubljana", "acme-d-d-ljubljana"},
+		// The Colombian public-utility form, after the S.A.S. or S.A. it qualifies.
+		{"colombian s.a.s e.s.p.", "INTERASEO S.A.S E.S.P.", "interaseo"},
+		{"colombian s.a e.s.p", "Conhydra S.A E.S.P", "conhydra"},
+		{"colombian s.a.s. e.s.p.", "Empresas Públicas S.A.S. E.S.P.", "empresas-publicas"},
 		// Their bare letters are not forms: a São Paulo store, a zoo, an advert, a meat
 		// producer whose "ø" the letters-only comparison would drop.
 		{"bare sp is são paulo, not a form", "Ragazzo Estacao Brooklin SP", "ragazzo-estacao-brooklin-sp"},
@@ -150,6 +159,18 @@ func TestCompanySlug(t *testing.T) {
 		{"a bare kd is kept", "Lidl Srbija KD", "lidl-srbija-kd"},
 		{"úřad is not ad", "Krajský úřad", "krajsky-urad"},
 		{"cyrillic initials are not a.d.", "ИП Рыкалина А.Д.", "ip-rykalina-a-d"},
+		{"cyrillic spaced initials are not d. d.", "ИП КИМ А. Д.", "ip-kim-a-d"},
+		{"cyrillic spaced initials are kept", "ИП Москвин С. П.", "ip-moskvin-s-p"},
+		{"cyrillic initials after a name", "ЗАВОД ИМЕНИ НЕМИРОВА А.Д.", "zavod-imeni-nemirova-a-d"},
+		{"a&d is not d. d.", "Canopy A&D", "canopy-a-d"},
+		{"s.m.a.d. is kept", "Acme S.M.A.D.", "acme-s-m-a-d"},
+		// A bare ESP is Spain, or an acronym, never the form.
+		{"bare esp is kept", "Millennium IT ESP", "millennium-it-esp"},
+		{"bracketed esp is kept", "Hotmart (ESP)", "hotmart-esp"},
+		{"a.s.p. is not e.s.p.", "A.S.P. Incorporated", "a-s-p"},
+		// "Castel S.A.D" is a French home-care service (Service d'Aide à Domicile), not the
+		// Iberian sports company the dotted S.A.D. also spells.
+		{"s.a.d is kept", "CASTEL S.A.D", "castel-s-a-d"},
 		{"estonian ou", "Shuttle99 OU", "shuttle99"},
 		{"estonian oü", "Shuttle99 OÜ", "shuttle99"},
 		{"a trailing z alone is kept", "Generation Z", "generation-z"},

@@ -19,6 +19,9 @@ func TestSlugPredatesRule(t *testing.T) {
 		{"lidl-hrvatska-d-o-o-k-d", "Lidl Hrvatska d.o.o. k.d.", true},
 		{"adria-mobil-d-o-o", "Adria Mobil, d. o. o.", true},
 		{"banca-intesa-a-d", "Banca Intesa a.d.", true},
+		{"telekom-slovenije-d-d", "Telekom Slovenije, d. d.", true},
+		{"interaseo-s-a-s-e-s-p", "INTERASEO S.A.S E.S.P.", true},
+		{"conhydra-s-a-e-s-p", "Conhydra S.A E.S.P", true},
 		{"ragazzo-brooklin-sp", "Ragazzo Brooklin SP", false}, // a bare SP is no form
 	} {
 		if got := SlugPredatesRule(tc.stored, tc.name); got != tc.want {

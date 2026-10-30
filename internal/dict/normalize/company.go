@@ -219,17 +219,24 @@ func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark
 // three letters, so a name ending in initials ("D. O.") is not touched, and only at the tail:
 // mid-name the slug renders "d-o-o" either way.
 //
+// So is the Slovenian and Croatian "d. d.", into the "d.d." legalSuffixes reads: 5 catalogue
+// companies end in it (2026-10-30), "Telekom Slovenije, d. d.", "Banka Intesa Sanpaolo d. d.".
+// Two Latin d's are matched, never the Cyrillic "Д", so the Russian initials "ИП КИМ А. Д."
+// keep their letters.
+//
 // Every walk over a name's tail calls it before splitting the name into words, for the same
 // reason each asks [IsLegalFormBefore]: a walk that skipped it would count "o." "o." as two
 // name words where the company key drops them.
 func CloseSpacedForms(name string) string {
 	name = spacedPolishTail.ReplaceAllString(name, "${1}o.o.")
-	return spacedBalkanTail.ReplaceAllString(name, "${1}.o.o.${2}")
+	name = spacedBalkanTail.ReplaceAllString(name, "${1}.o.o.${2}")
+	return spacedJointStockTail.ReplaceAllString(name, "${1}.d.${2}")
 }
 
 var (
-	spacedPolishTail = regexp.MustCompile(`(?i)([\s\p{Zs}.]z[\s\p{Zs}]+)o\.[\s\p{Zs}]+o\.?[\s\p{Zs})\]]*$`)
-	spacedBalkanTail = regexp.MustCompile(`(?i)((?:^|[^\p{L}\p{N}])d)\.[\s\p{Zs}]+o\.[\s\p{Zs}]+o\.?((?:[\s\p{Zs},]+k\.d\.?)?[\s\p{Zs})\]]*)$`)
+	spacedPolishTail     = regexp.MustCompile(`(?i)([\s\p{Zs}.]z[\s\p{Zs}]+)o\.[\s\p{Zs}]+o\.?[\s\p{Zs})\]]*$`)
+	spacedBalkanTail     = regexp.MustCompile(`(?i)((?:^|[^\p{L}\p{N}])d)\.[\s\p{Zs}]+o\.[\s\p{Zs}]+o\.?((?:[\s\p{Zs},]+k\.d\.?)?[\s\p{Zs})\]]*)$`)
+	spacedJointStockTail = regexp.MustCompile(`(?i)((?:^|[^\p{L}\p{N}])d)\.[\s\p{Zs}]+d\.?([\s\p{Zs})\]]*)$`)
 )
 
 // dropApostrophes removes the possessive/elision marks a name carries so they cannot become
@@ -356,7 +363,12 @@ func IsLegalForm(word string) bool {
 //     k.d.") is here and not in legalSuffixes because letters reads the Danish "Kød" as "kd".
 //     Its undotted "KD" is deliberately NOT listed: of the three names it ends, one is "Lidl
 //     Srbija KD" and another the fashion brand "NA-KD", which it would key at `na`. "d.n.o."
-//     because "dno" is a Slavic word.
+//     because "dno" is a Slavic word. "e.s.p." is the Colombian public-utility company (empresa
+//     de servicios públicos, "Conhydra S.A E.S.P"), while a bare "ESP" ends names for Spain or
+//     as an acronym ("Hotmart (ESP)", "Millennium IT ESP"). The dotted "S.A.D." is deliberately
+//     NOT listed: of the two names it ends, the Iberian sports company (Villarreal C.F. S.A.D.)
+//     carries no job, and the other is a French home-care service ("Castel S.A.D", Service
+//     d'Aide à Domicile), for which it is part of the name.
 //
 // Matching the spelling is also what lets a GLUED compound in: "Sp.zo.o." and "Sp.z.o.o." are
 // one word to the tail walk (a dot is not a word break), and as letters "spzoo", which ends no
@@ -365,6 +377,7 @@ var spelledForms = map[string]struct{}{
 	"oü":  {},
 	"a.d": {}, "s.p": {}, "k.d": {}, "d.n.o": {},
 	"z.o.o": {}, "zo.o": {}, "sp.z.o.o": {}, "sp.zo.o": {},
+	"e.s.p": {},
 }
 
 // notLetter trims what may surround a [spelledForms] word — "OÜ.", "(OÜ)", "a.d." — the way
