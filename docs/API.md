@@ -159,6 +159,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | --- | --- | --- |
 | `visa_sponsorship` | Visa sponsorship | true, false |
 | `requires_clearance` | Security clearance required | true, false |
+| `via_recruiter` | Posted by a recruiter for a client | true, false |
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |
 | `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |
