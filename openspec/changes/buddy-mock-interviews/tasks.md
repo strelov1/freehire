@@ -996,7 +996,7 @@ git commit -m "Add the buddy mock-interview schema and queries" -m "Six tables, 
   - `func (*MockService) Settings(ctx, userID int64) (MockSettings, bool, error)`, `SaveSettings(ctx, userID int64, in MockSettings) (MockSettings, error)`, `Availability(ctx, userID int64) ([]slots.Rule, error)`, `ReplaceWeekly(ctx, userID int64, rules []slots.Rule) error`, `AddOverride(ctx, userID int64, rule slots.Rule) (slots.Rule, error)`, `DeleteRule(ctx, userID, ruleID int64) error`
   - unexported: `validateMockSettings(MockSettings) (MockSettings, error)`, `ianaZone(string) (*time.Location, bool)`, `mockSlots(rules []slots.Rule, hostZone *time.Location, busy []slots.Interval, from, to, now time.Time, viewerZone string) (slots.SlotResult, error)`
 
-- [ ] 3.1 Write the failing unit tests `internal/engage/buddy/mock_test.go` (settings validation, and the availability scenarios "Weekly range across a DST change" and "Closed date", which are the engine's answer under the mock shape):
+- [x] 3.1 Write the failing unit tests `internal/engage/buddy/mock_test.go` (settings validation, and the availability scenarios "Weekly range across a DST change" and "Closed date", which are the engine's answer under the mock shape):
 
 ```go
 package buddy
@@ -1134,9 +1134,9 @@ func TestMockSlotsOfferNothingOnAClosedDate(t *testing.T) {
 }
 ```
 
-- [ ] 3.2 Run: `go test ./internal/engage/buddy/ -run 'TestValidateMockSettings|TestMockSlots' -count=1`. Expected: FAIL — `undefined: validateMockSettings`, `undefined: MockSettings`, `undefined: mockSlots`, … .
+- [x] 3.2 Run: `go test ./internal/engage/buddy/ -run 'TestValidateMockSettings|TestMockSlots' -count=1`. Expected: FAIL — `undefined: validateMockSettings`, `undefined: MockSettings`, `undefined: mockSlots`, … .
 
-- [ ] 3.3 Create `internal/engage/buddy/mock.go`:
+- [x] 3.3 Create `internal/engage/buddy/mock.go`:
 
 ```go
 package buddy
@@ -1298,9 +1298,9 @@ func mockSlots(rules []slots.Rule, hostZone *time.Location, busy []slots.Interva
 }
 ```
 
-- [ ] 3.4 Run: `go test ./internal/engage/buddy/ -run 'TestValidateMockSettings|TestMockSlots' -count=1`. Expected: `ok`.
+- [x] 3.4 Run: `go test ./internal/engage/buddy/ -run 'TestValidateMockSettings|TestMockSlots' -count=1`. Expected: `ok`.
 
-- [ ] 3.5 Write the failing integration tests. First the shared helpers, `internal/engage/buddy/mock_helpers_integration_test.go`:
+- [x] 3.5 Write the failing integration tests. First the shared helpers, `internal/engage/buddy/mock_helpers_integration_test.go`:
 
 ```go
 //go:build integration
@@ -1553,9 +1553,9 @@ func TestMockAvailabilityWeekAndOverrides(t *testing.T) {
 }
 ```
 
-- [ ] 3.6 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `undefined: buddy.NewMockService`, `undefined: buddy.MockService`, … .
+- [x] 3.6 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `undefined: buddy.NewMockService`, `undefined: buddy.MockService`, … .
 
-- [ ] 3.7 Create `internal/engage/buddy/mock_service.go`:
+- [x] 3.7 Create `internal/engage/buddy/mock_service.go`:
 
 ```go
 package buddy
@@ -1677,7 +1677,7 @@ func (s *MockService) DeleteRule(ctx context.Context, userID, ruleID int64) erro
 }
 ```
 
-- [ ] 3.8 Create `internal/engage/buddy/mock_repository.go`:
+- [x] 3.8 Create `internal/engage/buddy/mock_repository.go`:
 
 ```go
 package buddy
@@ -1813,9 +1813,9 @@ func clockFromPg(t pgtype.Time) (slots.TimeOfDay, bool) {
 }
 ```
 
-- [ ] 3.9 Run: `go test ./internal/engage/buddy/ -count=1 && go test -tags=integration ./internal/engage/buddy/ -run 'TestMockSettings|TestMockAvailability' -count=1`. Expected: `ok` for both.
+- [x] 3.9 Run: `go test ./internal/engage/buddy/ -count=1 && go test -tags=integration ./internal/engage/buddy/ -run 'TestMockSettings|TestMockAvailability' -count=1`. Expected: `ok` for both.
 
-- [ ] 3.10 Verify and commit:
+- [x] 3.10 Verify and commit:
 
 ```bash
 gofmt -l internal/engage/buddy && go vet ./... && go test ./... && go vet -tags=integration ./internal/engage/buddy/
