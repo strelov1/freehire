@@ -27,6 +27,11 @@ func TestParseJapaneseAddresses(t *testing.T) {
 		{"熊本県阿蘇郡西原村", []string{"jp"}},
 		// A prefecture opening a business name is no address: a Hong Kong restaurant.
 		{"北海道牧場餐廳, Hong Kong", []string{"hk"}},
+		// A marker with no name before it names no municipality: 市集 is a market.
+		{"北海道市集香港有限公司, Hong Kong", []string{"hk"}},
+		// A space may part the prefecture from the municipality.
+		{"東京都 渋谷区", []string{"jp"}},
+		{"東京都　渋谷区", []string{"jp"}},
 		// The postal mark is Japan's alone, wherever the address it opens sits in the token.
 		{"本社 〒151-0053 東京都渋谷区代々木1-36-4 全理連ビル", []string{"jp"}},
 		{"〒108-0023 東京都港区芝浦3丁目1－1", []string{"jp"}},

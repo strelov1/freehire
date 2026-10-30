@@ -48,17 +48,19 @@ func isJapaneseAddress(tok string) bool {
 	}
 	for _, p := range japanesePrefectures {
 		if rest, ok := strings.CutPrefix(tok, p); ok {
-			return rest == "" || strings.ContainsAny(leadingPlaceName(rest), japaneseMunicipalityMarks)
+			return rest == "" || namesMunicipality(strings.TrimLeftFunc(rest, unicode.IsSpace))
 		}
 	}
 	return false
 }
 
-// leadingPlaceName is s up to its first space or digit: the place names an address runs
-// through before its block number ("渋谷区渋谷2-24-12" -> "渋谷区渋谷").
-func leadingPlaceName(s string) string {
-	if i := strings.IndexFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsDigit(r) }); i >= 0 {
-		return s[:i]
+// namesMunicipality reports whether s, the address after its prefecture, opens with a
+// municipality: a name, then a marker, before any space or digit ("渋谷区渋谷2-24-12",
+// "あきる野市"). A marker with nothing before it is part of another word ("市集", a
+// market).
+func namesMunicipality(s string) bool {
+	if end := strings.IndexFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsDigit(r) }); end >= 0 {
+		s = s[:end]
 	}
-	return s
+	return strings.IndexAny(s, japaneseMunicipalityMarks) > 0
 }
