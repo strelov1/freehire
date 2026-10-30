@@ -1,5 +1,6 @@
 import { API_INTERNAL_URL, SSR_API_TIMEOUT_MS } from '$app/env/private';
 import { createApi } from '#lib/api.js';
+import { withFacetCache } from './facetCache.js';
 
 /** Build an API client for use inside a SvelteKit server `load` or endpoint.
  *  Pass the event's `fetch`, and the incoming request's `cookie` header for any
@@ -14,7 +15,10 @@ import { createApi } from '#lib/api.js';
  *  cookies, so the session cookie is forwarded explicitly when provided. Public
  *  reads can omit it. */
 export function serverApi(fetchImpl: typeof fetch, cookie?: string | null) {
-  return createApi(fetchImpl, API_INTERNAL_URL ?? '', cookie ? { cookie } : {}, timeoutMs());
+  const api = createApi(fetchImpl, API_INTERNAL_URL ?? '', cookie ? { cookie } : {}, timeoutMs());
+  // Facet counts are public and identical for every visitor, so renders share them for a
+  // while instead of each asking the API (see facetCache).
+  return { ...api, facetCounts: withFacetCache(api.facetCounts) };
 }
 
 /** How long a server-side API call may take before it is aborted. Every SSR call is

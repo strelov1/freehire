@@ -26,7 +26,11 @@ import (
 // the repeated recomputation that the see-also block and crawler traffic drive —
 // the endpoint measured at 55% of API handler time. It is deliberately short: the
 // win is in absorbing bursts of identical requests, not in holding a count for long.
-const facetCacheTTL = time.Minute
+// Five minutes, not one, since 2026-10-30: at ~44 req/s the endpoint was the API's
+// busiest route, and a count four minutes older than a wave is still invisible beside
+// the totals the filter panel shows. Server renders hold their own copy for ten
+// (web/src/lib/server/facetCache.ts), so this mostly serves browsers and agents.
+const facetCacheTTL = 5 * time.Minute
 
 // cachedFacetCounts wraps facetCounter.FacetCounts with a best-effort read-through
 // cache. A nil cache, a miss, or any cache error all fall straight through to a
