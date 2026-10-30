@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -124,6 +125,13 @@ func (l SystemdLauncher) Launch(ctx context.Context, run Run) error {
 		"--property=IOWeight=40",
 		"--property=WorkingDirectory=" + l.WorkingDir,
 		"--property=EnvironmentFile=" + l.EnvFile,
+		// Then the provider's OWN file, whose values win over the shared one's: the only
+		// place a knob that must be enabled one provider at a time can live, since every run
+		// reads the shared file (BODY_REFRESH_DAYS is the case — on for all, it would re-read
+		// the whole fleet's bodies against the host's bottleneck). The "-" makes a missing
+		// file not an error, so a provider without one launches exactly as before. The key
+		// was validated above, which is what makes it safe inside a path.
+		"--property=EnvironmentFile=-" + filepath.Join(filepath.Dir(l.EnvFile), "ingest-env", run.Provider+".env"),
 		"--uid=" + l.RunAs,
 		l.IngestBinary,
 		run.Provider,

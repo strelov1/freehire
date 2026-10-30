@@ -289,3 +289,30 @@ func TestLaunchRefusesAnUnsafeOrUnknownProviderKey(t *testing.T) {
 		}
 	}
 }
+
+// A knob that must be enabled one provider at a time (BODY_REFRESH_DAYS costs a detail
+// request per re-read posting against a fleet that is already the host's bottleneck) has
+// nowhere to go in the shared file every run reads. Each run therefore also reads its
+// provider's own file — after the shared one, so a value there wins — and the leading "-"
+// is what keeps a provider WITHOUT such a file launching exactly as before.
+func TestLaunchReadsTheProvidersOwnEnvironmentFileAfterTheSharedOne(t *testing.T) {
+	rec := &recordedExec{}
+	l := newTestLauncher(rec)
+
+	if err := l.Launch(context.Background(), Run{
+		Provider: "successfactors", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout,
+	}); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	var files []string
+	for _, a := range rec.args {
+		if v, ok := strings.CutPrefix(a, "--property=EnvironmentFile="); ok {
+			files = append(files, v)
+		}
+	}
+	want := []string{"/opt/freehire/.env", "-/opt/freehire/ingest-env/successfactors.env"}
+	if !slices.Equal(files, want) {
+		t.Errorf("EnvironmentFile properties = %q, want %q", files, want)
+	}
+}
