@@ -92,12 +92,10 @@
   // guard has to test that subset — a job carrying only editorial tags would
   // otherwise open an empty flex row and leave a stray margin under the title.
   const credentials = $derived(credentialBadges(job.collections));
-  // Only the full posting carries the raw location line; a card projection simply has none.
-  const locationLine = $derived('location' in job ? job.location : undefined);
   // Only the flags the stack actually draws count as said: a country past the cap hides
   // behind "+N", so the caption must still name it.
   const MAX_FLAGS = 5;
-  const place = $derived(cardLocation(locationLine, job.countries?.slice(0, MAX_FLAGS)));
+  const place = $derived(cardLocation(job.location, job.countries?.slice(0, MAX_FLAGS)));
   // A one-line blurb under the title so a card conveys what the job is without
   // opening it. Prefer the clean model-written summary, but only tech jobs are
   // enriched — fall back to a plain-text snippet of the raw (HTML) posting so
@@ -270,7 +268,7 @@
   const uid = $props.id();
   const summaryId = `${uid}-summary`;
   const summary = $derived(
-    [isViewed ? 'Viewed' : '', locationLine ?? '', posted ? `Posted ${posted}` : '', salary ?? ''].filter(Boolean).join(', '),
+    [isViewed ? 'Viewed' : '', job.location ?? '', posted ? `Posted ${posted}` : '', salary ?? ''].filter(Boolean).join(', '),
   );
 
   // Apply-intent — fired regardless of auth, the same event and shape the job page's own
@@ -441,7 +439,7 @@
            otherwise read identically until opened. A muted caption beside the flags
            rather than a chip, so it reads as part of the geography, not a new signal. -->
       {#if place}
-        <span title={locationLine} class="flex min-w-0 max-w-56 items-center gap-1 text-xs font-medium text-muted-foreground">
+        <span title={job.location} class="flex min-w-0 max-w-56 items-center gap-1 text-xs font-medium text-muted-foreground">
           <MapPin class="size-3.5 shrink-0" aria-hidden="true" />
           <span class="truncate">{place}</span>
         </span>

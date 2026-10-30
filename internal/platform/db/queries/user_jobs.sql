@@ -265,7 +265,7 @@ SELECT u.user_id, u.job_id, u.viewed_at,
 -- to reach the projection. They are pulled out of the enrichment by key instead of shipping
 -- the whole JSONB.
 SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, jobs.closed_at,
-       jobs.work_mode, jobs.seniority, jobs.employment_type,
+       jobs.location, jobs.work_mode, jobs.seniority, jobs.employment_type,
        jobs.countries, jobs.regions, jobs.skills, jobs.collections,
        jobs.posted_at, jobs.created_at,
        -- The blurb a row shows under the title: the enrichment's own summary when there is

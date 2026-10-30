@@ -340,6 +340,7 @@ func (r *QueriesRepository) ListInteractions(
 			Title:          row.Title,
 			Company:        row.Company,
 			ClosedAt:       pgconv.TimePtr(row.ClosedAt),
+			Location:       row.Location,
 			WorkMode:       row.WorkMode,
 			Seniority:      row.Seniority,
 			EmploymentType: row.EmploymentType,

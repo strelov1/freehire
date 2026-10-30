@@ -17,6 +17,9 @@ type Card struct {
 	Title      string  `json:"title"`
 	Company    string  `json:"company"`
 	ClosedAt   *string `json:"closed_at"`
+	// Location is the posting's own location line as it states it — what tells one employer's
+	// postings in different cities apart on a row whose flags all name the same country.
+	Location string `json:"location,omitempty"`
 	// The stated facets of the tag row. Empty means unstated, and the row simply omits it —
 	// the same rule the full projection follows.
 	WorkMode       string   `json:"work_mode,omitempty"`

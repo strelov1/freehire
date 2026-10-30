@@ -365,7 +365,7 @@ func (q *Queries) ListSavedJobSlugs(ctx context.Context, userID int64) ([]string
 
 const listUserJobs = `-- name: ListUserJobs :many
 SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, jobs.closed_at,
-       jobs.work_mode, jobs.seniority, jobs.employment_type,
+       jobs.location, jobs.work_mode, jobs.seniority, jobs.employment_type,
        jobs.countries, jobs.regions, jobs.skills, jobs.collections,
        jobs.posted_at, jobs.created_at,
        -- The blurb a row shows under the title: the enrichment's own summary when there is
@@ -470,6 +470,7 @@ type ListUserJobsRow struct {
 	Company                  string             `json:"company"`
 	CompanySlug              string             `json:"company_slug"`
 	ClosedAt                 pgtype.Timestamptz `json:"closed_at"`
+	Location                 string             `json:"location"`
 	WorkMode                 string             `json:"work_mode"`
 	Seniority                string             `json:"seniority"`
 	EmploymentType           string             `json:"employment_type"`
@@ -554,6 +555,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.Company,
 			&i.CompanySlug,
 			&i.ClosedAt,
+			&i.Location,
 			&i.WorkMode,
 			&i.Seniority,
 			&i.EmploymentType,

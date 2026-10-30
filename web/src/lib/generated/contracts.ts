@@ -101,6 +101,11 @@ export interface Card {
   company: string;
   closed_at?: string;
   /**
+   * Location is the posting's own location line as it states it — what tells one employer's
+   * postings in different cities apart on a row whose flags all name the same country.
+   */
+  location?: string;
+  /**
    * The stated facets of the tag row. Empty means unstated, and the row simply omits it —
    * the same rule the full projection follows.
    */

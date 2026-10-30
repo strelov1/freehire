@@ -39,8 +39,8 @@ func TestListMyJobsEndpoint(t *testing.T) {
 		t.Helper()
 		var id int64
 		if err := pool.QueryRow(ctx,
-			`INSERT INTO jobs (source, external_id, url, title, public_slug, closed_at)
-			 VALUES ('test', $1, 'http://example.test', 'Job ' || $1, 'job-' || $1,
+			`INSERT INTO jobs (source, external_id, url, title, public_slug, location, closed_at)
+			 VALUES ('test', $1, 'http://example.test', 'Job ' || $1, 'job-' || $1, 'Zagreb (Sesvete)',
 			         CASE WHEN $2 THEN now() ELSE NULL END)
 			 RETURNING id`, ext, closed).Scan(&id); err != nil {
 			t.Fatalf("seed job %q: %v", ext, err)
@@ -117,6 +117,12 @@ func TestListMyJobsEndpoint(t *testing.T) {
 		}
 		if _, ok := job["public_slug"]; !ok {
 			t.Error("job missing public_slug (not the jobview shape?)")
+		}
+		// The card's location caption tells one employer's postings in different cities
+		// apart, so the listing must carry the line it is cut from.
+		var location string
+		if err := json.Unmarshal(job["location"], &location); err != nil || location != "Zagreb (Sesvete)" {
+			t.Errorf("job location = %q (err %v), want the posting's location line", location, err)
 		}
 		c := body.Meta.Counts
 		if c.All != 2 || c.Viewed != 1 || c.Saved != 0 || c.Applied != 1 {

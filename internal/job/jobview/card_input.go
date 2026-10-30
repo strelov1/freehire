@@ -17,6 +17,7 @@ type CardInput struct {
 	Title              string
 	Company            string
 	ClosedAt           *time.Time
+	Location           string
 	WorkMode           string
 	Seniority          string
 	EmploymentType     string
@@ -41,6 +42,7 @@ func NewCard(in CardInput) Card {
 		Title:              in.Title,
 		Company:            in.Company,
 		ClosedAt:           rfc3339Ptr(in.ClosedAt),
+		Location:           strings.TrimSpace(in.Location),
 		WorkMode:           in.WorkMode,
 		Seniority:          in.Seniority,
 		EmploymentType:     in.EmploymentType,
