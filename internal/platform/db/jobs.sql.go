@@ -7183,13 +7183,9 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     category     = EXCLUDED.category,
     is_tech      = EXCLUDED.is_tech,
     requires_clearance = EXCLUDED.requires_clearance,
-    -- Description-derived and never re-read elsewhere: a failed detail fetch (an empty
-    -- incoming description, which leaves jobs.description as it was) must not drop the
-    -- mark the stored description still earns — the requirements_derived guard below.
-    via_recruiter = CASE
-        WHEN EXCLUDED.description <> '' THEN EXCLUDED.via_recruiter
-        ELSE jobs.via_recruiter
-    END,
+    -- The moderator's description replaces the stored one unconditionally, so the
+    -- mark is re-derived from it unconditionally too.
+    via_recruiter = EXCLUDED.via_recruiter,
     posting_language     = EXCLUDED.posting_language,
     employment_type      = EXCLUDED.employment_type,
     education_level      = EXCLUDED.education_level,
