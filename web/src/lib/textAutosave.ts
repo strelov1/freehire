@@ -68,11 +68,18 @@ export class TextAutosave<T> {
     const before = saved();
     this.#dirty = false;
     if (same(next, this.#sending ? this.#sending.value : before)) return true;
-    // Typing that lands during the save marks the card dirty again through `edited`, so
-    // it stays unsent without anything to clear here.
+    // The write clears `#dirty` itself rather than leaving it to commit(): a failed save
+    // marks the card dirty below, and SaveStatus.retry() re-runs THIS write without
+    // passing through commit() — so only the write can tell the card a retry landed.
+    // Typing that arrived meanwhile is still unsent, so it is cleared only when there was
+    // none. (#3898 removed this as a no-op and broke exactly that path.)
+    const write = async () => {
+      await save(next);
+      if (same(read(), next)) this.#dirty = false;
+    };
     const sending = { value: next };
     this.#sending = sending;
-    void status.run(() => save(next), { undo: () => save(before) }, quiet).then((ok) => {
+    void status.run(write, { undo: () => save(before) }, quiet).then((ok) => {
       if (this.#sending === sending) this.#sending = undefined;
       if (!ok) this.#dirty = true;
     });
