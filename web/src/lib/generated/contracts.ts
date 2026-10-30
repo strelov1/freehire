@@ -1383,6 +1383,20 @@ export interface Answers {
    */
   privacy_consent?: boolean;
 }
+/**
+ * Field names one screening answer by its wire key — the vocabulary a caller uses to ask
+ * for an answer to be withdrawn.
+ */
+export type Field = string;
+export const FieldAuthorizedCountries: Field = "authorized_countries";
+export const FieldVisaSponsorshipNeeded: Field = "visa_sponsorship_needed";
+export const FieldDesiredSalaryAmount: Field = "desired_salary_amount";
+export const FieldDesiredSalaryCurrency: Field = "desired_salary_currency";
+export const FieldDesiredSalaryPeriod: Field = "desired_salary_period";
+export const FieldNoticePeriodDays: Field = "notice_period_days";
+export const FieldWillingToRelocate: Field = "willing_to_relocate";
+export const FieldAge18OrOlder: Field = "age_18_or_older";
+export const FieldPrivacyConsent: Field = "privacy_consent";
 
 /**
  * Responses is one candidate's survey record. Every field is independently optional: a nil

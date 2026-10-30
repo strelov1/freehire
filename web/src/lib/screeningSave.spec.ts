@@ -66,3 +66,19 @@ describe('screeningStore.save', () => {
     expect(screeningStore.answers).toBeNull();
   });
 });
+
+describe('screeningStore.save — withdrawing', () => {
+  it('asks what to withdraw when the save is sent, after the save before it landed', async () => {
+    const first = deferred<Record<string, unknown>>();
+    updateScreeningAnswers.mockReturnValueOnce(first.promise).mockResolvedValueOnce({});
+    let stored: string[] = [];
+
+    const a = screeningStore.save({ desired_salary_amount: 120000 });
+    const b = screeningStore.save({}, () => stored.filter((k) => k === 'desired_salary_amount') as never);
+    stored = ['desired_salary_amount'];
+    first.resolve({ desired_salary_amount: 120000 });
+    await Promise.all([a, b]);
+
+    expect(updateScreeningAnswers).toHaveBeenNthCalledWith(2, { clear: ['desired_salary_amount'] });
+  });
+});

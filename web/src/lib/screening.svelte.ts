@@ -49,11 +49,15 @@ class ScreeningStore extends UserResource<Answers | null> {
    *  sending (one still waiting in the queue would otherwise go out on the NEXT account's
    *  cookie) and on the answer (one already sent must not refill the store). */
   //
-  // `cleared` names answers to withdraw: leaving a field out of `patch` keeps it as stored.
-  save(patch: Partial<Answers>, cleared: (keyof Answers)[] = []): Promise<void> {
+  // `withdrawn` names answers to withdraw: leaving a field out of `patch` keeps it as
+  // stored. It is asked when the save is SENT, not when it is queued — an answer emptied
+  // while an earlier save that stores it is still on its way is not stored yet at queue
+  // time, and would be left behind.
+  save(patch: Partial<Answers>, withdrawn: () => (keyof Answers)[] = () => []): Promise<void> {
     const generation = this.generation;
     return this.#queue(async () => {
       if (generation !== this.generation) return;
+      const cleared = withdrawn();
       const answers = await api.updateScreeningAnswers(cleared.length > 0 ? { ...patch, clear: cleared } : patch);
       if (generation !== this.generation) return;
       this.#answers = answers;

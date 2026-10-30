@@ -32,6 +32,10 @@ export class TextAutosave<T> {
   #opts: Options<T>;
   #dirty = false;
   #timer: ReturnType<typeof setTimeout> | undefined;
+  // The value of the save still on its way, if one is. Until it lands, `saved()` answers
+  // with the value from before it — so that, not `saved()`, is what the boxes now differ
+  // from: a box reverted mid-save must still be sent, and a box unchanged since need not.
+  #sending: { value: T } | undefined;
 
   constructor(opts: Options<T>) {
     this.#opts = opts;
@@ -63,10 +67,13 @@ export class TextAutosave<T> {
     }
     const before = saved();
     this.#dirty = false;
-    if (same(next, before)) return true;
+    if (same(next, this.#sending ? this.#sending.value : before)) return true;
     // Typing that lands during the save marks the card dirty again through `edited`, so
     // it stays unsent without anything to clear here.
+    const sending = { value: next };
+    this.#sending = sending;
     void status.run(() => save(next), { undo: () => save(before) }, quiet).then((ok) => {
+      if (this.#sending === sending) this.#sending = undefined;
       if (!ok) this.#dirty = true;
     });
     return true;

@@ -145,9 +145,10 @@
   const currencyOk = (patch: Partial<Answers>) =>
     patch.desired_salary_currency === undefined || /^[A-Za-z]{3}$/.test(patch.desired_salary_currency);
 
-  // The answers stored now that this patch leaves out — the ones emptied here, to be
-  // withdrawn rather than left as they were. An Undo re-sends the earlier patch through
-  // the same path, so it withdraws an answer that was filled in for the first time too.
+  // The answers stored that this patch leaves out — the ones emptied here, to be withdrawn
+  // rather than left as they were. The store asks it when the save is sent, so it sees
+  // what an earlier save still in flight stored. An Undo re-sends the earlier patch
+  // through the same path, so it withdraws an answer filled in for the first time too.
   const withdrawn = (patch: Partial<Answers>) =>
     (Object.keys(saved()) as (keyof Answers)[]).filter((k) => !(k in patch));
 
@@ -158,7 +159,7 @@
     saved,
     // Queued and session-guarded in the store; the PUT's own answer is the fresh copy, so
     // no re-read follows it and a failed one cannot hand the form stale answers.
-    save: (patch) => screeningStore.save(patch, withdrawn(patch)),
+    save: (patch) => screeningStore.save(patch, () => withdrawn(patch)),
     valid: (patch) => salaryOk(patch) && noticeOk(patch) && currencyOk(patch),
     // A number cannot be half-typed into something invalid — only a letter or a bad comma
     // makes it so — so it is marked after the pause too, not only on leaving the field. A
