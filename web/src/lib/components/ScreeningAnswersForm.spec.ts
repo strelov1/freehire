@@ -21,6 +21,45 @@ beforeEach(() => {
 });
 
 describe('ScreeningAnswersForm — autosave', () => {
+  it('saves a country picked from the list as its code', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Authorized to work in' }), {
+      target: { value: 'Germ' },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: /Germany/ }));
+
+    await waitFor(() => expect(updateScreeningAnswers).toHaveBeenCalledWith({ authorized_countries: ['de'] }));
+  });
+
+  it('offers only the countries the server accepts', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+
+    // Afghanistan is an ISO country the server's dictionary does not place, so the
+    // endpoint would refuse it.
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Authorized to work in' }), {
+      target: { value: 'Afghan' },
+    });
+
+    expect(screen.queryByRole('button', { name: /Afghanistan/ })).toBeNull();
+  });
+
+  it('marks a half-typed currency on leaving it and does not save it', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+    const currency = screen.getByRole('textbox', { name: 'Currency (ISO 4217)' });
+
+    await fireEvent.input(currency, { target: { value: 'US' } });
+    await fireEvent.blur(currency);
+    await fireEvent.focusOut(currency);
+
+    expect(screen.getByText('Currency must be a three-letter code, like USD.')).toBeTruthy();
+    expect(updateScreeningAnswers).not.toHaveBeenCalled();
+
+    await fireEvent.input(currency, { target: { value: 'usd' } });
+    await fireEvent.focusOut(currency);
+    await waitFor(() => expect(updateScreeningAnswers).toHaveBeenCalledWith({ desired_salary_currency: 'usd' }));
+  });
+
   it('saves a dropdown the moment it is picked', async () => {
     render(ScreeningAnswersForm, { props: { answers: {} } });
 

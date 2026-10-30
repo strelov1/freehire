@@ -6,8 +6,8 @@ export const messages = defineMessages(
     description:
       'Answer these once and the browser extension can fill them into matching questions on real application forms.',
     fields: {
-      authorizedCountries: 'Authorized to work in (comma-separated countries)',
-      authorizedCountriesPlaceholder: 'United States, Germany',
+      authorizedCountries: 'Authorized to work in',
+      authorizedCountriesPlaceholder: 'Add a country',
       visaSponsorship: 'Need visa sponsorship?',
       relocate: 'Willing to relocate?',
       age18: '18 or older?',
@@ -32,6 +32,7 @@ export const messages = defineMessages(
     },
     mustBeWholeNumber: '{field} must be a whole number.',
     mustBePositive: '{field} must be a whole number above zero.',
+    mustBeCurrency: 'Currency must be a three-letter code, like USD.',
   },
   {
     ru: {
@@ -39,8 +40,8 @@ export const messages = defineMessages(
       description:
         'Заполните один раз — расширение браузера подставит эти ответы в похожие вопросы на реальных формах заявки.',
       fields: {
-        authorizedCountries: 'Есть разрешение на работу в (страны через запятую)',
-        authorizedCountriesPlaceholder: 'США, Германия',
+        authorizedCountries: 'Есть разрешение на работу в',
+        authorizedCountriesPlaceholder: 'Добавить страну',
         visaSponsorship: 'Нужна визовая поддержка?',
         relocate: 'Готовы к переезду?',
         age18: '18 лет или больше?',
@@ -65,6 +66,7 @@ export const messages = defineMessages(
       },
       mustBeWholeNumber: '«{field}» должно быть целым числом.',
       mustBePositive: '«{field}» должно быть целым числом больше нуля.',
+      mustBeCurrency: 'Валюта — трёхбуквенный код, например USD.',
     },
   },
 );

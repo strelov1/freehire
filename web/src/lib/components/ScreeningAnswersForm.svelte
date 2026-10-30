@@ -1,11 +1,13 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { Answers } from '#lib/generated/contracts.js';
+  import { COUNTRY_REGION_MAP, type Answers } from '#lib/generated/contracts.js';
+  import { COUNTRY_OPTIONS } from '#lib/facets.js';
   import { Input } from '#lib/ui/index.js';
   import { SaveStatus } from '#lib/saveStatus.svelte.js';
   import { screeningStore } from '#lib/screening.svelte.js';
   import { TextAutosave } from '#lib/textAutosave.js';
   import SaveStatusLine from './SaveStatus.svelte';
+  import SearchSelect from './facets/SearchSelect.svelte';
   import { messages } from './ScreeningAnswersForm.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
@@ -20,7 +22,10 @@
   // It autosaves like every profile card (TextAutosave): a typed field a second after
   // typing stops or when focus leaves the form, a dropdown at once. Auto-apply sends these
   // answers to real employers, so a number field that does not read as a number is marked
-  // and not saved.
+  // and not saved. Countries are picked from a list rather than typed: the server accepts
+  // only the countries its own dictionary places (screeninganswers.Validate), and a typed
+  // name it did not know — "Германия", the Russian placeholder's own example — failed the
+  // whole save, dropdowns included.
   let { answers = null }: { answers?: Answers | null } = $props();
 
   const s = $derived(t(messages, locale()));
@@ -48,7 +53,12 @@
   const wholeNumber = (raw: string) =>
     /^\d+$/.test(raw) || /^\d{1,3}(,\d{3})+$/.test(raw) ? Number(raw.replace(/,/g, '')) : Number.NaN;
 
-  let authorizedCountriesText = $state((answers?.authorized_countries ?? []).join(', '));
+  // The picker offers only the countries the server accepts. The site-wide list is every
+  // ISO code; COUNTRY_REGION_MAP is generated from the server's own table, so the two
+  // cannot drift.
+  const countryOptions = COUNTRY_OPTIONS.filter((o) => o.value in COUNTRY_REGION_MAP);
+
+  let authorizedCountries = $state<string[]>(answers?.authorized_countries ?? []);
   let visaSponsorshipNeeded = $state<TriState>(toTriState(answers?.visa_sponsorship_needed));
   let desiredSalaryAmount = $state(answers?.desired_salary_amount?.toString() ?? '');
   let desiredSalaryCurrency = $state(answers?.desired_salary_currency ?? '');
@@ -59,6 +69,7 @@
   let privacyConsent = $state<TriState>(toTriState(answers?.privacy_consent));
   let salaryInvalid = $state(false);
   let noticeInvalid = $state(false);
+  let currencyInvalid = $state(false);
 
   // Only fields with a value are sent — the server's partial-update contract leaves an
   // omitted field exactly as stored, so a blank input means "unchanged", not "clear it"
@@ -90,10 +101,7 @@
 
   const read = () =>
     patchOf({
-      countries: authorizedCountriesText
-        .split(',')
-        .map((c) => c.trim())
-        .filter(Boolean),
+      countries: authorizedCountries,
       sponsorship: fromTriState(visaSponsorshipNeeded),
       salary: desiredSalaryAmount.trim(),
       currency: desiredSalaryCurrency.trim(),
@@ -119,11 +127,14 @@
 
   // The endpoint's own rules (screeninganswers.Validate), applied here so a value it would
   // refuse is marked on its field instead of coming back as a failed save: a whole number,
-  // and for the salary above zero. NaN fails Number.isInteger, so "12k" is caught too.
+  // and for the salary above zero. NaN fails Number.isInteger, so "12k" is caught too. A
+  // currency is three letters; the server uppercases it.
   const wholeAtLeast = (value: number | undefined, minimum: number) =>
     value === undefined || (Number.isInteger(value) && value >= minimum);
   const salaryOk = (patch: Partial<Answers>) => wholeAtLeast(patch.desired_salary_amount, 1);
   const noticeOk = (patch: Partial<Answers>) => wholeAtLeast(patch.notice_period_days, 0);
+  const currencyOk = (patch: Partial<Answers>) =>
+    patch.desired_salary_currency === undefined || /^[A-Za-z]{3}$/.test(patch.desired_salary_currency);
 
   const status = new SaveStatus();
   const autosave = new TextAutosave<Partial<Answers>>({
@@ -133,9 +144,10 @@
     // Queued and session-guarded in the store; the PUT's own answer is the fresh copy, so
     // no re-read follows it and a failed one cannot hand the form stale answers.
     save: (patch) => screeningStore.save(patch),
-    valid: (patch) => salaryOk(patch) && noticeOk(patch),
+    valid: (patch) => salaryOk(patch) && noticeOk(patch) && currencyOk(patch),
     // A number cannot be half-typed into something invalid — only a letter or a bad comma
-    // makes it so — so it is marked after the pause too, not only on leaving the field.
+    // makes it so — so it is marked after the pause too, not only on leaving the field. A
+    // currency can be half-typed ("US"), so it is marked only on leaving (currencyLeft).
     refused: (patch) => {
       salaryInvalid = !salaryOk(patch);
       noticeInvalid = !noticeOk(patch);
@@ -155,7 +167,7 @@
     const stored = saved();
     if (autosave.holding) return;
     if (JSON.stringify(stored) === JSON.stringify(untrack(read))) return;
-    authorizedCountriesText = (answers?.authorized_countries ?? []).join(', ');
+    authorizedCountries = answers?.authorized_countries ?? [];
     visaSponsorshipNeeded = toTriState(answers?.visa_sponsorship_needed);
     desiredSalaryAmount = answers?.desired_salary_amount?.toString() ?? '';
     desiredSalaryCurrency = answers?.desired_salary_currency ?? '';
@@ -169,6 +181,7 @@
   function edited() {
     salaryInvalid = false;
     noticeInvalid = false;
+    currencyInvalid = false;
     autosave.edited();
   }
 
@@ -180,6 +193,17 @@
   function picked() {
     edited();
     commit();
+  }
+
+  function toggleCountry(code: string) {
+    authorizedCountries = authorizedCountries.includes(code)
+      ? authorizedCountries.filter((c) => c !== code)
+      : [...authorizedCountries, code];
+    picked();
+  }
+
+  function currencyLeft() {
+    currencyInvalid = !currencyOk({ desired_salary_currency: desiredSalaryCurrency.trim() || undefined });
   }
 
   $effect(() => () => {
@@ -199,10 +223,18 @@
   </div>
 
   <div class="grid gap-3 sm:grid-cols-2">
-    <label class="flex flex-col gap-1 text-sm sm:col-span-2">
+    <div class="flex flex-col gap-1 text-sm sm:col-span-2">
       <span class="text-muted-foreground">{s.fields.authorizedCountries}</span>
-      <Input bind:value={authorizedCountriesText} oninput={edited} placeholder={s.fields.authorizedCountriesPlaceholder} class="w-full" />
-    </label>
+      <SearchSelect
+        options={countryOptions}
+        include={authorizedCountries}
+        placeholder={s.fields.authorizedCountriesPlaceholder}
+        onToggle={toggleCountry}
+        label={s.fields.authorizedCountries}
+        cap={8}
+        clearOnSelect
+      />
+    </div>
 
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-muted-foreground">{s.fields.visaSponsorship}</span>
@@ -293,7 +325,18 @@
 
     <label class="flex flex-col gap-1 text-sm">
       <span class="text-muted-foreground">{s.fields.currency}</span>
-      <Input bind:value={desiredSalaryCurrency} oninput={edited} placeholder="USD" maxlength={3} class="w-full" />
+      <Input
+        bind:value={desiredSalaryCurrency}
+        oninput={edited}
+        onblur={currencyLeft}
+        placeholder="USD"
+        maxlength={3}
+        aria-invalid={currencyInvalid}
+        class="w-full {currencyInvalid ? 'border-destructive focus-visible:ring-destructive' : ''}"
+      />
+      {#if currencyInvalid}
+        <span class="text-xs text-destructive">{s.mustBeCurrency}</span>
+      {/if}
     </label>
 
     <label class="flex flex-col gap-1 text-sm">
