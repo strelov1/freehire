@@ -55,7 +55,7 @@ hard part exists. It is simply locked inside the mentorship package.
   `mock*.go` files in `internal/engage/buddy`; handlers in `internal/api/handler`;
   `cmd/mentorship-remind` gains a buddy pass; `internal/platform/arch/layering/blocks.go`
   gains `slots`.
-- Database: migration `0210_buddy_mocks.sql` (six tables), queries in
+- Database: migration `0214_buddy_mocks.sql` (the next free number at implementation time) (six tables), queries in
   `internal/platform/db/queries/buddy_mocks.sql`.
 - Web: `/my/buddies/mocks`, booking panel on the member page, refactored
   `MentorScheduleEditor.svelte` / `MentorBookingView.svelte`.

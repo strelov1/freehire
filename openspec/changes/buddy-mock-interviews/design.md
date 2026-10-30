@@ -35,7 +35,8 @@ in the same block.
 ## Decisions
 
 ### D1. Extract the engine into `internal/engage/slots`
-Move the pure files and their tests verbatim, rename the mentor-flavoured identifiers
+Move the pure files (including `calendar.go`, which calls the engine's unexported
+functions) and their tests verbatim, export `withID` as `WithID` for the repositories, rename the mentor-flavoured identifiers
 (`MentorZone` → `OwnerZone`, `ErrNoMentorZone` → `ErrNoOwnerZone`), and have mentorship
 import the new package. Add `slots` to the engage list in
 `internal/platform/arch/layering/blocks.go`.
@@ -47,14 +48,18 @@ general terms.
 Mocks are 60 minutes, no buffers, 12 hours minimum notice, 30-day horizon. Constants in
 `buddy`, not columns. A peer mock has one shape; per-member tuning is a mentor feature.
 
-### D3. Tables (migration `0210_buddy_mocks.sql`)
+### D3. Tables (migration `0214_buddy_mocks.sql` (the next free number at implementation time))
 - `buddy_mock_settings(user_id PK → buddy_members, timezone, meeting_url, topics text[],
   paused, created_at, updated_at)` — `topics` non-empty and within the vocabulary,
   `meeting_url` must start with `https://`.
 - `buddy_mock_availability` — the same shape as `mentor_availability`: `weekday` XOR
   `on_date`, zoneless `start_time`/`end_time`.
 - `buddy_mocks(id uuid, host_user_id, guest_user_id, starts_at, ends_at, topic, status
-  confirmed|cancelled, cancelled_by, cancelled_at, created_at)` with `host <> guest`.
+  confirmed|cancelled, guest_timezone, cancelled_by, cancelled_at, cancel_reason
+  participant|left|blocked, cancel_announced_at, created_at)` with `host <> guest`.
+  `guest_timezone` is the zone the guest booked in (D9 renders their notices in it);
+  `cancel_reason` picks the notice wording; `cancel_announced_at` lets a cancellation made
+  inside SQL be announced afterwards (D7).
 - `buddy_mock_participants(mock_id, user_id, starts_at, ends_at, active)` — two rows per
   mock, with `EXCLUDE USING gist (user_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&)
   WHERE (active)`. Mentors only constrain the mentor; here either person can be host or
@@ -89,15 +94,26 @@ traffic is members-only and small.
 
 ### D6. Blind review
 A participant may review once, between the mock's end and 7 days after it, and only a
-confirmed mock. A review is revealed when the counterpart's review exists or the window
+confirmed mock. A member page shows rating, comment, topic and day, never the author's
+handle, so the page does not publish who practised with whom. A review is revealed when the counterpart's review exists or the window
 has closed. Reveal is computed in the read query, not stored. The member page aggregates
 only revealed reviews.
 
 ### D7. Cancellation triggers
-Either participant, before `starts_at`. `LeaveBuddyMember` and a new block both cancel the
-pair's (or member's) future mocks in the same transaction, so a mock can never outlive the
-relationship that allowed it. A cancellation by leave or block tells the other side only
-"the mock was cancelled".
+Either participant, before `starts_at`. A leave and a block both cancel the member's (or
+the pair's) future mocks in the same statement, so a mock can never outlive the
+relationship that allowed it:
+- **Leave:** the existing `LeaveBuddyMember` statement also cancels the member's mocks.
+- **Block:** the block is written by the messaging core (`BlockFromConversation`), which
+  must never import a feature. The buddy migration adds an `AFTER INSERT` trigger on
+  `user_blocks` that cancels the pair's future mocks, which covers every path that writes a
+  block.
+
+A trigger returns no rows, so notices are decoupled: every cancellation records its reason
+and leaves `cancel_announced_at` NULL, and `MockService.AnnounceCancellations(actor)` claims
+and announces the unannounced ones. The HTTP layer, the only one that sees both features,
+calls it after the buddy leave and after the conversation block route. A cancellation by
+leave or block tells the other side only "the mock was cancelled".
 
 ### D8. Reminders inside `cmd/mentorship-remind`
 Add `buddy.SendDueMockReminders` with the same claim → send → release-on-failure order
