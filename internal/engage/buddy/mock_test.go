@@ -131,3 +131,36 @@ func TestMockSlotsOfferNothingOnAClosedDate(t *testing.T) {
 		t.Errorf("slots = %d, want 4 (two Tuesdays, two hours each)", len(res.Slots))
 	}
 }
+
+func TestMockEntrySettle(t *testing.T) {
+	start := time.Date(2026, time.November, 10, 18, 0, 0, 0, time.UTC)
+	base := MockEntry{StartsAt: start, EndsAt: start.Add(MockDuration), Status: MockConfirmed, MeetingURL: "https://meet.example.test/room"}
+
+	before := base
+	before.settle(start.Add(-time.Minute))
+	if !before.CanCancel || before.CanReview || before.MeetingURL == "" {
+		t.Errorf("before the start: %+v", before)
+	}
+	after := base
+	after.settle(start.Add(2 * time.Hour))
+	if after.CanCancel || !after.CanReview {
+		t.Errorf("after the end: %+v", after)
+	}
+	reviewed := base
+	reviewed.MyReview = &MockReview{Rating: 4}
+	reviewed.settle(start.Add(2 * time.Hour))
+	if reviewed.CanReview {
+		t.Error("a reviewed mock still offers a review")
+	}
+	closed := base
+	closed.settle(start.Add(MockDuration + ReviewWindow))
+	if closed.CanReview {
+		t.Error("a mock past its review window still offers a review")
+	}
+	cancelled := base
+	cancelled.Status = MockCancelled
+	cancelled.settle(start.Add(-time.Hour))
+	if cancelled.CanCancel || cancelled.MeetingURL != "" {
+		t.Errorf("a cancelled mock: %+v", cancelled)
+	}
+}

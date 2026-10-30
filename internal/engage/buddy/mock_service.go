@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -54,6 +56,14 @@ type MockRepository interface {
 	// ClaimCancelNotices claims every recent, not yet announced cancellation actorID caused
 	// — by cancelling, leaving or blocking — and returns those mocks.
 	ClaimCancelNotices(ctx context.Context, actorID int64) ([]Mock, error)
+	// MockEntries is userID's mocks, newest first, with their own review and the review
+	// about them only once revealed. CanCancel/CanReview are left for the service.
+	MockEntries(ctx context.Context, userID int64, limit int32) ([]MockEntry, error)
+	// CreateMockReview stores authorID's review of the other participant; false when they
+	// already reviewed it or the mock is outside the review rules.
+	CreateMockReview(ctx context.Context, id uuid.UUID, authorID int64, rating int, comment string) (bool, error)
+	// MockSummary is subjectID's completed count and revealed-review aggregate.
+	MockSummary(ctx context.Context, subjectID int64, recent int32) (MockSummary, error)
 }
 
 // MockService is the mock-interview use cases between buddy members: settings,
@@ -314,4 +324,75 @@ func (s *MockService) AnnounceCancellations(ctx context.Context, actorID int64) 
 			log.Printf("buddy: cancellation notice for mock %s: %v", m.ID, err)
 		}
 	}
+}
+
+// List is the caller's own mocks.
+func (s *MockService) List(ctx context.Context, userID int64) (MockList, error) {
+	if err := s.members.requireActive(ctx, userID); err != nil {
+		return MockList{}, err
+	}
+	entries, err := s.repo.MockEntries(ctx, userID, mockListLimit)
+	if err != nil {
+		return MockList{}, err
+	}
+	now := s.now()
+	list := MockList{Upcoming: []MockEntry{}, Past: []MockEntry{}}
+	for _, e := range entries {
+		e.settle(now)
+		if e.Status == MockConfirmed && now.Before(e.EndsAt) {
+			list.Upcoming = append(list.Upcoming, e)
+		} else {
+			list.Past = append(list.Past, e)
+		}
+	}
+	// The read is newest first; what is coming reads soonest first.
+	slices.Reverse(list.Upcoming)
+	return list, nil
+}
+
+// Review rates the other participant of one of the caller's confirmed mocks, once, between
+// its end and ReviewWindow after it. The rating is hidden from its subject and their page
+// until they review too or the window closes — computed by every read, never stored.
+func (s *MockService) Review(ctx context.Context, userID int64, id uuid.UUID, rating int, comment string) error {
+	comment = strings.TrimSpace(comment)
+	if rating < 1 || rating > 5 || utf8.RuneCountInString(comment) > MaxReviewCommentRunes {
+		return fmt.Errorf("%w: a rating from 1 to 5 and at most %d characters", ErrInvalidReview, MaxReviewCommentRunes)
+	}
+	if err := s.members.requireActive(ctx, userID); err != nil {
+		return err
+	}
+	m, ok, err := s.repo.MockByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !ok || (userID != m.HostUserID && userID != m.GuestUserID) {
+		return ErrMockNotFound
+	}
+	now := s.now()
+	switch {
+	case m.Status != MockConfirmed:
+		return fmt.Errorf("%w: the mock interview was cancelled", ErrInvalidReview)
+	case now.Before(m.EndsAt):
+		return fmt.Errorf("%w: the mock interview has not ended", ErrInvalidReview)
+	case !now.Before(m.EndsAt.Add(ReviewWindow)):
+		return fmt.Errorf("%w: the review window has closed", ErrInvalidReview)
+	}
+	created, err := s.repo.CreateMockReview(ctx, id, userID, rating, comment)
+	if err != nil {
+		return err
+	}
+	if !created {
+		return ErrAlreadyReviewed
+	}
+	return nil
+}
+
+// MemberSummary is what handle's member page shows another active member: completed mocks
+// and their revealed reviews. Who reviewed is not part of it.
+func (s *MockService) MemberSummary(ctx context.Context, viewerID int64, handle string) (MockSummary, error) {
+	target, err := s.members.visibleMember(ctx, viewerID, handle)
+	if err != nil {
+		return MockSummary{}, err
+	}
+	return s.repo.MockSummary(ctx, target.UserID, recentReviews)
 }

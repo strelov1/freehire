@@ -247,3 +247,63 @@ func (r *QueriesRepository) ClaimCancelNotices(ctx context.Context, actorID int6
 	}
 	return out, nil
 }
+
+func (r *QueriesRepository) MockEntries(ctx context.Context, userID int64, limit int32) ([]MockEntry, error) {
+	rows, err := r.q.ListBuddyMocksForUser(ctx, db.ListBuddyMocksForUserParams{UserID: userID, RowLimit: limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]MockEntry, len(rows))
+	for i, row := range rows {
+		e := MockEntry{
+			ID: uuid.UUID(row.ID.Bytes), Role: RoleGuest, Counterpart: row.HostHandle,
+			StartsAt: row.StartsAt.Time, EndsAt: row.EndsAt.Time, Topic: row.Topic, Status: row.Status,
+			CancelReason: row.CancelReason.String, MeetingURL: row.HostMeetingUrl.String,
+		}
+		if row.HostUserID == userID {
+			e.Role, e.Counterpart = RoleHost, row.GuestHandle
+		}
+		if !row.CounterpartVisible {
+			e.Counterpart = ""
+		}
+		if row.MyRating.Valid {
+			e.MyReview = &MockReview{Rating: int(row.MyRating.Int16), Comment: row.MyComment.String}
+		}
+		if row.TheirRating.Valid {
+			e.TheirReview = &MockReview{Rating: int(row.TheirRating.Int16), Comment: row.TheirComment.String}
+		}
+		out[i] = e
+	}
+	return out, nil
+}
+
+func (r *QueriesRepository) CreateMockReview(ctx context.Context, id uuid.UUID, authorID int64, rating int, comment string) (bool, error) {
+	n, err := r.q.CreateBuddyMockReview(ctx, db.CreateBuddyMockReviewParams{
+		MockID: pgtype.UUID{Bytes: id, Valid: true}, AuthorUserID: authorID, Rating: int16(rating), Comment: comment,
+	})
+	return n == 1, err
+}
+
+func (r *QueriesRepository) MockSummary(ctx context.Context, subjectID int64, recent int32) (MockSummary, error) {
+	agg, err := r.q.GetBuddyMemberMockSummary(ctx, subjectID)
+	if err != nil {
+		return MockSummary{}, err
+	}
+	rows, err := r.q.ListBuddyMemberRevealedReviews(ctx, db.ListBuddyMemberRevealedReviewsParams{
+		SubjectUserID: subjectID, RowLimit: recent,
+	})
+	if err != nil {
+		return MockSummary{}, err
+	}
+	sum := MockSummary{
+		Completed: int(agg.Completed), RatingCount: int(agg.RatingCount), RatingAvg: agg.RatingAvg,
+		Recent: make([]RevealedReview, len(rows)),
+	}
+	for i, row := range rows {
+		sum.Recent[i] = RevealedReview{
+			Rating: int(row.Rating), Comment: row.Comment, Topic: row.Topic,
+			Day: row.CreatedAt.Time.UTC().Format(time.DateOnly),
+		}
+	}
+	return sum, nil
+}

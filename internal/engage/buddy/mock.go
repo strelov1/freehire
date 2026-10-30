@@ -28,6 +28,15 @@ const (
 	// MaxGuestMocks bounds the future confirmed mocks one member may hold as guest: a spam
 	// brake on one member reserving everybody's evenings, not a quota.
 	MaxGuestMocks = 3
+	// ReviewWindow is how long after a mock's end its participants may review it, and when
+	// a review the other side never answered is revealed anyway.
+	ReviewWindow = 7 * 24 * time.Hour
+	// MaxReviewCommentRunes bounds a review comment, matching buddy_mock_reviews_comment_check.
+	MaxReviewCommentRunes = 1000
+	// recentReviews is how many revealed reviews a member page shows.
+	recentReviews = 5
+	// mockListLimit bounds the caller's own list.
+	mockListLimit = 200
 )
 
 // mockSession is that shape as the engine takes it. No buffers: mocks may run back to back.
@@ -83,6 +92,11 @@ var (
 	ErrMockNotFound = errors.New("buddy: mock interview not found")
 	// ErrMockNotCancellable → 422. The mock has started, or is already cancelled.
 	ErrMockNotCancellable = errors.New("buddy: the mock interview has started or is already cancelled")
+	// ErrInvalidReview → 422. A rating outside 1-5, a comment over MaxReviewCommentRunes,
+	// a mock that has not ended, was cancelled, or whose review window has closed.
+	ErrInvalidReview = errors.New("buddy: invalid review")
+	// ErrAlreadyReviewed → 409. One review per participant per mock.
+	ErrAlreadyReviewed = errors.New("buddy: mock interview already reviewed")
 )
 
 // NewMock is one mock to write.
@@ -184,4 +198,76 @@ func mockSlots(rules []slots.Rule, hostZone *time.Location, busy []slots.Interva
 		Now:        now,
 		ViewerZone: viewerZone,
 	})
+}
+
+// MockReview is one participant's rating of the other.
+type MockReview struct {
+	Rating  int
+	Comment string
+}
+
+// MockEntry is one mock as a participant sees it: their role, the other side by handle
+// (empty once that member left or a block stands between them), the host's current link
+// while confirmed, their own review, and the review about them once revealed.
+type MockEntry struct {
+	ID           uuid.UUID
+	Role         string
+	Counterpart  string
+	StartsAt     time.Time
+	EndsAt       time.Time
+	Topic        string
+	Status       string
+	CancelReason string
+	MeetingURL   string
+	MyReview     *MockReview
+	TheirReview  *MockReview
+	CanCancel    bool
+	CanReview    bool
+}
+
+// EntryFor is the mock as participant userID sees it at now.
+func (m Mock) EntryFor(userID int64, now time.Time) MockEntry {
+	e := MockEntry{
+		ID: m.ID, Role: RoleGuest, Counterpart: m.HostHandle, StartsAt: m.StartsAt, EndsAt: m.EndsAt,
+		Topic: m.Topic, Status: m.Status, CancelReason: m.CancelReason, MeetingURL: m.MeetingURL,
+	}
+	if userID == m.HostUserID {
+		e.Role, e.Counterpart = RoleHost, m.GuestHandle
+	}
+	e.settle(now)
+	return e
+}
+
+// settle derives what the participant may do at now, and drops the link of a mock that is
+// no longer confirmed.
+func (e *MockEntry) settle(now time.Time) {
+	if e.Status != MockConfirmed {
+		e.MeetingURL = ""
+	}
+	e.CanCancel = e.Status == MockConfirmed && now.Before(e.StartsAt)
+	e.CanReview = e.Status == MockConfirmed && e.MyReview == nil &&
+		!now.Before(e.EndsAt) && now.Before(e.EndsAt.Add(ReviewWindow))
+}
+
+// MockList is the caller's own mocks: confirmed ones not yet over, soonest first, and the
+// rest (over or cancelled), newest first.
+type MockList struct {
+	Upcoming []MockEntry
+	Past     []MockEntry
+}
+
+// RevealedReview is one review on a member page: no author, day precision.
+type RevealedReview struct {
+	Rating  int
+	Comment string
+	Topic   string
+	Day     string
+}
+
+// MockSummary is what a member page shows about their mocks.
+type MockSummary struct {
+	Completed   int
+	RatingCount int
+	RatingAvg   float64
+	Recent      []RevealedReview
 }

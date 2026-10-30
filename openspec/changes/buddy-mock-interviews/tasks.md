@@ -2740,7 +2740,7 @@ git commit -m "Cancel buddy mocks by participant, leave and block"
 - Consumes: `db.Queries.ListBuddyMocksForUser`, `CreateBuddyMockReview`, `GetBuddyMemberMockSummary`, `ListBuddyMemberRevealedReviews`; `visibleMember`, `requireActive`, `MockByID`.
 - Produces: `const ReviewWindow = 7 * 24 * time.Hour`, `const MaxReviewCommentRunes = 1000`; `var ErrInvalidReview, ErrAlreadyReviewed error`; `type MockReview struct{ Rating int; Comment string }`; `type MockEntry struct{ ID uuid.UUID; Role, Counterpart string; StartsAt, EndsAt time.Time; Topic, Status, CancelReason, MeetingURL string; MyReview, TheirReview *MockReview; CanCancel, CanReview bool }`; `func (Mock) EntryFor(userID int64, now time.Time) MockEntry`; `type MockList struct{ Upcoming, Past []MockEntry }`; `type RevealedReview struct{ Rating int; Comment, Topic, Day string }`; `type MockSummary struct{ Completed, RatingCount int; RatingAvg float64; Recent []RevealedReview }`; `func (*MockService) List(ctx, userID int64) (MockList, error)`, `Review(ctx, userID int64, id uuid.UUID, rating int, comment string) error`, `MemberSummary(ctx, viewerID int64, handle string) (MockSummary, error)`; repository `MockEntries(ctx, userID int64, limit int32) ([]MockEntry, error)`, `CreateMockReview(ctx, id uuid.UUID, authorID int64, rating int, comment string) (bool, error)`, `MockSummary(ctx, subjectID int64, recent int32) (MockSummary, error)`.
 
-- [ ] 7.1 Write the failing unit test — append to `internal/engage/buddy/mock_test.go`:
+- [x] 7.1 Write the failing unit test — append to `internal/engage/buddy/mock_test.go`:
 
 ```go
 func TestMockEntrySettle(t *testing.T) {
@@ -2777,7 +2777,7 @@ func TestMockEntrySettle(t *testing.T) {
 }
 ```
 
-- [ ] 7.2 Write the failing integration tests `internal/engage/buddy/mock_review_integration_test.go`:
+- [x] 7.2 Write the failing integration tests `internal/engage/buddy/mock_review_integration_test.go`:
 
 ```go
 //go:build integration
@@ -2911,9 +2911,9 @@ func TestAOneSidedReviewIsRevealedWhenTheWindowCloses(t *testing.T) {
 }
 ```
 
-- [ ] 7.3 Run: `go test ./internal/engage/buddy/ -run TestMockEntrySettle -count=1` and `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `undefined: MockEntry`, `mocks.List undefined`, `mocks.Review undefined`, `mocks.MemberSummary undefined`.
+- [x] 7.3 Run: `go test ./internal/engage/buddy/ -run TestMockEntrySettle -count=1` and `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `undefined: MockEntry`, `mocks.List undefined`, `mocks.Review undefined`, `mocks.MemberSummary undefined`.
 
-- [ ] 7.4 Implement. In `internal/engage/buddy/mock.go`, add to the tunables `const` block after `MaxGuestMocks`:
+- [x] 7.4 Implement. In `internal/engage/buddy/mock.go`, add to the tunables `const` block after `MaxGuestMocks`:
 
 ```go
 	// ReviewWindow is how long after a mock's end its participants may review it, and when
@@ -3157,9 +3157,9 @@ func (r *QueriesRepository) MockSummary(ctx context.Context, subjectID int64, re
 }
 ```
 
-- [ ] 7.5 Run: `go test ./internal/engage/buddy/ -count=1 && go test -tags=integration ./internal/engage/buddy/ -run 'TestTheGuestSees|TestAReview|TestReviews|TestAOneSided' -count=1`. Expected: `ok` for both.
+- [x] 7.5 Run: `go test ./internal/engage/buddy/ -count=1 && go test -tags=integration ./internal/engage/buddy/ -run 'TestTheGuestSees|TestAReview|TestReviews|TestAOneSided' -count=1`. Expected: `ok` for both.
 
-- [ ] 7.6 Verify and commit:
+- [x] 7.6 Verify and commit:
 
 ```bash
 gofmt -l internal/engage/buddy && go vet ./... && go test ./... && go vet -tags=integration ./internal/engage/buddy/
