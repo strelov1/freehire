@@ -57,7 +57,8 @@ nothing but the URL. No network, no database.
   `clientkey` parameter fallback, GeekHunter's `/<lang>/<slug>/jobs`, CleverStaff's
   `/i/<alias>`; a `reject` pattern names the platform pages a shape cannot exclude, and the
   capture is kept verbatim because these platforms serve any case and the catalogue stores
-  whatever the harvested link spelled).
+  whatever the harvested link spelled — except where `fold` says the catalogue is lower-case,
+  as for HRM Direct's tenants on ClearCompany, `apply.clearcompany.com/<board>`).
 - **The mode must match how the ingest adapter addresses the board**, not how the URL reads. The
   board string is copied verbatim into the `boards` catalog and into the `external_id`
   namespace, so a truncated one is a board that 404s every crawl: Huntflow's adapter fetches

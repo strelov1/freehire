@@ -31,6 +31,11 @@ Resolving a single outbound job-detail URL into a fully parsed vacancy under the
   storefront appends a readable slug after the id (`…/jobs/<id>/<title>/`), so tail-only
   matching reports a posting as absent from its own board. Precision is safe here because the
   comparison is against one board's own ids.
+- **A posting named only in the query must be named by the link.** ClearCompany (HRM Direct)
+  serves every posting at the career page's own path under `?jobId=<guid>`, so the URL pass
+  requires the link to carry each non-tracking parameter the posting's URL does — otherwise the
+  career page link resolves to the board's first posting. GUIDs compare case-insensitively
+  (`sameRef`); every other reference compares exactly.
 
 ## How it works
 A Telegram post often just links to a real vacancy elsewhere. Rather than treating the Telegram post itself as the job, `internal/ingest/linksource` follows the outbound URL and resolves the actual detail page at the destination ATS. This reuses the same adapter pattern as `internal/ingest/sources` but at the granularity of a single page: a `LinkSource` matches the link's host and parses that one detail page into a normalized job. The job is then stored under the destination source's identity (e.g. greenhouse, lever), not under telegram, so the dedup key `(source, external_id)` naturally prevents duplication if another source also carries the same posting.

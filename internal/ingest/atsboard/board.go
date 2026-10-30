@@ -354,6 +354,8 @@ var atsBoards = []struct{ host, source, mode string }{
 	// application forms live on the platform's own apply.hrmdirect.com — see this apex's entry
 	// in platformLabelsByApex, without which every apply link on the platform names a board.
 	{"hrmdirect.com", "hrmdirect", modeSubdomain},
+	// ...which now redirects to ClearCompany's apply.clearcompany.com/<board>, same slug.
+	{"apply.clearcompany.com", "hrmdirect", modePathPattern},
 	// HireClick: <tenant>.hireclick.com/jb/<slug>/view/<id>; the adapter fetches the tenant's
 	// job board at <board>.hireclick.com. The vendor's own hosts are in platformLabelsByApex.
 	{"hireclick.com", "hireclick", modeSubdomain},
@@ -576,9 +578,9 @@ var pathTenantSubdomains = map[string]bool{"careers-page.com": true}
 
 // pathPattern is one pathPatternBoards entry; see there.
 type pathPattern struct {
-	path, reject, paramPattern *regexp.Regexp
-	param, listing             string
-	hostBoard, tenantHost      bool
+	path, reject, paramPattern  *regexp.Regexp
+	param, listing              string
+	hostBoard, tenantHost, fold bool
 }
 
 // pathPatternBoards holds, per modePathPattern host entry, the path pattern whose one capture
@@ -596,7 +598,20 @@ type pathPattern struct {
 //     "<pod host>/<site>"): the entry's host is only the domain those hosts share.
 //   - param names a query parameter that carries the board on the paths the pattern does not
 //     match, held to paramPattern after folding to lower case.
+//   - fold lower-cases the capture: the one exception to the verbatim rule, for a platform whose
+//     catalogue holds every board lower-case.
 var pathPatternBoards = map[string]pathPattern{
+	// ClearCompany, which has served HRM Direct's tenants since ~2026-10-21
+	// (internal/ingest/sources/hrmdirect.go): the career page is /<board>, a posting is that page
+	// with ?jobId=<guid>, and the old <board>.hrmdirect.com redirects through /<board>/redirect.
+	// Other paths on the host (/<board>/jobs, /careers) answer 404. The platform answers any case
+	// of the slug and all 1,515 hrmdirect boards in the catalogue are lower-case (measured
+	// 2026-10-30), so the capture folds.
+	"apply.clearcompany.com": {
+		path:    regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9-]*)(?:/redirect)?/?$`),
+		listing: "/%s",
+		fold:    true,
+	},
 	// Paycom: a portal is /v4/ats/web.php/portal/<32-hex client key>/…
 	// (internal/ingest/sources/paycom.go). An older posting link
 	// (…/jobs/ViewJobDetails?job=<id>&clientkey=<key>, sometimes on a regional host) names the
@@ -1195,6 +1210,9 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 			}
 		} else {
 			return "", "", "", false
+		}
+		if p.fold {
+			board = strings.ToLower(board)
 		}
 		if p.reject != nil && p.reject.MatchString(board) {
 			return "", "", "", false

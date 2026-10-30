@@ -350,3 +350,69 @@ func TestImportRegistryOrder(t *testing.T) {
 		})
 	}
 }
+
+// hrmdirectBoard is an HRM Direct board as the adapter yields it since the platform moved to
+// ClearCompany: the external id is the posting's GUID lower-cased, and the URL is the career page
+// with ?jobId=<that id> — every posting on the board shares the one path. Ids are real postings
+// on the bkbehavior board, 2026-10-30.
+func hrmdirectBoard() *fakeBoard {
+	const page = "https://apply.clearcompany.com/bkbehavior?jobId="
+	return &fakeBoard{
+		provider: "hrmdirect",
+		jobs: []sources.Job{
+			{ExternalID: "3522713d-0ff6-5e08-72c3-617411eaccb5", URL: page + "3522713d-0ff6-5e08-72c3-617411eaccb5", Title: "Behavior Technician", Company: "BK Behavior"},
+			{ExternalID: "7864d3e4-a031-ab73-23d1-4daa731c9ca4", URL: page + "7864d3e4-a031-ab73-23d1-4daa731c9ca4", Title: "Clinical Supervisor", Company: "BK Behavior"},
+		},
+	}
+}
+
+// A ClearCompany posting link resolves to the posting its jobId names, under the identity the
+// hrmdirect crawl of that board writes.
+func TestBoardCoverageResolvesAClearCompanyPostingByItsJobID(t *testing.T) {
+	cases := []struct{ name, raw string }{
+		{"canonical link", "https://apply.clearcompany.com/bkbehavior?jobId=7864d3e4-a031-ab73-23d1-4daa731c9ca4"},
+		// The widget works with upper-case ids and only rewrites the address bar to lower case
+		// once the page loads, so a link copied from elsewhere may carry either spelling.
+		{"upper-case id", "https://apply.clearcompany.com/bkbehavior?jobId=7864D3E4-A031-AB73-23D1-4DAA731C9CA4"},
+		{"upper-case slug and tracking", "https://apply.clearcompany.com/BKBehavior?jobId=7864d3e4-a031-ab73-23d1-4daa731c9ca4&utm_source=telegram"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bc := NewBoardCoverage(map[string]sources.Source{"hrmdirect": hrmdirectBoard()})
+			u, _ := url.Parse(c.raw)
+			if !bc.Match(u) {
+				t.Fatal("Match = false, want true")
+			}
+			job, ok, err := bc.Resolve(context.Background(), c.raw)
+			if err != nil || !ok {
+				t.Fatalf("Resolve = (ok %v, err %v), want the linked posting", ok, err)
+			}
+			if want := externalid.Namespace("bkbehavior", "7864d3e4-a031-ab73-23d1-4daa731c9ca4"); job.ExternalID != want {
+				t.Errorf("ExternalID = %q, want %q", job.ExternalID, want)
+			}
+			if got := bc.(PerLinkSource).SourceFor(u); got != "hrmdirect" {
+				t.Errorf("SourceFor = %q, want hrmdirect", got)
+			}
+		})
+	}
+}
+
+// The career page shares its path with every posting on the board, so a link to the page itself
+// names no posting — it must not resolve to whichever posting the board lists first, even when
+// the board holds only one.
+func TestBoardCoverageDoesNotReadAClearCompanyCareerPageAsAPosting(t *testing.T) {
+	single := hrmdirectBoard()
+	single.jobs = single.jobs[:1]
+	for name, board := range map[string]*fakeBoard{"two postings": hrmdirectBoard(), "one posting": single} {
+		t.Run(name, func(t *testing.T) {
+			bc := NewBoardCoverage(map[string]sources.Source{"hrmdirect": board})
+			job, ok, err := bc.Resolve(context.Background(), "https://apply.clearcompany.com/bkbehavior")
+			if err != nil {
+				t.Fatalf("Resolve: %v", err)
+			}
+			if ok {
+				t.Errorf("resolved %s, want nothing: the career page names no posting", job.ExternalID)
+			}
+		})
+	}
+}

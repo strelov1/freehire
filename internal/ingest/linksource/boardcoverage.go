@@ -4,6 +4,7 @@ import (
 	"context"
 	"maps"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -139,7 +140,19 @@ func fetchForResolve(ctx context.Context, adapter sources.Source, e sources.Comp
 // the id followed by a readable slug — SmartRecruiters' "<id>-<title-slug>", where the id is
 // never a segment of its own.
 func segmentNamesID(seg, id string) bool {
-	return id != "" && (seg == id || strings.HasPrefix(seg, id+"-"))
+	return id != "" && (sameRef(seg, id) || strings.HasPrefix(seg, id+"-"))
+}
+
+// guidShape is a GUID in its canonical 8-4-4-4-12 hex spelling.
+var guidShape = regexp.MustCompile(`^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$`)
+
+// sameRef reports whether two posting references are the same value. A GUID compares without
+// regard to case, the one spelling difference that never changes what it names: ClearCompany's
+// widget works with upper-case posting ids while the hrmdirect adapter stores and links them
+// lower-case, so a link copied before the widget rewrote the address bar names its posting in
+// the other case. Anything else compares exactly — a short code may well be case-significant.
+func sameRef(a, b string) bool {
+	return a == b || (guidShape.MatchString(a) && strings.EqualFold(a, b))
 }
 
 // pickPosting finds the posting a link refers to among a board's postings. It tries the URL
@@ -150,7 +163,8 @@ func segmentNamesID(seg, id string) bool {
 // The URL comparison ignores the query, except that a parameter both URLs carry must agree. A
 // pasted link's tracking parameters are noise, but a platform that names the posting ONLY in the
 // query — eRecruiter's Offer.aspx?oid=<id>, the same path for every offer — is identified by
-// exactly that parameter, and ignoring it handed back whichever offer came first.
+// exactly that parameter, and ignoring it handed back whichever offer came first. For the same
+// reason the URL pass requires the link to carry such a parameter at all (sameURL).
 //
 // An Unreadable marker is never a match. It carries a posting's identity WITHOUT its detail,
 // so it answers both predicates — and it is not the safe near-miss SeenRefresh is here, it is
@@ -181,15 +195,24 @@ func pickPosting(jobs []sources.Job, raw string) (sources.Job, bool) {
 }
 
 // sameURL reports whether a link and a posting's URL address the same posting: equal once
-// normalized (normalizeURL), and agreeing on every query parameter both carry (queryAgrees).
+// normalized (normalizeURL), and the link carrying every non-tracking query parameter the
+// posting's URL does, with the same value. A parameter the link lacks makes them different
+// addresses: ClearCompany serves every posting at its career page's own path under
+// ?jobId=<id>, and without that rule the career page itself matched the board's first posting.
 func sameURL(raw, posting string) bool {
-	return normalizeURL(raw) == normalizeURL(posting) && queryAgrees(raw, posting)
+	return normalizeURL(raw) == normalizeURL(posting) && queryMatches(raw, posting, true)
 }
 
 // queryAgrees reports whether no query parameter present in both URLs carries different values.
 // It vetoes the id match too: a query value on a link (a tracking ref, a sibling id) can equal
 // some other posting's id, and that posting's own URL then names a different oid than the link.
 func queryAgrees(raw, posting string) bool {
+	return queryMatches(raw, posting, false)
+}
+
+// queryMatches holds the posting URL's non-tracking query parameters against the link's: a
+// parameter both carry must agree, and with linkMustCarry one the link lacks fails as well.
+func queryMatches(raw, posting string, linkMustCarry bool) bool {
 	a, errA := url.Parse(strings.TrimSpace(raw))
 	b, errB := url.Parse(strings.TrimSpace(posting))
 	if errA != nil || errB != nil {
@@ -200,7 +223,8 @@ func queryAgrees(raw, posting string) bool {
 		if trackingParam(k) {
 			continue
 		}
-		if w, ok := qa[k]; ok && !slices.Equal(v, w) {
+		w, ok := qa[k]
+		if (!ok && linkMustCarry) || (ok && !slices.EqualFunc(v, w, sameRef)) {
 			return false
 		}
 	}

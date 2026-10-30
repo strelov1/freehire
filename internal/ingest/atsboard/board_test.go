@@ -368,6 +368,18 @@ func TestRecognize(t *testing.T) {
 		{"hrmdirect upper-case host folds", "https://500DegreesStudio.HRMDirect.com/employment/job-opening.php?req=1", "hrmdirect", "500degreesstudio", "https://500DegreesStudio.HRMDirect.com", true},
 		{"hrmdirect apply host is the platform's, not a board", "https://apply.hrmdirect.com/resumes/click2apply.php?req=1", "", "", "", false},
 		{"hrmdirect bare apex no tenant", "https://hrmdirect.com/", "", "", "", false},
+		// Since 2026-10-21 ClearCompany serves every HRM Direct tenant: <board>.hrmdirect.com
+		// redirects to apply.clearcompany.com/<board>/redirect, which lands on the career page
+		// apply.clearcompany.com/<board>, and a posting is that page with ?jobId=<guid>. The slug
+		// is the board the catalogue already holds, lower-case; the platform answers any case.
+		{"clearcompany career page", "https://apply.clearcompany.com/sms", "hrmdirect", "sms", "https://apply.clearcompany.com/sms", true},
+		{"clearcompany posting", "https://apply.clearcompany.com/bkbehavior?jobId=3522713d-0ff6-5e08-72c3-617411eaccb5", "hrmdirect", "bkbehavior", "https://apply.clearcompany.com/bkbehavior", true},
+		{"clearcompany redirect landing", "https://apply.clearcompany.com/123loadboard/redirect?req=3456", "hrmdirect", "123loadboard", "https://apply.clearcompany.com/123loadboard", true},
+		{"clearcompany upper-case slug folds", "https://apply.clearcompany.com/SMS/?noheader=False", "hrmdirect", "sms", "https://apply.clearcompany.com/sms", true},
+		{"clearcompany bare host no tenant", "https://apply.clearcompany.com/", "", "", "", false},
+		{"clearcompany deeper path is not a career page", "https://apply.clearcompany.com/sms/jobs", "", "", "", false},
+		{"clearcompany marketing site is not a board", "https://www.clearcompany.com/applicant-tracking", "", "", "", false},
+		{"clearcompany api host is not a board", "https://careers-api.clearcompany.com/v1/8a53c87d-2c7f-85ba-20f0-66842148ace3", "", "", "", false},
 		// ApplicantStack: the board is the tenant subdomain, folded to lower case — the same
 		// tenant is linked as both "SmartAutoCare" and "smartautocare".
 		{"applicantstack posting", "https://ozarkhealth.applicantstack.com/x/detail/a23rqqe2fctl", "applicantstack", "ozarkhealth", "https://ozarkhealth.applicantstack.com", true},
@@ -756,6 +768,7 @@ func TestVacancyAndListingSameBoard(t *testing.T) {
 		// host (HiringThing) and subdomain (HRM Direct): a posting and the board root
 		{"https://4mindsai.hiringthing.com/job/12345/senior-engineer", "https://4mindsai.hiringthing.com/"},
 		{"https://123loadboard.hrmdirect.com/employment/job-opening.php?req=3456&req_loc=1029", "https://123loadboard.hrmdirect.com/employment/job-openings.php?search=true"},
+		{"https://apply.clearcompany.com/bkbehavior?jobId=3522713d-0ff6-5e08-72c3-617411eaccb5", "https://apply.clearcompany.com/bkbehavior"},
 		{"https://senca.hireclick.com/jb/family-development-associate-nebraska-city/view/264587", "https://senca.hireclick.com/jobboard/jobboard.aspx"},
 		// path (Gusto): a paged listing and the bare board
 		{"https://jobs.gusto.com/boards/100-degrees-consulting-ec8f0e9c-d6b4-4a32-8544-9c213ca6bc90?page=3", "https://jobs.gusto.com/boards/100-degrees-consulting-ec8f0e9c-d6b4-4a32-8544-9c213ca6bc90"},
@@ -896,6 +909,9 @@ func TestRecognizeReturnsTheBoardTheBoardFileStores(t *testing.T) {
 		// hrmdirect: the tenant subdomain alone.
 		{"hrmdirect 123Loadboard", "https://123loadboard.hrmdirect.com/employment/job-opening.php?req=1&req_loc=2", "hrmdirect", "123loadboard"},
 		{"hrmdirect 1A Auto", "https://1aautoinc.hrmdirect.com/employment/job-openings.php?search=true", "hrmdirect", "1aautoinc"},
+		// ...and the same slug on ClearCompany, which now serves every HRM Direct tenant.
+		{"hrmdirect on clearcompany SMS", "https://apply.clearcompany.com/sms?jobId=3522713d-0ff6-5e08-72c3-617411eaccb5", "hrmdirect", "sms"},
+		{"hrmdirect on clearcompany both hosts agree", "https://apply.clearcompany.com/123loadboard", "hrmdirect", "123loadboard"},
 
 		// hireclick: the tenant subdomain alone.
 		{"hireclick Southwest Truck & RV", "https://southwesttruckandrv.hireclick.com/jb/professional-diesel-technician-phoenix-az/view/267596", "hireclick", "southwesttruckandrv"},
