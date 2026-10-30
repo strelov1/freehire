@@ -9,7 +9,7 @@
 
 ### Every IT job, straight from the source.
 
-**3.3M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
+**4.7M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
 [**Try it live →**](https://freehire.me) · [Features](docs/features.md) · [Architecture](docs/architecture.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
@@ -40,7 +40,7 @@
 
 <br>
 
-<img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 3.3M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
+<img src="docs/assets/freehire.gif" alt="freehire — faceted search narrowing 4.7M+ live postings by region, work format, specialization and seniority, each linking straight to the company's own careers page" width="860">
 
 </div>
 
@@ -62,9 +62,9 @@
   workspace on top of the catalogue — see [Beyond the catalogue](#beyond-the-catalogue).
   Use the hosted site, run your own, or build on top.
 
-Aggregating **3.3M+ unique live postings** from **470,000+ companies** across
-**124 ATS platforms**, a long tail of aggregators and direct feeds, and **97
-Telegram channels** — **320 sources** in all, see [Sources](#sources) for the full
+Aggregating **4.7M+ unique live postings** from **700,000+ companies** across
+**168 ATS platforms**, a long tail of aggregators and direct feeds, and **97
+Telegram channels** — **421 sources** in all, see [Sources](#sources) for the full
 breakdown. Reposts of one job across boards are collapsed, so every figure here is
 what [freehire.me/jobs](https://freehire.me/jobs) actually shows.
 
@@ -227,21 +227,21 @@ search-filter vocabulary: [freehire.me/docs/api](https://freehire.me/docs/api).*
 
 ## Sources
 
-Snapshot of 2026-10-20 — **3,371,563 unique open postings** across **477,323
-companies**, from **320 sources**; **304** of them carry a posting today. Counts are
+Snapshot of 2026-10-30 — **4,785,488 unique open postings** across **701,972
+companies**, from **421 sources**; **400** of them carry a posting today. Counts are
 unique open postings: a job reposted on several boards is counted once (the
 per-kind sums below run slightly higher, since a posting two sources carry is
 counted under each). Every source is one of three kinds:
 
 - **ATS platforms** — one adapter per multi-tenant applicant-tracking system,
   each serving many companies (Workday, Greenhouse, Lever, iCIMS…).
-  **117 platforms with postings · 2,936,676 open postings.**
+  **160 platforms with postings · 3,827,693 open postings.**
 - **Aggregators & job boards** — third-party feeds that republish many
   companies' postings (Adzuna, trudvsem, himalayas, **97 Telegram channels**…).
-  **133 with postings · 444,654 open postings.**
+  **179 with postings · 937,728 open postings.**
 - **Company career sites** — direct single-company feeds crawled from a
   company's own careers page (Amazon, Apple, Google, Yandex, Sber…).
-  **52 feeds with postings · 23,293 open postings.**
+  **58 feeds with postings · 25,350 open postings.**
 
 A source's kind is not configuration but a property of the adapter's own Go type,
 so `internal/ingest/sources` classifies every provider without a network call.
