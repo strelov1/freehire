@@ -33,6 +33,46 @@ func (q *Queries) ActivateBoard(ctx context.Context, arg ActivateBoardParams) (i
 	return result.RowsAffected(), nil
 }
 
+const getBoardForResolve = `-- name: GetBoardForResolve :one
+SELECT id, provider, board, region, company, hub, tenants, url, status, submitted_by, surface, rejected_reason, created_at, activated_at FROM boards
+WHERE provider = $1 AND lower(board) = lower($2)
+  AND status IN ('pending', 'active', 'retired')
+ORDER BY status = 'retired', id DESC
+LIMIT 1
+`
+
+type GetBoardForResolveParams struct {
+	Provider string `json:"provider"`
+	Board    string `json:"board"`
+}
+
+// The catalogue row a link import reads one board through (internal/ingest/linksource
+// ResolveOnBoard), so the adapter is handed the same entry a crawl of that board is — above
+// all its company, which most adapters copy onto every posting. A retired board still names
+// the employer of the postings crawled under it, so it answers too, after a live one;
+// 'rejected' never does, since no crawl ever read it. Case-insensitive like the identity key.
+func (q *Queries) GetBoardForResolve(ctx context.Context, arg GetBoardForResolveParams) (Board, error) {
+	row := q.db.QueryRow(ctx, getBoardForResolve, arg.Provider, arg.Board)
+	var i Board
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.Board,
+		&i.Region,
+		&i.Company,
+		&i.Hub,
+		&i.Tenants,
+		&i.URL,
+		&i.Status,
+		&i.SubmittedBy,
+		&i.Surface,
+		&i.RejectedReason,
+		&i.CreatedAt,
+		&i.ActivatedAt,
+	)
+	return i, err
+}
+
 const getRetiredBoardName = `-- name: GetRetiredBoardName :one
 SELECT board FROM boards
 WHERE provider = $1 AND lower(board) = lower($2) AND region = $3 AND status = 'retired'

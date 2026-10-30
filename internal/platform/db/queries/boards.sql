@@ -43,6 +43,18 @@ SELECT * FROM boards
 WHERE provider = sqlc.arg(provider) AND status IN ('pending', 'active')
 ORDER BY id;
 
+-- name: GetBoardForResolve :one
+-- The catalogue row a link import reads one board through (internal/ingest/linksource
+-- ResolveOnBoard), so the adapter is handed the same entry a crawl of that board is — above
+-- all its company, which most adapters copy onto every posting. A retired board still names
+-- the employer of the postings crawled under it, so it answers too, after a live one;
+-- 'rejected' never does, since no crawl ever read it. Case-insensitive like the identity key.
+SELECT * FROM boards
+WHERE provider = sqlc.arg(provider) AND lower(board) = lower(sqlc.arg(board))
+  AND status IN ('pending', 'active', 'retired')
+ORDER BY status = 'retired', id DESC
+LIMIT 1;
+
 -- name: UpdateBoardCompany :execrows
 -- Correct a board's company name — for a crowdsourced row seeded with
 -- boardcatalog.PlaceholderCompany, once a curator knows the real one. Matches any status

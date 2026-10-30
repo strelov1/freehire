@@ -2455,6 +2455,12 @@ type Querier interface {
 	// answers both pauses: a second query per board would double the per-board round trips over
 	// the crawl host's link to the database.
 	GetBoardCooldown(ctx context.Context, arg GetBoardCooldownParams) (GetBoardCooldownRow, error)
+	// The catalogue row a link import reads one board through (internal/ingest/linksource
+	// ResolveOnBoard), so the adapter is handed the same entry a crawl of that board is — above
+	// all its company, which most adapters copy onto every posting. A retired board still names
+	// the employer of the postings crawled under it, so it answers too, after a live one;
+	// 'rejected' never does, since no crawl ever read it. Case-insensitive like the identity key.
+	GetBoardForResolve(ctx context.Context, arg GetBoardForResolveParams) (Board, error)
 	// The member behind a handle, active or left.
 	GetBuddyMemberByHandle(ctx context.Context, handle string) (BuddyMember, error)
 	// A member's own row, active or left. The caller decides what left_at means.

@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/linksource"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/job"
@@ -61,6 +62,9 @@ type Importer struct {
 	q    *db.Queries
 	idx  *search.Client
 	reg  []linksource.Source
+	// catalog is the board catalogue a board is read through, shared with reg's board
+	// coverage so every board read hands the adapter the entry a crawl would.
+	catalog linksource.BoardCatalog
 	// ingest is the provider-keyed crawl registry, kept alongside reg because the
 	// vanity-domain fallback reaches a board directly rather than through an adapter's Match.
 	ingest map[string]sources.Source
@@ -81,13 +85,15 @@ var sourceTypeOf = sources.SourceTypes(sources.Taxonomy())
 var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow))
 
 func New(pool *pgxpool.Pool, q *db.Queries, idx *search.Client, c linksource.Client, ingest map[string]sources.Source, boards BoardResolver) *Importer {
+	catalog := boardcatalog.NewQueriesRepository(q)
 	return &Importer{
-		pool:   pool,
-		q:      q,
-		idx:    idx,
-		reg:    linksource.ImportRegistry(c, ingest),
-		ingest: ingest,
-		boards: boards,
+		pool:    pool,
+		q:       q,
+		idx:     idx,
+		reg:     linksource.ImportRegistry(c, ingest, catalog),
+		catalog: catalog,
+		ingest:  ingest,
+		boards:  boards,
 	}
 }
 
@@ -157,7 +163,7 @@ func (im *Importer) resolveOnKnownBoard(ctx context.Context, raw string, known B
 	if !known.known() || im.ingest == nil {
 		return linksource.Resolved{}, false
 	}
-	job, ok, err := linksource.ResolveOnBoard(ctx, im.ingest, known.Source, known.Board, raw)
+	job, ok, err := linksource.ResolveOnBoard(ctx, im.ingest, im.catalog, known.Source, known.Board, raw)
 	if err != nil {
 		log.Printf("linkimport: known board %s/%s for %s: %v", known.Source, known.Board, raw, err)
 		return linksource.Resolved{}, false
@@ -184,7 +190,7 @@ func (im *Importer) resolveVanityDomain(ctx context.Context, raw string) (linkso
 	if !ok {
 		return linksource.Resolved{}, false
 	}
-	job, ok, err := linksource.ResolveOnBoard(ctx, im.ingest, source, board, raw)
+	job, ok, err := linksource.ResolveOnBoard(ctx, im.ingest, im.catalog, source, board, raw)
 	if err != nil {
 		log.Printf("linkimport: board %s/%s for vanity link %s: %v", source, board, raw, err)
 		return linksource.Resolved{}, false

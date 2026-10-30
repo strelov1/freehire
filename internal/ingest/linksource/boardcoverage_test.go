@@ -45,7 +45,7 @@ func recruiteeBoard() *fakeBoard {
 
 func TestBoardCoverageResolvesAVacancyWithNoDedicatedAdapter(t *testing.T) {
 	board := recruiteeBoard()
-	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": board})
+	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": board}, nil)
 
 	raw := "https://acme.recruitee.com/o/senior-go?utm_source=telegram"
 	u, _ := url.Parse(raw)
@@ -80,7 +80,7 @@ func TestBoardCoverageResolvesAVacancyWithNoDedicatedAdapter(t *testing.T) {
 }
 
 func TestBoardCoverageDeclinesWhatItCannotServe(t *testing.T) {
-	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": recruiteeBoard()})
+	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": recruiteeBoard()}, nil)
 
 	cases := []struct {
 		name string
@@ -106,7 +106,7 @@ func TestBoardCoverageDeclinesWhatItCannotServe(t *testing.T) {
 func TestBoardCoverageResolvesNothingWhenTheBoardLacksTheVacancy(t *testing.T) {
 	// A closed or delisted posting: the board fetches fine but does not carry the link. That
 	// is "nothing resolved", not an error — the caller falls back to recording the link.
-	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": recruiteeBoard()})
+	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": recruiteeBoard()}, nil)
 
 	job, ok, err := bc.Resolve(context.Background(), "https://acme.recruitee.com/o/long-gone")
 	if err != nil {
@@ -133,7 +133,7 @@ func TestBoardCoverageDoesNotResolveAPostingItCouldNotRead(t *testing.T) {
 			{ExternalID: "222", URL: "https://acme.recruitee.com/o/senior-go", Company: "Acme", Unreadable: true},
 		},
 	}
-	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": board})
+	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": board}, nil)
 
 	for _, raw := range []string{
 		"https://acme.recruitee.com/o/senior-go", // matched by URL
@@ -154,10 +154,57 @@ func TestBoardCoverageReportsAFetchFailureAsAnError(t *testing.T) {
 	// An unreachable board must NOT look like "no such vacancy": the caller would record the
 	// link as unimportable and never retry.
 	boom := errors.New("board unreachable")
-	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": &fakeBoard{provider: "recruitee", err: boom}})
+	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": &fakeBoard{provider: "recruitee", err: boom}}, nil)
 
 	if _, ok, err := bc.Resolve(context.Background(), "https://acme.recruitee.com/o/senior-go"); ok || !errors.Is(err, boom) {
 		t.Errorf("Resolve = (ok %v, err %v), want (false, the fetch error)", ok, err)
+	}
+}
+
+// fakeCatalog answers one board's crawl entry, or an error.
+type fakeCatalog struct {
+	entry sources.CompanyEntry
+	err   error
+}
+
+func (c fakeCatalog) Entry(_ context.Context, source, board string) (sources.CompanyEntry, bool, error) {
+	if c.err != nil {
+		return sources.CompanyEntry{}, false, c.err
+	}
+	return c.entry, c.entry.Provider == source && c.entry.Board != "", nil
+}
+
+func TestBoardCoverageReadsTheBoardThroughItsCatalogueEntry(t *testing.T) {
+	// The adapter must be handed what a crawl hands it — the employer above all, which most
+	// adapters copy onto every posting — and the id namespaced with the board as stored.
+	board := recruiteeBoard()
+	stored := sources.CompanyEntry{Provider: "recruitee", Board: "Acme", Company: "Acme Robotics"}
+	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": board}, fakeCatalog{entry: stored})
+
+	job, ok, err := bc.Resolve(context.Background(), "https://acme.recruitee.com/o/senior-go")
+	if err != nil || !ok {
+		t.Fatalf("Resolve = (ok %v, err %v), want the linked vacancy", ok, err)
+	}
+	if len(board.asked) != 1 || board.asked[0].Company != stored.Company || board.asked[0].Board != stored.Board {
+		t.Errorf("adapter asked for %+v, want the catalogue entry %+v", board.asked, stored)
+	}
+	if want := externalid.Namespace("Acme", "222"); job.ExternalID != want {
+		t.Errorf("ExternalID = %q, want %q (the stored board spelling a crawl namespaces with)", job.ExternalID, want)
+	}
+}
+
+func TestBoardCoverageReportsACatalogueFailureAsAnError(t *testing.T) {
+	// Reading the board without its entry is exactly the write that blanks a crawled row's
+	// employer, so an unreadable catalogue stops the resolve rather than falling back to it.
+	boom := errors.New("catalogue unreachable")
+	board := recruiteeBoard()
+	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": board}, fakeCatalog{err: boom})
+
+	if _, ok, err := bc.Resolve(context.Background(), "https://acme.recruitee.com/o/senior-go"); ok || !errors.Is(err, boom) {
+		t.Errorf("Resolve = (ok %v, err %v), want (false, the catalogue error)", ok, err)
+	}
+	if len(board.asked) != 0 {
+		t.Errorf("adapter fetched %+v without its catalogue entry", board.asked)
 	}
 }
 
@@ -171,7 +218,7 @@ func TestBoardCoverageMatchesAVacancyByItsIDInThePath(t *testing.T) {
 			{ExternalID: "98765", URL: "https://acme.recruitee.com/o/senior-go/98765", Title: "Senior Go"},
 		},
 	}
-	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": board})
+	bc := NewBoardCoverage(map[string]sources.Source{"recruitee": board}, nil)
 
 	job, ok, err := bc.Resolve(context.Background(), "https://acme.recruitee.com/o/some-other-slug/98765")
 	if err != nil || !ok {
@@ -195,7 +242,7 @@ func TestBoardCoverageMatchesAVacancyByAnIDBeforeTheSlug(t *testing.T) {
 	// Reached through ResolveOnBoard, since the board came from elsewhere (the intake resolved
 	// it) rather than from this unrecognisable host.
 	reg := map[string]sources.Source{"recruitee": board}
-	job, ok, err := ResolveOnBoard(context.Background(), reg, "recruitee", "acme",
+	job, ok, err := ResolveOnBoard(context.Background(), reg, nil, "recruitee", "acme",
 		"https://careers.acme.test/en/jobs/7862086/senior-go/")
 	if err != nil || !ok {
 		t.Fatalf("ResolveOnBoard = (ok %v, err %v), want the vacancy matched by the id before the slug", ok, err)
@@ -248,7 +295,7 @@ func TestResolveOnBoardHydratesOnlyTheTargetPostingOnAHydratingSource(t *testing
 	reg := map[string]sources.Source{"workday": board}
 
 	raw := "https://acme.wd1.myworkdayjobs.com/en-US/careers/job/222"
-	job, ok, err := ResolveOnBoard(context.Background(), reg, "workday", "acme", raw)
+	job, ok, err := ResolveOnBoard(context.Background(), reg, nil, "workday", "acme", raw)
 	if err != nil || !ok {
 		t.Fatalf("ResolveOnBoard = (ok %v, err %v), want the linked vacancy", ok, err)
 	}
@@ -278,7 +325,7 @@ func TestResolveOnBoardHydratesAnIDPrefixedSlugSegment(t *testing.T) {
 	reg := map[string]sources.Source{"smartrecruiters": board}
 
 	raw := "https://jobs.smartrecruiters.com/Acme/744000022222222-senior-go"
-	job, ok, err := ResolveOnBoard(context.Background(), reg, "smartrecruiters", "Acme", raw)
+	job, ok, err := ResolveOnBoard(context.Background(), reg, nil, "smartrecruiters", "Acme", raw)
 	if err != nil || !ok {
 		t.Fatalf("ResolveOnBoard = (ok %v, err %v), want the linked vacancy", ok, err)
 	}
@@ -302,7 +349,7 @@ func TestResolveOnBoardMatchesAnIDPrefixedSegmentWithAStaleSlug(t *testing.T) {
 	reg := map[string]sources.Source{"smartrecruiters": board}
 
 	raw := "https://jobs.smartrecruiters.com/Acme/744000022222222-senior-go"
-	job, ok, err := ResolveOnBoard(context.Background(), reg, "smartrecruiters", "Acme", raw)
+	job, ok, err := ResolveOnBoard(context.Background(), reg, nil, "smartrecruiters", "Acme", raw)
 	if err != nil || !ok {
 		t.Fatalf("ResolveOnBoard = (ok %v, err %v), want the vacancy matched by the id in front of the stale slug", ok, err)
 	}
@@ -320,7 +367,7 @@ func TestImportRegistryOrder(t *testing.T) {
 		"greenhouse": &fakeBoard{provider: "greenhouse"},
 		"recruitee":  recruiteeBoard(),
 	}
-	reg := ImportRegistry(nil, ingest)
+	reg := ImportRegistry(nil, ingest, nil)
 
 	cases := []struct {
 		name     string
@@ -378,7 +425,7 @@ func TestBoardCoverageResolvesAClearCompanyPostingByItsJobID(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			bc := NewBoardCoverage(map[string]sources.Source{"hrmdirect": hrmdirectBoard()})
+			bc := NewBoardCoverage(map[string]sources.Source{"hrmdirect": hrmdirectBoard()}, nil)
 			u, _ := url.Parse(c.raw)
 			if !bc.Match(u) {
 				t.Fatal("Match = false, want true")
@@ -405,7 +452,7 @@ func TestBoardCoverageDoesNotReadAClearCompanyCareerPageAsAPosting(t *testing.T)
 	single.jobs = single.jobs[:1]
 	for name, board := range map[string]*fakeBoard{"two postings": hrmdirectBoard(), "one posting": single} {
 		t.Run(name, func(t *testing.T) {
-			bc := NewBoardCoverage(map[string]sources.Source{"hrmdirect": board})
+			bc := NewBoardCoverage(map[string]sources.Source{"hrmdirect": board}, nil)
 			job, ok, err := bc.Resolve(context.Background(), "https://apply.clearcompany.com/bkbehavior")
 			if err != nil {
 				t.Fatalf("Resolve: %v", err)

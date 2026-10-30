@@ -30,12 +30,29 @@ import (
 type boardCoverage struct {
 	// reg is the ingest registry, keyed by provider — the same map cmd/ingest crawls with.
 	reg map[string]sources.Source
+	// catalog supplies the entry a crawl of the board is handed; see BoardCatalog.
+	catalog BoardCatalog
+}
+
+// BoardCatalog answers the board catalogue's entry for (source, board) — the CompanyEntry
+// cmd/ingest hands the adapter when it crawls that board. Resolving a link must hand the
+// adapter the same entry: most adapters copy CompanyEntry.Company onto every posting, so a
+// bare {Provider, Board} builds a posting with no employer, and writing it over the row the
+// crawl stored blanks that row's company and company_slug (freehire#3913).
+//
+// This package reads no database, so the lookup is the caller's; boardcatalog's
+// QueriesRepository satisfies it. found=false means the catalogue has no such board — a
+// board we do not crawl, so no stored row carries a name to lose.
+type BoardCatalog interface {
+	Entry(ctx context.Context, source, board string) (e sources.CompanyEntry, found bool, err error)
 }
 
 // NewBoardCoverage builds the board-coverage adapter over an ingest registry. A nil or empty
-// registry is safe: nothing matches, so the caller falls through to its next resolver.
-func NewBoardCoverage(reg map[string]sources.Source) Source {
-	return boardCoverage{reg: reg}
+// registry is safe: nothing matches, so the caller falls through to its next resolver. A nil
+// catalog fetches every board by its bare (source, board) — only right where nothing is
+// written over a crawled row.
+func NewBoardCoverage(reg map[string]sources.Source, catalog BoardCatalog) Source {
+	return boardCoverage{reg: reg, catalog: catalog}
 }
 
 // Source names the adapter, not the platform: unlike every other link source, this one serves
@@ -83,7 +100,7 @@ func (b boardCoverage) Resolve(ctx context.Context, raw string) (sources.Job, bo
 	if !ok || board == "" {
 		return sources.Job{}, false, nil
 	}
-	return ResolveOnBoard(ctx, b.reg, source, board, raw)
+	return ResolveOnBoard(ctx, b.reg, b.catalog, source, board, raw)
 }
 
 // ResolveOnBoard fetches one tenant board through its ingest adapter and returns the posting
@@ -93,15 +110,31 @@ func (b boardCoverage) Resolve(ctx context.Context, raw string) (sources.Job, bo
 // single adapter and never tries the next — so the fallback is orchestrated a level up, and
 // this is the piece it reuses.
 //
+// The board is read through catalog's entry for it when the catalogue has one (see
+// BoardCatalog), so the posting comes back exactly as a crawl of that board builds it — the
+// employer's name, and the stored board spelling its id is namespaced with.
+//
 // ok=false means the board carries no such posting; an error means the board could not be
-// fetched, which the caller must not mistake for the posting being absent.
-func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, source, board, raw string) (sources.Job, bool, error) {
+// fetched (or its catalogue entry read), which the caller must not mistake for the posting
+// being absent.
+func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, catalog BoardCatalog, source, board, raw string) (sources.Job, bool, error) {
 	adapter, has := reg[source]
 	if !has || board == "" {
 		return sources.Job{}, false, nil
 	}
 
-	jobs, err := fetchForResolve(ctx, adapter, sources.CompanyEntry{Provider: source, Board: board}, raw)
+	entry := sources.CompanyEntry{Provider: source, Board: board}
+	if catalog != nil {
+		stored, found, err := catalog.Entry(ctx, source, board)
+		if err != nil {
+			return sources.Job{}, false, err
+		}
+		if found {
+			entry = stored
+		}
+	}
+
+	jobs, err := fetchForResolve(ctx, adapter, entry, raw)
 	if err != nil {
 		return sources.Job{}, false, err
 	}
@@ -112,7 +145,7 @@ func ResolveOnBoard(ctx context.Context, reg map[string]sources.Source, source, 
 	}
 	// Namespace the id by board exactly as the ingest pipeline does, so a later crawl of this
 	// board dedups onto the row this import writes instead of adding a second posting.
-	job.ExternalID = externalid.Namespace(board, job.ExternalID)
+	job.ExternalID = externalid.Namespace(entry.Board, job.ExternalID)
 	return job, true, nil
 }
 

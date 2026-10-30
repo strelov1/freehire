@@ -71,13 +71,14 @@ func All(c Client) []Source {
 //  3. the generic JobPosting resolver — a last resort that matches ANY page, so nothing may
 //     follow it (Find picks one adapter and never tries the next).
 //
-// ingest is the provider-keyed ingest registry; a nil one simply disables step 2. Generic is
+// ingest is the provider-keyed ingest registry; a nil one simply disables step 2. catalog is
+// the board catalogue step 2 reads each board's crawl entry from (see BoardCatalog). Generic is
 // absent from All on purpose — its always-true Match must not leak into the Telegram crawl,
 // where every outbound link would then look like a vacancy. Here the URL is a deliberate
 // input, which is what makes a last-resort resolver safe.
-func ImportRegistry(c Client, ingest map[string]sources.Source) []Source {
+func ImportRegistry(c Client, ingest map[string]sources.Source, catalog BoardCatalog) []Source {
 	reg := All(c)
-	reg = append(reg, NewBoardCoverage(ingest))
+	reg = append(reg, NewBoardCoverage(ingest, catalog))
 	return append(reg, NewGeneric(c))
 }
 

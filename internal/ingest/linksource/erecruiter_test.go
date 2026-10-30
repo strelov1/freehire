@@ -64,7 +64,7 @@ func TestResolveOnBoardResolvesAnErecruiterOfferByItsOid(t *testing.T) {
 	reg := map[string]sources.Source{"erecruiter": sources.NewErecruiter(capture)}
 
 	raw := "https://skk.erecruiter.pl/Offer.aspx?oid=5011939&cfg=" + board + "&ejoId=623916&ejorId=322876&comId=20002054"
-	job, ok, err := ResolveOnBoard(context.Background(), reg, "erecruiter", board, raw)
+	job, ok, err := ResolveOnBoard(context.Background(), reg, nil, "erecruiter", board, raw)
 	if err != nil || !ok {
 		t.Fatalf("ResolveOnBoard = (ok %v, err %v), want the linked offer", ok, err)
 	}
@@ -89,7 +89,7 @@ func TestResolveOnBoardDoesNotSubstituteAnotherErecruiterOffer(t *testing.T) {
 
 	// The board now lists only offer 4987752; the link names 5011050, closed since it was shared.
 	raw := "https://skk.erecruiter.pl/Offer.aspx?oid=5011050&cfg=" + board + "&ejoId=623224&ejorId=322754&comId=20002054"
-	job, ok, err := ResolveOnBoard(context.Background(), reg, "erecruiter", board, raw)
+	job, ok, err := ResolveOnBoard(context.Background(), reg, nil, "erecruiter", board, raw)
 	if err != nil {
 		t.Fatalf("ResolveOnBoard: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestResolveOnBoardIgnoresAQueryValueThatContradictsTheOid(t *testing.T) {
 	reg := map[string]sources.Source{"erecruiter": sources.NewErecruiter(capture)}
 
 	raw := "https://skk.erecruiter.pl/Offer.aspx?oid=5011050&cfg=" + board + "&ref=5011939"
-	job, ok, err := ResolveOnBoard(context.Background(), reg, "erecruiter", board, raw)
+	job, ok, err := ResolveOnBoard(context.Background(), reg, nil, "erecruiter", board, raw)
 	if err != nil {
 		t.Fatalf("ResolveOnBoard: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestResolveOnBoardIgnoresDifferingTrackingParameters(t *testing.T) {
 	reg := map[string]sources.Source{"acmeats": board}
 
 	raw := "https://jobs.acme.example/posting/go-engineer?utm_source=linkedin&utm_medium=social&gclid=xyz"
-	job, ok, err := ResolveOnBoard(context.Background(), reg, "acmeats", "acme", raw)
+	job, ok, err := ResolveOnBoard(context.Background(), reg, nil, "acmeats", "acme", raw)
 	if err != nil || !ok {
 		t.Fatalf("ResolveOnBoard = (ok %v, err %v), want the posting despite different tracking values", ok, err)
 	}

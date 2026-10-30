@@ -20,6 +20,12 @@ Resolving a single outbound job-detail URL into a fully parsed vacancy under the
   first (a platform with a cheap per-job API must keep using it), board coverage second (it
   fetches a whole board), `generic` last — nothing may follow it, since it matches every page
   and `Find` commits to a single adapter.
+- **A board is read through its catalogue entry, never a bare `{Provider, Board}`.**
+  `ResolveOnBoard` asks a `BoardCatalog` (the `boards` table, via `boardcatalog`) for the
+  `CompanyEntry` a crawl of that board is handed. Most adapters copy `CompanyEntry.Company`
+  onto every posting, so a bare entry built a posting with no employer, and `UpsertJob`
+  wrote that blank over the crawled row's `company` and `company_slug` (freehire#3913). An
+  unreadable catalogue is an error, not a fallback to the bare entry.
 - **A fetched-but-absent posting is `ok=false`; an unfetchable board is an error.** Conflating
   them makes the caller file a reachable vacancy as unimportable.
 - **`generic` winning is not the same as nothing matching.** Its `Match` is always true, so a

@@ -305,3 +305,73 @@ func (b boardServing) Fetch(_ context.Context, e sources.CompanyEntry) ([]source
 		Company:    "Acme",
 	}}, nil
 }
+
+// catalogueBoard is an ingest adapter that names the employer the way most real adapters do:
+// from the catalogue entry it was handed (CompanyEntry.Company), not from the posting.
+type catalogueBoard struct{}
+
+func (catalogueBoard) Provider() string { return "recruitee" }
+
+func (catalogueBoard) Fetch(_ context.Context, e sources.CompanyEntry) ([]sources.Job, error) {
+	return []sources.Job{{
+		ExternalID:  "senior-go",
+		URL:         "https://acme.recruitee.com/o/senior-go",
+		Title:       "Senior Go Engineer",
+		Company:     e.Company,
+		Description: "Build the backend.",
+	}}, nil
+}
+
+func TestImport_KeepsTheEmployerACrawlOfTheBoardRecorded(t *testing.T) {
+	// A crawl of a board hands the adapter the catalogue's employer name. Resolving a link to
+	// one of that board's postings must hand it the same name, or the import rewrites the
+	// crawled row's company — and its company_slug — to nothing (freehire#3913).
+	cases := []struct {
+		name  string
+		link  string
+		known Board
+	}{
+		{"board coverage", "https://acme.recruitee.com/o/senior-go", Board{}},
+		{"a board the caller resolved", "https://careers.acme.test/jobs/senior-go",
+			Board{Source: "recruitee", Board: "acme"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := startPostgres(t)
+			q := db.New(pool)
+			ctx := context.Background()
+
+			if _, err := pool.Exec(ctx, `
+				INSERT INTO boards (provider, board, company, status)
+				VALUES ('recruitee', 'acme', 'Acme Robotics', 'active')`); err != nil {
+				t.Fatalf("seed the board: %v", err)
+			}
+			if _, err := pool.Exec(ctx, `
+				INSERT INTO jobs (source, external_id, url, title, public_slug, company, company_slug)
+				VALUES ('recruitee', 'acme:senior-go', 'https://acme.recruitee.com/o/senior-go',
+				        'Senior Go Engineer', 'senior-go-acme-robotics', 'Acme Robotics', 'acme-robotics')`); err != nil {
+				t.Fatalf("seed the crawled posting: %v", err)
+			}
+
+			im := New(pool, q, nil, pageClient{body: plainPage},
+				map[string]sources.Source{"recruitee": catalogueBoard{}}, nil)
+			res, ok, err := im.Import(ctx, tc.link, tc.known)
+			if err != nil || !ok {
+				t.Fatalf("import = (ok %v, err %v), want the board posting written", ok, err)
+			}
+			if res.CompanySlug != "acme-robotics" {
+				t.Errorf("Result.CompanySlug = %q, want acme-robotics", res.CompanySlug)
+			}
+
+			var company, slug string
+			if err := pool.QueryRow(ctx,
+				`SELECT company, company_slug FROM jobs WHERE source = 'recruitee' AND external_id = 'acme:senior-go'`).
+				Scan(&company, &slug); err != nil {
+				t.Fatalf("read the posting: %v", err)
+			}
+			if company != "Acme Robotics" || slug != "acme-robotics" {
+				t.Errorf("company, company_slug = %q, %q, want the crawl's Acme Robotics, acme-robotics", company, slug)
+			}
+		})
+	}
+}

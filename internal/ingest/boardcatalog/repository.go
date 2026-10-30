@@ -269,6 +269,24 @@ func (r *QueriesRepository) ListActiveForProvider(ctx context.Context, provider 
 	return fromRows(rows)
 }
 
+// Entry returns the crawl entry for one board — what a link import hands the adapter so it
+// builds the posting a crawl of that board would. found=false when the catalogue has no
+// such board. It satisfies linksource.BoardCatalog.
+func (r *QueriesRepository) Entry(ctx context.Context, provider, board string) (sources.CompanyEntry, bool, error) {
+	row, err := r.q.GetBoardForResolve(ctx, db.GetBoardForResolveParams{Provider: provider, Board: board})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return sources.CompanyEntry{}, false, nil
+	}
+	if err != nil {
+		return sources.CompanyEntry{}, false, err
+	}
+	b, err := fromRow(row)
+	if err != nil {
+		return sources.CompanyEntry{}, false, err
+	}
+	return b.CompanyEntry(), true, nil
+}
+
 func (r *QueriesRepository) ListBySubmitter(ctx context.Context, submittedBy int64) ([]Board, error) {
 	rows, err := r.q.ListBoardsBySubmitter(ctx, pgconv.Int8(&submittedBy))
 	if err != nil {
