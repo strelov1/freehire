@@ -507,6 +507,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   hzz: 'HZZ (Burza rada)',
   posaohr: 'Posao.hr',
   ess: 'ESS (Zavod RS za zaposlovanje)',
+  nsz: 'NSZ (Nacionalna služba za zapošljavanje)',
 };
 
 /** Display label for a source slug (e.g. smartrecruiters → "SmartRecruiters"),

@@ -1097,6 +1097,10 @@ func All(c HTTPClient) map[string]Source {
 	} else {
 		registry["ess"] = NewESS(NewLongTimeoutClient())
 	}
+	// NSZ: Serbia's National Employment Service's job search, its server-rendered pages read
+	// newest first, each new vacancy's body from its page, all transliterated into Latin
+	// script as the site's own "LAT" switch does in the browser. See nsz.go.
+	registry["nsz"] = NewNSZ(c)
 	// meta/uber/gusto are NOT served by the shared client: Meta's edge 400s the default Go
 	// TLS+HTTP/2 fingerprint and Uber's and Gusto's Cloudflare edges challenge it, so all three
 	// need the shared Chrome-fingerprint transport (fingerprintHTTP, also used by the
