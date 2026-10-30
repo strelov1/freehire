@@ -98,21 +98,23 @@ describe('BoardColumn', () => {
     expect(screen.getByText('Role 99')).toBeTruthy();
   });
 
-  it('resumes drawing once a dragged card leaves the column or the drag is cancelled', async () => {
+  // Each trigger on its own: run together, the second could clear a pause the first left.
+  it.each([
+    ['leaves the column', 'draggedLeft'],
+    ['is cancelled from the keyboard', 'dragStopped'],
+  ])('resumes drawing once a dragged card %s', async (_, trigger) => {
     renderColumn();
     const el = zone() as HTMLElement;
-    const consider = (trigger: string) =>
-      fireEvent(el, new CustomEvent('consider', { detail: { items: items.slice(0, 30), info: { trigger } } }));
+    const consider = (t: string) =>
+      fireEvent(el, new CustomEvent('consider', { detail: { items: items.slice(0, 30), info: { trigger: t } } }));
     Object.defineProperties(el, {
       clientHeight: { value: 600, configurable: true },
       scrollHeight: { value: 3000, configurable: true },
       scrollTop: { value: 2100, configurable: true },
     });
 
-    for (const trigger of ['draggedLeft', 'dragStopped']) {
-      await consider('dragStarted');
-      await consider(trigger);
-    }
+    await consider('dragStarted');
+    await consider(trigger);
     await fireEvent.scroll(el);
 
     await vi.waitFor(() => expect(drawn()).toBeGreaterThan(30));
