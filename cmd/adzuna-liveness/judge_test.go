@@ -27,6 +27,34 @@ func TestDetailsURLRefusesAnIDThatIsNotDigits(t *testing.T) {
 	}
 }
 
+func TestWellfoundPageURLIsTheStoredPostingPage(t *testing.T) {
+	const url = "https://wellfound.com/jobs/4465590-senior-or-staff-full-stack-engineer"
+	got, ok := wellfoundPageURL("software-engineer:4465590", url)
+	if !ok || got != url {
+		t.Fatalf("wellfoundPageURL() = %q, %v", got, ok)
+	}
+}
+
+// Wellfound answers 404 for a LIVE posting asked for without its title slug
+// (/jobs/4689896, measured 2026-10-30), so a URL that does not carry the slug, or names a
+// different posting than the row, must not be probed: its 404 would close a live posting.
+func TestWellfoundPageURLRefusesAURLThatCannotAnswerForTheRow(t *testing.T) {
+	cases := []struct{ externalID, url string }{
+		{"software-engineer:4465590", "https://wellfound.com/jobs/4465590"},
+		{"software-engineer:4465590", "https://wellfound.com/jobs/4465591-other-posting"},
+		{"software-engineer:4465590", "https://wellfound.com/jobs/44655900-longer-id"},
+		{"software-engineer:4465590", "https://example.com/jobs/4465590-senior"},
+		{"software-engineer:4465590", "http://wellfound.com/jobs/4465590-senior"},
+		{"software-engineer:", "https://wellfound.com/jobs/-senior"},
+		{"software-engineer:44x5", "https://wellfound.com/jobs/44x5-senior"},
+	}
+	for _, c := range cases {
+		if got, ok := wellfoundPageURL(c.externalID, c.url); ok {
+			t.Errorf("wellfoundPageURL(%q, %q) = %q, want refused", c.externalID, c.url, got)
+		}
+	}
+}
+
 func TestClassifyReadsTheThreeShapesAdzunaAnswers(t *testing.T) {
 	cases := []struct {
 		name     string

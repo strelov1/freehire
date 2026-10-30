@@ -5511,62 +5511,6 @@ func (q *Queries) RoleClusterCountsFor(ctx context.Context, arg RoleClusterCount
 	return items, nil
 }
 
-const selectAdzunaLivenessCandidates = `-- name: SelectAdzunaLivenessCandidates :many
-SELECT id, external_id, public_slug, liveness_strikes
-FROM jobs
-WHERE closed_at IS NULL
-  AND NOT is_private
-  AND source = 'adzuna'
-  AND last_seen_at < $1
-ORDER BY random()
-LIMIT $2
-`
-
-type SelectAdzunaLivenessCandidatesParams struct {
-	Cutoff  pgtype.Timestamptz `json:"cutoff"`
-	MaxRows int32              `json:"max_rows"`
-}
-
-type SelectAdzunaLivenessCandidatesRow struct {
-	ID              int64  `json:"id"`
-	ExternalID      string `json:"external_id"`
-	PublicSlug      string `json:"public_slug"`
-	LivenessStrikes int32  `json:"liveness_strikes"`
-}
-
-// cmd/adzuna-liveness's candidates: open adzuna postings the crawl has stopped listing.
-// Adzuna's feed is far deeper than the crawl's request budget (157k US it-jobs postings in
-// 14 days, 750 read per run), so "unseen" there is not evidence of removal and the sweep
-// cannot settle these — Adzuna's own page can, and that worker reads it.
-//
-// ORDER BY random() rather than by age because most probes end on a challenge page and
-// leave the row untouched: a fixed order would hand the same unanswered rows to every
-// bounded run and never reach the rest. Sampling reaches every row with nothing to store.
-func (q *Queries) SelectAdzunaLivenessCandidates(ctx context.Context, arg SelectAdzunaLivenessCandidatesParams) ([]SelectAdzunaLivenessCandidatesRow, error) {
-	rows, err := q.db.Query(ctx, selectAdzunaLivenessCandidates, arg.Cutoff, arg.MaxRows)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []SelectAdzunaLivenessCandidatesRow{}
-	for rows.Next() {
-		var i SelectAdzunaLivenessCandidatesRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.ExternalID,
-			&i.PublicSlug,
-			&i.LivenessStrikes,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const selectOrphanLivenessCandidates = `-- name: SelectOrphanLivenessCandidates :many
 SELECT id, source, url, public_slug, liveness_strikes
 FROM jobs
@@ -5602,6 +5546,66 @@ func (q *Queries) SelectOrphanLivenessCandidates(ctx context.Context, atsProvide
 		if err := rows.Scan(
 			&i.ID,
 			&i.Source,
+			&i.URL,
+			&i.PublicSlug,
+			&i.LivenessStrikes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const selectScraplingLivenessCandidates = `-- name: SelectScraplingLivenessCandidates :many
+SELECT id, external_id, url, public_slug, liveness_strikes
+FROM jobs
+WHERE closed_at IS NULL
+  AND NOT is_private
+  AND source = $1
+  AND last_seen_at < $2
+ORDER BY random()
+LIMIT $3
+`
+
+type SelectScraplingLivenessCandidatesParams struct {
+	Source  string             `json:"source"`
+	Cutoff  pgtype.Timestamptz `json:"cutoff"`
+	MaxRows int32              `json:"max_rows"`
+}
+
+type SelectScraplingLivenessCandidatesRow struct {
+	ID              int64  `json:"id"`
+	ExternalID      string `json:"external_id"`
+	URL             string `json:"url"`
+	PublicSlug      string `json:"public_slug"`
+	LivenessStrikes int32  `json:"liveness_strikes"`
+}
+
+// cmd/adzuna-liveness's candidates: open postings of one source the crawl has stopped listing.
+// For adzuna "unseen" is not evidence of removal (its feed is far deeper than the crawl's
+// request budget: 157k US it-jobs postings in 14 days, 750 read per run); for wellfound it
+// strands a posting whose company left every role slice the crawl reads, out of the sweep's
+// reach. The source's own page settles both, and that worker reads it.
+//
+// ORDER BY random() rather than by age because most adzuna probes end on a challenge page and
+// leave the row untouched: a fixed order would hand the same unanswered rows to every
+// bounded run and never reach the rest. Sampling reaches every row with nothing to store.
+func (q *Queries) SelectScraplingLivenessCandidates(ctx context.Context, arg SelectScraplingLivenessCandidatesParams) ([]SelectScraplingLivenessCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, selectScraplingLivenessCandidates, arg.Source, arg.Cutoff, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SelectScraplingLivenessCandidatesRow{}
+	for rows.Next() {
+		var i SelectScraplingLivenessCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ExternalID,
 			&i.URL,
 			&i.PublicSlug,
 			&i.LivenessStrikes,
