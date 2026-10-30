@@ -36,6 +36,9 @@ export class TextAutosave<T> {
   // with the value from before it — so that, not `saved()`, is what the boxes now differ
   // from: a box reverted mid-save must still be sent, and a box unchanged since need not.
   #sending: { value: T } | undefined;
+  // Counts the writes this card has started. Only the newest may clear `#dirty`: an older
+  // write landing late would otherwise release a card whose boxes it no longer describes.
+  #generation = 0;
 
   constructor(opts: Options<T>) {
     this.#opts = opts;
@@ -72,10 +75,13 @@ export class TextAutosave<T> {
     // marks the card dirty below, and SaveStatus.retry() re-runs THIS write without
     // passing through commit() — so only the write can tell the card a retry landed.
     // Typing that arrived meanwhile is still unsent, so it is cleared only when there was
-    // none. (#3898 removed this as a no-op and broke exactly that path.)
+    // none, and only by the newest write: A, then B, then a box edited back to A must not
+    // be released by A landing while B is still out. (#3898 removed this as a no-op and
+    // broke exactly the Retry path.)
+    const generation = ++this.#generation;
     const write = async () => {
       await save(next);
-      if (same(read(), next)) this.#dirty = false;
+      if (generation === this.#generation && same(read(), next)) this.#dirty = false;
     };
     const sending = { value: next };
     this.#sending = sending;

@@ -124,4 +124,26 @@ describe('TextAutosave', () => {
     await retried;
     expect(autosave.holding).toBe(true);
   });
+  // A, then B while A is still out, then the box edited back to A. A landing late must
+  // not release the card: the box holds an edit B is about to overwrite in the store.
+  it('keeps holding when a superseded write lands after the box moved on', async () => {
+    const pending: Array<() => void> = [];
+    const save = vi.fn(() => new Promise<void>((resolve) => pending.push(resolve)));
+    const { box, autosave } = card(save);
+
+    box.value = 'A';
+    autosave.edited();
+    autosave.commit();
+    box.value = 'B';
+    autosave.edited();
+    autosave.commit();
+    box.value = 'A';
+    autosave.edited();
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+
+    pending[0]?.();
+    pending[1]?.();
+    await settle();
+    expect(autosave.holding).toBe(true);
+  });
 });
