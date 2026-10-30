@@ -1,7 +1,7 @@
 # source-quality-metrics Specification
 
 ## Purpose
-TBD - created by archiving change add-source-quality-metrics. Update Purpose after archive.
+Measure, per source, how much of what it delivers is missing what a visitor relies on (work mode, place, employer) or is likely no longer live, so an adapter or a feed that quietly degrades while its crawls stay green is visible and alertable.
 ## Requirements
 ### Requirement: Per-source quality counts
 
