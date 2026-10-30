@@ -118,12 +118,29 @@ func stripTownSuffix(tok string) string {
 	return ""
 }
 
+// institutionWords mark a token as the name of an institution rather than a city and its
+// district: "Harrison-Morton Middle School" and "Lincoln-Way Area Special Education
+// District 843" are named after people or roads, and their hyphen joins two names, not a
+// city to its quarter. A K-12 board (applitrack) writes such a site in place of a town.
+var institutionWords = map[string]bool{"school": true, "academy": true, "district": true}
+
+// namesInstitution reports whether any word of tok is an institutionWords entry.
+func namesInstitution(tok string) bool {
+	for _, w := range strings.Fields(tok) {
+		if institutionWords[w] {
+			return true
+		}
+	}
+	return false
+}
+
 // pendingFor collects what an unresolved token may still name, in order of confidence: the
 // token itself as a small place; the town before a townSuffixes word; the large city a
 // "City-District" token opens with (longest prefix first, so "baden-baden-oos" is
 // Baden-Baden and not Baden). A district is read only off the main table: the pattern is a
 // city large enough to have named districts, and a small-place lead would read
-// "Horn-Bad Meinberg" (one town) as "Horn".
+// "Horn-Bad Meinberg" (one town) as "Horn". An institution's name is no "City-District"
+// token (namesInstitution).
 func pendingFor(tok string) pendingCity {
 	if p := smallPlaceCandidates(tok); p != nil {
 		return p
@@ -135,6 +152,9 @@ func pendingFor(tok string) pendingCity {
 		if p := smallPlaceCandidates(town); p != nil {
 			return p
 		}
+	}
+	if namesInstitution(tok) {
+		return nil
 	}
 	segs := strings.Split(tok, "-")
 	for n := len(segs) - 1; n >= 1; n-- {

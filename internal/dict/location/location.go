@@ -617,14 +617,30 @@ var noiseTokenWords = map[string]struct{}{
 	"office": {}, "hq": {}, "headquarters": {},
 }
 
+// siteWords are the noiseTokenWords that name a site rather than a work mode.
+var siteWords = map[string]bool{"office": true, "hq": true, "headquarters": true}
+
+// siteDescriptors say which KIND of site the word after them is, so they go with it: a
+// school district's "Central Office" is its administration building, not Central,
+// Louisiana, and a "Branch Office" is not Branch, Arkansas. Cutting the site word alone
+// left the descriptor to be read as a town.
+var siteDescriptors = map[string]bool{
+	"central": true, "main": true, "head": true, "home": true, "district": true,
+	"regional": true, "corporate": true, "branch": true, "field": true, "front": true,
+	"back": true, "satellite": true, "administrative": true, "admin": true,
+}
+
 // stripWorkmodeWords drops any noise words from a token, returning the rest
 // (possibly ""). "us remote" -> "us"; "remote" -> ""; "san francisco office" ->
-// "san francisco".
+// "san francisco"; "central office" -> "" (see siteDescriptors).
 func stripWorkmodeWords(tok string) string {
 	fields := strings.Fields(tok)
 	kept := fields[:0]
 	for _, f := range fields {
 		if _, drop := noiseTokenWords[f]; drop {
+			if n := len(kept); siteWords[f] && n > 0 && siteDescriptors[kept[n-1]] {
+				kept = kept[:n-1]
+			}
 			continue
 		}
 		kept = append(kept, f)

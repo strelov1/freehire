@@ -117,6 +117,18 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   crawl: postings with a city 76.1% → 94.0%. The residue is mostly German municipalities
   GeoNames carries only as administrative units (ADM4), absent from `cities1000` entirely
   (Borchen, Weinstadt, Spremberg, Wedemark).
+- **A site is not a town.** A K-12 board (applitrack) writes the SITE where a town would
+  go, and two readings took a town out of it. The "City-District" dash read the first name
+  of an institution ("Harrison-Morton Middle School" was Scranton, through its old name
+  Harrison; "Lincoln-Way ... District 843" was Lincoln), so a token carrying `school`,
+  `academy` or `district` is not one (`namesInstitution`). And cutting a site word
+  ("San Francisco Office") left its descriptor behind to be read as a town ("Central
+  Office" was Central, Louisiana), so a `siteDescriptors` word goes with the site word.
+  Measured 2026-10-30 over the 600 most common applitrack sites with their state appended:
+  rows with a city 640 → 344, every one dropped wrong; over the 40,000 most common other
+  location strings (7.7M open rows) the only changes were five lines gaining a correct
+  city ("Corp - Toronto Corporate Office") and one bare "Central Office" losing Central.
+  A site that names its town still reads it ("Lincoln School, Palatine, IL").
 - **A curated city override renames the PLACE** (`loadCityDict`), not only its own alias,
   and `metroFor` maps the curated name back to the GeoNames one the metro table is keyed
   by. Renaming one alias split Frankfurt across "Frankfurt" and "Frankfurt am Main" and
