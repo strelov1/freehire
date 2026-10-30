@@ -2892,7 +2892,10 @@ type Querier interface {
 	// since a neighbour can close after it was computed. A job with no precomputed
 	// list yet (never backfilled) comes back with a NULL/nil similar_job_ids, not an
 	// error — the handler treats "not backfilled yet" and "computed empty" the same.
-	GetSimilarJobIDs(ctx context.Context, id int64) ([]int64, error)
+	// countries rides along because the handler puts neighbours sharing the source's
+	// country first: the precomputed list ignores geography, so it routinely leads with
+	// the same role on another continent (freehire#3874).
+	GetSimilarJobIDs(ctx context.Context, id int64) (GetSimilarJobIDsRow, error)
 	// The credential one channel publishes with. No rows means the channel has never been signed
 	// in, which every caller reports as "not configured" rather than as an error — the same
 	// degradation as an unset webhook URL.

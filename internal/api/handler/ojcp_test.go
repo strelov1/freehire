@@ -48,8 +48,8 @@ func (f fakeOJCPStore) GetCompany(context.Context, string) (db.Company, error) {
 	return f.company, f.compErr
 }
 
-func (f fakeOJCPStore) GetSimilarJobIDs(context.Context, int64) ([]int64, error) {
-	return f.similarIDs, nil
+func (f fakeOJCPStore) GetSimilarJobIDs(context.Context, int64) (db.GetSimilarJobIDsRow, error) {
+	return db.GetSimilarJobIDsRow{SimilarJobIds: f.similarIDs}, nil
 }
 
 func (f fakeOJCPStore) GetJobsByIDs(context.Context, []int64) ([]db.Job, error) {

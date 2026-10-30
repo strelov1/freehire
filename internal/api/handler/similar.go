@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -70,7 +71,7 @@ func (h *searchHandlers) SimilarJobs(c *fiber.Ctx) error {
 
 // similarReader is the two reads a similar-jobs answer needs. *db.Queries satisfies it.
 type similarReader interface {
-	GetSimilarJobIDs(ctx context.Context, id int64) ([]int64, error)
+	GetSimilarJobIDs(ctx context.Context, id int64) (db.GetSimilarJobIDsRow, error)
 	GetJobsByIDs(ctx context.Context, ids []int64) ([]db.Job, error)
 }
 
@@ -89,11 +90,20 @@ type similarReader interface {
 // though enough open neighbours exist further down the stored list. The nearest-first order
 // is restored from the stored ids rather than trusted from GetJobsByIDs, whose order is
 // undefined for a WHERE id = ANY($1) fetch.
+//
+// Neighbours sharing a country with the source come first, each group keeping that
+// nearest-first order (freehire#3874). The stored list is computed by meaning alone, and
+// measured on prod 2026-10-30 only 2.9 of the 6 shown shared the source's country while
+// 46% of postings had six such neighbours further down their own list. Reordering here
+// rather than filtering in NearestJobsToJob is deliberate: that query runs ~8s per job on
+// a disk-bound host, so a geographic predicate there means re-computing ~1.2M lists.
+// A source with no country orders as before.
 func similarViews(ctx context.Context, q similarReader, id int64, limit int, show func(db.Job) bool) ([]jobview.Job, error) {
-	similarIDs, err := q.GetSimilarJobIDs(ctx, id)
+	source, err := q.GetSimilarJobIDs(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	similarIDs := source.SimilarJobIds
 	if len(similarIDs) == 0 {
 		return []jobview.Job{}, nil
 	}
@@ -111,20 +121,39 @@ func similarViews(ctx context.Context, q similarReader, id int64, limit int, sho
 		}
 	}
 
-	ordered := make([]jobview.Job, 0, min(len(similarIDs), limit))
+	local := make([]db.Job, 0, len(byID))
+	var elsewhere []db.Job
 	for _, sid := range similarIDs {
-		if len(ordered) == limit {
-			break
-		}
 		i, ok := byID[sid]
 		if !ok {
 			continue // not shown, or a dangling id (hard-deleted, stale backfill entry).
 		}
-		view, err := jobview.FromRow(rows[i])
+		if sharesCountry(rows[i].Countries, source.Countries) {
+			local = append(local, rows[i])
+		} else {
+			elsewhere = append(elsewhere, rows[i])
+		}
+	}
+
+	picked := append(local, elsewhere...)
+	picked = picked[:min(len(picked), limit)]
+	ordered := make([]jobview.Job, 0, len(picked))
+	for _, row := range picked {
+		view, err := jobview.FromRow(row)
 		if err != nil {
 			return nil, err
 		}
 		ordered = append(ordered, view)
 	}
 	return ordered, nil
+}
+
+// sharesCountry reports whether two country-code lists overlap.
+func sharesCountry(a, b []string) bool {
+	for _, x := range a {
+		if slices.Contains(b, x) {
+			return true
+		}
+	}
+	return false
 }

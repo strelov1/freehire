@@ -707,8 +707,9 @@ paths:
         - Jobs
       summary: Find jobs similar to a job
       description: |
-        Nearest neighbours from a precomputed semantic list, nearest first.
-        The list is built offline, so a neighbour that has since closed is
+        Nearest neighbours from a precomputed semantic list. Neighbours that
+        share a country with the job come first; within each group the order
+        is nearest first. The list is built offline, so a neighbour that has since closed is
         dropped silently — a response may hold fewer items than `limit`.
       x-openai-isConsequential: false
       parameters:

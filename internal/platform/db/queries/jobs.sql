@@ -252,7 +252,10 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- since a neighbour can close after it was computed. A job with no precomputed
 -- list yet (never backfilled) comes back with a NULL/nil similar_job_ids, not an
 -- error — the handler treats "not backfilled yet" and "computed empty" the same.
-SELECT similar_job_ids
+-- countries rides along because the handler puts neighbours sharing the source's
+-- country first: the precomputed list ignores geography, so it routinely leads with
+-- the same role on another continent (freehire#3874).
+SELECT similar_job_ids, countries
 FROM jobs
 WHERE id = sqlc.arg(id)::bigint;
 

@@ -2388,10 +2388,15 @@ func (q *Queries) GetJobIDBySlug(ctx context.Context, publicSlug string) (int64,
 }
 
 const getSimilarJobIDs = `-- name: GetSimilarJobIDs :one
-SELECT similar_job_ids
+SELECT similar_job_ids, countries
 FROM jobs
 WHERE id = $1::bigint
 `
+
+type GetSimilarJobIDsRow struct {
+	SimilarJobIds []int64  `json:"similar_job_ids"`
+	Countries     []string `json:"countries"`
+}
 
 // Narrow read for GET /jobs/:slug/similar (internal/api/handler/similar.go): only the
 // precomputed neighbour-id list (jobs.similar_job_ids, populated by
@@ -2403,11 +2408,14 @@ WHERE id = $1::bigint
 // since a neighbour can close after it was computed. A job with no precomputed
 // list yet (never backfilled) comes back with a NULL/nil similar_job_ids, not an
 // error — the handler treats "not backfilled yet" and "computed empty" the same.
-func (q *Queries) GetSimilarJobIDs(ctx context.Context, id int64) ([]int64, error) {
+// countries rides along because the handler puts neighbours sharing the source's
+// country first: the precomputed list ignores geography, so it routinely leads with
+// the same role on another continent (freehire#3874).
+func (q *Queries) GetSimilarJobIDs(ctx context.Context, id int64) (GetSimilarJobIDsRow, error) {
 	row := q.db.QueryRow(ctx, getSimilarJobIDs, id)
-	var similar_job_ids []int64
-	err := row.Scan(&similar_job_ids)
-	return similar_job_ids, err
+	var i GetSimilarJobIDsRow
+	err := row.Scan(&i.SimilarJobIds, &i.Countries)
+	return i, err
 }
 
 const insertPrivateJob = `-- name: InsertPrivateJob :one
