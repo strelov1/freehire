@@ -60,7 +60,7 @@
     "@scalar/api-reference": "1.69.2",
     "@scalar/server-side-rendering": "0.1.49",
     "@scalar/types": "0.24.0",
-    "@sentry/sveltekit": "^11.8.0",
+    "@sentry/sveltekit": "^11.9.0",
     "easymde": "^2.21.0",
     "flag-icons": "^7.5.0",
     "freehire-design-system": "link:../design-system",
