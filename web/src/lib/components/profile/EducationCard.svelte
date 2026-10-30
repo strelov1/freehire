@@ -7,336 +7,241 @@
   // A PUT replaces the whole owned block, so every save goes through
   // resumeStore.saveContacts, which queues the block's writers and builds each save from
   // the block the one before it saved.
-  import { Award, GraduationCap, Languages as LanguagesIcon, Pencil, Plus, X } from '@lucide/svelte';
+  //
+  // Everything autosaves (TextAutosave), each section with its own status line. The one
+  // deliberate exception is a NEW education entry: it is typed into its own row and
+  // joins the list only on "Add", so half an entry is never saved (#3879).
+  import { untrack } from 'svelte';
+  import { Award, GraduationCap, Languages as LanguagesIcon, Plus, X } from '@lucide/svelte';
   import { resumeStore } from '#lib/resume.svelte.js';
+  import { SaveStatus } from '#lib/saveStatus.svelte.js';
+  import { TextAutosave } from '#lib/textAutosave.js';
   import type { ResumeEducation, ResumeStructured } from '#lib/types.js';
-  import { Button, Chip } from '#lib/ui/index.js';
+  import { Button } from '#lib/ui/index.js';
   import PeriodDateInput from '#lib/components/PeriodDateInput.svelte';
-  import { formatPeriodDate } from '#lib/periodDate.js';
+  import SaveStatusLine from '../SaveStatus.svelte';
   import { messages } from './EducationCard.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
-  import { announce } from '#lib/announce.svelte.js';
 
   let { structured }: { structured: ResumeStructured | null } = $props();
 
-  const education = $derived(structured?.education ?? []);
-  const languages = $derived(structured?.languages ?? []);
-  const certifications = $derived(structured?.certifications ?? []);
   const s = $derived(t(messages, locale()));
   // The languages/certifications textareas take their names from the visible headings.
   const uid = $props.id();
   const languagesHeadingId = `${uid}-languages`;
   const certificationsHeadingId = `${uid}-certifications`;
 
-  let editingEducation = $state(false);
-  let educationDraft = $state<ResumeEducation[]>([]);
-  let educationBusy = $state(false);
-  let educationError = $state<string | null>(null);
+  // An entry with nothing in it is not an entry; this is the shape that gets saved and
+  // compared, so blank rows never count as a change.
+  const cleanEducation = (rows: ResumeEducation[]): ResumeEducation[] =>
+    rows
+      .map((e) => ({ degree: (e.degree ?? '').trim(), institution: (e.institution ?? '').trim(), year: e.year }))
+      .filter((e) => e.degree || e.institution || e.year);
+  const lines = (text: string) =>
+    text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
 
-  function startEditEducation() {
-    educationDraft = education.map((e) => ({ ...e }));
-    educationError = null;
-    editingEducation = true;
-  }
+  const savedEducation = () => cleanEducation(structured?.education ?? []);
+  const savedLanguages = () => structured?.languages ?? [];
+  const savedCertifications = () => structured?.certifications ?? [];
 
-  function cancelEditEducation() {
-    editingEducation = false;
-    educationError = null;
-  }
+  let educationRows = $state<ResumeEducation[]>(savedEducation().map((e) => ({ ...e })));
+  let languagesText = $state(savedLanguages().join('\n'));
+  let certificationsText = $state(savedCertifications().join('\n'));
+  let newEntry = $state<ResumeEducation>({ degree: '', institution: '', year: undefined });
 
-  function addEducationRow() {
-    educationDraft = [...educationDraft, { degree: '', institution: '', year: undefined }];
-  }
+  const educationStatus = new SaveStatus();
+  const languagesStatus = new SaveStatus();
+  const certificationsStatus = new SaveStatus();
+
+  // Owned even when a list ends up empty — otherwise clearing every row is
+  // indistinguishable, server-side, from never having edited it, and the CV's own list
+  // reappears on the next read (internal/resume/owned.go).
+  const education = new TextAutosave<ResumeEducation[]>({
+    status: educationStatus,
+    read: () => cleanEducation(educationRows),
+    saved: savedEducation,
+    save: (value) => resumeStore.saveContacts({ education: value, education_set: true }),
+  });
+  const languages = new TextAutosave<string[]>({
+    status: languagesStatus,
+    read: () => lines(languagesText),
+    saved: savedLanguages,
+    save: (value) => resumeStore.saveContacts({ languages: value, languages_set: true }),
+  });
+  const certifications = new TextAutosave<string[]>({
+    status: certificationsStatus,
+    read: () => lines(certificationsText),
+    saved: savedCertifications,
+    save: (value) => resumeStore.saveContacts({ certifications: value, certifications_set: true }),
+  });
+
+  // Follow the saved lists when they change elsewhere (an Undo, a fresh CV parse), each
+  // only while it holds nothing unsent. The boxes are read untracked: a keystroke must
+  // never re-run this (see CandidateContactsEditor for why that eats the keystroke).
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  $effect(() => {
+    const saved = savedEducation();
+    if (education.holding) return;
+    if (!same(saved, untrack(() => cleanEducation(educationRows)))) educationRows = saved.map((e) => ({ ...e }));
+  });
+  $effect(() => {
+    const saved = savedLanguages();
+    if (languages.holding) return;
+    if (!same(saved, untrack(() => lines(languagesText)))) languagesText = saved.join('\n');
+  });
+  $effect(() => {
+    const saved = savedCertifications();
+    if (certifications.holding) return;
+    if (!same(saved, untrack(() => lines(certificationsText)))) certificationsText = saved.join('\n');
+  });
 
   function removeEducationRow(i: number) {
-    educationDraft = educationDraft.filter((_, idx) => idx !== i);
+    educationRows = educationRows.filter((_, idx) => idx !== i);
+    education.edited();
+    education.commit();
   }
 
-  async function saveEducation() {
-    educationBusy = true;
-    educationError = null;
-    try {
-      const cleaned = educationDraft
-        .map((e) => ({
-          degree: (e.degree ?? '').trim(),
-          institution: (e.institution ?? '').trim(),
-          year: e.year,
-        }))
-        .filter((e) => e.degree || e.institution || e.year);
-      // Owned even when `cleaned` is empty — otherwise clearing every row here is
-      // indistinguishable, server-side, from never having edited Education at all, and the
-      // CV's own education reappears on the next read (internal/resume/owned.go).
-      await resumeStore.saveContacts({ education: cleaned, education_set: true });
-      editingEducation = false;
-      announce(s.saved);
-    } catch (e) {
-      educationError = e instanceof Error ? e.message : s.saveFailed;
-      announce(educationError, 'assertive');
-    } finally {
-      educationBusy = false;
-    }
+  const newEntryFilled = $derived(
+    !!(newEntry.degree?.trim() || newEntry.institution?.trim() || newEntry.year),
+  );
+
+  function addEducation() {
+    if (!newEntryFilled) return;
+    educationRows = [...educationRows, { ...newEntry }];
+    newEntry = { degree: '', institution: '', year: undefined };
+    education.edited();
+    education.commit();
   }
 
-  let editingLanguages = $state(false);
-  let languagesText = $state('');
-  let languagesBusy = $state(false);
-  let languagesError = $state<string | null>(null);
-
-  function startEditLanguages() {
-    languagesText = languages.join('\n');
-    languagesError = null;
-    editingLanguages = true;
-  }
-
-  function cancelEditLanguages() {
-    editingLanguages = false;
-    languagesError = null;
-  }
-
-  async function saveLanguages() {
-    languagesBusy = true;
-    languagesError = null;
-    try {
-      await resumeStore.saveContacts({
-        languages: languagesText
-          .split('\n')
-          .map((l) => l.trim())
-          .filter(Boolean),
-        // Owned even when the list above ends up empty — see saveEducation's comment.
-        languages_set: true,
-      });
-      editingLanguages = false;
-      announce(s.saved);
-    } catch (e) {
-      languagesError = e instanceof Error ? e.message : s.saveFailed;
-      announce(languagesError, 'assertive');
-    } finally {
-      languagesBusy = false;
-    }
-  }
-
-  let editingCertifications = $state(false);
-  let certificationsText = $state('');
-  let certificationsBusy = $state(false);
-  let certificationsError = $state<string | null>(null);
-
-  function startEditCertifications() {
-    certificationsText = certifications.join('\n');
-    certificationsError = null;
-    editingCertifications = true;
-  }
-
-  function cancelEditCertifications() {
-    editingCertifications = false;
-    certificationsError = null;
-  }
-
-  async function saveCertifications() {
-    certificationsBusy = true;
-    certificationsError = null;
-    try {
-      await resumeStore.saveContacts({
-        certifications: certificationsText
-          .split('\n')
-          .map((l) => l.trim())
-          .filter(Boolean),
-        // Owned even when the list above ends up empty — see saveEducation's comment.
-        certifications_set: true,
-      });
-      editingCertifications = false;
-      announce(s.saved);
-    } catch (e) {
-      certificationsError = e instanceof Error ? e.message : s.saveFailed;
-      announce(certificationsError, 'assertive');
-    } finally {
-      certificationsBusy = false;
-    }
-  }
+  // Edits made right before leaving the page still land, quietly.
+  $effect(() => () => {
+    education.commit(true);
+    languages.commit(true);
+    certifications.commit(true);
+  });
 </script>
 
 <div class="flex flex-col gap-6">
   <div class="flex flex-col gap-2">
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between gap-3">
       <h2 class="flex items-center gap-2 text-base font-semibold">
         <GraduationCap class="size-4.5" />{s.education.heading}
       </h2>
-      {#if !editingEducation}
-        <Button size="sm" variant="ghost" class="text-muted-foreground" onclick={startEditEducation}>
-          <Pencil class="size-3.5" />{s.edit}
-        </Button>
-      {/if}
+      <SaveStatusLine status={educationStatus} />
     </div>
 
-    {#if editingEducation}
-      <div class="flex flex-col gap-2">
-        {#each educationDraft as row, i (row)}
-          <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
-            <div class="flex items-start gap-2">
-              <div class="grid flex-1 gap-2 sm:grid-cols-2">
-                <input
-                  class="rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  bind:value={row.degree}
-                  placeholder={s.education.degreePlaceholder}
-                  aria-label="{s.education.degreePlaceholder} {i + 1}"
+    <div class="flex flex-col gap-2">
+      <!-- Every saved entry is editable in place; an edit saves a second after typing
+           stops or when focus leaves the list. -->
+      <div
+        class="flex flex-col gap-2"
+        oninput={() => education.edited()}
+        onchange={() => education.edited()}
+        onfocusout={() => education.commit()}
+      >
+        {#each educationRows as row, i (row)}
+          <div class="flex items-start gap-2 rounded-lg border border-border p-3">
+            <div class="grid flex-1 gap-2 sm:grid-cols-2">
+              <input
+                class="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                bind:value={row.degree}
+                placeholder={s.education.degreePlaceholder}
+                aria-label="{s.education.degreePlaceholder} {i + 1}"
+              />
+              <input
+                class="rounded-md border border-border bg-background px-3 py-2 text-sm"
+                bind:value={row.institution}
+                placeholder={s.education.institutionPlaceholder}
+                aria-label="{s.education.institutionPlaceholder} {i + 1}"
+              />
+              <div class="sm:col-span-2">
+                <PeriodDateInput
+                  bind:value={row.year}
+                  placeholder={s.education.yearPlaceholder}
+                  label="{s.education.yearPlaceholder} {i + 1}"
                 />
-                <input
-                  class="rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  bind:value={row.institution}
-                  placeholder={s.education.institutionPlaceholder}
-                  aria-label="{s.education.institutionPlaceholder} {i + 1}"
-                />
-                <div class="sm:col-span-2">
-                  <PeriodDateInput
-                    bind:value={row.year}
-                    placeholder={s.education.yearPlaceholder}
-                    label="{s.education.yearPlaceholder} {i + 1}"
-                  />
-                </div>
               </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                class="shrink-0 text-muted-foreground"
-                onclick={() => removeEducationRow(i)}
-                aria-label={s.remove}
-              >
-                <X class="size-4" />
-              </Button>
             </div>
+            <Button
+              size="icon"
+              variant="ghost"
+              class="shrink-0 text-muted-foreground"
+              onclick={() => removeEducationRow(i)}
+              aria-label="{s.remove} {i + 1}"
+            >
+              <X class="size-4" />
+            </Button>
           </div>
         {/each}
-        <Button size="sm" variant="secondary" class="self-start" onclick={addEducationRow}>
+      </div>
+
+      <!-- A new entry is not saved until "Add": half an entry (a degree with no school yet)
+           is not something to store. -->
+      <div class="flex flex-col gap-2 rounded-lg border border-dashed border-border p-3">
+        <span class="text-xs text-muted-foreground">{s.education.newEntry}</span>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <input
+            class="rounded-md border border-border bg-background px-3 py-2 text-sm"
+            bind:value={newEntry.degree}
+            placeholder={s.education.degreePlaceholder}
+            aria-label="{s.education.newEntry}: {s.education.degreePlaceholder}"
+          />
+          <input
+            class="rounded-md border border-border bg-background px-3 py-2 text-sm"
+            bind:value={newEntry.institution}
+            placeholder={s.education.institutionPlaceholder}
+            aria-label="{s.education.newEntry}: {s.education.institutionPlaceholder}"
+          />
+          <div class="sm:col-span-2">
+            <PeriodDateInput
+              bind:value={newEntry.year}
+              placeholder={s.education.yearPlaceholder}
+              label="{s.education.newEntry}: {s.education.yearPlaceholder}"
+            />
+          </div>
+        </div>
+        <Button size="sm" variant="secondary" class="self-start" disabled={!newEntryFilled} onclick={addEducation}>
           <Plus class="size-3.5" />{s.education.add}
         </Button>
-        <div class="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="primary" disabled={educationBusy} onclick={saveEducation}>{s.save}</Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            class="text-muted-foreground"
-            disabled={educationBusy}
-            onclick={cancelEditEducation}
-          >
-            {s.cancel}
-          </Button>
-        </div>
-        {#if educationError}
-          <p class="text-sm text-destructive">{educationError}</p>
-        {/if}
       </div>
-    {:else if education.length}
-      <ul class="flex flex-col gap-1.5">
-        {#each education as ed, i (i)}
-          <li class="flex flex-wrap items-baseline justify-between gap-2 rounded-xl border border-border bg-card p-4 text-sm">
-            <span>
-              <span class="font-medium">{ed.degree || ed.institution}</span>
-              {#if ed.degree && ed.institution}
-                <span class="text-muted-foreground"> · {ed.institution}</span>
-              {/if}
-            </span>
-            {#if ed.year}
-              <span class="text-xs tabular-nums text-muted-foreground">{formatPeriodDate(ed.year)}</span>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-    {:else}
-      <p class="text-sm text-muted-foreground">{s.education.empty}</p>
-    {/if}
+    </div>
   </div>
 
-  <div class="flex flex-col gap-2">
-    <div class="flex items-center justify-between">
+  <div class="flex flex-col gap-2" onfocusout={() => languages.commit()}>
+    <div class="flex items-center justify-between gap-3">
       <h2 id={languagesHeadingId} class="flex items-center gap-2 text-base font-semibold">
         <LanguagesIcon class="size-4.5" />{s.languages.heading}
       </h2>
-      {#if !editingLanguages}
-        <Button size="sm" variant="ghost" class="text-muted-foreground" onclick={startEditLanguages}>
-          <Pencil class="size-3.5" />{s.edit}
-        </Button>
-      {/if}
+      <SaveStatusLine status={languagesStatus} />
     </div>
-
-    {#if editingLanguages}
-      <textarea
-        bind:value={languagesText}
-        aria-labelledby={languagesHeadingId}
-        rows="4"
-        class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        placeholder={s.languages.placeholder}
-      ></textarea>
-      <div class="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="primary" disabled={languagesBusy} onclick={saveLanguages}>{s.save}</Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          class="text-muted-foreground"
-          disabled={languagesBusy}
-          onclick={cancelEditLanguages}
-        >
-          {s.cancel}
-        </Button>
-      </div>
-      {#if languagesError}
-        <p class="text-sm text-destructive">{languagesError}</p>
-      {/if}
-    {:else if languages.length}
-      <div class="flex flex-wrap gap-1.5">
-        {#each languages as lang, i (i)}
-          <Chip>{lang}</Chip>
-        {/each}
-      </div>
-    {:else}
-      <p class="text-sm text-muted-foreground">{s.languages.empty}</p>
-    {/if}
+    <textarea
+      bind:value={languagesText}
+      oninput={() => languages.edited()}
+      aria-labelledby={languagesHeadingId}
+      rows="3"
+      class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+      placeholder={s.languages.placeholder}
+    ></textarea>
   </div>
 
-  <div class="flex flex-col gap-2">
-    <div class="flex items-center justify-between">
+  <div class="flex flex-col gap-2" onfocusout={() => certifications.commit()}>
+    <div class="flex items-center justify-between gap-3">
       <h2 id={certificationsHeadingId} class="flex items-center gap-2 text-base font-semibold">
         <Award class="size-4.5" />{s.certifications.heading}
       </h2>
-      {#if !editingCertifications}
-        <Button size="sm" variant="ghost" class="text-muted-foreground" onclick={startEditCertifications}>
-          <Pencil class="size-3.5" />{s.edit}
-        </Button>
-      {/if}
+      <SaveStatusLine status={certificationsStatus} />
     </div>
-
-    {#if editingCertifications}
-      <textarea
-        bind:value={certificationsText}
-        aria-labelledby={certificationsHeadingId}
-        rows="4"
-        class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-        placeholder={s.certifications.placeholder}
-      ></textarea>
-      <div class="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="primary" disabled={certificationsBusy} onclick={saveCertifications}>
-          {s.save}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          class="text-muted-foreground"
-          disabled={certificationsBusy}
-          onclick={cancelEditCertifications}
-        >
-          {s.cancel}
-        </Button>
-      </div>
-      {#if certificationsError}
-        <p class="text-sm text-destructive">{certificationsError}</p>
-      {/if}
-    {:else if certifications.length}
-      <div class="flex flex-wrap gap-1.5">
-        {#each certifications as cert, i (i)}
-          <Chip>{cert}</Chip>
-        {/each}
-      </div>
-    {:else}
-      <p class="text-sm text-muted-foreground">{s.certifications.empty}</p>
-    {/if}
+    <textarea
+      bind:value={certificationsText}
+      oninput={() => certifications.edited()}
+      aria-labelledby={certificationsHeadingId}
+      rows="3"
+      class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+      placeholder={s.certifications.placeholder}
+    ></textarea>
   </div>
 </div>

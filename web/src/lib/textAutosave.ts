@@ -23,6 +23,9 @@ type Options<T> = {
   save: (value: T) => Promise<unknown>;
   /** Whether a value may be saved at all. */
   valid?: (value: T) => boolean;
+  /** Whether saving `before` again would reverse the write. Defaults to yes; an endpoint
+   *  that cannot clear a field cannot reverse filling it in, so it says no then. */
+  canUndo?: (before: T, next: T) => boolean;
 };
 
 export class TextAutosave<T> {
@@ -52,7 +55,7 @@ export class TextAutosave<T> {
     clearTimeout(this.#timer);
     this.#timer = undefined;
     if (!this.#dirty) return true;
-    const { status, read, saved, save, valid } = this.#opts;
+    const { status, read, saved, save, valid, canUndo } = this.#opts;
     const next = read();
     if (valid && !valid(next)) return false;
     const before = saved();
@@ -63,7 +66,8 @@ export class TextAutosave<T> {
       // Typing that landed during the save is still unsent; only clear it if there was none.
       if (same(read(), next)) this.#dirty = false;
     };
-    void status.run(write, { undo: () => save(before) }, quiet).then((ok) => {
+    const undo = !canUndo || canUndo(before, next) ? () => save(before) : undefined;
+    void status.run(write, { undo }, quiet).then((ok) => {
       if (!ok) this.#dirty = true;
     });
     return true;
