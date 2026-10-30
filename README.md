@@ -77,8 +77,7 @@ ChatGPT, Claude or any agent over MCP.
 
 **Pro — $5/month** adds the AI that does the applying with you:
 
-- **CV tailoring for each vacancy**, with a cover letter, built only from what is
-  in your CV
+- **CV tailoring for each vacancy**, with a cover letter — it invents nothing
 - **The AI assistant**, unlimited
 - **The browser extension fills application forms** for you
 - **Auto-apply in the background**, within a daily limit
@@ -241,7 +240,7 @@ https://freehire.me/api/v1/jobs` needs no credential. All responses use
 `{"error": msg}`; jobs and companies are addressed by their public slug.
 
 **Full reference — every endpoint, its parameters, auth mode and the whole
-search-filter vocabulary: [freehire.me/docs/api](https://freehire.me/docs/api).**
+search-filter vocabulary: [freehire.me/docs/api](https://freehire.me/docs/api?utm_source=github&utm_medium=readme&utm_campaign=api).**
 
 ## Sources
 
@@ -266,7 +265,7 @@ so `internal/ingest/sources` classifies every provider without a network call.
 
 Full per-source breakdown — every source with its own open-jobs count — lives on
 its own page: [docs/sources.md](docs/sources.md), and always current at
-[freehire.me/sources](https://freehire.me/sources).
+[freehire.me/sources](https://freehire.me/sources?utm_source=github&utm_medium=readme&utm_campaign=sources).
 
 ## Adding a source
 
