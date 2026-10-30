@@ -27,7 +27,7 @@ selected, on `Escape`, and on outside click.
 - **THEN** it shows the nav links, the workspace switcher, Settings, Submit a job, the
   theme toggle, and Log out, but not Moderation
 
-#### Scenario: Job search targets the profile on mobile
+#### Scenario: Profile item targets the single profile on mobile
 
 - **WHEN** a signed-in user on a narrow viewport selects Job search
 - **THEN** the app navigates to `/my/profile`
@@ -69,7 +69,7 @@ opening either of those SHALL close the profile menu. The profile menu SHALL clo
 item is selected, on `Escape`, on outside click, and on navigation. For a signed-out user on
 a wide viewport the profile icon SHALL remain a direct Sign in action (no dropdown).
 
-#### Scenario: Profile menu lists the workspaces
+#### Scenario: Profile menu lists the account items
 
 - **WHEN** a signed-in non-moderator, non-beta user opens the profile menu on a wide
   viewport
@@ -80,6 +80,11 @@ a wide viewport the profile icon SHALL remain a direct Sign in action (no dropdo
 
 - **WHEN** a signed-in user on `/my/employer` opens the profile menu
 - **THEN** Employer is marked as the current workspace and Job search is not
+
+#### Scenario: Profile item targets the single profile
+
+- **WHEN** a signed-in user selects Job search in the profile menu
+- **THEN** the app navigates to `/my/profile`
 
 #### Scenario: Moderator sees moderation in the profile menu
 

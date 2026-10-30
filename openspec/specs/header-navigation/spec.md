@@ -143,16 +143,15 @@ identity row SHALL be shown.
 The menu SHALL contain the site nav links (Jobs, Companies, Collections, the
 site's feature pages, About, and Open) and the theme toggle. On a narrow
 viewport the menu SHALL additionally contain, for a signed-in user, the
-account items (Profile, Activity, Tracking, Inbox, Agent, Tailor, Search
-alerts, API keys, My submissions), Submit a job, and a Log out action; the
-Moderation item SHALL appear only for a moderator. For a signed-out user on a
-narrow viewport the menu SHALL show a Sign in action instead of the account
-items. On a wide viewport the menu SHALL NOT contain the account items,
-Submit a job, Moderation, or a Sign in/Log out action — those are reached
-through the profile menu trigger (signed in) or the existing direct sign-in
-icon (signed out); see Requirement: Desktop profile menu. The Profile item,
-where present in the menu, SHALL target `/my/profile`. The menu SHALL close
-after an item is selected, on `Escape`, and on outside click.
+workspace switcher (Job search, then Mentor for a beta tester, then Referrer, then
+Employer), a Settings
+item, Submit a job, and a Log out action; the Moderation item SHALL appear only for a
+moderator. For a signed-out user on a narrow viewport the menu SHALL show a Sign in action
+instead of the account items. On a wide viewport the menu SHALL NOT contain the workspace
+switcher, Settings, Submit a job, Moderation, or a Sign in/Log out action — those are
+reached through the profile menu trigger (signed in) or the existing direct sign-in icon
+(signed out); see Requirement: Desktop profile menu. The menu SHALL close after an item is
+selected, on `Escape`, and on outside click.
 
 #### Scenario: Signed-out menu on mobile
 
@@ -163,14 +162,12 @@ after an item is selected, on `Escape`, and on outside click.
 #### Scenario: Signed-in menu on mobile
 
 - **WHEN** a signed-in non-moderator user opens the menu on a narrow viewport
-- **THEN** it shows the nav links, the account items (Profile, Activity,
-  Tracking, Inbox, Agent, Tailor, Search alerts, API keys, My submissions),
-  Submit a job, the theme toggle, and Log out, but not Moderation
+- **THEN** it shows the nav links, the workspace switcher, Settings, Submit a job, the
+  theme toggle, and Log out, but not Moderation
 
 #### Scenario: Profile item targets the single profile on mobile
 
-- **WHEN** a signed-in user on a narrow viewport selects the Profile account
-  item
+- **WHEN** a signed-in user on a narrow viewport selects Job search
 - **THEN** the app navigates to `/my/profile`
 
 #### Scenario: Desktop menu excludes account items
@@ -199,22 +196,33 @@ after an item is selected, on `Escape`, and on outside click.
 
 On a wide viewport, a signed-in user's profile icon SHALL act as a second,
 independent menu trigger, opening a dropdown scoped to that user's own
-account: Profile (targeting `/my/profile`), Activity, Tracking, Inbox, Agent,
-Tailor, Search alerts, API keys, My submissions, then Submit a job, then
-(moderators only) Moderation, then Log out. Opening the profile menu SHALL
-close the consolidated menu and the notification bell dropdown if either is
-open, and opening either of those SHALL close the profile menu. The profile
-menu SHALL close after an item is selected, on `Escape`, on outside click, and
-on navigation. For a signed-out user on a wide viewport the profile icon SHALL
-remain a direct Sign in action (no dropdown).
+account: the workspace switcher — Job search (targeting `/my/profile`), Mentor (beta
+testers only, targeting `/my/mentorship/bookings`), Referrer (targeting
+`/my/referrals/offers`) and Employer (targeting `/my/employer`),
+each with a one-line description and the current workspace marked — then Settings
+(targeting `/my/account`), then Submit a job, then (moderators only) Moderation, then Log
+out. It SHALL NOT repeat the individual account sections. Opening the profile menu SHALL
+close the consolidated menu and the notification bell dropdown if either is open, and
+opening either of those SHALL close the profile menu. The profile menu SHALL close after an
+item is selected, on `Escape`, on outside click, and on navigation. For a signed-out user on
+a wide viewport the profile icon SHALL remain a direct Sign in action (no dropdown).
 
 #### Scenario: Profile menu lists the account items
 
-- **WHEN** a signed-in non-moderator user opens the profile menu on a wide
+- **WHEN** a signed-in non-moderator, non-beta user opens the profile menu on a wide
   viewport
-- **THEN** it shows Profile, Activity, Tracking, Inbox, Agent, Tailor, Search
-  alerts, API keys, My submissions, Submit a job, and Log out, but not
-  Moderation
+- **THEN** it shows Job search, Referrer, Employer, Settings, Submit a job, and Log out, but
+  not Mentor and not Moderation
+
+#### Scenario: The current workspace is marked
+
+- **WHEN** a signed-in user on `/my/employer` opens the profile menu
+- **THEN** Employer is marked as the current workspace and Job search is not
+
+#### Scenario: Profile item targets the single profile
+
+- **WHEN** a signed-in user selects Job search in the profile menu
+- **THEN** the app navigates to `/my/profile`
 
 #### Scenario: Moderator sees moderation in the profile menu
 
@@ -226,11 +234,6 @@ remain a direct Sign in action (no dropdown).
 - **WHEN** a signed-in user opens the profile menu on a wide viewport
 - **THEN** the Log out action is visible in the panel without needing to
   scroll
-
-#### Scenario: Profile item targets the single profile
-
-- **WHEN** a signed-in user selects the Profile item in the profile menu
-- **THEN** the app navigates to `/my/profile`
 
 #### Scenario: Opening the profile menu closes the consolidated menu
 
