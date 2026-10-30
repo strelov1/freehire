@@ -39,8 +39,24 @@ describe('ScreeningAnswersForm — autosave', () => {
     await fireEvent.input(salary, { target: { value: '12k' } });
     await fireEvent.focusOut(salary);
 
-    expect(screen.getByText('Desired salary amount must be a number.')).toBeTruthy();
+    expect(screen.getByText('Desired salary amount must be a whole number above zero.')).toBeTruthy();
     expect(salary.getAttribute('aria-invalid')).toBe('true');
+    expect(updateScreeningAnswers).not.toHaveBeenCalled();
+  });
+
+  it('marks a negative or fractional number the endpoint would refuse', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+    const notice = screen.getByRole('textbox', { name: 'Notice period (days)' });
+    const salary = screen.getByRole('textbox', { name: 'Desired salary amount' });
+
+    await fireEvent.input(notice, { target: { value: '-5' } });
+    await fireEvent.focusOut(notice);
+    expect(screen.getByText('Notice period (days) must be a whole number.')).toBeTruthy();
+
+    await fireEvent.input(notice, { target: { value: '0' } });
+    await fireEvent.input(salary, { target: { value: '1000.5' } });
+    await fireEvent.focusOut(salary);
+    expect(screen.getByText('Desired salary amount must be a whole number above zero.')).toBeTruthy();
     expect(updateScreeningAnswers).not.toHaveBeenCalled();
   });
 

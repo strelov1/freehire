@@ -39,6 +39,13 @@ class ScreeningStore extends UserResource<Answers | null> {
     this.#answers = row;
   }
 
+  /** Take the answers a save returned as the current copy. The PUT answers with the whole
+   *  stored record, so there is nothing a re-read would add. */
+  noteSaved(answers: Answers): void {
+    this.#answers = answers;
+    this.markLoaded();
+  }
+
   protected clearState() {
     this.#answers = null;
   }

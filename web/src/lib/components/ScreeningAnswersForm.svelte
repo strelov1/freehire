@@ -117,17 +117,23 @@
       consent: answers?.privacy_consent,
     });
 
+  // The endpoint's own rules (screeninganswers.Validate), applied here so a value it would
+  // refuse is marked on its field instead of coming back as a failed save: a whole number,
+  // and for the salary above zero. NaN fails Number.isInteger, so "12k" is caught too.
+  const wholeAtLeast = (value: number | undefined, minimum: number) =>
+    value === undefined || (Number.isInteger(value) && value >= minimum);
+  const salaryOk = (patch: Partial<Answers>) => wholeAtLeast(patch.desired_salary_amount, 1);
+  const noticeOk = (patch: Partial<Answers>) => wholeAtLeast(patch.notice_period_days, 0);
+
   const status = new SaveStatus();
   const autosave = new TextAutosave<Partial<Answers>>({
     status,
     read,
     saved,
-    save: async (patch) => {
-      await api.updateScreeningAnswers(patch);
-      await screeningStore.refresh();
-    },
-    valid: (patch) =>
-      !Number.isNaN(patch.desired_salary_amount ?? 0) && !Number.isNaN(patch.notice_period_days ?? 0),
+    // The PUT answers with the whole stored record, merged; that is the fresh copy, so no
+    // re-read follows it, and a re-read that failed cannot hand the form stale answers.
+    save: async (patch) => screeningStore.noteSaved(await api.updateScreeningAnswers(patch)),
+    valid: (patch) => salaryOk(patch) && noticeOk(patch),
     // Re-sending the earlier answers reverses a change only where the earlier answer had a
     // value: a field filled in for the first time cannot be cleared again.
     canUndo: (before, next) =>
@@ -163,8 +169,8 @@
   function commit() {
     if (autosave.commit()) return;
     const patch = read();
-    salaryInvalid = Number.isNaN(patch.desired_salary_amount ?? 0);
-    noticeInvalid = Number.isNaN(patch.notice_period_days ?? 0);
+    salaryInvalid = !salaryOk(patch);
+    noticeInvalid = !noticeOk(patch);
   }
 
   // A dropdown is a whole answer the moment it is picked; nothing to wait for.
@@ -263,7 +269,7 @@
         class="w-full {noticeInvalid ? 'border-destructive focus-visible:ring-destructive' : ''}"
       />
       {#if noticeInvalid}
-        <span class="text-xs text-destructive">{format(s.mustBeNumber, { field: s.fields.noticePeriod })}</span>
+        <span class="text-xs text-destructive">{format(s.mustBeWholeNumber, { field: s.fields.noticePeriod })}</span>
       {/if}
     </label>
 
@@ -278,7 +284,7 @@
         class="w-full {salaryInvalid ? 'border-destructive focus-visible:ring-destructive' : ''}"
       />
       {#if salaryInvalid}
-        <span class="text-xs text-destructive">{format(s.mustBeNumber, { field: s.fields.desiredSalaryAmount })}</span>
+        <span class="text-xs text-destructive">{format(s.mustBePositive, { field: s.fields.desiredSalaryAmount })}</span>
       {/if}
     </label>
 

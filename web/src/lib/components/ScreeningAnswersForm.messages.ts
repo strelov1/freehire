@@ -30,7 +30,8 @@ export const messages = defineMessages(
       day: 'Day',
       hour: 'Hour',
     },
-    mustBeNumber: '{field} must be a number.',
+    mustBeWholeNumber: '{field} must be a whole number.',
+    mustBePositive: '{field} must be a whole number above zero.',
   },
   {
     ru: {
@@ -62,7 +63,8 @@ export const messages = defineMessages(
         day: 'День',
         hour: 'Час',
       },
-      mustBeNumber: '«{field}» должно быть числом.',
+      mustBeWholeNumber: '«{field}» должно быть целым числом.',
+      mustBePositive: '«{field}» должно быть целым числом больше нуля.',
     },
   },
 );
