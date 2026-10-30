@@ -5,7 +5,7 @@ import type { BuddyActivity } from '#lib/types.js';
 // members share. Pure and `$app`-free, so every surface showing a member (feed, similar
 // list, conversation rows, the member page) words them the same way.
 
-export const BUDDY_HEADING_FALLBACK = 'Member';
+const BUDDY_HEADING_FALLBACK = 'Member';
 
 /** A member's heading: the same dictionary heading the Talent Network shows ("Senior
  *  Backend"), never the handle. A member whose card resolves neither value reads as
