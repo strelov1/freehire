@@ -142,23 +142,19 @@ export function isSectionActive(path: string, href: string): boolean {
 
 // The most specific section containing the path: `/my/mentorship/schedule` lies under
 // `/my/mentorship` too, and the prefix rule alone would light up both.
-export function activeSectionHref<T extends { href: string }>(
-  path: string,
-  items: readonly T[],
-): T['href'] | undefined {
+export function activeSection<T extends { href: string }>(path: string, items: readonly T[]): T | undefined {
   let best: T | undefined;
   for (const i of items) {
     if (isSectionActive(path, i.href) && (!best || i.href.length > best.href.length)) best = i;
   }
-  return best?.href;
+  return best;
 }
 
 // Read from the URL rather than remembered, so a shared link, a reload and the back button
 // all land in the right workspace. Shared settings and pages with no section of their own
 // fall back to Job search, the workspace every member has.
 export function workspaceFor(path: string): WorkspaceId {
-  const href = activeSectionHref(path, accountNav);
-  return accountNav.find((i) => i.href === href)?.workspace ?? 'seeker';
+  return activeSection(path, accountNav)?.workspace ?? 'seeker';
 }
 
 const GROUP_ORDER: readonly NavGroupId[] = ['main', 'found', 'help', 'settings'];
