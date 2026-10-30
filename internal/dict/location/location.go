@@ -630,6 +630,18 @@ var siteDescriptors = map[string]bool{
 	"back": true, "satellite": true, "administrative": true, "admin": true,
 }
 
+// trimSiteDescriptors drops the run of siteDescriptors closing words ("central regional"),
+// stopping at a town whose own name ends in one: "Olive Branch Office" is Olive Branch.
+func trimSiteDescriptors(words []string) []string {
+	for n := len(words); n > 0 && siteDescriptors[words[n-1]]; n-- {
+		if n > 1 && knownAsWritten(strings.Join(words[:n], " ")) {
+			return words[:n]
+		}
+		words = words[:n-1]
+	}
+	return words
+}
+
 // stripWorkmodeWords drops any noise words from a token, returning the rest
 // (possibly ""). "us remote" -> "us"; "remote" -> ""; "san francisco office" ->
 // "san francisco"; "central office" -> "" (see siteDescriptors).
@@ -638,8 +650,8 @@ func stripWorkmodeWords(tok string) string {
 	kept := fields[:0]
 	for _, f := range fields {
 		if _, drop := noiseTokenWords[f]; drop {
-			if n := len(kept); siteWords[f] && n > 0 && siteDescriptors[kept[n-1]] {
-				kept = kept[:n-1]
+			if siteWords[f] {
+				kept = trimSiteDescriptors(kept)
 			}
 			continue
 		}

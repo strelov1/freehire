@@ -21,6 +21,9 @@ func TestSiteNamesStateNoCity(t *testing.T) {
 		{"Central Office, Ohio", nil},
 		{"CENTRAL OFFICE, Illinois", nil},
 		{"Branch Office, Ohio", nil},
+		{"Central Regional Office, Ohio", nil},
+		// ...but a town whose own name ends in a descriptor keeps it.
+		{"Olive Branch Office, Mississippi", []string{"Olive Branch"}},
 		// A school named after two people (or two towns) is not a "City-District" token:
 		// the district rule read Scranton (through its historical name, Harrison) and
 		// Lincoln out of them.
