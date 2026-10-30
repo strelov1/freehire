@@ -3,6 +3,8 @@ package sources
 import (
 	"context"
 	"encoding/xml"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -46,7 +48,8 @@ const earcuFeed = `<?xml version="1.0" encoding="UTF-8"?>
 </channel></rss>`
 
 func TestEarcuFetch(t *testing.T) {
-	fake := &fakeHTTP{body: earcuFeed}
+	// The detail pages fail, so what is asserted here is the feed's own reading.
+	fake := &earcuRouted{feed: earcuFeed, detailErr: context.DeadlineExceeded}
 
 	jobs, err := NewEarcu(fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Cambridge University Press & Assessment", Provider: "earcu", Board: "careers.cambridge.org",
@@ -54,8 +57,8 @@ func TestEarcuFetch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if !strings.Contains(fake.gotURL, "careers.cambridge.org/jobs/rss") {
-		t.Errorf("requested URL %q should target the board rss feed", fake.gotURL)
+	if fake.feedURL != "https://careers.cambridge.org/jobs/rss" {
+		t.Errorf("requested URL %q should target the board rss feed", fake.feedURL)
 	}
 	// The third item has no posting id in its link and must be dropped.
 	if len(jobs) != 2 {
@@ -102,13 +105,17 @@ type earcuRouted struct {
 	feed      string
 	detail    string
 	detailErr error
+	feedURL   string
+	detailHit []string // detail URLs requested, in order
 }
 
-func (f *earcuRouted) GetXML(_ context.Context, _ string, v any) error {
+func (f *earcuRouted) GetXML(_ context.Context, url string, v any) error {
+	f.feedURL = url
 	return xml.Unmarshal([]byte(f.feed), v)
 }
 
-func (f *earcuRouted) GetHTML(_ context.Context, _ string) (*html.Node, error) {
+func (f *earcuRouted) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	f.detailHit = append(f.detailHit, url)
 	if f.detailErr != nil {
 		return nil, f.detailErr
 	}
@@ -216,5 +223,162 @@ func TestEarcuPubDateUnpadded(t *testing.T) {
 func TestEarcuRegisteredInAll(t *testing.T) {
 	if _, ok := All(nil)["earcu"]; !ok {
 		t.Error("earcu adapter not registered in All")
+	}
+}
+
+func readEarcuFixture(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile("testdata/earcu/" + name)
+	if err != nil {
+		t.Fatalf("read fixture %s: %v", name, err)
+	}
+	return string(b)
+}
+
+// earcuOneItemFeed wraps one real feed item's metadata prefix in a channel. Every eArcu feed
+// body is a ~1,000-character preview ending in "...", and most tenants' prefix states no place
+// at all — the real posting is the detail page.
+func earcuOneItemFeed(link, title, prefix string) string {
+	return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><item>` +
+		`<link>` + link + `</link><title>` + title + `</title>` +
+		`<description>` + prefix + `&lt;div id="rssjobdesc"&gt;A preview cut short by the feed...&lt;/div&gt;</description>` +
+		`<pubDate>Fri, 30 Oct 2026 12:46:52 Z</pubDate></item></channel></rss>`
+}
+
+// TestEarcuHydratesPlaceAndBodyFromDetail covers the tenants whose feed prefix carries no
+// place (IWG's "Region: , Business Area: …", Mitie's "Work Schedule Rule: , …"): a new
+// posting reads its detail page, whose JobPosting jobLocation states the place and a
+// structured country, and whose visible description block is the whole body rather than
+// the feed's truncated preview.
+func TestEarcuHydratesPlaceAndBodyFromDetail(t *testing.T) {
+	cases := []struct {
+		name, fixture, link, prefix string
+		wantLocation                string
+		wantCountries               []string
+		wantBody                    string
+	}{
+		{
+			name:          "single Place object",
+			fixture:       "detail_iwg_nairobi.html",
+			link:          "https://careers.iwgplc.com/jobs/vacancy/customer-service-executive-part-time-54066-nairobi/55084/description/",
+			prefix:        "Region: , Business Area: Customer Service, Contract Type: Permanent",
+			wantLocation:  "Nairobi, Kenya",
+			wantCountries: []string{"ke"},
+			wantBody:      "great day at work",
+		},
+		{
+			name:          "Place array, home based",
+			fixture:       "detail_mitie_home_based.html",
+			link:          "https://careers.mitie.com/jobs/vacancy/surveyor-106975/106994/description/",
+			prefix:        "Work Schedule Rule: , Category: Business Development, Tour Bonus in %: ",
+			wantLocation:  "Home Based, UK",
+			wantCountries: []string{"gb"},
+			// The tenant's intro sits in PosDescriptionText, outside the description container.
+			wantBody: "Better places, thriving communities",
+		},
+		{
+			name:          "multi-section body",
+			fixture:       "detail_millsandreeve.html",
+			link:          "https://millsandreeve.earcu.com/jobs/vacancy/senior-associate---corporate-0569-manchester/581/description/",
+			prefix:        "Region: , Vacancy Type: Qualified lawyers, Contract Type: Permanent",
+			wantLocation:  "Manchester, United Kingdom",
+			wantCountries: []string{"gb"},
+			wantBody:      "diversity and inclusion work",
+		},
+		{
+			// Kennedys' JobPosting carries an empty PostalAddress; the summary list
+			// still names the office.
+			name:         "empty address falls back to the summary's location row",
+			fixture:      "detail_kennedys_no_address.html",
+			link:         "https://careers.kennedyslaw.com/jobs/vacancy/senior-associate-2298-bogota/2316/description/",
+			prefix:       "Office Region: Latin America and Caribbean, Division/Department: Insurance, Working Pattern: Full Time - Perm",
+			wantLocation: "Bogotá",
+			wantBody:     "more or less experience",
+		},
+		{
+			// Cromwell renders no JobPosting and no description container — only the
+			// PosDescriptionText block and the summary row naming the place.
+			name:         "no JSON-LD, no container",
+			fixture:      "detail_cromwell_kilkeel.html",
+			link:         "https://careers.cromwell.co.uk/jobs/vacancy/onsite-support-warehouse-operative-7441/7468/description/",
+			prefix:       "Location: Kilkeel, Job Category (New): , Reason for Vacancy: Replacement",
+			wantLocation: "Kilkeel",
+			wantBody:     "Information for Recruitment Agencies",
+		},
+		{
+			// DX renders the description container without the PosDescriptionText wrapper.
+			name:          "container without the wrapper",
+			fixture:       "detail_dxdelivery_container_only.html",
+			link:          "https://careers.dxdelivery.com/jobs/vacancy/customer-service-advisor-37061/34161/description/",
+			prefix:        "Region: The Southern Hemisphere, Department: Customer Care DX-1, Position Type: Permanent",
+			wantLocation:  "Basildon, Essex, United Kingdom",
+			wantCountries: []string{"gb"},
+			wantBody:      "We look forward to hearing from you!",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &earcuRouted{
+				feed:   earcuOneItemFeed(tc.link, "Some Role (1)", tc.prefix),
+				detail: readEarcuFixture(t, tc.fixture),
+			}
+			jobs, err := NewEarcu(fake).(HydratingSource).FetchNew(context.Background(),
+				CompanyEntry{Company: "Acme", Provider: "earcu", Board: "careers.example.com"},
+				func(string) bool { return false })
+			if err != nil {
+				t.Fatalf("FetchNew: %v", err)
+			}
+			if len(jobs) != 1 {
+				t.Fatalf("len(jobs) = %d, want 1", len(jobs))
+			}
+			j := jobs[0]
+			if j.Location != tc.wantLocation {
+				t.Errorf("Location = %q, want %q", j.Location, tc.wantLocation)
+			}
+			if !slices.Equal(j.Countries, tc.wantCountries) {
+				t.Errorf("Countries = %v, want %v", j.Countries, tc.wantCountries)
+			}
+			if !strings.Contains(j.Description, tc.wantBody) {
+				t.Errorf("Description lacks %q from the detail page's full body: %q", tc.wantBody, j.Description)
+			}
+			if strings.Contains(j.Description, "cut short by the feed") {
+				t.Errorf("Description is the feed's truncated preview, want the detail body: %q", j.Description)
+			}
+		})
+	}
+}
+
+// TestEarcuFeedLocationWithoutReference covers a prefix whose Location field is followed by
+// a tenant field rather than the "eArcu Vacancy Reference" Cambridge's feed ends with.
+func TestEarcuFeedLocationWithoutReference(t *testing.T) {
+	prefix := "Location: Dublin, Job Category (New): , Reason for Vacancy: Replacement"
+	if got := earcuLocation(prefix); got != "Dublin" {
+		t.Errorf("earcuLocation = %q, want %q", got, "Dublin")
+	}
+}
+
+// TestEarcuSeenPostingCostsNoDetail asserts a posting the catalogue already holds is a
+// SeenRefresh — no detail request, and no re-upsert of the feed's truncated preview over the
+// full body stored when it was new.
+func TestEarcuSeenPostingCostsNoDetail(t *testing.T) {
+	link := "https://careers.iwgplc.com/jobs/vacancy/customer-service-executive-part-time-54066-nairobi/55084/description/"
+	fake := &earcuRouted{
+		feed:   earcuOneItemFeed(link, "Customer Service Executive (Part-time) (54066)", "Region: , Business Area: Customer Service"),
+		detail: readEarcuFixture(t, "detail_iwg_nairobi.html"),
+	}
+	jobs, err := NewEarcu(fake).(HydratingSource).FetchNew(context.Background(),
+		CompanyEntry{Company: "IWG", Provider: "earcu", Board: "careers.iwgplc.com"},
+		func(id string) bool { return id == "55084" })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(fake.detailHit) != 0 {
+		t.Errorf("detail requested for a seen posting: %v", fake.detailHit)
+	}
+	if len(jobs) != 1 || !jobs[0].SeenRefresh || jobs[0].ExternalID != "55084" {
+		t.Fatalf("jobs = %+v, want one SeenRefresh for 55084", jobs)
+	}
+	if jobs[0].Description != "" {
+		t.Errorf("SeenRefresh carries a body %q; it must not overwrite the stored one", jobs[0].Description)
 	}
 }

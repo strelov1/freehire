@@ -10,9 +10,11 @@ site into the catalogue. The adapter is **board-based and single-company**: each
 configured entry's board is the full careers host (e.g. `careers.cambridge.org`), and
 the company is the configured `company`. For each configured board the adapter fetches
 the keyless RSS feed at `https://<board>/jobs/rss` and returns one `Job` per feed
-`<item>`. The crawl is keyless (no API key) and issues one feed request per board — the
-full posting body is inline in the feed, so no per-posting request is required in the
-common case.
+`<item>`. The crawl is keyless (no API key). The feed names every open posting but only
+previews it — its inline body is a ~1,000-character excerpt ending in "...", and its
+metadata prefix carries a place on few tenants — so the adapter is a `HydratingSource`:
+a posting the catalogue does not hold costs one detail-page request, and a stored one is
+re-listed as a `SeenRefresh` with no request.
 
 #### Scenario: Board yields all feed items
 
@@ -27,26 +29,36 @@ common case.
 - **THEN** the adapter requests `https://careers.cambridge.org/jobs/rss` (the board is
   the host, not a subdomain slug), and the configured `company` is the job's company
 
-### Requirement: Description body with detail-page fallback
+### Requirement: Body and place from the detail page
 
-The adapter SHALL take each job's description from the feed item — eArcu embeds the full
-posting body as HTML inside the item's `<description>` (the `rssjobdesc` block) — and
-sanitize it. WHEN a feed item carries no usable body, the adapter MUST fall back to the
-posting detail page's schema.org `JobPosting` JSON-LD `description`, reusing the shared
-`ldJobPosting`/`sanitizeHTML` helpers. A posting that yields no body from either source
-is still returned (title/URL/location are sufficient), not dropped.
+For a posting the catalogue does not hold, the adapter SHALL read the posting's detail
+page. The description MUST be the page's visible posting body (`div.PosDescriptionText`,
+else `div.earcu_posdescriptionContainer`), falling back to the schema.org `JobPosting`
+`description`, and only then to the feed's preview. The location MUST be the
+`JobPosting` `jobLocation` addresses ("Locality, Region, Country", repeated parts
+dropped, several places joined by "; "), falling back to the page's summary row whose
+label ends in "Location", then to the feed prefix's `Location` field, then its `Country`
+field. `Job.Countries` MUST be set from the structured `addressCountry` values (or the
+feed's `Country` field) through `location.NormalizeCountry`, never from free text. A
+failed detail fetch is non-fatal: the posting is still returned with the feed's reading.
 
-#### Scenario: Body comes from the feed
+#### Scenario: Place and body come from the detail page
 
-- **WHEN** a feed item's `<description>` contains the inline posting body
-- **THEN** that body is sanitized into the job's description without any detail-page
-  request
+- **WHEN** a new posting's feed prefix states no place and its detail page carries a
+  `JobPosting` with `jobLocation.address.addressCountry`
+- **THEN** the job's location is the address and its countries the normalized country,
+  and its description is the page's full body rather than the feed preview
 
-#### Scenario: Empty feed body falls back to detail JSON-LD
+#### Scenario: Stored posting costs no request
 
-- **WHEN** a feed item has no inline body
-- **THEN** the adapter fetches the item's detail URL and uses its `JobPosting` JSON-LD
-  `description`; a failed detail fetch is non-fatal and leaves the description empty
+- **WHEN** a listed posting is already in the catalogue
+- **THEN** the adapter emits it as a `SeenRefresh` and requests no detail page
+
+#### Scenario: Failed detail fetch is non-fatal
+
+- **WHEN** a new posting's detail fetch fails
+- **THEN** the posting is still returned with the feed's preview body and the feed
+  prefix's place
 
 ### Requirement: Stable dedup identity
 
