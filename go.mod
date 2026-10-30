@@ -20,7 +20,7 @@ require (
 	github.com/getsentry/sentry-go/fiber v0.50.0
 	github.com/go-redis/redis_rate/v10 v10.0.1
 	github.com/gofiber/contrib/websocket v1.3.4
-	github.com/gofiber/fiber/v2 v2.52.15
+	github.com/gofiber/fiber/v2 v2.52.16
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0
