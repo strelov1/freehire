@@ -1,7 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { Answers } from '#lib/generated/contracts.js';
-  import { api } from '#lib/api.js';
   import { Input } from '#lib/ui/index.js';
   import { SaveStatus } from '#lib/saveStatus.svelte.js';
   import { screeningStore } from '#lib/screening.svelte.js';
@@ -44,9 +43,10 @@
   // Number(...) alone silently turns anything unparseable (a stray letter, or a very
   // natural "120,000" with a thousands separator) into NaN, which JSON.stringify then
   // serializes as null — indistinguishable on the wire from the field being omitted, so
-  // the server would leave the stored value untouched while the form looked saved. Strip
-  // thousands separators first; what still is not a number is refused, not sent.
-  const wholeNumber = (raw: string) => Number(raw.replace(/,/g, ''));
+  // the server would leave the stored value untouched while the form looked saved. Commas
+  // are read as thousands separators only where they group by three: "120,00" is a typo,
+  // not 12000, so it comes back NaN and is refused rather than saved as the wrong amount.
+  const wholeNumber = (raw: string) => (/^\d{1,3}(,\d{3})+$/.test(raw) ? Number(raw.replace(/,/g, '')) : Number(raw));
 
   let authorizedCountriesText = $state((answers?.authorized_countries ?? []).join(', '));
   let visaSponsorshipNeeded = $state<TriState>(toTriState(answers?.visa_sponsorship_needed));
@@ -130,10 +130,16 @@
     status,
     read,
     saved,
-    // The PUT answers with the whole stored record, merged; that is the fresh copy, so no
-    // re-read follows it, and a re-read that failed cannot hand the form stale answers.
-    save: async (patch) => screeningStore.noteSaved(await api.updateScreeningAnswers(patch)),
+    // Queued and session-guarded in the store; the PUT's own answer is the fresh copy, so
+    // no re-read follows it and a failed one cannot hand the form stale answers.
+    save: (patch) => screeningStore.save(patch),
     valid: (patch) => salaryOk(patch) && noticeOk(patch),
+    // A number cannot be half-typed into something invalid — only a letter or a bad comma
+    // makes it so — so it is marked after the pause too, not only on leaving the field.
+    refused: (patch) => {
+      salaryInvalid = !salaryOk(patch);
+      noticeInvalid = !noticeOk(patch);
+    },
     // Re-sending the earlier answers reverses a change only where the earlier answer had a
     // value: a field filled in for the first time cannot be cleared again.
     canUndo: (before, next) =>
@@ -167,10 +173,7 @@
   }
 
   function commit() {
-    if (autosave.commit()) return;
-    const patch = read();
-    salaryInvalid = !salaryOk(patch);
-    noticeInvalid = !noticeOk(patch);
+    autosave.commit();
   }
 
   // A dropdown is a whole answer the moment it is picked; nothing to wait for.

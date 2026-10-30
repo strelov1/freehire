@@ -60,6 +60,29 @@ describe('ScreeningAnswersForm — autosave', () => {
     expect(updateScreeningAnswers).not.toHaveBeenCalled();
   });
 
+  it('marks a comma that does not group by three instead of reading it as thousands', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+    const salary = screen.getByRole('textbox', { name: 'Desired salary amount' });
+
+    await fireEvent.input(salary, { target: { value: '120,00' } });
+    await fireEvent.focusOut(salary);
+
+    expect(salary.getAttribute('aria-invalid')).toBe('true');
+    expect(updateScreeningAnswers).not.toHaveBeenCalled();
+  });
+
+  it('marks a bad number after the pause, without waiting for focus to leave', async () => {
+    vi.useFakeTimers();
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+    const salary = screen.getByRole('textbox', { name: 'Desired salary amount' });
+
+    await fireEvent.input(salary, { target: { value: '12k' } });
+    await vi.advanceTimersByTimeAsync(1100);
+
+    expect(salary.getAttribute('aria-invalid')).toBe('true');
+    vi.useRealTimers();
+  });
+
   it('reads a thousands separator as part of the number', async () => {
     render(ScreeningAnswersForm, { props: { answers: {} } });
     const salary = screen.getByRole('textbox', { name: 'Desired salary amount' });

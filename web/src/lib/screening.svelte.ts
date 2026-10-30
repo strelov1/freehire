@@ -11,11 +11,15 @@
 
 import { api } from '#lib/api.js';
 import type { Answers } from '#lib/generated/contracts.js';
+import { serialQueue } from '#lib/serialQueue.js';
 import { UserResource } from '#lib/userResource.svelte.js';
 
 class ScreeningStore extends UserResource<Answers | null> {
   // Reassigned (never mutated in place) on every change, so $state.raw is enough.
   #answers = $state.raw<Answers | null>(null);
+  // Saves go one at a time, so two dropdowns picked a moment apart reach the server in the
+  // order they were picked and the last pick is the one that stays.
+  #queue = serialQueue();
 
   get answers(): Answers | null {
     return this.#answers;
@@ -39,11 +43,18 @@ class ScreeningStore extends UserResource<Answers | null> {
     this.#answers = row;
   }
 
-  /** Take the answers a save returned as the current copy. The PUT answers with the whole
-   *  stored record, so there is nothing a re-read would add. */
-  noteSaved(answers: Answers): void {
-    this.#answers = answers;
-    this.markLoaded();
+  /** Save part of the answers. The PUT answers with the whole stored record, so that
+   *  becomes the current copy with no re-read after it. An answer that lands after the
+   *  account signed out is dropped, the same guard the reads carry: it belongs to whoever
+   *  was signed in when it was sent. */
+  save(patch: Partial<Answers>): Promise<void> {
+    const generation = this.generation;
+    return this.#queue(async () => {
+      const answers = await api.updateScreeningAnswers(patch);
+      if (generation !== this.generation) return;
+      this.#answers = answers;
+      this.markLoaded();
+    });
   }
 
   protected clearState() {

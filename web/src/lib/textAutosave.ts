@@ -23,6 +23,9 @@ type Options<T> = {
   save: (value: T) => Promise<unknown>;
   /** Whether a value may be saved at all. */
   valid?: (value: T) => boolean;
+  /** Told when `valid` refuses a value, on the timed save as well as on leaving the card,
+   *  so a card that can mark the field at once does. */
+  refused?: (value: T) => void;
   /** Whether saving `before` again would reverse the write. Defaults to yes; an endpoint
    *  that cannot clear a field cannot reverse filling it in, so it says no then. */
   canUndo?: (before: T, next: T) => boolean;
@@ -55,9 +58,12 @@ export class TextAutosave<T> {
     clearTimeout(this.#timer);
     this.#timer = undefined;
     if (!this.#dirty) return true;
-    const { status, read, saved, save, valid, canUndo } = this.#opts;
+    const { status, read, saved, save, valid, refused, canUndo } = this.#opts;
     const next = read();
-    if (valid && !valid(next)) return false;
+    if (valid && !valid(next)) {
+      refused?.(next);
+      return false;
+    }
     const before = saved();
     this.#dirty = false;
     if (same(next, before)) return true;
