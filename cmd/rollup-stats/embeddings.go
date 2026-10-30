@@ -31,9 +31,11 @@ func rebuildEmbedProgress(ctx context.Context, pool *pgxpool.Pool, redisURL stri
 	}
 	defer closeCache()
 
-	// A read-only transaction only so SET LOCAL has a scope: the timeout must not
-	// outlive this one statement on a pooled connection.
-	err = pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
+	// A read-only transaction so SET LOCAL has a scope — the timeout must not outlive
+	// this measurement on a pooled connection — and REPEATABLE READ so the queue depth
+	// and the coverage counts read one snapshot: the live figure moves from that depth,
+	// and a drain between the two reads would be counted twice.
+	err = pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SET LOCAL statement_timeout = '"+coverageStatementTimeout+"'"); err != nil {
 			return fmt.Errorf("set statement_timeout: %w", err)
 		}

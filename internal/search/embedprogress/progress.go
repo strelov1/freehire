@@ -20,12 +20,14 @@ type Progress struct {
 	MeasuredAt      *time.Time `json:"measured_at"`
 }
 
-// Build combines what is known into one document. covered is eligible − queued clamped
-// to [0, eligible]: the queue also carries closed postings waiting to have their state
-// cleared, so it can exceed what is eligible, and the error then runs toward claiming
-// less progress, not more. The snapshot's own covered count travels beside it so that a
-// live figure a recent measurement contradicts is visible — which is what an empty
-// queue with nothing enqueuing looks like.
+// Build combines what is known into one document. covered is the snapshot's measured
+// count moved by how much the queue has drained since it was taken, clamped to
+// [0, eligible]. It is NOT eligible − queued: the queue also carries rows that are not
+// eligible — closed postings waiting to be cleared, duplicates, private ones — and on
+// 2026-10-30 it outnumbered the eligible postings, so that formula published 0% while
+// 45% was embedded. Those rows sit in both depths and cancel, except a closed row
+// leaving the queue, which counts as progress (a few a run). A snapshot without a
+// recorded depth leaves the measured count as it is.
 func Build(snap *Snapshot, latest *Sample, ratePerMinute *float64) Progress {
 	var p Progress
 	if snap != nil {
@@ -38,7 +40,11 @@ func Build(snap *Snapshot, latest *Sample, ratePerMinute *float64) Progress {
 		p.MeasuredAt = &latest.At
 	}
 	if snap != nil && latest != nil {
-		covered := min(max(snap.Eligible-latest.Depth, 0), snap.Eligible)
+		covered := snap.Covered
+		if snap.QueueDepth != nil {
+			covered += *snap.QueueDepth - latest.Depth
+		}
+		covered = min(max(covered, 0), snap.Eligible)
 		p.Covered = &covered
 	}
 	if ratePerMinute != nil {

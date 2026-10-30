@@ -12,8 +12,13 @@ import (
 )
 
 type stubCoverage struct {
-	row db.SemanticCoverageCountsRow
-	err error
+	row   db.SemanticCoverageCountsRow
+	err   error
+	depth int64
+}
+
+func (s stubCoverage) SemanticOutboxClaimableDepth(context.Context) (int64, error) {
+	return s.depth, nil
 }
 
 func (s stubCoverage) SemanticCoverageCounts(context.Context, string) (db.SemanticCoverageCountsRow, error) {
@@ -26,11 +31,11 @@ func TestPublishCoverageStoresTheSnapshot(t *testing.T) {
 	ctx := context.Background()
 	c := cache.NewMemory()
 
-	if err := publishCoverage(ctx, stubCoverage{row: db.SemanticCoverageCountsRow{Eligible: 1_900_000, Covered: 1_850_000}}, c, func() time.Time { return measuredAt }); err != nil {
+	if err := publishCoverage(ctx, stubCoverage{row: db.SemanticCoverageCountsRow{Eligible: 1_900_000, Covered: 1_850_000}, depth: 60_000}, c, func() time.Time { return measuredAt }); err != nil {
 		t.Fatalf("publishCoverage: %v", err)
 	}
 	got, ok := embedprogress.Load(ctx, c)
-	if !ok || got.Eligible != 1_900_000 || got.Covered != 1_850_000 || !got.MeasuredAt.Equal(measuredAt) {
+	if !ok || got.Eligible != 1_900_000 || got.Covered != 1_850_000 || got.QueueDepth == nil || *got.QueueDepth != 60_000 || !got.MeasuredAt.Equal(measuredAt) {
 		t.Errorf("published = %+v (ok %v)", got, ok)
 	}
 }

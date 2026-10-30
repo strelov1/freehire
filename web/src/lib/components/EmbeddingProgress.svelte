@@ -82,7 +82,9 @@
   </dl>
 
   <p class="mt-8 text-sm leading-relaxed text-muted-foreground">
-    “Embedded” is eligible postings minus the queue, current to the queue’s last sample. A full
+    “Embedded” is the last full count plus what the queue has drained since, current to the
+    queue’s last sample. The queue also holds closed postings waiting to be cleared, so it can
+    run longer than the eligible count. The full
     count — {formatCount(progress.snapshot_covered)} embedded — was last taken at
     {formatClock(progress.snapshot_at)}; it runs every few hours because it reads every open
     posting.

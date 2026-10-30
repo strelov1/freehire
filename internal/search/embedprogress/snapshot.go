@@ -8,10 +8,13 @@ import (
 	"github.com/strelov1/freehire/internal/platform/cache"
 )
 
-// Snapshot is the coverage measurement cmd/rollup-stats publishes.
+// Snapshot is the coverage measurement cmd/rollup-stats publishes. QueueDepth is the
+// claimable queue depth read in the same transaction as the counts — what the live
+// figure moves from. It is nil in a snapshot published before it was recorded.
 type Snapshot struct {
 	Eligible   int64     `json:"eligible"`
 	Covered    int64     `json:"covered"`
+	QueueDepth *int64    `json:"queue_depth,omitempty"`
 	MeasuredAt time.Time `json:"measured_at"`
 }
 

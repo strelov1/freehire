@@ -28,7 +28,8 @@ func (f *fakeDepth) SemanticOutboxClaimableDepth(ctx context.Context) (int64, er
 func TestSampler_PublishesEachSample(t *testing.T) {
 	ctx := context.Background()
 	c := cache.NewMemory()
-	if err := Store(ctx, c, Snapshot{Eligible: 100, Covered: 50, MeasuredAt: t0}); err != nil {
+	depthAtSnapshot := int64(50)
+	if err := Store(ctx, c, Snapshot{Eligible: 100, Covered: 50, QueueDepth: &depthAtSnapshot, MeasuredAt: t0}); err != nil {
 		t.Fatal(err)
 	}
 	now := t0
@@ -48,8 +49,8 @@ func TestSampler_PublishesEachSample(t *testing.T) {
 
 	now = now.Add(15 * time.Second)
 	s.sample(ctx)
-	if got := <-events; *got.Queued != 30 {
-		t.Errorf("second event queued = %d, want 30", *got.Queued)
+	if got := <-events; *got.Queued != 30 || *got.Covered != 70 {
+		t.Errorf("second event = queued %d covered %d, want 30 and 70", *got.Queued, *got.Covered)
 	}
 	if cur := s.Current(); *cur.Queued != 30 {
 		t.Errorf("Current queued = %d, want 30", *cur.Queued)

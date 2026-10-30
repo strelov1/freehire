@@ -3127,7 +3127,9 @@ data: {"type":"result","stop_reason":"completed"}
           'Backs the public /semantic-search page. `eligible` and `snapshot_covered` come ' +
           'from a snapshot `cmd/rollup-stats` measures every few hours (the count ' +
           'is too slow for a request); `queued` is the embedding queue, sampled ' +
-          'every 15 seconds, and `covered` is `eligible − queued`. ' +
+          'every 15 seconds, and `covered` is `snapshot_covered` plus how much the ' +
+          'queue has drained since that snapshot — not `eligible − queued`, since the ' +
+          'queue also carries closed postings waiting to be cleared. ' +
           '`rate_per_minute` counts only what left the queue over the last 10 ' +
           'minutes, so a batch of new postings arriving at once does not read as ' +
           'negative progress. Any figure not yet measured is `null`, never `0`.',
