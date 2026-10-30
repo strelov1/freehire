@@ -16,5 +16,5 @@
 
 ## 3. Alert (freehire-ops)
 
-- [ ] 3.1 Rule: open_jobs >= 500 and a check's share rose by 20+ points over 7 days.
-- [ ] 3.2 Rule: the snapshot is older than 12 hours.
+- [x] 3.1 Rule: open_jobs >= 500 and a check's share rose by 20+ points over 7 days.
+- [x] 3.2 Rule: the snapshot is older than 12 hours.
