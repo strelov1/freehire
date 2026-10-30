@@ -1697,8 +1697,8 @@ export type { ResumeEducation };
  *  (full_name/email/phone/location/links) *and* the flat part of the semantic body
  *  (headline/summary/languages/certifications/education) — see
  *  `internal/resume/owned.go`. A PUT replaces the whole block, so a caller editing only
- *  some of these fields must spread the current object first (see
- *  CandidateContactsEditor.svelte / CvSummaryCard.svelte / EducationCard.svelte). */
+ *  some of these fields goes through resumeStore.saveContacts, which builds each save
+ *  from the current object (see resume.svelte.ts). */
 export interface CandidateContacts {
   full_name?: string;
   email?: string;

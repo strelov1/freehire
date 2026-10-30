@@ -47,9 +47,5 @@
 <!-- Education used to be a tab of its own; /my/profile/education redirects here. The card
      carries its own headings. -->
 <div id="account-education" class="mt-8 scroll-mt-20 border-t border-border pt-6">
-  <EducationCard
-    structured={resumeMeta?.structured ?? null}
-    contacts={resumeMeta?.contacts ?? null}
-    onSaved={(saved) => resumeStore.noteContactsSaved(saved)}
-  />
+  <EducationCard structured={resumeMeta?.structured ?? null} />
 </div>

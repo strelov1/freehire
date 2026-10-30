@@ -6,6 +6,7 @@ export const messages = defineMessages(
     saved: 'Saved',
     failed: "Couldn't save.",
     retry: 'Retry',
+    undo: 'Undo',
   },
   {
     ru: {
@@ -13,6 +14,7 @@ export const messages = defineMessages(
       saved: 'Сохранено',
       failed: 'Не удалось сохранить.',
       retry: 'Повторить',
+      undo: 'Отменить',
     },
   },
 );

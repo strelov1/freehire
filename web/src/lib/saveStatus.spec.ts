@@ -71,6 +71,30 @@ describe('SaveStatus', () => {
     expect(status.state).toBe('error');
   });
 
+  it('offers an Undo that runs the reversing write, then no Undo of its own', async () => {
+    const status = new SaveStatus();
+    const undo = vi.fn().mockResolvedValue(undefined);
+
+    await status.run(() => Promise.resolve(), { undo });
+    expect(status.canUndo).toBe(true);
+
+    expect(await status.undo()).toBe(true);
+    expect(undo).toHaveBeenCalledTimes(1);
+    expect(status.state).toBe('saved');
+    expect(status.canUndo).toBe(false);
+  });
+
+  it('keeps an Undo on screen longer than a plain Saved', async () => {
+    const status = new SaveStatus();
+    await status.run(() => Promise.resolve(), { undo: () => Promise.resolve() });
+
+    vi.advanceTimersByTime(1500);
+    expect(status.canUndo).toBe(true);
+    vi.advanceTimersByTime(4500);
+    expect(status.state).toBe('idle');
+    expect(status.canUndo).toBe(false);
+  });
+
   it('saves quietly without showing or saying anything', async () => {
     const status = new SaveStatus();
     expect(await status.run(() => Promise.resolve(), {}, true)).toBe(true);

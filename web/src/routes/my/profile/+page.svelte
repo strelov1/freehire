@@ -37,11 +37,7 @@
   {/key}
 
   <div class="mt-4">
-    <CvSummaryCard
-      structured={resumeMeta?.structured ?? null}
-      contacts={resumeMeta?.contacts ?? null}
-      onSaved={(saved) => resumeStore.noteContactsSaved(saved)}
-    />
+    <CvSummaryCard structured={resumeMeta?.structured ?? null} />
   </div>
 
   <div class="mt-4">
@@ -49,10 +45,7 @@
   </div>
 
   <div id="account-contacts" class="mt-8 scroll-mt-20 border-t border-border pt-6">
-    <CandidateContactsEditor
-      contacts={resumeMeta?.contacts ?? null}
-      onSaved={(saved) => resumeStore.noteContactsSaved(saved)}
-    />
+    <CandidateContactsEditor contacts={resumeMeta?.contacts ?? null} />
   </div>
 
   <!-- `account-location` is the target of the setup checklist's location step (see

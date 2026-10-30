@@ -11,6 +11,7 @@
 
 import { api } from '#lib/api.js';
 import { nextResumePollDelayMs } from '#lib/onboardingResumeWait.js';
+import { serialQueue } from '#lib/serialQueue.js';
 import { UserResource } from '#lib/userResource.svelte.js';
 import type { CandidateContacts, ResumeMeta } from '#lib/types.js';
 
@@ -20,6 +21,8 @@ class ResumeStore extends UserResource<ResumeMeta | null> {
   // Optimistic: an upload stores the CV server-side before the re-fetch resolves (and
   // before any profile exists during set-up), so the uploaded state shows at once.
   #justUploaded = $state(false);
+  // Contact-block saves go one at a time: see saveContacts.
+  #contactsQueue = serialQueue();
 
   get meta(): ResumeMeta | null {
     return this.#meta;
@@ -82,15 +85,21 @@ class ResumeStore extends UserResource<ResumeMeta | null> {
     }
   }
 
-  /** Record a saved contact block: reflect it at once, then confirm from the server.
-   *  Every editor of this block (contacts, CV summary, education) PUTs the WHOLE block
-   *  built from `meta.contacts`, so until that copy is current a second save — from the
-   *  same card or another one on the page — would send back the values the first save
-   *  just replaced. The PUT's own answer is the new block, so it lands here before the
-   *  re-fetch rather than after it. */
-  noteContactsSaved(contacts: CandidateContacts): void {
-    if (this.#meta) this.#meta = { ...this.#meta, contacts };
-    void this.refresh();
+  /** Save part of the candidate-owned contact block and return the whole saved block.
+   *  PUT /me/resume/contacts replaces the WHOLE block, and three cards write it (contacts,
+   *  CV summary, education), so two saves a moment apart — a field left in one card while
+   *  another card's save is still out — would both be built from the same copy and the
+   *  second would put back what the first replaced. So saves queue here, and each is
+   *  built from the block the one before it saved. The re-read that follows (the parse
+   *  view `structured` shows the owned values merged in) is part of the same job, so a
+   *  slower read can't land after a newer save and hand the next one a stale copy. */
+  saveContacts(changes: Partial<CandidateContacts>): Promise<CandidateContacts> {
+    return this.#contactsQueue(async () => {
+      const saved = await api.putResumeContacts({ ...this.#meta?.contacts, ...changes });
+      if (this.#meta) this.#meta = { ...this.#meta, contacts: saved };
+      await this.refresh();
+      return saved;
+    });
   }
 }
 

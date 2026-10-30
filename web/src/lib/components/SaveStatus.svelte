@@ -1,5 +1,6 @@
 <script lang="ts">
-  // Draws a SaveStatus: "Saving…", "Saved" for a moment, or the failure with a Retry.
+  // Draws a SaveStatus: "Saving…", "Saved" for a moment (with an Undo when the write can be
+  // reversed), or the failure with a Retry.
   // Sits on the label row of the control it reports on. Nothing is drawn while idle, so
   // the row looks the same as before until something is saved. The words are announced
   // by SaveStatus itself, so this markup carries no live region of its own.
@@ -19,6 +20,12 @@
 {:else if status.state === 'saved'}
   <span class="flex items-center gap-1 text-xs text-brand-strong">
     <Check class="size-3.5" aria-hidden="true" />{s.saved}
+    {#if status.canUndo}
+      <span aria-hidden="true">·</span>
+      <button type="button" class="font-medium underline underline-offset-2" onclick={() => void status.undo()}>
+        {s.undo}
+      </button>
+    {/if}
   </span>
 {:else if status.state === 'error'}
   <span class="text-xs text-destructive">

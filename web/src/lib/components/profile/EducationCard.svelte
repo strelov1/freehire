@@ -4,12 +4,12 @@
   // CvSummaryCard/CandidateContactsEditor (see internal/resume/owned.go). Grouped here
   // because that's where a candidate looks for them, next to Education.
   //
-  // A PUT replaces the whole owned block, so saving here spreads the current `contacts`
-  // object first and only overrides this card's own fields — exactly as the other two
-  // editors do for theirs.
+  // A PUT replaces the whole owned block, so every save goes through
+  // resumeStore.saveContacts, which queues the block's writers and builds each save from
+  // the block the one before it saved.
   import { Award, GraduationCap, Languages as LanguagesIcon, Pencil, Plus, X } from '@lucide/svelte';
-  import { api } from '#lib/api.js';
-  import type { CandidateContacts, ResumeEducation, ResumeStructured } from '#lib/types.js';
+  import { resumeStore } from '#lib/resume.svelte.js';
+  import type { ResumeEducation, ResumeStructured } from '#lib/types.js';
   import { Button, Chip } from '#lib/ui/index.js';
   import PeriodDateInput from '#lib/components/PeriodDateInput.svelte';
   import { formatPeriodDate } from '#lib/periodDate.js';
@@ -18,15 +18,7 @@
   import { t } from '#lib/i18n/t.js';
   import { announce } from '#lib/announce.svelte.js';
 
-  let {
-    structured,
-    contacts = null,
-    onSaved,
-  }: {
-    structured: ResumeStructured | null;
-    contacts?: CandidateContacts | null;
-    onSaved?: (saved: CandidateContacts) => void;
-  } = $props();
+  let { structured }: { structured: ResumeStructured | null } = $props();
 
   const education = $derived(structured?.education ?? []);
   const languages = $derived(structured?.languages ?? []);
@@ -75,9 +67,8 @@
       // Owned even when `cleaned` is empty — otherwise clearing every row here is
       // indistinguishable, server-side, from never having edited Education at all, and the
       // CV's own education reappears on the next read (internal/resume/owned.go).
-      const saved = await api.putResumeContacts({ ...contacts, education: cleaned, education_set: true });
+      await resumeStore.saveContacts({ education: cleaned, education_set: true });
       editingEducation = false;
-      onSaved?.(saved);
       announce(s.saved);
     } catch (e) {
       educationError = e instanceof Error ? e.message : s.saveFailed;
@@ -107,8 +98,7 @@
     languagesBusy = true;
     languagesError = null;
     try {
-      const saved = await api.putResumeContacts({
-        ...contacts,
+      await resumeStore.saveContacts({
         languages: languagesText
           .split('\n')
           .map((l) => l.trim())
@@ -117,7 +107,6 @@
         languages_set: true,
       });
       editingLanguages = false;
-      onSaved?.(saved);
       announce(s.saved);
     } catch (e) {
       languagesError = e instanceof Error ? e.message : s.saveFailed;
@@ -147,8 +136,7 @@
     certificationsBusy = true;
     certificationsError = null;
     try {
-      const saved = await api.putResumeContacts({
-        ...contacts,
+      await resumeStore.saveContacts({
         certifications: certificationsText
           .split('\n')
           .map((l) => l.trim())
@@ -157,7 +145,6 @@
         certifications_set: true,
       });
       editingCertifications = false;
-      onSaved?.(saved);
       announce(s.saved);
     } catch (e) {
       certificationsError = e instanceof Error ? e.message : s.saveFailed;
