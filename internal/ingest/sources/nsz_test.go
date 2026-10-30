@@ -307,3 +307,18 @@ func TestNSZSplitEmployer(t *testing.T) {
 		}
 	}
 }
+
+func TestNSZLatinizeTextKeepsAttributes(t *testing.T) {
+	root, err := xhtml.Parse(strings.NewReader(`<p>Пријаве на <a href="https://example.rs/пријава">сајту</a></p>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nszLatinizeText(root)
+	var b strings.Builder
+	if err := xhtml.Render(&b, root); err != nil {
+		t.Fatal(err)
+	}
+	if got := b.String(); !strings.Contains(got, `<p>Prijave na <a href="https://example.rs/пријава">sajtu</a></p>`) {
+		t.Errorf("text must be transliterated and a link's address kept as written: %q", got)
+	}
+}

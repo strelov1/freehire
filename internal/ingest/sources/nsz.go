@@ -401,7 +401,7 @@ func nszJob(root *xhtml.Node, c nszCard) (Job, error) {
 			j.EmploymentType = nszEmploymentTypes[f.value]
 		}
 		if nszBodyFacts[f.label] && f.value != "" {
-			listed = append(listed, "<li>"+html.EscapeString(f.label)+": "+html.EscapeString(f.value)+"</li>")
+			listed = append(listed, "<li>"+html.EscapeString(nszLatin(f.label))+": "+html.EscapeString(nszLatin(f.value))+"</li>")
 		}
 	}
 	var body strings.Builder
@@ -413,17 +413,30 @@ func nszJob(root *xhtml.Node, c nszCard) (Job, error) {
 				continue
 			}
 			hasText = hasText || strings.TrimSpace(text) != ""
+			nszLatinizeText(n)
 			_ = xhtml.Render(&body, n)
 		}
 	}
 	if len(listed) > 0 {
 		body.WriteString("<ul>" + strings.Join(listed, "") + "</ul>")
 	}
-	j.Description = sanitizeHTML(normalize.LatinizeSerbian(strings.TrimSpace(body.String())))
+	j.Description = sanitizeHTML(strings.TrimSpace(body.String()))
 	if j.Title == "" || j.Company == "" || !hasText {
 		return Job{}, fmt.Errorf("nsz: vacancy %s: the page carries no title, employer or body", c.ID)
 	}
 	return j, nil
+}
+
+// nszLatinizeText transliterates the text of n and its descendants in place. Attributes are
+// left alone: a link's address is not prose, and a Cyrillic path or mailbox transliterated
+// would point somewhere else.
+func nszLatinizeText(n *xhtml.Node) {
+	walk(n, func(c *xhtml.Node) bool {
+		if c.Type == xhtml.TextNode {
+			c.Data = normalize.LatinizeSerbian(c.Data)
+		}
+		return true
+	})
 }
 
 // nszFacts reads the "Подаци о послу" table: each div.table-row holds a label column and a
