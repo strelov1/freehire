@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // There is deliberately no uncached MentorSlots beside CachedMentorSlots.
@@ -15,26 +17,26 @@ import (
 // they do not exist.
 
 // slotsFor assembles the engine's inputs and runs it.
-func (s *Service) slotsFor(ctx context.Context, mentor Profile, from, to time.Time, viewerZone string) (SlotResult, error) {
+func (s *Service) slotsFor(ctx context.Context, mentor Profile, from, to time.Time, viewerZone string) (slots.SlotResult, error) {
 	zone, err := time.LoadLocation(mentor.Timezone)
 	if err != nil {
-		return SlotResult{}, fmt.Errorf("%w: mentor %d has timezone %q", ErrNoMentorZone, mentor.ID, mentor.Timezone)
+		return slots.SlotResult{}, fmt.Errorf("%w: mentor %d has timezone %q", slots.ErrNoOwnerZone, mentor.ID, mentor.Timezone)
 	}
 
 	rules, err := s.repo.ListAvailability(ctx, mentor.ID)
 	if err != nil {
-		return SlotResult{}, err
+		return slots.SlotResult{}, err
 	}
 	// The busy read is widened by a day either side of the window: a booking that STARTS
 	// before it can still block an hour inside it once the buffers are applied.
 	busy, err := s.repo.ListBusy(ctx, mentor.ID, from.AddDate(0, 0, -1), to.AddDate(0, 0, 1))
 	if err != nil {
-		return SlotResult{}, err
+		return slots.SlotResult{}, err
 	}
 
-	return Slots(SlotRequest{
+	return slots.Slots(slots.SlotRequest{
 		Rules:      rules,
-		MentorZone: zone,
+		OwnerZone:  zone,
 		Params:     mentor.Session,
 		Busy:       busy,
 		From:       from,
@@ -45,7 +47,7 @@ func (s *Service) slotsFor(ctx context.Context, mentor Profile, from, to time.Ti
 }
 
 // MyAvailability is the owner's whole schedule.
-func (s *Service) MyAvailability(ctx context.Context, userID int64) ([]Rule, error) {
+func (s *Service) MyAvailability(ctx context.Context, userID int64) ([]slots.Rule, error) {
 	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -54,7 +56,7 @@ func (s *Service) MyAvailability(ctx context.Context, userID int64) ([]Rule, err
 }
 
 // ReplaceWeeklySchedule swaps the recurring week, leaving dated overrides alone.
-func (s *Service) ReplaceWeeklySchedule(ctx context.Context, userID int64, rules []Rule) error {
+func (s *Service) ReplaceWeeklySchedule(ctx context.Context, userID int64, rules []slots.Rule) error {
 	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
 		return err
@@ -63,9 +65,9 @@ func (s *Service) ReplaceWeeklySchedule(ctx context.Context, userID int64, rules
 }
 
 // AddOverride adds one dated rule.
-func (s *Service) AddOverride(ctx context.Context, userID int64, rule Rule) error {
+func (s *Service) AddOverride(ctx context.Context, userID int64, rule slots.Rule) error {
 	if !rule.IsDated() {
-		return fmt.Errorf("%w: an override names a date", ErrInvalidSpan)
+		return fmt.Errorf("%w: an override names a date", slots.ErrInvalidSpan)
 	}
 	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
@@ -77,14 +79,14 @@ func (s *Service) AddOverride(ctx context.Context, userID int64, rule Rule) erro
 // MyCalendar is the owner's own resolved calendar for one month: their availability,
 // bookings and synced-calendar busy time, partitioned into booked/busy/free/closed the
 // same way slotsFor computes what a seeker may book.
-func (s *Service) MyCalendar(ctx context.Context, userID int64, year int, month time.Month) (CalendarResult, error) {
+func (s *Service) MyCalendar(ctx context.Context, userID int64, year int, month time.Month) (slots.CalendarResult, error) {
 	profile, err := s.ownProfile(ctx, userID)
 	if err != nil {
-		return CalendarResult{}, err
+		return slots.CalendarResult{}, err
 	}
 	zone, err := time.LoadLocation(profile.Timezone)
 	if err != nil {
-		return CalendarResult{}, fmt.Errorf("%w: mentor %d has timezone %q", ErrNoMentorZone, profile.ID, profile.Timezone)
+		return slots.CalendarResult{}, fmt.Errorf("%w: mentor %d has timezone %q", slots.ErrNoOwnerZone, profile.ID, profile.Timezone)
 	}
 
 	from := time.Date(year, month, 1, 0, 0, 0, 0, zone)
@@ -92,24 +94,24 @@ func (s *Service) MyCalendar(ctx context.Context, userID int64, year int, month 
 
 	rules, err := s.repo.ListAvailability(ctx, profile.ID)
 	if err != nil {
-		return CalendarResult{}, err
+		return slots.CalendarResult{}, err
 	}
 	// Widened a day either side, matching slotsFor: a booking or busy interval starting
 	// just before the month can still block an hour inside it once buffers are applied.
 	booked, busy, err := s.repo.ListBusyByKind(ctx, profile.ID, from.AddDate(0, 0, -1), to.AddDate(0, 0, 1))
 	if err != nil {
-		return CalendarResult{}, err
+		return slots.CalendarResult{}, err
 	}
 
-	return Calendar(CalendarRequest{
-		Rules:      rules,
-		MentorZone: zone,
-		Params:     profile.Session,
-		Booked:     booked,
-		Busy:       busy,
-		From:       from,
-		To:         to,
-		Now:        s.now(),
+	return slots.Calendar(slots.CalendarRequest{
+		Rules:     rules,
+		OwnerZone: zone,
+		Params:    profile.Session,
+		Booked:    booked,
+		Busy:      busy,
+		From:      from,
+		To:        to,
+		Now:       s.now(),
 	})
 }
 

@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 import (
 	"testing"
@@ -139,7 +139,7 @@ func TestSlotsTerminateInAZoneWhoseMidnightIsMissing(t *testing.T) {
 			go func() {
 				got, err := Slots(SlotRequest{
 					Rules:      []Rule{rule},
-					MentorZone: zone,
+					OwnerZone:  zone,
 					Params:     validSession(t, SessionParams{Duration: time.Hour, Horizon: 30 * 24 * time.Hour}),
 					From:       now,
 					To:         now.AddDate(0, 0, 7),

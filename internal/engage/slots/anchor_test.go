@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 import (
 	"slices"
@@ -17,7 +17,7 @@ func eveningMentor(t *testing.T, now time.Time) SlotRequest {
 	}
 	return SlotRequest{
 		Rules:      []Rule{rule},
-		MentorZone: zone,
+		OwnerZone:  zone,
 		Params:     validSession(t, SessionParams{Duration: time.Hour, Horizon: 30 * 24 * time.Hour}),
 		Now:        now,
 		From:       time.Date(2026, time.September, 8, 0, 0, 0, 0, zone),

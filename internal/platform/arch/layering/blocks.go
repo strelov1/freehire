@@ -241,7 +241,12 @@ var blocks = map[string][]string{
 		// imports identity/billing at all — the reconciling worker that calls it reads
 		// the entitlement columns directly.
 		"prowelcome",
-		"referral", "reminder", "report", "socialdigest", "subscription",
+		"referral", "reminder", "report",
+		// slots is the pure availability engine (rules, expansion, slicing) that mentorship
+		// and buddy mock interviews both compute with. It imports nothing but the standard
+		// library; it sits in engage because both of its callers do.
+		"slots",
+		"socialdigest", "subscription",
 		"telegramnotify", "vote", "webhooknotify",
 	},
 	// atsapply and candidateprofile sit here, not lower, because both need to reach

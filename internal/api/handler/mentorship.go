@@ -11,6 +11,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
+	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // mentorshipHandlers serves the mentorship marketplace: the public directory and its
@@ -409,13 +410,13 @@ func mentorshipError(err error) error {
 	case errors.Is(err, mentorship.ErrNotAuthenticated):
 		return fiber.NewError(fiber.StatusUnauthorized, "sign in to book a session")
 	case errors.Is(err, mentorship.ErrInvalidProfile),
-		errors.Is(err, mentorship.ErrInvalidSessionParams),
+		errors.Is(err, slots.ErrInvalidSessionParams),
 		errors.Is(err, mentorship.ErrInvalidReview),
 		errors.Is(err, mentorship.ErrCannotBookYourself),
-		errors.Is(err, mentorship.ErrInvalidTimeOfDay),
-		errors.Is(err, mentorship.ErrInvalidDate),
-		errors.Is(err, mentorship.ErrInvalidWeekday),
-		errors.Is(err, mentorship.ErrInvalidSpan):
+		errors.Is(err, slots.ErrInvalidTimeOfDay),
+		errors.Is(err, slots.ErrInvalidDate),
+		errors.Is(err, slots.ErrInvalidWeekday),
+		errors.Is(err, slots.ErrInvalidSpan):
 		return fiber.NewError(fiber.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, mentorship.ErrProfileNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "mentor not found")
@@ -440,7 +441,7 @@ func mentorshipError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "this session can no longer be cancelled")
 	case errors.Is(err, mentorship.ErrSessionNotCompleted):
 		return fiber.NewError(fiber.StatusConflict, "this session has not taken place yet")
-	case errors.Is(err, mentorship.ErrNoMentorZone):
+	case errors.Is(err, slots.ErrNoOwnerZone):
 		// A stored zone that no longer resolves is a broken row, not a bad request.
 		return fiber.NewError(fiber.StatusInternalServerError, "this mentor's schedule is misconfigured")
 	default:

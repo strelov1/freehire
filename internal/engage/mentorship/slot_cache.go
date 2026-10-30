@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/cache"
 )
 
@@ -53,7 +54,7 @@ type cachedSlots struct {
 //
 // A cache that is down or misbehaving degrades to computing directly. A read never fails
 // because a cache is unavailable — the same rule catalogstats follows.
-func (s *Service) CachedMentorSlots(ctx context.Context, slug string, from, to time.Time, viewerZone string) (SlotResult, error) {
+func (s *Service) CachedMentorSlots(ctx context.Context, slug string, from, to time.Time, viewerZone string) (slots.SlotResult, error) {
 	// The publication check runs BEFORE the cache, always. Reading the cache first would
 	// mean a mentor who pauses stays bookable until their entries expire — the pause
 	// button would appear to do nothing for a minute, which is exactly when somebody uses
@@ -61,7 +62,7 @@ func (s *Service) CachedMentorSlots(ctx context.Context, slug string, from, to t
 	// which is the expensive half.
 	mentor, err := s.PublicProfile(ctx, slug)
 	if err != nil {
-		return SlotResult{}, err
+		return slots.SlotResult{}, err
 	}
 	if s.cache == nil {
 		return s.slotsFor(ctx, mentor, from, to, viewerZone)
@@ -86,7 +87,7 @@ func (s *Service) CachedMentorSlots(ctx context.Context, slug string, from, to t
 	return result, nil
 }
 
-func toCachedSlots(r SlotResult) cachedSlots {
+func toCachedSlots(r slots.SlotResult) cachedSlots {
 	out := cachedSlots{Zone: r.Zone, Slots: make([]time.Time, 0, len(r.Slots)), Ends: make([]time.Time, 0, len(r.Slots))}
 	for _, s := range r.Slots {
 		out.Slots = append(out.Slots, s.Start)
@@ -97,17 +98,17 @@ func toCachedSlots(r SlotResult) cachedSlots {
 
 // toResult re-expresses the stored instants in the stored zone. A zone that no longer
 // loads makes the entry unusable rather than wrong — the caller recomputes.
-func (c cachedSlots) toResult() (SlotResult, bool) {
+func (c cachedSlots) toResult() (slots.SlotResult, bool) {
 	if len(c.Slots) != len(c.Ends) {
-		return SlotResult{}, false
+		return slots.SlotResult{}, false
 	}
 	zone, err := time.LoadLocation(c.Zone)
 	if err != nil {
-		return SlotResult{}, false
+		return slots.SlotResult{}, false
 	}
-	slots := make([]Interval, 0, len(c.Slots))
+	intervals := make([]slots.Interval, 0, len(c.Slots))
 	for i := range c.Slots {
-		slots = append(slots, Interval{Start: c.Slots[i].In(zone), End: c.Ends[i].In(zone)})
+		intervals = append(intervals, slots.Interval{Start: c.Slots[i].In(zone), End: c.Ends[i].In(zone)})
 	}
-	return SlotResult{Slots: slots, Zone: c.Zone}, true
+	return slots.SlotResult{Slots: intervals, Zone: c.Zone}, true
 }

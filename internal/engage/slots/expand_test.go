@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 import (
 	"testing"

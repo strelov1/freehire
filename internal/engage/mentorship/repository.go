@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
@@ -294,7 +295,7 @@ func profileFromRow(row db.Mentor) Profile {
 		Topics:      row.Topics,
 		Languages:   row.Languages,
 		Timezone:    row.Timezone,
-		Session: SessionParams{
+		Session: slots.SessionParams{
 			Duration:      time.Duration(row.SessionDurationMin) * time.Minute,
 			BufferBefore:  time.Duration(row.BufferBeforeMin) * time.Minute,
 			BufferAfter:   time.Duration(row.BufferAfterMin) * time.Minute,

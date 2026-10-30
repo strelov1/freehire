@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 import (
 	"errors"
@@ -17,16 +17,16 @@ import (
 // find.
 var (
 	// ErrInvalidTimeOfDay → 422. A stored availability time outside 00:00–24:00.
-	ErrInvalidTimeOfDay = errors.New("mentorship: not a time of day")
+	ErrInvalidTimeOfDay = errors.New("slots: not a time of day")
 	// ErrInvalidDate → 422. A calendar date that does not exist.
-	ErrInvalidDate = errors.New("mentorship: not a calendar date")
+	ErrInvalidDate = errors.New("slots: not a calendar date")
 	// ErrInvalidWeekday → 422. A weekday outside Sunday..Saturday.
-	ErrInvalidWeekday = errors.New("mentorship: not a weekday")
+	ErrInvalidWeekday = errors.New("slots: not a weekday")
 	// ErrInvalidSpan → 422. An availability span that runs backwards, or an empty one
 	// where emptiness means nothing (a weekly rule).
-	ErrInvalidSpan = errors.New("mentorship: not an availability span")
+	ErrInvalidSpan = errors.New("slots: not an availability span")
 	// ErrInvalidSessionParams → 422. Session figures that cannot yield a slot.
-	ErrInvalidSessionParams = errors.New("mentorship: session parameters cannot yield a slot")
+	ErrInvalidSessionParams = errors.New("slots: session parameters cannot yield a slot")
 )
 
 // minutesInADay is the exclusive upper bound on a wall-clock minute and the inclusive
@@ -150,9 +150,9 @@ type Rule struct {
 // ID is the stored row's identifier, or zero for a rule that has not been read from one.
 func (r Rule) ID() int64 { return r.id }
 
-// withID labels a rule with the row it came from. Unexported: an id is something the
-// repository knows and a caller cannot invent.
-func (r Rule) withID(id int64) Rule {
+// WithID labels a rule with the row it came from. Only a repository calls it: an id is
+// something storage knows and a caller cannot invent.
+func (r Rule) WithID(id int64) Rule {
 	r.id = id
 	return r
 }

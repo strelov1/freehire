@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 import (
 	"slices"
@@ -41,8 +41,8 @@ func awkwardRequest(t *testing.T) SlotRequest {
 			datedRule(t, 15, 10, 12),
 			closure,
 		},
-		MentorZone: zone,
-		Params:     params,
+		OwnerZone: zone,
+		Params:    params,
 		Busy: []Interval{
 			{
 				Start: time.Date(2026, time.September, 15, 10, 30, 0, 0, zone),
@@ -161,7 +161,7 @@ func TestEverySlotSatisfiesEveryBound(t *testing.T) {
 		if s.Start.After(latest) {
 			t.Errorf("slot %d at %v is past the horizon", i, s.Start)
 		}
-		if day := s.Start.In(req.MentorZone); day.Month() == time.September && day.Day() == 16 {
+		if day := s.Start.In(req.OwnerZone); day.Month() == time.September && day.Day() == 16 {
 			t.Errorf("slot %d at %v falls on a closed day", i, s.Start)
 		}
 		for _, b := range req.Busy {

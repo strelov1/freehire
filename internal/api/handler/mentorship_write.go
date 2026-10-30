@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/engage/mentorship"
+	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // bookingRequest is what a seeker submits. The END is not in it: it is the mentor's
@@ -269,7 +270,7 @@ func (r profileRequest) toInput(userID int64) mentorship.ProfileInput {
 		Topics:      r.Topics,
 		Languages:   r.Languages,
 		Timezone:    r.Timezone,
-		Session: mentorship.SessionParams{
+		Session: slots.SessionParams{
 			Duration:      time.Duration(r.SessionMinutes) * time.Minute,
 			BufferBefore:  time.Duration(r.BufferBeforeMinutes) * time.Minute,
 			BufferAfter:   time.Duration(r.BufferAfterMinutes) * time.Minute,

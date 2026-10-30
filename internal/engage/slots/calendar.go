@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 import (
 	"fmt"
@@ -35,9 +35,9 @@ type CalendarInterval struct {
 type CalendarRequest struct {
 	// Rules is the mentor's availability, weekly rules and dated overrides together.
 	Rules []Rule
-	// MentorZone resolves the rules' wall-clock times, and is also the zone the result
+	// OwnerZone resolves the rules' wall-clock times, and is also the zone the result
 	// is reported in — this is a self-view, so there is no separate viewer zone.
-	MentorZone *time.Location
+	OwnerZone *time.Location
 	// Params is the session shape and the bounds on when it may be booked.
 	Params SessionParams
 	// Booked is the mentor's confirmed bookings. Buffers are applied here, not by the
@@ -67,14 +67,14 @@ type CalendarResult struct {
 // whatever is left over — outside the mentor's stated hours, or inside them but withheld
 // by a buffer, the notice period or the horizon — is closed.
 func Calendar(req CalendarRequest) (CalendarResult, error) {
-	if req.MentorZone == nil {
-		return CalendarResult{}, ErrNoMentorZone
+	if req.OwnerZone == nil {
+		return CalendarResult{}, ErrNoOwnerZone
 	}
 	if err := req.Params.Validate(); err != nil {
 		return CalendarResult{}, fmt.Errorf("calendar request: %w", err)
 	}
 	params := req.Params
-	zoneName := req.MentorZone.String()
+	zoneName := req.OwnerZone.String()
 
 	w := Interval{Start: req.From, End: req.To}
 	if w.IsEmpty() {
@@ -84,7 +84,7 @@ func Calendar(req CalendarRequest) (CalendarResult, error) {
 	earliest := req.Now.Add(params.MinimumNotice)
 	latest := req.Now.Add(params.Horizon)
 
-	avail := expandSchedule(req.Rules, req.MentorZone, w)
+	avail := expandSchedule(req.Rules, req.OwnerZone, w)
 	allBusy := make([]Interval, 0, len(req.Booked)+len(req.Busy))
 	allBusy = append(allBusy, req.Booked...)
 	allBusy = append(allBusy, req.Busy...)

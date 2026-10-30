@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 // sliceSlots cuts free ranges into consecutive sessions, emitting a slot only where the
 // WHOLE session fits. A tail too short for another session is not a short session, so it

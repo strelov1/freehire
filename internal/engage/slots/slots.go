@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 import (
 	"errors"
@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-// ErrNoMentorZone → 500. A mentor row reached the engine without the IANA zone that
+// ErrNoOwnerZone → 500. An owner's row reached the engine without the IANA zone that
 // alone gives their stored hours a meaning. It is a broken row rather than a bad
 // request, and guessing a zone would silently move every slot.
-var ErrNoMentorZone = errors.New("mentorship: the mentor has no timezone")
+var ErrNoOwnerZone = errors.New("slots: the owner has no timezone")
 
 // SlotRequest is everything the slot engine needs and nothing it could fetch itself.
 // Now is injected rather than read from the clock, which is what makes the whole
@@ -19,8 +19,8 @@ var ErrNoMentorZone = errors.New("mentorship: the mentor has no timezone")
 type SlotRequest struct {
 	// Rules is the mentor's availability, weekly rules and dated overrides together.
 	Rules []Rule
-	// MentorZone resolves the rules' wall-clock times into instants.
-	MentorZone *time.Location
+	// OwnerZone resolves the rules' wall-clock times into instants.
+	OwnerZone *time.Location
 	// Params is the session shape and the bounds on when it may be booked.
 	Params SessionParams
 	// Busy is the mentor's occupied time — confirmed bookings, and the calendar's
@@ -54,8 +54,8 @@ type SlotResult struct {
 // question with no slots as its answer. Only a request that could never yield a slot for
 // anyone is refused: unusable session parameters, or a mentor with no zone.
 func Slots(req SlotRequest) (SlotResult, error) {
-	if req.MentorZone == nil {
-		return SlotResult{}, ErrNoMentorZone
+	if req.OwnerZone == nil {
+		return SlotResult{}, ErrNoOwnerZone
 	}
 	if err := req.Params.Validate(); err != nil {
 		return SlotResult{}, fmt.Errorf("slot request: %w", err)
@@ -90,15 +90,15 @@ func Slots(req SlotRequest) (SlotResult, error) {
 	//
 	// Widening the window backwards costs nothing: the notice filter below drops every
 	// slot already past, which is the right place for it.
-	w := Interval{Start: startOfDayIn(req.From, req.MentorZone), End: req.To}
-	if today := startOfDayIn(req.Now, req.MentorZone); w.Start.Before(today) {
+	w := Interval{Start: startOfDayIn(req.From, req.OwnerZone), End: req.To}
+	if today := startOfDayIn(req.Now, req.OwnerZone); w.Start.Before(today) {
 		w.Start = today
 	}
 	if limit := latest.Add(params.Duration); w.End.After(limit) {
 		w.End = limit
 	}
 
-	free := subtractBusy(expandSchedule(req.Rules, req.MentorZone, w), req.Busy, params)
+	free := subtractBusy(expandSchedule(req.Rules, req.OwnerZone, w), req.Busy, params)
 
 	// Non-nil even when empty: this renders straight into the `{"data": ...}` list shape,
 	// and a nil slice marshals to `null` rather than `[]`. A client that gets null for
@@ -115,14 +115,14 @@ func Slots(req SlotRequest) (SlotResult, error) {
 }
 
 // resolveViewerZone turns an IANA name into a zone, falling back to UTC and reporting
-// the fallback. It must never fall back to the MENTOR's zone: a visitor shown the
-// mentor's local times, labelled as their own, has no way to notice.
+// the fallback. It must never fall back to the OWNER's zone: a visitor shown the
+// owner's local times, labelled as their own, has no way to notice.
 //
-// The shape check is the reason this is not a bare LoadLocation, and it carries the same
-// argument validateMentorZone makes: Go resolves "Local" to the SERVER's zone, and "EST"
-// and "Factory" to things that are not a place. A visitor served the host's wall clock,
-// labelled as their own, has no way to notice. Requiring a slash — or exactly "UTC" —
-// admits the IANA names and nothing else.
+// The shape check is the reason this is not a bare LoadLocation, and it carries the
+// same argument mentorship's validateMentorZone makes: Go resolves "Local" to the
+// SERVER's zone, and "EST" and "Factory" to things that are not a place. A visitor
+// served the host's wall clock, labelled as their own, has no way to notice. Requiring
+// a slash — or exactly "UTC" — admits the IANA names and nothing else.
 func resolveViewerZone(name string) (*time.Location, string) {
 	if name == "" {
 		return time.UTC, "UTC"

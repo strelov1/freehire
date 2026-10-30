@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 import (
 	"testing"
@@ -27,12 +27,12 @@ func calendarRequest(t *testing.T) CalendarRequest {
 	})
 
 	return CalendarRequest{
-		Rules:      rules,
-		MentorZone: zone,
-		Params:     params,
-		Now:        time.Date(2026, time.September, 7, 9, 0, 0, 0, zone), // Monday morning
-		From:       time.Date(2026, time.September, 7, 0, 0, 0, 0, zone),
-		To:         time.Date(2026, time.September, 14, 0, 0, 0, 0, zone),
+		Rules:     rules,
+		OwnerZone: zone,
+		Params:    params,
+		Now:       time.Date(2026, time.September, 7, 9, 0, 0, 0, zone), // Monday morning
+		From:      time.Date(2026, time.September, 7, 0, 0, 0, 0, zone),
+		To:        time.Date(2026, time.September, 14, 0, 0, 0, 0, zone),
 	}
 }
 
@@ -98,7 +98,7 @@ func TestCalendarDayWithNoAvailabilityIsEntirelyClosed(t *testing.T) {
 // happens to be requested for the exact same span.
 func TestCalendarBookedHourIsLabeledBookedNotBusyOrFree(t *testing.T) {
 	req := calendarRequest(t)
-	zone := req.MentorZone
+	zone := req.OwnerZone
 	bookingStart := time.Date(2026, time.September, 7, 18, 0, 0, 0, zone)
 	req.Booked = []Interval{{Start: bookingStart, End: bookingStart.Add(time.Hour)}}
 
@@ -114,7 +114,7 @@ func TestCalendarBookedHourIsLabeledBookedNotBusyOrFree(t *testing.T) {
 // here by construction.
 func TestCalendarSyncedBusyIntervalIsLabeledBusy(t *testing.T) {
 	req := calendarRequest(t)
-	zone := req.MentorZone
+	zone := req.OwnerZone
 	busyStart := time.Date(2026, time.September, 7, 18, 0, 0, 0, zone)
 	req.Busy = []Interval{{Start: busyStart, End: busyStart.Add(time.Hour)}}
 
@@ -130,7 +130,7 @@ func TestCalendarSyncedBusyIntervalIsLabeledBusy(t *testing.T) {
 func TestCalendarBufferWithheldIntervalIsClosedNotFree(t *testing.T) {
 	req := calendarRequest(t)
 	req.Params.BufferAfter = 30 * time.Minute
-	zone := req.MentorZone
+	zone := req.OwnerZone
 	bookingStart := time.Date(2026, time.September, 7, 18, 0, 0, 0, zone)
 	req.Booked = []Interval{{Start: bookingStart, End: bookingStart.Add(time.Hour)}}
 
@@ -147,7 +147,7 @@ func TestCalendarBufferWithheldIntervalIsClosedNotFree(t *testing.T) {
 // A past interval is never labeled free, regardless of the mentor's availability rules.
 func TestCalendarPastIntervalIsNeverFree(t *testing.T) {
 	req := calendarRequest(t)
-	zone := req.MentorZone
+	zone := req.OwnerZone
 	// Now is Monday 09:00; Sunday's whole day (before the window's availability even
 	// starts) and Monday morning both precede it.
 	past := time.Date(2026, time.September, 7, 6, 0, 0, 0, zone)
@@ -167,7 +167,7 @@ func TestCalendarPastIntervalIsNeverFree(t *testing.T) {
 // instant, while a later evening well past the notice period is unaffected.
 func TestCalendarWithinTheNoticeWindowIsClosedNotFree(t *testing.T) {
 	req := calendarRequest(t)
-	zone := req.MentorZone
+	zone := req.OwnerZone
 	req.Now = time.Date(2026, time.September, 7, 18, 30, 0, 0, zone) // mid-Monday-evening
 
 	result := mustCalendar(t, req)
@@ -189,13 +189,13 @@ func TestCalendarWithinTheNoticeWindowIsClosedNotFree(t *testing.T) {
 func TestCalendarFreeRangesMatchWhatSlotsOffers(t *testing.T) {
 	cReq := calendarRequest(t)
 	cReq.Booked = []Interval{{
-		Start: time.Date(2026, time.September, 8, 18, 0, 0, 0, cReq.MentorZone),
-		End:   time.Date(2026, time.September, 8, 19, 0, 0, 0, cReq.MentorZone),
+		Start: time.Date(2026, time.September, 8, 18, 0, 0, 0, cReq.OwnerZone),
+		End:   time.Date(2026, time.September, 8, 19, 0, 0, 0, cReq.OwnerZone),
 	}}
 
 	sReq := SlotRequest{
 		Rules:      cReq.Rules,
-		MentorZone: cReq.MentorZone,
+		OwnerZone:  cReq.OwnerZone,
 		Params:     cReq.Params,
 		Busy:       cReq.Booked,
 		From:       cReq.From,
@@ -228,7 +228,7 @@ func TestCalendarFreeRangesMatchWhatSlotsOffers(t *testing.T) {
 
 func TestCalendarRejectsAMentorWithNoZone(t *testing.T) {
 	req := calendarRequest(t)
-	req.MentorZone = nil
+	req.OwnerZone = nil
 
 	_, err := Calendar(req)
 	if err == nil {

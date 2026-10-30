@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // calendarMonthService mirrors bookingService's fixed clock, so "now" sits safely before
@@ -48,7 +49,7 @@ func TestMyCalendarReflectsAConfirmedBookingAsBooked(t *testing.T) {
 
 	found := false
 	for _, iv := range result.Intervals {
-		if iv.Status == StatusBooked && iv.Start.Equal(booking) {
+		if iv.Status == slots.StatusBooked && iv.Start.Equal(booking) {
 			found = true
 		}
 	}
@@ -63,7 +64,7 @@ func TestMyCalendarReflectsASyncedIntervalAsBusy(t *testing.T) {
 	svc := calendarMonthService(repo)
 
 	synced := tuesdayAt(t, 19)
-	repo.busyIntervals[profile.ID] = []Interval{{Start: synced, End: synced.Add(30 * time.Minute)}}
+	repo.busyIntervals[profile.ID] = []slots.Interval{{Start: synced, End: synced.Add(30 * time.Minute)}}
 
 	result, err := svc.MyCalendar(context.Background(), profile.UserID, 2026, time.September)
 	if err != nil {
@@ -72,7 +73,7 @@ func TestMyCalendarReflectsASyncedIntervalAsBusy(t *testing.T) {
 
 	found := false
 	for _, iv := range result.Intervals {
-		if iv.Status == StatusBusy && iv.Start.Equal(synced) {
+		if iv.Status == slots.StatusBusy && iv.Start.Equal(synced) {
 			found = true
 		}
 	}
@@ -114,7 +115,7 @@ func TestMyCalendarNeverShowsAnotherMentorsBooking(t *testing.T) {
 	}
 
 	for _, iv := range result.Intervals {
-		if iv.Status == StatusBooked {
+		if iv.Status == slots.StatusBooked {
 			t.Errorf("own calendar shows a booked interval %+v, but the only booking belongs to a different mentor",
 				iv)
 		}

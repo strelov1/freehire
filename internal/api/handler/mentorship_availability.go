@@ -6,8 +6,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-
-	"github.com/strelov1/freehire/internal/engage/mentorship"
+	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // availabilityRuleRequest is one row of a mentor's schedule, in whichever of the two
@@ -39,45 +38,45 @@ type availabilityRuleResponse struct {
 }
 
 // toRule turns a request into the domain type, which is where the shape is enforced.
-func (r availabilityRuleRequest) toRule() (mentorship.Rule, error) {
+func (r availabilityRuleRequest) toRule() (slots.Rule, error) {
 	start, err := parseClock(r.Start)
 	if err != nil {
-		return mentorship.Rule{}, err
+		return slots.Rule{}, err
 	}
 	end, err := parseClock(r.End)
 	if err != nil {
-		return mentorship.Rule{}, err
+		return slots.Rule{}, err
 	}
 
 	if r.Date != nil {
 		parsed, parseErr := time.Parse(time.DateOnly, *r.Date)
 		if parseErr != nil {
-			return mentorship.Rule{}, fiber.NewError(fiber.StatusUnprocessableEntity,
+			return slots.Rule{}, fiber.NewError(fiber.StatusUnprocessableEntity,
 				"date must be YYYY-MM-DD")
 		}
-		date, dateErr := mentorship.NewDate(parsed.Year(), parsed.Month(), parsed.Day())
+		date, dateErr := slots.NewDate(parsed.Year(), parsed.Month(), parsed.Day())
 		if dateErr != nil {
-			return mentorship.Rule{}, mentorshipError(dateErr)
+			return slots.Rule{}, mentorshipError(dateErr)
 		}
-		rule, ruleErr := mentorship.NewDatedRule(date, start, end)
+		rule, ruleErr := slots.NewDatedRule(date, start, end)
 		if ruleErr != nil {
-			return mentorship.Rule{}, mentorshipError(ruleErr)
+			return slots.Rule{}, mentorshipError(ruleErr)
 		}
 		return rule, nil
 	}
 
 	if r.Weekday == nil {
-		return mentorship.Rule{}, fiber.NewError(fiber.StatusUnprocessableEntity,
+		return slots.Rule{}, fiber.NewError(fiber.StatusUnprocessableEntity,
 			"a rule needs either a weekday or a date")
 	}
-	rule, err := mentorship.NewWeeklyRule(time.Weekday(*r.Weekday), start, end)
+	rule, err := slots.NewWeeklyRule(time.Weekday(*r.Weekday), start, end)
 	if err != nil {
-		return mentorship.Rule{}, mentorshipError(err)
+		return slots.Rule{}, mentorshipError(err)
 	}
 	return rule, nil
 }
 
-func toAvailabilityResponse(rule mentorship.Rule) availabilityRuleResponse {
+func toAvailabilityResponse(rule slots.Rule) availabilityRuleResponse {
 	out := availabilityRuleResponse{
 		ID:      rule.ID(),
 		Start:   rule.Start().String(),
@@ -100,25 +99,25 @@ func toAvailabilityResponse(rule mentorship.Rule) availabilityRuleResponse {
 // 24:00 is the whole point of TimeOfDay's upper bound: it is how a mentor says "until
 // midnight" without the row spilling onto the next date. Strict about the shape, because
 // fmt.Sscanf would happily accept "18:00nonsense".
-func parseClock(raw string) (mentorship.TimeOfDay, error) {
+func parseClock(raw string) (slots.TimeOfDay, error) {
 	invalid := fiber.NewError(fiber.StatusUnprocessableEntity, "times must be HH:MM")
 
 	hourPart, minutePart, ok := strings.Cut(raw, ":")
 	if !ok || len(hourPart) != 2 || len(minutePart) != 2 {
-		return mentorship.TimeOfDay{}, invalid
+		return slots.TimeOfDay{}, invalid
 	}
 	hour, err := strconv.Atoi(hourPart)
 	if err != nil {
-		return mentorship.TimeOfDay{}, invalid
+		return slots.TimeOfDay{}, invalid
 	}
 	minute, err := strconv.Atoi(minutePart)
 	if err != nil {
-		return mentorship.TimeOfDay{}, invalid
+		return slots.TimeOfDay{}, invalid
 	}
 
-	got, err := mentorship.NewTimeOfDay(hour, minute)
+	got, err := slots.NewTimeOfDay(hour, minute)
 	if err != nil {
-		return mentorship.TimeOfDay{}, mentorshipError(err)
+		return slots.TimeOfDay{}, mentorshipError(err)
 	}
 	return got, nil
 }
@@ -160,7 +159,7 @@ func (h *mentorshipHandlers) ReplaceWeeklyAvailability(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
 
-	rules := make([]mentorship.Rule, 0, len(req.Rules))
+	rules := make([]slots.Rule, 0, len(req.Rules))
 	for _, raw := range req.Rules {
 		if raw.Date != nil {
 			return fiber.NewError(fiber.StatusUnprocessableEntity,

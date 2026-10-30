@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/application/gmailsync"
+	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // bookableMentor is an approved mentor free every Tuesday 18:00–22:00 Berlin, hour-long
@@ -26,11 +27,11 @@ func bookableMentor(t *testing.T, repo *fakeRepo) Profile {
 		t.Fatalf("DecideProfile: %v", err)
 	}
 
-	rule, err := NewWeeklyRule(time.Tuesday, mustTimeOfDay(t, 18, 0), mustTimeOfDay(t, 22, 0))
+	rule, err := slots.NewWeeklyRule(time.Tuesday, mustTimeOfDay(t, 18, 0), mustTimeOfDay(t, 22, 0))
 	if err != nil {
-		t.Fatalf("NewWeeklyRule: %v", err)
+		t.Fatalf("slots.NewWeeklyRule: %v", err)
 	}
-	repo.availability[profile.ID] = []Rule{rule}
+	repo.availability[profile.ID] = []slots.Rule{rule}
 	return profile
 }
 
@@ -211,11 +212,11 @@ func TestBookingRefusesAPausedOrUnapprovedMentor(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateProfile: %v", err)
 		}
-		rule, err := NewWeeklyRule(time.Tuesday, mustTimeOfDay(t, 18, 0), mustTimeOfDay(t, 22, 0))
+		rule, err := slots.NewWeeklyRule(time.Tuesday, mustTimeOfDay(t, 18, 0), mustTimeOfDay(t, 22, 0))
 		if err != nil {
-			t.Fatalf("NewWeeklyRule: %v", err)
+			t.Fatalf("slots.NewWeeklyRule: %v", err)
 		}
-		repo.availability[profile.ID] = []Rule{rule}
+		repo.availability[profile.ID] = []slots.Rule{rule}
 
 		_, err = bookingService(repo, nil).Book(context.Background(), BookingInput{
 			MentorSlug: profile.Slug, SeekerUserID: 42,

@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 import (
 	"testing"
@@ -28,7 +28,7 @@ func mentorRequest(t *testing.T) SlotRequest {
 
 	return SlotRequest{
 		Rules:      rules,
-		MentorZone: zone,
+		OwnerZone:  zone,
 		Params:     params,
 		Now:        time.Date(2026, time.September, 7, 9, 0, 0, 0, zone), // Monday morning
 		From:       time.Date(2026, time.September, 7, 0, 0, 0, 0, zone),
@@ -114,7 +114,7 @@ func TestSlotsWithheldInsideTheNoticePeriod(t *testing.T) {
 	req := mentorRequest(t)
 	// Monday 17:30, half an hour before the mentor opens: with two hours' notice, nothing
 	// that evening is offerable, and Tuesday is the first day with slots.
-	req.Now = time.Date(2026, time.September, 7, 17, 30, 0, 0, req.MentorZone)
+	req.Now = time.Date(2026, time.September, 7, 17, 30, 0, 0, req.OwnerZone)
 
 	got := mustSlots(t, req)
 
@@ -130,7 +130,7 @@ func TestSlotsWithheldInsideTheNoticePeriod(t *testing.T) {
 // elapses is offerable, because the notice has in fact elapsed.
 func TestASlotExactlyAtTheNoticeBoundaryIsOffered(t *testing.T) {
 	req := mentorRequest(t)
-	req.Now = time.Date(2026, time.September, 7, 16, 0, 0, 0, req.MentorZone) // 18:00 minus two hours
+	req.Now = time.Date(2026, time.September, 7, 16, 0, 0, 0, req.OwnerZone) // 18:00 minus two hours
 
 	got := mustSlots(t, req)
 
@@ -178,8 +178,8 @@ func TestSlotsSubtractBusyTime(t *testing.T) {
 	req := mentorRequest(t)
 	// Book the whole of Tuesday evening.
 	req.Busy = []Interval{{
-		Start: time.Date(2026, time.September, 8, 18, 0, 0, 0, req.MentorZone),
-		End:   time.Date(2026, time.September, 8, 20, 0, 0, 0, req.MentorZone),
+		Start: time.Date(2026, time.September, 8, 18, 0, 0, 0, req.OwnerZone),
+		End:   time.Date(2026, time.September, 8, 20, 0, 0, 0, req.OwnerZone),
 	}}
 
 	got := mustSlots(t, req)
@@ -202,7 +202,7 @@ func TestSlotsRefuseParametersThatCannotYieldASlot(t *testing.T) {
 
 func TestSlotsWithoutAMentorZoneAreRefused(t *testing.T) {
 	req := mentorRequest(t)
-	req.MentorZone = nil
+	req.OwnerZone = nil
 
 	if _, err := Slots(req); err == nil {
 		t.Error("Slots accepted a request with no mentor zone")

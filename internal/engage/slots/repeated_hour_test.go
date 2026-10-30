@@ -1,4 +1,4 @@
-package mentorship
+package slots
 
 import (
 	"testing"
@@ -24,7 +24,7 @@ func TestTheRepeatedAutumnHourYieldsTwoDistinctInstants(t *testing.T) {
 
 	got := mustSlots(t, SlotRequest{
 		Rules:      []Rule{rule},
-		MentorZone: zone,
+		OwnerZone:  zone,
 		Params:     validSession(t, SessionParams{Duration: time.Hour, Horizon: 30 * 24 * time.Hour}),
 		Now:        time.Date(2026, time.October, 24, 0, 0, 0, 0, zone),
 		From:       time.Date(2026, time.October, 25, 0, 0, 0, 0, zone),
@@ -66,7 +66,7 @@ func TestTheRepeatedHourProducesTwoSlotsWithOneLabel(t *testing.T) {
 
 	got := mustSlots(t, SlotRequest{
 		Rules:      []Rule{rule},
-		MentorZone: zone,
+		OwnerZone:  zone,
 		Params:     validSession(t, SessionParams{Duration: time.Hour, Horizon: 30 * 24 * time.Hour}),
 		Now:        time.Date(2026, time.October, 24, 0, 0, 0, 0, zone),
 		From:       time.Date(2026, time.October, 25, 0, 0, 0, 0, zone),
@@ -108,7 +108,7 @@ func TestTheSkippedSpringHourProducesNoUnrealSlot(t *testing.T) {
 
 	got := mustSlots(t, SlotRequest{
 		Rules:      []Rule{rule},
-		MentorZone: zone,
+		OwnerZone:  zone,
 		Params:     validSession(t, SessionParams{Duration: time.Hour, Horizon: 30 * 24 * time.Hour}),
 		Now:        time.Date(2026, time.March, 28, 0, 0, 0, 0, zone),
 		From:       time.Date(2026, time.March, 29, 0, 0, 0, 0, zone),
