@@ -58,6 +58,13 @@
   // cannot drift.
   const countryOptions = COUNTRY_OPTIONS.filter((o) => o.value in COUNTRY_REGION_MAP);
 
+  // The list's labels are English, so each country is also found by its name in the
+  // reader's own language — "Германия" must find Germany on the Russian form.
+  const countryAliases = $derived.by(() => {
+    const names = new Intl.DisplayNames([locale()], { type: 'region' });
+    return Object.fromEntries(countryOptions.map((o) => [o.value, [names.of(o.value.toUpperCase()) ?? o.label]]));
+  });
+
   let authorizedCountries = $state<string[]>(answers?.authorized_countries ?? []);
   let visaSponsorshipNeeded = $state<TriState>(toTriState(answers?.visa_sponsorship_needed));
   let desiredSalaryAmount = $state(answers?.desired_salary_amount?.toString() ?? '');
@@ -181,7 +188,6 @@
   function edited() {
     salaryInvalid = false;
     noticeInvalid = false;
-    currencyInvalid = false;
     autosave.edited();
   }
 
@@ -200,6 +206,13 @@
       ? authorizedCountries.filter((c) => c !== code)
       : [...authorizedCountries, code];
     picked();
+  }
+
+  // The currency's mark is cleared only by editing the currency itself: while it stands
+  // invalid every save is refused, so another answer changed meanwhile must not hide why.
+  function currencyEdited() {
+    currencyInvalid = false;
+    edited();
   }
 
   function currencyLeft() {
@@ -231,6 +244,7 @@
         placeholder={s.fields.authorizedCountriesPlaceholder}
         onToggle={toggleCountry}
         label={s.fields.authorizedCountries}
+        searchAliases={countryAliases}
         cap={8}
         clearOnSelect
       />
@@ -327,7 +341,7 @@
       <span class="text-muted-foreground">{s.fields.currency}</span>
       <Input
         bind:value={desiredSalaryCurrency}
-        oninput={edited}
+        oninput={currencyEdited}
         onblur={currencyLeft}
         placeholder="USD"
         maxlength={3}

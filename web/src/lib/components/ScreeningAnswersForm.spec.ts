@@ -2,9 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ScreeningAnswersForm from './ScreeningAnswersForm.svelte';
 
-vi.mock('$app/state', () => ({
-  page: { data: { locale: 'en' }, url: new URL('http://localhost/') },
-}));
+const page = vi.hoisted(() => ({ data: { locale: 'en' }, url: new URL('http://localhost/') }));
+vi.mock('$app/state', () => ({ page }));
 
 const { updateScreeningAnswers, getScreeningAnswers } = vi.hoisted(() => ({
   updateScreeningAnswers: vi.fn(),
@@ -16,6 +15,7 @@ vi.mock('#lib/api.js', () => ({
 }));
 
 beforeEach(() => {
+  page.data.locale = 'en';
   updateScreeningAnswers.mockReset().mockImplementation((patch) => Promise.resolve(patch));
   getScreeningAnswers.mockReset().mockResolvedValue(null);
 });
@@ -42,6 +42,31 @@ describe('ScreeningAnswersForm — autosave', () => {
     });
 
     expect(screen.queryByRole('button', { name: /Afghanistan/ })).toBeNull();
+  });
+
+  it('finds a country by its name in the reader\'s language', async () => {
+    page.data.locale = 'ru';
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Есть разрешение на работу в' }), {
+      target: { value: 'Германия' },
+    });
+
+    expect(screen.getByRole('button', { name: /Germany/ })).toBeTruthy();
+  });
+
+  it('keeps the currency marked while another answer changes', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+    const currency = screen.getByRole('textbox', { name: 'Currency (ISO 4217)' });
+
+    await fireEvent.input(currency, { target: { value: 'US' } });
+    await fireEvent.blur(currency);
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Need visa sponsorship?' }), {
+      target: { value: 'no' },
+    });
+
+    expect(screen.getByText('Currency must be a three-letter code, like USD.')).toBeTruthy();
+    expect(updateScreeningAnswers).not.toHaveBeenCalled();
   });
 
   it('marks a half-typed currency on leaving it and does not save it', async () => {
