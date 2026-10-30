@@ -219,3 +219,31 @@ func (r *QueriesRepository) MockByID(ctx context.Context, id uuid.UUID) (Mock, b
 		HostEmail: row.HostEmail, GuestEmail: row.GuestEmail,
 	}, true, nil
 }
+
+func (r *QueriesRepository) CancelMock(ctx context.Context, id uuid.UUID, userID int64) (bool, error) {
+	_, err := r.q.CancelBuddyMock(ctx, db.CancelBuddyMockParams{ID: pgtype.UUID{Bytes: id, Valid: true}, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// ClaimCancelNotices returns what it read before an error, so the claimed mocks it did
+// read are still announced.
+func (r *QueriesRepository) ClaimCancelNotices(ctx context.Context, actorID int64) ([]Mock, error) {
+	ids, err := r.q.ClaimBuddyMockCancelNotices(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Mock, 0, len(ids))
+	for _, id := range ids {
+		m, found, err := r.MockByID(ctx, uuid.UUID(id.Bytes))
+		if err != nil {
+			return out, err
+		}
+		if found {
+			out = append(out, m)
+		}
+	}
+	return out, nil
+}

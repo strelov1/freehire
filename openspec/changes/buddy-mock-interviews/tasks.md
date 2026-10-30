@@ -2479,7 +2479,7 @@ The leave already cancels inside `LeaveBuddyMember` and the block inside the `us
 - Consumes: `db.Queries.CancelBuddyMock`, `ClaimBuddyMockCancelNotices`; `MockByID`; `MockNotifier.MockCancelled`; `(*Service).Leave`, `(*Service).Invite`, `(*messaging.Service).Block(ctx, userID, conversationID int64) error`.
 - Produces: `var ErrMockNotCancellable error`; `func (*MockService) Cancel(ctx, userID int64, id uuid.UUID) error`; `func (*MockService) AnnounceCancellations(ctx, actorID int64)`; repository `CancelMock(ctx, id uuid.UUID, userID int64) (bool, error)`, `ClaimCancelNotices(ctx, actorID int64) ([]Mock, error)`.
 
-- [ ] 6.1 Write the failing tests `internal/engage/buddy/mock_cancel_integration_test.go`:
+- [x] 6.1 Write the failing tests `internal/engage/buddy/mock_cancel_integration_test.go`:
 
 ```go
 //go:build integration
@@ -2620,9 +2620,9 @@ func TestBlockingCancelsThePairsFutureMocks(t *testing.T) {
 ```
 Add `"slices"`, `"github.com/google/uuid"`, `"github.com/jackc/pgx/v5/pgxpool"` and `"github.com/strelov1/freehire/internal/engage/slots"` to this file's imports.
 
-- [ ] 6.2 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `mocks.Cancel undefined`, `mocks.AnnounceCancellations undefined`, `undefined: buddy.ErrMockNotCancellable`.
+- [x] 6.2 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `mocks.Cancel undefined`, `mocks.AnnounceCancellations undefined`, `undefined: buddy.ErrMockNotCancellable`.
 
-- [ ] 6.3 Implement. In `internal/engage/buddy/mock.go`, inside the booking-sentinel `var (...)` block, add:
+- [x] 6.3 Implement. In `internal/engage/buddy/mock.go`, inside the booking-sentinel `var (...)` block, add:
 
 ```go
 	// ErrMockNotCancellable → 422. The mock has started, or is already cancelled.
@@ -2720,9 +2720,9 @@ func (r *QueriesRepository) ClaimCancelNotices(ctx context.Context, actorID int6
 }
 ```
 
-- [ ] 6.4 Run: `go test -tags=integration ./internal/engage/buddy/ -run 'TestGuestCancels|TestAStartedMock|TestAStranger|TestLeaving|TestBlocking' -count=1`, then the whole buddy suite to prove the leave change kept the old behaviour: `go test -tags=integration ./internal/engage/buddy/ -count=1`. Expected: `ok` for both.
+- [x] 6.4 Run: `go test -tags=integration ./internal/engage/buddy/ -run 'TestGuestCancels|TestAStartedMock|TestAStranger|TestLeaving|TestBlocking' -count=1`, then the whole buddy suite to prove the leave change kept the old behaviour: `go test -tags=integration ./internal/engage/buddy/ -count=1`. Expected: `ok` for both.
 
-- [ ] 6.5 Verify and commit:
+- [x] 6.5 Verify and commit:
 
 ```bash
 gofmt -l internal/engage/buddy && go vet ./... && go test ./... && go vet -tags=integration ./internal/engage/buddy/

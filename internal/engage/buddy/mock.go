@@ -81,6 +81,8 @@ var (
 	ErrGuestMockLimit = errors.New("buddy: too many upcoming mock interviews as a guest")
 	// ErrMockNotFound → 404. No mock, or one the caller is not a participant of.
 	ErrMockNotFound = errors.New("buddy: mock interview not found")
+	// ErrMockNotCancellable → 422. The mock has started, or is already cancelled.
+	ErrMockNotCancellable = errors.New("buddy: the mock interview has started or is already cancelled")
 )
 
 // NewMock is one mock to write.

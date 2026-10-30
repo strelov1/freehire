@@ -48,6 +48,12 @@ type MockRepository interface {
 	// MockByID reads one mock with both handles, the host's current zone and link and
 	// both addresses. Authorisation is the caller's.
 	MockByID(ctx context.Context, id uuid.UUID) (Mock, bool, error)
+	// CancelMock cancels a confirmed, not yet started mock userID takes part in, freeing
+	// both participants' time in the same statement; false when any of that does not hold.
+	CancelMock(ctx context.Context, id uuid.UUID, userID int64) (bool, error)
+	// ClaimCancelNotices claims every recent, not yet announced cancellation actorID caused
+	// — by cancelling, leaving or blocking — and returns those mocks.
+	ClaimCancelNotices(ctx context.Context, actorID int64) ([]Mock, error)
 }
 
 // MockService is the mock-interview use cases between buddy members: settings,
@@ -261,4 +267,51 @@ func (s *MockService) offerable(ctx context.Context, hostID int64, settings Mock
 		return false, err
 	}
 	return slices.ContainsFunc(res.Slots, func(iv slots.Interval) bool { return iv.Start.Equal(start) }), nil
+}
+
+// Cancel cancels one of the caller's mocks before it starts and tells the other side.
+// Someone else's mock reads as ErrMockNotFound; a started or cancelled one is
+// ErrMockNotCancellable.
+func (s *MockService) Cancel(ctx context.Context, userID int64, id uuid.UUID) error {
+	m, ok, err := s.repo.MockByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !ok || (userID != m.HostUserID && userID != m.GuestUserID) {
+		return ErrMockNotFound
+	}
+	if m.Status != MockConfirmed || !s.now().Before(m.StartsAt) {
+		return ErrMockNotCancellable
+	}
+	done, err := s.repo.CancelMock(ctx, id, userID)
+	if err != nil {
+		return err
+	}
+	if !done {
+		// The start or another cancellation landed between the read and the write.
+		return ErrMockNotCancellable
+	}
+	s.AnnounceCancellations(ctx, userID)
+	return nil
+}
+
+// AnnounceCancellations tells the other participant of every mock actorID's own act
+// cancelled and nobody has announced yet: a participant's Cancel, the leave
+// (LeaveBuddyMember cancels in its own statement) or a block (a trigger on user_blocks
+// cancels inside the block's statement). The api layer calls it after a leave and after a
+// block. Best-effort: a failure is logged, never returned, because the cancellation it
+// reports has already happened.
+func (s *MockService) AnnounceCancellations(ctx context.Context, actorID int64) {
+	if s.notifier == nil {
+		return
+	}
+	cancelled, err := s.repo.ClaimCancelNotices(ctx, actorID)
+	if err != nil {
+		log.Printf("buddy: claiming cancellation notices of user %d: %v", actorID, err)
+	}
+	for _, m := range cancelled {
+		if err := s.notifier.MockCancelled(ctx, m, actorID); err != nil {
+			log.Printf("buddy: cancellation notice for mock %s: %v", m.ID, err)
+		}
+	}
 }
