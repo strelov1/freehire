@@ -50,6 +50,22 @@ type ukgOpportunity struct {
 	PostedDate       string        `json:"PostedDate"`
 	BriefDescription string        `json:"BriefDescription"`
 	Locations        []ukgLocation `json:"Locations"`
+	// JobLocationType is the posting's workplace enum; nil when the tenant left it unset.
+	JobLocationType *int `json:"JobLocationType"`
+}
+
+// ukgWorkModes maps UKG Pro's JobLocationType enum to our work modes. The meaning is the
+// platform's own: the job board's bundle renders the value through "Common.JobLocationType_<n>"
+// and maps those same keys to LinkedIn's workplace types (Hybrid = _0, On-site = _1, Remote =
+// _2). Any other value states nothing.
+var ukgWorkModes = map[int]string{0: "hybrid", 1: "onsite", 2: "remote"}
+
+// workMode reads the posting's structured workplace type, "" when it states none.
+func (o ukgOpportunity) workMode() string {
+	if o.JobLocationType == nil {
+		return ""
+	}
+	return ukgWorkModes[*o.JobLocationType]
 }
 
 // ukgLocation is one posting location; Address is null for a location named only by its
@@ -145,6 +161,7 @@ func (u ukg) toJob(ctx context.Context, host, tenant, guid string, e CompanyEntr
 		employmentType = ukgEmploymentType(detail.FullTime)
 	}
 	location := o.location()
+	workMode := o.workMode()
 	return Job{
 		ExternalID:  o.ID,
 		URL:         url,
@@ -152,7 +169,8 @@ func (u ukg) toJob(ctx context.Context, host, tenant, guid string, e CompanyEntr
 		Company:     e.Company,
 		Location:    location,
 		Description: sanitizeHTML(html.UnescapeString(body)),
-		Remote:      isRemote(location),
+		Remote:      workMode == "remote" || isRemote(location),
+		WorkMode:    workMode,
 		PostedAt:    parseRFC3339(o.PostedDate),
 		// FullTime is UKG's structured full/part-time flag; preferred over the free-text
 		// employment-type parse.

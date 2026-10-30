@@ -174,3 +174,36 @@ func TestUKGFetchBadBoard(t *testing.T) {
 		t.Errorf("want error for malformed board")
 	}
 }
+
+// JobLocationType is UKG Pro's structured workplace enum, carried on every listing record. Its
+// meaning is the platform's own: the job board's bundle labels it through
+// "Common.JobLocationType_<n>" and maps the same keys to LinkedIn's workplace types — 0 Hybrid,
+// 1 On-site, 2 Remote. null (the tenant left it unset) states nothing. The records are trimmed
+// from live boards (cap1009capge, ald1001aldii; 2026-10-30).
+func TestUKGFetchReadsJobLocationType(t *testing.T) {
+	listing := `{"totalCount":4,"opportunities":[
+		{"Id":"h","Title":"Engineering and Solution Architecture Support","Locations":[{"LocalizedName":"San Antonio, TX, 78201"}],"JobLocationType":0,"OpportunityType":0},
+		{"Id":"o","Title":"Part-Time Store Cashier/Stocker","Locations":[{"LocalizedName":"12351 S Orange Blossom Trl"}],"JobLocationType":1,"OpportunityType":0},
+		{"Id":"r","Title":"Identity Governance and Administration (IGA) Engineer","Locations":[{"LocalizedName":"San Antonio, TX, 78201"}],"JobLocationType":2,"OpportunityType":0},
+		{"Id":"n","Title":"Part-Time Store Associate/Cashier/Stocker","Locations":[{"LocalizedName":"Friendswood, 3100 FM-528"}],"JobLocationType":null,"OpportunityType":0}
+	]}`
+	http := (&routedHTTP{}).route("/JobBoardView/LoadSearchResults", listing)
+
+	jobs, err := ukg{http: http}.Fetch(context.Background(), CompanyEntry{Board: "recruiting.ultipro.com/t/g"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	want := map[string]string{"h": "hybrid", "o": "onsite", "r": "remote", "n": ""}
+	if len(jobs) != len(want) {
+		t.Fatalf("got %d jobs, want %d", len(jobs), len(want))
+	}
+	for _, j := range jobs {
+		if j.WorkMode != want[j.ExternalID] {
+			t.Errorf("%s: WorkMode = %q, want %q", j.ExternalID, j.WorkMode, want[j.ExternalID])
+		}
+		// The remote flag follows the structured value, not only a "Remote" location label.
+		if j.Remote != (want[j.ExternalID] == "remote") {
+			t.Errorf("%s: Remote = %v", j.ExternalID, j.Remote)
+		}
+	}
+}
