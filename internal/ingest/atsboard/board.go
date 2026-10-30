@@ -606,9 +606,11 @@ var pathPatternBoards = map[string]pathPattern{
 	// with ?jobId=<guid>, and the old <board>.hrmdirect.com redirects through /<board>/redirect.
 	// Other paths on the host (/<board>/jobs, /careers) answer 404. The platform answers any case
 	// of the slug and all 1,515 hrmdirect boards in the catalogue are lower-case (measured
-	// 2026-10-30), so the capture folds.
+	// 2026-10-30), so the capture folds. /careers has the career page's shape, so it is rejected
+	// by name.
 	"apply.clearcompany.com": {
 		path:    regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9-]*)(?:/redirect)?/?$`),
+		reject:  regexp.MustCompile(`^careers$`),
 		listing: "/%s",
 		fold:    true,
 	},

@@ -378,6 +378,7 @@ func TestRecognize(t *testing.T) {
 		{"clearcompany upper-case slug folds", "https://apply.clearcompany.com/SMS/?noheader=False", "hrmdirect", "sms", "https://apply.clearcompany.com/sms", true},
 		{"clearcompany bare host no tenant", "https://apply.clearcompany.com/", "", "", "", false},
 		{"clearcompany deeper path is not a career page", "https://apply.clearcompany.com/sms/jobs", "", "", "", false},
+		{"clearcompany careers path is not a board", "https://apply.clearcompany.com/Careers", "", "", "", false},
 		{"clearcompany marketing site is not a board", "https://www.clearcompany.com/applicant-tracking", "", "", "", false},
 		{"clearcompany api host is not a board", "https://careers-api.clearcompany.com/v1/8a53c87d-2c7f-85ba-20f0-66842148ace3", "", "", "", false},
 		// ApplicantStack: the board is the tenant subdomain, folded to lower case — the same
