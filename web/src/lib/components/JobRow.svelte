@@ -204,6 +204,9 @@
   const saved = $derived(isSaved(job.public_slug));
   // Guards against a double-click racing two requests for the same job.
   let saving = $state(false);
+  // Set by a save made from THIS card, so the "view it on your board" strip answers
+  // the click that just happened rather than decorating every saved card in a feed.
+  let justSaved = $state(false);
   let showApplyGate = $state(false);
 
   // Toggle the save mark. Optimistic: flip the shared set first so the bookmark
@@ -219,11 +222,15 @@
     if (saving) return;
     saving = true;
     const wasSaved = saved;
+    justSaved = false;
     if (wasSaved) markUnsaved(job.public_slug);
     else markSaved(job.public_slug);
     try {
       if (wasSaved) await api.unsaveJob(job.public_slug);
-      else await api.saveJob(job.public_slug);
+      else {
+        await api.saveJob(job.public_slug);
+        justSaved = true;
+      }
     } catch {
       if (wasSaved) markSaved(job.public_slug);
       else markUnsaved(job.public_slug);
@@ -678,6 +685,25 @@
         {/if}
       </div>
     {/if}
+  </div>
+{/if}
+
+{#if justSaved && saved && !compact}
+  <!-- The same confirmation the job page shows after applying: saving puts the job on
+       the tracking board, and this is the way there while the click is still fresh.
+       Not in `compact`, where the chat column has no room for a second row. -->
+  <div
+    class="relative z-10 mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand/30 bg-brand-muted px-3 py-2 text-sm"
+  >
+    <span class="inline-flex items-center gap-1.5 font-medium text-brand-strong">
+      <Check class="size-4 shrink-0" aria-hidden="true" /> Saved to your board
+    </span>
+    <a
+      href={resolve('/my/tracking/[id]', { id: job.public_slug })}
+      class="font-medium text-brand-strong underline underline-offset-4"
+    >
+      Open in tracker →
+    </a>
   </div>
 {/if}
 
