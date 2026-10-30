@@ -8,7 +8,7 @@
   import { messages, navLabel } from '#lib/i18n/shell.js';
   import { t } from '#lib/i18n/t.js';
   import { cn } from '#lib/ui/index.js';
-  import { accountNav, activeSectionHref, isSectionActive, workspaceFor } from '#lib/accountNav.js';
+  import { accountNav, activeSection, isSectionActive, workspaceFor } from '#lib/accountNav.js';
   import { accountNavIcons } from '#lib/accountNavIcons.js';
   import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import AccountNavDrawer from '#lib/components/AccountNavDrawer.svelte';
@@ -60,8 +60,7 @@
   // Below lg the sections live in a drawer; the trigger names the section you are in,
   // so the page keeps saying where you are without a strip that scrolls off-screen.
   let drawerOpen = $state(false);
-  const activeHref = $derived(activeSectionHref(path, accountNav));
-  const activeItem = $derived(accountNav.find((i) => i.href === activeHref));
+  const activeItem = $derived(activeSection(path, accountNav));
 </script>
 
 <svelte:head>

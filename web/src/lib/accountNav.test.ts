@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   accountNav,
-  activeSectionHref,
+  activeSection,
   isSectionActive,
   visibleAccountNav,
   visibleWorkspaces,
@@ -272,16 +272,16 @@ describe('visibleWorkspaces', () => {
   });
 });
 
-describe('activeSectionHref', () => {
+describe('activeSection', () => {
   const all = accountNav;
 
   it('marks the most specific section, not every ancestor', () => {
-    expect(activeSectionHref('/my/mentorship/schedule', all)).toBe('/my/mentorship/schedule');
-    expect(activeSectionHref('/my/mentorship', all)).toBe('/my/mentorship');
+    expect(activeSection('/my/mentorship/schedule', all)?.href).toBe('/my/mentorship/schedule');
+    expect(activeSection('/my/mentorship', all)?.href).toBe('/my/mentorship');
   });
 
   it('covers descendants and misses unknown paths', () => {
-    expect(activeSectionHref('/my/notifications/searches', all)).toBe('/my/notifications');
-    expect(activeSectionHref('/my/searches', all)).toBeUndefined();
+    expect(activeSection('/my/notifications/searches', all)?.href).toBe('/my/notifications');
+    expect(activeSection('/my/searches', all)).toBeUndefined();
   });
 });

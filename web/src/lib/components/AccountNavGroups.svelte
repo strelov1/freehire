@@ -3,7 +3,7 @@
   import { resolve } from '$app/paths';
   import { toPath } from '#lib/pathname.js';
   import { currentUser } from '#lib/auth.svelte.js';
-  import { activeSectionHref, workspaceFor, workspaceNav } from '#lib/accountNav.js';
+  import { activeSection, workspaceFor, workspaceNav } from '#lib/accountNav.js';
   import { accountNavIcons, workspaceIcons } from '#lib/accountNavIcons.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { messages, navLabel } from '#lib/i18n/shell.js';
@@ -32,7 +32,7 @@
   const groups = $derived(
     workspaceNav(workspaceId, currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false),
   );
-  const activeHref = $derived(activeSectionHref(path, groups.flatMap((g) => g.items)));
+  const activeHref = $derived(activeSection(path, groups.flatMap((g) => g.items))?.href);
 
   const rowClass = (active: boolean) =>
     cn(
