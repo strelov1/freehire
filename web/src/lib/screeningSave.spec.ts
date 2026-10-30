@@ -39,6 +39,20 @@ describe('screeningStore.save', () => {
     expect(screeningStore.answers).toEqual({ willing_to_relocate: true });
   });
 
+  it('does not send a save still queued when the account signs out', async () => {
+    const first = deferred<object>();
+    updateScreeningAnswers.mockReturnValueOnce(first.promise);
+
+    const a = screeningStore.save({ age_18_or_older: true });
+    const b = screeningStore.save({ willing_to_relocate: true });
+    await Promise.resolve();
+    screeningStore.reset();
+    first.resolve({ age_18_or_older: true });
+    await Promise.all([a, b]);
+
+    expect(updateScreeningAnswers).toHaveBeenCalledTimes(1);
+  });
+
   it('drops an answer that lands after sign-out', async () => {
     const pending = deferred<object>();
     updateScreeningAnswers.mockReturnValueOnce(pending.promise);

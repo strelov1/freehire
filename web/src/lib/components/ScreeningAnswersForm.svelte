@@ -40,13 +40,13 @@
     return undefined;
   }
 
-  // Number(...) alone silently turns anything unparseable (a stray letter, or a very
-  // natural "120,000" with a thousands separator) into NaN, which JSON.stringify then
-  // serializes as null — indistinguishable on the wire from the field being omitted, so
-  // the server would leave the stored value untouched while the form looked saved. Commas
-  // are read as thousands separators only where they group by three: "120,00" is a typo,
-  // not 12000, so it comes back NaN and is refused rather than saved as the wrong amount.
-  const wholeNumber = (raw: string) => (/^\d{1,3}(,\d{3})+$/.test(raw) ? Number(raw.replace(/,/g, '')) : Number(raw));
+  // Only plain decimal digits, or digits grouped by commas in threes ("120,000"), are read
+  // as a number; anything else is NaN and refused. Number() on its own is too generous:
+  // it reads "0x10" as 16 and "1e5" as 100000, and silently turns "120,000" into NaN, which
+  // JSON.stringify sends as null — an omitted field the server leaves untouched while the
+  // form looked saved. And "120,00" is a typo, not 12000.
+  const wholeNumber = (raw: string) =>
+    /^\d+$/.test(raw) || /^\d{1,3}(,\d{3})+$/.test(raw) ? Number(raw.replace(/,/g, '')) : Number.NaN;
 
   let authorizedCountriesText = $state((answers?.authorized_countries ?? []).join(', '));
   let visaSponsorshipNeeded = $state<TriState>(toTriState(answers?.visa_sponsorship_needed));

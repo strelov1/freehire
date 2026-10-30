@@ -60,6 +60,18 @@ describe('ScreeningAnswersForm — autosave', () => {
     expect(updateScreeningAnswers).not.toHaveBeenCalled();
   });
 
+  it('refuses hexadecimal or exponent text that Number() would read as a number', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+    const notice = screen.getByRole('textbox', { name: 'Notice period (days)' });
+
+    for (const value of ['0x10', '1e2']) {
+      await fireEvent.input(notice, { target: { value } });
+      await fireEvent.focusOut(notice);
+      expect(notice.getAttribute('aria-invalid')).toBe('true');
+    }
+    expect(updateScreeningAnswers).not.toHaveBeenCalled();
+  });
+
   it('marks a comma that does not group by three instead of reading it as thousands', async () => {
     render(ScreeningAnswersForm, { props: { answers: {} } });
     const salary = screen.getByRole('textbox', { name: 'Desired salary amount' });

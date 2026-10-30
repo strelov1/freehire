@@ -44,12 +44,14 @@ class ScreeningStore extends UserResource<Answers | null> {
   }
 
   /** Save part of the answers. The PUT answers with the whole stored record, so that
-   *  becomes the current copy with no re-read after it. An answer that lands after the
-   *  account signed out is dropped, the same guard the reads carry: it belongs to whoever
-   *  was signed in when it was sent. */
+   *  becomes the current copy with no re-read after it. A save belongs to whoever was
+   *  signed in when it was made, so a sign-out in between drops it, checked twice: before
+   *  sending (one still waiting in the queue would otherwise go out on the NEXT account's
+   *  cookie) and on the answer (one already sent must not refill the store). */
   save(patch: Partial<Answers>): Promise<void> {
     const generation = this.generation;
     return this.#queue(async () => {
+      if (generation !== this.generation) return;
       const answers = await api.updateScreeningAnswers(patch);
       if (generation !== this.generation) return;
       this.#answers = answers;

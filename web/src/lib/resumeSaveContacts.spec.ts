@@ -33,6 +33,22 @@ describe('resumeStore.saveContacts', () => {
     expect(resumeStore.meta?.contacts).toEqual({ full_name: 'Ada Lovelace', headline: 'Mathematician' });
   });
 
+  it('refuses a save still queued when the account signs out', async () => {
+    let release!: () => void;
+    putResumeContacts.mockImplementationOnce(
+      (body: Record<string, unknown>) => new Promise((r) => (release = () => r(body))),
+    );
+    const first = resumeStore.saveContacts({ full_name: 'X' });
+    const second = resumeStore.saveContacts({ headline: 'Y' });
+    await Promise.resolve();
+    resumeStore.reset();
+    release();
+    await first;
+
+    await expect(second).rejects.toThrow('signed out');
+    expect(putResumeContacts).toHaveBeenCalledTimes(1);
+  });
+
   it('lets a failed save reject its caller without blocking the next', async () => {
     putResumeContacts.mockRejectedValueOnce(new Error('offline'));
 

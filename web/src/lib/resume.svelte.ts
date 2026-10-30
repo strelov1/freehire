@@ -93,9 +93,17 @@ class ResumeStore extends UserResource<ResumeMeta | null> {
    *  built from the block the one before it saved. The re-read that follows (the parse
    *  view `structured` shows the owned values merged in) is part of the same job, so a
    *  slower read can't land after a newer save and hand the next one a stale copy. */
+  //
+  // A save belongs to whoever was signed in when it was made. One still waiting when the
+  // account signs out must not go out on the next account's cookie, built from a store that
+  // reset() has emptied, so it is refused before sending; one already sent must not refill
+  // the store.
   saveContacts(changes: Partial<CandidateContacts>): Promise<CandidateContacts> {
+    const generation = this.generation;
     return this.#contactsQueue(async () => {
+      if (generation !== this.generation) throw new Error('signed out before the save was sent');
       const saved = await api.putResumeContacts({ ...this.#meta?.contacts, ...changes });
+      if (generation !== this.generation) return saved;
       if (this.#meta) this.#meta = { ...this.#meta, contacts: saved };
       await this.refresh();
       return saved;
