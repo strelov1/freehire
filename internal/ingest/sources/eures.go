@@ -220,6 +220,13 @@ type euresVacancy struct {
 	Employer              euresEmployer       `json:"employer"`
 }
 
+// euresEmployer is null for most postings of some national feeds, and then Company stays empty
+// on purpose. Measured 2026-10-30: 10,166 of the Netherlands' 10,242 open postings (the UWV
+// werk.nl feed, documentId WERKNL…) and 269 of Spain's 529 carry no employer, and the detail
+// response has no employer block for them either — it carries one exactly when the search does.
+// What the Dutch detail does carry is a contact person whose familyName is sometimes an agency
+// ("Spilberg"), plus an email and a webProfiles link that mostly point at a recruiter or a job
+// board (joof.nl, actiever.nl); none of them names the employer, so none is read as one.
 type euresEmployer struct {
 	Name string `json:"name"`
 }
