@@ -1084,6 +1084,11 @@ func All(c HTTPClient) map[string]Source {
 	// each new vacancy's employer and body read from its print page. The site answers nothing
 	// without the session cookie its first response sets, hence the cookie client. See hzz.go.
 	registry["hzz"] = cookieSessionSource[hzzGetter](c, NewHZZ)
+	// posao.hr: a Croatian general job board, walked through its county pages, each new
+	// posting's body read from its page; the employment-service vacancies it republishes are
+	// HZZ's own and skipped. The display language lives in the session, hence the cookie
+	// client. See posaohr.go.
+	registry["posaohr"] = cookieSessionSource[posaoHRGetter](c, NewPosaoHR)
 	// ESS: the Employment Service of Slovenia's job search, read through the public JSON API its
 	// search page calls, each new vacancy's body from the detail endpoint. A listing page of 500
 	// takes ~8 s to answer, near the standard 15s client timeout. See ess.go.

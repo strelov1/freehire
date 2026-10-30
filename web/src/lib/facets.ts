@@ -505,6 +505,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   sapoemprego: 'SAPO Emprego',
   netempregos: 'Net-Empregos',
   hzz: 'HZZ (Burza rada)',
+  posaohr: 'Posao.hr',
   ess: 'ESS (Zavod RS za zaposlovanje)',
 };
 
