@@ -56,18 +56,11 @@ info:
     ## Rate limits
 
     These endpoints need no key, which is not the same as being free. Without a
-    key, two per-address budgets apply, split by what a request costs to serve:
-
-    * **600 requests per minute** across the ordinary reads — `searchJobs`,
-      `getJobFacets`, `getJob`, `getSimilarJobs`, `searchCompanies`,
-      `getCompany` and `searchCities`, sharing one budget between them.
-    * **300 requests per minute** for `agentSearchJobs` alone, on its own
-      budget, because it rehydrates every result's full description. Exhausting
-      it does not touch the budget above.
-
-    These keyless budgets are being lowered to **120 requests per minute and
-    2,000 per day per address**, shared by all of the endpoints above. `GET
-    /plans` reports the figures in force (`api_limits`).
+    key, one per-address budget applies, shared by every public read —
+    `searchJobs`, `agentSearchJobs`, `getJobFacets`, `getJob`, `getSimilarJobs`,
+    `searchCompanies`, `getCompany` and `searchCities`: **120 requests per minute
+    and 2,000 per day**. `GET /plans` reports the figures in force
+    (`api_limits`).
 
     ### Keyed tiers
 
@@ -79,16 +72,15 @@ info:
 
     | Tier | Per minute | Per day |
     |---|---|---|
+    | No key (per address) | 120 | 2,000 |
     | Free account | 600 | 10,000 |
     | Pro | 800 | 30,000 |
     | Ultra | 1,000 | 100,000 |
     | [API plan](https://freehire.me/jobs-api) | 1,200 | no cap |
     | [Data plan](https://freehire.me/jobs-api) | 6,000 | no cap |
 
-    The daily caps of the free, Pro and Ultra tiers arrive together with the
-    keyless daily cap above; until then those tiers carry their minute budget
-    only. These are the figures a deployment ships with; `GET /plans` reports
-    the ones in force (`api_limits.tiers`). An API plan also licenses the data for use in
+    These are the figures a deployment ships with; `GET /plans` reports the ones
+    in force (`api_limits.tiers`). An API plan also licenses the data for use in
     your own product — see the
     [data licence](https://freehire.me/terms#data-licence).
 

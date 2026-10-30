@@ -74,7 +74,18 @@ Errors use standard HTTP status codes: 400 (bad request / invalid value), 401 (m
 
 The public read endpoints answer without a key, limited per address — for personal and non-commercial use. Showing the postings in a product you offer to others needs an API plan. `GET /plans` reports the figures in force as `api_limits`; every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`, and a refusal is `429` with `Retry-After`.
 
-With a full-access key the budget is per account instead, shared by all of its full-access keys and by the access tokens of its signed-in MCP and CLI connections, and its size is the account's tier: Pro and Ultra raise it, and the [API and Data plans](https://freehire.me/jobs-api) raise it further. By default the API and Data plans have no daily cap, and Data has the highest per-minute limit. An embed key is budgeted like no key. `api_limits.tiers` lists every rung in force. Send the key as `Authorization: Bearer <token>`. An API plan also licenses the data for use in your own product, under the [data licence](https://freehire.me/terms#data-licence).
+With a full-access key the budget is per account instead, shared by all of its full-access keys and by the access tokens of its signed-in MCP and CLI connections, and its size is the account's tier: Pro and Ultra raise it, and the [API and Data plans](https://freehire.me/jobs-api) raise it further. By default the API and Data plans have no daily cap, and Data has the highest per-minute limit. An embed key is budgeted like no key. Send the key as `Authorization: Bearer <token>`. An API plan also licenses the data for use in your own product, under the [data licence](https://freehire.me/terms#data-licence).
+
+The default budgets. Every public read draws on the same one; `api_limits.tiers` in `GET /plans` lists the figures in force.
+
+| Tier | Per minute | Per day |
+|---|---|---|
+| No key (per address) | 120 | 2,000 |
+| Free account | 600 | 10,000 |
+| Pro | 800 | 30,000 |
+| Ultra | 1,000 | 100,000 |
+| [API](https://freehire.me/jobs-api) | 1,200 | no cap |
+| [Data](https://freehire.me/jobs-api) | 6,000 | no cap |
 
 ## Authentication model
 

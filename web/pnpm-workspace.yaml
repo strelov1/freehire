@@ -79,3 +79,9 @@ overrides:
   # bump for that one plugin. It only parses our own build-time CSS, and the
   # built stylesheets came out byte-identical under 6.0.10 and 7.1.6.
   postcss-selector-parser@<7.1.6: 7.1.6
+  # One Vue for all of Scalar. Its packages declare Vue by range and resolved to
+  # two patch releases side by side; the server render of /docs/api then mixed
+  # @vue/runtime-core from one with @vue/server-renderer from the other and died
+  # in setup ("Cannot define property modal, object is not extensible"). A floor,
+  # not a pin: it only lifts the older copy onto the newer one.
+  vue@<3.5.44: 3.5.44
