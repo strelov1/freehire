@@ -26,12 +26,18 @@ OpenSpec change).
   manual form or assistant tool — always carries a value the candidate themselves typed or
   spoke. Nothing here distinguishes "candidate said it" from "model inferred it" because
   the second case cannot happen through this package's API.
-- **`Update` is a merge, not a replace, and there is no way to explicitly clear a field
-  back to unstated.** A candidate stating only their notice period in a chat turn must not
+- **`Update` is a merge, not a replace, and withdrawing an answer is its own
+  instruction.** A candidate stating only their notice period in a chat turn must not
   wipe their previously-stored salary expectation — `Merge` overlays only the fields the
-  caller actually set. The missing "clear" operation is a deliberate omission: every field
-  here is corrective in practice (a candidate restates a changed answer, they do not
-  withdraw one), so it trades a rare, low-value operation for a simpler contract.
+  caller actually set, so leaving a field out can never clear it. Clearing is the
+  `cleared` list (`clear` on the wire), naming `Field`s to return to unstated. It was
+  left out at first as a rare, low-value operation, and that was wrong for this record in
+  particular: auto-apply sends these answers to employers in the candidate's name, so a
+  candidate who moved away from a country or stopped wanting to name a salary kept having
+  the old answer sent for them (added 2026-10-30). A field both stated and cleared is
+  refused, not resolved either way. `TestFields_CoverEveryAnswer` holds `Fields()` to
+  every key `Answers` carries — a field missing from it could be stated and never
+  withdrawn.
 - **Currency is validated as well-formed, not dictionary-recognized.** Country codes go
   through `internal/dict/location.NormalizeCountry` (dict-only, unrecognized → dropped) and
   salary period through the closed `vocab.SalaryPeriodValues` enum, but `internal/dict/vocab`

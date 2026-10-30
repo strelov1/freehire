@@ -216,3 +216,40 @@ func TestStore_ConcurrentUpdatesForTheSameUserDoNotLoseEachOthersFields(t *testi
 		t.Errorf("PrivacyConsent = %v, want %v", got.PrivacyConsent, consent)
 	}
 }
+
+func TestStore_ClearWithdrawsAnswersOverARealDatabase(t *testing.T) {
+	pool := testdb.Pool(t)
+	queries := db.New(pool)
+	userID := insertScreeningAnswersIntegrationUser(t, pool, "screening-clear@example.test")
+	store := screeninganswers.New(screeninganswers.NewQueriesRepository(queries, pool))
+	ctx := context.Background()
+
+	amount := 120000
+	relocate := true
+	if _, err := store.Update(ctx, userID, screeninganswers.Answers{
+		AuthorizedCountries: []string{"de", "pl"},
+		DesiredSalaryAmount: &amount,
+		WillingToRelocate:   &relocate,
+	}); err != nil {
+		t.Fatalf("first Update: %v", err)
+	}
+
+	if _, err := store.Update(ctx, userID, screeninganswers.Answers{},
+		screeninganswers.FieldAuthorizedCountries, screeninganswers.FieldDesiredSalaryAmount); err != nil {
+		t.Fatalf("clearing Update: %v", err)
+	}
+
+	got, err := store.Get(ctx, userID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.AuthorizedCountries) != 0 {
+		t.Errorf("AuthorizedCountries = %v, want none", got.AuthorizedCountries)
+	}
+	if got.DesiredSalaryAmount != nil {
+		t.Errorf("DesiredSalaryAmount = %d, want unstated", *got.DesiredSalaryAmount)
+	}
+	if got.WillingToRelocate == nil || !*got.WillingToRelocate {
+		t.Errorf("WillingToRelocate = %v, want true untouched", got.WillingToRelocate)
+	}
+}

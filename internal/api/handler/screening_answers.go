@@ -50,21 +50,34 @@ func (h *screeningAnswersHandlers) GetScreeningAnswers(c *fiber.Ctx) error {
 
 // PutScreeningAnswers partially updates the authenticated user's screening answers: a
 // field the request body carries is validated and stored; a field it omits keeps its
-// stored value. A malformed field (an unrecognized country code, a currency that is not a
-// three-letter ISO 4217 code, a period outside the vocabulary, a non-positive salary, a
-// negative notice period) is a 400 naming the invalid value. Cookie-only.
+// stored value; a field named in "clear" is withdrawn back to unstated. A malformed field
+// (an unrecognized country code, a currency that is not a three-letter ISO 4217 code, a
+// period outside the vocabulary, a non-positive salary, a negative notice period), an
+// unknown name in "clear", or a field both stated and cleared is a 400 naming it.
+// Cookie-only.
 func (h *screeningAnswersHandlers) PutScreeningAnswers(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err
 	}
 
-	var in screeninganswers.Answers
+	var in struct {
+		screeninganswers.Answers
+		Clear []string `json:"clear"`
+	}
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
+	cleared := make([]screeninganswers.Field, 0, len(in.Clear))
+	for _, name := range in.Clear {
+		f, err := screeninganswers.ParseField(name)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		cleared = append(cleared, f)
+	}
 
-	answers, err := h.store.Update(c.Context(), userID, in)
+	answers, err := h.store.Update(c.Context(), userID, in.Answers, cleared...)
 	if err != nil {
 		var ve *screeninganswers.ValidationError
 		if errors.As(err, &ve) {

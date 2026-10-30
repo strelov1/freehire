@@ -80,13 +80,100 @@ func (a Answers) Validate() error {
 	return nil
 }
 
+// Field names one screening answer by its wire key — the vocabulary a caller uses to ask
+// for an answer to be withdrawn.
+type Field string
+
+const (
+	FieldAuthorizedCountries   Field = "authorized_countries"
+	FieldVisaSponsorshipNeeded Field = "visa_sponsorship_needed"
+	FieldDesiredSalaryAmount   Field = "desired_salary_amount"
+	FieldDesiredSalaryCurrency Field = "desired_salary_currency"
+	FieldDesiredSalaryPeriod   Field = "desired_salary_period"
+	FieldNoticePeriodDays      Field = "notice_period_days"
+	FieldWillingToRelocate     Field = "willing_to_relocate"
+	FieldAge18OrOlder          Field = "age_18_or_older"
+	FieldPrivacyConsent        Field = "privacy_consent"
+)
+
+// Fields lists every answer, in the order Answers declares them.
+func Fields() []Field {
+	return []Field{
+		FieldAuthorizedCountries, FieldVisaSponsorshipNeeded, FieldDesiredSalaryAmount,
+		FieldDesiredSalaryCurrency, FieldDesiredSalaryPeriod, FieldNoticePeriodDays,
+		FieldWillingToRelocate, FieldAge18OrOlder, FieldPrivacyConsent,
+	}
+}
+
+// ParseField resolves a wire key to its Field, refusing a name this record does not hold.
+func ParseField(name string) (Field, error) {
+	for _, f := range Fields() {
+		if string(f) == name {
+			return f, nil
+		}
+	}
+	return "", fmt.Errorf("clear: %q is not a screening answer", name)
+}
+
+// states reports whether a stores a value for f.
+func (a Answers) states(f Field) bool {
+	switch f {
+	case FieldAuthorizedCountries:
+		return len(a.AuthorizedCountries) > 0
+	case FieldVisaSponsorshipNeeded:
+		return a.VisaSponsorshipNeeded != nil
+	case FieldDesiredSalaryAmount:
+		return a.DesiredSalaryAmount != nil
+	case FieldDesiredSalaryCurrency:
+		return a.DesiredSalaryCurrency != nil
+	case FieldDesiredSalaryPeriod:
+		return a.DesiredSalaryPeriod != nil
+	case FieldNoticePeriodDays:
+		return a.NoticePeriodDays != nil
+	case FieldWillingToRelocate:
+		return a.WillingToRelocate != nil
+	case FieldAge18OrOlder:
+		return a.Age18OrOlder != nil
+	case FieldPrivacyConsent:
+		return a.PrivacyConsent != nil
+	}
+	return false
+}
+
+// unstate returns f to unstated.
+func (a *Answers) unstate(f Field) {
+	switch f {
+	case FieldAuthorizedCountries:
+		a.AuthorizedCountries = nil
+	case FieldVisaSponsorshipNeeded:
+		a.VisaSponsorshipNeeded = nil
+	case FieldDesiredSalaryAmount:
+		a.DesiredSalaryAmount = nil
+	case FieldDesiredSalaryCurrency:
+		a.DesiredSalaryCurrency = nil
+	case FieldDesiredSalaryPeriod:
+		a.DesiredSalaryPeriod = nil
+	case FieldNoticePeriodDays:
+		a.NoticePeriodDays = nil
+	case FieldWillingToRelocate:
+		a.WillingToRelocate = nil
+	case FieldAge18OrOlder:
+		a.Age18OrOlder = nil
+	case FieldPrivacyConsent:
+		a.PrivacyConsent = nil
+	}
+}
+
 // Merge overlays update onto existing: a field update states (a non-nil pointer, or a
 // non-empty AuthorizedCountries) replaces the stored value; a field update leaves unset
-// keeps whatever existing already held. There is no way to explicitly clear a
-// previously-stated field back to unstated through Merge — every field this domain holds
-// is corrective in practice (a candidate restates a changed salary, they do not withdraw
-// one), so that omission trades a rare, low-value operation for a simpler contract.
-func Merge(existing, update Answers) Answers {
+// keeps whatever existing already held. Leaving a field out can therefore never withdraw
+// it, so withdrawing is its own instruction: each field in cleared returns to unstated.
+//
+// It has to exist because these answers are not a form that sits still: auto-apply sends
+// them to employers in the candidate's name. A candidate who moved away from a country, or
+// stopped wanting to name a salary up front, must be able to take the answer back rather
+// than only replace it — until 2026-10-30 they could not, and the old answer kept going out.
+func Merge(existing, update Answers, cleared ...Field) Answers {
 	merged := existing
 	if len(update.AuthorizedCountries) > 0 {
 		merged.AuthorizedCountries = update.AuthorizedCountries
@@ -114,6 +201,9 @@ func Merge(existing, update Answers) Answers {
 	}
 	if update.PrivacyConsent != nil {
 		merged.PrivacyConsent = update.PrivacyConsent
+	}
+	for _, f := range cleared {
+		merged.unstate(f)
 	}
 	return merged
 }

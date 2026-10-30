@@ -3,6 +3,7 @@ package screeninganswers
 import (
 	"context"
 	"errors"
+	"fmt"
 )
 
 // ErrNotFound is the caller having stated no screening answer yet.
@@ -67,13 +68,21 @@ func (s *Store) Get(ctx context.Context, userID int64) (Answers, error) {
 // screening_answers_set tool both call this same method — would otherwise both read the
 // same "existing" record and the one that commits second would silently overwrite the
 // first's fields instead of merging onto them.
-func (s *Store) Update(ctx context.Context, userID int64, update Answers) (Answers, error) {
+//
+// Each field in cleared is withdrawn back to unstated (see Merge). A field the update both
+// states and clears is a contradiction and refused rather than resolved either way.
+func (s *Store) Update(ctx context.Context, userID int64, update Answers, cleared ...Field) (Answers, error) {
 	update.Sanitize()
 	if err := update.Validate(); err != nil {
 		return Answers{}, &ValidationError{err: err}
 	}
+	for _, f := range cleared {
+		if update.states(f) {
+			return Answers{}, &ValidationError{err: fmt.Errorf("%s: both stated and cleared", f)}
+		}
+	}
 
 	return s.repo.UpdateLocked(ctx, userID, func(existing Answers) Answers {
-		return Merge(existing, update)
+		return Merge(existing, update, cleared...)
 	})
 }

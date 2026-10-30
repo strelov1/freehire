@@ -2019,10 +2019,11 @@ export function createApi(
   }
 
   /** Partially update the user's screening answers: a field the patch omits keeps
-   *  whatever was already stored. An unrecognized country code, a malformed currency, an
-   *  out-of-vocabulary period, a non-positive salary, or a negative notice period is a
-   *  400 naming the invalid field. */
-  async function updateScreeningAnswers(patch: Partial<Answers>): Promise<Answers> {
+   *  whatever was already stored, and a field named in `clear` is withdrawn. An
+   *  unrecognized country code, a malformed currency, an out-of-vocabulary period, a
+   *  non-positive salary, a negative notice period, or a field both stated and cleared is
+   *  a 400 naming it. */
+  async function updateScreeningAnswers(patch: Partial<Answers> & { clear?: (keyof Answers)[] }): Promise<Answers> {
     return requestData<Answers>('/api/v1/me/screening-answers', jsonBody('PUT', patch));
   }
 

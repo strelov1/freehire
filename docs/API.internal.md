@@ -990,7 +990,7 @@ The six candidate-stated facts that repeat across ATS application forms and no C
 
 Update one or more screening answers.
 
-A field the body omits is left unchanged. An unrecognized country code, a currency that is not a three-letter ISO 4217 code, a period outside the vocabulary, a non-positive salary, or a negative notice period is a `400` naming the invalid value.
+A field the body omits is left unchanged; to withdraw an answer, name it in `clear`. An unrecognized country code, a currency that is not a three-letter ISO 4217 code, a period outside the vocabulary, a non-positive salary, a negative notice period, an unknown name in `clear`, or a field both given and cleared is a `400` naming it.
 
 **Body**
 
@@ -1005,6 +1005,7 @@ A field the body omits is left unchanged. An unrecognized country code, a curren
 | `willing_to_relocate` | boolean | no | Whether you are willing to relocate. |
 | `age_18_or_older` | boolean | no | Whether you are 18 or older. |
 | `privacy_consent` | boolean | no | Whether auto-apply may accept an employer's privacy / personal-data terms for you. Never covers marketing, SMS, future-openings or diversity opt-ins. |
+| `clear` | string[] | no | Answers to withdraw back to unstated, by field name. Auto-apply then asks you instead of answering. (e.g. `["desired_salary_amount"]`) |
 
 ```bash
 curl -X PUT "https://freehire.me/api/v1/me/screening-answers" \

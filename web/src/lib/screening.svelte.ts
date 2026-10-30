@@ -48,11 +48,13 @@ class ScreeningStore extends UserResource<Answers | null> {
    *  signed in when it was made, so a sign-out in between drops it, checked twice: before
    *  sending (one still waiting in the queue would otherwise go out on the NEXT account's
    *  cookie) and on the answer (one already sent must not refill the store). */
-  save(patch: Partial<Answers>): Promise<void> {
+  //
+  // `cleared` names answers to withdraw: leaving a field out of `patch` keeps it as stored.
+  save(patch: Partial<Answers>, cleared: (keyof Answers)[] = []): Promise<void> {
     const generation = this.generation;
     return this.#queue(async () => {
       if (generation !== this.generation) return;
-      const answers = await api.updateScreeningAnswers(patch);
+      const answers = await api.updateScreeningAnswers(cleared.length > 0 ? { ...patch, clear: cleared } : patch);
       if (generation !== this.generation) return;
       this.#answers = answers;
       this.markLoaded();

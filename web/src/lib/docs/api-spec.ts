@@ -2272,10 +2272,11 @@ data: {"type":"result","stop_reason":"completed"}
         auth: 'cookie',
         summary: 'Update one or more screening answers.',
         description:
-          'A field the body omits is left unchanged. An unrecognized country ' +
-          'code, a currency that is not a three-letter ISO 4217 code, a period ' +
-          'outside the vocabulary, a non-positive salary, or a negative notice ' +
-          'period is a `400` naming the invalid value.',
+          'A field the body omits is left unchanged; to withdraw an answer, name it in ' +
+          '`clear`. An unrecognized country code, a currency that is not a three-letter ' +
+          'ISO 4217 code, a period outside the vocabulary, a non-positive salary, a ' +
+          'negative notice period, an unknown name in `clear`, or a field both given and ' +
+          'cleared is a `400` naming it.',
         body: [
           { name: 'authorized_countries', type: 'string[]', description: 'ISO alpha-2 country codes you are authorized to work in.', example: '["DE","NL"]' },
           { name: 'visa_sponsorship_needed', type: 'boolean', description: 'Whether you need visa sponsorship.' },
@@ -2286,6 +2287,7 @@ data: {"type":"result","stop_reason":"completed"}
           { name: 'willing_to_relocate', type: 'boolean', description: 'Whether you are willing to relocate.' },
           { name: 'age_18_or_older', type: 'boolean', description: 'Whether you are 18 or older.' },
           { name: 'privacy_consent', type: 'boolean', description: "Whether auto-apply may accept an employer's privacy / personal-data terms for you. Never covers marketing, SMS, future-openings or diversity opt-ins." },
+          { name: 'clear', type: 'string[]', description: 'Answers to withdraw back to unstated, by field name. Auto-apply then asks you instead of answering.', example: '["desired_salary_amount"]' },
         ],
         curl: `curl -X PUT "${BASE_URL}/me/screening-answers" \\
   -b cookies.txt -H 'Content-Type: application/json' \\

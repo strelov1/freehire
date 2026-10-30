@@ -200,3 +200,44 @@ func TestPutScreeningAnswers_RepositoryFailureReturns500NotItsRawMessage(t *test
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+func TestPutScreeningAnswers_ClearWithdrawsAStoredAnswer(t *testing.T) {
+	repo := &fakeScreeningAnswersRepo{
+		getRet: screeninganswers.Answers{AuthorizedCountries: []string{"pl"}, WillingToRelocate: boolPtr(true)},
+	}
+	app, token := screeningAnswersApp(t, repo)
+	resp := doScreeningAnswers(t, app, fiber.MethodPut, `{"clear":["authorized_countries"]}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if repo.upserted.AuthorizedCountries != nil {
+		t.Errorf("upserted countries = %v, want cleared", repo.upserted.AuthorizedCountries)
+	}
+	if repo.upserted.WillingToRelocate == nil || !*repo.upserted.WillingToRelocate {
+		t.Errorf("upserted WillingToRelocate = %v, want true untouched", repo.upserted.WillingToRelocate)
+	}
+}
+
+func TestPutScreeningAnswers_ClearRefusesAnUnknownField(t *testing.T) {
+	repo := &fakeScreeningAnswersRepo{}
+	app, token := screeningAnswersApp(t, repo)
+	resp := doScreeningAnswers(t, app, fiber.MethodPut, `{"clear":["salary"]}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+	if repo.upsertCalled {
+		t.Error("repo.Upsert should not be called for an unknown field")
+	}
+}
+
+func TestPutScreeningAnswers_ClearRefusesAFieldAlsoStated(t *testing.T) {
+	repo := &fakeScreeningAnswersRepo{}
+	app, token := screeningAnswersApp(t, repo)
+	resp := doScreeningAnswers(t, app, fiber.MethodPut, `{"notice_period_days":14,"clear":["notice_period_days"]}`, token)
+	defer resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+}

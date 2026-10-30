@@ -177,3 +177,37 @@ func TestUpdate_ReadsMergesAndWritesAsOneRepositoryCallNotGetThenUpsert(t *testi
 		t.Errorf("repo calls = %v, want %v — Store.Update must not read and write as two separate, unlocked Repository calls", repo.calls, want)
 	}
 }
+
+func TestUpdate_RefusesAFieldBothStatedAndCleared(t *testing.T) {
+	repo := &fakeRepo{}
+	store := screeninganswers.New(repo)
+	salary := 100000
+
+	_, err := store.Update(context.Background(), 1,
+		screeninganswers.Answers{DesiredSalaryAmount: &salary}, screeninganswers.FieldDesiredSalaryAmount)
+
+	var ve *screeninganswers.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("err = %v, want a ValidationError", err)
+	}
+	if repo.updateLockedCalls != 0 {
+		t.Errorf("UpdateLocked called %d times, want 0", repo.updateLockedCalls)
+	}
+}
+
+func TestUpdate_ClearsAStoredField(t *testing.T) {
+	salary := 100000
+	repo := &fakeRepo{getRet: screeninganswers.Answers{DesiredSalaryAmount: &salary, AuthorizedCountries: []string{"de"}}}
+	store := screeninganswers.New(repo)
+
+	if _, err := store.Update(context.Background(), 1, screeninganswers.Answers{}, screeninganswers.FieldDesiredSalaryAmount); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	if repo.upserted.DesiredSalaryAmount != nil {
+		t.Errorf("upserted salary = %v, want nil", *repo.upserted.DesiredSalaryAmount)
+	}
+	if len(repo.upserted.AuthorizedCountries) != 1 {
+		t.Errorf("upserted countries = %v, want [de] untouched", repo.upserted.AuthorizedCountries)
+	}
+}

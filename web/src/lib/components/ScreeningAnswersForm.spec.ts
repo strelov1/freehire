@@ -181,20 +181,36 @@ describe('ScreeningAnswersForm — autosave', () => {
     await waitFor(() => expect(updateScreeningAnswers).toHaveBeenCalledWith({ desired_salary_amount: 120000 }));
   });
 
-  it('offers Undo for a changed answer, but not for one filled in for the first time', async () => {
-    render(ScreeningAnswersForm, { props: { answers: { notice_period_days: 30 } } });
-    const notice = screen.getByRole('textbox', { name: 'Notice period (days)' });
-
-    await fireEvent.input(notice, { target: { value: '60' } });
-    await fireEvent.focusOut(notice);
-    expect(await screen.findByRole('button', { name: 'Undo' })).toBeTruthy();
-
+  it('withdraws an answer that is emptied', async () => {
+    render(ScreeningAnswersForm, { props: { answers: { notice_period_days: 30, desired_salary_amount: 90000 } } });
     const salary = screen.getByRole('textbox', { name: 'Desired salary amount' });
+
+    await fireEvent.input(salary, { target: { value: '' } });
+    await fireEvent.focusOut(salary);
+
+    await waitFor(() =>
+      expect(updateScreeningAnswers).toHaveBeenCalledWith({
+        notice_period_days: 30,
+        clear: ['desired_salary_amount'],
+      }),
+    );
+  });
+
+  it('withdraws a country list emptied to nothing', async () => {
+    render(ScreeningAnswersForm, { props: { answers: { authorized_countries: ['pl'] } } });
+
+    await fireEvent.click(screen.getByRole('button', { name: /Poland/ }));
+
+    await waitFor(() => expect(updateScreeningAnswers).toHaveBeenCalledWith({ clear: ['authorized_countries'] }));
+  });
+
+  it('offers Undo for an answer filled in for the first time too', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+    const salary = screen.getByRole('textbox', { name: 'Desired salary amount' });
+
     await fireEvent.input(salary, { target: { value: '90000' } });
     await fireEvent.focusOut(salary);
-    await waitFor(() => expect(updateScreeningAnswers).toHaveBeenCalledTimes(2));
-    await screen.findByText('Saved');
-    // The salary was blank before, and the endpoint cannot clear it again.
-    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+
+    expect(await screen.findByRole('button', { name: 'Undo' })).toBeTruthy();
   });
 });
