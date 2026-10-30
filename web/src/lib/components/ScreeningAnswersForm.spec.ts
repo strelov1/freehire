@@ -52,7 +52,19 @@ describe('ScreeningAnswersForm — autosave', () => {
       target: { value: 'Германия' },
     });
 
-    expect(screen.getByRole('button', { name: /Germany/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Германия/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Germany/ })).toBeNull();
+  });
+
+  it('still finds a country by its English name on a translated form', async () => {
+    page.data.locale = 'ru';
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+
+    await fireEvent.input(screen.getByRole('textbox', { name: 'Есть разрешение на работу в' }), {
+      target: { value: 'Germany' },
+    });
+
+    expect(screen.getByRole('button', { name: /Германия/ })).toBeTruthy();
   });
 
   it('keeps the currency marked while another answer changes', async () => {

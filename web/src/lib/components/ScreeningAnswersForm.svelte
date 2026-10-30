@@ -56,14 +56,16 @@
   // The picker offers only the countries the server accepts. The site-wide list is every
   // ISO code; COUNTRY_REGION_MAP is generated from the server's own table, so the two
   // cannot drift.
-  const countryOptions = COUNTRY_OPTIONS.filter((o) => o.value in COUNTRY_REGION_MAP);
+  const acceptedCountries = COUNTRY_OPTIONS.filter((o) => o.value in COUNTRY_REGION_MAP);
 
-  // The list's labels are English, so each country is also found by its name in the
-  // reader's own language — "Германия" must find Germany on the Russian form.
-  const countryAliases = $derived.by(() => {
+  // The site-wide labels are English. The form shows each country in the reader's own
+  // language — a fuzzy "Германия" also surfaces Армения, and beside English labels that
+  // is easy to pick by mistake — and keeps the English name as a search alias.
+  const countryOptions = $derived.by(() => {
     const names = new Intl.DisplayNames([locale()], { type: 'region' });
-    return Object.fromEntries(countryOptions.map((o) => [o.value, [names.of(o.value.toUpperCase()) ?? o.label]]));
+    return acceptedCountries.map((o) => ({ ...o, label: names.of(o.value.toUpperCase()) ?? o.label }));
   });
+  const countryAliases = Object.fromEntries(acceptedCountries.map((o) => [o.value, [o.label]]));
 
   let authorizedCountries = $state<string[]>(answers?.authorized_countries ?? []);
   let visaSponsorshipNeeded = $state<TriState>(toTriState(answers?.visa_sponsorship_needed));
