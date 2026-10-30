@@ -1,6 +1,9 @@
 package location
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // japanesePrefectures are Japan's 47 prefectures in Japanese script, each with its
 // 都/道/府/県 suffix. HRMOS writes every location as "<ward or city>, <prefecture>" ("港区,
@@ -28,18 +31,34 @@ var japanesePrefectures = []string{
 // carrying it is a Japanese address wherever it sits ("本社 〒151-0053 東京都渋谷区…").
 const japanesePostalMark = "〒"
 
+// japaneseMunicipalityMarks are the suffixes of the unit that follows a prefecture in an
+// address: a city (市), a Tokyo ward (区), a district (郡) and its towns and villages (町,
+// 村).
+const japaneseMunicipalityMarks = "市区郡町村"
+
 // isJapaneseAddress reports whether tok is a prefecture, an address that opens with one,
-// or an address behind the postal mark. A prefecture named later in a token with no
-// postal mark ("■SHIRO 銀座三越店 東京都中央区") is not read: what precedes it is a shop or
-// office name, and the line is left to say no more than it plainly states.
+// or an address behind the postal mark. After a prefecture the address must go on to a
+// municipality: "北海道牧場餐廳" is a Hong Kong restaurant, not an address in Hokkaido. A
+// prefecture named later in a token with no postal mark ("■SHIRO 銀座三越店 東京都中央区")
+// is not read: what precedes it is a shop or office name, and the line is left to say no
+// more than it plainly states.
 func isJapaneseAddress(tok string) bool {
 	if strings.Contains(tok, japanesePostalMark) {
 		return true
 	}
 	for _, p := range japanesePrefectures {
-		if strings.HasPrefix(tok, p) {
-			return true
+		if rest, ok := strings.CutPrefix(tok, p); ok {
+			return rest == "" || strings.ContainsAny(leadingPlaceName(rest), japaneseMunicipalityMarks)
 		}
 	}
 	return false
+}
+
+// leadingPlaceName is s up to its first space or digit: the place names an address runs
+// through before its block number ("渋谷区渋谷2-24-12" -> "渋谷区渋谷").
+func leadingPlaceName(s string) string {
+	if i := strings.IndexFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsDigit(r) }); i >= 0 {
+		return s[:i]
+	}
+	return s
 }

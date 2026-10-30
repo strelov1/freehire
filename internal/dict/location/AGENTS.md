@@ -100,7 +100,8 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   US") gained the metro the now-recorded state lets `metroFor` resolve.
 - **A Japanese address states `jp`** (`location_ja.go`): a token that is one of the 47
   prefectures in Japanese script WITH its 都/道/府/県 suffix ("港区, 東京都"), opens with one
-  ("東京都渋谷区渋谷2-24-12"), or carries the 〒 postal mark. Bare "東京"/"大阪" and a ward
+  and goes on to a municipality (市/区/郡/町/村: "東京都渋谷区渋谷2-24-12", not the Hong Kong
+  restaurant "北海道牧場餐廳"), or carries the 〒 postal mark. Bare "東京"/"大阪" and a ward
   or city alone ("大阪市北区") state nothing, nor does a prefecture mid-token behind a shop
   name. No city or metro: the city tables are Latin-script. Measured 2026-10-30: all ~43.8k
   open HRMOS postings and ~20k of HERP's had no country.

@@ -23,6 +23,10 @@ func TestParseJapaneseAddresses(t *testing.T) {
 		// An address opens with its prefecture.
 		{"東京都渋谷区渋谷2-24-12　渋谷スクランブルスクエア 28F～36F", []string{"jp"}},
 		{"北海道砂川市", []string{"jp"}},
+		{"東京都あきる野市", []string{"jp"}},
+		{"熊本県阿蘇郡西原村", []string{"jp"}},
+		// A prefecture opening a business name is no address: a Hong Kong restaurant.
+		{"北海道牧場餐廳, Hong Kong", []string{"hk"}},
 		// The postal mark is Japan's alone, wherever the address it opens sits in the token.
 		{"本社 〒151-0053 東京都渋谷区代々木1-36-4 全理連ビル", []string{"jp"}},
 		{"〒108-0023 東京都港区芝浦3丁目1－1", []string{"jp"}},
