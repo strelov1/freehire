@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/strelov1/freehire/internal/dict/normalize"
 )
 
 // Croatian, Serbian, Bosnian and Montenegrin (BCS) titles are one language family, so
@@ -21,7 +23,7 @@ import (
 //
 // Second, Serbian is written in two scripts. A title in Cyrillic ("Програмер",
 // "Возач") is transliterated into the Latin alphabet before this table reads it, by
-// the official one-to-one mapping (serbianLatin) — but only a title that shows it is
+// the official one-to-one mapping (normalize.LatinizeSerbian) — but only a title that shows it is
 // Serbian (looksSerbianCyrillic). Russian, Ukrainian and Bulgarian titles have tables of
 // their own, the main table's Cyrillic aliases.
 //
@@ -123,17 +125,6 @@ func matchBCSOrdered(title bcsTitle, table []bcsEntry) string {
 	return ""
 }
 
-// serbianLatin is the official Serbian Cyrillic-to-Latin mapping (Gaj's alphabet).
-// The Macedonian letters ѓ, ќ and ѕ are mapped too, as Macedonian titles read the same
-// way.
-var serbianLatin = map[rune]string{
-	'а': "a", 'б': "b", 'в': "v", 'г': "g", 'д': "d", 'ђ': "đ", 'е': "e", 'ж': "ž",
-	'з': "z", 'и': "i", 'ј': "j", 'к': "k", 'л': "l", 'љ': "lj", 'м': "m", 'н': "n",
-	'њ': "nj", 'о': "o", 'п': "p", 'р': "r", 'с': "s", 'т': "t", 'ћ': "ć", 'у': "u",
-	'ф': "f", 'х': "h", 'ц': "c", 'ч': "č", 'џ': "dž", 'ш': "š",
-	'ѓ': "đ", 'ќ': "ć", 'ѕ': "dz",
-}
-
 // latinizeSerbian transliterates a lowercased title written in Serbian Cyrillic into
 // the Latin alphabet, and returns any other title unchanged.
 //
@@ -147,15 +138,7 @@ func latinizeSerbian(lower string) string {
 	if !looksSerbianCyrillic(lower) {
 		return lower
 	}
-	var b strings.Builder
-	for _, r := range lower {
-		if l, ok := serbianLatin[r]; ok {
-			b.WriteString(l)
-		} else {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
+	return normalize.LatinizeSerbian(lower)
 }
 
 // looksSerbianCyrillic reports whether a lowercased title is written in Serbian (or
@@ -168,7 +151,7 @@ func looksSerbianCyrillic(lower string) bool {
 		if !unicode.Is(unicode.Cyrillic, r) {
 			continue
 		}
-		if _, ok := serbianLatin[r]; !ok {
+		if !normalize.IsSerbianCyrillic(r) {
 			return false
 		}
 		cyrillic = true
