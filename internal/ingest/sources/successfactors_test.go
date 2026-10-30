@@ -3,6 +3,9 @@ package sources
 import (
 	"context"
 	"errors"
+	"net/url"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -165,8 +168,8 @@ func TestSuccessFactorsFetchSitemapThenDetailAndMaps(t *testing.T) {
 	if j.Company != "Tetra Pak" {
 		t.Errorf("Company = %q", j.Company)
 	}
-	if j.Location != "" {
-		t.Errorf("Location = %q, want empty (enrichment fills it)", j.Location)
+	if j.Location != "" || j.Countries != nil {
+		t.Errorf("Location = %q, Countries = %v, want both empty for a page that states no place", j.Location, j.Countries)
 	}
 	if strings.Contains(j.Description, "<script>") || !strings.Contains(j.Description, "<h2>Role</h2>") {
 		t.Errorf("Description not sanitized/assembled: %q", j.Description)
@@ -439,5 +442,65 @@ func TestSuccessFactorsFetchNewPropagatesAListingError(t *testing.T) {
 	if _, err := NewSuccessFactors(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "acme"},
 		func(string) bool { return false }); err == nil {
 		t.Fatal("FetchNew succeeded despite a listing error")
+	}
+}
+
+// The job page states its place in the schema.org JobPosting's jobLocation microdata, and on
+// the standard template also renders it as the jobGeoLocation line. Real pages (trimmed) cover
+// the three shapes measured on live boards: structured address plus the rendered line, a
+// structured address alone, and a single streetAddress string. addressRegion is not used: the
+// platform truncates it to four characters ("Québ", "II d").
+func TestSuccessFactorsDetailReadsTheLocation(t *testing.T) {
+	cases := []struct {
+		fixture, loc  string
+		wantLocation  string
+		wantCountries []string
+	}{
+		{
+			// "CA" in a free-text line reads as California; the structured country is Canada.
+			fixture:       "purolator.html",
+			loc:           "https://careers.purolator.com/job/Lachine-Aide-chauffeur/1437301700/",
+			wantLocation:  "Lachine, Québec, CA, H8R 1A1",
+			wantCountries: []string{"ca"},
+		},
+		{
+			fixture:       "glencorecopper.html",
+			loc:           "https://careers.glencorecopper.com/job/Sierra-Gorda-Ingeniero/1374636055/",
+			wantLocation:  "Sierra Gorda, CL",
+			wantCountries: []string{"cl"},
+		},
+		{
+			// A single string carries no dedicated country field; the location dictionary
+			// derives the country from it.
+			fixture:      "burda.html",
+			loc:          "https://burda.jobs.hr.cloud.sap/job/Offenburg-Werkstudent/667807901/",
+			wantLocation: "Offenburg, DE",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.fixture, func(t *testing.T) {
+			page, err := os.ReadFile("testdata/successfactors/" + tc.fixture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			u, _ := url.Parse(tc.loc)
+			fake := (&routedHTTP{}).
+				route("/job_sitemap.xml", sfSitemapXML(tc.loc)).
+				route(strings.TrimSuffix(u.Path, "/"), string(page))
+			jobs, err := NewSuccessFactors(fake).Fetch(context.Background(), CompanyEntry{Board: u.Host})
+			if err != nil {
+				t.Fatalf("Fetch: %v", err)
+			}
+			if len(jobs) != 1 {
+				t.Fatalf("got %d jobs, want 1", len(jobs))
+			}
+			j := jobs[0]
+			if j.Location != tc.wantLocation {
+				t.Errorf("Location = %q, want %q", j.Location, tc.wantLocation)
+			}
+			if !slices.Equal(j.Countries, tc.wantCountries) {
+				t.Errorf("Countries = %v, want %v", j.Countries, tc.wantCountries)
+			}
+		})
 	}
 }

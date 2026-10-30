@@ -6,6 +6,9 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/dict/location"
+	"golang.org/x/net/html"
 )
 
 // successfactors adapts SAP SuccessFactors career sites. The board is the career-site
@@ -96,18 +99,46 @@ func (s successfactors) detail(ctx context.Context, e CompanyEntry, entry sitema
 		title = metaProperty(root, "og:title")
 	}
 
+	place, countries := sfLocation(root)
 	return Job{
-		ExternalID: id,
-		URL:        entry.Loc,
-		Title:      title,
-		Company:    company,
-		// Location is intentionally empty: SuccessFactors does not expose it in the
-		// microdata, and enrichment derives it from the description.
-		Location:    "",
+		ExternalID:  id,
+		URL:         entry.Loc,
+		Title:       title,
+		Company:     company,
+		Location:    place,
+		Countries:   countries,
 		Description: sanitizeHTML(itempropHTML(root, "description")),
 		Remote:      isRemote(title),
 		PostedAt:    parseDate(entry.LastMod),
 	}, true
+}
+
+// sfLocation reads where a posting is from its page. The JobPosting's jobLocation microdata
+// carries either a structured address (addressLocality/addressCountry) or one streetAddress
+// string; the standard template also renders the place as a jobGeoLocation line, which is
+// the most complete form (it spells out the region), so it is preferred when present.
+// addressRegion is never used: the platform truncates it to four characters ("Québ",
+// "II d"). The structured addressCountry is returned as the posting's country, since in a
+// free-text line "CA" reads as California rather than Canada. A tenant whose custom layout
+// drops both the microdata and the rendered line states no place, and gets none.
+func sfLocation(root *html.Node) (string, []string) {
+	country := itempropAttr(root, "addressCountry")
+
+	rendered := ""
+	if n := firstByClass(root, "jobGeoLocation"); n != nil {
+		rendered = textContent(n)
+	}
+	place := firstNonEmpty(
+		rendered,
+		itempropAttr(root, "streetAddress"),
+		joinNonEmpty(itempropAttr(root, "addressLocality"), country),
+	)
+
+	var countries []string
+	if c := location.NormalizeCountry(country); c != "" {
+		countries = []string{c}
+	}
+	return place, countries
 }
 
 // sfJobIDPattern captures the leading digits of a job URL's last path segment, ignoring a
