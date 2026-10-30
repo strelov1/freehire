@@ -94,7 +94,10 @@
   const credentials = $derived(credentialBadges(job.collections));
   // Only the full posting carries the raw location line; a card projection simply has none.
   const locationLine = $derived('location' in job ? job.location : undefined);
-  const place = $derived(cardLocation(locationLine, job.countries));
+  // Only the flags the stack actually draws count as said: a country past the cap hides
+  // behind "+N", so the caption must still name it.
+  const MAX_FLAGS = 5;
+  const place = $derived(cardLocation(locationLine, job.countries?.slice(0, MAX_FLAGS)));
   // A one-line blurb under the title so a card conveys what the job is without
   // opening it. Prefer the clean model-written summary, but only tech jobs are
   // enriched — fall back to a plain-text snippet of the raw (HTML) posting so
@@ -432,7 +435,7 @@
       <!-- Eligible countries as an overlapping flag cluster. Display-only here: the
            whole card is a link, so the flags carry no nested filter links. -->
       {#if job.countries?.length}
-        <CountryFlagStack codes={job.countries} max={5} class="ml-0.5 text-base" />
+        <CountryFlagStack codes={job.countries} max={MAX_FLAGS} class="ml-0.5 text-base" />
       {/if}
       <!-- The place the flags do not name: one employer's postings in seven cities
            otherwise read identically until opened. A muted caption beside the flags
