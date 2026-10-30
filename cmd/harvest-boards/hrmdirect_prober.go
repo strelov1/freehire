@@ -4,68 +4,56 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"path"
-	"regexp"
+	"strings"
 
 	"golang.org/x/net/html"
 )
 
-// hrmdirectProber validates an HRM Direct board "<slug>" by counting the postings its listing
-// links ("<slug>.hrmdirect.com/employment/job-openings.php?search=true" — the bare path renders
-// the filter form above an empty result, so the query is what makes the board answer).
+// hrmdirectProber validates an HRM Direct board "<slug>" by asking ClearCompany's career-site
+// API how many postings the tenant lists. HRM Direct tenants are served by ClearCompany since
+// ~2026-10-21: the hosted career page ("apply.clearcompany.com/<slug>") renders no posting and
+// names the tenant's career-site id in its widget script, and the API answers a page of
+// postings with the total. This mirrors the adapter (internal/ingest/sources/hrmdirect.go),
+// which explains the move.
 //
-// It reports no company name. The heading a tenant puts on its career site is free text, not an
-// employer field: sampled live it reads "Current Openings" or "Careers and <name>" about as
-// often as a name, and some tenants leave it out entirely. Reporting it would gate every board
-// on a string the platform never promised was a company, so the seed's own name labels the
-// board instead — the same reading careerplugProber takes.
+// It reports no company name. The career page's title is free text, not an employer field, so
+// the seed's own name labels the board instead — the same reading careerplugProber takes.
 type hrmdirectProber struct{}
 
-// hrmdirectPostingID matches one of the two ids in a posting link, mirroring the adapter's own
-// rule (internal/ingest/sources/hrmdirect.go): a posting is keyed by the PAIR (req, req_loc),
-// and both must be numeric.
-var hrmdirectPostingID = regexp.MustCompile(`^\d+$`)
-
 func (hrmdirectProber) probe(ctx context.Context, c httpClient, slug string) (string, int, error) {
-	root, err := c.GetHTML(ctx,
-		fmt.Sprintf("https://%s.hrmdirect.com/employment/job-openings.php?search=true", slug))
+	root, err := c.GetHTML(ctx, "https://apply.clearcompany.com/"+url.PathEscape(slug))
 	if err != nil {
 		return "", 0, nil
 	}
-	// Counted by (req, req_loc) rather than by link, so the number reported is postings — the
-	// same thing the adapter would ingest — and not however many times the page links them.
-	ids := map[string]bool{}
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			for _, a := range n.Attr {
-				if a.Key == "href" {
-					if id, ok := hrmdirectPostingRef(a.Val); ok {
-						ids[id] = true
-					}
+	siteID := hrmdirectSiteID(root)
+	if siteID == "" {
+		return "", 0, nil
+	}
+	var resp struct {
+		TotalCount int `json:"totalCount"`
+	}
+	u := fmt.Sprintf("https://careers-api.clearcompany.com/v1/%s?pageIndex=0&pageSize=1", url.PathEscape(siteID))
+	if err := c.GetJSON(ctx, u, &resp); err != nil {
+		return "", 0, nil
+	}
+	return "", resp.TotalCount, nil
+}
+
+// hrmdirectSiteID returns the first data-site-id attribute in the page, or "".
+func hrmdirectSiteID(n *html.Node) string {
+	if n.Type == html.ElementNode {
+		for _, a := range n.Attr {
+			if a.Key == "data-site-id" {
+				if id := strings.TrimSpace(a.Val); id != "" {
+					return id
 				}
 			}
 		}
-		for ch := n.FirstChild; ch != nil; ch = ch.NextSibling {
-			walk(ch)
+	}
+	for ch := n.FirstChild; ch != nil; ch = ch.NextSibling {
+		if id := hrmdirectSiteID(ch); id != "" {
+			return id
 		}
 	}
-	walk(root)
-	return "", len(ids), nil
-}
-
-// hrmdirectPostingRef reads a listing link's "<req>-<req_loc>" posting id, reporting ok=false
-// when the link is not a posting permalink. It decodes the query rather than pattern-matching
-// it, so the filter form's own "?req=" link and any future parameter order both resolve right.
-func hrmdirectPostingRef(href string) (string, bool) {
-	u, err := url.Parse(href)
-	if err != nil || path.Base(u.Path) != "job-opening.php" {
-		return "", false
-	}
-	q := u.Query()
-	req, loc := q.Get("req"), q.Get("req_loc")
-	if !hrmdirectPostingID.MatchString(req) || !hrmdirectPostingID.MatchString(loc) {
-		return "", false
-	}
-	return req + "-" + loc, true
+	return ""
 }

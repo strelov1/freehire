@@ -54,7 +54,7 @@ import (
 //     Both the walk and this list collapse them, because they are one requisition with one
 //     posting page behind them; it is the number that is not what it looks like.
 //   - The pages declare no character set anywhere and are served as windows-1252, so the body
-//     goes through charset.NewReader before it is parsed (the hrmdirect case again). Most are
+//     goes through charset.NewReader before it is parsed. Most are
 //     pure ASCII; the ones that are not are text pasted in from a word processor, so it is
 //     exactly the smart quotes and dashes that would otherwise arrive as U+FFFD.
 //   - An id the board no longer carries is answered 200 with an EMPTY posting list rather than

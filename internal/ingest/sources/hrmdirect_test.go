@@ -2,69 +2,124 @@ package sources
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
-// hrmdirectList is the "all openings" listing: one row per (req, req_loc), so requisition 100
-// appears twice for its two locations. Each row links its posting from the title anchor with
-// the site's own trailing empty parameter and "#job" fragment, and the department filter links
-// back to the listing itself.
-const hrmdirectList = `<html><body><div class="reqResult">
-<table class="reqResultTable">
-<tr class="reqitem"><td class="posTitle"><a href="job-opening.php?req=100&amp;req_loc=11&amp;&amp;#job">Senior Platform Engineer</a></td><td>Austin</td></tr>
-<tr class="reqitem1"><td class="posTitle"><a href="job-opening.php?req=100&amp;req_loc=12&amp;&amp;#job">Senior Platform Engineer</a></td><td>Remote</td></tr>
-<tr class="reqitem"><td class="posTitle"><a href="job-opening.php?req=200&amp;req_loc=21&amp;&amp;#job">Support Lead</a></td><td></td></tr>
-<tr class="reqitem1"><td class="posTitle"><a href="job-opening.php?req=200&amp;req_loc=21&amp;&amp;#job">Support Lead</a></td><td></td></tr>
-</table>
-<a href="job-openings.php?search=true&amp;dept=7">Engineering</a>
-</div></body></html>`
+// hrmdirectCareerPage is the hosted career page an HRM Direct tenant now redirects to
+// (apply.clearcompany.com/<board>), trimmed from the live "sms" tenant on 2026-10-30. It renders
+// no posting at all: the list is drawn by ClearCompany's widget script, which carries the
+// tenant's career-site id the posting API is keyed by.
+const hrmdirectCareerPage = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>SMS DATA PRODUCTS GROUP, INC &#x2013; Careers</title>
+</head><body>
+<a class="cc-skip" href="#cc-widget">Skip to jobs</a>
+<main class="cc-main">
+    <div class="cc-wrap cc-widget" id="cc-widget">
+            <script src="https://careers-content.clearcompany.com/js/v1/career-site.js?hosted=true" data-site-id="8a53c87d-2c7f-85ba-20f0-66842148ace3" data-default-source="CJB-0"></script>
+    </div>
+</main>
+</body></html>`
 
-// hrmdirectDetailA is a job page. The tenant-authored welcome blurb above the posting carries a
-// heading of its own, which is why the adapter reads inside div.reqResult rather than taking the
-// document's first h2. The \x92 byte is windows-1252's right single quote: HRM Direct declares
-// no charset and serves these raw.
-const hrmdirectDetailA = "<html><body>" +
-	`<div class="hrmWelcomeContent"><h2>Welcome to Acme</h2></div>` +
-	`<div class="reqResult"><h2>Senior Platform Engineer</h2>` +
-	`<table class="viewFields">` +
-	`<tr><td class="viewFieldName"><b>Department:</b></td><td class="viewFieldValue">Engineering</td></tr>` +
-	`<tr><td class="viewFieldName"><b>Location:</b></td><td class="viewFieldValue">Austin, TX<br></td></tr>` +
-	`</table>` +
-	"<div class=\"jobDesc\"><p>Own the platform\x92s roadmap.</p><script>track()</script></div>" +
-	`</div></body></html>`
+// hrmdirectAPIPage is one page of the career-site posting API, trimmed from the live "sms" tenant on
+// 2026-10-30 (two of its postings, descriptions cut, address fields dropped; totalCount set to
+// what the trimmed page holds). The first is a remote posting stated in the structured
+// locations; the second lists one requisition at five locations, four of them the same town.
+const hrmdirectAPIPage = `{
+ "results": [
+  {
+   "id": "2F9F6833-113B-0D9B-5817-09E9BEDC812D",
+   "userDefinedId": "2026-5615",
+   "positionTitle": "Systems Engineer",
+   "description": "<p>SMS is seeking a Mid-Senior level System Engineer to work as part of the BIM Design team.</p><script>track()</script>",
+   "postedDate": "2026-10-23T00:00:00",
+   "departmentName": "BIM TO 05",
+   "location": "Remote (US)",
+   "locations": [
+    {"city": null, "subdivision": "", "subdivisionFullName": "", "country": "US", "isRemote": true, "isNationwide": true, "isStatewide": false}
+   ]
+  },
+  {
+   "id": "86e8505e-7101-13ec-1693-7018e401f109",
+   "userDefinedId": "2026-5502",
+   "positionTitle": "Information System Security Officer",
+   "description": "<p>The Senior Information System Security Officer (ISSO) supports the Information System Security Manager (ISSM).</p>",
+   "postedDate": "2026-09-15T00:00:00",
+   "departmentName": "AFCENT NOSC",
+   "location": "Shaw Afb SC, Sumter SC, Sumter SC, Sumter SC, Sumter SC",
+   "locations": [
+    {"city": "Shaw Afb", "subdivision": "SC", "subdivisionFullName": "South Carolina", "country": "US", "isRemote": false, "isNationwide": false, "isStatewide": false},
+    {"city": "Sumter", "subdivision": "SC", "subdivisionFullName": "South Carolina", "country": "US", "isRemote": false, "isNationwide": false, "isStatewide": false},
+    {"city": "Sumter", "subdivision": "SC", "subdivisionFullName": "South Carolina", "country": "US", "isRemote": false, "isNationwide": false, "isStatewide": false},
+    {"city": "Sumter", "subdivision": "SC", "subdivisionFullName": "South Carolina", "country": "US", "isRemote": false, "isNationwide": false, "isStatewide": false},
+    {"city": "Sumter", "subdivision": "SC", "subdivisionFullName": "South Carolina", "country": "US", "isRemote": false, "isNationwide": false, "isStatewide": false}
+   ]
+  }
+ ],
+ "currentPageIndex": 0,
+ "totalCount": 2,
+ "currentPageCount": 2
+}`
 
-// hrmdirectDetailB has no city, which the platform renders as a bare ", <state>", and an extra
-// tenant-configured field between the two the adapter reads.
-const hrmdirectDetailB = `<html><body><div class="reqResult"><h2>Senior Platform Engineer</h2>
-<table class="viewFields">
-<tr><td class="viewFieldName"><b>Department:</b></td><td class="viewFieldValue">Engineering</td></tr>
-<tr><td class="viewFieldName"><b>Office:</b></td><td class="viewFieldValue">HQ</td></tr>
-<tr><td class="viewFieldName"><b>Location:</b></td><td class="viewFieldValue">, Remote<br></td></tr>
-</table>
-<div class="jobDesc"><p>Same role, second location.</p></div>
-</div></body></html>`
+const hrmdirectSiteID = "8a53c87d-2c7f-85ba-20f0-66842148ace3"
 
-// hrmdirectDetailC states no location at all — a posting whose city and state columns are both
-// empty renders as "".
-const hrmdirectDetailC = `<html><body><div class="reqResult"><h2>Support Lead</h2>
-<table class="viewFields">
-<tr><td class="viewFieldName"><b>Department:</b></td><td class="viewFieldValue">Support</td></tr>
-<tr><td class="viewFieldName"><b>Location:</b></td><td class="viewFieldValue"><br></td></tr>
-</table>
-<div class="jobDesc"><p>Lead the desk.</p></div>
-</div></body></html>`
+// hrmdirectFake answers each exact URL with its body, and anything else with an error: the
+// career page through GetHTML, the posting API through GetStream.
+type hrmdirectFake map[string]string
 
-func hrmdirectFake() *routedHTTP {
-	// Contains-matching, so the detail routes (whose URLs carry "job-opening.php") precede the
-	// listing route; the two never collide, since "job-openings.php" does not contain
-	// "job-opening.php".
-	return (&routedHTTP{}).
-		route("req=100&req_loc=11", hrmdirectDetailA).
-		route("req=100&req_loc=12", hrmdirectDetailB).
-		route("req=200&req_loc=21", hrmdirectDetailC).
-		route("job-openings.php", hrmdirectList)
+func (f hrmdirectFake) body(url string) (string, error) {
+	body, ok := f[url]
+	if !ok {
+		return "", fmt.Errorf("unexpected request %s", url)
+	}
+	return body, nil
 }
+
+func (f hrmdirectFake) GetHTML(_ context.Context, url string) (*html.Node, error) {
+	body, err := f.body(url)
+	if err != nil {
+		return nil, err
+	}
+	return html.Parse(strings.NewReader(body))
+}
+
+func (f hrmdirectFake) GetStream(_ context.Context, url, _ string, fn func(io.Reader) error) error {
+	body, err := f.body(url)
+	if err != nil {
+		return err
+	}
+	return fn(strings.NewReader(body))
+}
+
+// hrmdirectListingURL is the one listing request a board costs: the whole board in one page.
+var hrmdirectListingURL = fmt.Sprintf("https://careers-api.clearcompany.com/v1/%s?pageIndex=0&pageSize=%d",
+	hrmdirectSiteID, hrmdirectMaxPostings)
+
+// hrmdirectBoard is a fake tenant whose career page names the fixture's site and whose listing
+// answers listing.
+func hrmdirectBoard(listing string) hrmdirectFake {
+	return hrmdirectFake{
+		"https://apply.clearcompany.com/sms": hrmdirectCareerPage,
+		hrmdirectListingURL:                  listing,
+	}
+}
+
+// hrmdirectEnvelope renders a listing of minimal postings with the given stated total.
+func hrmdirectEnvelope(total int, ids ...string) string {
+	rows := make([]string, len(ids))
+	for i, id := range ids {
+		rows[i] = fmt.Sprintf(`{"id":%q,"positionTitle":"Role %s","description":"<p>body</p>","location":"Austin TX",`+
+			`"locations":[{"city":"Austin","subdivision":"TX","country":"US","isRemote":false}]}`, id, id)
+	}
+	return fmt.Sprintf(`{"results":[%s],"totalCount":%d}`, strings.Join(rows, ","), total)
+}
+
+var hrmdirectEntry = CompanyEntry{Company: "SMS Data Products", Provider: "hrmdirect", Board: "sms"}
 
 func TestHRMDirectProvider(t *testing.T) {
 	if got := NewHRMDirect(nil).Provider(); got != "hrmdirect" {
@@ -72,155 +127,116 @@ func TestHRMDirectProvider(t *testing.T) {
 	}
 }
 
-func TestHRMDirectRef(t *testing.T) {
-	cases := []struct {
-		url      string
-		req, loc string
-		ok       bool
-	}{
-		{"job-opening.php?req=100&req_loc=11&&#job", "100", "11", true},
-		{"https://acme.hrmdirect.com/employment/job-opening.php?req=3798827&req_loc=1447910",
-			"3798827", "1447910", true},
-		// The query is decoded, not pattern-matched, so parameter order and anything sitting
-		// between the two ids are irrelevant.
-		{"job-opening.php?req_loc=11&src=email&req=100", "100", "11", true},
-		// req without req_loc is not a permalink: one requisition spans several locations,
-		// and keying on req alone would collapse them onto one dedup key.
-		{"job-opening.php?req=100", "", "", false},
-		{"job-opening.php?req=100&req_loc=", "", "", false},
-		{"job-opening.php?req=abc&req_loc=11", "", "", false},
-		{"job-openings.php?search=true&dept=7", "", "", false},
-		{"/employment/index.php", "", "", false},
-	}
-	for _, c := range cases {
-		req, loc, ok := hrmdirectRef(c.url)
-		if req != c.req || loc != c.loc || ok != c.ok {
-			t.Errorf("hrmdirectRef(%q) = (%q, %q, %v), want (%q, %q, %v)",
-				c.url, req, loc, ok, c.req, c.loc, c.ok)
-		}
-	}
-}
-
-func TestHRMDirectLocation(t *testing.T) {
-	cases := map[string]string{
-		"Austin, TX":   "Austin, TX",
-		", Remote":     "Remote",
-		"Brooks, AB\n": "Brooks, AB",
-		"":             "",
-		",":            "",
-	}
-	for raw, want := range cases {
-		if got := hrmdirectLocation(raw); got != want {
-			t.Errorf("hrmdirectLocation(%q) = %q, want %q", raw, got, want)
-		}
-	}
-}
-
 func TestHRMDirectFetchMapsPostings(t *testing.T) {
-	jobs, err := NewHRMDirect(hrmdirectFake()).Fetch(context.Background(), CompanyEntry{
-		Company: "Acme", Provider: "hrmdirect", Board: "acme",
-	})
+	jobs, err := NewHRMDirect(hrmdirectBoard(hrmdirectAPIPage)).Fetch(context.Background(), hrmdirectEntry)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 3 {
-		t.Fatalf("got %d jobs, want 3 (two locations of one requisition, plus a de-duped row)", len(jobs))
-	}
-	byID := map[string]Job{}
-	for _, j := range jobs {
-		byID[j.ExternalID] = j
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want 2", len(jobs))
 	}
 
-	a, ok := byID["100-11"]
-	if !ok {
-		t.Fatalf("missing job 100-11; got %v", byID)
+	remote := jobs[0]
+	// The id is the posting's own GUID, lower-cased: the widget itself links a posting by the
+	// lower-case spelling, and the API answers either.
+	if remote.ExternalID != "2f9f6833-113b-0d9b-5817-09e9bedc812d" {
+		t.Errorf("ExternalID = %q, want the lower-cased posting GUID", remote.ExternalID)
 	}
-	if a.Title != "Senior Platform Engineer" || a.Company != "Acme" {
-		t.Errorf("job 100-11: got title=%q company=%q (title must come from the posting block, "+
-			"not the welcome blurb's heading)", a.Title, a.Company)
+	if want := "https://apply.clearcompany.com/sms?jobId=2f9f6833-113b-0d9b-5817-09e9bedc812d"; remote.URL != want {
+		t.Errorf("URL = %q, want %q", remote.URL, want)
 	}
-	if a.Location != "Austin, TX" {
-		t.Errorf("job 100-11 location = %q, want %q", a.Location, "Austin, TX")
+	if remote.Title != "Systems Engineer" || remote.Company != "SMS Data Products" {
+		t.Errorf("got title=%q company=%q", remote.Title, remote.Company)
 	}
-	want := "https://acme.hrmdirect.com/employment/job-opening.php?req=100&req_loc=11"
-	if a.URL != want {
-		t.Errorf("job 100-11 URL = %q, want %q (rebuilt from the ids, not the listing href)", a.URL, want)
+	if remote.Location != "Remote (US)" {
+		t.Errorf("Location = %q, want the platform's own location line", remote.Location)
 	}
-	if !strings.Contains(a.Description, "Own the platform’s roadmap") {
-		t.Errorf("job 100-11 description = %q, want the windows-1252 apostrophe decoded", a.Description)
+	if !remote.Remote || remote.WorkMode != "remote" {
+		t.Errorf("Remote=%v WorkMode=%q, want the structured isRemote flag to mark it remote",
+			remote.Remote, remote.WorkMode)
 	}
-	if strings.Contains(a.Description, "<script>") {
-		t.Errorf("job 100-11 description not sanitized: %q", a.Description)
+	if len(remote.Countries) != 1 || remote.Countries[0] != "us" {
+		t.Errorf("Countries = %v, want [us]", remote.Countries)
 	}
-	if a.Remote || a.WorkMode != "" {
-		t.Errorf("job 100-11: got Remote=%v WorkMode=%q, want an office posting", a.Remote, a.WorkMode)
+	if !strings.Contains(remote.Description, "Mid-Senior level System Engineer") ||
+		strings.Contains(remote.Description, "<script>") {
+		t.Errorf("Description = %q, want the sanitized listing body", remote.Description)
 	}
-
-	b, ok := byID["100-12"]
-	if !ok {
-		t.Fatalf("missing job 100-12 (the second location of requisition 100)")
-	}
-	if b.Location != "Remote" {
-		t.Errorf("job 100-12 location = %q, want %q (the empty city must not leave a comma)",
-			b.Location, "Remote")
-	}
-	if !b.Remote || b.WorkMode != "remote" {
-		t.Errorf("job 100-12: got Remote=%v WorkMode=%q, want the location text to flag it",
-			b.Remote, b.WorkMode)
+	if remote.PostedAt == nil || remote.PostedAt.Format("2006-01-02") != "2026-10-23" {
+		t.Errorf("PostedAt = %v, want 2026-10-23", remote.PostedAt)
 	}
 
-	c, ok := byID["200-21"]
-	if !ok {
-		t.Fatalf("missing job 200-21")
+	office := jobs[1]
+	if office.Remote || office.WorkMode != "" {
+		t.Errorf("office posting: Remote=%v WorkMode=%q, want neither", office.Remote, office.WorkMode)
 	}
-	if c.Location != "" {
-		t.Errorf("job 200-21 location = %q, want empty", c.Location)
-	}
-	if c.PostedAt != nil {
-		t.Errorf("job 200-21 PostedAt = %v, want nil (the platform publishes no date)", c.PostedAt)
+	if len(office.Countries) != 1 || office.Countries[0] != "us" {
+		t.Errorf("office posting Countries = %v, want one us however many locations state it", office.Countries)
 	}
 }
 
-func TestHRMDirectFetchNewSkipsSeenDetail(t *testing.T) {
-	fake := hrmdirectFake()
-	jobs, err := NewHRMDirect(fake).(HydratingSource).FetchNew(context.Background(),
-		CompanyEntry{Company: "Acme", Provider: "hrmdirect", Board: "acme"},
-		func(id string) bool { return id != "200-21" })
+// A posting the answer repeats is one posting, and the distinct postings must still reach the
+// stated total.
+func TestHRMDirectFetchDropsARepeatedPosting(t *testing.T) {
+	jobs, err := NewHRMDirect(hrmdirectBoard(hrmdirectEnvelope(2, "a", "b", "A"))).Fetch(context.Background(), hrmdirectEntry)
 	if err != nil {
-		t.Fatalf("FetchNew: %v", err)
+		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 3 {
-		t.Fatalf("got %d jobs, want 3 (every listed posting is reported, seen or not)", len(jobs))
-	}
-	// One listing fetch plus the single unseen posting's page.
-	if fake.calls != 2 {
-		t.Errorf("made %d requests, want 2 (the two seen postings must cost no detail fetch)", fake.calls)
-	}
-	for _, j := range jobs {
-		seen := j.ExternalID != "200-21"
-		if j.SeenRefresh != seen {
-			t.Errorf("job %s: SeenRefresh = %v, want %v", j.ExternalID, j.SeenRefresh, seen)
-		}
-		if !seen {
-			continue
-		}
-		// The listing's own title travels, so the catalogue filter can still age the row out;
-		// nothing that would rewrite the stored content does.
-		if j.Title != "Senior Platform Engineer" {
-			t.Errorf("job %s: refresh title = %q, want the listing's row title", j.ExternalID, j.Title)
-		}
-		if j.Description != "" || j.Location != "" {
-			t.Errorf("job %s: a liveness refresh must not carry content, got description=%q location=%q",
-				j.ExternalID, j.Description, j.Location)
-		}
+	if len(jobs) != 2 || jobs[0].ExternalID != "a" || jobs[1].ExternalID != "b" {
+		t.Errorf("got %v, want [a b]", jobs)
 	}
 }
 
-func TestHRMDirectListingFailureIsBoardError(t *testing.T) {
-	_, err := NewHRMDirect(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{
-		Company: "Acme", Provider: "hrmdirect", Board: "acme",
-	})
-	if err == nil {
-		t.Fatal("Fetch: want an error when the listing cannot be read")
+// A listing short of the total it states is a failed crawl, never a partial success: the board
+// scope would close every posting it left out. A board past hrmdirectMaxPostings answers
+// exactly like this.
+func TestHRMDirectFetchFailsAnIncompleteListing(t *testing.T) {
+	cases := map[string]string{
+		"short":           hrmdirectEnvelope(3, "a", "b"),
+		"short by repeat": hrmdirectEnvelope(3, "a", "b", "b"),
+	}
+	for name, listing := range cases {
+		t.Run(name, func(t *testing.T) {
+			if jobs, err := NewHRMDirect(hrmdirectBoard(listing)).Fetch(context.Background(), hrmdirectEntry); err == nil {
+				t.Errorf("Fetch = %d jobs and no error, want the short listing to fail", len(jobs))
+			}
+		})
+	}
+}
+
+func TestHRMDirectFetchEmptyBoard(t *testing.T) {
+	jobs, err := NewHRMDirect(hrmdirectBoard(`{"results":[],"currentPageIndex":0,"totalCount":0,"currentPageCount":0}`)).
+		Fetch(context.Background(), hrmdirectEntry)
+	if err != nil || len(jobs) != 0 {
+		t.Errorf("Fetch = (%d jobs, %v), want an empty listing", len(jobs), err)
+	}
+}
+
+func TestHRMDirectFetchFailures(t *testing.T) {
+	cases := map[string]hrmdirectFake{
+		// The career page moved and no longer names a site: nothing can be listed, and an
+		// empty answer here would read as an emptied board.
+		"no site id": {"https://apply.clearcompany.com/sms": `<html><body><main></main></body></html>`},
+		// The career page itself is unreachable (an offline tenant answers 404).
+		"career page": {},
+		// The listing request fails (the API answers an unknown site, and a passing outage
+		// measured 2026-10-30, with 404).
+		"listing": {"https://apply.clearcompany.com/sms": hrmdirectCareerPage},
+		// An answer without its posting collection is not an empty board.
+		"no results": hrmdirectBoard(`{"totalCount":0}`),
+		"not json":   hrmdirectBoard(`<html>Not Found</html>`),
+	}
+	for name, fake := range cases {
+		t.Run(name, func(t *testing.T) {
+			if jobs, err := NewHRMDirect(fake).Fetch(context.Background(), hrmdirectEntry); err == nil {
+				t.Errorf("Fetch = %d jobs and no error, want a failed fetch", len(jobs))
+			}
+		})
+	}
+}
+
+func TestHRMDirectIsAFullBoardListing(t *testing.T) {
+	if !FullBoardListingProviders(All(nil))["hrmdirect"] {
+		t.Error("FullBoardListingProviders(All(nil)) should include hrmdirect")
 	}
 }

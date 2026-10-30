@@ -7,31 +7,27 @@ import (
 
 func TestHRMDirectProbe(t *testing.T) {
 	p := hrmdirectProber{}
-	listing := `<html><body><div class="reqResult"><table class="reqResultTable">
-<tr><td class="posTitle"><a href="job-opening.php?req=100&amp;req_loc=11&amp;&amp;#job">Server</a></td></tr>
-<tr><td class="posTitle"><a href="job-opening.php?req=100&amp;req_loc=12&amp;&amp;#job">Server</a></td></tr>
-<tr><td class="posTitle"><a href="job-opening.php?req=100&amp;req_loc=12&amp;&amp;#job">Server (apply)</a></td></tr>
-</table>
-<a href="job-openings.php?search=true&amp;dept=7">Engineering</a>
-<a href="job-opening.php?req=100">Broken</a>
-</div></body></html>`
+	page := func(siteID string) string {
+		return `<html><body><div id="cc-widget">` +
+			`<script src="https://careers-content.clearcompany.com/js/v1/career-site.js?hosted=true" data-site-id="` +
+			siteID + `" data-default-source="CJB-0"></script></div></body></html>`
+	}
 	getter := fakeGetter{
-		"https://acme.hrmdirect.com/employment/job-openings.php?search=true": listing,
-		// A tenant with no openings still serves the page, with the empty-result notice.
-		"https://empty.hrmdirect.com/employment/job-openings.php?search=true": `<html><body>
-<div class="reqResult"><div id="noResultsMsg"><p>Select options from the menus above.</p></div></div>
-</body></html>`,
+		"https://apply.clearcompany.com/acme":                                       page("site-acme"),
+		"https://careers-api.clearcompany.com/v1/site-acme?pageIndex=0&pageSize=1":  `{"results":[{"id":"a"}],"totalCount":64}`,
+		"https://apply.clearcompany.com/empty":                                      page("site-empty"),
+		"https://careers-api.clearcompany.com/v1/site-empty?pageIndex=0&pageSize=1": `{"results":[],"totalCount":0}`,
+		// A career page that names no site cannot be listed, so it counts nothing.
+		"https://apply.clearcompany.com/bare": `<html><body><main></main></body></html>`,
 	}
-	// Live: two postings. One requisition open in two locations is two rows; a posting linked
-	// twice counts once; and neither the department filter nor a req without req_loc is one.
-	if name, n, err := p.probe(context.Background(), getter, "acme"); err != nil || name != "" || n != 2 {
-		t.Errorf("live: got (%q,%d,%v), want (\"\",2,nil)", name, n, err)
+	// Live: the count is the total the posting API states, not the one posting it returned.
+	if name, n, err := p.probe(context.Background(), getter, "acme"); err != nil || name != "" || n != 64 {
+		t.Errorf("live: got (%q,%d,%v), want (\"\",64,nil)", name, n, err)
 	}
-	if _, n, err := p.probe(context.Background(), getter, "empty"); err != nil || n != 0 {
-		t.Errorf("empty: got n=%d err=%v, want 0,nil", n, err)
-	}
-	// A tenant that does not exist is a skip, never a fatal error.
-	if _, n, err := p.probe(context.Background(), getter, "gone"); err != nil || n != 0 {
-		t.Errorf("gone: got n=%d err=%v, want 0,nil", n, err)
+	for _, slug := range []string{"empty", "bare", "gone"} {
+		// An empty, unreadable or nonexistent tenant is a skip, never a fatal error.
+		if _, n, err := p.probe(context.Background(), getter, slug); err != nil || n != 0 {
+			t.Errorf("%s: got n=%d err=%v, want 0,nil", slug, n, err)
+		}
 	}
 }
