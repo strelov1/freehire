@@ -370,10 +370,10 @@ func TestPublicGate_RefusalNamesTheNextRung(t *testing.T) {
 		say     string
 		want    string
 	}{
-		{"anonymous", nil, "Create a free freehire account for a higher limit", "https://freehire.me/my/integrations/api-keys"},
-		{"free key", bearer(unpaidToken), "Upgrade your freehire account for a higher limit", "https://freehire.me/pricing"},
-		{"pro", bearer(proToken), "See the freehire API plans for a higher limit", "https://freehire.me/jobs-api"},
-		{"api product", bearer(apiKeyToken), "See the freehire API plans for a higher limit", "https://freehire.me/jobs-api"},
+		{"anonymous", nil, "Create a free account at freehire.me for a higher limit", "https://freehire.me/my/integrations/api-keys"},
+		{"free key", bearer(unpaidToken), "Upgrade your account at freehire.me for a higher limit", "https://freehire.me/pricing"},
+		{"pro", bearer(proToken), "See the API plans at freehire.me for a higher limit", "https://freehire.me/jobs-api"},
+		{"api product", bearer(apiKeyToken), "See the API plans at freehire.me for a higher limit", "https://freehire.me/jobs-api"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -167,11 +167,11 @@ func (g *publicGate) limiter(b publicBudget) fiber.Handler {
 func nextRung(tier rateTier) (path, next string) {
 	switch tier {
 	case rateAnonymous:
-		return "/my/integrations/api-keys", "Create a free freehire account"
+		return "/my/integrations/api-keys", "Create a free account at freehire.me"
 	case rateFree:
-		return "/pricing", "Upgrade your freehire account"
+		return "/pricing", "Upgrade your account at freehire.me"
 	case ratePro, rateUltra, rateAPI:
-		return "/jobs-api", "See the freehire API plans"
+		return "/jobs-api", "See the API plans at freehire.me"
 	}
 	return "", ""
 }
