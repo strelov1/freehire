@@ -11,9 +11,7 @@ export const messages = defineMessages(
     locationPlaceholder: 'Location',
     linksLabel: 'Links (one per line)',
     linksPlaceholder: 'https://…',
-    save: 'Save contacts',
-    saved: 'Contacts saved.',
-    saveFailed: 'Could not save contacts.',
+    invalidEmail: "That doesn't look like an email address. It isn't saved until it does.",
   },
   {
     ru: {
@@ -26,9 +24,7 @@ export const messages = defineMessages(
       locationPlaceholder: 'Местоположение',
       linksLabel: 'Ссылки (по одной на строку)',
       linksPlaceholder: 'https://…',
-      save: 'Сохранить контакты',
-      saved: 'Контакты сохранены.',
-      saveFailed: 'Не удалось сохранить контакты.',
+      invalidEmail: 'Это не похоже на адрес почты. Он не сохранится, пока не будет исправлен.',
     },
   },
 );

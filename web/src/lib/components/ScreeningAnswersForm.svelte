@@ -59,9 +59,9 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let note = $state<string | null>(null);
-  // Set by any keystroke, cleared right before a save request is sent — same guard
-  // CandidateContactsEditor uses so a reload after this component's own save (the parent
-  // re-fetches and passes a new `answers` prop) never overwrites an edit not yet saved.
+  // Set by any keystroke, cleared right before a save request is sent, so a reload after
+  // this component's own save (the parent re-fetches and passes a new `answers` prop)
+  // never overwrites an edit not yet saved.
   let dirty = $state(false);
 
   $effect(() => {

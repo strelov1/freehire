@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CandidateContactsEditor from './CandidateContactsEditor.svelte';
 
@@ -6,12 +6,16 @@ vi.mock('$app/state', () => ({
   page: { data: { locale: 'ru' }, url: new URL('http://localhost/') },
 }));
 
-const { putResumeContacts } = vi.hoisted(() => ({ putResumeContacts: vi.fn() }));
+const { putResumeContacts, getResume } = vi.hoisted(() => ({
+  putResumeContacts: vi.fn(),
+  getResume: vi.fn(),
+}));
 
-vi.mock('#lib/api.js', () => ({ api: { putResumeContacts } }));
+vi.mock('#lib/api.js', () => ({ api: { putResumeContacts, getResume }, ApiError: class extends Error {} }));
 
 beforeEach(() => {
-  putResumeContacts.mockReset();
+  putResumeContacts.mockReset().mockImplementation((body) => Promise.resolve(body));
+  getResume.mockReset().mockResolvedValue(null);
 });
 
 describe('CandidateContactsEditor — Russian locale', () => {
@@ -29,7 +33,6 @@ describe('CandidateContactsEditor — Russian locale', () => {
     expect(screen.getByPlaceholderText('Телефон')).toBeTruthy();
     expect(screen.getByPlaceholderText('Местоположение')).toBeTruthy();
     expect(screen.getByText('Ссылки (по одной на строку)')).toBeTruthy();
-    expect(screen.getByText('Сохранить контакты')).toBeTruthy();
   });
 
   it('gives every contact field an accessible name, not just a placeholder', () => {
@@ -40,41 +43,57 @@ describe('CandidateContactsEditor — Russian locale', () => {
     }
     expect(screen.getByRole('textbox', { name: 'Ссылки (по одной на строку)' })).toBeTruthy();
   });
-
-  it('renders the save-success note in Russian', async () => {
-    putResumeContacts.mockResolvedValue({});
-    render(CandidateContactsEditor, { props: {} });
-
-    await fireEvent.click(screen.getByText('Сохранить контакты'));
-
-    expect(screen.getByText('Контакты сохранены.')).toBeTruthy();
-  });
-
-  it('renders the save-failure fallback message in Russian for a non-Error rejection', async () => {
-    // The component's own fallback string only fires when the rejection isn't an
-    // Error instance (see CandidateContactsEditor.svelte's catch) — a real Error's
-    // own .message is used verbatim and is not a translation concern.
-    putResumeContacts.mockRejectedValue('network blip');
-    render(CandidateContactsEditor, { props: {} });
-
-    await fireEvent.click(screen.getByText('Сохранить контакты'));
-
-    expect(screen.getByText('Не удалось сохранить контакты.')).toBeTruthy();
-  });
 });
 
-// The page applies what the PUT answered straight to the shared store, so the next save —
-// from this card or the CV summary beside it — starts from the block just written rather
-// than the copy from before it (a re-fetch still in flight would send the old one back).
-describe('CandidateContactsEditor — after a save', () => {
-  it('hands onSaved the block the server answered with', async () => {
-    const answered = { full_name: 'Ada', headline: 'Kept by the server' };
-    putResumeContacts.mockResolvedValue(answered);
-    const onSaved = vi.fn();
-    render(CandidateContactsEditor, { props: { contacts: { headline: 'Old' }, onSaved } });
+describe('CandidateContactsEditor — autosave', () => {
+  it('saves when focus leaves an edited field, and offers an Undo', async () => {
+    render(CandidateContactsEditor, { props: { contacts: { full_name: 'Ada', headline: 'Kept' } } });
+    const name = screen.getByRole('textbox', { name: 'Полное имя' });
 
-    await fireEvent.click(screen.getByText('Сохранить контакты'));
+    await fireEvent.input(name, { target: { value: 'Ada Lovelace' } });
+    await fireEvent.focusOut(name);
 
-    expect(onSaved).toHaveBeenCalledWith(answered);
+    await waitFor(() => expect(putResumeContacts).toHaveBeenCalledTimes(1));
+    expect(putResumeContacts).toHaveBeenNthCalledWith(1, expect.objectContaining({ full_name: 'Ada Lovelace' }));
+    expect(await screen.findByText('Сохранено')).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Отменить' }));
+    await waitFor(() => expect(putResumeContacts).toHaveBeenCalledTimes(2));
+    expect(putResumeContacts).toHaveBeenNthCalledWith(2, expect.objectContaining({ full_name: 'Ada' }));
+  });
+
+  it('saves nothing when focus leaves an untouched field', async () => {
+    render(CandidateContactsEditor, { props: { contacts: { full_name: 'Ada' } } });
+
+    await fireEvent.focusOut(screen.getByRole('textbox', { name: 'Полное имя' }));
+
+    expect(putResumeContacts).not.toHaveBeenCalled();
+  });
+
+  it('keeps an invalid email on screen, marked, and does not save it', async () => {
+    render(CandidateContactsEditor, { props: { contacts: { email: 'ada@example.com' } } });
+    const email = screen.getByRole('textbox', { name: 'Email' });
+
+    await fireEvent.input(email, { target: { value: 'ada@' } });
+    await fireEvent.focusOut(email);
+
+    expect(screen.getByText('Это не похоже на адрес почты. Он не сохранится, пока не будет исправлен.')).toBeTruthy();
+    expect(email.getAttribute('aria-invalid')).toBe('true');
+    expect((email as HTMLInputElement).value).toBe('ada@');
+    expect(putResumeContacts).not.toHaveBeenCalled();
+  });
+
+  it('shows a failed save with a Retry', async () => {
+    putResumeContacts.mockRejectedValueOnce(new Error('offline'));
+    render(CandidateContactsEditor, { props: { contacts: { phone: '' } } });
+    const phone = screen.getByRole('textbox', { name: 'Телефон' });
+
+    await fireEvent.input(phone, { target: { value: '+1 555' } });
+    await fireEvent.focusOut(phone);
+
+    expect(await screen.findByText('Не удалось сохранить.')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+    await waitFor(() => expect(putResumeContacts).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('Сохранено')).toBeTruthy();
   });
 });

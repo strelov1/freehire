@@ -8,9 +8,10 @@
   // them.
   //
   // Backed by the same owned-overlay PUT /me/resume/contacts as the Contacts view (see
-  // internal/resume/owned.go) — a PUT replaces the whole block, so saving here spreads
-  // the current `contacts` object first and only overrides the fields this card owns,
-  // exactly as CandidateContactsEditor does for identity fields.
+  // internal/resume/owned.go), through resumeStore.saveContacts, which queues every
+  // writer of that block so one card's save can't put back what another's just replaced.
+  // The fields autosave like Contacts (TextAutosave), with an Undo in the status line
+  // standing in for the Cancel an edit mode used to have.
   //
   // `structured` (GET /me/resume's `structured`) is non-null whenever there is anything
   // worth showing — a current CV parse, OR owned overrides alone (they survive a CV
@@ -18,121 +19,91 @@
   // no file on record. No separate "still parsing" placeholder: a CV can sit pending
   // indefinitely (no LLM configured, a stuck job) and a permanent-looking stuck message
   // reads as broken rather than as progress.
-  import { Pencil } from '@lucide/svelte';
-  import { api } from '#lib/api.js';
-  import type { CandidateContacts, ResumeStructured } from '#lib/types.js';
-  import { Button, Input } from '#lib/ui/index.js';
+  import { untrack } from 'svelte';
+  import { resumeStore } from '#lib/resume.svelte.js';
+  import { SaveStatus } from '#lib/saveStatus.svelte.js';
+  import { TextAutosave } from '#lib/textAutosave.js';
+  import type { ResumeStructured } from '#lib/types.js';
+  import { Input } from '#lib/ui/index.js';
+  import SaveStatusLine from '../SaveStatus.svelte';
   import { messages } from './CvSummaryCard.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { format, t } from '#lib/i18n/t.js';
 
-  let {
-    structured,
-    contacts = null,
-    onSaved,
-  }: {
-    structured: ResumeStructured | null;
-    contacts?: CandidateContacts | null;
-    onSaved?: (saved: CandidateContacts) => void;
-  } = $props();
+  let { structured }: { structured: ResumeStructured | null } = $props();
 
   // A current structured CV is the entry point, even if this particular parse had neither
   // field — the candidate can still add them by hand once a CV is on file.
   const showCard = $derived(structured !== null);
   const s = $derived(t(messages, locale()));
+  const fieldIds = $props.id();
 
-  let editing = $state(false);
-  let headline = $state('');
-  let summary = $state('');
-  let busy = $state(false);
-  let error = $state<string | null>(null);
+  type Summary = { headline: string; summary: string };
 
-  function startEdit() {
-    headline = structured?.headline ?? '';
-    summary = structured?.summary ?? '';
-    error = null;
-    editing = true;
-  }
+  // svelte-ignore state_referenced_locally
+  let headline = $state(structured?.headline ?? '');
+  // svelte-ignore state_referenced_locally
+  let summary = $state(structured?.summary ?? '');
+  const status = new SaveStatus();
 
-  function cancelEdit() {
-    editing = false;
-    error = null;
-  }
+  const read = (): Summary => ({ headline: headline.trim(), summary: summary.trim() });
+  const shown = (): Summary => ({ headline: structured?.headline ?? '', summary: structured?.summary ?? '' });
 
-  async function save() {
-    busy = true;
-    error = null;
-    try {
-      const saved = await api.putResumeContacts({
-        ...contacts,
-        headline: headline.trim(),
-        summary: summary.trim(),
-        // Owned per field even when the trimmed value above is "" — otherwise clearing
-        // Headline here is indistinguishable, server-side, from never having set it, and
-        // the CV's own headline reappears on the next read (internal/resume/owned.go).
-        headline_set: true,
-        summary_set: true,
-      });
-      editing = false;
-      onSaved?.(saved);
-    } catch (e) {
-      error = e instanceof Error ? e.message : s.saveFailed;
-    } finally {
-      busy = false;
-    }
-  }
+  const autosave = new TextAutosave<Summary>({
+    status,
+    read,
+    saved: shown,
+    // Owned per field even when the value is "" — otherwise clearing Headline here is
+    // indistinguishable, server-side, from never having set it, and the CV's own headline
+    // reappears on the next read (internal/resume/owned.go).
+    save: (value) => resumeStore.saveContacts({ ...value, headline_set: true, summary_set: true }),
+  });
+
+  // Follow the shown values when they change elsewhere (an Undo, a fresh CV parse), field
+  // by field and reading the boxes untracked, for the reasons CandidateContactsEditor gives.
+  $effect(() => {
+    const now = shown();
+    if (autosave.holding) return;
+    const mine = untrack(read);
+    if (now.headline !== mine.headline) headline = now.headline;
+    if (now.summary !== mine.summary) summary = now.summary;
+  });
+
+  $effect(() => () => {
+    autosave.commit(true);
+  });
 </script>
 
 {#if showCard}
-  <div class="flex flex-col gap-4">
-    <div class="flex items-center justify-between">
+  <div class="flex flex-col gap-4" onfocusout={() => autosave.commit()}>
+    <div class="flex items-center justify-between gap-3">
       <h2 class="text-sm font-semibold">{s.heading}</h2>
-      {#if !editing}
-        <Button size="sm" variant="ghost" class="text-muted-foreground" onclick={startEdit}>
-          <Pencil class="size-3.5" />{s.edit}
-        </Button>
-      {/if}
+      <SaveStatusLine {status} />
     </div>
 
-    {#if editing}
-      <label class="flex flex-col gap-1 text-sm">
-        <span class="text-muted-foreground">{s.headlineLabel}</span>
-        <Input bind:value={headline} placeholder={s.headlinePlaceholder} class="w-full" />
-      </label>
-      <label class="flex flex-col gap-1 text-sm">
-        <span class="text-muted-foreground">{s.heading}</span>
-        <textarea
-          bind:value={summary}
-          rows="4"
-          class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-          placeholder={s.summaryPlaceholder}
-        ></textarea>
-      </label>
-      <div class="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="primary" disabled={busy} onclick={save}>{s.save}</Button>
-        <Button size="sm" variant="ghost" class="text-muted-foreground" disabled={busy} onclick={cancelEdit}>
-          {s.cancel}
-        </Button>
-      </div>
-      {#if error}
-        <p class="text-sm text-destructive">{error}</p>
-      {/if}
-    {:else}
-      {#if structured?.headline}
-        <p class="text-sm font-medium">{structured.headline}</p>
-      {/if}
+    <label class="flex flex-col gap-1 text-sm" for="{fieldIds}-headline">
+      <span class="text-muted-foreground">{s.headlineLabel}</span>
+      <Input
+        id="{fieldIds}-headline"
+        bind:value={headline}
+        oninput={() => autosave.edited()}
+        placeholder={s.headlinePlaceholder}
+        class="w-full"
+      />
+    </label>
+    <label class="flex flex-col gap-1 text-sm">
+      <span class="text-muted-foreground">{s.heading}</span>
+      <textarea
+        bind:value={summary}
+        oninput={() => autosave.edited()}
+        rows="4"
+        class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+        placeholder={s.summaryPlaceholder}
+      ></textarea>
+    </label>
 
-      {#if structured?.summary}
-        <p class="text-sm leading-relaxed">{structured.summary}</p>
-      {/if}
-
-      {#if structured?.location}
-        <p class="text-xs text-muted-foreground">{format(s.cvLocation, { location: structured.location })}</p>
-      {/if}
-
-      {#if !structured?.headline && !structured?.summary}
-        <p class="text-sm text-muted-foreground">{s.empty}</p>
-      {/if}
+    {#if structured?.location}
+      <p class="text-xs text-muted-foreground">{format(s.cvLocation, { location: structured.location })}</p>
     {/if}
   </div>
 {/if}
