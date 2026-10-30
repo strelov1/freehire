@@ -166,7 +166,9 @@ var trueOrAbsentParams = map[string]bool{
 // whole catalogue. Negating the positive is what actually answers "everything not
 // marked", including the documents that omit the attribute.
 func trueOrAbsentFragment(attr, val string) string {
-	if val == "false" {
+	// Case-insensitive, like the validator that admitted the value (query_values.go):
+	// "False" read as true would return exactly the postings the caller hid.
+	if strings.EqualFold(strings.TrimSpace(val), "false") {
 		return "NOT " + EqBool(attr, true)
 	}
 	return EqBool(attr, true)
@@ -181,6 +183,14 @@ func facetNeq(param, attr, val string) string {
 	}
 	if set := impliedRegions(val); param == "regions" && set != nil {
 		return NotInStrings(attr, set)
+	}
+	// A true-or-absent facet is never stored false, so `attr != "false"` matches every
+	// document: excluding a value means asking for its opposite.
+	if trueOrAbsentParams[param] {
+		if strings.EqualFold(strings.TrimSpace(val), "false") {
+			return trueOrAbsentFragment(attr, "true")
+		}
+		return trueOrAbsentFragment(attr, "false")
 	}
 	attr, val = retiredCategory(param, attr, val)
 	return Neq(attr, val)

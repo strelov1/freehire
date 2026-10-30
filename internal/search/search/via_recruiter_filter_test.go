@@ -16,6 +16,9 @@ func TestFilterFromValues_ViaRecruiter(t *testing.T) {
 	}{
 		{"true selects only the marked postings", "via_recruiter=true", [][]string{{"via_recruiter = true"}}},
 		{"false negates the positive", "via_recruiter=false", [][]string{{"NOT via_recruiter = true"}}},
+		{"False is false, whatever its case", "via_recruiter=False", [][]string{{"NOT via_recruiter = true"}}},
+		{"excluding false keeps only the marked", "via_recruiter_exclude=false", [][]string{{"via_recruiter = true"}}},
+		{"excluding true hides the marked", "via_recruiter_exclude=true", [][]string{{"NOT via_recruiter = true"}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
