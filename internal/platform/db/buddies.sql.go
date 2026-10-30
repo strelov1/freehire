@@ -133,6 +133,18 @@ WITH closed AS (
       AND EXISTS (
           SELECT 1 FROM conversation_participants p
           WHERE p.conversation_id = c.id AND p.user_id = $1)
+), cancelled AS (
+    UPDATE buddy_mocks m
+    SET status = 'cancelled', cancelled_at = now(), cancelled_by = $1::bigint,
+        cancel_reason = 'left'
+    WHERE m.status = 'confirmed'
+      AND m.starts_at > now()
+      AND (m.host_user_id = $1::bigint OR m.guest_user_id = $1::bigint)
+    RETURNING m.id
+), freed AS (
+    UPDATE buddy_mock_participants p
+    SET active = false
+    WHERE p.mock_id IN (SELECT id FROM cancelled)
 )
 UPDATE buddy_members bm
 SET left_at = now()
@@ -140,13 +152,15 @@ WHERE bm.user_id = $1 AND bm.left_at IS NULL
 RETURNING bm.user_id, bm.handle, bm.category, bm.countries, bm.regions, bm.joined_at, bm.left_at
 `
 
-// Opt a member out: stamp left_at and close every pending or open buddy conversation they
-// are in, in one statement so a leave cannot half-apply. The conversations are the
+// Opt a member out: stamp left_at, close every pending or open buddy conversation they
+// are in, and cancel every future mock they are in (either role, freeing both people's
+// time), in one statement so a leave cannot half-apply. The conversations are the
 // messaging core's (kind 'buddy'); closing them here rather than through the core is what
-// keeps the two writes atomic. The row is kept, so rejoining restores the handle. The
-// member update is guarded by left_at IS NULL, so for a member who is not active it
-// returns no row; the conversation close is not guarded, which is harmless because a left
-// member has no pending or open buddy conversation to close.
+// keeps the writes atomic. The row is kept, so rejoining restores the handle. The member
+// update is guarded by left_at IS NULL, so for a member who is not active it returns no
+// row; the close and the cancel are not guarded, which is harmless because a left member
+// has no pending or open buddy conversation and no future mock. cancelled_by is the
+// leaver: the caller claims the cancellation notices by it afterwards.
 func (q *Queries) LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMember, error) {
 	row := q.db.QueryRow(ctx, leaveBuddyMember, userID)
 	var i BuddyMember

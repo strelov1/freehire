@@ -239,7 +239,7 @@ git commit -m "Move the slot engine into internal/engage/slots" -m "Pure move: t
 
 Design deviations recorded here (design.md D3 lists the columns): `buddy_mocks` gains `guest_timezone` (D9 renders the guest's notices "from the booking", and nothing else stores it), `cancel_reason` (the wording differs for a participant's cancellation and a leave/block) and `cancel_announced_at` (the block cancels inside a trigger, which cannot return rows, so the cancellation notice is claimed from this column afterwards — see Task 6).
 
-- [ ] 2.1 Write the failing schema test `internal/platform/db/buddy_mocks_integration_test.go`:
+- [x] 2.1 Write the failing schema test `internal/platform/db/buddy_mocks_integration_test.go`:
 
 ```go
 //go:build integration
@@ -470,9 +470,9 @@ func TestClaimBuddyMockCancelNoticesOnce(t *testing.T) {
 }
 ```
 
-- [ ] 2.2 Run it: `go vet -tags=integration ./internal/platform/db/`. Expected: FAIL — `undefined: CreateBuddyMockParams`, `q.CreateBuddyMock undefined`, … .
+- [x] 2.2 Run it: `go vet -tags=integration ./internal/platform/db/`. Expected: FAIL — `undefined: CreateBuddyMockParams`, `q.CreateBuddyMock undefined`, … .
 
-- [ ] 2.3 Create `migrations/0214_buddy_mocks.sql`:
+- [x] 2.3 Create `migrations/0214_buddy_mocks.sql`:
 
 ```sql
 -- Buddy mock interviews (openspec/changes/buddy-mock-interviews): one interview-buddy member
@@ -661,7 +661,7 @@ CREATE OR REPLACE TRIGGER buddy_mocks_cancel_on_block
     FOR EACH ROW EXECUTE FUNCTION public.buddy_mocks_cancel_on_block();
 ```
 
-- [ ] 2.4 Create `internal/platform/db/queries/buddy_mocks.sql`:
+- [x] 2.4 Create `internal/platform/db/queries/buddy_mocks.sql`:
 
 ```sql
 -- name: GetBuddyMockSettings :one
@@ -686,15 +686,17 @@ SELECT * FROM buddy_mock_availability WHERE user_id = $1 ORDER BY id;
 -- name: ReplaceBuddyMockWeekly :exec
 -- Swap the recurring week in one statement, leaving dated overrides alone: half of the
 -- edit applied is a member bookable at hours they just removed. The three arrays are one
--- row each, position by position.
+-- row each, zipped back by position (WITH ORDINALITY: sqlc's analyzer does not resolve the
+-- multi-array form of unnest).
 WITH cleared AS (
     DELETE FROM buddy_mock_availability
     WHERE user_id = sqlc.arg(user_id)::bigint AND weekday IS NOT NULL
 )
 INSERT INTO buddy_mock_availability (user_id, weekday, start_time, end_time)
-SELECT sqlc.arg(user_id)::bigint, w.weekday, w.start_time, w.end_time
-FROM unnest(sqlc.arg(weekdays)::smallint[], sqlc.arg(start_times)::time[], sqlc.arg(end_times)::time[])
-     AS w (weekday, start_time, end_time);
+SELECT sqlc.arg(user_id)::bigint, w.weekday, s.start_time, e.end_time
+FROM unnest(sqlc.arg(weekdays)::smallint[]) WITH ORDINALITY AS w (weekday, ord)
+JOIN unnest(sqlc.arg(start_times)::time[]) WITH ORDINALITY AS s (start_time, ord) ON s.ord = w.ord
+JOIN unnest(sqlc.arg(end_times)::time[]) WITH ORDINALITY AS e (end_time, ord) ON e.ord = w.ord;
 
 -- name: CreateBuddyMockAvailabilityRule :one
 -- One row, weekly or dated; which one is whichever of weekday and on_date is set.
@@ -908,7 +910,7 @@ DELETE FROM buddy_mock_reminders
 WHERE mock_id = sqlc.arg(mock_id) AND offset_minutes = sqlc.arg(offset_minutes);
 ```
 
-- [ ] 2.5 Make the leave cancel the member's future mocks in its own statement. In `internal/platform/db/queries/buddies.sql` replace lines 20-40 (`-- name: LeaveBuddyMember :one` through `RETURNING bm.*;`) with:
+- [x] 2.5 Make the leave cancel the member's future mocks in its own statement. In `internal/platform/db/queries/buddies.sql` replace lines 20-40 (`-- name: LeaveBuddyMember :one` through `RETURNING bm.*;`) with:
 
 ```sql
 -- name: LeaveBuddyMember :one
@@ -948,7 +950,7 @@ WHERE bm.user_id = sqlc.arg(user_id) AND bm.left_at IS NULL
 RETURNING bm.*;
 ```
 
-- [ ] 2.6 Generate and check the signatures the later tasks rely on:
+- [x] 2.6 Generate and check the signatures the later tasks rely on:
 
 ```bash
 make sqlc
@@ -959,16 +961,16 @@ grep -n 'HostTimezone \|MeetingUrl \|HostEmail \|CounterpartVisible \|RatingAvg 
 ```
 Expected: every grep prints a line; `HostTimezone`, `MeetingUrl` and `HostEmail` are `string`, `CounterpartVisible` is `bool`, `RatingAvg` is `float64`, `ClaimBuddyMockCancelNotices(ctx context.Context, actorID int64) ([]pgtype.UUID, error)`. If sqlc typed `host_timezone`/`meeting_url` as `pgtype.Text` despite the `coalesce(...)::text`, change the mapping in Task 5 (`row.HostTimezone.String`, `row.MeetingUrl.String`) rather than the query.
 
-- [ ] 2.7 Run the schema tests and the account-deletion guard:
+- [x] 2.7 Run the schema tests and the account-deletion guard:
 
 ```bash
 go test -tags=integration ./internal/platform/db/ -run 'BuddyMock|TestBlockCancelsThePairsFutureMocks|TestLeaveBuddyMemberCancelsTheirFutureMocks|TestCreateBuddyMockRefusesAPairThatCannotMeet|TestEveryUserForeignKeyIsIndexed|TestDeletingUserCascadesBuddyData|TestBuddyMembershipQueries' -count=1
 ```
 Expected: `ok`.
 
-- [ ] 2.8 Lint the new migration: `pnpm check:sql`. Expected: no findings for `0214_buddy_mocks.sql` (fix a finding by the rule's own advice, or with a `-- squawk-ignore <rule>` line before the statement and the reason beside it).
+- [x] 2.8 Lint the new migration: `pnpm check:sql`. Expected: no findings for `0214_buddy_mocks.sql` (fix a finding by the rule's own advice, or with a `-- squawk-ignore <rule>` line before the statement and the reason beside it).
 
-- [ ] 2.9 Verify and commit:
+- [x] 2.9 Verify and commit:
 
 ```bash
 gofmt -l internal/platform/db && go vet ./... && go test ./... && go vet -tags=integration ./internal/platform/db/

@@ -286,6 +286,65 @@ type BuddyMember struct {
 	LeftAt    pgtype.Timestamptz `json:"left_at"`
 }
 
+type BuddyMock struct {
+	ID                pgtype.UUID        `json:"id"`
+	HostUserID        int64              `json:"host_user_id"`
+	GuestUserID       int64              `json:"guest_user_id"`
+	StartsAt          pgtype.Timestamptz `json:"starts_at"`
+	EndsAt            pgtype.Timestamptz `json:"ends_at"`
+	Topic             string             `json:"topic"`
+	GuestTimezone     string             `json:"guest_timezone"`
+	Status            string             `json:"status"`
+	CancelledBy       pgtype.Int8        `json:"cancelled_by"`
+	CancelledAt       pgtype.Timestamptz `json:"cancelled_at"`
+	CancelReason      pgtype.Text        `json:"cancel_reason"`
+	CancelAnnouncedAt pgtype.Timestamptz `json:"cancel_announced_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+}
+
+type BuddyMockAvailability struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Weekday   pgtype.Int2        `json:"weekday"`
+	OnDate    pgtype.Date        `json:"on_date"`
+	StartTime pgtype.Time        `json:"start_time"`
+	EndTime   pgtype.Time        `json:"end_time"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type BuddyMockParticipant struct {
+	MockID   pgtype.UUID        `json:"mock_id"`
+	UserID   int64              `json:"user_id"`
+	StartsAt pgtype.Timestamptz `json:"starts_at"`
+	EndsAt   pgtype.Timestamptz `json:"ends_at"`
+	Active   bool               `json:"active"`
+}
+
+type BuddyMockReminder struct {
+	MockID        pgtype.UUID        `json:"mock_id"`
+	OffsetMinutes int32              `json:"offset_minutes"`
+	SentAt        pgtype.Timestamptz `json:"sent_at"`
+}
+
+type BuddyMockReview struct {
+	MockID        pgtype.UUID        `json:"mock_id"`
+	AuthorUserID  int64              `json:"author_user_id"`
+	SubjectUserID int64              `json:"subject_user_id"`
+	Rating        int16              `json:"rating"`
+	Comment       string             `json:"comment"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+type BuddyMockSetting struct {
+	UserID     int64              `json:"user_id"`
+	Timezone   string             `json:"timezone"`
+	MeetingUrl string             `json:"meeting_url"`
+	Topics     []string           `json:"topics"`
+	Paused     bool               `json:"paused"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type CandidateSurvey struct {
 	UserID                int64              `json:"user_id"`
 	JobSearchStage        pgtype.Text        `json:"job_search_stage"`
