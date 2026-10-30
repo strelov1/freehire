@@ -1,6 +1,7 @@
+import type { createApi } from '#lib/api.js';
 import type { FacetCounts } from '#lib/types.js';
 
-type FacetCountsFn = (params: URLSearchParams, opts?: { disjunctive?: boolean; facets?: string[] }) => Promise<FacetCounts>;
+type FacetCountsFn = ReturnType<typeof createApi>['facetCounts'];
 
 /** How long a server render may reuse a facet distribution. The counts are the same for
  *  every visitor and move only when ingest lands a wave (a few times an hour). The job
