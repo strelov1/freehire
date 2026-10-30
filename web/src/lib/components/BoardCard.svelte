@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Clock, FileCheck, Mail, MessageSquare } from '@lucide/svelte';
+  import { Clock, FileCheck, Mail, MapPin, MessageSquare } from '@lucide/svelte';
   import { companyLogoUrl } from '#lib/logo.js';
   import { Badge, EntityLogo } from '#lib/ui/index.js';
   import { humanizeStage } from '#lib/stages.js';
@@ -22,6 +22,7 @@
   // wired in as the description — otherwise stage/review/silence are never announced.
   const indicatorsId = $props.id();
   const hintId = `${indicatorsId}-hint`;
+  const locationId = `${indicatorsId}-location`;
   const s = $derived(t(messages, locale()));
 
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
@@ -39,6 +40,9 @@
   // The employer and role are carried by the application itself for exactly this.
   const company = $derived(item.job?.company || item.company_slug);
   const title = $derived(item.job?.title || item.role_title);
+  // Where the role is — what tells two applications to one employer apart when the titles
+  // match. The board has no flags, so the line is shown whole (truncated to one line).
+  const location = $derived(item.job?.location);
 
   // Enter and Space open the application. This runs in the CAPTURE phase, and that is
   // load-bearing rather than a style choice.
@@ -88,7 +92,7 @@
   onclick={() => onopen(item)}
   onkeydowncapture={openOnKey}
   aria-label="Open {title} at {company || 'unknown company'}"
-  aria-describedby="{indicatorsId} {hintId}"
+  aria-describedby="{location ? `${locationId} ` : ''}{indicatorsId} {hintId}"
   class="relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
   <span class="flex items-center gap-1.5 text-sm font-semibold">
@@ -96,6 +100,12 @@
     <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
   </span>
   <span class="line-clamp-2 text-sm">{title}</span>
+  {#if location}
+    <span id={locationId} title={location} class="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+      <MapPin class="size-3 shrink-0" aria-hidden="true" />
+      <span class="truncate">{location}</span>
+    </span>
+  {/if}
   <!-- Indicators, every one of them. The silence marker used to be the way into the
        follow-up draft; that offer moved into the opened application when the card gave
        up its controls, and the marker went back to reporting. -->
