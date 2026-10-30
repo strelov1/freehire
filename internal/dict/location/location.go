@@ -214,7 +214,9 @@ func ParseIn(location string, known []string) Geo {
 		}
 		// A Brazilian state code after a Brazilian town is the state ("Curitiba, PR"), not
 		// Puerto Rico; see brazilianStateCodes.
-		if brazilianStateCodes[tok] && !first && !seg.namesUS && brazilianStateAccepted(tok, prevTok, seg.namesBrazil) {
+		// So is one opening a location that names Brazil next ("RS, Brasil").
+		if brazilianStateCodes[tok] && !seg.namesUS && (!first && brazilianStateAccepted(tok, prevTok, seg.namesBrazil) ||
+			first && brazilianStateOpening(tok, toks, segs, i)) {
 			// "Colombo, PR": the town is Paraná's Colombo, so Sri Lanka goes; "Concordia,
 			// SC" is Concórdia, not the El Paso district the city table named.
 			for _, c := range lastCountries {

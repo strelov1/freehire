@@ -3195,6 +3195,45 @@ WHERE countries && ARRAY['in', 'de', 'id']::text[]
   AND location ~* ',\s*(in|de|id)\s*(,|$|[0-9])'
 ORDER BY id;
 
+-- name: ListJobIDsWithBrazilianStateCollision :many
+-- Candidates for cmd/backfill-brazil-state-codes: postings of the named Brazilian sources
+-- whose stored countries carry a code a Brazilian state code spells (RS Serbia, BA Bosnia,
+-- PR Puerto Rico, SC/MS/MA/AL/PA a US state, PE Peru or Prince Edward Island, DF Mexico),
+-- or the namesake a state code used to leave behind ("Colombo, PR" Sri Lanka, Montenegro).
+--
+-- Broad on purpose, as ListJobIDsWithUSSubdivisionCollision is: it also matches genuine
+-- Peruvian or US postings of the same sources, and the recompute in the caller decides. Open
+-- and closed alike, since a closed posting reopens when the crawl lists it again. Rides
+-- jobs_source_idx and reads no description.
+SELECT id
+FROM jobs
+WHERE source = ANY(sqlc.arg(sources)::text[])
+  AND countries && ARRAY['al', 'am', 'ba', 'ca', 'es', 'lk', 'ma', 'me', 'mg', 'mt', 'mx',
+                         'pa', 'pe', 'pr', 'ro', 'rs', 'se', 'to', 'us']::text[]
+ORDER BY id;
+
+-- name: JobsForPlaceRecheckByIDs :many
+-- What cmd/backfill-brazil-state-codes re-derives a row's places from, and the places it
+-- currently stores, for a named set of ids.
+SELECT id, source, title, location, description, work_mode, countries, regions, cities, metros
+FROM jobs
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- name: SetJobPlaces :execrows
+-- Write one row's countries, regions, cities and metros, for cmd/backfill-brazil-state-codes.
+-- A nil slice encodes as NULL, which the NOT NULL columns refuse; COALESCE writes the empty
+-- array the ingest upserts write. IS DISTINCT FROM-guarded, so a re-run writes nothing.
+UPDATE jobs
+SET countries = COALESCE(sqlc.arg(countries)::text[], '{}'),
+    regions   = COALESCE(sqlc.arg(regions)::text[], '{}'),
+    cities    = COALESCE(sqlc.arg(cities)::text[], '{}'),
+    metros    = COALESCE(sqlc.arg(metros)::text[], '{}')
+WHERE id = sqlc.arg(id)
+  AND (countries IS DISTINCT FROM COALESCE(sqlc.arg(countries)::text[], '{}')
+       OR regions IS DISTINCT FROM COALESCE(sqlc.arg(regions)::text[], '{}')
+       OR cities IS DISTINCT FROM COALESCE(sqlc.arg(cities)::text[], '{}')
+       OR metros IS DISTINCT FROM COALESCE(sqlc.arg(metros)::text[], '{}'));
+
 -- name: ListBoardJobURLs :many
 -- Every stored posting of ONE board (open or closed), with the URL it was crawled at — what
 -- cmd/rekey-gupy-boards reads to learn which career page each posting of a retired

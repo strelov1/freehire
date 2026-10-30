@@ -60,6 +60,23 @@ func brazilianStateAccepted(code, prevTok string, namesBrazil bool) bool {
 	return namesBrazil || isBrazilianPlace(prevTok)
 }
 
+// brazilianStateOpening reports whether tok is a Brazilian state code opening a location
+// whose next place is Brazil written out: "RS, Brasil", the line gupy and solides write for
+// a posting with a state and no town. With no town before it the code has no other context,
+// and the word after it is what places it. Only the word counts, not the code "br": two bare
+// codes ("PE, BR") are a list of countries.
+func brazilianStateOpening(tok string, toks []string, segs []tokenLocation, i int) bool {
+	if !brazilianStateCodes[tok] {
+		return false
+	}
+	for j := i + 1; j < len(toks) && segs[j] == segs[i]; j++ {
+		if next := stripWorkmodeWords(trimToken(toks[j])); next != "" {
+			return next == "brasil" || next == "brazil"
+		}
+	}
+	return false
+}
+
 // isBrazilianPlace reports whether any of the dictionary's tables has tok in Brazil.
 func isBrazilianPlace(tok string) bool {
 	if nameToCountry[tok] == "br" {

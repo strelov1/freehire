@@ -2680,6 +2680,58 @@ func (q *Queries) JobsForGeographyRecheckByIDs(ctx context.Context, ids []int64)
 	return items, nil
 }
 
+const jobsForPlaceRecheckByIDs = `-- name: JobsForPlaceRecheckByIDs :many
+SELECT id, source, title, location, description, work_mode, countries, regions, cities, metros
+FROM jobs
+WHERE id = ANY($1::bigint[])
+`
+
+type JobsForPlaceRecheckByIDsRow struct {
+	ID          int64    `json:"id"`
+	Source      string   `json:"source"`
+	Title       string   `json:"title"`
+	Location    string   `json:"location"`
+	Description string   `json:"description"`
+	WorkMode    string   `json:"work_mode"`
+	Countries   []string `json:"countries"`
+	Regions     []string `json:"regions"`
+	Cities      []string `json:"cities"`
+	Metros      []string `json:"metros"`
+}
+
+// What cmd/backfill-brazil-state-codes re-derives a row's places from, and the places it
+// currently stores, for a named set of ids.
+func (q *Queries) JobsForPlaceRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForPlaceRecheckByIDsRow, error) {
+	rows, err := q.db.Query(ctx, jobsForPlaceRecheckByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []JobsForPlaceRecheckByIDsRow{}
+	for rows.Next() {
+		var i JobsForPlaceRecheckByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Source,
+			&i.Title,
+			&i.Location,
+			&i.Description,
+			&i.WorkMode,
+			&i.Countries,
+			&i.Regions,
+			&i.Cities,
+			&i.Metros,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const jobsForWorkModeRecheckByIDs = `-- name: JobsForWorkModeRecheckByIDs :many
 SELECT id, location, description, work_mode FROM jobs
 WHERE id = ANY($1::bigint[])
@@ -3320,6 +3372,44 @@ type ListJobIDsUpdatedAfterParams struct {
 // incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
 func (q *Queries) ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpdatedAfterParams) ([]int64, error) {
 	rows, err := q.db.Query(ctx, listJobIDsUpdatedAfter, arg.AfterID, arg.Since, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJobIDsWithBrazilianStateCollision = `-- name: ListJobIDsWithBrazilianStateCollision :many
+SELECT id
+FROM jobs
+WHERE source = ANY($1::text[])
+  AND countries && ARRAY['al', 'am', 'ba', 'ca', 'es', 'lk', 'ma', 'me', 'mg', 'mt', 'mx',
+                         'pa', 'pe', 'pr', 'ro', 'rs', 'se', 'to', 'us']::text[]
+ORDER BY id
+`
+
+// Candidates for cmd/backfill-brazil-state-codes: postings of the named Brazilian sources
+// whose stored countries carry a code a Brazilian state code spells (RS Serbia, BA Bosnia,
+// PR Puerto Rico, SC/MS/MA/AL/PA a US state, PE Peru or Prince Edward Island, DF Mexico),
+// or the namesake a state code used to leave behind ("Colombo, PR" Sri Lanka, Montenegro).
+//
+// Broad on purpose, as ListJobIDsWithUSSubdivisionCollision is: it also matches genuine
+// Peruvian or US postings of the same sources, and the recompute in the caller decides. Open
+// and closed alike, since a closed posting reopens when the crawl lists it again. Rides
+// jobs_source_idx and reads no description.
+func (q *Queries) ListJobIDsWithBrazilianStateCollision(ctx context.Context, sources []string) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listJobIDsWithBrazilianStateCollision, sources)
 	if err != nil {
 		return nil, err
 	}
@@ -5672,6 +5762,44 @@ type SetJobGeographyParams struct {
 // nothing and stopping mid-way costs nothing to resume.
 func (q *Queries) SetJobGeography(ctx context.Context, arg SetJobGeographyParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setJobGeography, arg.Countries, arg.Regions, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setJobPlaces = `-- name: SetJobPlaces :execrows
+UPDATE jobs
+SET countries = COALESCE($1::text[], '{}'),
+    regions   = COALESCE($2::text[], '{}'),
+    cities    = COALESCE($3::text[], '{}'),
+    metros    = COALESCE($4::text[], '{}')
+WHERE id = $5
+  AND (countries IS DISTINCT FROM COALESCE($1::text[], '{}')
+       OR regions IS DISTINCT FROM COALESCE($2::text[], '{}')
+       OR cities IS DISTINCT FROM COALESCE($3::text[], '{}')
+       OR metros IS DISTINCT FROM COALESCE($4::text[], '{}'))
+`
+
+type SetJobPlacesParams struct {
+	Countries []string `json:"countries"`
+	Regions   []string `json:"regions"`
+	Cities    []string `json:"cities"`
+	Metros    []string `json:"metros"`
+	ID        int64    `json:"id"`
+}
+
+// Write one row's countries, regions, cities and metros, for cmd/backfill-brazil-state-codes.
+// A nil slice encodes as NULL, which the NOT NULL columns refuse; COALESCE writes the empty
+// array the ingest upserts write. IS DISTINCT FROM-guarded, so a re-run writes nothing.
+func (q *Queries) SetJobPlaces(ctx context.Context, arg SetJobPlacesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setJobPlaces,
+		arg.Countries,
+		arg.Regions,
+		arg.Cities,
+		arg.Metros,
+		arg.ID,
+	)
 	if err != nil {
 		return 0, err
 	}

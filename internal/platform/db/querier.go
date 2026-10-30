@@ -3450,6 +3450,9 @@ type Querier interface {
 	// over `description` de-TOASTs the column for every row it examines, and the search index
 	// already holds the text.
 	JobsForGeographyRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForGeographyRecheckByIDsRow, error)
+	// What cmd/backfill-brazil-state-codes re-derives a row's places from, and the places it
+	// currently stores, for a named set of ids.
+	JobsForPlaceRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForPlaceRecheckByIDsRow, error)
 	// Location, description and the currently-stored work_mode for a named set of ids, for
 	// cmd/backfill-remote-perk-false-positive.
 	//
@@ -4398,6 +4401,16 @@ type Querier interface {
 	// Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
 	// incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
 	ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpdatedAfterParams) ([]int64, error)
+	// Candidates for cmd/backfill-brazil-state-codes: postings of the named Brazilian sources
+	// whose stored countries carry a code a Brazilian state code spells (RS Serbia, BA Bosnia,
+	// PR Puerto Rico, SC/MS/MA/AL/PA a US state, PE Peru or Prince Edward Island, DF Mexico),
+	// or the namesake a state code used to leave behind ("Colombo, PR" Sri Lanka, Montenegro).
+	//
+	// Broad on purpose, as ListJobIDsWithUSSubdivisionCollision is: it also matches genuine
+	// Peruvian or US postings of the same sources, and the recompute in the caller decides. Open
+	// and closed alike, since a closed posting reopens when the crawl lists it again. Rides
+	// jobs_source_idx and reads no description.
+	ListJobIDsWithBrazilianStateCollision(ctx context.Context, sources []string) ([]int64, error)
 	// Candidates for cmd/backfill-us-subdivision-collision (freehire#3113): a location whose
 	// trailing comma-field is a bare two-letter code that collides between a US/Canada
 	// subdivision and a curated country (in/de/id — the exact three freehire#3113 added to
@@ -7173,6 +7186,10 @@ type Querier interface {
 	// does: a row already carrying the recomputed values is not rewritten, so a re-run writes
 	// nothing and stopping mid-way costs nothing to resume.
 	SetJobGeography(ctx context.Context, arg SetJobGeographyParams) (int64, error)
+	// Write one row's countries, regions, cities and metros, for cmd/backfill-brazil-state-codes.
+	// A nil slice encodes as NULL, which the NOT NULL columns refuse; COALESCE writes the empty
+	// array the ingest upserts write. IS DISTINCT FROM-guarded, so a re-run writes nothing.
+	SetJobPlaces(ctx context.Context, arg SetJobPlacesParams) (int64, error)
 	// Write one row's requires_clearance, for cmd/backfill-clearance.
 	//
 	// The IS DISTINCT FROM guard is what makes the pass idempotent: a row already carrying

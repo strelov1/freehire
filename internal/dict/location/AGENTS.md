@@ -330,7 +330,11 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   Brazilian reading in any table — including a namesake the city table gives to another
   country first, whose country is withdrawn and whose name becomes the Brazilian one
   ("Colombo, PR", "Concordia, SC" → Concórdia, not El Paso). Not when the line names the
-  US, and not after the country the code spells ("Juan Díaz, Panamá, PA"). Lines with a
+  US, and not after the country the code spells ("Juan Díaz, Panamá, PA"). A code with no
+  town before it is the state only when the next place is the WORD "Brasil"/"Brazil" ("RS,
+  Brasil", what gupy and solides write for a posting with no city); two bare codes ("PE,
+  BR") stay a list of countries. Rows stored before the fix keep the wrong country, since
+  backfill-derive keeps a stored one: `cmd/backfill-brazil-state-codes` re-derives them. Lines with a
   wrong country 20.1% → 1.1%; exactly Brazil 76.6% → 97.9%. The state names that have no
   second reading state Brazil and no city (`foreignSubdivisionNames` + `regionNotCity`:
   "Rio Grande do Sul" named Rio Grande, "Ceará" Fortaleza, "Bahia" Salvador); Paraná,

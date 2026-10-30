@@ -47,6 +47,14 @@ func TestBrazilianAndPortugueseLines(t *testing.T) {
 		{"Rio de Janeiro, RJ", []string{"br"}, []string{"Rio de Janeiro"}},
 		{"Campinas SP", []string{"br"}, []string{"Campinas"}},
 		{"Localização não informada, SP, Brasil", []string{"br"}, nil},
+		// A state code with no town before it, the line gupy and solides write when the
+		// posting names no city: RS was Serbia, BA Bosnia, MS Mississippi.
+		{"RS, Brasil", []string{"br"}, nil},
+		{"BA, Brasil", []string{"br"}, nil},
+		{"MS, Brasil", []string{"br"}, nil},
+		{"PE, Brazil", []string{"br"}, nil},
+		// Two bare codes are a list of countries, not a state and its country.
+		{"PE, BR", []string{"br", "pe"}, nil},
 		// The state names state Brazil and no city.
 		{"Ijuí, Rio Grande do Sul, BR", []string{"br"}, []string{"Ijuí"}},
 		{"Minas Gerais", []string{"br"}, nil},
