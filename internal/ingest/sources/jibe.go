@@ -2,7 +2,9 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -49,9 +51,77 @@ type jibePosting struct {
 	Description        string `json:"description"`
 	LocationName       string `json:"location_name"`
 	FullLocation       string `json:"full_location"`
-	LocationType       string `json:"location_type"`
 	HiringOrganization string `json:"hiring_organization"`
 	PostedDate         string `json:"posted_date"`
+	// Tags holds the values of every tag slot ("tags", "tags1" … "tags9"), one slice per slot.
+	// The slots are the tenant's own free fields, so they are collected generically.
+	Tags [][]string `json:"-"`
+}
+
+// jibeTagKey matches a tag slot's key.
+var jibeTagKey = regexp.MustCompile(`^tags[0-9]*$`)
+
+// UnmarshalJSON decodes the named fields as usual, then collects every tag slot, whose keys
+// vary by tenant and cannot be named in the struct.
+func (p *jibePosting) UnmarshalJSON(b []byte) error {
+	type plain jibePosting
+	if err := json.Unmarshal(b, (*plain)(p)); err != nil {
+		return err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	for k, v := range raw {
+		var values []string
+		if jibeTagKey.MatchString(k) && json.Unmarshal(v, &values) == nil {
+			p.Tags = append(p.Tags, values)
+		}
+	}
+	return nil
+}
+
+// jibeWorkplaceTags maps a tag value, lowercased, to a work mode. Jibe has no workplace field
+// of its own — the record's location_type is a geocoding setting ("LAT_LNG", "ANY") on every
+// sampled posting — so a tenant that states the arrangement puts it in one of its free tag
+// slots, and which slot differs per tenant. Every entry is a label a live board publishes (189
+// boards, 2026-10-30; about a quarter of postings carry one). Labels that offer a choice
+// ("Onsite or Hybrid Required", "Remote / Hybrid / In-Office", "Remote Optional") or a
+// permission ("Virtual Permitted") are absent, so they state nothing.
+var jibeWorkplaceTags = map[string]string{
+	"remote": "remote", "fully remote": "remote", "remote - us": "remote",
+	"remote within the united states": "remote", "remote within location state only": "remote",
+	"us-remote": "remote", "uk-remote": "remote", "de-remote": "remote", "in-remote": "remote",
+	"au-remote": "remote", "nl-remote": "remote",
+
+	"hybrid": "hybrid", "hybride": "hybrid", "#li-hybrid": "hybrid",
+	"hybrid - 2 or less days in office": "hybrid", "hybrid (3 days in office)": "hybrid",
+	"hybrid (remote / on site)":                              "hybrid",
+	"hybrid (work from home with ability to report on-site)": "hybrid",
+
+	"onsite": "onsite", "on-site": "onsite", "fully onsite": "onsite", "onsite 100%": "onsite",
+	"onsite with travel": "onsite", "in-office": "onsite", "in office": "onsite",
+	"in office w/field work": "onsite", "#li-onsite": "onsite", "not remote": "onsite",
+	"no remote work": "onsite", "in office (not remote)": "onsite",
+}
+
+// jibeWorkMode reads a posting's work mode from its tag slots, "" when no tag states one or
+// two tags disagree (a "Hybrid" slot beside a "#LI-Onsite" one is not a statement).
+func jibeWorkMode(tags [][]string) string {
+	mode := ""
+	for _, slot := range tags {
+		for _, v := range slot {
+			m := jibeWorkplaceTags[strings.ToLower(strings.TrimSpace(v))]
+			switch {
+			case m == "":
+			case mode == "":
+				mode = m
+			case mode != m:
+				return ""
+			}
+		}
+	}
+	return mode
 }
 
 func (s jibe) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
@@ -88,10 +158,7 @@ func (s jibe) toJob(e CompanyEntry, p jibePosting) (Job, bool) {
 		return Job{}, false
 	}
 	location := firstNonEmpty(p.LocationName, p.FullLocation)
-	// location_type is the structured work-arrangement signal (REMOTE/HYBRID/ONSITE);
-	// "ANY" and unknown values yield no mode, leaving the pipeline to fall back to the
-	// location string.
-	workMode := workplaceTypeMode(p.LocationType)
+	workMode := jibeWorkMode(p.Tags)
 	return Job{
 		ExternalID:  id,
 		URL:         fmt.Sprintf("https://%s/careers-home/jobs/%s", e.Board, id),
