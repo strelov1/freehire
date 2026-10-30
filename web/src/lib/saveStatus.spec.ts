@@ -77,4 +77,24 @@ describe('SaveStatus', () => {
     expect(status.state).toBe('idle');
     expect(announce).not.toHaveBeenCalled();
   });
+
+  // A failure the screen cannot show — superseded by a newer write, or flushed as the
+  // control went away — must still leave a trace.
+  it('logs every failed write, including the ones it does not show', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const status = new SaveStatus();
+
+    expect(await status.run(() => Promise.reject(new Error('shown')))).toBe(false);
+    expect(await status.run(() => Promise.reject(new Error('quiet')), {}, true)).toBe(false);
+
+    const older = deferred();
+    const superseded = status.run(() => older.promise);
+    void status.run(() => Promise.resolve());
+    older.reject(new Error('superseded'));
+    expect(await superseded).toBe(false);
+
+    const logged = warn.mock.calls.map((call) => (call[1] as Error).message);
+    expect(logged).toEqual(['shown', 'quiet', 'superseded']);
+    warn.mockRestore();
+  });
 });

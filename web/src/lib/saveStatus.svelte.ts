@@ -39,7 +39,15 @@ export class SaveStatus {
    *  would describe something no longer on screen. */
   async run(write: () => Promise<unknown>, wording: SaveWording = {}, quiet = false): Promise<boolean> {
     this.#last = { write, wording };
-    if (quiet) return write().then(() => true, () => false);
+    if (quiet) {
+      return write().then(
+        () => true,
+        (e: unknown) => {
+          console.warn('save failed', e);
+          return false;
+        },
+      );
+    }
     const seq = ++this.#seq;
     clearTimeout(this.#timer);
     this.state = 'saving';
@@ -55,6 +63,9 @@ export class SaveStatus {
       }, SAVED_FOR_MS);
       return true;
     } catch (e) {
+      // Logged before the newest-write check: a superseded or quiet failure is shown
+      // nowhere, and must still leave a trace.
+      console.warn('save failed', e);
       if (seq !== this.#seq) return false;
       this.state = 'error';
       this.failure = wording.failed ?? (e instanceof ApiError ? e.message : null);

@@ -22,16 +22,17 @@
   let {
     skills,
     onToggleSkill,
-    busy = false,
     status,
   }: {
     skills: string[];
     onToggleSkill: (skill: string) => void;
-    busy?: boolean;
-    /** The autosaving Skills view's save state, shown on the label row. Set-up saves
-     *  with the whole form, so it passes none. */
+    /** The autosaving Skills view's save state, shown on the label row (and dimming the
+     *  picker while a write is in flight). Set-up saves with the whole form, so it passes
+     *  none. */
     status?: SaveStatus;
   } = $props();
+
+  const busy = $derived(status?.saving ?? false);
 
   let skillDist = $state.raw<FacetOption[]>([]);
   // See RemoteSearchSelect's `ready` prop: without it, a dictionary fetch slower than the

@@ -55,7 +55,7 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <SkillsPicker {skills} onToggleSkill={toggleSkill} busy={status.saving} {status} />
+  <SkillsPicker {skills} onToggleSkill={toggleSkill} {status} />
 
   {#if lastSkillBlocked}
     <p class="text-sm text-muted-foreground">{s.lastSkillBlocked}</p>
