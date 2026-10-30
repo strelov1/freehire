@@ -21,6 +21,8 @@ const EARLY_DAYS = 3;
  *  it, so the threshold is small enough that the claim survives being wrong by an
  *  order of magnitude. */
 const EARLY_APPLIES = 3;
+/** The one badge a list card keeps — see `cardFreshnessBadges`. */
+const NEW_LABEL = 'New';
 
 /** daysSince returns whole days between `iso` and now, or null when the date is
  *  missing or unparseable. Clamped at zero: a source clock running a few hours ahead
@@ -78,7 +80,7 @@ export function freshnessBadges(
   if (days === null || days > NEW_DAYS) return [];
 
   const posted = postedPhrase(days);
-  const badges: FreshnessBadge[] = [{ label: 'New', tooltip: posted }];
+  const badges: FreshnessBadge[] = [{ label: NEW_LABEL, tooltip: posted }];
 
   if (days <= EARLY_DAYS && appliedCount <= EARLY_APPLIES) {
     badges.push({ label: 'Be an early applicant', tooltip: appliedPhrase(appliedCount, posted) });
@@ -86,7 +88,8 @@ export function freshnessBadges(
   return badges;
 }
 
-/** cardFreshnessBadges is the list card's stricter gate: no reality signal, no badges.
+/** cardFreshnessBadges is the list card's stricter gate: no reality signal, no badges,
+ *  and never more than "New".
  *
  *  `freshnessBadges` lets the date stand alone when the signal is absent, which is right
  *  on the job's own page — the detail read always computes one. A card is different,
@@ -98,14 +101,15 @@ export function freshnessBadges(
  *  crawl — on the surface people scan fastest and least critically.
  *
  *  So a card that cannot verify freshness claims nothing. An absent badge costs less
- *  than a false one. Everything else — the thresholds, the tooltips — is the shared
- *  rule's, deliberately not restated here. */
+ *  than a false one. "Be an early applicant" stays on the job's own page: on a card it
+ *  repeated "New" on almost every fresh posting and crowded out the facts that tell
+ *  one posting from the next, such as where it is (freehire#3894). Everything else —
+ *  the thresholds, the tooltip — is the shared rule's, deliberately not restated here. */
 export function cardFreshnessBadges(
   postedAt?: string | null,
   reality?: Reality | null,
-  appliedCount = 0,
   closedAt?: string | null,
 ): FreshnessBadge[] {
   if (!reality) return [];
-  return freshnessBadges(postedAt, reality, appliedCount, closedAt);
+  return freshnessBadges(postedAt, reality, 0, closedAt).filter((b) => b.label === NEW_LABEL);
 }

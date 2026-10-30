@@ -3,9 +3,10 @@
   import type { Snippet } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Bookmark, Check, ExternalLink, Eye, EyeOff, FileText, Lock } from '@lucide/svelte';
+  import { Bookmark, Check, ExternalLink, Eye, EyeOff, FileText, Lock, MapPin } from '@lucide/svelte';
   import { companyLogoUrl } from '#lib/logo.js';
   import CountryFlagStack from './CountryFlagStack.svelte';
+  import { cardLocation } from '#lib/cardLocation.js';
   import JobMatchBar from './JobMatchBar.svelte';
   import { api } from '#lib/api.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -91,6 +92,9 @@
   // guard has to test that subset — a job carrying only editorial tags would
   // otherwise open an empty flex row and leave a stray margin under the title.
   const credentials = $derived(credentialBadges(job.collections));
+  // Only the full posting carries the raw location line; a card projection simply has none.
+  const locationLine = $derived('location' in job ? job.location : undefined);
+  const place = $derived(cardLocation(locationLine, job.countries));
   // A one-line blurb under the title so a card conveys what the job is without
   // opening it. Prefer the clean model-written summary, but only tech jobs are
   // enriched — fall back to a plain-text snippet of the raw (HTML) posting so
@@ -120,7 +124,6 @@
   // same way they omit salary. Zero renders nothing at all: "0 views" reads as a dead
   // figure rather than as information.
   const views = $derived('view_count' in job ? job.view_count : 0);
-  const applied = $derived('applied_count' in job ? job.applied_count : 0);
   // The direct-apply shortcut in the action row below. Only `jobview.Job` carries the
   // outbound `url` (and the `source` the apply-intent event reports) — `jobview.Card`
   // (saved / lists / tracking board) does not, so those surfaces render no button
@@ -133,12 +136,12 @@
   // A closed posting takes no applications, so it offers no Apply at all.
   const applyJob = $derived('url' in job && job.url && !job.closed_at ? job : null);
   const directApply = $derived('direct_apply' in job && job.direct_apply === true && !job.closed_at);
-  // The two freshness badges, through the card's own gate: a projection that carries no
+  // The freshness badge, through the card's own gate: a projection that carries no
   // reality signal earns none, because on those surfaces the posting date alone would
   // vouch for a job the signal was written to distrust. Everything else — the
   // thresholds, the wording, the closed-posting rule — is the shared rule's, so the card
   // and the job's own page cannot tell different stories about one posting.
-  const freshness = $derived(cardFreshnessBadges(job.posted_at, reality, applied, job.closed_at));
+  const freshness = $derived(cardFreshnessBadges(job.posted_at, reality, job.closed_at));
 
   const MAX_SKILLS = 5;
   const shownSkills = $derived(skills.slice(0, MAX_SKILLS));
@@ -386,7 +389,7 @@
   <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || credentials.length > 0 || job.ai_interview_reports || directApply}
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
@@ -406,9 +409,8 @@
       <!-- Freshness before the facets: "New" is a fact about right now, the facets are
            stable attributes of the role. Both sit behind the reality/ghost chip, because
            a warning that a posting may not be real outranks a note that it is fresh.
-           Each badge's title is the claim's own basis, not a restatement of its label —
-           "be an early applicant" counts the people who told US they applied, and the
-           tooltip is where that limit is stated. -->
+           The badge's title is the claim's own basis (when it was posted), not a
+           restatement of its label. -->
       {#each freshness as badge (badge.label)}
         <!-- The tooltip rides a wrapper, not the Badge: the primitive takes only
              variant/class/children, so a `title` passed to it would be dropped
@@ -430,6 +432,15 @@
            whole card is a link, so the flags carry no nested filter links. -->
       {#if job.countries?.length}
         <CountryFlagStack codes={job.countries} max={5} class="ml-0.5 text-base" />
+      {/if}
+      <!-- The place the flags do not name: one employer's postings in seven cities
+           otherwise read identically until opened. A muted caption beside the flags
+           rather than a chip, so it reads as part of the geography, not a new signal. -->
+      {#if place}
+        <span title={locationLine} class="flex min-w-0 max-w-56 items-center gap-1 text-xs font-medium text-muted-foreground">
+          <MapPin class="size-3.5 shrink-0" aria-hidden="true" />
+          <span class="truncate">{place}</span>
+        </span>
       {/if}
     </div>
   {/if}

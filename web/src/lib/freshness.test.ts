@@ -81,30 +81,22 @@ describe('freshnessBadges', () => {
 // assistant Card shape has no such field), and there the date would stand alone on
 // exactly the postings the fake-freshness gate exists to suppress.
 describe('cardFreshnessBadges', () => {
-  it('shows the pair when the signal is present and fresh', () => {
-    expect(cardFreshnessBadges(daysAgo(1), reality(), 0).map((b) => b.label)).toEqual([
-      'New',
-      'Be an early applicant',
-    ]);
+  it('shows only "New" when the signal is present and fresh', () => {
+    expect(cardFreshnessBadges(daysAgo(1), reality()).map((b) => b.label)).toEqual(['New']);
   });
 
   it('shows nothing when no reality signal was computed, however fresh the date', () => {
-    expect(cardFreshnessBadges(daysAgo(0), null, 0)).toEqual([]);
-    expect(cardFreshnessBadges(daysAgo(0), undefined, 0)).toEqual([]);
+    expect(cardFreshnessBadges(daysAgo(0), null)).toEqual([]);
+    expect(cardFreshnessBadges(daysAgo(0), undefined)).toEqual([]);
   });
 
   it('still defers to the signal when it distrusts the date', () => {
-    expect(cardFreshnessBadges(daysAgo(0), reality({ fake_freshness: true }), 0)).toEqual([]);
+    expect(cardFreshnessBadges(daysAgo(0), reality({ fake_freshness: true }))).toEqual([]);
   });
 
   it('still applies the shared thresholds', () => {
-    expect(cardFreshnessBadges(daysAgo(5), reality(), 0).map((b) => b.label)).toEqual(['New']);
-    expect(cardFreshnessBadges(daysAgo(20), reality(), 0)).toEqual([]);
-  });
-
-  // The wrapper must not quietly relax the applied bound the shared rule enforces.
-  it('still applies the shared applied-count bound', () => {
-    expect(cardFreshnessBadges(daysAgo(1), reality(), 9).map((b) => b.label)).toEqual(['New']);
+    expect(cardFreshnessBadges(daysAgo(5), reality()).map((b) => b.label)).toEqual(['New']);
+    expect(cardFreshnessBadges(daysAgo(20), reality())).toEqual([]);
   });
 });
 
@@ -114,7 +106,7 @@ describe('cardFreshnessBadges', () => {
 describe('closed postings', () => {
   it('earn no badge however fresh the date', () => {
     expect(freshnessBadges(daysAgo(0), reality(), 0, daysAgo(0))).toEqual([]);
-    expect(cardFreshnessBadges(daysAgo(0), reality(), 0, daysAgo(0))).toEqual([]);
+    expect(cardFreshnessBadges(daysAgo(0), reality(), daysAgo(0))).toEqual([]);
   });
 
   it('leave an open posting badged, whether the close date is null or absent', () => {
@@ -122,9 +114,6 @@ describe('closed postings', () => {
       'New',
       'Be an early applicant',
     ]);
-    expect(cardFreshnessBadges(daysAgo(1), reality(), 0).map((b) => b.label)).toEqual([
-      'New',
-      'Be an early applicant',
-    ]);
+    expect(cardFreshnessBadges(daysAgo(1), reality()).map((b) => b.label)).toEqual(['New']);
   });
 });
