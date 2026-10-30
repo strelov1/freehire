@@ -307,3 +307,37 @@ func (r *QueriesRepository) MockSummary(ctx context.Context, subjectID int64, re
 	}
 	return sum, nil
 }
+
+func (r *QueriesRepository) MocksDueForReminder(ctx context.Context, offset, floor time.Duration, limit int32) ([]Mock, error) {
+	ids, err := r.q.ListBuddyMocksDueForReminder(ctx, db.ListBuddyMocksDueForReminderParams{
+		OffsetMinutes: int32(offset / time.Minute), FloorMinutes: int32(floor / time.Minute), RowLimit: limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Mock, 0, len(ids))
+	for _, id := range ids {
+		m, found, err := r.MockByID(ctx, uuid.UUID(id.Bytes))
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			out = append(out, m)
+		}
+	}
+	return out, nil
+}
+
+func (r *QueriesRepository) ClaimMockReminder(ctx context.Context, id uuid.UUID, offset time.Duration) (bool, error) {
+	n, err := r.q.RecordBuddyMockReminder(ctx, db.RecordBuddyMockReminderParams{
+		MockID: pgtype.UUID{Bytes: id, Valid: true}, OffsetMinutes: int32(offset / time.Minute),
+	})
+	return n == 1, err
+}
+
+func (r *QueriesRepository) ReleaseMockReminder(ctx context.Context, id uuid.UUID, offset time.Duration) error {
+	_, err := r.q.DeleteBuddyMockReminder(ctx, db.DeleteBuddyMockReminderParams{
+		MockID: pgtype.UUID{Bytes: id, Valid: true}, OffsetMinutes: int32(offset / time.Minute),
+	})
+	return err
+}

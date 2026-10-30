@@ -19,6 +19,11 @@
 // that never opens the pool, which is both how this ships before SES is wired and what
 // rolling it back looks like — and it must not merely skip SENDING, because claiming a
 // reminder it cannot deliver would mark it sent forever.
+//
+// It runs a second pass for buddy mock interviews (buddy.SendDueMockReminders): the same
+// offsets, windows and claim order, on the same schedule and mail transport, so the
+// feature needs no unit of its own. A failure in one pass does not skip the other, and the
+// run exits non-zero if either could not read its work.
 package main
 
 import (
@@ -27,6 +32,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/strelov1/freehire/internal/engage/buddy"
 	"github.com/strelov1/freehire/internal/engage/emailnotify"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
 	"github.com/strelov1/freehire/internal/platform/config"
@@ -67,21 +73,35 @@ func run() int {
 		return 1
 	}
 
+	q := db.New(pool)
 	svc := mentorship.New(
-		mentorship.NewQueriesRepository(db.New(pool), pool),
+		mentorship.NewQueriesRepository(q, pool),
 		mentorship.Config{
 			Notifier: mentorship.NewMailNotifier(sender, cfg.NotifyEmailFrom,
 				cfg.FrontendOrigin+"/my/sessions"),
 		},
 	)
+	// The buddy pass needs no messaging core: reminders never start a conversation.
+	buddyRepo := buddy.NewQueriesRepository(q)
+	mocks := buddy.NewMockService(buddy.New(buddyRepo, nil), buddyRepo,
+		buddy.NewMockMailNotifier(q, sender, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
 
+	exit := 0
 	stats, err := svc.SendDueReminders(ctx, maxPerRun())
 	if err != nil {
 		log.Printf("mentorship-remind: %v", err)
-		return 1
+		exit = 1
+	} else {
+		log.Printf("mentorship-remind: sent=%d failed=%d", stats.Sent, stats.Failed)
 	}
-	log.Printf("mentorship-remind: sent=%d failed=%d", stats.Sent, stats.Failed)
-	return 0
+	mockStats, err := mocks.SendDueMockReminders(ctx, maxPerRun())
+	if err != nil {
+		log.Printf("mentorship-remind: buddy mocks: %v", err)
+		exit = 1
+	} else {
+		log.Printf("mentorship-remind: buddy mocks sent=%d failed=%d", mockStats.Sent, mockStats.Failed)
+	}
+	return exit
 }
 
 // maxPerRun reads the per-run bound.

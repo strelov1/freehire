@@ -64,6 +64,13 @@ type MockRepository interface {
 	CreateMockReview(ctx context.Context, id uuid.UUID, authorID int64, rating int, comment string) (bool, error)
 	// MockSummary is subjectID's completed count and revealed-review aggregate.
 	MockSummary(ctx context.Context, subjectID int64, recent int32) (MockSummary, error)
+	// MocksDueForReminder is confirmed mocks starting in (floor, offset] from now and not
+	// yet reminded at offset.
+	MocksDueForReminder(ctx context.Context, offset, floor time.Duration, limit int32) ([]Mock, error)
+	// ClaimMockReminder records one reminder as sent; false when another run holds it.
+	ClaimMockReminder(ctx context.Context, id uuid.UUID, offset time.Duration) (bool, error)
+	// ReleaseMockReminder gives a claim back after a failed delivery.
+	ReleaseMockReminder(ctx context.Context, id uuid.UUID, offset time.Duration) error
 }
 
 // MockService is the mock-interview use cases between buddy members: settings,

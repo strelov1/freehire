@@ -3618,7 +3618,7 @@ git commit -m "Notify buddy mock participants by handle only"
 - Consumes: `db.Queries.ListBuddyMocksDueForReminder`, `RecordBuddyMockReminder`, `DeleteBuddyMockReminder`; `MockByID`; `MockNotifier.MockReminder`; `NewMockMailNotifier` (Task 8).
 - Produces: `var MockReminderOffsets = []time.Duration{24 * time.Hour, time.Hour}`; `type MockReminderStats struct{ Sent, Failed int }`; `func (*MockService) SendDueMockReminders(ctx, maxPerRun int32) (MockReminderStats, error)`; repository `MocksDueForReminder(ctx, offset, floor time.Duration, limit int32) ([]Mock, error)`, `ClaimMockReminder(ctx, id uuid.UUID, offset time.Duration) (bool, error)`, `ReleaseMockReminder(ctx, id uuid.UUID, offset time.Duration) error`.
 
-- [ ] 9.1 Write the failing tests `internal/engage/buddy/mock_remind_integration_test.go`:
+- [x] 9.1 Write the failing tests `internal/engage/buddy/mock_remind_integration_test.go`:
 
 ```go
 //go:build integration
@@ -3705,9 +3705,9 @@ func TestAStartedMockIsNotReminded(t *testing.T) {
 }
 ```
 
-- [ ] 9.2 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `mocks.SendDueMockReminders undefined`.
+- [x] 9.2 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `mocks.SendDueMockReminders undefined`.
 
-- [ ] 9.3 Implement. Extend `MockRepository` in `internal/engage/buddy/mock_service.go` after `MockSummary`:
+- [x] 9.3 Implement. Extend `MockRepository` in `internal/engage/buddy/mock_service.go` after `MockSummary`:
 
 ```go
 	// MocksDueForReminder is confirmed mocks starting in (floor, offset] from now and not
@@ -3837,9 +3837,9 @@ func (r *QueriesRepository) ReleaseMockReminder(ctx context.Context, id uuid.UUI
 }
 ```
 
-- [ ] 9.4 Run: `go test -tags=integration ./internal/engage/buddy/ -run 'TestAMockBooked13|TestTheTwentyFour|TestAFailedReminder|TestAStartedMockIsNot' -count=1`. Expected: `ok`.
+- [x] 9.4 Run: `go test -tags=integration ./internal/engage/buddy/ -run 'TestAMockBooked13|TestTheTwentyFour|TestAFailedReminder|TestAStartedMockIsNot' -count=1`. Expected: `ok`.
 
-- [ ] 9.5 Run the buddy pass from the existing reminder worker. In `cmd/mentorship-remind/main.go`:
+- [x] 9.5 Run the buddy pass from the existing reminder worker. In `cmd/mentorship-remind/main.go`:
   - append to the package doc comment (after the paragraph ending `…what rolling it back looks like — and it must not merely skip SENDING, because claiming a reminder it cannot deliver would mark it sent forever.`):
 
 ```go
@@ -3884,7 +3884,7 @@ func (r *QueriesRepository) ReleaseMockReminder(ctx context.Context, id uuid.UUI
 	return exit
 ```
 
-- [ ] 9.6 Verify and commit:
+- [x] 9.6 Verify and commit:
 
 ```bash
 gofmt -l internal/engage/buddy cmd/mentorship-remind && go build ./cmd/mentorship-remind/ && go vet ./... && go test ./... && go vet -tags=integration ./internal/engage/buddy/
