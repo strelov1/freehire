@@ -152,7 +152,7 @@ func (g *publicGate) limiter(b publicBudget) fiber.Handler {
 		if err := g.enforce(c, b, userID, tier); err != nil {
 			if path, next := nextRung(tier); next != "" && isTooManyRequests(err) && g.cfg.Origin != "" {
 				return fiber.NewError(fiber.StatusTooManyRequests,
-					"too many requests, please try again later — for higher limits "+next+": "+g.cfg.Origin+path)
+					"Rate limit reached. "+next+" for a higher limit: "+g.cfg.Origin+path)
 			}
 			return err
 		}
@@ -160,16 +160,18 @@ func (g *publicGate) limiter(b publicBudget) fiber.Handler {
 	}
 }
 
-// nextRung is where a refused caller of a tier can go for a bigger budget, and what to call it,
-// or "" at the top of the ladder.
+// nextRung is where a refused caller of a tier can go for a bigger budget, and the sentence
+// that sends them there, or "" at the top of the ladder. The refusal is read by whoever wrote
+// the client — and, through an agent, by the person it works for — so it names freehire and
+// what to do, not the mechanism; Retry-After already says when to try again.
 func nextRung(tier rateTier) (path, next string) {
 	switch tier {
 	case rateAnonymous:
-		return "/my/integrations/api-keys", "sign in and use a free API key"
+		return "/my/integrations/api-keys", "Create a free freehire account"
 	case rateFree:
-		return "/pricing", "upgrade to Pro"
+		return "/pricing", "Upgrade your freehire account"
 	case ratePro, rateUltra, rateAPI:
-		return "/jobs-api", "see the API plans"
+		return "/jobs-api", "See the freehire API plans"
 	}
 	return "", ""
 }

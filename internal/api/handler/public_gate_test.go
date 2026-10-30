@@ -367,19 +367,20 @@ func TestPublicGate_RefusalNamesTheNextRung(t *testing.T) {
 	cases := []struct {
 		name    string
 		headers map[string]string
+		say     string
 		want    string
 	}{
-		{"anonymous", nil, "https://freehire.me/my/integrations/api-keys"},
-		{"free key", bearer(unpaidToken), "https://freehire.me/pricing"},
-		{"pro", bearer(proToken), "https://freehire.me/jobs-api"},
-		{"api product", bearer(apiKeyToken), "https://freehire.me/jobs-api"},
+		{"anonymous", nil, "Create a free freehire account for a higher limit", "https://freehire.me/my/integrations/api-keys"},
+		{"free key", bearer(unpaidToken), "Upgrade your freehire account for a higher limit", "https://freehire.me/pricing"},
+		{"pro", bearer(proToken), "See the freehire API plans for a higher limit", "https://freehire.me/jobs-api"},
+		{"api product", bearer(apiKeyToken), "See the freehire API plans for a higher limit", "https://freehire.me/jobs-api"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			app := gateApp(newTestGate(&checkRecorder{refuse: true}, paidKeys(), true, ""))
 			code, body := gateGet(t, app, "/read", tc.headers)
-			if code != fiber.StatusTooManyRequests || !strings.Contains(body, tc.want) {
-				t.Fatalf("status %d body %q, want 429 naming %s", code, body, tc.want)
+			if code != fiber.StatusTooManyRequests || !strings.Contains(body, tc.want) || !strings.Contains(body, tc.say) {
+				t.Fatalf("status %d body %q, want 429 saying %q and naming %s", code, body, tc.say, tc.want)
 			}
 		})
 	}
