@@ -79,11 +79,11 @@ export function dismissalLifted(
   return conversations.some((c) => c.unread > 0 && newestMessageAt([c]) > dismissedAt);
 }
 
-/** The dock stays off the buddies section's own page, whose Chats tab is the full-size
- *  list and pane — two copies of one conversation on one screen would each poll and
- *  mark it read. Every other page, the member pages included, gets the dock. */
+/** The dock stays off the buddies chat page, which is the full-size list and pane — two
+ *  copies of one conversation on one screen would each poll and mark it read. Every other
+ *  page, the member pages included, gets the dock. */
 export function dockHiddenOn(pathname: string): boolean {
-  return pathname === '/my/buddies';
+  return pathname === '/buddies/chats';
 }
 
 /** How much of the bottom-right corner the dock is taking, so the support toast that

@@ -1159,9 +1159,10 @@ interface BuddyCompany { slug: string; name: string }
 export interface BuddyStatus { member: boolean; handle?: string; card_empty: boolean }
 export interface BuddySimilar { handle: string; card_summary: BuddySummary; score: number; shared_companies: BuddyCompany[] }
 export interface BuddyFeedPage { data: BuddyFeedItem[]; meta: { next_cursor: string | null } }
-export interface BuddyProfile { handle: string; card: CandidateCard; card_empty: boolean }
+export interface BuddyProfile { handle: string; card_summary: BuddySummary; card: CandidateCard; card_empty: boolean }
 /** One member's feed events per UTC day over the last year; only days with an event. */
-export interface BuddyActivity { days: { day: string; count: number }[] }
+/** One member's feed events per UTC day; `count` is always applied + interview + offer. */
+export interface BuddyActivity { days: { day: string; count: number; applied: number; interview: number; offer: number }[] }
 export interface BuddyFeedItem { id: number; handle: string; card_summary: BuddySummary; company: BuddyCompany; job_title: string | null; type: 'applied' | 'interview' | 'offer'; day: string }
 /** How a buddy counterpart is drawn: by handle and card, and nothing at all once they are
  *  unreachable (left, blocked) — not even the handle. */

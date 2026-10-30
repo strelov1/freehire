@@ -13,6 +13,7 @@
 // chunk for visitors where analytics is inert (no key, or SSR). Same lazy posture
 // as easymde elsewhere.
 import type { PostHog } from 'posthog-js';
+import { isBuddiesSpace } from './shellLayout.js';
 
 export interface AnalyticsConfig {
   /** PostHog project key; empty/absent leaves analytics inert. */
@@ -179,9 +180,10 @@ function initGoogleAnalytics(): void {
 }
 
 /** Routes whose DOM must never be recorded (résumé, tracking, inbox all live
- *  under /my). Session replay is stopped for their duration. */
+ *  under /my; the buddies space holds private conversations). Session replay is
+ *  stopped for their duration. */
 export function isPrivateRoute(path: string): boolean {
-  return path === '/my' || path.startsWith('/my/');
+  return path === '/my' || path.startsWith('/my/') || isBuddiesSpace(path);
 }
 
 /** Why a CV upload was rejected, as a bounded code. `other` is deliberate: an

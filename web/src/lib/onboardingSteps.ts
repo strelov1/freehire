@@ -186,7 +186,7 @@ const TIP = {
     icon: 'buddies',
     title: 'Interview buddies',
     body: 'Pair up with other candidates and practise interviews together.',
-    href: '/my/buddies',
+    href: '/buddies',
   },
   mentors: {
     icon: 'mentors',

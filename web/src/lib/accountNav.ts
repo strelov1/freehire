@@ -63,7 +63,9 @@ export const accountNav = [
   // mentor — which is why this is a workspace of its own rather than part of Mentor.
   { href: '/my/referrals/offers', label: 'Offers to refer', workspace: 'referrer', group: 'main' },
   { href: '/my/referrals/incoming', label: 'Incoming requests', workspace: 'referrer', group: 'main' },
-  { href: '/my/buddies', label: 'Interview buddies', workspace: 'seeker', group: 'found' },
+  // Its own full-width space outside /my (the cabinet's sidebar left no room for it); the
+  // entry stays so the cabinet still leads there.
+  { href: '/buddies', label: 'Interview buddies', workspace: 'seeker', group: 'found' },
   // Booked mentorship sessions, upcoming and past. Beside referrals because it is the
   // same insider seen from the other end — but NOT folded into it: a referral offer is
   // anonymous on purpose and a mentor is named, which is the whole difference between

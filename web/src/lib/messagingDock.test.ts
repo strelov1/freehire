@@ -60,9 +60,10 @@ describe('dock persistence and badge', () => {
 });
 
 describe('dock placement', () => {
-  it('stays off the Chats tab page only', () => {
-    expect(dockHiddenOn('/my/buddies')).toBe(true);
-    expect(dockHiddenOn('/my/buddies/some-handle')).toBe(false);
+  it('stays off the buddies chat page only', () => {
+    expect(dockHiddenOn('/buddies/chats')).toBe(true);
+    expect(dockHiddenOn('/buddies')).toBe(false);
+    expect(dockHiddenOn('/buddies/some-handle')).toBe(false);
     expect(dockHiddenOn('/jobs')).toBe(false);
   });
 

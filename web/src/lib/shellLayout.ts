@@ -40,9 +40,15 @@ export function isWideHeaderRoute(pathname: string): boolean {
   return isFullBleedRoute(pathname) || isApiReferenceRoute(pathname);
 }
 
-/** True anywhere in the signed-in account area, `/my` and everything under it. The
- *  promos that stay out of a candidate's workspace (the CLI banner, the support toast)
- *  ask this one question, so "the account area" cannot mean two things. */
+/** True in the interview buddies space, `/buddies` and everything under it: signed-in
+ *  and private like `/my`, but outside it because it needs the full width. */
+export function isBuddiesSpace(pathname: string): boolean {
+  return pathname === '/buddies' || pathname.startsWith('/buddies/');
+}
+
+/** True anywhere in the signed-in account area: `/my` and everything under it, and the
+ *  buddies space. The promos that stay out of a candidate's workspace (the CLI banner,
+ *  the support toast) ask this one question, so "the account area" cannot mean two things. */
 export function isAccountArea(pathname: string): boolean {
-  return pathname === '/my' || pathname.startsWith('/my/');
+  return pathname === '/my' || pathname.startsWith('/my/') || isBuddiesSpace(pathname);
 }

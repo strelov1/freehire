@@ -22,6 +22,12 @@ describe('isPrivateRoute', () => {
     expect(isPrivateRoute('/my/tracking')).toBe(true);
   });
 
+  it('treats the buddies space as private: it holds private conversations', () => {
+    expect(isPrivateRoute('/buddies')).toBe(true);
+    expect(isPrivateRoute('/buddies/chats')).toBe(true);
+    expect(isPrivateRoute('/buddies/amber-heron-42')).toBe(true);
+  });
+
   it('treats public routes as not private', () => {
     expect(isPrivateRoute('/')).toBe(false);
     expect(isPrivateRoute('/jobs')).toBe(false);

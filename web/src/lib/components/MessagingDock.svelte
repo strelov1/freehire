@@ -17,7 +17,7 @@
   // The messaging dock: a bar in the bottom-right corner that unfolds into the
   // conversation list (every kind), with up to two chat windows beside it. Mounted once by
   // the root layout and only for an account with a conversation, so it and its windows
-  // survive client-side navigation. It renders nothing on /my/buddies, whose Chats tab is
+  // survive client-side navigation. It renders nothing on /buddies/chats, which is
   // the full-size version of the same list and pane. It also hosts the buddy first-message
   // dialog, so "Message" works from any page.
   //
@@ -264,7 +264,7 @@
               />
             {/each}
           </div>
-          <a href={resolve('/my/buddies')} class="block border-t border-border p-3 text-sm font-medium text-brand hover:underline">Open interview buddies</a>
+          <a href={resolve('/buddies/chats')} class="block border-t border-border p-3 text-sm font-medium text-brand hover:underline">Open all chats</a>
         </div>
       {/if}
     </section>

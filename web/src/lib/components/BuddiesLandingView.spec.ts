@@ -13,12 +13,12 @@ vi.stubGlobal('matchMedia', (q: string) => ({
 vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} });
 
 describe('BuddiesLandingView', () => {
-  it('leads with the headline and sends every join button to /my/buddies', () => {
+  it('leads with the headline and sends every join button to /buddies', () => {
     render(BuddiesLandingView);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Find people interviewing where you are.');
     const joins = screen.getAllByRole('link', { name: 'Join interview buddies' });
     expect(joins.length).toBeGreaterThan(0);
-    for (const a of joins) expect(a.getAttribute('href')).toBe('/my/buddies');
+    for (const a of joins) expect(a.getAttribute('href')).toBe('/buddies');
   });
 
   it('renders every FAQ question', () => {

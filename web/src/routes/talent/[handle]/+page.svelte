@@ -8,8 +8,8 @@
   import type { PageData } from './$types';
 
   // One member's public card. The same anonymised payload the catalogue list carries,
-  // with the work history opened up (CandidateCardView, shared with the interview-buddy
-  // member page). No name, no employer, no prose — the payload has none.
+  // with the work history opened up (CandidateCardView; its career sections are shared
+  // with the interview-buddy member page). No name, no employer, no prose — the payload has none.
 
   let { data }: { data: PageData } = $props();
 

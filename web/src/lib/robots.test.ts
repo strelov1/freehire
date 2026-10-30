@@ -37,6 +37,11 @@ describe('robots.txt', () => {
     for (const path of DISALLOWED) expect(rules).toContain(path);
   });
 
+  // The buddies space is signed-in and private like /my, but sits outside it.
+  it('keeps every crawler out of the buddies space', () => {
+    expect(groups(BODY).get('*')).toContain('/buddies');
+  });
+
   it('takes /api/ from the search crawlers and only them', () => {
     const parsed = groups(BODY);
     expect(parsed.get('*')).not.toContain('/api/');

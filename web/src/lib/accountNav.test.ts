@@ -57,9 +57,12 @@ describe('accountNav config', () => {
     expect(hrefs.slice(0, 4)).toEqual(['/my/profile', '/my/activity', '/my/tracking', '/my/inbox']);
   });
 
-  it('every item links under /my/ and has a label', () => {
+  it('every item links under /my/ (or to a named space outside it) and has a label', () => {
+    // Interview buddies needs the full width the cabinet's sidebar takes, so it lives at
+    // /buddies; the cabinet still leads there.
+    const outsideMy = ['/buddies'];
     for (const item of accountNav) {
-      expect(item.href.startsWith('/my/')).toBe(true);
+      expect(item.href.startsWith('/my/') || outsideMy.includes(item.href)).toBe(true);
       expect(item.label.length).toBeGreaterThan(0);
     }
   });
@@ -226,7 +229,7 @@ describe('workspaceNav', () => {
           '/my/cvs',
         ],
       ],
-      ['found', ['/my/talent-network', '/my/buddies']],
+      ['found', ['/my/talent-network', '/buddies']],
       ['help', ['/my/referrals', '/my/mentorship']],
       ['settings', SETTINGS],
     ]);

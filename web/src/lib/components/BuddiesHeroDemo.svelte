@@ -5,10 +5,11 @@
      and only its opacity/offset changes, so the card never changes height mid-loop. -->
 <script lang="ts">
   import { MediaQuery } from 'svelte/reactivity';
-  import { BadgeCheck, MessagesSquare, Send, User } from '@lucide/svelte';
+  import { BadgeCheck, MessagesSquare, Send } from '@lucide/svelte';
   import { DEMO_FEED, DEMO_INVITE, DEMO_REPLY } from '#lib/buddiesDemo.js';
   import { buddyFeedEventLabel } from '#lib/buddies.js';
-  import { Avatar, EntityLogo } from '#lib/ui/index.js';
+  import { EntityLogo } from '#lib/ui/index.js';
+  import BuddyAvatar from './BuddyAvatar.svelte';
   import BuddyIdentity from './BuddyIdentity.svelte';
 
   const STEP_MS = 1800;
@@ -65,10 +66,6 @@
     };
   });
 </script>
-
-{#snippet personIcon()}
-  <User class="size-4" aria-hidden="true" />
-{/snippet}
 
 <figure bind:this={root} class="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
   <figcaption
@@ -147,7 +144,7 @@
           ? 'translate-y-0 opacity-100'
           : 'invisible translate-y-2 opacity-0'}"
       >
-        <Avatar size="sm" class="shrink-0 bg-secondary" fallbackIcon={personIcon} />
+        <BuddyAvatar handle={DEMO_REPLY.from} size="sm" class="shrink-0" />
         <p class="rounded-lg bg-muted px-3 py-2 text-sm text-pretty">{DEMO_REPLY.body}</p>
       </div>
     </div>

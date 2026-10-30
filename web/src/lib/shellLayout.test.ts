@@ -74,6 +74,12 @@ describe('isAccountArea', () => {
     expect(isAccountArea('/my/tracking')).toBe(true);
   });
 
+  it('covers the buddies space, which is signed-in and private like /my', () => {
+    expect(isAccountArea('/buddies')).toBe(true);
+    expect(isAccountArea('/buddies/chats')).toBe(true);
+    expect(isAccountArea('/buddies-landing')).toBe(false);
+  });
+
   it('does not match on a prefix that only looks like it', () => {
     expect(isAccountArea('/mystery')).toBe(false);
     expect(isAccountArea('/jobs')).toBe(false);

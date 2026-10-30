@@ -1,4 +1,5 @@
 import { talentHeading } from '#lib/talentCard.js';
+import type { BuddyActivity } from '#lib/types.js';
 
 // How an interview buddy is PRESENTED — the heading, the day of an event, the signals two
 // members share. Pure and `$app`-free, so every surface showing a member (feed, similar
@@ -60,4 +61,28 @@ export function buddyRelativeDay(day: string, today: string): string {
 export function buddySharedCompanies(count: number): string {
   if (count <= 0) return '';
   return count === 1 ? '1 company in common' : `${count} companies in common`;
+}
+
+/** The name a buddy's avatar is drawn from: the handle's words without its number
+ *  ("amber-heron-42" → "amber heron"), which the shared Avatar turns into initials and a
+ *  colour. Derived from the anonymous handle alone, so the picture links to nothing outside
+ *  the buddy network — never a photo, not even the blurred Talent Network one. */
+export function buddyAvatarName(handle: string): string {
+  return handle.split('-').filter((w) => w && !/^\d+$/.test(w)).join(' ') || handle;
+}
+
+/** A member's year in numbers, summed from the activity days the grid draws, so the two
+ *  can never disagree. */
+export function buddyYearTotals(days: BuddyActivity['days']): {
+  applied: number;
+  interview: number;
+  offer: number;
+} {
+  const t = { applied: 0, interview: 0, offer: 0 };
+  for (const d of days) {
+    t.applied += d.applied;
+    t.interview += d.interview;
+    t.offer += d.offer;
+  }
+  return t;
 }

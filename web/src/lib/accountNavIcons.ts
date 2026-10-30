@@ -42,7 +42,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   // read as one feature.
   '/my/talent-network': Radar,
   '/my/referrals': Handshake,
-  '/my/buddies': UsersRound,
+  '/buddies': UsersRound,
   // Not the handshake beside it: a referral is a hand-off between two people, mentorship
   // is somebody teaching. The two sections sit together and must not read as one.
   '/my/mentorship': GraduationCap,

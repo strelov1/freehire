@@ -50,6 +50,8 @@
 // this keeps the crawl budget off it too. The postings' own pages stay crawlable.
 export const DISALLOWED = [
   '/my/',
+  // Interview buddies: signed-in and private like /my, outside it for the width.
+  '/buddies',
   '/signin',
   '/jobs/*/discussion',
   '/companies/*/discussion',

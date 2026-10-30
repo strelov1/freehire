@@ -51,7 +51,7 @@
 </script>
 
 {#snippet join()}
-  <Button href={resolve('/my/buddies')} variant="primary" size="lg">Join interview buddies</Button>
+  <Button href={resolve('/buddies')} variant="primary" size="lg">Join interview buddies</Button>
 {/snippet}
 
 <div class="flex flex-col">
