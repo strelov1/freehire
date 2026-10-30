@@ -316,3 +316,20 @@ func TestLaunchReadsTheProvidersOwnEnvironmentFileAfterTheSharedOne(t *testing.T
 		t.Errorf("EnvironmentFile properties = %q, want %q", files, want)
 	}
 }
+
+// The shared file may itself be marked optional; that "-" belongs to systemd, not to the
+// directory the provider file is looked up in, and "--/opt/..." would fail every launch.
+func TestLaunchProviderEnvironmentFileIgnoresAnOptionalSharedFileMarker(t *testing.T) {
+	rec := &recordedExec{}
+	l := newTestLauncher(rec)
+	l.EnvFile = "-/opt/freehire/.env"
+
+	if err := l.Launch(context.Background(), Run{
+		Provider: "successfactors", Shard: 1, Shards: 1, RunTimeout: DefaultRunTimeout,
+	}); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	if !slices.Contains(rec.args, "--property=EnvironmentFile=-/opt/freehire/ingest-env/successfactors.env") {
+		t.Errorf("provider environment file not derived from the unmarked path: %q", rec.args)
+	}
+}
