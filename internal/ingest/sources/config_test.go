@@ -37,6 +37,29 @@ func TestConfigValidateRejectsEmptyCompany(t *testing.T) {
 	}
 }
 
+// A company name that yields no company slug is no name at all: every posting of the board
+// would be stored with company_slug = ” and belong to no company page. Ashby's q board
+// arrived with U+3164 HANGUL FILLER as its organisation name, which is a letter to Unicode
+// and invisible on screen, so a non-empty check let it through.
+func TestConfigValidateRejectsCompanyWithoutAName(t *testing.T) {
+	for _, company := range []string{"\u3164", "-", "*", " ", "\u200b", "\uffa0"} {
+		cfg := Config{Provider: "ashby", Sources: []CompanyEntry{{Company: company, Provider: "ashby", Board: "q"}}}
+		if err := cfg.Validate(reg(fakeSource{"ashby"})); err == nil {
+			t.Errorf("Validate(company %q): expected error, got nil", company)
+		}
+	}
+}
+
+// Names outside Latin script still carry a slug, so the rule above must not refuse them.
+func TestConfigValidateAcceptsNonLatinCompany(t *testing.T) {
+	for _, company := range []string{"Яндекс", "株式会社メルカリ", "3M", "X"} {
+		cfg := Config{Provider: "greenhouse", Sources: []CompanyEntry{{Company: company, Provider: "greenhouse", Board: "b"}}}
+		if err := cfg.Validate(reg(fakeSource{"greenhouse"})); err != nil {
+			t.Errorf("Validate(company %q): unexpected error %v", company, err)
+		}
+	}
+}
+
 func TestConfigValidateAcceptsKnownProviders(t *testing.T) {
 	cfg := Config{Provider: "greenhouse", Sources: []CompanyEntry{{Company: "Cohere", Provider: "greenhouse", Board: "cohere"}}}
 

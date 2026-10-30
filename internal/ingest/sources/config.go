@@ -3,6 +3,8 @@ package sources
 import (
 	"fmt"
 	"strings"
+
+	"github.com/strelov1/freehire/internal/dict/normalize"
 )
 
 // Config is a set of boards to crawl plus the provider they belong to. It is what
@@ -70,8 +72,12 @@ func (c Config) Validate(registry map[string]Source) error {
 		if !ok {
 			return fmt.Errorf("sources: unknown provider %q", provider)
 		}
-		if e.Company == "" {
-			return fmt.Errorf("sources: %s entry has empty company", provider)
+		// A name that yields no company slug names nobody: every posting of the board would be
+		// stored under company_slug = '' and reach no company page. Asking the slug rule rather
+		// than checking for letters is deliberate — Ashby handed us U+3164 HANGUL FILLER as an
+		// organisation name, which Unicode calls a letter and a screen shows as nothing.
+		if normalize.CompanySlug(e.Company) == "" {
+			return fmt.Errorf("sources: %s entry has no company name (%q)", provider, e.Company)
 		}
 		// A boardless provider crawls one company's own API and has no board id, so its
 		// entries may omit board; every other provider still requires one.
