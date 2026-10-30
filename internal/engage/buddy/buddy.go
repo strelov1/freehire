@@ -113,7 +113,9 @@ type Status struct {
 
 // Profile is what one member sees of another: the handle and the dictionary-only card.
 type Profile struct {
-	Handle    string
+	Handle string
+	// Summary names the member the way every list does (heading and country).
+	Summary   CardSummary
 	Card      talentnetwork.CandidateCard
 	EmptyCard bool
 }
@@ -190,7 +192,12 @@ func (s *Service) Profile(ctx context.Context, viewerID int64, handle string) (P
 		return Profile{}, err
 	}
 	card := talentnetwork.ProjectCard(in.CV)
-	return Profile{Handle: target.Handle, Card: card, EmptyCard: cardIsEmpty(card)}, nil
+	return Profile{
+		Handle:    target.Handle,
+		Summary:   summarize(in.CV, target.Countries),
+		Card:      card,
+		EmptyCard: cardIsEmpty(card),
+	}, nil
 }
 
 // visibleMember resolves the member behind handle for an active viewer. An unknown

@@ -88,7 +88,7 @@ func (Kind) Notice(conversationID int64, pending bool) messaging.Notice {
 	n := messaging.Notice{
 		Title:            "You have a new message from a buddy",
 		Line:             "You have a new message from a buddy.",
-		Path:             fmt.Sprintf("/my/buddies?c=%d", conversationID),
+		Path:             fmt.Sprintf("/buddies/chats?c=%d", conversationID),
 		NotificationKind: notificationMessage,
 		Footer:           "You’re getting this because you joined interview buddies.",
 	}

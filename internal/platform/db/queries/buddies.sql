@@ -208,9 +208,14 @@ LIMIT sqlc.arg(page_limit);
 -- exclusion above must hold here too or the grid counts what the feed hides. The guard
 -- against the two drifting is TestMemberActivityMatchesMemberFeed, which seeds every
 -- exclusion and asserts the grid's total equals the author-filtered feed's length — change
--- one predicate and change the other. Only days with an event come back.
+-- one predicate and change the other. Only days with an event come back. The three
+-- per-type counts split `events` by the feed's own vocabulary (the predicate admits only
+-- these three), so they always add up to it.
 SELECT (e.occurred_at AT TIME ZONE 'UTC')::date AS day,
-       count(*)::int AS events
+       count(*)::int AS events,
+       (count(*) FILTER (WHERE e.kind = 'applied'))::int AS applied,
+       (count(*) FILTER (WHERE e.kind = 'stage_set' AND e.signal = 'interview'))::int AS interview,
+       (count(*) FILTER (WHERE e.kind = 'stage_set' AND e.signal = 'offer'))::int AS offer
 FROM application_events e
 JOIN buddy_members m ON m.user_id = e.user_id AND m.left_at IS NULL
 LEFT JOIN jobs j ON j.id = e.job_id

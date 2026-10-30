@@ -61,9 +61,9 @@ func TestMemberActivityCountsPerDay(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []buddy.ActivityDay{
-		{Day: utcDaysAgo(buddy.ActivityDays - 1), Count: 1},
-		{Day: utcDaysAgo(10), Count: 1},
-		{Day: utcDaysAgo(2), Count: 3},
+		{Day: utcDaysAgo(buddy.ActivityDays - 1), Count: 1, Applied: 1},
+		{Day: utcDaysAgo(10), Count: 1, Offer: 1},
+		{Day: utcDaysAgo(2), Count: 3, Applied: 2, Interview: 1},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("activity = %+v, want %+v", got, want)
@@ -142,6 +142,21 @@ func TestMemberActivityMatchesMemberFeed(t *testing.T) {
 		if perDay[d.Day] != d.Count {
 			t.Fatalf("day %s: grid %d, feed %d", d.Day, d.Count, perDay[d.Day])
 		}
+	}
+	// And type by type: the profile's year in numbers is summed from these columns.
+	perType := map[string]int{}
+	for _, e := range feed.Entries {
+		perType[e.Type]++
+	}
+	var applied, interview, offer int
+	for _, d := range days {
+		if d.Applied+d.Interview+d.Offer != d.Count {
+			t.Fatalf("day %s: types %d+%d+%d do not add up to %d", d.Day, d.Applied, d.Interview, d.Offer, d.Count)
+		}
+		applied, interview, offer = applied+d.Applied, interview+d.Interview, offer+d.Offer
+	}
+	if applied != perType["applied"] || interview != perType["interview"] || offer != perType["offer"] {
+		t.Fatalf("grid types = %d/%d/%d, feed types = %v", applied, interview, offer, perType)
 	}
 }
 

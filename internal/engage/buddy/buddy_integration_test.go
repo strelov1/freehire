@@ -193,6 +193,26 @@ func TestProfileCardCarriesNoCVText(t *testing.T) {
 	}
 }
 
+// The profile names the member the way every list does: the same summary the similar list
+// draws (heading from the CV's primary title, the first stored country).
+func TestProfileCarriesCardSummary(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	a, b := seedUser(t, pool, "a@example.test"), seedUser(t, pool, "b@example.test")
+	seedCV(t, pool, b)
+	joinWith(t, pool, svc, a, "", nil, nil)
+	hB := joinWith(t, pool, svc, b, "backend", []string{"pl", "de"}, nil)
+
+	p, err := svc.Profile(ctx, a, hB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := buddy.CardSummary{Category: "backend", Seniority: "senior", Country: "pl"}
+	if p.Summary != want {
+		t.Fatalf("summary = %+v, want %+v", p.Summary, want)
+	}
+}
+
 func TestEmptyCVGivesEmptyCard(t *testing.T) {
 	pool, svc := setup(t)
 	ctx := context.Background()

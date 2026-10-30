@@ -45,3 +45,13 @@ func TestGenerateHandleShape(t *testing.T) {
 		}
 	}
 }
+
+// The unread notice opens the conversation in the buddies space's chat page, not the
+// cabinet address it moved from (which still redirects, for links already sent).
+func TestNoticeLinksToBuddiesChats(t *testing.T) {
+	for _, pending := range []bool{false, true} {
+		if got := (Kind{}).Notice(42, pending).Path; got != "/buddies/chats?c=42" {
+			t.Errorf("pending=%v: path = %q, want /buddies/chats?c=42", pending, got)
+		}
+	}
+}

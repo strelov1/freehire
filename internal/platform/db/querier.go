@@ -3819,7 +3819,9 @@ type Querier interface {
 	// exclusion above must hold here too or the grid counts what the feed hides. The guard
 	// against the two drifting is TestMemberActivityMatchesMemberFeed, which seeds every
 	// exclusion and asserts the grid's total equals the author-filtered feed's length — change
-	// one predicate and change the other. Only days with an event come back.
+	// one predicate and change the other. Only days with an event come back. The three
+	// per-type counts split `events` by the feed's own vocabulary (the predicate admits only
+	// these three), so they always add up to it.
 	ListBuddyMemberActivity(ctx context.Context, arg ListBuddyMemberActivityParams) ([]ListBuddyMemberActivityRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)

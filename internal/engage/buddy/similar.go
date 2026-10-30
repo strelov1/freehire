@@ -91,10 +91,16 @@ func clampLimit(limit int) int {
 }
 
 func cardSummary(r SimilarRow) CardSummary {
-	primary := classify.Parse(talentnetwork.PrimaryTitle(r.CV))
+	return summarize(r.CV, r.Countries)
+}
+
+// summarize is the one place a member's heading and country are chosen, so the similar
+// list and the profile name a member alike.
+func summarize(cv resumeextract.Structured, countries []string) CardSummary {
+	primary := classify.Parse(talentnetwork.PrimaryTitle(cv))
 	c := CardSummary{Category: primary.Category, Seniority: primary.Seniority}
-	if len(r.Countries) > 0 {
-		c.Country = r.Countries[0]
+	if len(countries) > 0 {
+		c.Country = countries[0]
 	}
 	return c
 }

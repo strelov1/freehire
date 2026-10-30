@@ -174,7 +174,10 @@ func (r *QueriesRepository) Activity(ctx context.Context, viewerID, authorID int
 	}
 	out := make([]ActivityDay, len(rows))
 	for i, row := range rows {
-		out[i] = ActivityDay{Day: row.Day.Time.Format(time.DateOnly), Count: int(row.Events)}
+		out[i] = ActivityDay{
+			Day: row.Day.Time.Format(time.DateOnly), Count: int(row.Events),
+			Applied: int(row.Applied), Interview: int(row.Interview), Offer: int(row.Offer),
+		}
 	}
 	return out, nil
 }

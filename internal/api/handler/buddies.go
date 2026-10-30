@@ -198,9 +198,10 @@ func (h *buddyHandlers) Feed(c *fiber.Ctx) error {
 }
 
 type buddyProfileResponse struct {
-	Handle    string                      `json:"handle"`
-	Card      talentnetwork.CandidateCard `json:"card"`
-	CardEmpty bool                        `json:"card_empty"`
+	Handle      string                      `json:"handle"`
+	CardSummary buddyCardSummaryResponse    `json:"card_summary"`
+	Card        talentnetwork.CandidateCard `json:"card"`
+	CardEmpty   bool                        `json:"card_empty"`
 }
 
 // Profile shows one member's anonymous card.
@@ -213,12 +214,17 @@ func (h *buddyHandlers) Profile(c *fiber.Ctx) error {
 	if err != nil {
 		return buddyError(err)
 	}
-	return c.JSON(fiber.Map{"data": buddyProfileResponse{Handle: p.Handle, Card: p.Card, CardEmpty: p.EmptyCard}})
+	return c.JSON(fiber.Map{"data": buddyProfileResponse{
+		Handle: p.Handle, CardSummary: toBuddyCardSummary(p.Summary), Card: p.Card, CardEmpty: p.EmptyCard,
+	}})
 }
 
 type buddyActivityDayResponse struct {
-	Day   string `json:"day"`
-	Count int    `json:"count"`
+	Day       string `json:"day"`
+	Count     int    `json:"count"`
+	Applied   int    `json:"applied"`
+	Interview int    `json:"interview"`
+	Offer     int    `json:"offer"`
 }
 
 // Activity is one member's feed events per day over the last year, for their page's grid.
@@ -233,7 +239,7 @@ func (h *buddyHandlers) Activity(c *fiber.Ctx) error {
 	}
 	out := make([]buddyActivityDayResponse, len(days))
 	for i, d := range days {
-		out[i] = buddyActivityDayResponse{Day: d.Day, Count: d.Count}
+		out[i] = buddyActivityDayResponse{Day: d.Day, Count: d.Count, Applied: d.Applied, Interview: d.Interview, Offer: d.Offer}
 	}
 	return c.JSON(fiber.Map{"data": fiber.Map{"days": out}})
 }

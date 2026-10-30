@@ -371,7 +371,10 @@ func (q *Queries) ListBuddyHandles(ctx context.Context, userIds []int64) ([]List
 
 const listBuddyMemberActivity = `-- name: ListBuddyMemberActivity :many
 SELECT (e.occurred_at AT TIME ZONE 'UTC')::date AS day,
-       count(*)::int AS events
+       count(*)::int AS events,
+       (count(*) FILTER (WHERE e.kind = 'applied'))::int AS applied,
+       (count(*) FILTER (WHERE e.kind = 'stage_set' AND e.signal = 'interview'))::int AS interview,
+       (count(*) FILTER (WHERE e.kind = 'stage_set' AND e.signal = 'offer'))::int AS offer
 FROM application_events e
 JOIN buddy_members m ON m.user_id = e.user_id AND m.left_at IS NULL
 LEFT JOIN jobs j ON j.id = e.job_id
@@ -399,8 +402,11 @@ type ListBuddyMemberActivityParams struct {
 }
 
 type ListBuddyMemberActivityRow struct {
-	Day    pgtype.Date `json:"day"`
-	Events int32       `json:"events"`
+	Day       pgtype.Date `json:"day"`
+	Events    int32       `json:"events"`
+	Applied   int32       `json:"applied"`
+	Interview int32       `json:"interview"`
+	Offer     int32       `json:"offer"`
 }
 
 // One member's feed events counted per UTC day since since_day, oldest first, for the year
@@ -409,7 +415,9 @@ type ListBuddyMemberActivityRow struct {
 // exclusion above must hold here too or the grid counts what the feed hides. The guard
 // against the two drifting is TestMemberActivityMatchesMemberFeed, which seeds every
 // exclusion and asserts the grid's total equals the author-filtered feed's length — change
-// one predicate and change the other. Only days with an event come back.
+// one predicate and change the other. Only days with an event come back. The three
+// per-type counts split `events` by the feed's own vocabulary (the predicate admits only
+// these three), so they always add up to it.
 func (q *Queries) ListBuddyMemberActivity(ctx context.Context, arg ListBuddyMemberActivityParams) ([]ListBuddyMemberActivityRow, error) {
 	rows, err := q.db.Query(ctx, listBuddyMemberActivity, arg.ViewerID, arg.AuthorID, arg.SinceDay)
 	if err != nil {
@@ -419,7 +427,13 @@ func (q *Queries) ListBuddyMemberActivity(ctx context.Context, arg ListBuddyMemb
 	items := []ListBuddyMemberActivityRow{}
 	for rows.Next() {
 		var i ListBuddyMemberActivityRow
-		if err := rows.Scan(&i.Day, &i.Events); err != nil {
+		if err := rows.Scan(
+			&i.Day,
+			&i.Events,
+			&i.Applied,
+			&i.Interview,
+			&i.Offer,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

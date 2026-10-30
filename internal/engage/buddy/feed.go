@@ -120,6 +120,8 @@ const ActivityDays = 365
 type ActivityDay struct {
 	Day   string
 	Count int
+	// Count split by feed type; the three always add up to Count.
+	Applied, Interview, Offer int
 }
 
 // MemberActivity counts one member's feed events per UTC day over the last ActivityDays
