@@ -1,0 +1,108 @@
+{
+ "total_job_count": 3,
+ "jobs": [
+  {
+   "random_key": "pvbgk22pxc",
+   "title": "Senior AI Software Engineer, Agentic Systems & Data Fabric",
+   "job_type": "permanent",
+   "required_countries": [
+    "CA"
+   ],
+   "position_type": "engineering",
+   "experience_levels": [
+    "senior"
+   ],
+   "url_string": "kinaxis-senior-ai-software-engineer-agentic-systems-data-fabric",
+   "posted_at": 1793316305,
+   "company": {
+    "random_key": "cooxe850xd",
+    "url_string": "kinaxis",
+    "name": "Kinaxis",
+    "logo": "https://logo.clearbit.com/kinaxis.com"
+   },
+   "categories": [
+    {
+     "name": "AI",
+     "url_string": "ai"
+    },
+    {
+     "name": "Data",
+     "url_string": "data"
+    },
+    {
+     "name": "Azure",
+     "url_string": "azure"
+    }
+   ]
+  },
+  {
+   "random_key": "pvbgcmy1fa",
+   "title": "Staff Software Engineer, Frontend (Decisions Orechestration)",
+   "job_type": "permanent",
+   "required_countries": [
+    "US",
+    "GA"
+   ],
+   "position_type": "engineering",
+   "experience_levels": [
+    "staff"
+   ],
+   "url_string": "affirm-staff-software-engineer-frontend-decisions-orechestration",
+   "posted_at": 1793316304,
+   "company": {
+    "random_key": "alug1e5pp9",
+    "url_string": "affirm",
+    "name": "Affirm",
+    "logo": "https://ucarecdn.com/08519464-27e2-479c-b4a6-e827991dc986/"
+   },
+   "categories": [
+    {
+     "name": "Project management",
+     "url_string": "project-management"
+    },
+    {
+     "name": "Support",
+     "url_string": "support"
+    },
+    {
+     "name": "React",
+     "url_string": "reactjs"
+    }
+   ]
+  },
+  {
+   "random_key": "p8c2klll2v",
+   "title": "Marketing Project Manager",
+   "job_type": "permanent",
+   "required_countries": [
+    "VE"
+   ],
+   "position_type": "marketing",
+   "experience_levels": [
+    "manager"
+   ],
+   "url_string": "topfoxx-marketing-project-manager",
+   "posted_at": 1793316301,
+   "company": {
+    "random_key": "lprlww0ss5",
+    "url_string": "topfoxx",
+    "name": "TopFoxx",
+    "logo": null
+   },
+   "categories": [
+    {
+     "name": "Project management",
+     "url_string": "project-management"
+    },
+    {
+     "name": "Data",
+     "url_string": "data"
+    },
+    {
+     "name": "Digital marketing",
+     "url_string": "digital-marketing"
+    }
+   ]
+  }
+ ]
+}

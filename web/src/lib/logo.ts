@@ -63,4 +63,6 @@ export const SOURCE_LOGO_DOMAINS: Record<string, string> = {
   alfabank: 'alfabank.ru',
   aijobs: 'aijobs.net',
   remotedotcom: 'remote.com',
+  // By name the proxy answers 200 with another company's mark (checked 2026-10-30).
+  arc: 'arc.dev',
 };

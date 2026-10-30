@@ -1,0 +1,39 @@
+{
+ "total_job_count": 1,
+ "jobs": [
+  {
+   "random_key": "pvbutr8j4z",
+   "title": "Senior UX Researcher / UX Designer",
+   "job_type": "contract",
+   "required_countries": [
+    "US"
+   ],
+   "position_type": "design",
+   "experience_levels": [
+    "senior"
+   ],
+   "url_string": "kelly-senior-ux-researcher-ux-designer",
+   "posted_at": 1793316305,
+   "company": {
+    "random_key": "alufyzpuv5",
+    "url_string": "kelly-services",
+    "name": "Kelly Services",
+    "logo": "https://logo.clearbit.com/kellyservices.com"
+   },
+   "categories": [
+    {
+     "name": "Research",
+     "url_string": "research"
+    },
+    {
+     "name": "UX design",
+     "url_string": "ux-design"
+    },
+    {
+     "name": "Testing",
+     "url_string": "testing"
+    }
+   ]
+  }
+ ]
+}

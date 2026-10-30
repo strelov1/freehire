@@ -807,7 +807,7 @@ func All(c HTTPClient) map[string]Source {
 		NewMagnit(c),
 		NewSelectel(c),
 	)
-	// usajobs, reed, whatjobs and adzuna are the keyed sources: each needs a credential read from
+	// usajobs, reed, whatjobs, adzuna and arc are the keyed sources: each needs a credential read from
 	// the environment, never from a board file. The credential gates the CRAWL registry only — a
 	// host without it must not register a provider whose every board would fail to authenticate,
 	// so its board file fails config validation before a request goes out. The taxonomy path
@@ -819,6 +819,16 @@ func All(c HTTPClient) map[string]Source {
 	}
 	if key := os.Getenv("REED_API_KEY"); c == nil || key != "" {
 		registry["reed"] = NewReed(c, key)
+	}
+	// Arc's credential is a signed-in browser session: its complete remote-jobs list answers
+	// only a request carrying that session's Cookie header (see arc.go). The listing and the
+	// public job pages share one paced client, since the session is a person's account.
+	if session := os.Getenv(arcSessionEnv); c == nil || session != "" {
+		if c == nil {
+			registry["arc"] = NewArc(nil, session)
+		} else {
+			registry["arc"] = NewArc(pacedArc(c), session)
+		}
 	}
 	// France Travail's credential is an OAuth2 client pair issued to an application registered
 	// on francetravail.io; both must be set, and the transport must answer the search's 204.
