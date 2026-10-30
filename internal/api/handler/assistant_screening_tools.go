@@ -21,9 +21,10 @@ func (h *assistantHandlers) assistantScreeningTools() []assistant.Tool {
 // that repeat across ATS application forms — work authorization, visa sponsorship, desired
 // salary, notice period, willingness to relocate, 18+ — and the standing privacy consent, so
 // the browser extension's
-// autofill agent can use them later. It decodes straight into screeninganswers.Answers:
+// autofill agent can use them later. It decodes into screeninganswers.Answers plus "clear":
 // the same wire shape the manual-edit endpoint accepts, so a field the call omits is a
-// field Update leaves untouched, identically on both write paths.
+// field Update leaves untouched and a field it names in "clear" is withdrawn, identically
+// on both write paths. The MCP account server serves this same tool.
 func (h *assistantHandlers) screeningAnswersSetTool() assistant.Tool {
 	return assistant.Tool{
 		Name:   "screening_answers_set",
@@ -35,7 +36,9 @@ func (h *assistantHandlers) screeningAnswersSetTool() assistant.Tool {
 			"are willing to relocate, and whether they are 18 or older. Call this the moment the candidate " +
 			"states one of these facts, so it is available to fill their next application form. Only pass " +
 			"fields the candidate actually stated — never guess or infer one. A field you leave out keeps " +
-			"whatever was already recorded; it is not cleared. privacy_consent is a permission, not a fact: " +
+			"whatever was already recorded; it is not cleared. To withdraw an answer — the candidate says it no " +
+			"longer holds, or they no longer want it given to employers — name it in clear; auto-apply then " +
+			"asks them instead of answering. privacy_consent is a permission, not a fact: " +
 			"set it only when the candidate says, in so many words, that they agree to employers' privacy " +
 			"and personal-data terms being accepted for them on every application.",
 		Schema: map[string]any{
@@ -81,15 +84,42 @@ func (h *assistantHandlers) screeningAnswersSetTool() assistant.Tool {
 						"an employer's form requires being accepted for them. Ticks only that condition of " +
 						"applying — never a marketing, future-openings, SMS or diversity opt-in.",
 				},
+				"clear": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string", "enum": screeningFieldNames()},
+					"description": "Answers to withdraw back to unstated, by field name. Never name a field you also set.",
+				},
 			},
 			"additionalProperties": false,
 		},
 		Run: func(ctx context.Context, userID int64, raw json.RawMessage) (any, error) {
-			var in screeninganswers.Answers
+			var in struct {
+				screeninganswers.Answers
+				Clear []string `json:"clear"`
+			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
 			}
-			return h.screeningAnswers.Update(ctx, userID, in)
+			cleared := make([]screeninganswers.Field, 0, len(in.Clear))
+			for _, name := range in.Clear {
+				f, err := screeninganswers.ParseField(name)
+				if err != nil {
+					return nil, err
+				}
+				cleared = append(cleared, f)
+			}
+			return h.screeningAnswers.Update(ctx, userID, in.Answers, cleared...)
 		},
 	}
+}
+
+// screeningFieldNames is the clear argument's vocabulary, read from the record's own list
+// so a field added there is offered here without a second edit.
+func screeningFieldNames() []string {
+	fields := screeninganswers.Fields()
+	names := make([]string, len(fields))
+	for i, f := range fields {
+		names[i] = string(f)
+	}
+	return names
 }

@@ -66,3 +66,37 @@ func TestScreeningAnswersSetReportsAnInvalidFieldToTheModel(t *testing.T) {
 		t.Error("repo.Upsert should not be called on invalid input")
 	}
 }
+
+// A candidate who says "don't tell employers my salary any more" must be able to have it
+// withdrawn through the assistant, not only replaced.
+func TestScreeningAnswersSetWithdrawsWhatItIsAskedToClear(t *testing.T) {
+	salary := 120000
+	repo := &fakeScreeningAnswersRepo{
+		getRet: screeninganswers.Answers{DesiredSalaryAmount: &salary, AuthorizedCountries: []string{"de"}},
+	}
+	reg := screeningToolsFor(repo)
+
+	out := reg.Call(context.Background(), 1, "screening_answers_set", json.RawMessage(`{"clear":["desired_salary_amount"]}`))
+	if strings.Contains(out.Content, `"error"`) {
+		t.Fatalf("call failed: %s", out.Content)
+	}
+	if repo.upserted.DesiredSalaryAmount != nil {
+		t.Errorf("upserted salary = %d, want withdrawn", *repo.upserted.DesiredSalaryAmount)
+	}
+	if len(repo.upserted.AuthorizedCountries) != 1 {
+		t.Errorf("upserted countries = %v, want [de] untouched", repo.upserted.AuthorizedCountries)
+	}
+}
+
+func TestScreeningAnswersSetRefusesToClearAnUnknownField(t *testing.T) {
+	repo := &fakeScreeningAnswersRepo{}
+	reg := screeningToolsFor(repo)
+
+	out := reg.Call(context.Background(), 1, "screening_answers_set", json.RawMessage(`{"clear":["salary"]}`))
+	if !strings.Contains(out.Content, "salary") || !strings.Contains(out.Content, `"error"`) {
+		t.Errorf("result = %s, want an error naming the unknown field", out.Content)
+	}
+	if repo.upsertCalled {
+		t.Error("repo.Upsert should not be called for an unknown field")
+	}
+}
