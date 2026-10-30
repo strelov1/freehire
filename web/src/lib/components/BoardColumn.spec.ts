@@ -97,4 +97,24 @@ describe('BoardColumn', () => {
     expect(written).toHaveLength(31);
     expect(screen.getByText('Role 99')).toBeTruthy();
   });
+
+  it('resumes drawing once a dragged card leaves the column or the drag is cancelled', async () => {
+    renderColumn();
+    const el = zone() as HTMLElement;
+    const consider = (trigger: string) =>
+      fireEvent(el, new CustomEvent('consider', { detail: { items: items.slice(0, 30), info: { trigger } } }));
+    Object.defineProperties(el, {
+      clientHeight: { value: 600, configurable: true },
+      scrollHeight: { value: 3000, configurable: true },
+      scrollTop: { value: 2100, configurable: true },
+    });
+
+    for (const trigger of ['draggedLeft', 'dragStopped']) {
+      await consider('dragStarted');
+      await consider(trigger);
+    }
+    await fireEvent.scroll(el);
+
+    await vi.waitFor(() => expect(drawn()).toBeGreaterThan(30));
+  });
 });

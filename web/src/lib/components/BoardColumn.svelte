@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { dndzone } from 'svelte-dnd-action';
+  import { dndzone, TRIGGERS } from 'svelte-dnd-action';
   import BoardCard from './BoardCard.svelte';
   import type { BoardItem, BoardColumnId } from '#lib/board.js';
   import type { MyJob } from '#lib/types.js';
@@ -98,7 +98,10 @@
     onscroll={grow}
     use:dndzone={{ items: visible, flipDurationMs: 150, type: 'board', dropTargetStyle, dragDisabled }}
     onconsider={(e) => {
-      dragging = true;
+      // Paused only while the dragged card is in this zone: a card that passes through
+      // and leaves, or a keyboard drag cancelled here, sends no finalize to this column.
+      const { trigger } = e.detail.info;
+      dragging = trigger !== TRIGGERS.DRAGGED_LEFT && trigger !== TRIGGERS.DRAG_STOPPED;
       onconsider(id, withTail(e.detail.items as BoardItem[]));
     }}
     onfinalize={(e) => {
