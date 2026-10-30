@@ -68,6 +68,16 @@ describe('createFacetCache', () => {
     expect(live).toHaveBeenCalledTimes(2);
   });
 
+  it('never caches the disjunctive mode carried in the params', async () => {
+    const live = vi.fn().mockResolvedValue(result(1));
+    const cached = createFacetCache()(live);
+
+    await cached(new URLSearchParams({ disjunctive: '1' }));
+    await cached(new URLSearchParams({ disjunctive: '1' }));
+
+    expect(live).toHaveBeenCalledTimes(2);
+  });
+
   it('shares entries between renders that bring their own counter', async () => {
     const withCache = createFacetCache();
     const first = vi.fn().mockResolvedValue(result(1));

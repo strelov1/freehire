@@ -23,7 +23,8 @@ export function createFacetCache(capacity = DEFAULT_CAPACITY): (live: FacetCount
   const entries = new Map<string, { at: number; value: Promise<FacetCounts> }>();
 
   return (live) => (params, opts) => {
-    if (opts?.disjunctive) return live(params, opts);
+    // The mode can also arrive in the params themselves: /analytics hands its URL through.
+    if (opts?.disjunctive || params.has('disjunctive')) return live(params, opts);
 
     const key = `${params.toString()}|${opts?.facets?.join(',') ?? ''}`;
     const now = Date.now();
