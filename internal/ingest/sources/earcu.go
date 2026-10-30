@@ -2,7 +2,10 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -70,6 +73,10 @@ func (a earcu) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 }
 
 // FetchNew lists the board's feed and hydrates only the postings the catalogue does not hold.
+// A new posting whose detail page fails is deferred, not emitted with the feed's reading: once
+// stored it is seen, and a seen posting is never read again, so its truncated preview would be
+// permanent. Left unseen, the next crawl retries it. A 404/410 means the page is gone; that
+// posting is dropped the same way, without counting as a failure.
 func (a earcu) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
 	url := fmt.Sprintf("https://%s/jobs/rss", e.Board)
 
@@ -79,6 +86,7 @@ func (a earcu) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 	}
 
 	jobs := make([]Job, 0, len(feed.Items))
+	deferred := 0
 	for _, it := range feed.Items {
 		m := earcuIDRe.FindStringSubmatch(it.Link)
 		if m == nil {
@@ -100,9 +108,18 @@ func (a earcu) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 		job.Countries = countryFromCode(earcuField(prefix, "Country"))
 		job.Description = sanitizeHTML(body)
 		job.PostedAt = earcuPubDate(it.PubDate)
-		a.hydrate(ctx, &job)
+		if err := a.hydrate(ctx, &job); err != nil {
+			var se *StatusError
+			if !errors.As(err, &se) || (se.Code != http.StatusNotFound && se.Code != http.StatusGone) {
+				deferred++
+			}
+			continue
+		}
 		job.Remote = isRemote(job.Location) // the platform has no structured remote flag
 		jobs = append(jobs, job)
+	}
+	if deferred > 0 {
+		log.Printf("earcu: board %s: %d new postings deferred to the next crawl (detail fetch failed)", e.Board, deferred)
 	}
 	return jobs, nil
 }
@@ -113,13 +130,13 @@ type earcuPosting struct {
 	JobLocation schemaPlaces `json:"jobLocation"`
 }
 
-// hydrate overlays what the posting's detail page states on the feed's reading. A failed
-// fetch is non-fatal: the feed names the posting, so it is kept with the feed's preview body
-// and whatever place the prefix gave.
-func (a earcu) hydrate(ctx context.Context, job *Job) {
+// hydrate overlays what the posting's detail page states on the feed's reading, returning the
+// fetch error when the page did not answer. A page that answers without a body or a place
+// leaves the feed's reading of that field standing.
+func (a earcu) hydrate(ctx context.Context, job *Job) error {
 	root, err := a.http.GetHTML(ctx, job.URL)
 	if err != nil {
-		return
+		return err
 	}
 	var ld earcuPosting // stays zero when the page renders no JobPosting
 	ldJobPosting(root, &ld)
@@ -140,6 +157,7 @@ func (a earcu) hydrate(ctx context.Context, job *Job) {
 	if countries != nil {
 		job.Countries = countries
 	}
+	return nil
 }
 
 // earcuDetailBody returns the detail page's visible posting body, sanitized; "" when the page

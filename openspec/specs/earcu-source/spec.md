@@ -40,7 +40,9 @@ dropped, several places joined by "; "), falling back to the page's summary row 
 label ends in "Location", then to the feed prefix's `Location` field, then its `Country`
 field. `Job.Countries` MUST be set from the structured `addressCountry` values (or the
 feed's `Country` field) through `location.NormalizeCountry`, never from free text. A
-failed detail fetch is non-fatal: the posting is still returned with the feed's reading.
+new posting whose detail fetch fails MUST NOT be returned: stored with the feed's preview
+it would be seen and never read again. Left out, it stays new and the next crawl retries
+it. A 404/410 drops the posting the same way. Neither fails the board.
 
 #### Scenario: Place and body come from the detail page
 
@@ -54,11 +56,11 @@ failed detail fetch is non-fatal: the posting is still returned with the feed's 
 - **WHEN** a listed posting is already in the catalogue
 - **THEN** the adapter emits it as a `SeenRefresh` and requests no detail page
 
-#### Scenario: Failed detail fetch is non-fatal
+#### Scenario: Failed detail fetch defers the posting
 
 - **WHEN** a new posting's detail fetch fails
-- **THEN** the posting is still returned with the feed's preview body and the feed
-  prefix's place
+- **THEN** the posting is not returned, the board's other postings are, and the next
+  crawl requests that posting's detail page again
 
 ### Requirement: Stable dedup identity
 

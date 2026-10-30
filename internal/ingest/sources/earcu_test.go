@@ -48,8 +48,9 @@ const earcuFeed = `<?xml version="1.0" encoding="UTF-8"?>
 </channel></rss>`
 
 func TestEarcuFetch(t *testing.T) {
-	// The detail pages fail, so what is asserted here is the feed's own reading.
-	fake := &earcuRouted{feed: earcuFeed, detailErr: context.DeadlineExceeded}
+	// The detail pages answer with nothing to read, so what is asserted here is the feed's own
+	// reading.
+	fake := &earcuRouted{feed: earcuFeed}
 
 	jobs, err := NewEarcu(fake).Fetch(context.Background(), CompanyEntry{
 		Company: "Cambridge University Press & Assessment", Provider: "earcu", Board: "careers.cambridge.org",
@@ -186,29 +187,62 @@ func TestEarcuLocation(t *testing.T) {
 	}
 }
 
-// TestEarcuDetailFetchFailureNonFatal asserts a body-less item whose detail fetch fails is
-// still emitted (empty description), not dropped and not aborting the board.
-func TestEarcuDetailFetchFailureNonFatal(t *testing.T) {
+// TestEarcuFailedDetailDefersPosting asserts a NEW posting whose detail fetch fails is not
+// emitted: stored with the feed's preview it would be seen and never read again. Left unseen,
+// the next crawl retries the detail. A 404/410 drops the posting the same way. Neither fails
+// the board, and a seen posting is still refreshed.
+func TestEarcuFailedDetailDefersPosting(t *testing.T) {
 	feed := `<?xml version="1.0"?><rss version="2.0"><channel>
   <item>
-    <link>https://careers.cambridge.org/jobs/vacancy/no-body/300/description/</link>
-    <title>No Body (299)</title>
-    <description>Location: London, eArcu Vacancy Reference: 299</description>
+    <link>https://careers.cambridge.org/jobs/vacancy/new-role/300/description/</link>
+    <title>New Role (299)</title>
+    <description>Location: London, eArcu Vacancy Reference: 299&lt;div id="rssjobdesc"&gt;A preview...&lt;/div&gt;</description>
+    <pubDate>Tue, 07 Jul 2026 15:53:15 Z</pubDate>
+  </item>
+  <item>
+    <link>https://careers.cambridge.org/jobs/vacancy/stored-role/302/description/</link>
+    <title>Stored Role (301)</title>
+    <description>Location: London, eArcu Vacancy Reference: 301</description>
     <pubDate>Tue, 07 Jul 2026 15:53:15 Z</pubDate>
   </item>
 </channel></rss>`
+	entry := CompanyEntry{Company: "Cambridge", Provider: "earcu", Board: "careers.cambridge.org"}
+	seen := func(id string) bool { return id == "302" }
 
-	jobs, err := NewEarcu(&earcuRouted{feed: feed, detailErr: context.DeadlineExceeded}).Fetch(context.Background(), CompanyEntry{
-		Company: "Cambridge", Provider: "earcu", Board: "careers.cambridge.org",
-	})
-	if err != nil {
-		t.Fatalf("Fetch should not fail when a detail fetch errors: %v", err)
-	}
-	if len(jobs) != 1 {
-		t.Fatalf("len(jobs) = %d, want 1 (item kept despite detail-fetch failure)", len(jobs))
-	}
-	if jobs[0].Description != "" {
-		t.Errorf("Description = %q, want empty after a failed detail fetch", jobs[0].Description)
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"transport failure", context.DeadlineExceeded},
+		{"server error", &StatusError{Method: "GET", Code: 503}},
+		{"gone", &StatusError{Method: "GET", Code: 410}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &earcuRouted{feed: feed, detailErr: tc.err}
+			a := NewEarcu(fake).(HydratingSource)
+			jobs, err := a.FetchNew(context.Background(), entry, seen)
+			if err != nil {
+				t.Fatalf("FetchNew should not fail when a detail fetch errors: %v", err)
+			}
+			if len(jobs) != 1 || jobs[0].ExternalID != "302" || !jobs[0].SeenRefresh {
+				t.Fatalf("jobs = %+v, want only the SeenRefresh for 302 (300 deferred)", jobs)
+			}
+
+			// The deferred posting is still new on the next crawl, so its detail is retried.
+			fake.detailErr = nil
+			fake.detail = readEarcuFixture(t, "detail_iwg_nairobi.html")
+			fake.detailHit = nil
+			jobs, err = a.FetchNew(context.Background(), entry, seen)
+			if err != nil {
+				t.Fatalf("second FetchNew: %v", err)
+			}
+			if len(fake.detailHit) != 1 || !strings.Contains(fake.detailHit[0], "/300/") {
+				t.Errorf("detail requests on retry = %v, want one for 300", fake.detailHit)
+			}
+			if len(jobs) != 2 || jobs[0].ExternalID != "300" || jobs[0].Description == "" {
+				t.Errorf("jobs = %+v, want 300 hydrated on the retry", jobs)
+			}
+		})
 	}
 }
 
