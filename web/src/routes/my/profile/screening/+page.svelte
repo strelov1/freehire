@@ -12,4 +12,4 @@
   });
 </script>
 
-<ScreeningAnswersForm {answers} onSaved={() => void screeningStore.refresh()} />
+<ScreeningAnswersForm {answers} />

@@ -1,0 +1,73 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import ScreeningAnswersForm from './ScreeningAnswersForm.svelte';
+
+vi.mock('$app/state', () => ({
+  page: { data: { locale: 'en' }, url: new URL('http://localhost/') },
+}));
+
+const { updateScreeningAnswers, getScreeningAnswers } = vi.hoisted(() => ({
+  updateScreeningAnswers: vi.fn(),
+  getScreeningAnswers: vi.fn(),
+}));
+vi.mock('#lib/api.js', () => ({
+  api: { updateScreeningAnswers, getScreeningAnswers },
+  ApiError: class extends Error {},
+}));
+
+beforeEach(() => {
+  updateScreeningAnswers.mockReset().mockImplementation((patch) => Promise.resolve(patch));
+  getScreeningAnswers.mockReset().mockResolvedValue(null);
+});
+
+describe('ScreeningAnswersForm — autosave', () => {
+  it('saves a dropdown the moment it is picked', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Need visa sponsorship?' }), {
+      target: { value: 'no' },
+    });
+
+    await waitFor(() => expect(updateScreeningAnswers).toHaveBeenCalledWith({ visa_sponsorship_needed: false }));
+    expect(screen.queryByRole('button', { name: /save/i })).toBeNull();
+  });
+
+  it('marks a salary that is not a number and does not save it', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+    const salary = screen.getByRole('textbox', { name: 'Desired salary amount' });
+
+    await fireEvent.input(salary, { target: { value: '12k' } });
+    await fireEvent.focusOut(salary);
+
+    expect(screen.getByText('Desired salary amount must be a number.')).toBeTruthy();
+    expect(salary.getAttribute('aria-invalid')).toBe('true');
+    expect(updateScreeningAnswers).not.toHaveBeenCalled();
+  });
+
+  it('reads a thousands separator as part of the number', async () => {
+    render(ScreeningAnswersForm, { props: { answers: {} } });
+    const salary = screen.getByRole('textbox', { name: 'Desired salary amount' });
+
+    await fireEvent.input(salary, { target: { value: '120,000' } });
+    await fireEvent.focusOut(salary);
+
+    await waitFor(() => expect(updateScreeningAnswers).toHaveBeenCalledWith({ desired_salary_amount: 120000 }));
+  });
+
+  it('offers Undo for a changed answer, but not for one filled in for the first time', async () => {
+    render(ScreeningAnswersForm, { props: { answers: { notice_period_days: 30 } } });
+    const notice = screen.getByRole('textbox', { name: 'Notice period (days)' });
+
+    await fireEvent.input(notice, { target: { value: '60' } });
+    await fireEvent.focusOut(notice);
+    expect(await screen.findByRole('button', { name: 'Undo' })).toBeTruthy();
+
+    const salary = screen.getByRole('textbox', { name: 'Desired salary amount' });
+    await fireEvent.input(salary, { target: { value: '90000' } });
+    await fireEvent.focusOut(salary);
+    await waitFor(() => expect(updateScreeningAnswers).toHaveBeenCalledTimes(2));
+    await screen.findByText('Saved');
+    // The salary was blank before, and the endpoint cannot clear it again.
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+});
