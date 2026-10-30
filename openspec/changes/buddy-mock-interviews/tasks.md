@@ -57,7 +57,7 @@
 - Produces (package `slots`, unchanged apart from the renames): `type Rule`, `func NewWeeklyRule(time.Weekday, TimeOfDay, TimeOfDay) (Rule, error)`, `func NewDatedRule(Date, TimeOfDay, TimeOfDay) (Rule, error)`, `func (Rule) WithID(int64) Rule` (was unexported `withID`), `func (Rule) ID() int64`, `type TimeOfDay`, `func NewTimeOfDay(int, int) (TimeOfDay, error)`, `type Date`, `func NewDate(int, time.Month, int) (Date, error)`, `type Interval struct{ Start, End time.Time }`, `type SessionParams struct{ Duration, BufferBefore, BufferAfter, MinimumNotice, Horizon time.Duration }`, `type SlotRequest struct{ Rules []Rule; OwnerZone *time.Location; Params SessionParams; Busy []Interval; From, To, Now time.Time; ViewerZone string }`, `type SlotResult struct{ Slots []Interval; Zone string }`, `func Slots(SlotRequest) (SlotResult, error)`, `type CalendarRequest` (field `OwnerZone`), `func Calendar(CalendarRequest) (CalendarResult, error)`, `StatusBooked/StatusBusy/StatusFree/StatusClosed`, sentinels `ErrNoOwnerZone`, `ErrInvalidTimeOfDay`, `ErrInvalidDate`, `ErrInvalidWeekday`, `ErrInvalidSpan`, `ErrInvalidSessionParams` (messages now prefixed `slots:` instead of `mentorship:`; no test or client reads the text).
 - Consumes: nothing new. Mentorship behaviour does not change.
 
-- [ ] 1.1 Move the engine and its tests with history, and rename the package and the mentor-flavoured identifiers:
+- [x] 1.1 Move the engine and its tests with history, and rename the package and the mentor-flavoured identifiers:
 
 ```bash
 cd /Users/i_strelov/Projects/hire-wt-mocks
@@ -72,7 +72,7 @@ done
 perl -pi -e 's/^package mentorship$/package slots/; s/\bErrNoMentorZone\b/ErrNoOwnerZone/g; s/\bMentorZone\b/OwnerZone/g; s/"mentorship: /"slots: /g; s/the mentor has no timezone/the owner has no timezone/; s/\bwithID\b/WithID/g' internal/engage/slots/*.go
 ```
 
-- [ ] 1.2 Fix the two doc comments the rename made wrong. In `internal/engage/slots/slots.go` replace
+- [x] 1.2 Fix the two doc comments the rename made wrong. In `internal/engage/slots/slots.go` replace
 
 ```go
 // ErrNoOwnerZone → 500. A mentor row reached the engine without the IANA zone that
@@ -92,7 +92,7 @@ with
 // something storage knows and a caller cannot invent.
 ```
 
-- [ ] 1.3 Create `internal/engage/slots/doc.go`:
+- [x] 1.3 Create `internal/engage/slots/doc.go`:
 
 ```go
 // Package slots is the availability engine shared by mentorship sessions and buddy mock
@@ -107,9 +107,9 @@ with
 package slots
 ```
 
-- [ ] 1.4 Run the moved tests: `go test ./internal/engage/slots/ -count=1`. Expected: `ok`. Run the layering guard: `go test ./internal/platform/arch/layering/ -count=1`. Expected: FAIL, naming `internal/engage/slots` as a package in no block.
+- [x] 1.4 Run the moved tests: `go test ./internal/engage/slots/ -count=1`. Expected: `ok`. Run the layering guard: `go test ./internal/platform/arch/layering/ -count=1`. Expected: FAIL, naming `internal/engage/slots` as a package in no block.
 
-- [ ] 1.5 Add `slots` to the engage block. In `internal/platform/arch/layering/blocks.go` replace line 244
+- [x] 1.5 Add `slots` to the engage block. In `internal/platform/arch/layering/blocks.go` replace line 244
 
 ```go
 		"referral", "reminder", "report", "socialdigest", "subscription",
@@ -125,7 +125,7 @@ with
 ```
 Run `go test ./internal/platform/arch/layering/ -count=1`. Expected: `ok`.
 
-- [ ] 1.6 Run `go build ./internal/engage/mentorship/`. Expected: FAIL with `undefined: Rule`, `undefined: Interval`, `undefined: SlotRequest`, … . Rename the local variable that would shadow the new package import: in `internal/engage/mentorship/slot_cache.go` replace
+- [x] 1.6 Run `go build ./internal/engage/mentorship/`. Expected: FAIL with `undefined: Rule`, `undefined: Interval`, `undefined: SlotRequest`, … . Rename the local variable that would shadow the new package import: in `internal/engage/mentorship/slot_cache.go` replace
 
 ```go
 	slots := make([]Interval, 0, len(c.Slots))
@@ -143,7 +143,7 @@ with
 	return SlotResult{Slots: intervals, Zone: c.Zone}, true
 ```
 
-- [ ] 1.7 Qualify every engine name left in mentorship (comment lines are skipped; the only string literal touched is a `t.Fatalf("NewWeeklyRule: …")` label, which then reads `slots.NewWeeklyRule`) and in the mentorship handlers, then let goimports add the import:
+- [x] 1.7 Qualify every engine name left in mentorship (comment lines are skipped; the only string literal touched is a `t.Fatalf("NewWeeklyRule: …")` label, which then reads `slots.NewWeeklyRule`) and in the mentorship handlers, then let goimports add the import:
 
 ```bash
 cd /Users/i_strelov/Projects/hire-wt-mocks
@@ -158,7 +158,7 @@ command -v "$(go env GOPATH)/bin/goimports" >/dev/null || go install golang.org/
 "$(go env GOPATH)/bin/goimports" -w internal/engage/mentorship/*.go internal/api/handler/mentorship*.go
 ```
 
-- [ ] 1.8 Give the mentorship tests that stayed behind the two fixture helpers they shared with the moved files. Create `internal/engage/mentorship/engine_helpers_test.go`:
+- [x] 1.8 Give the mentorship tests that stayed behind the two fixture helpers they shared with the moved files. Create `internal/engage/mentorship/engine_helpers_test.go`:
 
 ```go
 package mentorship
@@ -191,7 +191,7 @@ func mustTimeOfDay(t *testing.T, hour, minute int) slots.TimeOfDay {
 }
 ```
 
-- [ ] 1.9 Verify the move changed nothing:
+- [x] 1.9 Verify the move changed nothing:
 
 ```bash
 gofmt -l internal/engage/slots internal/engage/mentorship internal/api/handler   # prints nothing
@@ -201,7 +201,7 @@ go test ./internal/engage/slots/ ./internal/engage/mentorship/... ./internal/api
 ```
 Expected: every command succeeds; `go test` prints `ok` for each package. Then the mentorship integration suite: `go test -tags=integration ./internal/engage/mentorship/ ./internal/api/handler/ -run 'Mentor|Mentorship' -count=1`. Expected: `ok`.
 
-- [ ] 1.10 Commit:
+- [x] 1.10 Commit:
 
 ```bash
 git add -A internal/engage/slots internal/engage/mentorship internal/api/handler internal/platform/arch/layering/blocks.go
