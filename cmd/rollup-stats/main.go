@@ -33,7 +33,8 @@ import (
 
 const (
 	// growthWindowDays is how far back the role/skill "prior window" open-count looks,
-	// so growth = open_now - open_as_of(now - growthWindowDays).
+	// so growth = open_now - open_as_of(now - growthWindowDays). A posting is open as of
+	// a date from LEAST(posted_at, created_at), not first-seen — see insights.sql's header.
 	growthWindowDays = 30
 	// minSalarySample is the smallest number of disclosed salaries a (currency, period)
 	// band needs to be published — below it the band is suppressed as unreliable and
@@ -188,6 +189,18 @@ func rebuildInsights(ctx context.Context, q *db.Queries) error {
 		return err
 	}
 	if _, err := q.RebuildInsightsRoleStatsByCountry(ctx, prevTs); err != nil {
+		return err
+	}
+
+	// The role × country grid: the same demand without the seniority axis, over
+	// canonical postings only (migration 0214 says why it is a table of its own).
+	if err := q.DeleteAllInsightsRoleCountryStats(ctx); err != nil {
+		return err
+	}
+	if _, err := q.RebuildInsightsRoleCountryStatsGlobal(ctx, prevTs); err != nil {
+		return err
+	}
+	if _, err := q.RebuildInsightsRoleCountryStatsByCountry(ctx, prevTs); err != nil {
 		return err
 	}
 

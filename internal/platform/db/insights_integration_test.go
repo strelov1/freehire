@@ -25,6 +25,7 @@ type insightSeed struct {
 	skills     []string
 	countries  []string
 	createdAgo int  // days before now
+	postedAgo  *int // days before now; nil = no publication date
 	closedAgo  *int // days before now; nil = still open
 	salary     int  // 0 = no salary disclosed
 	currency   string
@@ -41,9 +42,12 @@ func seedInsightsJob(t *testing.T, ctx context.Context, q *Queries, pool *pgxpoo
 		enrichment = fmt.Sprintf(`{"salary_min":%d,"salary_max":%d,"salary_currency":%q,"salary_period":%q}`,
 			s.salary, s.salary, s.currency, s.period)
 	}
-	var closed any
+	var closed, posted any
 	if s.closedAgo != nil {
 		closed = *s.closedAgo
+	}
+	if s.postedAgo != nil {
+		posted = *s.postedAgo
 	}
 	// skills/countries are NOT NULL text[]; a nil Go slice would bind as NULL.
 	if s.skills == nil {
@@ -60,9 +64,10 @@ func seedInsightsJob(t *testing.T, ctx context.Context, q *Queries, pool *pgxpoo
 			countries  = $4,
 			created_at = now() - make_interval(days => $5::int),
 			closed_at  = CASE WHEN $6::int IS NULL THEN NULL ELSE now() - make_interval(days => $6::int) END,
-			enrichment = $7::jsonb
+			enrichment = $7::jsonb,
+			posted_at  = CASE WHEN $9::int IS NULL THEN NULL ELSE now() - make_interval(days => $9::int) END
 		WHERE external_id = $8`,
-		s.category, s.seniority, s.skills, s.countries, s.createdAgo, closed, enrichment, ext,
+		s.category, s.seniority, s.skills, s.countries, s.createdAgo, closed, enrichment, ext, posted,
 	); err != nil {
 		t.Fatalf("seed facets %s: %v", ext, err)
 	}
@@ -551,4 +556,93 @@ func roleSkillSample(t *testing.T, ctx context.Context, q *Queries, cat, sen str
 		t.Fatalf("get role skill sample: %v", err)
 	}
 	return n
+}
+
+// existenceSeeds are the five ways a posting's publication date and first-seen date
+// can relate, all open and all in one role, country, skill and company. Against a
+// 30-day window, two of them existed at the window start and three did not:
+//
+//   - backlog: published 60d ago, first seen 5d ago — an old posting from a board
+//     onboarded inside the window. Existed then; NOT growth.
+//   - fresh:   published 5d ago, first seen 4d ago. Genuinely new; growth.
+//   - undated: no publication date, first seen 5d ago. Falls back to first-seen; growth.
+//   - restamp: published 2d ago, first seen 60d ago — a source re-stamping the date on
+//     repost. Existed from first-seen; NOT growth.
+//   - future:  published 3d FROM NOW (bad source data), first seen 5d ago. Existed from
+//     first-seen; growth.
+//
+// First-seen alone counts only `restamp` as existing then, so every rollup built on
+// it reports +4 where the honest answer is +3.
+var existenceSeeds = []struct {
+	ext        string
+	postedAgo  *int
+	createdAgo int
+}{
+	{"backlog", intPtr(60), 5},
+	{"fresh", intPtr(5), 4},
+	{"undated", nil, 5},
+	{"restamp", intPtr(2), 60},
+	{"future", intPtr(-3), 5},
+}
+
+func intPtr(n int) *int { return &n }
+
+func TestInsightsGrowthCountsExistenceNotDiscovery(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	for _, s := range existenceSeeds {
+		seedInsightsJob(t, ctx, q, pool, s.ext, insightSeed{
+			category: "engineering", seniority: "senior", countries: []string{"de"},
+			skills: []string{"go"}, createdAgo: s.createdAgo, postedAgo: s.postedAgo,
+		})
+	}
+	prev := windowStart()
+
+	t.Run("roles", func(t *testing.T) {
+		rebuildRoles(t, ctx, q, prev)
+		for _, country := range []string{"", "de"} {
+			got := findRole(t, roles(t, ctx, q, country), "engineering", "senior")
+			if got.OpenCount != 5 || got.Growth != 3 {
+				t.Errorf("country %q: {open %d, growth %d}, want {5, 3}", country, got.OpenCount, got.Growth)
+			}
+		}
+	})
+
+	t.Run("skills", func(t *testing.T) {
+		if err := q.DeleteAllInsightsSkillStats(ctx); err != nil {
+			t.Fatalf("delete skills: %v", err)
+		}
+		for _, rebuild := range []func(context.Context, pgtype.Timestamptz) (int64, error){
+			q.RebuildInsightsSkillStatsGlobal, q.RebuildInsightsSkillStatsByCategory, q.RebuildInsightsSkillStatsByCountry,
+		} {
+			if _, err := rebuild(ctx, prev); err != nil {
+				t.Fatalf("rebuild skills: %v", err)
+			}
+		}
+		for _, scope := range []struct{ cat, country string }{{"", ""}, {"engineering", ""}, {"", "de"}} {
+			got := findSkill(t, skills(t, ctx, q, scope.cat, scope.country), "go")
+			if got.OpenCount != 5 || got.Growth != 3 {
+				t.Errorf("scope %+v: {open %d, growth %d}, want {5, 3}", scope, got.OpenCount, got.Growth)
+			}
+		}
+	})
+
+	t.Run("company growth", func(t *testing.T) {
+		if _, err := pool.Exec(ctx, `UPDATE jobs SET company_slug = 'acme'`); err != nil {
+			t.Fatalf("set company: %v", err)
+		}
+		if err := q.DeleteAllInsightsCompanyGrowth(ctx); err != nil {
+			t.Fatalf("delete growth: %v", err)
+		}
+		if _, err := q.RebuildInsightsCompanyGrowth(ctx, prev); err != nil {
+			t.Fatalf("rebuild growth: %v", err)
+		}
+		got, ok := companyGrowth(t, ctx, q, "acme")
+		if !ok || got.openCount != 5 || got.openCountPrev != 2 {
+			t.Errorf("acme = %+v (present=%v), want open_count=5 open_count_prev=2", got, ok)
+		}
+	})
 }

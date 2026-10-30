@@ -1559,6 +1559,10 @@ type Querier interface {
 	// Per-company posting views (backs the company page's Hiring tab)
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsCompanyViews(ctx context.Context) error
+	// ---------------------------------------------------------------------------
+	// Role × country grid
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsRoleCountryStats(ctx context.Context) error
 	DeleteAllInsightsRoleSkillSample(ctx context.Context) error
 	// ---------------------------------------------------------------------------
 	// Per-role skill demand
@@ -1569,6 +1573,15 @@ type Querier interface {
 	// endpoints serve from them. All rollups are a pure function of current `jobs`
 	// state; @prev_ts (the growth-window start) and @min_sample are supplied by the
 	// worker so the window and sample floor stay out of the SQL and are test-injectable.
+	//
+	// Every prior-window count asks whether a posting EXISTED at @prev_ts, and a posting
+	// exists from LEAST(posted_at, created_at) — never from created_at alone. created_at
+	// is when freehire FOUND it, so on first-seen alone a board onboarded inside the
+	// window publishes its whole backlog as growth: measured 2026-10-30, 387,324 of the
+	// 876,973 open healthcare postings first seen in the last 30 days had been published
+	// before that window. LEAST skips a NULL posted_at (falling back to first-seen) and
+	// cannot let a posted_at re-stamped on repost push existence later than first-seen.
+	// A test in this package fails if a bare `created_at <=` prior-window count returns.
 	// ---------------------------------------------------------------------------
 	// Role demand
 	// ---------------------------------------------------------------------------
@@ -4309,6 +4322,11 @@ type Querier interface {
 	// tiebreak. @min_open floors the current open-count (blunts ingest-artifact spikes).
 	// company_name falls back to the slug when no companies row exists.
 	ListInsightsCompanies(ctx context.Context, arg ListInsightsCompaniesParams) ([]ListInsightsCompaniesRow, error)
+	// Every cell of the all-countries column plus every cell of the named countries.
+	ListInsightsRoleCountryCells(ctx context.Context, countries []string) ([]InsightsRoleCountryStat, error)
+	// The grid's columns: the countries holding the most open postings, largest first.
+	// Summing a country's cells counts each posting once — it has exactly one category.
+	ListInsightsRoleCountryColumns(ctx context.Context, lim int32) ([]string, error)
 	// One role's skills, most-demanded first. The caller divides by the role's
 	// sample_size (GetInsightsRoleSkillSample), never by its open_count.
 	ListInsightsRoleSkills(ctx context.Context, arg ListInsightsRoleSkillsParams) ([]ListInsightsRoleSkillsRow, error)
@@ -5904,6 +5922,14 @@ type Querier interface {
 	// still attention paid to the company. One visitor counts once per posting per day, so
 	// the sum is posting-views, not distinct people; the page says so.
 	RebuildInsightsCompanyViews(ctx context.Context) (int64, error)
+	// One column per country: a posting contributes once to each country it lists, and a
+	// posting with none reaches the '' bucket only.
+	RebuildInsightsRoleCountryStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// The all-countries column ('' bucket): one count per posting, however many countries
+	// it lists — grouping by category alone is what keeps a two-country posting from
+	// counting twice here. Unlike insights_role_stats it needs no seniority and counts
+	// only canonical, public postings (see migration 0214 for both).
+	RebuildInsightsRoleCountryStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
 	// The denominator every share in insights_role_skill_stats divides by: the role's
 	// open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of
 	// the eligible postings carry none, so dividing by the role's open count would fold

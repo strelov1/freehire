@@ -38,8 +38,10 @@ postings in the rollup, in descending order, their number set by an optional
 when not a positive integer). It SHALL respond with
 `{"data": [...], "meta": {...}}`, where each `data` row carries `category`,
 `country` (empty string for the all-countries bucket), `open_count` and
-`open_count_prev`, and `meta` carries the ordered `countries` list and the growth
-window in days. Every category with an open posting SHALL appear in the
+`open_count_prev`, and `meta` carries the ordered `countries` list. The growth window
+is the fixed 30 days every insights growth figure uses (`open_prev_30d` on the
+companies endpoint), so it is part of the contract rather than a `meta` field — a
+field would be a second copy of a constant the rollup worker owns. Every category with an open posting SHALL appear in the
 all-countries bucket. The response SHALL be aggregate-only.
 
 #### Scenario: Default grid

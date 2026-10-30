@@ -432,6 +432,64 @@ func (h *statsHandlers) InsightsCompanies(c *fiber.Ctx) error {
 	})
 }
 
+// roleCountriesDefaultColumns / roleCountriesMaxColumns bound how many countries the
+// role × country grid spans. The cap is about the payload (each column adds up to one
+// cell per category, ~50), not about cost: the rollup is a few thousand rows.
+const (
+	roleCountriesDefaultColumns = 10
+	roleCountriesMaxColumns     = 25
+)
+
+// roleCountryCell is one cell of the role × country grid. Country is "" for the
+// all-countries column. Raw counts, not a percentage: the floor below which growth is
+// noise is a presentation choice, so each consumer applies its own.
+type roleCountryCell struct {
+	Category      string `json:"category"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+}
+
+// parseRoleCountriesColumns resolves the grid's column count: empty → the default,
+// else a positive integer at most roleCountriesMaxColumns.
+func parseRoleCountriesColumns(s string) (int32, error) {
+	if s == "" {
+		return roleCountriesDefaultColumns, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 || n > roleCountriesMaxColumns {
+		return 0, fmt.Errorf("invalid countries %q (want an integer from 1 to %d)", s, roleCountriesMaxColumns)
+	}
+	return int32(n), nil
+}
+
+// InsightsRoleCountries serves GET /api/v1/insights/role-countries: the role × country
+// grid on /insights, from insights_role_country_stats. The endpoint, not the caller,
+// picks the columns — the countries with the most open postings — and returns their
+// cells plus the all-countries column. Aggregate-only.
+func (h *statsHandlers) InsightsRoleCountries(c *fiber.Ctx) error {
+	columns, err := parseRoleCountriesColumns(c.Query("countries"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	countries, err := h.queries.ListInsightsRoleCountryColumns(c.Context(), columns)
+	if err != nil {
+		return err
+	}
+	rows, err := h.queries.ListInsightsRoleCountryCells(c.Context(), countries)
+	if err != nil {
+		return err
+	}
+	data := make([]roleCountryCell, len(rows))
+	for i, r := range rows {
+		data[i] = roleCountryCell{Category: r.Category, Country: r.Country, OpenCount: r.OpenCount, OpenCountPrev: r.OpenCountPrev}
+	}
+	if countries == nil {
+		countries = []string{} // an empty rollup answers [], not null
+	}
+	return c.JSON(fiber.Map{"data": data, "meta": fiber.Map{"countries": countries}})
+}
+
 // InsightsSkills serves GET /api/v1/insights/skills: skills ranked by open-count or
 // growth, optionally scoped by category or country (not both — the rollup is
 // single-dimensional). Aggregate-only.

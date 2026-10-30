@@ -72,6 +72,19 @@ func (q *Queries) DeleteAllInsightsCompanyViews(ctx context.Context) error {
 	return err
 }
 
+const deleteAllInsightsRoleCountryStats = `-- name: DeleteAllInsightsRoleCountryStats :exec
+
+DELETE FROM insights_role_country_stats
+`
+
+// ---------------------------------------------------------------------------
+// Role × country grid
+// ---------------------------------------------------------------------------
+func (q *Queries) DeleteAllInsightsRoleCountryStats(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteAllInsightsRoleCountryStats)
+	return err
+}
+
 const deleteAllInsightsRoleSkillSample = `-- name: DeleteAllInsightsRoleSkillSample :exec
 DELETE FROM insights_role_skill_sample
 `
@@ -105,6 +118,15 @@ DELETE FROM insights_role_stats
 // endpoints serve from them. All rollups are a pure function of current `jobs`
 // state; @prev_ts (the growth-window start) and @min_sample are supplied by the
 // worker so the window and sample floor stay out of the SQL and are test-injectable.
+//
+// Every prior-window count asks whether a posting EXISTED at @prev_ts, and a posting
+// exists from LEAST(posted_at, created_at) — never from created_at alone. created_at
+// is when freehire FOUND it, so on first-seen alone a board onboarded inside the
+// window publishes its whole backlog as growth: measured 2026-10-30, 387,324 of the
+// 876,973 open healthcare postings first seen in the last 30 days had been published
+// before that window. LEAST skips a NULL posted_at (falling back to first-seen) and
+// cannot let a posted_at re-stamped on repost push existence later than first-seen.
+// A test in this package fails if a bare `created_at <=` prior-window count returns.
 // ---------------------------------------------------------------------------
 // Role demand
 // ---------------------------------------------------------------------------
@@ -436,6 +458,70 @@ func (q *Queries) ListInsightsCompanies(ctx context.Context, arg ListInsightsCom
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInsightsRoleCountryCells = `-- name: ListInsightsRoleCountryCells :many
+SELECT category, country, open_count, open_count_prev
+FROM insights_role_country_stats
+WHERE country = '' OR country = ANY($1::text[])
+ORDER BY category, country
+`
+
+// Every cell of the all-countries column plus every cell of the named countries.
+func (q *Queries) ListInsightsRoleCountryCells(ctx context.Context, countries []string) ([]InsightsRoleCountryStat, error) {
+	rows, err := q.db.Query(ctx, listInsightsRoleCountryCells, countries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InsightsRoleCountryStat{}
+	for rows.Next() {
+		var i InsightsRoleCountryStat
+		if err := rows.Scan(
+			&i.Category,
+			&i.Country,
+			&i.OpenCount,
+			&i.OpenCountPrev,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInsightsRoleCountryColumns = `-- name: ListInsightsRoleCountryColumns :many
+SELECT country
+FROM insights_role_country_stats
+WHERE country <> ''
+GROUP BY country
+ORDER BY sum(open_count) DESC, country
+LIMIT $1::int
+`
+
+// The grid's columns: the countries holding the most open postings, largest first.
+// Summing a country's cells counts each posting once — it has exactly one category.
+func (q *Queries) ListInsightsRoleCountryColumns(ctx context.Context, lim int32) ([]string, error) {
+	rows, err := q.db.Query(ctx, listInsightsRoleCountryColumns, lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var country string
+		if err := rows.Scan(&country); err != nil {
+			return nil, err
+		}
+		items = append(items, country)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -812,12 +898,12 @@ INSERT INTO insights_company_growth (company_slug, open_count, open_count_prev)
 SELECT
     company_slug,
     count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-    count(*) FILTER (WHERE created_at <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+    count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
 FROM jobs
 WHERE company_slug <> '' AND duplicate_of IS NULL
 GROUP BY company_slug
 HAVING count(*) FILTER (WHERE closed_at IS NULL) > 0
-    OR count(*) FILTER (WHERE created_at <= $1 AND (closed_at IS NULL OR closed_at > $1)) > 0
+    OR count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1)) > 0
 `
 
 // One row per company with its current open-count and the open-count as of @prev_ts,
@@ -1013,6 +1099,59 @@ func (q *Queries) RebuildInsightsCompanyViews(ctx context.Context) (int64, error
 	return result.RowsAffected(), nil
 }
 
+const rebuildInsightsRoleCountryStatsByCountry = `-- name: RebuildInsightsRoleCountryStatsByCountry :execrows
+INSERT INTO insights_role_country_stats (category, country, open_count, open_count_prev)
+SELECT category, country, open_count, open_count_prev
+FROM (
+    SELECT
+        category,
+        country,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+    FROM jobs, unnest(countries) AS country
+    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
+    GROUP BY category, country
+) t
+WHERE open_count > 0 OR open_count_prev > 0
+`
+
+// One column per country: a posting contributes once to each country it lists, and a
+// posting with none reaches the ” bucket only.
+func (q *Queries) RebuildInsightsRoleCountryStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, rebuildInsightsRoleCountryStatsByCountry, prevTs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const rebuildInsightsRoleCountryStatsGlobal = `-- name: RebuildInsightsRoleCountryStatsGlobal :execrows
+INSERT INTO insights_role_country_stats (category, country, open_count, open_count_prev)
+SELECT category, '', open_count, open_count_prev
+FROM (
+    SELECT
+        category,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+    FROM jobs
+    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
+    GROUP BY category
+) t
+WHERE open_count > 0 OR open_count_prev > 0
+`
+
+// The all-countries column (” bucket): one count per posting, however many countries
+// it lists — grouping by category alone is what keeps a two-country posting from
+// counting twice here. Unlike insights_role_stats it needs no seniority and counts
+// only canonical, public postings (see migration 0214 for both).
+func (q *Queries) RebuildInsightsRoleCountryStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, rebuildInsightsRoleCountryStatsGlobal, prevTs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const rebuildInsightsRoleSkillSample = `-- name: RebuildInsightsRoleSkillSample :execrows
 INSERT INTO insights_role_skill_sample (category, seniority, sample_size)
 SELECT category, seniority, count(*)::int
@@ -1081,7 +1220,7 @@ FROM (
         seniority,
         country,
         count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE created_at <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
     FROM jobs, unnest(countries) AS country
     WHERE category <> '' AND seniority <> ''
     GROUP BY category, seniority, country
@@ -1106,7 +1245,7 @@ FROM (
         category,
         seniority,
         count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE created_at <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
     FROM jobs
     WHERE category <> '' AND seniority <> ''
     GROUP BY category, seniority
@@ -1226,7 +1365,7 @@ FROM (
         skill,
         category,
         count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE created_at <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
     FROM jobs, unnest(skills) AS skill
     WHERE category <> ''
     GROUP BY skill, category
@@ -1251,7 +1390,7 @@ FROM (
         skill,
         country,
         count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE created_at <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
     FROM jobs, unnest(skills) AS skill, unnest(countries) AS country
     GROUP BY skill, country
 ) t
@@ -1274,7 +1413,7 @@ FROM (
     SELECT
         skill,
         count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE created_at <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= $1 AND (closed_at IS NULL OR closed_at > $1))::int AS open_count_prev
     FROM jobs, unnest(skills) AS skill
     GROUP BY skill
 ) t

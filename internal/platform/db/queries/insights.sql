@@ -3,6 +3,15 @@
 -- endpoints serve from them. All rollups are a pure function of current `jobs`
 -- state; @prev_ts (the growth-window start) and @min_sample are supplied by the
 -- worker so the window and sample floor stay out of the SQL and are test-injectable.
+--
+-- Every prior-window count asks whether a posting EXISTED at @prev_ts, and a posting
+-- exists from LEAST(posted_at, created_at) — never from created_at alone. created_at
+-- is when freehire FOUND it, so on first-seen alone a board onboarded inside the
+-- window publishes its whole backlog as growth: measured 2026-10-30, 387,324 of the
+-- 876,973 open healthcare postings first seen in the last 30 days had been published
+-- before that window. LEAST skips a NULL posted_at (falling back to first-seen) and
+-- cannot let a posted_at re-stamped on repost push existence later than first-seen.
+-- A test in this package fails if a bare `created_at <=` prior-window count returns.
 
 -- ---------------------------------------------------------------------------
 -- Role demand
@@ -23,7 +32,7 @@ FROM (
         category,
         seniority,
         count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE created_at <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
     FROM jobs
     WHERE category <> '' AND seniority <> ''
     GROUP BY category, seniority
@@ -40,7 +49,7 @@ FROM (
         seniority,
         country,
         count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE created_at <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
     FROM jobs, unnest(countries) AS country
     WHERE category <> '' AND seniority <> ''
     GROUP BY category, seniority, country
@@ -65,6 +74,65 @@ ORDER BY
     (CASE WHEN sqlc.arg('sort')::text = 'growth' THEN (open_count - open_count_prev) ELSE open_count END) DESC,
     open_count DESC
 LIMIT sqlc.arg('lim')::int;
+
+-- ---------------------------------------------------------------------------
+-- Role × country grid
+-- ---------------------------------------------------------------------------
+
+-- name: DeleteAllInsightsRoleCountryStats :exec
+DELETE FROM insights_role_country_stats;
+
+-- name: RebuildInsightsRoleCountryStatsGlobal :execrows
+-- The all-countries column ('' bucket): one count per posting, however many countries
+-- it lists — grouping by category alone is what keeps a two-country posting from
+-- counting twice here. Unlike insights_role_stats it needs no seniority and counts
+-- only canonical, public postings (see migration 0214 for both).
+INSERT INTO insights_role_country_stats (category, country, open_count, open_count_prev)
+SELECT category, '', open_count, open_count_prev
+FROM (
+    SELECT
+        category,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
+    FROM jobs
+    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
+    GROUP BY category
+) t
+WHERE open_count > 0 OR open_count_prev > 0;
+
+-- name: RebuildInsightsRoleCountryStatsByCountry :execrows
+-- One column per country: a posting contributes once to each country it lists, and a
+-- posting with none reaches the '' bucket only.
+INSERT INTO insights_role_country_stats (category, country, open_count, open_count_prev)
+SELECT category, country, open_count, open_count_prev
+FROM (
+    SELECT
+        category,
+        country,
+        count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
+    FROM jobs, unnest(countries) AS country
+    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
+    GROUP BY category, country
+) t
+WHERE open_count > 0 OR open_count_prev > 0;
+
+-- name: ListInsightsRoleCountryColumns :many
+-- The grid's columns: the countries holding the most open postings, largest first.
+-- Summing a country's cells counts each posting once — it has exactly one category.
+SELECT country
+FROM insights_role_country_stats
+WHERE country <> ''
+GROUP BY country
+ORDER BY sum(open_count) DESC, country
+LIMIT sqlc.arg('lim')::int;
+
+-- name: ListInsightsRoleCountryCells :many
+-- Every cell of the all-countries column plus every cell of the named countries.
+SELECT category, country, open_count, open_count_prev
+FROM insights_role_country_stats
+WHERE country = '' OR country = ANY(sqlc.arg('countries')::text[])
+ORDER BY category, country;
 
 -- ---------------------------------------------------------------------------
 -- Per-role skill demand
@@ -151,7 +219,7 @@ FROM (
     SELECT
         skill,
         count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE created_at <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
     FROM jobs, unnest(skills) AS skill
     GROUP BY skill
 ) t
@@ -166,7 +234,7 @@ FROM (
         skill,
         category,
         count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE created_at <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
     FROM jobs, unnest(skills) AS skill
     WHERE category <> ''
     GROUP BY skill, category
@@ -182,7 +250,7 @@ FROM (
         skill,
         country,
         count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-        count(*) FILTER (WHERE created_at <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
+        count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
     FROM jobs, unnest(skills) AS skill, unnest(countries) AS country
     GROUP BY skill, country
 ) t
@@ -444,12 +512,12 @@ INSERT INTO insights_company_growth (company_slug, open_count, open_count_prev)
 SELECT
     company_slug,
     count(*) FILTER (WHERE closed_at IS NULL)::int AS open_count,
-    count(*) FILTER (WHERE created_at <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
+    count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts')))::int AS open_count_prev
 FROM jobs
 WHERE company_slug <> '' AND duplicate_of IS NULL
 GROUP BY company_slug
 HAVING count(*) FILTER (WHERE closed_at IS NULL) > 0
-    OR count(*) FILTER (WHERE created_at <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts'))) > 0;
+    OR count(*) FILTER (WHERE LEAST(posted_at, created_at) <= sqlc.arg('prev_ts') AND (closed_at IS NULL OR closed_at > sqlc.arg('prev_ts'))) > 0;
 
 -- name: ListInsightsCompanies :many
 -- The leaderboard read: companies ranked by growth (open_count - open_count_prev),

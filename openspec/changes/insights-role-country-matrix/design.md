@@ -75,7 +75,9 @@ deliberately skipped — so a cell approximates, not equals, the count its link 
 ### 3. The endpoint picks the columns
 
 `GET /api/v1/insights/role-countries?countries=N` (default 10, max 25). Column order is
-`SUM(open_count)` per country over the by-country rows. Returning the cells for those
+`SUM(open_count)` per country over the by-country rows. The 30-day window is not echoed in `meta`: it is
+a constant in `cmd/rollup-stats` that no package the handler imports can see, and
+the companies endpoint already fixes it in its field names. Returning the cells for those
 columns plus the all-countries bucket keeps the payload ~50 × 11 rows and lets the API
 — not each client — own "which countries matter". Raw `open_count` and
 `open_count_prev` go on the wire; the percentage and its floor are presentation and

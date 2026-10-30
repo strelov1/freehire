@@ -750,6 +750,13 @@ type InsightsFacetStat struct {
 	Count int64  `json:"count"`
 }
 
+type InsightsRoleCountryStat struct {
+	Category      string `json:"category"`
+	Country       string `json:"country"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+}
+
 type InsightsRoleSkillSample struct {
 	Category   string `json:"category"`
 	Seniority  string `json:"seniority"`
