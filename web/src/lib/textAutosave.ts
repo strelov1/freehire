@@ -58,12 +58,9 @@ export class TextAutosave<T> {
     const before = saved();
     this.#dirty = false;
     if (same(next, before)) return true;
-    const write = async () => {
-      await save(next);
-      // Typing that landed during the save is still unsent; only clear it if there was none.
-      if (same(read(), next)) this.#dirty = false;
-    };
-    void status.run(write, { undo: () => save(before) }, quiet).then((ok) => {
+    // Typing that lands during the save marks the card dirty again through `edited`, so
+    // it stays unsent without anything to clear here.
+    void status.run(() => save(next), { undo: () => save(before) }, quiet).then((ok) => {
       if (!ok) this.#dirty = true;
     });
     return true;
