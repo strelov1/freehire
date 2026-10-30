@@ -56,21 +56,22 @@ describe('BoardColumn', () => {
     expect(screen.getByText('70')).toBeTruthy();
   });
 
-  it('draws the next page when the column is scrolled near its end', async () => {
+  it('draws one more page when scrolled near its end, then stops', async () => {
     renderColumn();
     const el = zone() as HTMLElement;
+    // 100px a card: the column grows with what is drawn, so the next page reaches past
+    // the viewport and the check after it finds nothing more to do.
     Object.defineProperties(el, {
       clientHeight: { value: 600, configurable: true },
-      scrollHeight: { value: 3000, configurable: true },
+      scrollHeight: { get: () => drawn() * 100, configurable: true },
       scrollTop: { value: 2100, configurable: true },
     });
 
     await fireEvent.scroll(el);
 
-    // The stub's height does not grow with the cards, so every check after a page lands
-    // still reads "near the end" and the column fills; a real one stops once it reaches
-    // past the viewport.
-    await vi.waitFor(() => expect(drawn()).toBe(70));
+    await vi.waitFor(() => expect(drawn()).toBe(60));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(drawn()).toBe(60);
   });
 
   it('keeps the undrawn cards when a drop reorders the drawn ones', async () => {
