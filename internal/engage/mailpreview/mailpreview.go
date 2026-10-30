@@ -374,7 +374,7 @@ func referralRequestSample(baseURL string) (Sample, error) {
 		return referral.NewChannelPinger(c, "hi@freehire.me", nil, baseURL, previewLinks(baseURL), nil).
 			PingReferrer(context.Background(),
 				referral.Recipient{UserID: 1, Email: "someone@example.com"},
-				baseURL+"/my/referrals/inbox")
+				baseURL+"/my/referrals/incoming")
 	})
 }
 

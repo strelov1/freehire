@@ -1,6 +1,5 @@
 <script lang="ts">
   import { Briefcase, Building2, Globe, MapPin, Plus } from '@lucide/svelte';
-  import { tablist } from '#lib/actions/tablist.js';
   import { announce } from '#lib/announce.svelte.js';
   import { api, ApiError } from '#lib/api.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
@@ -22,12 +21,20 @@
   import EmployerQuestionsEditor from './EmployerQuestionsEditor.svelte';
   import TokenInput from './facets/TokenInput.svelte';
 
-  let { company, onProfileSaved }: { company: EmployerCompany; onProfileSaved: (updated: EmployerCompany) => void } =
-    $props();
+  // `tab` is the route: /my/employer is the profile, /my/employer/vacancies the vacancies.
+  // They were two tabs of one page; as routes each is its own item in the Employer
+  // workspace's sidebar.
+  let {
+    company,
+    tab,
+    onProfileSaved,
+  }: {
+    company: EmployerCompany;
+    tab: 'profile' | 'vacancies';
+    onProfileSaved: (updated: EmployerCompany) => void;
+  } = $props();
 
   const s = $derived(t(messages, locale()));
-
-  let activeTab = $state<'profile' | 'vacancies'>('profile');
 
   const selectClass =
     'h-9 rounded-lg border border-input bg-transparent px-3 text-sm transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-input/30';
@@ -78,7 +85,7 @@
   const vacanciesData = new AsyncData<Job[]>([]);
   let vacanciesLoaded = $state(false);
   $effect(() => {
-    if (activeTab === 'vacancies' && !vacanciesLoaded) {
+    if (tab === 'vacancies' && !vacanciesLoaded) {
       vacanciesLoaded = true;
       void vacanciesData.run(() => api.listEmployerVacancies());
     }
@@ -263,26 +270,7 @@
     <h1 class="text-2xl font-semibold tracking-tight">{format(s.dashboardTitle, { company: company.company_name })}</h1>
   </header>
 
-  <div class="flex gap-1 border-b border-border" role="tablist" use:tablist={activeTab}>
-    {#each [['profile', s.tabProfile], ['vacancies', s.tabVacancies]] as [id, label] (id)}
-      <button
-        type="button"
-        role="tab"
-        aria-selected={activeTab === id}
-        onclick={() => (activeTab = id as 'profile' | 'vacancies')}
-        class={cn(
-          '-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold',
-          activeTab === id
-            ? 'border-brand text-foreground'
-            : 'border-transparent text-muted-foreground hover:text-foreground',
-        )}
-      >
-        {label}
-      </button>
-    {/each}
-  </div>
-
-  {#if activeTab === 'profile'}
+  {#if tab === 'profile'}
     <form onsubmit={saveProfile} class="flex max-w-xl flex-col gap-4">
       <label class="flex flex-col gap-1">
         <span class="text-sm font-medium">{s.profileTaglineLabel}</span>

@@ -42,8 +42,6 @@ export const messages = defineMessages(
 
     // Dashboard shell.
     dashboardTitle: '{company}',
-    tabProfile: 'Profile',
-    tabVacancies: 'Vacancies',
 
     // Profile tab.
     profileSaved: 'Saved.',
@@ -146,8 +144,6 @@ export const messages = defineMessages(
       revokedBody: 'Администратор отозвал доступ к компании «{company}». Если это ошибка, обратитесь в поддержку.',
 
       dashboardTitle: '{company}',
-      tabProfile: 'Профиль',
-      tabVacancies: 'Вакансии',
 
       profileSaved: 'Сохранено.',
       profileSaveError: 'Не удалось сохранить. Попробуйте ещё раз.',

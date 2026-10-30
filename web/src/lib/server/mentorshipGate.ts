@@ -18,8 +18,8 @@ import type { User } from '#lib/types.js';
  *  abstraction with nobody on the other end.
  *
  *  ENDING THE BETA IS THREE EDITS, not one: this file, `inBeta` in `MentorBlock.svelte`,
- *  and `betaOnly` on `/my/mentorship` in `accountNav.ts`. They are deliberately separate —
- *  a door, an offer of the door, and a menu entry are three different things — but a
+ *  and `betaOnly` on the mentorship sections and the Mentor workspace in `accountNav.ts`.
+ *  They are deliberately separate — a door, an offer of the door, and a menu entry are three different things — but a
  *  comment that promised one edit would send somebody looking for a single switch that
  *  does not exist. Grep for `beta_tester` and for `betaOnly`; those three are all of it. */
 export function requireMentorshipAccess(user: User | null | undefined): void {

@@ -1,11 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
-  import { page } from '$app/state';
-  import { replaceState } from '$app/navigation';
   import { FileText } from '@lucide/svelte';
   import { api, ApiError } from '#lib/api.js';
-  import { tablist } from '#lib/actions/tablist.js';
   import { AsyncData } from '#lib/asyncData.svelte.js';
   import type {
     IncomingReferralRequest,
@@ -24,32 +21,19 @@
 
   const s = $derived(t(messages, locale()));
 
-  type Tab = 'requests' | 'offers' | 'incoming';
-  const tabs: Tab[] = ['requests', 'offers', 'incoming'];
-
-  // Open on the tab named in `?tab=` so deep-links land right — notably the
-  // "new referral request" ping, which links approved referrers to `?tab=incoming`.
-  function readTab(): Tab {
-    // Not `t` — that name is the catalog resolver imported above.
-    const requested = page.url.searchParams.get('tab');
-    return tabs.includes(requested as Tab) ? (requested as Tab) : 'requests';
-  }
-  let tab = $state<Tab>(readTab());
-  function selectTab(next: Tab) {
-    if (next === tab) return;
-    tab = next;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query write to the current pathname; there is no route to resolve
-    replaceState(`${page.url.pathname}?tab=${next}`, {});
-  }
+  // One pane per route: asking for a referral is Job search (/my/referrals), offering one
+  // and answering requests is the Referrer workspace (/offers, /incoming). They were three
+  // tabs of one page, which put two roles side by side.
+  let { tab }: { tab: 'requests' | 'offers' | 'incoming' } = $props();
 
   const requests = new AsyncData<SeekerReferralRequest[]>([]);
   const offers = new AsyncData<ReferralOffer[]>([]);
   const incoming = new AsyncData<IncomingReferralRequest[]>([]);
 
   onMount(() => {
-    void requests.run(() => api.listMyReferralRequests());
-    void offers.run(() => api.listMyReferralOffers());
-    void incoming.run(() => api.listIncomingReferrals());
+    if (tab === 'requests') void requests.run(() => api.listMyReferralRequests());
+    else if (tab === 'offers') void offers.run(() => api.listMyReferralOffers());
+    else void incoming.run(() => api.listIncomingReferrals());
   });
 
   // Status pill treatment shared by request rows and inbox cards.
@@ -148,33 +132,6 @@
     }
   }
 </script>
-
-<div class="flex items-center justify-between gap-4">
-  <!-- use:tablist is what makes role="tablist" true. Without it the group announces
-       itself as one widget and then cannot be stepped through: every tab stays in the
-       Tab sequence and the arrow keys do nothing — the promise without the behaviour. -->
-  <div class="flex gap-1 border-b border-border" role="tablist" use:tablist={tab}>
-    {#each tabs as id (id)}
-      <button
-        type="button"
-        role="tab"
-        aria-selected={tab === id}
-        onclick={() => selectTab(id)}
-        class={[
-          '-mb-px border-b-2 px-3 py-2.5 text-sm font-semibold',
-          tab === id ? 'border-brand text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
-        ]}
-      >
-        {s.tabs[id]}
-        {#if id === 'incoming' && incoming.value.length > 0}
-          <span class="ml-1.5 rounded-full bg-brand px-1.5 py-0.5 text-xs font-bold text-brand-foreground">
-            {incoming.value.length}
-          </span>
-        {/if}
-      </button>
-    {/each}
-  </div>
-</div>
 
 <!-- ── My requests ── -->
 {#if tab === 'requests'}

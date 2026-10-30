@@ -5,4 +5,4 @@
   let { data }: { data: PageData } = $props();
 </script>
 
-<MentorSessionSplit sessions={data.bookings} empty="Nobody has booked yet." />
+<MentorSessionSplit asMentor={true} sessions={data.bookings} empty="Nobody has booked yet." />

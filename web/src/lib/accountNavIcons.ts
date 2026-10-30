@@ -23,9 +23,16 @@ import {
   Radar,
   Building2,
   UsersRound,
+  Users,
+  CalendarDays,
+  IdCard,
+  HandHelping,
+  UserPlus,
+  Briefcase,
+  Search,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
-import type { AccountNavItem } from './accountNav';
+import type { AccountNavItem, WorkspaceId } from './accountNav';
 
 export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/profile': User,
@@ -39,6 +46,13 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   // Not the handshake beside it: a referral is a hand-off between two people, mentorship
   // is somebody teaching. The two sections sit together and must not read as one.
   '/my/mentorship': GraduationCap,
+  // The same glyphs the mentorship tab strip carried before its panes moved here.
+  '/my/mentorship/bookings': Users,
+  '/my/mentorship/schedule': CalendarDays,
+  '/my/mentorship/profile': IdCard,
+  '/my/referrals/offers': HandHelping,
+  '/my/referrals/incoming': UserPlus,
+  '/my/employer/vacancies': Briefcase,
   '/my/tracking': LayoutList,
   '/my/activity': Activity,
   '/my/inbox': Inbox,
@@ -49,4 +63,14 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
   '/my/employer': Building2,
   '/my/plan': Coins,
   '/my/account': Settings,
+};
+
+// One glyph per workspace, for the switcher and the sidebar's workspace heading. Each
+// reuses the icon of the section that best stands for the role, so the switcher and the
+// sidebar read as one thing.
+export const workspaceIcons: Record<WorkspaceId, LucideIcon> = {
+  seeker: Search,
+  mentor: GraduationCap,
+  referrer: Handshake,
+  employer: Building2,
 };

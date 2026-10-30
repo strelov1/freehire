@@ -1,18 +1,13 @@
 <script lang="ts">
   import { afterNavigate } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { toPath } from '#lib/pathname.js';
   import { CircleUser, SquarePlus, ShieldCheck, LogOut, LogIn } from '@lucide/svelte';
   import { isAuthenticated, currentUser, logout as doLogout } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { openedOverlay, closedOverlay } from '#lib/headerOverlay.js';
   import { cn } from '#lib/ui/index.js';
   import { menuNav } from '#lib/actions/menuNav.js';
-  import { visibleAccountNav } from '#lib/accountNav.js';
-  import { accountNavIcons } from '#lib/accountNavIcons.js';
-  import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { messages as shellMessages, navLabel } from '#lib/i18n/shell.js';
-  import { t } from '#lib/i18n/t.js';
+  import WorkspaceSwitcher from './WorkspaceSwitcher.svelte';
 
   // Desktop-only: the profile icon doubles as a second, independent dropdown
   // trigger scoped to the signed-in user's own account, split off HeaderMenu's
@@ -27,10 +22,6 @@
   const email = $derived(currentUser()?.email ?? '');
   const isModerator = $derived(currentUser()?.role === 'moderator');
 
-  // The account items are the sidebar's own list — same sections, order, icons and labels
-  // — read from accountNav rather than a curated copy, which is how the two drifted apart.
-  const shell = $derived(t(shellMessages, locale()));
-  const accountItems = $derived(visibleAccountNav(isModerator, currentUser()?.beta_tester ?? false));
   // Drives the trigger's tier badge — see header-navigation's "Paying-tier badge on
   // the desktop profile icon" requirement. 'free' shows nothing.
   const tier = $derived(currentUser()?.tier ?? 'free');
@@ -117,25 +108,9 @@
         role="menu"
         aria-label="Profile"
         {@attach menuNav({ onclose: closeSelf })}
-        class="profile-panel absolute right-0 top-full z-50 mt-2 flex w-56 flex-col rounded-md border border-border bg-background py-1 shadow-lg"
+        class="absolute right-0 top-full z-50 mt-2 flex w-64 flex-col rounded-md border border-border bg-background py-1 shadow-lg"
       >
-        <!-- Only the sections scroll: the actions below stay in view, so Log out never
-             needs a scroll to reach — the reason this menu was split off at all. -->
-        <div class="min-h-0 flex-1 overflow-y-auto">
-          {#each accountItems as item (item.href)}
-            {@const Icon = accountNavIcons[item.href]}
-            <a
-              href={resolve(toPath(item.href))}
-              role="menuitem"
-              onclick={() => (open = false)}
-              class={rowBase}
-              title={item.href === '/my/profile' ? email : undefined}
-            >
-              <Icon class="size-4 shrink-0" />
-              {navLabel(shell, item.href, item.label)}
-            </a>
-          {/each}
-        </div>
+        <WorkspaceSwitcher rowClass={rowBase} onselect={() => (open = false)} />
 
         <div class="my-1 h-px shrink-0 bg-border"></div>
         <a href={resolve('/submit')} role="menuitem" onclick={() => (open = false)} class={rowBase}>
@@ -167,10 +142,3 @@
   {/if}
 </div>
 
-<style>
-  /* The panel lists every account section, which can be taller than a short window;
-     it stays inside the viewport, and its section list scrolls instead. */
-  .profile-panel {
-    max-height: calc(100dvh - 5rem);
-  }
-</style>

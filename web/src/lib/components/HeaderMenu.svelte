@@ -15,18 +15,14 @@
   import GithubStars from './GithubStars.svelte';
   import NotificationBell from './NotificationBell.svelte';
   import HeaderProfileMenu from './HeaderProfileMenu.svelte';
+  import WorkspaceSwitcher from './WorkspaceSwitcher.svelte';
   import { ensureAccountSetupLoaded, setupOutstanding } from '#lib/accountSetup.svelte.js';
   import { ProviderIcon } from '#lib/ui/index.js';
   import { NAV } from '#lib/siteNav.js';
-  import { visibleAccountNav } from '#lib/accountNav.js';
-  import { accountNavIcons } from '#lib/accountNavIcons.js';
-  import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { messages as shellMessages, navLabel } from '#lib/i18n/shell.js';
-  import { t } from '#lib/i18n/t.js';
   import { DISCORD_URL } from '#lib/socialLinks.js';
 
   // This menu carries the site nav and the theme toggle on every viewport; on
-  // mobile it additionally carries the signed-in account items and the auth
+  // mobile it additionally carries the workspace switcher and the auth
   // action (Sign in/Log out) — on desktop those live in HeaderProfileMenu, the
   // bar's separate profile trigger, so Log out is reachable without scrolling
   // past the whole site nav first (openspec/changes/split-header-profile-menu).
@@ -55,13 +51,8 @@
   // The theme button only renders inside the open panel (client-only), so no
   // SSR mounted-guard is needed — read the store directly.
   const isDark = $derived(themeStore.isDark);
-  const email = $derived(currentUser()?.email ?? '');
   const isModerator = $derived(currentUser()?.role === 'moderator');
 
-  // The account items are the sidebar's own list — same sections, order, icons and labels
-  // — read from accountNav rather than a curated copy, which is how the two drifted apart.
-  const shell = $derived(t(shellMessages, locale()));
-  const accountItems = $derived(visibleAccountNav(isModerator, currentUser()?.beta_tester ?? false));
 
   // Static nav (always shown) and the signed-in account items (shown only when
   // authenticated). Moderation is gated on the moderator role at render time.
@@ -300,25 +291,13 @@
         <!-- Mobile-only: the account section moved to HeaderProfileMenu on desktop
              (openspec/changes/split-header-profile-menu), so this stays scoped to
              the drawer via sm:hidden rather than removed — the mobile drawer's
-             markup is otherwise unchanged. The account items are the sidebar's own
-             list (accountNav), the same one HeaderProfileMenu's desktop panel reads,
-             so neither can drift from the sidebar. "Submit a job" below is a create action, split off from the
+             markup is otherwise unchanged. The account entry is the same
+             WorkspaceSwitcher HeaderProfileMenu's desktop panel renders, so a phone and a
+             laptop offer the same way into each workspace. "Submit a job" below is a create action, split off from the
              "My submissions" reading item it used to sit next to. -->
         <div class="sm:hidden">
           {#if isAuthenticated()}
-            {#each accountItems as item (item.href)}
-              {@const Icon = accountNavIcons[item.href]}
-              <a
-                href={resolve(toPath(item.href))}
-                role="menuitem"
-                onclick={() => (open = false)}
-                class={linkClass(item.href)}
-                title={item.href === '/my/profile' ? email : undefined}
-              >
-                <Icon class="size-4 shrink-0" />
-                {navLabel(shell, item.href, item.label)}
-              </a>
-            {/each}
+            <WorkspaceSwitcher rowClass={rowBase} onselect={() => (open = false)} />
 
             <!-- Create/action items, split off from the account reading items above. -->
             <div class="my-1 h-px bg-border"></div>

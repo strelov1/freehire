@@ -8,7 +8,7 @@
 </script>
 
 <div class="flex flex-col gap-6">
-  <MentorSessionSplit sessions={data.sessions} empty="No sessions booked." />
+  <MentorSessionSplit asMentor={false} sessions={data.sessions} empty="No sessions booked." />
 
   {#if !data.profile}
     <!-- Only for somebody who is not a mentor. Once they are, this is the Profile tab and

@@ -4,14 +4,14 @@
   import { Button } from '#lib/ui/index.js';
 
   // CTA destinations wired to the real feature (no invite-code program exists):
-  //  - The headline "Ask for a referral" points at the referral hub (/my/referrals),
-  //    the account cabinet that gates behind auth and holds both sides of the flow.
+  //  - The headline "Ask for a referral" points at the member's own requests
+  //    (/my/referrals), behind auth.
   //  - The seeker card's concrete step is browsing companies: a request is only
   //    created from a company page, where an approved referrer surfaces ReferralBlock.
-  //  - Insiders offer to refer from that same cabinet's Offers tab.
+  //  - Insiders offer to refer from the Referrer workspace (/my/referrals/offers).
   const askCta = resolve('/my/referrals');
   const browseCta = resolve('/companies');
-  const referrerCta = `${resolve('/my/referrals')}?tab=offers`;
+  const referrerCta = resolve('/my/referrals/offers');
 
   // Illustrative referrer inbox for the hero — decorative, not live data. Mirrors
   // the real incoming-request card (ReferralsView) so the preview shows the actual

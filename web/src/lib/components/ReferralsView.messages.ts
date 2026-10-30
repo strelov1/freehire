@@ -8,9 +8,9 @@ export const messages = defineMessages(
     headTitle: 'Referrals — freehire',
     title: 'Referrals',
     tabs: {
-      requests: 'My requests',
+      requests: 'Referral requests',
       offers: 'Offers to refer',
-      incoming: 'Incoming',
+      incoming: 'Incoming requests',
     },
     requests: {
       empty: "You haven't requested any referrals yet.",
@@ -82,9 +82,9 @@ export const messages = defineMessages(
       headTitle: 'Рефералы — freehire',
       title: 'Рефералы',
       tabs: {
-        requests: 'Мои запросы',
+        requests: 'Запросы рекомендаций',
         offers: 'Готов рекомендовать',
-        incoming: 'Входящие',
+        incoming: 'Входящие запросы',
       },
       requests: {
         empty: 'Вы ещё не запрашивали рекомендации.',

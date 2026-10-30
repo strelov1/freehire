@@ -4,11 +4,14 @@
   import { formatInstantIn } from '#lib/mentorship.js';
   import type { MentorSession } from '#lib/types.js';
 
+  // `asMentor` picks the session's address: the mentor's lives under Booked with you, so
+  // opening one keeps them in the Mentor workspace.
   let {
     sessions,
     timezone,
     empty,
-  }: { sessions: MentorSession[]; timezone: string; empty: string } = $props();
+    asMentor,
+  }: { sessions: MentorSession[]; timezone: string; empty: string; asMentor: boolean } = $props();
 </script>
 
 {#if sessions.length === 0}
@@ -19,7 +22,9 @@
       {@const when = formatInstantIn(session.starts_at, timezone)}
       <li>
         <a
-          href={resolve('/my/mentorship/sessions/[id]', { id: session.id })}
+          href={asMentor
+            ? resolve('/my/mentorship/bookings/[id]', { id: session.id })
+            : resolve('/my/mentorship/sessions/[id]', { id: session.id })}
           class="focus-visible:ring-ring block rounded-lg focus-visible:ring-2 focus-visible:outline-none"
         >
           <Card class="p-4">

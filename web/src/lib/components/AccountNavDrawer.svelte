@@ -1,31 +1,22 @@
 <script lang="ts">
   import { MediaQuery } from 'svelte/reactivity';
-  import { page } from '$app/state';
-  import { resolve } from '$app/paths';
-  import { toPath } from '#lib/pathname.js';
   import { X } from '@lucide/svelte';
-  import { currentUser } from '#lib/auth.svelte.js';
-  import { visibleAccountNav, isSectionActive } from '#lib/accountNav.js';
-  import { accountNavIcons } from '#lib/accountNavIcons.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { messages, navLabel } from '#lib/i18n/shell.js';
+  import { messages } from '#lib/i18n/shell.js';
   import { t } from '#lib/i18n/t.js';
-  import { cn, lockScroll, unlockScroll } from '#lib/ui/index.js';
+  import { lockScroll, unlockScroll } from '#lib/ui/index.js';
+  import AccountNavGroups from './AccountNavGroups.svelte';
   import { focusTrap } from '#lib/actions/focusTrap.js';
 
   // The account-section navigation as a labelled slide-in drawer, for widths below lg.
   // The host renders its own trigger (a burger, a section switcher) and binds `open`.
-  // Same items, gating, order, and active rule as the sidebar and the icon rail.
+  // Same workspace, groups, gating and active rule as the sidebar and the icon rail.
 
   let { open = $bindable(false) }: { open?: boolean } = $props();
   const uid = $props.id();
   const titleId = `${uid}-drawer-title`;
 
   const s = $derived(t(messages, locale()));
-  const path = $derived(page.url.pathname);
-  const navItems = $derived(
-    visibleAccountNav(currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false),
-  );
 
   const close = () => (open = false);
   const onKey = (e: KeyboardEvent) => {
@@ -88,24 +79,7 @@
          trackpad still counts. A mouse-only narrow window keeps the denser list, since
          twenty rows at 44px scroll on most screens. -->
     <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
-      {#each navItems as item (item.href)}
-        {@const active = isSectionActive(path, item.href)}
-        {@const Icon = accountNavIcons[item.href]}
-        <a
-          href={resolve(toPath(item.href))}
-          aria-current={active ? 'page' : undefined}
-          onclick={close}
-          class={cn(
-            'flex items-center gap-3 rounded-md px-3 py-2 transition-colors any-pointer-coarse:min-h-11',
-            active
-              ? 'bg-secondary text-secondary-foreground'
-              : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-          )}
-        >
-          <Icon class="size-4 shrink-0" />
-          <span class="text-sm">{navLabel(s, item.href, item.label)}</span>
-        </a>
-      {/each}
+      <AccountNavGroups variant="drawer" onnavigate={close} />
     </nav>
   </div>
 {/if}

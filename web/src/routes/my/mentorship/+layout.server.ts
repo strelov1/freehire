@@ -2,9 +2,9 @@ import { requireMentorshipAccess } from '#lib/server/mentorshipGate.js';
 import { serverApi } from '#lib/server/api.js';
 import type { LayoutServerLoad } from './$types';
 
-// The profile is read ONCE for the whole section, here, because the tab strip's existence
-// depends on it — a seeker has no mentor tabs. Every pane reaches it through `parent()`
-// rather than fetching it again.
+// The profile is read ONCE for the whole section, here: several panes need it (the
+// mentor-only ones refuse an account without one). Every pane reaches it through
+// `parent()` rather than fetching it again.
 //
 // Authenticated, so the session cookie is forwarded explicitly: with an absolute API base
 // URL `event.fetch` does not carry it (see #lib/server/api). The `/my` layout above this
@@ -14,9 +14,9 @@ import type { LayoutServerLoad } from './$types';
 // which is why `myMentorProfile` turns the 404 into null rather than leaving every caller
 // to catch it.
 export const load: LayoutServerLoad = async ({ fetch, request, parent }) => {
-  // The beta gate for the whole section, here rather than on each pane: a tab hidden
-  // from the strip is still a reachable address, which is how two of them answered 500
-  // to a visitor who simply typed one.
+  // The beta gate for the whole section, here rather than on each pane: a pane hidden
+  // from the navigation is still a reachable address, which is how two of them answered
+  // 500 to a visitor who simply typed one.
   const { user } = await parent();
   requireMentorshipAccess(user);
 

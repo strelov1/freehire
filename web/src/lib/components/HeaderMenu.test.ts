@@ -31,6 +31,14 @@ describe('HeaderMenu desktop/mobile split', () => {
     expect(bar).not.toContain('aria-label="Sign in"');
   });
 
+  // The same switcher the desktop profile menu renders, so a phone and a laptop offer
+  // the same way into each workspace.
+  it('renders the workspace switcher, not the section list, for a signed-in phone user', () => {
+    const mobile = SOURCE.slice(SOURCE.indexOf('<div class="sm:hidden">'));
+    expect(mobile.indexOf('<WorkspaceSwitcher')).toBeLessThan(mobile.indexOf("resolve('/submit')"));
+    expect(SOURCE).not.toContain('visibleAccountNav');
+  });
+
   it('scopes the account-items block to mobile with sm:hidden', () => {
     expect(SOURCE).toMatch(/<div class="sm:hidden">(\s*<!--[\s\S]*?-->)?\s*\{#if isAuthenticated\(\)\}/);
   });

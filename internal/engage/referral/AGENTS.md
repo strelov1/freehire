@@ -51,6 +51,6 @@ Wiring is in handler.go:484-513: the SES client (reusing the notify worker's AWS
 `NotifyEmailFrom`) and the Telegram bot are both optional — nil disables that channel, and
 a referrer with no enabled channel still sees requests in-cabinet. Proof CVs go through
 `cfg.Blob` (the S3_* blob store); `CabinetURL` is `FrontendOrigin` +
-`/my/referrals?tab=incoming` (handler.go:510). `Config.DailyRequestCap` is a rolling-24h
+`/my/referrals/incoming` (handler.go:942; the old `?tab=incoming` address, still in sent emails, redirects there). `Config.DailyRequestCap` is a rolling-24h
 per-seeker request limit (0 → `DefaultDailyRequestCap` = 10, referral.go:46-48); requests
 are free but spam-resistant. `Config.Now` is the injectable clock for tests.

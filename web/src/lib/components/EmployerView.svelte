@@ -10,6 +10,10 @@
   import States from './States.svelte';
   import EmployerDashboard from './EmployerDashboard.svelte';
 
+  // Which pane of the claimed company's dashboard this route shows; an account that has
+  // not claimed a company sees the claim flow on either.
+  let { section }: { section: 'profile' | 'vacancies' } = $props();
+
   const s = $derived(t(messages, locale()));
 
   // The load, distinguishing "no account" (company === null) from "still loading"
@@ -182,5 +186,5 @@
     </div>
   </div>
 {:else if company}
-  <EmployerDashboard {company} onProfileSaved={(updated) => (company = updated)} />
+  <EmployerDashboard {company} tab={section} onProfileSaved={(updated) => (company = updated)} />
 {/if}

@@ -3,18 +3,16 @@
   import { onMount } from 'svelte';
   import { browser } from '$app/env';
   import { page } from '$app/state';
-  import { resolve } from '$app/paths';
-  import { toPath } from '#lib/pathname.js';
   import { PanelLeftClose, PanelLeft, ChevronDown } from '@lucide/svelte';
-  import { currentUser } from '#lib/auth.svelte.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { messages, navLabel } from '#lib/i18n/shell.js';
   import { t } from '#lib/i18n/t.js';
   import { cn } from '#lib/ui/index.js';
-  import { visibleAccountNav, isSectionActive } from '#lib/accountNav.js';
+  import { accountNav, activeSectionHref, isSectionActive, workspaceFor } from '#lib/accountNav.js';
   import { accountNavIcons } from '#lib/accountNavIcons.js';
   import TalentNetworkInvite from '#lib/components/TalentNetworkInvite.svelte';
   import AccountNavDrawer from '#lib/components/AccountNavDrawer.svelte';
+  import AccountNavGroups from '#lib/components/AccountNavGroups.svelte';
   import { dockOffset } from '#lib/assistantDock.svelte.js';
 
   // The account shell: one source of truth for the `my/*` chrome — the width
@@ -59,27 +57,11 @@
     }
   });
 
-  // Sections marked moderator- or beta-only are hidden from the nav for everyone
-  // else; the relevant server surfaces enforce the real gate, this just declutters
-  // the UI. No section carries such a mark today — the Agent lost its beta gate and
-  // is open to every signed-in user.
-  const navItems = $derived(
-    visibleAccountNav(currentUser()?.role === 'moderator', currentUser()?.beta_tester ?? false),
-  );
-
   // Below lg the sections live in a drawer; the trigger names the section you are in,
   // so the page keeps saying where you are without a strip that scrolls off-screen.
   let drawerOpen = $state(false);
-  const activeItem = $derived(navItems.find((i) => isSectionActive(path, i.href)));
-
-  // Sidebar item treatment; active matches the tracking tabs.
-  const itemClass = (active: boolean) =>
-    cn(
-      'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
-      active
-        ? 'bg-secondary font-medium text-secondary-foreground'
-        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-    );
+  const activeHref = $derived(activeSectionHref(path, accountNav));
+  const activeItem = $derived(accountNav.find((i) => i.href === activeHref));
 </script>
 
 <svelte:head>
@@ -98,25 +80,6 @@
     <!-- No signed-out branch here: +layout.server.ts redirects an anonymous visitor to
          /signin before this renders, so the shell only ever draws for a session. -->
 
-    <!-- When `iconOnly`, the label is dropped and the icon centres (collapsed rail). -->
-    {#snippet navLinks(iconOnly: boolean)}
-      {#each navItems as item (item.href)}
-        {@const active = isSectionActive(path, item.href)}
-        {@const Icon = accountNavIcons[item.href]}
-        {@const label = navLabel(s, item.href, item.label)}
-        <a
-          href={resolve(toPath(item.href))}
-          aria-current={active ? 'page' : undefined}
-          title={iconOnly ? label : undefined}
-          class={cn(itemClass(active), iconOnly && 'justify-center')}
-        >
-          <Icon class="size-4 shrink-0" />
-          {#if !iconOnly}
-            {label}
-          {/if}
-        </a>
-      {/each}
-    {/snippet}
 
     <!-- Below lg: a section switcher naming where you are, opening the drawer. A chevron,
          not a burger: the site header already carries one, and two identical icons a row
@@ -178,7 +141,7 @@
             {/if}
           </button>
           <nav aria-label={s.shell.accountSections} class="flex flex-col gap-1">
-            {@render navLinks(collapsed)}
+            <AccountNavGroups variant="sidebar" iconOnly={collapsed} />
           </nav>
         </div>
       </div>
@@ -189,7 +152,7 @@
              phone so it does not push that heading down. All this layer decides is the
              one page it must not appear on: a banner pointing at the page you are reading
              is noise. Dismissal is the card's own business. -->
-        {#if !isSectionActive(path, '/my/talent-network')}
+        {#if workspaceFor(path) === 'seeker' && !isSectionActive(path, '/my/talent-network')}
           <TalentNetworkInvite />
         {/if}
 
