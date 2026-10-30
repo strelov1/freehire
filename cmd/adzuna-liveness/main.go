@@ -31,6 +31,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -39,6 +40,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/job/liveness"
@@ -162,9 +164,10 @@ func run() int {
 
 // run probes one sample of the route's source and returns how many verdicts it could not write.
 func (r route) run(ctx context.Context, queries *db.Queries, client *http.Client, maxRows int32) int {
+	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-unseenFor), Valid: true}
 	candidates, err := queries.SelectScraplingLivenessCandidates(ctx, db.SelectScraplingLivenessCandidatesParams{
 		Source:  r.source,
-		Cutoff:  pgtype.Timestamptz{Time: time.Now().Add(-unseenFor), Valid: true},
+		Cutoff:  cutoff,
 		MaxRows: maxRows,
 	})
 	if err != nil {
@@ -185,7 +188,7 @@ func (r route) run(ctx context.Context, queries *db.Queries, client *http.Client
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			st.judge(ctx, queries, client, r, c)
+			st.judge(ctx, queries, client, r, cutoff, c)
 		}()
 	}
 	wg.Wait()
@@ -200,7 +203,10 @@ type stats struct {
 	probed, closed, live, unanswered, failed atomic.Int64
 }
 
-func (s *stats) judge(ctx context.Context, queries *db.Queries, client *http.Client, r route, c db.SelectScraplingLivenessCandidatesRow) {
+// judge probes one candidate and writes the verdict. cutoff is the staleness bound the
+// candidate was selected by: the close repeats it, so a posting the crawl listed again while
+// the probe was in flight is left alone.
+func (s *stats) judge(ctx context.Context, queries *db.Queries, client *http.Client, r route, cutoff pgtype.Timestamptz, c db.SelectScraplingLivenessCandidatesRow) {
 	url, ok := r.pageURL(c.ExternalID, c.URL)
 	if !ok {
 		s.unanswered.Add(1)
@@ -211,7 +217,15 @@ func (s *stats) judge(ctx context.Context, queries *db.Queries, client *http.Cli
 	verdict, tries, err := probe(ctx, client, url, r.attempts)
 	switch verdict {
 	case liveness.Expired:
-		res, err := queries.MarkLivenessExpired(ctx, db.MarkLivenessExpiredParams{ID: c.ID, Threshold: closeThreshold})
+		res, err := queries.MarkLivenessExpired(ctx, db.MarkLivenessExpiredParams{
+			ID: c.ID, Threshold: closeThreshold, SeenBefore: cutoff,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The crawl listed it again after the select: that read is newer than the probe's.
+			s.live.Add(1)
+			log.Printf("%s-liveness: %s re-listed by the crawl while probed, left open", r.source, c.PublicSlug)
+			return
+		}
 		if err != nil {
 			s.failed.Add(1)
 			log.Printf("%s-liveness: close %s: %v", r.source, c.PublicSlug, err)

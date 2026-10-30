@@ -5443,6 +5443,13 @@ type Querier interface {
 	// and the UPDATE's row lock, in which case the enqueue happens and the close does not.
 	// That is the harmless direction: whoever closed it queued the same removal, and the
 	// queue is ON CONFLICT DO NOTHING on job_id.
+	//
+	// seen_before, when set, is the staleness cutoff the caller selected its candidates by. A
+	// probe answers minutes after that read, and a crawl that listed the posting again in between
+	// (UpsertJob/RefreshUnchangedJob stamp last_seen_at = now()) has just proved it live; the
+	// verdict was reached on a stale read and must write nothing — no strike, no close, no
+	// queued removal — so the statement matches no row (pgx.ErrNoRows). NULL keeps the old
+	// behaviour for a caller whose candidates no crawl re-lists.
 	MarkLivenessExpired(ctx context.Context, arg MarkLivenessExpiredParams) (MarkLivenessExpiredRow, error)
 	// Stamp notified_at on the jobs that were just delivered for a subscription, so
 	// they leave the pending queue and are never sent again.

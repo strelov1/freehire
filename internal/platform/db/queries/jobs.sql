@@ -2387,11 +2387,19 @@ LIMIT sqlc.arg(max_rows);
 -- and the UPDATE's row lock, in which case the enqueue happens and the close does not.
 -- That is the harmless direction: whoever closed it queued the same removal, and the
 -- queue is ON CONFLICT DO NOTHING on job_id.
+--
+-- seen_before, when set, is the staleness cutoff the caller selected its candidates by. A
+-- probe answers minutes after that read, and a crawl that listed the posting again in between
+-- (UpsertJob/RefreshUnchangedJob stamp last_seen_at = now()) has just proved it live; the
+-- verdict was reached on a stale read and must write nothing — no strike, no close, no
+-- queued removal — so the statement matches no row (pgx.ErrNoRows). NULL keeps the old
+-- behaviour for a caller whose candidates no crawl re-lists.
 WITH queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT j.id FROM jobs j
     WHERE j.id = sqlc.arg(id)
       AND j.closed_at IS NULL
+      AND (sqlc.narg(seen_before)::timestamptz IS NULL OR j.last_seen_at < sqlc.narg(seen_before))
       AND j.liveness_strikes + 1 >= sqlc.arg(threshold)
     ON CONFLICT (job_id) DO NOTHING
 )
@@ -2410,6 +2418,7 @@ SET liveness_strikes = jobs.liveness_strikes + 1,
     END,
     updated_at = now()
 WHERE jobs.id = sqlc.arg(id)
+  AND (sqlc.narg(seen_before)::timestamptz IS NULL OR jobs.last_seen_at < sqlc.narg(seen_before))
 RETURNING jobs.id, jobs.liveness_strikes, jobs.closed_at;
 
 -- name: ResetLivenessStrikes :exec

@@ -8,8 +8,12 @@ package db
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // orphanParams builds an UpsertJob for a non-board source (no ingest sweep ever
@@ -246,5 +250,65 @@ func TestSelectOrphanLivenessCandidatesSkipsPostingsWithoutURL(t *testing.T) {
 	}
 	if len(cands) != 0 {
 		t.Fatalf("a posting with no url must not be probed, got %d candidates", len(cands))
+	}
+}
+
+// A probe runs minutes after its candidates were read. A crawl that lists the posting again
+// in between has just proved it live, so an expired verdict reached from the stale read must
+// not close it: the close is bounded by the same staleness cutoff the select used.
+func TestLivenessExpiredSkipsAPostingTheCrawlListedSinceTheSelect(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	p := ingestParams("software-engineer:4465590", "Engineer")
+	p.Source = "wellfound"
+	job, err := ingestUpsert(ctx, q, p)
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET last_seen_at = now() - interval '5 days' WHERE id = $1`, job.ID); err != nil {
+		t.Fatalf("age last_seen_at: %v", err)
+	}
+	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-72 * time.Hour), Valid: true}
+	candidates, err := q.SelectScraplingLivenessCandidates(ctx, SelectScraplingLivenessCandidatesParams{
+		Source: "wellfound", Cutoff: cutoff, MaxRows: 10,
+	})
+	if err != nil || len(candidates) != 1 {
+		t.Fatalf("select candidates = %v, %v; want the one stale posting", candidates, err)
+	}
+
+	// The crawl lists it again while the probe is in flight.
+	if _, err := ingestUpsert(ctx, q, p); err != nil {
+		t.Fatalf("re-list: %v", err)
+	}
+
+	_, err = q.MarkLivenessExpired(ctx, MarkLivenessExpiredParams{ID: job.ID, Threshold: 1, SeenBefore: cutoff})
+	if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("MarkLivenessExpired on a re-listed posting: err = %v, want no row written", err)
+	}
+	got, err := q.GetJob(ctx, job.ID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
+	if got.ClosedAt.Valid || got.LivenessStrikes != 0 {
+		t.Fatalf("re-listed posting: closed_at=%v strikes=%d, want open with no strike", got.ClosedAt, got.LivenessStrikes)
+	}
+	var queued int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM search_delete_outbox WHERE job_id = $1`, job.ID).Scan(&queued); err != nil {
+		t.Fatalf("count delete outbox: %v", err)
+	}
+	if queued != 0 {
+		t.Fatalf("re-listed posting queued for search deletion %d times, want 0", queued)
+	}
+
+	// Still stale: the same verdict closes it.
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET last_seen_at = now() - interval '5 days' WHERE id = $1`, job.ID); err != nil {
+		t.Fatalf("age last_seen_at: %v", err)
+	}
+	res, err := q.MarkLivenessExpired(ctx, MarkLivenessExpiredParams{ID: job.ID, Threshold: 1, SeenBefore: cutoff})
+	if err != nil || !res.ClosedAt.Valid {
+		t.Fatalf("MarkLivenessExpired on a stale posting = %+v, %v; want closed", res, err)
 	}
 }
