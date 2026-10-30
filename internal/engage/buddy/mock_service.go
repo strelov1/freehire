@@ -3,7 +3,11 @@ package buddy
 import (
 	"context"
 	"fmt"
+	"log"
+	"slices"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/engage/slots"
 )
@@ -35,6 +39,15 @@ type MockRepository interface {
 	// MockBusy is the member's occupied time in a window: every active participant row of
 	// theirs, as host or as guest.
 	MockBusy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error)
+	// FutureGuestMocks counts the member's confirmed, not yet started mocks as guest.
+	FutureGuestMocks(ctx context.Context, guestID int64) (int, error)
+	// CreateMock writes the mock and both participant rows in one statement. It returns
+	// ErrSlotUnavailable when either person is already in an overlapping mock, or when the
+	// pair can no longer meet (one left, or a block landed since the service's read).
+	CreateMock(ctx context.Context, in NewMock) (Mock, error)
+	// MockByID reads one mock with both handles, the host's current zone and link and
+	// both addresses. Authorisation is the caller's.
+	MockByID(ctx context.Context, id uuid.UUID) (Mock, bool, error)
 }
 
 // MockService is the mock-interview use cases between buddy members: settings,
@@ -170,4 +183,82 @@ func (s *MockService) hostSlots(ctx context.Context, hostID int64, settings Mock
 		return slots.SlotResult{}, err
 	}
 	return mockSlots(rules, zone, busy, from, to, s.now(), viewerZone)
+}
+
+// BookInput is a request to take one of another member's slots.
+type BookInput struct {
+	HostHandle  string
+	GuestUserID int64
+	// StartsAt is the slot's start as the guest saw it. The end is MockDuration later and
+	// is never taken from the client.
+	StartsAt time.Time
+	Topic    string
+	// GuestZone is the zone the guest booked in; their notices are rendered in it. An
+	// unusable name is stored as UTC, which the notices then state.
+	GuestZone string
+}
+
+// Book takes one of another member's slots. The slot is re-derived from the host's live
+// schedule and busy time rather than trusted from the request; the EXCLUDE on
+// buddy_mock_participants, not this re-check, is what wins a race, and losing one is the
+// same ErrSlotUnavailable a stale page gets. The booked notice is best-effort.
+func (s *MockService) Book(ctx context.Context, in BookInput) (Mock, error) {
+	host, err := s.members.visibleMember(ctx, in.GuestUserID, in.HostHandle)
+	if err != nil {
+		return Mock{}, err
+	}
+	settings, ok, err := s.repo.MockSettings(ctx, host.UserID)
+	if err != nil {
+		return Mock{}, err
+	}
+	if !ok || settings.Paused {
+		return Mock{}, ErrSlotUnavailable
+	}
+	if !slices.Contains(settings.Topics, in.Topic) {
+		return Mock{}, ErrInvalidTopic
+	}
+	held, err := s.repo.FutureGuestMocks(ctx, in.GuestUserID)
+	if err != nil {
+		return Mock{}, err
+	}
+	// A count followed by an insert: concurrent bookings by one guest can slip one past the
+	// bound, as with the invitation cap. The bound is a brake, the EXCLUDE is what holds.
+	if held >= MaxGuestMocks {
+		return Mock{}, ErrGuestMockLimit
+	}
+	offerable, err := s.offerable(ctx, host.UserID, settings, in.StartsAt)
+	if err != nil {
+		return Mock{}, err
+	}
+	if !offerable {
+		return Mock{}, ErrSlotUnavailable
+	}
+	guestZone := "UTC"
+	if _, ok := ianaZone(in.GuestZone); ok {
+		guestZone = in.GuestZone
+	}
+	mock, err := s.repo.CreateMock(ctx, NewMock{
+		HostUserID: host.UserID, GuestUserID: in.GuestUserID,
+		StartsAt: in.StartsAt, EndsAt: in.StartsAt.Add(MockDuration),
+		Topic: in.Topic, GuestTimezone: guestZone,
+	})
+	if err != nil {
+		return Mock{}, err
+	}
+	if s.notifier != nil {
+		if err := s.notifier.MockBooked(ctx, mock); err != nil {
+			log.Printf("buddy: booked notice for mock %s: %v", mock.ID, err)
+		}
+	}
+	return mock, nil
+}
+
+// offerable re-derives the host's slots a day either side of start and reports whether
+// that exact instant is one of them.
+func (s *MockService) offerable(ctx context.Context, hostID int64, settings MockSettings, start time.Time) (bool, error) {
+	res, err := s.hostSlots(ctx, hostID, settings, start.AddDate(0, 0, -1), start.AddDate(0, 0, 1), "UTC")
+	if err != nil {
+		return false, err
+	}
+	return slices.ContainsFunc(res.Slots, func(iv slots.Interval) bool { return iv.Start.Equal(start) }), nil
 }

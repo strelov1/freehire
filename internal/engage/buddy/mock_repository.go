@@ -5,11 +5,13 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
 var _ MockRepository = (*QueriesRepository)(nil)
@@ -145,3 +147,75 @@ func (r *QueriesRepository) MockBusy(ctx context.Context, userID int64, from, to
 }
 
 func pgInstant(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
+
+// constraintMockNoOverlap is the EXCLUDE that keeps one person out of two overlapping mocks
+// in either role. Matched by name, so another exclusion could never be answered with this
+// one's meaning.
+const constraintMockNoOverlap = "buddy_mock_participants_no_overlap"
+
+func (r *QueriesRepository) FutureGuestMocks(ctx context.Context, guestID int64) (int, error) {
+	n, err := r.q.CountFutureBuddyMocksAsGuest(ctx, guestID)
+	return int(n), err
+}
+
+// createMockAttempts bounds the deadlock retry in CreateMock.
+const createMockAttempts = 3
+
+func (r *QueriesRepository) CreateMock(ctx context.Context, in NewMock) (Mock, error) {
+	p := db.CreateBuddyMockParams{
+		HostUserID: in.HostUserID, GuestUserID: in.GuestUserID,
+		StartsAt: pgInstant(in.StartsAt), EndsAt: pgInstant(in.EndsAt),
+		Topic: in.Topic, GuestTimezone: in.GuestTimezone,
+	}
+	// Two bookings racing for one person's time each insert a participant row and then
+	// wait on the other's uncommitted one, and Postgres breaks that cycle by aborting one
+	// with 40P01 instead of answering 23P01. The statement wrote nothing, so it is run
+	// again: the retry waits for the survivor's commit and then meets the EXCLUDE plainly.
+	var id pgtype.UUID
+	var err error
+	for range createMockAttempts {
+		if id, err = r.q.CreateBuddyMock(ctx, p); !pgerr.IsDeadlock(err) {
+			break
+		}
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Mock{}, ErrSlotUnavailable
+	}
+	// SQLSTATE 23P01, not a unique violation's 23505 — the lost race, answered as a stale page.
+	if name, ok := pgerr.ExclusionViolationConstraint(err); ok && name == constraintMockNoOverlap {
+		return Mock{}, ErrSlotUnavailable
+	}
+	if err != nil {
+		return Mock{}, err
+	}
+	mockID := uuid.UUID(id.Bytes)
+	// The insert returns the id only, and the booked notice needs both handles, zones and
+	// addresses. A failed re-read falls back to what was written: the mock is committed,
+	// and losing its notice beats failing a booking that happened.
+	if full, found, err := r.MockByID(ctx, mockID); err == nil && found {
+		return full, nil
+	}
+	return Mock{
+		ID: mockID, HostUserID: in.HostUserID, GuestUserID: in.GuestUserID,
+		StartsAt: in.StartsAt, EndsAt: in.EndsAt, Topic: in.Topic, Status: MockConfirmed,
+		GuestTimezone: in.GuestTimezone,
+	}, nil
+}
+
+func (r *QueriesRepository) MockByID(ctx context.Context, id uuid.UUID) (Mock, bool, error) {
+	row, err := r.q.GetBuddyMock(ctx, pgtype.UUID{Bytes: id, Valid: true})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Mock{}, false, nil
+	}
+	if err != nil {
+		return Mock{}, false, err
+	}
+	return Mock{
+		ID: uuid.UUID(row.ID.Bytes), HostUserID: row.HostUserID, GuestUserID: row.GuestUserID,
+		HostHandle: row.HostHandle, GuestHandle: row.GuestHandle,
+		StartsAt: row.StartsAt.Time, EndsAt: row.EndsAt.Time,
+		Topic: row.Topic, Status: row.Status, CancelReason: row.CancelReason.String,
+		HostTimezone: row.HostTimezone, GuestTimezone: row.GuestTimezone, MeetingURL: row.MeetingUrl,
+		HostEmail: row.HostEmail, GuestEmail: row.GuestEmail,
+	}, true, nil
+}

@@ -25,6 +25,9 @@ const (
 	MockHorizon = 30 * 24 * time.Hour
 	// maxMeetingURLRunes bounds a meeting link, matching buddy_mock_settings_url_check.
 	maxMeetingURLRunes = 500
+	// MaxGuestMocks bounds the future confirmed mocks one member may hold as guest: a spam
+	// brake on one member reserving everybody's evenings, not a quota.
+	MaxGuestMocks = 3
 )
 
 // mockSession is that shape as the engine takes it. No buffers: mocks may run back to back.
@@ -64,6 +67,31 @@ const (
 // ErrInvalidMockSettings → 422: a zone that is not an IANA place, a link that is not
 // https://, or no known topic.
 var ErrInvalidMockSettings = errors.New("buddy: invalid mock settings")
+
+// The booking sentinels, each with the status the handler maps it to.
+var (
+	// ErrInvalidTopic → 422. The host does not offer the topic asked for.
+	ErrInvalidTopic = errors.New("buddy: the host does not offer that topic")
+	// ErrSlotUnavailable → 409. THE one answer for every ordinary way a booking fails to
+	// land — the hour was taken, the schedule changed, the host paused, the notice passed,
+	// either person is already in an overlapping mock, or another request won the race —
+	// for the reason mentorship's ErrSlotUnavailable gives.
+	ErrSlotUnavailable = errors.New("buddy: that time is no longer available")
+	// ErrGuestMockLimit → 429. The member already holds MaxGuestMocks future mocks as guest.
+	ErrGuestMockLimit = errors.New("buddy: too many upcoming mock interviews as a guest")
+	// ErrMockNotFound → 404. No mock, or one the caller is not a participant of.
+	ErrMockNotFound = errors.New("buddy: mock interview not found")
+)
+
+// NewMock is one mock to write.
+type NewMock struct {
+	HostUserID    int64
+	GuestUserID   int64
+	StartsAt      time.Time
+	EndsAt        time.Time
+	Topic         string
+	GuestTimezone string
+}
 
 // MockSettings is what a member offers as a mock host.
 type MockSettings struct {

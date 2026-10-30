@@ -2099,7 +2099,7 @@ git commit -m "List another buddy's open mock slots"
 - Consumes: `db.Queries.CountFutureBuddyMocksAsGuest`, `CreateBuddyMock`, `GetBuddyMock`; `pgerr.ExclusionViolationConstraint(err) (name string, ok bool)` (`internal/platform/pgerr/pgerr.go:93`, the helper mentorship's `CreateBooking` uses); `hostSlots`, `visibleMember`, `MockNotifier.MockBooked`.
 - Produces: `const MaxGuestMocks = 3`; `var ErrInvalidTopic, ErrSlotUnavailable, ErrGuestMockLimit, ErrMockNotFound error`; `type NewMock struct{ HostUserID, GuestUserID int64; StartsAt, EndsAt time.Time; Topic, GuestTimezone string }`; `type BookInput struct{ HostHandle string; GuestUserID int64; StartsAt time.Time; Topic, GuestZone string }`; `func (*MockService) Book(ctx, BookInput) (Mock, error)`; repository `FutureGuestMocks(ctx, guestID int64) (int, error)`, `CreateMock(ctx, NewMock) (Mock, error)`, `MockByID(ctx, uuid.UUID) (Mock, bool, error)`.
 
-- [ ] 5.1 Write the failing tests `internal/engage/buddy/mock_booking_integration_test.go`:
+- [x] 5.1 Write the failing tests `internal/engage/buddy/mock_booking_integration_test.go`:
 
 ```go
 //go:build integration
@@ -2264,9 +2264,9 @@ func TestPausingKeepsBookedMocksConfirmed(t *testing.T) {
 }
 ```
 
-- [ ] 5.2 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `mocks.Book undefined`, `undefined: buddy.BookInput`, `undefined: buddy.ErrSlotUnavailable`, … .
+- [x] 5.2 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `mocks.Book undefined`, `undefined: buddy.BookInput`, `undefined: buddy.ErrSlotUnavailable`, … .
 
-- [ ] 5.3 Implement. Append to the `const` block of tunables in `internal/engage/buddy/mock.go`, after `maxMeetingURLRunes`:
+- [x] 5.3 Implement. Append to the `const` block of tunables in `internal/engage/buddy/mock.go`, after `maxMeetingURLRunes`:
 
 ```go
 	// MaxGuestMocks bounds the future confirmed mocks one member may hold as guest: a spam
@@ -2457,9 +2457,9 @@ func (r *QueriesRepository) MockByID(ctx context.Context, id uuid.UUID) (Mock, b
 }
 ```
 
-- [ ] 5.4 Run: `go test -tags=integration ./internal/engage/buddy/ -run 'TestBooking|TestConcurrentBookings|TestAGuestAlready|TestATopic|TestAFourth|TestPausing' -count=1`. Expected: `ok`.
+- [x] 5.4 Run: `go test -tags=integration ./internal/engage/buddy/ -run 'TestBooking|TestConcurrentBookings|TestAGuestAlready|TestATopic|TestAFourth|TestPausing' -count=1`. Expected: `ok`.
 
-- [ ] 5.5 Verify and commit:
+- [x] 5.5 Verify and commit:
 
 ```bash
 gofmt -l internal/engage/buddy && go vet ./... && go test ./... && go vet -tags=integration ./internal/engage/buddy/
