@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/strelov1/freehire/internal/dict/location"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/charset"
 )
@@ -62,14 +63,17 @@ import (
 //     response about anything else simply has no such node.
 //   - The listing carries a posting's title and identity but no body, which only the posting
 //     page holds — hence HydratingSource.
-//   - The platform states no geography. "Location" is the SITE inside the district a posting
-//     belongs to ("Central Maintenance and Operations", "Various Locations", "Petersburg High
-//     School"), so it is passed through as what the posting says about itself and nothing more.
-//     Measured over 1,004 ingested postings, the location dictionary resolved a city for 19 of
-//     them and a country for 4, and the ones it did resolve were as often an artifact as a
-//     place: a Pennsylvania programme's acronym "(PATTAN)" reads as Pattan, India. There is
-//     nothing better to feed it — no page anywhere on the platform names the district's town —
-//     and dropping the field would lose the one thing a candidate needs to place the job.
+//   - A posting's "Location" is the SITE inside the district it belongs to ("Central Maintenance
+//     and Operations", "Various Locations", "Petersburg High School"), never a town. What does
+//     place a board is its footer: every page links the district's state on the platform's
+//     sister board, K12JobSpot ("You can also view <a href='…/illinois-teaching-jobs'>Illinois
+//     teaching jobs</a>"), rendered from the tenant's own state setting; a Canadian tenant's
+//     reads "Canad- Saskatchewan". So the state is appended to the site and its country set as
+//     the posting's structured country (applitrackBoardState) — "Georgia" there is the state,
+//     which a location line alone could never say. A state no dictionary knows (one tenant's
+//     renders as "Californicredential or") places nothing. Before this the site went out alone
+//     and ~96% of the open postings had no country (2026-10-29); the few the dictionary did
+//     place were as often an artifact as a place ("(PATTAN)" read as Pattan, India).
 //   - A steady-state crawl is small and stays small: one listing request per board and a detail
 //     request only for a posting the catalogue has not seen.
 type applitrack struct {
@@ -97,15 +101,21 @@ type applitrackPosting struct {
 	title string
 }
 
+// applitrackState is the state or province a board's district is in, as its footer names it:
+// the display name and its country code. Zero when the footer names none the dictionary knows.
+type applitrackState struct {
+	name, country string
+}
+
 // Fetch is the list-only fallback used when the pipeline cannot supply a seen set: it hydrates
 // every listed posting. FetchNew is the hydrating path ingest prefers.
 func (s applitrack) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	postings, err := s.list(ctx, e)
+	postings, state, err := s.list(ctx, e)
 	if err != nil {
 		return nil, err
 	}
 	return fetchDetails(postings, defaultDetailWorkers, func(p applitrackPosting) (Job, bool) {
-		return s.detail(ctx, e, p)
+		return s.detail(ctx, e, p, state)
 	}), nil
 }
 
@@ -116,27 +126,27 @@ func (s applitrack) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 // refresh path re-applies the catalogue filter to it, which is how a stored posting the
 // dictionary now turns away ages out instead of being kept alive by its own re-listing.
 func (s applitrack) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalID string) bool) ([]Job, error) {
-	postings, err := s.list(ctx, e)
+	postings, state, err := s.list(ctx, e)
 	if err != nil {
 		return nil, err
 	}
 	return fetchDetails(postings, defaultDetailWorkers, func(p applitrackPosting) (Job, bool) {
 		if seen(p.id) {
-			j := p.job(e)
+			j := p.job(e, state)
 			j.SeenRefresh = true
 			return j, true
 		}
-		return s.detail(ctx, e, p)
+		return s.detail(ctx, e, p, state)
 	}), nil
 }
 
-// list reads the board's whole listing (see the header).
-func (s applitrack) list(ctx context.Context, e CompanyEntry) ([]applitrackPosting, error) {
+// list reads the board's whole listing (see the header) and the state its footer names.
+func (s applitrack) list(ctx context.Context, e CompanyEntry) ([]applitrackPosting, applitrackState, error) {
 	root, err := s.page(ctx, applitrackAllURL(e.Board))
 	if err != nil {
-		return nil, fmt.Errorf("applitrack: listing %s: %w", e.Board, err)
+		return nil, applitrackState{}, fmt.Errorf("applitrack: listing %s: %w", e.Board, err)
 	}
-	return applitrackListing(root), nil
+	return applitrackListing(root), applitrackBoardState(root), nil
 }
 
 // detail fetches one posting page and returns the listing row's job with everything that page
@@ -145,7 +155,7 @@ func (s applitrack) list(ctx context.Context, e CompanyEntry) ([]applitrackPosti
 // body at all. Deferring a posting by one crawl is recoverable; storing it body-less is not,
 // because a stored row is `seen` and so is never hydrated again once it ages past the pipeline's
 // hydration-retry window, leaving a posting no search can reach.
-func (s applitrack) detail(ctx context.Context, e CompanyEntry, p applitrackPosting) (Job, bool) {
+func (s applitrack) detail(ctx context.Context, e CompanyEntry, p applitrackPosting, state applitrackState) (Job, bool) {
 	root, err := s.page(ctx, applitrackDetailURL(e.Board, p.id))
 	if err != nil {
 		return Job{}, false
@@ -161,14 +171,15 @@ func (s applitrack) detail(ctx context.Context, e CompanyEntry, p applitrackPost
 		return Job{}, false
 	}
 
-	j := p.job(e)
-	j.Location = applitrackField(block, "Location")
+	site := applitrackField(block, "Location")
+	j := p.job(e, state)
+	j.Location = joinNonEmpty(site, state.name)
 	j.Description = description
-	// The platform states no work arrangement of its own, so the location text is the only
-	// remote signal (never the title, which false-positives on "Remote …" role names). WorkMode
-	// stays empty: that field carries structured signal only, and the pipeline reads the
-	// location string for itself.
-	j.Remote = isRemote(j.Location)
+	// The platform states no work arrangement of its own, so the site text is the only remote
+	// signal (never the title, which false-positives on "Remote …" role names). WorkMode stays
+	// empty: that field carries structured signal only, and the pipeline reads the location
+	// string for itself.
+	j.Remote = isRemote(site)
 	j.PostedAt = applitrackDate(applitrackField(block, "Date Posted"))
 	return j, true
 }
@@ -176,14 +187,19 @@ func (s applitrack) detail(ctx context.Context, e CompanyEntry, p applitrackPost
 // job maps a listing row onto the identity every path shares — the same shape a SeenRefresh
 // carries and the base a hydrated posting fills in. The title comes from the LISTING on both
 // paths, though the posting page restates it, so a refreshed row and a hydrated one describe
-// the posting identically. The employer is the configured entry's: a board is one district.
-func (p applitrackPosting) job(e CompanyEntry) Job {
-	return Job{
+// the posting identically. The employer is the configured entry's: a board is one district,
+// and so is its state.
+func (p applitrackPosting) job(e CompanyEntry, state applitrackState) Job {
+	j := Job{
 		ExternalID: p.id,
 		URL:        applitrackPostingURL(e.Board, p.id),
 		Title:      p.title,
 		Company:    e.Company,
 	}
+	if state.country != "" {
+		j.Countries = []string{state.country}
+	}
+	return j
 }
 
 // applitrackDir is a board's job-postings directory, which every URL below hangs off.
@@ -309,6 +325,37 @@ func applitrackListing(root *html.Node) []applitrackPosting {
 		return false // a row never nests another
 	})
 	return out
+}
+
+// applitrackStateLink captures the anchor text of the footer's K12JobSpot link — "Illinois" out
+// of "<a href='http://www.k12jobspot.com/illinois-teaching-jobs'>Illinois teaching jobs</a>".
+var applitrackStateLink = regexp.MustCompile(`(?i)k12jobspot\.com/[^'">]*['"]?\s*>\s*([^<]+?)\s+teaching jobs\s*</a>`)
+
+// applitrackBoardState reads the state the page footer names (see the header). The link sits in
+// a <noscript>, which the parser keeps as raw text rather than elements, so it is matched in that
+// text. A Canadian tenant's name carries a "Canad-" prefix, and the province after it must then
+// resolve to Canada. Anything the dictionary does not know yields the zero state.
+func applitrackBoardState(root *html.Node) applitrackState {
+	var raw string
+	walk(root, func(n *html.Node) bool {
+		if raw != "" {
+			return false
+		}
+		if n.Type == html.ElementNode && n.Data == "noscript" {
+			raw = firstSubmatch(applitrackStateLink, textContent(n))
+			return false
+		}
+		return true
+	})
+	name, canadian := raw, false
+	if prefix, rest, ok := strings.Cut(raw, "-"); ok && strings.HasPrefix(strings.ToLower(prefix), "canad") {
+		name, canadian = strings.TrimSpace(rest), true
+	}
+	country := location.StateCountry(name)
+	if country == "" || (canadian && country != "ca") {
+		return applitrackState{}
+	}
+	return applitrackState{name: name, country: country}
 }
 
 // applitrackRowTitle reads the posting title out of a listing row: the row's text with the
