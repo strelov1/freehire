@@ -108,6 +108,9 @@ func TestWorkdayFetchListsAndFetchesDetail(t *testing.T) {
 	if j.Remote {
 		t.Error("Remote = true, want false for an on-site role")
 	}
+	if j.WorkMode != "onsite" {
+		t.Errorf("WorkMode = %q, want onsite from remoteType", j.WorkMode)
+	}
 	if j.PostedAt == nil || j.PostedAt.UTC().Year() != 2024 {
 		t.Errorf("PostedAt = %v, want parsed startDate (2024)", j.PostedAt)
 	}
@@ -119,8 +122,8 @@ func TestWorkdayFetchListsAndFetchesDetail(t *testing.T) {
 	}
 
 	d := byID["/job/Remote/Data_JR-2"]
-	if !d.Remote {
-		t.Error("Remote = false, want true from remoteType")
+	if !d.Remote || d.WorkMode != "remote" {
+		t.Errorf("Remote/WorkMode = %v/%q, want true/remote from remoteType", d.Remote, d.WorkMode)
 	}
 	// This posting's detail carries no jobRequisitionLocation at all.
 	if d.Countries != nil {

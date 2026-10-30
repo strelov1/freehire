@@ -456,7 +456,8 @@ func (s workday) detail(ctx context.Context, e CompanyEntry, b workdayBoard, p w
 	if jobURL == "" {
 		jobURL = fmt.Sprintf("https://%s/%s%s", b.host, b.publicPath, p.ExternalPath)
 	}
-	remote := isRemote(location) || strings.Contains(strings.ToLower(info.RemoteType), "remote")
+	workMode := workdayWorkMode(info.RemoteType)
+	remote := workMode == "remote" || isRemote(location)
 
 	return Job{
 		ExternalID:  p.ExternalPath,
@@ -466,6 +467,7 @@ func (s workday) detail(ctx context.Context, e CompanyEntry, b workdayBoard, p w
 		Location:    location,
 		Description: sanitizeHTML(info.JobDescription),
 		Remote:      remote,
+		WorkMode:    workMode,
 		Countries:   countryFromCode(info.JobRequisitionLocation.Country.Alpha2Code),
 		PostedAt:    parseWorkdayDate(info.StartDate),
 		// timeType is Workday's structured full/part-time enum; the pipeline prefers it
@@ -473,6 +475,63 @@ func (s workday) detail(ctx context.Context, e CompanyEntry, b workdayBoard, p w
 		// full vs part time (contract/intern live in other, per-tenant fields).
 		EmploymentType: workdayEmploymentType(info.TimeType),
 	}, true
+}
+
+// workdayWorkModes maps a Workday remoteType label, lowercased, to a work mode. remoteType is
+// not an enum: each tenant names its own workplace types, in its own language, and about one
+// posting in eight carries one. Every entry is a label a live tenant publishes (sampled across
+// ~1,000 boards, 2026-10-30). A label that offers a choice ("Hybrid or Onsite"), a schedule
+// ("Flex"), a place that is neither an office nor home ("Field Based", "Client site") or nothing
+// at all ("Not specified") is absent, so it states no work mode rather than a guessed one.
+// A benefit beside an office ("Mobiles Arbeiten möglich", "Télétravail possible") is hybrid,
+// as the description dictionaries read it; a refusal of remote work ("Not Remote", "No mobile
+// working") is onsite.
+var workdayWorkModes = map[string]string{
+	"remote": "remote", "fully remote": "remote", "remote-restricted": "remote",
+	"home based/remote": "remote", "remote work only": "remote", "virtual": "remote",
+
+	"hybrid": "hybrid", "hybrid working": "hybrid", "hybrid work": "hybrid", "hybrid remote": "hybrid",
+	"this position is a hybrid of office/remote working": "hybrid",
+	"onsite - hybrid eligible":                           "hybrid",
+	"eligible for hybrid work":                           "hybrid",
+	"partially remote":                                   "hybrid",
+	"office flex":                                        "hybrid",
+	"location type: hybrid option available (mix of in-person and remote)": "hybrid",
+	"mobiles arbeiten möglich": "hybrid", "partial mobile working": "hybrid",
+	"télétravail partiel": "hybrid", "télétravail possible": "hybrid", "híbrido": "hybrid",
+
+	"on-site": "onsite", "onsite": "onsite", "on site": "onsite", "on campus": "onsite",
+	"office": "onsite", "in office": "onsite", "in-office": "onsite", "in-office position": "onsite",
+	"in person": "onsite", "in-person": "onsite", "fully onsite": "onsite", "fully in-person": "onsite",
+	"onsite only": "onsite", "onsite job": "onsite", "on-site/in-office": "onsite",
+	"full-time onsite": "onsite", "in office 100%": "onsite", "n/a - in office only": "onsite",
+	"in branch": "onsite", "not remote": "onsite",
+	"on-site only, not eligible for remote work":      "onsite",
+	"location type: in person (remote not available)": "onsite",
+	"not eligible for hybrid work":                    "onsite",
+	"not eligible for agile working":                  "onsite",
+	"no mobile working":                               "onsite",
+	"mobiles arbeiten nicht möglich":                  "onsite",
+	"poste uniquement en présentiel":                  "onsite",
+	"travail sur site":                                "onsite",
+}
+
+// workdayWorkMode reads a posting's remoteType label as a work mode, "" when it states none.
+// Beyond the exact labels, a qualified remote or hybrid label ("Remote - Nationwide", "Remote
+// - Must reside within territory", "Hybrid - Onsite / 2 Days Remote", "Hybrid (Onsite/WFA)")
+// keeps the mode it opens with: the qualifier narrows where or how often, never which.
+func workdayWorkMode(remoteType string) string {
+	label := strings.ToLower(strings.Join(strings.Fields(remoteType), " "))
+	if m, ok := workdayWorkModes[label]; ok {
+		return m
+	}
+	switch {
+	case strings.HasPrefix(label, "remote -"):
+		return "remote"
+	case strings.HasPrefix(label, "hybrid -"), strings.HasPrefix(label, "hybrid ("):
+		return "hybrid"
+	}
+	return ""
 }
 
 // postJSONRetrying and getJSONRetrying retry a rate-limited (403/429) request with exponential
