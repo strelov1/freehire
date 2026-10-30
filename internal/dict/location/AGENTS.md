@@ -98,6 +98,12 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   4,271 distinct lines, 42,933 open rows changed country or region, all corrections
   (~34.9k Canadian rows lost a spurious `us`); a further 18.3k open rows ("Fresno, CA,
   US") gained the metro the now-recorded state lets `metroFor` resolve.
+- **A Japanese address states `jp`** (`location_ja.go`): a token that is one of the 47
+  prefectures in Japanese script WITH its 都/道/府/県 suffix ("港区, 東京都"), opens with one
+  ("東京都渋谷区渋谷2-24-12"), or carries the 〒 postal mark. Bare "東京"/"大阪" and a ward
+  or city alone ("大阪市北区") state nothing, nor does a prefecture mid-token behind a shop
+  name. No city or metro: the city tables are Latin-script. Measured 2026-10-30: all ~43.8k
+  open HRMOS postings and ~20k of HERP's had no country.
 - **A small place names a city, never a country** (`smallplaces.go`, `smallplaces.tsv`,
   written by `cmd/gen-cities` beside `cities1000.tsv`). The main table stops at 15,000
   people; the German crawl names towns of a few thousand beside their Land ("Billerbeck,

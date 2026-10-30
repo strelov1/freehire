@@ -168,6 +168,13 @@ func ParseIn(location string, known []string) Geo {
 		placeToks++
 		lastCountries := prevCountries
 		prevCountries = nil
+		// A Japanese address or prefecture (location_ja.go).
+		if isJapaneseAddress(tok) {
+			countrySet["jp"] = struct{}{}
+			regionSet[countryToRegion["jp"]] = struct{}{}
+			prevTok = tok
+			continue
+		}
 		// India's export, district and office shapes become the city they name (india.go);
 		// a metropolitan region ("Delhi NCR") is read before that, as the region it is.
 		metro, isMetroRegion := indianMetroRegions[tok]
