@@ -8,7 +8,7 @@
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { confirmTailorDialog, settleConfirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
   import { onboardingGate, onboardingUrl } from '#lib/onboardingGate.svelte.js';
-  import { isFullBleedRoute } from '#lib/shellLayout.js';
+  import { isAccountArea, isFullBleedRoute } from '#lib/shellLayout.js';
   import { safeRedirect } from '#lib/safeRedirect.js';
   import { resetUserStores } from '#lib/userResource.svelte.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
@@ -87,9 +87,7 @@
   // isFullBleedRoute) size themselves to the exact viewport height and get no
   // footer at all, same as /onboarding and /signin, both their own full-screen
   // pages (a fixed inset-0 overlay covers TopBar too).
-  const isAccountRoute = $derived(
-    page.url.pathname === '/my' || page.url.pathname.startsWith('/my/'),
-  );
+  const isAccountRoute = $derived(isAccountArea(page.url.pathname));
   const hideFooter = $derived(
     isFullBleedRoute(page.url.pathname) ||
       page.url.pathname === '/onboarding' ||

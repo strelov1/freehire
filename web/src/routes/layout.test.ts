@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 // plugin, no DOM in vitest.config.ts).
 //
 // The root layout decides which of three footer states a route gets: none (the
-// full-bleed account routes, /onboarding, /signin), compact (the rest of /my/*),
+// full-bleed account routes, /onboarding, /signin), compact (the rest of /my/* and /buddies),
 // or full (everywhere else). Pins that `hideFooter` reuses `isFullBleedRoute`
 // (shellLayout.ts) rather than re-listing /my/assistant/* and /tailor/* inline a
 // second time, and that Footer receives `compact` only where that's the intent.
@@ -15,7 +15,7 @@ const SOURCE = readFileSync(join(import.meta.dirname, '+layout.svelte'), 'utf8')
 
 describe('root layout footer state', () => {
   it('derives hideFooter from isFullBleedRoute plus onboarding/signin, not a re-listed /my or /tailor/ prefix', () => {
-    expect(SOURCE).toContain("import { isFullBleedRoute } from '#lib/shellLayout.js'");
+    expect(SOURCE).toContain("import { isAccountArea, isFullBleedRoute } from '#lib/shellLayout.js'");
     const hideFooterAt = SOURCE.indexOf('const hideFooter');
     const compactFooterAt = SOURCE.indexOf('const compactFooter', hideFooterAt);
     expect(compactFooterAt, 'expected compactFooter to be declared after hideFooter').toBeGreaterThan(hideFooterAt);
@@ -26,7 +26,8 @@ describe('root layout footer state', () => {
   });
 
   it('scopes compactFooter to the account routes that still get a footer at all', () => {
-    expect(SOURCE).toMatch(/const isAccountRoute = \$derived\(\s*page\.url\.pathname === '\/my' \|\| page\.url\.pathname\.startsWith\('\/my\/'\)/);
+    // isAccountArea: /my and the buddies space, the one shared answer to "the account area".
+    expect(SOURCE).toMatch(/const isAccountRoute = \$derived\(isAccountArea\(page\.url\.pathname\)\)/);
     expect(SOURCE).toContain('const compactFooter = $derived(isAccountRoute && !hideFooter)');
   });
 

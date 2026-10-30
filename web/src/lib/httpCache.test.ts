@@ -32,6 +32,8 @@ describe('cachePolicy', () => {
       '/auth/callback',
       '/moderation',
       '/delete-account',
+      '/buddies',
+      '/buddies/chats',
     ]) {
       expect(cachePolicy({ pathname, authenticated: false })).toBe(PRIVATE_CACHE);
       expect(cachePolicy({ pathname, authenticated: true })).toBe(PRIVATE_CACHE);

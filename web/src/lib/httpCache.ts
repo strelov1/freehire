@@ -58,7 +58,7 @@ export const NO_CACHE = 'no-store';
 
 /** Route trees that are never shared, whoever asks. An anonymous hit here is a
  *  sign-in screen or a redirect, which is not worth handing to the next visitor. */
-const PRIVATE_ROOTS = new Set(['my', 'auth', 'moderation', 'delete-account']);
+const PRIVATE_ROOTS = new Set(['my', 'buddies', 'auth', 'moderation', 'delete-account']);
 
 /** Route families whose SECOND segment names one entity. Only `/<root>/<slug>`
  *  qualifies, never a deeper child: `/jobs/<slug>/discussion` carries comments

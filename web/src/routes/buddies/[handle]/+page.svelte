@@ -108,7 +108,7 @@
     const current = handle;
     let cancelled = false;
     view = 'loading'; profile = null; feed = []; cursor = null; feedError = false;
-    activity = null; dayView = null; tab = 'activity'; allSkills = false;
+    activity = null; similar = []; dayView = null; tab = 'activity'; allSkills = false;
     history = []; historyCursor = null; historyPages = 0; historyLoad = Promise.resolve();
     api.getBuddyActivity(current).then(
       (a) => { if (!cancelled) activity = a; },
