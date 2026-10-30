@@ -51,7 +51,12 @@
   // drawn part back as the whole column — and the boundary follows the zone, so a card
   // dragged out does not pull an undrawn one into view mid-drag.
   function withTail(zoneItems: BoardItem[]): BoardItem[] {
-    if (items.length <= limit) return zoneItems;
+    if (items.length <= limit) {
+      // No undrawn tail, but a card dropped onto a full page is one past the limit and
+      // must still be drawn.
+      limit = Math.max(limit, zoneItems.length);
+      return zoneItems;
+    }
     const tail = items.slice(limit);
     limit = zoneItems.length;
     return [...zoneItems, ...tail];

@@ -28,11 +28,13 @@ const card = (n: number): BoardItem => ({
 
 const items = Array.from({ length: 70 }, (_, i) => card(i));
 
-function renderColumn(onfinalize = vi.fn()) {
-  render(BoardColumn, {
-    props: { id: 'applied', label: 'Applied', items, onconsider: vi.fn(), onfinalize, onopen: vi.fn() },
-  });
-  return onfinalize;
+function renderColumn(onfinalize = vi.fn(), cards = items) {
+  return {
+    onfinalize,
+    ...render(BoardColumn, {
+      props: { id: 'applied', label: 'Applied', items: cards, onconsider: vi.fn(), onfinalize, onopen: vi.fn() },
+    }),
+  };
 }
 
 const drawn = () => screen.queryAllByText(/^Role \d+$/).length;
@@ -72,14 +74,27 @@ describe('BoardColumn', () => {
   });
 
   it('keeps the undrawn cards when a drop reorders the drawn ones', async () => {
-    const onfinalize = renderColumn();
+    const { onfinalize } = renderColumn();
     const reordered = [items[1], items[0], ...items.slice(2, 30)];
 
     await fireEvent(zone(), new CustomEvent('finalize', { detail: { items: reordered, info: {} } }));
 
-    const written = onfinalize.mock.calls[0][1] as BoardItem[];
+    const written = must(onfinalize.mock.calls[0])[1] as BoardItem[];
     expect(written).toHaveLength(70);
     expect(written.slice(0, 2).map((i) => i.id)).toEqual(['app-1', 'app-0']);
     expect(written.slice(30).map((i) => i.id)).toEqual(items.slice(30).map((i) => i.id));
+  });
+
+  it('draws a card dropped onto a column whose first page is exactly full', async () => {
+    const page = items.slice(0, 30);
+    const dropped = card(99);
+    const { onfinalize, rerender } = renderColumn(vi.fn(), page);
+
+    await fireEvent(zone(), new CustomEvent('finalize', { detail: { items: [...page, dropped], info: {} } }));
+    const written = must(onfinalize.mock.calls[0])[1] as BoardItem[];
+    await rerender({ items: written });
+
+    expect(written).toHaveLength(31);
+    expect(screen.getByText('Role 99')).toBeTruthy();
   });
 });
