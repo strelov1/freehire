@@ -75,6 +75,7 @@ export const FILTER_FACETS: FilterRow[] = [
 export const FILTER_EXTRAS: FilterRow[] = [
   { param: 'visa_sponsorship', label: 'Visa sponsorship', values: 'true, false' },
   { param: 'requires_clearance', label: 'Security clearance required', values: 'true, false' },
+  { param: 'via_recruiter', label: 'Posted by a recruiter for a client', values: 'true, false' },
   {
     param: 'salary_min',
     label: 'Minimum salary',

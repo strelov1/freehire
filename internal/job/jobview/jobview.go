@@ -99,6 +99,12 @@ type Job struct {
 	// a requirement was detected. There is no serialized false, because "we detected
 	// nothing" must not reach a reader as "this job needs no clearance".
 	RequiresClearance bool `json:"requires_clearance,omitempty"`
+	// ViaRecruiter marks a posting that states it is published by an intermediary on
+	// a client's behalf — a staffing agency or recruiter ("on behalf of our client").
+	// Deterministic, from the description (internal/job/jobfacts). True-or-absent like
+	// RequiresClearance: a recruiter who never says so is not detected, so an absent
+	// key does not mean "posted by the employer".
+	ViaRecruiter bool `json:"via_recruiter,omitempty"`
 	// AutoApplyAvailable marks a posting whose ATS provider (Source) is one
 	// internal/api/atsapply can currently attempt to fill and submit for (see
 	// AutoApplyProviders) — a best-effort, provider-level eligibility signal,
@@ -246,6 +252,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		AIInterviewReports: x.AIInterviewReports,
 		IsTech:             isTechFacet(f.IsTech),
 		RequiresClearance:  f.RequiresClearance != nil && *f.RequiresClearance,
+		ViaRecruiter:       f.ViaRecruiter != nil && *f.ViaRecruiter,
 		AutoApplyAvailable: AutoApplyProviders[f.Source],
 		PostedAt:           rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
 		CreatedAt:          rfc3339Ptr(f.CreatedAt),

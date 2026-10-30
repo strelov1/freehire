@@ -220,6 +220,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
+        - $ref: "#/components/parameters/ViaRecruiter"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -309,6 +310,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
+        - $ref: "#/components/parameters/ViaRecruiter"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -570,6 +572,7 @@ paths:
         - $ref: "#/components/parameters/SkillsMode"
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
+        - $ref: "#/components/parameters/ViaRecruiter"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -1295,6 +1298,23 @@ components:
 
         `true` returns only the marked postings, for a cleared candidate seeking
         exactly that work. Omitting the parameter filters nothing.
+    ViaRecruiter:
+      name: via_recruiter
+      in: query
+      schema:
+        type: boolean
+      description: |
+        Whether the posting states that it is published by an intermediary on a
+        client's behalf — a staffing agency or recruiter ("on behalf of our
+        client", "our client is a ..."), derived deterministically from the
+        description.
+
+        `false` returns every posting NOT marked — including recruiter postings
+        that never say so. It is the "hide recruiter posts" filter, not an
+        assertion that the rest were posted by the employer.
+
+        `true` returns only the marked postings. Omitting the parameter filters
+        nothing.
     AutoApplyAvailable:
       name: auto_apply_available
       in: query
@@ -1902,6 +1922,13 @@ components:
             security-clearance requirement. Absent otherwise — there is no
             `false`, because "no requirement was detected" is not the same claim
             as "this posting needs no clearance".
+        via_recruiter:
+          type: boolean
+          description: |
+            Present and `true` only when the posting states that it is published
+            by an intermediary on a client's behalf. Absent otherwise — a
+            recruiter who never says so is not detected, so absence does not
+            mean the employer posted it.
         auto_apply_available:
           type: boolean
           description: |

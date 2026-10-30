@@ -66,6 +66,7 @@ var closedFacets = map[string]func(string) bool{
 	},
 	"is_tech":               oneOf(boolValues),
 	RequiresClearanceParam:  oneOf(boolValues),
+	ViaRecruiterParam:       oneOf(boolValues),
 	AIInterviewParam:        oneOf(boolValues),
 	AutoApplyAvailableParam: oneOf(boolValues),
 }

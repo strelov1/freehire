@@ -113,6 +113,10 @@ type Derived struct {
 	// nil: the dictionary cannot tell a posting that promises no clearance from one
 	// that is silent, so a denial produces the absence of a true, not a false.
 	RequiresClearance *bool
+	// ViaRecruiter marks a posting that states it is published by an intermediary on a
+	// client's behalf (internal/job/jobfacts). True or nil, never false, for the same
+	// reason as RequiresClearance: a recruiter who never says so is not detected.
+	ViaRecruiter *bool
 	// Synthetic enrichment facets (category B): deterministic stand-ins for fields
 	// the LLM also emits, served dict-only like the facets above. ExperienceYearsMin
 	// is nil when the description states no figure.
@@ -308,6 +312,7 @@ func Derive(in Input) Derived {
 		Category:           category,
 		IsTech:             isTech,
 		RequiresClearance:  deriveRequiresClearance(in.Description),
+		ViaRecruiter:       trueOrNil(jobfacts.ViaRecruiter(in.Description)),
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     employmentType,
 		EducationLevel:     educationLevel,
@@ -326,11 +331,16 @@ func Derive(in Input) Derived {
 // false would read as "stated to be unnecessary", which is a different claim and one
 // the catalogue almost never makes.
 func deriveRequiresClearance(desc string) *bool {
-	if !location.RequiresClearanceFromDescription(desc) {
+	return trueOrNil(location.RequiresClearanceFromDescription(desc))
+}
+
+// trueOrNil lifts a dictionary's boolean into a true-or-absent column: a positive is
+// asserted, a negative stays unknown.
+func trueOrNil(v bool) *bool {
+	if !v {
 		return nil
 	}
-	required := true
-	return &required
+	return &v
 }
 
 // deriveIsTech computes the tri-state is_tech signal from the already-resolved

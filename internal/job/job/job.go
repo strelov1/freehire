@@ -96,6 +96,9 @@ type Fields struct {
 	// requirement (nil = not stated); served as a filterable facet. Only ever true or
 	// nil — see jobderive.Derived.RequiresClearance for why there is no false.
 	RequiresClearance *bool
+	// ViaRecruiter marks a posting that states it is published by an intermediary on a
+	// client's behalf (nil = not stated); served as a filterable facet.
+	ViaRecruiter *bool
 
 	// synthetic enrichment facets (deterministic stand-ins)
 	PostingLanguage    string
@@ -199,6 +202,7 @@ func New(d Draft) (Job, error) {
 		IsTech:    der.IsTech,
 
 		RequiresClearance: der.RequiresClearance,
+		ViaRecruiter:      der.ViaRecruiter,
 
 		PostingLanguage:    der.PostingLanguage,
 		EmploymentType:     der.EmploymentType,
@@ -258,6 +262,7 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		IsTech:      pgconv.Bool(f.IsTech),
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
+		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -350,6 +355,7 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 		IsTech:      pgconv.Bool(f.IsTech),
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
+		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -414,6 +420,7 @@ func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJo
 		IsTech:      pgconv.Bool(f.IsTech),
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
+		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -459,6 +466,7 @@ func (f Fields) UpdateEmployerParams(slug string, actorID int64) db.UpdateEmploy
 		IsTech:      pgconv.Bool(f.IsTech),
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
+		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -505,6 +513,7 @@ func (f Fields) InsertPrivateParams(createdBy int64) db.InsertPrivateJobParams {
 		IsTech:      pgconv.Bool(f.IsTech),
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
+		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,

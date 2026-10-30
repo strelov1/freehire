@@ -1,0 +1,12 @@
+-- via_recruiter marks a posting that states it is published by an intermediary on a
+-- client's behalf — a staffing agency, a recruiter, a job portal relaying a vacancy —
+-- derived from the description by internal/job/jobfacts.ViaRecruiter.
+--
+-- Same true-or-absent shape as requires_clearance (0119): TRUE when the posting says
+-- so, NULL otherwise, never FALSE. A recruiter who never says "our client" is not
+-- detected, so a stored FALSE would claim "posted by the employer", which the
+-- dictionary cannot know.
+--
+-- Nullable, so additive: no table rewrite, no long lock. Existing rows are filled by
+-- cmd/backfill-derive.
+ALTER TABLE jobs ADD COLUMN via_recruiter boolean;

@@ -7790,7 +7790,7 @@ type Querier interface {
 	// One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 	// ingest computes as a pure function of a row's own raw/immutable fields — the
 	// deterministic dictionary facets (countries, regions, cities, work_mode, skills,
-	// seniority, category, is_tech, requires_clearance, plus the synthetic enrichment
+	// seniority, category, is_tech, requires_clearance, via_recruiter, plus the synthetic enrichment
 	// facets posting_language,
 	// employment_type, education_level, english_level, experience_years_min, all from
 	// jobderive.Derive), the repost-identity role_fingerprint (internal/job/jobhash), and the

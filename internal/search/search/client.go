@@ -719,6 +719,9 @@ func facetSettings() *meilisearch.Settings {
 			//
 			// The settings-before-binary warning above applies to this attribute too.
 			"requires_clearance",
+			// via_recruiter: a jobs column served top-level, true-or-absent like
+			// requires_clearance. Same settings-before-binary order.
+			"via_recruiter",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",

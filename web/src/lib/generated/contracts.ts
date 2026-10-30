@@ -273,6 +273,14 @@ export interface Job {
    */
   requires_clearance?: boolean;
   /**
+   * ViaRecruiter marks a posting that states it is published by an intermediary on
+   * a client's behalf — a staffing agency or recruiter ("on behalf of our client").
+   * Deterministic, from the description (internal/job/jobfacts). True-or-absent like
+   * RequiresClearance: a recruiter who never says so is not detected, so an absent
+   * key does not mean "posted by the employer".
+   */
+  via_recruiter?: boolean;
+  /**
    * AutoApplyAvailable marks a posting whose ATS provider (Source) is one
    * internal/api/atsapply can currently attempt to fill and submit for (see
    * AutoApplyProviders) — a best-effort, provider-level eligibility signal,
