@@ -3176,7 +3176,7 @@ git commit -m "List buddy mocks and review them blind"
 - Consumes: `emailnotify.Sender` (`Send(ctx, emailnotify.Message) error`, `internal/engage/emailnotify/notifier.go:33`), `emailnotify.Message{From, To, Subject, HTML, Text string; Group emailprefs.Group}`, `emailprefs.GroupEssential` (transactional, no unsubscribe link — the mentorship booking mail's choice and reason), `db.Queries.RecordNotification(ctx, db.RecordNotificationParams{UserID int64; Kind, Title, Body string; DedupKey pgtype.Text}) (int64, error)` (returns `pgx.ErrNoRows` on a dedup conflict); `Mock`, `ianaZone`, the `MockNotifier` interface (Task 3).
 - Produces: `func NewMockMailNotifier(q *db.Queries, sender emailnotify.Sender, from, origin string) *MockMailNotifier` implementing `MockNotifier`. A nil `sender` records notification-center rows only; a nil `q` sends mail only (unit tests). Notification kinds `buddy_mock_booked`, `buddy_mock_cancelled`, `buddy_mock_reminder` (free text; no migration).
 
-- [ ] 8.1 Write the failing unit tests `internal/engage/buddy/mock_notify_test.go`:
+- [x] 8.1 Write the failing unit tests `internal/engage/buddy/mock_notify_test.go`:
 
 ```go
 package buddy
@@ -3310,9 +3310,9 @@ func TestAnUnusableZoneFallsBackToUTCAndSaysSo(t *testing.T) {
 }
 ```
 
-- [ ] 8.2 Run: `go test ./internal/engage/buddy/ -run 'Notice|Reminder|UnusableZone' -count=1`. Expected: FAIL — `undefined: NewMockMailNotifier`, `undefined: MockMailNotifier`.
+- [x] 8.2 Run: `go test ./internal/engage/buddy/ -run 'Notice|Reminder|UnusableZone' -count=1`. Expected: FAIL — `undefined: NewMockMailNotifier`, `undefined: MockMailNotifier`.
 
-- [ ] 8.3 Create `internal/engage/buddy/mock_notify.go`:
+- [x] 8.3 Create `internal/engage/buddy/mock_notify.go`:
 
 ```go
 package buddy
@@ -3531,9 +3531,9 @@ func leadPhrase(d time.Duration) string {
 }
 ```
 
-- [ ] 8.4 Run: `go test ./internal/engage/buddy/ -run 'Notice|Reminder|UnusableZone' -count=1`. Expected: `ok`.
+- [x] 8.4 Run: `go test ./internal/engage/buddy/ -run 'Notice|Reminder|UnusableZone' -count=1`. Expected: `ok`.
 
-- [ ] 8.5 Write the integration test proving the notification-center rows carry handles only, `internal/engage/buddy/mock_notify_integration_test.go`:
+- [x] 8.5 Write the integration test proving the notification-center rows carry handles only, `internal/engage/buddy/mock_notify_integration_test.go`:
 
 ```go
 //go:build integration
@@ -3600,7 +3600,7 @@ func TestBookingNoticesNameHandlesOnly(t *testing.T) {
 ```
 Run: `go test -tags=integration ./internal/engage/buddy/ -run TestBookingNoticesNameHandlesOnly -count=1`. Expected: `ok`.
 
-- [ ] 8.6 Verify and commit:
+- [x] 8.6 Verify and commit:
 
 ```bash
 gofmt -l internal/engage/buddy && go vet ./... && go test ./... && go vet -tags=integration ./internal/engage/buddy/
