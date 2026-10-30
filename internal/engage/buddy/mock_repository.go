@@ -129,3 +129,19 @@ func clockFromPg(t pgtype.Time) (slots.TimeOfDay, bool) {
 	got, err := slots.NewTimeOfDay(minutes/60, minutes%60)
 	return got, err == nil
 }
+
+func (r *QueriesRepository) MockBusy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error) {
+	rows, err := r.q.ListBuddyMockBusy(ctx, db.ListBuddyMockBusyParams{
+		UserID: userID, WindowStart: pgInstant(from), WindowEnd: pgInstant(to),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]slots.Interval, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, slots.Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
+	}
+	return out, nil
+}
+
+func pgInstant(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }

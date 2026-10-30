@@ -32,6 +32,9 @@ type MockRepository interface {
 	AddMockRule(ctx context.Context, userID int64, rule slots.Rule) (slots.Rule, error)
 	// DeleteMockRule reports false when the rule is not userID's.
 	DeleteMockRule(ctx context.Context, userID, ruleID int64) (bool, error)
+	// MockBusy is the member's occupied time in a window: every active participant row of
+	// theirs, as host or as guest.
+	MockBusy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error)
 }
 
 // MockService is the mock-interview use cases between buddy members: settings,
@@ -114,4 +117,57 @@ func (s *MockService) DeleteRule(ctx context.Context, userID, ruleID int64) erro
 		return ErrNotFound
 	}
 	return nil
+}
+
+// MockSlots is what one member may book of another: the open slots in the viewer's zone
+// and the host's topics. The meeting link is deliberately absent — it reaches a guest only
+// through a booked mock.
+type MockSlots struct {
+	Slots  []slots.Interval
+	Zone   string
+	Topics []string
+}
+
+// OpenSlots lists hostHandle's bookable slots for an active viewer, in viewerZone (an
+// unknown name answers in UTC and says so in Zone). A host with no settings or paused
+// offers nothing; an unknown, departed or blocked host, and the viewer's own handle, are
+// ErrNotFound.
+func (s *MockService) OpenSlots(ctx context.Context, viewerID int64, hostHandle string, from, to time.Time, viewerZone string) (MockSlots, error) {
+	host, err := s.members.visibleMember(ctx, viewerID, hostHandle)
+	if err != nil {
+		return MockSlots{}, err
+	}
+	settings, ok, err := s.repo.MockSettings(ctx, host.UserID)
+	if err != nil {
+		return MockSlots{}, err
+	}
+	if !ok || settings.Paused {
+		// No schedule: the engine over no rules still resolves the viewer's zone, so the
+		// empty answer says which zone it would have been in.
+		res, err := mockSlots(nil, time.UTC, nil, from, to, s.now(), viewerZone)
+		return MockSlots{Slots: res.Slots, Zone: res.Zone, Topics: []string{}}, err
+	}
+	res, err := s.hostSlots(ctx, host.UserID, settings, from, to, viewerZone)
+	if err != nil {
+		return MockSlots{}, err
+	}
+	return MockSlots{Slots: res.Slots, Zone: res.Zone, Topics: settings.Topics}, nil
+}
+
+// hostSlots runs the engine over a host's schedule and busy time. Busy is read a day wider
+// than the window on both sides, as mentorship's slotsFor does.
+func (s *MockService) hostSlots(ctx context.Context, hostID int64, settings MockSettings, from, to time.Time, viewerZone string) (slots.SlotResult, error) {
+	zone, ok := ianaZone(settings.Timezone)
+	if !ok {
+		return slots.SlotResult{}, fmt.Errorf("%w: member %d has timezone %q", slots.ErrNoOwnerZone, hostID, settings.Timezone)
+	}
+	rules, err := s.repo.MockAvailability(ctx, hostID)
+	if err != nil {
+		return slots.SlotResult{}, err
+	}
+	busy, err := s.repo.MockBusy(ctx, hostID, from.AddDate(0, 0, -1), to.AddDate(0, 0, 1))
+	if err != nil {
+		return slots.SlotResult{}, err
+	}
+	return mockSlots(rules, zone, busy, from, to, s.now(), viewerZone)
 }

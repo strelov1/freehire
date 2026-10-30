@@ -1833,7 +1833,7 @@ git commit -m "Add buddy mock settings and availability"
 - Consumes: `(*Service).visibleMember(ctx, viewerID int64, handle string) (Member, error)` (`buddy.go`; `ErrNotMember` for an inactive viewer, `ErrNotFound` for an unknown/left/self/blocked handle); `db.Queries.ListBuddyMockBusy`; `mockSlots`, `ianaZone`; `slots.ErrNoOwnerZone`.
 - Produces: `MockRepository.MockBusy(ctx, userID int64, from, to time.Time) ([]slots.Interval, error)`; `type MockSlots struct{ Slots []slots.Interval; Zone string; Topics []string }`; `func (*MockService) OpenSlots(ctx, viewerID int64, hostHandle string, from, to time.Time, viewerZone string) (MockSlots, error)`; unexported `(*MockService).hostSlots(ctx, hostID int64, settings MockSettings, from, to time.Time, viewerZone string) (slots.SlotResult, error)`.
 
-- [ ] 4.1 Append the two fixtures the next tasks share to `internal/engage/buddy/mock_helpers_integration_test.go` (add `"github.com/google/uuid"` and `"github.com/jackc/pgx/v5/pgtype"` to its imports):
+- [x] 4.1 Append the two fixtures the next tasks share to `internal/engage/buddy/mock_helpers_integration_test.go` (add `"github.com/google/uuid"` and `"github.com/jackc/pgx/v5/pgtype"` to its imports):
 
 ```go
 // firstSlot is the earliest slot hostHandle offers viewerID in the next three days, in UTC.
@@ -1873,7 +1873,7 @@ func seedMock(t *testing.T, pool *pgxpool.Pool, host, guest int64, start time.Ti
 }
 ```
 
-- [ ] 4.2 Write the failing tests `internal/engage/buddy/mock_slots_integration_test.go`:
+- [x] 4.2 Write the failing tests `internal/engage/buddy/mock_slots_integration_test.go`:
 
 ```go
 //go:build integration
@@ -1994,9 +1994,9 @@ func TestSlotListingRefusesStrangersAndBlocks(t *testing.T) {
 }
 ```
 
-- [ ] 4.3 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `mocks.OpenSlots undefined`.
+- [x] 4.3 Run: `go vet -tags=integration ./internal/engage/buddy/`. Expected: FAIL — `mocks.OpenSlots undefined`.
 
-- [ ] 4.4 Implement. In `internal/engage/buddy/mock_service.go` add to `MockRepository`, after `DeleteMockRule`:
+- [x] 4.4 Implement. In `internal/engage/buddy/mock_service.go` add to `MockRepository`, after `DeleteMockRule`:
 
 ```go
 	// MockBusy is the member's occupied time in a window: every active participant row of
@@ -2079,9 +2079,9 @@ func (r *QueriesRepository) MockBusy(ctx context.Context, userID int64, from, to
 func pgInstant(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
 ```
 
-- [ ] 4.5 Run: `go test -tags=integration ./internal/engage/buddy/ -run 'TestMockSlots|TestPausedOrUnset|TestBeingAGuest|TestSlotListing' -count=1`. Expected: `ok`.
+- [x] 4.5 Run: `go test -tags=integration ./internal/engage/buddy/ -run 'TestMockSlots|TestPausedOrUnset|TestBeingAGuest|TestSlotListing' -count=1`. Expected: `ok`.
 
-- [ ] 4.6 Verify and commit:
+- [x] 4.6 Verify and commit:
 
 ```bash
 gofmt -l internal/engage/buddy && go vet ./... && go test ./... && go vet -tags=integration ./internal/engage/buddy/
