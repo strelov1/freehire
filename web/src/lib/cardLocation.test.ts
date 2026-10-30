@@ -13,12 +13,20 @@ describe('cardLocation', () => {
     expect(cardLocation('Austin, TX, US', ['us'])).toBe('Austin, TX');
     expect(cardLocation('Germany', ['de'])).toBeNull();
     expect(cardLocation('JP - Sagamihara', ['jp'])).toBe('Sagamihara');
+    expect(cardLocation('New York, USA', ['us'])).toBe('New York');
+    expect(cardLocation('London, UK', ['gb'])).toBe('London');
   });
 
   it('drops the arrangement words the work-mode chip already states', () => {
     expect(cardLocation('Remote', [])).toBeNull();
     expect(cardLocation('Remote, Poland', ['pl'])).toBeNull();
     expect(cardLocation('Hybrid; Warsaw', ['pl'])).toBe('Warsaw');
+  });
+
+  it('reads a trailing parenthetical the same way, keeping a real place in it', () => {
+    expect(cardLocation('Remote (US)', ['us'])).toBeNull();
+    expect(cardLocation('Remote (Berlin)', ['de'])).toBe('Berlin');
+    expect(cardLocation('Lisbon (Hybrid)', ['pt'])).toBe('Lisbon');
   });
 
   it('adds nothing for an empty line', () => {

@@ -261,12 +261,13 @@
   // is every word on the card — the blurb, each chip, each skill — hundreds of characters
   // read out before a screen-reader user learns which job it is. The name is "Title at
   // Company" instead, and the few facts worth hearing before opening the posting go in its
-  // description. Browse mode still reads the card's full visible text.
+  // description — the full location line among them, since one employer's postings often
+  // share a title and differ only by city. Browse mode still reads the card's full visible text.
   const linkName = $derived(`${job.title} at ${job.company || 'Unknown company'}`);
   const uid = $props.id();
   const summaryId = `${uid}-summary`;
   const summary = $derived(
-    [isViewed ? 'Viewed' : '', posted ? `Posted ${posted}` : '', salary ?? ''].filter(Boolean).join(', '),
+    [isViewed ? 'Viewed' : '', locationLine ?? '', posted ? `Posted ${posted}` : '', salary ?? ''].filter(Boolean).join(', '),
   );
 
   // Apply-intent — fired regardless of auth, the same event and shape the job page's own
