@@ -34,13 +34,14 @@ import (
 //     keyed apart from their own employer. Of the ~1,000 merges they produce, the wrong ones
 //     sampled are the generic-name kind every form risks ("Hit d.d." onto HIT Inc, "SOLVO
 //     S.A.S" onto a Russian Солво), not a word the form shares with ordinary names. Measured
-//     and LEFT OUT for exactly that: "ad" (the Serbian a.d., but "Canopy A&D" reads as it),
+//     and LEFT OUT for exactly that: "ad" (the Serbian a.d., but "Canopy A&D" reads as it —
+//     the dotted "a.d." alone is a form, in [spelledForms]),
 //     "sc" (Mexican S.C., and the South Carolina at the end of a US place name), "pt"
 //     (Indonesian PT, and physical therapy), "sia" (seven companies, none merged, and a name).
 //     "oo" is the tail of the Polish "Sp. z o.o." — see [formQualifiers] for the rest of it.
 //
-// The letters-only comparison sees only ASCII, so a form spelled with other letters is listed
-// in [accentedForms] instead: the Estonian "OÜ" reads "o" here, and a lone "o" is no form.
+// A form whose letters alone are not distinctive is listed in [spelledForms] instead, matched
+// only as written: the Estonian "OÜ" reads "o" here, and the Serbian "a.d." reads "ad".
 //
 // "Private" is the same form written out, and it is NOT listed, because unlike "pvt" it is an
 // ordinary word: "Julius Baer Private" and "Private Equity Partners" are names, not forms. It
@@ -105,16 +106,17 @@ func CompanySlug(name string) string { return trimTail(name, IsLegalFormBefore, 
 // the Malaysian "Sdn Bhd", and the Polish "Sp. z o.o." with its spelled-out "Spółka z o.o."
 // and the half-glued "Sp.z o.o.". Since each word needs the next one already stripped, the walk
 // takes "o.o.", then "z", then "Sp." — and "Generation Z" keeps its "Z". The spaced "o. o." is
-// closed up before the walk (see [CloseSpacedForms]). "Sp. z.o.o." is not reached: "z.o.o." is
-// the letters "zoo", which ends real names.
+// closed up before the walk (see [CloseSpacedForms]). "Sp. z.o.o." and "Sp. zo.o." qualify
+// through their letters "zoo", but only once the dotted word has been stripped as a
+// [spelledForms] entry — a bare "Zoo" is never stripped, so "Sp zoo" is not reached.
 var formQualifiers = map[string]map[string]struct{}{
 	"private": {"limited": {}, "ltd": {}},
 	"p":       {"limited": {}, "ltd": {}},
 	"sdn":     {"bhd": {}},
 	"z":       {"oo": {}},
-	"sp":      {"z": {}},
-	"spka":    {"z": {}}, // "Spółka", whose "ó" and "ł" the letters-only comparison drops
-	"spolka":  {"z": {}}, // the same word as sources write it in ASCII
+	"sp":      {"z": {}, "zoo": {}},
+	"spka":    {"z": {}, "zoo": {}}, // "Spółka", whose "ó" and "ł" the letters-only comparison drops
+	"spolka":  {"z": {}, "zoo": {}}, // the same word as sources write it in ASCII
 	"spz":     {"oo": {}},
 }
 
@@ -209,17 +211,26 @@ func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark
 // "o", and a lone "o" cannot be a form — it would strip the end of any name with an initial.
 // Closing the gap before the walk turns it into the "o.o." [formQualifiers] already reads.
 // It is anchored to the end of the name (past a closing bracket, "Acme (Sp. z o. o.)") and
-// needs the "z" before it, so only that tail moves: the spaced Balkan "d. o. o." would
-// otherwise close up to "d o.o.", which reads as no form.
+// needs the "z" before it, so only that tail moves.
+//
+// The Slovenian "d. o. o." is closed up the same way, into the "d.o.o." [legalSuffixes] reads:
+// 29 catalogue companies end in it (2026-10-30), "Adria Mobil, d. o. o.", one of them with a
+// "k.d." after it ("Bauhaus, d. o. o., k.d."), which the anchor steps over. It needs all
+// three letters, so a name ending in initials ("D. O.") is not touched, and only at the tail:
+// mid-name the slug renders "d-o-o" either way.
 //
 // Every walk over a name's tail calls it before splitting the name into words, for the same
 // reason each asks [IsLegalFormBefore]: a walk that skipped it would count "o." "o." as two
 // name words where the company key drops them.
 func CloseSpacedForms(name string) string {
-	return spacedPolishTail.ReplaceAllString(name, "${1}o.o.")
+	name = spacedPolishTail.ReplaceAllString(name, "${1}o.o.")
+	return spacedBalkanTail.ReplaceAllString(name, "${1}.o.o.${2}")
 }
 
-var spacedPolishTail = regexp.MustCompile(`(?i)([\s\p{Zs}.]z[\s\p{Zs}]+)o\.[\s\p{Zs}]+o\.?[\s\p{Zs})\]]*$`)
+var (
+	spacedPolishTail = regexp.MustCompile(`(?i)([\s\p{Zs}.]z[\s\p{Zs}]+)o\.[\s\p{Zs}]+o\.?[\s\p{Zs})\]]*$`)
+	spacedBalkanTail = regexp.MustCompile(`(?i)((?:^|[^\p{L}\p{N}])d)\.[\s\p{Zs}]+o\.[\s\p{Zs}]+o\.?((?:[\s\p{Zs},]+k\.d\.?)?[\s\p{Zs})\]]*)$`)
+)
 
 // dropApostrophes removes the possessive/elision marks a name carries so they cannot become
 // word breaks in the key. "Kohl's" is one word and belongs at `kohls`, which is also what a
@@ -321,20 +332,42 @@ func IsLegalForm(word string) bool {
 	if _, ok := legalSuffixes[letters(word)]; ok {
 		return true
 	}
-	if _, ok := accentedForms[strings.ToLower(strings.TrimFunc(word, notLetter))]; ok {
+	if _, ok := spelledForms[strings.ToLower(strings.TrimFunc(word, notLetter))]; ok {
 		return true
 	}
 	return isGluedForms(word)
 }
 
-// accentedForms are the corporate forms whose letters are not all ASCII, matched as the whole
-// lowercased word past any punctuation around it. [letters] cannot carry them: it keeps ASCII
-// only, so "OÜ" reads "o". Folding accents inside letters instead was measured and refused
-// (2026-10-29): it transliterates Cyrillic too, and "ООО "САС"" and "ООО "АГ"" both became
-// `ooo` — two employers on one key — while initials like "С.А." started reading as forms.
-var accentedForms = map[string]struct{}{"oü": {}}
+// spelledForms are the corporate forms recognised only AS WRITTEN — the whole lowercased word
+// past any punctuation around it, dots inside kept — because reducing them to their letters,
+// as [legalSuffixes] does, would read ordinary words as forms. Two reasons put a form here:
+//
+//   - Its letters are not all ASCII. [letters] keeps ASCII only, so "OÜ" reads "o". Folding
+//     accents inside letters instead was measured and refused (2026-10-29): it transliterates
+//     Cyrillic too, and "ООО "САС"" and "ООО "АГ"" both became `ooo` — two employers on one
+//     key — while initials like "С.А." started reading as forms.
+//   - Its bare letters are a word, or another place's abbreviation, while its dotted spelling
+//     is only the form. Measured 2026-10-30 on the names whose tail the rule left alone: the 23
+//     ending in "a.d." are every one a Serbian joint-stock company (Banca Intesa a.d., Erste
+//     Bank a.d.), while "ad" — and "úřad", whose accents letters drops — is an advert or an
+//     office; the 79 ending in "s.p." are Slovenian sole traders, while a bare "SP" ends 55
+//     names, Brazilian ones for São Paulo; the 25 ending in "z.o.o." are Slovenian cooperatives
+//     and Polish "Sp. z.o.o.", while "Zoo" ends 49 zoos. "k.d." (the Lidl companies' "d.o.o.
+//     k.d.") is here and not in legalSuffixes because letters reads the Danish "Kød" as "kd".
+//     Its undotted "KD" is deliberately NOT listed: of the three names it ends, one is "Lidl
+//     Srbija KD" and another the fashion brand "NA-KD", which it would key at `na`. "d.n.o."
+//     because "dno" is a Slavic word.
+//
+// Matching the spelling is also what lets a GLUED compound in: "Sp.zo.o." and "Sp.z.o.o." are
+// one word to the tail walk (a dot is not a word break), and as letters "spzoo", which ends no
+// list. Spelled out they are unambiguous, so each is listed whole.
+var spelledForms = map[string]struct{}{
+	"oü":  {},
+	"a.d": {}, "s.p": {}, "k.d": {}, "d.n.o": {},
+	"z.o.o": {}, "zo.o": {}, "sp.z.o.o": {}, "sp.zo.o": {},
+}
 
-// notLetter trims what may surround an [accentedForms] word — "OÜ.", "(OÜ)" — the way
+// notLetter trims what may surround a [spelledForms] word — "OÜ.", "(OÜ)", "a.d." — the way
 // [letters] ignores it for every other form.
 func notLetter(r rune) bool { return !unicode.IsLetter(r) }
 
