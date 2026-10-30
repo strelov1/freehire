@@ -57,6 +57,17 @@ func ParseFilter(s string) (Filter, error) {
 	return "", ErrInvalidFilter
 }
 
+// CardDetail says how much of each row's job card a listing carries. The saved and
+// history lists render the full card (blurb, skills, collections); the Kanban board
+// renders only the card's identity and its tag row, so it asks for CardCompact and is
+// spared the blurb's description read and the bytes of what it never draws.
+type CardDetail int
+
+const (
+	CardFull CardDetail = iota
+	CardCompact
+)
+
 // Counts are the per-filter interaction totals for the my-jobs tab badges.
 type Counts struct {
 	All       int64
@@ -234,7 +245,7 @@ type Repository interface {
 
 	// ListInteractions returns the caller's interactions joined with the jobs,
 	// narrowed by an already-validated filter, most recently touched first.
-	ListInteractions(ctx context.Context, userID int64, filter Filter, limit, offset int32) ([]TrackedJob, error)
+	ListInteractions(ctx context.Context, userID int64, filter Filter, detail CardDetail, limit, offset int32) ([]TrackedJob, error)
 
 	// CountInteractions returns the per-filter counts for the caller in one pass.
 	CountInteractions(ctx context.Context, userID int64) (Counts, error)
@@ -335,12 +346,12 @@ func (s *Service) cancelReminder(ctx context.Context, userID, jobID int64) {
 // ParseFilter, not the HTTP layer), then reads the caller's interactions and the
 // per-filter counts. The returned Listing knows its active filter, so Total picks
 // the matching count.
-func (s *Service) ListTracked(ctx context.Context, userID int64, filter string, limit, offset int32) (Listing, error) {
+func (s *Service) ListTracked(ctx context.Context, userID int64, filter string, detail CardDetail, limit, offset int32) (Listing, error) {
 	f, err := ParseFilter(filter)
 	if err != nil {
 		return Listing{}, err
 	}
-	items, err := s.repo.ListInteractions(ctx, userID, f, limit, offset)
+	items, err := s.repo.ListInteractions(ctx, userID, f, detail, limit, offset)
 	if err != nil {
 		return Listing{}, err
 	}

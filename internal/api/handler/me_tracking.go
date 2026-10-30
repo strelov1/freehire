@@ -63,6 +63,11 @@ type myJobResponse struct {
 // counts for the tab badges — which is also why this writes its own envelope
 // instead of listResponse. Closed jobs stay listed: a user's history must not
 // shrink when a posting closes.
+//
+// ?compact=1 is the Kanban board's read: each card carries its identity and tag row
+// only (no blurb, skills or collections) and no ghost signal, since the board draws
+// none of them. That drops the ghost pass's three queries and its Meilisearch round
+// trip, and on a 500-card board ~40% of the bytes.
 func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -70,7 +75,11 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 	}
 
 	limit, offset := pageParamsBounded(c, defaultLimit, trackingMaxLimit)
-	listing, err := h.tracking.ListTracked(c.Context(), userID, c.Query("filter"), int32(limit), int32(offset))
+	detail := jobtracking.CardFull
+	if c.QueryBool("compact") {
+		detail = jobtracking.CardCompact
+	}
+	listing, err := h.tracking.ListTracked(c.Context(), userID, c.Query("filter"), detail, int32(limit), int32(offset))
 	if err != nil {
 		return trackingError(err)
 	}
@@ -102,7 +111,9 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 		}
 		items = append(items, item)
 	}
-	h.attachGhostToTrackedCards(c.Context(), listing.Items)
+	if detail == jobtracking.CardFull {
+		h.attachGhostToTrackedCards(c.Context(), listing.Items)
+	}
 
 	return c.JSON(fiber.Map{
 		"data": items,

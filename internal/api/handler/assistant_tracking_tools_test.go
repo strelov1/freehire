@@ -104,7 +104,7 @@ func (r *trackingRepo) UntrackApplication(context.Context, int64, int64) (jobtra
 	return jobtracking.Interaction{}, nil
 }
 
-func (r *trackingRepo) ListInteractions(_ context.Context, _ int64, filter jobtracking.Filter, _, _ int32) ([]jobtracking.TrackedJob, error) {
+func (r *trackingRepo) ListInteractions(_ context.Context, _ int64, filter jobtracking.Filter, _ jobtracking.CardDetail, _, _ int32) ([]jobtracking.TrackedJob, error) {
 	r.listedFor = filter
 	return nil, nil
 }

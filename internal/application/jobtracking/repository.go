@@ -315,19 +315,26 @@ func (r *QueriesRepository) ListInteractions(
 	ctx context.Context,
 	userID int64,
 	filter Filter,
+	detail CardDetail,
 	limit, offset int32,
 ) ([]TrackedJob, error) {
+	compact := detail == CardCompact
 	rows, err := r.q.ListUserJobs(ctx, db.ListUserJobsParams{
-		UserID: userID,
-		Filter: string(filter),
-		Limit:  limit,
-		Offset: offset,
+		UserID:  userID,
+		Filter:  string(filter),
+		Compact: compact,
+		Limit:   limit,
+		Offset:  offset,
 	})
 	if err != nil {
 		return nil, err
 	}
 	items := make([]TrackedJob, 0, len(rows))
 	for _, row := range rows {
+		skills, collections := row.Skills, row.Collections
+		if compact {
+			skills, collections = nil, nil
+		}
 		card := jobview.NewCard(jobview.CardInput{
 			PublicSlug:     row.PublicSlug,
 			Title:          row.Title,
@@ -340,8 +347,8 @@ func (r *QueriesRepository) ListInteractions(
 			DictRegions:    row.Regions,
 			LLMCountries:   row.LlmCountries,
 			LLMRegions:     row.LlmRegions,
-			Skills:         row.Skills,
-			Collections:    row.Collections,
+			Skills:         skills,
+			Collections:    collections,
 			PostedAt:       pgconv.TimePtr(row.PostedAt),
 			CreatedAt:      pgconv.TimePtr(row.CreatedAt),
 			Blurb:          row.Blurb,

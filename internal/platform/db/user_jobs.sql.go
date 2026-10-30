@@ -372,10 +372,16 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        -- one, else the opening of the description with its tags stripped. Cut here rather
        -- than shipped whole and cut in the browser — the descriptions were 2.37 MB of a
        -- 2.83 MB response, and a row displays about 220 characters of one.
-       COALESCE(
-           NULLIF(jobs.enrichment ->> 'summary', ''),
-           left(regexp_replace(jobs.description, '<[^>]*>', ' ', 'g'), 400)
-       )::text AS blurb,
+       --
+       -- The compact read (the Kanban board) draws no blurb at all, and the fallback is the
+       -- expensive half of this row: it de-TOASTs a description per card. CASE evaluates
+       -- lazily, so skipping it skips the read — measured on prod at ~75 of a 500-card
+       -- board's ~100 ms.
+       (CASE WHEN $4::boolean THEN ''
+             ELSE COALESCE(
+                 NULLIF(jobs.enrichment ->> 'summary', ''),
+                 left(regexp_replace(jobs.description, '<[^>]*>', ' ', 'g'), 400))
+        END)::text AS blurb,
        ARRAY(SELECT jsonb_array_elements_text(jobs.enrichment -> 'countries'))::text[] AS llm_countries,
        ARRAY(SELECT jsonb_array_elements_text(jobs.enrichment -> 'regions'))::text[]   AS llm_regions,
        uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes,
@@ -431,14 +437,14 @@ LEFT JOIN LATERAL (
        AND e.deleted_at IS NULL
 ) mail ON true
 WHERE uj.user_id = $1
-  AND ($4::text = 'all'
-       OR ($4::text = 'viewed' AND uj.saved_at IS NULL AND a.applied_at IS NULL)
-       OR ($4::text = 'saved' AND uj.saved_at IS NOT NULL)
-       OR ($4::text = 'applied' AND a.applied_at IS NOT NULL)
-       OR ($4::text = 'board'
+  AND ($5::text = 'all'
+       OR ($5::text = 'viewed' AND uj.saved_at IS NULL AND a.applied_at IS NULL)
+       OR ($5::text = 'saved' AND uj.saved_at IS NOT NULL)
+       OR ($5::text = 'applied' AND a.applied_at IS NOT NULL)
+       OR ($5::text = 'board'
            AND (uj.saved_at IS NOT NULL OR a.applied_at IS NOT NULL OR a.stage IS NOT NULL))
-       OR ($4::text = 'dismissed' AND uj.dismissed_at IS NOT NULL))
-ORDER BY (CASE $4::text
+       OR ($5::text = 'dismissed' AND uj.dismissed_at IS NOT NULL))
+ORDER BY (CASE $5::text
             WHEN 'saved' THEN uj.saved_at
             WHEN 'applied' THEN a.applied_at
             WHEN 'viewed' THEN uj.viewed_at
@@ -450,10 +456,11 @@ LIMIT $2 OFFSET $3
 `
 
 type ListUserJobsParams struct {
-	UserID int64  `json:"user_id"`
-	Limit  int32  `json:"limit"`
-	Offset int32  `json:"offset"`
-	Filter string `json:"filter"`
+	UserID  int64  `json:"user_id"`
+	Limit   int32  `json:"limit"`
+	Offset  int32  `json:"offset"`
+	Compact bool   `json:"compact"`
+	Filter  string `json:"filter"`
 }
 
 type ListUserJobsRow struct {
@@ -530,6 +537,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 		arg.UserID,
 		arg.Limit,
 		arg.Offset,
+		arg.Compact,
 		arg.Filter,
 	)
 	if err != nil {

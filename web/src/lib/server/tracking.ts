@@ -8,7 +8,7 @@ import { rangeForWindow } from '#lib/activityGrid.js';
  *  client fetch + friendly error state rather than 500ing the page. */
 export async function loadBoard(fetchImpl: typeof fetch, cookie: string | null) {
   try {
-    const board = await serverApi(fetchImpl, cookie).listMyJobs('board', 500, 0);
+    const board = await serverApi(fetchImpl, cookie).listMyJobs('board', 500, 0, { compact: true });
     return board.items;
   } catch {
     return undefined;

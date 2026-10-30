@@ -167,7 +167,7 @@ func (h *assistantHandlers) myJobsTool() assistant.Tool {
 			}
 			limit = min(limit, assistantMaxSearchLimit)
 
-			listing, err := h.tracking.tracking.ListTracked(ctx, userID, in.Filter, int32(limit), 0)
+			listing, err := h.tracking.tracking.ListTracked(ctx, userID, in.Filter, jobtracking.CardFull, int32(limit), 0)
 			if errors.Is(err, jobtracking.ErrInvalidFilter) {
 				return nil, fmt.Errorf("unknown filter %q — use all, viewed, saved, applied, board or dismissed", in.Filter)
 			}

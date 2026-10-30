@@ -272,10 +272,16 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        -- one, else the opening of the description with its tags stripped. Cut here rather
        -- than shipped whole and cut in the browser — the descriptions were 2.37 MB of a
        -- 2.83 MB response, and a row displays about 220 characters of one.
-       COALESCE(
-           NULLIF(jobs.enrichment ->> 'summary', ''),
-           left(regexp_replace(jobs.description, '<[^>]*>', ' ', 'g'), 400)
-       )::text AS blurb,
+       --
+       -- The compact read (the Kanban board) draws no blurb at all, and the fallback is the
+       -- expensive half of this row: it de-TOASTs a description per card. CASE evaluates
+       -- lazily, so skipping it skips the read — measured on prod at ~75 of a 500-card
+       -- board's ~100 ms.
+       (CASE WHEN sqlc.arg(compact)::boolean THEN ''
+             ELSE COALESCE(
+                 NULLIF(jobs.enrichment ->> 'summary', ''),
+                 left(regexp_replace(jobs.description, '<[^>]*>', ' ', 'g'), 400))
+        END)::text AS blurb,
        ARRAY(SELECT jsonb_array_elements_text(jobs.enrichment -> 'countries'))::text[] AS llm_countries,
        ARRAY(SELECT jsonb_array_elements_text(jobs.enrichment -> 'regions'))::text[]   AS llm_regions,
        uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes,

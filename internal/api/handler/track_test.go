@@ -64,7 +64,7 @@ func (stubTrackingRepo) ClearApplicationProgress(context.Context, int64, int64) 
 func (stubTrackingRepo) UntrackApplication(context.Context, int64, int64) (jobtracking.Interaction, error) {
 	return jobtracking.Interaction{JobID: 1}, nil
 }
-func (stubTrackingRepo) ListInteractions(context.Context, int64, jobtracking.Filter, int32, int32) ([]jobtracking.TrackedJob, error) {
+func (stubTrackingRepo) ListInteractions(context.Context, int64, jobtracking.Filter, jobtracking.CardDetail, int32, int32) ([]jobtracking.TrackedJob, error) {
 	return nil, nil
 }
 func (stubTrackingRepo) CountInteractions(context.Context, int64) (jobtracking.Counts, error) {

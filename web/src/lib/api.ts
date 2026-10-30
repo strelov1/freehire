@@ -1552,13 +1552,18 @@ export function createApi(
 
   /** The current user's job interactions, newest activity first. Alongside the
    *  page, the response carries the per-tab counts for the my-jobs tab badges. */
+  /** `compact` asks for each card's identity and tag row only — no blurb, skills,
+   *  collections or ghost signal. The board draws none of them, and on a 500-card board
+   *  they were ~40% of the response, serialized again into the SSR payload. */
   async function listMyJobs(
     filter: MyJobsFilter,
     limit: number,
     offset: number,
+    opts: { compact?: boolean } = {},
   ): Promise<Slice<MyJob> & { counts: MyJobCounts }> {
+    const compact = opts.compact ? '&compact=1' : '';
     const res = await request<{ data: MyJob[]; meta: ListMeta & { counts: MyJobCounts } }>(
-      `/api/v1/me/tracking${query(limit, offset)}&filter=${filter}`,
+      `/api/v1/me/tracking${query(limit, offset)}&filter=${filter}${compact}`,
     );
     return { ...toSlice(res, offset), counts: res.meta.counts };
   }

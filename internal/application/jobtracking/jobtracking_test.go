@@ -155,7 +155,7 @@ func (f *fakeRepo) UntrackApplication(_ context.Context, _, appID int64) (jobtra
 	return f.untrackResult, f.untrackErr
 }
 
-func (f *fakeRepo) ListInteractions(_ context.Context, _ int64, filter jobtracking.Filter, _, _ int32) ([]jobtracking.TrackedJob, error) {
+func (f *fakeRepo) ListInteractions(_ context.Context, _ int64, filter jobtracking.Filter, _ jobtracking.CardDetail, _, _ int32) ([]jobtracking.TrackedJob, error) {
 	f.listCalls++
 	f.listFilter = filter
 	return f.listResult, f.listErr
@@ -633,7 +633,7 @@ func TestListTracked_InvalidFilter_ShortCircuits(t *testing.T) {
 	repo := newRepo()
 	svc := jobtracking.New(repo)
 
-	_, err := svc.ListTracked(ctx(), userID, "bogus", 20, 0)
+	_, err := svc.ListTracked(ctx(), userID, "bogus", jobtracking.CardFull, 20, 0)
 	if !errors.Is(err, jobtracking.ErrInvalidFilter) {
 		t.Errorf("err = %v, want ErrInvalidFilter", err)
 	}
@@ -648,7 +648,7 @@ func TestListTracked_EmptyFilterDefaultsToAll(t *testing.T) {
 	repo.countResult = jobtracking.Counts{All: 9, Viewed: 4, Saved: 2, Applied: 3, Board: 5}
 	svc := jobtracking.New(repo)
 
-	listing, err := svc.ListTracked(ctx(), userID, "", 20, 0)
+	listing, err := svc.ListTracked(ctx(), userID, "", jobtracking.CardFull, 20, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -669,7 +669,7 @@ func TestListTracked_BoardFilterSelectsBoardTotal(t *testing.T) {
 	repo.listResult = []jobtracking.TrackedJob{{Interaction: jobtracking.Interaction{JobID: jobID}}}
 	svc := jobtracking.New(repo)
 
-	listing, err := svc.ListTracked(ctx(), userID, "board", 20, 0)
+	listing, err := svc.ListTracked(ctx(), userID, "board", jobtracking.CardFull, 20, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -742,7 +742,7 @@ func TestListTracked_DismissedFilterSelectsDismissedTotal(t *testing.T) {
 	repo.listResult = []jobtracking.TrackedJob{{Interaction: jobtracking.Interaction{JobID: jobID}}}
 	svc := jobtracking.New(repo)
 
-	listing, err := svc.ListTracked(ctx(), userID, "dismissed", 20, 0)
+	listing, err := svc.ListTracked(ctx(), userID, "dismissed", jobtracking.CardFull, 20, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

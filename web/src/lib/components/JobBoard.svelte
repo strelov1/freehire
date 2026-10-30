@@ -139,7 +139,7 @@
   async function load() {
     status = 'loading';
     try {
-      const slice = await api.listMyJobs('board', 500, 0);
+      const slice = await api.listMyJobs('board', 500, 0, { compact: true });
       build(slice.items);
     } catch {
       status = 'error';

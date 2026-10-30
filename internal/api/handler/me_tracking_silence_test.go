@@ -24,7 +24,7 @@ type silenceRepo struct {
 	items []jobtracking.TrackedJob
 }
 
-func (r silenceRepo) ListInteractions(context.Context, int64, jobtracking.Filter, int32, int32) ([]jobtracking.TrackedJob, error) {
+func (r silenceRepo) ListInteractions(context.Context, int64, jobtracking.Filter, jobtracking.CardDetail, int32, int32) ([]jobtracking.TrackedJob, error) {
 	return r.items, nil
 }
 
