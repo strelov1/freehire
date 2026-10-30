@@ -331,24 +331,35 @@ func TestAppliTrackFetchPlacesPostingsInTheBoardState(t *testing.T) {
 		route("AppliTrackJobId=900", applitrackDetail900).
 		route("AppliTrackJobId=950", applitrackDetail950).
 		route("all=1", applitrackListingBody+applitrackFooter(t, "cch160"))
-	jobs, err := NewAppliTrack(fake).Fetch(context.Background(), applitrackEntry())
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
+	src := NewAppliTrack(fake)
+	unseen := func(string) bool { return false }
+	// Both entry points hydrate an unseen posting, and each passes the board's state on.
+	fetchers := map[string]func() ([]Job, error){
+		"Fetch": func() ([]Job, error) { return src.Fetch(context.Background(), applitrackEntry()) },
+		"FetchNew": func() ([]Job, error) {
+			return src.(HydratingSource).FetchNew(context.Background(), applitrackEntry(), unseen)
+		},
 	}
 	want := map[string]string{
 		"739": "Central Office, Illinois",
 		// A posting with no site row is still placed in its district's state.
 		"812": "Illinois",
 	}
-	if len(jobs) != len(want) {
-		t.Fatalf("got %d jobs, want %d", len(jobs), len(want))
-	}
-	for _, j := range jobs {
-		if j.Location != want[j.ExternalID] {
-			t.Errorf("job %s location = %q, want %q", j.ExternalID, j.Location, want[j.ExternalID])
+	for name, fetch := range fetchers {
+		jobs, err := fetch()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
 		}
-		if len(j.Countries) != 1 || j.Countries[0] != "us" {
-			t.Errorf("job %s countries = %v, want [us]", j.ExternalID, j.Countries)
+		if len(jobs) != len(want) {
+			t.Fatalf("%s: got %d jobs, want %d", name, len(jobs), len(want))
+		}
+		for _, j := range jobs {
+			if j.Location != want[j.ExternalID] {
+				t.Errorf("%s: job %s location = %q, want %q", name, j.ExternalID, j.Location, want[j.ExternalID])
+			}
+			if len(j.Countries) != 1 || j.Countries[0] != "us" {
+				t.Errorf("%s: job %s countries = %v, want [us]", name, j.ExternalID, j.Countries)
+			}
 		}
 	}
 }
