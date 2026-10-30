@@ -76,7 +76,7 @@ The public read endpoints answer without a key, limited per address — for pers
 
 With a full-access key the budget is per account instead, shared by all of its full-access keys and by the access tokens of its signed-in MCP and CLI connections, and its size is the account's tier: Pro and Ultra raise it, and the [API and Data plans](https://freehire.me/jobs-api) raise it further. By default the API and Data plans have no daily cap, and Data has the highest per-minute limit. An embed key is budgeted like no key. Send the key as `Authorization: Bearer <token>`. An API plan also licenses the data for use in your own product, under the [data licence](https://freehire.me/terms#data-licence).
 
-The default budgets. Every public read draws on the same one; `api_limits.tiers` in `GET /plans` lists the figures in force.
+The budgets in force on freehire.me. Every public REST read draws on the same one (the ChatGPT app keeps its own); `api_limits.tiers` in `GET /plans` lists the figures in force.
 
 | Tier | Per minute | Per day |
 |---|---|---|

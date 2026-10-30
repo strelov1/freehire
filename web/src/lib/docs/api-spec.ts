@@ -141,8 +141,8 @@ export const OVERVIEW: Overview[] = [
         'An embed key is budgeted like no key. Send the key as ' +
         '`Authorization: Bearer <token>`. An API plan also licenses the data for use in ' +
         'your own product, under the [data licence](https://freehire.me/terms#data-licence).',
-      'The default budgets. Every public read draws on the same one; `api_limits.tiers` ' +
-        'in `GET /plans` lists the figures in force.',
+      'The budgets in force on freehire.me. Every public REST read draws on the same one ' +
+        '(the ChatGPT app keeps its own); `api_limits.tiers` in `GET /plans` lists the figures in force.',
       '| Tier | Per minute | Per day |\n' +
         '|---|---|---|\n' +
         '| No key (per address) | 120 | 2,000 |\n' +
