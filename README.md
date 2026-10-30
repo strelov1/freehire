@@ -11,9 +11,9 @@
 
 **3.3M+ live postings pulled directly from company career pages — no recruiters, no reposts, no dead links. Fully open source.**
 
-[**Try it live →**](https://freehire.me) · [Features](docs/features.md) · [Architecture](docs/architecture.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
+[**Try it live →**](https://freehire.me/?utm_source=github&utm_medium=readme&utm_campaign=hero) · [Features](docs/features.md) · [Architecture](docs/architecture.md) · [Sources](#sources) · [API](#api) · [Add a source](#adding-a-source) · [Contributing](CONTRIBUTING.md)
 
-[![Live](https://img.shields.io/badge/live-freehire.me-0a0a0a)](https://freehire.me)
+[![Live](https://img.shields.io/badge/live-freehire.me-0a0a0a)](https://freehire.me/?utm_source=github&utm_medium=readme&utm_campaign=badge)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Go version](https://img.shields.io/github/go-mod/go-version/strelov1/freehire)
 ![Last commit](https://img.shields.io/github/last-commit/strelov1/freehire)
@@ -66,7 +66,26 @@ Aggregating **3.3M+ unique live postings** from **470,000+ companies** across
 **124 ATS platforms**, a long tail of aggregators and direct feeds, and **97
 Telegram channels** — **320 sources** in all, see [Sources](#sources) for the full
 breakdown. Reposts of one job across boards are collapsed, so every figure here is
-what [freehire.me/jobs](https://freehire.me/jobs) actually shows.
+what [freehire.me/jobs](https://freehire.me/jobs?utm_source=github&utm_medium=readme&utm_campaign=stats) actually shows.
+
+## Free and Pro
+
+[freehire.me](https://freehire.me/?utm_source=github&utm_medium=readme&utm_campaign=plans) is free for finding and tracking a job,
+for good: every posting and every filter, AI search, alerts by email, Telegram and
+push, the application board, the inbox that sorts employer replies, and search from
+ChatGPT, Claude or any agent over MCP.
+
+**Pro — $5/month** adds the AI that does the applying with you:
+
+- **CV tailoring for each vacancy**, with a cover letter, built only from what is
+  in your CV
+- **The AI assistant**, unlimited
+- **The browser extension fills application forms** for you
+- **Auto-apply in the background**, within a daily limit
+- Members-only channels on the community Discord
+
+Cancel any time; not what you expected — email within 14 days for a refund.
+**[See plans →](https://freehire.me/pricing?utm_source=github&utm_medium=readme&utm_campaign=plans)**
 
 > If freehire saves you time — or you just like the idea of jobs straight from the
 > source — a ⭐ helps other people find it.
@@ -86,8 +105,7 @@ same repository, under the same licence.
 | **Build on** | A keyless public API, a [CLI](https://github.com/strelov1/freehire-cli), an [MCP server](https://github.com/strelov1/freehire-mcp) for Claude Desktop and Claude Code, a form-filling browser extension, ChatGPT Actions |
 
 **[Full feature reference → `docs/features.md`](docs/features.md)** — what each one
-does, where it lives in the tree, which need an LLM endpoint configured, and
-which draw on AI credits.
+does, where it lives in the tree, and which need an LLM endpoint configured.
 
 ## Stack
 
