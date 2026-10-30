@@ -9,17 +9,18 @@ The system SHALL provide an `earcu` source adapter that crawls a single eArcu ca
 site into the catalogue. The adapter is **board-based and single-company**: each
 configured entry's board is the full careers host (e.g. `careers.cambridge.org`), and
 the company is the configured `company`. For each configured board the adapter fetches
-the keyless RSS feed at `https://<board>/jobs/rss` and returns one `Job` per feed
-`<item>`. The crawl is keyless (no API key). The feed names every open posting but only
-previews it — its inline body is a ~1,000-character excerpt ending in "...", and its
-metadata prefix carries a place on few tenants — so the adapter is a `HydratingSource`:
-a posting the catalogue does not hold costs one detail-page request, and a stored one is
-re-listed as a `SeenRefresh` with no request.
+the keyless RSS feed at `https://<board>/jobs/rss`. The crawl is keyless (no API key).
+The feed names every open posting but only previews it — its inline body is a
+~1,000-character excerpt ending in "...", and its metadata prefix carries a place on few
+tenants — so the adapter is a `HydratingSource`: a posting the catalogue does not hold
+costs one detail-page request, and a stored one is re-listed as a `SeenRefresh` with no
+request. A new posting whose detail fetch fails is omitted (see below).
 
-#### Scenario: Board yields all feed items
+#### Scenario: Board yields its feed items
 
 - **WHEN** the adapter fetches a configured board
-- **THEN** it returns one `Job` per `<item>` in that board's `/jobs/rss` feed, each
+- **THEN** it returns a `SeenRefresh` for each stored `<item>` in that board's
+  `/jobs/rss` feed, and for each new `<item>` whose detail fetch succeeds a `Job`
   populated with title, posting/detail URL, external id, free-text location, posted-at,
   and an HTML description
 
