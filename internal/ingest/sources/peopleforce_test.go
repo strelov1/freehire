@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -413,5 +414,60 @@ func TestPeopleForceFetchFailsWhenListingExceedsThePageCap(t *testing.T) {
 	}
 	if fake.calls != peopleforceMaxPages {
 		t.Errorf("got %d listing calls, want exactly %d (the cap, no more)", fake.calls, peopleforceMaxPages)
+	}
+}
+
+// fetchPeopleForceFixture serves one listing card whose detail page is a trimmed live page
+// from testdata/peopleforce, and returns the single job the crawl yields.
+func fetchPeopleForceFixture(t *testing.T, fixture, slug, title string) Job {
+	t.Helper()
+	page, err := os.ReadFile("testdata/peopleforce/" + fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := (&routedHTTP{}).
+		route("?page=1", peopleforceListingHTML([2]string{slug, title})).
+		route("/careers/v/"+slug, string(page))
+	jobs, err := NewPeopleForce(fake).Fetch(context.Background(), CompanyEntry{
+		Company: "Acme", Provider: "peopleforce", Board: "acme",
+	})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	return jobs[0]
+}
+
+// The detail layout every live tenant serves (all 40 boards sampled 2026-10-30) has no <dl>
+// sidebar: its place and work type sit in a vacancy_meta row whose items are told apart only
+// by their icon. Reading only the <dl> left every open posting without a location or country.
+func TestPeopleForceReadsLocationFromTheVacancyMetaRow(t *testing.T) {
+	j := fetchPeopleForceFixture(t, "detail_meta_location.html",
+		"247873-customer-support-specialist-with-german", "Customer Support Specialist with German")
+	// The sitemap item ("Autenti S.A.") is the tenant's legal entity, not a place.
+	if j.Location != "Remote Poland" {
+		t.Errorf("Location = %q, want the map-marker item", j.Location)
+	}
+	if !j.Remote {
+		t.Errorf("Remote = false for %q", j.Location)
+	}
+	// "CoE" is a tenant-defined work type outside the vocabulary.
+	if j.EmploymentType != "" {
+		t.Errorf("EmploymentType = %q, want empty", j.EmploymentType)
+	}
+	if !strings.Contains(j.Description, "Customer Support Specialist") {
+		t.Errorf("Description = %q", j.Description)
+	}
+}
+
+func TestPeopleForceVacancyMetaWithoutAPlaceLeavesLocationEmpty(t *testing.T) {
+	j := fetchPeopleForceFixture(t, "detail_meta_no_location.html", "203055-data-analyst", "Data Analyst")
+	if j.Location != "" {
+		t.Errorf("Location = %q, want empty: the posting names no place", j.Location)
+	}
+	if j.EmploymentType != "full_time" {
+		t.Errorf("EmploymentType = %q, want full_time from the clock item", j.EmploymentType)
 	}
 }

@@ -15,8 +15,9 @@ import (
 // "gigacloud"), forming the host "<board>.peopleforce.io". The tenant's listing is
 // server-rendered HTML paginated via ?page=N, each job card linking to a
 // /careers/v/<id>-<slug> detail page. The detail page carries no schema.org JobPosting, so
-// its fields are read from the DOM: the description is the Bootstrap col-lg-8 column and a
-// <dl> sidebar holds Work type / Location. The title comes from the listing anchor (the
+// its fields are read from the DOM: the description is the Bootstrap col-lg-8 column and the
+// vacancy_meta row under the heading holds Work type / Location (an older theme put them in a
+// <dl> sidebar, still read as a fallback). The title comes from the listing anchor (the
 // detail <h1> is the generic "Work at <Company>").
 type peopleforce struct {
 	http HTMLGetter
@@ -132,7 +133,10 @@ func (s peopleforce) detail(ctx context.Context, e CompanyEntry, c peopleforceLi
 		return Job{}, false
 	}
 
-	fields := peopleforceDefList(root)
+	fields := peopleforceVacancyMeta(root)
+	if len(fields) == 0 {
+		fields = peopleforceDefList(root)
+	}
 	location := fields["Location"]
 	description := ""
 	col := firstByClass(root, "col-lg-8")
@@ -224,6 +228,49 @@ func peopleforceListings(base *url.URL, root *html.Node) []peopleforceListing {
 		seen[abs] = struct{}{}
 		out = append(out, peopleforceListing{URL: abs, Title: textContent(n)})
 		return true
+	})
+	return out
+}
+
+// peopleforceMetaIcons names the vacancy_meta items by the Font Awesome icon that is their only
+// label. The other two the row carries are deliberately absent: fa-briefcase is the department
+// and fa-sitemap the tenant's division or legal entity ("Autenti S.A.", "Europe") — neither
+// is where the work happens.
+var peopleforceMetaIcons = map[string]string{
+	"fa-map-marker-alt": "Location",
+	"fa-clock":          "Work type",
+}
+
+// peopleforceVacancyMeta reads the detail page's vacancy_meta row — the layout every tenant
+// serves since the <dl> sidebar went away (all 40 boards sampled 2026-10-30) — into the same
+// label→value map peopleforceDefList builds. Each item is an icon followed by its value as bare
+// text; an item the posting leaves blank is simply not rendered, so a posting naming no place
+// has no Location key. Returns an empty map for a page without the row.
+func peopleforceVacancyMeta(root *html.Node) map[string]string {
+	out := map[string]string{}
+	meta := firstByAttr(root, "data-cy", "vacancy_meta")
+	if meta == nil {
+		return out
+	}
+	walk(meta, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "i" {
+			return true
+		}
+		for icon, label := range peopleforceMetaIcons {
+			if !HasClass(n, icon) {
+				continue
+			}
+			var value strings.Builder
+			for s := n.NextSibling; s != nil; s = s.NextSibling {
+				if s.Type == html.TextNode {
+					value.WriteString(s.Data)
+				}
+			}
+			if v := strings.TrimSpace(value.String()); v != "" {
+				out[label] = v
+			}
+		}
+		return false
 	})
 	return out
 }
