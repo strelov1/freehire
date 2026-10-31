@@ -17,6 +17,8 @@ import (
 type phenomFake struct {
 	pages   map[int]string
 	details map[string]string
+	// slices serves the listing filtered to one state (selected_fields), by state and offset.
+	slices map[string]map[int]string
 
 	mu     sync.Mutex
 	detail []string
@@ -26,7 +28,11 @@ func (f *phenomFake) PostJSON(_ context.Context, _ string, body, v any) error {
 	m := body.(map[string]any)
 	switch m["ddoKey"] {
 	case "refineSearch":
-		page, ok := f.pages[m["from"].(int)]
+		pages := f.pages
+		if sel, ok := m["selected_fields"].(map[string][]string); ok {
+			pages = f.slices[sel["state"][0]]
+		}
+		page, ok := pages[m["from"].(int)]
 		if !ok {
 			return fmt.Errorf("unexpected page from=%v", m["from"])
 		}
@@ -138,22 +144,56 @@ func TestPhenomFetchListsToTheStatedTotalAndFetchesDetail(t *testing.T) {
 	}
 }
 
-// The listing serves nothing once from+size reaches 10,000: a page past that window answers
-// empty with a total of 0, however many postings the board states. The walk ends there with
-// what it read rather than failing the board — a board over the window would otherwise never
-// be crawled at all.
-func TestPhenomEndsTheWalkAtTheListingWindow(t *testing.T) {
+// The listing serves nothing once from+size reaches 10,000, so a board stating more is read one
+// state at a time (selected_fields): each slice is under the window and is walked to its own
+// end. A posting listed in several states comes back once.
+func TestPhenomReadsABoardOverTheWindowStateByState(t *testing.T) {
 	fake := &phenomFake{
-		pages: map[int]string{
-			0: phenomListPage(15000, "S0", "S1"),
-			2: phenomListPage(0),
+		pages: map[int]string{0: phenomOverWindowPage(15000, map[string]int{"Ohio": 9000, "Texas": 7000}, "S0")},
+		slices: map[string]map[int]string{
+			"Ohio":  {0: phenomListPage(9000, "O1", "O2"), 2: phenomListPage(9000, "O3", "S9"), 4: phenomListPage(0)},
+			"Texas": {0: phenomListPage(7000, "T1", "S9"), 2: phenomListPage(0)},
 		},
-		details: map[string]string{"S0": phenomDetail("<p>a</p>"), "S1": phenomDetail("<p>b</p>")},
 	}
-	jobs, err := NewPhenom(fake).Fetch(context.Background(), phenomEntry)
-	if err != nil || len(jobs) != 2 {
-		t.Fatalf("Fetch = %d jobs, %v; want the 2 read and no error", len(jobs), err)
+	all := func(string) bool { return true }
+	jobs, err := NewPhenom(fake).(HydratingSource).FetchNew(context.Background(), phenomEntry, all)
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
 	}
+	var ids []string
+	for _, j := range jobs {
+		ids = append(ids, j.ExternalID)
+	}
+	slices.Sort(ids)
+	if got := strings.Join(ids, ","); got != "O1,O2,O3,S9,T1" {
+		t.Errorf("read %q, want every state's postings once (one listed in two states is one)", got)
+	}
+}
+
+// A board over the window is read only when its slices account for every posting it states and
+// each fits under the window; otherwise the crawl fails rather than passing a partial read off
+// as the board.
+func TestPhenomFailsABoardOverTheWindowItCannotSlice(t *testing.T) {
+	cases := map[string]string{
+		"states short of the total": phenomOverWindowPage(15000, map[string]int{"Ohio": 9000, "Texas": 5000}),
+		"a state over the window":   phenomOverWindowPage(15000, map[string]int{"Ohio": 12000, "Texas": 3000}),
+		"no state counts":           phenomListPage(15000),
+	}
+	for name, first := range cases {
+		t.Run(name, func(t *testing.T) {
+			fake := &phenomFake{pages: map[int]string{0: first}}
+			if _, err := NewPhenom(fake).Fetch(context.Background(), phenomEntry); err == nil {
+				t.Fatal("Fetch succeeded on a board over the window it could not slice")
+			}
+		})
+	}
+}
+
+// phenomOverWindowPage is the first page of a board stating more postings than the listing
+// window serves, carrying the per-state counts the request asks for.
+func phenomOverWindowPage(total int, states map[string]int, seqs ...string) string {
+	agg, _ := json.Marshal([]map[string]any{{"field": "state", "value": states}})
+	return strings.Replace(phenomListPage(total, seqs...), `"data":{`, `"data":{"aggregations":`+string(agg)+`,`, 1)
 }
 
 // An answer without totalHits is not a listing this adapter can prove complete.
@@ -178,7 +218,7 @@ func TestPhenomFailsAListingPastItsPageCeiling(t *testing.T) {
 	// Every page claims more remains; the walk must stop at its ceiling and fail.
 	fake := &phenomFake{pages: map[int]string{}}
 	for p := 0; p <= phenomMaxPages; p++ {
-		fake.pages[p] = phenomListPage(1<<30, fmt.Sprintf("S%d", p))
+		fake.pages[p] = phenomListPage(phenomListingWindow, fmt.Sprintf("S%d", p))
 	}
 	if _, err := NewPhenom(fake).Fetch(context.Background(), phenomEntry); err == nil {
 		t.Fatal("Fetch succeeded past its page ceiling")

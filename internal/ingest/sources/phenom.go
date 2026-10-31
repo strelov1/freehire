@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"maps"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"sync/atomic"
 )
@@ -161,54 +163,152 @@ func claimBudget(budget *atomic.Int64, want int64) int64 {
 // deliberately omitted from the body: they do not change the result set (verified), so the
 // board host is the only per-tenant input.
 //
-// The walk advances by what each page actually held and stops at the total the first page
-// stated, or at an empty page. The empty page is also where a board over the listing's
-// 10,000-result window ends (past it the API answers empty with a total of 0): such a board is
-// read to the window and no further, which is all the API serves through this request.
+// The listing serves nothing once from+size reaches phenomListingWindow (past it the API
+// answers empty with a total of 0), so a board stating more is read one state at a time
+// instead (see listByState); the first page asks for the per-state counts that needs, so a
+// board under the window costs no extra request.
 //
 // It is not a proof of the whole board, and the adapter does not claim fullBoardListing: the
 // listing's order is not stable between requests, so one walk reads ~85-92% of a board's
 // distinct postings (see TestPhenomIsNotFullBoardListing). Successive walks read different
 // subsets, which is what keeps the 48h company-scoped sweep safe.
 func (s phenom) list(ctx context.Context, board string) ([]phenomPosting, error) {
-	url := fmt.Sprintf("https://%s/widgets", board)
+	first, err := s.page(ctx, board, nil, 0, true)
+	if err != nil {
+		return nil, err
+	}
+	if first.total <= phenomListingWindow {
+		return s.walk(ctx, board, nil, &first)
+	}
+	return s.listByState(ctx, board, first)
+}
+
+// phenomListingWindow is how far into one listing the API serves: a page reaching past the
+// 10,000th result answers empty (measured 2026-10-30). Six of 382 boards stated more on
+// 2026-10-31 — CVS and O'Reilly ~19.1k, Advance Auto Parts 16.5k, Dollar Tree 15.4k, two of
+// them under two hostnames each.
+const phenomListingWindow = 10000
+
+// listByState reads a board over the listing window as one walk per state (the
+// selected_fields facet filter), every one under the window. The partition is checked against
+// the counts the board's first page stated before anything is read: every state must fit the
+// window, and together they must account for the board's total, or the crawl fails rather than
+// pass a partial read off as the board. The sum may exceed the total — a multi-location posting
+// is counted, and listed, under each of its states (CVS: 23,224 for 19,099) — and crawl keeps
+// one copy of each posting.
+//
+// State, not category or country, because it is the only facet that slices every board over
+// the window: Advance Auto Parts and Dollar Tree each hold ~99% of their postings under one
+// category, and every board's country is ~all US. It also reads more of a board: a slice
+// that fits one page is read whole, where offset paging loses postings between pages (CVS
+// 2026-10-31: 94.6% distinct by state, 86.4% by category).
+func (s phenom) listByState(ctx context.Context, board string, first phenomPage) ([]phenomPosting, error) {
+	counted := 0
+	for state, n := range first.states {
+		if n > phenomListingWindow {
+			return nil, fmt.Errorf("phenom: list board %s: %d postings, and state %q alone holds %d, over the %d the listing serves", board, first.total, state, n, phenomListingWindow)
+		}
+		counted += n
+	}
+	if counted < first.total {
+		return nil, fmt.Errorf("phenom: list board %s: %d postings over the %d the listing serves, and its states account for only %d", board, first.total, phenomListingWindow, counted)
+	}
 	var postings []phenomPosting
-	total := -1
-	for page, from := 0, 0; ; page++ {
-		if page == phenomMaxPages {
-			return nil, fmt.Errorf("phenom: list board %s: %d pages without reaching the stated total %d", board, page, total)
+	for _, state := range slices.Sorted(maps.Keys(first.states)) {
+		filter := map[string][]string{"state": {state}}
+		got, err := s.walk(ctx, board, filter, nil)
+		if err != nil {
+			return nil, err
 		}
-		body := map[string]any{
-			"deviceType": "desktop",
-			"ddoKey":     "refineSearch",
-			"jobs":       true,
-			"from":       from,
-			"size":       phenomPageSize,
-		}
-		var resp struct {
-			RefineSearch struct {
-				TotalHits *int `json:"totalHits"`
-				Data      struct {
-					Jobs []phenomPosting `json:"jobs"`
-				} `json:"data"`
-			} `json:"refineSearch"`
-		}
-		if err := s.http.PostJSON(ctx, url, body, &resp); err != nil {
-			return nil, fmt.Errorf("phenom: list board %s: %w", board, err)
-		}
-		if total < 0 {
-			if resp.RefineSearch.TotalHits == nil {
-				return nil, errListingAbsent("phenom", board, "totalHits")
-			}
-			total = *resp.RefineSearch.TotalHits
-		}
-		got := resp.RefineSearch.Data.Jobs
 		postings = append(postings, got...)
-		from += len(got)
-		if len(got) == 0 || from >= total {
-			return postings, nil
+	}
+	log.Printf("phenom: board %q states %d postings, over the listing window: read in %d state slices", board, first.total, len(first.states))
+	return postings, nil
+}
+
+// phenomPage is one refineSearch answer: the total the listing states, the page's postings,
+// and — when asked for — the per-state counts.
+type phenomPage struct {
+	total  int
+	jobs   []phenomPosting
+	states map[string]int
+}
+
+// walk pages one listing — the whole board, or the slice filter selects — to the total its
+// first page states, advancing by what each page actually held and stopping there or at an
+// empty page. first is that page when the caller already holds it, nil when it does not.
+func (s phenom) walk(ctx context.Context, board string, filter map[string][]string, first *phenomPage) ([]phenomPosting, error) {
+	if first == nil {
+		p, err := s.page(ctx, board, filter, 0, false)
+		if err != nil {
+			return nil, err
+		}
+		first = &p
+	}
+	if first.total < 0 {
+		return nil, errListingAbsent("phenom", board, "totalHits")
+	}
+	postings := first.jobs
+	from := len(first.jobs)
+	for pages := 1; len(postings) > 0 && from < first.total; pages++ {
+		if pages == phenomMaxPages {
+			return nil, fmt.Errorf("phenom: list board %s: %d pages without reaching the stated total %d", board, pages, first.total)
+		}
+		next, err := s.page(ctx, board, filter, from, false)
+		if err != nil {
+			return nil, err
+		}
+		if len(next.jobs) == 0 {
+			break
+		}
+		postings = append(postings, next.jobs...)
+		from += len(next.jobs)
+	}
+	return postings, nil
+}
+
+// page reads one refineSearch page at from, narrowed to filter when it is set; withStates asks
+// for the board's per-state counts beside it.
+func (s phenom) page(ctx context.Context, board string, filter map[string][]string, from int, withStates bool) (phenomPage, error) {
+	body := map[string]any{
+		"deviceType": "desktop",
+		"ddoKey":     "refineSearch",
+		"jobs":       true,
+		"from":       from,
+		"size":       phenomPageSize,
+	}
+	if filter != nil {
+		body["selected_fields"] = filter
+	}
+	if withStates {
+		body["counts"] = true
+		body["all_fields"] = []string{"state"}
+	}
+	var resp struct {
+		RefineSearch struct {
+			TotalHits *int `json:"totalHits"`
+			Data      struct {
+				Jobs         []phenomPosting `json:"jobs"`
+				Aggregations []struct {
+					Field string         `json:"field"`
+					Value map[string]int `json:"value"`
+				} `json:"aggregations"`
+			} `json:"data"`
+		} `json:"refineSearch"`
+	}
+	if err := s.http.PostJSON(ctx, fmt.Sprintf("https://%s/widgets", board), body, &resp); err != nil {
+		return phenomPage{}, fmt.Errorf("phenom: list board %s: %w", board, err)
+	}
+	p := phenomPage{total: -1, jobs: resp.RefineSearch.Data.Jobs}
+	if resp.RefineSearch.TotalHits != nil {
+		p.total = *resp.RefineSearch.TotalHits
+	}
+	for _, a := range resp.RefineSearch.Data.Aggregations {
+		if a.Field == "state" {
+			p.states = a.Value
 		}
 	}
+	return p, nil
 }
 
 // detail fetches one posting's jobDetail and maps it to a Job, returning ok=false when
