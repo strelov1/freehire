@@ -342,8 +342,22 @@ func (h *mentorshipHandlers) GetMentorSlots(c *fiber.Ctx) error {
 		return mentorshipError(err)
 	}
 
-	out := make([]slotResponse, 0, len(result.Slots))
-	for _, s := range result.Slots {
+	out := slotResponses(result.Slots)
+
+	// The zone is echoed because it may NOT be the one that was asked for: an
+	// unrecognised name falls back to UTC, and a client that does not know which zone it
+	// was answered in cannot tell a correct time from a wrong one.
+	return c.JSON(fiber.Map{
+		"data": out,
+		"meta": fiber.Map{"timezone": result.Zone, "count": len(out)},
+	})
+}
+
+// slotResponses renders engine slots for the wire: the instant, the wall clock and the
+// offset, for the reasons slotResponse gives. Buddy mock slots use it too.
+func slotResponses(ivs []slots.Interval) []slotResponse {
+	out := make([]slotResponse, 0, len(ivs))
+	for _, s := range ivs {
 		_, offset := s.Start.Zone()
 		out = append(out, slotResponse{
 			StartsAt:   s.Start.UTC(),
@@ -353,14 +367,7 @@ func (h *mentorshipHandlers) GetMentorSlots(c *fiber.Ctx) error {
 			UTCOffset:  offsetLabel(offset),
 		})
 	}
-
-	// The zone is echoed because it may NOT be the one that was asked for: an
-	// unrecognised name falls back to UTC, and a client that does not know which zone it
-	// was answered in cannot tell a correct time from a wrong one.
-	return c.JSON(fiber.Map{
-		"data": out,
-		"meta": fiber.Map{"timezone": result.Zone, "count": len(out)},
-	})
+	return out
 }
 
 // maxSlotWindowDays bounds how much a single request may ask to have computed. The

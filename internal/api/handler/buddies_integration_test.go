@@ -73,8 +73,12 @@ func newBuddyEnv(t *testing.T, names ...string) *buddyEnv {
 		cookie:    auth.RequireAuth(iss, testVersions),
 		moderator: auth.RequireRole(queries, "moderator"),
 	}
-	newBuddyHandlers(buddy.New(repo, msg)).register(env.app.Group("/api/v1"), mw)
-	newConversationHandlers(msg).register(env.app.Group("/api/v1"), mw)
+	svc := buddy.New(repo, msg)
+	// Notices land in the notification center only (no mail transport), which is what the
+	// leave and block tests read to see that the other participant was told.
+	mocks := buddy.NewMockService(svc, repo, buddy.NewMockMailNotifier(queries, nil, "", ""))
+	newBuddyHandlers(svc, mocks).register(env.app.Group("/api/v1"), mw)
+	newConversationHandlers(msg, mocks).register(env.app.Group("/api/v1"), mw)
 	return env
 }
 

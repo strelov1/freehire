@@ -3914,7 +3914,7 @@ git commit -m "Remind buddy mock participants from mentorship-remind"
   - Status mapping: 422 invalid settings/topic/review/not cancellable/rule; 409 slot unavailable, already reviewed; 429 guest limit; 404 not found (unknown/left/blocked/self handle, unknown mock); 403 not a member; 500 a stored zone that no longer resolves.
   - `newBuddyHandlers(svc *buddy.Service, mocks *buddy.MockService) *buddyHandlers`; `newConversationHandlers(msg *messaging.Service, mocks *buddy.MockService) *conversationHandlers`; `slotResponses(ivs []slots.Interval) []slotResponse`.
 
-- [ ] 10.1 Write the failing handler tests `internal/api/handler/buddy_mocks_integration_test.go`:
+- [x] 10.1 Write the failing handler tests `internal/api/handler/buddy_mocks_integration_test.go`:
 
 ```go
 //go:build integration
@@ -4021,9 +4021,9 @@ func TestBuddyMockRoutesHideAMemberAcrossABlock(t *testing.T) {
 }
 ```
 
-- [ ] 10.2 Run: `go vet -tags=integration ./internal/api/handler/`. Expected: PASS (the test only calls existing helpers); then `go test -tags=integration ./internal/api/handler/ -run 'TestBuddyMock' -count=1`. Expected: FAIL — 404 on `/api/v1/me/buddies/mocks/settings` (no route).
+- [x] 10.2 Run: `go vet -tags=integration ./internal/api/handler/`. Expected: PASS (the test only calls existing helpers); then `go test -tags=integration ./internal/api/handler/ -run 'TestBuddyMock' -count=1`. Expected: FAIL — 404 on `/api/v1/me/buddies/mocks/settings` (no route).
 
-- [ ] 10.3 Extract the slot rendering mentorship already does so both endpoints share it. In `internal/api/handler/mentorship.go` replace lines 344-354
+- [x] 10.3 Extract the slot rendering mentorship already does so both endpoints share it. In `internal/api/handler/mentorship.go` replace lines 344-354
 
 ```go
 	out := make([]slotResponse, 0, len(result.Slots))
@@ -4063,7 +4063,7 @@ func slotResponses(ivs []slots.Interval) []slotResponse {
 }
 ```
 
-- [ ] 10.4 Create `internal/api/handler/buddy_mocks.go`:
+- [x] 10.4 Create `internal/api/handler/buddy_mocks.go`:
 
 ```go
 package handler
@@ -4452,7 +4452,7 @@ func (h *buddyHandlers) MockReviews(c *fiber.Ctx) error {
 }
 ```
 
-- [ ] 10.5 Wire the handlers. In `internal/api/handler/buddies.go` replace
+- [x] 10.5 Wire the handlers. In `internal/api/handler/buddies.go` replace
 
 ```go
 type buddyHandlers struct {
@@ -4579,9 +4579,9 @@ with
 	newConversationHandlers(msg, mocks).register(env.app.Group("/api/v1"), mw)
 ```
 
-- [ ] 10.6 Run: `go build ./... && go vet -tags=integration ./internal/api/handler/ && go test -tags=integration ./internal/api/handler/ -run 'TestBuddy|Mentor' -count=1`. Expected: `ok` (the existing buddy and mentorship handler tests pass with the new wiring).
+- [x] 10.6 Run: `go build ./... && go vet -tags=integration ./internal/api/handler/ && go test -tags=integration ./internal/api/handler/ -run 'TestBuddy|Mentor' -count=1`. Expected: `ok` (the existing buddy and mentorship handler tests pass with the new wiring).
 
-- [ ] 10.7 Verify and commit:
+- [x] 10.7 Verify and commit:
 
 ```bash
 gofmt -l internal/api/handler && go vet ./... && go test ./... && go vet -tags=integration ./...
