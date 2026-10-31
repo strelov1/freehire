@@ -7,7 +7,7 @@ other insights rollups, over canonical (`duplicate_of IS NULL`), public (`NOT
 is_private`), categorized postings:
 
 - the sum of `job_daily_views.page_uniques` of the category's postings over the 30 days
-  ending on the freshest day the views table holds, and over the 30 days before; never
+  ending on the freshest complete (before today, UTC) day the views table holds, and over the 30 days before; never
   `uniques`;
 - the posting-days the category's postings were visible on freehire within each of those
   two windows, a posting being visible from `created_at` until `closed_at` (or now);

@@ -72,7 +72,10 @@ func TestInsightsRolePulseRollup(t *testing.T) {
 		t.Fatalf("mark private: %v", err)
 	}
 	old := jobIDByExternal(t, ctx, pool, "old")
-	// The freshest views day is yesterday, so both windows end there.
+	// The freshest COMPLETE views day is yesterday, so both windows end there. Today's
+	// row is a partial day (cmd/rollup-views can land one mid-day) and must not anchor
+	// the windows or count.
+	seedJobViews(t, pool, old, 0, 999, 100)
 	seedJobViews(t, pool, old, 1, 99, 2)
 	seedJobViews(t, pool, old, 3, 500, 7)
 	seedJobViews(t, pool, old, 40, 60, 4)

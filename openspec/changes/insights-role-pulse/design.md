@@ -64,10 +64,11 @@ freehire had not found yet and nobody could have viewed here. **This is the one 
 site, not when it existed. Published as views × 30 / exposure — "views per open posting
 per month". Measured: software_engineering 4.5 vs 4.5, healthcare 3.4 vs 1.4.
 
-Both windows are anchored on the freshest day `job_daily_views` holds (the rule
-`cmd/social-digest` follows), not on `now()`: `cmd/rollup-views` lands a day after it
-ends, so a `now()`-anchored window would compare 29 days of views with 30 days of
-exposure. Same population on both sides (canonical, public, categorized) — a numerator
+Both windows are anchored on the freshest COMPLETE day `job_daily_views` holds (before
+today, UTC), not on `now()`: `cmd/rollup-views` usually lands a day after it ends, so a
+`now()`-anchored window would compare 29 days of views with 30 days of exposure, and a
+partial row for today (prod held one on 2026-10-30) would set part of a day's views
+against a full day of exposure. Same population on both sides (canonical, public, categorized) — a numerator
 and a denominator counting different populations is a quietly wrong ratio.
 
 ### Time to close: median existence-to-close over closes that describe the posting

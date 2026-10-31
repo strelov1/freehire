@@ -1293,7 +1293,11 @@ func (q *Queries) RebuildInsightsRoleCountryStatsGlobal(ctx context.Context, pre
 
 const rebuildInsightsRolePulse = `-- name: RebuildInsightsRolePulse :execrows
 WITH anchor AS (
-    SELECT coalesce(max(day), (now() AT TIME ZONE 'UTC')::date) AS d FROM job_daily_views
+    -- The freshest COMPLETE day: today's row, when cmd/rollup-views has landed one, holds
+    -- part of a day's views and would be set against a full day of exposure.
+    SELECT coalesce(max(day), (now() AT TIME ZONE 'UTC')::date - 1) AS d
+    FROM job_daily_views
+    WHERE day < (now() AT TIME ZONE 'UTC')::date
 ), w AS (
     SELECT
         d,
@@ -1376,8 +1380,9 @@ type RebuildInsightsRolePulseParams struct {
 // a posting here before we found it, and the existence rule would charge a backlog posting
 // for weeks it was not on the site. A view on a day the posting was already closed is not
 // counted, so numerator and denominator are the same population. Both windows end on the
-// freshest views day rather than on now(): cmd/rollup-views lands a day after it ends, and
-// a now()-anchored window would set 29 days of views against 30 of exposure.
+// freshest COMPLETE views day (before today, UTC) rather than on now(): cmd/rollup-views
+// usually lands a day after it ends, and a now()-anchored window would set 29 days of
+// views against 30 of exposure.
 //
 // TIME TO CLOSE is the median days from existence to close over closes that describe the
 // POSTING: unseen, feed_removed, probe_expired, employer_closed. Not expired (a 45-day age
