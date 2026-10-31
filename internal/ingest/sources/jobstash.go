@@ -23,7 +23,7 @@ const (
 	jobstashDetailURL = "https://jobstash.xyz/jobs/%s/details"
 	jobstashPageSize  = 200
 	// jobstashMaxPages bounds pagination so a server that mis-reports total (never
-	// emptying its data) cannot loop forever; the empty-page check ends it sooner.
+	// emptying its data) cannot loop forever; running out of pages fails the crawl.
 	jobstashMaxPages = 200
 )
 
@@ -37,6 +37,14 @@ func (jobstash) boardless() {}
 
 // jobstash aggregates postings from many companies, so it stays in the source facet.
 func (jobstash) aggregator() {}
+
+// jobstash lists its whole catalogue every run: the list endpoint pages through every posting
+// (measured 2026-10-31: 85 pages of 200, 16,963 postings), and list fails a walk that ends
+// short of the reported total or names no posting at all. So the sweep may close by source,
+// which reaches the postings of an employer with nothing left in the feed — the company scope
+// never names that employer again, and on 2026-10-31 ~3k open postings under such employers
+// had gone unseen for a week. See the fullCatalog interface (source.go) for the bar.
+func (jobstash) fullCatalog() {}
 
 // jobstashPosting is one posting with its body inline (no detail call). url is already the
 // right target: the downstream ATS link for a public posting, the JobStash page for a
@@ -72,9 +80,13 @@ func (j jobstash) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	return jobs, nil
 }
 
-// list walks the job-list endpoint page by page (page size jobstashPageSize) until the
-// reported total is reached or a page returns no postings, whichever comes first. Each page
-// carries postings with their body inline.
+// list walks the job-list endpoint page by page (page size jobstashPageSize) until it has read
+// the reported total. Each page carries postings with their body inline.
+//
+// The walk is the whole catalogue or an error, because jobstash is swept by source: a page that
+// comes back empty before the total, a walk that runs out of pages, or a listing with no posting
+// in it would otherwise read as every unlisted posting gone. The total is the latest page's, so
+// a catalogue that shrinks during the walk still ends cleanly.
 func (j jobstash) list(ctx context.Context) ([]jobstashPosting, error) {
 	var all []jobstashPosting
 	for page := 1; page <= jobstashMaxPages; page++ {
@@ -87,11 +99,14 @@ func (j jobstash) list(ctx context.Context) ([]jobstashPosting, error) {
 			return nil, fmt.Errorf("jobstash: page %d: %w", page, err)
 		}
 		all = append(all, resp.Data...)
-		if len(resp.Data) == 0 || len(all) >= resp.Total {
-			break
+		if len(all) > 0 && len(all) >= resp.Total {
+			return all, nil
+		}
+		if len(resp.Data) == 0 {
+			return nil, fmt.Errorf("jobstash: page %d listed nothing after %d of %d postings", page, len(all), resp.Total)
 		}
 	}
-	return all, nil
+	return nil, fmt.Errorf("jobstash: listing not finished after %d pages (%d postings read)", jobstashMaxPages, len(all))
 }
 
 // toJob maps an inline posting to a Job, returning ok=false for an unusable posting (no

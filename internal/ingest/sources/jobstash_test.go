@@ -52,22 +52,22 @@ func TestJobStashRegisteredAndFilterable(t *testing.T) {
 }
 
 func TestJobStashFetchPaginatesAndMaps(t *testing.T) {
-	// total=300 with page size 200: page 1 then page 2 (after which len(all)=2... the
-	// loop stops on the empty page 3). Each posting's body is inline — no detail call.
+	// total=2 across two pages: the walk reads page 2 because page 1 left it short of the
+	// total, and stops there because it reached it. Each posting's body is inline — no detail
+	// call.
 	fake := (&routedHTTP{}).
-		route("page=1", jobstashListPage(300,
+		route("page=1", jobstashListPage(2,
 			jobstashJob("Z2IGg7", "Associate Tech Lead", "KAST",
 				"https://kastcard.pinpointhq.com/en/postings/abc", "public",
 				"Remote", "HYBRID", 1781521356188,
 				"Design back-end components", "6+ years experience"),
 		)).
-		route("page=2", jobstashListPage(300,
+		route("page=2", jobstashListPage(2,
 			jobstashJob("PqCopo", "Head of Capital", "Symbiotic",
 				"https://jobstash.xyz/jobs/PqCopo/details", "protected",
 				"New York", "REMOTE", 1746057600000,
 				"Lead fundraising", "Network"),
-		)).
-		route("page=3", jobstashListPage(300)) // empty tail page ends pagination
+		))
 
 	jobs, err := NewJobStash(fake).Fetch(context.Background(), CompanyEntry{Provider: "jobstash"})
 	if err != nil {
@@ -167,14 +167,41 @@ func TestJobStashSkipsPostingWithoutCompanyOrID(t *testing.T) {
 	}
 }
 
-func TestJobStashEmptyListYieldsNoJobsNoError(t *testing.T) {
+// jobstash is swept by source, so a listing that names no posting at all must fail rather than
+// read as a catalogue that emptied overnight — the source-scoped close would retire every open
+// posting it holds.
+func TestJobStashEmptyListingIsAnError(t *testing.T) {
 	fake := (&routedHTTP{}).route("page=1", jobstashListPage(0))
 
-	jobs, err := NewJobStash(fake).Fetch(context.Background(), CompanyEntry{Provider: "jobstash"})
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
+	if _, err := NewJobStash(fake).Fetch(context.Background(), CompanyEntry{Provider: "jobstash"}); err == nil {
+		t.Fatal("want an error: an empty listing is not evidence that every posting is gone")
 	}
-	if len(jobs) != 0 {
-		t.Fatalf("got %d jobs, want 0", len(jobs))
+}
+
+// A page that comes back empty before the walk reached the reported total is a truncated
+// listing, and a truncated listing must fail: returned as a success, the source-scoped sweep
+// would close every posting past the point the API stopped answering.
+func TestJobStashShortListingIsAnError(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("page=1", jobstashListPage(300,
+			jobstashJob("Z2IGg7", "Associate Tech Lead", "KAST", "", "public", "Remote", "REMOTE", 1781521356188, "a", "b"),
+		)).
+		route("page=2", jobstashListPage(300))
+
+	if _, err := NewJobStash(fake).Fetch(context.Background(), CompanyEntry{Provider: "jobstash"}); err == nil {
+		t.Fatal("want an error: the listing stopped at 1 of 300 postings")
+	}
+}
+
+// JobStash's list endpoint pages through the whole catalogue (measured 2026-10-31: 85 pages,
+// 16,963 postings, every page full until the last), so an open posting a clean run did not list
+// is gone — including one whose company has no posting left in the feed, which the company
+// scope never reaches.
+func TestJobStashIsFullCatalog(t *testing.T) {
+	if !isFullCatalog(NewJobStash(nil)) {
+		t.Error("jobstash should implement the fullCatalog marker")
+	}
+	if !slices.Contains(FullCatalogProviders(All(nil)), "jobstash") {
+		t.Error("FullCatalogProviders() should include jobstash")
 	}
 }
