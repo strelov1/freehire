@@ -12,6 +12,7 @@
     columnShare,
     growthLevel,
     growthPercent,
+    roundedGrowth,
     shareLevel,
     type CellTarget,
     type GridCell,
@@ -24,6 +25,10 @@
   // Both numbers are always printed, so the table reads the same without JavaScript;
   // the switch only chooses what the colour encodes.
   let shading = $state<'open' | 'growth'>('open');
+  const SHADINGS = [
+    ['open', 'Share of country'],
+    ['growth', '30-day change'],
+  ] as const;
   // Every row is in the HTML — crawlers and no-JS readers get all of them; "show all"
   // only unhides the tail on screen.
   let showAll = $state(false);
@@ -47,12 +52,6 @@
   function shadeOf(country: string, cell: GridCell): string {
     if (shading === 'growth') return GROWTH_SHADES[growthLevel(growthPercent(cell))] ?? '';
     return OPEN_SHADES[shareLevel(columnShare(cell.open, grid.columnTotals.get(country) ?? 0), grid.maxShare)] ?? '';
-  }
-
-  /** The 30-day change as a whole percent, or null under the base floor. */
-  function roundedGrowth(cell: GridCell): number | null {
-    const pct = growthPercent(cell);
-    return pct === null ? null : Math.round(pct);
   }
 
   // Red and green only where they are the encoding: in the share view the cell colour
@@ -102,18 +101,14 @@
         <p class="mt-0.5 text-sm text-muted-foreground">Open roles by country, and how that changed over 30 days.</p>
       </div>
       <div class="inline-flex rounded-md border border-border p-0.5 text-sm" role="group" aria-label="Shade cells by">
-        <button
-          type="button"
-          class="rounded px-2.5 py-1 {shading === 'open' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}"
-          aria-pressed={shading === 'open'}
-          onclick={() => (shading = 'open')}>Share of country</button
-        >
-        <button
-          type="button"
-          class="rounded px-2.5 py-1 {shading === 'growth' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}"
-          aria-pressed={shading === 'growth'}
-          onclick={() => (shading = 'growth')}>30-day change</button
-        >
+        {#each SHADINGS as [value, label] (value)}
+          <button
+            type="button"
+            class="rounded px-2.5 py-1 {shading === value ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}"
+            aria-pressed={shading === value}
+            onclick={() => (shading = value)}>{label}</button
+          >
+        {/each}
       </div>
     </div>
 

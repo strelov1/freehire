@@ -8,6 +8,7 @@ import {
   cellTarget,
   growthLevel,
   growthPercent,
+  roundedGrowth,
   shareLevel,
 } from './roleCountryGrid';
 
@@ -71,6 +72,14 @@ describe('growthPercent', () => {
     expect(growthPercent({ open: 40, prev: GROWTH_MIN_BASE - 1 })).toBeNull();
     expect(growthPercent({ open: 40, prev: 0 })).toBeNull();
     expect(growthPercent({ open: 40, prev: GROWTH_MIN_BASE })).not.toBeNull();
+  });
+});
+
+describe('roundedGrowth', () => {
+  it('rounds to a whole percent, and keeps null under the floor', () => {
+    expect(roundedGrowth({ open: 1006, prev: 1000 })).toBe(1);
+    expect(roundedGrowth({ open: 994, prev: 1000 })).toBe(-1);
+    expect(roundedGrowth({ open: 10, prev: GROWTH_MIN_BASE - 1 })).toBeNull();
   });
 });
 

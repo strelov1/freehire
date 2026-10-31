@@ -75,6 +75,12 @@ export function growthPercent(cell: GridCell): number | null {
   return ((cell.open - cell.prev) / cell.prev) * 100;
 }
 
+/** The change as a whole percent, or null under the base floor — what the cell prints. */
+export function roundedGrowth(cell: GridCell): number | null {
+  const pct = growthPercent(cell);
+  return pct === null ? null : Math.round(pct);
+}
+
 /** Shading step 0–4 for the open-count view, relative to the largest share drawn. A cell
  *  with anything in it is never step 0: an empty-looking square would claim nothing is
  *  posted there. */
