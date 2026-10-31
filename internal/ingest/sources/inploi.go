@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -42,6 +43,7 @@ type inploi struct {
 	http     inploiHTTP
 	pageSize int
 	maxNew   int
+	pick     func(int) int
 }
 
 func NewInploi(c inploiHTTP) Source {
@@ -76,10 +78,22 @@ func (s inploi) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 		}
 		fresh = append(fresh, p)
 	}
-	// Keep part of the budget moving through the backlog: rejected or unreadable
-	// postings stay unseen and must not consume every crawl's detail requests.
-	head := s.maxNew / 2
-	fresh = hydrationLanes(fresh, head, s.maxNew-head, time.Now())
+	if len(fresh) > s.maxNew {
+		// Keep half the budget on the head and sample the rest independently of the
+		// clock: hourly rotation can skip the same backlog on a two-hour cadence.
+		head := s.maxNew / 2
+		rest := fresh[head:]
+		pick := s.pick
+		if pick == nil {
+			pick = rand.IntN
+		}
+		start := pick(len(rest))
+		picked := append([]inploiPosting(nil), fresh[:head]...)
+		for i := range s.maxNew - head {
+			picked = append(picked, rest[(start+i)%len(rest)])
+		}
+		fresh = picked
+	}
 	return append(fetchDetails(fresh, defaultDetailWorkers, func(p inploiPosting) (Job, bool) {
 		return s.detail(ctx, p)
 	}), refresh...), nil
