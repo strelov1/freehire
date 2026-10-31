@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
+	"github.com/strelov1/freehire/internal/job/formeremployer"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -50,7 +51,24 @@ type searchHandlers struct {
 	semantic semanticSearch
 	// agentViews receives the postings /agent/jobs/search serves; nil records nothing.
 	agentViews agentview.Sink
+	// formerEmployers resolves a signed-in caller's experience bank to the companies the
+	// "Hiring again" filter narrows to. Nil leaves former_employers unread, so it is
+	// reported in meta.ignored_params like any other param nothing reads.
+	formerEmployers formerEmployerLookup
 }
+
+// formerEmployerLookup resolves a person's past employers to company slugs.
+// *formeremployer.Store satisfies it; tests inject a fake.
+type formerEmployerLookup interface {
+	Slugs(ctx context.Context, userID int64) ([]string, error)
+}
+
+// formerEmployersParam is the "Hiring again" filter: only postings at companies the
+// signed-in caller has worked at and left, per their experience bank. It is not part of
+// the search package's vocabulary because it is not a facet of the posting — it is a fact
+// about the CALLER, resolved per request — so the endpoint reads it itself, and declares it
+// as its own only when it did (see jobSearchOutcome.own).
+const formerEmployersParam = "former_employers"
 
 // profileReader loads a caller's profile. *userprofile.Service satisfies it; tests
 // inject a fake. Only the skills are read here — the match sort has no opinion on
@@ -67,6 +85,7 @@ func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries
 	// Assign only when set: a nil *db.Queries in the interface would be non-nil.
 	if queries != nil {
 		h.companyNames = queries
+		h.formerEmployers = formeremployer.NewStore(queries)
 	}
 	return h
 }
@@ -206,7 +225,7 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	}
 	h.attachGhost(c, res.Hits, views)
 
-	ignored := mergedJobSearchIgnored(c, jobSearchParams, dropped)
+	ignored := mergedJobSearchIgnored(c, out.own(jobSearchParams), dropped)
 	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignored, ignoredJobValues(c))
 }
 
@@ -220,6 +239,41 @@ type jobSearchOutcome struct {
 	offset   int
 	dropped  []search.UnknownParam
 	semantic string
+	// formerEmployers reports that the "Hiring again" filter was applied, which makes
+	// former_employers one of the endpoint's own params rather than an ignored one.
+	formerEmployers bool
+}
+
+// own is the endpoint's own params for this request: base, plus former_employers when the
+// filter read it. Anonymous, it was not read, and the report must say so — the answer then
+// is the whole catalogue, which a caller who asked for their former employers must not
+// mistake for them.
+func (o jobSearchOutcome) own(base []string) []string {
+	if !o.formerEmployers {
+		return base
+	}
+	return append(slices.Clip(base), formerEmployersParam)
+}
+
+// formerEmployerSlugs resolves the "Hiring again" filter for this request. applied is false
+// when the param is absent or false, or when nothing can read it — no session, no lookup
+// wired — and the caller then searches as if it were absent (and reports it, see own).
+// Applied with no slugs is a real answer: nothing banked resolves to a hiring company.
+func (h *searchHandlers) formerEmployerSlugs(c *fiber.Ctx) (slugs []string, applied bool, err error) {
+	if h.formerEmployers == nil || !c.QueryBool(formerEmployersParam) {
+		return nil, false, nil
+	}
+	userID, ok := auth.UserID(c)
+	if !ok {
+		return nil, false, nil
+	}
+	// The answer is this person's own history; no shared cache may keep it.
+	c.Set(fiber.HeaderCacheControl, "private, no-store")
+	slugs, err = h.formerEmployers.Slugs(c.Context(), userID)
+	if err != nil {
+		return nil, false, err
+	}
+	return slugs, true, nil
 }
 
 // runJobSearch performs the request handling shared by both job-search endpoints:
@@ -243,9 +297,25 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool) (jobSearc
 		return jobSearchOutcome{}, err
 	}
 
+	former, formerApplied, err := h.formerEmployerSlugs(c)
+	if err != nil {
+		return jobSearchOutcome{}, err
+	}
+	if formerApplied && len(former) == 0 {
+		// Narrow to nothing rather than drop the filter: the set the caller asked for is
+		// empty, and searching without it would answer with strangers.
+		return jobSearchOutcome{limit: limit, offset: offset, formerEmployers: true}, nil
+	}
+
 	vector := h.matchVector(c)
 	sort := searchSort(c, vector != nil)
-	filter := buildSearchFilter(c)
+	base := buildSearchFilter(c)
+	// formerFilter is the "Hiring again" group alone, kept for the degrade below.
+	filter, formerFilter := base, any(nil)
+	if formerApplied {
+		filter = search.AndInStrings(base, "company_slug", former)
+		formerFilter = search.AndInStrings(nil, "company_slug", former)
+	}
 	qFields, qFieldsIgnored := search.QFieldsFromValues(queryValues(c))
 	params := search.SearchParams{
 		Query:   c.Query("q"),
@@ -269,16 +339,19 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool) (jobSearc
 		// before the live index catches up (AGENTS.md's "Adding a filterable
 		// attribute") is the realistic trigger, not a malformed client value
 		// (every facet/scalar value is already escaped before it reaches a filter
-		// expression — see search.quote). filter == nil means there is nothing to
+		// expression — see search.quote). base == nil means there is nothing to
 		// blame — retrying an unchanged query would just fail again identically.
-		if filter == nil || !errors.Is(err, search.ErrBadQuery) {
+		// The "Hiring again" group is not blamed and survives the retry: company_slug
+		// has been filterable since the index existed, and dropping it would answer a
+		// request for former employers with the whole catalogue.
+		if base == nil || !errors.Is(err, search.ErrBadQuery) {
 			// RenderError renders a generic 500 (or 400 for ErrBadQuery); returning
 			// the error keeps the failure cause visible to logging instead of
 			// swallowing it.
 			return jobSearchOutcome{}, err
 		}
 		res, err = h.search.Search(c.Context(), search.SearchParams{
-			Query: c.Query("q"), Sort: sort, Vector: vector, QFields: qFields, Limit: limit, Offset: offset,
+			Query: c.Query("q"), Filter: formerFilter, Sort: sort, Vector: vector, QFields: qFields, Limit: limit, Offset: offset,
 		})
 		if err != nil {
 			return jobSearchOutcome{}, err
@@ -295,7 +368,8 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool) (jobSearc
 	h.recordQuery(c.Query("q"))
 	return jobSearchOutcome{
 		res: res, limit: limit, offset: offset, dropped: dropped,
-		semantic: outcome.wire(ojcp.SemanticApplied, ojcp.SemanticUnavailable),
+		semantic:        outcome.wire(ojcp.SemanticApplied, ojcp.SemanticUnavailable),
+		formerEmployers: formerApplied,
 	}, nil
 }
 
