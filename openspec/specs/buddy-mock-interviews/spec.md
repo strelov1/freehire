@@ -8,7 +8,7 @@ a review that is revealed once both have written theirs or the window closes.
 ## Requirements
 ### Requirement: Mock settings
 An active buddy member SHALL be able to save mock settings: an IANA time zone, a meeting
-link starting with `https://`, a non-empty set of topics from `coding`, `system_design`,
+link starting with `https://` that carries no user name or password, a non-empty set of topics from `coding`, `system_design`,
 `behavioral`, and a pause switch. A member without saved settings, or with the switch
 paused, SHALL offer no slots. The settings form SHALL warn that the guest may see the
 host's name through the meeting link.
@@ -19,6 +19,10 @@ host's name through the meeting link.
 
 #### Scenario: Non-https link is refused
 - **WHEN** a member saves a meeting link starting with `http://`
+- **THEN** the system responds with a validation error
+
+#### Scenario: Link with credentials is refused
+- **WHEN** a member saves a meeting link such as `https://user:pass@host` or `https://user@host`
 - **THEN** the system responds with a validation error
 
 #### Scenario: Paused member offers nothing
@@ -128,7 +132,9 @@ comment of at most 1000 characters, once, from the mock's end until 7 days after
 review SHALL be visible to its subject and on the subject's member page only after the
 counterpart has reviewed too or the 7-day window has closed. A member page SHALL show the
 count of completed mocks, the average of revealed ratings and the most recent revealed
-reviews.
+reviews. While either of a review's author and subject blocks the other, the review SHALL
+be shown neither to its subject nor on the subject's member page (count, average or list);
+the count of completed mocks SHALL be unaffected.
 
 #### Scenario: Hidden until both reviewed
 - **WHEN** the guest has reviewed the host and the host has not reviewed the guest
@@ -141,6 +147,11 @@ reviews.
 #### Scenario: Revealed after the window
 - **WHEN** only one participant reviewed and 7 days have passed since the mock ended
 - **THEN** that review becomes visible
+
+#### Scenario: A block withdraws the review
+- **WHEN** both participants have reviewed and then either blocks the other
+- **THEN** neither sees the review about them, neither review is on a member page, and
+  both pages still count the completed mock
 
 #### Scenario: Review before the end
 - **WHEN** a participant reviews a mock that has not ended
