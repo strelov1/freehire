@@ -10,6 +10,8 @@ export type NotificationTarget =
   | { kind: 'digest'; id: number }
   | { kind: 'tailor'; slug: string }
   | { kind: 'mocks' }
+  | { kind: 'buddies' }
+  | { kind: 'buddy_chats' }
   | { kind: 'none' };
 
 /** A card with no `public_slug` and no `jobs` snapshot has nothing to open.
@@ -60,6 +62,9 @@ export function notificationTarget(
   if (item.kind === 'buddy_mock_booked' || item.kind === 'buddy_mock_cancelled' || item.kind === 'buddy_mock_reminder') {
     return { kind: 'mocks' };
   }
+  // A reaction opens the feed it was given in; a message or an invitation, the chats.
+  if (item.kind === 'buddy_reaction') return { kind: 'buddies' };
+  if (item.kind === 'buddy_message' || item.kind === 'buddy_invitation') return { kind: 'buddy_chats' };
   if (item.kind === 'subscription_digest' && item.jobs && item.jobs.length > 0 && item.id != null) {
     return { kind: 'digest', id: item.id };
   }

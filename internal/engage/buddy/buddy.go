@@ -81,6 +81,9 @@ type Repository interface {
 	// ReactionCounts is each event's reactions as viewerID may see them, keyed by event;
 	// an event nobody reacted to has no entry.
 	ReactionCounts(ctx context.Context, viewerID int64, eventIDs []int64) (map[int64]Reactions, error)
+	// NoticeReaction tells the event's author, in their notification center, that reactorID
+	// reacted — once per (event, reactor), whatever they later change it to.
+	NoticeReaction(ctx context.Context, eventID, reactorID int64, title, body string) error
 	// Activity counts authorID's feed events per UTC day from since on, under the same
 	// visibility rules as Feed for viewerID. Days without an event are absent.
 	Activity(ctx context.Context, viewerID, authorID int64, since time.Time) ([]ActivityDay, error)

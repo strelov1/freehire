@@ -340,3 +340,7 @@ WHERE r.event_id = ANY(sqlc.arg(event_ids)::bigint[])
       WHERE (b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = r.user_id)
          OR (b.blocker_id = r.user_id AND b.blocked_id = sqlc.arg(viewer_id)))
 GROUP BY r.event_id, r.kind;
+
+-- name: BuddyEventAuthor :one
+-- Who an application event belongs to: the member a reaction to it is news for.
+SELECT user_id FROM application_events WHERE id = sqlc.arg(event_id);

@@ -1,18 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import {
-    Search,
-    Clock,
-    Target,
-    Archive,
-    MessageCircle,
-    FileText,
-    Bell,
-    CheckCircle2,
-    AlertTriangle,
-    XCircle,
-    CalendarClock,
-  } from '@lucide/svelte';
+  import { AlertTriangle, Archive, Bell, CalendarClock, CheckCircle2, Clock, FileText, Heart, MessageCircle, MessagesSquare, Search, Target, XCircle } from '@lucide/svelte';
   import { notificationCenter } from '#lib/notificationCenter.svelte.js';
   import { notificationTarget } from '#lib/notificationTarget.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -43,6 +31,9 @@
     buddy_mock_booked: CalendarClock,
     buddy_mock_cancelled: CalendarClock,
     buddy_mock_reminder: CalendarClock,
+    buddy_reaction: Heart,
+    buddy_message: MessagesSquare,
+    buddy_invitation: MessagesSquare,
   };
 
   const target = $derived(notificationTarget(item));
@@ -62,7 +53,11 @@
             ? resolve('/tailor/[slug]', { slug: target.slug })
             : target.kind === 'mocks'
               ? resolve('/buddies/mocks')
-              : null,
+              : target.kind === 'buddies'
+                ? resolve('/buddies')
+                : target.kind === 'buddy_chats'
+                  ? resolve('/buddies/chats')
+                  : null,
   );
   const unread = $derived(item.read_at == null);
   const Icon = $derived(KIND_ICON[item.kind]);

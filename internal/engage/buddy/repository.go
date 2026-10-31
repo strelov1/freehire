@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -310,4 +311,20 @@ func (r *QueriesRepository) ReactionCounts(ctx context.Context, viewerID int64, 
 		out[row.EventID] = re
 	}
 	return out, nil
+}
+
+func (r *QueriesRepository) NoticeReaction(ctx context.Context, eventID, reactorID int64, title, body string) error {
+	author, err := r.q.BuddyEventAuthor(ctx, eventID)
+	if err != nil {
+		return err
+	}
+	_, err = r.q.RecordNotification(ctx, db.RecordNotificationParams{
+		UserID: author, Kind: NotificationReaction, Title: title, Body: body,
+		DedupKey: pgtype.Text{String: fmt.Sprintf("%s:%d:%d", NotificationReaction, eventID, reactorID), Valid: true},
+	})
+	// A notice this reactor already gave the author for this event is a conflict, not a failure.
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	return err
 }

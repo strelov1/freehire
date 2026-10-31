@@ -3,6 +3,8 @@ package buddy
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 )
 
 // The reactions a member may give a feed event: a closed vocabulary chosen for a job
@@ -17,9 +19,14 @@ const (
 	ReactionInsight  = "insight"
 )
 
-var reactionKinds = map[string]bool{
-	ReactionCongrats: true, ReactionLuck: true, ReactionRooting: true, ReactionSame: true, ReactionInsight: true,
+// reactionLabels is each kind as people read it, and the vocabulary itself.
+var reactionLabels = map[string]string{
+	ReactionCongrats: "Congrats", ReactionLuck: "Good luck", ReactionRooting: "Rooting for you",
+	ReactionSame: "Same boat", ReactionInsight: "Insightful",
 }
+
+// NotificationReaction is the notification-center kind of a reaction notice.
+const NotificationReaction = "buddy_reaction"
 
 // ErrBadReaction is a reaction kind outside the vocabulary (HTTP 400).
 var ErrBadReaction = errors.New("buddy: unknown reaction")
@@ -38,7 +45,7 @@ type Reactions struct {
 // left) holds here without a second copy of the predicate. Anything else is ErrNotFound,
 // which does not say why. It returns the event's reactions after the change.
 func (s *Service) React(ctx context.Context, userID, eventID int64, kind string) (Reactions, error) {
-	if kind != "" && !reactionKinds[kind] {
+	if _, known := reactionLabels[kind]; kind != "" && !known {
 		return Reactions{}, ErrBadReaction
 	}
 	if err := s.requireActive(ctx, userID); err != nil {
@@ -59,9 +66,31 @@ func (s *Service) React(ctx context.Context, userID, eventID int64, kind string)
 	if err != nil {
 		return Reactions{}, err
 	}
+	if kind != "" {
+		// Best-effort: the reaction stands whether or not the author hears about it.
+		title, body := reactionNotice(kind, feedType(rows[0].Kind, rows[0].Signal), rows[0].Company.Name)
+		if err := s.repo.NoticeReaction(ctx, eventID, userID, title, body); err != nil {
+			log.Printf("buddy: noticing reaction to event %d: %v", eventID, err)
+		}
+	}
 	counts, err := s.repo.ReactionCounts(ctx, userID, []int64{eventID})
 	if err != nil {
 		return Reactions{}, err
 	}
 	return counts[eventID], nil
+}
+
+// reactionNotice is what the author reads: the reaction and the news it answers, never who
+// gave it — a buddy is a handle, and the notice has no business naming one.
+func reactionNotice(kind, eventType, company string) (title, body string) {
+	var noun, news string
+	switch eventType {
+	case "offer":
+		noun, news = "offer", "your offer from "+company
+	case "interview":
+		noun, news = "interview", "your interview at "+company
+	default:
+		noun, news = "application", "your application to "+company
+	}
+	return "A buddy reacted to your " + noun, fmt.Sprintf("A buddy reacted “%s” to %s.", reactionLabels[kind], news)
 }

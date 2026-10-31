@@ -369,6 +369,8 @@ type Querier interface {
 	// in the URL/page). external_id is "<board>:<id>"; served by the
 	// (split_part(external_id,':',2)) WHERE source='greenhouse' partial index.
 	BoardByGreenhouseJobID(ctx context.Context, jobID string) (string, error)
+	// Who an application event belongs to: the member a reaction to it is news for.
+	BuddyEventAuthor(ctx context.Context, eventID int64) (int64, error)
 	// Count one failed confirmation and return the new total, so the caller can burn the code
 	// once it reaches the ceiling. Atomic, so concurrent guesses cannot share an attempt.
 	BumpEmailCodeAttempts(ctx context.Context, arg BumpEmailCodeAttemptsParams) (int32, error)
