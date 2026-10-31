@@ -64,9 +64,11 @@ var closedFacets = map[string]func(string) bool{
 		_, ok := skilltag.Resolve(val)
 		return ok
 	},
-	"is_tech":               oneOf(boolValues),
-	RequiresClearanceParam:  oneOf(boolValues),
-	ViaRecruiterParam:       oneOf(boolValues),
+	"is_tech":              oneOf(boolValues),
+	RequiresClearanceParam: oneOf(boolValues),
+	ViaRecruiterParam:      oneOf(boolValues),
+	// EquityNotStated is a reserved value the filter maps to NOT EXISTS.
+	EquityParam:             oneOf(append(slices.Clone(vocab.EquityValues), EquityNotStated)),
 	AIInterviewParam:        oneOf(boolValues),
 	AutoApplyAvailableParam: oneOf(boolValues),
 }

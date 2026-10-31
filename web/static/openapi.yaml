@@ -221,6 +221,7 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Equity"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -311,6 +312,7 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Equity"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -573,6 +575,7 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Equity"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -1315,6 +1318,32 @@ components:
 
         `true` returns only the marked postings. Omitting the parameter filters
         nothing.
+    Equity:
+      name: equity
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - salary_and_equity
+            - equity_only
+            - not_stated
+      description: |
+        What the posting states about equity compensation, derived
+        deterministically from its title and description.
+
+        `salary_and_equity` — equity (stock options, RSUs, an equity grant,
+        ESOP, VSOP/phantom shares) offered beside cash pay; a salary figure is
+        not required. `equity_only` — the posting states that equity is the
+        whole compensation. `not_stated` — neither was read, which is NOT a
+        statement that the job offers no equity. An employee stock PURCHASE
+        plan does not count as equity.
+
+        Repeated values are ORed; `equity_exclude=<value>` excludes one
+        (`equity_exclude=not_stated` keeps every posting that states equity).
     AutoApplyAvailable:
       name: auto_apply_available
       in: query
@@ -1929,6 +1958,16 @@ components:
             by an intermediary on a client's behalf. Absent otherwise — a
             recruiter who never says so is not detected, so absence does not
             mean the employer posted it.
+        equity:
+          type: string
+          enum:
+            - salary_and_equity
+            - equity_only
+          description: |
+            What the posting states about equity compensation:
+            `salary_and_equity` (offered beside cash pay) or `equity_only`
+            (equity is the whole pay). Absent when the posting states neither —
+            "not stated", not "no equity".
         auto_apply_available:
           type: boolean
           description: |

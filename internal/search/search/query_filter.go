@@ -52,6 +52,10 @@ var StringFacets = map[string]string{
 	// via_recruiter is true-or-absent too, and enrolled in /jobs/facets the same way —
 	// so the same settings-before-binary order applies.
 	"via_recruiter": "via_recruiter",
+	// equity is a closed vocabulary (vocab.EquityValues) whose "not stated" is the
+	// attribute's absence, selected by the reserved EquityNotStated value. Enrolled in
+	// /jobs/facets like the two above, so the same settings-before-binary order applies.
+	EquityParam: EquityParam,
 	// ai_interview is written on the document at index time from the company's report
 	// count (see JobDocument.AIInterview), so it filters on the bare attribute.
 	"ai_interview": "ai_interview",
@@ -91,6 +95,16 @@ var locationFacets = map[string]bool{"regions": true, "countries": true, "cities
 // the former materialized `remote_unspecified` boolean with a query-time predicate.
 const RegionUnspecified = "none"
 
+// EquityParam asks what a posting states about equity compensation.
+const EquityParam = "equity"
+
+// EquityNotStated is the reserved value of the equity facet that selects the postings
+// stating neither vocab.EquityValues member. Nothing stores it: the dictionary cannot
+// tell "no equity" from silence, so the document simply omits the attribute and the
+// value maps to NOT EXISTS (EXISTS when excluded) — the regions RegionUnspecified
+// pattern, for a scalar attribute instead of an array.
+const EquityNotStated = "not_stated"
+
 // regionImplies names, for a region filter value, the other regions choosing it
 // also selects. "eu" is Europe in the geographic sense, and the UK is in Europe, but
 // a British posting carries only its own "uk" region — so without this, choosing
@@ -116,6 +130,9 @@ func impliedRegions(val string) []string {
 func facetEq(param, attr, val string) string {
 	if param == "regions" && val == RegionUnspecified {
 		return IsEmpty(attr)
+	}
+	if param == EquityParam && strings.EqualFold(strings.TrimSpace(val), EquityNotStated) {
+		return NotExists(attr)
 	}
 	if set := impliedRegions(val); param == "regions" && set != nil {
 		return InStrings(attr, set)
@@ -180,6 +197,9 @@ func trueOrAbsentFragment(attr, val string) string {
 func facetNeq(param, attr, val string) string {
 	if param == "regions" && val == RegionUnspecified {
 		return IsNotEmpty(attr)
+	}
+	if param == EquityParam && strings.EqualFold(strings.TrimSpace(val), EquityNotStated) {
+		return Exists(attr)
 	}
 	if set := impliedRegions(val); param == "regions" && set != nil {
 		return NotInStrings(attr, set)

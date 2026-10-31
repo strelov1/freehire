@@ -14,6 +14,15 @@ package vocab
 
 import "regexp"
 
+// The two EquityValues, named because the derivation writes them.
+const (
+	// EquityWithSalary: equity is offered beside cash pay. A salary FIGURE is not
+	// required — most postings that offer equity state no figure.
+	EquityWithSalary = "salary_and_equity"
+	// EquityOnly: the posting states that equity is the whole compensation.
+	EquityOnly = "equity_only"
+)
+
 // Controlled vocabularies. Each is the ordered, canonical list of allowed
 // values for one enum field. They are exported so the enrichment prompt, the
 // deterministic dictionaries, and the facet config reference the same lists.
@@ -47,8 +56,13 @@ var (
 	// a multi-company aggregator, or a community channel. The classifier is
 	// sources.ProviderKind; a source it cannot place (a manual import, a pasted link)
 	// carries no value, so it is reachable only through the `source` facet.
-	SourceTypeValues     = []string{"ats", "company", "aggregator", "social"}
-	EnglishLevelValues   = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
+	SourceTypeValues   = []string{"ats", "company", "aggregator", "social"}
+	EnglishLevelValues = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
+	// EquityValues answer "does this job pay in equity?" — derived from the posting's
+	// text by internal/job/jobfacts.Equity. There is no "no equity" value: a posting the
+	// matcher reads nothing from is NOT STATED, which is the absence of a value, not a
+	// member of the vocabulary (the search filter names it EquityNotStated).
+	EquityValues         = []string{EquityWithSalary, EquityOnly}
 	EducationLevelValues = []string{"none", "bachelor", "master", "phd"}
 	CategoryValues       = []string{
 		// "software_engineering" is the generic bucket for a title the dictionary

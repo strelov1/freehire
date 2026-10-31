@@ -157,6 +157,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | --- | --- | --- |
 | `visa_sponsorship` | Visa sponsorship | true, false |
 | `requires_clearance` | Security clearance required | true, false |
+| `equity` | Equity compensation | salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity |
 | `via_recruiter` | Posting says a recruiter publishes it for a client | true — the description says so; false — every posting not marked, including recruiter posts that never say so |
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |

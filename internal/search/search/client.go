@@ -722,6 +722,9 @@ func facetSettings() *meilisearch.Settings {
 			// via_recruiter: a jobs column served top-level, true-or-absent like
 			// requires_clearance. Same settings-before-binary order.
 			"via_recruiter",
+			// equity: a jobs column served top-level, a closed string vocabulary that is
+			// ABSENT when not stated (see EquityNotStated). Same settings-before-binary order.
+			"equity",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",

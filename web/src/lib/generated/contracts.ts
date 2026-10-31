@@ -281,6 +281,14 @@ export interface Job {
    */
   via_recruiter?: boolean;
   /**
+   * Equity is what the posting states about equity compensation:
+   * "salary_and_equity" (offered beside cash pay, with or without a salary figure)
+   * or "equity_only" (the posting says equity is the whole pay). Deterministic, from
+   * the title and description (internal/job/jobfacts). Absent when the posting states
+   * neither — "not stated", never "no equity".
+   */
+  equity?: string;
+  /**
    * AutoApplyAvailable marks a posting whose ATS provider (Source) is one
    * internal/api/atsapply can currently attempt to fill and submit for (see
    * AutoApplyProviders) — a best-effort, provider-level eligibility signal,

@@ -117,6 +117,10 @@ type Derived struct {
 	// client's behalf (internal/job/jobfacts). True or nil, never false, for the same
 	// reason as RequiresClearance: a recruiter who never says so is not detected.
 	ViaRecruiter *bool
+	// Equity is what the posting states about equity compensation (jobfacts.Equity): a
+	// vocab.EquityValues member, or "" when it states nothing the matcher reads. There
+	// is no "no equity" value, for the same reason as RequiresClearance has no false.
+	Equity string
 	// Synthetic enrichment facets (category B): deterministic stand-ins for fields
 	// the LLM also emits, served dict-only like the facets above. ExperienceYearsMin
 	// is nil when the description states no figure.
@@ -313,6 +317,7 @@ func Derive(in Input) Derived {
 		IsTech:             isTech,
 		RequiresClearance:  deriveRequiresClearance(in.Description),
 		ViaRecruiter:       trueOrNil(jobfacts.ViaRecruiter(in.Description)),
+		Equity:             jobfacts.Equity(in.Title, in.Description),
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     employmentType,
 		EducationLevel:     educationLevel,

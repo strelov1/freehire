@@ -106,6 +106,12 @@ type Job struct {
 	// RequiresClearance: a recruiter who never says so is not detected, so an absent
 	// key does not mean "posted by the employer".
 	ViaRecruiter bool `json:"via_recruiter,omitempty"`
+	// Equity is what the posting states about equity compensation:
+	// "salary_and_equity" (offered beside cash pay, with or without a salary figure)
+	// or "equity_only" (the posting says equity is the whole pay). Deterministic, from
+	// the title and description (internal/job/jobfacts). Absent when the posting states
+	// neither — "not stated", never "no equity".
+	Equity string `json:"equity,omitempty"`
 	// AutoApplyAvailable marks a posting whose ATS provider (Source) is one
 	// internal/api/atsapply can currently attempt to fill and submit for (see
 	// AutoApplyProviders) — a best-effort, provider-level eligibility signal,
@@ -271,6 +277,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		IsTech:             isTechFacet(f.IsTech),
 		RequiresClearance:  f.RequiresClearance != nil && *f.RequiresClearance,
 		ViaRecruiter:       f.ViaRecruiter != nil && *f.ViaRecruiter,
+		Equity:             f.Equity,
 		AutoApplyAvailable: AutoApplyProviders[f.Source],
 		PostedAt:           rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
 		CreatedAt:          rfc3339Ptr(f.CreatedAt),

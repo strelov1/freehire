@@ -76,6 +76,11 @@ export const FILTER_EXTRAS: FilterRow[] = [
   { param: 'visa_sponsorship', label: 'Visa sponsorship', values: 'true, false' },
   { param: 'requires_clearance', label: 'Security clearance required', values: 'true, false' },
   {
+    param: 'equity',
+    label: 'Equity compensation',
+    values: 'salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity',
+  },
+  {
     param: 'via_recruiter',
     label: 'Posting says a recruiter publishes it for a client',
     values: 'true — the description says so; false — every posting not marked, including recruiter posts that never say so',
