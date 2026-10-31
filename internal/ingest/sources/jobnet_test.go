@@ -4,39 +4,88 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"testing"
 )
 
-// jobnetHTTP is a page-aware test HeaderJSONGetter. Jobnet has one endpoint — the paged BFF
-// search (/bff/FindJob/Search?PageNumber=) — so this fake routes by the PageNumber query
-// parameter and records both the pages requested (to assert pagination stops at
-// totalJobAdCount / the first empty page) and the x-csrf header seen (to assert it is sent).
-type jobnetHTTP struct {
-	pages    map[int]string // search body keyed by requested PageNumber
-	failPage map[int]bool   // a specific page's request fails
-	gotPages []int
+// jobnetCatalogue is a test HeaderJSONGetter that behaves like the live BFF search: it filters
+// by the occupations query parameters (OR, as the live API does), pages newest-first, reports
+// the filtered total and the unfiltered occupations facet, and — like the live API — serves only
+// the first jobnetWindow results of any query, answering an empty page past it.
+type jobnetCatalogue struct {
+	ads      []jobnetFakeAd
+	extraOcc int          // added to the facet total, to model a facet that misses ads
+	failAt   map[int]bool // the nth request (1-based) fails
+	requests int
 	gotCSRF  string
 }
 
-var jobnetPageRE = regexp.MustCompile(`PageNumber=(\d+)`)
+type jobnetFakeAd struct {
+	ad         jobnetAd
+	occupation string
+}
 
-func (f *jobnetHTTP) GetJSONWithHeaders(_ context.Context, url string, headers map[string]string, v any) error {
+func (f *jobnetCatalogue) GetJSONWithHeaders(_ context.Context, raw string, headers map[string]string, v any) error {
+	f.requests++
 	f.gotCSRF = headers["x-csrf"]
-	page := 1
-	if m := jobnetPageRE.FindStringSubmatch(url); m != nil {
-		page, _ = strconv.Atoi(m[1])
+	if f.failAt[f.requests] {
+		return errors.New("jobnetCatalogue: boom")
 	}
-	f.gotPages = append(f.gotPages, page)
-	if f.failPage[page] {
-		return errors.New("jobnetHTTP: boom")
+	u, err := url.Parse(raw)
+	if err != nil {
+		return err
 	}
-	raw, ok := f.pages[page]
-	if !ok {
-		raw = `{"jobAds":[],"totalJobAdCount":0}`
+	q := u.Query()
+	page, _ := strconv.Atoi(q.Get("PageNumber"))
+	size, _ := strconv.Atoi(q.Get("ResultsPerPage"))
+	occs := q["occupations"]
+
+	var matched []jobnetAd
+	facet := map[string]int{}
+	for _, a := range f.ads {
+		facet[a.occupation]++
+		if len(occs) == 0 || slices.Contains(occs, a.occupation) {
+			matched = append(matched, a.ad)
+		}
 	}
-	return json.Unmarshal([]byte(raw), v)
+	var served []jobnetAd
+	if start := (page - 1) * size; start < len(matched) && start+size <= jobnetWindow {
+		served = matched[start:min(start+size, len(matched))]
+	}
+	resp := map[string]any{"totalJobAdCount": len(matched), "jobAds": served}
+	var facets []map[string]any
+	for id, n := range facet {
+		facets = append(facets, map[string]any{"identifier": id, "jobAdCount": n})
+	}
+	if f.extraOcc != 0 && len(facets) > 0 {
+		facets[0]["jobAdCount"] = facets[0]["jobAdCount"].(int) + f.extraOcc
+	}
+	resp["searchFacets"] = map[string]any{"occupations": facets}
+	b, err := json.Marshal(resp)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, v)
+}
+
+// jobnetFakeAds builds n ads in one occupation, ids prefixed so occupations never collide.
+func jobnetFakeAds(occupation string, n int) []jobnetFakeAd {
+	ads := make([]jobnetFakeAd, n)
+	for i := range ads {
+		ads[i] = jobnetFakeAd{occupation: occupation, ad: jobnetAd{
+			JobAdID: fmt.Sprintf("%s-%d", occupation, i), Title: "T", HiringOrgName: "Acme", Description: "x",
+		}}
+	}
+	return ads
+}
+
+func fetchJobnet(t *testing.T, f *jobnetCatalogue) ([]Job, error) {
+	t.Helper()
+	return NewJobnet(f).Fetch(context.Background(), CompanyEntry{Company: "Jobnet", Provider: "jobnet"})
 }
 
 func TestJobnetProvider(t *testing.T) {
@@ -45,15 +94,23 @@ func TestJobnetProvider(t *testing.T) {
 	}
 }
 
-func TestJobnetFetchMapsAd(t *testing.T) {
-	fake := &jobnetHTTP{pages: map[int]string{1: `{"totalJobAdCount":1,"jobAds":[
-		{"jobAdId":"c1dc33fa-9c57-4592-a050-36ecda5bdfc1","title":"IT-supportelev",
-		 "hiringOrgName":"ipnordic A/S","postalDistrictName":"Gråsten","country":"Danmark",
-		 "publicationDate":"2026-07-07T00:00:00+02:00","jobAdUrl":"",
-		 "description":"<p>Er du nysgerrig</p><script>x()</script>"}
-	]}`}}
+// jobnet lists its whole catalogue or fails, so it is swept by source: an ad gone from the
+// listing closes whatever employer it belonged to.
+func TestJobnetRegisteredFullCatalog(t *testing.T) {
+	if !slices.Contains(FullCatalogProviders(All(nil)), "jobnet") {
+		t.Error("jobnet should be fullCatalog")
+	}
+}
 
-	jobs, err := NewJobnet(fake).Fetch(context.Background(), CompanyEntry{Company: "Jobnet", Provider: "jobnet"})
+func TestJobnetFetchMapsAd(t *testing.T) {
+	fake := &jobnetCatalogue{ads: []jobnetFakeAd{{occupation: "o1", ad: jobnetAd{
+		JobAdID: "c1dc33fa-9c57-4592-a050-36ecda5bdfc1", Title: "IT-supportelev",
+		HiringOrgName: "ipnordic A/S", PostalDistrictName: "Gråsten", Country: "Danmark",
+		PublicationDate: "2026-07-07T00:00:00+02:00",
+		Description:     "<p>Er du nysgerrig</p><script>x()</script>",
+	}}}}
+
+	jobs, err := fetchJobnet(t, fake)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -92,11 +149,11 @@ func TestJobnetFetchMapsAd(t *testing.T) {
 // An external ad carries its own destination URL; the adapter must prefer it over the
 // synthesized jobnet page so the link points at the real posting.
 func TestJobnetFetchPrefersAdURL(t *testing.T) {
-	fake := &jobnetHTTP{pages: map[int]string{1: `{"totalJobAdCount":1,"jobAds":[
-		{"jobAdId":"abc","title":"Dev","hiringOrgName":"Acme","country":"Danmark",
-		 "jobAdUrl":"https://acme.example/jobs/1","description":"<p>x</p>"}
-	]}`}}
-	jobs, err := NewJobnet(fake).Fetch(context.Background(), CompanyEntry{Company: "Jobnet", Provider: "jobnet"})
+	fake := &jobnetCatalogue{ads: []jobnetFakeAd{{occupation: "o1", ad: jobnetAd{
+		JobAdID: "abc", Title: "Dev", HiringOrgName: "Acme", Country: "Danmark",
+		JobAdURL: "https://acme.example/jobs/1", Description: "<p>x</p>",
+	}}}}
+	jobs, err := fetchJobnet(t, fake)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -108,12 +165,12 @@ func TestJobnetFetchPrefersAdURL(t *testing.T) {
 // An ad with no id to key on or no employer name (which would break the company slug) is
 // dropped rather than emitted, mirroring the other aggregator adapters.
 func TestJobnetFetchDropsIncompleteAds(t *testing.T) {
-	fake := &jobnetHTTP{pages: map[int]string{1: `{"totalJobAdCount":3,"jobAds":[
-		{"jobAdId":"","title":"No id","hiringOrgName":"Acme","description":"x"},
-		{"jobAdId":"has-id","title":"No company","hiringOrgName":"","description":"x"},
-		{"jobAdId":"ok","title":"Good","hiringOrgName":"Acme","description":"x"}
-	]}`}}
-	jobs, err := NewJobnet(fake).Fetch(context.Background(), CompanyEntry{Company: "Jobnet", Provider: "jobnet"})
+	fake := &jobnetCatalogue{ads: []jobnetFakeAd{
+		{occupation: "o1", ad: jobnetAd{JobAdID: "", Title: "No id", HiringOrgName: "Acme"}},
+		{occupation: "o1", ad: jobnetAd{JobAdID: "has-id", Title: "No company"}},
+		{occupation: "o1", ad: jobnetAd{JobAdID: "ok", Title: "Good", HiringOrgName: "Acme"}},
+	}}
+	jobs, err := fetchJobnet(t, fake)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
@@ -122,60 +179,73 @@ func TestJobnetFetchDropsIncompleteAds(t *testing.T) {
 	}
 }
 
-func TestJobnetFetchPaginates(t *testing.T) {
-	// Page 1 reports a total far above one page, so the crawl requests page 2; page 2 is
-	// empty (the unknown-page default), which terminates enumeration.
-	fake := &jobnetHTTP{pages: map[int]string{
-		1: `{"totalJobAdCount":9999,"jobAds":[{"jobAdId":"a","title":"A","hiringOrgName":"Acme","description":"x"}]}`,
-	}}
-	jobs, err := NewJobnet(fake).Fetch(context.Background(), CompanyEntry{Company: "Jobnet", Provider: "jobnet"})
+// The search serves only the first 10,000 results of a query, and the catalogue is larger
+// (23,169 ads on 2026-10-31): a walk of the unfiltered listing read the newest 10k and called it
+// the end. Walking it in occupation slices, each under the window, reads every ad.
+func TestJobnetFetchReadsPastTheResultWindow(t *testing.T) {
+	var ads []jobnetFakeAd
+	ads = append(ads, jobnetFakeAds("big", 5000)...)
+	ads = append(ads, jobnetFakeAds("mid", 4500)...)
+	ads = append(ads, jobnetFakeAds("small", 3000)...)
+	jobs, err := fetchJobnet(t, &jobnetCatalogue{ads: ads})
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != 1 {
-		t.Errorf("got %d jobs, want 1", len(jobs))
+	if len(jobs) != len(ads) {
+		t.Fatalf("got %d jobs, want all %d", len(jobs), len(ads))
 	}
-	if len(fake.gotPages) != 2 || fake.gotPages[0] != 1 || fake.gotPages[1] != 2 {
-		t.Errorf("requested pages = %v, want [1 2]", fake.gotPages)
+	ids := map[string]bool{}
+	for _, j := range jobs {
+		ids[j.ExternalID] = true
 	}
-}
-
-// totalJobAdCount stops pagination without a wasted trailing request: page 1 already covers
-// the whole (tiny) catalogue, so page 2 is never requested.
-func TestJobnetFetchStopsAtTotal(t *testing.T) {
-	fake := &jobnetHTTP{pages: map[int]string{
-		1: `{"totalJobAdCount":1,"jobAds":[{"jobAdId":"a","title":"A","hiringOrgName":"Acme","description":"x"}]}`,
-	}}
-	if _, err := NewJobnet(fake).Fetch(context.Background(), CompanyEntry{Company: "Jobnet", Provider: "jobnet"}); err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if len(fake.gotPages) != 1 {
-		t.Errorf("requested pages = %v, want only [1]", fake.gotPages)
+	if len(ids) != len(ads) {
+		t.Errorf("got %d distinct ids, want %d", len(ids), len(ads))
 	}
 }
 
-func TestJobnetFetchFirstPageErrorFails(t *testing.T) {
-	fake := &jobnetHTTP{failPage: map[int]bool{1: true}}
-	if _, err := NewJobnet(fake).Fetch(context.Background(), CompanyEntry{Company: "Jobnet", Provider: "jobnet"}); err == nil {
-		t.Fatal("Fetch: want error when the first page fails")
+// One occupation larger than the window cannot be read whole by any slice, so the crawl fails
+// rather than reporting the window as the end.
+func TestJobnetFetchFailsWhenAnOccupationOutgrowsTheWindow(t *testing.T) {
+	if _, err := fetchJobnet(t, &jobnetCatalogue{ads: jobnetFakeAds("huge", jobnetWindow+500)}); err == nil {
+		t.Fatal("Fetch: want an error when one occupation holds more ads than the search serves")
 	}
 }
 
-// A later page failing ends enumeration with the jobs gathered so far, rather than failing
-// the whole board.
-func TestJobnetFetchLaterPageErrorKeepsJobs(t *testing.T) {
-	fake := &jobnetHTTP{
-		pages:    map[int]string{1: `{"totalJobAdCount":9999,"jobAds":[{"jobAdId":"a","title":"A","hiringOrgName":"Acme","description":"x"}]}`},
-		failPage: map[int]bool{2: true},
+// Ads the occupation facet does not count would be in no slice and never read, so the crawl
+// fails rather than closing them.
+func TestJobnetFetchFailsWhenTheFacetMissesAds(t *testing.T) {
+	if _, err := fetchJobnet(t, &jobnetCatalogue{ads: jobnetFakeAds("o1", 50), extraOcc: -1}); err == nil {
+		t.Fatal("Fetch: want an error when the occupations facet accounts for fewer ads than the total")
 	}
-	jobs, err := NewJobnet(fake).Fetch(context.Background(), CompanyEntry{Company: "Jobnet", Provider: "jobnet"})
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
+}
+
+// Any page failing fails the crawl: a partial list would let the source-scoped sweep close every
+// ad the walk did not reach.
+func TestJobnetFetchFailsOnAnyPageError(t *testing.T) {
+	for req := 1; req <= 3; req++ {
+		fake := &jobnetCatalogue{ads: jobnetFakeAds("o1", 250), failAt: map[int]bool{req: true}}
+		if _, err := fetchJobnet(t, fake); err == nil {
+			t.Errorf("Fetch with request %d failing: want an error", req)
+		}
 	}
-	if len(jobs) != 1 {
-		t.Errorf("got %d jobs, want the 1 gathered before the failing page", len(jobs))
+}
+
+// An empty catalogue is what a broken answer looks like, never a real state of the national
+// job portal, so it fails rather than letting the sweep close everything.
+func TestJobnetFetchFailsOnAnEmptyCatalogue(t *testing.T) {
+	if _, err := fetchJobnet(t, &jobnetCatalogue{}); err == nil {
+		t.Fatal("Fetch: want an error when the listing states no ads")
+	}
+}
+
+func TestJobnetSlices(t *testing.T) {
+	facet := []jobnetFacet{{"a", 6000}, {"b", 3000}, {"c", 2000}, {"d", 10}, {"e", 10}, {"f", 10}}
+	got := jobnetSlices(facet, 9000, 2)
+	want := [][]string{{"a", "b"}, {"c", "d"}, {"e", "f"}}
+	if !slices.EqualFunc(got, want, slices.Equal) {
+		t.Errorf("jobnetSlices = %v, want %v", got, want)
 	}
 }
 
 // compile-time guard that the fake satisfies the role the adapter depends on.
-var _ HeaderJSONGetter = (*jobnetHTTP)(nil)
+var _ HeaderJSONGetter = (*jobnetCatalogue)(nil)
