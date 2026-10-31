@@ -63,6 +63,17 @@ func TestArbeitnowPassJudgesThePostingPage(t *testing.T) {
 			wantRefused: true,
 		},
 		{
+			// The status is the whole answer, so a body cut short must not hide a refusal.
+			name: "rate limited with a truncated body",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Length", "1000")
+				w.WriteHeader(http.StatusTooManyRequests)
+				_, _ = w.Write([]byte("slow down"))
+			},
+			wantVerdict: liveness.Uncertain,
+			wantRefused: true,
+		},
+		{
 			name:        "server error",
 			handler:     func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadGateway) },
 			wantVerdict: liveness.Uncertain,

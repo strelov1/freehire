@@ -49,9 +49,11 @@ func arbeitnowPass(client *http.Client) pacedPass {
 }
 
 // checkArbeitnowLive judges one arbeitnow page by its status: 404/410 is gone, a 2xx is live, a
-// 403 or 429 is the site metering the host and ends the pass, anything else says nothing.
+// 403 or 429 is the site metering the host and ends the pass, anything else says nothing. The
+// body is never read: the status is the whole answer, and a body cut short must not turn a
+// refusal into a failed probe that lets the pass carry on.
 func checkArbeitnowLive(ctx context.Context, client *http.Client, c candidate) pacedVerdict {
-	status, _, _, err := liveness.Fetch(ctx, client, c.url)
+	status, err := fetchStatus(ctx, client, c.url)
 	switch {
 	case err != nil:
 		log.Printf("liveness: probe %s failed: %v", c.publicSlug, err)
@@ -65,4 +67,20 @@ func checkArbeitnowLive(ctx context.Context, client *http.Client, c candidate) p
 	default:
 		return pacedVerdict{verdict: liveness.Uncertain}
 	}
+}
+
+// fetchStatus GETs url and returns the final status, following redirects, without reading
+// the body.
+func fetchStatus(ctx context.Context, client *http.Client, url string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("User-Agent", liveness.UserAgent)
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode, nil
 }
