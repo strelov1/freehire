@@ -5815,7 +5815,7 @@ Expected: `pnpm check:links` reports no broken link.
 
 ## 14. Final verification
 
-- [ ] 14.1 Run the whole suite once more from a clean tree:
+- [x] 14.1 Run the whole suite once more from a clean tree:
 
 ```bash
 gofmt -l . && go build ./... && go vet ./... && go test ./... && go vet -tags=integration ./...
@@ -5826,4 +5826,4 @@ openspec validate buddy-mock-interviews --strict
 ```
 Expected: `gofmt -l .` prints nothing and every other command succeeds.
 
-- [ ] 14.2 Walk the spec once more: every scenario in `specs/buddy-mock-interviews/spec.md` maps to a test named in Tasks 2-12 (settings 3.5; availability 3.1; slot listing 4.2; booking 5.1 and 2.1; link visibility 7.2 and 10.1; cancellation 6.1 and 2.1; reminders 9.1; blind review 7.2; anonymous notifications 8.1 and 8.5). Fix any scenario left without one before opening the PR.
+- [x] 14.2 Walk the spec once more: every scenario in `specs/buddy-mock-interviews/spec.md` maps to a test named in Tasks 2-12 (settings 3.5; availability 3.1; slot listing 4.2; booking 5.1 and 2.1; link visibility 7.2 and 10.1; cancellation 6.1 and 2.1; reminders 9.1; blind review 7.2; anonymous notifications 8.1 and 8.5). Fix any scenario left without one before opening the PR.
