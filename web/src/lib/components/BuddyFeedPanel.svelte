@@ -1,15 +1,16 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { ApiError, api } from '#lib/api.js';
-  import { messagingDock } from '#lib/messagingDock.svelte.js';
+  import { buddyFeedDays, buddyFeedPosts } from '#lib/buddyFeed.js';
+  import { buddyRelativeDay, localDay } from '#lib/buddyPresent.js';
   import type { BuddyFeedItem } from '#lib/types.js';
   import { LoadMore, Tabs } from '#lib/ui/index.js';
-  import BuddyFeedEntry from './BuddyFeedEntry.svelte';
-  import BuddyMessageButton from './BuddyMessageButton.svelte';
+  import BuddyPost from './BuddyPost.svelte';
   import States from './States.svelte';
 
-  // The buddy feed with its two views (similar to you, everyone) and keyset paging. Message
-  // goes through the messaging dock, which is on every page of the space but Chats.
+  // The buddy feed with its two views (similar to you, everyone) and keyset paging, read as
+  // posts under day headings (buddyFeed.ts). Message goes through the messaging dock, which
+  // is on every page of the space but Chats.
   let mode = $state<'similar' | 'all'>('similar');
   let feed = $state<BuddyFeedItem[]>([]);
   let cursor = $state<string | null>(null);
@@ -43,6 +44,14 @@
     }
   }
 
+  // Regrouped over everything loaded, so a later page can still fold into a day already shown.
+  const days = $derived(buddyFeedDays(buddyFeedPosts(feed)));
+  const today = localDay();
+  const dayLabel = (day: string) => {
+    const label = buddyRelativeDay(day, today);
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
+
   $effect(() => { const currentMode = mode; untrack(() => { feed = []; cursor = null; void loadFeed(false, currentMode); }); });
 </script>
 
@@ -51,7 +60,14 @@
   {:else if feed.length === 0 && feedBusy}<States state="loading" />
   {:else if feed.length === 0}<States state="empty" message="No application updates yet." />
   {:else}
-    <ul class="flex flex-col gap-3">{#each feed as item (item.id)}<BuddyFeedEntry {item}>{#snippet actions()}<BuddyMessageButton handle={item.handle} conversations={messagingDock.conversations} oninvite={(h) => messagingDock.messageBuddy(h)} onconversation={(id) => messagingDock.openConversation(id)} />{/snippet}</BuddyFeedEntry>{/each}</ul>
+    <div class="flex flex-col gap-3">
+      {#each days as group (group.day)}
+        <h2 class="flex items-center gap-3 pt-1 text-xs font-medium text-muted-foreground after:h-px after:flex-1 after:bg-border">
+          <time datetime={group.day}>{dayLabel(group.day)}</time>
+        </h2>
+        {#each group.posts as post (post.key)}<BuddyPost {post} />{/each}
+      {/each}
+    </div>
     {#if cursor}<LoadMore loading={feedBusy} error={feedError === 'more'} onclick={() => void loadFeed(true)} />{/if}
   {/if}
 </Tabs>

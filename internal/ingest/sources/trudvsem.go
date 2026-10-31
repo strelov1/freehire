@@ -97,6 +97,13 @@ var trudvsemEmployment = map[string]string{
 	"Стажировка":          "internship",
 }
 
+// trudvsemRemoteEmployment is the employment value under which the board files remote work —
+// the Labour Code's "дистанционная работа", picked from the same closed list as the values
+// above. It names where the work is done, not its hours, so it is the posting's structured work
+// mode rather than an employment type. No other employment value or schedule states a work
+// mode ("Полный рабочий день" is hours), so everything else is left to the dictionaries.
+const trudvsemRemoteEmployment = "Дистанционная (удаленная) работа"
+
 // Fetch reads a region's whole listing, one date window at a time (see the type comment). Any
 // page failing fails the board: the region is a fullBoardListing, so a partial result returned
 // as a success would let the board-scoped sweep close every posting the walk did not reach.
@@ -188,6 +195,11 @@ func (trudvsem) toJob(v trudvsemVacancy, hubName string) (Job, bool) {
 	if v.ID == "" || strings.TrimSpace(v.JobName) == "" {
 		return Job{}, false
 	}
+	employment := strings.TrimSpace(v.Employment)
+	var workMode string
+	if employment == trudvsemRemoteEmployment {
+		workMode = "remote"
+	}
 	return Job{
 		ExternalID:     v.ID,
 		URL:            strings.TrimSpace(v.VacURL),
@@ -195,7 +207,9 @@ func (trudvsem) toJob(v trudvsemVacancy, hubName string) (Job, bool) {
 		Company:        firstNonEmpty(strings.TrimSpace(v.Company.Name), hubName),
 		Location:       strings.TrimSpace(v.Region.Name),
 		Description:    trudvsemDescription(v),
-		EmploymentType: trudvsemEmployment[strings.TrimSpace(v.Employment)],
+		Remote:         workMode == "remote",
+		WorkMode:       workMode,
+		EmploymentType: trudvsemEmployment[employment],
 		PostedAt:       parseDate(strings.TrimSpace(v.CreationDate)),
 	}, true
 }

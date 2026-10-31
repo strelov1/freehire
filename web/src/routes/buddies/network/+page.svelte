@@ -4,5 +4,5 @@
 
 <svelte:head><title>Network · Interview buddies</title></svelte:head>
 
-<h1 class="sr-only">People like you</h1>
+<h1 class="sr-only">Your network</h1>
 <BuddySimilarList />

@@ -131,6 +131,51 @@ def test_a_refused_browser_session_is_retired_so_the_next_gets_another_ip():
     assert opened[0].closed and not opened[1].closed
 
 
+def test_a_405_retires_the_browser_session_too():
+    # InfoJobs (Adevinta's bot wall) turns a flagged session away with 405, not 403: measured
+    # 2026-10-30, after ~45 offer pages one session answered 405 to 942 of the next ~950 until
+    # it retired by age, and the next session's exit was served again.
+    opened = []
+    statuses = [[405], [200]]
+
+    async def open_session(key, proxy, tabs):
+        b = FakeBrowser(proxy, statuses.pop(0))
+        opened.append(b)
+        return b
+
+    cfg = ProxyConfig(rotating=None, sticky=["http://ip1", "http://ip2"])
+    pool = SessionPool(stealth_session_factory(cfg, open_session), max_sessions=2, idle_ttl=60)
+    fetch = browser_fetcher(pool)
+
+    async def go():
+        first = await fetch(FetchRequest(url="https://ex.com/a", mode="browser", proxy=True))
+        second = await fetch(FetchRequest(url="https://ex.com/b", mode="browser", proxy=True))
+        return first, second
+
+    first, second = asyncio.run(go())
+    assert first.status == 405 and second.status == 200
+    assert [b.proxy for b in opened] == ["http://ip1", "http://ip2"]
+    assert opened[0].closed and not opened[1].closed
+
+
+def test_a_405_through_the_rotating_proxy_is_not_retried_here():
+    # Over http the 405 callers (adzuna-liveness, epreselec) already re-send it themselves with
+    # their own budgets; retrying here as well would multiply every one of those attempts.
+    calls = []
+
+    async def send_fn(url, **kw):
+        calls.append(1)
+
+        class P:
+            status, url, body, headers = 405, "https://ex.com", b"pardon", {}
+
+        return P()
+
+    fetch = http_fetcher(ProxyConfig(rotating="http://rot", sticky=[]), send=lambda method: send_fn)
+    r = asyncio.run(fetch(FetchRequest(url="https://ex.com", proxy=True)))
+    assert r.status == 405 and len(calls) == 1
+
+
 def test_a_direct_browser_session_gets_no_proxy():
     got = []
 

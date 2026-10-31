@@ -158,9 +158,9 @@ func (r *QueriesRepository) Feed(ctx context.Context, viewerID int64, authors []
 			Company: Company{Slug: row.CompanySlug, Name: row.CompanyName},
 			Author:  SimilarRow{Handle: row.Handle, Countries: row.Countries, CV: decodeCV(row.ResumeStructured)},
 		}
-		if row.JobTitle.Valid {
-			out[i].JobTitle = &row.JobTitle.String
-		}
+		out[i].JobTitle = textPtr(row.JobTitle)
+		out[i].JobSlug = textPtr(row.JobSlug)
+		out[i].JobLocation = textPtr(row.JobLocation)
 	}
 	return out, nil
 }
@@ -246,4 +246,12 @@ func (r *QueriesRepository) Handles(ctx context.Context, userIDs []int64) (map[i
 		out[row.UserID] = row.Handle
 	}
 	return out, nil
+}
+
+// textPtr is a nullable column as an optional string; an empty value counts as absent.
+func textPtr(t pgtype.Text) *string {
+	if !t.Valid || t.String == "" {
+		return nil
+	}
+	return &t.String
 }

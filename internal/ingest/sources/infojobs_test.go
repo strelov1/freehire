@@ -39,6 +39,8 @@ type infojobsHTTP struct {
 	// flaky is how many times each listing page ("<category>:<page>", "" for the root) fails
 	// before it is served.
 	flaky map[string]int
+	// refusedDetails is how many times each offer page answers 405 before it is served.
+	refusedDetails map[string]int
 
 	mu       sync.Mutex
 	got      []string
@@ -57,6 +59,15 @@ func (f *infojobsHTTP) GetText(_ context.Context, rawURL string) (string, error)
 	defer func() { f.mu.Lock(); f.inFlight--; f.mu.Unlock() }()
 	time.Sleep(f.delay)
 	if !strings.HasPrefix(rawURL, "https://www.infojobs.net/ofertas-trabajo?") {
+		f.mu.Lock()
+		refused := f.refusedDetails[rawURL] > 0
+		if refused {
+			f.refusedDetails[rawURL]--
+		}
+		f.mu.Unlock()
+		if refused {
+			return "", &StatusError{Method: "GET", Code: 405, URL: rawURL}
+		}
 		if body, ok := f.details[rawURL]; ok {
 			return body, nil
 		}
@@ -222,6 +233,50 @@ func TestInfojobsDetailFailureDefersTheOffer(t *testing.T) {
 	}
 	if len(jobs) != 1 || jobs[0].ExternalID != "A" || !strings.Contains(jobs[0].Description, "Body A") {
 		t.Errorf("jobs = %+v, want only A, hydrated", jobs)
+	}
+}
+
+// An offer page refused with 405 is sent again: through the Scrapling tier the refusal retires
+// its browser session, so the retry opens on another exit IP. Measured 2026-10-30, a session
+// that started answering 405 answered it to 942 of the next ~950 pages, while a fresh one was
+// served — so the refused page is worth one more navigation, not a deferral to the next run.
+func TestInfojobsDetailRefusalIsRetriedOnce(t *testing.T) {
+	http := ijSite(ijCat{id: "190", pages: [][]string{ijOffers("A", "B")}})
+	http.details = map[string]string{
+		"https://www.infojobs.net/x/of-iA": ijPage(`{"offer":{"description":"Body A."}}`),
+		"https://www.infojobs.net/x/of-iB": ijPage(`{"offer":{"description":"Body B."}}`),
+	}
+	http.refusedDetails = map[string]int{
+		"https://www.infojobs.net/x/of-iA": 1,                      // served on the retry
+		"https://www.infojobs.net/x/of-iB": infojobsDetailAttempts, // refused every time
+	}
+	jobs, err := infojobs{http: http}.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "A" || !strings.Contains(jobs[0].Description, "Body A") {
+		t.Errorf("jobs = %+v, want A hydrated after its refusal and B deferred", jobs)
+	}
+}
+
+// A page that is not a refusal is not sent again: a gone offer, or a challenge page served with
+// a 200, would be the same on the next navigation.
+func TestInfojobsDetailNonRefusalIsNotRetried(t *testing.T) {
+	http := ijSite(ijCat{id: "190", pages: [][]string{ijOffers("A")}})
+	http.details = map[string]string{
+		"https://www.infojobs.net/x/of-iA": `<html>No podemos identificar tu navegador</html>`,
+	}
+	if _, err := (infojobs{http: http}).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, u := range http.got {
+		if u == "https://www.infojobs.net/x/of-iA" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("offer page requested %d times, want 1", n)
 	}
 }
 

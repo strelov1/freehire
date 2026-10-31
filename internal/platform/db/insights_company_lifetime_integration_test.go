@@ -49,10 +49,12 @@ func TestInsightsCompanyLifetimeMedianOfEmployerClosures(t *testing.T) {
 	truncate(t, pool)
 
 	// Open 10, 20 and 30 days before closing 5 days ago, under three different
-	// employer-side reasons.
+	// reasons that say the posting is over at its source. probe_expired is the
+	// liveness probe reading the source page as expired twice — the posting left its
+	// source as surely as an unseen one did.
 	seedClosedCompanyJob(t, pool, "a1", "acme", 15, 5, "unseen", nil)
 	seedClosedCompanyJob(t, pool, "a2", "acme", 25, 5, "employer_closed", nil)
-	seedClosedCompanyJob(t, pool, "a3", "acme", 35, 5, "expired", nil)
+	seedClosedCompanyJob(t, pool, "a3", "acme", 35, 5, "probe_expired", nil)
 	// Still open: no closure, nothing to measure.
 	seedCompanyJob(t, pool, "a4", "acme", 40, nil, nil)
 
@@ -76,9 +78,11 @@ func TestInsightsCompanyLifetimeExcludesOurOwnClosures(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	// Every one of these says something about our crawler or our decisions, not
-	// about how fast the employer hires.
-	for i, reason := range []string{"board_unreachable", "feed_empty", "source_misattributed", "moderated"} {
+	// Every one of these says something about our crawler, our rules or our decisions,
+	// not about how fast the employer hires. expired is the age rule for sources with no
+	// close signal: it closes at 45 days whatever the employer did, so counting it would
+	// publish our cutoff as the company's hiring speed.
+	for i, reason := range []string{"board_unreachable", "feed_empty", "source_misattributed", "moderated", "expired", "board_retired", ""} {
 		seedClosedCompanyJob(t, pool, "x"+string(rune('a'+i)), "crawlfail", 30, 2, reason, nil)
 	}
 
@@ -89,7 +93,7 @@ func TestInsightsCompanyLifetimeExcludesOurOwnClosures(t *testing.T) {
 	}
 }
 
-func TestInsightsCompanyLifetimeExcludesOldClosuresAndDuplicates(t *testing.T) {
+func TestInsightsCompanyLifetimeExcludesOldClosuresDuplicatesAndPrivate(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -100,6 +104,13 @@ func TestInsightsCompanyLifetimeExcludesOldClosuresAndDuplicates(t *testing.T) {
 	seedClosedCompanyJob(t, pool, "old", "globex", 260, 200, "unseen", nil)
 	// A repost copy closed yesterday: the canonical posting stands for it.
 	seedClosedCompanyJob(t, pool, "dup", "globex", 5, 1, "unseen", &canonical)
+	// A member's private URL import carries the employer's slug, and the orphan
+	// liveness probe can close it as probe_expired: it is the member's, not public
+	// evidence about the company.
+	seedClosedCompanyJob(t, pool, "priv", "globex", 40, 1, "probe_expired", nil)
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET is_private = true WHERE external_id = 'priv'`); err != nil {
+		t.Fatalf("mark private: %v", err)
+	}
 	// Closed before it was created: a data quirk, not a negative lifetime.
 	seedClosedCompanyJob(t, pool, "skew", "globex", 1, 3, "unseen", nil)
 	// One qualifying closure so the company has a row to inspect.

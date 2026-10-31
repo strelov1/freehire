@@ -1,19 +1,18 @@
 <script lang="ts">
   import { BadgeCheck } from '@lucide/svelte';
-  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { ApiError, api } from '#lib/api.js';
   import { buildActivityGridFromCounts } from '#lib/activityGrid.js';
   import { buddyHeading, buddyYearTotals, localDay } from '#lib/buddyPresent.js';
   import { countryLabel, skillLabel } from '#lib/facets.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
-  import type { BuddyActivity, BuddyFeedItem, BuddyProfile, BuddySimilar } from '#lib/types.js';
+  import type { BuddyActivity, BuddyFeedItem, BuddyProfile } from '#lib/types.js';
   import { Chip, CountryFlag, LoadMore, TabStrip, tabStripId } from '#lib/ui/index.js';
   import ActivityYear from '#lib/components/ActivityYear.svelte';
   import BuddyAvatar from '#lib/components/BuddyAvatar.svelte';
   import BuddyFeedEntry from '#lib/components/BuddyFeedEntry.svelte';
-  import BuddyIdentity from '#lib/components/BuddyIdentity.svelte';
   import BuddyMessageButton from '#lib/components/BuddyMessageButton.svelte';
+  import BuddySimilarRail from '#lib/components/BuddySimilarRail.svelte';
   import CandidateCardSections from '#lib/components/CandidateCardSections.svelte';
   import States from '#lib/components/States.svelte';
 
@@ -31,7 +30,6 @@
   let cursor = $state<string | null>(null);
   let feedBusy = $state(false);
   let feedError = $state(false);
-  let similar = $state<BuddySimilar[]>([]);
 
   // The year grid and the year in numbers both read the activity days, which count exactly
   // what this member's feed lists. A failure to read them costs those two, not the page.
@@ -108,15 +106,10 @@
     const current = handle;
     let cancelled = false;
     view = 'loading'; profile = null; feed = []; cursor = null; feedError = false;
-    activity = null; similar = []; dayView = null; tab = 'activity'; allSkills = false;
+    activity = null; dayView = null; tab = 'activity'; allSkills = false;
     history = []; historyCursor = null; historyPages = 0; historyLoad = Promise.resolve();
     api.getBuddyActivity(current).then(
       (a) => { if (!cancelled) activity = a; },
-      () => {},
-    );
-    // The rail is a suggestion; its failure leaves it empty.
-    api.listBuddySimilar(5).then(
-      (s) => { if (!cancelled) similar = s.filter((m) => m.handle !== current).slice(0, 4); },
       () => {},
     );
     void (async () => {
@@ -229,8 +222,10 @@
       <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)} class="flex flex-col gap-4">
         {#if tab === 'activity'}
           {#if grid}
-            <!-- ActivityYear draws its own card; a second frame around it nests two. -->
-            <section>
+            <!-- ActivityYear draws its own cards (grid, totals, the selected day) as siblings and
+                 leaves the space between them to the host — the gap its totals use. No frame:
+                 a second one around it would nest cards. -->
+            <section class="flex flex-col gap-3">
               <ActivityYear
                 {grid}
                 heading="Their last year"
@@ -246,7 +241,7 @@
                     <p role="alert" class="text-sm text-destructive">Could not load this day.</p>
                   {:else}
                     {#if dayView.entries.length > 0}
-                      <ul>{#each dayView.entries as item (item.id)}<BuddyFeedEntry {item} showHandle={false} />{/each}</ul>
+                      <ul>{#each dayView.entries as item (item.id)}<BuddyFeedEntry {item} />{/each}</ul>
                     {/if}
                     {#if !dayView.complete}
                       <p class="text-sm text-muted-foreground">
@@ -258,12 +253,12 @@
               </ActivityYear>
             </section>
           {/if}
-          <section class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
+          <section class="flex flex-col gap-1 rounded-xl border border-border bg-card p-5">
             <h2 class="text-sm font-semibold">Activity</h2>
             {#if feed.length === 0}
               <p class="text-sm text-muted-foreground">No application updates yet.</p>
             {:else}
-              <ul>{#each feed as item (item.id)}<BuddyFeedEntry {item} showHandle={false} />{/each}</ul>
+              <ul>{#each feed as item (item.id)}<BuddyFeedEntry {item} />{/each}</ul>
               {#if cursor}<LoadMore loading={feedBusy} error={feedError} onclick={() => void loadMore()} />{/if}
             {/if}
           </section>
@@ -277,19 +272,5 @@
     {/if}
   </div>
 
-  {#if similar.length}
-    <aside class="xl:sticky xl:top-20 xl:w-68 xl:shrink-0 xl:self-start">
-      <section class="rounded-xl border border-border bg-card p-4">
-        <div class="mb-2 flex items-baseline justify-between">
-          <h2 class="text-sm font-semibold">Similar members</h2>
-          <a href={resolve('/buddies/network')} class="text-xs font-medium text-brand-strong hover:underline">See all</a>
-        </div>
-        <ul class="flex flex-col divide-y divide-border">
-          {#each similar as person (person.handle)}
-            <li class="py-2.5"><BuddyIdentity handle={person.handle} summary={person.card_summary} size="sm" /></li>
-          {/each}
-        </ul>
-      </section>
-    </aside>
-  {/if}
+  <BuddySimilarRail exclude={handle} />
 </div>

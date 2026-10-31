@@ -17,9 +17,17 @@ _DROPPED = frozenset({"user-agent", "host", "content-length", "accept-encoding",
 # whole, so these would describe bytes the caller never receives.
 _FRAMING = frozenset({"content-encoding", "content-length", "transfer-encoding"})
 
-# A browser session the source refused is retired: a Cloudflare clearance belongs to the exit
-# IP, and the next session opens on another one.
+# Statuses an http request through the rotating proxy is retried on: each leaves from another
+# exit IP, so a refusal is usually one flagged address.
 _REFUSED = frozenset({403, 429})
+
+# A browser session the source refused is retired: a clearance belongs to the exit IP, and the
+# next session opens on another one. 405 is how InfoJobs (Adevinta's bot wall, the same one in
+# front of ePreselec) refuses: measured 2026-10-30, after ~45 offer pages one session answered
+# 405 to 942 of the next ~950 until it retired by age, and the next session was served again.
+# It is a refusal for sessions only — the http callers that meet it (adzuna-liveness, epreselec)
+# re-send a 405 under their own budgets, and a retry here would multiply each of theirs.
+_SESSION_REFUSED = _REFUSED | {405}
 
 # Attempts an http request gets through the rotating proxy when it is refused (403/429) or the
 # transport fails. Each leaves from another exit IP, so either is usually one bad address:
@@ -139,7 +147,7 @@ def browser_fetcher(pool: SessionPool):
 
         async def navigate(session):
             result = _result(await session.fetch(req.url))
-            if result.status in _REFUSED:
+            if result.status in _SESSION_REFUSED:
                 raise _Refused(result)
             return result
 

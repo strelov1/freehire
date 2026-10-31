@@ -17,18 +17,21 @@
     summary,
     size = 'md',
     link = true,
+    avatar = true,
   }: {
     handle: string;
     summary: { category: string; seniority: string; country: string };
     size?: 'sm' | 'md';
     link?: boolean;
+    /** False where the host already draws the member's avatar larger (a network card). */
+    avatar?: boolean;
   } = $props();
 
   const heading = $derived(buddyHeading(summary));
 </script>
 
 {#snippet body()}
-  <BuddyAvatar {handle} size={size === 'md' ? 'md' : 'sm'} class="shrink-0" />
+  {#if avatar}<BuddyAvatar {handle} size={size === 'md' ? 'md' : 'sm'} class="shrink-0" />{/if}
   <span class="flex min-w-0 flex-col">
     <span class="flex min-w-0 items-center gap-1.5">
       <span class="truncate font-semibold text-foreground {size === 'md' ? 'text-base' : 'text-sm'} {link ? 'group-hover:underline' : ''}">{heading}</span>

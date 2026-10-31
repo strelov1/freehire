@@ -117,6 +117,33 @@ func TestTrudvsemFetchMaps(t *testing.T) {
 	}
 }
 
+// Trudvsem files remote work as an EMPLOYMENT form, "Дистанционная (удаленная) работа" — the
+// Labour Code's own category, picked from the board's closed list — so it is the posting's
+// structured work mode. No other employment value or schedule states one: "Полный рабочий день"
+// is hours, not a place. The record is trimmed from the live API (2026-10-30).
+func TestTrudvsemRemoteEmploymentIsTheWorkMode(t *testing.T) {
+	const page = `{"status":"200","meta":{"total":2},"results":{"vacancies":[
+	  {"vacancy":{"id":"3386d350-1ed4-11f1-b26c-af1153b4c800","job-name":"Менеджер по продажам (удаленно)",
+	    "region":{"region_code":"7700000000000","name":"Город Москва"},"company":{"name":"ООО \"МЕДИС\""},
+	    "employment":"Дистанционная (удаленная) работа","schedule":"Полный рабочий день",
+	    "duty":"Менеджер по входящим продажам (удалённо)"}},
+	  {"vacancy":{"id":"cfbc6315-5df3-11ee-b174-d549be31d974","job-name":"инженер",
+	    "region":{"region_code":"6600000000000","name":"Свердловская область"},"company":{"name":"МКУ \"СЗГХ\""},
+	    "employment":"Полная занятость","schedule":"Полный рабочий день"}}
+	]}}`
+	jobs, err := NewTrudvsem(&trudvsemFake{byOffset: map[int]string{0: page}}).Fetch(context.Background(),
+		CompanyEntry{Company: "Работа России", Provider: "trudvsem", Board: "7700000000000"})
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("Fetch = %d jobs, %v", len(jobs), err)
+	}
+	if r := jobs[0]; r.WorkMode != "remote" || !r.Remote {
+		t.Errorf("remote employment: WorkMode/Remote = %q/%v, want remote/true", r.WorkMode, r.Remote)
+	}
+	if o := jobs[1]; o.WorkMode != "" || o.Remote {
+		t.Errorf("full-time employment: WorkMode/Remote = %q/%v, want empty/false", o.WorkMode, o.Remote)
+	}
+}
+
 func TestTrudvsemPaginates(t *testing.T) {
 	// offset is a 0-based page index: page 0 full => keep going, page 1 short => stop.
 	full := trudvsemPage(trudvsemPageSize, 0, 100000)

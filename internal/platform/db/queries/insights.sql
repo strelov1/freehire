@@ -681,12 +681,18 @@ DELETE FROM insights_company_lifetime;
 
 -- name: RebuildInsightsCompanyLifetime :execrows
 -- Median days from created_at to closed_at over each company's canonical postings
--- closed in the last 180 days. Only closures that say something about the EMPLOYER
--- count: the posting left its source (unseen, feed_removed), the employer closed it,
--- or its own deadline passed. board_unreachable and feed_empty measure our crawler,
--- source_misattributed and moderated our own decisions — counting them would publish
--- our health as a named employer's hiring speed. 180 days so the figure describes how
--- the company hires now, not over its whole history.
+-- closed in the last 180 days. Only closures that say the POSTING is over count: it
+-- dropped off a board we crawl (unseen), the source reported it taken down
+-- (feed_removed), the liveness probe read its source page as expired twice
+-- (probe_expired), or the employer closed it here (employer_closed). Not expired —
+-- that is the age rule for sources with no close signal, which closes at 45 days
+-- whatever the employer did, so it would publish our cutoff as the company's speed.
+-- board_unreachable and feed_empty measure our crawler, board_retired,
+-- source_misattributed and moderated our own decisions, '' is unknown. 180 days so the
+-- figure describes how the company hires now, not over its whole history.
+--
+-- Every rollup that measures a real close reads this same list;
+-- insights_close_rule_test.go fails if one of them drifts from it.
 INSERT INTO insights_company_lifetime (company_slug, closed, median_days)
 SELECT
     company_slug,
@@ -697,9 +703,13 @@ SELECT
 FROM jobs
 WHERE company_slug <> ''
   AND duplicate_of IS NULL
+  -- A member's private URL import carries the employer's slug and can be closed by the
+  -- orphan liveness probe (probe_expired); it is the member's, not evidence about the
+  -- company, and the company page's own reads exclude it the same way.
+  AND NOT is_private
   AND closed_at IS NOT NULL
   AND closed_at >= now() - interval '180 days'
-  AND closed_reason IN ('unseen', 'employer_closed', 'feed_removed', 'expired')
+  AND closed_reason IN ('unseen', 'feed_removed', 'probe_expired', 'employer_closed')
   -- A closure dated before its posting (a reopened row, clock skew) would add a
   -- negative duration; the response rollup keeps the same pair out of its median.
   AND closed_at >= created_at

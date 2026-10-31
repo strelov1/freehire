@@ -92,7 +92,7 @@
   });
 </script>
 
-<Card class="p-4">
+<Card class="p-5">
   <div class="flex flex-wrap items-baseline justify-between gap-2">
     <h2 class="text-lg font-medium">{heading}</h2>
     <p class="text-sm text-muted-foreground">{countOf(grid.total)}</p>
@@ -160,22 +160,22 @@
 </Card>
 
 <div class="grid gap-3 sm:grid-cols-3">
-  <Card class="p-4">
+  <Card class="p-5">
     <p class="text-sm text-muted-foreground">{s.totalLabel}</p>
     <p class="text-2xl font-semibold tabular-nums">{grid.total}</p>
   </Card>
-  <Card class="p-4">
+  <Card class="p-5">
     <p class="text-sm text-muted-foreground">{s.currentStreakLabel}</p>
     <p class="text-2xl font-semibold tabular-nums">{daysOf(grid.currentStreak)}</p>
   </Card>
-  <Card class="p-4">
+  <Card class="p-5">
     <p class="text-sm text-muted-foreground">{s.longestStreakLabel}</p>
     <p class="text-2xl font-semibold tabular-nums">{daysOf(grid.longestStreak)}</p>
   </Card>
 </div>
 
 {#if selected}
-  <Card class="p-4">
+  <Card class="p-5">
     <div id="activity-day-panel" role="region" aria-live="polite">
       <h3 class="mb-3 text-sm font-medium">
         {dayHeading(selected)}
