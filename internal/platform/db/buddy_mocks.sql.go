@@ -272,6 +272,9 @@ WHERE r.subject_user_id = $1::bigint
   AND (EXISTS (SELECT 1 FROM buddy_mock_reviews o
                WHERE o.mock_id = r.mock_id AND o.author_user_id = r.subject_user_id)
        OR m.ends_at + interval '7 days' <= now())
+  AND NOT EXISTS (SELECT 1 FROM user_blocks b
+              WHERE (b.blocker_id = r.author_user_id AND b.blocked_id = r.subject_user_id)
+                 OR (b.blocker_id = r.subject_user_id AND b.blocked_id = r.author_user_id))
 `
 
 type GetBuddyMemberMockSummaryRow struct {
@@ -281,7 +284,8 @@ type GetBuddyMemberMockSummaryRow struct {
 }
 
 // What a member page shows: completed mocks (confirmed and ended, either role) and the
-// count and average of REVEALED reviews about the member. Zeroes, never NULLs.
+// count and average of REVEALED reviews about the member, minus any written across a
+// block (the ListBuddyMocksForUser rule). Zeroes, never NULLs.
 func (q *Queries) GetBuddyMemberMockSummary(ctx context.Context, subjectUserID int64) (GetBuddyMemberMockSummaryRow, error) {
 	row := q.db.QueryRow(ctx, getBuddyMemberMockSummary, subjectUserID)
 	var i GetBuddyMemberMockSummaryRow
@@ -387,6 +391,9 @@ WHERE r.subject_user_id = $1::bigint
   AND (EXISTS (SELECT 1 FROM buddy_mock_reviews o
                WHERE o.mock_id = r.mock_id AND o.author_user_id = r.subject_user_id)
        OR m.ends_at + interval '7 days' <= now())
+  AND NOT EXISTS (SELECT 1 FROM user_blocks b
+              WHERE (b.blocker_id = r.author_user_id AND b.blocked_id = r.subject_user_id)
+                 OR (b.blocker_id = r.subject_user_id AND b.blocked_id = r.author_user_id))
 ORDER BY r.created_at DESC
 LIMIT $2
 `
@@ -583,6 +590,9 @@ LEFT JOIN buddy_mock_reviews mine
 LEFT JOIN buddy_mock_reviews theirs
        ON theirs.mock_id = m.id AND theirs.subject_user_id = $1::bigint
       AND (mine.mock_id IS NOT NULL OR m.ends_at + interval '7 days' <= now())
+      AND NOT EXISTS (SELECT 1 FROM user_blocks b
+              WHERE (b.blocker_id = theirs.author_user_id AND b.blocked_id = theirs.subject_user_id)
+                 OR (b.blocker_id = theirs.subject_user_id AND b.blocked_id = theirs.author_user_id))
 WHERE m.host_user_id = $1::bigint OR m.guest_user_id = $1::bigint
 ORDER BY m.starts_at DESC
 LIMIT $2
@@ -616,7 +626,8 @@ type ListBuddyMocksForUserRow struct {
 // still meet (the GetBuddyMock rule), whether the other side may still be drawn (both
 // active, no block either way — the ListBuddyCounterparts rule), the member's own review,
 // and the review ABOUT them only once revealed: they have written theirs, or seven days
-// have passed since the end. The same reveal rule is restated in
+// have passed since the end — and only while no block stands between its author and its
+// subject, either way. The same reveal-and-block rule is restated in
 // GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
 func (q *Queries) ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksForUserParams) ([]ListBuddyMocksForUserRow, error) {
 	rows, err := q.db.Query(ctx, listBuddyMocksForUser, arg.UserID, arg.RowLimit)

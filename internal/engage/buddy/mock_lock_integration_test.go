@@ -47,8 +47,9 @@ func raceAgainst(t *testing.T, rival func(ctx context.Context, pool *pgxpool.Poo
 		}()
 		go func() {
 			defer done.Done()
-			repo.arrived.Done()
-			repo.arrived.Wait()
+			if rivalErr = repo.arrive(); rivalErr != nil {
+				return
+			}
 			rivalErr = rival(ctx, pool, svc, host, guest)
 		}()
 		done.Wait()

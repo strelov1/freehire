@@ -137,10 +137,13 @@ func (r *QueriesRepository) listBusyByKind(ctx context.Context, mentorID int64, 
 	return booked, busy, nil
 }
 
+// createBookingAttempts bounds the deadlock retry in CreateBooking.
+const createBookingAttempts = 3
+
 // CreateBooking writes a confirmed booking, translating the non-overlap constraint into
 // the ordinary "no longer available" answer.
 func (r *QueriesRepository) CreateBooking(ctx context.Context, row BookingRow) (Booking, error) {
-	created, err := r.q.CreateMentorBooking(ctx, db.CreateMentorBookingParams{
+	params := db.CreateMentorBookingParams{
 		MentorID:       row.MentorID,
 		SeekerUserID:   row.SeekerUserID,
 		StartsAt:       pgtype.Timestamptz{Time: row.StartsAt, Valid: true},
@@ -149,7 +152,19 @@ func (r *QueriesRepository) CreateBooking(ctx context.Context, row BookingRow) (
 		Note:           row.Note,
 		SeekerTimezone: row.SeekerTimezone,
 		MeetingUrl:     row.MeetingURL,
-	})
+	}
+	// Even a single-row insert can lose a true race with 40P01 rather than 23P01: two
+	// inserts into the GiST exclusion index each place their entry, then each waits on
+	// the other's uncommitted one, and Postgres breaks the cycle by aborting one (measured:
+	// 3 of 30 barrier-forced races). The aborted statement wrote nothing, so it is run
+	// again: the retry waits for the survivor's commit and then meets the EXCLUDE plainly.
+	var created db.MentorBooking
+	var err error
+	for range createBookingAttempts {
+		if created, err = r.q.CreateMentorBooking(ctx, params); !pgerr.IsDeadlock(err) {
+			break
+		}
+	}
 	if err != nil {
 		// An EXCLUDE violation carries SQLSTATE 23P01, NOT a unique violation's 23505 —
 		// reaching for IsUniqueViolation here would miss it and turn "somebody took that

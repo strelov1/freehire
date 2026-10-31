@@ -11,7 +11,7 @@ by account) and `Kind` (the notice wording and link). Layer 7 (`engage`); tables
 `buddy_members` and `buddy_hidden_applications` (migration 0203), queries in
 `internal/platform/db/queries/buddies.sql`. HTTP lives in `internal/api/handler`, not here.
 
-Mock interviews (openspec/changes/buddy-mock-interviews) live in `mock*.go`: a member
+Mock interviews ([spec](../../../openspec/specs/buddy-mock-interviews/spec.md)) live in `mock*.go`: a member
 publishes when they can host and another books 60 minutes of it. Tables `buddy_mock_*`
 (migration 0215), queries in `internal/platform/db/queries/buddy_mocks.sql`; the slot
 arithmetic is the shared engine in [internal/engage/slots](../slots/doc.go), the reminders a
@@ -94,6 +94,7 @@ second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.g
   subject has reviewed back or seven days have passed since the end. The rule is computed in
   `ListBuddyMocksForUser`, `GetBuddyMemberMockSummary` and `ListBuddyMemberRevealedReviews`;
   change all three together. A member page never names who wrote a review.
+- **A block withdraws the reviews across it**: while either of a review's author and subject blocks the other, it is neither their_review nor on the subject's page (count, average or list); the completed-mock count stays.
 - **Mock notices name the other member by handle only**, render the time in the
   recipient's zone (UTC, stated, when it does not resolve), and say only "cancelled" for a
   leave or a block.

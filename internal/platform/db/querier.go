@@ -2548,7 +2548,8 @@ type Querier interface {
 	// A member's own row, active or left. The caller decides what left_at means.
 	GetBuddyMemberByUser(ctx context.Context, userID int64) (BuddyMember, error)
 	// What a member page shows: completed mocks (confirmed and ended, either role) and the
-	// count and average of REVEALED reviews about the member. Zeroes, never NULLs.
+	// count and average of REVEALED reviews about the member, minus any written across a
+	// block (the ListBuddyMocksForUser rule). Zeroes, never NULLs.
 	GetBuddyMemberMockSummary(ctx context.Context, subjectUserID int64) (GetBuddyMemberMockSummaryRow, error)
 	// One mock with what both participants' notices need: both handles, the host's CURRENT
 	// zone and link, and both addresses — each address only ever addresses its own owner's
@@ -3948,7 +3949,8 @@ type Querier interface {
 	// still meet (the GetBuddyMock rule), whether the other side may still be drawn (both
 	// active, no block either way — the ListBuddyCounterparts rule), the member's own review,
 	// and the review ABOUT them only once revealed: they have written theirs, or seven days
-	// have passed since the end. The same reveal rule is restated in
+	// have passed since the end — and only while no block stands between its author and its
+	// subject, either way. The same reveal-and-block rule is restated in
 	// GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
 	ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksForUserParams) ([]ListBuddyMocksForUserRow, error)
 	// Each event's reaction counts by kind, and the viewer's own choice, for the events of one
