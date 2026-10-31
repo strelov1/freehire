@@ -37,6 +37,9 @@ func seedEmployment(t *testing.T, pool *pgxpool.Pool, userID int64, kind, compan
 
 func seedCompany(t *testing.T, pool *pgxpool.Pool, slug string, jobs int, countries []string) {
 	t.Helper()
+	if countries == nil {
+		countries = []string{}
+	}
 	if _, err := pool.Exec(context.Background(),
 		`INSERT INTO companies (slug, name, job_count, countries) VALUES ($1, $1, $2, $3)`,
 		slug, jobs, countries); err != nil {
@@ -57,7 +60,7 @@ func TestStoreSlugs(t *testing.T) {
 	seedCompany(t, pool, "fe-stark", 9, nil)
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO company_slug_aliases (alias_slug, canonical_slug, folded_key, reason)
-		 VALUES ('feumbrella', 'fe-umbrella', 'feumbrella', 'test')`); err != nil {
+		 VALUES ('feumbrella', 'fe-umbrella', 'feumbrella', 'spelling')`); err != nil {
 		t.Fatalf("seed alias: %v", err)
 	}
 
