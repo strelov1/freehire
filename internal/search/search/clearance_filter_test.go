@@ -47,3 +47,77 @@ func TestFilterFromValues_RequiresClearance(t *testing.T) {
 		})
 	}
 }
+
+// clearance_levels ORs its levels in one group like any multi-value facet. Its "none"
+// value — no explicit reference to a clearance — is answered from requires_clearance,
+// which every indexed document already carries, so it is right before the levels
+// reach the index and identical to the legacy requires_clearance=false.
+func TestFilterFromValues_ClearanceLevels(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		want  [][]string
+	}{
+		{name: "uppercase none", query: "clearance_levels=NONE", want: [][]string{{"NOT requires_clearance = true"}}},
+		{name: "padded none", query: "clearance_levels=+none+", want: [][]string{{"NOT requires_clearance = true"}}},
+		{name: "uppercase exclusion", query: "clearance_levels_exclude=NONE", want: [][]string{{"requires_clearance = true"}}},
+		{name: "padded exclusion", query: "clearance_levels_exclude=+none+", want: [][]string{{"requires_clearance = true"}}},
+		{
+			name:  "levels OR within the group",
+			query: "clearance_levels=secret&clearance_levels=ts_sci",
+			want:  [][]string{{`clearance_levels = "secret"`, `clearance_levels = "ts_sci"`}},
+		},
+		{
+			name:  "none selects the postings not marked as requiring a clearance",
+			query: "clearance_levels=none",
+			want:  [][]string{{"NOT requires_clearance = true"}},
+		},
+		{
+			name:  "none ORs with a real level",
+			query: "clearance_levels=none,public_trust",
+			want:  [][]string{{"NOT requires_clearance = true", `clearance_levels = "public_trust"`}},
+		},
+		{
+			name:  "excluding none keeps only the postings that state a clearance",
+			query: "clearance_levels_exclude=none",
+			want:  [][]string{{"requires_clearance = true"}},
+		},
+		{
+			name:  "excluding a level is an inequality",
+			query: "clearance_levels_exclude=top_secret",
+			want:  [][]string{{`clearance_levels != "top_secret"`}},
+		},
+		{
+			name:  "the boolean and the levels compose as two AND groups",
+			query: "requires_clearance=true&clearance_levels=secret",
+			want:  [][]string{{`clearance_levels = "secret"`}, {"requires_clearance = true"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v, err := url.ParseQuery(tt.query)
+			if err != nil {
+				t.Fatalf("ParseQuery: %v", err)
+			}
+			got := normalizeGroups(t, FilterFromValues(v))
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("filter = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// The level vocabulary is closed, so a mistyped level is named in meta.ignored_values
+// instead of passing for an empty market; the reserved "none" is known.
+func TestIgnoredValues_ClearanceLevels(t *testing.T) {
+	v, err := url.ParseQuery("clearance_levels=none,secret,topsecret&clearance_levels_exclude=other")
+	if err != nil {
+		t.Fatalf("ParseQuery: %v", err)
+	}
+	got := IgnoredValues(v)
+	want := map[string][]string{"clearance_levels": {"topsecret"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("IgnoredValues = %v, want %v", got, want)
+	}
+}

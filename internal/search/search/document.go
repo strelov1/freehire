@@ -113,9 +113,7 @@ type JobDocument struct {
 	//   {skills: vec}   the job's vector.
 	//   {skills: nil}   serialises as `"skills":null`, which is Meilisearch's documented
 	//                   opt-out. It both declines to provide a vector AND clears any
-	//                   previously stored one — the latter matters because the indexers
-	//                   push with PUT (add-or-update), which merges fields, so a job
-	//                   that lost its skills would otherwise keep ranking by them.
+	//                   previously stored one when a replacement removes its skills.
 	//
 	// Omitting the key is NOT a third state: with the embedder declared, Meilisearch
 	// rejects the whole document ("no vectors provided for document"), which would drop

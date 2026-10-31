@@ -21,9 +21,8 @@ func TestFromJobCarriesTheSkillVector(t *testing.T) {
 }
 
 // A job that LOSES its skills must clear the vector it used to carry. The indexers
-// push with PUT (Meilisearch's add-or-update), which MERGES fields, so simply omitting
-// `_vectors` leaves the old one in place and the posting keeps ranking by skills it no
-// longer has — verified against a live engine. An explicit null is what clears it.
+// supply an explicit null for an empty userProvided vector: omitting the embedder key
+// rejects the whole document instead of clearing its old vector.
 func TestFromJobWithNoRecognisedSkillsClearsTheVector(t *testing.T) {
 	doc, err := FromJob(db.Job{ID: 1, PublicSlug: "s", Title: "Engineer", Skills: []string{"definitely-not-a-skill"}}, nil, "")
 	if err != nil {

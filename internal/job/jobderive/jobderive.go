@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/lang"
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/dict/perks"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/job/jobfacts"
@@ -117,6 +118,17 @@ type Derived struct {
 	// client's behalf (internal/job/jobfacts). True or nil, never false, for the same
 	// reason as RequiresClearance: a recruiter who never says so is not detected.
 	ViaRecruiter *bool
+	// Equity is what the posting states about equity compensation (jobfacts.Equity): a
+	// vocab.EquityValues member, or "" when it states nothing the matcher reads. There
+	// is no "no equity" value, for the same reason as RequiresClearance has no false.
+	Equity string
+	// ClearanceLevels names the clearance levels the posting states, in
+	// vocab.ClearanceLevelValues order. Non-empty exactly when RequiresClearance is
+	// set: both come from one reading of the description, so they cannot disagree.
+	ClearanceLevels []string
+	// Perks are the benefits the description states it offers, in vocab.PerkValues
+	// order (internal/dict/perks); nil when it names none.
+	Perks []string
 	// Synthetic enrichment facets (category B): deterministic stand-ins for fields
 	// the LLM also emits, served dict-only like the facets above. ExperienceYearsMin
 	// is nil when the description states no figure.
@@ -262,6 +274,7 @@ func Derive(in Input) Derived {
 		category = classify.NonTechFromDescription(in.Description)
 	}
 	isTech := deriveIsTech(category, title, in.IsTechHint)
+	clearanceLevels := location.ClearanceLevelsFromDescription(in.Description)
 	// Employment-type precedence: structured source signal (an ATS timeType /
 	// typeOfEmployment enum) → free-text description parse. The source's own value wins.
 	employmentType := in.EmploymentType
@@ -311,8 +324,11 @@ func Derive(in Input) Derived {
 		Seniority:          seniority,
 		Category:           category,
 		IsTech:             isTech,
-		RequiresClearance:  deriveRequiresClearance(in.Description),
+		RequiresClearance:  trueOrNil(len(clearanceLevels) > 0),
 		ViaRecruiter:       trueOrNil(jobfacts.ViaRecruiter(in.Description)),
+		Equity:             jobfacts.Equity(in.Title, in.Description),
+		ClearanceLevels:    clearanceLevels,
+		Perks:              perks.FromDescription(in.Description),
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     employmentType,
 		EducationLevel:     educationLevel,
@@ -332,17 +348,10 @@ func RetainEmploymentType(stored, title, description string) string {
 	return stored
 }
 
-// deriveRequiresClearance lifts the dictionary's boolean into the column's tri-state.
-// Only a positive is asserted: a description the dictionary does not mark yields nil
-// (unknown), never false. The dictionary reports "not stated", and storing that as a
-// false would read as "stated to be unnecessary", which is a different claim and one
-// the catalogue almost never makes.
-func deriveRequiresClearance(desc string) *bool {
-	return trueOrNil(location.RequiresClearanceFromDescription(desc))
-}
-
 // trueOrNil lifts a dictionary's boolean into a true-or-absent column: a positive is
-// asserted, a negative stays unknown.
+// asserted, a negative stays unknown (nil), never false. A dictionary reports "not
+// stated", and storing that as false would read as "stated to be unnecessary" — a
+// different claim, and one the catalogue almost never makes.
 func trueOrNil(v bool) *bool {
 	if !v {
 		return nil

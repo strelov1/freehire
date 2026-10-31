@@ -1,0 +1,12 @@
+-- perks: the benefits a posting's description states it offers (paid time off, a
+-- 401(k) match, parental leave...), derived by internal/dict/perks into the
+-- closed vocabulary vocab.PerkValues. Multi-valued like skills, and served as the
+-- `perks` search facet.
+--
+-- Empty means "the description names none of them", never "the job offers none":
+-- most employers list only part of their package, and the filter says so.
+--
+-- A constant default is a catalog-only change on Postgres 11+: no table rewrite, no
+-- long lock. Existing rows read '{}' until the next planned backfill-derive + reindex
+-- fills them; there is no dedicated backfill.
+ALTER TABLE jobs ADD COLUMN perks text[] NOT NULL DEFAULT '{}';

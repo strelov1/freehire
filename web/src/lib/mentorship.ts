@@ -578,12 +578,16 @@ export function withSearchParams(
   return params.toString();
 }
 
-/** The calendar's FIRST read when the address names no month: the shown month and the
- *  next one in a single request, from the same padded start as slotWindowForMonth. Two
- *  months is what a 30-day horizon can reach from any day, and 62 days is the endpoint's
- *  ceiling — so one read answers which month to open on, instead of a read per empty month. */
-export function openingSlotWindow(month: string): { from: string; to: string } {
-  return { from: slotWindowForMonth(month).from, to: `${addMonths(month, 2)}-01T00:00:00Z` };
+/** Search forward from today's UTC boundary within the endpoint's 62-day ceiling.
+ *  Shared bounds preserve the server cache; the slot engine applies the notice period.
+ *  Calendar-month boundaries can miss hours: 30 days from late January can reach March. */
+export function openingSlotWindow(now = new Date()): { from: string; to: string } {
+  const from = new Date(now);
+  from.setUTCHours(0, 0, 0, 0);
+  return {
+    from: from.toISOString(),
+    to: new Date(from.getTime() + 62 * 24 * 60 * 60 * 1000).toISOString(),
+  };
 }
 
 /** The month a calendar should open on: `current` while it has an open hour, otherwise the

@@ -341,7 +341,7 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 	reality := jobview.ClassifyReality(saved.Job, time.Now(), int(repost), int(mass))
 	doc.Reality = &reality
 	// Widen the row with the geography of everything it represents — the push is a
-	// field-level document update, so omitting this replaces the reindex's union with this
+	// complete document replacement, so omitting this replaces the reindex's union with this
 	// row's own narrow set. Asked unconditionally: there is no cheap "represents nobody"
 	// test, and wanting one is what made the old gate default to asking anyway. The wave
 	// query takes a slice, so a single row is a one-element one; an empty result means no

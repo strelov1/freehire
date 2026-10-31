@@ -152,6 +152,8 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |
 | `education_level` | Education level | none, bachelor, master, phd |
 | `salary_period` | Salary period | year, month, day, hour |
+| `clearance_levels` | Security clearance level | none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no explicit reference to clearance (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one |
+| `perks` | Perks mentioned | generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it |
 
 ### Numeric & boolean filters
 
@@ -159,6 +161,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | --- | --- | --- |
 | `visa_sponsorship` | Visa sponsorship | true, false |
 | `requires_clearance` | Security clearance required | true, false |
+| `equity` | Equity compensation | salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity |
 | `via_recruiter` | Posting says a recruiter publishes it for a client | true — the description says so; false — every posting not marked, including recruiter posts that never say so |
 | `former_employers` | Hiring again: companies you have worked at and left | true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params |
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
@@ -179,7 +182,8 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 - **Must use both Go and Rust** — `skills=go,rust&skills_mode=and`
 - **Exclude outstaff companies** — `company_type_exclude=outstaff`
 - **At least $100k, with visa sponsorship** — `salary_currency=USD&salary_min=100000&visa_sponsorship=true`
-- **Excluding jobs that need a security clearance** — `requires_clearance=false`
+- **Excluding jobs that need a security clearance** — `clearance_levels=none`
+- **Jobs a Secret or Top Secret holder can work** — `clearance_levels=secret,top_secret`
 - **Only jobs that need a security clearance** — `requires_clearance=true`
 
 ## Jobs
@@ -306,7 +310,7 @@ curl "https://freehire.me/api/v1/jobs/search?q=golang&seniority=senior&work_mode
 
 Search with full descriptions, for programmatic/agent consumers.
 
-Same query and filters as `/jobs/search`, but each result carries the `description` in full (verbatim from the database) instead of the truncated index preview. Use `description_format` to choose how it is rendered.
+Same text query and facet filters as `/jobs/search`, but each result carries the `description` in full (verbatim from the database) instead of the truncated index preview. Use `description_format` to choose how it is rendered.
 
 **Query parameters**
 

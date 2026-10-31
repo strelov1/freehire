@@ -317,7 +317,7 @@ export const GROUPS: Group[] = [
         auth: 'none',
         summary: 'Search with full descriptions, for programmatic/agent consumers.',
         description:
-          'Same query and filters as `/jobs/search`, but each result carries the ' +
+          'Same text query and facet filters as `/jobs/search`, but each result carries the ' +
           '`description` in full (verbatim from the database) instead of the truncated ' +
           'index preview. Use `description_format` to choose how it is rendered.',
         filterable: true,
