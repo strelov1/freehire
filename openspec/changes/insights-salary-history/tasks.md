@@ -25,5 +25,5 @@
 
 ## 5. Ship
 
-- [ ] 5.1 `EXPLAIN` the monthly rebuild on prod; note the cost in the PR
-- [ ] 5.2 PR with the band before/after for one non-technical category; CodeRabbit handled
+- [x] 5.1 `EXPLAIN` the monthly rebuild on prod; note the cost in the PR
+- [x] 5.2 PR with the band before/after for one non-technical category; CodeRabbit handled
