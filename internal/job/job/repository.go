@@ -9,6 +9,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // Extras is the read-only projection data that rides on the jobs row but is NOT
@@ -79,6 +80,8 @@ func jobFromRow(r db.Job) (Job, error) {
 
 		RequiresClearance: boolPtr(r.RequiresClearance),
 		ViaRecruiter:      boolPtr(r.ViaRecruiter),
+		Equity:            pgconv.TextString(r.Equity),
+		ClearanceLevels:   r.ClearanceLevels,
 		Perks:             r.Perks,
 
 		PostingLanguage:    r.PostingLanguage,

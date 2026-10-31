@@ -41,6 +41,14 @@ for display names, and [internal/job/collections](../../internal/job/collections
   spelling nobody ever merged still reaches the canon its folded form owns; `GET
   /companies/:slug` asks by `alias_slug` to serve a 301 — and only AFTER the company read
   misses, so a company that came back is never shadowed by the row that once retired it.
+- **A name with no posting behind it resolves through the same key, and refuses what is
+  unsettled.** `internal/job/formeremployer` maps the company names of a person's experience
+  bank to slugs for the "Hiring again" filter: `CompanyKey` of the name, the registry by
+  `folded_key`, and otherwise the hiring companies whose slug folds to it
+  (`companies_folded_slug_idx`). Two hiring slugs on one key and no registry entry to choose
+  between them is refused, never resolved — the `cmd/publish-logo-domains` rule, because a
+  wrong employer shown under a familiar name is worse than none. The package doc carries the
+  measured precision and the rest of its refusals.
 - **`folded_key` is the ALIAS's own fold, never the group's.** For a folded group the two are
   the same by construction, so the distinction only shows up on a curated group — whose members
   do not share a fold, that being what makes it curated. Writing the group's key there leaves

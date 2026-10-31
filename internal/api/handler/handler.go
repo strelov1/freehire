@@ -815,6 +815,8 @@ func Register(app *fiber.App, cfg Config) {
 	reminders := reminder.New(reminder.NewQueriesRepository(queries))
 	tracking := jobtracking.New(jobtracking.NewQueriesRepository(queries, cfg.Pool), jobtracking.WithReminders(reminders))
 	trackingH := newTrackingHandlers(queries, tracking, reminders, jobSearch)
+	// hide_applied_companies on /jobs/search reads the same set the feed badges cards by.
+	searchH.appliedCompanies = tracking
 	// hide_seen on /jobs/search reads the same record the swipe deck excludes by.
 	searchH.seen = tracking
 	timelineH := newTimelineHandlers(queries)

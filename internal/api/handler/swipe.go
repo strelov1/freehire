@@ -62,10 +62,5 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 // hide_seen). base is buildSearchFilter's result — either a [][]string of facet
 // groups or nil. An empty exclusion set leaves the filter untouched.
 func withExcludedIDs(base any, excluded []int64) any {
-	frag := search.NotIn("id", excluded)
-	if frag == "" {
-		return base
-	}
-	groups, _ := base.([][]string) // nil base → nil groups; append allocates
-	return append(groups, []string{frag})
+	return withFilterGroup(base, search.NotIn("id", excluded))
 }

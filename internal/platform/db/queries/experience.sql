@@ -228,3 +228,15 @@ WHERE resume_object_key IS NOT NULL
   AND resume_uploaded_at IS NOT NULL
   AND (@user_id::bigint = 0 OR id = @user_id::bigint)
 ORDER BY id;
+
+-- name: ListPastEmployerNames :many
+-- The places the caller has worked at and LEFT, for the "Hiring again" search filter: the
+-- company name and the location exactly as banked, one row per employment. Owner-scoped like
+-- every read here. Projects are not employers, a blank company names nobody, and a current
+-- role is not a former employer — the filter is about going BACK.
+SELECT company, location
+FROM experience_employments
+WHERE user_id = $1
+  AND kind = 'job'
+  AND company <> ''
+  AND NOT is_current;

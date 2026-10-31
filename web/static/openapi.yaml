@@ -206,6 +206,7 @@ paths:
         - $ref: "#/components/parameters/Q"
         - $ref: "#/components/parameters/QFields"
         - $ref: "#/components/parameters/HideSeen"
+        - $ref: "#/components/parameters/HideAppliedCompanies"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
         - $ref: "#/components/parameters/Sort"
@@ -222,8 +223,13 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Equity"
+        - $ref: "#/components/parameters/ClearanceLevels"
         - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksExclude"
         - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/ClearanceLevelsExclude"
+        - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -260,6 +266,7 @@ paths:
         - $ref: "#/components/parameters/SourceExclude"
         - $ref: "#/components/parameters/SourceTypeExclude"
         - $ref: "#/components/parameters/CompanySlugExclude"
+        - $ref: "#/components/parameters/FormerEmployers"
       responses:
         "200":
           description: Matching jobs with pagination metadata.
@@ -276,7 +283,7 @@ paths:
         - Jobs
       summary: Search open jobs for agents (full descriptions)
       description: |
-        Identical query surface to `searchJobs`, but every result carries the
+        The same text query and facet filters as `searchJobs`, but every result carries the
         job's **full** description, read verbatim from the database rather than
         the search index's preview, in the format selected by
         `description_format`.
@@ -314,8 +321,13 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Equity"
+        - $ref: "#/components/parameters/ClearanceLevels"
         - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksExclude"
         - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/ClearanceLevelsExclude"
+        - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -538,6 +550,8 @@ paths:
         Return facet values, counts, canonical skill slugs, and numeric ranges
         for the postings matching the same filter grammar the search endpoints
         take. Call this before applying any uncertain filter.
+        `former_employers` is ignored, so facet counts do not narrow to past
+        employers even for signed-in callers.
 
         A distribution is counted per facet and the wide-valued ones (`cities`,
         `skills`) dominate, so narrow with `facets=` whenever you read only a few.
@@ -578,8 +592,13 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Equity"
+        - $ref: "#/components/parameters/ClearanceLevels"
         - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksExclude"
         - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/ClearanceLevelsExclude"
+        - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -1080,6 +1099,21 @@ components:
         parameter entirely — `q` runs unrestricted, across all four fields —
         and `q_fields` is reported in `meta.ignored_params`, the same
         convention every other unrecognized filter follows.
+    HideAppliedCompanies:
+      name: hide_applied_companies
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` leaves out every posting of an employer the signed-in caller
+        has applied to, through any of its postings. The exclusion is applied
+        inside the search, so `meta.total` and paging describe what is left.
+        It covers the employers of the caller's 1000 most recent applications.
+
+        It is a per-person preference, not a filter: a saved search carrying
+        it narrows nothing. Without a session (or API key), or with a value
+        that is not a boolean, the search runs unhidden and
+        `hide_applied_companies` is reported in `meta.ignored_params`.
     HideSeen:
       name: hide_seen
       in: query
@@ -1321,6 +1355,28 @@ components:
 
         `true` returns only the marked postings, for a cleared candidate seeking
         exactly that work. Omitting the parameter filters nothing.
+    FormerEmployers:
+      name: former_employers
+      in: query
+      schema:
+        type: boolean
+      description: |
+        "Hiring again": only postings at companies the signed-in caller has
+        worked at and left, as recorded in their own experience bank (current
+        roles and projects are not former employers). Combines with every other
+        filter; `meta.total` counts the narrowed result.
+
+        A banked company name counts only when it resolves to exactly one
+        catalogue company carrying open jobs. Names that name no employer
+        ("Freelance", "Confidential"), names two catalogue companies share, and
+        short names whose banked location does not match a country the company
+        hires in are left out — a missing company is preferred to a stranger
+        under a familiar name. When nothing resolves the answer is empty, never
+        the whole catalogue.
+
+        Read only for a signed-in caller (session cookie or API key). Anonymous, it filters
+        nothing and is reported in `meta.ignored_params`. `false` filters
+        nothing.
     ViaRecruiter:
       name: via_recruiter
       in: query
@@ -1338,6 +1394,83 @@ components:
 
         `true` returns only the marked postings. Omitting the parameter filters
         nothing.
+    ClearanceLevelsExclude:
+      name: clearance_levels_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - none
+            - confidential
+            - secret
+            - top_secret
+            - ts_sci
+            - public_trust
+            - interim
+            - other
+      description: |
+        Exclude postings matching these clearance levels. `none` keeps only postings that state a clearance.
+    ClearanceLevels:
+      name: clearance_levels
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - none
+            - confidential
+            - secret
+            - top_secret
+            - ts_sci
+            - public_trust
+            - interim
+            - other
+      description: |
+        The security-clearance levels the posting states, derived
+        deterministically from the description. Values OR together.
+
+        The US ladder is `confidential`, `secret`, `top_secret`, `ts_sci` and
+        `public_trust`. `interim` marks a posting that accepts an interim
+        clearance; it is stated beside a level, not instead of one. `other` is a
+        non-US scheme (UK SC/DV/BPSS, AU Baseline/NV1, NATO) or a clearance
+        stated with no level at all. A posting may carry several values.
+
+        `none` selects the postings with no detected clearance requirement —
+        exactly the postings `requires_clearance=false` returns — and ORs with
+        real levels like any other value. `clearance_levels_exclude=none` keeps
+        only the postings that state a clearance.
+    PerksExclude:
+      name: perks_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - generous_pto
+            - four_day_week
+            - 401k_match
+            - parental_leave
+            - retirement_plan
+            - tuition_reimbursement
+            - unlimited_pto
+            - health_insurance
+            - mental_health
+            - learning_budget
+            - home_office_stipend
+            - sabbatical
+            - sign_on_bonus
+      description: |
+        Exclude postings that mention any of the selected perks.
     Perks:
       name: perks
       in: query
@@ -1382,6 +1515,47 @@ components:
       description: |
         `and` requires a posting to mention EVERY listed perk instead of any
         of them.
+    EquityExclude:
+      name: equity_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - salary_and_equity
+            - equity_only
+            - not_stated
+      description: |
+        Exclude postings matching these equity values. `not_stated` keeps only postings that state equity compensation.
+    Equity:
+      name: equity
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - salary_and_equity
+            - equity_only
+            - not_stated
+      description: |
+        What the posting states about equity compensation, derived
+        deterministically from its title and description.
+
+        `salary_and_equity` — equity (stock options, RSUs, an equity grant,
+        ESOP, VSOP/phantom shares) offered beside cash pay; a salary figure is
+        not required. `equity_only` — the posting states that equity is the
+        whole compensation. `not_stated` — neither was read, which is NOT a
+        statement that the job offers no equity. An employee stock PURCHASE
+        plan does not count as equity.
+
+        Repeated values are ORed; `equity_exclude=<value>` excludes one
+        (`equity_exclude=not_stated` keeps every posting that states equity).
     AutoApplyAvailable:
       name: auto_apply_available
       in: query
@@ -1996,6 +2170,32 @@ components:
             by an intermediary on a client's behalf. Absent otherwise — a
             recruiter who never says so is not detected, so absence does not
             mean the employer posted it.
+        equity:
+          type: string
+          enum:
+            - salary_and_equity
+            - equity_only
+          description: |
+            What the posting states about equity compensation:
+            `salary_and_equity` (offered beside cash pay) or `equity_only`
+            (equity is the whole pay). Absent when the posting states neither —
+            "not stated", not "no equity".
+        clearance_levels:
+          type: array
+          items:
+            type: string
+            enum:
+              - confidential
+              - secret
+              - top_secret
+              - ts_sci
+              - public_trust
+              - interim
+              - other
+          description: |
+            The security-clearance levels the posting states. Present exactly
+            when `requires_clearance` is, absent otherwise. `other` is a non-US
+            scheme or a clearance stated with no level.
         perks:
           type: array
           items:

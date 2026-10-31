@@ -14,6 +14,7 @@
   import { computeClientMatch } from '#lib/jobMatch.js';
   import { ensureViewedLoaded } from '#lib/viewedJobs.svelte.js';
   import { ensureSavedLoaded } from '#lib/savedJobs.svelte.js';
+  import { ensureAppliedCompaniesLoaded } from '#lib/appliedCompanies.svelte.js';
   import { ensureDismissedLoaded, isDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
   import { latestOnly } from '#lib/latestOnly.js';
   import { Paginator } from '#lib/paginated.svelte.js';
@@ -334,8 +335,9 @@
   // Detect that mismatch so the first effect run reloads instead of keeping `initial`.
   const initialStale = browser && page.url.search !== location.search;
 
-  // For a signed-in user, load the set of already-viewed and already-saved slugs so
-  // JobRow can dim seen cards and fill saved bookmarks (no-op when signed out — the
+  // For a signed-in user, load the set of already-viewed and already-saved slugs (and the
+  // employers already applied to) so JobRow can dim seen cards, fill saved bookmarks and
+  // mark applied-to companies (no-op when signed out — the
   // sets stay empty). Cleanup: cancel any pending debounced reload so it can't fire
   // after this view is gone.
   onMount(() => {
@@ -347,6 +349,7 @@
       ensureViewedLoaded();
       ensureSavedLoaded();
       ensureDismissedLoaded();
+      ensureAppliedCompaniesLoaded();
     }
     // Register this page's store so the header search drives it. This holds for the
     // standalone /jobs list AND the company page's embedded, scoped list — on

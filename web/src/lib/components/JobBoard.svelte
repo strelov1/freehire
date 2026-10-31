@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { Search, X as XIcon } from '@lucide/svelte';
+  import { refreshAppliedCompanies } from '#lib/appliedCompanies.svelte.js';
   import { api } from '#lib/api.js';
   import { Button, EmptyState, alertVariants, cn } from '#lib/ui/index.js';
   import { announce } from '#lib/announce.svelte.js';
@@ -388,6 +389,7 @@
       item.saved_at ??= new Date().toISOString();
     }
     await api.clearApplicationStage(item.id);
+    void refreshAppliedCompanies();
   }
 
   // Rejects on failure: the editor reports it beside itself and keeps the text for a retry.
@@ -415,6 +417,7 @@
     const item = openItem;
     try {
       await api.untrackApplication(item.id);
+      void refreshAppliedCompanies();
     } catch {
       throw new Error(s.removeFailed);
     }

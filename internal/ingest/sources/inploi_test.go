@@ -160,12 +160,36 @@ func TestInploiFetchNewCapsUnseenDetail(t *testing.T) {
 	}
 }
 
-func TestInploiFetchNewReachesPastUnreadablePostings(t *testing.T) {
+func TestInploiFetchNewBacklogWindowWrapsWithoutDuplicates(t *testing.T) {
+	fake := inploiOne(`{"data":[{"id":1,"title":"One"},{"id":2,"title":"Two"},{"id":3,"title":"Three"},{"id":4,"title":"Four"},{"id":5,"title":"Five"}],"pagination":{"total":5,"current_page":1,"last_page":1}}`)
+	src := NewInploi(fake).(inploi)
+	src.maxNew = 4
+	src.pick = func(n int) int { return n - 1 }
+	jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "haven"}, func(string) bool { return false })
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, job := range jobs {
+		ids = append(ids, job.ExternalID)
+	}
+	if got := strings.Join(ids, ","); got != "1,2,5,3" {
+		t.Fatalf("selected IDs = %q, want the head followed by the wrapping backlog window 1,2,5,3", got)
+	}
+}
+
+func TestInploiFetchNewReachesBacklogAtTwoHourCadence(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		fake := inploiOne(`{"data":[{"id":1,"title":"One"},{"id":2,"title":"Two"},{"id":3,"title":"Engineer"},{"id":4,"title":"Seen"}],"pagination":{"total":4,"current_page":1,"last_page":1}}`)
 		fake.html["https://jobs.example.test/job/3"] = `<html><script type="application/ld+json">{"@type":"JobPosting","description":"<p>Build software.</p>"}</script></html>`
 		src := NewInploi(fake).(inploi)
 		src.maxNew = 2
+		next := 0
+		src.pick = func(n int) int {
+			picked := next
+			next = (next + 1) % n
+			return picked
+		}
 		found := false
 		for range 2 {
 			asked := map[string]bool{}
@@ -179,6 +203,9 @@ func TestInploiFetchNewReachesPastUnreadablePostings(t *testing.T) {
 			if len(asked) != 4 {
 				t.Fatalf("consulted %d listed IDs, want all 4 including deferred postings", len(asked))
 			}
+			if len(jobs) != 3 || jobs[0].ExternalID != "1" {
+				t.Fatalf("jobs = %+v, want the unseen head, one backlog posting, and the refresh", jobs)
+			}
 			refreshed := false
 			for _, job := range jobs {
 				if job.ExternalID == "3" && strings.Contains(job.Description, "Build software.") {
@@ -191,7 +218,7 @@ func TestInploiFetchNewReachesPastUnreadablePostings(t *testing.T) {
 			if !refreshed {
 				t.Fatal("seen posting lost its liveness refresh")
 			}
-			time.Sleep(inploiCadence)
+			time.Sleep(2 * time.Hour)
 		}
 		if !found {
 			t.Fatal("readable posting behind the unreadable prefix was never hydrated")
@@ -202,7 +229,7 @@ func TestInploiFetchNewReachesPastUnreadablePostings(t *testing.T) {
 	})
 }
 
-func TestInploiFetchNewStepsOncePerDefaultCadence(t *testing.T) {
+func TestInploiFetchNewCanSelectEveryBacklogOffsetAtTwoHourCadence(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var rows []string
 		htmls := map[string]string{}
@@ -213,11 +240,19 @@ func TestInploiFetchNewStepsOncePerDefaultCadence(t *testing.T) {
 		}
 		body := `{"data":[` + strings.Join(rows, ",") + `],"pagination":{"total":5,"current_page":1,"last_page":1}}`
 		got := map[string]bool{}
-		for range 4 {
+		// Enumerate picker offsets; random production picks do not guarantee coverage
+		// within four crawls. Every backlog position must remain reachable at this cadence.
+		for offset := range 4 {
 			fake := inploiOne(body)
 			fake.html = htmls
 			src := NewInploi(fake).(inploi)
 			src.maxNew = 2
+			src.pick = func(n int) int {
+				if n != 4 {
+					t.Fatalf("picker range = %d, want four backlog positions", n)
+				}
+				return offset
+			}
 			jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "haven"}, func(string) bool { return false })
 			if err != nil {
 				t.Fatal(err)
@@ -225,14 +260,17 @@ func TestInploiFetchNewStepsOncePerDefaultCadence(t *testing.T) {
 			if len(jobs) != 2 {
 				t.Fatalf("hydrated %d, want the budget of 2", len(jobs))
 			}
+			if jobs[0].ExternalID != "1" || jobs[1].ExternalID != strconv.Itoa(offset+2) {
+				t.Fatalf("offset %d selected %s,%s, want head 1 and backlog %d", offset, jobs[0].ExternalID, jobs[1].ExternalID, offset+2)
+			}
 			for _, job := range jobs {
 				got[job.ExternalID] = true
 			}
-			time.Sleep(inploiCadence)
+			time.Sleep(2 * time.Hour)
 		}
 		for _, id := range []string{"1", "2", "3", "4", "5"} {
 			if !got[id] {
-				t.Errorf("posting %s was never hydrated across four cadence-spaced crawls", id)
+				t.Errorf("posting %s was unreachable while enumerating backlog offsets", id)
 			}
 		}
 	})

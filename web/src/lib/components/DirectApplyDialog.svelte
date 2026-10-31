@@ -99,25 +99,28 @@
   async function submit(e: SubmitEvent) {
     e.preventDefault();
     if (!canSubmit || !form || cv === null) return;
+    const submittedSlug = slug;
+    const submittedCompany = form.company_name;
+    const notifySent = onSent;
     submitting = true;
     error = null;
     try {
       const choice = cv === 'tailored' && form.cvs.tailored ? { cv_id: form.cvs.tailored.id } : { resume: true as const };
-      await api.sendDirectApplication(slug, { ...choice, answers, note: note.trim() || undefined });
+      await api.sendDirectApplication(submittedSlug, { ...choice, answers, note: note.trim() || undefined });
       done = true;
-      announce(`Your application was sent to ${form.company_name}.`);
-      onSent();
+      announce(`Your application was sent to ${submittedCompany}.`);
+      notifySent();
     } catch (err) {
       error = messageFor(err);
       // A 409 is either "already sent" or "being sent by another tab"; the form read
       // says which, and only the first is final.
       if (err instanceof ApiError && err.status === 409) {
-        const fresh = await api.getDirectApplyForm(slug).catch(() => null);
+        const fresh = await api.getDirectApplyForm(submittedSlug).catch(() => null);
         if (fresh?.applied) {
           done = true;
           error = null;
-          announce(`Your application was sent to ${form.company_name}.`);
-          onSent();
+          announce(`Your application was sent to ${submittedCompany}.`);
+          notifySent();
         } else {
           error = 'Your application is being sent. Check back in a minute.';
         }

@@ -1,0 +1,15 @@
+-- equity records what a posting states about equity compensation, derived from its
+-- text by internal/job/jobfacts.Equity:
+--   'salary_and_equity'  equity offered beside cash pay
+--   'equity_only'        the posting states equity is the whole pay
+--   NULL                 not stated
+--
+-- There is deliberately no 'no_equity' value. The dictionary cannot tell a posting that
+-- promises no equity from one that is simply silent, so the search filter expresses
+-- "not stated" as the attribute's absence rather than as a stored claim.
+--
+-- Text, not an enum or a CHECK: the closed vocabulary is vocab.EquityValues and the
+-- derivation is its only writer, the same arrangement as work_mode. Nullable with no
+-- default, so the ALTER is metadata-only: no table rewrite and no scan. Existing rows
+-- fill on the next cmd/backfill-derive pass.
+ALTER TABLE jobs ADD COLUMN equity text;

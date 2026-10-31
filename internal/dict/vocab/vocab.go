@@ -14,6 +14,15 @@ package vocab
 
 import "regexp"
 
+// The two EquityValues, named because the derivation writes them.
+const (
+	// EquityWithSalary: equity is offered beside cash pay. A salary FIGURE is not
+	// required — most postings that offer equity state no figure.
+	EquityWithSalary = "salary_and_equity"
+	// EquityOnly: the posting states that equity is the whole compensation.
+	EquityOnly = "equity_only"
+)
+
 // Controlled vocabularies. Each is the ordered, canonical list of allowed
 // values for one enum field. They are exported so the enrichment prompt, the
 // deterministic dictionaries, and the facet config reference the same lists.
@@ -62,9 +71,23 @@ var (
 		"unlimited_pto", "health_insurance", "mental_health",
 		"learning_budget", "home_office_stipend", "sabbatical", "sign_on_bonus",
 	}
-	EnglishLevelValues   = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
+	EnglishLevelValues = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
+	// EquityValues answer "does this job pay in equity?" — derived from the posting's
+	// text by internal/job/jobfacts.Equity. There is no "no equity" value: a posting the
+	// matcher reads nothing from is NOT STATED, which is the absence of a value, not a
+	// member of the vocabulary (the search filter names it EquityNotStated).
+	EquityValues         = []string{EquityWithSalary, EquityOnly}
 	EducationLevelValues = []string{"none", "bachelor", "master", "phd"}
-	CategoryValues       = []string{
+	// ClearanceLevelValues are the security-clearance levels a posting may state,
+	// written by internal/dict/location.ClearanceLevelsFromDescription. The US ladder
+	// in ascending order, then interim (a status stated beside a level) and other
+	// (a non-US scheme, or a clearance stated with no level). The location package
+	// argues the split with the measured numbers.
+	ClearanceLevelValues = []string{
+		ClearanceConfidential, ClearanceSecret, ClearanceTopSecret, ClearanceTSSCI,
+		ClearancePublicTrust, ClearanceInterim, ClearanceOther,
+	}
+	CategoryValues = []string{
 		// "software_engineering" is the generic bucket for a title the dictionary
 		// confirms is software/IT work (feeds is_tech via classify.IsTech's
 		// techTitleTerms) but that names no sub-discipline to resolve to — a bare
@@ -332,6 +355,17 @@ var (
 // a proxy for), and a profile save drops it from the specializations. Nothing may
 // write it again — it is deliberately absent from CategoryValues.
 const RetiredCategoryManagement = "management"
+
+// The values of ClearanceLevelValues, named for the dictionary that writes them.
+const (
+	ClearanceConfidential = "confidential"
+	ClearanceSecret       = "secret"
+	ClearanceTopSecret    = "top_secret"
+	ClearanceTSSCI        = "ts_sci"
+	ClearancePublicTrust  = "public_trust"
+	ClearanceInterim      = "interim"
+	ClearanceOther        = "other"
+)
 
 // JobChallengeOther is the JobChallengeValues member that admits a written note. Named
 // rather than spelled inline because two places depend on the exact string — the survey's
