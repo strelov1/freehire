@@ -380,11 +380,15 @@ SELECT
     percentile_cont(0.50) WITHIN GROUP (ORDER BY amount)::int,
     percentile_cont(0.75) WITHIN GROUP (ORDER BY amount)::int
 FROM (
+    -- Months are UTC calendar months, so a posting near midnight on the 1st lands in
+    -- the month the page's own UTC clock calls current, whatever the session TimeZone.
+    -- A publication date in the future (bad source data) is no month at all yet.
     SELECT category, currency, period, amount,
-           date_trunc('month', LEAST(posted_at, created_at))::date AS month
+           date_trunc('month', LEAST(posted_at, created_at) AT TIME ZONE 'UTC')::date AS month
     FROM jobs_effective_salary
     WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
-      AND LEAST(posted_at, created_at) >= date_trunc('month', now()) - interval '11 months'
+      AND LEAST(posted_at, created_at) AT TIME ZONE 'UTC' >= date_trunc('month', now() AT TIME ZONE 'UTC') - interval '11 months'
+      AND LEAST(posted_at, created_at) <= now()
 ) s
 GROUP BY category, currency, period, month
 HAVING count(*) >= sqlc.arg('min_sample')::int;

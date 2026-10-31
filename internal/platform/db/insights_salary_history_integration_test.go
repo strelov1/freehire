@@ -50,6 +50,17 @@ func TestInsightsSalaryBandsReadTheEffectiveSalary(t *testing.T) {
 	llm.salary, llm.currency, llm.period = 70000, "USD", "year"
 	seedInsightsJob(t, ctx, q, pool, "llm", llm)
 
+	// nocur: the source states amounts but no currency, so that tier is incomplete and the
+	// posting falls through to its complete enrichment figure instead of dropping out.
+	nocur := base
+	nocur.salary, nocur.currency, nocur.period = 80000, "USD", "year"
+	seedInsightsJob(t, ctx, q, pool, "nocur", nocur)
+	setSalaryTier(t, ctx, pool, "nocur", "source", 1, "", "year")
+
+	// zero: a zero amount is no salary.
+	seedInsightsJob(t, ctx, q, pool, "zero", base)
+	setSalaryTier(t, ctx, pool, "zero", "source", 0, "USD", "year")
+
 	// none: no salary anywhere.
 	seedInsightsJob(t, ctx, q, pool, "none", base)
 
@@ -68,14 +79,14 @@ func TestInsightsSalaryBandsReadTheEffectiveSalary(t *testing.T) {
 		if err != nil {
 			t.Fatalf("list salary: %v", err)
 		}
-		// One USD/year band of {70k, 90k, 200k}; no EUR band — the source tier of
+		// One USD/year band of {70k, 80k, 90k, 200k}; no EUR band — the source tier of
 		// all3 lost to its manual tier.
 		if len(bands) != 1 {
 			t.Fatalf("country %q: bands = %+v, want exactly one", country, bands)
 		}
 		b := bands[0]
-		if b.Currency != "USD" || b.Period != "year" || b.SampleSize != 3 || b.P50 != 90000 {
-			t.Errorf("country %q: band = %+v, want USD/year n=3 p50=90000", country, b)
+		if b.Currency != "USD" || b.Period != "year" || b.SampleSize != 4 || b.P50 != 85000 {
+			t.Errorf("country %q: band = %+v, want USD/year n=4 p50=85000", country, b)
 		}
 	}
 }

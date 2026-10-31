@@ -10,8 +10,11 @@
   // The four largest series: a category can carry a dozen (currency, period) pairs, most
   // of them a few hundred postings, and a dozen buttons bury the one most people want.
   const series = $derived(historySeries(rows).slice(0, 4));
-  let selected = $state(0);
-  const active = $derived(series[selected] ?? series[0]);
+  let picked = $state(0);
+  // Back to the first series when the rows change under a reused component (client
+  // navigation between categories) and the old index no longer exists.
+  const selected = $derived(picked < series.length ? picked : 0);
+  const active = $derived(series[selected]);
   const model = $derived(active ? buildSalaryChart(active, currentMonth) : null);
   const ticks = $derived(model ? pickTickIndices(model.slots.length) : []);
 
@@ -105,7 +108,7 @@
                 : 'border-border text-muted-foreground hover:text-foreground'}"
               aria-pressed={i === selected}
               onclick={() => {
-                selected = i;
+                picked = i;
                 hovered = null;
               }}>{seriesLabel(s)}</button
             >
@@ -223,7 +226,8 @@
     </ul>
 
     <p class="mt-2 text-xs text-muted-foreground">
-      Months follow the date a posting was published. A month needs 30 postings with a salary
+      Months follow the date a posting was published, and count postings closed since — the
+      table below counts only those open now. A month needs 30 postings with a salary
       to be shown; a missing month is a gap, not a guess. A dashed step means the month had at
       least {MIX_SHIFT_RATIO}× the postings of the one before, so part of that change is which
       postings are counted. The hollow point is the current month, still filling up. These are
