@@ -54,7 +54,7 @@ exit IP, so a source's per-IP rate limit (Wellfound answered 429 to one shared I
 request from a different address. A browser session must not rotate — a Cloudflare clearance
 belongs to the exit IP it was solved from — so each new proxied session takes the next STICKY
 exit IP in turn and keeps it for its life. A page a source refuses with 403 or 429 is still
-returned to the caller, but its session is retired, so the next opens on another IP.
+returned to the caller, but its session is retired, so the next opens on another IP. A browser session is also retired on 405, which is how InfoJobs refuses; over `http` a 405 is returned without a retry, since its callers re-send it under their own budgets.
 
 With Webshare, the rotating gateway is `http://<user>-rotate:<pass>@p.webshare.io:80` and the
 sticky template `http://<user>-{n}:<pass>@p.webshare.io:80`, one fixed IP per `n`.

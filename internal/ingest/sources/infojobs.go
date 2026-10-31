@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
@@ -187,10 +188,25 @@ func (s infojobs) FetchNew(ctx context.Context, _ CompanyEntry, seen func(extern
 	return append(jobs, hydrated...), nil
 }
 
+// infojobsDetailAttempts is how many times an offer page refused with 405 is sent. InfoJobs
+// refuses a flagged browser session with 405 (measured 2026-10-30: 942 of ~950 pages after the
+// first ~45 of a session), and the Scrapling tier retires the session that met it, so the next
+// attempt opens on another exit IP — where the same page was served.
+const infojobsDetailAttempts = 2
+
 // detail fetches an offer page and returns its full description, ok=false on a failed request
 // or a page with no parseable body (the bot challenge among them).
 func (s infojobs) detail(ctx context.Context, jobURL string) (string, bool) {
-	text, err := s.http.GetText(ctx, jobURL)
+	var text string
+	var err error
+	for attempt := 1; attempt <= infojobsDetailAttempts; attempt++ {
+		text, err = s.http.GetText(ctx, jobURL)
+		var se *StatusError
+		refused := errors.As(err, &se) && se.Code == http.StatusMethodNotAllowed
+		if !refused || ctx.Err() != nil {
+			break
+		}
+	}
 	if err != nil {
 		return "", false
 	}
