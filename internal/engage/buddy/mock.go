@@ -155,6 +155,12 @@ func validateMockSettings(in MockSettings) (MockSettings, error) {
 		utf8.RuneCountInString(link) > maxMeetingURLRunes {
 		return MockSettings{}, fmt.Errorf("%w: the meeting link must be an https:// address", ErrInvalidMockSettings)
 	}
+	// The link is handed to every guest, so a credential pasted into it (user:pass@host)
+	// would be published to strangers, and a bare user@ prefix can make the visible host
+	// read as a different one than the browser opens.
+	if parsed.User != nil {
+		return MockSettings{}, fmt.Errorf("%w: the meeting link must not carry a user name or password", ErrInvalidMockSettings)
+	}
 	for _, t := range in.Topics {
 		if !slices.Contains(MockTopics, t) {
 			return MockSettings{}, fmt.Errorf("%w: unknown topic %q", ErrInvalidMockSettings, t)

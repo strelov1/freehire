@@ -28,15 +28,17 @@ func TestValidateMockSettings(t *testing.T) {
 
 	link := "https://meet.example.test/abc"
 	for name, in := range map[string]MockSettings{
-		"unknown zone":    {Timezone: "Mars/Olympus", MeetingURL: link, Topics: []string{TopicCoding}},
-		"server zone":     {Timezone: "Local", MeetingURL: link, Topics: []string{TopicCoding}},
-		"abbreviation":    {Timezone: "EST", MeetingURL: link, Topics: []string{TopicCoding}},
-		"no zone":         {Timezone: "", MeetingURL: link, Topics: []string{TopicCoding}},
-		"plain http link": {Timezone: "UTC", MeetingURL: "http://meet.example.test/abc", Topics: []string{TopicCoding}},
-		"no host":         {Timezone: "UTC", MeetingURL: "https://", Topics: []string{TopicCoding}},
-		"too long":        {Timezone: "UTC", MeetingURL: "https://meet.example.test/" + strings.Repeat("a", 500), Topics: []string{TopicCoding}},
-		"no topics":       {Timezone: "UTC", MeetingURL: link},
-		"unknown topic":   {Timezone: "UTC", MeetingURL: link, Topics: []string{TopicCoding, "karaoke"}},
+		"unknown zone":      {Timezone: "Mars/Olympus", MeetingURL: link, Topics: []string{TopicCoding}},
+		"server zone":       {Timezone: "Local", MeetingURL: link, Topics: []string{TopicCoding}},
+		"abbreviation":      {Timezone: "EST", MeetingURL: link, Topics: []string{TopicCoding}},
+		"no zone":           {Timezone: "", MeetingURL: link, Topics: []string{TopicCoding}},
+		"plain http link":   {Timezone: "UTC", MeetingURL: "http://meet.example.test/abc", Topics: []string{TopicCoding}},
+		"no host":           {Timezone: "UTC", MeetingURL: "https://", Topics: []string{TopicCoding}},
+		"user and password": {Timezone: "UTC", MeetingURL: "https://user:pass@meet.example.test/abc", Topics: []string{TopicCoding}},
+		"user only":         {Timezone: "UTC", MeetingURL: "https://user@meet.example.test/abc", Topics: []string{TopicCoding}},
+		"too long":          {Timezone: "UTC", MeetingURL: "https://meet.example.test/" + strings.Repeat("a", 500), Topics: []string{TopicCoding}},
+		"no topics":         {Timezone: "UTC", MeetingURL: link},
+		"unknown topic":     {Timezone: "UTC", MeetingURL: link, Topics: []string{TopicCoding, "karaoke"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := validateMockSettings(in); !errors.Is(err, ErrInvalidMockSettings) {

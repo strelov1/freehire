@@ -94,6 +94,7 @@ second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.g
   subject has reviewed back or seven days have passed since the end. The rule is computed in
   `ListBuddyMocksForUser`, `GetBuddyMemberMockSummary` and `ListBuddyMemberRevealedReviews`;
   change all three together. A member page never names who wrote a review.
+- **A block withdraws the reviews across it**: while either of a review's author and subject blocks the other, it is neither their_review nor on the subject's page (count, average or list); the completed-mock count stays.
 - **Mock notices name the other member by handle only**, render the time in the
   recipient's zone (UTC, stated, when it does not resolve), and say only "cancelled" for a
   leave or a block.

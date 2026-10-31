@@ -136,7 +136,8 @@ WHERE m.id = $1;
 -- still meet (the GetBuddyMock rule), whether the other side may still be drawn (both
 -- active, no block either way — the ListBuddyCounterparts rule), the member's own review,
 -- and the review ABOUT them only once revealed: they have written theirs, or seven days
--- have passed since the end. The same reveal rule is restated in
+-- have passed since the end — and only while no block stands between its author and its
+-- subject, either way. The same reveal-and-block rule is restated in
 -- GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
 SELECT m.id, m.host_user_id, m.guest_user_id, m.starts_at, m.ends_at, m.topic, m.status,
        m.cancel_reason,
@@ -165,6 +166,9 @@ LEFT JOIN buddy_mock_reviews mine
 LEFT JOIN buddy_mock_reviews theirs
        ON theirs.mock_id = m.id AND theirs.subject_user_id = sqlc.arg(user_id)::bigint
       AND (mine.mock_id IS NOT NULL OR m.ends_at + interval '7 days' <= now())
+      AND NOT EXISTS (SELECT 1 FROM user_blocks b
+              WHERE (b.blocker_id = theirs.author_user_id AND b.blocked_id = theirs.subject_user_id)
+                 OR (b.blocker_id = theirs.subject_user_id AND b.blocked_id = theirs.author_user_id))
 WHERE m.host_user_id = sqlc.arg(user_id)::bigint OR m.guest_user_id = sqlc.arg(user_id)::bigint
 ORDER BY m.starts_at DESC
 LIMIT sqlc.arg(row_limit);
@@ -221,7 +225,8 @@ ON CONFLICT (mock_id, author_user_id) DO NOTHING;
 
 -- name: GetBuddyMemberMockSummary :one
 -- What a member page shows: completed mocks (confirmed and ended, either role) and the
--- count and average of REVEALED reviews about the member. Zeroes, never NULLs.
+-- count and average of REVEALED reviews about the member, minus any written across a
+-- block (the ListBuddyMocksForUser rule). Zeroes, never NULLs.
 SELECT
     (SELECT count(*) FROM buddy_mocks c
      WHERE c.status = 'confirmed' AND c.ends_at <= now()
@@ -234,7 +239,10 @@ JOIN buddy_mocks m ON m.id = r.mock_id
 WHERE r.subject_user_id = sqlc.arg(subject_user_id)::bigint
   AND (EXISTS (SELECT 1 FROM buddy_mock_reviews o
                WHERE o.mock_id = r.mock_id AND o.author_user_id = r.subject_user_id)
-       OR m.ends_at + interval '7 days' <= now());
+       OR m.ends_at + interval '7 days' <= now())
+  AND NOT EXISTS (SELECT 1 FROM user_blocks b
+              WHERE (b.blocker_id = r.author_user_id AND b.blocked_id = r.subject_user_id)
+                 OR (b.blocker_id = r.subject_user_id AND b.blocked_id = r.author_user_id));
 
 -- name: ListBuddyMemberRevealedReviews :many
 -- The most recent revealed reviews about a member, without their authors: who mocked with
@@ -246,6 +254,9 @@ WHERE r.subject_user_id = sqlc.arg(subject_user_id)::bigint
   AND (EXISTS (SELECT 1 FROM buddy_mock_reviews o
                WHERE o.mock_id = r.mock_id AND o.author_user_id = r.subject_user_id)
        OR m.ends_at + interval '7 days' <= now())
+  AND NOT EXISTS (SELECT 1 FROM user_blocks b
+              WHERE (b.blocker_id = r.author_user_id AND b.blocked_id = r.subject_user_id)
+                 OR (b.blocker_id = r.subject_user_id AND b.blocked_id = r.author_user_id))
 ORDER BY r.created_at DESC
 LIMIT sqlc.arg(row_limit);
 
