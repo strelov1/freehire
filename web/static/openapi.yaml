@@ -1401,7 +1401,7 @@ components:
         non-US scheme (UK SC/DV/BPSS, AU Baseline/NV1, NATO) or a clearance
         stated with no level at all. A posting may carry several values.
 
-        `none` selects the postings with no explicit reference to a clearance —
+        `none` selects the postings with no detected clearance requirement —
         exactly the postings `requires_clearance=false` returns — and ORs with
         real levels like any other value. `clearance_levels_exclude=none` keeps
         only the postings that state a clearance.

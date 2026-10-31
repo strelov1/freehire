@@ -44,7 +44,7 @@ const API_ONLY_FACETS: FilterRow[] = [
     param: 'clearance_levels',
     label: 'Security clearance level',
     values:
-      'none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no explicit reference to clearance (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one',
+      'none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one',
   },
   {
     param: 'perks',
@@ -177,6 +177,6 @@ export const RECIPES: Recipe[] = [
   { title: 'Exclude outstaff companies', query: 'company_type_exclude=outstaff' },
   { title: 'At least $100k, with visa sponsorship', query: 'salary_currency=USD&salary_min=100000&visa_sponsorship=true' },
   { title: 'Excluding jobs that need a security clearance', query: 'clearance_levels=none' },
-  { title: 'Jobs a Secret or Top Secret holder can work', query: 'clearance_levels=secret,top_secret' },
+  { title: 'Jobs stating Secret or Top Secret clearance', query: 'clearance_levels=secret,top_secret' },
   { title: 'Only jobs that need a security clearance', query: 'requires_clearance=true' },
 ];
