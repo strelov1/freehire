@@ -47,7 +47,7 @@ func run() int {
 		log.Print("serve-probe: MEILI_MASTER_KEY is unset, nothing to compare against")
 		return 0
 	}
-	sample, err := worker.EnvInt64("SERVE_PROBE_SAMPLE", 500)
+	sample, err := worker.EnvInt32("SERVE_PROBE_SAMPLE", 500)
 	if err != nil {
 		log.Printf("serve-probe: %v", err)
 		return 1
