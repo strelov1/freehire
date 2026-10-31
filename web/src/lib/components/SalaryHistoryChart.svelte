@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { InsightSalaryMonth } from '#lib/api.js';
   import { pickTickIndices } from '#lib/activityChart.js';
-  import { chartTipPosition, nextChartIndex } from '#lib/chartKeys.js';
+  import { chartTipPosition, nearestIndexByX, nextChartIndex } from '#lib/chartKeys.js';
   import { formatSalary } from '#lib/insights.js';
   import { MIX_SHIFT_RATIO, buildSalaryChart, historySeries } from '#lib/salaryHistoryChart.js';
 
@@ -71,16 +71,7 @@
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     if (rect.width === 0) return;
     const vbX = ((e.clientX - rect.left) / rect.width) * model.width;
-    let nearest = 0;
-    let nearestDist = Infinity;
-    model.points.forEach((p, i) => {
-      const d = Math.abs(p.x - vbX);
-      if (d < nearestDist) {
-        nearestDist = d;
-        nearest = i;
-      }
-    });
-    hovered = nearest;
+    hovered = nearestIndexByX(model.points, vbX);
     tipX = e.clientX - rect.left;
     tipY = e.clientY - rect.top;
   }
