@@ -36,7 +36,7 @@ const job: Job = {
   public_slug: 'acme-job', source: 'greenhouse', manually_added: false, external_id: '1',
   url: 'https://example.test/apply', title: 'Engineer', company: 'Acme', company_slug: 'acme',
   location: '', description: 'Build things.', countries: [], regions: [], cities: [], metros: [],
-  skills: [], collections: [], enrichment: {}, enrichment_version: 0,
+  skills: [], collections: [], perks: [], enrichment: {}, enrichment_version: 0,
   view_count: 0, applied_count: 0, upvote_count: 0, downvote_count: 0, my_vote: 0,
 };
 

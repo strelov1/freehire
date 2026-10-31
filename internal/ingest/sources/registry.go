@@ -245,6 +245,7 @@ func All(c HTTPClient) map[string]Source {
 		NewKeka(c),
 		NewHireHive(c),
 		NewBeehire(c),
+		NewInploi(c),
 		NewGupy(c),
 		// AppOne (Paychex): board = job-portal slug; one listing request per portal, bodies
 		// hydrated from the posting API for new postings only. Paced: its edge refuses a fast

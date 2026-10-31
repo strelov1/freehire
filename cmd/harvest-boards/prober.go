@@ -938,6 +938,7 @@ var probers = map[string]prober{
 	"keka":              kekaProber{},
 	"hirehive":          hirehiveProber{},
 	"beehire":           beehireProber{},
+	"inploi":            inploiProber{},
 	"darwinbox":         darwinboxProber,
 	"zohorecruit":       zohoRecruitProber,
 	"pyjamahr":          pyjamahrProber,
