@@ -580,9 +580,17 @@ func (g concurrencyLimitedHTMLGetter) GetHTML(ctx context.Context, url string) (
 // hammering it for a whole crawl — intermittent 500s and slow bodies that trip the 15s read
 // timeout, failing most regions (a rate limiter did not help, since slow reads keep the workers
 // busy and never wait on it). Bounding in-flight requests to a gentle few keeps the crawl in the
-// API's healthy regime; at ~0.5s a page and 2 in flight the whole ~4900-page board still finishes
-// well inside the 40-min ingest window. Tune from observed convergence.
-const trudvsemMaxInFlight = 2
+// API's healthy regime.
+//
+// The cap was 2 when a page took ~0.5s. Measured 2026-10-30 from the crawl host a page takes
+// 5.5-6.5s, nearly all of it server time before the first byte, so 2 in flight read ~0.36
+// pages/s: a 40-minute crawl reached ~11 of the 90 regions, the eight boards running at once
+// split the two slots so a 100-page region needed most of a run, and the big regions were the
+// ones still in flight at the deadline every time — Bashkortostan went unseen for a week. Six
+// requests held in flight for a sustained minute answered all 200 at 6.7s on average, so the
+// latency is per request rather than load, and 6 roughly triples the rate (~0.9 pages/s, the ~5,100-page
+// catalogue in two to three runs) without nearing the earlier failure regime.
+const trudvsemMaxInFlight = 6
 
 // limitedTrudvsemGetter wraps a getter with a fresh semaphore shared across one registry build, so
 // all of trudvsem's region-shard requests in a run stay under one gentle in-flight cap.

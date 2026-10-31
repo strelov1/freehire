@@ -9,15 +9,18 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // trudvsemFake routes each vacancies request by its offset param, so one fake drives the
 // whole region-shard pagination loop.
 type trudvsemFake struct {
-	byOffset   map[int]string // offset -> response JSON ("" => empty page envelope)
-	errAt      map[int]error  // offset -> transport error (simulates a 500/timeout blip)
-	offsets    []int          // offsets requested, in order
-	gotRegions []string       // region codes taken from the request path
+	byOffset   map[int]string            // offset -> response JSON, unwindowed ("" => empty page envelope)
+	byWindow   map[string]map[int]string // modifiedTo -> offset -> response JSON, windowed
+	errAt      map[int]error             // offset -> transport error (simulates a 500/timeout blip)
+	offsets    []int                     // offsets requested, in order
+	windows    []string                  // each request's modifiedTo ("" when unwindowed), in order
+	gotRegions []string                  // region codes taken from the request path
 }
 
 func (f *trudvsemFake) GetJSON(_ context.Context, u string, v any) error {
@@ -27,11 +30,16 @@ func (f *trudvsemFake) GetJSON(_ context.Context, u string, v any) error {
 		f.gotRegions = append(f.gotRegions, pu.Path[i+len("/region/"):])
 	}
 	offset, _ := strconv.Atoi(pu.Query().Get("offset"))
+	window := pu.Query().Get("modifiedTo")
 	f.offsets = append(f.offsets, offset)
-	if err := f.errAt[offset]; err != nil {
+	f.windows = append(f.windows, window)
+	if err := f.errAt[offset]; err != nil && window == "" {
 		return err
 	}
 	body := f.byOffset[offset]
+	if window != "" {
+		body = f.byWindow[window][offset]
+	}
 	if body == "" {
 		body = `{"status":"200","meta":{"total":0},"results":{"vacancies":[]}}`
 	}
@@ -157,20 +165,107 @@ func TestTrudvsemStopsAtTotalMultiplePages(t *testing.T) {
 	}
 }
 
-func TestTrudvsemKeepsPartialOnMidPageError(t *testing.T) {
-	// The gov API blips (500/timeout) on page 1 after a full page 0. The jobs already gathered
-	// must survive — Fetch returns page 0's postings and no error, not a discarded region.
+func TestTrudvsemFailsOnMidWalkError(t *testing.T) {
+	// The board-scoped sweep reads a successful Fetch as the region's WHOLE listing
+	// (fullBoardListing), so a blip on page 1 after a full page 0 must fail the board rather
+	// than hand back page 0 as if it were everything — the unread pages would close as gone.
 	fake := &trudvsemFake{
 		byOffset: map[int]string{0: trudvsemPage(trudvsemPageSize, 0, 100000)},
 		errAt:    map[int]error{1: errors.New("status 500")},
 	}
-	jobs, err := NewTrudvsem(fake).Fetch(context.Background(), CompanyEntry{Board: "5200000000000"})
+	if _, err := NewTrudvsem(fake).Fetch(context.Background(), CompanyEntry{Board: "5200000000000"}); err == nil {
+		t.Fatal("Fetch returned nil error on a mid-walk blip, want the board to fail")
+	}
+}
+
+func TestTrudvsemClaimsFullBoardListing(t *testing.T) {
+	if _, ok := NewTrudvsem(nil).(fullBoardListing); !ok {
+		t.Fatal("trudvsem must claim fullBoardListing: Fetch walks every region to its end")
+	}
+}
+
+// trudvsemPastCeiling is a region 50 postings past the API's 100-page ceiling: the unwindowed
+// listing's 100 full pages, and the modifiedTo bound the adapter must ask for next — the
+// oldest date_modify those pages carry (posting #9999), plus the overlap.
+func trudvsemPastCeiling(newest time.Time) (total int, unwindowed map[int]string, window string) {
+	total = trudvsemMaxPages*trudvsemPageSize + 50
+	unwindowed = map[int]string{}
+	for p := range trudvsemMaxPages {
+		unwindowed[p] = trudvsemDatedPage(trudvsemPageSize, p*trudvsemPageSize, total, newest)
+	}
+	oldest := newest.Add(-time.Duration(trudvsemMaxPages*trudvsemPageSize-1) * time.Minute)
+	return total, unwindowed, oldest.Add(trudvsemWindowOverlap).UTC().Format(time.RFC3339)
+}
+
+func TestTrudvsemSplitsRegionPastPageCap(t *testing.T) {
+	// A region holding more than the 100-page ceiling is read in date windows: the unwindowed
+	// walk yields the freshest 10k, then a window bounded by modifiedTo is walked to its end.
+	// The overlap's repeats are dropped, so every posting appears once.
+	newest := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	total, unwindowed, window := trudvsemPastCeiling(newest)
+	fake := &trudvsemFake{
+		byOffset: unwindowed,
+		// The window re-reads the ten postings before #9999 (the overlap) and the 50 past it.
+		byWindow: map[string]map[int]string{window: {
+			0: trudvsemDatedPage(60, trudvsemMaxPages*trudvsemPageSize-10, 60, newest),
+		}},
+	}
+	jobs, err := NewTrudvsem(fake).Fetch(context.Background(), CompanyEntry{Board: "7700000000000"})
 	if err != nil {
-		t.Fatalf("Fetch returned error on a mid-page blip, want partial success: %v", err)
+		t.Fatalf("Fetch: %v", err)
 	}
-	if len(jobs) != trudvsemPageSize {
-		t.Errorf("len(jobs) = %d, want %d (page 0 kept despite page 1 error)", len(jobs), trudvsemPageSize)
+	ids := map[string]bool{}
+	for _, j := range jobs {
+		if ids[j.ExternalID] {
+			t.Fatalf("posting %s returned twice", j.ExternalID)
+		}
+		ids[j.ExternalID] = true
 	}
+	if len(ids) != total {
+		t.Fatalf("got %d postings, want %d", len(ids), total)
+	}
+	if got := fake.windows[len(fake.windows)-1]; got != window {
+		t.Errorf("last request's modifiedTo = %q, want %q", got, window)
+	}
+}
+
+func TestTrudvsemSplitFailsWithoutProgress(t *testing.T) {
+	// A window no smaller than the one before it would walk the same ceiling forever: fail the
+	// board instead of returning a listing that is not whole.
+	newest := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	_, unwindowed, window := trudvsemPastCeiling(newest)
+	fake := &trudvsemFake{byOffset: unwindowed, byWindow: map[string]map[int]string{window: unwindowed}}
+	if _, err := NewTrudvsem(fake).Fetch(context.Background(), CompanyEntry{Board: "7700000000000"}); err == nil {
+		t.Fatal("Fetch returned nil error for a window that did not shrink, want an error")
+	}
+}
+
+func TestTrudvsemSplitFailsWithoutModifyDate(t *testing.T) {
+	// Past the ceiling the next window is bounded by the oldest date_modify read; with none
+	// there is no bound to give, so the region cannot be read whole and the board fails.
+	total := trudvsemMaxPages*trudvsemPageSize + 50
+	unwindowed := map[int]string{}
+	for p := range trudvsemMaxPages {
+		unwindowed[p] = trudvsemPage(trudvsemPageSize, p*trudvsemPageSize, total)
+	}
+	fake := &trudvsemFake{byOffset: unwindowed}
+	if _, err := NewTrudvsem(fake).Fetch(context.Background(), CompanyEntry{Board: "7700000000000"}); err == nil {
+		t.Fatal("Fetch returned nil error past the ceiling with no date_modify, want an error")
+	}
+}
+
+// trudvsemDatedPage is trudvsemPage with a date_modify on each vacancy, in the API's own
+// format: posting #k was modified k minutes before newest, so the listing is newest-first.
+func trudvsemDatedPage(n, base, total int, newest time.Time) string {
+	msk := time.FixedZone("MSK", 3*3600)
+	items := make([]string, n)
+	for i := range items {
+		k := base + i
+		modified := newest.Add(-time.Duration(k) * time.Minute).In(msk).Format("2006-01-02T15:04:05-0700")
+		items[i] = `{"vacancy":{"id":"R-` + strconv.Itoa(k) + `","job-name":"T","region":{"name":"Город Москва"},` +
+			`"company":{"name":"Co"},"creation-date":"2026-07-15","date_modify":"` + modified + `"}}`
+	}
+	return `{"status":"200","meta":{"total":` + strconv.Itoa(total) + `},"results":{"vacancies":[` + strings.Join(items, ",") + `]}}`
 }
 
 func TestTrudvsemFailsWhenFirstPageErrors(t *testing.T) {
