@@ -154,6 +154,8 @@ import type {
   BuddyProfile,
   BuddyActivity,
   BuddyMock,
+  BuddyMockHost,
+  BuddyMockHosts,
   BuddyMocks,
   BuddyMockSettings,
   BuddyMockSlots,
@@ -2519,6 +2521,17 @@ export function createApi(
   ): Promise<BuddyMock> {
     return requestData(`/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}/mocks`, jsonBody('POST', body));
   }
+  /** The members the caller could book a mock with now, soonest slot first, optionally
+   *  narrowed to one topic. `timezone` is the zone the slots were resolved in. */
+  async function listBuddyMockHosts(timezone: string, topic?: BuddyMockTopic): Promise<BuddyMockHosts> {
+    const params = new URLSearchParams();
+    if (timezone) params.set('timezone', timezone);
+    if (topic) params.set('topic', topic);
+    const res = await request<{ data: BuddyMockHost[]; meta: { timezone: string; count: number } }>(
+      `/api/v1/me/buddies/mocks/hosts?${params}`,
+    );
+    return { hosts: res.data, timezone: res.meta.timezone };
+  }
   async function listBuddyMocks(): Promise<BuddyMocks> {
     return requestData('/api/v1/me/buddies/mocks');
   }
@@ -3550,6 +3563,7 @@ export function createApi(
     addBuddyMockOverride,
     deleteBuddyMockAvailabilityRule,
     getBuddyMockSlots,
+    listBuddyMockHosts,
     bookBuddyMock,
     listBuddyMocks,
     cancelBuddyMock,

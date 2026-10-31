@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -36,18 +35,6 @@ func formerEmployersApp(s searcher, userID int64, lookup formerEmployerLookup) *
 		return h.SearchJobs(c)
 	})
 	return app
-}
-
-func ignoredParamNames(body map[string]any) []string {
-	meta, _ := body["meta"].(map[string]any)
-	list, _ := meta["ignored_params"].([]any)
-	var out []string
-	for _, e := range list {
-		if m, ok := e.(map[string]any); ok {
-			out = append(out, fmt.Sprint(m["param"]))
-		}
-	}
-	return out
 }
 
 func TestFormerEmployers_SignedInNarrowsToTheResolvedCompanies(t *testing.T) {
@@ -166,5 +153,33 @@ func TestFormerEmployers_SurvivesTheBadFilterDegrade(t *testing.T) {
 	want := [][]string{{`company_slug IN ["accenture"]`}}
 	if !reflect.DeepEqual(fake.calls[1].Filter, want) {
 		t.Errorf("retry filter = %#v, want only the former-employer group %#v", fake.calls[1].Filter, want)
+	}
+}
+
+func TestFormerEmployers_SeenExclusionSurvivesTheBadFilterDegrade(t *testing.T) {
+	fake := &degradingSearcher{}
+	h := &searchHandlers{
+		search:          fake,
+		formerEmployers: &fakeFormerEmployers{slugs: []string{"accenture"}},
+		seen:            &fakeSeen{ids: []int64{11}},
+	}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Get("/jobs/search", func(c *fiber.Ctx) error {
+		c.Locals(auth.LocalsUserID, int64(7))
+		return h.SearchJobs(c)
+	})
+	status, body := doGet(t, app, "/jobs/search?former_employers=true&hide_seen=true&seniority=senior")
+	if status != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if len(fake.calls) != 2 {
+		t.Fatalf("searched %d times, want the query and one retry", len(fake.calls))
+	}
+	want := [][]string{{`company_slug IN ["accenture"]`}, {"id NOT IN [11]"}}
+	if !reflect.DeepEqual(fake.calls[1].Filter, want) {
+		t.Errorf("retry filter = %#v, want %#v", fake.calls[1].Filter, want)
+	}
+	if reportsParam(body, formerEmployersParam) || reportsParam(body, hideSeenParam) {
+		t.Errorf("honoured personal filters reported as ignored: %v", ignoredParamNames(body))
 	}
 }

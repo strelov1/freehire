@@ -22,18 +22,36 @@ describe('MentorScheduleEditor', () => {
     const schedule = fakeSchedule();
     render(MentorScheduleEditor, { rules: [tuesday], schedule, emptyMessage: 'Nothing yet.' });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Save the week' }));
+    const save = screen.getByRole('button', { name: 'Save weekly hours' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true); // nothing to save until the week differs from what is stored
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Thursday' }));
+    expect(save.disabled).toBe(false);
+    await fireEvent.click(save);
 
     await waitFor(() => expect(schedule.reload).toHaveBeenCalledOnce());
-    expect(schedule.replaceWeek).toHaveBeenCalledWith([{ weekday: 2, start: '18:00', end: '20:00' }]);
+    expect(schedule.replaceWeek).toHaveBeenCalledWith([
+      { weekday: 2, start: '18:00', end: '20:00' },
+      { weekday: 4, start: '18:00', end: '20:00' },
+    ]);
+  });
+
+  it('discards an unsaved edit back to the stored week', async () => {
+    render(MentorScheduleEditor, { rules: [tuesday], schedule: fakeSchedule(), emptyMessage: 'Nothing yet.' });
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Tuesday' }));
+    expect((screen.getByRole('checkbox', { name: 'Tuesday' }) as HTMLInputElement).checked).toBe(false);
+    await fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+
+    expect((screen.getByRole('checkbox', { name: 'Tuesday' }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save weekly hours' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('removes an exception through the schedule it was given', async () => {
     const schedule = fakeSchedule();
     render(MentorScheduleEditor, { rules: [tuesday, away], schedule, emptyMessage: 'Nothing yet.' });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove the exception on Tue 1 Dec 2026' }));
 
     await waitFor(() => expect(schedule.remove).toHaveBeenCalledWith(7));
   });

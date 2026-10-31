@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  hostRatingLine,
+  hostSlotLabel,
   MOCK_TOPICS,
   isHttpsLink,
   mockCounterpartLabel,
   mockRoleLabel,
   mockTopicLabel,
-  mockWhen,
+  mockDateParts,
   reviewSummaryLine,
 } from './buddyMocks';
 
@@ -25,11 +27,8 @@ describe('buddy mocks', () => {
   // label, which the server already resolved).
   it('renders a mock in the given zone', () => {
     const mock = { starts_at: '2026-11-10T18:00:00Z', ends_at: '2026-11-10T19:00:00Z' };
-    const berlin = mockWhen(mock, 'Europe/Berlin');
-    expect(berlin).toContain('10 November');
-    expect(berlin).toContain('19:00');
-    expect(berlin).toContain('20:00');
-    expect(mockWhen(mock, 'Asia/Tokyo')).toContain('11 November');
+    expect(mockDateParts(mock, 'Europe/Berlin')).toEqual({ weekday: 'Tue', day: '10', month: 'Nov', time: '19:00–20:00' });
+    expect(mockDateParts(mock, 'Asia/Tokyo')).toMatchObject({ weekday: 'Wed', day: '11', time: '03:00–04:00' });
   });
 
   it('never states an average of nothing', () => {
@@ -43,5 +42,28 @@ describe('buddy mocks', () => {
     expect(mockCounterpartLabel({ counterpart: null })).toBe('A former buddy');
     expect(mockRoleLabel({ role: 'host' })).toBe('You host');
     expect(mockRoleLabel({ role: 'guest' })).toBe('You are the guest');
+  });
+});
+
+describe('hostSlotLabel', () => {
+  it('reads the wall clock the server resolved, without re-reading it in the browser zone', () => {
+    // Tokyo's Thursday 01:00 is still Wednesday in UTC; the label must stay on Thursday.
+    expect(hostSlotLabel('2026-11-05T01:00:00+09:00')).toBe('Thu 5 Nov, 01:00');
+    expect(hostSlotLabel('2026-11-04T19:00:00-05:00')).toBe('Wed 4 Nov, 19:00');
+  });
+
+  it('falls back to the raw value it cannot read', () => {
+    expect(hostSlotLabel('soon')).toBe('soon');
+  });
+});
+
+describe('hostRatingLine', () => {
+  it('states the average and the completed mocks', () => {
+    expect(hostRatingLine({ rating_count: 3, rating_avg: 4.6, completed: 5 })).toBe('4.6 · 5 mocks');
+    expect(hostRatingLine({ rating_count: 1, rating_avg: 5, completed: 1 })).toBe('5.0 · 1 mock');
+  });
+
+  it('says nothing without a revealed rating', () => {
+    expect(hostRatingLine({ rating_count: 0, rating_avg: 0, completed: 4 })).toBeNull();
   });
 });

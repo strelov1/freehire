@@ -308,7 +308,7 @@ func (r *QueriesRepository) CreateMockReview(ctx context.Context, id uuid.UUID, 
 }
 
 func (r *QueriesRepository) MockSummary(ctx context.Context, subjectID int64, recent int32) (MockSummary, error) {
-	agg, err := r.q.GetBuddyMemberMockSummary(ctx, subjectID)
+	sums, err := r.MockSummaries(ctx, []int64{subjectID})
 	if err != nil {
 		return MockSummary{}, err
 	}
@@ -318,10 +318,8 @@ func (r *QueriesRepository) MockSummary(ctx context.Context, subjectID int64, re
 	if err != nil {
 		return MockSummary{}, err
 	}
-	sum := MockSummary{
-		Completed: int(agg.Completed), RatingCount: int(agg.RatingCount), RatingAvg: agg.RatingAvg,
-		Recent: make([]RevealedReview, len(rows)),
-	}
+	sum := sums[subjectID]
+	sum.Recent = make([]RevealedReview, len(rows))
 	for i, row := range rows {
 		sum.Recent[i] = RevealedReview{
 			Rating: int(row.Rating), Comment: row.Comment, Topic: row.Topic,
@@ -329,6 +327,66 @@ func (r *QueriesRepository) MockSummary(ctx context.Context, subjectID int64, re
 		}
 	}
 	return sum, nil
+}
+
+func (r *QueriesRepository) MockSummaries(ctx context.Context, subjectIDs []int64) (map[int64]MockSummary, error) {
+	rows, err := r.q.ListBuddyMemberMockSummaries(ctx, subjectIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]MockSummary, len(rows))
+	for _, row := range rows {
+		out[row.SubjectUserID] = MockSummary{
+			Completed: int(row.Completed), RatingCount: int(row.RatingCount), RatingAvg: row.RatingAvg,
+		}
+	}
+	return out, nil
+}
+
+func (r *QueriesRepository) MockHostCandidates(ctx context.Context, viewerID int64, topic string, limit int32) ([]MockHostCandidate, error) {
+	rows, err := r.q.ListBuddyMockHostCandidates(ctx, db.ListBuddyMockHostCandidatesParams{
+		ViewerID: viewerID, Topic: pgtype.Text{String: topic, Valid: topic != ""}, RowLimit: limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]MockHostCandidate, len(rows))
+	for i, row := range rows {
+		out[i] = MockHostCandidate{
+			UserID: row.UserID, Handle: row.Handle, Card: summarize(decodeCV(row.ResumeStructured), row.Countries),
+			Timezone: row.Timezone, Topics: row.Topics,
+		}
+	}
+	return out, nil
+}
+
+// MockAvailabilityFor skips an unrepresentable row as MockAvailability does.
+func (r *QueriesRepository) MockAvailabilityFor(ctx context.Context, userIDs []int64) (map[int64][]slots.Rule, error) {
+	rows, err := r.q.ListBuddyMockAvailabilityForUsers(ctx, userIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64][]slots.Rule, len(userIDs))
+	for _, row := range rows {
+		if rule, ok := mockRuleFromRow(row); ok {
+			out[row.UserID] = append(out[row.UserID], rule.WithID(row.ID))
+		}
+	}
+	return out, nil
+}
+
+func (r *QueriesRepository) MockBusyFor(ctx context.Context, userIDs []int64, from, to time.Time) (map[int64][]slots.Interval, error) {
+	rows, err := r.q.ListBuddyMockBusyForUsers(ctx, db.ListBuddyMockBusyForUsersParams{
+		UserIds: userIDs, WindowStart: pgInstant(from), WindowEnd: pgInstant(to),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64][]slots.Interval, len(userIDs))
+	for _, row := range rows {
+		out[row.UserID] = append(out[row.UserID], slots.Interval{Start: row.StartsAt.Time, End: row.EndsAt.Time})
+	}
+	return out, nil
 }
 
 func (r *QueriesRepository) MocksDueForReminder(ctx context.Context, offset, floor time.Duration, limit int32) ([]Mock, error) {

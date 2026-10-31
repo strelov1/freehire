@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,6 +56,16 @@ type searchHandlers struct {
 	// "Hiring again" filter narrows to. Nil leaves former_employers unread, so it is
 	// reported in meta.ignored_params like any other param nothing reads.
 	formerEmployers formerEmployerLookup
+	// seen reads the jobs a signed-in caller has already opened, for /jobs/search's
+	// hide_seen. Nil leaves the param unhonoured, and reported as such.
+	seen seenJobs
+}
+
+// seenJobs reads the job ids a caller has already opened. It is the same set the feed
+// dims a card by — every user_jobs row carries viewed_at, so any interaction is a view —
+// capped to the most recently touched. *jobtracking.Service satisfies it.
+type seenJobs interface {
+	ExcludedJobIDs(ctx context.Context, userID int64) ([]int64, error)
 }
 
 // formerEmployerLookup resolves a person's past employers to company slugs.
@@ -138,6 +149,15 @@ var searchParams = []string{"q", "sort", "order", "limit", "offset"}
 // searchParams but never reads q_fields) understand.
 var jobSearchParams = slices.Concat(searchParams, []string{"q_fields"})
 
+// hideSeenParam asks /jobs/search to leave out the jobs the caller has already opened.
+// It is a per-person preference, not a filter: search.FilterFromValues does not read it,
+// so a saved search carrying it narrows nothing and its digest ignores it. Only the
+// public /jobs/search reads it; the agent search reports it like any other unread param.
+const hideSeenParam = "hide_seen"
+
+// publicJobSearchParams is what /jobs/search itself reads beyond the filter vocabulary.
+var publicJobSearchParams = slices.Concat(jobSearchParams, []string{hideSeenParam})
+
 // agentSearchParams is jobSearchParams plus the agent endpoint's own two: the
 // response-format selector and the opt-in semantic search.
 var agentSearchParams = slices.Concat(jobSearchParams, []string{"description_format", "semantic"})
@@ -213,11 +233,15 @@ func (h *searchHandlers) matchVector(c *fiber.Ctx) []float32 {
 // view...], "meta": {total, limit, offset}} — results carry public_slug and never
 // the internal id.
 func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
-	out, err := h.runJobSearch(c, false)
+	seen, seenIgnored := h.seenExclusion(c)
+	out, err := h.runJobSearch(c, false, seen)
 	if err != nil {
 		return err
 	}
 	res, limit, offset, dropped := out.res, out.limit, out.offset, out.dropped
+	if seenIgnored {
+		dropped = append(dropped, search.UnknownParam{Param: hideSeenParam})
+	}
 
 	views := make([]jobview.Job, len(res.Hits))
 	for i, hit := range res.Hits {
@@ -225,8 +249,46 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	}
 	h.attachGhost(c, res.Hits, views)
 
-	ignored := mergedJobSearchIgnored(c, out.own(jobSearchParams), dropped)
+	ignored := mergedJobSearchIgnored(c, out.own(publicJobSearchParams), dropped)
 	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignored, ignoredJobValues(c))
+}
+
+// seenExclusion resolves ?hide_seen=true into the job ids to keep out of this search,
+// and reports whether the param has to be named in meta.ignored_params instead.
+//
+// The exclusion happens inside the index query rather than over the returned page, so
+// meta.total and every later page stay honest: hiding hits after the fact would shrink
+// a page below its limit and leave the total counting what the caller never sees.
+//
+// It is honoured for a signed-in caller only, because "seen" is the server's record of
+// what that account opened — the same record the feed dims cards by. An anonymous
+// caller, an unparseable value, or a record that could not be read all fall back to the
+// unhidden search and say so, rather than refusing a shared link or quietly widening.
+func (h *searchHandlers) seenExclusion(c *fiber.Ctx) (ids []int64, ignored bool) {
+	vals := queryValues(c)
+	if !vals.Has(hideSeenParam) {
+		return nil, false
+	}
+	// A present but empty `?hide_seen=` is unreadable like any other non-boolean.
+	want, err := strconv.ParseBool(vals.Get(hideSeenParam))
+	if err != nil {
+		return nil, true
+	}
+	if !want {
+		return nil, false
+	}
+	userID, ok := auth.UserID(c)
+	if !ok || h.seen == nil {
+		return nil, true
+	}
+	ids, err = h.seen.ExcludedJobIDs(c.Context(), userID)
+	if err != nil {
+		log.Printf("search: hide_seen: read seen jobs of user %d: %v", userID, err)
+		return nil, true
+	}
+	// The answer now depends on who asked, under a URL that does not say so.
+	c.Set(fiber.HeaderCacheControl, "private, no-store")
+	return ids, false
 }
 
 // jobSearchOutcome is what runJobSearch hands back: the raw hits, the applied
@@ -286,8 +348,9 @@ func (h *searchHandlers) formerEmployerSlugs(c *fiber.Ctx) (slugs []string, appl
 // ignoredParams(c, own) report.
 //
 // wantSemantic runs the query as a hybrid through h.semantic; a flag it cannot honour
-// (see semanticDropped) is reported as a dropped param.
-func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool) (jobSearchOutcome, error) {
+// (see semanticDropped) is reported as a dropped param. exclude names job ids to keep
+// out of the result (hide_seen); nil excludes nothing.
+func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude []int64) (jobSearchOutcome, error) {
 	if h.search == nil {
 		return jobSearchOutcome{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
@@ -319,7 +382,7 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool) (jobSearc
 	qFields, qFieldsIgnored := search.QFieldsFromValues(queryValues(c))
 	params := search.SearchParams{
 		Query:   c.Query("q"),
-		Filter:  filter,
+		Filter:  withExcludedIDs(filter, exclude),
 		Sort:    sort,
 		Vector:  vector,
 		QFields: qFields,
@@ -350,8 +413,11 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool) (jobSearc
 			// swallowing it.
 			return jobSearchOutcome{}, err
 		}
+		// The exclusion survives the retry: it is an `id NOT IN` over an attribute the
+		// index has always declared filterable, so it is never what Meilisearch minded.
 		res, err = h.search.Search(c.Context(), search.SearchParams{
-			Query: c.Query("q"), Filter: formerFilter, Sort: sort, Vector: vector, QFields: qFields, Limit: limit, Offset: offset,
+			Query: c.Query("q"), Filter: withExcludedIDs(formerFilter, exclude),
+			Sort: sort, Vector: vector, QFields: qFields, Limit: limit, Offset: offset,
 		})
 		if err != nil {
 			return jobSearchOutcome{}, err

@@ -205,6 +205,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Q"
         - $ref: "#/components/parameters/QFields"
+        - $ref: "#/components/parameters/HideSeen"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
         - $ref: "#/components/parameters/Sort"
@@ -1074,6 +1075,22 @@ components:
         parameter entirely — `q` runs unrestricted, across all four fields —
         and `q_fields` is reported in `meta.ignored_params`, the same
         convention every other unrecognized filter follows.
+    HideSeen:
+      name: hide_seen
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` leaves out the postings the signed-in caller has already
+        opened — the same record that marks a card as viewed. The exclusion
+        is applied inside the search, so `meta.total` and paging describe
+        what is left. It covers the 1000 postings the caller most recently
+        viewed, saved, applied to or hid.
+
+        It is a per-person preference, not a filter: a saved search carrying
+        it narrows nothing. Without a session (or API key), or with a value
+        that is not a boolean, the search runs unhidden and `hide_seen` is
+        reported in `meta.ignored_params`.
     Limit:
       name: limit
       in: query
