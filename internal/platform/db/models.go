@@ -816,6 +816,21 @@ type InsightsRoleCountryStat struct {
 	OpenCountPrev int32  `json:"open_count_prev"`
 }
 
+type InsightsRolePulse struct {
+	Category            string        `json:"category"`
+	ViewsThrough        pgtype.Date   `json:"views_through"`
+	Views               int64         `json:"views"`
+	ViewsPrev           int64         `json:"views_prev"`
+	ExposureDays        float64       `json:"exposure_days"`
+	ExposureDaysPrev    float64       `json:"exposure_days_prev"`
+	Closed              int64         `json:"closed"`
+	ClosedPrev          int64         `json:"closed_prev"`
+	MedianCloseDays     pgtype.Float4 `json:"median_close_days"`
+	MedianCloseDaysPrev pgtype.Float4 `json:"median_close_days_prev"`
+	Inflow              int64         `json:"inflow"`
+	InflowPrev          int64         `json:"inflow_prev"`
+}
+
 type InsightsRoleSkillSample struct {
 	Category   string `json:"category"`
 	Seniority  string `json:"seniority"`

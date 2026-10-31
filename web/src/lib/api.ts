@@ -229,6 +229,30 @@ export interface InsightRoleCountries {
   countries: string[];
 }
 
+/** One category's market pulse (GET /api/v1/insights/role-pulse): raw figures for the
+ *  last 30 days and the 30 before. `web/src/lib/rolePulse.ts` turns them into the
+ *  page's figures and decides which are too thin to show. */
+export interface InsightRolePulse {
+  category: string;
+  /** Every open canonical posting of the category, whatever its seniority. */
+  open_count: number;
+  open_count_prev: number;
+  competition: {
+    views: number;
+    views_prev: number;
+    exposure_days: number;
+    exposure_days_prev: number;
+    views_through: string | null;
+  };
+  time_to_close: {
+    closed: number;
+    closed_prev: number;
+    median_days: number | null;
+    median_days_prev: number | null;
+  };
+  inflow: { count: number; count_prev: number };
+}
+
 export interface InsightRole {
   category: string;
   seniority: string;
@@ -1203,6 +1227,13 @@ export function createApi(
       '/api/v1/insights/role-countries',
     );
     return { cells: res.data, countries: res.meta.countries };
+  }
+
+  /** One category's market pulse and its all-seniority open count. */
+  async function insightsRolePulse(category: string): Promise<InsightRolePulse> {
+    return requestData<InsightRolePulse>(
+      `/api/v1/insights/role-pulse?${insightsQuery({ category })}`,
+    );
   }
 
   /** Ranked skills, optionally scoped by category or country (not both). */
@@ -3345,6 +3376,7 @@ export function createApi(
     insightsRoles,
     insightsRoleCountries,
     insightsSalaryHistory,
+    insightsRolePulse,
     insightsRole,
     insightsSkills,
     insightsSalaryByCategory,

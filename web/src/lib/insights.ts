@@ -194,9 +194,11 @@ export function skillsIntro(category: string, skills: InsightSkill[]): string {
   return `The most in-demand skills for ${label} roles right now are ${top} — ranked across ${skills.reduce((n, s) => n + s.open_count, 0)} open postings.`;
 }
 
-export function rolesIntro(category: string, roles: InsightRole[]): string {
+/** `openCount` is the category's ALL-seniority figure (the role-pulse endpoint's
+ *  `open_count`), never the sum of the seniority rows: those count only postings with a
+ *  resolved seniority — about a quarter of the category — and understated it ~4x. */
+export function rolesIntro(category: string, openCount: number): string {
   const label = categoryLabel(category);
-  const total = roles.reduce((n, r) => n + r.open_count, 0);
-  if (total === 0) return `Open ${label} roles by seniority on freehire.`;
-  return `There are ${total} open ${label} roles on freehire right now, broken down by seniority and how fast each level is growing.`;
+  if (openCount === 0) return `Open ${label} roles by seniority on freehire.`;
+  return `There are ${openCount.toLocaleString('en-US')} open ${label} roles on freehire right now. Below: how many of them state each seniority, and how fast each level is growing.`;
 }

@@ -1599,6 +1599,10 @@ type Querier interface {
 	// Role × country grid
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsRoleCountryStats(ctx context.Context) error
+	// ---------------------------------------------------------------------------
+	// Role pulse (competition, time to close, inflow per category)
+	// ---------------------------------------------------------------------------
+	DeleteAllInsightsRolePulse(ctx context.Context) error
 	DeleteAllInsightsRoleSkillSample(ctx context.Context) error
 	// ---------------------------------------------------------------------------
 	// Per-role skill demand
@@ -2763,6 +2767,13 @@ type Querier interface {
 	// grant actually covers what this caller wants to do with it. `status` is read too so a
 	// row already marked needs_reconsent can be treated as unusable without a second query.
 	GetGoogleGrantForWrite(ctx context.Context, userID int64) (GetGoogleGrantForWriteRow, error)
+	// One category's all-countries cell: every open canonical public posting of the
+	// category, whatever its seniority. No row means nothing open at either point; the
+	// caller serves zeros.
+	GetInsightsRoleOpenCount(ctx context.Context, category string) (GetInsightsRoleOpenCountRow, error)
+	// One category's pulse. No row means the category had nothing open or closed in either
+	// window; the caller serves zeros.
+	GetInsightsRolePulse(ctx context.Context, category string) (GetInsightsRolePulseRow, error)
 	// One role's share denominator. A role with no skill-bearing postings has no row
 	// here, and the caller MUST read that as a sample of zero rather than as an error:
 	// it means the role exists and nothing in it was taggable, which is a real answer.
@@ -6041,6 +6052,30 @@ type Querier interface {
 	// counting twice here. Unlike insights_role_stats it needs no seniority and counts
 	// only canonical, public postings (see migration 0214 for both).
 	RebuildInsightsRoleCountryStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// Three figures per category over canonical, public postings, each for the last 30 days
+	// and the 30 before (openspec/changes/insights-role-pulse/design.md has the prod
+	// measurements behind every choice below).
+	//
+	// COMPETITION is page views over exposure. Views are job_daily_views.page_uniques, never
+	// uniques (AGENTS.md "View counts"). Exposure is the posting-days a posting was OPEN ON
+	// FREEHIRE inside the window: from created_at, not from LEAST(posted_at, created_at) —
+	// the one figure in this file where first-seen is the right date, because nobody can view
+	// a posting here before we found it, and the existence rule would charge a backlog posting
+	// for weeks it was not on the site. A view on a day the posting was already closed is not
+	// counted, so numerator and denominator are the same population. Both windows end on the
+	// freshest views day rather than on now(): cmd/rollup-views lands a day after it ends, and
+	// a now()-anchored window would set 29 days of views against 30 of exposure.
+	//
+	// TIME TO CLOSE is the median days from existence to close over closes that describe the
+	// POSTING: unseen, feed_removed, probe_expired, employer_closed. Not expired (a 45-day age
+	// rule — its median is 45 by construction), feed_empty or board_unreachable (our crawler's
+	// health), board_retired, moderated or source_misattributed (our own decisions), or ''
+	// (closed before reasons were recorded). A close dated before existence is left out, as
+	// RebuildInsightsCompanyLifetime does.
+	//
+	// INFLOW counts postings whose existence date falls in the window — the header's rule,
+	// applied to "new" instead of "open at the start".
+	RebuildInsightsRolePulse(ctx context.Context, arg RebuildInsightsRolePulseParams) (int64, error)
 	// The denominator every share in insights_role_skill_stats divides by: the role's
 	// open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of
 	// the eligible postings carry none, so dividing by the role's open count would fold

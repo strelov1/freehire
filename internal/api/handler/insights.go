@@ -490,6 +490,84 @@ func (h *statsHandlers) InsightsRoleCountries(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"data": data, "meta": fiber.Map{"countries": countries}})
 }
 
+// rolePulse is one category's market pulse on the wire: raw figures for the last 30 days
+// and the 30 before, never a ratio or a verdict. Like the role × country cells, the floor
+// below which a figure is noise is a presentation choice, so the page applies its own.
+type rolePulse struct {
+	Category      string `json:"category"`
+	OpenCount     int32  `json:"open_count"`
+	OpenCountPrev int32  `json:"open_count_prev"`
+	Competition   struct {
+		Views            int64   `json:"views"`
+		ViewsPrev        int64   `json:"views_prev"`
+		ExposureDays     float64 `json:"exposure_days"`
+		ExposureDaysPrev float64 `json:"exposure_days_prev"`
+		// The last day the views cover; both view windows end on it. Null when the
+		// rollup holds no row for the category.
+		ViewsThrough *string `json:"views_through"`
+	} `json:"competition"`
+	TimeToClose struct {
+		Closed     int64 `json:"closed"`
+		ClosedPrev int64 `json:"closed_prev"`
+		// Null, not zero, when the window holds no qualifying close.
+		MedianDays     *float32 `json:"median_days"`
+		MedianDaysPrev *float32 `json:"median_days_prev"`
+	} `json:"time_to_close"`
+	Inflow struct {
+		Count     int64 `json:"count"`
+		CountPrev int64 `json:"count_prev"`
+	} `json:"inflow"`
+}
+
+// InsightsRolePulse serves GET /api/v1/insights/role-pulse: one category's competition
+// (page views over the posting-days it was open), time to close and inflow, plus its
+// open count across every seniority. category is required — the pulse is per category.
+// Aggregate-only.
+func (h *statsHandlers) InsightsRolePulse(c *fiber.Ctx) error {
+	category, err := parseCategory(c.Query("category"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	if category == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "category is required")
+	}
+
+	out := rolePulse{Category: category}
+	open, err := h.queries.GetInsightsRoleOpenCount(c.Context(), category)
+	switch {
+	case err == nil:
+		out.OpenCount, out.OpenCountPrev = open.OpenCount, open.OpenCountPrev
+	case !errors.Is(err, pgx.ErrNoRows):
+		return err
+	}
+
+	p, err := h.queries.GetInsightsRolePulse(c.Context(), category)
+	switch {
+	case err == nil:
+		out.Competition.Views, out.Competition.ViewsPrev = p.Views, p.ViewsPrev
+		out.Competition.ExposureDays, out.Competition.ExposureDaysPrev = p.ExposureDays, p.ExposureDaysPrev
+		if p.ViewsThrough.Valid {
+			d := p.ViewsThrough.Time.Format(time.DateOnly)
+			out.Competition.ViewsThrough = &d
+		}
+		out.TimeToClose.Closed, out.TimeToClose.ClosedPrev = p.Closed, p.ClosedPrev
+		out.TimeToClose.MedianDays = float4Ptr(p.MedianCloseDays)
+		out.TimeToClose.MedianDaysPrev = float4Ptr(p.MedianCloseDaysPrev)
+		out.Inflow.Count, out.Inflow.CountPrev = p.Inflow, p.InflowPrev
+	case !errors.Is(err, pgx.ErrNoRows):
+		return err
+	}
+	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"category": category}})
+}
+
+// float4Ptr maps a nullable real to a JSON number or null.
+func float4Ptr(v pgtype.Float4) *float32 {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Float32
+}
+
 // InsightsSkills serves GET /api/v1/insights/skills: skills ranked by open-count or
 // growth, optionally scoped by category or country (not both — the rollup is
 // single-dimensional). Aggregate-only.

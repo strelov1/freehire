@@ -82,6 +82,7 @@ func (h *statsHandlers) register(api fiber.Router, optionalAuth fiber.Handler) {
 	api.Get("/insights/salary/history", h.InsightsSalaryHistory)
 	api.Get("/insights/companies", h.InsightsCompanies)
 	api.Get("/insights/role-countries", h.InsightsRoleCountries)
+	api.Get("/insights/role-pulse", h.InsightsRolePulse)
 
 	// Public ingest-fleet status, unauthenticated like the other public reads.
 	// A per-provider health rollup over board_health, sanitized (no error text or

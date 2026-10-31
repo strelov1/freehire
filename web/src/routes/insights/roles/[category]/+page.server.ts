@@ -5,10 +5,11 @@ import { coveredCategories, isCovered, roleQualifies, rolesIntro } from '#lib/in
 import { categoryLabel } from '#lib/labels.js';
 import type { PageServerLoad } from './$types';
 
-// Per-category roles landing page: the category's seniorities ranked by open-job
-// demand. Gated + SSR-live like the sibling pages. The global roles ranking drives
-// the gate + cross-links; the page's own rows come from the category-scoped read so
-// a low-volume seniority isn't lost past the global top-N cutoff.
+// Per-category roles landing page: the category's market pulse (competition, time to
+// close, inflow) and its seniorities ranked by open-job demand. Gated + SSR-live like
+// the sibling pages. The global roles ranking drives the gate + cross-links; the page's
+// own rows come from the category-scoped read so a low-volume seniority isn't lost past
+// the global top-N cutoff.
 export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   const category = params.category;
   const api = serverApi(fetch);
@@ -16,7 +17,10 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   const globalRoles = await loadInsightsGate(fetch);
   if (!isCovered(globalRoles, category)) error(404, 'No role insights for this category yet');
 
-  const roles = await api.insightsRoles({ category, sort: 'open', limit: 20 });
+  const [roles, pulse] = await Promise.all([
+    api.insightsRoles({ category, sort: 'open', limit: 20 }),
+    api.insightsRolePulse(category),
+  ]);
   setHeaders({ 'cache-control': 'public, max-age=0, s-maxage=3600' });
 
   // Which of this category's seniorities have a leaf page. Derived from the SAME
@@ -33,6 +37,7 @@ export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
     covered: coveredCategories(globalRoles),
     roles,
     leaves,
-    intro: rolesIntro(category, roles),
+    pulse,
+    intro: rolesIntro(category, pulse.open_count),
   };
 };

@@ -5,7 +5,8 @@
   import InsightsPageShell from '#lib/components/InsightsPageShell.svelte';
   import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '#lib/seo.js';
   import { seniorityLabel } from '#lib/insights.js';
-  import { Table } from '#lib/ui/index.js';
+  import { rolePulseFigures } from '#lib/rolePulse.js';
+  import { Card, Table } from '#lib/ui/index.js';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -20,6 +21,10 @@
   const updated = $derived(
     new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
   );
+  const figures = $derived(rolePulseFigures(data.pulse));
+  // The direction is stated in words beside its arrow: whether more competition or a
+  // longer time to close is good news depends on who is reading, so no colour judges it.
+  const MOVES = { up: ['↑', 'up from'], down: ['↓', 'down from'], flat: ['→', 'about the same as'] } as const;
   const jsonLd = $derived(
     jsonLdScript([
       datasetJsonLd(`${data.label} roles by demand`, data.intro, canonical, origin),
@@ -47,6 +52,34 @@
   {updated}
   covered={data.covered}
 >
+  <section aria-label="Market pulse" class="mb-8">
+    <div class="grid gap-4 sm:grid-cols-3">
+      {#each figures as f (f.key)}
+        <Card class="p-4">
+          <p class="text-sm text-muted-foreground">{f.label}</p>
+          {#if f.value === null}
+            <p class="mt-1 text-sm text-muted-foreground">Not enough data yet.</p>
+          {:else}
+            <p class="mt-1 text-2xl font-semibold tabular-nums text-foreground">{f.value}</p>
+            <p class="mt-1 text-sm text-muted-foreground">{f.detail}</p>
+            {#if f.direction && f.previous !== null}
+              <p class="mt-1 text-sm tabular-nums text-muted-foreground">
+                <span aria-hidden="true">{MOVES[f.direction][0]}</span>
+                {MOVES[f.direction][1]} {f.previous} the 30 days before
+              </p>
+            {/if}
+          {/if}
+        </Card>
+      {/each}
+    </div>
+    {#if data.pulse.competition.views_through}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Views counted through {data.pulse.competition.views_through} (UTC); closures that only
+        reflect our crawler, such as an unreachable board, are left out of the close time.
+      </p>
+    {/if}
+  </section>
+
   {#if data.roles.length === 0}
     <p class="text-muted-foreground">No role data for this category yet.</p>
   {:else}

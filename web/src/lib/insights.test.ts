@@ -122,9 +122,9 @@ describe('auto-intros', () => {
     expect(skillsIntro('backend', skills)).toContain('go, sql, kubernetes');
   });
 
-  it('rolesIntro totals open roles', () => {
-    const roles = [role('backend', 'senior', 30), role('backend', 'junior', 20)];
-    expect(rolesIntro('backend', roles)).toContain('50 open Backend roles');
+  it('rolesIntro states the all-seniority count it is given', () => {
+    expect(rolesIntro('backend', 12345)).toContain('12,345 open Backend roles');
+    expect(rolesIntro('backend', 0)).toBe('Open Backend roles by seniority on freehire.');
   });
 });
 

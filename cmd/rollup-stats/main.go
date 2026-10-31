@@ -208,6 +208,19 @@ func rebuildInsights(ctx context.Context, q *db.Queries) error {
 		return err
 	}
 
+	// The role pulse: competition, time to close and inflow per category, for the
+	// growth window and the one before it. Competition anchors its own windows on the
+	// freshest views day (see the query); the other two use these.
+	if err := q.DeleteAllInsightsRolePulse(ctx); err != nil {
+		return err
+	}
+	if _, err := q.RebuildInsightsRolePulse(ctx, db.RebuildInsightsRolePulseParams{
+		WindowStart: prevTs,
+		PriorStart:  pgtype.Timestamptz{Time: prevTs.Time.AddDate(0, 0, -growthWindowDays), Valid: true},
+	}); err != nil {
+		return err
+	}
+
 	// Per-role skill demand, and separately the denominator its shares divide by.
 	// The floor reaches the distribution only: applied to the sample it would delete
 	// the denominator of a share that did clear it.
