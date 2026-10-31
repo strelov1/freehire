@@ -72,7 +72,7 @@ func TestBookedNoticeNamesTheHandleTopicAndRecipientsZone(t *testing.T) {
 	host := c.to(t, "host@example.test")
 	all := host.Subject + host.Text + host.HTML
 	assertContains(t, "host mail", host.Text, "brave-lynx-22", "system design", "Tuesday 10 November 2026, 19:00", "Europe/Berlin",
-		"https://meet.example.test/room", "https://freehire.test/my/buddies/mocks")
+		"https://meet.example.test/room", "https://freehire.test/buddies/mocks")
 	assertLacks(t, "host mail", all, "guest@example.test", "Asia/Tokyo", "calm-otter-11")
 
 	guest := c.to(t, "guest@example.test")

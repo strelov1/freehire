@@ -159,7 +159,7 @@ func (n *MockMailNotifier) record(ctx context.Context, userID int64, nt mockNoti
 	}
 }
 
-func (n *MockMailNotifier) cabinetURL() string { return n.origin + "/my/buddies/mocks" }
+func (n *MockMailNotifier) cabinetURL() string { return n.origin + "/buddies/mocks" }
 
 func (n *MockMailNotifier) renderText(nt mockNotice, when string, m Mock) string {
 	lines := []string{nt.line, "", when}

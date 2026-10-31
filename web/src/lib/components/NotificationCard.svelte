@@ -11,6 +11,7 @@
     CheckCircle2,
     AlertTriangle,
     XCircle,
+    CalendarClock,
   } from '@lucide/svelte';
   import { notificationCenter } from '#lib/notificationCenter.svelte.js';
   import { notificationTarget } from '#lib/notificationTarget.js';
@@ -39,6 +40,9 @@
     nudge_auto_apply_failed: XCircle,
     auto_apply_tailor_ready: FileText,
     auto_apply_ready_for_review: FileText,
+    buddy_mock_booked: CalendarClock,
+    buddy_mock_cancelled: CalendarClock,
+    buddy_mock_reminder: CalendarClock,
   };
 
   const target = $derived(notificationTarget(item));
@@ -56,7 +60,9 @@
           ? resolve('/my/notifications/[id]/jobs', { id: String(target.id) })
           : target.kind === 'tailor'
             ? resolve('/tailor/[slug]', { slug: target.slug })
-            : null,
+            : target.kind === 'mocks'
+              ? resolve('/buddies/mocks')
+              : null,
   );
   const unread = $derived(item.read_at == null);
   const Icon = $derived(KIND_ICON[item.kind]);

@@ -198,3 +198,20 @@ describe('plan refusal telemetry', () => {
     spy.mockRestore();
   });
 });
+
+describe('buddy mock paths', () => {
+  it('encodes the member handle and the mock id', async () => {
+    const urls: string[] = [];
+    const fetcher = ((url: string) => {
+      urls.push(url);
+      return Promise.resolve(new Response('{"data":null}', { status: 200 }));
+    }) as unknown as typeof fetch;
+    const client = createApi(fetcher, '', {});
+    await client.getBuddyMockSummary('a/b');
+    await client.cancelBuddyMock('x/y');
+    expect(urls).toEqual([
+      '/api/v1/me/buddies/profiles/a%2Fb/mock-reviews',
+      '/api/v1/me/buddies/mocks/x%2Fy/cancel',
+    ]);
+  });
+});

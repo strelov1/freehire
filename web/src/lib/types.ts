@@ -1027,7 +1027,8 @@ export interface NotificationSettings {
  *  engines: `auto_apply_tailor_ready` (auto-apply-tailored-resume; historical rows only —
  *  auto-apply-review-tracking moved this notification to fire later, as
  *  `auto_apply_ready_for_review`, once there is an answer preview to review, not merely a
- *  tailored CV) and `auto_apply_ready_for_review` itself. */
+ *  tailored CV) and `auto_apply_ready_for_review` itself — and the three buddy mock
+ *  interview notices internal/engage/buddy records (`buddy_mock_*`). */
 export type NotificationKind =
   | 'subscription_digest'
   | 'reminder'
@@ -1038,7 +1039,10 @@ export type NotificationKind =
   | 'nudge_auto_apply_blocked'
   | 'nudge_auto_apply_failed'
   | 'auto_apply_tailor_ready'
-  | 'auto_apply_ready_for_review';
+  | 'auto_apply_ready_for_review'
+  | 'buddy_mock_booked'
+  | 'buddy_mock_cancelled'
+  | 'buddy_mock_reminder';
 
 /** One matched job as recorded into a multi-job subscription digest's `jobs`
  *  snapshot — the same {title, company, slug} shape as everywhere else in this
@@ -1163,6 +1167,38 @@ export interface BuddyProfile { handle: string; card_summary: BuddySummary; card
 /** One member's feed events per UTC day over the last year; only days with an event. */
 /** One member's feed events per UTC day; `count` is always applied + interview + offer. */
 export interface BuddyActivity { days: { day: string; count: number; applied: number; interview: number; offer: number }[] }
+/** The mock-interview topics, the server's vocabulary (internal/engage/buddy). */
+export type BuddyMockTopic = 'coding' | 'system_design' | 'behavioral';
+/** A member's mock-host settings. The link reaches only the two people in a booked mock. */
+export interface BuddyMockSettings { timezone: string; meeting_url: string; topics: BuddyMockTopic[]; paused: boolean }
+/** One member's open mock slots in the viewer's zone, and the topics they host. Never the link. */
+export interface BuddyMockSlots extends MentorSlots { topics: BuddyMockTopic[] }
+interface BuddyMockReview { rating: number; comment: string }
+/** One mock as its participant sees it. `counterpart` is null once the other member left or a
+ *  block stands between them; `their_review` is null until revealed (both reviewed, or a week
+ *  after the end). Instants are absolute (`Z`), so they may be rendered in any zone. */
+export interface BuddyMock {
+  id: string;
+  role: 'host' | 'guest';
+  counterpart: string | null;
+  starts_at: string;
+  ends_at: string;
+  topic: BuddyMockTopic;
+  status: 'confirmed' | 'cancelled';
+  meeting_url: string | null;
+  can_cancel: boolean;
+  can_review: boolean;
+  my_review: BuddyMockReview | null;
+  their_review: BuddyMockReview | null;
+}
+export interface BuddyMocks { upcoming: BuddyMock[]; past: BuddyMock[] }
+/** A member page's mock record: revealed reviews only, without their authors. */
+export interface BuddyMockSummary {
+  completed: number;
+  rating_count: number;
+  rating_avg: number;
+  recent: { rating: number; comment: string; topic: BuddyMockTopic; day: string }[];
+}
 export interface BuddyFeedItem { id: number; handle: string; card_summary: BuddySummary; company: BuddyCompany; job_title: string | null; job_slug: string | null; job_location: string | null; type: 'applied' | 'interview' | 'offer'; day: string }
 /** How a buddy counterpart is drawn: by handle and card, and nothing at all once they are
  *  unreachable (left, blocked) — not even the handle. */

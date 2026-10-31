@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { onMount } from 'svelte';
-  import { House, LogOut, MessagesSquare, UsersRound } from '@lucide/svelte';
+  import { House, LogOut, MessagesSquare, UsersRound, Video } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api } from '#lib/api.js';
@@ -40,6 +40,7 @@
     { route: '/buddies', label: 'Feed', icon: House, badge: 0 },
     { route: '/buddies/network', label: 'Network', icon: UsersRound, badge: 0 },
     { route: '/buddies/chats', label: 'Chats', icon: MessagesSquare, badge: unread },
+    { route: '/buddies/mocks', label: 'Mock interviews', icon: Video, badge: 0 },
   ] as const);
 </script>
 
@@ -98,7 +99,7 @@
 <ConfirmDialog
   bind:open={confirmLeaveOpen}
   title="Leave interview buddies?"
-  description="You disappear from other members' lists and feed, and every conversation closes. You can join again later with the same handle."
+  description="You disappear from other members' lists and feed, every conversation closes and your upcoming mock interviews are cancelled. You can join again later with the same handle."
   confirmLabel="Leave"
   onConfirm={leave}
 />

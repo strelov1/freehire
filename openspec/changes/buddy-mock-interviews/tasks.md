@@ -4979,7 +4979,7 @@ git commit -m "Let the schedule editor and slot picker take their API as props"
 - `api.getBuddyMockSettings(): Promise<BuddyMockSettings | null>`, `saveBuddyMockSettings(s: BuddyMockSettings): Promise<BuddyMockSettings>`, `myBuddyMockAvailability(): Promise<MentorAvailabilityRule[]>`, `replaceBuddyMockWeekly(rows): Promise<void>`, `addBuddyMockOverride(date, start, end): Promise<MentorAvailabilityRule>`, `deleteBuddyMockAvailabilityRule(id: number): Promise<void>`, `getBuddyMockSlots(handle, from, to, timezone, signal?): Promise<BuddyMockSlots>`, `bookBuddyMock(handle, { starts_at, topic, timezone }): Promise<BuddyMock>`, `listBuddyMocks(): Promise<BuddyMocks>`, `cancelBuddyMock(id: string): Promise<void>`, `reviewBuddyMock(id: string, rating: number, comment: string): Promise<void>`, `getBuddyMockSummary(handle: string): Promise<BuddyMockSummary>`.
 - `buddyMocks.ts`: `MOCK_DURATION_MINUTES = 60`, `MOCK_TOPICS`, `mockTopicLabel(t)`, `isHttpsLink(raw)`, `mockWhen(mock, zone)`, `reviewSummaryLine(summary)`, `mockCounterpartLabel(mock)`, `mockRoleLabel(mock)`.
 
-- [ ] 12.1 Add the types. In `web/src/lib/types.ts`, after the `export interface BuddyActivity …` line (1164), insert:
+- [x] 12.1 Add the types. In `web/src/lib/types.ts`, after the `export interface BuddyActivity …` line (1164), insert:
 
 ```ts
 /** The mock-interview topics, the server's vocabulary (internal/engage/buddy). */
@@ -5016,7 +5016,7 @@ export interface BuddyMockSummary {
 }
 ```
 
-- [ ] 12.2 Write the failing tests `web/src/lib/buddyMocks.test.ts`:
+- [x] 12.2 Write the failing tests `web/src/lib/buddyMocks.test.ts`:
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -5069,7 +5069,7 @@ describe('buddy mocks', () => {
 ```
 Run: `pnpm --dir web exec vitest run src/lib/buddyMocks.test.ts`. Expected: FAIL — cannot resolve `./buddyMocks`.
 
-- [ ] 12.3 Create `web/src/lib/buddyMocks.ts`:
+- [x] 12.3 Create `web/src/lib/buddyMocks.ts`:
 
 ```ts
 import type { BuddyMock, BuddyMockSummary, BuddyMockTopic } from './types.js';
@@ -5131,7 +5131,7 @@ export function mockRoleLabel(mock: Pick<BuddyMock, 'role'>): string {
 ```
 Run: `pnpm --dir web exec vitest run src/lib/buddyMocks.test.ts`. Expected: PASS.
 
-- [ ] 12.4 Add the API calls. In `web/src/lib/api.ts` add `BuddyMock,`, `BuddyMocks,`, `BuddyMockSettings,`, `BuddyMockSlots,`, `BuddyMockSummary,` and `BuddyMockTopic,` to the `import type { … } from './types'` list after `BuddyActivity,` (line 153). After `inviteBuddy` (lines 2389-2391) insert:
+- [x] 12.4 Add the API calls. In `web/src/lib/api.ts` add `BuddyMock,`, `BuddyMocks,`, `BuddyMockSettings,`, `BuddyMockSlots,`, `BuddyMockSummary,` and `BuddyMockTopic,` to the `import type { … } from './types'` list after `BuddyActivity,` (line 153). After `inviteBuddy` (lines 2389-2391) insert:
 
 ```ts
 
@@ -5229,7 +5229,7 @@ describe('buddy mock paths', () => {
 ```
 Run: `pnpm --dir web exec vitest run src/lib/api.test.ts`. Expected: PASS (if the base-URL join differs, assert with `toContain` on each path instead — the paths are what the test is about).
 
-- [ ] 12.5 Create `web/src/lib/components/BuddyMockSettingsForm.svelte`:
+- [x] 12.5 Create `web/src/lib/components/BuddyMockSettingsForm.svelte`:
 
 ```svelte
 <script lang="ts">
@@ -5326,7 +5326,7 @@ Run: `pnpm --dir web exec vitest run src/lib/api.test.ts`. Expected: PASS (if th
 </Card>
 ```
 
-- [ ] 12.6 Create `web/src/lib/components/BuddyMockReviewForm.svelte`:
+- [x] 12.6 Create `web/src/lib/components/BuddyMockReviewForm.svelte`:
 
 ```svelte
 <script lang="ts">
@@ -5389,7 +5389,7 @@ Run: `pnpm --dir web exec vitest run src/lib/api.test.ts`. Expected: PASS (if th
 </div>
 ```
 
-- [ ] 12.7 Create `web/src/lib/components/BuddyMockList.svelte`:
+- [x] 12.7 Create `web/src/lib/components/BuddyMockList.svelte`:
 
 ```svelte
 <script lang="ts">
@@ -5478,7 +5478,7 @@ Run: `pnpm --dir web exec vitest run src/lib/api.test.ts`. Expected: PASS (if th
 />
 ```
 
-- [ ] 12.8 Create `web/src/lib/components/BuddyMockPanel.svelte` (the booking panel on a member page):
+- [x] 12.8 Create `web/src/lib/components/BuddyMockPanel.svelte` (the booking panel on a member page):
 
 ```svelte
 <script lang="ts">
@@ -5584,7 +5584,7 @@ Run: `pnpm --dir web exec vitest run src/lib/api.test.ts`. Expected: PASS (if th
 </section>
 ```
 
-- [ ] 12.9 Create the page `web/src/routes/my/buddies/mocks/+page.svelte`:
+- [x] 12.9 Create the page `web/src/routes/my/buddies/mocks/+page.svelte`:
 
 ```svelte
 <script lang="ts">
@@ -5685,7 +5685,7 @@ Run: `pnpm --dir web exec vitest run src/lib/api.test.ts`. Expected: PASS (if th
 </div>
 ```
 
-- [ ] 12.10 Put the panel on the member page and the way in on the buddies page.
+- [x] 12.10 Put the panel on the member page and the way in on the buddies page.
   - In `web/src/routes/my/buddies/[handle]/+page.svelte` add `  import BuddyMockPanel from '#lib/components/BuddyMockPanel.svelte';` after the `BuddyMessageButton` import, and insert, directly before `      <section class="flex flex-col gap-2">` (the "Activity" section):
 
 ```svelte
@@ -5705,7 +5705,7 @@ with
 ```
 and in the leave dialog replace `description="You disappear from other members' lists and feed, and every conversation closes. You can join again later with the same handle."` with `description="You disappear from other members' lists and feed, every conversation closes and your upcoming mock interviews are cancelled. You can join again later with the same handle."`.
 
-- [ ] 12.11 Verify:
+- [x] 12.11 Verify:
 
 ```bash
 pnpm --dir web exec vitest run src/lib/buddyMocks.test.ts src/lib/api.test.ts src/lib/components/MentorScheduleEditor.spec.ts src/lib/buddies.test.ts
@@ -5714,7 +5714,7 @@ pnpm --dir web lint
 ```
 Expected: all pass, 0 svelte-check errors, lint clean. Then against a local stack (`make up`, `make run`, `pnpm --dir web dev`): sign in as two accounts in two browsers, join buddies with both, save settings and a week on `/my/buddies/mocks` as the first, open the first's page as the second, pick a day, slot and topic, book; confirm the second lands on `/my/buddies/mocks` with "Join the call", the first sees the mock with the second's handle, cancelling as either re-offers the slot, and the settings form shows the name-through-link warning.
 
-- [ ] 12.12 Commit:
+- [x] 12.12 Commit:
 
 ```bash
 git add web/src/lib/buddyMocks.ts web/src/lib/buddyMocks.test.ts web/src/lib/types.ts web/src/lib/api.ts web/src/lib/api.test.ts web/src/lib/components/BuddyMockSettingsForm.svelte web/src/lib/components/BuddyMockReviewForm.svelte web/src/lib/components/BuddyMockList.svelte web/src/lib/components/BuddyMockPanel.svelte web/src/routes/my/buddies/mocks/+page.svelte 'web/src/routes/my/buddies/[handle]/+page.svelte' web/src/lib/components/BuddiesView.svelte
