@@ -129,6 +129,25 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   location strings (7.7M open rows) the only changes were five lines gaining a correct
   city ("Corp - Toronto Corporate Office") and one bare "Central Office" losing Central.
   A site that names its town still reads it ("Lincoln School, Palatine, IL").
+- **A city read through another place's ALIAS answers to the line's country and state**
+  (`alias_place.go`, `addAliasCity`). GeoNames lists old, foreign and colloquial names as
+  aliases and `cityDict` hands each to the most populous carrier, so "Harrison" (Scranton's
+  name until 1851) was Scranton, "Morton" Mandan, "Frisco" San Francisco, "Missouri"
+  Bozeman — even in "Harrison, NJ". cities1000 carries no historical/colloquial flag, and
+  "own name beats a bigger place's alias" is wrong for the exonyms people still write
+  (Calcutta, Bombay, New Delhi), so the rule reads the LINE instead: an alias city whose
+  country the line does not state is not named; one whose country it states but whose
+  metro-table admin1 is none of the stated US/CA subdivisions is replaced by the place
+  whose OWN name the token is in a stated subdivision (`townIn`, punctuation and
+  St/Saint folded: "St Petersburg, FL"), or by nothing. Never by another alias there:
+  "Newton, NC" would become Wilmington, whose old name it is. A bare alias with no stated
+  geography still reads as before ("Calcutta", bare "Morton"). Measured 2026-10-31 over
+  the 40,000 most common open location strings (7.68M rows): 1,158 strings / 126k rows
+  changed city, no country changed; 438 strings (55k rows) swapped to the town the line
+  names, 206 (27k) gained one ("Salem, OR", "Canton, OH" named none), 514 (44k) lost a
+  wrong one. About 226 rows lost a right city, each behind a pre-existing country misread
+  ("St. Gallen, SG" is Singapore, "Apodaca, NL" the Netherlands, a Mexico City postcode a
+  US ZIP) or "Reston, VA / Washington D.C." (D.C. is not recorded as a subdivision).
 - **A curated city override renames the PLACE** (`loadCityDict`), not only its own alias,
   and `metroFor` maps the curated name back to the GeoNames one the metro table is keyed
   by. Renaming one alias split Frankfurt across "Frankfurt" and "Frankfurt am Main" and
@@ -334,7 +353,7 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   the capital ("Mexico", "Panama", "Puerto Rico", "Guatemala") and "D.C." are
   `regionNotCity`: "Monterrey, Mexico" used to name Mexico City too. **A contested alias whose
   city is named differently from the line is held back until the line states that city's
-  country** (`renamedContested`): "León, ES" was León de los Aldama, "Canton, Ohio" Guangzhou,
+  country** (`addAliasCity`): "León, ES" was León de los Aldama, "Canton, Ohio" Guangzhou,
   "Salem, MA" Jerusalem, "Annapolis" a Brazilian town — ~6.7k wrong city names over the
   Spanish sample, ~550 lines in an 18k-line control. Valencia and Zaragoza are city overrides:
   the curated es country used to suppress their city. infojobs and occ carry

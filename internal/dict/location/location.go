@@ -113,12 +113,22 @@ func ParseIn(location string, known []string) Geo {
 	// Subdivision codes the line states, and the cities it names, are collected over the
 	// whole line: the state usually FOLLOWS the city ("Roseville, CA").
 	statedSubdivisions := map[string]struct{}{}
+	// An alias must agree with its own location's state, even when another location
+	// on the line names the alias's state ("Harrison, NJ; Philadelphia, PA").
+	segmentSubdivisions := map[string]map[string]struct{}{}
+	recordSubdivision := func(code, segment string) {
+		statedSubdivisions[code] = struct{}{}
+		if segmentSubdivisions[segment] == nil {
+			segmentSubdivisions[segment] = map[string]struct{}{}
+		}
+		segmentSubdivisions[segment][code] = struct{}{}
+	}
 	// pending holds the tokens that name a city only in a country the line states, resolved
 	// once the whole line has been read (resolvePending).
 	var pending []pendingCity
-	// renamedContested holds the contested long-tail cities the line names by an alias of
-	// a differently named place, emitted after the loop only if the line states its country.
-	var renamedContested []heldContested
+	// aliasCities holds the long-tail cities the line names by an alias of a differently
+	// named place, resolved after the loop against what the line states (addAliasCity).
+	var aliasCities []heldContested
 	// placeToks counts the tokens left once work-mode words are cut. Whether one came before
 	// matters because a province named after its capital is the province only after another
 	// place (provinceAfterCity); the count, because the caller's countries name a pending or
@@ -261,7 +271,7 @@ func ParseIn(location string, known []string) Geo {
 				withdrawNamesake("us", prevTok, lastCountries, countryVotes, countrySet, regionSet)
 			}
 			if code, ok := statedSubdivisionCode(tok); ok {
-				statedSubdivisions[code] = struct{}{}
+				recordSubdivision(code, seg.text)
 			}
 			prevTok = tok
 			continue
@@ -276,7 +286,7 @@ func ParseIn(location string, known []string) Geo {
 			// Canada") is a stated subdivision, so a foreign namesake of the town goes.
 			if c, ok := subdivisionToCountry[tok]; ok && c == countryOf(next) {
 				if code, ok := statedSubdivisionCode(tok); ok {
-					statedSubdivisions[code] = struct{}{}
+					recordSubdivision(code, seg.text)
 				}
 				withdrawNamesake(c, prevTok, lastCountries, countryVotes, countrySet, regionSet)
 			}
@@ -320,7 +330,7 @@ func ParseIn(location string, known []string) Geo {
 		// would key the metro lookup to Washington and find nothing in Perth.
 		if _, ok := resolveSubdivision(tok, prevTok); ok && !isAustralianState(tok, prevTok) {
 			if code, ok := statedSubdivisionCode(tok); ok {
-				statedSubdivisions[code] = struct{}{}
+				recordSubdivision(code, seg.text)
 			}
 		}
 		resolved := resolveGeoToken(tok, prevTok, tokCountry, tokRegion)
@@ -344,7 +354,10 @@ func ParseIn(location string, known []string) Geo {
 				// The token is a curated place: emit the city name only when cityDict agrees
 				// on its country, so a country/region token ("usa") never emits the unrelated
 				// city buried in its GeoNames alternate names ("Yokkaichi").
-				if _, agree := tokCountry[ce.Country]; agree {
+				// An alias still waits for the rest of the line: "Calcutta, OH" is no Kolkata.
+				if _, agree := tokCountry[ce.Country]; agree && !sameCityName(ce.Name, tok) {
+					aliasCities = append(aliasCities, heldContested{ce: ce, tok: tok, segment: seg.text})
+				} else if agree {
 					citySet[ce.Name] = struct{}{}
 				}
 			} else {
@@ -353,11 +366,12 @@ func ParseIn(location string, known []string) Geo {
 				// LAST-RESORT candidate. It is applied after the whole string is read
 				// and only if nothing else stated a country — see cityFallback below.
 				//
-				// A contested alias whose city is named differently from the line is held
-				// back until the country is known: "León" is León de los Aldama only in a
-				// line that places it in Mexico, and "León, España" must not name it.
-				if ce.Contested && !strings.EqualFold(foldIndianName(ce.Name), foldIndianName(tok)) {
-					renamedContested = append(renamedContested, heldContested{ce, tok})
+				// A city named differently from the line — read through an alias — is held
+				// until the line's country and state are known (addAliasCity): "León" is
+				// León de los Aldama only in a line that places it in Mexico, and "Harrison,
+				// NJ" is not Scranton, PA, whose old name it is.
+				if !sameCityName(ce.Name, tok) {
+					aliasCities = append(aliasCities, heldContested{ce: ce, tok: tok, segment: seg.text})
 				} else {
 					citySet[ce.Name] = struct{}{}
 				}
@@ -437,22 +451,14 @@ func ParseIn(location string, known []string) Geo {
 		stated = hint
 	}
 	resolvePending(pending, stated, citySet)
-	for _, h := range renamedContested {
-		if _, ok := stated[h.ce.Country]; ok {
-			citySet[h.ce.Name] = struct{}{}
-			continue
+	// Keep aliases separate until their metros are resolved: two segments can name
+	// different places called Franklin, each with its own metro.
+	aliasesBySegment := map[string]map[string]struct{}{}
+	for _, h := range aliasCities {
+		if aliasesBySegment[h.segment] == nil {
+			aliasesBySegment[h.segment] = map[string]struct{}{}
 		}
-		// The line's own country may have a place of the name too: "Valence, France" is
-		// Valence, where the table's first reading of "valence" is Valencia; "Ribnica,
-		// Slovenija" the Slovenian town below the main table's floor, where the table's
-		// reading is Rîbnița in Moldova (contestedSmallPlaces).
-		for c := range stated {
-			if name := contestedCityIn(h.tok, c); name != "" {
-				citySet[name] = struct{}{}
-			} else if name := contestedSmallPlaces[[2]string{h.tok, c}]; name != "" {
-				citySet[name] = struct{}{}
-			}
-		}
+		addAliasCity(aliasesBySegment[h.segment], h.ce, h.tok, stated, segmentSubdivisions[h.segment])
 	}
 
 	// Nothing in the line stated a country, so the long-tail cities get to — but only
@@ -478,7 +484,6 @@ func ParseIn(location string, known []string) Geo {
 
 	// A metro needs one stated country: a line naming two cannot place a city in either
 	// without guessing.
-	var metros []string
 	metroCountry := ""
 	if len(countrySet) == 1 {
 		for c := range countrySet {
@@ -489,15 +494,25 @@ func ParseIn(location string, known []string) Geo {
 			metroCountry = c
 		}
 	}
-	if metroCountry != "" && len(citySet) > 0 {
-		metroSet := map[string]struct{}{}
+	metroSet := map[string]struct{}{}
+	if metroCountry != "" {
 		for name := range citySet {
 			if v, ok := metroFor(name, metroCountry, statedSubdivisions); ok {
 				metroSet[v] = struct{}{}
 			}
 		}
-		metros = stringset.Sorted(metroSet)
 	}
+	for segment, names := range aliasesBySegment {
+		for name := range names {
+			citySet[name] = struct{}{}
+			if metroCountry != "" {
+				if v, ok := metroFor(name, metroCountry, segmentSubdivisions[segment]); ok {
+					metroSet[v] = struct{}{}
+				}
+			}
+		}
+	}
+	metros := stringset.Sorted(metroSet)
 	// A metropolitan region the line named ("Delhi NCR", "GBA", a Buenos Aires barrio) adds
 	// its metro, in that metro's country only.
 	if metroCountry != "" && len(regionMetros) > 0 {
