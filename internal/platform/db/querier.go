@@ -5865,12 +5865,18 @@ type Querier interface {
 	// keep the table lean.
 	RebuildInsightsCompanyGrowth(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
 	// Median days from created_at to closed_at over each company's canonical postings
-	// closed in the last 180 days. Only closures that say something about the EMPLOYER
-	// count: the posting left its source (unseen, feed_removed), the employer closed it,
-	// or its own deadline passed. board_unreachable and feed_empty measure our crawler,
-	// source_misattributed and moderated our own decisions — counting them would publish
-	// our health as a named employer's hiring speed. 180 days so the figure describes how
-	// the company hires now, not over its whole history.
+	// closed in the last 180 days. Only closures that say the POSTING is over count: it
+	// dropped off a board we crawl (unseen), the source reported it taken down
+	// (feed_removed), the liveness probe read its source page as expired twice
+	// (probe_expired), or the employer closed it here (employer_closed). Not expired —
+	// that is the age rule for sources with no close signal, which closes at 45 days
+	// whatever the employer did, so it would publish our cutoff as the company's speed.
+	// board_unreachable and feed_empty measure our crawler, board_retired,
+	// source_misattributed and moderated our own decisions, '' is unknown. 180 days so the
+	// figure describes how the company hires now, not over its whole history.
+	//
+	// Every rollup that measures a real close reads this same list;
+	// insights_close_rule_test.go fails if one of them drifts from it.
 	RebuildInsightsCompanyLifetime(ctx context.Context) (int64, error)
 	// One row per company with an OBSERVABLE application: the applicant has a connected
 	// mailbox, so a reply would have been seen. Applications from people we cannot observe

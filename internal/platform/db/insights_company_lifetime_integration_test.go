@@ -49,10 +49,12 @@ func TestInsightsCompanyLifetimeMedianOfEmployerClosures(t *testing.T) {
 	truncate(t, pool)
 
 	// Open 10, 20 and 30 days before closing 5 days ago, under three different
-	// employer-side reasons.
+	// reasons that say the posting is over at its source. probe_expired is the
+	// liveness probe reading the source page as expired twice — the posting left its
+	// source as surely as an unseen one did.
 	seedClosedCompanyJob(t, pool, "a1", "acme", 15, 5, "unseen", nil)
 	seedClosedCompanyJob(t, pool, "a2", "acme", 25, 5, "employer_closed", nil)
-	seedClosedCompanyJob(t, pool, "a3", "acme", 35, 5, "expired", nil)
+	seedClosedCompanyJob(t, pool, "a3", "acme", 35, 5, "probe_expired", nil)
 	// Still open: no closure, nothing to measure.
 	seedCompanyJob(t, pool, "a4", "acme", 40, nil, nil)
 
@@ -76,9 +78,11 @@ func TestInsightsCompanyLifetimeExcludesOurOwnClosures(t *testing.T) {
 	ctx := context.Background()
 	truncate(t, pool)
 
-	// Every one of these says something about our crawler or our decisions, not
-	// about how fast the employer hires.
-	for i, reason := range []string{"board_unreachable", "feed_empty", "source_misattributed", "moderated"} {
+	// Every one of these says something about our crawler, our rules or our decisions,
+	// not about how fast the employer hires. expired is the age rule for sources with no
+	// close signal: it closes at 45 days whatever the employer did, so counting it would
+	// publish our cutoff as the company's hiring speed.
+	for i, reason := range []string{"board_unreachable", "feed_empty", "source_misattributed", "moderated", "expired", "board_retired", ""} {
 		seedClosedCompanyJob(t, pool, "x"+string(rune('a'+i)), "crawlfail", 30, 2, reason, nil)
 	}
 
