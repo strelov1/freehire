@@ -26,21 +26,26 @@ var (
 	reUpTo   = regexp.MustCompile(`(?i)\bup to\b`)
 	reFrom   = regexp.MustCompile(`(?i)\bfrom\b`)
 	reMoney  = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)(\+)?|(\d{1,3}(?:[.,]\d{3})+)(\+)?`)
-	reDotGrp = regexp.MustCompile(`^\d{1,3}(\.\d{3})+$`)
-	reComGrp = regexp.MustCompile(`^\d{1,3}(,\d{3})+(\.\d+)?$`)
-	reEuDec  = regexp.MustCompile(`^\d{1,3}(\.\d{3})+,\d+$`)
-	reDec    = regexp.MustCompile(`^\d+[.,]\d{1,2}$`)
-	reInt    = regexp.MustCompile(`^\d+$`)
-	reAUD    = regexp.MustCompile(`(?i)\baud\b`)
-	reCAD    = regexp.MustCompile(`(?i)\bcad\b`)
-	reNZD    = regexp.MustCompile(`(?i)\bnzd\b`)
-	reHKD    = regexp.MustCompile(`(?i)\bhkd\b`)
-	reSGD    = regexp.MustCompile(`(?i)\bsgd\b`)
-	reUSD    = regexp.MustCompile(`(?i)\busd\b`)
-	reIDR    = regexp.MustCompile(`(?i)\brp\b|\bidr\b`)
-	reGBP    = regexp.MustCompile(`(?i)\bgbp\b`)
-	reEUR    = regexp.MustCompile(`(?i)\beur\b`)
-	rePLN    = regexp.MustCompile(`(?i)\bpln\b`)
+	// reScaled is a "120k" or "1.5m" amount; reMoney would read it as 120 or 1.
+	reScaled = regexp.MustCompile(`(?i)\d[km]\b`)
+	// reOpenRange is a symboled amount whose dash-joined second bound carries no
+	// symbol and no thousands grouping ("$50 - 60"), which reMoney does not read.
+	reOpenRange = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
+	reDotGrp    = regexp.MustCompile(`^\d{1,3}(\.\d{3})+$`)
+	reComGrp    = regexp.MustCompile(`^\d{1,3}(,\d{3})+(\.\d+)?$`)
+	reEuDec     = regexp.MustCompile(`^\d{1,3}(\.\d{3})+,\d+$`)
+	reDec       = regexp.MustCompile(`^\d+[.,]\d{1,2}$`)
+	reInt       = regexp.MustCompile(`^\d+$`)
+	reAUD       = regexp.MustCompile(`(?i)\baud\b`)
+	reCAD       = regexp.MustCompile(`(?i)\bcad\b`)
+	reNZD       = regexp.MustCompile(`(?i)\bnzd\b`)
+	reHKD       = regexp.MustCompile(`(?i)\bhkd\b`)
+	reSGD       = regexp.MustCompile(`(?i)\bsgd\b`)
+	reUSD       = regexp.MustCompile(`(?i)\busd\b`)
+	reIDR       = regexp.MustCompile(`(?i)\brp\b|\bidr\b`)
+	reGBP       = regexp.MustCompile(`(?i)\bgbp\b`)
+	reEUR       = regexp.MustCompile(`(?i)\beur\b`)
+	rePLN       = regexp.MustCompile(`(?i)\bpln\b`)
 )
 
 var dollarCurrency = map[string]string{
@@ -94,7 +99,10 @@ func Parse(description string, countries []string) (Salary, bool) {
 func parseLine(body string, countries []string) (Salary, bool) {
 	body = strings.TrimSpace(body)
 	nums := amountsIn(body)
-	if len(nums) == 0 || len(nums) > 2 {
+	if len(nums) == 0 || len(nums) > 2 || reScaled.MatchString(body) {
+		return Salary{}, false
+	}
+	if len(nums) == 1 && reOpenRange.MatchString(body) {
 		return Salary{}, false
 	}
 	var sal Salary
@@ -230,18 +238,18 @@ func periodOf(s string) string {
 
 func currencyOf(line string, countries []string) string {
 	switch {
-	case strings.Contains(line, "A$") || reAUD.MatchString(line):
-		return "AUD"
-	case strings.Contains(line, "C$") || reCAD.MatchString(line):
+	case strings.Contains(line, "US$") || reUSD.MatchString(line):
+		return "USD"
+	case strings.Contains(line, "CA$") || strings.Contains(line, "C$") || reCAD.MatchString(line):
 		return "CAD"
 	case strings.Contains(line, "NZ$") || reNZD.MatchString(line):
 		return "NZD"
 	case strings.Contains(line, "HK$") || reHKD.MatchString(line):
 		return "HKD"
+	case strings.Contains(line, "AU$") || strings.Contains(line, "A$") || reAUD.MatchString(line):
+		return "AUD"
 	case strings.Contains(line, "S$") || reSGD.MatchString(line):
 		return "SGD"
-	case strings.Contains(line, "US$") || reUSD.MatchString(line):
-		return "USD"
 	case reIDR.MatchString(line):
 		return "IDR"
 	case strings.Contains(line, "£") || reGBP.MatchString(line):

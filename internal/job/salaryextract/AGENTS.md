@@ -26,3 +26,8 @@ order — the same precedence `SetJobEnrichment` already applies once the model 
   header says `$104,000 - 208,000 per year` and the body says the work is paid hourly
   up to `$100+`. Returning the header would publish the wrong period with confidence.
   The same amount repeated in another period is not a contradiction.
+- **A scaled or half-read amount refuses the line.** `$120k` would read as 120 and
+  `$50 - 60` would drop the unsymboled, ungrouped second bound, so both are refused
+  rather than published as a confident wrong figure.
+- **Longer currency markers are tested first.** `US$` contains `S$` and `CA$` contains
+  `A$`, so the order of the cases in `currencyOf` is the rule.

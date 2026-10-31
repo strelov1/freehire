@@ -14,6 +14,32 @@ func TestParseLabeledSalary(t *testing.T) {
 		period    string
 		ok        bool
 	}{
+		{name: "k suffix is not read as 120", text: "Salary: $120k per year", countries: []string{"us"}},
+		{name: "ungrouped second bound is not dropped", text: "Pay: $50 - 60 per hour", countries: []string{"us"}},
+		{
+			name: "US$ is USD, not SGD",
+			text: "Salary: US$120,000 per year",
+			min:  120000, max: 120000, minSet: true, maxSet: true,
+			currency: "USD", period: "year", ok: true,
+		},
+		{
+			name: "CA$ is CAD, not AUD",
+			text: "Salary: CA$120,000 per year",
+			min:  120000, max: 120000, minSet: true, maxSet: true,
+			currency: "CAD", period: "year", ok: true,
+		},
+		{
+			name: "AU$ is AUD",
+			text: "Salary: AU$120,000 per year",
+			min:  120000, max: 120000, minSet: true, maxSet: true,
+			currency: "AUD", period: "year", ok: true,
+		},
+		{
+			name: "S$ is SGD",
+			text: "Salary: S$9,000 per month",
+			min:  9000, max: 9000, minSet: true, maxSet: true,
+			currency: "SGD", period: "month", ok: true,
+		},
 		{
 			name:      "whatjobs range, second bound without a dollar",
 			text:      "<p>Salary: $120,000 - 185,000 per year</p><p>Build services.</p>",
