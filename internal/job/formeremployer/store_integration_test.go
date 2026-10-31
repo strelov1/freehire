@@ -58,9 +58,11 @@ func TestStoreSlugs(t *testing.T) {
 	seedCompany(t, pool, "fe-hooli", 4, nil)              // two slugs, one fold, no registry
 	seedCompany(t, pool, "feho-oli", 4, nil)
 	seedCompany(t, pool, "fe-stark", 9, nil)
+	// Different aliases can share a folded key and still name the same settled company.
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO company_slug_aliases (alias_slug, canonical_slug, folded_key, reason)
-		 VALUES ('feumbrella', 'fe-umbrella', 'feumbrella', 'spelling')`); err != nil {
+		 VALUES ('feumbrella', 'fe-umbrella', 'feumbrella', 'spelling'),
+		        ('fe-umbrella-inc', 'fe-umbrella', 'feumbrella', 'spelling')`); err != nil {
 		t.Fatalf("seed alias: %v", err)
 	}
 

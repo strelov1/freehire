@@ -1,12 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { tick } from 'svelte';
-import type { Job, UserJob } from '#lib/types.js';
-import { hasAppliedToCompany, markAppliedToCompany } from '#lib/appliedCompanies.svelte.js';
+import type { DirectApplyForm, Job, UserJob, UserProfile } from '#lib/types.js';
+import { ensureAppliedCompaniesLoaded, hasAppliedToCompany, markAppliedToCompany } from '#lib/appliedCompanies.svelte.js';
 import { resetUserStores } from '#lib/userResource.svelte.js';
+import { profileStore } from '#lib/profile.svelte.js';
 import JobView from './JobView.svelte';
 import JobRow from './JobRow.svelte';
 
+vi.mock('$app/env', () => ({ browser: true }));
 vi.mock('$app/state', () => ({
   page: { data: { locale: 'en' }, url: new URL('http://localhost/jobs/acme-job'), state: {} },
 }));
@@ -17,14 +19,22 @@ vi.mock('#lib/auth.svelte.js', () => ({
   isAuthenticated: () => session.userID !== null,
   currentUser: () => session.userID === null ? null : { id: session.userID },
 }));
-vi.mock('#lib/profile.svelte.js', () => ({ profileStore: { profile: null, loaded: true, ensureLoaded() {} } }));
 vi.mock('#lib/analytics.js', () => ({ track() {} }));
 
-const { markJobApplied } = vi.hoisted(() => ({ markJobApplied: vi.fn() }));
+const { markJobApplied, listAppliedCompanySlugs, getProfile, getDirectApplyForm } = vi.hoisted(() => ({
+  markJobApplied: vi.fn(),
+  listAppliedCompanySlugs: vi.fn(),
+  getProfile: vi.fn(),
+  getDirectApplyForm: vi.fn(),
+}));
 vi.mock('#lib/api.js', () => ({
   ApiError: class extends Error {},
+  RESUME_MAX_MB: 10,
   api: {
     markJobApplied,
+    listAppliedCompanySlugs,
+    getProfile,
+    getDirectApplyForm,
     countThreads: async () => 0,
     myPlan: async () => null,
     recordJobView: async () => null,
@@ -45,6 +55,46 @@ beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} });
   resetUserStores();
   markJobApplied.mockReset();
+  listAppliedCompanySlugs.mockReset().mockResolvedValue([]);
+  getProfile.mockReset().mockResolvedValue(null);
+  const form: DirectApplyForm = {
+    company_name: 'Acme', questions: [], open: true, applied: false, prefill: {},
+    cvs: { tailored: null, has_resume: true },
+  };
+  getDirectApplyForm.mockReset().mockResolvedValue(form);
+});
+
+describe('JobView deferred user data', () => {
+  it.each(['applied companies', 'profile'] as const)('keeps a draft open after %s loads', async (resource) => {
+    const applied = Promise.withResolvers<string[]>();
+    const profile = Promise.withResolvers<UserProfile | null>();
+    if (resource === 'applied companies') listAppliedCompanySlugs.mockReturnValue(applied.promise);
+    else getProfile.mockReturnValue(profile.promise);
+    const view = render(JobView, { job: { ...job, direct_apply: true } });
+    // Let the other resource settle before opening the form.
+    if (resource === 'applied companies') await profileStore.ensureLoaded();
+    else await ensureAppliedCompaniesLoaded();
+    await tick();
+    expect(listAppliedCompanySlugs).toHaveBeenCalled();
+    expect(getProfile).toHaveBeenCalled();
+    const [applyButton] = screen.getAllByRole('button', { name: /^Apply/ });
+    if (!applyButton) throw new Error('Missing direct application button');
+    await fireEvent.click(applyButton);
+    const note = await screen.findByLabelText<HTMLTextAreaElement>('A note to the employer (optional)', {}, { timeout: 10_000 });
+    await fireEvent.input(note, { target: { value: 'My application draft' } });
+    if (resource === 'applied companies') {
+      applied.resolve([]);
+      await ensureAppliedCompaniesLoaded();
+    } else {
+      profile.resolve(null);
+      await profileStore.ensureLoaded();
+    }
+    await tick();
+    expect(screen.queryByRole('dialog', { name: 'Apply: Engineer' })).not.toBeNull();
+    expect(screen.getByLabelText<HTMLTextAreaElement>('A note to the employer (optional)').value).toBe('My application draft');
+    await view.rerender({ job: { ...job, public_slug: 'another-job', direct_apply: true } });
+    expect(screen.queryByRole('dialog', { name: 'Apply: Engineer' })).toBeNull();
+  }, 20_000);
 });
 
 describe('JobView application completion', () => {

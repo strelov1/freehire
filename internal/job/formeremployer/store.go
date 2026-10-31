@@ -3,6 +3,7 @@ package formeremployer
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -48,6 +49,9 @@ func (s *Store) Slugs(ctx context.Context, userID int64) ([]string, error) {
 	canons := make(map[string][]string, len(aliasRows))
 	var canonSlugs []string
 	for _, r := range aliasRows {
+		if slices.Contains(canons[r.FoldedKey], r.CanonicalSlug) {
+			continue
+		}
 		canons[r.FoldedKey] = append(canons[r.FoldedKey], r.CanonicalSlug)
 		canonSlugs = append(canonSlugs, r.CanonicalSlug)
 	}

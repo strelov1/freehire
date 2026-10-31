@@ -2,6 +2,7 @@
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
+  import { untrack } from 'svelte';
   import {
     ArrowRight,
     Bookmark,
@@ -300,7 +301,7 @@
     showDirectApply = false;
     directApplied = false;
     if (!isAuthenticated()) return; // effects run client-only, so no browser guard needed
-    ensureAppliedCompaniesLoaded();
+    untrack(ensureAppliedCompaniesLoaded);
     if (job.direct_apply) {
       api.getDirectApplyForm(slug)
         .then((f) => {
@@ -310,7 +311,7 @@
     }
     // The Avoid control below reads the profile's excluded_sources; without this its mark
     // would be wrong on a first load until something else happened to fetch the profile.
-    profileStore.ensureLoaded();
+    untrack(() => profileStore.ensureLoaded());
     api.recordJobView(slug)
       .then((rec) => {
         // Mark it locally so its card dims on back-navigation without a reload.

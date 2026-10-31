@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/location"
+	"github.com/strelov1/freehire/internal/platform/htmltext"
 )
 
 // greenhouseBaseURL is the Greenhouse public boards API root. Unlike Lever, Greenhouse
@@ -113,9 +114,9 @@ type GreenhousePosting struct {
 
 // GreenhousePayRange is one pay_input_ranges entry. Amounts use the currency's minor unit. The API
 // carries no period field: the period is stated, when it is, only in the range's Title
-// ("Hourly Pay Range") or its HTML Blurb ("the annual base salary range"; matched as
-// markup, since a word boundary holds beside a tag), so
-// greenhousePayPeriod reads those and a range that states neither is dropped.
+// ("Hourly Pay Range") or its HTML Blurb ("the annual base salary range"). HTML is
+// rendered as text with paragraph boundaries before excluded components are removed;
+// greenhousePayPeriod reads what remains and drops a range that states no period.
 type GreenhousePayRange struct {
 	MinCents     *int64 `json:"min_cents"`
 	MaxCents     *int64 `json:"max_cents"`
@@ -174,9 +175,8 @@ func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, c
 	title := ""
 	for i, r := range ranges {
 		// "Base salary (excluding equity and bonus)" names a salary, not a bonus.
-		// Keep only that title for period lookup too: an excluded annual bonus
-		// does not make the base salary annual.
-		candidateTitle := greenhousePayExclusion.Split(r.Title, 2)[0]
+		// Retain later clauses: "including bonus" still disqualifies the range.
+		candidateTitle := greenhouseBasePayText(r.Title)
 		if greenhouseNonBase.MatchString(candidateTitle) {
 			continue
 		}
@@ -189,7 +189,7 @@ func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, c
 	r := ranges[selected]
 	period = greenhousePayPeriod(title)
 	if period == "" {
-		period = greenhousePayPeriod(r.Blurb)
+		period = greenhousePayPeriod(greenhouseBasePayText(r.Blurb))
 	}
 	if period == "" || r.CurrencyType == "" {
 		return nil, nil, "", ""
@@ -224,7 +224,34 @@ func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, c
 // greenhouseNonBase names a pay range that is not the base wage.
 var greenhouseNonBase = regexp.MustCompile(`(?i)\bbonus|\bcommission|\bequity\b|\bstock\b|\bincentive`)
 
-var greenhousePayExclusion = regexp.MustCompile(`(?i)\b(excluding|exclusive of|without)\b`)
+var greenhousePayExclusion = regexp.MustCompile(`(?i)\b(excluding|excludes|exclusive of|without)\b`)
+
+var greenhousePayClauseEnd = regexp.MustCompile(`(?i)[);\]\r\n]|\.(?:\s|$)|\b(including|includes|inclusive of|plus|but|however)\b`)
+
+// greenhouseBasePayText omits excluded components and their periods, retaining text
+// after a clause boundary or explicit inclusion. Commas stay inside exclusion lists.
+func greenhouseBasePayText(text string) string {
+	if strings.ContainsAny(text, "<&") {
+		text = htmltext.ToText(text)
+	}
+	text = strings.ReplaceAll(text, "\u00a0", " ")
+	var b strings.Builder
+	for {
+		exclusion := greenhousePayExclusion.FindStringIndex(text)
+		if exclusion == nil {
+			b.WriteString(text)
+			return b.String()
+		}
+		b.WriteString(text[:exclusion[0]])
+		b.WriteByte(' ')
+		rest := text[exclusion[1]:]
+		end := greenhousePayClauseEnd.FindStringIndex(rest)
+		if end == nil {
+			return b.String()
+		}
+		text = rest[end[0]:]
+	}
+}
 
 // currencyMinorUnits is how many of a currency's smallest unit make one: Greenhouse's
 // "cents" are the currency's minor unit, so a JPY range is already in yen — Anduril's

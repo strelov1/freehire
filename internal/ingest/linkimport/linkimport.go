@@ -346,12 +346,13 @@ func (im *Importer) index(ctx context.Context, saved db.UpsertJobRow) {
 	// test, and wanting one is what made the old gate default to asking anyway. The wave
 	// query takes a slice, so a single row is a one-element one; an empty result means no
 	// widening, which is exactly what a row representing nobody should get.
-	if rows, err := im.q.DuplicateClosureGeoFor(ctx, []int64{saved.Job.ID}); err != nil {
+	rows, err := im.q.DuplicateClosureGeoFor(ctx, []int64{saved.Job.ID})
+	if err != nil {
 		log.Printf("linkimport: duplicate-closure geography for job %d: %v", saved.Job.ID, err)
-	} else {
-		for _, g := range rows {
-			doc.MergeClosureGeography(jobview.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})
-		}
+		return
+	}
+	for _, g := range rows {
+		doc.MergeClosureGeography(jobview.ClosureGeo{Countries: g.Countries, Regions: g.Regions, Cities: g.Cities, Metros: g.Metros})
 	}
 	if err := im.idx.SubmitJobs(ctx, []search.JobDocument{doc}); err != nil {
 		log.Printf("linkimport: index job %d: %v", saved.Job.ID, err)
