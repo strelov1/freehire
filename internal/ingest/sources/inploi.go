@@ -23,6 +23,7 @@ const (
 	inploiPageSize  = 100
 	inploiMaxTotal  = 50000
 	inploiMaxNew    = 400
+	inploiCadence   = 2 * time.Hour
 	inploiKeyHeader = "x-publishable-key"
 )
 
@@ -76,13 +77,16 @@ func (s inploi) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 		}
 		fresh = append(fresh, p)
 	}
-	// Keep part of the budget moving through the backlog: rejected or unreadable
-	// postings stay unseen and must not consume every crawl's detail requests.
 	head := s.maxNew / 2
-	fresh = hydrationLanes(fresh, head, s.maxNew-head, time.Now())
+	fresh = hydrationLanes(fresh, head, s.maxNew-head, inploiLaneClock(time.Now()))
 	return append(fetchDetails(fresh, defaultDetailWorkers, func(p inploiPosting) (Job, bool) {
 		return s.detail(ctx, p)
 	}), refresh...), nil
+}
+
+func inploiLaneClock(now time.Time) time.Time {
+	hours := int64(inploiCadence / time.Hour)
+	return time.Unix(now.Unix()/hours, 0).UTC()
 }
 
 func (s inploi) list(ctx context.Context, e CompanyEntry) ([]inploiPosting, error) {

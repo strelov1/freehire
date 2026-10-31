@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -190,13 +191,49 @@ func TestInploiFetchNewReachesPastUnreadablePostings(t *testing.T) {
 			if !refreshed {
 				t.Fatal("seen posting lost its liveness refresh")
 			}
-			time.Sleep(time.Hour)
+			time.Sleep(inploiCadence)
 		}
 		if !found {
 			t.Fatal("readable posting behind the unreadable prefix was never hydrated")
 		}
 		if got := fake.htmlN.Load(); got != 4 {
 			t.Fatalf("detail requests = %d, want two per crawl", got)
+		}
+	})
+}
+
+func TestInploiFetchNewStepsOncePerDefaultCadence(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var rows []string
+		htmls := map[string]string{}
+		for i := 1; i <= 5; i++ {
+			id := strconv.Itoa(i)
+			rows = append(rows, `{"id":`+id+`,"title":"Role"}`)
+			htmls["https://jobs.example.test/job/"+id] = `<html><script type="application/ld+json">{"@type":"JobPosting","description":"<p>x</p>"}</script></html>`
+		}
+		body := `{"data":[` + strings.Join(rows, ",") + `],"pagination":{"total":5,"current_page":1,"last_page":1}}`
+		got := map[string]bool{}
+		for range 4 {
+			fake := inploiOne(body)
+			fake.html = htmls
+			src := NewInploi(fake).(inploi)
+			src.maxNew = 2
+			jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "haven"}, func(string) bool { return false })
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(jobs) != 2 {
+				t.Fatalf("hydrated %d, want the budget of 2", len(jobs))
+			}
+			for _, job := range jobs {
+				got[job.ExternalID] = true
+			}
+			time.Sleep(inploiCadence)
+		}
+		for _, id := range []string{"1", "2", "3", "4", "5"} {
+			if !got[id] {
+				t.Errorf("posting %s was never hydrated across four cadence-spaced crawls", id)
+			}
 		}
 	})
 }
