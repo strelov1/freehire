@@ -20,6 +20,7 @@ type jobnetCatalogue struct {
 	ads        []jobnetFakeAd
 	extraOcc   int          // added to the facet total, to model a facet that misses ads
 	sliceEmpty bool         // a slice (occupation-filtered) query states its total but lists no ads
+	growFrom   int          // from this request on, totals are stated 1,000 higher (0: never)
 	failAt     map[int]bool // the nth request (1-based) fails
 	requests   int
 	gotCSRF    string
@@ -58,7 +59,11 @@ func (f *jobnetCatalogue) GetJSONWithHeaders(_ context.Context, raw string, head
 	if start := (page - 1) * size; start < len(matched) && start+size <= jobnetWindow && !listsNothing {
 		served = matched[start:min(start+size, len(matched))]
 	}
-	resp := map[string]any{"totalJobAdCount": len(matched), "jobAds": served}
+	stated := len(matched)
+	if f.growFrom > 0 && f.requests >= f.growFrom {
+		stated += 1000
+	}
+	resp := map[string]any{"totalJobAdCount": stated, "jobAds": served}
 	var facets []map[string]any
 	for id, n := range facet {
 		facets = append(facets, map[string]any{"identifier": id, "jobAdCount": n})
@@ -213,6 +218,15 @@ func TestJobnetFetchFailsWhenAnOccupationOutgrowsTheWindow(t *testing.T) {
 		if _, err := fetchJobnet(t, &jobnetCatalogue{ads: jobnetFakeAds("huge", jobnetWindow+over)}); err == nil {
 			t.Errorf("Fetch: want an error when one occupation holds %d ads more than the search serves", over)
 		}
+	}
+}
+
+// A slice that grows past the window while it is walked is cut by the window just the same, so
+// a later page stating it fails the crawl even though the first page fit.
+func TestJobnetFetchFailsWhenASliceGrowsPastTheWindow(t *testing.T) {
+	fake := &jobnetCatalogue{ads: jobnetFakeAds("o1", 9500), growFrom: 3}
+	if _, err := fetchJobnet(t, fake); err == nil {
+		t.Fatal("Fetch: want an error when a later page states more ads than the window serves")
 	}
 }
 
