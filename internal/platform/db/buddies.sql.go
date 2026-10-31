@@ -11,6 +11,29 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const closeBuddyConversationsForLeave = `-- name: CloseBuddyConversationsForLeave :exec
+UPDATE conversations c
+SET status = 'closed', closed_at = now()
+WHERE c.kind = 'buddy'
+  AND c.status IN ('pending', 'open')
+  AND EXISTS (
+      SELECT 1 FROM conversation_participants p
+      WHERE p.conversation_id = c.id AND p.user_id = $1)
+`
+
+// A leave's first statement: close every pending or open buddy conversation the member is
+// in. The conversations are the messaging core's (kind 'buddy'); closing them in the
+// leave's own transaction rather than through the core is what keeps the leave atomic.
+// Not guarded on membership, which is harmless: a left member has no pending or open buddy
+// conversation. It runs BEFORE LockBuddyMemberForLeave on purpose: a block
+// (BlockFromConversation) locks the pair's conversations before its trigger locks their
+// buddy_members rows, so a leave taking the member row first and the conversations second
+// would close a lock cycle with it.
+func (q *Queries) CloseBuddyConversationsForLeave(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, closeBuddyConversationsForLeave, userID)
+	return err
+}
+
 const getBuddyMemberByHandle = `-- name: GetBuddyMemberByHandle :one
 SELECT user_id, handle, category, countries, regions, joined_at, left_at FROM buddy_members WHERE handle = $1
 `
@@ -125,14 +148,18 @@ func (q *Queries) JoinBuddyMember(ctx context.Context, arg JoinBuddyMemberParams
 }
 
 const leaveBuddyMember = `-- name: LeaveBuddyMember :one
-WITH closed AS (
-    UPDATE conversations c
-    SET status = 'closed', closed_at = now()
-    WHERE c.kind = 'buddy'
-      AND c.status IN ('pending', 'open')
-      AND EXISTS (
-          SELECT 1 FROM conversation_participants p
-          WHERE p.conversation_id = c.id AND p.user_id = $1)
+WITH cancelled AS (
+    UPDATE buddy_mocks m
+    SET status = 'cancelled', cancelled_at = now(), cancelled_by = $1::bigint,
+        cancel_reason = 'left'
+    WHERE m.status = 'confirmed'
+      AND m.starts_at > now()
+      AND (m.host_user_id = $1::bigint OR m.guest_user_id = $1::bigint)
+    RETURNING m.id
+), freed AS (
+    UPDATE buddy_mock_participants p
+    SET active = false
+    WHERE p.mock_id IN (SELECT id FROM cancelled)
 )
 UPDATE buddy_members bm
 SET left_at = now()
@@ -140,13 +167,14 @@ WHERE bm.user_id = $1 AND bm.left_at IS NULL
 RETURNING bm.user_id, bm.handle, bm.category, bm.countries, bm.regions, bm.joined_at, bm.left_at
 `
 
-// Opt a member out: stamp left_at and close every pending or open buddy conversation they
-// are in, in one statement so a leave cannot half-apply. The conversations are the
-// messaging core's (kind 'buddy'); closing them here rather than through the core is what
-// keeps the two writes atomic. The row is kept, so rejoining restores the handle. The
-// member update is guarded by left_at IS NULL, so for a member who is not active it
-// returns no row; the conversation close is not guarded, which is harmless because a left
-// member has no pending or open buddy conversation to close.
+// Opt a member out, the leave's last statement: stamp left_at and cancel every future
+// mock they are in (either role, freeing both people's time). Run in one transaction after
+// CloseBuddyConversationsForLeave and LockBuddyMemberForLeave, so a leave cannot
+// half-apply and cannot miss a booking racing it. The row is kept, so rejoining restores
+// the handle. The member update is guarded by left_at IS NULL, so for a member who is not
+// active it returns no row; the cancel is not guarded, which is harmless because a left
+// member has no future mock. cancelled_by is the leaver: the caller claims the
+// cancellation notices by it afterwards.
 func (q *Queries) LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMember, error) {
 	row := q.db.QueryRow(ctx, leaveBuddyMember, userID)
 	var i BuddyMember
@@ -623,6 +651,19 @@ func (q *Queries) ListSimilarBuddies(ctx context.Context, arg ListSimilarBuddies
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockBuddyMemberForLeave = `-- name: LockBuddyMemberForLeave :exec
+SELECT user_id FROM buddy_members WHERE user_id = $1 FOR UPDATE
+`
+
+// The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
+// the member's own row FOR UPDATE, in a statement of its own, before LeaveBuddyMember. A
+// booking holding its share lock makes this wait until the mock is committed, and
+// LeaveBuddyMember, starting a fresh snapshot after the wait, then sees it and cancels it.
+func (q *Queries) LockBuddyMemberForLeave(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, lockBuddyMemberForLeave, userID)
+	return err
 }
 
 const showBuddyApplication = `-- name: ShowBuddyApplication :exec

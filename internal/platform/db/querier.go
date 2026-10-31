@@ -389,6 +389,9 @@ type Querier interface {
 	// that the employer may hold the application, and without it a fresh start for the same job
 	// would find nothing to stop it sending a second one.
 	CancelAutoApplyEntry(ctx context.Context, arg CancelAutoApplyEntryParams) (int64, error)
+	// A participant cancels a confirmed mock before it starts, freeing both people's time in
+	// the same statement. No row: not a participant, already cancelled, or already started.
+	CancelBuddyMock(ctx context.Context, arg CancelBuddyMockParams) (pgtype.UUID, error)
 	// Withdrawal and any other wholesale removal: cancel every future confirmed session at
 	// once, RETURNING enough to notify each seeker. Their notifications are sent after this
 	// commits — a booking cancelled without its seeker being told is worse than one not
@@ -512,6 +515,12 @@ type Querier interface {
 	// park during preview resolution (a captcha, an unscannable page) predicts the identical
 	// outcome the real submission would hit, so there is nothing a retry here would fix either.
 	ClaimAutoApplyPreviewBatch(ctx context.Context, arg ClaimAutoApplyPreviewBatchParams) ([]ClaimAutoApplyPreviewBatchRow, error)
+	// Claim the cancellations an actor caused that nobody has announced yet — by their own
+	// cancel, their leave, or their block (whose trigger cannot return rows). A concurrent
+	// claim waits on the row lock and then matches nothing, so each notice goes out once.
+	// Bounded to future mocks cancelled in the last day: an announcement lost to a crash is not
+	// worth sending weeks later.
+	ClaimBuddyMockCancelNotices(ctx context.Context, actorID int64) ([]pgtype.UUID, error)
 	// The daily cap: claims one of a user's 20 writes for the UTC day, and returns no row
 	// once they are spent, which the caller turns into a 429.
 	ClaimDictionaryGapWrite(ctx context.Context, arg ClaimDictionaryGapWriteParams) (int32, error)
@@ -795,6 +804,15 @@ type Querier interface {
 	// yield, and the chronic pass waits 60 days. jobs_closed_reason_check bounds the values. The
 	// search_delete_outbox CTE rides the statement as in CloseEmptyFeedBoardJobs.
 	CloseBoardJobsWithReason(ctx context.Context, arg CloseBoardJobsWithReasonParams) (int64, error)
+	// A leave's first statement: close every pending or open buddy conversation the member is
+	// in. The conversations are the messaging core's (kind 'buddy'); closing them in the
+	// leave's own transaction rather than through the core is what keeps the leave atomic.
+	// Not guarded on membership, which is harmless: a left member has no pending or open buddy
+	// conversation. It runs BEFORE LockBuddyMemberForLeave on purpose: a block
+	// (BlockFromConversation) locks the pair's conversations before its trigger locks their
+	// buddy_members rows, so a leave taking the member row first and the conversations second
+	// would close a lock cycle with it.
+	CloseBuddyConversationsForLeave(ctx context.Context, userID int64) error
 	// The chronic-board safety net (openspec change close-chronically-unreachable-boards, issue
 	// #2017), board-scoped: closes every open job of ONE board that board_health.ListChronicBoards
 	// has already proven unreachable for the closure window — no per-run cutoff, because the
@@ -1320,6 +1338,8 @@ type Querier interface {
 	// What CloseEmptyFeedProviderJobs would close, for the safety-net worker's dry-run report.
 	// Same board_health re-validation as its close counterpart.
 	CountEmptyFeedProviderJobs(ctx context.Context, arg CountEmptyFeedProviderJobsParams) (int64, error)
+	// The spam bound's count: confirmed mocks the member is a guest in that have not started.
+	CountFutureBuddyMocksAsGuest(ctx context.Context, guestUserID int64) (int64, error)
 	// How many claims this account has filed since a cutoff, for the daily cap. Counts
 	// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
 	// exists to bound, so forgiving it would leave the cap trivially bypassable.
@@ -1410,6 +1430,22 @@ type Querier interface {
 	// 'tailor'); cv_id/job_id bind a tailoring session to its CV and vacancy and are NULL
 	// for a chat. The label is set later, from the first user message.
 	CreateAssistantSession(ctx context.Context, arg CreateAssistantSessionParams) (CreateAssistantSessionRow, error)
+	// Book a mock and both participant rows in ONE statement, after LockBuddyMembersForMock in
+	// the same transaction. The guard repeats, inside the write, what the service read before
+	// it: both people are active members and no block stands between them; a pair that cannot
+	// meet inserts nothing and returns no row. The guard is only race-free because of that
+	// lock: without it a leave or block committing beside this statement is invisible to it,
+	// and its own cancel cannot see this uncommitted mock. The
+	// buddy_mock_participants_no_overlap EXCLUDE refuses a person already in an overlapping
+	// mock in either role; the repository maps that 23P01 to the same "slot unavailable" a
+	// stale page gets.
+	CreateBuddyMock(ctx context.Context, arg CreateBuddyMockParams) (pgtype.UUID, error)
+	// One row, weekly or dated; which one is whichever of weekday and on_date is set.
+	CreateBuddyMockAvailabilityRule(ctx context.Context, arg CreateBuddyMockAvailabilityRuleParams) (BuddyMockAvailability, error)
+	// One review of the other participant, once, between the mock's end and seven days after
+	// it, and only of a confirmed mock. Zero rows: already reviewed (the key) or outside the
+	// rules (the WHERE); the service reads the mock first to say which.
+	CreateBuddyMockReview(ctx context.Context, arg CreateBuddyMockReviewParams) (int64, error)
 	// Insert a new CV for a user. data is the sanitized structured document (JSON). This is the
 	// user's own CV, not a copy made for a vacancy, so is_tailored is stated false rather than left to
 	// be inferred from a NULL job_id — an absence deleting the vacancy also produces. Users may own several of
@@ -1586,6 +1622,7 @@ type Querier interface {
 	// Role demand
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsRoleStats(ctx context.Context) error
+	DeleteAllInsightsSalaryMonthly(ctx context.Context) error
 	// ---------------------------------------------------------------------------
 	// Salary bands
 	// ---------------------------------------------------------------------------
@@ -1643,6 +1680,10 @@ type Querier interface {
 	// Remove a submission once triage has resolved its (provider, board) and inserted the
 	// corresponding boards row.
 	DeleteBoardSubmission(ctx context.Context, id int64) (int64, error)
+	// The user_id guard scopes the delete to the owner's own schedule.
+	DeleteBuddyMockAvailabilityRule(ctx context.Context, arg DeleteBuddyMockAvailabilityRuleParams) (int64, error)
+	// Give a claim back after a failed delivery, so the next run retries.
+	DeleteBuddyMockReminder(ctx context.Context, arg DeleteBuddyMockReminderParams) (int64, error)
 	// Delete a CV owned by the user. Returns the affected-row count so the handler can 404
 	// when nothing was deleted (foreign or missing id).
 	DeleteCV(ctx context.Context, arg DeleteCVParams) (int64, error)
@@ -2004,6 +2045,21 @@ type Querier interface {
 	// purpose, like the folded-slug bounds beside it: the pass is run by hand and rarely, and a wrong
 	// "0 remaining" would end it early.
 	DuplicateMarkerOwnerBackfillBounds(ctx context.Context) (DuplicateMarkerOwnerBackfillBoundsRow, error)
+	// Newest open postings written in the last ten minutes, capped, so cmd/queue-metrics
+	// can ask jobfacts whether a stored employment_type is carried only by boilerplate.
+	//
+	// The window matches IngestDuplicationMetrics and rides the same open-created index.
+	// The cap is 501 rather than unbounded because each row de-TOASTs a description, and
+	// this file's bar is a query that can run every minute beside ingest. 500 is what the
+	// gauge examines; the extra row is how the worker tells a full window from a capped
+	// one without a second scan. Newest first, so a sustained mislabel is in the sample
+	// even when the cap binds.
+	//
+	// The phrase list stays in jobfacts. A SQL copy would drift from the matcher the
+	// catalogue actually uses.
+	//
+	// NOT is_private: a pasted JD is not catalogue intake (internal/job/privatejob).
+	EmploymentBoilerplateCandidates(ctx context.Context) ([]EmploymentBoilerplateCandidatesRow, error)
 	// Re-enables a user-disabled (or auto-disabled) webhook destination without
 	// changing its URL. Resets consecutive_failures for the same reason
 	// UpsertWebhookConfig does: re-enabling is a fresh start, not a standing
@@ -2478,6 +2534,19 @@ type Querier interface {
 	GetBuddyMemberByHandle(ctx context.Context, handle string) (BuddyMember, error)
 	// A member's own row, active or left. The caller decides what left_at means.
 	GetBuddyMemberByUser(ctx context.Context, userID int64) (BuddyMember, error)
+	// What a member page shows: completed mocks (confirmed and ended, either role) and the
+	// count and average of REVEALED reviews about the member. Zeroes, never NULLs.
+	GetBuddyMemberMockSummary(ctx context.Context, subjectUserID int64) (GetBuddyMemberMockSummaryRow, error)
+	// One mock with what both participants' notices need: both handles, the host's CURRENT
+	// zone and link, and both addresses — each address only ever addresses its own owner's
+	// notice. Authorisation is the caller's: this answers for any id. The link is empty unless
+	// the pair can still meet: confirmed, both active members, no block either way. The
+	// writers cancel in that case, and this is the defence should one ever be missed. The same
+	// "can meet" rule is restated in ListBuddyMocksForUser, ListBuddyMocksDueForReminder and
+	// RecordBuddyMockReminder; change all four together.
+	GetBuddyMock(ctx context.Context, id pgtype.UUID) (GetBuddyMockRow, error)
+	// A member's mock-host settings, or no row when they never saved any.
+	GetBuddyMockSettings(ctx context.Context, userID int64) (BuddyMockSetting, error)
 	// The user's saved CV appearance defaults, if any. No row means the user has never saved
 	// any — the caller falls back to the system defaults rather than treating this as an error.
 	GetCVAppearanceDefaults(ctx context.Context, userID int64) (CvAppearanceDefault, error)
@@ -3549,13 +3618,14 @@ type Querier interface {
 	// returns exactly one row — NULL for an empty catalogue — rather than the
 	// no-rows error a bare LIMIT 1 SELECT would give sqlc's :one on an empty table.
 	LatestOpenJobAddedAt(ctx context.Context) (pgtype.Timestamptz, error)
-	// Opt a member out: stamp left_at and close every pending or open buddy conversation they
-	// are in, in one statement so a leave cannot half-apply. The conversations are the
-	// messaging core's (kind 'buddy'); closing them here rather than through the core is what
-	// keeps the two writes atomic. The row is kept, so rejoining restores the handle. The
-	// member update is guarded by left_at IS NULL, so for a member who is not active it
-	// returns no row; the conversation close is not guarded, which is harmless because a left
-	// member has no pending or open buddy conversation to close.
+	// Opt a member out, the leave's last statement: stamp left_at and cancel every future
+	// mock they are in (either role, freeing both people's time). Run in one transaction after
+	// CloseBuddyConversationsForLeave and LockBuddyMemberForLeave, so a leave cannot
+	// half-apply and cannot miss a booking racing it. The row is kept, so rejoining restores
+	// the handle. The member update is guarded by left_at IS NULL, so for a member who is not
+	// active it returns no row; the cancel is not guarded, which is harmless because a left
+	// member has no future mock. cancelled_by is the leaver: the caller claims the
+	// cancellation notices by it afterwards.
 	LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMember, error)
 	// Bind a Discord account to a freehire account, or move an existing binding to a different
 	// Discord account.
@@ -3836,6 +3906,26 @@ type Querier interface {
 	// per-type counts split `events` by the feed's own vocabulary (the predicate admits only
 	// these three), so they always add up to it.
 	ListBuddyMemberActivity(ctx context.Context, arg ListBuddyMemberActivityParams) ([]ListBuddyMemberActivityRow, error)
+	// The most recent revealed reviews about a member, without their authors: who mocked with
+	// whom is a social graph no member page needs to publish.
+	ListBuddyMemberRevealedReviews(ctx context.Context, arg ListBuddyMemberRevealedReviewsParams) ([]ListBuddyMemberRevealedReviewsRow, error)
+	// Every availability row of a member, both shapes: an override only means anything beside
+	// the weekly rules it replaces.
+	ListBuddyMockAvailability(ctx context.Context, userID int64) ([]BuddyMockAvailability, error)
+	// A member's occupied time in a window: every mock they are in, as host or as guest. The
+	// slot engine subtracts it from their availability.
+	ListBuddyMockBusy(ctx context.Context, arg ListBuddyMockBusyParams) ([]ListBuddyMockBusyRow, error)
+	// Confirmed mocks starting inside one offset's window (floor, offset] and not yet reminded
+	// at it, between a pair that can still meet (the GetBuddyMock rule). starts_at > now()
+	// keeps a late run from reminding about a mock already under way.
+	ListBuddyMocksDueForReminder(ctx context.Context, arg ListBuddyMocksDueForReminderParams) ([]pgtype.UUID, error)
+	// A member's own mocks, newest first, with the host's current link while the pair can
+	// still meet (the GetBuddyMock rule), whether the other side may still be drawn (both
+	// active, no block either way — the ListBuddyCounterparts rule), the member's own review,
+	// and the review ABOUT them only once revealed: they have written theirs, or seven days
+	// have passed since the end. The same reveal rule is restated in
+	// GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
+	ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksForUserParams) ([]ListBuddyMocksForUserRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
 	// Every revision of one agent turn or autopilot run that is still standing, newest first —
@@ -4348,6 +4438,8 @@ type Querier interface {
 	// seniorities are the per-grade bands. Bands below the sample floor are already
 	// absent from the rollup.
 	ListInsightsSalaryByCategory(ctx context.Context, category string) ([]ListInsightsSalaryByCategoryRow, error)
+	// One category's stored months, every (currency, period) it has.
+	ListInsightsSalaryHistory(ctx context.Context, category string) ([]ListInsightsSalaryHistoryRow, error)
 	// All retained weekly snapshots for a set of skills (a caller's own profile
 	// skills), newest first per skill.
 	ListInsightsSkillHistory(ctx context.Context, skills []string) ([]InsightsSkillHistory, error)
@@ -5269,6 +5361,19 @@ type Querier interface {
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
+	// The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
+	// the member's own row FOR UPDATE, in a statement of its own, before LeaveBuddyMember. A
+	// booking holding its share lock makes this wait until the mock is committed, and
+	// LeaveBuddyMember, starting a fresh snapshot after the wait, then sees it and cancels it.
+	LockBuddyMemberForLeave(ctx context.Context, userID int64) error
+	// The booking's half of the buddy_members lock protocol: share-lock both participants'
+	// rows, in user_id order, in the booking's transaction and BEFORE CreateBuddyMock. A leave
+	// (LockBuddyMemberForLeave) and a block (the buddy_mocks_cancel_on_block trigger) take the
+	// same rows FOR UPDATE, so a booking and either of them serialise instead of each reading
+	// the other's pre-state. It must be a statement of its own: a statement keeps the snapshot
+	// it started with even after waiting on a row lock, so the eligibility check has to be a
+	// LATER statement to see a leave or block that committed while this one waited.
+	LockBuddyMembersForMock(ctx context.Context, arg LockBuddyMembersForMockParams) error
 	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
 	// user_jobs row that persists for other marks), a company_votes row exists solely to
 	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go
@@ -5966,13 +6071,22 @@ type Querier interface {
 	// aggregate is wrapped so the "non-zero in either window" filter names the counts
 	// once instead of repeating the FILTER expressions in a HAVING.
 	RebuildInsightsRoleStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// The salary history: effective-salary percentiles per (category, currency, period,
+	// month a posting was PUBLISHED), the current month and the eleven before it. Open and
+	// closed postings alike — a posting closed since still records what was offered that
+	// month — and canonical, public ones only. A month a posting belongs to is its
+	// existence date (see the file header), so one found in June but published in March
+	// counts in March. Months under @min_sample are not stored: a line through a handful
+	// of postings a month is noise drawn as a trend.
+	RebuildInsightsSalaryMonthly(ctx context.Context, minSample int32) (int64, error)
 	// Per-country salary bands (same CUBE of role scope, country from unnest).
 	RebuildInsightsSalaryStatsByCountry(ctx context.Context, minSample int32) (int64, error)
 	// Country-agnostic salary bands. CUBE(category, seniority) emits every scope the
 	// endpoint can ask for — the exact (category, seniority) band, the category-only
 	// band (seniority ''), the seniority-only band (category ''), and the overall band
 	// (both '') — all per (currency, period), which is never aggregated across. The
-	// representative figure per job is the min/max midpoint (or whichever bound is
+	// figure per job is its EFFECTIVE salary (jobs_effective_salary, migration 0216:
+	// manual, else source, else enrichment — the min/max midpoint or whichever bound is
 	// present). Only bands at/above @min_sample are stored.
 	RebuildInsightsSalaryStatsGlobal(ctx context.Context, minSample int32) (int64, error)
 	// Per-category skill demand (country '' bucket).
@@ -6120,6 +6234,11 @@ type Querier interface {
 	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) (int32, error)
 	// Closes out one (user, campaign) whether or not the send worked.
 	RecordBroadcastEmail(ctx context.Context, arg RecordBroadcastEmailParams) error
+	// Claim one reminder. Zero rows means another run holds it, or the mock was cancelled or
+	// has started since the due read, or the pair can no longer meet (the GetBuddyMock rule):
+	// send only after this returns 1. The rule is checked here, in the claim, because a batch
+	// leaves time between that read and this statement.
+	RecordBuddyMockReminder(ctx context.Context, arg RecordBuddyMockReminderParams) (int64, error)
 	// Record that this company page was announced to this engine. Idempotent, for the same
 	// reason its job sibling is: the row is what stops a re-run after a partial failure from
 	// spending a bounded budget twice.
@@ -6644,6 +6763,11 @@ type Querier interface {
 	// place, the drain would remove the reopened row after re-adding it) and the row is queued
 	// for the facet index. Returns the rows reopened, 0 when there was nothing to undo.
 	ReopenEmployerJob(ctx context.Context, arg ReopenEmployerJobParams) (int64, error)
+	// Swap the recurring week in one statement, leaving dated overrides alone: half of the
+	// edit applied is a member bookable at hours they just removed. The three arrays are one
+	// row each, zipped back by position (WITH ORDINALITY: sqlc's analyzer does not resolve the
+	// multi-array form of unnest).
+	ReplaceBuddyMockWeekly(ctx context.Context, arg ReplaceBuddyMockWeeklyParams) error
 	// The whole schedule as an operator reads it: every eligible provider, its override if it
 	// has one, and what its runs have actually been doing. Aggregated per provider rather than
 	// per shard, because the question this answers is "is anything not running?" and 24
@@ -7844,6 +7968,8 @@ type Querier interface {
 	// is a pure function of the raw fields, so the write is idempotent. COALESCE maps a nil
 	// array arg to '{}' for the NOT NULL array columns; work_mode is written as given by the
 	// caller, which preserves an already-set (possibly adapter-structured) value.
+	// employment_type is likewise the caller's: a stored type is kept, except a part_time
+	// the text parser now attributes only to a pay-policy sentence (jobderive.RetainEmploymentType).
 	//
 	// updated_at is bumped ONLY when role_fingerprint actually moves (the SET clause reads
 	// the pre-update row, so the guard compares the stored fingerprint to the new one): a
@@ -7935,6 +8061,9 @@ type Querier interface {
 	// form, and a re-capture supersedes rather than accumulates. captured_at is refreshed on
 	// every write so a form's age always describes the payload actually stored.
 	UpsertApplyForm(ctx context.Context, arg UpsertApplyFormParams) error
+	// Save the whole settings block. The service validates zone, link and topics first; the
+	// CHECKs repeat the link and topic rules so no other writer can skip them.
+	UpsertBuddyMockSettings(ctx context.Context, arg UpsertBuddyMockSettingsParams) (BuddyMockSetting, error)
 	// Replaces the user's CV appearance defaults wholesale — there is exactly one row per user,
 	// so a save always means "this is the new complete set", never a partial patch.
 	UpsertCVAppearanceDefaults(ctx context.Context, arg UpsertCVAppearanceDefaultsParams) (CvAppearanceDefault, error)

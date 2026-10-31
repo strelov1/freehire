@@ -87,4 +87,12 @@ describe('notificationTarget', () => {
       slug: 'acme-go-engineer',
     });
   });
+
+  // A mock notice carries no slug: it opens the member's own mock interviews, the page its
+  // email links to as well.
+  it('sends every buddy mock notice to the mock interviews page', () => {
+    for (const kind of ['buddy_mock_booked', 'buddy_mock_cancelled', 'buddy_mock_reminder'] as const) {
+      expect(notificationTarget({ kind, public_slug: null })).toEqual({ kind: 'mocks' });
+    }
+  });
 });

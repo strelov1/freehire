@@ -311,7 +311,8 @@ DELETE FROM insights_salary_stats;
 -- endpoint can ask for — the exact (category, seniority) band, the category-only
 -- band (seniority ''), the seniority-only band (category ''), and the overall band
 -- (both '') — all per (currency, period), which is never aggregated across. The
--- representative figure per job is the min/max midpoint (or whichever bound is
+-- figure per job is its EFFECTIVE salary (jobs_effective_salary, migration 0216:
+-- manual, else source, else enrichment — the min/max midpoint or whichever bound is
 -- present). Only bands at/above @min_sample are stored.
 INSERT INTO insights_salary_stats (category, seniority, country, currency, period, sample_size, p25, p50, p75)
 SELECT
@@ -325,21 +326,10 @@ SELECT
     percentile_cont(0.50) WITHIN GROUP (ORDER BY sal)::int,
     percentile_cont(0.75) WITHIN GROUP (ORDER BY sal)::int
 FROM (
-    SELECT
-        category,
-        seniority,
-        upper(enrichment->>'salary_currency') AS currency,
-        enrichment->>'salary_period'   AS period,
-        coalesce(
-            (nullif(enrichment->>'salary_min', '')::numeric + nullif(enrichment->>'salary_max', '')::numeric) / 2,
-            nullif(enrichment->>'salary_min', '')::numeric,
-            nullif(enrichment->>'salary_max', '')::numeric
-        ) AS sal
-    FROM jobs
-    WHERE closed_at IS NULL
+    SELECT category, seniority, currency, period, amount AS sal
+    FROM jobs_effective_salary
+    WHERE closed_at IS NULL AND NOT is_private
       AND category <> '' AND seniority <> ''
-      AND coalesce(enrichment->>'salary_currency', '') <> ''
-      AND coalesce(enrichment->>'salary_period', '') <> ''
 ) s
 WHERE sal IS NOT NULL
 GROUP BY currency, period, CUBE(category, seniority)
@@ -359,26 +349,56 @@ SELECT
     percentile_cont(0.50) WITHIN GROUP (ORDER BY sal)::int,
     percentile_cont(0.75) WITHIN GROUP (ORDER BY sal)::int
 FROM (
-    SELECT
-        category,
-        seniority,
-        country,
-        upper(enrichment->>'salary_currency') AS currency,
-        enrichment->>'salary_period'   AS period,
-        coalesce(
-            (nullif(enrichment->>'salary_min', '')::numeric + nullif(enrichment->>'salary_max', '')::numeric) / 2,
-            nullif(enrichment->>'salary_min', '')::numeric,
-            nullif(enrichment->>'salary_max', '')::numeric
-        ) AS sal
-    FROM jobs, unnest(countries) AS country
-    WHERE closed_at IS NULL
+    SELECT category, seniority, country, currency, period, amount AS sal
+    FROM jobs_effective_salary, unnest(countries) AS country
+    WHERE closed_at IS NULL AND NOT is_private
       AND category <> '' AND seniority <> ''
-      AND coalesce(enrichment->>'salary_currency', '') <> ''
-      AND coalesce(enrichment->>'salary_period', '') <> ''
 ) s
 WHERE sal IS NOT NULL
 GROUP BY country, currency, period, CUBE(category, seniority)
 HAVING count(*) >= sqlc.arg('min_sample')::int;
+
+-- name: DeleteAllInsightsSalaryMonthly :exec
+DELETE FROM insights_salary_monthly;
+
+-- name: RebuildInsightsSalaryMonthly :execrows
+-- The salary history: effective-salary percentiles per (category, currency, period,
+-- month a posting was PUBLISHED), the current month and the eleven before it. Open and
+-- closed postings alike — a posting closed since still records what was offered that
+-- month — and canonical, public ones only. A month a posting belongs to is its
+-- existence date (see the file header), so one found in June but published in March
+-- counts in March. Months under @min_sample are not stored: a line through a handful
+-- of postings a month is noise drawn as a trend.
+INSERT INTO insights_salary_monthly (category, currency, period, month, sample_size, p25, p50, p75)
+SELECT
+    category,
+    currency,
+    period,
+    month,
+    count(*)::int,
+    percentile_cont(0.25) WITHIN GROUP (ORDER BY amount)::int,
+    percentile_cont(0.50) WITHIN GROUP (ORDER BY amount)::int,
+    percentile_cont(0.75) WITHIN GROUP (ORDER BY amount)::int
+FROM (
+    -- Months are UTC calendar months, so a posting near midnight on the 1st lands in
+    -- the month the page's own UTC clock calls current, whatever the session TimeZone.
+    -- A publication date in the future (bad source data) is no month at all yet.
+    SELECT category, currency, period, amount,
+           date_trunc('month', LEAST(posted_at, created_at) AT TIME ZONE 'UTC')::date AS month
+    FROM jobs_effective_salary
+    WHERE category <> '' AND duplicate_of IS NULL AND NOT is_private
+      AND LEAST(posted_at, created_at) AT TIME ZONE 'UTC' >= date_trunc('month', now() AT TIME ZONE 'UTC') - interval '11 months'
+      AND LEAST(posted_at, created_at) <= now()
+) s
+GROUP BY category, currency, period, month
+HAVING count(*) >= sqlc.arg('min_sample')::int;
+
+-- name: ListInsightsSalaryHistory :many
+-- One category's stored months, every (currency, period) it has.
+SELECT currency, period, month, sample_size, p25, p50, p75
+FROM insights_salary_monthly
+WHERE category = sqlc.arg('category')::text
+ORDER BY currency, period, month;
 
 -- name: ListInsightsSalary :many
 -- Salary bands for one role × country scope, one row per (currency, period),

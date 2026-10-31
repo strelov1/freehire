@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/application/gmailsync"
+	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // The statuses a booking holds. There is no `completed`: completion is not a decision
@@ -299,7 +300,7 @@ func (s *Service) slotIsOfferable(ctx context.Context, mentor Profile, start tim
 		// A stored zone that no longer resolves is a broken row, not a bad request: the
 		// mentor has no schedule at all until it is fixed, and guessing one would offer
 		// hours nobody stated.
-		return false, fmt.Errorf("%w: mentor %d has timezone %q", ErrNoMentorZone, mentor.ID, mentor.Timezone)
+		return false, fmt.Errorf("%w: mentor %d has timezone %q", slots.ErrNoOwnerZone, mentor.ID, mentor.Timezone)
 	}
 
 	from := start.AddDate(0, 0, -1)
@@ -314,9 +315,9 @@ func (s *Service) slotIsOfferable(ctx context.Context, mentor Profile, start tim
 		return false, err
 	}
 
-	result, err := Slots(SlotRequest{
+	result, err := slots.Slots(slots.SlotRequest{
 		Rules:      rules,
-		MentorZone: zone,
+		OwnerZone:  zone,
 		Params:     mentor.Session,
 		Busy:       busy,
 		From:       from,

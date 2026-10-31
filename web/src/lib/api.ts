@@ -151,6 +151,12 @@ import type {
   BuddyFeedPage,
   BuddyProfile,
   BuddyActivity,
+  BuddyMock,
+  BuddyMocks,
+  BuddyMockSettings,
+  BuddyMockSlots,
+  BuddyMockSummary,
+  BuddyMockTopic,
   Conversation,
   ConversationMessage,
   ConversationReport,
@@ -256,6 +262,17 @@ export interface InsightSkill {
   open_count: number;
   growth: number;
 }
+/** One month of a category's salary history (`month` is YYYY-MM). */
+export interface InsightSalaryMonth {
+  currency: string;
+  period: string;
+  month: string;
+  sample_size: number;
+  p25: number;
+  p50: number;
+  p75: number;
+}
+
 export interface InsightSalaryBand {
   seniority: string;
   currency: string;
@@ -1198,6 +1215,13 @@ export function createApi(
   /** Every seniority's salary bands for one category, in a single call (the
    *  per-category salary page). Rows carry their own `seniority` ('' = the
    *  category-wide band). */
+  /** One category's monthly salary history, every (currency, period) it has. */
+  async function insightsSalaryHistory(category: string): Promise<InsightSalaryMonth[]> {
+    return requestData<InsightSalaryMonth[]>(
+      `/api/v1/insights/salary/history?category=${encodeURIComponent(category)}`,
+    );
+  }
+
   async function insightsSalaryByCategory(category: string): Promise<InsightSalaryBand[]> {
     return requestData<InsightSalaryBand[]>(
       `/api/v1/insights/salary?category=${encodeURIComponent(category)}`,
@@ -2412,6 +2436,62 @@ export function createApi(
     return requestData('/api/v1/me/buddies/invite', jsonBody('POST', { handle, body }));
   }
 
+  // ── Buddy mock interviews ────────────────────────────────────────────────
+  async function getBuddyMockSettings(): Promise<BuddyMockSettings | null> {
+    return requestData('/api/v1/me/buddies/mocks/settings');
+  }
+  async function saveBuddyMockSettings(settings: BuddyMockSettings): Promise<BuddyMockSettings> {
+    return requestData('/api/v1/me/buddies/mocks/settings', jsonBody('PUT', settings));
+  }
+  async function myBuddyMockAvailability(): Promise<MentorAvailabilityRule[]> {
+    return requestData('/api/v1/me/buddies/mocks/availability');
+  }
+  /** The whole recurring week, as the mentor schedule's PUT. 204, so callers re-read. */
+  async function replaceBuddyMockWeekly(rules: { weekday: number; start: string; end: string }[]): Promise<void> {
+    await call('/api/v1/me/buddies/mocks/availability/weekly', jsonBody('PUT', { rules }));
+  }
+  async function addBuddyMockOverride(date: string, start: string, end: string): Promise<MentorAvailabilityRule> {
+    return requestData('/api/v1/me/buddies/mocks/availability/overrides', jsonBody('POST', { date, start, end }));
+  }
+  async function deleteBuddyMockAvailabilityRule(id: number): Promise<void> {
+    await call(`/api/v1/me/buddies/mocks/availability/${id}`, { method: 'DELETE' });
+  }
+  /** A member's open mock slots in the viewer's zone and the topics they host. The answer's
+   *  `timezone` is the zone actually used, as with mentor slots. Never carries the link. */
+  async function getBuddyMockSlots(
+    handle: string,
+    from: string,
+    to: string,
+    timezone: string,
+    signal?: AbortSignal,
+  ): Promise<BuddyMockSlots> {
+    const params = new URLSearchParams({ from, to });
+    if (timezone) params.set('timezone', timezone);
+    const res = await request<{ data: MentorSlot[]; meta: { timezone: string; topics: BuddyMockTopic[] } }>(
+      `/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}/mock-slots?${params}`,
+      { signal },
+    );
+    return { slots: res.data, timezone: res.meta.timezone, topics: res.meta.topics };
+  }
+  async function bookBuddyMock(
+    handle: string,
+    body: { starts_at: string; topic: BuddyMockTopic; timezone: string },
+  ): Promise<BuddyMock> {
+    return requestData(`/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}/mocks`, jsonBody('POST', body));
+  }
+  async function listBuddyMocks(): Promise<BuddyMocks> {
+    return requestData('/api/v1/me/buddies/mocks');
+  }
+  async function cancelBuddyMock(id: string): Promise<void> {
+    await call(`/api/v1/me/buddies/mocks/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+  }
+  async function reviewBuddyMock(id: string, rating: number, comment: string): Promise<void> {
+    await call(`/api/v1/me/buddies/mocks/${encodeURIComponent(id)}/review`, jsonBody('POST', { rating, comment }));
+  }
+  async function getBuddyMockSummary(handle: string): Promise<BuddyMockSummary> {
+    return requestData(`/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}/mock-reviews`);
+  }
+
   // ── Conversations (the messaging core, every kind) ───────────────────────
   async function listConversations(): Promise<Conversation[]> { return requestData('/api/v1/me/conversations'); }
   async function answerConversation(id: number, action: 'accept' | 'decline'): Promise<Conversation> {
@@ -3264,6 +3344,7 @@ export function createApi(
     searchCities,
     insightsRoles,
     insightsRoleCountries,
+    insightsSalaryHistory,
     insightsRole,
     insightsSkills,
     insightsSalaryByCategory,
@@ -3419,6 +3500,18 @@ export function createApi(
     listBuddyHiddenApplications,
     setBuddyApplicationHidden,
     inviteBuddy,
+    getBuddyMockSettings,
+    saveBuddyMockSettings,
+    myBuddyMockAvailability,
+    replaceBuddyMockWeekly,
+    addBuddyMockOverride,
+    deleteBuddyMockAvailabilityRule,
+    getBuddyMockSlots,
+    bookBuddyMock,
+    listBuddyMocks,
+    cancelBuddyMock,
+    reviewBuddyMock,
+    getBuddyMockSummary,
     listConversations,
     answerConversation,
     blockConversation,

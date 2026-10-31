@@ -11,6 +11,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
+	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // mentorshipHandlers serves the mentorship marketplace: the public directory and its
@@ -341,8 +342,22 @@ func (h *mentorshipHandlers) GetMentorSlots(c *fiber.Ctx) error {
 		return mentorshipError(err)
 	}
 
-	out := make([]slotResponse, 0, len(result.Slots))
-	for _, s := range result.Slots {
+	out := slotResponses(result.Slots)
+
+	// The zone is echoed because it may NOT be the one that was asked for: an
+	// unrecognised name falls back to UTC, and a client that does not know which zone it
+	// was answered in cannot tell a correct time from a wrong one.
+	return c.JSON(fiber.Map{
+		"data": out,
+		"meta": fiber.Map{"timezone": result.Zone, "count": len(out)},
+	})
+}
+
+// slotResponses renders engine slots for the wire: the instant, the wall clock and the
+// offset, for the reasons slotResponse gives. Buddy mock slots use it too.
+func slotResponses(ivs []slots.Interval) []slotResponse {
+	out := make([]slotResponse, 0, len(ivs))
+	for _, s := range ivs {
 		_, offset := s.Start.Zone()
 		out = append(out, slotResponse{
 			StartsAt:   s.Start.UTC(),
@@ -352,14 +367,7 @@ func (h *mentorshipHandlers) GetMentorSlots(c *fiber.Ctx) error {
 			UTCOffset:  offsetLabel(offset),
 		})
 	}
-
-	// The zone is echoed because it may NOT be the one that was asked for: an
-	// unrecognised name falls back to UTC, and a client that does not know which zone it
-	// was answered in cannot tell a correct time from a wrong one.
-	return c.JSON(fiber.Map{
-		"data": out,
-		"meta": fiber.Map{"timezone": result.Zone, "count": len(out)},
-	})
+	return out
 }
 
 // maxSlotWindowDays bounds how much a single request may ask to have computed. The
@@ -409,13 +417,13 @@ func mentorshipError(err error) error {
 	case errors.Is(err, mentorship.ErrNotAuthenticated):
 		return fiber.NewError(fiber.StatusUnauthorized, "sign in to book a session")
 	case errors.Is(err, mentorship.ErrInvalidProfile),
-		errors.Is(err, mentorship.ErrInvalidSessionParams),
+		errors.Is(err, slots.ErrInvalidSessionParams),
 		errors.Is(err, mentorship.ErrInvalidReview),
 		errors.Is(err, mentorship.ErrCannotBookYourself),
-		errors.Is(err, mentorship.ErrInvalidTimeOfDay),
-		errors.Is(err, mentorship.ErrInvalidDate),
-		errors.Is(err, mentorship.ErrInvalidWeekday),
-		errors.Is(err, mentorship.ErrInvalidSpan):
+		errors.Is(err, slots.ErrInvalidTimeOfDay),
+		errors.Is(err, slots.ErrInvalidDate),
+		errors.Is(err, slots.ErrInvalidWeekday),
+		errors.Is(err, slots.ErrInvalidSpan):
 		return fiber.NewError(fiber.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, mentorship.ErrProfileNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "mentor not found")
@@ -440,7 +448,7 @@ func mentorshipError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "this session can no longer be cancelled")
 	case errors.Is(err, mentorship.ErrSessionNotCompleted):
 		return fiber.NewError(fiber.StatusConflict, "this session has not taken place yet")
-	case errors.Is(err, mentorship.ErrNoMentorZone):
+	case errors.Is(err, slots.ErrNoOwnerZone):
 		// A stored zone that no longer resolves is a broken row, not a bad request.
 		return fiber.NewError(fiber.StatusInternalServerError, "this mentor's schedule is misconfigured")
 	default:

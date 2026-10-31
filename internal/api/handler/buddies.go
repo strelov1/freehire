@@ -20,10 +20,11 @@ import (
 // member.
 type buddyHandlers struct {
 	buddy *buddy.Service
+	mocks *buddy.MockService
 }
 
-func newBuddyHandlers(svc *buddy.Service) *buddyHandlers {
-	return &buddyHandlers{buddy: svc}
+func newBuddyHandlers(svc *buddy.Service, mocks *buddy.MockService) *buddyHandlers {
+	return &buddyHandlers{buddy: svc, mocks: mocks}
 }
 
 func (h *buddyHandlers) register(api fiber.Router, mw middleware) {
@@ -38,6 +39,7 @@ func (h *buddyHandlers) register(api fiber.Router, mw middleware) {
 	api.Put("/me/buddies/hidden-applications/:id", mw.cookie, h.HideApplication)
 	api.Delete("/me/buddies/hidden-applications/:id", mw.cookie, h.ShowApplication)
 	api.Post("/me/buddies/invite", mw.cookie, h.Invite)
+	h.registerMocks(api, mw)
 }
 
 // buddyError renders a buddy sentinel as the status its declaration documents, and a
@@ -120,6 +122,9 @@ func (h *buddyHandlers) Leave(c *fiber.Ctx) error {
 	if err := h.buddy.Leave(c.Context(), userID); err != nil {
 		return buddyError(err)
 	}
+	// The leave cancelled the member's future mocks in its own statement; this tells the
+	// other participants.
+	h.mocks.AnnounceCancellations(c.Context(), userID)
 	return c.SendStatus(fiber.StatusNoContent)
 }
 

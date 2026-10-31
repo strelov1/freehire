@@ -105,9 +105,21 @@ type snapshot struct {
 	newestJob time.Time
 	// providers is also the fleet: freehire_boards_total is their sum, so the two board
 	// families are one measurement published twice and cannot disagree.
-	providers []providerHealth
-	ingest    []ingestVolume
-	sources   []sourceQuality
+	providers   []providerHealth
+	ingest      []ingestVolume
+	sources     []sourceQuality
+	boilerplate employmentBoilerplate
+}
+
+type boilerplateCount struct {
+	kind  string
+	count int64
+}
+
+type employmentBoilerplate struct {
+	counts     []boilerplateCount
+	sampleSize int64
+	truncated  bool
 }
 
 // fleet is the whole board fleet, summed from the per-provider rows rather than measured
@@ -298,7 +310,31 @@ func render(s snapshot) string {
 		fmt.Fprintf(&b, "freehire_source_stats_measured_timestamp_seconds %d\n", s.sources[0].measuredAt.Unix())
 	}
 
+	writeEmploymentBoilerplate(&b, s.boilerplate)
+
 	return b.String()
+}
+
+func writeEmploymentBoilerplate(b *strings.Builder, measured employmentBoilerplate) {
+	counts := make(map[string]int64, len(measured.counts))
+	for _, c := range measured.counts {
+		counts[c.kind] = c.count
+	}
+	writeHeader(b, "freehire_employment_boilerplate",
+		"Open postings in the recent sample whose stored employment type is explained only by boilerplate the dictionary ignores.")
+	for _, kind := range employmentBoilerplateKinds {
+		fmt.Fprintf(b, "freehire_employment_boilerplate{kind=%q} %d\n", kind, counts[kind])
+	}
+	writeHeader(b, "freehire_employment_boilerplate_sample_size",
+		"Open postings examined for an employment-type boilerplate label, at most 500.")
+	fmt.Fprintf(b, "freehire_employment_boilerplate_sample_size %d\n", measured.sampleSize)
+	truncated := 0
+	if measured.truncated {
+		truncated = 1
+	}
+	writeHeader(b, "freehire_employment_boilerplate_truncated",
+		"1 when the employment-type boilerplate sample hit its cap and older rows in the window were not examined.")
+	fmt.Fprintf(b, "freehire_employment_boilerplate_truncated %d\n", truncated)
 }
 
 // boardState pairs one of the four mutually exclusive board health states with how many

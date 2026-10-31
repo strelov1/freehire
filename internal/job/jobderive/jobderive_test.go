@@ -104,6 +104,26 @@ func TestDerive_StructuredEmploymentTypeWins(t *testing.T) {
 	}
 }
 
+func TestRetainEmploymentType(t *testing.T) {
+	const disclaimer = "Salaries for part-time roles will be pro-rated based on number of hours regularly worked."
+	cases := []struct {
+		name, stored, title, desc, want string
+	}{
+		{"ats full time survives the pay policy", "full_time", "Manager", disclaimer, "full_time"},
+		{"ats part time with no phrase is kept", "part_time", "Analyst", "Build the risk platform.", "part_time"},
+		{"real part-time sentence is kept", "part_time", "Barista", "This is a part-time role, 20h/week. " + disclaimer, "part_time"},
+		{"disclaimer-only part time is dropped", "part_time", "Manager", disclaimer, ""},
+		{"empty stays empty", "", "Manager", disclaimer, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := RetainEmploymentType(c.stored, c.title, c.desc); got != c.want {
+				t.Errorf("RetainEmploymentType(%q) = %q, want %q", c.stored, got, c.want)
+			}
+		})
+	}
+}
+
 // Education and English level were the last two facets with no structured tier: both
 // were always read out of the description by English-language matchers, so a platform
 // that STATES them — Profession.hu publishes each as a closed picklist — had nowhere to

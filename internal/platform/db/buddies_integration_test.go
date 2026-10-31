@@ -97,6 +97,11 @@ func TestBuddyMembershipQueries(t *testing.T) {
 	}
 	conv := started.ID
 
+	// The leave is three statements in one transaction in production (see
+	// buddy.QueriesRepository.Leave); this checks the two that write.
+	if err := q.CloseBuddyConversationsForLeave(ctx, user); err != nil {
+		t.Fatalf("close conversations: %v", err)
+	}
 	left, err := q.LeaveBuddyMember(ctx, user)
 	if err != nil {
 		t.Fatalf("leave: %v", err)

@@ -253,6 +253,12 @@ type Stats struct {
 	// only part of it, so it must never prove coverage (boardQualifies). It is not Failed: the
 	// board did nothing wrong, the run simply ran out of time around it.
 	Interrupted int
+	// SeenUnknown counts boards a hydrating adapter crawled without the catalogue's seen-set,
+	// because the lookup failed. Every stored posting then reads as new, so a budgeted adapter
+	// yields only its budget of them and refreshes none of the rest: the crawl is no evidence
+	// of what is gone, and the board's close scopes are withheld (boardQualifies, the company
+	// scope through UnprovenCompanies, cmd/ingest's source scope).
+	SeenUnknown int
 	// QualifyingBoards lists, per provider once merged into RunStats, the boards this run
 	// structurally PROVED it covered — see boardQualifies. It is the post-run sweep's board
 	// scope input (freehire#2328): cmd/ingest still gates a board-scoped close on the
@@ -293,6 +299,7 @@ func (s *Stats) add(o Stats) {
 	s.ATSCovered += o.ATSCovered
 	s.Unreadable += o.Unreadable
 	s.Interrupted += o.Interrupted
+	s.SeenUnknown += o.SeenUnknown
 	s.QualifyingBoards = append(s.QualifyingBoards, o.QualifyingBoards...)
 	s.EmptyBoards = append(s.EmptyBoards, o.EmptyBoards...)
 	s.UnprovenCompanies = append(s.UnprovenCompanies, o.UnprovenCompanies...)
@@ -540,14 +547,14 @@ func (r Runner) probeProvider(ctx context.Context, src sources.Source, boards []
 		if !ok {
 			continue
 		}
-		raw, seen, deferred, err := r.fetchBoard(ctx, candidate, src)
+		fetched, err := r.fetchBoard(ctx, candidate, src)
 		if err != nil {
 			continue
 		}
 		if streaming {
 			return candidate, Stats{}, false, true
 		}
-		return candidate, r.ingestFetched(ctx, candidate, raw, seen, deferred), true, true
+		return candidate, r.ingestFetched(ctx, candidate, fetched), true, true
 	}
 	return sources.CompanyEntry{}, Stats{}, false, false
 }
@@ -636,7 +643,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		return st
 	}
 
-	raw, seen, deferred, err := r.fetchBoard(ctx, e, src)
+	fetched, err := r.fetchBoard(ctx, e, src)
 	if err != nil && (ctx.Err() != nil || limiterOutOfRun(err)) {
 		// The run's context ended under the fetch, or a rate limiter refused the request
 		// because it could not be sent before that end: running out of time is not the board's
@@ -651,7 +658,7 @@ func (r Runner) ingestBoard(ctx context.Context, e sources.CompanyEntry) Stats {
 		r.recordFailure(ctx, e, err.Error())
 		return Stats{Failed: 1}
 	}
-	return r.ingestFetched(ctx, e, raw, seen, deferred)
+	return r.ingestFetched(ctx, e, fetched)
 }
 
 // fillCompanyDescription calls a CompanyDescriber adapter at most once per board, and only
@@ -700,10 +707,11 @@ func (r Runner) fillCompanyDescription(ctx context.Context, e sources.CompanyEnt
 // same fetch into a full ingest (see probeProvider) instead of discarding the result and
 // having the main loop fetch the board a second time.
 //
-// deferred reports that a hydrating adapter left a NEW posting it listed un-hydrated (its detail
-// budget ran out, or the detail failed): the board has work pending, so this crawl does not
-// count as quiet.
-func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool, deferred bool) Stats {
+// A deferred board (fetchedBoard.deferred) has work pending, so its crawl does not count as
+// quiet; one crawled without its seen-set (fetchedBoard.seenUnknown) is no evidence of what is
+// gone, so its close scopes are withheld.
+func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, fetched fetchedBoard) Stats {
+	raw, seen := fetched.jobs, fetched.seen
 	canon := r.resolveCompanyAliases(ctx, e, raw)
 	covered := r.aggregatorCoverageForBatch(ctx, e, raw, canon)
 	st, rej, firstErr := r.writeBoard(ctx, e, raw, seen, covered, canon)
@@ -734,7 +742,7 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 		listed[i] = j.ExternalID
 	}
 	fingerprint := ""
-	if !deferred {
+	if !fetched.deferred {
 		fingerprint = r.completeListingFingerprint(ctx, r.Registry[e.Provider], listed, st)
 	}
 	r.recordSuccess(ctx, e, st.Ingested, boardListedAnyPosting(st), fingerprint)
@@ -742,7 +750,14 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw [
 	// so this run's close scopes are withheld for every employer the board carries — the board
 	// scope through boardQualifies, the company scope through these slugs. Announced because
 	// an operator otherwise sees only a sweep that closed nothing.
-	if !boardReadWhatItListed(st) {
+	if fetched.seenUnknown {
+		st.SeenUnknown = 1
+		st.UnprovenCompanies = resolveAll(canon, distinctCompanySlugs(raw))
+		// raw names only the companies of what the adapter yielded; a company found only among
+		// the postings it left out could still be closed through another board's crawl, so the
+		// board itself is excluded too.
+		st.SkippedBoards = append(st.SkippedBoards, skippedBoard(e)...)
+	} else if !boardReadWhatItListed(st) {
 		st.UnprovenCompanies = resolveAll(canon, distinctCompanySlugs(raw))
 		log.Printf("ingest: %s board %q (%s): %d/%d postings unreadable — withholding this run's stale-job close for it",
 			e.Provider, e.Board, e.Company, st.Unreadable, len(raw))
@@ -1119,16 +1134,17 @@ func (r Runner) save(ctx context.Context, dj job.Job, form *applyform.Form) erro
 // tech evidence, which the caller needs to judge a liveness refresh against the same rule as a
 // write. A non-hydrating board has no seen-set and returns nil, which reads as "no evidence" for
 // every lookup — harmless, because such a board yields no refreshes.
-func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) ([]sources.Job, map[string]bool, bool, error) {
+func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sources.Source) (fetchedBoard, error) {
 	hs, hydrating := src.(sources.HydratingSource)
 	sl, canLookUp := r.Store.(SeenLookup)
 	if !hydrating || !canLookUp {
 		jobs, err := src.Fetch(ctx, e)
-		return jobs, nil, false, err
+		return fetchedBoard{jobs: jobs}, err
 	}
 	set, err := sl.ExistingExternalIDs(ctx, e.Provider, e.Board)
-	if err != nil {
-		log.Printf("ingest: %s board %q seen-set lookup failed, hydrating every posting as new: %v",
+	seenUnknown := err != nil
+	if seenUnknown {
+		log.Printf("ingest: %s board %q seen-set lookup failed, hydrating every posting as new and withholding its closes: %v",
 			e.Provider, e.Board, err)
 		set = nil
 	}
@@ -1167,11 +1183,22 @@ func (r Runner) fetchBoard(ctx context.Context, e sources.CompanyEntry, src sour
 		if covered := r.coverageProbe(ctx, e); covered != nil {
 			gate := sources.DetailGate{Covered: covered, Rejected: listingRejected(e)}
 			jobs, err := cg.FetchNewGated(ctx, e, seen, gate)
-			return jobs, set, deferredAny(jobs), err
+			return fetchedBoard{jobs, set, deferredAny(jobs), seenUnknown}, err
 		}
 	}
 	jobs, err := hs.FetchNew(ctx, e, seen)
-	return jobs, set, deferredAny(jobs), err
+	return fetchedBoard{jobs, set, deferredAny(jobs), seenUnknown}, err
+}
+
+// fetchedBoard is what fetchBoard read from one board. deferred reports that a hydrating adapter
+// left a NEW posting it listed un-hydrated (its detail budget ran out, or the detail failed), so
+// the board has work pending; seenUnknown that the seen-set lookup failed, so every stored
+// posting read as new (see Stats.SeenUnknown).
+type fetchedBoard struct {
+	jobs        []sources.Job
+	seen        map[string]bool
+	deferred    bool
+	seenUnknown bool
 }
 
 // coverageProbe builds the resolver a CoverageGated adapter consults mid-crawl: given the

@@ -16,6 +16,13 @@ func TestEmploymentType(t *testing.T) {
 		{"internship", "Software Engineering Intern", "A summer internship program.", "internship"},
 		{"intern word not internal", "Engineer", "Work on internal international internet tools.", ""},
 		{"part time", "Barista", "This is a part-time role, 20h/week.", "part_time"},
+		{"pay policy is not the schedule", "Manager, Capital Data Analytics", "Salaries for part-time roles will be pro-rated based on number of hours regularly worked.", ""},
+		{"pay policy does not hide a real part-time role", "Barista", "This is a part-time role, 20h/week. Salaries for part-time roles will be pro-rated.", "part_time"},
+		{"part-time title survives the pay policy", "Part-time Analyst", "Salaries for part-time roles will be pro-rated based on hours regularly worked.", "part_time"},
+		{"singular part-time role with prorated pay still counts", "Clerk", "This part-time role is paid a pro-rated salary.", "part_time"},
+		{"agreement contract is not an employment type", "Manager", "A recruiting agency must have an executed agency agreement contract for service.", ""},
+		{"contract position still counts beside the agreement boilerplate", "Dev", "12-month contract position. Agency agreement contract for service.", "contract"},
+		{"bmo salary policy and recruiter note state no schedule", "Manager, Capital Data Analytics", "Salaries for part-time roles will be pro-rated based on number of hours regularly worked. A recruiting agency must first have a valid, written and fully executed agency agreement contract for service to submit resumes.", ""},
 		{"contract", "Consultant", "6-month contract, fixed-term engagement.", "contract"},
 		{"contractor", "Dev", "We hire a contractor for this.", "contract"},
 		{"freelance", "Designer", "Freelance, remote.", "contract"},
@@ -30,6 +37,20 @@ func TestEmploymentType(t *testing.T) {
 		{"b2b product prose is not contract", "Engineer", "Join us building a b2b product for enterprises.", ""},
 		{"c2c marketplace is not contract", "Engineer", "We run a C2C marketplace for hobbyists.", ""},
 		{"full time", "Engineer", "Full-time, permanent position.", "full_time"},
+		{"full-time pay policy is not the schedule", "Manager", "Salaries for full-time roles are not pro-rated. Salaries for part-time roles will be pro-rated.", ""},
+		{"real full-time survives the pay policy", "Engineer", "This is a full-time role. Salaries for full-time roles are not pro-rated.", "full_time"},
+		{"full-time title survives the pay policy", "Full-time Analyst", "Salaries for full-time employees will not be pro-rated.", "full_time"},
+		{"permanent employees pay policy is not the schedule", "Manager", "Pay for permanent employees is not pro-rated.", ""},
+		{"permanent resident is not full-time", "Engineer", "Applicants must be a permanent resident or a citizen.", ""},
+		{"permanent resident status is not full-time", "Engineer", "Applicants must hold permanent resident status.", ""},
+		{"permanent status is the schedule", "Engineer", "This role is permanent status.", "full_time"},
+		{"permanent position still counts beside residency", "Engineer", "Permanent position. Applicants must be a permanent resident.", "full_time"},
+		{"contract for service is the arrangement", "Dev", "Engaged on a contract for service.", "contract"},
+		{"temporary visa is not a contract", "Engineer", "We do not sponsor a temporary visa.", ""},
+		{"temporary housing is not a contract", "Engineer", "Temporary housing for the first month.", ""},
+		{"breach of contract is not an employment type", "Counsel", "You will advise on breach of contract claims.", ""},
+		{"contract law is not an employment type", "Counsel", "Background in contract law is required.", ""},
+		{"real contract survives the legal boilerplate", "Dev", "12-month contract position. You will advise on breach of contract claims.", "contract"},
 		{"internship beats full-time", "Intern", "A full-time internship for students.", "internship"},
 		{"fellowship", "Postdoctoral Fellowship, Applied Data Science", "Join our research team as a fellow.", "fellowship"},
 		{"fellowship beats contract", "PhD Fellowship", "A 3-year fixed-term fellowship position.", "fellowship"},
@@ -67,6 +88,35 @@ func TestEmploymentType(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			if got := EmploymentType(c.title, c.desc); got != c.want {
 				t.Errorf("EmploymentType(%q,%q) = %q, want %q", c.title, c.desc, got, c.want)
+			}
+		})
+	}
+}
+
+func TestEmploymentBoilerplateKind(t *testing.T) {
+	cases := []struct{ name, stored, title, desc, want string }{
+		{"part-time pay policy", "part_time", "Manager", "Salaries for part-time roles will be pro-rated.", "part_time_pay_policy"},
+		{"real part-time beside the policy", "part_time", "Analyst", "This is a part-time role. Salaries for part-time roles will be pro-rated.", ""},
+		{"ats part-time with no phrase", "part_time", "Analyst", "Build the risk platform.", ""},
+		{"full-time pay policy", "full_time", "Manager", "Salaries for full-time roles are not pro-rated.", "full_time_pay_policy"},
+		{"permanent employees pay policy", "full_time", "Manager", "Pay for permanent employees is not pro-rated.", "full_time_pay_policy"},
+		{"real full-time beside the policy", "full_time", "Engineer", "This is a full-time role. Salaries for full-time roles are not pro-rated.", ""},
+		{"full-time title beside the policy", "full_time", "Full-time Analyst", "Salaries for full-time employees will not be pro-rated.", ""},
+		{"permanent resident stored as full-time", "full_time", "Engineer", "Applicants must be a permanent resident or a citizen.", "permanent_status"},
+		{"permanent position beside residency", "full_time", "Engineer", "Permanent position. Applicants must be a permanent resident.", ""},
+		{"agreement contract stored as contract", "contract", "Counsel", "Signed under an agreement contract for service.", "contract_boilerplate"},
+		{"contract for service stored as contract is the arrangement", "contract", "Dev", "Engaged on a contract for service.", ""},
+		{"permanent status stored as full-time is the schedule", "full_time", "Engineer", "This role is permanent status.", ""},
+		{"breach of contract stored as contract", "contract", "Counsel", "You will advise on breach of contract claims.", "contract_boilerplate"},
+		{"temporary visa stored as contract", "contract", "Engineer", "We do not sponsor a temporary visa.", "contract_boilerplate"},
+		{"real contract beside the legal phrase", "contract", "Dev", "12-month contract position. You will advise on breach of contract claims.", ""},
+		{"empty stored type", "", "Manager", "Salaries for part-time roles will be pro-rated.", ""},
+		{"full-time stored over a part-time policy", "full_time", "Manager", "Salaries for part-time roles will be pro-rated.", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := EmploymentBoilerplateKind(c.stored, c.title, c.desc); got != c.want {
+				t.Errorf("EmploymentBoilerplateKind(%q) = %q, want %q", c.stored, got, c.want)
 			}
 		})
 	}

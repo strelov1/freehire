@@ -6522,6 +6522,8 @@ type UpdateJobDerivedParams struct {
 // is a pure function of the raw fields, so the write is idempotent. COALESCE maps a nil
 // array arg to '{}' for the NOT NULL array columns; work_mode is written as given by the
 // caller, which preserves an already-set (possibly adapter-structured) value.
+// employment_type is likewise the caller's: a stored type is kept, except a part_time
+// the text parser now attributes only to a pay-policy sentence (jobderive.RetainEmploymentType).
 //
 // updated_at is bumped ONLY when role_fingerprint actually moves (the SET clause reads
 // the pre-update row, so the guard compares the stored fingerprint to the new one): a

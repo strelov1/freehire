@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/dict/vocab"
+	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // validInput is a profile submission that should always be accepted, so each test can
@@ -25,7 +26,7 @@ func validInput() ProfileInput {
 		Topics:      []string{"career", "system-design"},
 		Languages:   []string{"en", "de"},
 		Timezone:    "Europe/Berlin",
-		Session: SessionParams{
+		Session: slots.SessionParams{
 			Duration:      time.Hour,
 			MinimumNotice: 2 * time.Hour,
 			Horizon:       30 * 24 * time.Hour,
@@ -123,7 +124,7 @@ func TestSubmitProfileRefusesWhatCannotYieldASchedule(t *testing.T) {
 		// "Local" resolves in Go and means the SERVER's clock. A mentor whose hours are
 		// interpreted in the server's zone is a mentor whose hours are wrong.
 		{"a timezone of Local", func(in *ProfileInput) { in.Timezone = "Local" }, ErrInvalidProfile},
-		{"a session that yields nothing", func(in *ProfileInput) { in.Session.Duration = 0 }, ErrInvalidSessionParams},
+		{"a session that yields nothing", func(in *ProfileInput) { in.Session.Duration = 0 }, slots.ErrInvalidSessionParams},
 		{"no meeting link", func(in *ProfileInput) { in.MeetingURL = "" }, ErrInvalidProfile},
 		{"a meeting link that is not a URL", func(in *ProfileInput) { in.MeetingURL = "not a url" }, ErrInvalidProfile},
 		{"a meeting link that is not http", func(in *ProfileInput) { in.MeetingURL = "javascript:alert(1)" }, ErrInvalidProfile},

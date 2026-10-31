@@ -48,13 +48,27 @@ func DegreeOptional(description string) bool {
 // marketplace") — so, like the bare "ms"/"bs" degree abbreviations below, they favour
 // precision: reContractShorthand matches them only when an employment-context word
 // sits right after ("C2C candidates", "B2B contract", "C2C only"), never standalone.
+//
+// A pay-policy sentence ("salaries for part-time roles will be pro-rated", and the
+// full-time / permanent twin of that sentence) names a class of roles, not this
+// posting's schedule, so that hit does not count. The same precision drops a legal
+// instrument ("agreement contract", "breach of contract", "contract law"), a
+// residency statement ("permanent resident"), and a travel perk ("temporary visa",
+// "temporary housing"): the bare token would otherwise label the posting.
 var (
-	reInternship        = regexp.MustCompile(`\b(internship|intern|co-?op|working student|praktikum|werkstudent)\b`)
-	rePartTime          = regexp.MustCompile(`\bpart[\s-]?time\b`)
-	reContract          = regexp.MustCompile(`\b(contractor|contract|freelancer|freelance|fixed[\s-]?term|temporary|1099|corp[\s-]?to[\s-]?corp)\b`)
-	reContractShorthand = regexp.MustCompile(`\b(b2b|c2c)\b[\s:/.-]*(only|contract|contractor|candidates?|welcome|accepted|basis|engagement|employment|position|arrangement|w2)\b`)
-	reFullTime          = regexp.MustCompile(`\b(full[\s-]?time|permanent)\b`)
-	reFellowship        = regexp.MustCompile(`\bfellowship\b`)
+	reInternship         = regexp.MustCompile(`\b(internship|intern|co-?op|working student|praktikum|werkstudent)\b`)
+	rePartTime           = regexp.MustCompile(`\bpart[\s-]?time\b`)
+	rePartTimePolicy     = regexp.MustCompile(`\bpart[\s-]?time\s+(?:roles|positions|employees|staff)\b`)
+	reFullTimePolicy     = regexp.MustCompile(`\bfull[\s-]?time\s+(?:roles|positions|employees|staff)\b`)
+	rePermanentPolicy    = regexp.MustCompile(`\bpermanent\s+(?:roles|positions|employees|staff)\b`)
+	rePermanentStatus    = regexp.MustCompile(`\bpermanent\s+(?:resident|residency|authorization|address)\b`)
+	reProrate            = regexp.MustCompile(`\bpro[\s-]?rat`)
+	reContract           = regexp.MustCompile(`\b(contractor|contract|freelancer|freelance|fixed[\s-]?term|temporary|1099|corp[\s-]?to[\s-]?corp)\b`)
+	reContractShorthand  = regexp.MustCompile(`\b(b2b|c2c)\b[\s:/.-]*(only|contract|contractor|candidates?|welcome|accepted|basis|engagement|employment|position|arrangement|w2)\b`)
+	reContractInstrument = regexp.MustCompile(`\bagreement\s+contract\b|\bbreach\s+of\s+contract\b|\bcontract\s+law\b`)
+	reTemporaryNotJob    = regexp.MustCompile(`\btemporary\s+(?:visa|accommodation|housing|permit|resident|residency)\b`)
+	reFullTime           = regexp.MustCompile(`\b(full[\s-]?time|permanent)\b`)
+	reFellowship         = regexp.MustCompile(`\bfellowship\b`)
 	// French contract types, which a French posting states as a label ("Type de contrat :
 	// CDI", "Contrat : CDD 6 mois") or in its title ("Stage - Assistant marketing",
 	// "Alternance - Chargé RH"). A CDI is the permanent contract, a CDD and an intérim
@@ -130,16 +144,15 @@ func EmploymentType(title, description string) string {
 		return h
 	}
 	switch {
-	case rePartTime.MatchString(s) || rePartTimeFR.MatchString(s) || bcsLabel(s, rePartTimeBCS):
+	case partTimeSchedule(s) || rePartTimeFR.MatchString(s) || bcsLabel(s, rePartTimeBCS):
 		return "part_time"
 	case reContractFR.MatchString(t):
 		return "contract"
 	case reFullTimeFR.MatchString(t):
 		return "full_time"
-	case reContract.MatchString(s) || reContractShorthand.MatchString(s) || reContractFR.MatchString(s) ||
-		bcsLabel(s, reContractBCS):
+	case contractSchedule(s) || reContractFR.MatchString(s) || bcsLabel(s, reContractBCS):
 		return "contract"
-	case reFullTime.MatchString(s) || reFullTimeFR.MatchString(s) || bcsLabel(s, reFullTimeBCS):
+	case fullTimeSchedule(s) || reFullTimeFR.MatchString(s) || bcsLabel(s, reFullTimeBCS):
 		return "full_time"
 	}
 	return polishEmploymentType(t, s)
@@ -165,6 +178,163 @@ func polishEmploymentType(t, s string) string {
 		return "full_time"
 	}
 	return ""
+}
+
+func PartTimePayPolicyOnly(title, description string) bool {
+	_, s := employmentText(title, description)
+	return rePartTime.MatchString(s) && !partTimeSchedule(s)
+}
+
+func EmploymentBoilerplateKind(stored, title, description string) string {
+	_, s := employmentText(title, description)
+	switch stored {
+	case "part_time":
+		if rePartTime.MatchString(s) && !partTimeSchedule(s) {
+			return "part_time_pay_policy"
+		}
+	case "full_time":
+		if fullTimePayPolicyOnly(s) {
+			return "full_time_pay_policy"
+		}
+		if permanentStatusOnly(s) {
+			return "permanent_status"
+		}
+	case "contract":
+		if contractBoilerplateOnly(s) {
+			return "contract_boilerplate"
+		}
+	}
+	return ""
+}
+
+func employmentText(title, description string) (string, string) {
+	t := strings.ReplaceAll(strings.ToLower(title), "’", "'")
+	return t, t + "\n" + strings.ReplaceAll(strings.ToLower(description), "’", "'")
+}
+
+func fullTimePayPolicyOnly(s string) bool {
+	saw := false
+	for _, loc := range reFullTime.FindAllStringIndex(s, -1) {
+		if s[loc[0]:loc[1]] == "permanent" {
+			if permanentSchedule(s, loc[0]) {
+				return false
+			}
+			if !classPayPolicy(s, loc[0], rePermanentPolicy) {
+				continue
+			}
+			saw = true
+			continue
+		}
+		if !classPayPolicy(s, loc[0], reFullTimePolicy) {
+			return false
+		}
+		saw = true
+	}
+	return saw
+}
+
+func permanentStatusOnly(s string) bool {
+	saw := false
+	for _, loc := range reFullTime.FindAllStringIndex(s, -1) {
+		if s[loc[0]:loc[1]] != "permanent" {
+			return false
+		}
+		if permanentSchedule(s, loc[0]) || classPayPolicy(s, loc[0], rePermanentPolicy) {
+			return false
+		}
+		saw = true
+	}
+	return saw
+}
+
+func contractBoilerplateOnly(s string) bool {
+	if contractSchedule(s) {
+		return false
+	}
+	return reContract.MatchString(s) || reContractInstrument.MatchString(s)
+}
+
+func partTimeSchedule(s string) bool {
+	for _, loc := range rePartTime.FindAllStringIndex(s, -1) {
+		if !partTimePayPolicy(s, loc[0]) {
+			return true
+		}
+	}
+	return false
+}
+
+func partTimePayPolicy(s string, at int) bool {
+	return classPayPolicy(s, at, rePartTimePolicy)
+}
+
+func fullTimeSchedule(s string) bool {
+	for _, loc := range reFullTime.FindAllStringIndex(s, -1) {
+		switch s[loc[0]:loc[1]] {
+		case "permanent":
+			if permanentSchedule(s, loc[0]) {
+				return true
+			}
+		default:
+			if !classPayPolicy(s, loc[0], reFullTimePolicy) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func permanentSchedule(s string, at int) bool {
+	if classPayPolicy(s, at, rePermanentPolicy) {
+		return false
+	}
+	status := rePermanentStatus.FindStringIndex(s[at:])
+	return status == nil || status[0] != 0
+}
+
+func classPayPolicy(s string, at int, class *regexp.Regexp) bool {
+	if !reProrate.MatchString(sentenceAround(s, at)) {
+		return false
+	}
+	noun := class.FindStringIndex(s[at:])
+	return noun != nil && noun[0] == 0
+}
+
+func sentenceAround(s string, at int) string {
+	lo := strings.LastIndexAny(s[:at], ".\n")
+	if lo < 0 {
+		lo = 0
+	} else {
+		lo++
+	}
+	hiRel := strings.IndexAny(s[at:], ".\n")
+	if hiRel < 0 {
+		return s[lo:]
+	}
+	return s[lo : at+hiRel]
+}
+
+func contractSchedule(s string) bool {
+	if reContractShorthand.MatchString(s) {
+		return true
+	}
+	covers := reContractInstrument.FindAllStringIndex(s, -1)
+	notJob := reTemporaryNotJob.FindAllStringIndex(s, -1)
+	for _, m := range reContract.FindAllStringIndex(s, -1) {
+		if spanCovered(m, covers) || spanCovered(m, notJob) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func spanCovered(span []int, covers [][]int) bool {
+	for _, c := range covers {
+		if span[0] >= c[0] && span[1] <= c[1] {
+			return true
+		}
+	}
+	return false
 }
 
 // frenchTraineeTitle reports whether a lowercased title names a French trainee contract.

@@ -73,14 +73,6 @@ var privatePredicateExemptions = map[string]string{
 		"JD's title fragments reaching that console is small but real. Recorded honestly rather " +
 		"than blessed: the earlier reason named the since-retired cmd/prune, which never called this.",
 
-	// --- Aggregates: a sample, never a posting. ---
-	// The other seven insights rollups count with `count(*) FILTER (WHERE closed_at IS
-	// NULL)` over the whole catalogue and so are outside this rule's shape. Exempting
-	// these two keeps the family consistent rather than splitting it on which member the
-	// detector happens to see.
-	"RebuildInsightsSalaryStatsGlobal":    "a salary percentile over a band of at least @min_sample postings; a private one contributes a number, never a title, slug or link",
-	"RebuildInsightsSalaryStatsByCountry": "the same rollup, per country",
-
 	// --- Duplicate-marker passes: they write a pointer between two postings of one
 	// company and show nothing.
 	//
@@ -224,7 +216,10 @@ type jobsQuery struct {
 }
 
 var (
-	reReadsJobs   = regexp.MustCompile(`\b(from|join)\s+jobs\b`)
+	// jobs_effective_salary (migration 0216) is a view over jobs that passes is_private
+	// and closed_at through, so reading it IS reading jobs; without it in the pattern
+	// every statement that reads the view would fall outside this rule unseen.
+	reReadsJobs   = regexp.MustCompile(`\b(from|join)\s+(jobs|jobs_effective_salary)\b`)
 	reOpenScope   = regexp.MustCompile(`\bclosed_at\s+is\s+null\b`)
 	rePrivatePred = regexp.MustCompile(`\bnot\s+(\w+\.)?is_private\b`)
 )

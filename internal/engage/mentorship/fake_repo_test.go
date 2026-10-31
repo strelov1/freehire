@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/strelov1/freehire/internal/engage/slots"
 )
 
 // fakeRepo is an in-memory Repository. It exists so the service's rules can be tested
@@ -20,7 +21,7 @@ type fakeRepo struct {
 	approvedReferralOffers map[referralKey]bool
 	futureBookings         map[int64][]Booking
 
-	availability  map[int64][]Rule
+	availability  map[int64][]slots.Rule
 	bookings      map[uuid.UUID]Booking
 	reviews       map[uuid.UUID]Review
 	remindersSent map[reminderKey]bool
@@ -50,7 +51,7 @@ type fakeRepo struct {
 	setBookingCalendarEvent map[uuid.UUID][2]string // bookingID -> [meetingURL, eventID]
 
 	// busyIntervals stands in for mentor_busy_intervals, keyed by mentor id.
-	busyIntervals map[int64][]Interval
+	busyIntervals map[int64][]slots.Interval
 }
 
 type fakeCalendarGrant struct {
@@ -69,14 +70,14 @@ func newFakeRepo() *fakeRepo {
 		byUser:                  map[int64]int64{},
 		approvedReferralOffers:  map[referralKey]bool{},
 		futureBookings:          map[int64][]Booking{},
-		availability:            map[int64][]Rule{},
+		availability:            map[int64][]slots.Rule{},
 		bookings:                map[uuid.UUID]Booking{},
 		reviews:                 map[uuid.UUID]Review{},
 		remindersSent:           map[reminderKey]bool{},
 		calendarGrants:          map[int64]fakeCalendarGrant{},
 		needsReconsent:          map[int64]bool{},
 		setBookingCalendarEvent: map[uuid.UUID][2]string{},
-		busyIntervals:           map[int64][]Interval{},
+		busyIntervals:           map[int64][]slots.Interval{},
 	}
 }
 
@@ -263,12 +264,12 @@ func (r *fakeRepo) ReactivateProfile(_ context.Context, userID int64) (Profile, 
 	return p, nil
 }
 
-func (r *fakeRepo) ListAvailability(_ context.Context, mentorID int64) ([]Rule, error) {
+func (r *fakeRepo) ListAvailability(_ context.Context, mentorID int64) ([]slots.Rule, error) {
 	return r.availability[mentorID], nil
 }
 
-func (r *fakeRepo) ReplaceWeeklyAvailability(_ context.Context, mentorID int64, rules []Rule) error {
-	var kept []Rule
+func (r *fakeRepo) ReplaceWeeklyAvailability(_ context.Context, mentorID int64, rules []slots.Rule) error {
+	var kept []slots.Rule
 	for _, rule := range r.availability[mentorID] {
 		if rule.IsDated() {
 			kept = append(kept, rule)
@@ -278,7 +279,7 @@ func (r *fakeRepo) ReplaceWeeklyAvailability(_ context.Context, mentorID int64, 
 	return nil
 }
 
-func (r *fakeRepo) AddAvailabilityRule(_ context.Context, mentorID int64, rule Rule) error {
+func (r *fakeRepo) AddAvailabilityRule(_ context.Context, mentorID int64, rule slots.Rule) error {
 	r.availability[mentorID] = append(r.availability[mentorID], rule)
 	return nil
 }
@@ -287,7 +288,7 @@ func (r *fakeRepo) DeleteAvailabilityRule(_ context.Context, _, _ int64) error {
 
 // ListBusy mirrors what the query does: this mentor's CONFIRMED bookings overlapping the
 // window, on half-open bounds, with no buffers applied.
-func (r *fakeRepo) ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]Interval, error) {
+func (r *fakeRepo) ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]slots.Interval, error) {
 	booked, busy, err := r.ListBusyByKind(ctx, mentorID, from, to)
 	if err != nil {
 		return nil, err
@@ -297,13 +298,13 @@ func (r *fakeRepo) ListBusy(ctx context.Context, mentorID int64, from, to time.T
 
 // ListBusyByKind is ListBusy's two sources kept apart: this mentor's CONFIRMED bookings,
 // and the synced-calendar intervals seeded directly into busyIntervals by a test.
-func (r *fakeRepo) ListBusyByKind(_ context.Context, mentorID int64, from, to time.Time) (booked, busy []Interval, err error) {
+func (r *fakeRepo) ListBusyByKind(_ context.Context, mentorID int64, from, to time.Time) (booked, busy []slots.Interval, err error) {
 	for _, b := range r.bookings {
 		if b.MentorID != mentorID || b.Status != BookingConfirmed {
 			continue
 		}
 		if b.StartsAt.Before(to) && b.EndsAt.After(from) {
-			booked = append(booked, Interval{Start: b.StartsAt, End: b.EndsAt})
+			booked = append(booked, slots.Interval{Start: b.StartsAt, End: b.EndsAt})
 		}
 	}
 	for _, iv := range r.busyIntervals[mentorID] {
@@ -320,12 +321,12 @@ func (r *fakeRepo) CreateBooking(_ context.Context, row BookingRow) (Booking, er
 	}
 	// Stands in for the EXCLUDE constraint: a confirmed booking of this mentor cannot
 	// overlap another.
-	candidate := Interval{Start: row.StartsAt, End: row.EndsAt}
+	candidate := slots.Interval{Start: row.StartsAt, End: row.EndsAt}
 	for _, b := range r.bookings {
 		if b.MentorID != row.MentorID || b.Status != BookingConfirmed {
 			continue
 		}
-		if candidate.Overlaps(Interval{Start: b.StartsAt, End: b.EndsAt}) {
+		if candidate.Overlaps(slots.Interval{Start: b.StartsAt, End: b.EndsAt}) {
 			return Booking{}, ErrSlotUnavailable
 		}
 	}

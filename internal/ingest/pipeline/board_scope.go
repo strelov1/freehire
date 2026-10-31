@@ -89,7 +89,7 @@ func boardReadWhatItListed(st Stats) bool {
 
 // boardQualifies reports whether a run structurally PROVED it covered a board — the fact the
 // post-run sweep's board-scoped close needs before it may retire anything within that board
-// (freehire#2328, docs/agents/job-lifecycle.md). Four conditions, all read directly off this
+// (freehire#2328, docs/agents/job-lifecycle.md). Five conditions, all read directly off this
 // board's own Stats rather than through BoardHealth's tolerant health verdict:
 //
 //  1. the board's crawl reported zero failures (st.Failed == 0). A streaming board that dies
@@ -111,12 +111,15 @@ func boardReadWhatItListed(st Stats) bool {
 //     stops the crawl at a deadline ahead of its unit's timeout so the sweep still runs, and a
 //     board caught in flight at that moment has the same shape as a board caught mid-stream:
 //     some of it read and written, the rest not, with nothing in Failed to say so.
+//  5. the crawl had the catalogue's seen-set (Stats.SeenUnknown). Without it every stored
+//     posting reads as new, and a hydrating adapter with a detail budget refreshes none past it.
 //
 // A boardless entry (e.Board == "") never qualifies: its postings are namespaced with an
 // empty board (externalid.Namespace("", id)), so a board-scoped LIKE pattern built from it
 // would match the provider's WHOLE catalogue rather than nothing.
 func boardQualifies(e sources.CompanyEntry, st Stats) bool {
-	return e.Board != "" && st.Failed == 0 && st.Interrupted == 0 && boardReachedPostings(st) && boardReadWhatItListed(st)
+	return e.Board != "" && st.Failed == 0 && st.Interrupted == 0 && st.SeenUnknown == 0 &&
+		boardReachedPostings(st) && boardReadWhatItListed(st)
 }
 
 // boardListedEmpty reports whether a board's crawl FINISHED and its listing named no posting at

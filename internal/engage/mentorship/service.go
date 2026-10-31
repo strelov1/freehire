@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/platform/cache"
 )
 
@@ -92,21 +93,21 @@ type Repository interface {
 	// withdrawn, so a zero-row result here means only a genuine race.
 	ReactivateProfile(ctx context.Context, userID int64) (Profile, error)
 
-	ListAvailability(ctx context.Context, mentorID int64) ([]Rule, error)
-	ReplaceWeeklyAvailability(ctx context.Context, mentorID int64, rules []Rule) error
-	AddAvailabilityRule(ctx context.Context, mentorID int64, rule Rule) error
+	ListAvailability(ctx context.Context, mentorID int64) ([]slots.Rule, error)
+	ReplaceWeeklyAvailability(ctx context.Context, mentorID int64, rules []slots.Rule) error
+	AddAvailabilityRule(ctx context.Context, mentorID int64, rule slots.Rule) error
 	DeleteAvailabilityRule(ctx context.Context, ruleID, mentorID int64) error
 
 	// ListBusy is the mentor's occupied time in a window: their confirmed bookings and,
 	// once that sync exists, their calendar's free/busy intervals. Buffers are NOT applied
 	// here — the slot engine widens these, because the buffers belong to the mentor and
 	// may change between two reads of the same booking.
-	ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]Interval, error)
+	ListBusy(ctx context.Context, mentorID int64, from, to time.Time) ([]slots.Interval, error)
 	// ListBusyByKind is ListBusy's two sources kept apart — this mentor's confirmed
 	// bookings and their synced-calendar busy intervals — for the mentor's own calendar
 	// breakdown, which needs to say which kind an occupied moment is. The public slot
 	// engine has no such need and keeps using ListBusy's flat union.
-	ListBusyByKind(ctx context.Context, mentorID int64, from, to time.Time) (booked, busy []Interval, err error)
+	ListBusyByKind(ctx context.Context, mentorID int64, from, to time.Time) (booked, busy []slots.Interval, err error)
 
 	// CreateBooking writes a confirmed booking. The adapter translates the EXCLUDE
 	// constraint's violation into ErrSlotUnavailable — the same sentinel a stale page

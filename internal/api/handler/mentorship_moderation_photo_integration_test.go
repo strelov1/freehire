@@ -19,6 +19,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/candidate/headshot"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
+	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -55,7 +56,7 @@ func TestModeratorCanPreviewAPendingMentorsPhoto(t *testing.T) {
 		UserID: optedInUserID, CompanySlug: "photoco", Slug: "photo-in-mentor",
 		DisplayName: "Photo In", Headline: "Staff Engineer",
 		Topics: []string{"career"}, Languages: []string{"en"}, Timezone: "Europe/Berlin",
-		Session:    mentorship.SessionParams{Duration: time.Hour, MinimumNotice: 2 * time.Hour, Horizon: 30 * 24 * time.Hour},
+		Session:    slots.SessionParams{Duration: time.Hour, MinimumNotice: 2 * time.Hour, Horizon: 30 * 24 * time.Hour},
 		MeetingURL: "https://meet.example.test/photo-in",
 		ShowPhoto:  true,
 	})
@@ -66,7 +67,7 @@ func TestModeratorCanPreviewAPendingMentorsPhoto(t *testing.T) {
 		UserID: optedOutUserID, CompanySlug: "photoco", Slug: "photo-out-mentor",
 		DisplayName: "Photo Out", Headline: "Staff Engineer",
 		Topics: []string{"career"}, Languages: []string{"en"}, Timezone: "Europe/Berlin",
-		Session:    mentorship.SessionParams{Duration: time.Hour, MinimumNotice: 2 * time.Hour, Horizon: 30 * 24 * time.Hour},
+		Session:    slots.SessionParams{Duration: time.Hour, MinimumNotice: 2 * time.Hour, Horizon: 30 * 24 * time.Hour},
 		MeetingURL: "https://meet.example.test/photo-out",
 		ShowPhoto:  false,
 	})

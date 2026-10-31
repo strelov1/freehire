@@ -945,10 +945,19 @@ func Register(app *fiber.App, cfg Config) {
 	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore, queries)
 	// Conversations are the messaging core's; each persona a participant may speak as is
 	// registered here.
-	buddyRepo := buddy.NewQueriesRepository(queries)
+	buddyRepo := buddy.NewQueriesRepository(queries, cfg.Pool)
 	messagingSvc := messaging.New(messaging.NewQueriesRepository(queries), buddy.NewPersona(buddyRepo))
-	conversationH := newConversationHandlers(messagingSvc)
-	buddyH := newBuddyHandlers(buddy.New(buddyRepo, messagingSvc))
+	buddySvc := buddy.New(buddyRepo, messagingSvc)
+	// Buddy mock interviews. Without a mail transport the notices still reach the
+	// notification center. A properly nil interface, never a typed-nil *Client.
+	var mockMail emailnotify.Sender
+	if mailClient != nil && cfg.NotifyEmailFrom != "" {
+		mockMail = mailClient
+	}
+	buddyMocks := buddy.NewMockService(buddySvc, buddyRepo,
+		buddy.NewMockMailNotifier(queries, mockMail, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
+	conversationH := newConversationHandlers(messagingSvc, buddyMocks)
+	buddyH := newBuddyHandlers(buddySvc, buddyMocks)
 
 	// The mentorship marketplace: referral's opposite number, where the insider is named
 	// and chosen rather than anonymous. A nil notifier is a deployment with no mail

@@ -688,8 +688,12 @@ func shouldSweep(stats pipeline.Stats) bool {
 // drops the company scope that sweepableCompanies uses to withhold anything, and no fullCatalog
 // adapter emits the marker today — so the strict reading costs nothing now and is the one that
 // stays right if one ever does.
+//
+// So does a board crawled without the catalogue's seen-set (Stats.SeenUnknown): every stored
+// posting then reads as new, and a hydrating adapter with a detail budget refreshes none of
+// those past it, so the source scope would close live postings the listing named.
 func sweepBySource(stats pipeline.Stats, fullCatalog bool) bool {
-	return fullCatalog && stats.Failed == 0 && stats.Unreadable == 0
+	return fullCatalog && stats.Failed == 0 && stats.Unreadable == 0 && stats.SeenUnknown == 0
 }
 
 // sweepWindowFor reports how long a provider's unseen jobs are spared before the sweep closes

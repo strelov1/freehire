@@ -1,11 +1,20 @@
 <script lang="ts">
-  import { api } from '#lib/api.js';
   import { errorMessage } from '#lib/utils.js';
   import { Badge, Button, Card } from '#lib/ui/index.js';
   import { splitAvailability, weekdayLabel, weekdayOrder } from '#lib/mentorship.js';
-  import type { MentorAvailabilityRule } from '#lib/types.js';
+  import type { AvailabilityApi, MentorAvailabilityRule } from '#lib/types.js';
 
-  let { rules = $bindable() }: { rules: MentorAvailabilityRule[] } = $props();
+  let {
+    rules = $bindable(),
+    schedule,
+    emptyMessage,
+  }: {
+    rules: MentorAvailabilityRule[];
+    /** Where the edits go: the mentor schedule's endpoints or the buddy mock ones. */
+    schedule: AvailabilityApi;
+    /** What an empty week means on the page hosting the editor. */
+    emptyMessage: string;
+  } = $props();
 
   const split = $derived(splitAvailability(rules));
 
@@ -32,11 +41,11 @@
     saving = true;
     error = '';
     try {
-      await api.replaceWeeklyAvailability(draft);
+      await schedule.replaceWeek(draft);
       // The PUT answers 204, so the stored rows come from a re-read rather than from the
       // reply. They are worth having: a new row's id is assigned by the server and is what
       // the delete route takes, so a locally-built list would show rows nothing can remove.
-      rules = await api.myMentorAvailability();
+      rules = await schedule.reload();
       editingWeek = false;
     } catch (e) {
       error = errorMessage(e, 'The week could not be saved.');
@@ -59,7 +68,7 @@
       // inserted row says "I am away on the 16th", beating the weekly rules for that date,
       // instead of a mentor deleting and rebuilding their week around one absence.
       const end = closing ? overrideStart : overrideEnd;
-      const added = await api.addAvailabilityOverride(overrideDate, overrideStart, end);
+      const added = await schedule.addOverride(overrideDate, overrideStart, end);
       rules = [...rules, added];
       overrideDate = '';
     } catch (e) {
@@ -73,7 +82,7 @@
     saving = true;
     error = '';
     try {
-      await api.deleteAvailabilityRule(id);
+      await schedule.remove(id);
       rules = rules.filter((r) => r.id !== id);
     } catch (e) {
       error = errorMessage(e, 'The rule could not be removed.');
@@ -148,9 +157,7 @@
         </div>
       </div>
     {:else if split.weekly.length === 0}
-      <p class="text-muted-foreground text-sm">
-        No hours yet — until you add some, your profile offers nothing to book.
-      </p>
+      <p class="text-muted-foreground text-sm">{emptyMessage}</p>
     {:else}
       <ul class="flex flex-col gap-1 text-sm">
         {#each split.weekly as row (row.id)}

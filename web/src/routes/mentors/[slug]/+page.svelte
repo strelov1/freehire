@@ -1,5 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { api } from '#lib/api.js';
+  import MentorBookingForm from '#lib/components/MentorBookingForm.svelte';
   import MentorBookingView from '#lib/components/MentorBookingView.svelte';
   import Seo from '#lib/components/Seo.svelte';
   import { Badge } from '#lib/ui/index.js';
@@ -53,5 +55,13 @@
     <p class="whitespace-pre-line">{mentor.bio}</p>
   {/if}
 
-  <MentorBookingView {mentor} />
+  <MentorBookingView
+    loadSlots={(from, to, timezone, signal) => api.getMentorSlots(mentor.slug, from, to, timezone, signal)}
+    sessionMinutes={mentor.session_minutes}
+    counterpart={mentor.name}
+  >
+    {#snippet booker({ slot, zone, refused })}
+      <MentorBookingForm {mentor} chosen={slot} {zone} {refused} />
+    {/snippet}
+  </MentorBookingView>
 </div>

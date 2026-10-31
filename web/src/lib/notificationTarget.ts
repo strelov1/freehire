@@ -9,6 +9,7 @@ export type NotificationTarget =
   | { kind: 'tracking'; slug?: string }
   | { kind: 'digest'; id: number }
   | { kind: 'tailor'; slug: string }
+  | { kind: 'mocks' }
   | { kind: 'none' };
 
 /** A card with no `public_slug` and no `jobs` snapshot has nothing to open.
@@ -53,6 +54,11 @@ export function notificationTarget(
       return { kind: 'tracking', slug: item.public_slug };
     }
     return { kind: 'job', slug: item.public_slug };
+  }
+  // A buddy mock notice carries no slug; it opens the member's own mock interviews, which
+  // is where its email links too.
+  if (item.kind === 'buddy_mock_booked' || item.kind === 'buddy_mock_cancelled' || item.kind === 'buddy_mock_reminder') {
+    return { kind: 'mocks' };
   }
   if (item.kind === 'subscription_digest' && item.jobs && item.jobs.length > 0 && item.id != null) {
     return { kind: 'digest', id: item.id };

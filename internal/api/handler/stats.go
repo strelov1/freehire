@@ -79,6 +79,7 @@ func (h *statsHandlers) register(api fiber.Router, optionalAuth fiber.Handler) {
 	api.Get("/insights/skills", h.InsightsSkills)
 	api.Get("/insights/velocity", h.InsightsVelocity)
 	api.Get("/insights/salary", h.InsightsSalary)
+	api.Get("/insights/salary/history", h.InsightsSalaryHistory)
 	api.Get("/insights/companies", h.InsightsCompanies)
 	api.Get("/insights/role-countries", h.InsightsRoleCountries)
 

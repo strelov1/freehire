@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/dict/vocab"
+	"github.com/strelov1/freehire/internal/engage/slots"
 	"github.com/strelov1/freehire/internal/identity/username"
 )
 
@@ -75,7 +76,7 @@ type Profile struct {
 	Topics      []string
 	Languages   []string
 	Timezone    string
-	Session     SessionParams
+	Session     slots.SessionParams
 	MeetingURL  string
 	// ShowPhoto is the mentor's own opt-in to serve their account's stored CV headshot
 	// on their public directory card and profile page. Off by default: the account
@@ -125,7 +126,7 @@ type ProfileInput struct {
 	Topics      []string
 	Languages   []string
 	Timezone    string
-	Session     SessionParams
+	Session     slots.SessionParams
 	MeetingURL  string
 	ShowPhoto   bool
 	// Seniority is optional; see Profile.Seniority for what an empty value means.

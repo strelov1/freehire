@@ -17,11 +17,12 @@ import (
 // start a conversation is the kind's rule. Every route is cookie-only, so a leaked API key
 // cannot read or write a member's conversations.
 type conversationHandlers struct {
-	msg *messaging.Service
+	msg   *messaging.Service
+	mocks *buddy.MockService
 }
 
-func newConversationHandlers(msg *messaging.Service) *conversationHandlers {
-	return &conversationHandlers{msg: msg}
+func newConversationHandlers(msg *messaging.Service, mocks *buddy.MockService) *conversationHandlers {
+	return &conversationHandlers{msg: msg, mocks: mocks}
 }
 
 func (h *conversationHandlers) register(api fiber.Router, mw middleware) {
@@ -150,8 +151,18 @@ func (h *conversationHandlers) answer(c *fiber.Ctx, do func(ctx context.Context,
 
 // Block closes every conversation with the other participant and stops either from
 // starting another, of any kind.
+//
+// A block also cancels every future buddy mock between the two, inside the block's own
+// statement (a trigger the buddy migration puts on user_blocks, because the core never
+// imports a feature). This layer, the only one that sees both, tells the other side.
 func (h *conversationHandlers) Block(c *fiber.Ctx) error {
-	return h.byID(c, h.msg.Block)
+	return h.byID(c, func(ctx context.Context, userID, id int64) error {
+		if err := h.msg.Block(ctx, userID, id); err != nil {
+			return err
+		}
+		h.mocks.AnnounceCancellations(ctx, userID)
+		return nil
+	})
 }
 
 // byID runs an action on the caller and the ":id" path param and answers 204.

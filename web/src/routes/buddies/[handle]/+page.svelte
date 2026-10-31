@@ -12,6 +12,7 @@
   import BuddyAvatar from '#lib/components/BuddyAvatar.svelte';
   import BuddyFeedEntry from '#lib/components/BuddyFeedEntry.svelte';
   import BuddyMessageButton from '#lib/components/BuddyMessageButton.svelte';
+  import BuddyMockPanel from '#lib/components/BuddyMockPanel.svelte';
   import BuddySimilarRail from '#lib/components/BuddySimilarRail.svelte';
   import CandidateCardSections from '#lib/components/CandidateCardSections.svelte';
   import States from '#lib/components/States.svelte';
@@ -36,10 +37,11 @@
   let activity = $state<BuddyActivity | null>(null);
   const totals = $derived(activity ? buddyYearTotals(activity.days) : null);
 
-  type Tab = 'activity' | 'experience';
+  type Tab = 'activity' | 'experience' | 'mock';
   const TABS: readonly { id: Tab; label: string }[] = [
     { id: 'activity', label: 'Activity' },
     { id: 'experience', label: 'Experience' },
+    { id: 'mock', label: 'Mock interview' },
   ];
   const PANEL_ID = 'buddy-profile-sections';
   let tab = $state<Tab>('activity');
@@ -262,6 +264,8 @@
               {#if cursor}<LoadMore loading={feedBusy} error={feedError} onclick={() => void loadMore()} />{/if}
             {/if}
           </section>
+        {:else if tab === 'mock'}
+          <div class="rounded-xl border border-border bg-card p-4"><BuddyMockPanel handle={profile.handle} /></div>
         {:else}
           <!-- The roles are cards of their own; a frame around them would nest them. -->
           <section class="px-1">

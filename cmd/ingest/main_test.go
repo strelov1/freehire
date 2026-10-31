@@ -80,6 +80,9 @@ func TestSweepBySource(t *testing.T) {
 		// The source scope drops the company scope entirely, so it is the one close
 		// sweepableCompanies cannot narrow — a single unread posting disqualifies it.
 		{"full-catalog, one posting unread", pipeline.Stats{Ingested: 1000, Unreadable: 1}, true, false},
+		// Without its seen-set a budgeted adapter refreshes nothing it already stored, so
+		// every stored posting would read as gone.
+		{"full-catalog, seen-set unknown", pipeline.Stats{Ingested: 1000, SeenUnknown: 1}, true, false},
 	}
 	for _, tc := range cases {
 		if got := sweepBySource(tc.stats, tc.fullCatalog); got != tc.want {
