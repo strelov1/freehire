@@ -17,7 +17,7 @@
     SquarePen,
   } from '@lucide/svelte';
   import { ApiError, api } from '#lib/api.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
   import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
@@ -375,12 +375,18 @@
     showDirectApply = true;
   }
 
-  function onDirectApplied() {
-    directApplied = true;
-    markAppliedToCompany(job.company_slug);
-    if (interaction) interaction = { ...interaction, applied_at: interaction.applied_at ?? new Date().toISOString() };
-    justApplied = true;
-    track('job_track', { slug: job.public_slug, stage: 'applied' });
+  // Build the callback from this posting before the dialog starts an asynchronous send.
+  function directAppliedCallback({ public_slug: slug, company_slug: companySlug }: Job) {
+    const userID = currentUser()?.id;
+    return () => {
+      if (currentUser()?.id !== userID) return;
+      markAppliedToCompany(companySlug);
+      track('job_track', { slug, stage: 'applied' });
+      if (job.public_slug !== slug) return;
+      directApplied = true;
+      if (interaction) interaction = { ...interaction, applied_at: interaction.applied_at ?? new Date().toISOString() };
+      justApplied = true;
+    };
   }
 
   function viewWithoutSignIn() {
@@ -389,16 +395,22 @@
   }
 
   async function confirmApplied() {
+    const { public_slug: slug, company_slug: companySlug } = job;
+    const userID = currentUser()?.id;
+    let result: UserJob;
     try {
-      interaction = await api.markJobApplied(job.public_slug);
+      result = await api.markJobApplied(slug);
     } catch {
       // Leave the prompt up so the user can retry; nothing else to do.
       return;
     }
-    markAppliedToCompany(job.company_slug);
+    if (currentUser()?.id !== userID) return;
+    markAppliedToCompany(companySlug);
+    track('job_track', { slug, stage: 'applied' });
+    if (job.public_slug !== slug) return;
+    interaction = result;
     showApplyPrompt = false;
-    justApplied = true; // offer the board link now that the job is tracked
-    track('job_track', { slug: job.public_slug, stage: 'applied' });
+    justApplied = true;
   }
 
   // "No": purely local — the job must not enter the tracker.
@@ -1341,7 +1353,7 @@
         slug={job.public_slug}
         title={job.title}
         onClose={() => (showDirectApply = false)}
-        onSent={onDirectApplied}
+        onSent={directAppliedCallback(job)}
         onTailor={() => {
           showDirectApply = false;
           void onTailorClick();

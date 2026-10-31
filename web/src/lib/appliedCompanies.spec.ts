@@ -11,6 +11,7 @@ import {
   ensureAppliedCompaniesLoaded,
   hasAppliedToCompany,
   markAppliedToCompany,
+  refreshAppliedCompanies,
 } from './appliedCompanies.svelte';
 
 describe('appliedCompanies', () => {
@@ -40,6 +41,42 @@ describe('appliedCompanies', () => {
     markAppliedToCompany('');
     expect(hasAppliedToCompany('acme')).toBe(true);
     expect(hasAppliedToCompany('')).toBe(false);
+  });
+
+  it('keeps an application marked while the initial read was pending', async () => {
+    const response = Promise.withResolvers<string[]>();
+    listAppliedCompanySlugs.mockReturnValue(response.promise);
+    const loading = ensureAppliedCompaniesLoaded();
+    markAppliedToCompany('acme');
+    response.resolve(['globex']);
+    await loading;
+    expect(hasAppliedToCompany('acme')).toBe(true);
+    expect(hasAppliedToCompany('globex')).toBe(true);
+  });
+
+  it('reconciles removed applications while keeping marks made during a refresh', async () => {
+    listAppliedCompanySlugs.mockResolvedValue(['acme']);
+    await ensureAppliedCompaniesLoaded();
+    const response = Promise.withResolvers<string[]>();
+    listAppliedCompanySlugs.mockReturnValue(response.promise);
+    const refreshing = refreshAppliedCompanies();
+    markAppliedToCompany('globex');
+    response.resolve([]);
+    await refreshing;
+    expect(hasAppliedToCompany('acme')).toBe(false);
+    expect(hasAppliedToCompany('globex')).toBe(true);
+  });
+
+  it('does not restore the previous account after its pending read completes', async () => {
+    const response = Promise.withResolvers<string[]>();
+    listAppliedCompanySlugs.mockReturnValue(response.promise);
+    const loading = ensureAppliedCompaniesLoaded();
+    markAppliedToCompany('acme');
+    resetUserStores();
+    response.resolve(['globex']);
+    await loading;
+    expect(hasAppliedToCompany('acme')).toBe(false);
+    expect(hasAppliedToCompany('globex')).toBe(false);
   });
 
   it('leaves no badge when the load fails', async () => {

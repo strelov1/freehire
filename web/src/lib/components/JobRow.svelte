@@ -281,7 +281,13 @@
   const uid = $props.id();
   const summaryId = `${uid}-summary`;
   const summary = $derived(
-    [isViewed ? 'Viewed' : '', job.location ?? '', posted ? `Posted ${posted}` : '', salary ?? ''].filter(Boolean).join(', '),
+    [
+      isViewed ? 'Viewed' : '',
+      appliedToCompany ? 'Applied to this company' : '',
+      job.location ?? '',
+      posted ? `Posted ${posted}` : '',
+      salary ?? '',
+    ].filter(Boolean).join(', '),
   );
 
   // Apply-intent — fired regardless of auth, the same event and shape the job page's own

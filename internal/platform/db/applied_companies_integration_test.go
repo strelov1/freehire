@@ -36,7 +36,7 @@ func TestListAppliedCompanySlugs(t *testing.T) {
 	seedOrphanedApplication(t, pool, user, "dollartree", time.Now().Add(-time.Hour))
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO company_slug_aliases (alias_slug, canonical_slug, folded_key, reason)
-		 VALUES ('dollartree', 'dollar-tree', 'dollartree', 'test')`); err != nil {
+		 VALUES ('dollartree', 'dollar-tree', 'dollartree', 'spelling')`); err != nil {
 		t.Fatalf("seed alias: %v", err)
 	}
 

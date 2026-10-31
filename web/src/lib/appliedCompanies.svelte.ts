@@ -18,8 +18,29 @@ import { api } from '#lib/api.js';
 import { SlugSet } from '#lib/userResource.svelte.js';
 
 class AppliedCompanies extends SlugSet {
-  protected load(): Promise<string[]> {
-    return api.listAppliedCompanySlugs();
+  // Each in-flight read keeps the writes made after it began. A newer refresh may
+  // overlap the initial load; neither response may erase an application made meanwhile.
+  #pending = new Set<Set<string>>();
+
+  protected async load(): Promise<string[]> {
+    const marked = new Set<string>();
+    this.#pending.add(marked);
+    try {
+      const slugs = await api.listAppliedCompanySlugs();
+      return [...slugs, ...marked];
+    } finally {
+      this.#pending.delete(marked);
+    }
+  }
+
+  override mark(slug: string) {
+    for (const marked of this.#pending) marked.add(slug);
+    super.mark(slug);
+  }
+
+  protected override clearState() {
+    this.#pending.clear();
+    super.clearState();
   }
 }
 
@@ -38,4 +59,9 @@ export function markAppliedToCompany(companySlug: string | undefined) {
 
 export function ensureAppliedCompaniesLoaded(): Promise<void> {
   return appliedCompanies.ensureLoaded();
+}
+
+/** Reconcile after clearing progress: another application may still name the employer. */
+export function refreshAppliedCompanies(): Promise<void> {
+  return appliedCompanies.refresh();
 }

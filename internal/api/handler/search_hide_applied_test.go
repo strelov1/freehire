@@ -134,6 +134,8 @@ func TestSearchJobsHideAppliedCompanies_ValueRules(t *testing.T) {
 		wantRead    bool
 		wantIgnored bool
 	}{
+		{"", false, false},
+		{"hide_applied_companies=", false, true},
 		{"hide_applied_companies=false", false, false},
 		{"hide_applied_companies=1", true, false},
 		{"hide_applied_companies=yes", false, true},

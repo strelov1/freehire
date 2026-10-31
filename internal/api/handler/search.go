@@ -251,7 +251,7 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 // exclude, and nothing ignored either.
 func (h *searchHandlers) appliedCompanyExclusion(c *fiber.Ctx) (frag string, ignored bool) {
 	raw := c.Query(hideAppliedCompaniesParam)
-	if raw == "" {
+	if !c.Context().QueryArgs().Has(hideAppliedCompaniesParam) {
 		return "", false
 	}
 	want, err := strconv.ParseBool(raw)

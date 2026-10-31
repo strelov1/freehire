@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyJob } from '#lib/types.js';
 import JobBoard from './JobBoard.svelte';
+import { resetUserStores } from '#lib/userResource.svelte.js';
+import { hasAppliedToCompany, markAppliedToCompany } from '#lib/appliedCompanies.svelte.js';
 
 vi.mock('$app/state', () => ({
   page: { data: { locale: 'en' }, url: new URL('http://localhost/my/tracking'), state: {} },
@@ -31,17 +33,18 @@ vi.mock('easymde', () => ({
   },
 }));
 
-const { untrackApplication, listMyJobs, trackApplication, saveJob, clearApplicationStage } =
+const { untrackApplication, listMyJobs, trackApplication, saveJob, clearApplicationStage, listAppliedCompanySlugs } =
   vi.hoisted(() => ({
     untrackApplication: vi.fn(),
     listMyJobs: vi.fn(),
     trackApplication: vi.fn(),
     saveJob: vi.fn(),
     clearApplicationStage: vi.fn(),
+    listAppliedCompanySlugs: vi.fn(),
   }));
 
 vi.mock('#lib/api.js', () => ({
-  api: { untrackApplication, listMyJobs, trackApplication, saveJob, clearApplicationStage },
+  api: { untrackApplication, listMyJobs, trackApplication, saveJob, clearApplicationStage, listAppliedCompanySlugs },
   isPlanRefusal: () => false,
 }));
 
@@ -65,6 +68,9 @@ const application: MyJob = {
 };
 
 beforeEach(() => {
+  resetUserStores();
+  listAppliedCompanySlugs.mockReset().mockResolvedValue([]);
+  clearApplicationStage.mockReset().mockResolvedValue(undefined);
   untrackApplication.mockReset().mockResolvedValue(undefined);
   listMyJobs.mockReset();
   trackApplication.mockReset();
@@ -107,7 +113,8 @@ describe('JobBoard — removing an application', () => {
     expect(screen.getByRole('button', { name: 'Remove from board' })).toBeTruthy();
   });
 
-  it('untracks on confirm and drops the card', async () => {
+  it('untracks on confirm and drops the card and employer mark', async () => {
+    markAppliedToCompany('acme');
     render(JobBoard, { initial: [application], initialId: 'app-1' });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Remove from board' }));
@@ -115,6 +122,7 @@ describe('JobBoard — removing an application', () => {
 
     expect(untrackApplication).toHaveBeenCalledWith('app-1');
     await waitFor(() => expect(screen.getByText('Your board is empty')).toBeTruthy());
+    await waitFor(() => expect(hasAppliedToCompany('acme')).toBe(false));
   });
 
   it('keeps the card and says so when the server refuses', async () => {
@@ -128,6 +136,16 @@ describe('JobBoard — removing an application', () => {
       expect(screen.getByText("Couldn't remove it from your board. Try again.")).toBeTruthy(),
     );
     expect(screen.queryByText('Your board is empty')).toBeNull();
+  });
+});
+
+describe('JobBoard — clearing application progress', () => {
+  it('refreshes employer marks after moving an application to Saved', async () => {
+    markAppliedToCompany('acme');
+    render(JobBoard, { initial: [application], view: 'list' });
+    const picker = screen.getByRole('combobox', { name: /stage for Backend Engineer/i });
+    await fireEvent.change(picker, { target: { value: '' } });
+    await waitFor(() => expect(hasAppliedToCompany('acme')).toBe(false));
   });
 });
 
