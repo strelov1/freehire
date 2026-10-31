@@ -108,7 +108,7 @@ func TestInsightsRolePulseRollup(t *testing.T) {
 	}
 
 	// --- inflow (qa) -------------------------------------------------------------
-	seedInsightsJob(t, ctx, q, pool, "i-backlog", insightSeed{category: "qa", createdAgo: 3, postedAgo: days(45)}) // earlier window
+	seedInsightsJob(t, ctx, q, pool, "i-backlog", insightSeed{category: "qa", createdAgo: 3, postedAgo: days(45)}) // published before the window
 	seedInsightsJob(t, ctx, q, pool, "i-new", insightSeed{category: "qa", createdAgo: 3})
 	seedInsightsJob(t, ctx, q, pool, "i-posted", insightSeed{category: "qa", createdAgo: 10, postedAgo: days(5)})
 	seedInsightsJob(t, ctx, q, pool, "i-ancient", insightSeed{category: "qa", createdAgo: 80})
@@ -154,8 +154,8 @@ func TestInsightsRolePulseRollup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get qa: %v", err)
 	}
-	if qa.Inflow != 2 || qa.InflowPrev != 1 {
-		t.Errorf("qa inflow = %d / %d, want 2 / 1", qa.Inflow, qa.InflowPrev)
+	if qa.Inflow != 2 {
+		t.Errorf("qa inflow = %d, want 2 (i-backlog existed before the window)", qa.Inflow)
 	}
 	if qa.MedianCloseDays.Valid {
 		t.Errorf("qa median = %+v, want NULL with no close", qa.MedianCloseDays)

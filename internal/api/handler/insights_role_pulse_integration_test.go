@@ -89,8 +89,11 @@ func TestInsightsRolePulseEndpoint(t *testing.T) {
 			t.Errorf("time_to_close = %v, want closed 1, a median, no earlier median", ttc)
 		}
 		inflow, _ := data["inflow"].(map[string]any)
-		if inflow["count"] != float64(4) || inflow["count_prev"] != float64(0) {
-			t.Errorf("inflow = %v, want 4 / 0", inflow)
+		if inflow["count"] != float64(4) {
+			t.Errorf("inflow = %v, want count 4", inflow)
+		}
+		if _, ok := inflow["count_prev"]; ok {
+			t.Errorf("inflow carries count_prev %v; the earlier window is deliberately not served", inflow)
 		}
 		if strings.Contains(raw, "SECRET_") || strings.Contains(raw, "secret-") {
 			t.Errorf("record-level field leaked: %s", raw)

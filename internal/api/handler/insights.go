@@ -491,7 +491,7 @@ func (h *statsHandlers) InsightsRoleCountries(c *fiber.Ctx) error {
 }
 
 // rolePulse is one category's market pulse on the wire: raw figures for the last 30 days
-// and the 30 before, never a ratio or a verdict. Like the role × country cells, the floor
+// and (except inflow) the 30 before, never a ratio or a verdict. Like the role × country cells, the floor
 // below which a figure is noise is a presentation choice, so the page applies its own.
 type rolePulse struct {
 	Category      string `json:"category"`
@@ -513,9 +513,10 @@ type rolePulse struct {
 		MedianDays     *float32 `json:"median_days"`
 		MedianDaysPrev *float32 `json:"median_days_prev"`
 	} `json:"time_to_close"`
+	// Inflow has no earlier window: the comparison measured our coverage growth more
+	// than the market (see RebuildInsightsRolePulse).
 	Inflow struct {
-		Count     int64 `json:"count"`
-		CountPrev int64 `json:"count_prev"`
+		Count int64 `json:"count"`
 	} `json:"inflow"`
 }
 
@@ -553,7 +554,7 @@ func (h *statsHandlers) InsightsRolePulse(c *fiber.Ctx) error {
 		out.TimeToClose.Closed, out.TimeToClose.ClosedPrev = p.Closed, p.ClosedPrev
 		out.TimeToClose.MedianDays = float4Ptr(p.MedianCloseDays)
 		out.TimeToClose.MedianDaysPrev = float4Ptr(p.MedianCloseDaysPrev)
-		out.Inflow.Count, out.Inflow.CountPrev = p.Inflow, p.InflowPrev
+		out.Inflow.Count = p.Inflow
 	case !errors.Is(err, pgx.ErrNoRows):
 		return err
 	}

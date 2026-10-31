@@ -828,7 +828,6 @@ type InsightsRolePulse struct {
 	MedianCloseDays     pgtype.Float4 `json:"median_close_days"`
 	MedianCloseDaysPrev pgtype.Float4 `json:"median_close_days_prev"`
 	Inflow              int64         `json:"inflow"`
-	InflowPrev          int64         `json:"inflow_prev"`
 }
 
 type InsightsRoleSkillSample struct {

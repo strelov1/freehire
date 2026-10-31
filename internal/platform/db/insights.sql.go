@@ -321,7 +321,7 @@ func (q *Queries) GetInsightsRoleOpenCount(ctx context.Context, category string)
 
 const getInsightsRolePulse = `-- name: GetInsightsRolePulse :one
 SELECT views_through, views, views_prev, exposure_days, exposure_days_prev,
-       closed, closed_prev, median_close_days, median_close_days_prev, inflow, inflow_prev
+       closed, closed_prev, median_close_days, median_close_days_prev, inflow
 FROM insights_role_pulse
 WHERE category = $1::text
 `
@@ -337,7 +337,6 @@ type GetInsightsRolePulseRow struct {
 	MedianCloseDays     pgtype.Float4 `json:"median_close_days"`
 	MedianCloseDaysPrev pgtype.Float4 `json:"median_close_days_prev"`
 	Inflow              int64         `json:"inflow"`
-	InflowPrev          int64         `json:"inflow_prev"`
 }
 
 // One category's pulse. No row means the category had nothing open or closed in either
@@ -356,7 +355,6 @@ func (q *Queries) GetInsightsRolePulse(ctx context.Context, category string) (Ge
 		&i.MedianCloseDays,
 		&i.MedianCloseDaysPrev,
 		&i.Inflow,
-		&i.InflowPrev,
 	)
 	return i, err
 }
@@ -1326,8 +1324,7 @@ WITH anchor AS (
             FILTER (WHERE p.counted_close AND p.closed_at > $2::timestamptz))::real AS median_close_days,
         (percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (p.closed_at - p.existed_at)) / 86400.0)
             FILTER (WHERE p.counted_close AND p.closed_at > $1::timestamptz AND p.closed_at <= $2::timestamptz))::real AS median_close_days_prev,
-        count(*) FILTER (WHERE p.existed_at > $2::timestamptz) AS inflow,
-        count(*) FILTER (WHERE p.existed_at > $1::timestamptz AND p.existed_at <= $2::timestamptz) AS inflow_prev
+        count(*) FILTER (WHERE p.existed_at > $2::timestamptz) AS inflow
     FROM p, w
     GROUP BY p.category
 ), views AS (
@@ -1344,7 +1341,7 @@ WITH anchor AS (
 )
 INSERT INTO insights_role_pulse (
     category, views_through, views, views_prev, exposure_days, exposure_days_prev,
-    closed, closed_prev, median_close_days, median_close_days_prev, inflow, inflow_prev
+    closed, closed_prev, median_close_days, median_close_days_prev, inflow
 )
 SELECT
     s.category,
@@ -1357,8 +1354,7 @@ SELECT
     s.closed_prev,
     s.median_close_days,
     s.median_close_days_prev,
-    s.inflow,
-    s.inflow_prev
+    s.inflow
 FROM postings s
 CROSS JOIN w
 LEFT JOIN views v ON v.category = s.category
@@ -1390,8 +1386,13 @@ type RebuildInsightsRolePulseParams struct {
 // (closed before reasons were recorded). A close dated before existence is left out, as
 // RebuildInsightsCompanyLifetime does.
 //
-// INFLOW counts postings whose existence date falls in the window — the header's rule,
-// applied to "new" instead of "open at the start".
+// INFLOW counts postings whose existence date falls in the last 30 days — the header's
+// rule, applied to "new" instead of "open at the start" — and deliberately has NO earlier
+// window. Measured 2026-10-30, the comparison was dominated by our own coverage growth:
+// a board first crawled this month shows its earlier postings only if they were still
+// open when we found it, so healthcare read +155% while stable-coverage categories
+// (devops, data_engineering) moved -1% and -20%; neither a stable-employer panel nor a
+// discovered-within-N-days rule removed it (the latter made healthcare +392%).
 func (q *Queries) RebuildInsightsRolePulse(ctx context.Context, arg RebuildInsightsRolePulseParams) (int64, error) {
 	result, err := q.db.Exec(ctx, rebuildInsightsRolePulse, arg.PriorStart, arg.WindowStart)
 	if err != nil {

@@ -22,12 +22,13 @@ all-seniority figure exists since `insights_role_country_stats` (country `''`).
   - **time to close** — the count and the median lifetime of the category's postings
     that closed for a reason that says something about the posting (not about our
     crawler), in the last 30 days and the 30 before;
-  - **inflow** — postings the employer published in the last 30 days and the 30
-    before, by existence date `LEAST(posted_at, created_at)`.
-- **New endpoint** `GET /api/v1/insights/role-pulse?category=<c>`: the three raw
-  figure pairs plus the category's all-seniority open count. Aggregate-only, additive.
-- **`/insights/roles/<category>`** shows the three figures with their 30-day
-  direction, each hidden below a sample floor, and its intro counts every open
+  - **inflow** — postings the employer published in the last 30 days, by existence
+    date `LEAST(posted_at, created_at)`. No earlier window: measured, the comparison
+    tracked our own coverage growth more than the market (design.md).
+- **New endpoint** `GET /api/v1/insights/role-pulse?category=<c>`: the raw figures
+  plus the category's all-seniority open count. Aggregate-only, additive.
+- **`/insights/roles/<category>`** shows the three figures — competition and time to
+  close with their 30-day direction — each hidden below a sample floor, and its intro counts every open
   posting of the category instead of the seniority-resolved subset.
 
 ## Capabilities

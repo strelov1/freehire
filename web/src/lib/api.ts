@@ -230,7 +230,7 @@ export interface InsightRoleCountries {
 }
 
 /** One category's market pulse (GET /api/v1/insights/role-pulse): raw figures for the
- *  last 30 days and the 30 before. `web/src/lib/rolePulse.ts` turns them into the
+ *  last 30 days and, for competition and time to close, the 30 before. `web/src/lib/rolePulse.ts` turns them into the
  *  page's figures and decides which are too thin to show. */
 export interface InsightRolePulse {
   category: string;
@@ -250,7 +250,8 @@ export interface InsightRolePulse {
     median_days: number | null;
     median_days_prev: number | null;
   };
-  inflow: { count: number; count_prev: number };
+  /** The last 30 days only: no earlier window is served (see rolePulse.ts). */
+  inflow: { count: number };
 }
 
 export interface InsightRole {

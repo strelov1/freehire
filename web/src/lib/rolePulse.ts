@@ -11,8 +11,6 @@ const MIN_EXPOSURE_DAYS = 300;
 const MIN_VIEWS = 50;
 /** Fewest qualifying closes before a median close time is published. */
 const MIN_CLOSES = 30;
-/** Fewest postings in the earlier window before inflow gets a direction. */
-const MIN_INFLOW = 30;
 /** A change smaller than this, either way, reads as "about the same". */
 const FLAT_BAND = 0.05;
 
@@ -57,8 +55,6 @@ export function rolePulseFigures(p: InsightRolePulse): PulseFigure[] {
   const close = t.closed >= MIN_CLOSES ? t.median_days : null;
   const closePrev = t.closed_prev >= MIN_CLOSES ? t.median_days_prev : null;
 
-  const i = p.inflow;
-  const inflowComparable = i.count_prev >= MIN_INFLOW;
 
   return [
     {
@@ -83,10 +79,12 @@ export function rolePulseFigures(p: InsightRolePulse): PulseFigure[] {
     {
       key: 'inflow',
       label: 'New postings',
-      value: fmtCount(i.count),
+      value: fmtCount(p.inflow.count),
       detail: 'published in the last 30 days',
-      previous: inflowComparable ? fmtCount(i.count_prev) : null,
-      direction: inflowComparable ? directionOf(i.count, i.count_prev) : null,
+      // No comparison, on purpose: an earlier window counts only what we were already
+      // crawling, so the change measured our coverage growth more than the market.
+      previous: null,
+      direction: null,
     },
   ];
 }

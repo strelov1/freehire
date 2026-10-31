@@ -15,7 +15,7 @@ function pulse(over: Partial<InsightRolePulse> = {}): InsightRolePulse {
       views_through: '2026-10-29',
     },
     time_to_close: { closed: 200, closed_prev: 180, median_days: 27.4, median_days_prev: 31.2 },
-    inflow: { count: 1200, count_prev: 1180 },
+    inflow: { count: 1200 },
     ...over,
   };
 }
@@ -79,13 +79,16 @@ describe('rolePulseFigures', () => {
   });
 
   it('reads a change under 5% as flat', () => {
-    expect(byKey(pulse()).inflow.direction).toBe('flat');
+    const f = byKey(
+      pulse({ time_to_close: { closed: 200, closed_prev: 180, median_days: 30, median_days_prev: 29 } }),
+    ).time_to_close;
+    expect(f.direction).toBe('flat');
     expect(byKey(pulse()).time_to_close.direction).toBe('down');
   });
 
-  it('always shows the inflow count, but compares only against a real earlier window', () => {
-    const f = byKey(pulse({ inflow: { count: 40, count_prev: 3 } })).inflow;
-    expect(f.value).toBe('40');
+  it('shows the inflow count with no comparison', () => {
+    const f = byKey(pulse({ inflow: { count: 12345 } })).inflow;
+    expect(f.value).toBe('12,345');
     expect(f.previous).toBeNull();
     expect(f.direction).toBeNull();
   });

@@ -34,7 +34,8 @@ existence rule (`LEAST(posted_at, created_at)`) and the all-seniority
   category is recent) and `management` 0 in the later one (retired) — the floors below
   suppress their direction.
 - Inflow by existence date, last 30 vs the 30 before: healthcare 344,346 vs 135,130,
-  software_engineering 85,703 vs 77,631, data_engineering 33,365 vs 41,660.
+  software_engineering 85,703 vs 77,631, data_engineering 33,365 vs 41,660 — see the
+  Inflow decision for why only the first figure ships.
 
 ## Goals / Non-Goals
 
@@ -87,25 +88,41 @@ Reuse of `insights_company_lifetime`: it fits in spirit, not in shape — it is 
 over 180 days, first-seen-based, and has no window pair — so the rule (which reasons
 count) is reused and the query is not.
 
-### Inflow: existence-dated count, the direction with a caveat
+### Inflow: an existence-dated count with NO comparison
 
-New postings = existence date inside the window. Counting by `created_at` would publish
-our onboarding schedule as hiring (the whole point of `insights-role-country-matrix`).
+New postings = existence date inside the last 30 days. Counting by `created_at` would
+publish our onboarding schedule as hiring (the whole point of
+`insights-role-country-matrix`).
 
-Existence does not fully remove onboarding from the direction: a board first crawled
-this month shows its postings published in the earlier window only if they were still
-open when we found it, so the earlier count is a floor wherever coverage grew. Two
-stable panels were measured to correct it — employers (company_slug) and (source,
-company_slug) pairs freehire already carried before the earlier window — and neither
-moved the result materially (healthcare: +155% raw, +100% and +107% on the panels;
-software_engineering: +10%, −9%, −16%). The panels add a scan and a definition without
-removing the doubt, so the plain existence rule ships, and the page shows the earlier
-count beside the new one instead of a percentage, so a reader sees the two figures the
-direction comes from.
+There is deliberately no earlier window, because every way of measuring one tracked our
+coverage growth more than the market. A board first crawled this month shows its
+postings published in the earlier window only if they were still open when we found it,
+so the earlier count is a floor wherever coverage grew. Measured 2026-10-30, new
+postings last 30 days vs the 30 before:
+
+| category | existence rule | stable employers | stable (source, employer) | found ≤3 days after publication |
+|---|---|---|---|---|
+| healthcare | +155% | +100% | +107% | +392% |
+| skilled_trades | +116% | +64% | +53% | +182% |
+| retail | +100% | +40% | — | +86% |
+| sales | +51% | +3% | +3% | +44% |
+| software_engineering | +11% | −9% | −16% | +8% |
+| devops | −1% | −16% | −21% | −2% |
+| data_engineering | −20% | −33% | −40% | −21% |
+
+Where coverage barely moved (devops, data_engineering, software_engineering) the rules
+stay within ~20 points of each other; where boards were onboarded they swing by 50 to
+250 points, so the sign of the change is the only stable part and only in the stable
+categories. The panels do not remove the effect, and the "fresh discovery" rule
+makes it worse: it drops late-found postings, which on a newly onboarded board are
+exactly its earlier-window ones (healthcare: it removes 67% of the earlier window and
+37% of the current one), and the result moves with the threshold (1 day +400%, 7 days
++468%). The count alone is honest; its direction is not, so none is published.
 
 ### Raw figures on the wire, floors in the page helper
 
-The endpoint returns the raw pairs (views/exposure, closes/median, inflow) plus the
+The endpoint returns the raw figures (views/exposure and closes/median for both windows,
+inflow for the last 30 days) plus the
 category's all-seniority open count, like `/insights/role-countries` returns raw cells:
 the floor below which a ratio is noise is a presentation choice. The floors live in one
 pure helper (`web/src/lib/rolePulse.ts`): competition needs ≥ 300 posting-days and ≥ 50
@@ -134,8 +151,8 @@ response — one call, and the figure a search for the category can show.
   took 7m28s. → It runs inside the existing `work_mem = 256MB` transaction, so readers
   keep the old snapshot meanwhile; watch the first run's duration, and split the views
   pass out if the rollup's schedule cannot absorb it.
-- [Inflow direction] see above → the earlier count is shown, not hidden behind a
-  percentage.
+- [Inflow without context] A count with no direction says less → it is the part that
+  survives measurement; revisit once coverage has been stable for two windows.
 - [Category reclassification] A dictionary change moves past postings between categories
   only where `backfill-derive` re-derived them, so a window pair can straddle two
   classifications (`it_support`, `management`). → The floors hide a direction whose

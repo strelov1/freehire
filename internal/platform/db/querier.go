@@ -6073,8 +6073,13 @@ type Querier interface {
 	// (closed before reasons were recorded). A close dated before existence is left out, as
 	// RebuildInsightsCompanyLifetime does.
 	//
-	// INFLOW counts postings whose existence date falls in the window — the header's rule,
-	// applied to "new" instead of "open at the start".
+	// INFLOW counts postings whose existence date falls in the last 30 days — the header's
+	// rule, applied to "new" instead of "open at the start" — and deliberately has NO earlier
+	// window. Measured 2026-10-30, the comparison was dominated by our own coverage growth:
+	// a board first crawled this month shows its earlier postings only if they were still
+	// open when we found it, so healthcare read +155% while stable-coverage categories
+	// (devops, data_engineering) moved -1% and -20%; neither a stable-employer panel nor a
+	// discovered-within-N-days rule removed it (the latter made healthcare +392%).
 	RebuildInsightsRolePulse(ctx context.Context, arg RebuildInsightsRolePulseParams) (int64, error)
 	// The denominator every share in insights_role_skill_stats divides by: the role's
 	// open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of

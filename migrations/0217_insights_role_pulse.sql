@@ -1,6 +1,6 @@
 -- Per-category market pulse behind /insights/roles/<category> (GET
 -- /api/v1/insights/role-pulse): competition, time to close and inflow, each for the last
--- 30 days and the 30 before. Like every insights_* table it is a pure function of
+-- 30 days and (for the first two) the 30 before. Like every insights_* table it is a pure function of
 -- current `jobs` (and `job_daily_views`), rebuilt by cmd/rollup-stats as an atomic
 -- delete-and-reinsert. The rules behind each figure are argued beside
 -- RebuildInsightsRolePulse in internal/platform/db/queries/insights.sql.
@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS public.insights_role_pulse (
     closed_prev             bigint           NOT NULL DEFAULT 0,
     median_close_days       real,
     median_close_days_prev  real,
-    inflow                  bigint           NOT NULL DEFAULT 0,
-    inflow_prev             bigint           NOT NULL DEFAULT 0
+    -- The last 30 days only, with no earlier window to compare against: see the
+    -- INFLOW note beside RebuildInsightsRolePulse.
+    inflow                  bigint           NOT NULL DEFAULT 0
 );
