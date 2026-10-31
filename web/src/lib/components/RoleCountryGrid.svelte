@@ -159,7 +159,7 @@
                       class="block px-2 py-1.5 transition-colors hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-foreground {shadeOf(country, cell)}"
                     >
                       <span class="block font-medium text-foreground">{compact.format(cell.open)}</span>
-                      <span class="block text-xs {growth.tone}">{growth.text}</span>
+                      <span class="block text-xs whitespace-nowrap {growth.tone}">{growth.text}</span>
                     </a>
                   {:else}
                     <span class="block px-2 py-1.5 text-muted-foreground"><span aria-hidden="true">·</span><span class="sr-only">none</span></span>
