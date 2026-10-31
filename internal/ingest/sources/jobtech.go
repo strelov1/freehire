@@ -1,11 +1,15 @@
 package sources
 
 import (
+	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -25,6 +29,12 @@ import (
 // catalogue is a rolling window of recent Swedish postings, not the full ~40k back-catalogue.
 // Seeding the full history would need a one-time /snapshot bootstrap — the throttled,
 // multi-hour path deliberately not built here.
+//
+// The same shape means a live ad that does not change is never re-sent, so its last_seen_at
+// stops moving three days after it was published and says nothing about whether it is still
+// up; and a removal the crawl fails to apply inside the window is never sent again.
+// cmd/liveness's jobtech pass is that miss's backstop, asking JobSearch about each ad unseen
+// past the sweep window (see cmd/liveness/jobtech.go).
 type jobtech struct {
 	http StreamGetter
 }
@@ -87,46 +97,95 @@ func (s jobtech) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	return jobs, err
 }
 
-// FetchStream streams the trailing change window and emits each item as it is decoded: a
-// live ad as a Job to upsert, a removed ad as a Job with Removed set (the pipeline closes it
-// by identity). The JobStream body is a single large, throttled JSON array, so it is decoded
-// token-by-token (constant memory) rather than buffered. A mid-stream read failure after the
-// first emit returns nil — the throttled feed dropping the connection is expected, and the
-// already-emitted items are persisted; only a failure before any progress is a board error.
+// FetchStream reads the trailing change window and emits its removals — each a Job with
+// Removed set, which the pipeline closes by identity — and then its live ads, as Jobs to
+// upsert.
+//
+// The window is spooled to a temporary file before anything is emitted. Every emit is a
+// database write from the crawl host, a few a second, and the window runs to ~18k items
+// (80 MB on 2026-10-31); decoding while writing held the download open behind the writes until
+// the stream client's timeout ended it a few thousand items in. JobStream lists live ads first
+// and removals after them, so that cut fell before every removal: from 2026-10-27 no run closed
+// anything, and a removal that ages out of the window is never sent again.
+//
+// Removals go first for the same reason — they are the only close signal this source has,
+// while a live ad not reached this run is re-sent by every run for the window's 72h. An ad the
+// window lists as removed is not emitted live as well, so the order cannot reopen it.
+//
+// A window that could not be read whole — the connection dropped, the body ended mid-array —
+// still emits what it decoded, then returns the failure: the run did not read its window, and
+// the part a cut-short read loses is exactly the removals.
 func (s jobtech) FetchStream(ctx context.Context, _ CompanyEntry, emit func(Job)) error {
+	spool, err := os.CreateTemp("", "jobtech-stream-*.json")
+	if err != nil {
+		return fmt.Errorf("jobtech: spool: %w", err)
+	}
+	defer func() {
+		_ = spool.Close()
+		_ = os.Remove(spool.Name())
+	}()
+
 	since := time.Now().UTC().Add(-jobtechStreamWindow).Format(jobtechDateLayout)
 	q := url.Values{}
 	q.Set("date", since)
-	streamURL := jobtechStreamURL + "?" + q.Encode()
-
-	emitted := 0
-	return s.http.GetStream(ctx, streamURL, "application/json", func(r io.Reader) error {
-		dec := json.NewDecoder(r)
-		if _, err := dec.Token(); err != nil { // consume the opening '['
-			return fmt.Errorf("jobtech: stream open: %w", err)
-		}
-		for dec.More() {
-			var it jobtechItem
-			if err := dec.Decode(&it); err != nil {
-				if emitted > 0 {
-					return nil // throttled stream dropped mid-flight: keep what was emitted
-				}
-				return fmt.Errorf("jobtech: decode item: %w", err)
-			}
-			if it.Removed {
-				if it.ID != "" {
-					emit(Job{ExternalID: it.ID, Removed: true})
-					emitted++
-				}
-				continue
-			}
-			if job, ok := it.toJob(); ok {
-				emit(job)
-				emitted++
-			}
-		}
-		return nil
+	var read int64
+	readErr := s.http.GetStream(ctx, jobtechStreamURL+"?"+q.Encode(), "application/json", func(r io.Reader) error {
+		var err error
+		read, err = io.Copy(spool, r)
+		return err
 	})
+	if read == 0 {
+		if readErr != nil {
+			return readErr
+		}
+		return errors.New("jobtech: empty stream body")
+	}
+	if readErr != nil {
+		readErr = fmt.Errorf("jobtech: stream cut short after %d bytes: %w", read, readErr)
+	}
+
+	removed := make(map[string]bool)
+	removalsErr := eachJobtechItem(ctx, spool, func(it jobtechItem) {
+		if it.Removed && it.ID != "" && !removed[it.ID] {
+			removed[it.ID] = true
+			emit(Job{ExternalID: it.ID, Removed: true})
+		}
+	})
+	liveErr := eachJobtechItem(ctx, spool, func(it jobtechItem) {
+		if it.Removed || removed[it.ID] {
+			return
+		}
+		if job, ok := it.toJob(); ok {
+			emit(job)
+		}
+	})
+	// A bad body fails both passes at the same item; the read failure, when there is one, is
+	// the cause worth reporting.
+	return cmp.Or(readErr, liveErr, removalsErr)
+}
+
+// eachJobtechItem decodes the spooled window from its start and hands each item to fn, one at
+// a time so memory stays flat however wide the window is. It stops at the first item that does
+// not decode (a body cut short) and reports it.
+func eachJobtechItem(ctx context.Context, spool *os.File, fn func(jobtechItem)) error {
+	if _, err := spool.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("jobtech: rewind spool: %w", err)
+	}
+	dec := json.NewDecoder(bufio.NewReader(spool))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('[') {
+		return errors.New("jobtech: stream body is not a JSON array")
+	}
+	for dec.More() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var it jobtechItem
+		if err := dec.Decode(&it); err != nil {
+			return fmt.Errorf("jobtech: decode item: %w", err)
+		}
+		fn(it)
+	}
+	return nil
 }
 
 // toJob maps a live ad to a Job, returning ok=false for an ad with no id to key on or no

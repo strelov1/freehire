@@ -3,6 +3,7 @@ package sources
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
@@ -73,7 +74,8 @@ func TestJobtechStreamMapsLiveClosesRemovedDropsInvalid(t *testing.T) {
 		t.Fatalf("got %d jobs, want 2 (1 live + 1 removed close; no-employer dropped)", len(jobs))
 	}
 
-	live := jobs[0]
+	// Removals are emitted before live ads (TestJobtechAppliesRemovalsBeforeLiveAds).
+	removed, live := jobs[0], jobs[1]
 	if live.ExternalID != "31223446" || live.Removed {
 		t.Errorf("live ad: ExternalID=%q Removed=%v, want id + not removed", live.ExternalID, live.Removed)
 	}
@@ -96,7 +98,6 @@ func TestJobtechStreamMapsLiveClosesRemovedDropsInvalid(t *testing.T) {
 		t.Errorf("Remote=%v WorkMode=%q, want unset (left to the location dictionary)", live.Remote, live.WorkMode)
 	}
 
-	removed := jobs[1]
 	if removed.ExternalID != "555" || !removed.Removed {
 		t.Errorf("removed ad: ExternalID=%q Removed=%v, want id 555 + removed", removed.ExternalID, removed.Removed)
 	}
@@ -137,19 +138,133 @@ func TestJobtechRequestsTrailingWindow(t *testing.T) {
 	}
 }
 
-func TestJobtechKeepsPartialOnMidStreamDrop(t *testing.T) {
-	// The throttled feed drops mid-array: the first element decodes, then the body is
-	// truncated. The already-emitted job must survive (partial result), not error.
+func TestJobtechKeepsPartialButReportsATruncatedBody(t *testing.T) {
+	// The body ends mid-array: the first element decodes, the rest is cut off. The decoded job
+	// is still emitted, but the run did not read its window — and the removals the feed lists
+	// LAST are what a cut-short read loses — so it must not pass for a complete read.
 	body := `[
 {"id":"1","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}},
 {"id":"2","removed":fal`
 	fake := &fakeStream{body: body}
 	jobs, err := NewJobtech(fake).Fetch(context.Background(), CompanyEntry{})
-	if err != nil {
-		t.Fatalf("Fetch should swallow a mid-stream drop after progress, got: %v", err)
+	if err == nil {
+		t.Fatal("Fetch should report a body cut short mid-array")
 	}
 	if len(jobs) != 1 {
-		t.Fatalf("got %d jobs, want 1 (the element decoded before the drop)", len(jobs))
+		t.Fatalf("got %d jobs, want 1 (the element decoded before the cut)", len(jobs))
+	}
+}
+
+// droppingStream serves body and then fails the read, the way a connection reset or the
+// stream client's timeout ends a body part-way.
+type droppingStream struct{ body string }
+
+func (d droppingStream) GetStream(_ context.Context, _, _ string, fn func(io.Reader) error) error {
+	return fn(io.MultiReader(strings.NewReader(d.body), failingReader{}))
+}
+
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) { return 0, errors.New("connection reset") }
+
+func TestJobtechReportsADroppedConnection(t *testing.T) {
+	body := `[
+{"id":"1","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}},
+`
+	jobs, err := NewJobtech(droppingStream{body: body}).Fetch(context.Background(), CompanyEntry{})
+	if err == nil || !strings.Contains(err.Error(), "connection reset") {
+		t.Fatalf("Fetch error = %v, want the dropped read reported", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1 (what arrived before the drop)", len(jobs))
+	}
+}
+
+// JobStream lists a window's live ads first and its removals after them (measured 2026-10-31:
+// 6,692 live ads, then 11,053 removals). Emitting in that order put every removal behind
+// thousands of database writes, so a run that ran out of time closed nothing.
+func TestJobtechAppliesRemovalsBeforeLiveAds(t *testing.T) {
+	body := `[
+{"id":"1","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}},
+{"id":"2","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}},
+{"id":"3","removed":true},
+{"id":"4","removed":true}
+]`
+	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	var got []string
+	for _, j := range jobs {
+		got = append(got, fmt.Sprintf("%s:%v", j.ExternalID, j.Removed))
+	}
+	want := []string{"3:true", "4:true", "1:false", "2:false"}
+	if !slices.Equal(got, want) {
+		t.Errorf("emit order = %v, want removals first %v", got, want)
+	}
+}
+
+// Emitting removals first must not let a later live emit of the same ad reopen what it closed.
+func TestJobtechDoesNotEmitARemovedAdLive(t *testing.T) {
+	body := `[
+{"id":"7","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}},
+{"id":"7","removed":true}
+]`
+	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || !jobs[0].Removed {
+		t.Errorf("got %+v, want only the removal of ad 7", jobs)
+	}
+}
+
+// eofSignallingStream serves body and records when the body has been read to its end.
+type eofSignallingStream struct {
+	body string
+	done *bool
+}
+
+func (s eofSignallingStream) GetStream(_ context.Context, _, _ string, fn func(io.Reader) error) error {
+	return fn(eofSignallingReader{r: strings.NewReader(s.body), done: s.done})
+}
+
+type eofSignallingReader struct {
+	r    io.Reader
+	done *bool
+}
+
+func (s eofSignallingReader) Read(p []byte) (int, error) {
+	n, err := s.r.Read(p)
+	if err == io.EOF {
+		*s.done = true
+	}
+	return n, err
+}
+
+// Every emit is a database write from the crawl host, a few a second, while the feed's 72h
+// window runs to ~18k items. Decoding while writing held the download open behind the writes
+// until the stream client's timeout ended it a few thousand items in, short of every removal.
+// The window must be read to its end before the first emit.
+func TestJobtechReadsTheWholeWindowBeforeEmitting(t *testing.T) {
+	body := `[
+{"id":"1","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}},
+{"id":"2","removed":true}
+]`
+	done := false
+	src := NewJobtech(eofSignallingStream{body: body, done: &done}).(StreamingSource)
+	emitted := 0
+	err := src.FetchStream(context.Background(), CompanyEntry{}, func(j Job) {
+		emitted++
+		if !done {
+			t.Errorf("emitted %s before the stream was read to its end", j.ExternalID)
+		}
+	})
+	if err != nil {
+		t.Fatalf("FetchStream: %v", err)
+	}
+	if emitted != 2 {
+		t.Errorf("emitted %d, want 2", emitted)
 	}
 }
 

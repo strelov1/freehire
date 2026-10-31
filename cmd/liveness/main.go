@@ -13,8 +13,8 @@
 // echojobs.io's, so its candidates are checked against echojobs.io's own per-posting
 // API instead (see echojobs.go); hh.ru's pages embed an "archived" phrase even when live, so
 // its candidates are read for the page's own archived flag instead, one page a second (see
-// hh.go); djinni, 4dayweek, torre and arbeitnow are paced the same way, each against its own
-// evidence (djinni.go, fourdayweek.go, torre.go, arbeitnow.go). A source with the same leak but NO evidence a probe
+// hh.go); djinni, 4dayweek, torre, arbeitnow and jobtech are paced the same way, each against its
+// own evidence (djinni.go, fourdayweek.go, torre.go, arbeitnow.go, jobtech.go). A source with the same leak but NO evidence a probe
 // could ever read — see expireDespiteRegistered — falls back to the same age-based
 // guess as unsignalledSources instead of a verdict.)
 //
@@ -103,8 +103,10 @@ const expiryWindow = 45 * 24 * time.Hour
 // is not fullCatalog and its sweep is company-scoped too. So do djinni (its listing names only
 // the last month), 4dayweek (its list feed omits postings the site still serves) and torre
 // (its sitemap still names a few closed postings), and arbeitnow (its API names only the last
-// week) — none of them fullCatalog, all boardless.
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow"}
+// week) — none of them fullCatalog, all boardless. jobtech is the one member the sweep never
+// touches at all: it is self-closing, closing from its change feed's removals, and a removal
+// the crawl missed inside the feed's 72h window is never sent again (see jobtech.go).
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow", "jobtech"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
 // plain-GET-then-Classify probe as every orphan candidate — their job pages answer a
@@ -118,7 +120,7 @@ var probeDespiteRegisteredGET = []string{"jobicy", "remoteok", "empregos"}
 // pacedPasses are the probeDespiteRegistered members probed one request at a time rather than
 // on the fan-out: each meters the host the crawl reads it from (see paced.go), and each reads
 // its own evidence — hh's archived flag, djinni's page through the shared Classify, 4dayweek's
-// per-posting API, torre's page state.
+// per-posting API, torre's page state, arbeitnow's status, jobtech's per-ad API.
 func pacedPasses(client *http.Client) []pacedPass {
 	return []pacedPass{
 		hhPass(client, hhVacancyPage),
@@ -126,6 +128,7 @@ func pacedPasses(client *http.Client) []pacedPass {
 		fourDayWeekPass(client, fourDayWeekJobAPI),
 		torrePass(client, torrePostPage),
 		arbeitnowPass(client),
+		jobtechPass(client, jobtechAdAPI),
 	}
 }
 
