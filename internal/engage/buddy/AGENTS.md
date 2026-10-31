@@ -92,9 +92,16 @@ second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.g
   them together.
 - **Reviews are blind.** A review is shown to its subject and on their page only once the
   subject has reviewed back or seven days have passed since the end. The rule is computed in
-  `ListBuddyMocksForUser`, `GetBuddyMemberMockSummary` and `ListBuddyMemberRevealedReviews`;
+  `ListBuddyMocksForUser`, `ListBuddyMemberMockSummaries` and `ListBuddyMemberRevealedReviews`;
   change all three together. A member page never names who wrote a review.
 - **A block withdraws the reviews across it**: while either of a review's author and subject blocks the other, it is neither their_review nor on the subject's page (count, average or list); the completed-mock count stays.
+- **The hosts listing (`MockService.Hosts`) is the slot listing run for many hosts.** It
+  reuses the engine and the mock shape, and its exclusions are `visibleMember`'s (left,
+  self, a block either way) restated in `ListBuddyMockHostCandidates`; change one and
+  change the other. Its rating is the member page's own query
+  (`ListBuddyMemberMockSummaries`), never a second copy. Candidates are capped at
+  `maxMockHostCandidates`; past that, the oldest settings drop out of the listing, not
+  out of booking.
 - **Mock notices name the other member by handle only**, render the time in the
   recipient's zone (UTC, stated, when it does not resolve), and say only "cancelled" for a
   leave or a block.

@@ -158,3 +158,36 @@ func TestBuddyBlockTellsTheOtherMockParticipant(t *testing.T) {
 		t.Fatalf("the blocker was told about their own block: %d", got)
 	}
 }
+
+func TestBuddyMockHostsOverHTTP(t *testing.T) {
+	env := newBuddyEnv(t, "host", "viewer", "outsider")
+	hostHandle := env.join("host")
+	env.join("viewer")
+	link := env.openMockHost("host")
+	path := "/api/v1/me/buddies/mocks/hosts?timezone=Asia/Tokyo"
+
+	env.want(http.StatusUnauthorized, http.MethodGet, path, "", nil)
+	env.want(http.StatusForbidden, http.MethodGet, path, "outsider", nil)
+	env.want(http.StatusUnprocessableEntity, http.MethodGet, path+"&topic=astrology", "viewer", nil)
+
+	if raw := env.raw(http.StatusOK, http.MethodGet, path, "viewer", nil); strings.Contains(raw, link) {
+		t.Fatal("the hosts listing carries the meeting link")
+	}
+	out := env.want(http.StatusOK, http.MethodGet, path, "viewer", nil)
+	if meta := out["meta"].(map[string]any); meta["timezone"] != "Asia/Tokyo" || meta["count"] != float64(1) {
+		t.Fatalf("meta = %v", meta)
+	}
+	host := out["data"].([]any)[0].(map[string]any)
+	next := host["next_slot"].(map[string]any)
+	if host["handle"] != hostHandle || host["card_summary"] == nil || len(host["topics"].([]any)) != 2 ||
+		next["utc_offset"] != "+09:00" || !strings.HasSuffix(next["local_start"].(string), "+09:00") {
+		t.Fatalf("host = %v", host)
+	}
+	if got := env.want(http.StatusOK, http.MethodGet, path+"&topic=system_design", "viewer", nil); len(got["data"].([]any)) != 0 {
+		t.Fatalf("a topic the host does not offer still lists them: %v", got)
+	}
+	// The host does not see themselves.
+	if got := env.want(http.StatusOK, http.MethodGet, path, "host", nil); len(got["data"].([]any)) != 0 {
+		t.Fatalf("the host lists themselves: %v", got)
+	}
+}

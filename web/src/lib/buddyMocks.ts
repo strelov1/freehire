@@ -1,4 +1,4 @@
-import type { BuddyMock, BuddyMockSummary, BuddyMockTopic } from './types.js';
+import type { BuddyMock, BuddyMockHost, BuddyMockSummary, BuddyMockTopic } from './types.js';
 
 /** A mock runs one hour: buddy.MockDuration on the server. */
 export const MOCK_DURATION_MINUTES = 60;
@@ -27,14 +27,23 @@ export function isHttpsLink(raw: string): boolean {
   }
 }
 
-/** A booked mock's time in `zone`. A mock carries absolute instants, so parsing them is
- *  safe here — unlike a slot label, which the server already resolved (web/AGENTS.md). */
-export function mockWhen(mock: Pick<BuddyMock, 'starts_at' | 'ends_at'>, zone: string): string {
-  const clock = { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zone } as const;
-  const day = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: zone });
-  const time = new Intl.DateTimeFormat('en-GB', clock);
+/** A booked mock's day and hours in `zone`, split for a date tile: "Tue" / "10" / "Nov"
+ *  and "19:00–20:00". A mock carries absolute instants, so parsing them is safe here —
+ *  unlike a slot label, which the server already resolved (web/AGENTS.md). */
+export function mockDateParts(
+  mock: Pick<BuddyMock, 'starts_at' | 'ends_at'>,
+  zone: string,
+): { weekday: string; day: string; month: string; time: string } {
   const start = new Date(mock.starts_at);
-  return `${day.format(start)}, ${time.format(start)}–${time.format(new Date(mock.ends_at))}`;
+  const part = (opts: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: zone }).format(start);
+  const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: zone });
+  return {
+    weekday: part({ weekday: 'short' }),
+    day: part({ day: 'numeric' }),
+    month: part({ month: 'short' }),
+    time: `${time.format(start)}–${time.format(new Date(mock.ends_at))}`,
+  };
 }
 
 /** The member page's one-line record. An average of no ratings is not zero stars. */
@@ -53,4 +62,26 @@ export function mockCounterpartLabel(mock: Pick<BuddyMock, 'counterpart'>): stri
 
 export function mockRoleLabel(mock: Pick<BuddyMock, 'role'>): string {
   return mock.role === 'host' ? 'You host' : 'You are the guest';
+}
+
+const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** A host's next slot as "Tue 4 Nov, 19:00", read from the slot's `local_start`, which the
+ *  server already resolved in the viewer's zone. The wall clock is taken from the string
+ *  itself: parsing it into a Date would re-read it in the browser's zone (web/AGENTS.md).
+ *  The weekday comes from the calendar date alone. */
+export function hostSlotLabel(localStart: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})/.exec(localStart);
+  if (!m) return localStart;
+  const [, y, mo, d, clock] = m;
+  const weekday = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d))).getUTCDay();
+  return `${SHORT_DAYS[weekday]} ${Number(d)} ${SHORT_MONTHS[Number(mo) - 1]}, ${clock}`;
+}
+
+/** A host's record in the listing, "4.6 · 5 mocks", or null before any revealed rating:
+ *  an average of nothing is not a score, and a bare mock count reads as one. */
+export function hostRatingLine(h: Pick<BuddyMockHost, 'rating_count' | 'rating_avg' | 'completed'>): string | null {
+  if (h.rating_count === 0) return null;
+  return `${h.rating_avg.toFixed(1)} · ${h.completed === 1 ? '1 mock' : `${h.completed} mocks`}`;
 }

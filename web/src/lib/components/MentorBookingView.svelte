@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, type Snippet } from 'svelte';
+  import { onMount, untrack, type Snippet } from 'svelte';
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { Badge, Card, Skeleton } from '#lib/ui/index.js';
@@ -7,9 +7,11 @@
     addMonths,
     browserTimezone,
     daysWithSlots,
+    firstOpenMonth,
     groupSlotsByLocalDay,
     monthGrid,
     monthOf,
+    openingSlotWindow,
     slotLocalTime,
     slotWindowForMonth,
     todayIn,
@@ -128,6 +130,13 @@
       // The zone the server used, which may not be the one asked for.
       zone = res.timezone;
       failed = false;
+      if (opening) {
+        opening = false;
+        // Held in the component only, not written to the address: this is a default, and
+        // replaceState may not run before the router is ready.
+        const first = firstOpenMonth(res.slots, month);
+        if (first !== month) selection = { ...selection, month: first };
+      }
     } catch {
       if (!controller.signal.aborted) failed = true;
     } finally {
@@ -138,7 +147,16 @@
   // One name for "ask again for the month on screen", said once rather than at each of
   // the four places that need it: first render, the timer, the tab regaining focus, and a
   // booking that was refused because the hour had gone.
-  const reload = () => void load(slotWindowForMonth(month));
+  //
+  // Opened without a ?month, the calendar does not start on a month with nothing to book:
+  // late in a month every remaining hour can sit inside the notice period, and a visitor
+  // shown an empty grid reads it as "this person has no time". So the first read spans this
+  // month and the next (openingSlotWindow), and when this month is empty the grid moves to
+  // the first month that has an hour. A month the address names is the visitor's choice
+  // and is kept, empty or not. `opening` is plain, not $state: the effect must not re-run
+  // when it flips.
+  let opening = untrack(() => !selection.month);
+  const reload = () => void load(opening ? openingSlotWindow(month) : slotWindowForMonth(month));
 
   $effect(reload);
 
