@@ -182,6 +182,16 @@
             "example": "title"
           },
           {
+            "name": "hide_applied_companies",
+            "in": "query",
+            "required": false,
+            "description": "`true` leaves out every posting of an employer the signed-in caller has applied to (through any of its postings). Applied inside the search, so `meta.total` and paging describe what is left. A per-person preference, not a filter: a saved search carrying it narrows nothing. Without a session or API key, or with a value that is not a boolean, the search runs unhidden and the param is reported in `meta.ignored_params`.",
+            "schema": {
+              "type": "boolean"
+            },
+            "example": "true"
+          },
+          {
             "name": "sort",
             "in": "query",
             "required": false,
@@ -2355,6 +2365,37 @@
                   "type": "string"
                 },
                 "example": "{ \"data\": [\"senior-go-engineer-acme-1a2b\", \"...\"] }"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "tags": [
+          "Job interactions"
+        ]
+      }
+    },
+    "/me/tracking/applied-companies": {
+      "get": {
+        "operationId": "get_me_tracking_applied_companies",
+        "summary": "Company slugs of the employers you have applied to.",
+        "description": "Lets the SPA mark \"you already applied to this company\" on any posting of theirs without authenticating the public job reads: compare a posting's `company_slug` against this set. Counts applications actually made (not ones still being prepared), keyed by the posting's current company slug and resolved through company merges. Newest first, drawn from your 1000 most recent applications.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{ \"data\": [\"acme\", \"globex\"] }"
               }
             }
           }

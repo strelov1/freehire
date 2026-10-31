@@ -1790,6 +1790,13 @@ export function createApi(
     return requestData<string[]>('/api/v1/me/tracking/saved');
   }
 
+  /** The company slugs of every employer the current user has applied to. The browse UI
+   *  and the job page compare each posting's `company_slug` against it to mark "you
+   *  already applied to this company" without authenticating the public job reads. */
+  async function listAppliedCompanySlugs(): Promise<string[]> {
+    return requestData<string[]>('/api/v1/me/tracking/applied-companies');
+  }
+
   // --- Notification settings -------------------------------------------------
   //
   // One account-level rule (enable, channels) gates saved-job reminders and both
@@ -3455,6 +3462,7 @@ export function createApi(
     myUsage,
     listViewedSlugs,
     listSavedSlugs,
+    listAppliedCompanySlugs,
     getNotificationSettings,
     updateNotificationSettings,
     updateTimezone,

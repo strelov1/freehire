@@ -279,6 +279,7 @@ Combine free-text `q` with any of the filter params below. Repeated facet params
 | --- | --- | --- | --- |
 | `q` | string | no | Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default engine matching: the first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one. (e.g. `golang`) |
 | `q_fields` | string | no | Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying. (e.g. `title`) |
+| `hide_applied_companies` | boolean | no | `true` leaves out every posting of an employer the signed-in caller has applied to (through any of its postings). Applied inside the search, so `meta.total` and paging describe what is left. A per-person preference, not a filter: a saved search carrying it narrows nothing. Without a session or API key, or with a value that is not a boolean, the search runs unhidden and the param is reported in `meta.ignored_params`. (e.g. `true`) |
 | `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
 | `limit` | integer | no | Page size, 1–100. (e.g. `20`) |
@@ -1558,6 +1559,22 @@ curl "https://freehire.me/api/v1/me/tracking/saved" -H "Authorization: Bearer $F
 
 ```json
 { "data": ["senior-go-engineer-acme-1a2b", "..."] }
+```
+
+### `GET /me/tracking/applied-companies`
+
+**Auth:** Session or API key
+
+Company slugs of the employers you have applied to.
+
+Lets the SPA mark "you already applied to this company" on any posting of theirs without authenticating the public job reads: compare a posting's `company_slug` against this set. Counts applications actually made (not ones still being prepared), keyed by the posting's current company slug and resolved through company merges. Newest first, drawn from your 1000 most recent applications.
+
+```bash
+curl "https://freehire.me/api/v1/me/tracking/applied-companies" -H "Authorization: Bearer $FREEHIRE_API_KEY"
+```
+
+```json
+{ "data": ["acme", "globex"] }
 ```
 
 ### `GET /me/tracking/pipeline`

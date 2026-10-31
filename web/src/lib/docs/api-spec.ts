@@ -298,6 +298,7 @@ export const GROUPS: Group[] = [
         query: [
           { name: 'q', type: 'string', description: 'Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default engine matching: the first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one.', example: 'golang' },
           { name: 'q_fields', type: 'string', description: 'Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying.', example: 'title' },
+          { name: 'hide_applied_companies', type: 'boolean', description: '`true` leaves out every posting of an employer the signed-in caller has applied to (through any of its postings). Applied inside the search, so `meta.total` and paging describe what is left. A per-person preference, not a filter: a saved search carrying it narrows nothing. Without a session or API key, or with a value that is not a boolean, the search runs unhidden and the param is reported in `meta.ignored_params`.', example: 'true' },
           { name: 'sort', type: 'string', description: 'One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest.', example: 'posted_at' },
           { name: 'order', type: 'string', description: '`asc` or `desc` (default `desc`).', example: 'desc' },
           { name: 'limit', type: 'integer', description: 'Page size, 1–100.', example: '20' },
@@ -1429,6 +1430,20 @@ ${BASE_URL}/auth/extension/connect?redirect_uri=https://<extension-id>.chromiuma
         description: 'Lets the SPA render the save toggle as filled without authenticating the public job reads.',
         curl: `curl "${BASE_URL}/me/tracking/saved" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
         responseExample: `{ "data": ["senior-go-engineer-acme-1a2b", "..."] }`,
+      },
+      {
+        method: 'GET',
+        path: '/me/tracking/applied-companies',
+        auth: 'cookie-or-key',
+        summary: 'Company slugs of the employers you have applied to.',
+        description:
+          'Lets the SPA mark "you already applied to this company" on any posting of theirs ' +
+          'without authenticating the public job reads: compare a posting\'s `company_slug` ' +
+          'against this set. Counts applications actually made (not ones still being ' +
+          'prepared), keyed by the posting\'s current company slug and resolved through ' +
+          'company merges. Newest first, drawn from your 1000 most recent applications.',
+        curl: `curl "${BASE_URL}/me/tracking/applied-companies" -H "Authorization: Bearer $FREEHIRE_API_KEY"`,
+        responseExample: `{ "data": ["acme", "globex"] }`,
       },
       {
         method: 'GET',
