@@ -280,6 +280,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"pinpointhq.com", "pinpoint", modeSubdomain},
 	{"scalis.ai", "scalis", modeSubdomain},
 	{"keka.com", "keka", modeSubdomain},
+	{"hirehive.com", "hirehive", modeSubdomain},
 	{"selfrecruit.ge", "selfrecruit", modeSubdomain},
 	{"talentlyft.com", "talentlyft", modeSubdomain},
 	{"traffit.com", "traffit", modeSubdomain},
@@ -1626,7 +1627,8 @@ var platformLabelsByApex = map[string][]string{
 	"darwinbox.com": {"www", "explore", "lighthouse"},
 	"darwinbox.in":  {"www"},
 	// greytHR's marketing site, community forum, help centres, status page and campaign pages.
-	"greythr.com": {"www", "community", "admin-help", "ess-help", "status", "campaign"},
+	"greythr.com":  {"www", "community", "admin-help", "ess-help", "status", "campaign"},
+	"hirehive.com": {"www", "assets", "static", "hirehive-testing-account"},
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —

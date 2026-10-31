@@ -936,6 +936,7 @@ var probers = map[string]prober{
 	"talentsoft":        talentsoftProber{},
 	"digitalrecruiters": digitalrecruitersProber{},
 	"keka":              kekaProber{},
+	"hirehive":          hirehiveProber{},
 	"darwinbox":         darwinboxProber,
 	"zohorecruit":       zohoRecruitProber,
 	"pyjamahr":          pyjamahrProber,
