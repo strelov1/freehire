@@ -88,7 +88,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.12.2
+          version: v2.15.0
           args: --new-from-merge-base=origin/main
 
       - name: Unit tests
@@ -410,7 +410,7 @@ jobs:
       # report zero findings — it reports "package requires newer Go version" for most of
       # the repository, which this step would read as findings.
       - name: Install deadcode
-        run: go install golang.org/x/tools/cmd/deadcode@v0.49.0
+        run: go install golang.org/x/tools/cmd/deadcode@v0.52.0
 
       # deadcode exits 0 whatever it finds — it is a reporter, not a linter — so the
       # verdict is whether it printed anything. There is no allowlist: the repository has
