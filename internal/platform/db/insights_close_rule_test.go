@@ -13,8 +13,9 @@ import (
 // over: it dropped off a board we crawl, its source took it down, the liveness probe
 // read it as expired, or the employer closed it here. Every other closed_reason
 // describes our crawler (board_unreachable, feed_empty), our rules (expired, the 45-day
-// age cutoff) or our decisions (board_retired, moderated, source_misattributed), and ”
-// is unknown — counting any of them publishes our pipeline as the market's speed.
+// age cutoff) or our decisions (board_retired, moderated, source_misattributed), and the
+// empty reason is unknown — counting any of them publishes our pipeline as the market's
+// speed.
 var realCloseReasons = []string{"employer_closed", "feed_removed", "probe_expired", "unseen"}
 
 var closedReasonIn = regexp.MustCompile(`closed_reason\s+IN\s*\(([^)]*)\)`)
