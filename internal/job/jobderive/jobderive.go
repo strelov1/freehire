@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/lang"
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/dict/perks"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/job/jobfacts"
@@ -117,6 +118,9 @@ type Derived struct {
 	// client's behalf (internal/job/jobfacts). True or nil, never false, for the same
 	// reason as RequiresClearance: a recruiter who never says so is not detected.
 	ViaRecruiter *bool
+	// Perks are the benefits the description states it offers, in vocab.PerkValues
+	// order (internal/dict/perks); nil when it names none.
+	Perks []string
 	// Synthetic enrichment facets (category B): deterministic stand-ins for fields
 	// the LLM also emits, served dict-only like the facets above. ExperienceYearsMin
 	// is nil when the description states no figure.
@@ -313,6 +317,7 @@ func Derive(in Input) Derived {
 		IsTech:             isTech,
 		RequiresClearance:  deriveRequiresClearance(in.Description),
 		ViaRecruiter:       trueOrNil(jobfacts.ViaRecruiter(in.Description)),
+		Perks:              perks.FromDescription(in.Description),
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     employmentType,
 		EducationLevel:     educationLevel,

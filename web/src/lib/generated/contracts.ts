@@ -248,6 +248,13 @@ export interface Job {
    */
   collections: string[];
   /**
+   * Perks are the benefits the description states it offers, from the closed
+   * vocabulary vocab.PerkValues and in its order (internal/dict/perks, never the LLM).
+   * Indexed as a filterable Meili facet. Always an array: [] means the description
+   * names none of them, not that the job offers none.
+   */
+  perks: string[];
+  /**
    * AIInterviewReports is how many people have reported that this job's company
    * screens candidates with an AI interviewer (internal/engage/processreport),
    * denormalized from the company onto the job. Omitted at zero: the count is what
@@ -1684,6 +1691,24 @@ export const ROLE_TYPE_VALUES = ['people_manager'] as const;
 export type RoleType = (typeof ROLE_TYPE_VALUES)[number];
 export const SOURCE_TYPE_VALUES = ['ats', 'company', 'aggregator', 'social'] as const;
 export type SourceType = (typeof SOURCE_TYPE_VALUES)[number];
+export const PERK_VALUES = ['generous_pto', 'four_day_week', '401k_match', 'parental_leave', 'retirement_plan', 'tuition_reimbursement', 'unlimited_pto', 'health_insurance', 'mental_health', 'learning_budget', 'home_office_stipend', 'sabbatical', 'sign_on_bonus'] as const;
+export type Perk = (typeof PERK_VALUES)[number];
+export const PERK_LABELS = {
+  '401k_match': '401(k) Matching',
+  'four_day_week': 'Four Day Work Week',
+  'generous_pto': 'Generous Paid Time Off',
+  'health_insurance': 'Health Insurance',
+  'home_office_stipend': 'Home Office Stipend',
+  'learning_budget': 'Learning Budget',
+  'mental_health': 'Mental Health Support',
+  'parental_leave': 'Parental Leave',
+  'retirement_plan': 'Retirement Plan',
+  'sabbatical': 'Sabbatical',
+  'sign_on_bonus': 'Sign-On Bonus',
+  'tuition_reimbursement': 'Tuition Reimbursement',
+  'unlimited_pto': 'Unlimited PTO',
+} as const;
+export type PerkLabels = typeof PERK_LABELS;
 export const GHOST_CRITERION_VALUES = ['evergreen_posting', 'ats_absent', 'silent_applications', 'user_reports'] as const;
 export type GhostCriterion = (typeof GHOST_CRITERION_VALUES)[number];
 export const EMAIL_STATUS_SIGNAL_VALUES = ['acknowledgement', 'screening', 'interview_invitation', 'assessment', 'offer', 'rejection', 'info_request', 'incomplete_application', 'other'] as const;

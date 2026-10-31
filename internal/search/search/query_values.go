@@ -57,6 +57,7 @@ var closedFacets = map[string]func(string) bool{
 	"source_type":     oneOf(vocab.SourceTypeValues),
 	"ai_archetype":    oneOf(vocab.AIArchetypeValues),
 	"domains":         oneOf(vocab.DomainValues),
+	"perks":           oneOf(vocab.PerkValues),
 	"reality": oneOf([]string{
 		jobreality.ClassFresh, jobreality.ClassStale, jobreality.ClassLikelyEvergreen,
 	}),

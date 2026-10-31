@@ -156,7 +156,7 @@ info:
     Facets with a fixed vocabulary (`work_mode`, `regions`, `seniority`,
     `category`, `employment_type`, `education_level`, `company_type`,
     `company_size`, `salary_period`, `relocation`, `english_level`, `role_type`,
-    `source_type`, `ai_archetype`, `domains`, `reality`, `skills` and the boolean facets) still
+    `source_type`, `ai_archetype`, `domains`, `reality`, `perks`, `skills` and the boolean facets) still
     apply a value outside it — so `?work_mode=foo` answers `total: 0`, which reads
     exactly like an empty market. `meta.ignored_values` names such values per
     parameter (the `_exclude` form under its own name):
@@ -222,6 +222,8 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksMode"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -312,6 +314,8 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksMode"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -574,6 +578,8 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksMode"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -1332,6 +1338,50 @@ components:
 
         `true` returns only the marked postings. Omitting the parameter filters
         nothing.
+    Perks:
+      name: perks
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - generous_pto
+            - four_day_week
+            - 401k_match
+            - parental_leave
+            - retirement_plan
+            - tuition_reimbursement
+            - unlimited_pto
+            - health_insurance
+            - mental_health
+            - learning_budget
+            - home_office_stipend
+            - sabbatical
+            - sign_on_bonus
+      description: |
+        Benefits the posting's description states it offers, matched
+        deterministically from explicit text (never inferred). A posting
+        carrying no perk means its description names none of these — most
+        employers list only part of their package — not that it offers none.
+        `generous_pto` is the employer's own "generous"/"unlimited"/"flexible"
+        wording or a stated allowance of 25+ days; `unlimited_pto` is a subset
+        of it. `retirement_plan` covers non-US forms (pension, superannuation,
+        RRSP). Values OR by default; `perks_mode=and` requires every one.
+        Visa sponsorship and relocation are separate filters
+        (`visa_sponsorship`, `relocation`).
+    PerksMode:
+      name: perks_mode
+      in: query
+      schema:
+        type: string
+        enum:
+          - and
+      description: |
+        `and` requires a posting to mention EVERY listed perk instead of any
+        of them.
     AutoApplyAvailable:
       name: auto_apply_available
       in: query
@@ -1946,6 +1996,14 @@ components:
             by an intermediary on a client's behalf. Absent otherwise — a
             recruiter who never says so is not detected, so absence does not
             mean the employer posted it.
+        perks:
+          type: array
+          items:
+            type: string
+          description: |
+            Benefits the description states it offers (see the `perks` filter
+            for the vocabulary). Empty when it names none of them — not a claim
+            that the job offers none.
         auto_apply_available:
           type: boolean
           description: |
