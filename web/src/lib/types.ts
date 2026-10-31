@@ -1155,7 +1155,7 @@ export interface TrackedApplication {
 }
 
 interface BuddySummary { category: string; seniority: string; country: string }
-interface BuddyCompany { slug: string; name: string }
+export interface BuddyCompany { slug: string; name: string }
 export interface BuddyStatus { member: boolean; handle?: string; card_empty: boolean }
 export interface BuddySimilar { handle: string; card_summary: BuddySummary; score: number; shared_companies: BuddyCompany[] }
 export interface BuddyFeedPage { data: BuddyFeedItem[]; meta: { next_cursor: string | null } }
