@@ -155,6 +155,21 @@ func TestJobtechKeepsPartialButReportsATruncatedBody(t *testing.T) {
 	}
 }
 
+// A body cut right after a complete item decodes every item it holds and never says it ended
+// early; only the missing closing bracket shows the window was not read whole.
+func TestJobtechReportsABodyMissingItsClosingBracket(t *testing.T) {
+	body := `[
+{"id":"1","removed":false,"webpage_url":"u","headline":"h","publication_date":"2026-06-10T12:00:00","employer":{"name":"C"}}
+`
+	jobs, err := NewJobtech(&fakeStream{body: body}).Fetch(context.Background(), CompanyEntry{})
+	if err == nil {
+		t.Fatal("Fetch should report a body that ends before its closing ]")
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1 (the complete item)", len(jobs))
+	}
+}
+
 // droppingStream serves body and then fails the read, the way a connection reset or the
 // stream client's timeout ends a body part-way.
 type droppingStream struct{ body string }

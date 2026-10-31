@@ -185,6 +185,11 @@ func eachJobtechItem(ctx context.Context, spool *os.File, fn func(jobtechItem)) 
 		}
 		fn(it)
 	}
+	// A body cut right after a complete item ends the loop as cleanly as a whole one does; only
+	// the closing bracket tells them apart.
+	if tok, err := dec.Token(); err != nil || tok != json.Delim(']') {
+		return errors.New("jobtech: stream body ended before its closing ]")
+	}
 	return nil
 }
 
