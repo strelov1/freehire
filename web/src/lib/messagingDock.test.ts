@@ -60,11 +60,13 @@ describe('dock persistence and badge', () => {
 });
 
 describe('dock placement', () => {
-  it('stays off the buddies chat page only', () => {
-    expect(dockHiddenOn('/buddies/chats')).toBe(true);
+  it('lives in the buddies space only, and stays off its chat page', () => {
     expect(dockHiddenOn('/buddies')).toBe(false);
+    expect(dockHiddenOn('/buddies/network')).toBe(false);
     expect(dockHiddenOn('/buddies/some-handle')).toBe(false);
-    expect(dockHiddenOn('/jobs')).toBe(false);
+    expect(dockHiddenOn('/buddies/chats')).toBe(true);
+    expect(dockHiddenOn('/jobs')).toBe(true);
+    expect(dockHiddenOn('/my/tracking')).toBe(true);
   });
 
   it('reports how much of the corner it takes', () => {

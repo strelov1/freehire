@@ -3,17 +3,21 @@
 // Svelte/icon imports so it stays pure and unit-testable; the `my/+layout.svelte` shell
 // maps each href to its icon.
 
-// One account, four workspaces. Job search is the member as a candidate; Mentor,
+// One account, five workspaces. Job search is the member as a candidate; Interview
+// buddies is them as an anonymous peer, in its own full-width space at /buddies (outside
+// the cabinet, so it has no sidebar sections here — only the entry that names it); Mentor,
 // Referrer and Employer are roles they take on. The sidebar shows the CURRENT workspace
 // only — the flat column of every section side by side gave no hint which of them was
 // "me", which was an anonymous face, and which was a separate role. `workspace: null`
 // marks the shared Settings group every workspace ends with. Workspace names and hints
 // live in the i18n catalog (`i18n/shell.ts`), keyed by id.
-export type WorkspaceId = 'seeker' | 'mentor' | 'referrer' | 'employer';
+export type WorkspaceId = 'seeker' | 'buddies' | 'mentor' | 'referrer' | 'employer';
 type NavGroupId = 'main' | 'found' | 'help' | 'settings';
 
 const workspaces = [
   { id: 'seeker', home: '/my/profile' },
+  // Open to everyone: the space's own page asks a non-member to join.
+  { id: 'buddies', home: '/buddies' },
   // Beta-gated with the marketplace itself (see mentorshipGate.ts). Its home is a pane
   // only a mentor can use; for anybody else that pane redirects to the index, which is
   // where "Offer to mentor" lives.
@@ -63,9 +67,9 @@ export const accountNav = [
   // mentor — which is why this is a workspace of its own rather than part of Mentor.
   { href: '/my/referrals/offers', label: 'Offers to refer', workspace: 'referrer', group: 'main' },
   { href: '/my/referrals/incoming', label: 'Incoming requests', workspace: 'referrer', group: 'main' },
-  // Its own full-width space outside /my (the cabinet's sidebar left no room for it); the
-  // entry stays so the cabinet still leads there.
-  { href: '/buddies', label: 'Interview buddies', workspace: 'seeker', group: 'found' },
+  // The buddies space's one entry: what puts /buddies in its workspace. Never drawn as a
+  // sidebar link — the space is outside /my, reached from the workspace switcher.
+  { href: '/buddies', label: 'Interview buddies', workspace: 'buddies', group: 'main' },
   // Booked mentorship sessions, upcoming and past. Beside referrals because it is the
   // same insider seen from the other end — but NOT folded into it: a referral offer is
   // anonymous on purpose and a mentor is named, which is the whole difference between

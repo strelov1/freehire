@@ -2,6 +2,8 @@
 // plain node. The reactive store is `messagingDock.svelte.ts`; the markup is
 // `components/MessagingDock.svelte`.
 
+import { isBuddiesSpace } from './shellLayout.js';
+
 /** One chat window docked beside the conversation list. */
 export interface DockWindow {
   id: number;
@@ -79,11 +81,12 @@ export function dismissalLifted(
   return conversations.some((c) => c.unread > 0 && newestMessageAt([c]) > dismissedAt);
 }
 
-/** The dock stays off the buddies chat page, which is the full-size list and pane — two
- *  copies of one conversation on one screen would each poll and mark it read. Every other
- *  page, the member pages included, gets the dock. */
+/** The dock lives in the buddies space only — conversations are a buddies thing, and a
+ *  chat corner over job search or the cabinet was noise there. It also stays off the
+ *  space's chat page, the full-size list and pane: two copies of one conversation on one
+ *  screen would each poll and mark it read. */
 export function dockHiddenOn(pathname: string): boolean {
-  return pathname === '/buddies/chats';
+  return !isBuddiesSpace(pathname) || pathname === '/buddies/chats';
 }
 
 /** How much of the bottom-right corner the dock is taking, so the support toast that

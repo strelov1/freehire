@@ -17,9 +17,9 @@
   // The messaging dock: a bar in the bottom-right corner that unfolds into the
   // conversation list (every kind), with up to two chat windows beside it. Mounted once by
   // the root layout and only for an account with a conversation, so it and its windows
-  // survive client-side navigation. It renders nothing on /buddies/chats, which is
-  // the full-size version of the same list and pane. It also hosts the buddy first-message
-  // dialog, so "Message" works from any page.
+  // survive client-side navigation. It shows in the buddies space only (dockHiddenOn), and
+  // not on /buddies/chats, which is the full-size version of the same list and pane. It
+  // also hosts the buddy first-message dialog, so "Message" works on every buddies page.
   //
   // A narrow screen shows one chat at a time as a full-width sheet under the header, and
   // that sheet is modal: everything outside it is inert while it is open, and folding it

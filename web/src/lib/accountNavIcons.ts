@@ -70,6 +70,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
 // sidebar read as one thing.
 export const workspaceIcons: Record<WorkspaceId, LucideIcon> = {
   seeker: Search,
+  buddies: UsersRound,
   mentor: GraduationCap,
   referrer: Handshake,
   employer: Building2,

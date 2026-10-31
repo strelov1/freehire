@@ -189,6 +189,13 @@ describe('workspaceFor', () => {
     expect(workspaceFor('/my/mentorship/sessions/abc123')).toBe('seeker');
   });
 
+  // Interview buddies is its own space (/buddies, outside the cabinet), switched to like a role.
+  it('puts the buddies space in the Interview buddies workspace', () => {
+    expect(workspaceFor('/buddies')).toBe('buddies');
+    expect(workspaceFor('/buddies/chats')).toBe('buddies');
+    expect(workspaceFor('/buddies/amber-heron-42')).toBe('buddies');
+  });
+
   it('puts the company pages in the Employer workspace', () => {
     expect(workspaceFor('/my/employer')).toBe('employer');
     expect(workspaceFor('/my/employer/vacancies')).toBe('employer');
@@ -229,7 +236,7 @@ describe('workspaceNav', () => {
           '/my/cvs',
         ],
       ],
-      ['found', ['/my/talent-network', '/buddies']],
+      ['found', ['/my/talent-network']],
       ['help', ['/my/referrals', '/my/mentorship']],
       ['settings', SETTINGS],
     ]);
@@ -266,8 +273,8 @@ describe('workspaceNav', () => {
 
 describe('visibleWorkspaces', () => {
   it('offers Mentor to a beta tester only, the rest to everyone', () => {
-    expect(visibleWorkspaces(false).map((w) => w.id)).toEqual(['seeker', 'referrer', 'employer']);
-    expect(visibleWorkspaces(true).map((w) => w.id)).toEqual(['seeker', 'mentor', 'referrer', 'employer']);
+    expect(visibleWorkspaces(false).map((w) => w.id)).toEqual(['seeker', 'buddies', 'referrer', 'employer']);
+    expect(visibleWorkspaces(true).map((w) => w.id)).toEqual(['seeker', 'buddies', 'mentor', 'referrer', 'employer']);
   });
 
   it("opens each workspace on one of its own sections", () => {

@@ -42,12 +42,14 @@ export const messages = defineMessages(
     // Keyed by WorkspaceId / NavGroupId; accountNav.ts carries no English copy of these.
     workspaces: {
       seeker: 'Job search',
+      buddies: 'Interview buddies',
       mentor: 'Mentor',
       referrer: 'Referrer',
       employer: 'Employer',
     },
     workspaceHints: {
       seeker: 'Your profile and applications',
+      buddies: 'Anonymous peers in the same search',
       mentor: 'Sessions you give',
       referrer: 'Refer candidates to your company',
       employer: 'Your company and vacancies',
@@ -105,12 +107,14 @@ export const messages = defineMessages(
       },
       workspaces: {
         seeker: 'Поиск работы',
+        buddies: 'Бадди для интервью',
         mentor: 'Ментор',
         referrer: 'Рекомендатель',
         employer: 'Работодатель',
       },
       workspaceHints: {
         seeker: 'Ваш профиль и отклики',
+        buddies: 'Анонимные коллеги в том же поиске',
         mentor: 'Сессии, которые вы проводите',
         referrer: 'Рекомендуете кандидатов в свою компанию',
         employer: 'Ваша компания и вакансии',
