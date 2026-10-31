@@ -85,6 +85,11 @@ type trudvsemVacancy struct {
 	Employment   string `json:"employment"`
 	Requirements string `json:"requirements"`
 	Duty         string `json:"duty"`
+	// SalaryMin/SalaryMax are the employer's own monthly bounds in roubles; 0 means
+	// unstated. The free-text "salary" beside them always reads "от N" even for a real
+	// range, so the numbers are the signal and the text is not read.
+	SalaryMin *float64 `json:"salary_min"`
+	SalaryMax *float64 `json:"salary_max"`
 }
 
 // trudvsemEmployment maps Trudvsem's employment enum to freehire's controlled EmploymentType
@@ -200,6 +205,7 @@ func (trudvsem) toJob(v trudvsemVacancy, hubName string) (Job, bool) {
 	if employment == trudvsemRemoteEmployment {
 		workMode = "remote"
 	}
+	salMin, salMax, salCurrency, salPeriod := rubMonthlySalary(v.SalaryMin, v.SalaryMax)
 	return Job{
 		ExternalID:     v.ID,
 		URL:            strings.TrimSpace(v.VacURL),
@@ -211,6 +217,10 @@ func (trudvsem) toJob(v trudvsemVacancy, hubName string) (Job, bool) {
 		WorkMode:       workMode,
 		EmploymentType: trudvsemEmployment[employment],
 		PostedAt:       parseDate(strings.TrimSpace(v.CreationDate)),
+		SalaryMin:      salMin,
+		SalaryMax:      salMax,
+		SalaryCurrency: salCurrency,
+		SalaryPeriod:   salPeriod,
 	}, true
 }
 
