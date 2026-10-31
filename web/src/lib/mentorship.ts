@@ -578,12 +578,15 @@ export function withSearchParams(
   return params.toString();
 }
 
-/** Search forward from now within the endpoint's 62-day ceiling. Calendar-month
- *  boundaries can miss bookable hours: 30 days from late January can reach March. */
+/** Search forward from today's UTC boundary within the endpoint's 62-day ceiling.
+ *  Shared bounds preserve the server cache; the slot engine applies the notice period.
+ *  Calendar-month boundaries can miss hours: 30 days from late January can reach March. */
 export function openingSlotWindow(now = new Date()): { from: string; to: string } {
+  const from = new Date(now);
+  from.setUTCHours(0, 0, 0, 0);
   return {
-    from: now.toISOString(),
-    to: new Date(now.getTime() + 62 * 24 * 60 * 60 * 1000).toISOString(),
+    from: from.toISOString(),
+    to: new Date(from.getTime() + 62 * 24 * 60 * 60 * 1000).toISOString(),
   };
 }
 

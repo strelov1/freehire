@@ -115,8 +115,8 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   `replaceState` (see `urlSynced.svelte.ts`), so deriving from it moves the URL and not the
   screen. That URL is also what survives the sign-in bounce, which is why the sign-in link is
   built from `location.search` rather than `promptSignIn()`. With no `?month` the calendar opens on the first
-  month that has an open hour: its first read searches 62 days forward from now
-  (`openingSlotWindow`, the endpoint's maximum window). Calendar-month boundaries can
+  month that has an open hour: its first read searches 62 days forward from today's UTC
+  boundary (`openingSlotWindow`, the endpoint's maximum window, shared for caching). Calendar-month boundaries can
   miss valid slots: 30 days from late January can reach March.
 - **`MentorBlock` asks from the browser, not from `load`.** It answers "does this company have
   a mentor?" out of the DIRECTORY narrowed to that company — never a second endpoint, which

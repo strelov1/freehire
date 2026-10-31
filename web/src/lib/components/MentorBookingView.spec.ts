@@ -80,8 +80,8 @@ describe('MentorBookingView', () => {
     view(loadSlots);
 
     await waitFor(() => expect(screen.getByText('November 2026')).toBeTruthy());
-    // Search forward from now, then load the selected calendar month.
-    expect(loadSlots.mock.calls[0]?.slice(0, 2)).toEqual(['2026-10-31T12:00:00.000Z', '2027-01-01T12:00:00.000Z']);
+    // Search forward from today's shared UTC boundary, then load the selected month.
+    expect(loadSlots.mock.calls[0]?.slice(0, 2)).toEqual(['2026-10-31T00:00:00.000Z', '2027-01-01T00:00:00.000Z']);
     expect(loadSlots).toHaveBeenCalledTimes(2);
   });
 
