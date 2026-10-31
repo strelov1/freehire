@@ -1,7 +1,16 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { CalendarOff, Plus, Trash2, X } from '@lucide/svelte';
   import { errorMessage } from '#lib/utils.js';
-  import { Badge, Button, Card } from '#lib/ui/index.js';
-  import { splitAvailability, weekdayLabel, weekdayOrder } from '#lib/mentorship.js';
+  import { Button, Card, Input, tabsListVariants, tabsTriggerVariants } from '#lib/ui/index.js';
+  import {
+    exceptionDayLabel,
+    nextWeekRange,
+    splitAvailability,
+    weekDraft,
+    weekRows,
+    weekdayLabel,
+  } from '#lib/mentorship.js';
   import type { AvailabilityApi, MentorAvailabilityRule } from '#lib/types.js';
 
   let {
@@ -20,20 +29,40 @@
 
   let saving = $state(false);
   let error = $state('');
+  let savedNote = $state(false);
 
   // The week is edited as a whole and saved as a whole, mirroring the endpoint: a schedule
   // is a shape a mentor reasons about all at once, and a half-applied edit leaves them
-  // bookable at hours they just removed.
-  let draft = $state<{ weekday: number; start: string; end: string }[]>([]);
-  let editingWeek = $state(false);
+  // bookable at hours they just removed. The draft is always on screen; Save lights up
+  // only when it differs from what is stored.
+  let draft = $state(untrack(() => weekDraft(splitAvailability(rules).weekly)));
+  const stored = $derived(JSON.stringify(weekRows(weekDraft(split.weekly))));
+  const dirty = $derived(JSON.stringify(weekRows(draft)) !== stored);
+  const hasStoredWeek = $derived(split.weekly.length > 0);
 
-  function startEditing() {
-    draft = split.weekly.map((r) => ({
-      weekday: r.weekday as number,
-      start: r.start,
-      end: r.end,
-    }));
-    editingWeek = true;
+  function setDay(index: number, on: boolean) {
+    const day = draft[index];
+    if (!day) return;
+    day.ranges = on ? [nextWeekRange([])] : [];
+    savedNote = false;
+  }
+
+  function addRange(index: number) {
+    const day = draft[index];
+    if (!day) return;
+    day.ranges = [...day.ranges, nextWeekRange(day.ranges)];
+    savedNote = false;
+  }
+
+  function removeRange(index: number, at: number) {
+    const day = draft[index];
+    if (!day) return;
+    day.ranges = day.ranges.filter((_, j) => j !== at);
+    savedNote = false;
+  }
+
+  function discard() {
+    draft = weekDraft(split.weekly);
     error = '';
   }
 
@@ -41,12 +70,13 @@
     saving = true;
     error = '';
     try {
-      await schedule.replaceWeek(draft);
+      await schedule.replaceWeek(weekRows(draft));
       // The PUT answers 204, so the stored rows come from a re-read rather than from the
       // reply. They are worth having: a new row's id is assigned by the server and is what
       // the delete route takes, so a locally-built list would show rows nothing can remove.
       rules = await schedule.reload();
-      editingWeek = false;
+      draft = weekDraft(splitAvailability(rules).weekly);
+      savedNote = true;
     } catch (e) {
       error = errorMessage(e, 'The week could not be saved.');
     } finally {
@@ -85,152 +115,169 @@
       await schedule.remove(id);
       rules = rules.filter((r) => r.id !== id);
     } catch (e) {
-      error = errorMessage(e, 'The rule could not be removed.');
+      error = errorMessage(e, 'The exception could not be removed.');
     } finally {
       saving = false;
     }
   }
+
+  const timeClass = 'w-28 tabular-nums';
+  const uid = $props.id();
 </script>
 
-<Card class="flex flex-col gap-5 p-4">
-  <section class="flex flex-col gap-3">
-    <div class="flex items-center justify-between">
-      <h2 class="text-sm font-medium">Your usual week</h2>
-      {#if !editingWeek}
-        <Button variant="ghost" size="sm" onclick={startEditing}>Edit</Button>
-      {/if}
+<Card class="flex flex-col p-0">
+  <section class="flex flex-col gap-3 p-5" aria-labelledby="{uid}-weekly">
+    <div class="flex flex-col gap-0.5">
+      <h2 id="{uid}-weekly" class="text-base font-semibold">Weekly hours</h2>
+      <p class="text-sm text-muted-foreground">
+        {hasStoredWeek ? 'Repeats every week. Tick a day to open it, then set its hours.' : emptyMessage}
+      </p>
     </div>
 
-    {#if editingWeek}
-      <div class="flex flex-col gap-2">
-        {#each draft as row, i (i)}
-          <div class="flex flex-wrap items-center gap-2">
-            <!-- Bound to the row rather than to draft[i]: `$state` makes the array's
-                 objects deeply reactive, so writing through the row is the same edit and
-                 does not need an index the type system cannot prove is in range. -->
-            <select
-              class="border-input bg-background h-9 rounded-md border px-2 text-sm"
-              bind:value={row.weekday}
-              aria-label="Day, row {i + 1}"
-            >
-              {#each weekdayOrder() as weekday (weekday)}
-                <option value={weekday}>{weekdayLabel(weekday)}</option>
-              {/each}
-            </select>
+    <ul class="flex flex-col divide-y divide-border">
+      {#each draft as day, i (day.weekday)}
+        {@const label = weekdayLabel(day.weekday)}
+        {@const open = day.ranges.length > 0}
+        <li class="flex flex-wrap items-start gap-x-4 gap-y-1 py-1.5">
+          <label class="flex h-9 w-28 shrink-0 items-center gap-2.5 text-sm font-medium sm:w-36">
             <input
-              type="time"
-              bind:value={row.start}
-              aria-label="Start time, row {i + 1}"
-              class="border-input bg-background h-9 rounded-md border px-2 text-sm"
+              type="checkbox"
+              class="size-4 accent-brand"
+              checked={open}
+              onchange={(e) => setDay(i, e.currentTarget.checked)}
             />
-            <span class="text-muted-foreground text-sm">to</span>
-            <input
-              type="time"
-              bind:value={row.end}
-              aria-label="End time, row {i + 1}"
-              class="border-input bg-background h-9 rounded-md border px-2 text-sm"
-            />
-            <button
-              type="button"
-              class="text-muted-foreground hover:text-foreground text-sm underline"
-              onclick={() => (draft = draft.filter((_, j) => j !== i))}
-            >
-              Remove
-            </button>
-          </div>
-        {/each}
+            {label}
+          </label>
 
-        <div class="flex gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onclick={() => (draft = [...draft, { weekday: 1, start: '18:00', end: '20:00' }])}
-          >
-            Add a row
-          </Button>
-          <Button size="sm" disabled={saving} onclick={saveWeek}>
-            {saving ? 'Saving…' : 'Save the week'}
-          </Button>
-          <Button variant="ghost" size="sm" disabled={saving} onclick={() => (editingWeek = false)}>
-            Cancel
-          </Button>
-        </div>
-      </div>
-    {:else if split.weekly.length === 0}
-      <p class="text-muted-foreground text-sm">{emptyMessage}</p>
-    {:else}
-      <ul class="flex flex-col gap-1 text-sm">
-        {#each split.weekly as row (row.id)}
-          <li>
-            <span class="font-medium">{weekdayLabel(row.weekday as number)}</span>
-            {row.start}–{row.end}
-          </li>
-        {/each}
-      </ul>
-    {/if}
+          {#if open}
+            <div class="flex flex-col gap-2">
+              {#each day.ranges as range, j (j)}
+                <!-- Bound to the range rather than to draft[i].ranges[j]: `$state` makes the
+                     draft deeply reactive, so writing through it is the same edit. -->
+                <div class="flex items-center gap-2">
+                  <Input type="time" bind:value={range.start} class={timeClass} aria-label="{label}, range {j + 1}, from" />
+                  <span class="text-sm text-muted-foreground" aria-hidden="true">–</span>
+                  <Input type="time" bind:value={range.end} class={timeClass} aria-label="{label}, range {j + 1}, until" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="text-muted-foreground hover:text-foreground"
+                    aria-label="Remove {label} {range.start}–{range.end}"
+                    onclick={() => removeRange(i, j)}
+                  >
+                    <X class="size-4" aria-hidden="true" />
+                  </Button>
+                  {#if j === day.ranges.length - 1}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="text-muted-foreground hover:text-foreground"
+                      aria-label="Add hours on {label}"
+                      onclick={() => addRange(i)}
+                    >
+                      <Plus class="size-4" aria-hidden="true" />
+                    </Button>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <span class="flex h-9 items-center text-sm text-muted-foreground">Unavailable</span>
+          {/if}
+        </li>
+      {/each}
+    </ul>
   </section>
 
-  <section class="flex flex-col gap-3 border-t pt-4">
-    <h2 class="text-sm font-medium">Exceptions</h2>
-    <p class="text-muted-foreground text-sm">
-      A date here replaces your usual week for that day entirely — it does not add to it.
-    </p>
+  <div class="flex flex-wrap items-center gap-2 border-t border-border bg-muted/40 px-5 py-3">
+    <Button variant="primary" size="sm" disabled={!dirty || saving} onclick={saveWeek}>
+      {saving && dirty ? 'Saving…' : 'Save weekly hours'}
+    </Button>
+    {#if dirty}
+      <Button variant="ghost" size="sm" disabled={saving} onclick={discard}>Discard changes</Button>
+      <span class="text-sm text-muted-foreground">Unsaved changes</span>
+    {:else if savedNote}
+      <span class="text-sm text-muted-foreground" role="status">Saved.</span>
+    {/if}
+  </div>
+
+  <section class="flex flex-col gap-3 border-t border-border p-5" aria-labelledby="{uid}-exceptions">
+    <div class="flex flex-col gap-0.5">
+      <h2 id="{uid}-exceptions" class="text-base font-semibold">Date exceptions</h2>
+      <p class="text-sm text-muted-foreground">
+        A date here replaces your weekly hours for that day entirely — it does not add to them.
+      </p>
+    </div>
 
     {#if split.dated.length > 0}
-      <ul class="flex flex-col gap-1 text-sm">
+      <ul class="flex flex-col divide-y divide-border rounded-lg border border-border">
         {#each split.dated as row (row.id)}
-          <li class="flex items-center gap-2">
-            <span class="font-medium">{row.date}</span>
+          <li class="flex items-center gap-3 py-1.5 pr-1.5 pl-3 text-sm">
+            <span class="w-32 shrink-0 font-medium tabular-nums">{exceptionDayLabel(row.date ?? '')}</span>
             <!-- A closure is start === end. Rendering the raw pair would say "10:00–10:00",
                  which nobody would read as "away". -->
             {#if row.closure}
-              <Badge variant="secondary">away</Badge>
+              <span class="flex items-center gap-1.5 text-muted-foreground">
+                <CalendarOff class="size-4" aria-hidden="true" /> Away all day
+              </span>
             {:else}
-              <span>{row.start}–{row.end}</span>
+              <span class="tabular-nums">{row.start}–{row.end}</span>
             {/if}
-            <button
-              type="button"
-              class="text-muted-foreground hover:text-foreground text-sm underline"
+            <Button
+              variant="ghost"
+              size="icon"
+              class="ml-auto text-muted-foreground hover:text-destructive"
+              aria-label="Remove the exception on {exceptionDayLabel(row.date ?? '')}"
+              disabled={saving}
               onclick={() => remove(row.id)}
             >
-              Remove
-            </button>
+              <Trash2 class="size-4" aria-hidden="true" />
+            </Button>
           </li>
         {/each}
       </ul>
     {/if}
 
-    <div class="flex flex-wrap items-center gap-2">
-      <input
-        type="date"
-        bind:value={overrideDate}
-        aria-label="Exception date"
-        class="border-input bg-background h-9 rounded-md border px-2 text-sm"
-      />
-      <label class="flex items-center gap-1 text-sm">
-        <input type="checkbox" bind:checked={closing} />
-        Away all day
-      </label>
+    <div class="flex flex-wrap items-center gap-2 rounded-lg bg-muted/60 p-2">
+      <Input type="date" bind:value={overrideDate} class="w-40 tabular-nums" aria-label="Exception date" />
+      <div class={tabsListVariants({ class: 'self-auto bg-background' })} role="group" aria-label="Exception kind">
+        <button
+          type="button"
+          class={tabsTriggerVariants({ active: !closing })}
+          aria-pressed={!closing}
+          onclick={() => (closing = false)}
+        >
+          Other hours
+        </button>
+        <button
+          type="button"
+          class={tabsTriggerVariants({ active: closing })}
+          aria-pressed={closing}
+          onclick={() => (closing = true)}
+        >
+          Away all day
+        </button>
+      </div>
       {#if !closing}
-        <input
-          type="time"
-          bind:value={overrideStart}
-          aria-label="Exception start time"
-          class="border-input bg-background h-9 rounded-md border px-2 text-sm"
-        />
-        <span class="text-muted-foreground text-sm">to</span>
-        <input
-          type="time"
-          bind:value={overrideEnd}
-          aria-label="Exception end time"
-          class="border-input bg-background h-9 rounded-md border px-2 text-sm"
-        />
+        <span class="flex items-center gap-2">
+          <Input type="time" bind:value={overrideStart} class={timeClass} aria-label="Exception from" />
+          <span class="text-sm text-muted-foreground" aria-hidden="true">–</span>
+          <Input type="time" bind:value={overrideEnd} class={timeClass} aria-label="Exception until" />
+        </span>
       {/if}
-      <Button size="sm" variant="primary" disabled={saving || !overrideDate} onclick={addOverride}>Add</Button>
+      <Button
+        variant="outline"
+        size="sm"
+        class="sm:ml-auto"
+        disabled={saving || !overrideDate}
+        onclick={addOverride}
+      >
+        <Plus class="size-4" aria-hidden="true" /> Add exception
+      </Button>
     </div>
   </section>
 
   {#if error}
-    <p class="text-destructive text-sm">{error}</p>
+    <p role="alert" class="border-t border-border px-5 py-3 text-sm text-destructive">{error}</p>
   {/if}
 </Card>

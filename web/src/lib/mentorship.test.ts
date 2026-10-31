@@ -26,6 +26,10 @@ import {
   formatInstantIn,
   isCancellable,
   splitAvailability,
+  weekDraft,
+  weekRows,
+  nextWeekRange,
+  exceptionDayLabel,
   weekdayLabel,
   weekdayOrder,
   weekdayShortLabel,
@@ -836,5 +840,38 @@ describe('which statuses a day shows, in priority order', () => {
 
   test('a day with no intervals reports nothing', () => {
     expect(dayStatuses([])).toEqual([]);
+  });
+});
+
+describe('the weekly schedule editor', () => {
+  const rule = (id: number, weekday: number, start: string, end: string): MentorAvailabilityRule => ({
+    id, weekday, start, end, closure: false,
+  });
+
+  test('draws all seven days Monday first, each with its own ranges in order', () => {
+    const draft = weekDraft([rule(1, 0, '10:00', '12:00'), rule(2, 2, '19:00', '21:00'), rule(3, 2, '08:00', '09:00')]);
+    expect(draft.map((d) => d.weekday)).toEqual([1, 2, 3, 4, 5, 6, 0]);
+    expect(draft[1]?.ranges).toEqual([{ start: '08:00', end: '09:00' }, { start: '19:00', end: '21:00' }]);
+    expect(draft[6]?.ranges).toEqual([{ start: '10:00', end: '12:00' }]);
+    expect(draft[0]?.ranges).toEqual([]);
+  });
+
+  test('flattens back into the rows the replace-week endpoint takes', () => {
+    const rows = weekRows(weekDraft([rule(1, 0, '10:00', '12:00'), rule(2, 1, '18:00', '20:00')]));
+    expect(rows).toEqual([
+      { weekday: 1, start: '18:00', end: '20:00' },
+      { weekday: 0, start: '10:00', end: '12:00' },
+    ]);
+  });
+
+  test('a new range follows the last one, and never wraps past midnight', () => {
+    expect(nextWeekRange([])).toEqual({ start: '18:00', end: '20:00' });
+    expect(nextWeekRange([{ start: '09:00', end: '11:30' }])).toEqual({ start: '11:30', end: '13:30' });
+    expect(nextWeekRange([{ start: '20:00', end: '23:00' }])).toEqual({ start: '18:00', end: '20:00' });
+  });
+
+  test('an exception names its day without reading the date in a zone', () => {
+    expect(exceptionDayLabel('2026-11-04')).toBe('Wed 4 Nov 2026');
+    expect(exceptionDayLabel('nonsense')).toBe('nonsense');
   });
 });

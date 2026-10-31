@@ -1192,6 +1192,19 @@ export interface BuddyMock {
   their_review: BuddyMockReview | null;
 }
 export interface BuddyMocks { upcoming: BuddyMock[]; past: BuddyMock[] }
+/** A member the viewer could book a mock with now: the card every buddy list shows, the
+ *  topics they host, their soonest open slot in the viewer's zone (`local_start` already
+ *  resolved there) and their revealed-review record. Never the link. */
+export interface BuddyMockHost {
+  handle: string;
+  card_summary: BuddySummary;
+  topics: BuddyMockTopic[];
+  next_slot: { starts_at: string; local_start: string; utc_offset: string };
+  rating_avg: number;
+  rating_count: number;
+  completed: number;
+}
+export interface BuddyMockHosts { hosts: BuddyMockHost[]; timezone: string }
 /** A member page's mock record: revealed reviews only, without their authors. */
 export interface BuddyMockSummary {
   completed: number;

@@ -10,7 +10,7 @@
 
 ## 2. Web
 
-- [ ] 2.1 "Who runs mocks" block on `/buddies/mocks` with topic filter, loading, error and
+- [x] 2.1 "Who runs mocks" block on `/buddies/mocks` with topic filter, loading, error and
       empty states
-- [ ] 2.2 Weekly availability editor reworked (shared with the mentor schedule page)
-- [ ] 2.3 Settings form and the member's own mock list polished
+- [x] 2.2 Weekly availability editor reworked (shared with the mentor schedule page)
+- [x] 2.3 Settings form and the member's own mock list polished
