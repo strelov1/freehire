@@ -2209,6 +2209,23 @@ SET last_seen_at = now(),
 WHERE source = sqlc.arg(source) AND external_id = sqlc.arg(external_id)
 RETURNING company_slug;
 
+-- name: RefreshCoveredJobs :many
+-- Liveness refresh for the postings an aggregator board listed but the coverage gate kept out
+-- of the write path (pipeline.CoveredRefresher): the employer is already crawled first-hand, so
+-- nothing is written — but a row stored before that began must not be left with the
+-- last_seen_at of its last write, or it stays open whether or not the aggregator still lists it
+-- (4dayweek, 2026-10-30: 17,306 of 23,046 open rows unseen for a week, 98% of them covered).
+-- last_seen_at is the ONLY column written, for RefreshUnchangedJob's reason: it is in no index,
+-- so the update is heap-only. Open rows only, and never a reopen: reopening is a write the gate
+-- has already declined. An id the catalogue does not hold matches nothing. RETURNING
+-- company_slug so the caller puts the company in the sweep's crawled scope, as TouchJob does.
+UPDATE jobs
+SET last_seen_at = now()
+WHERE source = sqlc.arg(source)
+  AND external_id = ANY(sqlc.arg(external_ids)::text[])
+  AND closed_at IS NULL
+RETURNING company_slug;
+
 -- name: CloseJobByID :one
 --
 -- The removal enqueue rides this statement (see CloseUnseenJobs for why): feeding

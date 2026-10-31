@@ -72,6 +72,18 @@ type Toucher interface {
 	Touch(ctx context.Context, source, externalID string) error
 }
 
+// CoveredRefresher is the optional Store capability behind the aggregator-coverage gate: refresh
+// the liveness (last_seen_at) of the OPEN stored rows among the postings a board listed but the
+// gate kept out of the write path, by their (source, external_id) identity, writing nothing
+// else. An id the catalogue does not hold matches no row, so the gate's decision about what to
+// WRITE is untouched. Without it a covered posting stored before its employer's own board joined
+// the fleet kept the last_seen_at of its last write and its company stayed out of the sweep's
+// scope, so it stayed open whether or not the aggregator still listed it. Only the ingest
+// dbStore implements it; a Store without it (a test fake) drops the refresh, like Toucher.
+type CoveredRefresher interface {
+	RefreshCovered(ctx context.Context, source string, externalIDs []string) error
+}
+
 // SeenLookup is the optional Store capability a HydratingSource needs: the external_ids already
 // stored for the board about to be crawled, so the adapter fetches expensive per-posting detail
 // only for postings the catalogue lacks. Only the ingest dbStore implements it; the runner
@@ -706,7 +718,9 @@ func (r Runner) fillCompanyDescription(ctx context.Context, e sources.CompanyEnt
 func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool, deferred bool) Stats {
 	canon := r.resolveCompanyAliases(ctx, e, raw)
 	covered := r.aggregatorCoverageForBatch(ctx, e, raw, canon)
-	st, rej, firstErr := r.writeBoard(ctx, e, raw, seen, covered, canon)
+	t := r.writeBoard(ctx, e, raw, seen, covered, canon)
+	st, rej, firstErr := t.st, t.rej, t.firstErr
+	r.refreshCovered(ctx, e, t.covered)
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
 	// without flooding the log.
@@ -778,12 +792,15 @@ type boardTally struct {
 	st       Stats
 	rej      rejections
 	firstErr error
+	// covered is the external ids of the postings the coverage gate kept out of the write path,
+	// for refreshCovered.
+	covered []string
 }
 
 // writeBoard writes raw through saveConcurrency workers, each tallying into its own
 // boardTally, and merges them. Everything a write touches is safe to share: the Store already
 // serves boards concurrently, and canon and covered are read-only lookups built up front.
-func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool, covered aggregatorCoverage, canon companyCanonical) (Stats, rejections, error) {
+func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []sources.Job, seen map[string]bool, covered aggregatorCoverage, canon companyCanonical) boardTally {
 	tallies := make([]boardTally, min(saveConcurrency, max(len(raw), 1)))
 	jobs := make(chan sources.Job)
 	var wg sync.WaitGroup
@@ -802,22 +819,19 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 	close(jobs)
 	wg.Wait()
 
-	var (
-		st       Stats
-		rej      rejections
-		firstErr error
-	)
+	var merged boardTally
 	for _, t := range tallies {
-		st.Ingested += t.st.Ingested
-		st.Skipped += t.st.Skipped
-		st.ATSCovered += t.st.ATSCovered
-		st.Unreadable += t.st.Unreadable
-		rej.merge(t.rej)
-		if firstErr == nil {
-			firstErr = t.firstErr
+		merged.st.Ingested += t.st.Ingested
+		merged.st.Skipped += t.st.Skipped
+		merged.st.ATSCovered += t.st.ATSCovered
+		merged.st.Unreadable += t.st.Unreadable
+		merged.rej.merge(t.rej)
+		if merged.firstErr == nil {
+			merged.firstErr = t.firstErr
 		}
+		merged.covered = append(merged.covered, t.covered...)
 	}
-	return st, rej, firstErr
+	return merged
 }
 
 // ingestOne applies one fetched posting: counts an unreadable one, refreshes a re-listed one,
@@ -858,41 +872,56 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 		t.st.Ingested++
 		return
 	}
-	r.saveOne(ctx, e, j, covered, canon, &t.st, &t.rej, &t.firstErr)
+	r.saveOne(ctx, e, j, covered, canon, t)
 }
 
 // saveOne normalizes one posting, puts it through the catalogue filter, and saves what
-// survives, tallying the outcome into st and keeping the first error for the board's
+// survives, tallying the outcome into t and keeping the first error for the board's
 // skip-summary log line. Both the buffered (ingestBoard) and the streaming (ingestStream)
 // save loops share it so the normalize→filter→save→count step behaves identically; the
 // SeenRefresh and Removed branches stay on the caller, which is why neither reaches the
 // filter's candidate denominator.
-func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, covered aggregatorCoverage, canon companyCanonical, st *Stats, rej *rejections, firstErr *error) {
+func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, covered aggregatorCoverage, canon companyCanonical, t *boardTally) {
 	dj, err := normalizeJob(e, j, canon)
 	if err != nil {
-		st.Skipped++
-		if *firstErr == nil {
-			*firstErr = err
+		t.st.Skipped++
+		if t.firstErr == nil {
+			t.firstErr = err
 		}
 		return
 	}
-	rej.candidate()
+	t.rej.candidate()
 	if outOfCatalogue(dj) {
-		rej.reject(dj.Fields().Title)
+		t.rej.reject(dj.Fields().Title)
 		return
 	}
 	if covered != nil && covered(dj.Fields().CompanySlug) {
-		st.ATSCovered++
+		t.st.ATSCovered++
+		t.covered = append(t.covered, dj.Fields().ExternalID)
 		return
 	}
 	if err := r.save(ctx, dj, j.ApplyForm); err != nil {
-		st.Skipped++
-		if *firstErr == nil {
-			*firstErr = err
+		t.st.Skipped++
+		if t.firstErr == nil {
+			t.firstErr = err
 		}
 		return
 	}
-	st.Ingested++
+	t.st.Ingested++
+}
+
+// refreshCovered refreshes the liveness of whichever of a board's covered postings the
+// catalogue already holds (see CoveredRefresher). It only logs a failure: a row the refresh
+// misses is left exactly as stale as it was, and is never closed because of it.
+func (r Runner) refreshCovered(ctx context.Context, e sources.CompanyEntry, externalIDs []string) {
+	cr, ok := r.Store.(CoveredRefresher)
+	if !ok || len(externalIDs) == 0 {
+		return
+	}
+	if err := cr.RefreshCovered(ctx, e.Provider, externalIDs); err != nil {
+		log.Printf("ingest: %s board %q (%s): refresh %d covered postings: %v",
+			e.Provider, e.Board, e.Company, len(externalIDs), err)
+	}
 }
 
 // aggregatorGate reports whether the ingest-time coverage gate applies to e's board: a
@@ -1351,12 +1380,10 @@ func (r Runner) recordFailure(ctx context.Context, e sources.CompanyEntry, msg s
 // already saved (the 48h unseen-sweep guards against a short crawl closing the un-reached tail).
 func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sources.StreamingSource) (Stats, []string) {
 	var (
-		mu       sync.Mutex
-		st       Stats
-		rej      rejections
-		firstErr error
-		total    int
-		listed   []string // every posting the stream named, for the listing fingerprint
+		mu     sync.Mutex
+		t      boardTally
+		total  int
+		listed []string // every posting the stream named, for the listing fingerprint
 	)
 	// The buffered path resolves a whole board's companies in one batched call because it
 	// already has every posting in hand; a streaming source (jobtech is the one aggregator on
@@ -1382,29 +1409,31 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 			}
 			source, externalID := jobIdentity(e, j)
 			if err := c.Close(ctx, source, externalID); err != nil {
-				st.Skipped++
-				if firstErr == nil {
-					firstErr = err
+				t.st.Skipped++
+				if t.firstErr == nil {
+					t.firstErr = err
 				}
 				return
 			}
 			// A close is not counted as ingested — Stats.Ingested is saved jobs only.
 			return
 		}
-		r.saveOne(ctx, e, j, covered, canon, &st, &rej, &firstErr)
+		r.saveOne(ctx, e, j, covered, canon, &t)
 	}
 
 	err := ss.FetchStream(ctx, e, emit)
-	rej.log(e)
+	r.refreshCovered(ctx, e, t.covered)
+	st := t.st
+	t.rej.log(e)
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
-			e.Provider, e.Board, e.Company, st.Skipped, total, firstErr)
+			e.Provider, e.Board, e.Company, st.Skipped, total, t.firstErr)
 	}
 	if st.ATSCovered > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d postings — company already covered by a non-aggregator source",
 			e.Provider, e.Board, e.Company, st.ATSCovered, total)
 	}
-	st.Rejected = rej.rejected
+	st.Rejected = t.rej.rejected
 	markInterrupted(ctx, &st)
 	if err != nil {
 		log.Printf("ingest: %s board %q (%s) failed after %d saved: %v",

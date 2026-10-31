@@ -15,14 +15,15 @@ var probedButWithheld = map[string]string{
 	// The sitemap is the live catalogue, so a posting it stopped naming two weeks ago is gone;
 	// the probe only closes the last postings of companies the company-scoped sweep lost.
 	"torre": "the crawl re-lists every live posting",
-	// The feed omits a third of the postings the site still serves, which is the marker's case —
-	// but ~16k of the ~22k rows it had stopped listing when the probe landed were dead, and
-	// the probe reads ~6k a day, so the marker would put them back in search for days. Grant it
-	// once the backlog has been worked off and only the live tail is left unseen.
-	"4dayweek": "the probe's backlog is days deep",
+	// The feed lists the whole catalogue (275 pages, 27.5k postings, 2026-10-30), so a posting
+	// it stopped naming is gone. The third of its unseen rows that still answered 200 were not
+	// left out of the feed: they were listed, but under an employer the coverage gate keeps out
+	// of the write path, which until then refreshed nothing (see pipeline.CoveredRefresher).
+	"4dayweek": "the crawl re-lists every live posting",
 	// The API names only the last week, so most of what it stopped listing is still up — but
 	// 64 of 100 such rows sampled when the probe landed were dead (~7k of ~11k), and the probe
-	// reads ~5k a day. Same as 4dayweek: grant the marker once the backlog is worked off.
+	// reads ~5k a day, so the marker would put them back in search for days. Grant it once the
+	// backlog is worked off and only the live tail is left unseen.
 	"arbeitnow": "the probe's backlog is days deep",
 }
 

@@ -6458,6 +6458,16 @@ type Querier interface {
 	// {other} or a retired vocabulary value) simply produces no rows here and reads as
 	// '{}' below, with no special case.
 	RefreshCompanyFacets(ctx context.Context, arg RefreshCompanyFacetsParams) (int64, error)
+	// Liveness refresh for the postings an aggregator board listed but the coverage gate kept out
+	// of the write path (pipeline.CoveredRefresher): the employer is already crawled first-hand, so
+	// nothing is written — but a row stored before that began must not be left with the
+	// last_seen_at of its last write, or it stays open whether or not the aggregator still lists it
+	// (4dayweek, 2026-10-30: 17,306 of 23,046 open rows unseen for a week, 98% of them covered).
+	// last_seen_at is the ONLY column written, for RefreshUnchangedJob's reason: it is in no index,
+	// so the update is heap-only. Open rows only, and never a reopen: reopening is a write the gate
+	// has already declined. An id the catalogue does not hold matches nothing. RETURNING
+	// company_slug so the caller puts the company in the sweep's crawled scope, as TouchJob does.
+	RefreshCoveredJobs(ctx context.Context, arg RefreshCoveredJobsParams) ([]string, error)
 	// The cheap half of the ingest write path, tried before UpsertJob: a crawl that re-sees a
 	// posting identical to the stored row refreshes its liveness and writes NOTHING else. Matching
 	// nothing (pgx.ErrNoRows) is the signal to run the full upsert — which is also what a brand-new

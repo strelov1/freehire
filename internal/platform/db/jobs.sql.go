@@ -5140,6 +5140,49 @@ func (q *Queries) RecomputeRoleDuplicatesForCompanies(ctx context.Context, compa
 	return column_1, err
 }
 
+const refreshCoveredJobs = `-- name: RefreshCoveredJobs :many
+UPDATE jobs
+SET last_seen_at = now()
+WHERE source = $1
+  AND external_id = ANY($2::text[])
+  AND closed_at IS NULL
+RETURNING company_slug
+`
+
+type RefreshCoveredJobsParams struct {
+	Source      string   `json:"source"`
+	ExternalIds []string `json:"external_ids"`
+}
+
+// Liveness refresh for the postings an aggregator board listed but the coverage gate kept out
+// of the write path (pipeline.CoveredRefresher): the employer is already crawled first-hand, so
+// nothing is written — but a row stored before that began must not be left with the
+// last_seen_at of its last write, or it stays open whether or not the aggregator still lists it
+// (4dayweek, 2026-10-30: 17,306 of 23,046 open rows unseen for a week, 98% of them covered).
+// last_seen_at is the ONLY column written, for RefreshUnchangedJob's reason: it is in no index,
+// so the update is heap-only. Open rows only, and never a reopen: reopening is a write the gate
+// has already declined. An id the catalogue does not hold matches nothing. RETURNING
+// company_slug so the caller puts the company in the sweep's crawled scope, as TouchJob does.
+func (q *Queries) RefreshCoveredJobs(ctx context.Context, arg RefreshCoveredJobsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, refreshCoveredJobs, arg.Source, arg.ExternalIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var company_slug string
+		if err := rows.Scan(&company_slug); err != nil {
+			return nil, err
+		}
+		items = append(items, company_slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const refreshUnchangedJob = `-- name: RefreshUnchangedJob :one
 UPDATE jobs
 SET last_seen_at = now(),

@@ -101,7 +101,7 @@ const expiryWindow = 45 * 24 * time.Hour
 // rather than racing it. empregos leaks the same way for a different reason: its crawl reads
 // every posting that names a state but cannot prove it read the rest (see empregos.go), so it
 // is not fullCatalog and its sweep is company-scoped too. So do djinni (its listing names only
-// the last month), 4dayweek (its list feed omits postings the site still serves) and torre
+// the last month), 4dayweek (an employer that leaves its feed takes its company out of the sweep's scope) and torre
 // (its sitemap still names a few closed postings), and arbeitnow (its API names only the last
 // week) — none of them fullCatalog, all boardless.
 var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow"}

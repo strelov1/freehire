@@ -14,10 +14,12 @@ import (
 	"github.com/strelov1/freehire/internal/job/liveness"
 )
 
-// 4dayweek's list feed (/api/v2/jobs) does not name every posting the site still serves —
-// measured 2026-10-29, a third of the open rows it had stopped listing still answered 200 on
-// both the job page and the per-posting API — and its sweep is company-scoped, so the last
-// posting of a company that leaves the feed stays open. This is that leak's evidence path.
+// 4dayweek's list feed (/api/v2/jobs) names its whole catalogue, but the adapter is not
+// fullCatalog, so its sweep is company-scoped and the last posting of a company that leaves the
+// feed stays open. This is that leak's evidence path. (Measured 2026-10-29, a third of the open
+// rows gone unseen still answered 200; those were listed all along, under employers the
+// coverage gate keeps out of the write path — which refreshed none of them until
+// pipeline.CoveredRefresher, 2026-10-30.)
 //
 // What it reads is the per-posting API, keyed on the slug: /api/v2/jobs/<slug> answers 200
 // with the posting while 4dayweek has it and 404 {"error":{"code":404,"message":"Job not
