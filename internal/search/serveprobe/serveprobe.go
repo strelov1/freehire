@@ -25,6 +25,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // Layer names where a served shape was read from; it becomes a metric label.
@@ -102,13 +103,22 @@ type Count struct {
 	Gaps   int
 }
 
+// Missing is the Unindexed reason for a row no search rule withholds: its document should
+// exist and does not — lost by the index, or still queued for the drain.
+const Missing = "missing"
+
+// UnindexedReasons lists every Unindexed key, for a stable report.
+var UnindexedReasons = []string{
+	string(search.WithheldNoCategory), string(search.WithheldNoDescription), string(search.WithheldUnseen), Missing,
+}
+
 // Report is one probe's result. Unindexed counts sampled rows with no Meilisearch
-// document; it is reported, not counted as a gap, because the rebuild deliberately
-// skips rows SQL cannot rule out (no category, no visible description) and a fresh
-// posting waits for the drain.
+// document, by why: a search.WithholdReason when search keeps the row out on purpose
+// (measured 2026-10-31 that was 797 of 798, mostly no category), Missing when nothing
+// does. Neither is a field gap — there is no document to compare.
 type Report struct {
 	Sampled   int
-	Unindexed int
+	Unindexed map[string]int
 	// Unreadable counts rows the projection itself refused; every rule is skipped for
 	// them, since there is no served shape to check.
 	Unreadable int
@@ -125,9 +135,10 @@ func Fields() []string {
 }
 
 // Check runs every rule over rows. docs holds the indexed shape by job id; a row
-// absent from it is counted Unindexed and checked in the projection layer only.
-func Check(rows []db.Job, docs map[int64]jobview.Job) Report {
-	rep := Report{Sampled: len(rows), Counts: map[Layer]map[string]Count{}}
+// absent from it is counted Unindexed under withheld's reason (Missing when there is
+// none) and checked in the projection layer only.
+func Check(rows []db.Job, docs map[int64]jobview.Job, withheld func(db.Job) search.WithholdReason) Report {
+	rep := Report{Sampled: len(rows), Unindexed: map[string]int{}, Counts: map[Layer]map[string]Count{}}
 	for _, l := range Layers {
 		rep.Counts[l] = map[string]Count{}
 	}
@@ -139,7 +150,11 @@ func Check(rows []db.Job, docs map[int64]jobview.Job) Report {
 		}
 		indexed, ok := docs[row.ID]
 		if !ok {
-			rep.Unindexed++
+			reason := string(withheld(row))
+			if reason == "" {
+				reason = Missing
+			}
+			rep.Unindexed[reason]++
 		}
 		for _, r := range rules {
 			if !r.stored(row) {
