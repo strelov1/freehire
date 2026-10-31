@@ -74,10 +74,12 @@ func (s inploi) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 			})
 			continue
 		}
-		if len(fresh) < s.maxNew {
-			fresh = append(fresh, p)
-		}
+		fresh = append(fresh, p)
 	}
+	// Keep part of the budget moving through the backlog: rejected or unreadable
+	// postings stay unseen and must not consume every crawl's detail requests.
+	head := s.maxNew / 2
+	fresh = hydrationLanes(fresh, head, s.maxNew-head, time.Now())
 	return append(fetchDetails(fresh, defaultDetailWorkers, func(p inploiPosting) (Job, bool) {
 		return s.detail(ctx, p)
 	}), refresh...), nil
@@ -172,7 +174,7 @@ func inploiSearchURL(board string) string {
 
 func inploiSearchPath(path string) bool {
 	path = strings.TrimSuffix(path, "/")
-	return path == "/search" || strings.HasSuffix(path, "/search")
+	return strings.HasSuffix(path, "/search")
 }
 
 func inploiCareerHost(raw string) (string, error) {

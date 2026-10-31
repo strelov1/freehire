@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -122,8 +125,8 @@ func TestInploiFetchNewSkipsASeenBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
 	}
-	if len(jobs) != 1 || !jobs[0].SeenRefresh || fake.htmlN != 0 {
-		t.Fatalf("jobs=%+v htmlGets=%d, want a refresh and no detail request", jobs, fake.htmlN)
+	if len(jobs) != 1 || !jobs[0].SeenRefresh || fake.htmlN.Load() != 0 {
+		t.Fatalf("jobs=%+v htmlGets=%d, want a refresh and no detail request", jobs, fake.htmlN.Load())
 	}
 }
 
@@ -151,9 +154,51 @@ func TestInploiFetchNewCapsUnseenDetail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
 	}
-	if len(jobs) != 1 || jobs[0].ExternalID != "1" || fake.htmlN != 1 {
-		t.Fatalf("jobs=%+v htmlGets=%d, want only the first new posting hydrated", jobs, fake.htmlN)
+	if len(jobs) != 1 || fake.htmlN.Load() != 1 {
+		t.Fatalf("jobs=%+v htmlGets=%d, want only one new posting hydrated", jobs, fake.htmlN.Load())
 	}
+}
+
+func TestInploiFetchNewReachesPastUnreadablePostings(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		fake := inploiOne(`{"data":[{"id":1,"title":"One"},{"id":2,"title":"Two"},{"id":3,"title":"Engineer"},{"id":4,"title":"Seen"}],"pagination":{"total":4,"current_page":1,"last_page":1}}`)
+		fake.html["https://jobs.example.test/job/3"] = `<html><script type="application/ld+json">{"@type":"JobPosting","description":"<p>Build software.</p>"}</script></html>`
+		src := NewInploi(fake).(inploi)
+		src.maxNew = 2
+		found := false
+		for range 2 {
+			asked := map[string]bool{}
+			jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "haven"}, func(id string) bool {
+				asked[id] = true
+				return id == "4"
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(asked) != 4 {
+				t.Fatalf("consulted %d listed IDs, want all 4 including deferred postings", len(asked))
+			}
+			refreshed := false
+			for _, job := range jobs {
+				if job.ExternalID == "3" && strings.Contains(job.Description, "Build software.") {
+					found = true
+				}
+				if job.ExternalID == "4" && job.SeenRefresh {
+					refreshed = true
+				}
+			}
+			if !refreshed {
+				t.Fatal("seen posting lost its liveness refresh")
+			}
+			time.Sleep(time.Hour)
+		}
+		if !found {
+			t.Fatal("readable posting behind the unreadable prefix was never hydrated")
+		}
+		if got := fake.htmlN.Load(); got != 4 {
+			t.Fatalf("detail requests = %d, want two per crawl", got)
+		}
+	})
 }
 
 func TestInploiFetchReadsTheHostSearchWhenTheRedirectDropsIt(t *testing.T) {
@@ -262,7 +307,7 @@ type inploiFake struct {
 	html   map[string]string
 	status map[string]int
 	header string
-	htmlN  int
+	htmlN  atomic.Int64
 }
 
 func (f *inploiFake) GetHTMLResolved(_ context.Context, raw string) (*html.Node, string, error) {
@@ -282,7 +327,7 @@ func (f *inploiFake) GetHTMLResolved(_ context.Context, raw string) (*html.Node,
 }
 
 func (f *inploiFake) GetHTML(_ context.Context, raw string) (*html.Node, error) {
-	f.htmlN++
+	f.htmlN.Add(1)
 	body, ok := f.html[raw]
 	if !ok {
 		return nil, errors.New("missing " + raw)
