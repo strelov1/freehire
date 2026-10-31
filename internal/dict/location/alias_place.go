@@ -19,11 +19,11 @@ import (
 // alias to that statement.
 
 // addAliasCity adds to cities the city a line names through tok, an alias of the
-// differently named place ce, given the countries and the US/CA subdivision codes the
-// line states — or nothing, when it names none.
+// differently named place ce, given the line's countries and its location segment's
+// US/CA subdivision codes — or nothing, when it names none.
 //
-// A line that states ce's country keeps ce unless it also states subdivisions of that
-// country and ce lies in none of them; then the town called tok in a stated subdivision
+// A line that states ce's country keeps ce unless the segment also states subdivisions
+// of that country and ce lies in none of them; then the town called tok in a stated subdivision
 // is the city, or there is none ("Harrison, NJ" is Harrison, not Scranton, PA). A line
 // that states other countries names that country's own place of the name, when it has
 // exactly one, and never ce ("Bombay, NY" is not Mumbai). A line that states no country

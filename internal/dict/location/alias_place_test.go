@@ -19,6 +19,10 @@ func TestAliasCityAgreesWithStatedPlace(t *testing.T) {
 		// A stated state names the town of the name in that state.
 		{"Harrison, NJ", []string{"Harrison"}, []string{"New York City (US)"}},
 		{"Harrison, New Jersey, United States", []string{"Harrison"}, []string{"New York City (US)"}},
+		{"Harrison, NJ; Philadelphia, PA", []string{"Harrison", "Philadelphia"}, []string{"New York City (US)", "Philadelphia (US)"}},
+		{"Harrison, NJ | Scranton, PA", []string{"Harrison", "Scranton"}, []string{"New York City (US)", "Scranton (US)"}},
+		{"Frisco, TX; Frisco, CA", []string{"Frisco", "San Francisco"}, []string{"Dallas (US)", "San Francisco Bay Area (US)"}},
+		{"Frisco; Harrison, NJ", []string{"Harrison", "San Francisco"}, []string{"New York City (US)"}},
 		{"Morton, IL", []string{"Morton"}, []string{"Peoria (US)"}},
 		{"Frisco, TX", []string{"Frisco"}, []string{"Dallas (US)"}},
 		{"Apex, NC", []string{"Apex"}, []string{"Raleigh (US)"}},
