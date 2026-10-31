@@ -472,7 +472,13 @@ func TestRunCountsALimiterDeadlineRefusalAsInterrupted(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	stats, _ := r.Run(ctx, []sources.CompanyEntry{{Company: "DHL", Provider: "phenom", Board: "careers.dhl.com"}})
+	stats, err := r.Run(ctx, []sources.CompanyEntry{{Company: "DHL", Provider: "phenom", Board: "careers.dhl.com"}})
+	// The run did not crawl what it was asked to, so it must say so even though its context
+	// never ended: cmd/ingest reads a non-nil error as a truncated run, which keeps the
+	// company and source scopes from closing the unreached board's postings.
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("Run error = %v, want one wrapping context.DeadlineExceeded", err)
+	}
 	got := stats["phenom"]
 	if got.Interrupted != 1 || got.Failed != 0 {
 		t.Errorf("Interrupted = %d, Failed = %d; want 1 and 0", got.Interrupted, got.Failed)

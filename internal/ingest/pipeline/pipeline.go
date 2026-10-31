@@ -5,6 +5,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"slices"
 	"sort"
@@ -446,7 +447,16 @@ func (r Runner) Run(ctx context.Context, entries []sources.CompanyEntry) (RunSta
 	}
 	wg.Wait()
 
-	return byProv, ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return byProv, err
+	}
+	// A board interrupted while the context is still alive met a limiter's early deadline
+	// refusal (limiterOutOfRun). The run did not crawl it, so it reports itself cut short like
+	// any run its deadline ended, and cmd/ingest narrows its sweep accordingly.
+	if byProv.Total().Interrupted > 0 {
+		return byProv, errLimiterOutOfRun
+	}
+	return byProv, nil
 }
 
 // maxRecoveryProbes bounds how many cooled boards a provider is probed with before a
@@ -1269,6 +1279,10 @@ func (r Runner) paused(ctx context.Context, e sources.CompanyEntry) pause {
 // TestRunCountsALimiterDeadlineRefusalAsInterrupted produces the error with a real limiter, so
 // a change to the wording fails that test rather than silently cooling boards again.
 const limiterDeadlineRefusal = "would exceed context deadline"
+
+// errLimiterOutOfRun is Run's error when a rate limiter refused a board's request ahead of the
+// deadline. It wraps context.DeadlineExceeded because that is what happened, one step early.
+var errLimiterOutOfRun = fmt.Errorf("a rate limiter could not admit a request before the run's deadline: %w", context.DeadlineExceeded)
 
 // limiterOutOfRun reports whether a fetch failed because a rate limiter could not admit its
 // request before the run's deadline: the run ran out, not the board. Every paced adapter's
