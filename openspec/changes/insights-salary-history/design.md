@@ -31,10 +31,11 @@ backfills itself; a chart that cannot be read as more precise than its sample.
 `(job_id, currency, period, amount)` plus the posting columns the salary rollups
 filter and group on (category, seniority, countries, dates, duplicate_of, is_private),
 so a rollup scans the view alone instead of joining it back to `jobs` — a second full
-read of the table. Amount is the min/max midpoint (or whichever
-bound exists) of the FIRST tier that has a bound — manual, then source, then
-enrichment — with currency (upper-cased) and period from that same tier. Rows without
-a usable figure are absent. Both band rebuilds and the monthly rebuild join it.
+read of the table. The salary comes from the FIRST COMPLETE tier — manual, then source,
+then enrichment — where complete means a positive amount, a non-empty currency
+(upper-cased, trimmed) and a period; an incomplete tier falls through to the next
+rather than taking the posting out of every figure. Amount is the min/max midpoint, or
+whichever bound exists, of that tier. Both band rebuilds and the monthly rebuild read it.
 
 *Alternative:* repeat a `CASE` in each statement. Three copies of a three-tier rule is
 exactly how the bands came to read one tier only; sqlc cannot share a SQL fragment,
@@ -52,7 +53,9 @@ rows; grouping by publication month recomputes all 12 months each run. That is t
 backfill. A snapshot table (like `insights_skill_history`) would start empty and
 could never recover the months before it shipped.
 
-Window: `LEAST(posted_at, created_at) >= date_trunc('month', now()) - 11 months`.
+Months are UTC calendar months (`date_trunc('month', … AT TIME ZONE 'UTC')`), matching
+the page's own UTC clock whatever the session TimeZone. Window: the current UTC month and
+the eleven before it; a publication date in the future joins no month.
 Open AND closed postings: a posting closed since still records an offer of its month.
 
 ### 3. Floor of 30 per point, stored, not presented

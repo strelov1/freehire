@@ -6,7 +6,7 @@
 import type { InsightSalaryMonth } from './api';
 
 /** A series needs this many stored months before it is drawn at all. */
-export const MIN_HISTORY_POINTS = 3;
+const MIN_HISTORY_POINTS = 3;
 
 /** A month whose sample is at least this multiple of the month before it is flagged:
  *  the catalogue grows in jumps as boards are onboarded, and a jump that size changes
