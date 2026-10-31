@@ -543,10 +543,16 @@ export function filtersWithParts(
 // Excluded sources carry the SAME cap (maxExcludedCount == maxSkills), so they need a
 // budget for the same reason — but a much smaller one. A source key is a crawl adapter's
 // name, ~12 characters, and a person avoids a handful rather than a career's worth; 200
-// characters covers a dozen and keeps the total comfortably clear of maxQueryLen now that
-// three lists share it rather than two.
+// characters covers a dozen and keeps the total comfortably clear of maxQueryLen.
+//
+// Excluded companies share that cap and get a budget sized the same way. A company slug
+// (normalize.CompanySlug) runs ~10-20 characters and the list is a short blocklist of
+// employers someone has ruled out, so 400 characters covers twenty-odd. The
+// maximal-profile test in profileFilters.test.ts holds all four lists together under
+// maxQueryLen.
 const SKILL_CHAR_BUDGET = 800;
 const SOURCE_CHAR_BUDGET = 200;
+const COMPANY_CHAR_BUDGET = 400;
 
 /** Values from `values`, in the profile's own order, until `maxChars` is spent.
  *
@@ -597,9 +603,9 @@ function entryExperienceCap(seniorities: string[]): number | null {
  *  staged as supported+required when the user is open to relocating. The flatten is lossy
  *  (base vs relocation merge) — the filter is a convenience narrowing of "places relevant to
  *  me". Trimming/dedup come free from facetAdd, so unions of overlapping lists are safe.
- *  Avoided SOURCES become excluded `source` values; unlike skills they have no wanted
- *  counterpart, so there is no overlap rule to apply. Both lists are bounded by
- *  `charBudget` before seeding — see its own comment. */
+ *  Avoided SOURCES and COMPANIES become excluded `source` and `company_slug` values; unlike
+ *  skills they have no wanted counterpart, so there is no overlap rule to apply. Every list
+ *  is bounded by `charBudget` before seeding — see its own comment. */
 export function filtersFromProfile(profile: UserProfile): JobFilters {
   const seed = (values: string[]) => values.reduce(facetAdd, emptyFacet());
   const f = emptyFilters();
@@ -637,17 +643,14 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
     seed(charBudget(profile.skills, SKILL_CHAR_BUDGET)),
   );
 
-  // Sources: avoided → excluded. No wanted counterpart exists, so nothing to reconcile —
-  // every value goes in as an exclude. Until this line the profile's excluded_sources were
-  // stored and read by nobody, which made the profile's own "Sources to avoid" card a
+  // Sources and companies: avoided → excluded. Neither has a wanted counterpart, so there is
+  // nothing to reconcile — every value goes in as an exclude. Until each list was seeded
+  // here it was stored and editable in the profile's Avoid card, yet read by nobody: a
   // control that changed no result anywhere.
-  f.facets.source = charBudget(profile.excluded_sources ?? [], SOURCE_CHAR_BUDGET).reduce(
-    (st, raw) => {
-      const v = raw.trim();
-      return v ? facetSetSign(st, v, 'exclude') : st;
-    },
-    emptyFacet(),
-  );
+  const seedExcluded = (values: string[], maxChars: number) =>
+    charBudget(values, maxChars).reduce((st, v) => facetSetSign(st, v, 'exclude'), emptyFacet());
+  f.facets.source = seedExcluded(profile.excluded_sources ?? [], SOURCE_CHAR_BUDGET);
+  f.facets.company_slug = seedExcluded(profile.excluded_companies ?? [], COMPANY_CHAR_BUDGET);
 
   const loc = profile.location_preferences;
   if (loc) {
