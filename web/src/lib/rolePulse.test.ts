@@ -6,7 +6,6 @@ function pulse(over: Partial<InsightRolePulse> = {}): InsightRolePulse {
   return {
     category: 'backend',
     open_count: 1000,
-    open_count_prev: 900,
     competition: {
       views: 4500,
       views_prev: 3000,

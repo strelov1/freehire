@@ -299,24 +299,19 @@ func (q *Queries) GetGlobalCompanyResponse(ctx context.Context) (GetGlobalCompan
 }
 
 const getInsightsRoleOpenCount = `-- name: GetInsightsRoleOpenCount :one
-SELECT open_count, open_count_prev
+SELECT open_count
 FROM insights_role_country_stats
 WHERE category = $1::text AND country = ''
 `
 
-type GetInsightsRoleOpenCountRow struct {
-	OpenCount     int32 `json:"open_count"`
-	OpenCountPrev int32 `json:"open_count_prev"`
-}
-
-// One category's all-countries cell: every open canonical public posting of the
-// category, whatever its seniority. No row means nothing open at either point; the
-// caller serves zeros.
-func (q *Queries) GetInsightsRoleOpenCount(ctx context.Context, category string) (GetInsightsRoleOpenCountRow, error) {
+// One category's open count in the all-countries cell: every open canonical public
+// posting of the category, whatever its seniority. No row means nothing open at either
+// point; the caller serves zero.
+func (q *Queries) GetInsightsRoleOpenCount(ctx context.Context, category string) (int32, error) {
 	row := q.db.QueryRow(ctx, getInsightsRoleOpenCount, category)
-	var i GetInsightsRoleOpenCountRow
-	err := row.Scan(&i.OpenCount, &i.OpenCountPrev)
-	return i, err
+	var open_count int32
+	err := row.Scan(&open_count)
+	return open_count, err
 }
 
 const getInsightsRolePulse = `-- name: GetInsightsRolePulse :one

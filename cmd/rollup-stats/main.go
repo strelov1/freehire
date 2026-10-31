@@ -210,7 +210,7 @@ func rebuildInsights(ctx context.Context, q *db.Queries) error {
 
 	// The role pulse: competition, time to close and inflow per category, for the
 	// growth window and the one before it. Competition anchors its own windows on the
-	// freshest views day (see the query); the other two use these.
+	// last complete views day (see the query); the other two use these.
 	if err := q.DeleteAllInsightsRolePulse(ctx); err != nil {
 		return err
 	}

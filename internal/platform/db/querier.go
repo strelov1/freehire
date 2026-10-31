@@ -2767,10 +2767,10 @@ type Querier interface {
 	// grant actually covers what this caller wants to do with it. `status` is read too so a
 	// row already marked needs_reconsent can be treated as unusable without a second query.
 	GetGoogleGrantForWrite(ctx context.Context, userID int64) (GetGoogleGrantForWriteRow, error)
-	// One category's all-countries cell: every open canonical public posting of the
-	// category, whatever its seniority. No row means nothing open at either point; the
-	// caller serves zeros.
-	GetInsightsRoleOpenCount(ctx context.Context, category string) (GetInsightsRoleOpenCountRow, error)
+	// One category's open count in the all-countries cell: every open canonical public
+	// posting of the category, whatever its seniority. No row means nothing open at either
+	// point; the caller serves zero.
+	GetInsightsRoleOpenCount(ctx context.Context, category string) (int32, error)
 	// One category's pulse. No row means the category had nothing open or closed in either
 	// window; the caller serves zeros.
 	GetInsightsRolePulse(ctx context.Context, category string) (GetInsightsRolePulseRow, error)

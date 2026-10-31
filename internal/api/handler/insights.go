@@ -491,13 +491,13 @@ func (h *statsHandlers) InsightsRoleCountries(c *fiber.Ctx) error {
 }
 
 // rolePulse is one category's market pulse on the wire: raw figures for the last 30 days
-// and (except inflow) the 30 before, never a ratio or a verdict. Like the role × country cells, the floor
-// below which a figure is noise is a presentation choice, so the page applies its own.
+// and (except inflow) the 30 before, never a ratio or a verdict. Like the role × country
+// cells, the floor below which a figure is noise is a presentation choice, so the page
+// applies its own.
 type rolePulse struct {
-	Category      string `json:"category"`
-	OpenCount     int32  `json:"open_count"`
-	OpenCountPrev int32  `json:"open_count_prev"`
-	Competition   struct {
+	Category    string `json:"category"`
+	OpenCount   int32  `json:"open_count"`
+	Competition struct {
 		Views            int64   `json:"views"`
 		ViewsPrev        int64   `json:"views_prev"`
 		ExposureDays     float64 `json:"exposure_days"`
@@ -537,7 +537,7 @@ func (h *statsHandlers) InsightsRolePulse(c *fiber.Ctx) error {
 	open, err := h.queries.GetInsightsRoleOpenCount(c.Context(), category)
 	switch {
 	case err == nil:
-		out.OpenCount, out.OpenCountPrev = open.OpenCount, open.OpenCountPrev
+		out.OpenCount = open
 	case !errors.Is(err, pgx.ErrNoRows):
 		return err
 	}

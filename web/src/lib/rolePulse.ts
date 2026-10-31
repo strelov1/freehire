@@ -1,7 +1,8 @@
 // Pure helpers behind the market pulse on /insights/roles/<category>. The endpoint
-// serves raw figures for the last 30 days and the 30 before; this module turns them
-// into the three figures the page shows and decides which are too thin to show at all.
-// The floors live here and only here — the endpoint deliberately applies none.
+// serves raw figures for the last 30 days and (except inflow) the 30 before; this module
+// turns them into the three figures the page shows and decides which are too thin to
+// show at all. The floors live here and only here — the endpoint deliberately applies
+// none.
 
 import type { InsightRolePulse } from './api';
 
@@ -35,6 +36,17 @@ function directionOf(current: number, previous: number): Direction {
   return change > 0 ? 'up' : 'down';
 }
 
+/** The earlier window's figure and the direction from it to the current one — both
+ *  null unless both windows cleared their floor. */
+function comparison(
+  current: number | null,
+  previous: number | null,
+  fmt: (n: number) => string,
+): Pick<PulseFigure, 'previous' | 'direction'> {
+  if (current === null || previous === null) return { previous: null, direction: null };
+  return { previous: fmt(previous), direction: directionOf(current, previous) };
+}
+
 /** Views per open posting per 30 days, or null below the floor. */
 function viewsPerPosting(views: number, exposureDays: number): number | null {
   if (exposureDays < MIN_EXPOSURE_DAYS || views < MIN_VIEWS) return null;
@@ -55,15 +67,13 @@ export function rolePulseFigures(p: InsightRolePulse): PulseFigure[] {
   const close = t.closed >= MIN_CLOSES ? t.median_days : null;
   const closePrev = t.closed_prev >= MIN_CLOSES ? t.median_days_prev : null;
 
-
   return [
     {
       key: 'competition',
       label: 'Competition',
       value: comp === null ? null : fmtRatio(comp),
       detail: 'page views per open posting a month — one visitor counts once per posting per day',
-      previous: comp !== null && compPrev !== null ? fmtRatio(compPrev) : null,
-      direction: comp !== null && compPrev !== null ? directionOf(comp, compPrev) : null,
+      ...comparison(comp, compPrev, fmtRatio),
     },
     {
       key: 'time_to_close',
@@ -73,8 +83,7 @@ export function rolePulseFigures(p: InsightRolePulse): PulseFigure[] {
         close === null
           ? 'median time a posting stays open'
           : `median time a posting stays open, over ${fmtCount(t.closed)} closed in the last 30 days`,
-      previous: close !== null && closePrev !== null ? fmtDays(closePrev) : null,
-      direction: close !== null && closePrev !== null ? directionOf(close, closePrev) : null,
+      ...comparison(close, closePrev, fmtDays),
     },
     {
       key: 'inflow',

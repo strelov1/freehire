@@ -236,7 +236,6 @@ export interface InsightRolePulse {
   category: string;
   /** Every open canonical posting of the category, whatever its seniority. */
   open_count: number;
-  open_count_prev: number;
   competition: {
     views: number;
     views_prev: number;

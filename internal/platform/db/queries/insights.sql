@@ -133,11 +133,12 @@ SELECT category, country, open_count, open_count_prev
 FROM insights_role_country_stats
 WHERE country = '' OR country = ANY(sqlc.arg('countries')::text[])
 ORDER BY category, country;
+
 -- name: GetInsightsRoleOpenCount :one
--- One category's all-countries cell: every open canonical public posting of the
--- category, whatever its seniority. No row means nothing open at either point; the
--- caller serves zeros.
-SELECT open_count, open_count_prev
+-- One category's open count in the all-countries cell: every open canonical public
+-- posting of the category, whatever its seniority. No row means nothing open at either
+-- point; the caller serves zero.
+SELECT open_count
 FROM insights_role_country_stats
 WHERE category = sqlc.arg('category')::text AND country = '';
 
