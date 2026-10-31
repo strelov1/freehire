@@ -54,4 +54,7 @@ func TestInploiCompanyNameDecodesHTMLEntities(t *testing.T) {
 			t.Errorf("inploiCompanyName(%q) = %q, want Smith & Co", title, got)
 		}
 	}
+	if got := inploiCompanyName("<title>İş İlanları at Acme | Careers</title>"); got != "Acme" {
+		t.Errorf("inploiCompanyName(dotted I) = %q, want Acme", got)
+	}
 }
