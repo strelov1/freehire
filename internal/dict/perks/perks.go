@@ -49,9 +49,10 @@ type rule struct {
 	// notAfter, when set, disqualifies a match the text right after it continues into
 	// something that is not the perk ("health insurance portability" is HIPAA).
 	notAfter *regexp.Regexp
-	// notInside, when set, disqualifies a match whose own span carries a denial the
-	// guards around it cannot see ("401(k): no employer match" spans the "no").
-	notInside *regexp.Regexp
+	// A contextual rule needs an anchor on either side of the matched phrase.
+	contextBefore, contextAfter *regexp.Regexp
+	// deniedBefore rejects a denial governing this phrase through its qualifiers.
+	deniedBefore *regexp.Regexp
 }
 
 // pto is what a time-off phrase may be called.
@@ -83,12 +84,11 @@ var rules = []rule{
 	}},
 	// 7.2% / 5.5%. The match must sit in the same clause as the plan, either order.
 	{slug: "401k_match", label: "401(k) Matching", patterns: []*regexp.Regexp{
-		re(`\b` + retirementAccount + `[^.;•]{0,60}?\bmatch`),
-		re(`\bmatch\w*[^.;•]{0,40}?\b` + retirementAccount),
+		re(`\bmatch\w*`),
 	},
-		// Only a denial governing "match" itself: "401(k) with no vesting period and a
-		// 4% company match" is a match.
-		notInside: re(`\b(?:no|not|without|n't)\s+(?:\w+\s+){0,2}match`),
+		contextBefore: re(`\b` + retirementAccount + `[^.;•]{0,60}$`),
+		contextAfter:  re(`^[^.;•]{0,40}\b` + retirementAccount),
+		deniedBefore:  re(`\b(?:no|not|without|n't)\s+(?:(?:an?|any|employer|company|contribution|` + retirementAccount + `)\s+)*$`),
 	},
 	// 3.0% / 4.9%. Any stated parental leave, not only a "generous" one: outside the
 	// statutory minimum the US does not have, offering it at all is the signal.
@@ -200,7 +200,10 @@ func (r rule) asserted(text string) bool {
 				dutyBefore.MatchString(before) {
 				continue
 			}
-			if r.notInside != nil && r.notInside.MatchString(text[loc[0]:loc[1]]) {
+			if r.deniedBefore != nil && r.deniedBefore.MatchString(before) {
+				continue
+			}
+			if r.contextBefore != nil && !r.contextBefore.MatchString(before) && !r.contextAfter.MatchString(text[loc[1]:]) {
 				continue
 			}
 			if r.notAfter != nil && r.notAfter.MatchString(after) {

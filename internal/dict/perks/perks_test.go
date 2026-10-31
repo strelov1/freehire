@@ -93,3 +93,24 @@ func TestRulesCoverVocab(t *testing.T) {
 		}
 	}
 }
+
+func TestRetirementMatch(t *testing.T) {
+	for _, tt := range []struct {
+		desc string
+		want bool
+	}{
+		{"401(k) with no waiting for matching contributions", true},
+		{"401(k): no match during the first year, then a 4% employer match", true},
+		{"401(k) matching today, no employer match next year", true},
+		{"No employer match on your 401(k) contributions", false},
+		{"401(k): no employer match", false},
+		{"No 401(k) match is offered", false},
+	} {
+		t.Run(tt.desc, func(t *testing.T) {
+			got := slices.Contains(FromDescription(tt.desc), "401k_match")
+			if got != tt.want {
+				t.Errorf("match = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
