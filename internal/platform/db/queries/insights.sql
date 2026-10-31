@@ -703,6 +703,10 @@ SELECT
 FROM jobs
 WHERE company_slug <> ''
   AND duplicate_of IS NULL
+  -- A member's private URL import carries the employer's slug and can be closed by the
+  -- orphan liveness probe (probe_expired); it is the member's, not evidence about the
+  -- company, and the company page's own reads exclude it the same way.
+  AND NOT is_private
   AND closed_at IS NOT NULL
   AND closed_at >= now() - interval '180 days'
   AND closed_reason IN ('unseen', 'feed_removed', 'probe_expired', 'employer_closed')

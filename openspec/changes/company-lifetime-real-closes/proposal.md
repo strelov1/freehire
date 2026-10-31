@@ -12,6 +12,9 @@ not what the label means (docs/agents/job-lifecycle.md, mechanism 4).
 
 - The lifetime rollup counts `unseen`, `feed_removed`, `probe_expired` and
   `employer_closed`, and no longer `expired`.
+- Private postings (a member's URL import, which carries the employer's slug and can be
+  closed by the orphan liveness probe as `probe_expired`) no longer count, as the company
+  page's own reads already exclude them.
 - A guard test pins every `closed_reason IN (...)` in `insights.sql` to one list, so the
   role pulse (#3952) and this rollup cannot drift apart. sqlc cannot share a SQL
   fragment, so the list lives once in the test and the queries are held to it.

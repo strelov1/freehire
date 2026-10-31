@@ -29,15 +29,16 @@ func TestInsightsRealCloseReasonsAgree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read insights.sql: %v", err)
 	}
+	// Comment lines are dropped first, then the whole file is matched at once, so a
+	// list wrapped over several lines is checked like a one-line one.
+	var sql []string
+	for _, line := range strings.Split(string(src), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "--") {
+			sql = append(sql, line)
+		}
+	}
 	var checked int
-	for i, line := range strings.Split(string(src), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "--") {
-			continue
-		}
-		m := closedReasonIn.FindStringSubmatch(line)
-		if m == nil {
-			continue
-		}
+	for _, m := range closedReasonIn.FindAllStringSubmatch(strings.Join(sql, "\n"), -1) {
 		checked++
 		var got []string
 		for _, v := range strings.Split(m[1], ",") {
@@ -45,7 +46,7 @@ func TestInsightsRealCloseReasonsAgree(t *testing.T) {
 		}
 		slices.Sort(got)
 		if !slices.Equal(got, realCloseReasons) {
-			t.Errorf("insights.sql:%d closed_reason list %v, want %v", i+1, got, realCloseReasons)
+			t.Errorf("insights.sql: closed_reason IN (%s) is %v, want %v", strings.TrimSpace(m[1]), got, realCloseReasons)
 		}
 	}
 	if checked == 0 {

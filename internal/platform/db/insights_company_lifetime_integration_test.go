@@ -93,7 +93,7 @@ func TestInsightsCompanyLifetimeExcludesOurOwnClosures(t *testing.T) {
 	}
 }
 
-func TestInsightsCompanyLifetimeExcludesOldClosuresAndDuplicates(t *testing.T) {
+func TestInsightsCompanyLifetimeExcludesOldClosuresDuplicatesAndPrivate(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -104,6 +104,13 @@ func TestInsightsCompanyLifetimeExcludesOldClosuresAndDuplicates(t *testing.T) {
 	seedClosedCompanyJob(t, pool, "old", "globex", 260, 200, "unseen", nil)
 	// A repost copy closed yesterday: the canonical posting stands for it.
 	seedClosedCompanyJob(t, pool, "dup", "globex", 5, 1, "unseen", &canonical)
+	// A member's private URL import carries the employer's slug, and the orphan
+	// liveness probe can close it as probe_expired: it is the member's, not public
+	// evidence about the company.
+	seedClosedCompanyJob(t, pool, "priv", "globex", 40, 1, "probe_expired", nil)
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET is_private = true WHERE external_id = 'priv'`); err != nil {
+		t.Fatalf("mark private: %v", err)
+	}
 	// Closed before it was created: a data quirk, not a negative lifetime.
 	seedClosedCompanyJob(t, pool, "skew", "globex", 1, 3, "unseen", nil)
 	// One qualifying closure so the company has a row to inspect.

@@ -4,8 +4,8 @@
 The system SHALL maintain `insights_company_lifetime`, one row per company with the
 number of its postings closed within the last 180 days by a closure that says the
 posting is over, and the median days from `created_at` to `closed_at` over those
-postings. Only canonical, attributable postings (`company_slug <> ''` and
-`duplicate_of IS NULL`) SHALL count, and only closures whose `closed_reason` is one of
+postings. Only canonical, attributable, public postings (`company_slug <> ''`,
+`duplicate_of IS NULL` and `NOT is_private`) SHALL count, and only closures whose `closed_reason` is one of
 `unseen`, `feed_removed`, `probe_expired` or `employer_closed` — the same set every
 insights rollup that measures a real close uses. `expired` (the age rule for sources
 with no close signal) SHALL NOT count. The table SHALL be rebuilt by `cmd/rollup-company`
@@ -19,10 +19,10 @@ inside the same transaction as the other per-company rollups.
 - **WHEN** a company's only closed postings carry `closed_reason` `board_unreachable`, `feed_empty`, `source_misattributed`, `moderated`, `expired`, `board_retired` or `''`
 - **THEN** the company has no row
 
-#### Scenario: Old closures and duplicates are excluded
-- **WHEN** a posting closed 200 days ago, or a posting with `duplicate_of` set closed yesterday
-- **THEN** neither contributes to the company's row
+#### Scenario: Old closures, duplicates and private postings are excluded
+- **WHEN** a posting closed 200 days ago, a posting with `duplicate_of` set closed yesterday, or a member's private import closed yesterday as `probe_expired`
+- **THEN** none of them contributes to the company's row
 
 #### Scenario: The rebuild is atomic with its siblings
 - **WHEN** `cmd/rollup-company` runs
-- **THEN** `insights_company_lifetime` is cleared and rebuilt in the same transaction as `insights_company_stats`, `insights_company_growth` and `insights_company_response`
+- **THEN** `insights_company_lifetime` is cleared and rebuilt in the same transaction as `insights_company_stats`, `insights_company_growth`, `insights_company_response` and `insights_company_views`
