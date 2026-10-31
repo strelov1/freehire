@@ -578,12 +578,13 @@ export function withSearchParams(
   return params.toString();
 }
 
-/** The calendar's FIRST read when the address names no month: the shown month and the
- *  next one in a single request, from the same padded start as slotWindowForMonth. Two
- *  months is what a 30-day horizon can reach from any day, and 62 days is the endpoint's
- *  ceiling — so one read answers which month to open on, instead of a read per empty month. */
-export function openingSlotWindow(month: string): { from: string; to: string } {
-  return { from: slotWindowForMonth(month).from, to: `${addMonths(month, 2)}-01T00:00:00Z` };
+/** Search forward from now within the endpoint's 62-day ceiling. Calendar-month
+ *  boundaries can miss bookable hours: 30 days from late January can reach March. */
+export function openingSlotWindow(now = new Date()): { from: string; to: string } {
+  return {
+    from: now.toISOString(),
+    to: new Date(now.getTime() + 62 * 24 * 60 * 60 * 1000).toISOString(),
+  };
 }
 
 /** The month a calendar should open on: `current` while it has an open hour, otherwise the

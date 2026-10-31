@@ -879,9 +879,13 @@ describe('the weekly schedule editor', () => {
 });
 
 describe('the month a booking calendar opens on', () => {
-  test('the opening read spans the shown month and the next, from the same padded start', () => {
-    expect(openingSlotWindow('2026-10')).toEqual({ from: '2026-09-30T00:00:00Z', to: '2026-12-01T00:00:00Z' });
-    expect(openingSlotWindow('2026-12')).toEqual({ from: '2026-11-30T00:00:00Z', to: '2027-02-01T00:00:00Z' });
+  test('the opening read searches forward within the endpoint limit across short months and year boundaries', () => {
+    expect(openingSlotWindow(new Date('2027-01-31T12:00:00Z'))).toEqual({
+      from: '2027-01-31T12:00:00.000Z', to: '2027-04-03T12:00:00.000Z',
+    });
+    expect(openingSlotWindow(new Date('2026-12-31T12:00:00Z'))).toEqual({
+      from: '2026-12-31T12:00:00.000Z', to: '2027-03-03T12:00:00.000Z',
+    });
   });
 
   test('stays on the shown month while it has an open hour', () => {
