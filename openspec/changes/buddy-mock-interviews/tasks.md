@@ -5728,7 +5728,7 @@ git commit -m "Add the buddy mock interview pages"
 
 **Interfaces:** none (docs).
 
-- [ ] 13.1 In `internal/engage/buddy/AGENTS.md`, append to the Scope paragraph (after ``…`internal/platform/db/queries/buddies.sql`. HTTP lives in `internal/api/handler`, not here.``):
+- [x] 13.1 In `internal/engage/buddy/AGENTS.md`, append to the Scope paragraph (after ``…`internal/platform/db/queries/buddies.sql`. HTTP lives in `internal/api/handler`, not here.``):
 
 ```markdown
 
@@ -5765,7 +5765,7 @@ and append to "Always true":
   leave or a block.
 ```
 
-- [ ] 13.2 In `internal/engage/mentorship/AGENTS.md` replace
+- [x] 13.2 In `internal/engage/mentorship/AGENTS.md` replace
 
 ```markdown
 publishes when they are free, and a seeker books half an hour of it. The slot engine is
@@ -5790,9 +5790,9 @@ with
 ```
 replace `  midnight cannot see it; anchor_test.go now calls the engine the way the handler does.` with `  midnight cannot see it; internal/engage/slots/anchor_test.go calls the engine the way the handler does.`; and replace `Run the slot-engine tests with `-count=1`: the layering guard next door reports `ok` with `Run the slot-engine tests (`go test ./internal/engage/slots/`) with `-count=1`: the layering guard next door reports `ok`.
 
-- [ ] 13.3 In `internal/engage/AGENTS.md` replace `` `referral` `reminder` `report` `socialdigest` `` with `` `referral` `reminder` `report` `slots` `socialdigest` ``.
+- [x] 13.3 In `internal/engage/AGENTS.md` replace `` `referral` `reminder` `report` `socialdigest` `` with `` `referral` `reminder` `report` `slots` `socialdigest` ``.
 
-- [ ] 13.4 In `AGENTS.md`, in the `mentorship-remind` bullet, insert right before its closing "See [internal/engage/mentorship/AGENTS.md]…" sentence:
+- [x] 13.4 In `AGENTS.md`, in the `mentorship-remind` bullet, insert right before its closing "See [internal/engage/mentorship/AGENTS.md]…" sentence:
 
 ```markdown
 The same run reminds buddy mock interviews (`buddy.SendDueMockReminders`: same offsets, windows and claim order); a failure in one pass does not skip the other, and the run exits non-zero if either could not read its work.
@@ -5804,7 +5804,7 @@ See [internal/engage/mentorship/AGENTS.md](internal/engage/mentorship/AGENTS.md)
 ```
 In the module table, extend the Interview buddies row's description from "(anonymous peer network: handle, feed vocabulary, one conversation per pair)" to "(anonymous peer network: handle, feed vocabulary, one conversation per pair, mock interviews)".
 
-- [ ] 13.5 Check the links and commit:
+- [x] 13.5 Check the links and commit:
 
 ```bash
 pnpm check:links

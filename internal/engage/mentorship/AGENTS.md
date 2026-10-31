@@ -2,8 +2,9 @@
 
 ## Scope
 The mentorship marketplace: a named, moderated insider at a company in the catalogue
-publishes when they are free, and a seeker books half an hour of it. The slot engine is
-in slots.go/expand.go/override.go/subtract.go/slice.go; the domain services in
+publishes when they are free, and a seeker books half an hour of it. The slot engine lives
+in [internal/engage/slots](../slots/doc.go) (shared with buddy mock interviews; the rules
+below still bind it); the domain services in
 profile.go, booking.go, remind.go and schedule_service.go; the sqlc adapter in
 repository.go and booking_repository.go; the mail path in notify.go and invite.go. HTTP
 lives in internal/api/handler/mentorship*.go — the public surface in its own
@@ -20,21 +21,21 @@ not one. They share the company key and nothing else.
 - **A stored availability time carries no zone and no date.** It is resolved through the
   mentor's own IANA zone, per date, and only then becomes an instant. Convert once and
   repeat weekly and every slot moves by an hour for half the year, silently, and no mentor
-  could diagnose it (expand.go's `resolve`).
+  could diagnose it (internal/engage/slots/expand.go's `resolve`).
 
 - **The day cursor is a `Date`, not an instant, and steps through UTC.**
   `America/Santiago`, `America/Havana` and `Atlantic/Azores` move their clocks AT
   midnight, so once a year that midnight does not exist and Go normalises it BACKWARDS to
   23:00 of the previous date. A cursor built at midnight stops advancing — an infinite
-  loop on an unauthenticated endpoint (schedule.go:`Date.next`, and the regression tests
-  in midnight_test.go).
+  loop on an unauthenticated endpoint (internal/engage/slots/schedule.go:`Date.next`, and
+  the regression tests in internal/engage/slots/midnight_test.go).
 
 - **The slot grid is anchored to the SCHEDULE, never to `now`.** `Slots` moves the
   window's near end DOWN to a day boundary; the minimum notice then filters slots.
   Clamping the near end to `now` instead offers 18:33, 19:33, 20:33 for a mentor who
   stated 18:00 — and this was got wrong TWICE: the first fix only raised a bound that was
   already earlier, which the HTTP default (`from = now`) never is. Tests that supply
-  midnight cannot see it; anchor_test.go now calls the engine the way the handler does.
+  midnight cannot see it; internal/engage/slots/anchor_test.go calls the engine the way the handler does.
 
 - **An empty dated override CLOSES its date, and beats every other override on it.** That
   last part departs from cal.com, where an empty override is a zero-length range filtered
@@ -143,5 +144,5 @@ drives `QueriesRepository` against a real Postgres, so it sees the seam itself. 
 written for that defect in `internal/platform/db` passes with the fix removed; this one
 does not, and that difference is the whole reason the file is here.
 
-Run the slot-engine tests with `-count=1`: the layering guard next door reports `ok
+Run the slot-engine tests (`go test ./internal/engage/slots/`) with `-count=1`: the layering guard next door reports `ok
 (cached)` on a package it has never seen, and the habit is worth keeping here too.
