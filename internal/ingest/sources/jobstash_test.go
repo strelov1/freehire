@@ -193,6 +193,20 @@ func TestJobStashShortListingIsAnError(t *testing.T) {
 	}
 }
 
+// A 200 that carries no total (an error object, a changed envelope) must not end the walk as
+// complete: with no total, any count read so far would pass for the whole catalogue.
+func TestJobStashPageWithoutTotalIsAnError(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("page=1", jobstashListPage(300,
+			jobstashJob("Z2IGg7", "Associate Tech Lead", "KAST", "", "public", "Remote", "REMOTE", 1781521356188, "a", "b"),
+		)).
+		route("page=2", `{"message":"Internal error"}`)
+
+	if _, err := NewJobStash(fake).Fetch(context.Background(), CompanyEntry{Provider: "jobstash"}); err == nil {
+		t.Fatal("want an error: page 2 stated no total")
+	}
+}
+
 // JobStash's list endpoint pages through the whole catalogue (measured 2026-10-31: 85 pages,
 // 16,963 postings, every page full until the last), so an open posting a clean run did not list
 // is gone — including one whose company has no posting left in the feed, which the company

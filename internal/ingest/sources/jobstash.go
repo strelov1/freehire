@@ -40,7 +40,7 @@ func (jobstash) aggregator() {}
 
 // jobstash lists its whole catalogue every run: the list endpoint pages through every posting
 // (measured 2026-10-31: 85 pages of 200, 16,963 postings), and list fails a walk that ends
-// short of the reported total or names no posting at all. So the sweep may close by source,
+// short of the reported total or on a page that states none. So the sweep may close by source,
 // which reaches the postings of an employer with nothing left in the feed — the company scope
 // never names that employer again, and on 2026-10-31 ~3k open postings under such employers
 // had gone unseen for a week. See the fullCatalog interface (source.go) for the bar.
@@ -84,8 +84,8 @@ func (j jobstash) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 // the reported total. Each page carries postings with their body inline.
 //
 // The walk is the whole catalogue or an error, because jobstash is swept by source: a page that
-// comes back empty before the total, a walk that runs out of pages, or a listing with no posting
-// in it would otherwise read as every unlisted posting gone. The total is the latest page's, so
+// states no total (an empty catalogue included), one that comes back empty before the total, or
+// a walk that runs out of pages would otherwise read as every unlisted posting gone. The total is the latest page's, so
 // a catalogue that shrinks during the walk still ends cleanly.
 func (j jobstash) list(ctx context.Context) ([]jobstashPosting, error) {
 	var all []jobstashPosting
@@ -98,8 +98,12 @@ func (j jobstash) list(ctx context.Context) ([]jobstashPosting, error) {
 		if err := j.http.GetJSON(ctx, url, &resp); err != nil {
 			return nil, fmt.Errorf("jobstash: page %d: %w", page, err)
 		}
+		// Without a total nothing proves the walk complete, and any count would pass for it.
+		if resp.Total <= 0 {
+			return nil, fmt.Errorf("jobstash: page %d stated no total", page)
+		}
 		all = append(all, resp.Data...)
-		if len(all) > 0 && len(all) >= resp.Total {
+		if len(all) >= resp.Total {
 			return all, nil
 		}
 		if len(resp.Data) == 0 {

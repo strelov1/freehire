@@ -695,8 +695,13 @@ func shouldSweep(stats pipeline.Stats) bool {
 // So does a board crawled without the catalogue's seen-set (Stats.SeenUnknown): every stored
 // posting then reads as new, and a hydrating adapter with a detail budget refreshes none of
 // those past it, so the source scope would close live postings the listing named.
+//
+// And so does a covered posting whose refresh failed (Stats.RefreshFailed): the listing named
+// it, but its stored row keeps its old last_seen_at, and a covered row is never written again,
+// so a wrong close would never be undone by a later crawl.
 func sweepBySource(stats pipeline.Stats, fullCatalog bool) bool {
-	return fullCatalog && stats.Failed == 0 && stats.Unreadable == 0 && stats.SeenUnknown == 0
+	return fullCatalog && stats.Failed == 0 && stats.Unreadable == 0 && stats.SeenUnknown == 0 &&
+		stats.RefreshFailed == 0
 }
 
 // sweepWindowFor reports how long a provider's unseen jobs are spared before the sweep closes

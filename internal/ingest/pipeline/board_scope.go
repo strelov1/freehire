@@ -113,13 +113,15 @@ func boardReadWhatItListed(st Stats) bool {
 //     some of it read and written, the rest not, with nothing in Failed to say so.
 //  5. the crawl had the catalogue's seen-set (Stats.SeenUnknown). Without it every stored
 //     posting reads as new, and a hydrating adapter with a detail budget refreshes none past it.
+//  6. every covered posting it listed was refreshed (Stats.RefreshFailed). A failed refresh
+//     leaves those stored rows as old as they were while the listing still named them.
 //
 // A boardless entry (e.Board == "") never qualifies: its postings are namespaced with an
 // empty board (externalid.Namespace("", id)), so a board-scoped LIKE pattern built from it
 // would match the provider's WHOLE catalogue rather than nothing.
 func boardQualifies(e sources.CompanyEntry, st Stats) bool {
 	return e.Board != "" && st.Failed == 0 && st.Interrupted == 0 && st.SeenUnknown == 0 &&
-		boardReachedPostings(st) && boardReadWhatItListed(st)
+		st.RefreshFailed == 0 && boardReachedPostings(st) && boardReadWhatItListed(st)
 }
 
 // boardListedEmpty reports whether a board's crawl FINISHED and its listing named no posting at

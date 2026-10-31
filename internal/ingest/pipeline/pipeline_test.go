@@ -20,16 +20,17 @@ import (
 // It also implements the optional seenLookup capability (ExistingExternalIDs), so a hydrating
 // source can be driven by a canned seen-set.
 type fakeStore struct {
-	mu        sync.Mutex
-	saved     []job.Job
-	closed    [][2]string
-	touched   [][2]string
-	refreshed map[string][]string // source -> external ids passed to RefreshCovered
-	err       error
-	seenIDs   map[string]bool            // stored (namespaced) external_id -> is_tech evidence
-	seenByBrd map[string]map[string]bool // per-board sets, keyed by the requested board
-	seenAsked []string                   // every board the runner scoped a lookup to
-	seenErr   error                      // when set, ExistingExternalIDs fails
+	mu         sync.Mutex
+	saved      []job.Job
+	closed     [][2]string
+	touched    [][2]string
+	refreshed  map[string][]string // source -> external ids passed to RefreshCovered
+	refreshErr error               // when set, RefreshCovered fails (writes still succeed)
+	err        error
+	seenIDs    map[string]bool            // stored (namespaced) external_id -> is_tech evidence
+	seenByBrd  map[string]map[string]bool // per-board sets, keyed by the requested board
+	seenAsked  []string                   // every board the runner scoped a lookup to
+	seenErr    error                      // when set, ExistingExternalIDs fails
 	// filled records every RecordCompanyDescription call, in order.
 	filled []filledDescription
 	// descNotDue makes CompanyDescriptionDue answer false (the company already has a
@@ -113,6 +114,9 @@ func (s *fakeStore) RefreshCovered(_ context.Context, source string, externalIDs
 	defer s.mu.Unlock()
 	if s.err != nil {
 		return 0, s.err
+	}
+	if s.refreshErr != nil {
+		return 0, s.refreshErr
 	}
 	if s.refreshed == nil {
 		s.refreshed = map[string][]string{}
@@ -1162,6 +1166,36 @@ func TestRunRefreshesAStoredPostingTheCoverageGateSkips(t *testing.T) {
 	}
 	if len(store.saved) != 1 {
 		t.Errorf("saved %d postings, want 1 — the gate still decides what is written", len(store.saved))
+	}
+}
+
+// A failed refresh leaves the covered rows exactly as stale as before, while the listing named
+// them. The run must say so: a sweep that read those rows' age as absence would close postings
+// still listed — and a covered row, never written again, would never reopen.
+func TestRunCountsTheCoveredPostingsAFailedRefreshMissed(t *testing.T) {
+	src := fakeSource{provider: "himalayas", jobs: []sources.Job{
+		{ExternalID: "1", Title: "Backend Engineer", Company: "Acme"},
+		{ExternalID: "2", Title: "Frontend Engineer", Company: "Acme"},
+		{ExternalID: "3", Title: "Data Engineer", Company: "Uncovered"},
+	}}
+	store := &fakeStore{refreshErr: errors.New("db down")}
+	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}}
+	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Himalayas", Provider: "himalayas", Board: "remote"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := stats.Total().RefreshFailed; got != 2 {
+		t.Errorf("RefreshFailed = %d, want 2 — both covered postings went unrefreshed", got)
+	}
+	if got := stats.Total().Refreshed; got != 0 {
+		t.Errorf("Refreshed = %d, want 0", got)
+	}
+	if got := stats["himalayas"].QualifyingBoards; len(got) != 0 {
+		t.Errorf("QualifyingBoards = %v, want none — the board's covered rows were not refreshed", got)
 	}
 }
 

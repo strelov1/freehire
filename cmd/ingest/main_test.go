@@ -87,6 +87,9 @@ func TestSweepBySource(t *testing.T) {
 		// Without its seen-set a budgeted adapter refreshes nothing it already stored, so
 		// every stored posting would read as gone.
 		{"full-catalog, seen-set unknown", pipeline.Stats{Ingested: 1000, SeenUnknown: 1}, true, false},
+		// A covered posting the listing named but whose refresh failed keeps its old
+		// last_seen_at, and the source scope would read that as gone.
+		{"full-catalog, covered refresh failed", pipeline.Stats{Ingested: 1000, RefreshFailed: 3}, true, false},
 	}
 	for _, tc := range cases {
 		if got := sweepBySource(tc.stats, tc.fullCatalog); got != tc.want {

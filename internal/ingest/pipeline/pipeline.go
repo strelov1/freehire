@@ -257,6 +257,11 @@ type Stats struct {
 	// run refreshed (CoveredRefresher). Not Ingested — the gate wrote nothing — but evidence the
 	// crawl worked all the same, so cmd/ingest sweeps a provider whose every posting was covered.
 	Refreshed int
+	// RefreshFailed counts the ATSCovered postings whose refresh failed. The listing named them,
+	// but their stored rows keep the last_seen_at they had, so the board's close scopes are
+	// withheld (boardQualifies, cmd/ingest's sweepBySource): reading that age as absence would
+	// close a posting still listed, and a covered row is never written again to reopen it.
+	RefreshFailed int
 	// Unreadable counts postings the board's listing NAMED but whose detail this crawl could
 	// not read (sources.Job.Unreadable). It is deliberately not Failed: the board answered, so
 	// failing it would cool a working board and freeze its whole catalogue over a per-posting
@@ -315,6 +320,7 @@ func (s *Stats) add(o Stats) {
 	s.Rejected += o.Rejected
 	s.ATSCovered += o.ATSCovered
 	s.Refreshed += o.Refreshed
+	s.RefreshFailed += o.RefreshFailed
 	s.Unreadable += o.Unreadable
 	s.Interrupted += o.Interrupted
 	s.SeenUnknown += o.SeenUnknown
@@ -734,7 +740,7 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, fetch
 	covered := r.aggregatorCoverageForBatch(ctx, e, raw, canon)
 	t := r.writeBoard(ctx, e, raw, seen, covered, canon)
 	st, rej, firstErr := t.st, t.rej, t.firstErr
-	st.Refreshed = r.refreshCovered(ctx, e, t.covered)
+	st.Refreshed, st.RefreshFailed = r.refreshCovered(ctx, e, t.covered)
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
 	// without flooding the log.
@@ -935,18 +941,18 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 // catalogue already holds (see CoveredRefresher). It only logs a failure: a row the refresh
 // misses is left exactly as stale as it was, and is never closed because of it. It returns how
 // many rows were refreshed.
-func (r Runner) refreshCovered(ctx context.Context, e sources.CompanyEntry, externalIDs []string) int {
+func (r Runner) refreshCovered(ctx context.Context, e sources.CompanyEntry, externalIDs []string) (refreshed, failed int) {
 	cr, ok := r.Store.(CoveredRefresher)
 	if !ok || len(externalIDs) == 0 {
-		return 0
+		return 0, 0
 	}
 	n, err := cr.RefreshCovered(ctx, e.Provider, externalIDs)
 	if err != nil {
 		log.Printf("ingest: %s board %q (%s): refresh %d covered postings: %v",
 			e.Provider, e.Board, e.Company, len(externalIDs), err)
-		return 0
+		return 0, len(externalIDs)
 	}
-	return n
+	return n, 0
 }
 
 // aggregatorGate reports whether the ingest-time coverage gate applies to e's board: a
@@ -1460,7 +1466,7 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 
 	err := ss.FetchStream(ctx, e, emit)
 	st := t.st
-	st.Refreshed = r.refreshCovered(ctx, e, t.covered)
+	st.Refreshed, st.RefreshFailed = r.refreshCovered(ctx, e, t.covered)
 	t.rej.log(e)
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",
