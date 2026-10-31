@@ -17,11 +17,12 @@ import (
 // the filtered total and the unfiltered occupations facet, and — like the live API — serves only
 // the first jobnetWindow results of any query, answering an empty page past it.
 type jobnetCatalogue struct {
-	ads      []jobnetFakeAd
-	extraOcc int          // added to the facet total, to model a facet that misses ads
-	failAt   map[int]bool // the nth request (1-based) fails
-	requests int
-	gotCSRF  string
+	ads        []jobnetFakeAd
+	extraOcc   int          // added to the facet total, to model a facet that misses ads
+	sliceEmpty bool         // a slice (occupation-filtered) query states its total but lists no ads
+	failAt     map[int]bool // the nth request (1-based) fails
+	requests   int
+	gotCSRF    string
 }
 
 type jobnetFakeAd struct {
@@ -53,7 +54,8 @@ func (f *jobnetCatalogue) GetJSONWithHeaders(_ context.Context, raw string, head
 		}
 	}
 	var served []jobnetAd
-	if start := (page - 1) * size; start < len(matched) && start+size <= jobnetWindow {
+	listsNothing := f.sliceEmpty && len(occs) > 0
+	if start := (page - 1) * size; start < len(matched) && start+size <= jobnetWindow && !listsNothing {
 		served = matched[start:min(start+size, len(matched))]
 	}
 	resp := map[string]any{"totalJobAdCount": len(matched), "jobAds": served}
@@ -216,6 +218,14 @@ func TestJobnetFetchFailsWhenAnOccupationOutgrowsTheWindow(t *testing.T) {
 func TestJobnetFetchFailsWhenTheFacetMissesAds(t *testing.T) {
 	if _, err := fetchJobnet(t, &jobnetCatalogue{ads: jobnetFakeAds("o1", 50), extraOcc: -1}); err == nil {
 		t.Fatal("Fetch: want an error when the occupations facet accounts for fewer ads than the total")
+	}
+}
+
+// A slice that states ads and lists none was not read, however small it is: no drift empties a
+// slice, so the crawl fails rather than letting the sweep close the slice's ads.
+func TestJobnetFetchFailsOnASliceThatListsNothing(t *testing.T) {
+	if _, err := fetchJobnet(t, &jobnetCatalogue{ads: jobnetFakeAds("o1", 50), sliceEmpty: true}); err == nil {
+		t.Fatal("Fetch: want an error when a slice states ads and lists none")
 	}
 }
 

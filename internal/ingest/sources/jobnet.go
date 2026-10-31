@@ -109,9 +109,9 @@ type jobnetAd struct {
 //
 // jobnet is swept by source, so a partial list would close every ad the walk missed, and
 // anything that leaves the read unproven fails the crawl: any request failing, an empty
-// catalogue, a facet that does not account for the stated total, and a slice whose walk ended a
-// whole page or more short of what its first page stated (the window cut it, or the listing
-// stopped serving). Less than a page of shortfall is the drift of ads removed while the slice
+// catalogue, a facet that does not account for the stated total, and a slice whose walk listed
+// nothing or ended a whole page or more short of what its first page stated (the window cut it,
+// or the listing stopped serving). Less than a page of shortfall is the drift of ads removed while the slice
 // was walked, which the sweep's window absorbs.
 func (s jobnet) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	var head jobnetSearchResponse
@@ -155,7 +155,7 @@ func (s jobnet) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 				}
 			}
 		}
-		if read+jobnetPageSize <= stated {
+		if read+jobnetPageSize <= stated || (read == 0 && stated > 0) {
 			return nil, fmt.Errorf("jobnet: a slice of %d occupations listed %d of the %d ads it states", len(occupations), read, stated)
 		}
 	}
