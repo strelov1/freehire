@@ -48,7 +48,7 @@ func TestHireHiveFetchListsPostings(t *testing.T) {
 				"hosted_url": "https://amcsgroup.hirehive.com/sales-executive",
 				"location": "Remote",
 				"published_date": "2026-10-30T18:09:36.457Z",
-				"description": {"text": "Sell the platform."},
+				"description": {"text": "Sell the platform.\n\nCall customers."},
 				"type": {"type": "Contract", "name": "Contract"},
 				"experience": {"type": "NA", "name": "NA"},
 				"country": {"name": "United States", "code": "US"},
@@ -87,6 +87,9 @@ func TestHireHiveFetchListsPostings(t *testing.T) {
 	sales := jobs[1]
 	if sales.EmploymentType != "contract" || sales.Seniority != "" {
 		t.Errorf("sales facets = %q %q", sales.EmploymentType, sales.Seniority)
+	}
+	if !strings.Contains(sales.Description, "<p>Sell the platform.</p>") || !strings.Contains(sales.Description, "<p>Call customers.</p>") {
+		t.Errorf("Description = %q, want the plain text rebuilt as paragraphs", sales.Description)
 	}
 	if sales.SalaryMin == nil || *sales.SalaryMin != 100000 || sales.SalaryMax == nil || *sales.SalaryMax != 125000 || sales.SalaryCurrency != "USD" || sales.SalaryPeriod != "year" {
 		t.Errorf("salary = %v %v %s %s", sales.SalaryMin, sales.SalaryMax, sales.SalaryCurrency, sales.SalaryPeriod)

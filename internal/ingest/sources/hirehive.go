@@ -139,7 +139,7 @@ func hirehiveBody(d hirehiveDescriptionField) string {
 	if d.HTML != "" {
 		return d.HTML
 	}
-	return d.Text
+	return plainTextToHTML(d.Text)
 }
 
 func hirehiveSalary(job *Job, tiers []hirehiveTier) {
