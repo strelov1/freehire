@@ -815,6 +815,8 @@ func Register(app *fiber.App, cfg Config) {
 	reminders := reminder.New(reminder.NewQueriesRepository(queries))
 	tracking := jobtracking.New(jobtracking.NewQueriesRepository(queries, cfg.Pool), jobtracking.WithReminders(reminders))
 	trackingH := newTrackingHandlers(queries, tracking, reminders, jobSearch)
+	// hide_applied_companies on /jobs/search reads the same set the feed badges cards by.
+	searchH.appliedCompanies = tracking
 	timelineH := newTimelineHandlers(queries)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)

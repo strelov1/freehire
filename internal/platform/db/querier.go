@@ -3761,6 +3761,27 @@ type Querier interface {
 	// Cancelled meetings are returned and marked rather than filtered: the view shows them
 	// struck through, because a silently missing interview reads as a fault.
 	ListApplicationInterviewsInRange(ctx context.Context, arg ListApplicationInterviewsInRangeParams) ([]ListApplicationInterviewsInRangeRow, error)
+	// The employers the caller has applied to, as the company slugs the catalogue files
+	// postings under — what the feed's "you already applied here" badge and its
+	// hide_applied_companies exclusion compare a posting's company_slug against.
+	//
+	// Only an application that was MADE counts (applied_at IS NOT NULL, per 0065): a tracked
+	// row the candidate is still preparing asserts nothing about the employer yet.
+	//
+	// The slug is the posting's CURRENT company_slug while the posting exists, and the
+	// application's own snapshot only once it is gone. The snapshot is frozen at apply time,
+	// and the slug rule has moved under it since (legal forms stripped, aggregators
+	// re-attributed: measured 2026-10-31, 383 of 11,856 applications held a snapshot their
+	// posting no longer carries, 165 of them with no alias to bridge the two). The posting's
+	// own slug is what backfill-derive and merge-companies keep current; the snapshot is
+	// only the fallback that keeps a deleted posting's employer counted. Either one is then
+	// resolved through company_slug_aliases, so an employer merged since still matches.
+	//
+	// Bounded to the newest max_applications applications BEFORE the posting join, because
+	// the join is a random heap read per application: unbounded, the heaviest account
+	// (7,296 applications) took 10.7s cold. The overflow is a long-ago employer missing its
+	// badge, never a wrong one.
+	ListAppliedCompanySlugs(ctx context.Context, arg ListAppliedCompanySlugsParams) ([]string, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
 	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
 	// optional Telegram ping.

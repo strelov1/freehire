@@ -277,3 +277,22 @@ func (h *trackingHandlers) ListDismissedSlugs(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"data": slugs})
 }
+
+// ListAppliedCompanySlugs returns the company slugs of the employers the authenticated
+// caller has applied to. The SPA reads this once to mark "you already applied to this
+// company" on catalogue cards and the job page, cross-referencing each posting's
+// company_slug client-side — the public job reads stay unauthenticated and cacheable,
+// the same arrangement as the viewed and saved sets. Response: {"data": ["acme", ...]}.
+func (h *trackingHandlers) ListAppliedCompanySlugs(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+
+	slugs, err := h.tracking.AppliedCompanySlugs(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(fiber.Map{"data": slugs})
+}

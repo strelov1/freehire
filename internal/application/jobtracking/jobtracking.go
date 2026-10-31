@@ -273,12 +273,23 @@ type Repository interface {
 	// ExcludedJobIDs returns up to limit job ids the caller has already interacted
 	// with (viewed, saved, applied, or dismissed), most-recently-touched first.
 	ExcludedJobIDs(ctx context.Context, userID int64, limit int32) ([]int64, error)
+
+	// AppliedCompanySlugs returns the company slugs of the employers the caller has
+	// applied to, drawn from at most maxApplications of their newest applications.
+	AppliedCompanySlugs(ctx context.Context, userID int64, maxApplications int32) ([]string, error)
 }
 
 // excludedJobsCap bounds the swipe deck's exclusion set so the search
 // `id NOT IN (...)` filter stays small; a heavy triager past this cap may
 // occasionally re-see a long-ago-seen job, which is acceptable.
 const excludedJobsCap int32 = 1000
+
+// appliedCompaniesCap bounds how many of a caller's newest applications the applied-
+// company set is drawn from. It keeps both the read (one posting lookup per
+// application) and the search's `company_slug NOT IN [...]` filter bounded, at the same
+// size as excludedJobsCap; measured 2026-10-31, one account on production is past it.
+// The overflow is a long-ago employer missing its badge, never a wrong one.
+const appliedCompaniesCap int32 = 1000
 
 // Reminders is the come-back-and-apply reminder, as this package needs it.
 //
@@ -382,6 +393,14 @@ func (s *Service) DismissedSlugs(ctx context.Context, userID int64) ([]string, e
 // card is shown at most once across sessions, capped at excludedJobsCap.
 func (s *Service) ExcludedJobIDs(ctx context.Context, userID int64) ([]int64, error) {
 	return s.repo.ExcludedJobIDs(ctx, userID, excludedJobsCap)
+}
+
+// AppliedCompanySlugs returns the company slugs of the employers the caller has
+// applied to — the set the feed marks "you already applied to this company" by, and
+// the one /jobs/search's hide_applied_companies leaves out. Newest first, capped at
+// appliedCompaniesCap applications.
+func (s *Service) AppliedCompanySlugs(ctx context.Context, userID int64) ([]string, error) {
+	return s.repo.AppliedCompanySlugs(ctx, userID, appliedCompaniesCap)
 }
 
 // Pipeline returns the caller's application-pipeline snapshot: the count at each stage of the
