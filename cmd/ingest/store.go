@@ -474,7 +474,7 @@ const refreshCoveredChunk = 5000
 // The companies are recorded only once every chunk has succeeded: a company whose postings span
 // two chunks, one refreshed and one not, must not enter the sweep's scope, or the sweep would
 // close its listed-but-unrefreshed rows.
-func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs []string) error {
+func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs []string) (int, error) {
 	var refreshed []string
 	for chunk := range slices.Chunk(externalIDs, refreshCoveredChunk) {
 		slugs, err := s.q.RefreshCoveredJobs(ctx, db.RefreshCoveredJobsParams{
@@ -482,7 +482,7 @@ func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs
 			ExternalIds: chunk,
 		})
 		if err != nil {
-			return fmt.Errorf("refresh covered jobs %s: %w", source, err)
+			return 0, fmt.Errorf("refresh covered jobs %s: %w", source, err)
 		}
 		refreshed = append(refreshed, slugs...)
 	}
@@ -491,7 +491,7 @@ func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs
 			s.crawled.record(source, slug)
 		}
 	}
-	return nil
+	return len(refreshed), nil
 }
 
 // CompanyDescriptionDue implements pipeline.CompanyDescriptionFiller: whether the company

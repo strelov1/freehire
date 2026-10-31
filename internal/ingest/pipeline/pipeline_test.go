@@ -106,17 +106,18 @@ func (s *fakeStore) Touch(_ context.Context, source, externalID string) error {
 	return nil
 }
 
-func (s *fakeStore) RefreshCovered(_ context.Context, source string, externalIDs []string) error {
+// RefreshCovered reports every id as a stored open row.
+func (s *fakeStore) RefreshCovered(_ context.Context, source string, externalIDs []string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil {
-		return s.err
+		return 0, s.err
 	}
 	if s.refreshed == nil {
 		s.refreshed = map[string][]string{}
 	}
 	s.refreshed[source] = append(s.refreshed[source], externalIDs...)
-	return nil
+	return len(externalIDs), nil
 }
 
 // fakeCoverage answers NonAggregatorCompanies from a canned covered set, and records every
@@ -1112,10 +1113,14 @@ func TestRunRefreshesAStoredPostingTheCoverageGateSkips(t *testing.T) {
 	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}}
 	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
 
-	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
 		{Company: "Himalayas", Provider: "himalayas"},
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+	if got := stats.Total().Refreshed; got != 2 {
+		t.Errorf("Refreshed = %d, want 2 — what the store reported refreshing", got)
 	}
 	got := slices.Sorted(slices.Values(store.refreshed["himalayas"]))
 	if want := []string{":1", ":2"}; !slices.Equal(got, want) {
@@ -1136,13 +1141,17 @@ func TestRunRefreshesStreamedPostingsTheCoverageGateSkips(t *testing.T) {
 	coverage := &fakeCoverage{covered: map[string]bool{"acme": true}}
 	r := Runner{Registry: registry(src), Store: store, Coverage: coverage}
 
-	if _, err := r.Run(context.Background(), []sources.CompanyEntry{
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
 		{Company: "Acme", Provider: "jobtech", Board: "acme"},
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if got, want := store.refreshed["jobtech"], []string{"acme:1"}; !slices.Equal(got, want) {
 		t.Errorf("refreshed = %v, want %v", got, want)
+	}
+	if got := stats.Total().Refreshed; got != 1 {
+		t.Errorf("Refreshed = %d, want 1", got)
 	}
 }
 

@@ -35,6 +35,10 @@ func TestShouldSweep(t *testing.T) {
 		{"normal run", pipeline.Stats{Ingested: 100, Failed: 3}, true},
 		{"zero ingested", pipeline.Stats{Ingested: 0, Failed: 550}, false},
 		{"all boards ok but empty", pipeline.Stats{Ingested: 0, Failed: 0}, false},
+		// Every posting went to an employer crawled first-hand, and the stored ones among them
+		// were refreshed: the crawl worked, so the companies those rows put in scope must sweep.
+		{"covered only, stored rows refreshed", pipeline.Stats{ATSCovered: 40, Refreshed: 12}, true},
+		{"covered only, nothing stored", pipeline.Stats{ATSCovered: 40}, false},
 	}
 	for _, tc := range cases {
 		if got := shouldSweep(tc.stats); got != tc.want {

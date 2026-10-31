@@ -671,9 +671,12 @@ func sweepableProviders(rs pipeline.RunStats) []string {
 }
 
 // shouldSweep reports whether the run saw enough of the world to justify closing
-// jobs: a run that ingested nothing proves only that the crawl failed.
+// jobs: a run that ingested nothing proves only that the crawl failed. A stored row the
+// coverage gate refreshed counts too: on an aggregator whose every employer is crawled
+// first-hand nothing is ingested, yet the crawl plainly worked, and those rows' companies are
+// already in the crawled scope waiting for this sweep.
 func shouldSweep(stats pipeline.Stats) bool {
-	return stats.Ingested > 0
+	return stats.Ingested > 0 || stats.Refreshed > 0
 }
 
 // sweepBySource reports whether a provider's run may close its unseen jobs by source alone,
