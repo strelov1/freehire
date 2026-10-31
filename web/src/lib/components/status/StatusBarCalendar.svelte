@@ -246,6 +246,11 @@
       aria-label="Status calendar showing {days.length}-day uptime data"
     ></canvas>
   </div>
+  <ul class="sr-only">
+    {#each days as day (day.day)}
+      <li>{day.day}: {statusLabel(day.status)}</li>
+    {/each}
+  </ul>
 
   {#if hovered}
     <div

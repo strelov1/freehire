@@ -64,6 +64,7 @@ describe('StatusBoard', () => {
     expect(screen.getByText('66.7%')).toBeTruthy();
     expect(screen.getByText('uptime')).toBeTruthy();
     expect(screen.getByLabelText('Status calendar showing 90-day uptime data')).toBeTruthy();
+    expect(screen.getByText('2026-10-29: Down')).toBeTruthy();
     expect(screen.getByText('2026-08-03')).toBeTruthy();
     expect(screen.getByText('2026-10-31')).toBeTruthy();
     expect(screen.getByText(/Database connections in use: 40%/)).toBeTruthy();
