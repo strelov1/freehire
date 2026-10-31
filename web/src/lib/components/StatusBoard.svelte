@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CircleAlert, CircleCheck, CircleX } from '@lucide/svelte';
   import { timeAgo, must } from '#lib/utils.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   // A provider key is a source facet code, so it renders through the one label map every
@@ -7,6 +8,7 @@
   import { sourceLabel } from '#lib/facets.js';
   import { TabStrip, tabStripId } from '#lib/ui/index.js';
   import type { HealthStatus, IngestStatus, ProviderKind } from '#lib/types.js';
+  import StatusBarCalendar from './status/StatusBarCalendar.svelte';
 
   // The presentational half of the /status page: given the status read (or null
   // when the API read failed), it renders the site/API's own status, the
@@ -15,24 +17,13 @@
   // The route owns data loading + SEO.
   let { status }: { status: IngestStatus | null } = $props();
 
-  // Status → display metadata. Tone classes mirror RealityBadge's light/dark
-  // convention; the dot is the at-a-glance signal, the pill spells it out.
-  const STATUS_META: Record<HealthStatus, { label: string; dot: string; pill: string }> = {
-    operational: {
-      label: 'Operational',
-      dot: 'bg-success',
-      pill: 'border-success/40 bg-success/10 text-success-strong',
-    },
-    degraded: {
-      label: 'Degraded',
-      dot: 'bg-warning',
-      pill: 'border-warning/40 bg-warning/10 text-warning-strong',
-    },
-    down: {
-      label: 'Down',
-      dot: 'bg-red-500',
-      pill: 'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400',
-    },
+  const STATUS_META: Record<
+    HealthStatus,
+    { label: string; dot: string; icon: string; Icon: typeof CircleCheck }
+  > = {
+    operational: { label: 'Operational', dot: 'bg-success', icon: 'text-success', Icon: CircleCheck },
+    degraded: { label: 'Degraded', dot: 'bg-warning', icon: 'text-warning', Icon: CircleAlert },
+    down: { label: 'Down', dot: 'bg-destructive', icon: 'text-destructive', Icon: CircleX },
   };
 
   const OVERALL_HEADLINE: Record<HealthStatus, string> = {
@@ -54,14 +45,13 @@
   // HealthStatus or null for "no sample recorded that day" — a gap must render
   // as its own neutral treatment, never silently as "operational".
   const HISTORY_DAYS = 90;
-  const NO_DATA_TILE_META = { label: 'No data', dot: 'bg-border' };
 
   function utcDateString(d: Date): string {
     return d.toISOString().slice(0, 10);
   }
 
   const historyTiles = $derived.by(() => {
-    const byDay = new Map((site?.history ?? []).map((h) => [h.day, h.status]));
+    const byDay = new Map((status?.site.history ?? []).map((h) => [h.day, h.status]));
     // Anchored on the response's own generated_at (UTC) rather than the visitor's
     // local clock, so "today" here always matches the day the backend last wrote —
     // the two can disagree by up to a day if left to the browser's local timezone.
@@ -73,6 +63,25 @@
       tiles.push({ day, status: byDay.get(day) ?? null });
     }
     return tiles;
+  });
+
+  const uptime = $derived.by(() => {
+    let sampled = 0;
+    let operational = 0;
+    for (const tile of historyTiles) {
+      if (!tile.status) continue;
+      sampled++;
+      if (tile.status === 'operational') operational++;
+    }
+    if (sampled === 0) return null;
+    return operational / sampled;
+  });
+
+  const historySpan = $derived.by(() => {
+    const from = historyTiles[0]?.day;
+    const to = historyTiles[historyTiles.length - 1]?.day;
+    if (!from || !to) return null;
+    return { from, to };
   });
 
   const SEVERITY: Record<HealthStatus, number> = { operational: 0, degraded: 1, down: 2 };
@@ -110,8 +119,10 @@
       (a, b) => SEVERITY[b.status] - SEVERITY[a.status] || a.provider.localeCompare(b.provider),
     ),
   );
-  const overall = $derived(status?.overall ?? null);
-  const site = $derived(status?.site ?? null);
+  function boardPercent(healthy: number, total: number): number | null {
+    if (total <= 0) return null;
+    return Math.min(100, Math.round((healthy / total) * 100));
+  }
 
   // Kind chips: only kinds present in the data, each with its live count.
   const kindCounts = $derived.by(() => {
@@ -135,7 +146,26 @@
   });
 </script>
 
-{#if !status || !overall}
+{#snippet statusDot(dot: string)}
+  <span class="relative flex size-2.5 shrink-0" aria-hidden="true">
+    <span class="{dot} absolute inline-flex size-full rounded-full opacity-75 motion-safe:animate-ping"></span>
+    <span class="{dot} relative inline-flex size-2.5 rounded-full"></span>
+  </span>
+{/snippet}
+
+{#snippet kindChip(id: ProviderKind | 'all', label: string)}
+  <button
+    type="button"
+    onclick={() => (kind = id)}
+    class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {kind === id
+      ? 'border-foreground bg-foreground text-background'
+      : 'border-border text-muted-foreground hover:text-foreground'}"
+  >
+    {label}
+  </button>
+{/snippet}
+
+{#if !status}
   <div class="rounded-xl border border-border p-8 text-center text-muted-foreground">
     Status is unavailable right now. Try again in a moment.
   </div>
@@ -155,66 +185,58 @@
     class="mt-6"
   >
     {#if activeSection === 'site'}
-      {#if site}
-        <!-- Site status: is freehire.me itself working, independent of the ingest fleet tab. -->
-        <div class="flex items-center gap-3 rounded-lg border p-4 {STATUS_META[site.status].pill}">
-          <span class="inline-flex h-2.5 w-2.5 shrink-0 rounded-full {STATUS_META[site.status].dot}"></span>
-          <div>
-            <div class="text-base font-semibold tracking-tight">{SITE_HEADLINE[site.status]}</div>
-            <div class="text-sm">
-              Database {site.database} · {nfPercent.format(site.error_rate)} error rate over the last {site.window_minutes} min
+      {@const siteMeta = STATUS_META[status.site.status]}
+      <div class="overflow-hidden rounded-2xl border">
+        <div class="flex items-center gap-3 px-4 py-3">
+          {@render statusDot(siteMeta.dot)}
+            <div class="min-w-0 flex-1">
+              <p class="text-base leading-tight font-medium break-words">{SITE_HEADLINE[status.site.status]}</p>
+              <p class="mt-1 text-sm text-muted-foreground">
+                Database {status.site.database} · {nfPercent.format(status.site.error_rate)} error rate over the last {status.site.window_minutes} min
+              </p>
+              <!-- Reported beside the error rate, never conditionally. The two answer
+                   different questions — the error rate describes requests that FINISHED,
+                   this describes how much of the connection pool is held at this instant,
+                   which is why requests may not start. An earlier draft showed this line
+                   only above 90% and read as a warning; the live pool touches its ceiling
+                   in ordinary bursts, so that phrasing cried wolf on a healthy site. A
+                   sustained reading is what matters, and judging that needs history the
+                   page does not have (the Grafana rule averages it over five minutes). -->
+              <p class="text-sm text-muted-foreground">
+                Database connections in use: {nfPercent.format(status.site.pool_pressure)}
+              </p>
             </div>
-            <!-- Reported beside the error rate, never conditionally. The two answer
-                 different questions — the error rate describes requests that FINISHED,
-                 this describes how much of the connection pool is held at this instant,
-                 which is why requests may not start. An earlier draft showed this line
-                 only above 90% and read as a warning; the live pool touches its ceiling
-                 in ordinary bursts, so that phrasing cried wolf on a healthy site. A
-                 sustained reading is what matters, and judging that needs history the
-                 page does not have (the Grafana rule averages it over five minutes). -->
-            <div class="text-sm">
-              Database connections in use: {nfPercent.format(site.pool_pressure)}
-            </div>
+            {#if uptime !== null}
+              <div class="shrink-0 text-right">
+                <p class="text-sm tabular-nums font-medium" title="Operational days among days with a recorded sample">
+                  {nfPercent.format(uptime)}
+                </p>
+                <p class="text-xs text-muted-foreground">uptime</p>
+              </div>
+            {/if}
           </div>
+          <div class="flex flex-col gap-1 px-4 pb-3">
+            <StatusBarCalendar days={historyTiles} barHeight={22} radius={6} />
+            {#if historySpan}
+              <div class="flex min-w-0 justify-between gap-3">
+                <p class="min-w-0 truncate text-xs font-medium text-muted-foreground">{historySpan.from}</p>
+                <p class="min-w-0 truncate text-right text-xs font-medium text-muted-foreground">{historySpan.to}</p>
+              </div>
+            {/if}
         </div>
-
-        <!-- Daily history strip: worst status observed each day, oldest first. A gap
-             (no sample recorded) renders as a distinct neutral tile, never as if the
-             day were operational. -->
-        <div class="mt-4 rounded-xl border border-border p-4 sm:p-5">
-          <p class="text-xs text-muted-foreground">Last {HISTORY_DAYS} days</p>
-          <!-- flex-1 tiles (not a fixed width) so all 90 always fit the container —
-               a fixed width overflows on anything narrower than a wide desktop, and
-               the resulting horizontal scroll defaults to showing the OLDEST (gray)
-               end, hiding the recent, colorful end a visitor actually wants to see. -->
-          <div class="mt-3 flex h-7 gap-px">
-            {#each historyTiles as tile (tile.day)}
-              {@const meta = tile.status ? STATUS_META[tile.status] : NO_DATA_TILE_META}
-              <span
-                class="flex-1 rounded-sm {meta.dot}"
-                title="{tile.day} — {tile.status ? meta.label : 'no data recorded'}"
-              ></span>
-            {/each}
-          </div>
-        </div>
-      {:else}
-        <p class="rounded-xl border border-border p-8 text-center text-muted-foreground">
-          Site status is unavailable right now.
-        </p>
-      {/if}
+      </div>
     {:else}
-      <!-- Overall banner -->
-      <div class="flex items-center gap-3 rounded-lg border p-4 {STATUS_META[overall].pill}">
-        <span class="inline-flex h-2.5 w-2.5 shrink-0 rounded-full {STATUS_META[overall].dot}"></span>
-        <div>
-          <div class="text-base font-semibold tracking-tight">{OVERALL_HEADLINE[overall]}</div>
-          <div class="text-sm">
-            {providers.length} provider{providers.length === 1 ? '' : 's'} monitored
-          </div>
+      {@const fleetMeta = STATUS_META[status.overall]}
+      <div class="flex items-center gap-3 rounded-2xl border px-4 py-3">
+        {@render statusDot(fleetMeta.dot)}
+        <div class="min-w-0">
+          <p class="text-base leading-tight font-medium break-words">{OVERALL_HEADLINE[status.overall]}</p>
+          <p class="mt-1 text-sm text-muted-foreground">
+            {nf.format(providers.length)} provider{providers.length === 1 ? '' : 's'} monitored
+          </p>
         </div>
       </div>
 
-      <!-- Provider list -->
       <section class="mt-6">
         <div class="flex items-baseline justify-between">
           <p class="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">// providers</p>
@@ -242,25 +264,9 @@
 
           {#if kindCounts.length > 1}
             <div class="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onclick={() => (kind = 'all')}
-                class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {kind === 'all'
-                  ? 'border-foreground bg-foreground text-background'
-                  : 'border-border text-muted-foreground hover:text-foreground'}"
-              >
-                All {nf.format(providers.length)}
-              </button>
+              {@render kindChip('all', `All ${nf.format(providers.length)}`)}
               {#each kindCounts as kc (kc.kind)}
-                <button
-                  type="button"
-                  onclick={() => (kind = kc.kind)}
-                  class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {kind === kc.kind
-                    ? 'border-foreground bg-foreground text-background'
-                    : 'border-border text-muted-foreground hover:text-foreground'}"
-                >
-                  {KIND_LABEL[kc.kind]} {nf.format(kc.count)}
-                </button>
+                {@render kindChip(kc.kind, `${KIND_LABEL[kc.kind]} ${nf.format(kc.count)}`)}
               {/each}
             </div>
           {/if}
@@ -270,39 +276,35 @@
               No providers match “{query.trim()}”.
             </p>
           {:else}
-            <ul class="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border">
-              {#each filtered as p (p.provider)}
-              {@const meta = STATUS_META[p.status]}
-              <li class="flex flex-wrap items-center gap-x-4 gap-y-1 bg-background p-4 sm:p-5">
-                <span class="h-2.5 w-2.5 shrink-0 rounded-full {meta.dot}"></span>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="font-medium">{sourceLabel(p.provider)}</span>
-                    <span class="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {KIND_LABEL[p.kind]}
-                    </span>
+            <ul class="mt-4 overflow-hidden rounded-2xl border">
+              {#each filtered as p, i (p.provider)}
+                {@const meta = STATUS_META[p.status]}
+                {@const StatusIcon = meta.Icon}
+                {@const pct = boardPercent(p.healthy_boards, p.total_boards)}
+                <li class="bg-background px-4 py-2.5 {i < filtered.length - 1 ? 'border-b' : ''}">
+                  <div class="flex items-center gap-3">
+                    <StatusIcon class="size-4 shrink-0 {meta.icon}" />
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate font-medium">{sourceLabel(p.provider)}</p>
+                      <p class="text-sm text-muted-foreground">
+                        {KIND_LABEL[p.kind]} · {nf.format(p.healthy_boards)} / {nf.format(p.total_boards)} boards healthy{#if p.cooled_boards > 0}<span
+                            class="text-warning-strong"
+                          >
+                            · {nf.format(p.cooled_boards)} in cooldown</span
+                          >{/if}
+                      </p>
+                    </div>
+                    <div class="shrink-0 text-right">
+                      <p class="text-sm tabular-nums font-medium">{pct === null ? '—' : `${pct}%`}</p>
+                      <p class="text-xs text-muted-foreground">{meta.label}</p>
+                      {#if p.last_run}
+                        <p class="text-xs text-muted-foreground" title={p.last_run}>
+                          ran {timeAgo(p.last_run, locale())}
+                        </p>
+                      {/if}
+                    </div>
                   </div>
-                  <div class="text-sm text-muted-foreground">
-                    {nf.format(p.healthy_boards)} / {nf.format(p.total_boards)} boards healthy{#if p.cooled_boards > 0}<span
-                        class="text-warning-strong"
-                      >
-                        · {nf.format(p.cooled_boards)} in cooldown</span
-                      >{/if}
-                  </div>
-                </div>
-                <div class="flex flex-col items-end gap-1">
-                  <span
-                    class="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium {meta.pill}"
-                  >
-                    {meta.label}
-                  </span>
-                  {#if p.last_run}
-                    <span class="text-xs text-muted-foreground" title={p.last_run}>
-                      ran {timeAgo(p.last_run, locale())}
-                    </span>
-                  {/if}
-                </div>
-              </li>
+                </li>
               {/each}
             </ul>
           {/if}
