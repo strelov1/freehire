@@ -124,3 +124,57 @@ func TestReactionCountsSkipLeftAndBlockedMembers(t *testing.T) {
 		t.Fatalf("viewer sees %+v, want no reactions", r)
 	}
 }
+
+// The author hears about a reaction once per member: a member changing their mind (or
+// taking it back and giving it again) adds nothing, another member adds one more. The
+// notice names the reaction and the news, never who reacted.
+func TestReactNotifiesTheAuthorOncePerMember(t *testing.T) {
+	pool, svc := setup(t)
+	ctx := context.Background()
+	author, a, b := seedUser(t, pool, "au@example.test"), seedUser(t, pool, "a@example.test"), seedUser(t, pool, "b@example.test")
+	for _, u := range []int64{author, a, b} {
+		joinWith(t, pool, svc, u, "", nil, nil)
+	}
+	ev := event(t, pool, author, newApp(t, pool, author, "acme"), "acme", "stage_set", "offer", 1)
+
+	for _, kind := range []string{buddy.ReactionCongrats, buddy.ReactionLuck, "", buddy.ReactionCongrats} {
+		if _, err := svc.React(ctx, a, ev, kind); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := svc.React(ctx, b, ev, buddy.ReactionRooting); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := pool.Query(ctx, `SELECT user_id, kind, title, body FROM user_notifications ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	type notice struct {
+		user              int64
+		kind, title, body string
+	}
+	var got []notice
+	for rows.Next() {
+		var n notice
+		if err := rows.Scan(&n.user, &n.kind, &n.title, &n.body); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, n)
+	}
+	if len(got) != 2 {
+		t.Fatalf("notices = %+v, want 2 (one per reacting member)", got)
+	}
+	for _, n := range got {
+		if n.user != author || n.kind != "buddy_reaction" {
+			t.Fatalf("notice %+v, want kind buddy_reaction for the author", n)
+		}
+	}
+	if got[0].body != `A buddy reacted “Congrats” to your offer from acme.` {
+		t.Errorf("first body = %q", got[0].body)
+	}
+	if got[1].body != `A buddy reacted “Rooting for you” to your offer from acme.` {
+		t.Errorf("second body = %q", got[1].body)
+	}
+}

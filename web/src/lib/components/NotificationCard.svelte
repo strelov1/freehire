@@ -1,18 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import {
-    Search,
-    Clock,
-    Target,
-    Archive,
-    MessageCircle,
-    FileText,
-    Bell,
-    CheckCircle2,
-    AlertTriangle,
-    XCircle,
-    CalendarClock,
-  } from '@lucide/svelte';
+  import { AlertTriangle, Archive, Bell, CalendarClock, CheckCircle2, Clock, FileText, Heart, MessageCircle, MessagesSquare, Search, Target, XCircle } from '@lucide/svelte';
   import { notificationCenter } from '#lib/notificationCenter.svelte.js';
   import { notificationTarget } from '#lib/notificationTarget.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -43,27 +31,37 @@
     buddy_mock_booked: CalendarClock,
     buddy_mock_cancelled: CalendarClock,
     buddy_mock_reminder: CalendarClock,
+    buddy_reaction: Heart,
+    buddy_message: MessagesSquare,
+    buddy_invitation: MessagesSquare,
   };
 
   const target = $derived(notificationTarget(item));
-  const href = $derived(
-    target.kind === 'job'
-      ? resolve('/jobs/[slug]', { slug: target.slug })
-      : target.kind === 'tracking'
-        ? // A slug opens the same deep-link route the inbox already uses
-          // (/my/tracking/[id] — see JobBoard.svelte's own initialId prop) so the
-          // board paints with that application's drawer open, not just the board.
-          target.slug
-          ? resolve('/my/tracking/[id]', { id: target.slug })
-          : resolve('/my/tracking')
-        : target.kind === 'digest'
-          ? resolve('/my/notifications/[id]/jobs', { id: String(target.id) })
-          : target.kind === 'tailor'
-            ? resolve('/tailor/[slug]', { slug: target.slug })
-            : target.kind === 'mocks'
-              ? resolve('/buddies/mocks')
-              : null,
-  );
+  const href = $derived(hrefFor(target));
+
+  function hrefFor(t: typeof target): string | null {
+    switch (t.kind) {
+      case 'job':
+        return resolve('/jobs/[slug]', { slug: t.slug });
+      case 'tracking':
+        // A slug opens the same deep-link route the inbox already uses
+        // (/my/tracking/[id] — see JobBoard.svelte's own initialId prop) so the
+        // board paints with that application's drawer open, not just the board.
+        return t.slug ? resolve('/my/tracking/[id]', { id: t.slug }) : resolve('/my/tracking');
+      case 'digest':
+        return resolve('/my/notifications/[id]/jobs', { id: String(t.id) });
+      case 'tailor':
+        return resolve('/tailor/[slug]', { slug: t.slug });
+      case 'mocks':
+        return resolve('/buddies/mocks');
+      case 'buddies':
+        return resolve('/buddies');
+      case 'buddy_chats':
+        return resolve('/buddies/chats');
+      case 'none':
+        return null;
+    }
+  }
   const unread = $derived(item.read_at == null);
   const Icon = $derived(KIND_ICON[item.kind]);
 

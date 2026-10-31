@@ -95,4 +95,12 @@ describe('notificationTarget', () => {
       expect(notificationTarget({ kind, public_slug: null })).toEqual({ kind: 'mocks' });
     }
   });
+
+  // A reaction opens the feed it was given in; a buddy message or invitation opens the chats.
+  it('sends a buddy reaction to the feed and a buddy message to the chats', () => {
+    expect(notificationTarget({ kind: 'buddy_reaction', public_slug: null })).toEqual({ kind: 'buddies' });
+    for (const kind of ['buddy_message', 'buddy_invitation'] as const) {
+      expect(notificationTarget({ kind, public_slug: null })).toEqual({ kind: 'buddy_chats' });
+    }
+  });
 });

@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const buddyEventAuthor = `-- name: BuddyEventAuthor :one
+SELECT user_id FROM application_events WHERE id = $1
+`
+
+// Who an application event belongs to: the member a reaction to it is news for.
+func (q *Queries) BuddyEventAuthor(ctx context.Context, eventID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, buddyEventAuthor, eventID)
+	var user_id int64
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const closeBuddyConversationsForLeave = `-- name: CloseBuddyConversationsForLeave :exec
 UPDATE conversations c
 SET status = 'closed', closed_at = now()

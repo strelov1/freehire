@@ -1042,7 +1042,12 @@ export type NotificationKind =
   | 'auto_apply_ready_for_review'
   | 'buddy_mock_booked'
   | 'buddy_mock_cancelled'
-  | 'buddy_mock_reminder';
+  | 'buddy_mock_reminder'
+  // Interview buddies: a reaction to one of your feed events (internal/engage/buddy), and
+  // the messaging core's unread notices for a buddy conversation (buddy/kind.go).
+  | 'buddy_reaction'
+  | 'buddy_message'
+  | 'buddy_invitation';
 
 /** One matched job as recorded into a multi-job subscription digest's `jobs`
  *  snapshot — the same {title, company, slug} shape as everywhere else in this
