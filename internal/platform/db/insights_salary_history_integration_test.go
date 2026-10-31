@@ -199,3 +199,43 @@ func TestInsightsSalaryMonthlyRollup(t *testing.T) {
 		t.Errorf("EUR/month = %+v, want sample 30", e)
 	}
 }
+
+// TestEffectiveSalaryMidpointDoesNotOverflow pins the prod failure of 2026-10-31: the
+// view summed two integer bounds before halving them, so a source range of 1.5–1.6
+// billion (a yearly salary in VND or IRR) overflowed 32 bits and failed the whole
+// insights rebuild — every rollup in its transaction, not just salaries.
+func TestEffectiveSalaryMidpointDoesNotOverflow(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	seedInsightsJob(t, ctx, q, pool, "vnd", insightSeed{category: "backend", seniority: "senior", countries: []string{"vn"}, createdAgo: 5})
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET salary_min_source = 1500000000, salary_max_source = 1600000000,
+		salary_currency_source = 'VND', salary_period_source = 'year',
+		salary_min_manual = 1500000000, salary_max_manual = 1600000000,
+		salary_currency_manual = 'VND', salary_period_manual = 'year'
+		WHERE external_id = 'vnd'`); err != nil {
+		t.Fatalf("seed range: %v", err)
+	}
+
+	var amount float64
+	if err := pool.QueryRow(ctx, `SELECT amount FROM jobs_effective_salary`).Scan(&amount); err != nil {
+		t.Fatalf("read the view: %v", err)
+	}
+	if amount != 1550000000 {
+		t.Errorf("amount = %v, want 1550000000", amount)
+	}
+	if err := q.DeleteAllInsightsSalaryStats(ctx); err != nil {
+		t.Fatalf("delete salary: %v", err)
+	}
+	if _, err := q.RebuildInsightsSalaryStatsGlobal(ctx, 1); err != nil {
+		t.Errorf("rebuild salary bands: %v", err)
+	}
+	if err := q.DeleteAllInsightsSalaryMonthly(ctx); err != nil {
+		t.Fatalf("delete monthly: %v", err)
+	}
+	if _, err := q.RebuildInsightsSalaryMonthly(ctx, 1); err != nil {
+		t.Errorf("rebuild salary history: %v", err)
+	}
+}
