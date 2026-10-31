@@ -60,6 +60,13 @@ type Auditor struct {
 	HostWorkers int
 }
 
+// maxRobots is how much of a robots.txt is read: the 500 KiB RFC 9309 asks a crawler to parse at
+// least, so a long file's later Disallow lines are not silently dropped.
+const maxRobots = 500 << 10
+
+// maxRedirects bounds the redirect hops one request follows (RFC 9309 asks for at least five).
+const maxRedirects = 5
+
 // maxDrain is how much of a response body is read before closing it, so a small page can return
 // its connection to the pool. Nothing reads what is drained.
 const maxDrain = 64 << 10
@@ -118,6 +125,7 @@ func (a *Auditor) Run(ctx context.Context, postings []Posting) []Result {
 // host probes one host's postings in order, one request at a time: robots.txt, then a canary,
 // then the postings.
 func (a *Auditor) host(ctx context.Context, origin string, postings []Posting, budget *atomic.Int64) []Result {
+	host := origin[strings.Index(origin, "://")+3:]
 	out := make([]Result, 0, len(postings))
 	rest := func(from int, reason Reason) []Result {
 		for _, p := range postings[from:] {
@@ -127,11 +135,17 @@ func (a *Auditor) host(ctx context.Context, origin string, postings []Posting, b
 	}
 	p := pacer{interval: a.HostInterval, budget: budget}
 
-	status, _, body, ok := p.get(ctx, a.Client, origin+"/robots.txt", true)
+	status, _, body, ok := p.get(ctx, sameHostClient(a.Client, host, robots{}), origin+"/robots.txt", true)
 	if !ok {
 		return rest(0, p.stopReason(ctx))
 	}
+	if status == http.StatusForbidden || status == http.StatusTooManyRequests {
+		// RFC 9309 reads a 4xx robots.txt as "no rules", but a host refusing or metering us at
+		// its front door is not inviting the canary and the postings behind it.
+		return rest(0, ReasonRefused)
+	}
 	rules := robotsFromStatus(status, body)
+	client := sameHostClient(a.Client, host, rules)
 	if rules.crawlDelay > a.MaxCrawlDelay {
 		return rest(0, ReasonRobots)
 	}
@@ -151,12 +165,12 @@ func (a *Auditor) host(ctx context.Context, origin string, postings []Posting, b
 		return out
 	}
 
-	if calibrated, stopped := a.calibrate(ctx, &p, rules, postings); !calibrated {
+	if calibrated, stopped := calibrate(ctx, &p, client, rules, postings); !calibrated {
 		return rest(0, cmp.Or(stopped, ReasonUncalibrated))
 	}
 
 	for i, post := range postings {
-		status, final, _, ok := p.get(ctx, a.Client, post.URL, false)
+		status, final, _, ok := p.get(ctx, client, post.URL, false)
 		if !ok {
 			return rest(i, p.stopReason(ctx))
 		}
@@ -176,7 +190,7 @@ func (a *Auditor) host(ctx context.Context, origin string, postings []Posting, b
 // can be rewritten, and reports whether the host answered 404/410 — the proof that its 404 means
 // "no such posting" and its 200 means "this posting exists". stopped is set when the budget or
 // the run ended before the canary could be asked.
-func (a *Auditor) calibrate(ctx context.Context, p *pacer, rules robots, postings []Posting) (calibrated bool, stopped Reason) {
+func calibrate(ctx context.Context, p *pacer, client *http.Client, rules robots, postings []Posting) (calibrated bool, stopped Reason) {
 	rng := rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 	for _, post := range postings {
 		canary, ok := canaryURL(post.URL, post.ExternalID, rng)
@@ -187,7 +201,7 @@ func (a *Auditor) calibrate(ctx context.Context, p *pacer, rules robots, posting
 		if err != nil || !rules.allowed(cu.RequestURI()) {
 			continue
 		}
-		status, final, _, ok := p.get(ctx, a.Client, canary, false)
+		status, final, _, ok := p.get(ctx, client, canary, false)
 		if !ok {
 			return false, p.stopReason(ctx)
 		}
@@ -195,6 +209,21 @@ func (a *Auditor) calibrate(ctx context.Context, p *pacer, rules robots, posting
 		return outcome == Dead, ""
 	}
 	return false, ""
+}
+
+// sameHostClient returns a copy of base that follows a redirect only while it stays on host, on a
+// path rules allow, within maxRedirects hops. Any other redirect is handed back unfollowed (and
+// reads as moved): the robots check and the pacing were done for THIS host, and following a
+// posting off to somebody else's site would probe it with neither.
+func sameHostClient(base *http.Client, host string, rules robots) *http.Client {
+	c := *base
+	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects || !strings.EqualFold(req.URL.Host, host) || !rules.allowed(req.URL.RequestURI()) {
+			return http.ErrUseLastResponse
+		}
+		return nil
+	}
+	return &c
 }
 
 // pacer spaces one host's requests and draws each from the run's shared budget.
@@ -206,7 +235,8 @@ type pacer struct {
 
 // get waits its turn, takes one request from the budget and fetches rawURL. ok is false when the
 // budget is spent or the run was stopped — not when the fetch failed, which is status 0. withBody
-// returns up to maxDrain of the body as text (robots.txt); otherwise it is drained and dropped.
+// returns up to maxRobots of the body as text (robots.txt); otherwise up to maxDrain is drained
+// and dropped.
 func (p *pacer) get(ctx context.Context, client *http.Client, rawURL string, withBody bool) (status int, final *url.URL, body string, ok bool) {
 	if !p.last.IsZero() {
 		if wait := time.Until(p.last.Add(p.interval)); wait > 0 {
@@ -235,7 +265,11 @@ func (p *pacer) get(ctx context.Context, client *http.Client, rawURL string, wit
 		return 0, nil, "", true
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, maxDrain))
+	limit := int64(maxDrain)
+	if withBody {
+		limit = maxRobots
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, limit))
 	if err != nil && withBody {
 		// A robots.txt cut short is not one we can read; RFC 9309 treats it as unreachable.
 		return 0, resp.Request.URL, "", true

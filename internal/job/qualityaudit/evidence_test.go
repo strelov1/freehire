@@ -38,7 +38,7 @@ func TestReadStatus(t *testing.T) {
 		{"rate limited", 429, posting, Unmeasured, ReasonRefused},
 		{"server error", 503, posting, Unmeasured, ReasonNoAnswer},
 		{"transport failure", 0, posting, Unmeasured, ReasonNoAnswer},
-		{"unresolved redirect", 301, posting, Unmeasured, ReasonNoAnswer},
+		{"redirect not followed", 301, posting, Unmeasured, ReasonMoved},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

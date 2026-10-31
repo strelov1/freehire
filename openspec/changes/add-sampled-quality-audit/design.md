@@ -50,7 +50,9 @@ For each sampled posting the evidence is one GET of its stored URL, read by stat
   query are ignored) → **live**.
 - anything else → **unmeasured**, with a reason (`no_answer`, `moved`, `refused`, …). A 2xx
   that redirected elsewhere is `moved`, not live: greenhouse sends a closed posting to its
-  board page with a 200.
+  board page with a 200. Redirects are followed only while they stay on the posting's host and
+  on paths its robots.txt allows (at most 5 hops); one that leaves is handed back unfollowed and
+  is `moved` too — robots and pacing were checked for this host, not for wherever it points.
 
 A dead/live verdict is only kept when the posting's HOST is calibrated: before reading any of a
 host's postings, the audit asks it for a posting that cannot exist — the stored URL with the
@@ -79,7 +81,8 @@ them into a shared package is the follow-up if one of these sources needs a numb
 
 Politeness: robots.txt is fetched once per host and honoured for the `freehire` agent (or `*`):
 a disallowed path is `unmeasured: robots`, a Crawl-delay above the default pacing is used, one
-above 60 s skips the host. A 5xx robots.txt disallows the host (RFC 9309); a 4xx allows it.
+above 60 s skips the host. A 5xx robots.txt disallows the host (RFC 9309); a 4xx allows it,
+except a 403/429, which ends the host as refused. Up to 500 KiB of robots.txt is parsed.
 Requests to one host are sequential and spaced (default 2 s); hosts run 16 at a time; a 403 or
 429 from a posting ends that host for the run. Every request — robots, canary, posting — draws
 on one budget (`QUALITY_AUDIT_MAX_REQUESTS`, default 15000); a posting reached after it ran out

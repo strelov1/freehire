@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -254,5 +255,50 @@ func TestAuditTwoHostsCalibrateApart(t *testing.T) {
 	}
 	if !strings.HasPrefix(got[2].Posting.URL, ls.URL) {
 		t.Fatal("results lost their postings")
+	}
+}
+
+func TestAuditDoesNotFollowAPostingOffItsHost(t *testing.T) {
+	elsewhere := &site{live: map[string]bool{"/landing": true}, unknown: http.StatusNotFound}
+	es := httptest.NewServer(elsewhere)
+	defer es.Close()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/j/110001", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, es.URL+"/landing", http.StatusFound)
+	})
+	mux.HandleFunc("/j/110002", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/j/110002/", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("/j/110002/", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	mux.HandleFunc("/", http.NotFound)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	got := byID(newAuditor(100).Run(context.Background(), []Posting{
+		posting(1, "x", srv.URL, "110001", "/j/110001"),
+		posting(2, "x", srv.URL, "110002", "/j/110002"),
+	}))
+	if got[1].Reason != ReasonMoved {
+		t.Errorf("off-host redirect = %+v, want moved", got[1])
+	}
+	if got[2].Outcome != Live {
+		t.Errorf("same-host redirect = %+v, want followed and live", got[2])
+	}
+	if elsewhere.count() != 0 {
+		t.Errorf("the other host was probed: %v", elsewhere.hits)
+	}
+}
+
+func TestAuditRobotsRefusalEndsTheHost(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusForbidden) })
+	var asked atomic.Int64
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { asked.Add(1); http.NotFound(w, r) })
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	got := byID(newAuditor(100).Run(context.Background(), []Posting{posting(1, "x", srv.URL, "120001", "/j/120001")}))
+	if got[1].Reason != ReasonRefused || asked.Load() != 0 {
+		t.Errorf("result = %+v after %d requests, want refused and nothing asked", got[1], asked.Load())
 	}
 }

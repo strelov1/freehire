@@ -32,8 +32,8 @@ const (
 type Reason string
 
 const (
-	ReasonNoAnswer     Reason = "no_answer"    // 5xx, an unresolved 3xx, a transport failure
-	ReasonMoved        Reason = "moved"        // 2xx, but only after leaving the posting's URL
+	ReasonNoAnswer     Reason = "no_answer"    // 5xx, a transport failure
+	ReasonMoved        Reason = "moved"        // left the posting's URL: a 2xx elsewhere, or a redirect not followed
 	ReasonRefused      Reason = "refused"      // 403/429: the host metering us, not a verdict
 	ReasonUncalibrated Reason = "uncalibrated" // the host did not 404 a posting that cannot exist
 	ReasonRobots       Reason = "robots"       // robots.txt disallows it, or could not be read
@@ -57,6 +57,9 @@ func readStatus(requested *url.URL, status int, final *url.URL) (Outcome, Reason
 		if samePage(requested, final) {
 			return Live, ""
 		}
+		return Unmeasured, ReasonMoved
+	case status >= 300 && status < 400:
+		// A redirect handed back unfollowed: it left the host, or for a path robots.txt forbids.
 		return Unmeasured, ReasonMoved
 	case status == http.StatusForbidden || status == http.StatusTooManyRequests:
 		return Unmeasured, ReasonRefused
