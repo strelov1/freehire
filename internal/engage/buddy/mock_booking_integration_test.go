@@ -60,9 +60,27 @@ type insertBarrier struct {
 	arrived sync.WaitGroup
 }
 
-func (b *insertBarrier) CreateMock(ctx context.Context, in buddy.NewMock) (buddy.Mock, error) {
+// barrierTimeout bounds the wait at the barrier: a party that never reaches it (a booking
+// refused before its insert) fails the test instead of hanging it.
+const barrierTimeout = 30 * time.Second
+
+// arrive counts this caller in and waits for the rest, or gives up after barrierTimeout.
+func (b *insertBarrier) arrive() error {
 	b.arrived.Done()
-	b.arrived.Wait()
+	all := make(chan struct{})
+	go func() { b.arrived.Wait(); close(all) }()
+	select {
+	case <-all:
+		return nil
+	case <-time.After(barrierTimeout):
+		return errors.New("insert barrier: the other party never arrived")
+	}
+}
+
+func (b *insertBarrier) CreateMock(ctx context.Context, in buddy.NewMock) (buddy.Mock, error) {
+	if err := b.arrive(); err != nil {
+		return buddy.Mock{}, err
+	}
 	return b.QueriesRepository.CreateMock(ctx, in)
 }
 
