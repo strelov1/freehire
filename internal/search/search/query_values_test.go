@@ -28,6 +28,7 @@ func TestIgnoredValues(t *testing.T) {
 		{"unknown excluded skill", "skills_exclude=phpp", map[string][]string{"skills_exclude": {"phpp"}}},
 		{"repeated value reported once", "work_mode=foo&work_mode=foo", map[string][]string{"work_mode": {"foo"}}},
 		{"stray comma is not a value", "work_mode=remote,", nil},
+		{"unknown perk", "perks=401k_match,free_beer", map[string][]string{"perks": {"free_beer"}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

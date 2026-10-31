@@ -21,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/classify"
 	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/dict/location"
+	"github.com/strelov1/freehire/internal/dict/perks"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -452,6 +453,10 @@ func genVocab() string {
 	// The source-type vocabulary (sources.ProviderKind's searchable kinds), so the Source
 	// pane's pills cannot offer a kind no document carries.
 	b.WriteString(emitVocab("SourceType", "SOURCE_TYPE_VALUES", vocab.SourceTypeValues))
+	// The perk vocabulary (internal/dict/perks), so the Benefits & Perks chips cannot
+	// offer a perk the dictionary never writes.
+	b.WriteString(emitVocab("Perk", "PERK_VALUES", vocab.PerkValues))
+	b.WriteString(emitMap("PerkLabels", "PERK_LABELS", perks.Labels()))
 	// The ghost criterion vocabulary. Generated for the same reason the mail signals are,
 	// with a sharper edge: the job page draws one gauge segment per criterion the payload
 	// says fired, and the rows accounting for them come from the SPA's own list. A

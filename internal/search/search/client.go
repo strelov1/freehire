@@ -722,6 +722,11 @@ func facetSettings() *meilisearch.Settings {
 			// via_recruiter: a jobs column served top-level, true-or-absent like
 			// requires_clearance. Same settings-before-binary order.
 			"via_recruiter",
+			// perks is a jobs text[] column served top-level (internal/dict/perks), a
+			// multi-value facet like skills. It is enrolled in /jobs/facets through
+			// StringFacets, so the settings-before-binary warning above applies, and a
+			// full rebuild must follow the backfill-derive that fills existing rows.
+			"perks",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",

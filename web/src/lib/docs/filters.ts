@@ -38,6 +38,12 @@ const API_ONLY_FACETS: FilterRow[] = [
   { param: 'company_size', label: 'Company size', values: '1-10, 11-50, 51-200, 201-500, 501-1000, 1000+' },
   { param: 'education_level', label: 'Education level', values: 'none, bachelor, master, phd' },
   { param: 'salary_period', label: 'Salary period', values: 'year, month, day, hour' },
+  {
+    param: 'perks',
+    label: 'Perks mentioned',
+    values:
+      'generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it',
+  },
 ];
 
 // A facet whose value list needs saying more than enumerating. Keyed by param, this
