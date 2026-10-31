@@ -11,7 +11,7 @@ by account) and `Kind` (the notice wording and link). Layer 7 (`engage`); tables
 `buddy_members` and `buddy_hidden_applications` (migration 0203), queries in
 `internal/platform/db/queries/buddies.sql`. HTTP lives in `internal/api/handler`, not here.
 
-Mock interviews (openspec/changes/buddy-mock-interviews) live in `mock*.go`: a member
+Mock interviews ([spec](../../../openspec/specs/buddy-mock-interviews/spec.md)) live in `mock*.go`: a member
 publishes when they can host and another books 60 minutes of it. Tables `buddy_mock_*`
 (migration 0215), queries in `internal/platform/db/queries/buddy_mocks.sql`; the slot
 arithmetic is the shared engine in [internal/engage/slots](../slots/doc.go), the reminders a
