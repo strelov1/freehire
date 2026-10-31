@@ -239,7 +239,7 @@ func TestIntegration_DescEmbedderSurvivesSettingsAndHoldsEveryChunk(t *testing.T
 }
 
 // The drain re-pushes a document whenever anything about the posting changes. That push
-// is an add-or-update, and both embedders must come out of it intact: a re-push that
+// replaces the full document, and both embedders must come out intact: a re-push that
 // changed only the skills must not cost the description vectors, and a job whose chunks
 // were deleted must lose them.
 func TestIntegration_RepushKeepsBothEmbeddersInStep(t *testing.T) {

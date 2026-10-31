@@ -222,8 +222,13 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Equity"
+        - $ref: "#/components/parameters/ClearanceLevels"
         - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksExclude"
         - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/ClearanceLevelsExclude"
+        - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -314,8 +319,13 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Equity"
+        - $ref: "#/components/parameters/ClearanceLevels"
         - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksExclude"
         - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/ClearanceLevelsExclude"
+        - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -578,8 +588,13 @@ paths:
         - $ref: "#/components/parameters/IsTech"
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
+        - $ref: "#/components/parameters/Equity"
+        - $ref: "#/components/parameters/ClearanceLevels"
         - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksExclude"
         - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/ClearanceLevelsExclude"
+        - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -1338,6 +1353,83 @@ components:
 
         `true` returns only the marked postings. Omitting the parameter filters
         nothing.
+    ClearanceLevelsExclude:
+      name: clearance_levels_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - none
+            - confidential
+            - secret
+            - top_secret
+            - ts_sci
+            - public_trust
+            - interim
+            - other
+      description: |
+        Exclude postings matching these clearance levels. `none` keeps only postings that state a clearance.
+    ClearanceLevels:
+      name: clearance_levels
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - none
+            - confidential
+            - secret
+            - top_secret
+            - ts_sci
+            - public_trust
+            - interim
+            - other
+      description: |
+        The security-clearance levels the posting states, derived
+        deterministically from the description. Values OR together.
+
+        The US ladder is `confidential`, `secret`, `top_secret`, `ts_sci` and
+        `public_trust`. `interim` marks a posting that accepts an interim
+        clearance; it is stated beside a level, not instead of one. `other` is a
+        non-US scheme (UK SC/DV/BPSS, AU Baseline/NV1, NATO) or a clearance
+        stated with no level at all. A posting may carry several values.
+
+        `none` selects the postings with no explicit reference to a clearance —
+        exactly the postings `requires_clearance=false` returns — and ORs with
+        real levels like any other value. `clearance_levels_exclude=none` keeps
+        only the postings that state a clearance.
+    PerksExclude:
+      name: perks_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - generous_pto
+            - four_day_week
+            - 401k_match
+            - parental_leave
+            - retirement_plan
+            - tuition_reimbursement
+            - unlimited_pto
+            - health_insurance
+            - mental_health
+            - learning_budget
+            - home_office_stipend
+            - sabbatical
+            - sign_on_bonus
+      description: |
+        Exclude postings that mention any of the selected perks.
     Perks:
       name: perks
       in: query
@@ -1382,6 +1474,47 @@ components:
       description: |
         `and` requires a posting to mention EVERY listed perk instead of any
         of them.
+    EquityExclude:
+      name: equity_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - salary_and_equity
+            - equity_only
+            - not_stated
+      description: |
+        Exclude postings matching these equity values. `not_stated` keeps only postings that state equity compensation.
+    Equity:
+      name: equity
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - salary_and_equity
+            - equity_only
+            - not_stated
+      description: |
+        What the posting states about equity compensation, derived
+        deterministically from its title and description.
+
+        `salary_and_equity` — equity (stock options, RSUs, an equity grant,
+        ESOP, VSOP/phantom shares) offered beside cash pay; a salary figure is
+        not required. `equity_only` — the posting states that equity is the
+        whole compensation. `not_stated` — neither was read, which is NOT a
+        statement that the job offers no equity. An employee stock PURCHASE
+        plan does not count as equity.
+
+        Repeated values are ORed; `equity_exclude=<value>` excludes one
+        (`equity_exclude=not_stated` keeps every posting that states equity).
     AutoApplyAvailable:
       name: auto_apply_available
       in: query
@@ -1996,6 +2129,32 @@ components:
             by an intermediary on a client's behalf. Absent otherwise — a
             recruiter who never says so is not detected, so absence does not
             mean the employer posted it.
+        equity:
+          type: string
+          enum:
+            - salary_and_equity
+            - equity_only
+          description: |
+            What the posting states about equity compensation:
+            `salary_and_equity` (offered beside cash pay) or `equity_only`
+            (equity is the whole pay). Absent when the posting states neither —
+            "not stated", not "no equity".
+        clearance_levels:
+          type: array
+          items:
+            type: string
+            enum:
+              - confidential
+              - secret
+              - top_secret
+              - ts_sci
+              - public_trust
+              - interim
+              - other
+          description: |
+            The security-clearance levels the posting states. Present exactly
+            when `requires_clearance` is, absent otherwise. `other` is a non-US
+            scheme or a clearance stated with no level.
         perks:
           type: array
           items:

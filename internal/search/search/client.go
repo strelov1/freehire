@@ -374,8 +374,9 @@ func (c *Client) dropIndex(ctx context.Context, uid string) error {
 	return nil
 }
 
-// IndexJobs upserts a batch of documents into the facet index by primary key. A
-// re-run with the same data is a no-op upsert, keeping reindex idempotent.
+// IndexJobs replaces complete documents in the facet index by primary key. Every
+// producer supplies the full projection and both vector keys. Replacement clears
+// omitted facets after an edit; a partial update would retain their old values.
 func (c *Client) IndexJobs(ctx context.Context, docs []JobDocument) error {
 	return c.indexInto(ctx, c.facet, docs)
 }
@@ -385,14 +386,14 @@ func (c *Client) indexInto(ctx context.Context, idx meilisearch.IndexManager, do
 		return nil
 	}
 	pk := primaryKey
-	task, err := idx.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
+	task, err := idx.AddDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk})
 	if err != nil {
 		return fmt.Errorf("search: index documents: %w", err)
 	}
 	return c.awaitTask(ctx, idx, task.TaskUID)
 }
 
-// SubmitJobs upserts a batch into the live facet index WITHOUT awaiting the
+// SubmitJobs replaces complete documents in the live facet index WITHOUT awaiting the
 // indexing task. The incremental ingest indexer uses this instead of IndexJobs so
 // it never blocks the crawl on Meilisearch's per-batch indexing (which the reindex
 // passes do await); Meilisearch auto-batches the submitted tasks and processes them
@@ -404,7 +405,7 @@ func (c *Client) SubmitJobs(ctx context.Context, docs []JobDocument) error {
 		return nil
 	}
 	pk := primaryKey
-	if _, err := c.facet.UpdateDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk}); err != nil {
+	if _, err := c.facet.AddDocumentsWithContext(ctx, docs, &meilisearch.DocumentOptions{PrimaryKey: &pk}); err != nil {
 		return fmt.Errorf("search: submit documents: %w", err)
 	}
 	return nil
@@ -722,6 +723,13 @@ func facetSettings() *meilisearch.Settings {
 			// via_recruiter: a jobs column served top-level, true-or-absent like
 			// requires_clearance. Same settings-before-binary order.
 			"via_recruiter",
+			// equity: a jobs column served top-level, a closed string vocabulary that is
+			// ABSENT when not stated (see EquityNotStated). Same settings-before-binary order.
+			"equity",
+			// clearance_levels is the multi-value level facet beside it (a jobs column,
+			// vocab.ClearanceLevelValues), present exactly when requires_clearance is
+			// (see ClearanceLevelUnspecified in query_filter.go). Settings before binary.
+			"clearance_levels",
 			// perks is a jobs text[] column served top-level (internal/dict/perks), a
 			// multi-value facet like skills. It is enrolled in /jobs/facets through
 			// StringFacets, so the settings-before-binary warning above applies, and a
