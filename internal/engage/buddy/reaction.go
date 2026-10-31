@@ -8,7 +8,7 @@ import (
 // The reactions a member may give a feed event: a closed vocabulary chosen for a job
 // search rather than a generic "like" — congratulating an offer, wishing luck with an
 // interview, rooting for someone, being in the same boat, finding a post insightful.
-// The stored kind is the constant's value (migration 0219 checks it).
+// The stored kind is the constant's value (migration 0220 checks it).
 const (
 	ReactionCongrats = "congrats"
 	ReactionLuck     = "luck"

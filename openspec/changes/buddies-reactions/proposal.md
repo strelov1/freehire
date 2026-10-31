@@ -14,7 +14,7 @@ redesign (`buddies-social-space`) has them — chosen for a job search rather th
 - Feed entries carry `reactions: {counts, mine}`. A reaction from a member who left, or from
   one on either side of a block with the viewer, does not count.
 - **API:** `PUT /me/buddies/feed/:id/reaction` `{kind}` and `DELETE` the same; both answer
-  the event's reactions. **Migration 0219** `buddy_reactions`.
+  the event's reactions. **Migration 0220** `buddy_reactions`.
 - **Web:** under every post, one click gives the reaction that fits the news (congrats on an
   offer, luck on an interview, rooting on an application); hover or the arrow opens all five;
   beside it the most chosen kinds and the total. A folded applications post reacts on its
