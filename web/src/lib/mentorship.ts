@@ -578,6 +578,23 @@ export function withSearchParams(
   return params.toString();
 }
 
+/** The calendar's FIRST read when the address names no month: the shown month and the
+ *  next one in a single request, from the same padded start as slotWindowForMonth. Two
+ *  months is what a 30-day horizon can reach from any day, and 62 days is the endpoint's
+ *  ceiling — so one read answers which month to open on, instead of a read per empty month. */
+export function openingSlotWindow(month: string): { from: string; to: string } {
+  return { from: slotWindowForMonth(month).from, to: `${addMonths(month, 2)}-01T00:00:00Z` };
+}
+
+/** The month a calendar should open on: `current` while it has an open hour, otherwise the
+ *  month of the earliest open hour after it, otherwise `current` (nothing is open at all).
+ *  Slots before `current` — the padding day — never move it backwards. */
+export function firstOpenMonth(slots: MentorSlot[], current: string): string {
+  const months = slots.map((s) => monthOf(slotLocalDay(s))).filter((m) => m >= current);
+  if (months.length === 0 || months.includes(current)) return current;
+  return months.reduce((a, b) => (b < a ? b : a));
+}
+
 /** The instants to ask the slot endpoint for, to fill one month of the grid.
  *
  *  A day of padding on each side, because the endpoint takes INSTANTS and answers in the

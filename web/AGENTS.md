@@ -114,7 +114,9 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   the component and only MIRRORED to the address bar — `page.url` lags a shallow
   `replaceState` (see `urlSynced.svelte.ts`), so deriving from it moves the URL and not the
   screen. That URL is also what survives the sign-in bounce, which is why the sign-in link is
-  built from `location.search` rather than `promptSignIn()`.
+  built from `location.search` rather than `promptSignIn()`. With no `?month` the calendar opens on the first
+  month that has an open hour: its first read spans this month and the next (`openingSlotWindow`),
+  because late in a month every remaining hour can sit inside the notice period.
 - **`MentorBlock` asks from the browser, not from `load`.** It answers "does this company have
   a mentor?" out of the DIRECTORY narrowed to that company — never a second endpoint, which
   would be a second copy of the publication predicate. It runs client-side because the job page

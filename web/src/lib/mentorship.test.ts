@@ -11,6 +11,8 @@ import {
   profileInputFromProfile,
   seedFormFromSuggestions,
   slotWindowForMonth,
+  openingSlotWindow,
+  firstOpenMonth,
   todayIn,
   withSearchParams,
   groupSlotsByLocalDay,
@@ -873,5 +875,25 @@ describe('the weekly schedule editor', () => {
   test('an exception names its day without reading the date in a zone', () => {
     expect(exceptionDayLabel('2026-11-04')).toBe('Wed 4 Nov 2026');
     expect(exceptionDayLabel('nonsense')).toBe('nonsense');
+  });
+});
+
+describe('the month a booking calendar opens on', () => {
+  test('the opening read spans the shown month and the next, from the same padded start', () => {
+    expect(openingSlotWindow('2026-10')).toEqual({ from: '2026-09-30T00:00:00Z', to: '2026-12-01T00:00:00Z' });
+    expect(openingSlotWindow('2026-12')).toEqual({ from: '2026-11-30T00:00:00Z', to: '2027-02-01T00:00:00Z' });
+  });
+
+  test('stays on the shown month while it has an open hour', () => {
+    expect(firstOpenMonth([slot('2026-11-02T19:00:00+01:00'), slot('2026-10-31T19:00:00+01:00')], '2026-10')).toBe('2026-10');
+  });
+
+  test('moves to the month of the earliest open hour when the shown month has none', () => {
+    expect(firstOpenMonth([slot('2026-12-01T09:00:00+01:00'), slot('2026-11-02T19:00:00+01:00')], '2026-10')).toBe('2026-11');
+  });
+
+  test('ignores the padding day before the shown month and stays put with nothing open', () => {
+    expect(firstOpenMonth([slot('2026-09-30T22:00:00+01:00')], '2026-10')).toBe('2026-10');
+    expect(firstOpenMonth([], '2026-10')).toBe('2026-10');
   });
 });
