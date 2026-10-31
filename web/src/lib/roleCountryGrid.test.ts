@@ -3,6 +3,7 @@ import type { InsightRoleCountryCell } from './api';
 import { MIN_PAIR_OPEN } from './roleLandings';
 import {
   ALL_COUNTRIES,
+  COVERAGE_JUMP_RATIO,
   GROWTH_MIN_BASE,
   buildGrid,
   cellTarget,
@@ -59,6 +60,36 @@ describe('buildGrid', () => {
   it('records the largest share in the grid for the shading scale', () => {
     // backend in de: 30/30 = 1.
     expect(grid.maxShare).toBe(1);
+  });
+});
+
+describe('coverage jumps', () => {
+  // tw: 700 open now against 100 a window ago across its cells — freehire's coverage of
+  // the country grew sevenfold, so no cell in it can say what the market did.
+  // de: 130 against 100 — an ordinary month (the live range was ×0.92–×1.46).
+  const grid = buildGrid(
+    [
+      cell('backend', '', 830, 500),
+      cell('backend', 'tw', 600, 80),
+      cell('design', 'tw', 100, 20),
+      cell('backend', 'de', 130, 100),
+    ],
+    ['tw', 'de'],
+  );
+
+  it('flags a column whose open total grew at least COVERAGE_JUMP_RATIO-fold', () => {
+    expect(COVERAGE_JUMP_RATIO).toBe(1.75);
+    expect([...grid.coverageJumps]).toEqual(['tw']);
+  });
+
+  it('counts dropped rows in the ratio, like the share', () => {
+    const g = buildGrid([cell('backend', 'tw', 10, 10), cell('other', 'tw', 500, 10)], ['tw']);
+    expect(g.coverageJumps.has('tw')).toBe(true);
+  });
+
+  it('never flags a column with nothing a window ago as anything but a jump', () => {
+    const g = buildGrid([cell('backend', 'fr', 40, 0)], ['fr']);
+    expect(g.coverageJumps.has('fr')).toBe(true);
   });
 });
 

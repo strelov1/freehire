@@ -5,6 +5,7 @@
   import { categoryLabel } from '#lib/labels.js';
   import {
     ALL_COUNTRIES,
+    COVERAGE_JUMP_RATIO,
     GROWTH_MIN_BASE,
     VISIBLE_ROWS,
     buildGrid,
@@ -49,15 +50,19 @@
   const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
   const full = new Intl.NumberFormat('en-US');
 
+  // A country whose coverage jumped prints no change anywhere: its cells would report
+  // freehire's onboarding, not the market (COVERAGE_JUMP_RATIO says why).
+  const jumped = (country: string) => grid.coverageJumps.has(country);
+
   function shadeOf(country: string, cell: GridCell): string {
-    if (shading === 'growth') return GROWTH_SHADES[growthLevel(growthPercent(cell))] ?? '';
+    if (shading === 'growth') return jumped(country) ? '' : (GROWTH_SHADES[growthLevel(growthPercent(cell))] ?? '');
     return OPEN_SHADES[shareLevel(columnShare(cell.open, grid.columnTotals.get(country) ?? 0), grid.maxShare)] ?? '';
   }
 
   // Red and green only where they are the encoding: in the share view the cell colour
   // already says something else, so the change stays grey (its ▲/▼ still reads).
-  function growthText(cell: GridCell): { text: string; tone: string } {
-    const rounded = roundedGrowth(cell);
+  function growthText(country: string, cell: GridCell): { text: string; tone: string } {
+    const rounded = jumped(country) ? null : roundedGrowth(cell);
     if (rounded === null) return { text: '—', tone: 'text-muted-foreground' };
     if (rounded === 0) return { text: '0%', tone: 'text-muted-foreground' };
     const text = rounded > 0 ? `▲ ${rounded}%` : `▼ ${-rounded}%`;
@@ -70,7 +75,8 @@
   function cellLabel(category: string, country: string, cell: GridCell): string {
     const rounded = roundedGrowth(cell);
     let change: string;
-    if (rounded === null) change = `fewer than ${GROWTH_MIN_BASE} 30 days ago`;
+    if (jumped(country)) change = `change not shown, freehire's coverage of ${columnName(country)} at least ${COVERAGE_JUMP_RATIO}× in 30 days`;
+    else if (rounded === null) change = `fewer than ${GROWTH_MIN_BASE} 30 days ago`;
     else if (rounded === 0) change = 'unchanged over 30 days';
     else change = `${rounded > 0 ? 'up' : 'down'} ${Math.abs(rounded)}% over 30 days`;
     return `${categoryLabel(category)}, ${columnName(country)}: ${full.format(cell.open)} open, ${change}`;
@@ -130,6 +136,11 @@
                     {columnName(country)}
                   </a>
                 {/if}
+                {#if jumped(country)}
+                  <span title="Coverage grew {COVERAGE_JUMP_RATIO}× or more in 30 days; change not shown"
+                    ><span aria-hidden="true">*</span><span class="sr-only"> (coverage grew, change not shown)</span></span
+                  >
+                {/if}
               </th>
             {/each}
           </tr>
@@ -146,7 +157,7 @@
                 {@const cell = row.cells.get(country)}
                 <td class="p-0 text-right {country === ALL_COUNTRIES ? 'border-r border-border' : ''}">
                   {#if cell}
-                    {@const growth = growthText(cell)}
+                    {@const growth = growthText(country, cell)}
                     <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- hrefOf builds every target with resolve(); the rule cannot see through the call -->
                     <a href={hrefOf(cellTarget(row.category, country, cell.open))}
                       aria-label={cellLabel(row.category, country, cell)}
@@ -186,6 +197,10 @@
       Change compares postings by when they were published, and shows "—" when there were
       fewer than {GROWTH_MIN_BASE} a month ago. These are postings on freehire, not the whole
       job market.
+      {#if grid.coverageJumps.size > 0}
+        * freehire's coverage of that country grew {COVERAGE_JUMP_RATIO}× or more in 30 days, so
+        its change would describe our new sources rather than hiring, and is not shown.
+      {/if}
     </p>
   </section>
 {/if}

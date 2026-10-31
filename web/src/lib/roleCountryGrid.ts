@@ -9,6 +9,15 @@ export const ALL_COUNTRIES = '';
  *  growth view prints "—" instead. Presentation only — the endpoint sends raw counts. */
 export const GROWTH_MIN_BASE = 50;
 
+/** A column whose open total is at least this multiple of its total a window ago is a
+ *  country freehire started covering, not one whose market grew: on prod on 2026-10-31
+ *  Taiwan's cells read +300% to +800% across every role the month its boards were added.
+ *  No per-posting rule can tell the two apart (publication dates were tried and made it
+ *  worse), so the grid prints no change for such a column at all. The figure sits in the
+ *  gap the live columns showed that day: ordinary countries ×0.92–×1.46, the two whose
+ *  boards were being onboarded ×1.94 (France) and ×6.99 (Taiwan). */
+export const COVERAGE_JUMP_RATIO = 1.75;
+
 /** Rows shown before "show all". */
 export const VISIBLE_ROWS = 15;
 
@@ -32,6 +41,8 @@ interface Grid {
   columnTotals: Map<string, number>;
   /** The largest cell-to-column share among drawn cells: the top of the shading scale. */
   maxShare: number;
+  /** Columns whose coverage jumped (COVERAGE_JUMP_RATIO): their change is not shown. */
+  coverageJumps: Set<string>;
 }
 
 /** Arranges the endpoint's cells into rows. Only categories with a role landing become
@@ -41,9 +52,11 @@ interface Grid {
 export function buildGrid(cells: InsightRoleCountryCell[], countries: string[]): Grid {
   const columns = [ALL_COUNTRIES, ...countries];
   const columnTotals = new Map<string, number>();
+  const columnPrevTotals = new Map<string, number>();
   const byCategory = new Map<string, Map<string, GridCell>>();
   for (const c of cells) {
     columnTotals.set(c.country, (columnTotals.get(c.country) ?? 0) + c.open_count);
+    columnPrevTotals.set(c.country, (columnPrevTotals.get(c.country) ?? 0) + c.open_count_prev);
     if (!categoryLandingLink(c.category)) continue;
     let row = byCategory.get(c.category);
     if (!row) byCategory.set(c.category, (row = new Map()));
@@ -61,7 +74,13 @@ export function buildGrid(cells: InsightRoleCountryCell[], countries: string[]):
       maxShare = Math.max(maxShare, columnShare(c.open, columnTotals.get(country) ?? 0));
     }
   }
-  return { columns, rows, columnTotals, maxShare };
+  const coverageJumps = new Set(
+    columns.filter((country) => {
+      const open = columnTotals.get(country) ?? 0;
+      return open > 0 && open >= COVERAGE_JUMP_RATIO * (columnPrevTotals.get(country) ?? 0);
+    }),
+  );
+  return { columns, rows, columnTotals, maxShare, coverageJumps };
 }
 
 /** A cell's part of its column: the category's share of that country's postings. */
