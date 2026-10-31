@@ -325,3 +325,29 @@ func TestTrudvsemProviderRegistered(t *testing.T) {
 		t.Error("FilterableProviders() should include trudvsem")
 	}
 }
+
+// The employer's own bounds are read from the numbers, never the text: the text reads
+// "от N" for a real range too. A zero bound is unstated, and a posting with neither
+// states no salary at all.
+func TestTrudvsemReadsTheStatedSalary(t *testing.T) {
+	const page = `{"status":"200","meta":{"total":3},"results":{"vacancies":[
+	  {"vacancy":{"id":"a","job-name":"Инженер","salary":"от 280000","salary_min":280000,"salary_max":380000,"currency":"«руб.»"}},
+	  {"vacancy":{"id":"b","job-name":"Водитель","salary":"от 180000","salary_min":180000,"salary_max":0,"currency":"«руб.»"}},
+	  {"vacancy":{"id":"c","job-name":"Кладовщик","salary":"от 0","salary_min":0,"salary_max":0,"currency":"«руб.»"}}
+	]}}`
+	jobs, err := NewTrudvsem(&trudvsemFake{byOffset: map[int]string{0: page}}).Fetch(context.Background(),
+		CompanyEntry{Company: "Работа России", Provider: "trudvsem", Board: "7700000000000"})
+	if err != nil || len(jobs) != 3 {
+		t.Fatalf("Fetch = %d jobs, %v", len(jobs), err)
+	}
+	if r := jobs[0]; r.SalaryMin == nil || *r.SalaryMin != 280000 || r.SalaryMax == nil || *r.SalaryMax != 380000 ||
+		r.SalaryCurrency != "RUB" || r.SalaryPeriod != "month" {
+		t.Errorf("range = %v-%v %q/%q, want 280000-380000 RUB/month", r.SalaryMin, r.SalaryMax, r.SalaryCurrency, r.SalaryPeriod)
+	}
+	if r := jobs[1]; r.SalaryMin == nil || *r.SalaryMin != 180000 || r.SalaryMax != nil {
+		t.Errorf("one-sided = %v-%v, want 180000-nil", r.SalaryMin, r.SalaryMax)
+	}
+	if r := jobs[2]; r.SalaryMin != nil || r.SalaryMax != nil || r.SalaryCurrency != "" || r.SalaryPeriod != "" {
+		t.Errorf("unstated = %v-%v %q/%q, want no salary", r.SalaryMin, r.SalaryMax, r.SalaryCurrency, r.SalaryPeriod)
+	}
+}
