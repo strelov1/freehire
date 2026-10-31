@@ -35,8 +35,8 @@ hard part exists. It is simply locked inside the mentorship package.
   7-day review window has closed. A member's page shows their completed mock count,
   average rating and recent revealed reviews.
 - **Notifications** carry handles only, never a name or an email.
-- New page `/my/buddies/mocks` (settings, calendar, upcoming and past mocks); a booking
-  panel on `/my/buddies/<handle>`. The mentor schedule editor and slot picker take their
+- New page `/buddies/mocks` (settings, calendar, upcoming and past mocks); a booking
+  panel on `/buddies/<handle>` (a "Mock interview" tab). The mentor schedule editor and slot picker take their
   API calls as props so both features share them.
 
 ## Capabilities
@@ -55,9 +55,9 @@ hard part exists. It is simply locked inside the mentorship package.
   `mock*.go` files in `internal/engage/buddy`; handlers in `internal/api/handler`;
   `cmd/mentorship-remind` gains a buddy pass; `internal/platform/arch/layering/blocks.go`
   gains `slots`.
-- Database: migration `0214_buddy_mocks.sql` (the next free number at implementation time) (six tables), queries in
+- Database: migration `0215_buddy_mocks.sql` (the next free number at implementation time) (six tables), queries in
   `internal/platform/db/queries/buddy_mocks.sql`.
-- Web: `/my/buddies/mocks`, booking panel on the member page, refactored
+- Web: `/buddies/mocks`, booking panel on the member page, refactored
   `MentorScheduleEditor.svelte` / `MentorBookingView.svelte`.
 - Ops: none new — the existing `freehire-mentorship-remind` timer runs the extra pass.
 - Free for every member. No plan gate.

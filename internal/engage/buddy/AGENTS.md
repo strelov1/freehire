@@ -13,7 +13,7 @@ by account) and `Kind` (the notice wording and link). Layer 7 (`engage`); tables
 
 Mock interviews (openspec/changes/buddy-mock-interviews) live in `mock*.go`: a member
 publishes when they can host and another books 60 minutes of it. Tables `buddy_mock_*`
-(migration 0214), queries in `internal/platform/db/queries/buddy_mocks.sql`; the slot
+(migration 0215), queries in `internal/platform/db/queries/buddy_mocks.sql`; the slot
 arithmetic is the shared engine in [internal/engage/slots](../slots/doc.go), the reminders a
 second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.go`.
 

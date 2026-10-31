@@ -48,7 +48,7 @@ general terms.
 Mocks are 60 minutes, no buffers, 12 hours minimum notice, 30-day horizon. Constants in
 `buddy`, not columns. A peer mock has one shape; per-member tuning is a mentor feature.
 
-### D3. Tables (migration `0214_buddy_mocks.sql` (the next free number at implementation time))
+### D3. Tables (migration `0215_buddy_mocks.sql` (the next free number at implementation time))
 - `buddy_mock_settings(user_id PK → buddy_members, timezone, meeting_url, topics text[],
   paused, created_at, updated_at)` — `topics` non-empty and within the vocabulary,
   `meeting_url` must start with `https://`.

@@ -15,7 +15,7 @@
 - A member holds **at most 3 future confirmed mocks as guest**.
 - Reviews: rating **1-5**, comment **≤ 1000** characters, written once, from the mock's end until **7 days** after it; revealed when the counterpart has reviewed too or the **7-day** window has closed.
 - The meeting link must be **`https://`-only**, and reaches only the two participants of a confirmed mock.
-- Migration: the proposal and design name **`0210_buddy_mocks.sql`**, but `migrations/0210_onboarding_buddies_step.sql` already exists and the newest file on `origin/main` is `0213_source_stats_quality.sql`. Use **`migrations/0214_buddy_mocks.sql`**; before writing it, run `git fetch origin main && git ls-tree --name-only origin/main migrations/ | tail -3` and take the next free number if `0214` has been taken meanwhile (rename every `0214` reference in this plan with it).
+- Migration: the proposal and design name **`0210_buddy_mocks.sql`**, but `migrations/0210_onboarding_buddies_step.sql` already exists and the newest file on `origin/main` is `0213_source_stats_quality.sql`. Use **`migrations/0215_buddy_mocks.sql`**; before writing it, run `git fetch origin main && git ls-tree --name-only origin/main migrations/ | tail -3` and take the next free number if `0214` has been taken meanwhile (rename every `0214` reference in this plan with it).
 - **English only** in code, comments, identifiers, docs and commits.
 - Before every commit that touches Go: `gofmt -l .` prints nothing (run `gofmt -w` on the touched paths), then `go vet ./...` and `go test ./...` pass. Before every push: `go vet -tags=integration ./...`.
 - After any edit under `internal/platform/db/queries/`: `make sqlc`, and commit the regenerated `internal/platform/db/*.go` with it.
@@ -29,7 +29,7 @@
 |---|---|---|
 | `internal/engage/slots/*.go` | 1 | The pure engine (moved): rules, expansion, overrides, subtraction, slicing, `Slots`, `Calendar` |
 | `internal/platform/arch/layering/blocks.go` | 1 | `slots` in the engage block |
-| `migrations/0214_buddy_mocks.sql` | 2 | Six tables, the participants `EXCLUDE`, the block trigger |
+| `migrations/0215_buddy_mocks.sql` | 2 | Six tables, the participants `EXCLUDE`, the block trigger |
 | `internal/platform/db/queries/buddy_mocks.sql` | 2 | Every mock query |
 | `internal/platform/db/queries/buddies.sql` | 2 | `LeaveBuddyMember` also cancels the member's future mocks |
 | `internal/platform/db/buddy_mocks_integration_test.go` | 2 | Schema guarantees |
@@ -208,10 +208,10 @@ git add -A internal/engage/slots internal/engage/mentorship internal/api/handler
 git commit -m "Move the slot engine into internal/engage/slots" -m "Pure move: the engine, its calendar partition and their tests leave mentorship so buddy mock interviews can share them. MentorZone becomes OwnerZone, ErrNoMentorZone becomes ErrNoOwnerZone and withID is exported as WithID for the repositories."
 ```
 
-## 2. Schema and queries (migration 0214_buddy_mocks.sql)
+## 2. Schema and queries (migration 0215_buddy_mocks.sql)
 
 **Files:**
-- Create: `migrations/0214_buddy_mocks.sql`, `internal/platform/db/queries/buddy_mocks.sql`, `internal/platform/db/buddy_mocks_integration_test.go`
+- Create: `migrations/0215_buddy_mocks.sql`, `internal/platform/db/queries/buddy_mocks.sql`, `internal/platform/db/buddy_mocks_integration_test.go`
 - Modify: `internal/platform/db/queries/buddies.sql:20-40` (`LeaveBuddyMember`)
 - Regenerate: `internal/platform/db/models.go`, `internal/platform/db/buddy_mocks.sql.go`, `internal/platform/db/buddies.sql.go`, `internal/platform/db/querier.go`
 
@@ -472,7 +472,7 @@ func TestClaimBuddyMockCancelNoticesOnce(t *testing.T) {
 
 - [x] 2.2 Run it: `go vet -tags=integration ./internal/platform/db/`. Expected: FAIL — `undefined: CreateBuddyMockParams`, `q.CreateBuddyMock undefined`, … .
 
-- [x] 2.3 Create `migrations/0214_buddy_mocks.sql`:
+- [x] 2.3 Create `migrations/0215_buddy_mocks.sql`:
 
 ```sql
 -- Buddy mock interviews (openspec/changes/buddy-mock-interviews): one interview-buddy member
@@ -968,13 +968,13 @@ go test -tags=integration ./internal/platform/db/ -run 'BuddyMock|TestBlockCance
 ```
 Expected: `ok`.
 
-- [x] 2.8 Lint the new migration: `pnpm check:sql`. Expected: no findings for `0214_buddy_mocks.sql` (fix a finding by the rule's own advice, or with a `-- squawk-ignore <rule>` line before the statement and the reason beside it).
+- [x] 2.8 Lint the new migration: `pnpm check:sql`. Expected: no findings for `0215_buddy_mocks.sql` (fix a finding by the rule's own advice, or with a `-- squawk-ignore <rule>` line before the statement and the reason beside it).
 
 - [x] 2.9 Verify and commit:
 
 ```bash
 gofmt -l internal/platform/db && go vet ./... && go test ./... && go vet -tags=integration ./internal/platform/db/
-git add migrations/0214_buddy_mocks.sql internal/platform/db/queries/buddy_mocks.sql internal/platform/db/queries/buddies.sql internal/platform/db/*.go
+git add migrations/0215_buddy_mocks.sql internal/platform/db/queries/buddy_mocks.sql internal/platform/db/queries/buddies.sql internal/platform/db/*.go
 git commit -m "Add the buddy mock-interview schema and queries" -m "Six tables, a per-person EXCLUDE over the participant rows, a single-statement booking guard, the leave cancelling the member's future mocks, and a user_blocks trigger cancelling the pair's."
 ```
 
@@ -5734,7 +5734,7 @@ git commit -m "Add the buddy mock interview pages"
 
 Mock interviews (openspec/changes/buddy-mock-interviews) live in `mock*.go`: a member
 publishes when they can host and another books 60 minutes of it. Tables `buddy_mock_*`
-(migration 0214), queries in `internal/platform/db/queries/buddy_mocks.sql`; the slot
+(migration 0215), queries in `internal/platform/db/queries/buddy_mocks.sql`; the slot
 arithmetic is the shared engine in [internal/engage/slots](../slots/doc.go), the reminders a
 second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.go`.
 ```
