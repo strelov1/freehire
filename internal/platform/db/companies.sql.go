@@ -813,6 +813,58 @@ func (q *Queries) ListCompanySlugs(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
+const listHiringCompaniesByFoldedSlug = `-- name: ListHiringCompaniesByFoldedSlug :many
+SELECT c.slug, c.countries
+FROM unnest($1::text[]) AS k(key)
+JOIN companies c ON replace(c.slug, '-', '') = k.key
+WHERE c.job_count > 0
+UNION
+SELECT c.slug, c.countries
+FROM companies c
+WHERE c.slug = ANY($2::text[])
+  AND c.job_count > 0
+`
+
+type ListHiringCompaniesByFoldedSlugParams struct {
+	FoldedKeys []string `json:"folded_keys"`
+	Slugs      []string `json:"slugs"`
+}
+
+type ListHiringCompaniesByFoldedSlugRow struct {
+	Slug      string   `json:"slug"`
+	Countries []string `json:"countries"`
+}
+
+// The companies carrying searchable jobs whose slug folds to one of the given keys, or IS one
+// of the given slugs — the candidates the "Hiring again" filter (internal/job/formeremployer)
+// chooses among. Both halves are needed: a name resolves either through the alias registry,
+// whose canonical slug need not fold to the name's own key (a curated merge), or through the
+// fold itself, where EVERY slug sharing the key must come back so a key two companies share
+// can be refused rather than half-answered.
+//
+// The keys are joined through unnest rather than compared with `= ANY`, so each key is one
+// probe of companies_folded_slug_idx (migration 0222) — see that file for why the `= ANY`
+// form over an expression is the shape that went wrong on jobs.
+func (q *Queries) ListHiringCompaniesByFoldedSlug(ctx context.Context, arg ListHiringCompaniesByFoldedSlugParams) ([]ListHiringCompaniesByFoldedSlugRow, error) {
+	rows, err := q.db.Query(ctx, listHiringCompaniesByFoldedSlug, arg.FoldedKeys, arg.Slugs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListHiringCompaniesByFoldedSlugRow{}
+	for rows.Next() {
+		var i ListHiringCompaniesByFoldedSlugRow
+		if err := rows.Scan(&i.Slug, &i.Countries); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPlaceholderBoardDescriptions = `-- name: ListPlaceholderBoardDescriptions :many
 SELECT description
 FROM jobs

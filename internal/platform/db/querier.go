@@ -4399,6 +4399,17 @@ type Querier interface {
 	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
 	// The caller's hidden application ids, for the tracker's visibility switch.
 	ListHiddenBuddyApplications(ctx context.Context, userID int64) ([]int64, error)
+	// The companies carrying searchable jobs whose slug folds to one of the given keys, or IS one
+	// of the given slugs — the candidates the "Hiring again" filter (internal/job/formeremployer)
+	// chooses among. Both halves are needed: a name resolves either through the alias registry,
+	// whose canonical slug need not fold to the name's own key (a curated merge), or through the
+	// fold itself, where EVERY slug sharing the key must come back so a key two companies share
+	// can be refused rather than half-answered.
+	//
+	// The keys are joined through unnest rather than compared with `= ANY`, so each key is one
+	// probe of companies_folded_slug_idx (migration 0222) — see that file for why the `= ANY`
+	// form over an expression is the shape that went wrong on jobs.
+	ListHiringCompaniesByFoldedSlug(ctx context.Context, arg ListHiringCompaniesByFoldedSlugParams) ([]ListHiringCompaniesByFoldedSlugRow, error)
 	// Every claimed HEAVY-pool run, with what the scheduler needs to ask the service manager
 	// about it. See ListInFlightLightRuns for the other pool, and ClaimDueHeavyRuns for what
 	// "heavy" means and why the two pools are counted apart: the budget each pool claims
@@ -4900,6 +4911,11 @@ type Querier interface {
 	// not ask at all when the page is already full. It handed the same window to both until
 	// 2026-09-06, which returned up to 2*limit rows and skipped a window per page.
 	ListOrphanedApplications(ctx context.Context, arg ListOrphanedApplicationsParams) ([]ListOrphanedApplicationsRow, error)
+	// The places the caller has worked at and LEFT, for the "Hiring again" search filter: the
+	// company name and the location exactly as banked, one row per employment. Owner-scoped like
+	// every read here. Projects are not employers, a blank company names nobody, and a current
+	// role is not a former employer — the filter is about going BACK.
+	ListPastEmployerNames(ctx context.Context, userID int64) ([]ListPastEmployerNamesRow, error)
 	// The moderator review queue: every claim that could not auto-activate (unknown or
 	// mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 	// whose code was never entered is not reviewable — nobody has shown they can read that

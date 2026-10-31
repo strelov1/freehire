@@ -651,6 +651,44 @@ func (q *Queries) ListExperienceEmployments(ctx context.Context, userID int64) (
 	return items, nil
 }
 
+const listPastEmployerNames = `-- name: ListPastEmployerNames :many
+SELECT company, location
+FROM experience_employments
+WHERE user_id = $1
+  AND kind = 'job'
+  AND company <> ''
+  AND NOT is_current
+`
+
+type ListPastEmployerNamesRow struct {
+	Company  string `json:"company"`
+	Location string `json:"location"`
+}
+
+// The places the caller has worked at and LEFT, for the "Hiring again" search filter: the
+// company name and the location exactly as banked, one row per employment. Owner-scoped like
+// every read here. Projects are not employers, a blank company names nobody, and a current
+// role is not a former employer — the filter is about going BACK.
+func (q *Queries) ListPastEmployerNames(ctx context.Context, userID int64) ([]ListPastEmployerNamesRow, error) {
+	rows, err := q.db.Query(ctx, listPastEmployerNames, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPastEmployerNamesRow{}
+	for rows.Next() {
+		var i ListPastEmployerNamesRow
+		if err := rows.Scan(&i.Company, &i.Location); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const mergeExperienceAtoms = `-- name: MergeExperienceAtoms :one
 WITH updated AS (
     UPDATE experience_atoms

@@ -862,3 +862,24 @@ WHERE NOT EXISTS (
 ON CONFLICT (slug) DO UPDATE SET
     name       = EXCLUDED.name,
     updated_at = now();
+
+-- name: ListHiringCompaniesByFoldedSlug :many
+-- The companies carrying searchable jobs whose slug folds to one of the given keys, or IS one
+-- of the given slugs — the candidates the "Hiring again" filter (internal/job/formeremployer)
+-- chooses among. Both halves are needed: a name resolves either through the alias registry,
+-- whose canonical slug need not fold to the name's own key (a curated merge), or through the
+-- fold itself, where EVERY slug sharing the key must come back so a key two companies share
+-- can be refused rather than half-answered.
+--
+-- The keys are joined through unnest rather than compared with `= ANY`, so each key is one
+-- probe of companies_folded_slug_idx (migration 0222) — see that file for why the `= ANY`
+-- form over an expression is the shape that went wrong on jobs.
+SELECT c.slug, c.countries
+FROM unnest(@folded_keys::text[]) AS k(key)
+JOIN companies c ON replace(c.slug, '-', '') = k.key
+WHERE c.job_count > 0
+UNION
+SELECT c.slug, c.countries
+FROM companies c
+WHERE c.slug = ANY(@slugs::text[])
+  AND c.job_count > 0;
