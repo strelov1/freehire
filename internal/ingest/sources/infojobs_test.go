@@ -420,6 +420,28 @@ func TestInfojobsCrawlFailsWhenTheCategoryFilterIsIgnored(t *testing.T) {
 	}
 }
 
+// The filter is checked on every page, not just the first: a later page served unfiltered holds
+// other categories' offers in place of the ones it should list.
+func TestInfojobsCrawlFailsWhenALaterPageIgnoresTheFilter(t *testing.T) {
+	http := ijSite(ijCat{id: "190", pages: [][]string{ijOffers("A", "B"), ijOffers("C", "D")}})
+	http.catPages["190"][2] = ijPage(`{"navigation":{"totalPages":2},"search":{"categoryIds":[]},"offers":[` + strings.Join(ijOffers("X", "Y"), ",") + `]}`)
+	if _, err := (infojobs{http: http}).crawl(context.Background()); err == nil {
+		t.Fatal("want an error when a later category page did not apply its filter")
+	}
+}
+
+// A category the root says holds offers but whose listing comes back empty was not read.
+func TestInfojobsCrawlFailsWhenAStatedCategoryListsNothing(t *testing.T) {
+	http := ijSite(
+		ijCat{id: "190", pages: [][]string{ijOffers("A", "B")}},
+		ijCat{id: "120", pages: [][]string{ijOffers("C")}},
+	)
+	http.catPages["120"][1] = ijCategoryPage("120", 1)
+	if _, err := (infojobs{http: http}).crawl(context.Background()); err == nil {
+		t.Fatal("want an error when a category stated to hold offers lists none")
+	}
+}
+
 func TestInfojobsCrawlRefusesACategoryPastTheCeiling(t *testing.T) {
 	http := ijSite(ijCat{id: "190", pages: [][]string{ijOffers("A", "B")}})
 	http.catPages["190"][1] = ijCategoryPage("190", infojobsMaxPages+1, ijOffers("A", "B")...)

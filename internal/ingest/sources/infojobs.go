@@ -250,12 +250,9 @@ func (s infojobs) crawl(ctx context.Context) ([]infojobsOffer, error) {
 	g.SetLimit(infojobsListWorkers)
 	for i, c := range cats {
 		g.Go(func() error {
-			first, err := s.listPage(gctx, infojobsCategoryPageURL(c.Value, 1))
+			first, err := s.categoryPage(gctx, c.Value, 1)
 			if err != nil {
 				return err
-			}
-			if !slices.Equal(first.Search.CategoryIDs, []string{c.Value}) {
-				return fmt.Errorf("infojobs: category %s: the listing did not apply the filter (it applied %v)", c.Value, first.Search.CategoryIDs)
 			}
 			pages := max(first.Navigation.TotalPages, 1)
 			if pages > infojobsMaxPages {
@@ -275,7 +272,7 @@ func (s infojobs) crawl(ctx context.Context) ([]infojobsOffer, error) {
 	for i, c := range cats {
 		for page := 2; page <= len(byCat[i]); page++ {
 			g.Go(func() error {
-				props, err := s.listPage(gctx, infojobsCategoryPageURL(c.Value, page))
+				props, err := s.categoryPage(gctx, c.Value, page)
 				if err != nil {
 					return err
 				}
@@ -292,7 +289,7 @@ func (s infojobs) crawl(ctx context.Context) ([]infojobsOffer, error) {
 	g.SetLimit(infojobsListWorkers)
 	for i, c := range cats {
 		g.Go(func() error {
-			tail, err := s.categoryTail(gctx, c.Value, byCat[i])
+			tail, err := s.categoryTail(gctx, c.Value, c.Count, byCat[i])
 			if err != nil {
 				return err
 			}
@@ -330,11 +327,15 @@ func (s infojobs) crawl(ctx context.Context) ([]infojobsOffer, error) {
 // those are the same offers every run, so missing them would be systematic rather than the
 // random drift the 48-hour sweep window absorbs. So when the stated last page is not empty, the
 // pages after it are read one by one until one comes back empty (the listing answers a page past
-// its end with no offers).
-func (s infojobs) categoryTail(ctx context.Context, cat string, pages [][]infojobsOffer) ([][]infojobsOffer, error) {
+// its end with no offers). A category the root page stated to hold offers that lists none at all
+// was not read, whatever its pages said.
+func (s infojobs) categoryTail(ctx context.Context, cat string, stated int, pages [][]infojobsOffer) ([][]infojobsOffer, error) {
 	last := len(pages) - 1
 	for last >= 0 && len(pages[last]) == 0 {
 		last--
+	}
+	if last < 0 && stated > 0 {
+		return nil, fmt.Errorf("infojobs: category %s is stated to hold %d offers and lists none", cat, stated)
 	}
 	for page := range last {
 		if len(pages[page]) == 0 {
@@ -352,7 +353,7 @@ func (s infojobs) categoryTail(ctx context.Context, cat string, pages [][]infojo
 		if page > infojobsMaxPages {
 			return nil, fmt.Errorf("infojobs: category %s runs past the %d pages the listing serves", cat, infojobsMaxPages)
 		}
-		props, err := s.listPage(ctx, infojobsCategoryPageURL(cat, page))
+		props, err := s.categoryPage(ctx, cat, page)
 		if err != nil {
 			return nil, err
 		}
@@ -363,8 +364,18 @@ func (s infojobs) categoryTail(ctx context.Context, cat string, pages [][]infojo
 	}
 }
 
-func infojobsCategoryPageURL(cat string, page int) string {
-	return fmt.Sprintf(infojobsCategoryURL, url.QueryEscape(cat), page)
+// categoryPage fetches one page of a category's listing and fails unless the page echoes the
+// filter: a page served unfiltered (the semantic /ofertas-trabajo/<slug> path does exactly that)
+// holds other categories' offers in place of the ones it should list.
+func (s infojobs) categoryPage(ctx context.Context, cat string, page int) (infojobsListProps, error) {
+	props, err := s.listPage(ctx, fmt.Sprintf(infojobsCategoryURL, url.QueryEscape(cat), page))
+	if err != nil {
+		return props, err
+	}
+	if !slices.Equal(props.Search.CategoryIDs, []string{cat}) {
+		return props, fmt.Errorf("infojobs: category %s page %d: the listing did not apply the filter (it applied %v)", cat, page, props.Search.CategoryIDs)
+	}
+	return props, nil
 }
 
 // sortInfojobsNewestFirst orders offers by publication time, newest first, so a run's hydration
