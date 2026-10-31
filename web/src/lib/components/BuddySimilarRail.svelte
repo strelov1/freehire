@@ -23,21 +23,24 @@
   });
 </script>
 
+<!-- The rail owns its column: with nobody to suggest, nothing reserves the width. -->
 {#if people.length}
-  <section class="rounded-xl border border-border bg-card p-4">
-    <div class="mb-1 flex items-baseline justify-between">
-      <h2 class="text-sm font-semibold">People like you</h2>
-      <a href={resolve('/buddies/network')} class="text-xs font-medium text-brand-strong hover:underline">See all</a>
-    </div>
-    <ul class="flex flex-col divide-y divide-border">
-      {#each people as person (person.handle)}
-        <li class="flex flex-col gap-0.5 py-2.5">
-          <BuddyIdentity handle={person.handle} summary={person.card_summary} size="sm" />
-          {#if person.shared_companies.length}
-            <span class="pl-11 text-xs text-muted-foreground">{buddySharedCompanies(person.shared_companies.length)}</span>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-  </section>
+  <aside class="xl:sticky xl:top-20 xl:w-68 xl:shrink-0 xl:self-start">
+    <section class="rounded-xl border border-border bg-card p-4">
+      <div class="mb-1 flex items-baseline justify-between">
+        <h2 class="text-sm font-semibold">People like you</h2>
+        <a href={resolve('/buddies/network')} class="text-xs font-medium text-brand-strong hover:underline">See all</a>
+      </div>
+      <ul class="flex flex-col divide-y divide-border">
+        {#each people as person (person.handle)}
+          <li class="flex flex-col gap-0.5 py-2.5">
+            <BuddyIdentity handle={person.handle} summary={person.card_summary} size="sm" />
+            {#if person.shared_companies.length}
+              <span class="pl-11 text-xs text-muted-foreground">{buddySharedCompanies(person.shared_companies.length)}</span>
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    </section>
+  </aside>
 {/if}

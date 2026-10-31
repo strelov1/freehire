@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ArrowUpRight, BadgeCheck, MessagesSquare, Send } from '@lucide/svelte';
   import { resolve } from '$app/paths';
-  import type { BuddyPost } from '#lib/buddyFeed.js';
+  import { buddyJobLines, type BuddyPost } from '#lib/buddyFeed.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
   import type { BuddyFeedItem } from '#lib/types.js';
   import { cn } from '#lib/ui/index.js';
@@ -31,11 +31,15 @@
   // The fan shows at most four marks; the list below names every posting.
   const FAN = 4;
   const TILT = ['-rotate-6', '-rotate-2', 'rotate-2', 'rotate-6'];
-
-  function where(it: BuddyFeedItem): string {
-    return [it.company.name, it.job_location].filter(Boolean).join(' · ');
-  }
 </script>
+
+{#snippet jobRow(it: BuddyFeedItem)}
+  {@const lines = buddyJobLines(it)}
+  <BuddyCompanyLogo name={it.company.name} size="sm" class="size-6" />
+  <span class="truncate font-semibold group-hover:underline group-hover:underline-offset-2">{lines.title}</span>
+  <span class="truncate text-muted-foreground">{lines.where}</span>
+  <ArrowUpRight class="ml-auto size-4 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" aria-hidden="true" />
+{/snippet}
 
 <article class="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
   <header class="flex items-start justify-between gap-3">
@@ -80,19 +84,11 @@
     <ul class="-mx-2 flex flex-col">
       {#each post.items as it (it.id)}
         <li>
+          <!-- To the job while it has a page, to the company once it is gone (as BuddyJobCard). -->
           {#if it.job_slug}
-            <a href={resolve('/jobs/[slug]', { slug: it.job_slug })} class="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted">
-              <BuddyCompanyLogo name={it.company.name} size="sm" class="size-6" />
-              <span class="truncate font-semibold group-hover:underline group-hover:underline-offset-2">{it.job_title ?? it.company.name}</span>
-              <span class="truncate text-muted-foreground">{where(it)}</span>
-              <ArrowUpRight class="ml-auto size-4 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" aria-hidden="true" />
-            </a>
+            <a href={resolve('/jobs/[slug]', { slug: it.job_slug })} class="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted">{@render jobRow(it)}</a>
           {:else}
-            <span class="flex items-center gap-2.5 px-2 py-1.5 text-sm">
-              <BuddyCompanyLogo name={it.company.name} size="sm" class="size-6" />
-              <span class="truncate font-semibold">{it.job_title ?? it.company.name}</span>
-              <span class="truncate text-muted-foreground">{where(it)}</span>
-            </span>
+            <a href={resolve('/companies/[slug]', { slug: it.company.slug })} class="group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted">{@render jobRow(it)}</a>
           {/if}
         </li>
       {/each}

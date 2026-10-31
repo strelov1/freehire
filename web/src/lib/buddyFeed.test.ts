@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buddyFeedDays, buddyFeedPosts } from './buddyFeed';
+import { buddyFeedDays, buddyFeedPosts, buddyJobLines } from './buddyFeed';
 import type { BuddyFeedItem } from './types';
 
 const summary = { category: 'backend', seniority: 'senior', country: 'de' };
@@ -52,5 +52,18 @@ describe('buddyFeedDays', () => {
       ['2026-10-30', 2],
       ['2026-10-28', 1],
     ]);
+  });
+});
+
+describe('buddyJobLines', () => {
+  const company = { slug: 'cloudflare', name: 'Cloudflare' };
+  it('titles a posting by its job and places it under the company', () => {
+    expect(buddyJobLines({ company, job_title: 'Systems Engineer', job_location: 'Lisbon' })).toEqual({
+      title: 'Systems Engineer',
+      where: 'Cloudflare · Lisbon',
+    });
+  });
+  it('names the company once when the posting is gone', () => {
+    expect(buddyJobLines({ company, job_title: null, job_location: null })).toEqual({ title: 'Cloudflare', where: '' });
   });
 });

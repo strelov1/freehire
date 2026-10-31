@@ -52,3 +52,11 @@ export function buddyFeedDays(posts: readonly BuddyPost[]): { day: string; posts
   }
   return out;
 }
+
+/** A posting's two lines: the job title, and under it the company and, when known, where
+ *  the posting is ("Revolut · London, UK"). A posting since removed has no title, so the
+ *  company becomes the title and is not repeated beneath it. */
+export function buddyJobLines(item: Pick<BuddyFeedItem, 'company' | 'job_title' | 'job_location'>): { title: string; where: string } {
+  if (!item.job_title) return { title: item.company.name, where: item.job_location ?? '' };
+  return { title: item.job_title, where: [item.company.name, item.job_location].filter(Boolean).join(' · ') };
+}

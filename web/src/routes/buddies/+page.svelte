@@ -8,5 +8,5 @@
 <h1 class="sr-only">Interview buddies feed</h1>
 <div class="flex flex-col gap-4 xl:flex-row xl:gap-6">
   <div class="min-w-0 flex-1"><BuddyFeedPanel /></div>
-  <aside class="xl:sticky xl:top-20 xl:w-68 xl:shrink-0 xl:self-start"><BuddySimilarRail /></aside>
+  <BuddySimilarRail />
 </div>

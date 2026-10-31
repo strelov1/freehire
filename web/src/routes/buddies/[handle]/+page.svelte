@@ -272,7 +272,5 @@
     {/if}
   </div>
 
-  <aside class="xl:sticky xl:top-20 xl:w-68 xl:shrink-0 xl:self-start">
-    <BuddySimilarRail exclude={handle} />
-  </aside>
+  <BuddySimilarRail exclude={handle} />
 </div>
