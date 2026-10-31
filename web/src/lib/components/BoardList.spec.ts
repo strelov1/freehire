@@ -8,19 +8,28 @@ vi.mock('$app/state', () => ({
   page: { data: { locale: 'en' }, url: new URL('http://localhost/my/tracking/list'), state: {} },
 }));
 
-// The sentinel's observer, captured so a test can scroll it into view.
+// The sentinel's observer, captured so a test can scroll it into view. A real observer
+// also reports once when it starts observing; `inView` makes the stub do the same.
 let reveal: (() => void) | undefined;
+let inView = false;
 vi.stubGlobal(
   'IntersectionObserver',
   class {
-    constructor(private cb: (e: { isIntersecting: boolean }[]) => void) {}
+    cb: (e: { isIntersecting: boolean }[]) => void;
+    constructor(cb: (e: { isIntersecting: boolean }[]) => void) {
+      this.cb = cb;
+    }
     observe() {
       reveal = () => this.cb([{ isIntersecting: true }]);
+      if (inView) queueMicrotask(reveal);
     }
     disconnect() {}
   },
 );
-afterEach(() => (reveal = undefined));
+afterEach(() => {
+  reveal = undefined;
+  inView = false;
+});
 
 const row = (n: number): BoardItem => ({
   id: `app-${n}`,
@@ -58,5 +67,24 @@ describe('BoardList', () => {
 
     expect(drawn()).toBe(2);
     expect(reveal).toBeUndefined();
+  });
+
+  it('keeps drawing while the end stays in view on a tall viewport', async () => {
+    // The sentinel never leaves the viewport, so no observer sees it ENTER; only one
+    // started after each page reports it.
+    inView = true;
+    render(BoardList, { props: { items: Array.from({ length: 120 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() } });
+
+    await vi.waitFor(() => expect(drawn()).toBe(120));
+  });
+
+  it('offers a load-more control for keyboard and screen-reader users', async () => {
+    render(BoardList, { props: { items: Array.from({ length: 60 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() } });
+
+    screen.getByRole('button', { name: 'Load more' }).click();
+    flushSync();
+
+    expect(drawn()).toBe(60);
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Clock, Mail } from '@lucide/svelte';
   import { companyLogoUrl } from '#lib/logo.js';
-  import { EntityLogo } from '#lib/ui/index.js';
+  import { EntityLogo, LoadMore } from '#lib/ui/index.js';
   import { groupedStages } from '#lib/stages.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { timeAgo } from '#lib/utils.js';
@@ -31,11 +31,11 @@
 
   // Rows are drawn a page at a time as the list scrolls: each carries a stage select of
   // every stage, so 500 applications were ~10k nodes built on load. Nothing is fetched —
-  // the rows are already here — so there is no failure to retry, and a keyboard user
-  // tabbing down scrolls the next page in like anyone else.
+  // the rows are already here — so there is no failure to retry.
   const PAGE = 50;
   let limit = $state(PAGE);
-  const visible = $derived(items.length > limit ? items.slice(0, limit) : items);
+  const visible = $derived(items.slice(0, limit));
+  const showMore = () => (limit += PAGE);
 </script>
 
 {#if items.length === 0}
@@ -102,5 +102,17 @@
       </li>
     {/each}
   </ul>
-  <InfiniteScroll enabled={items.length > limit} onLoad={() => (limit += PAGE)} />
+  {#if items.length > limit}
+    <!-- Remounted per page: on a viewport taller than a page the sentinel is still in
+         view after the rows land, and only a fresh observer reports that. -->
+    {#key limit}
+      <InfiniteScroll enabled onLoad={showMore} />
+    {/key}
+    <!-- The control InfiniteScroll leaves to its caller, for whoever moves by keyboard or
+         reads with a screen reader rather than scrolls. Hidden until it takes focus: the
+         list reads as one continuous list for everyone else. -->
+    <div class="sr-only focus-within:not-sr-only">
+      <LoadMore loading={false} onclick={showMore} />
+    </div>
+  {/if}
 {/if}
