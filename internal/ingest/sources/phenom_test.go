@@ -191,6 +191,9 @@ func TestPhenomFailsABoardOverTheWindowItCannotSlice(t *testing.T) {
 		"a slice the filter did not narrow": {first: twoStates, slices: map[string]map[int]string{
 			"Ohio": {0: phenomListPage(15000, "S0")}, "Texas": readable,
 		}},
+		"a slice grew beyond the safe paging limit": {first: twoStates, slices: map[string]map[int]string{
+			"Ohio": {0: phenomListPage(9501, "S0"), 1: phenomListPage(0)}, "Texas": readable,
+		}},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

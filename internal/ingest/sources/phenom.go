@@ -226,10 +226,9 @@ func (s phenom) listByState(ctx context.Context, board string, first phenomPage)
 		if err != nil {
 			return nil, err
 		}
-		// A slice stating nothing for a state the board counted, or more than the window, is a
-		// filter the API did not apply as asked; reading on would drop the state or re-read the
-		// board's first window under its name.
-		if n := first.states[state]; n > 0 && (slice.total <= 0 || slice.total > phenomListingWindow) {
+		// Recheck the filtered total: counts can change between requests, and the slice
+		// itself must stay within the safe paging limit. An empty counted state also fails.
+		if n := first.states[state]; n > 0 && (slice.total <= 0 || slice.total > phenomSliceLimit) {
 			return nil, fmt.Errorf("phenom: list board %s: state %q counted %d postings, and its slice states %d", board, state, n, slice.total)
 		}
 		got, err := s.walk(ctx, board, filter, &slice)
