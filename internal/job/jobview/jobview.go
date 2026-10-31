@@ -211,6 +211,16 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	if len(e.Requirements) == 0 {
 		e.Requirements = f.RequirementsDerived
 	}
+	// Salary has three producers, folded here for the same reason: SetJobEnrichment's
+	// overlay copies the ATS's and the moderator's ranges into the payload only when
+	// the model runs, so an unenriched posting served no salary although its source
+	// stated one. Manual beats source beats model, and a stated layer replaces the
+	// whole range rather than lending one bound to another layer's currency.
+	for _, s := range []*job.Salary{f.SourceSalary, f.ManualSalary} {
+		if s != nil {
+			e.SalaryMin, e.SalaryMax, e.SalaryCurrency, e.SalaryPeriod = s.Min, s.Max, s.Currency, s.Period
+		}
+	}
 	skills := normalizeSet(f.Skills)
 	collections := normalizeSet(x.Collections)
 	cities := cityFacet(f.Cities, e.Cities)

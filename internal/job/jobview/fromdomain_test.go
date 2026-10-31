@@ -236,3 +236,83 @@ func TestFromDomain_UnreadableDerivedRequirementsAreNotFatal(t *testing.T) {
 		})
 	}
 }
+
+// The ATS's own salary must SERVE on a posting the model has never reached. The SQL
+// overlay in SetJobEnrichment copies it into the payload only when the model runs, so
+// before this fold an Ashby posting with a stated range served no salary at all until
+// enrichment caught up — and the enrichment backlog is most of the catalogue.
+func TestFromDomain_SourceSalaryServesAnUnenrichedJob(t *testing.T) {
+	row := db.Job{
+		ID: 7, Source: "ashby", ExternalID: "cohere:7", Title: "Web Developer",
+		Company: "Cohere", CompanySlug: "cohere", PublicSlug: "web-developer-cohere-7",
+		CreatedAt:            pgtype.Timestamptz{Time: time.Date(2026, 1, 7, 0, 0, 0, 0, time.UTC), Valid: true},
+		SalaryMinSource:      pgtype.Int4{Int32: 180000, Valid: true},
+		SalaryMaxSource:      pgtype.Int4{Int32: 250000, Valid: true},
+		SalaryCurrencySource: "CAD", SalaryPeriodSource: "year",
+	}
+
+	got := fromRow(t, row)
+
+	e := got.Enrichment
+	if e.SalaryMin == nil || *e.SalaryMin != 180000 || e.SalaryMax == nil || *e.SalaryMax != 250000 ||
+		e.SalaryCurrency != "CAD" || e.SalaryPeriod != "year" {
+		t.Errorf("salary = %v-%v %q/%q, want 180000-250000 CAD/year", e.SalaryMin, e.SalaryMax, e.SalaryCurrency, e.SalaryPeriod)
+	}
+	if got.EnrichmentVersion != 0 || got.EnrichedAt != nil {
+		t.Errorf("provenance = version %d / %v, want an unenriched job", got.EnrichmentVersion, got.EnrichedAt)
+	}
+}
+
+// Precedence is manual > source > model, and a layer replaces the whole range: a
+// stated range keeps none of a lower layer's bounds, so a model's max is never paired
+// with an ATS's min in another currency.
+func TestFromDomain_SalaryPrecedence(t *testing.T) {
+	base := func() db.Job {
+		return db.Job{
+			ID: 8, Source: "ashby", ExternalID: "acme:8", Title: "Engineer",
+			Company: "Acme", CompanySlug: "acme", PublicSlug: "engineer-acme-8",
+			CreatedAt:  pgtype.Timestamptz{Time: time.Date(2026, 1, 7, 0, 0, 0, 0, time.UTC), Valid: true},
+			Enrichment: json.RawMessage(`{"salary_min":1,"salary_max":2,"salary_currency":"EUR","salary_period":"month"}`),
+		}
+	}
+
+	t.Run("source over model", func(t *testing.T) {
+		row := base()
+		row.SalaryMinSource = pgtype.Int4{Int32: 100, Valid: true}
+		row.SalaryCurrencySource, row.SalaryPeriodSource = "USD", "year"
+		e := fromRow(t, row).Enrichment
+		if e.SalaryMin == nil || *e.SalaryMin != 100 || e.SalaryMax != nil || e.SalaryCurrency != "USD" || e.SalaryPeriod != "year" {
+			t.Errorf("salary = %v-%v %q/%q, want 100-nil USD/year", e.SalaryMin, e.SalaryMax, e.SalaryCurrency, e.SalaryPeriod)
+		}
+	})
+	t.Run("manual over source", func(t *testing.T) {
+		row := base()
+		row.SalaryMinSource = pgtype.Int4{Int32: 100, Valid: true}
+		row.SalaryCurrencySource, row.SalaryPeriodSource = "USD", "year"
+		row.SalaryMaxManual = pgtype.Int4{Int32: 900, Valid: true}
+		row.SalaryCurrencyManual, row.SalaryPeriodManual = "GBP", "year"
+		e := fromRow(t, row).Enrichment
+		if e.SalaryMin != nil || e.SalaryMax == nil || *e.SalaryMax != 900 || e.SalaryCurrency != "GBP" {
+			t.Errorf("salary = %v-%v %q, want nil-900 GBP", e.SalaryMin, e.SalaryMax, e.SalaryCurrency)
+		}
+	})
+	t.Run("model alone", func(t *testing.T) {
+		e := fromRow(t, base()).Enrichment
+		if e.SalaryMin == nil || *e.SalaryMin != 1 || e.SalaryCurrency != "EUR" {
+			t.Errorf("salary = %v %q, want the model's 1 EUR", e.SalaryMin, e.SalaryCurrency)
+		}
+	})
+}
+
+func fromRow(t *testing.T, row db.Job) jobview.Job {
+	t.Helper()
+	j, x, err := job.FromRow(row)
+	if err != nil {
+		t.Fatalf("job.FromRow: %v", err)
+	}
+	got, err := jobview.FromDomain(j, x)
+	if err != nil {
+		t.Fatalf("FromDomain: %v", err)
+	}
+	return got
+}
