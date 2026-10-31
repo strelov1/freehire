@@ -186,7 +186,7 @@ func (g gulftalent) hydrationQueue(fresh []string) []string {
 }
 
 // listing reads the sitemap index and every job-posting shard and returns the posting links. A
-// shard that cannot be read, or a listing with no posting at all, fails the whole listing:
+// shard that cannot be read or lists no posting, or an index with no job shard, fails it:
 // gulftalent is swept by source, so a listing missing a shard would close every posting in it.
 func (g gulftalent) listing(ctx context.Context) ([]string, error) {
 	index, err := getSitemap(ctx, g.http, gulftalentSitemapURL)
@@ -202,15 +202,20 @@ func (g gulftalent) listing(ctx context.Context) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("gulftalent: shard %s: %w", s.Loc, err)
 		}
+		before := len(links)
 		for _, u := range shard.URLs {
 			if gulftalentJobID(u.Loc) != "" {
 				links = append(links, u.Loc)
 			}
 		}
+		// A job shard with no posting in it is not an empty slice of the site but a page other
+		// than the one we read (a challenge, a moved layout), and the source-scoped sweep would
+		// read its postings as gone.
+		if len(links) == before {
+			return nil, fmt.Errorf("gulftalent: shard %s listed no job posting", s.Loc)
+		}
 	}
-	// A sitemap with no posting in it is not an empty site but a page other than the one we
-	// read (a challenge, a moved layout), and the source-scoped sweep would read it as every
-	// posting gone.
+	// The same holds for an index naming no job shard at all.
 	if len(links) == 0 {
 		return nil, fmt.Errorf("gulftalent: sitemap listed no job posting (%d shards in the index)", len(index.Sitemaps))
 	}

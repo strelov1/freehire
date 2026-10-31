@@ -280,6 +280,14 @@ func TestGulfTalentEmptyListingFailsTheCrawl(t *testing.T) {
 		"no posting in the shards": (&routedHTTP{}).
 			route("/sitemap.xml", gtSitemapIndexXML("https://www.gulftalent.com/sitemaps/sitemap_jx000.xml")).
 			route("sitemap_jx000.xml", gtShardXML("https://www.gulftalent.com/jobs/category/accounting")),
+		// One shard well-formed but empty while another lists postings: the empty one's postings
+		// would read as gone.
+		"one empty shard": (&routedHTTP{}).
+			route("/sitemap.xml", gtSitemapIndexXML(
+				"https://www.gulftalent.com/sitemaps/sitemap_jx000.xml",
+				"https://www.gulftalent.com/sitemaps/sitemap_jx001.xml")).
+			route("sitemap_jx000.xml", gtShardXML("https://www.gulftalent.com/uae/jobs/role-a-201")).
+			route("sitemap_jx001.xml", gtShardXML()),
 	}
 	for name, fake := range cases {
 		t.Run(name, func(t *testing.T) {

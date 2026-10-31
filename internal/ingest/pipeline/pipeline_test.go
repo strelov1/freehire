@@ -619,6 +619,36 @@ func TestRunHydratingSourceFailsOpenOnSeenLookupError(t *testing.T) {
 	}
 }
 
+// A board crawled without its seen-set proves nothing about what is gone: every stored posting
+// reads as new, so a budgeted adapter yields only its budget of them and the rest go untouched.
+// The run says so (SeenUnknown), the board does not qualify for the board scope, and its
+// companies are withheld from the company scope — otherwise the sweep would close live postings
+// the crawl listed but never refreshed.
+func TestRunSeenLookupErrorWithholdsTheBoardsCloses(t *testing.T) {
+	src := &fakeHydratingSource{provider: "justjoin", jobs: []sources.Job{
+		{ExternalID: "a", Title: "A", Company: "Acme", URL: "u"},
+	}}
+	store := &fakeStore{seenErr: errors.New("db down")}
+	r := Runner{Registry: registry(src), Store: store}
+
+	stats, err := r.Run(context.Background(), []sources.CompanyEntry{
+		{Company: "Acme", Provider: "justjoin", Board: "b1"},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	st := stats["justjoin"]
+	if st.SeenUnknown != 1 {
+		t.Errorf("SeenUnknown = %d, want 1", st.SeenUnknown)
+	}
+	if len(st.QualifyingBoards) != 0 {
+		t.Errorf("QualifyingBoards = %v, want none: a board crawled without its seen-set proves nothing", st.QualifyingBoards)
+	}
+	if !slices.Contains(st.UnprovenCompanies, "acme") {
+		t.Errorf("UnprovenCompanies = %v, want acme withheld from the company scope", st.UnprovenCompanies)
+	}
+}
+
 func TestRunNormalizesAndNamespaces(t *testing.T) {
 	src := fakeSource{provider: "greenhouse", jobs: []sources.Job{
 		{ExternalID: "42", Title: "Senior Go Developer", Company: "Acme Inc", URL: "u", Location: "Remote", Remote: true},
