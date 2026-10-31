@@ -109,10 +109,10 @@ type Count struct {
 type Report struct {
 	Sampled   int
 	Unindexed int
-	Counts    map[Layer]map[string]Count
 	// Unreadable counts rows the projection itself refused; every rule is skipped for
 	// them, since there is no served shape to check.
 	Unreadable int
+	Counts     map[Layer]map[string]Count
 }
 
 // Fields lists every checked field in table order, for a stable report.
