@@ -149,6 +149,8 @@ import type {
   BuddyStatus,
   BuddySimilar,
   BuddyFeedPage,
+  BuddyReactions,
+  ReactionKind,
   BuddyProfile,
   BuddyActivity,
   BuddyMock,
@@ -2453,6 +2455,13 @@ export function createApi(
     if (cursor) q.set('cursor', cursor);
     return request<BuddyFeedPage>(`/api/v1/me/buddies/feed?${q}`);
   }
+  /** Sets the caller's one reaction to a feed event (replacing another); the event's reactions after it. */
+  async function reactToBuddyEvent(id: number, kind: ReactionKind): Promise<BuddyReactions> {
+    return requestData(`/api/v1/me/buddies/feed/${id}/reaction`, jsonBody('PUT', { kind }));
+  }
+  async function clearBuddyReaction(id: number): Promise<BuddyReactions> {
+    return requestData(`/api/v1/me/buddies/feed/${id}/reaction`, { method: 'DELETE' });
+  }
   async function getBuddyProfile(handle: string): Promise<BuddyProfile> {
     return requestData(`/api/v1/me/buddies/profiles/${encodeURIComponent(handle)}`);
   }
@@ -3527,6 +3536,8 @@ export function createApi(
     listBuddySimilar,
     listBuddyFeed,
     listBuddyMemberFeed,
+    reactToBuddyEvent,
+    clearBuddyReaction,
     getBuddyProfile,
     getBuddyActivity,
     listBuddyHiddenApplications,

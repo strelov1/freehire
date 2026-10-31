@@ -9,6 +9,7 @@
   import BuddyIdentity from './BuddyIdentity.svelte';
   import BuddyJobCard from './BuddyJobCard.svelte';
   import BuddyMessageButton from './BuddyMessageButton.svelte';
+  import BuddyReactionBar from './BuddyReactionBar.svelte';
 
   // One post of the buddy feed: who and what happened — an interview or an offer
   // with the posting as a link card, or one day's applications with the companies fanned
@@ -17,6 +18,8 @@
 
   const handle = $derived(post.kind === 'event' ? post.item.handle : post.handle);
   const summary = $derived(post.kind === 'event' ? post.item.card_summary : post.card_summary);
+  // A folded post takes its reactions on its first application, the event its key names.
+  const anchor = $derived(post.kind === 'event' ? post.item : post.items[0]);
 
   // The further along, the more it stands out: an offer carries the brand fill.
   const STAGES = {
@@ -93,5 +96,8 @@
         </li>
       {/each}
     </ul>
+  {/if}
+  {#if anchor}
+    <div class="-mx-1 -mb-1 border-t border-border pt-1"><BuddyReactionBar eventId={anchor.id} type={anchor.type} reactions={anchor.reactions} /></div>
   {/if}
 </article>

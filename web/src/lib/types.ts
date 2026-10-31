@@ -1199,7 +1199,10 @@ export interface BuddyMockSummary {
   rating_avg: number;
   recent: { rating: number; comment: string; topic: BuddyMockTopic; day: string }[];
 }
-export interface BuddyFeedItem { id: number; handle: string; card_summary: BuddySummary; company: BuddyCompany; job_title: string | null; job_slug: string | null; job_location: string | null; type: 'applied' | 'interview' | 'offer'; day: string }
+export type ReactionKind = 'congrats' | 'luck' | 'rooting' | 'same' | 'insight';
+/** A feed event's reactions: count per kind (no key for a kind nobody chose) and the viewer's own, "" for none. */
+export interface BuddyReactions { counts: Partial<Record<ReactionKind, number>>; mine: ReactionKind | '' }
+export interface BuddyFeedItem { id: number; handle: string; card_summary: BuddySummary; company: BuddyCompany; job_title: string | null; job_slug: string | null; job_location: string | null; reactions: BuddyReactions; type: 'applied' | 'interview' | 'offer'; day: string }
 /** How a buddy counterpart is drawn: by handle and card, and nothing at all once they are
  *  unreachable (left, blocked) — not even the handle. */
 type BuddyCounterpart =
