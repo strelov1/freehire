@@ -778,6 +778,17 @@ type InsightsRoleStat struct {
 	OpenCountPrev int32  `json:"open_count_prev"`
 }
 
+type InsightsSalaryMonthly struct {
+	Category   string      `json:"category"`
+	Currency   string      `json:"currency"`
+	Period     string      `json:"period"`
+	Month      pgtype.Date `json:"month"`
+	SampleSize int32       `json:"sample_size"`
+	P25        int32       `json:"p25"`
+	P50        int32       `json:"p50"`
+	P75        int32       `json:"p75"`
+}
+
 type InsightsSalaryStat struct {
 	Category   string `json:"category"`
 	Seniority  string `json:"seniority"`
@@ -989,6 +1000,21 @@ type JobSubmission struct {
 	SalaryPeriod   string             `json:"salary_period"`
 	EmploymentType string             `json:"employment_type"`
 	Seniority      string             `json:"seniority"`
+}
+
+type JobsEffectiveSalary struct {
+	JobID       int64              `json:"job_id"`
+	Category    string             `json:"category"`
+	Seniority   string             `json:"seniority"`
+	Countries   []string           `json:"countries"`
+	PostedAt    pgtype.Timestamptz `json:"posted_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ClosedAt    pgtype.Timestamptz `json:"closed_at"`
+	DuplicateOf pgtype.Int8        `json:"duplicate_of"`
+	IsPrivate   bool               `json:"is_private"`
+	Currency    interface{}        `json:"currency"`
+	Period      interface{}        `json:"period"`
+	Amount      interface{}        `json:"amount"`
 }
 
 type LearnedAtsDomain struct {

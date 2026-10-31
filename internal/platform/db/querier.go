@@ -1586,6 +1586,7 @@ type Querier interface {
 	// Role demand
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsRoleStats(ctx context.Context) error
+	DeleteAllInsightsSalaryMonthly(ctx context.Context) error
 	// ---------------------------------------------------------------------------
 	// Salary bands
 	// ---------------------------------------------------------------------------
@@ -4348,6 +4349,8 @@ type Querier interface {
 	// seniorities are the per-grade bands. Bands below the sample floor are already
 	// absent from the rollup.
 	ListInsightsSalaryByCategory(ctx context.Context, category string) ([]ListInsightsSalaryByCategoryRow, error)
+	// One category's stored months, every (currency, period) it has.
+	ListInsightsSalaryHistory(ctx context.Context, category string) ([]ListInsightsSalaryHistoryRow, error)
 	// All retained weekly snapshots for a set of skills (a caller's own profile
 	// skills), newest first per skill.
 	ListInsightsSkillHistory(ctx context.Context, skills []string) ([]InsightsSkillHistory, error)
@@ -5966,13 +5969,22 @@ type Querier interface {
 	// aggregate is wrapped so the "non-zero in either window" filter names the counts
 	// once instead of repeating the FILTER expressions in a HAVING.
 	RebuildInsightsRoleStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
+	// The salary history: effective-salary percentiles per (category, currency, period,
+	// month a posting was PUBLISHED), the current month and the eleven before it. Open and
+	// closed postings alike — a posting closed since still records what was offered that
+	// month — and canonical, public ones only. A month a posting belongs to is its
+	// existence date (see the file header), so one found in June but published in March
+	// counts in March. Months under @min_sample are not stored: a line through a handful
+	// of postings a month is noise drawn as a trend.
+	RebuildInsightsSalaryMonthly(ctx context.Context, minSample int32) (int64, error)
 	// Per-country salary bands (same CUBE of role scope, country from unnest).
 	RebuildInsightsSalaryStatsByCountry(ctx context.Context, minSample int32) (int64, error)
 	// Country-agnostic salary bands. CUBE(category, seniority) emits every scope the
 	// endpoint can ask for — the exact (category, seniority) band, the category-only
 	// band (seniority ''), the seniority-only band (category ''), and the overall band
 	// (both '') — all per (currency, period), which is never aggregated across. The
-	// representative figure per job is the min/max midpoint (or whichever bound is
+	// figure per job is its EFFECTIVE salary (jobs_effective_salary, migration 0216:
+	// manual, else source, else enrichment — the min/max midpoint or whichever bound is
 	// present). Only bands at/above @min_sample are stored.
 	RebuildInsightsSalaryStatsGlobal(ctx context.Context, minSample int32) (int64, error)
 	// Per-category skill demand (country '' bucket).

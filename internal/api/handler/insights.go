@@ -579,6 +579,42 @@ func (h *statsHandlers) InsightsVelocity(c *fiber.Ctx) error {
 	})
 }
 
+// salaryMonth is one month of a category's salary history on the wire.
+type salaryMonth struct {
+	Currency   string `json:"currency"`
+	Period     string `json:"period"`
+	Month      string `json:"month"` // YYYY-MM
+	SampleSize int32  `json:"sample_size"`
+	P25        int32  `json:"p25"`
+	P50        int32  `json:"p50"`
+	P75        int32  `json:"p75"`
+}
+
+// InsightsSalaryHistory serves GET /api/v1/insights/salary/history: one category's
+// monthly salary percentiles per (currency, period), from insights_salary_monthly.
+// The category is required — the history is per role by design. Aggregate-only.
+func (h *statsHandlers) InsightsSalaryHistory(c *fiber.Ctx) error {
+	category, err := parseCategory(c.Query("category"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	if category == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "category is required")
+	}
+	rows, err := h.queries.ListInsightsSalaryHistory(c.Context(), category)
+	if err != nil {
+		return err
+	}
+	data := make([]salaryMonth, len(rows))
+	for i, r := range rows {
+		data[i] = salaryMonth{
+			Currency: r.Currency, Period: r.Period, Month: r.Month.Time.Format("2006-01"),
+			SampleSize: r.SampleSize, P25: r.P25, P50: r.P50, P75: r.P75,
+		}
+	}
+	return c.JSON(fiber.Map{"data": data, "meta": fiber.Map{"category": category}})
+}
+
 // InsightsSalary serves GET /api/v1/insights/salary: salary bands for a role × country
 // scope, one entry per (currency, period). Currencies are never combined and bands
 // below the recompute's minimum sample size are absent. Aggregate-only.

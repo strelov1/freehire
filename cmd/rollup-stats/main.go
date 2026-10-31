@@ -40,6 +40,10 @@ const (
 	// band needs to be published — below it the band is suppressed as unreliable and
 	// potentially individually identifying.
 	minSalarySample = 5
+	// minSalaryMonthSample is the smallest sample one month of the salary history needs
+	// to be stored. Far above minSalarySample: a band is one figure, while the history
+	// is drawn as a line, and a line through five postings a month reads as a trend.
+	minSalaryMonthSample = 30
 	// skillHistoryRetentionWeeks bounds insights_skill_history: snapshots older than
 	// this are pruned every run, so the table stays roughly this many weeks deep.
 	skillHistoryRetentionWeeks = 26
@@ -257,6 +261,12 @@ func rebuildInsights(ctx context.Context, q *db.Queries) error {
 		return err
 	}
 	if _, err := q.RebuildInsightsSalaryStatsByCountry(ctx, minSalarySample); err != nil {
+		return err
+	}
+	if err := q.DeleteAllInsightsSalaryMonthly(ctx); err != nil {
+		return err
+	}
+	if _, err := q.RebuildInsightsSalaryMonthly(ctx, minSalaryMonthSample); err != nil {
 		return err
 	}
 
