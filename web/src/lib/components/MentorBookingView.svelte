@@ -1,12 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto, replaceState } from '$app/navigation';
+  import { onMount, type Snippet } from 'svelte';
+  import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
-  import { resolve } from '$app/paths';
-  import { api } from '#lib/api.js';
-  import { errorMessage } from '#lib/utils.js';
-  import { signinUrl } from '#lib/signin.js';
-  import { Badge, Button, Card, Skeleton } from '#lib/ui/index.js';
+  import { Badge, Card, Skeleton } from '#lib/ui/index.js';
   import {
     addMonths,
     browserTimezone,
@@ -21,9 +17,25 @@
     weekdayShortLabel,
     withSearchParams,
   } from '#lib/mentorship.js';
-  import type { Mentor, MentorSlot } from '#lib/types.js';
+  import type { MentorSlot, MentorSlots } from '#lib/types.js';
 
-  let { mentor }: { mentor: Mentor } = $props();
+  // A month of open slots and the day's hours, for whoever offers them: a mentor on their
+  // public page, or a buddy offering mock interviews. Where the slots come from and what
+  // taking one looks like are the host page's.
+  let {
+    loadSlots,
+    sessionMinutes,
+    counterpart,
+    booker,
+  }: {
+    /** Reads one window's open slots in the viewer's zone. */
+    loadSlots: (from: string, to: string, timezone: string, signal: AbortSignal) => Promise<MentorSlots>;
+    sessionMinutes: number;
+    /** Who the session is with, as the chosen-slot line names them. */
+    counterpart: string;
+    /** Taking the chosen slot. `refused` re-reads the slots after a booking that did not land. */
+    booker: Snippet<[{ slot: MentorSlot; day: string; zone: string; refused: () => void }]>;
+  } = $props();
 
   // How often an open page re-asks for the slots. Derived, not chosen: the endpoint caches
   // a computed window for one minute, so a faster poll is answered from the same entry and
@@ -110,13 +122,7 @@
     inflight = controller;
     loading = true;
     try {
-      const res = await api.getMentorSlots(
-        mentor.slug,
-        window.from,
-        window.to,
-        browserZone,
-        controller.signal,
-      );
+      const res = await loadSlots(window.from, window.to, browserZone, controller.signal);
       if (controller.signal.aborted) return;
       slots = res.slots;
       // The zone the server used, which may not be the one asked for.
@@ -156,49 +162,7 @@
     };
   });
 
-  // ---- taking the hour ----------------------------------------------------------
-
-  const signedIn = $derived(Boolean(page.data.user));
   const chosen = $derived(daySlots.find((s) => s.starts_at === selectedSlot));
-
-  let note = $state('');
-  let booking = $state(false);
-  let bookingError = $state('');
-
-  // Not promptSignIn(): that reads `page.url.search`, which lags our shallow writes, so a
-  // visitor would return from signing in with the slot no longer chosen — the one thing
-  // putting it in the URL was for. Read the address bar, which is current.
-  function signInAndComeBack() {
-    const returnTo = location.pathname + location.search;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- signinUrl() wraps resolve('/signin'); the rule can't see through the appended query
-    void goto(signinUrl({ returnTo, mode: 'login' }));
-  }
-
-  async function book() {
-    if (!chosen) return;
-    booking = true;
-    bookingError = '';
-    try {
-      const session = await api.bookMentorSession(mentor.slug, {
-        // The absolute instant, never the wall clock: this is what the server re-derives
-        // the slot from.
-        starts_at: chosen.starts_at,
-        // Recorded on the booking so the confirmation is written in the zone the seeker
-        // actually booked in — `zone`, which is what the server used, not what we asked.
-        timezone: zone,
-        note,
-      });
-      void goto(resolve('/my/mentorship/sessions/[id]', { id: session.id }));
-    } catch (e) {
-      // The hour may simply have gone: somebody else took it, or the mentor moved their
-      // availability inside the minute the slot cache holds. Re-ask rather than leaving a
-      // list that still offers it.
-      bookingError = errorMessage(e, 'That hour could not be booked.');
-      reload();
-    } finally {
-      booking = false;
-    }
-  }
 
   // From the module that owns the Monday-first order, not a second list beside it.
   const WEEKDAYS = weekdayOrder().map(weekdayShortLabel);
@@ -308,39 +272,14 @@
       <p class="text-sm">
         <span class="font-medium">{selectedDay} at {slotLocalTime(chosen)}</span>
         <span class="text-muted-foreground">
-          (UTC{chosen.utc_offset}) · {mentor.session_minutes} minutes with {mentor.name}
+          (UTC{chosen.utc_offset}) · {sessionMinutes} minutes with {counterpart}
         </span>
       </p>
-
-      {#if signedIn}
-        <label class="mt-3 block text-sm">
-          <span class="text-muted-foreground">What would you like to talk about? (optional)</span>
-          <textarea
-            bind:value={note}
-            rows="3"
-            maxlength="1000"
-            class="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-            placeholder="A sentence is plenty — it helps them prepare."
-          ></textarea>
-        </label>
-
-        <Button class="mt-3" disabled={booking} onclick={book}>
-          {booking ? 'Booking…' : 'Book this session'}
-        </Button>
-      {:else}
-        <p class="text-muted-foreground mt-3 text-sm">
-          Sign in to book. Your chosen hour is in the address, so it will still be here.
-        </p>
-        <Button class="mt-3" onclick={signInAndComeBack}>Sign in to book</Button>
-      {/if}
-
-      {#if bookingError}
-        <p class="text-destructive mt-2 text-sm">{bookingError}</p>
-      {/if}
+      {@render booker({ slot: chosen, day: selectedDay, zone, refused: reload })}
     </div>
   {/if}
 
   <p class="text-muted-foreground mt-4 text-xs">
-    Times shown in {zone}. Sessions run {mentor.session_minutes} minutes.
+    Times shown in {zone}. Sessions run {sessionMinutes} minutes.
   </p>
 </Card>

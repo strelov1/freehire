@@ -4606,7 +4606,7 @@ Before any web command in Tasks 11-12, install the linked design system first (w
 - `MentorBookingForm` props: `{ mentor: Mentor; slot: MentorSlot; zone: string; refused: () => void }`
 - Consumes: `api.replaceWeeklyAvailability`, `api.myMentorAvailability`, `api.addAvailabilityOverride`, `api.deleteAvailabilityRule`, `api.getMentorSlots`, `api.bookMentorSession` (`web/src/lib/api.ts`).
 
-- [ ] 11.1 Add the type. In `web/src/lib/types.ts`, right after the closing `}` of `export interface MentorAvailabilityRule` (line 2058), insert:
+- [x] 11.1 Add the type. In `web/src/lib/types.ts`, right after the closing `}` of `export interface MentorAvailabilityRule` (line 2058), insert:
 
 ```ts
 /** The four calls an availability editor makes. The mentor cabinet and the buddy mock page
@@ -4619,7 +4619,7 @@ export interface AvailabilityApi {
 }
 ```
 
-- [ ] 11.2 Write the failing component test `web/src/lib/components/MentorScheduleEditor.spec.ts`:
+- [x] 11.2 Write the failing component test `web/src/lib/components/MentorScheduleEditor.spec.ts`:
 
 ```ts
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
@@ -4670,7 +4670,7 @@ describe('MentorScheduleEditor', () => {
 ```
 Run: `pnpm --dir web exec vitest run src/lib/components/MentorScheduleEditor.spec.ts`. Expected: FAIL — the first test sees no call on `schedule.replaceWeek` (the component still calls `api.replaceWeeklyAvailability`), the third finds no `Nobody can book you yet.`.
 
-- [ ] 11.3 Refactor `web/src/lib/components/MentorScheduleEditor.svelte`. Replace the top of the script
+- [x] 11.3 Refactor `web/src/lib/components/MentorScheduleEditor.svelte`. Replace the top of the script
 
 ```svelte
   import { api } from '#lib/api.js';
@@ -4712,7 +4712,7 @@ with
       <p class="text-muted-foreground text-sm">{emptyMessage}</p>
 ```
 
-- [ ] 11.4 Pass the mentor API from the mentor cabinet. Replace `web/src/routes/my/mentorship/schedule/+page.svelte`'s script and editor line:
+- [x] 11.4 Pass the mentor API from the mentor cabinet. Replace `web/src/routes/my/mentorship/schedule/+page.svelte`'s script and editor line:
 
 ```svelte
 <script lang="ts">
@@ -4748,7 +4748,7 @@ and `<MentorScheduleEditor bind:rules={availability} />` with
 ```
 Run: `pnpm --dir web exec vitest run src/lib/components/MentorScheduleEditor.spec.ts`. Expected: PASS.
 
-- [ ] 11.5 Move the mentor booking form out of `MentorBookingView`. Create `web/src/lib/components/MentorBookingForm.svelte` (the logic and markup are the ones that lived in `MentorBookingView`, with `chosen` → `slot` and `reload()` → `refused()`):
+- [x] 11.5 Move the mentor booking form out of `MentorBookingView`. Create `web/src/lib/components/MentorBookingForm.svelte` (the logic and markup are the ones that lived in `MentorBookingView`, with `chosen` → `slot` and `reload()` → `refused()`):
 
 ```svelte
 <script lang="ts">
@@ -4837,7 +4837,7 @@ Run: `pnpm --dir web exec vitest run src/lib/components/MentorScheduleEditor.spe
 {/if}
 ```
 
-- [ ] 11.6 Make `web/src/lib/components/MentorBookingView.svelte` take its slots and its booking form as props.
+- [x] 11.6 Make `web/src/lib/components/MentorBookingView.svelte` take its slots and its booking form as props.
   - Replace the imports
 
 ```svelte
@@ -4927,7 +4927,7 @@ with
   </p>
 ```
 
-- [ ] 11.7 Pass the mentor's slots and form from the mentor page. In `web/src/routes/mentors/[slug]/+page.svelte` replace
+- [x] 11.7 Pass the mentor's slots and form from the mentor page. In `web/src/routes/mentors/[slug]/+page.svelte` replace
 
 ```svelte
   import MentorBookingView from '#lib/components/MentorBookingView.svelte';
@@ -4952,7 +4952,7 @@ and `  <MentorBookingView {mentor} />` with
   </MentorBookingView>
 ```
 
-- [ ] 11.8 Verify the mentor pages are unchanged in behaviour:
+- [x] 11.8 Verify the mentor pages are unchanged in behaviour:
 
 ```bash
 pnpm --dir web exec vitest run src/lib/components/MentorScheduleEditor.spec.ts src/lib/mentorship.test.ts
@@ -4961,7 +4961,7 @@ pnpm --dir web lint
 ```
 Expected: tests pass; `svelte-check` reports 0 errors; lint clean. Then, with a local stack (`make up`, `pnpm --dir web dev`), run the mentorship end-to-end story: `PLAYWRIGHT_BASE_URL=http://localhost:5173 pnpm --dir web test:e2e e2e/mentorship.spec.ts`. Expected: passes (it publishes a schedule through the editor and books through the view).
 
-- [ ] 11.9 Commit:
+- [x] 11.9 Commit:
 
 ```bash
 git add web/src/lib/types.ts web/src/lib/components/MentorScheduleEditor.svelte web/src/lib/components/MentorScheduleEditor.spec.ts web/src/lib/components/MentorBookingView.svelte web/src/lib/components/MentorBookingForm.svelte web/src/routes/my/mentorship/schedule/+page.svelte 'web/src/routes/mentors/[slug]/+page.svelte'

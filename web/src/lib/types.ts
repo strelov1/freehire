@@ -2058,6 +2058,15 @@ export interface MentorAvailabilityRule {
   closure: boolean;
 }
 
+/** The four calls an availability editor makes. The mentor cabinet and the buddy mock page
+ *  share one editor over two APIs, so the editor takes them rather than importing one. */
+export interface AvailabilityApi {
+  replaceWeek(rows: { weekday: number; start: string; end: string }[]): Promise<void>;
+  reload(): Promise<MentorAvailabilityRule[]>;
+  addOverride(date: string, start: string, end: string): Promise<MentorAvailabilityRule>;
+  remove(id: number): Promise<void>;
+}
+
 /** One labeled span of a mentor's own resolved calendar — booked, busy, free or closed —
  *  computed the same way the public slot engine decides what a seeker may book.
  *
