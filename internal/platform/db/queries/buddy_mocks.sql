@@ -233,9 +233,13 @@ ORDER BY m.starts_at
 LIMIT sqlc.arg(row_limit);
 
 -- name: RecordBuddyMockReminder :execrows
--- Claim one reminder. Zero rows means another run holds it: send only after this returns 1.
+-- Claim one reminder. Zero rows means another run holds it, or the mock was cancelled or
+-- has started since the due read: send only after this returns 1. The status is checked
+-- here, in the claim, because a batch leaves time between that read and this statement.
 INSERT INTO buddy_mock_reminders (mock_id, offset_minutes)
-VALUES (sqlc.arg(mock_id), sqlc.arg(offset_minutes))
+SELECT m.id, sqlc.arg(offset_minutes)::int
+FROM buddy_mocks m
+WHERE m.id = sqlc.arg(mock_id) AND m.status = 'confirmed' AND m.starts_at > now()
 ON CONFLICT DO NOTHING;
 
 -- name: DeleteBuddyMockReminder :execrows

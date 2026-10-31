@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -46,8 +47,10 @@ func mockError(err error) error {
 	case errors.Is(err, buddy.ErrMockNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "mock interview not found")
 	case errors.Is(err, slots.ErrNoOwnerZone):
-		// A stored zone that no longer resolves is a broken row, not a bad request.
-		return fiber.NewError(fiber.StatusInternalServerError, "this member's schedule is misconfigured")
+		// A stored zone that no longer resolves is a broken row, not a bad request. Wrapped,
+		// not a fiber.Error, so Sentry keeps the host and the zone; the caller gets RenderError's
+		// generic 500.
+		return fmt.Errorf("buddy mock: this member's schedule is misconfigured: %w", err)
 	}
 	return buddyError(err)
 }

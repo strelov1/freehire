@@ -6177,7 +6177,9 @@ type Querier interface {
 	RecordBoardSuccess(ctx context.Context, arg RecordBoardSuccessParams) (int32, error)
 	// Closes out one (user, campaign) whether or not the send worked.
 	RecordBroadcastEmail(ctx context.Context, arg RecordBroadcastEmailParams) error
-	// Claim one reminder. Zero rows means another run holds it: send only after this returns 1.
+	// Claim one reminder. Zero rows means another run holds it, or the mock was cancelled or
+	// has started since the due read: send only after this returns 1. The status is checked
+	// here, in the claim, because a batch leaves time between that read and this statement.
 	RecordBuddyMockReminder(ctx context.Context, arg RecordBuddyMockReminderParams) (int64, error)
 	// Record that this company page was announced to this engine. Idempotent, for the same
 	// reason its job sibling is: the row is what stops a re-run after a partial failure from

@@ -6,6 +6,12 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/strelov1/freehire/internal/engage/buddy"
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 func TestAMockBooked13HoursAheadGetsOnlyTheOneHourReminder(t *testing.T) {
@@ -78,5 +84,33 @@ func TestAStartedMockIsNotReminded(t *testing.T) {
 
 	if stats, err := mocks.SendDueMockReminders(context.Background(), 100); err != nil || stats.Sent != 0 {
 		t.Fatalf("stats = %+v, %v", stats, err)
+	}
+}
+
+// cancelBeforeClaim cancels the mock between the due read and the claim, the window a
+// long batch leaves open.
+type cancelBeforeClaim struct {
+	*buddy.QueriesRepository
+	pool *pgxpool.Pool
+}
+
+func (c *cancelBeforeClaim) ClaimMockReminder(ctx context.Context, id uuid.UUID, offset time.Duration) (bool, error) {
+	if _, err := c.pool.Exec(ctx, `UPDATE buddy_mocks SET status = 'cancelled', cancelled_at = now(),
+		cancelled_by = host_user_id, cancel_reason = 'participant' WHERE id = $1::uuid`, id.String()); err != nil {
+		return false, err
+	}
+	return c.QueriesRepository.ClaimMockReminder(ctx, id, offset)
+}
+
+func TestAMockCancelledMidRunIsNotReminded(t *testing.T) {
+	pool, svc, _, _ := mockSetup(t)
+	n := &recordingNotifier{}
+	mocks := buddy.NewMockService(svc, &cancelBeforeClaim{buddy.NewQueriesRepository(db.New(pool)), pool}, n)
+	host, _ := joined(t, pool, svc, "host@example.test")
+	guest, _ := joined(t, pool, svc, "guest@example.test")
+	seedMock(t, pool, host, guest, time.Now().Add(30*time.Minute))
+
+	if stats, err := mocks.SendDueMockReminders(context.Background(), 100); err != nil || stats.Sent != 0 || stats.Failed != 0 || len(n.reminded) != 0 {
+		t.Fatalf("stats = %+v, %v, reminded %v; a cancelled mock must not be reminded", stats, err, n.reminded)
 	}
 }

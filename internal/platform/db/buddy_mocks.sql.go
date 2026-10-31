@@ -632,18 +632,22 @@ func (q *Queries) ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksF
 
 const recordBuddyMockReminder = `-- name: RecordBuddyMockReminder :execrows
 INSERT INTO buddy_mock_reminders (mock_id, offset_minutes)
-VALUES ($1, $2)
+SELECT m.id, $1::int
+FROM buddy_mocks m
+WHERE m.id = $2 AND m.status = 'confirmed' AND m.starts_at > now()
 ON CONFLICT DO NOTHING
 `
 
 type RecordBuddyMockReminderParams struct {
-	MockID        pgtype.UUID `json:"mock_id"`
 	OffsetMinutes int32       `json:"offset_minutes"`
+	MockID        pgtype.UUID `json:"mock_id"`
 }
 
-// Claim one reminder. Zero rows means another run holds it: send only after this returns 1.
+// Claim one reminder. Zero rows means another run holds it, or the mock was cancelled or
+// has started since the due read: send only after this returns 1. The status is checked
+// here, in the claim, because a batch leaves time between that read and this statement.
 func (q *Queries) RecordBuddyMockReminder(ctx context.Context, arg RecordBuddyMockReminderParams) (int64, error) {
-	result, err := q.db.Exec(ctx, recordBuddyMockReminder, arg.MockID, arg.OffsetMinutes)
+	result, err := q.db.Exec(ctx, recordBuddyMockReminder, arg.OffsetMinutes, arg.MockID)
 	if err != nil {
 		return 0, err
 	}
