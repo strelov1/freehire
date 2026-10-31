@@ -18,25 +18,27 @@ import (
 // fakeQueries answers each query from a canned value, so collect's assembly and error
 // handling are testable without a database. A non-nil err field fails that one query.
 type fakeQueries struct {
-	search       db.SearchOutboxMetricsRow
-	searchDelete db.SearchDeleteOutboxMetricsRow
-	enrich       db.EnrichmentOutboxMetricsRow
-	semantic     db.SemanticOutboxMetricsRow
-	mail         db.MailClassificationOutboxMetricsRow
-	applyForms   db.ApplyFormOutboxMetricsRow
-	adzuna       db.AdzunaDescriptionOutboxMetricsRow
-	autoApply    db.AutoApplyQueueMetricsRow
-	pushTickets  db.PushTicketOutboxMetricsRow
-	apple        db.AppleRevocationJobMetricsRow
-	newest       pgtype.Timestamptz
-	health       []db.ProviderIngestHealthRow
-	ingest       []db.IngestDuplicationMetricsRow
-	ingestErr    error
-	quality      []db.SourceQualityMetricsRow
-	qualityErr   error
-	notify       []db.NotifyBacklogMetricsRow
-	newestErr    error
-	searchErr    error
+	search         db.SearchOutboxMetricsRow
+	searchDelete   db.SearchDeleteOutboxMetricsRow
+	enrich         db.EnrichmentOutboxMetricsRow
+	semantic       db.SemanticOutboxMetricsRow
+	mail           db.MailClassificationOutboxMetricsRow
+	applyForms     db.ApplyFormOutboxMetricsRow
+	adzuna         db.AdzunaDescriptionOutboxMetricsRow
+	autoApply      db.AutoApplyQueueMetricsRow
+	pushTickets    db.PushTicketOutboxMetricsRow
+	apple          db.AppleRevocationJobMetricsRow
+	newest         pgtype.Timestamptz
+	health         []db.ProviderIngestHealthRow
+	ingest         []db.IngestDuplicationMetricsRow
+	ingestErr      error
+	quality        []db.SourceQualityMetricsRow
+	qualityErr     error
+	boilerplate    []db.EmploymentBoilerplateCandidatesRow
+	boilerplateErr error
+	notify         []db.NotifyBacklogMetricsRow
+	newestErr      error
+	searchErr      error
 }
 
 func (f fakeQueries) NotifyBacklogMetrics(context.Context) ([]db.NotifyBacklogMetricsRow, error) {
@@ -97,6 +99,10 @@ func (f fakeQueries) IngestDuplicationMetrics(context.Context) ([]db.IngestDupli
 
 func (f fakeQueries) SourceQualityMetrics(context.Context) ([]db.SourceQualityMetricsRow, error) {
 	return f.quality, f.qualityErr
+}
+
+func (f fakeQueries) EmploymentBoilerplateCandidates(context.Context) ([]db.EmploymentBoilerplateCandidatesRow, error) {
+	return f.boilerplate, f.boilerplateErr
 }
 
 func populatedQueries() fakeQueries {
@@ -378,6 +384,84 @@ func TestCollectCarriesIngestVolume(t *testing.T) {
 // A failure here aborts the pass, like every other query: publishing the other families
 // without this one is how a silent corruption goes unwatched while the exposition still
 // looks healthy.
+func TestCountEmploymentBoilerplate(t *testing.T) {
+	rows := []db.EmploymentBoilerplateCandidatesRow{
+		{EmploymentType: "part_time", Title: "Manager", Description: "Salaries for part-time roles will be pro-rated."},
+		{EmploymentType: "full_time", Title: "Engineer", Description: "This is a full-time role."},
+		{EmploymentType: "full_time", Title: "Engineer", Description: "Applicants must be a permanent resident."},
+		{EmploymentType: "contract", Title: "Counsel", Description: "You will advise on breach of contract claims."},
+	}
+	got := countEmploymentBoilerplate(rows)
+	if got.sampleSize != 4 || got.truncated {
+		t.Fatalf("sample = %d truncated %v, want 4/false", got.sampleSize, got.truncated)
+	}
+	want := map[string]int64{
+		"part_time_pay_policy": 1,
+		"full_time_pay_policy": 0,
+		"contract_boilerplate": 1,
+		"permanent_status":     1,
+	}
+	if len(got.counts) != len(want) {
+		t.Fatalf("kinds = %d, want %d", len(got.counts), len(want))
+	}
+	for _, c := range got.counts {
+		if c.count != want[c.kind] {
+			t.Errorf("kind %s = %d, want %d", c.kind, c.count, want[c.kind])
+		}
+	}
+}
+
+func TestCountEmploymentBoilerplateCapsTheSample(t *testing.T) {
+	rows := make([]db.EmploymentBoilerplateCandidatesRow, 501)
+	for i := range rows {
+		rows[i] = db.EmploymentBoilerplateCandidatesRow{
+			EmploymentType: "part_time", Title: "Manager",
+			Description: "Salaries for part-time roles will be pro-rated.",
+		}
+	}
+	got := countEmploymentBoilerplate(rows)
+	if !got.truncated || got.sampleSize != 500 {
+		t.Fatalf("sample = %d truncated %v, want 500/true", got.sampleSize, got.truncated)
+	}
+	for _, c := range got.counts {
+		if c.kind == "part_time_pay_policy" && c.count != 500 {
+			t.Errorf("part_time_pay_policy = %d, want 500", c.count)
+		}
+	}
+}
+
+func TestCollectCountsEmploymentBoilerplate(t *testing.T) {
+	q := fakeQueries{boilerplate: []db.EmploymentBoilerplateCandidatesRow{
+		{EmploymentType: "part_time", Title: "Manager", Description: "Salaries for part-time roles will be pro-rated."},
+	}}
+	got, err := collect(context.Background(), q)
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if got.boilerplate.sampleSize != 1 || got.boilerplate.truncated {
+		t.Fatalf("sample = %+v, want size 1", got.boilerplate)
+	}
+	var found bool
+	for _, c := range got.boilerplate.counts {
+		if c.kind == "part_time_pay_policy" {
+			found = true
+			if c.count != 1 {
+				t.Errorf("part_time_pay_policy = %d, want 1", c.count)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("part_time_pay_policy was not published")
+	}
+}
+
+func TestCollectFailsWhenEmploymentBoilerplateFails(t *testing.T) {
+	q := fakeQueries{boilerplateErr: errors.New("boom")}
+	if _, err := collect(context.Background(), q); err == nil {
+		t.Fatal("collect returned no error when the employment-boilerplate query failed")
+	}
+}
+
 func TestCollectFailsWhenIngestVolumeFails(t *testing.T) {
 	q := fakeQueries{ingestErr: errors.New("boom")}
 	if _, err := collect(context.Background(), q); err == nil {

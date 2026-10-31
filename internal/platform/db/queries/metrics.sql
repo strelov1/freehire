@@ -446,3 +446,27 @@ SELECT source, open_jobs,
 FROM source_stats
 WHERE missing_work_mode_jobs IS NOT NULL
 ORDER BY source;
+
+-- name: EmploymentBoilerplateCandidates :many
+-- Newest open postings written in the last ten minutes, capped, so cmd/queue-metrics
+-- can ask jobfacts whether a stored employment_type is carried only by boilerplate.
+--
+-- The window matches IngestDuplicationMetrics and rides the same open-created index.
+-- The cap is 501 rather than unbounded because each row de-TOASTs a description, and
+-- this file's bar is a query that can run every minute beside ingest. 500 is what the
+-- gauge examines; the extra row is how the worker tells a full window from a capped
+-- one without a second scan. Newest first, so a sustained mislabel is in the sample
+-- even when the cap binds.
+--
+-- The phrase list stays in jobfacts. A SQL copy would drift from the matcher the
+-- catalogue actually uses.
+--
+-- NOT is_private: a pasted JD is not catalogue intake (internal/job/privatejob).
+SELECT j.employment_type, j.title, j.description
+FROM jobs j
+WHERE j.closed_at IS NULL
+  AND NOT j.is_private
+  AND j.created_at > now() - interval '10 minutes'
+  AND j.employment_type IN ('part_time', 'full_time', 'contract')
+ORDER BY j.created_at DESC, j.id DESC
+LIMIT 501;

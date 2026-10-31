@@ -2004,6 +2004,21 @@ type Querier interface {
 	// purpose, like the folded-slug bounds beside it: the pass is run by hand and rarely, and a wrong
 	// "0 remaining" would end it early.
 	DuplicateMarkerOwnerBackfillBounds(ctx context.Context) (DuplicateMarkerOwnerBackfillBoundsRow, error)
+	// Newest open postings written in the last ten minutes, capped, so cmd/queue-metrics
+	// can ask jobfacts whether a stored employment_type is carried only by boilerplate.
+	//
+	// The window matches IngestDuplicationMetrics and rides the same open-created index.
+	// The cap is 501 rather than unbounded because each row de-TOASTs a description, and
+	// this file's bar is a query that can run every minute beside ingest. 500 is what the
+	// gauge examines; the extra row is how the worker tells a full window from a capped
+	// one without a second scan. Newest first, so a sustained mislabel is in the sample
+	// even when the cap binds.
+	//
+	// The phrase list stays in jobfacts. A SQL copy would drift from the matcher the
+	// catalogue actually uses.
+	//
+	// NOT is_private: a pasted JD is not catalogue intake (internal/job/privatejob).
+	EmploymentBoilerplateCandidates(ctx context.Context) ([]EmploymentBoilerplateCandidatesRow, error)
 	// Re-enables a user-disabled (or auto-disabled) webhook destination without
 	// changing its URL. Resets consecutive_failures for the same reason
 	// UpsertWebhookConfig does: re-enabling is a fresh start, not a standing
@@ -7844,6 +7859,8 @@ type Querier interface {
 	// is a pure function of the raw fields, so the write is idempotent. COALESCE maps a nil
 	// array arg to '{}' for the NOT NULL array columns; work_mode is written as given by the
 	// caller, which preserves an already-set (possibly adapter-structured) value.
+	// employment_type is likewise the caller's: a stored type is kept, except a part_time
+	// the text parser now attributes only to a pay-policy sentence (jobderive.RetainEmploymentType).
 	//
 	// updated_at is bumped ONLY when role_fingerprint actually moves (the SET clause reads
 	// the pre-update row, so the guard compares the stored fingerprint to the new one): a

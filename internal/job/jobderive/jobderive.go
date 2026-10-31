@@ -320,6 +320,13 @@ func Derive(in Input) Derived {
 	}
 }
 
+func RetainEmploymentType(stored, title, description string) string {
+	if stored == "part_time" && jobfacts.PartTimePayPolicyOnly(title, description) {
+		return ""
+	}
+	return stored
+}
+
 // deriveRequiresClearance lifts the dictionary's boolean into the column's tri-state.
 // Only a positive is asserted: a description the dictionary does not mark yields nil
 // (unknown), never false. The dictionary reports "not stated", and storing that as a

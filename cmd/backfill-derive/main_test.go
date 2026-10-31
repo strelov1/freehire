@@ -150,7 +150,8 @@ func expectedDerived(j db.Job) db.UpdateJobDerivedParams {
 	d := jobderive.Derive(jobderive.Input{
 		Title: j.Title, Company: j.Company, Source: j.Source, ExternalID: j.ExternalID,
 		Location: j.Location, Description: j.Description, WorkMode: j.WorkMode,
-		Countries: countries, Regions: regions,
+		EmploymentType: jobderive.RetainEmploymentType(j.EmploymentType, j.Title, j.Description),
+		Countries:      countries, Regions: regions,
 	})
 	fingerprint := jobhash.RoleFingerprint(db.UpsertJobParams{
 		CompanySlug: d.CompanySlug, Title: j.Title, Description: j.Description,
@@ -220,6 +221,36 @@ func TestBackfill_RewritesAllDerivedInOnePass(t *testing.T) {
 	if got.RoleFingerprint.String == "" || got.CompanySlug == "" {
 		t.Errorf("fingerprint/company slug not derived: fp=%q company=%q",
 			got.RoleFingerprint.String, got.CompanySlug)
+	}
+}
+
+func TestDeriveRow_EmploymentTypeSignal(t *testing.T) {
+	const disclaimer = "Salaries for part-time roles will be pro-rated based on number of hours regularly worked."
+	base := func(stored string) db.Job {
+		return db.Job{
+			ID: 1, Title: "Manager, Capital Data Analytics", Company: "Bank of Montreal",
+			Source: "workday", ExternalID: "bmo:1", Location: "Toronto, ON, CAN",
+			Description: disclaimer, EmploymentType: stored,
+		}
+	}
+	fullTime := base("full_time")
+	got, _, _ := deriveRow(fullTime, nil)
+	if got.EmploymentType != "full_time" {
+		t.Errorf("ATS full_time = %q, want full_time", got.EmploymentType)
+	}
+	poisoned := base("part_time")
+	got, changed, _ := deriveRow(poisoned, nil)
+	if got.EmploymentType != "" {
+		t.Errorf("disclaimer-only part_time = %q, want empty", got.EmploymentType)
+	}
+	if !changed {
+		t.Error("clearing the false part_time should count as a change")
+	}
+	atsOnly := base("part_time")
+	atsOnly.Description = "Build the risk platform."
+	got, _, _ = deriveRow(atsOnly, nil)
+	if got.EmploymentType != "part_time" {
+		t.Errorf("ATS part_time with no phrase = %q, want part_time", got.EmploymentType)
 	}
 }
 

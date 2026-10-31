@@ -18,7 +18,8 @@
 // Indonesia postings written "City, CC") — the recompute below is what decides, and a
 // row whose derived value doesn't change costs one skipped write. Idempotent for the
 // same reason cmd/backfill-derive is: every derived column is a pure function of the
-// row's own raw fields, so a second run rewrites nothing.
+// row's own raw fields, except a stored employment_type, which is kept
+// (jobderive.RetainEmploymentType). A second run rewrites nothing.
 //
 // Follow with a full `make reindex` — none of these columns are part of content_hash,
 // so an incremental search-drain push would not reach rows already in the index
@@ -139,14 +140,15 @@ func loadAliasRegistry(ctx context.Context, queries *db.Queries) (map[string]str
 // package around.
 func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedParams, changed, slugMoved bool) {
 	d := jobderive.Derive(jobderive.Input{
-		Title:       j.Title,
-		Company:     j.Company,
-		Source:      j.Source,
-		ExternalID:  j.ExternalID,
-		Location:    j.Location,
-		Description: j.Description,
-		WorkMode:    j.WorkMode,
-		IsTechHint:  sources.ProfessionConfirmsTech(j.Source, j.ExternalID),
+		Title:          j.Title,
+		Company:        j.Company,
+		Source:         j.Source,
+		ExternalID:     j.ExternalID,
+		Location:       j.Location,
+		Description:    j.Description,
+		WorkMode:       j.WorkMode,
+		EmploymentType: jobderive.RetainEmploymentType(j.EmploymentType, j.Title, j.Description),
+		IsTechHint:     sources.ProfessionConfirmsTech(j.Source, j.ExternalID),
 	})
 	if canonical, ok := canon[normalize.FoldSlug(d.CompanySlug)]; ok {
 		d.CompanySlug = canonical

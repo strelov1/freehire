@@ -105,6 +105,18 @@ freehire_provider_boards{provider="gupy",state="healthy"} 0
 freehire_provider_boards{provider="gupy",state="failing"} 2
 freehire_provider_boards{provider="gupy",state="cooled"} 2
 freehire_provider_boards{provider="gupy",state="uncrawled"} 3324
+# HELP freehire_employment_boilerplate Open postings in the recent sample whose stored employment type is explained only by boilerplate the dictionary ignores.
+# TYPE freehire_employment_boilerplate gauge
+freehire_employment_boilerplate{kind="part_time_pay_policy"} 0
+freehire_employment_boilerplate{kind="full_time_pay_policy"} 0
+freehire_employment_boilerplate{kind="contract_boilerplate"} 0
+freehire_employment_boilerplate{kind="permanent_status"} 0
+# HELP freehire_employment_boilerplate_sample_size Open postings examined for an employment-type boilerplate label, at most 500.
+# TYPE freehire_employment_boilerplate_sample_size gauge
+freehire_employment_boilerplate_sample_size 0
+# HELP freehire_employment_boilerplate_truncated 1 when the employment-type boilerplate sample hit its cap and older rows in the window were not examined.
+# TYPE freehire_employment_boilerplate_truncated gauge
+freehire_employment_boilerplate_truncated 0
 `
 
 func TestRenderMatchesThePublishedContract(t *testing.T) {
@@ -195,6 +207,9 @@ func TestRenderIsValidPrometheusTextFormat(t *testing.T) {
 		"freehire_provider_boards":                         8,
 		"freehire_notify_pending_subscriptions":            2,
 		"freehire_notify_oldest_pending_age_seconds":       2,
+		"freehire_employment_boilerplate":                  4,
+		"freehire_employment_boilerplate_sample_size":      1,
+		"freehire_employment_boilerplate_truncated":        1,
 	}
 	for name, wantSamples := range want {
 		family, ok := families[name]

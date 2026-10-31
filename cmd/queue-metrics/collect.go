@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/job/jobfacts"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
@@ -31,6 +32,16 @@ type metricsQueries interface {
 	NotifyBacklogMetrics(context.Context) ([]db.NotifyBacklogMetricsRow, error)
 	IngestDuplicationMetrics(context.Context) ([]db.IngestDuplicationMetricsRow, error)
 	SourceQualityMetrics(context.Context) ([]db.SourceQualityMetricsRow, error)
+	EmploymentBoilerplateCandidates(context.Context) ([]db.EmploymentBoilerplateCandidatesRow, error)
+}
+
+const employmentBoilerplateCap = 500
+
+var employmentBoilerplateKinds = []string{
+	"part_time_pay_policy",
+	"full_time_pay_policy",
+	"contract_boilerplate",
+	"permanent_status",
 }
 
 // collect runs one measurement pass. Any query failure aborts the pass: a partial
@@ -158,6 +169,10 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 			measuredAt: r.MeasuredAt.Time,
 		}
 	}
+	candidates, err := q.EmploymentBoilerplateCandidates(ctx)
+	if err != nil {
+		return snapshot{}, fmt.Errorf("employment boilerplate metrics: %w", err)
+	}
 
 	return snapshot{
 		// Every queue in the pipeline, because a queue this worker does not measure has
@@ -192,7 +207,28 @@ func collect(ctx context.Context, q metricsQueries) (snapshot, error) {
 		providers:           providers,
 		ingest:              ingest,
 		sources:             sources,
+		boilerplate:         countEmploymentBoilerplate(candidates),
 	}, nil
+}
+
+func countEmploymentBoilerplate(rows []db.EmploymentBoilerplateCandidatesRow) employmentBoilerplate {
+	truncated := len(rows) > employmentBoilerplateCap
+	if truncated {
+		rows = rows[:employmentBoilerplateCap]
+	}
+	counts := map[string]int64{}
+	for _, row := range rows {
+		kind := jobfacts.EmploymentBoilerplateKind(row.EmploymentType, row.Title, row.Description)
+		if kind == "" {
+			continue
+		}
+		counts[kind]++
+	}
+	out := employmentBoilerplate{sampleSize: int64(len(rows)), truncated: truncated}
+	for _, kind := range employmentBoilerplateKinds {
+		out.counts = append(out.counts, boilerplateCount{kind: kind, count: counts[kind]})
+	}
+	return out
 }
 
 // newestJobTime reports when the catalogue last gained an open posting, or the zero time

@@ -30,8 +30,12 @@
 // never starves the live API.
 //
 // work_mode is preserved when already set: jobderive keeps a row's existing (possibly
-// adapter-structured) work_mode over the parsed-location hint. The other
-// structured-source facets are NOT preserved: an adapter that emits a grade,
+// adapter-structured) work_mode over the parsed-location hint. employment_type is
+// preserved the same way (jobderive.RetainEmploymentType), except a stored part_time
+// whose only textual evidence is a pay-policy sentence ("salaries for part-time roles
+// will be pro-rated"): that value is the false positive, and keeping it would freeze
+// the mislabel. An ATS part_time whose description never says the words is kept.
+// The other structured-source facets are NOT preserved: an adapter that emits a grade,
 // category, skills, or required-experience directly (e.g. getmatch) supplies those
 // only at ingest, and this command re-derives seniority/category/skills/
 // experience_years_min from the stored description columns — so running it
@@ -342,15 +346,16 @@ func runOutcome(pass backfillRun, orphaned int64, err error) (string, int) {
 func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedParams, changed, slugMoved bool) {
 	storedCountries, storedRegions := storedGeography(j)
 	d := jobderive.Derive(jobderive.Input{
-		Title:       j.Title,
-		Company:     j.Company,
-		Source:      j.Source,
-		ExternalID:  j.ExternalID,
-		Location:    j.Location,
-		Description: j.Description,
-		WorkMode:    j.WorkMode, // preserves a set work_mode (jobderive precedence)
-		Countries:   storedCountries,
-		Regions:     storedRegions,
+		Title:          j.Title,
+		Company:        j.Company,
+		Source:         j.Source,
+		ExternalID:     j.ExternalID,
+		Location:       j.Location,
+		Description:    j.Description,
+		WorkMode:       j.WorkMode, // preserves a set work_mode (jobderive precedence)
+		EmploymentType: jobderive.RetainEmploymentType(j.EmploymentType, j.Title, j.Description),
+		Countries:      storedCountries,
+		Regions:        storedRegions,
 		// Recovers the ingest-time IsTechHint from the stored row, which never re-crawls
 		// to learn it fresh: without this, a Profession itdev/itops row whose title the
 		// dictionary cannot resolve would have is_tech silently rederived back to
