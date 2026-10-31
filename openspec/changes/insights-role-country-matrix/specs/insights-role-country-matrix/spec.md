@@ -66,18 +66,18 @@ all-countries bucket. The response SHALL be aggregate-only.
 ### Requirement: Role × country grid on the insights hub
 
 The `/insights` page SHALL render the grid above the category cards, server-side, as
-a table: categories as rows ordered by all-countries open count, an all-countries
+a table: categories as rows ordered by all-countries open count — only categories that
+have a role landing, since the unsearchable `other` and retired values would make rows
+whose every link opens an empty search — an all-countries
 column first and then the endpoint's countries in its order. It SHALL show the 15
 largest categories and offer to show all of them.
 
-Every cell SHALL be a link. A cell whose category has a role landing and whose open
-count is at least TWICE the role landing's publication floor (`MIN_PAIR_OPEN`) SHALL
+Every cell SHALL be a link. A cell whose open count is at least TWICE the role landing's publication floor (`MIN_PAIR_OPEN`) SHALL
 link to that `(category, country)` role landing; any other cell SHALL link to the job
 search filtered to that category and country. The margin exists because the landing
 gates on the live search count while the grid reads the rollup, and the two differ:
 a cell linked at the bare floor could point at a page that answers 404. An
-all-countries cell SHALL link to the category's country table (`/roles/<category>`)
-when the category has a landing, otherwise to the job search for the category. A row
+all-countries cell SHALL link to the category's country table (`/roles/<category>`). A row
 heading SHALL link to that category's insights page and a column heading to the job
 search for that country.
 
@@ -102,6 +102,12 @@ search for that country.
 
 - **WHEN** a visitor asks to see all categories
 - **THEN** every category in the rollup appears as a row
+
+#### Scenario: Categories without a landing are not rows
+
+- **WHEN** the rollup holds cells for `other` or for a retired category
+- **THEN** the grid draws no row for it, while the column totals still include its
+  postings
 
 ### Requirement: Open-count and growth views
 

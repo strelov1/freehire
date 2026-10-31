@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
+  import RoleCountryGrid from '#lib/components/RoleCountryGrid.svelte';
   import Seo from '#lib/components/Seo.svelte';
   import { breadcrumbJsonLd, collectionPageJsonLd, jsonLdScript } from '#lib/seo.js';
   import type { PageData } from './$types';
@@ -8,6 +9,13 @@
   let { data }: { data: PageData } = $props();
 
   const origin = $derived(page.url.origin);
+  // A card's count comes from the grid's all-countries column when the grid loaded. The
+  // gate's figure counts only postings with a resolved seniority (about a quarter of
+  // them), so beside the grid it would state a second, much smaller number for the same
+  // role on the same page.
+  const gridOpen = $derived(
+    new Map((data.grid?.cells ?? []).filter((c) => c.country === '').map((c) => [c.category, c.open_count])),
+  );
   const canonical = $derived(`${origin}/insights`);
   const description =
     'Aggregate job-market data from freehire: salaries, in-demand skills, and hiring demand for every tech category.';
@@ -63,6 +71,10 @@
     <span aria-hidden="true" class="text-muted-foreground">→</span>
   </a>
 
+  {#if data.grid}
+    <RoleCountryGrid data={data.grid} />
+  {/if}
+
   {#if data.covered.length === 0}
     <p class="mt-8 text-muted-foreground">Insights are being computed — check back shortly.</p>
   {:else}
@@ -70,7 +82,7 @@
       {#each data.covered as c (c.category)}
         <div class="rounded-lg border border-border p-4">
           <h2 class="text-lg font-semibold text-foreground">{c.label}</h2>
-          <p class="mt-0.5 text-xs text-muted-foreground">{c.openCount.toLocaleString('en-US')} open roles</p>
+          <p class="mt-0.5 text-xs text-muted-foreground">{(gridOpen.get(c.category) ?? c.openCount).toLocaleString('en-US')} open roles</p>
           <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <a href={resolve('/insights/salary/[category]', { category: c.category })} class="text-brand-strong hover:underline">Salaries</a>
             <a href={resolve('/insights/skills/[category]', { category: c.category })} class="text-brand-strong hover:underline">Skills</a>

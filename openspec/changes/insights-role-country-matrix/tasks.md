@@ -22,14 +22,14 @@
 
 ## 4. Page
 
-- [ ] 4.1 Pure helpers in `web/src/lib/` with unit tests: column share, growth percent with the `< 50` floor, ±100% clamp for shading, cell href (pair landing at ≥ 2 × `MIN_PAIR_OPEN` with a landing, else `/jobs` search; all-countries → `/roles/<slug>`)
-- [ ] 4.2 API client method + types for the endpoint; fetch it in `web/src/routes/insights/+page.server.ts` beside the gate; hide the grid when `data` is empty
-- [ ] 4.3 `RoleCountryGrid.svelte`: semantic `<table>`, sticky first column, open/growth switch, "show all" beyond 15 rows, ▲/▼ markers, caveat line; design-system tokens only — run the `impeccable` skill for the visual pass
-- [ ] 4.4 Verify SSR output without JS (curl the page, grep the table and a pair-landing href); `pnpm check` and lint in `web/`
-- [ ] 4.5 Look at it in a browser at desktop and phone widths against the local web pointed at prod API; screenshot both views
+- [x] 4.1 Pure helpers in `web/src/lib/` with unit tests: column share, growth percent with the `< 50` floor, ±100% clamp for shading, cell href (pair landing at ≥ 2 × `MIN_PAIR_OPEN` with a landing, else `/jobs` search; all-countries → `/roles/<slug>`)
+- [x] 4.2 API client method + types for the endpoint; fetch it in `web/src/routes/insights/+page.server.ts` beside the gate; hide the grid when `data` is empty
+- [x] 4.3 `RoleCountryGrid.svelte`: semantic `<table>`, sticky first column, open/growth switch, "show all" beyond 15 rows, ▲/▼ markers, caveat line; design-system tokens only — run the `impeccable` skill for the visual pass
+- [x] 4.4 Verify SSR output without JS (curl the page, grep the table and a pair-landing href); `pnpm check` and lint in `web/`
+- [x] 4.5 Look at it in a browser at desktop and phone widths against the local web pointed at prod API; screenshot both views
 
 ## 5. Ship
 
-- [ ] 5.1 Before merge: `EXPLAIN` (no `ANALYZE`) the two new rebuild statements on prod and compare the plan with `RebuildInsightsRoleStatsByCountry`'s; read the last `rollup-stats` run duration from its journal so the extra pass's cost is known, not assumed
+- [x] 5.1 Before merge: `EXPLAIN` (no `ANALYZE`) the two new rebuild statements on prod and compare the plan with `RebuildInsightsRoleStatsByCountry`'s; read the last `rollup-stats` run duration from its journal so the extra pass's cost is known, not assumed
 - [ ] 5.2 PR with the healthcare before/after growth figures in the description; read CodeRabbit, fix valid findings
 - [ ] 5.3 Merge, deploy, run `rollup-stats` once, check `/insights` grid and `/insights/roles/healthcare` growth on prod

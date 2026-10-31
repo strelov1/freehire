@@ -209,6 +209,20 @@ export interface SitemapEntry {
 }
 
 /** Aggregate market-insight wire shapes (the /api/v1/insights/* reads). */
+/** One cell of the role × country grid; `country` is '' for the all-countries column. */
+export interface InsightRoleCountryCell {
+  category: string;
+  country: string;
+  open_count: number;
+  open_count_prev: number;
+}
+
+/** The grid: its cells, and the countries the endpoint chose as columns, largest first. */
+export interface InsightRoleCountries {
+  cells: InsightRoleCountryCell[];
+  countries: string[];
+}
+
 export interface InsightRole {
   category: string;
   seniority: string;
@@ -1164,6 +1178,14 @@ export function createApi(
       `/api/v1/insights/roles?${insightsQuery({ category, seniority })}`,
     );
     return rows[0] ?? null;
+  }
+
+  /** The role × country grid. The endpoint picks the columns (its default ten). */
+  async function insightsRoleCountries(): Promise<InsightRoleCountries> {
+    const res = await request<{ data: InsightRoleCountryCell[]; meta: { countries: string[] } }>(
+      '/api/v1/insights/role-countries',
+    );
+    return { cells: res.data, countries: res.meta.countries };
   }
 
   /** Ranked skills, optionally scoped by category or country (not both). */
@@ -3241,6 +3263,7 @@ export function createApi(
     decideMentorProfile,
     searchCities,
     insightsRoles,
+    insightsRoleCountries,
     insightsRole,
     insightsSkills,
     insightsSalaryByCategory,
