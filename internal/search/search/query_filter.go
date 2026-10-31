@@ -115,9 +115,8 @@ const EquityParam = "equity"
 const EquityNotStated = "not_stated"
 
 // ClearanceLevelUnspecified is the reserved value of the `clearance_levels` facet that
-// selects postings with no explicit reference to a clearance — the SPA's "No explicit
-// reference to clearance" chip. Like RegionUnspecified it ORs with real levels in the
-// same group and supports exclude.
+// selects postings with no detected clearance requirement. Like RegionUnspecified it
+// ORs with real levels in the same group and supports exclude.
 //
 // It is answered from requires_clearance, not from the levels attribute. The two are
 // written from one reading of the description (jobderive), so "no level" and "not
@@ -324,6 +323,8 @@ func withinDays(n int) bool { return n > 0 && n <= maxWithinDays }
 // skill is named by IgnoredValues rather than dropped here).
 func facetValue(param, val string) string {
 	switch param {
+	case "clearance_levels":
+		return strings.ToLower(strings.TrimSpace(val))
 	case "cities":
 		if name, ok := location.CanonicalCity(val); ok {
 			return name

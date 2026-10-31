@@ -49,7 +49,7 @@ func TestFilterFromValues_RequiresClearance(t *testing.T) {
 }
 
 // clearance_levels ORs its levels in one group like any multi-value facet. Its "none"
-// value — no explicit reference to a clearance — is answered from requires_clearance,
+// value — no detected clearance requirement — is answered from requires_clearance,
 // which every indexed document already carries, so it is right before the levels
 // reach the index and identical to the legacy requires_clearance=false.
 func TestFilterFromValues_ClearanceLevels(t *testing.T) {
@@ -58,6 +58,10 @@ func TestFilterFromValues_ClearanceLevels(t *testing.T) {
 		query string
 		want  [][]string
 	}{
+		{name: "padded level", query: "clearance_levels=+secret+", want: [][]string{{`clearance_levels = "secret"`}}},
+		{name: "uppercase level", query: "clearance_levels=SECRET", want: [][]string{{`clearance_levels = "secret"`}}},
+		{name: "padded level exclusion", query: "clearance_levels_exclude=+top_secret+", want: [][]string{{`clearance_levels != "top_secret"`}}},
+		{name: "uppercase level exclusion", query: "clearance_levels_exclude=TOP_SECRET", want: [][]string{{`clearance_levels != "top_secret"`}}},
 		{name: "uppercase none", query: "clearance_levels=NONE", want: [][]string{{"NOT requires_clearance = true"}}},
 		{name: "padded none", query: "clearance_levels=+none+", want: [][]string{{"NOT requires_clearance = true"}}},
 		{name: "uppercase exclusion", query: "clearance_levels_exclude=NONE", want: [][]string{{"requires_clearance = true"}}},

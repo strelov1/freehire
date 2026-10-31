@@ -17,8 +17,8 @@ import (
 // The ladder is the US one — confidential, secret, top_secret, ts_sci, public_trust —
 // plus interim, which is a STATUS stated beside a level ("interim Secret required to
 // start") rather than a level of its own, and other. A posting may carry several:
-// "Active Secret, must be able to obtain TS/SCI" is both, and a candidate holding
-// either should find it.
+// "Active Secret, must be able to obtain TS/SCI" is both and is returned by a filter
+// for either level.
 //
 // Everything outside that ladder is "other". Measured on a sample of 3,331 postings
 // carrying requires_clearance (tablesample over every jobs row, 2026-10-31), of which
@@ -33,7 +33,7 @@ import (
 //     vetting agency makes, while giving each its own ladder would put a dozen chips
 //     in the filter that hold a few dozen postings each. They are "other" (371).
 //   - 939 state a clearance and name no level ("an active security clearance is
-//     required"). They must not land under "no explicit reference", which would
+//     required"). They must not land under "no detected clearance requirement", which would
 //     contradict requires_clearance, so they are "other" too: a requirement the
 //     dictionary recognises but cannot place on the ladder.
 //
