@@ -111,12 +111,21 @@ var clearanceDenials = []string{"no", "none", "n/a", "na", "nil"}
 // never see the value.
 func RequiresClearanceFromDescription(desc string) bool {
 	text := strings.ToLower(htmltext.ToText(desc))
+	return requiresClearanceText(text, strings.Join(strings.Fields(text), " "))
+}
+
+// requiresClearanceText is RequiresClearanceFromDescription over text already stripped
+// and lowercased, plus its whitespace-folded form, so ClearanceLevelsFromDescription can
+// share one strip with it.
+func requiresClearanceText(text, flat string) bool {
+	text = clearanceFalseFriends.Replace(text)
+	flat = clearanceFalseFriends.Replace(flat)
 	for _, p := range clearancePhrases {
 		if phraseAssertedOutsideLabel(text, p) {
 			return true
 		}
 	}
-	return labelledClearanceAsserted(strings.Join(strings.Fields(text), " "))
+	return labelledClearanceAsserted(flat)
 }
 
 // phraseAssertedOutsideLabel is phraseAsserted with one exclusion: an occurrence that
@@ -136,9 +145,14 @@ func phraseAssertedOutsideLabel(text, p string) bool {
 		}
 		start := offset + i
 		end := start + len(p)
-		if wholeWordMatch(text, start, end) && !isFieldLabel(text, end) &&
-			!negatedSentence(sentenceAround(text, start, end)) {
-			return true
+		if wholeWordMatch(text, start, end) && !isFieldLabel(text, end) {
+			if question, yes := questionField(text, end); question {
+				if yes {
+					return true
+				}
+			} else if !negatedSentence(sentenceAround(text, start, end)) {
+				return true
+			}
 		}
 		offset = end
 	}
@@ -154,6 +168,36 @@ func isFieldLabel(text string, end int) bool {
 	}
 	return end < len(text) && text[end] == ':'
 }
+
+// questionField reports whether the phrase ending at end is the label of a
+// question-form field — "Government Clearance Required? No", a Workday template — and
+// whether its answer is yes. Such a field states the requirement only by its answer:
+// the phrase alone used to mark every posting carrying the template, and 109 of 3,331
+// sampled clearance-marked postings (2026-10-31) answered it "No" or left it blank.
+func questionField(text string, end int) (question, yes bool) {
+	m := questionTail.FindStringSubmatch(text[end:])
+	if m == nil || strings.HasPrefix(m[1], "?") {
+		return false, false
+	}
+	return true, strings.HasPrefix(strings.TrimLeft(m[1], "* \t\n"), "yes")
+}
+
+// questionTail is the rest of a question-form label and its answer. htmltext renders a
+// bolded label as "*Government Clearance Required?* No", so emphasis is skipped on
+// both sides of the answer. A doubled "??" is not a question: it is how an emoji bullet
+// survives a lossy feed ("?? Active SC clearance required ??"), and reading it as an
+// unanswered field dropped a real requirement.
+var questionTail = regexp.MustCompile(`^(?:\s+[a-z]+){0,2}\s*\?([?*\s]*[a-z]*)`)
+
+// clearanceFalseFriends are phrases that carry a clearance word without stating a
+// security clearance, blanked before any rule reads the text. Each was found in the
+// same sample: the Employee Polygraph Protection Act notice US employers must post (67
+// postings) and a tuberculosis "TB clearance" (7) — both read as a clearance through
+// "polygraph" and "clearance required".
+var clearanceFalseFriends = strings.NewReplacer(
+	"polygraph protection act", "                        ",
+	"tb clearance", "            ",
+)
 
 // labelledClearanceAsserted reports whether a "Clearance: <value>" field asserts a
 // requirement. Every occurrence is examined rather than only the first: a posting may

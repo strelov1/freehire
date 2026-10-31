@@ -50,7 +50,16 @@ var (
 	SourceTypeValues     = []string{"ats", "company", "aggregator", "social"}
 	EnglishLevelValues   = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
 	EducationLevelValues = []string{"none", "bachelor", "master", "phd"}
-	CategoryValues       = []string{
+	// ClearanceLevelValues are the security-clearance levels a posting may state,
+	// written by internal/dict/location.ClearanceLevelsFromDescription. The US ladder
+	// in ascending order, then interim (a status stated beside a level) and other
+	// (a non-US scheme, or a clearance stated with no level). The location package
+	// argues the split with the measured numbers.
+	ClearanceLevelValues = []string{
+		ClearanceConfidential, ClearanceSecret, ClearanceTopSecret, ClearanceTSSCI,
+		ClearancePublicTrust, ClearanceInterim, ClearanceOther,
+	}
+	CategoryValues = []string{
 		// "software_engineering" is the generic bucket for a title the dictionary
 		// confirms is software/IT work (feeds is_tech via classify.IsTech's
 		// techTitleTerms) but that names no sub-discipline to resolve to — a bare
@@ -318,6 +327,17 @@ var (
 // a proxy for), and a profile save drops it from the specializations. Nothing may
 // write it again — it is deliberately absent from CategoryValues.
 const RetiredCategoryManagement = "management"
+
+// The values of ClearanceLevelValues, named for the dictionary that writes them.
+const (
+	ClearanceConfidential = "confidential"
+	ClearanceSecret       = "secret"
+	ClearanceTopSecret    = "top_secret"
+	ClearanceTSSCI        = "ts_sci"
+	ClearancePublicTrust  = "public_trust"
+	ClearanceInterim      = "interim"
+	ClearanceOther        = "other"
+)
 
 // JobChallengeOther is the JobChallengeValues member that admits a written note. Named
 // rather than spelled inline because two places depend on the exact string — the survey's

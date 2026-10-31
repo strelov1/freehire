@@ -30,7 +30,7 @@ func TestSetJobRequiresClearanceIsIdempotent(t *testing.T) {
 	}
 
 	n, err := q.SetJobRequiresClearance(ctx, SetJobRequiresClearanceParams{
-		ID: job.ID, RequiresClearance: trueFlag(),
+		ID: job.ID, RequiresClearance: trueFlag(), ClearanceLevels: []string{"secret"},
 	})
 	if err != nil {
 		t.Fatalf("first write: %v", err)
@@ -40,7 +40,7 @@ func TestSetJobRequiresClearanceIsIdempotent(t *testing.T) {
 	}
 
 	n, err = q.SetJobRequiresClearance(ctx, SetJobRequiresClearanceParams{
-		ID: job.ID, RequiresClearance: trueFlag(),
+		ID: job.ID, RequiresClearance: trueFlag(), ClearanceLevels: []string{"secret"},
 	})
 	if err != nil {
 		t.Fatalf("second write: %v", err)
@@ -49,12 +49,27 @@ func TestSetJobRequiresClearanceIsIdempotent(t *testing.T) {
 		t.Fatalf("second write affected %d rows, want 0 — the guard did not hold", n)
 	}
 
+	// Levels alone moving is a change: a dictionary that learns a new rung must reach a
+	// row whose boolean was already right.
+	n, err = q.SetJobRequiresClearance(ctx, SetJobRequiresClearanceParams{
+		ID: job.ID, RequiresClearance: trueFlag(), ClearanceLevels: []string{"secret", "interim"},
+	})
+	if err != nil {
+		t.Fatalf("third write: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("levels-only change affected %d rows, want 1", n)
+	}
+
 	stored, err := q.GetJob(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("read back: %v", err)
 	}
 	if !stored.RequiresClearance.Valid || !stored.RequiresClearance.Bool {
 		t.Fatalf("requires_clearance = %+v, want true", stored.RequiresClearance)
+	}
+	if got := stored.ClearanceLevels; len(got) != 2 || got[0] != "secret" || got[1] != "interim" {
+		t.Fatalf("clearance_levels = %v, want [secret interim]", got)
 	}
 }
 

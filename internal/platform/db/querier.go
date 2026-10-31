@@ -7454,7 +7454,10 @@ type Querier interface {
 	// A nil slice encodes as NULL, which the NOT NULL columns refuse; COALESCE writes the empty
 	// array the ingest upserts write. IS DISTINCT FROM-guarded, so a re-run writes nothing.
 	SetJobPlaces(ctx context.Context, arg SetJobPlacesParams) (int64, error)
-	// Write one row's requires_clearance, for cmd/backfill-clearance.
+	// Write one row's requires_clearance and clearance_levels, for cmd/backfill-clearance.
+	// Both together, because they come from one reading of the description and a row whose
+	// levels are empty beside a TRUE requires_clearance would fall under the levels
+	// filter's "no explicit reference" while the boolean filter says it needs a clearance.
 	//
 	// The IS DISTINCT FROM guard is what makes the pass idempotent: a row already carrying
 	// the derived value is not rewritten, so a re-run writes nothing, produces no dead
@@ -8048,7 +8051,7 @@ type Querier interface {
 	// One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 	// ingest computes as a pure function of a row's own raw/immutable fields — the
 	// deterministic dictionary facets (countries, regions, cities, work_mode, skills,
-	// seniority, category, is_tech, requires_clearance, via_recruiter, plus the synthetic enrichment
+	// seniority, category, is_tech, requires_clearance, via_recruiter, clearance_levels, plus the synthetic enrichment
 	// facets posting_language,
 	// employment_type, education_level, english_level, experience_years_min, all from
 	// jobderive.Derive), the repost-identity role_fingerprint (internal/job/jobhash), and the

@@ -722,6 +722,10 @@ func facetSettings() *meilisearch.Settings {
 			// via_recruiter: a jobs column served top-level, true-or-absent like
 			// requires_clearance. Same settings-before-binary order.
 			"via_recruiter",
+			// clearance_levels is the multi-value level facet beside it (a jobs column,
+			// vocab.ClearanceLevelValues), present exactly when requires_clearance is
+			// (see ClearanceLevelUnspecified in query_filter.go). Settings before binary.
+			"clearance_levels",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",

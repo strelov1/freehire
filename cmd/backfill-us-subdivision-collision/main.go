@@ -170,6 +170,7 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		isTech != j.IsTech ||
 		requiresClearance != j.RequiresClearance ||
 		viaRecruiter != j.ViaRecruiter ||
+		!slices.Equal(d.ClearanceLevels, j.ClearanceLevels) ||
 		d.PostingLanguage != j.PostingLanguage ||
 		d.EmploymentType != j.EmploymentType ||
 		d.EducationLevel != j.EducationLevel ||
@@ -192,6 +193,7 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		IsTech:             isTech,
 		RequiresClearance:  requiresClearance,
 		ViaRecruiter:       viaRecruiter,
+		ClearanceLevels:    d.ClearanceLevels,
 		PostingLanguage:    d.PostingLanguage,
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,

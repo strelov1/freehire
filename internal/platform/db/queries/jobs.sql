@@ -376,7 +376,7 @@ company_upsert AS (
 )
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, company_slug_folded, location, remote, description, posted_at,
-    public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter,
+    public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter, clearance_levels,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
     content_hash, role_fingerprint, requirements_derived, hydrated_at
@@ -386,7 +386,7 @@ INSERT INTO jobs (
     sqlc.arg(description), sqlc.arg(posted_at),
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'), COALESCE(sqlc.arg(metros)::text[], '{}'),
-    sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech), sqlc.arg(requires_clearance), sqlc.arg(via_recruiter),
+    sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'), sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech), sqlc.arg(requires_clearance), sqlc.arg(via_recruiter), COALESCE(sqlc.arg(clearance_levels)::text[], '{}'),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
     sqlc.arg(salary_min_source), sqlc.arg(salary_max_source), sqlc.arg(salary_currency_source), sqlc.arg(salary_period_source),
     sqlc.arg(content_hash), sqlc.arg(role_fingerprint),
@@ -431,6 +431,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     category     = EXCLUDED.category,
     is_tech      = EXCLUDED.is_tech,
     requires_clearance = EXCLUDED.requires_clearance,
+    clearance_levels   = EXCLUDED.clearance_levels,
     -- Description-derived and never re-read elsewhere: a failed detail fetch (an empty
     -- incoming description, which leaves jobs.description as it was) must not drop the
     -- mark the stored description still earns — the requirements_derived guard below.
@@ -1270,7 +1271,7 @@ WITH company_upsert AS (
 )
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, company_slug_folded, location, remote, description, posted_at,
-    public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter,
+    public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter, clearance_levels,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, enrichment,
     content_hash, role_fingerprint, requirements_derived,
@@ -1282,7 +1283,7 @@ INSERT INTO jobs (
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'), COALESCE(sqlc.arg(metros)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'),
-    sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech), sqlc.arg(requires_clearance), sqlc.arg(via_recruiter),
+    sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech), sqlc.arg(requires_clearance), sqlc.arg(via_recruiter), COALESCE(sqlc.arg(clearance_levels)::text[], '{}'),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
     sqlc.arg(salary_min_manual), sqlc.arg(salary_max_manual), sqlc.arg(salary_currency_manual), sqlc.arg(salary_period_manual),
     -- Seed the enrichment salary from the manual salary so it displays before any pass;
@@ -1324,6 +1325,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     category     = EXCLUDED.category,
     is_tech      = EXCLUDED.is_tech,
     requires_clearance = EXCLUDED.requires_clearance,
+    clearance_levels   = EXCLUDED.clearance_levels,
     -- The moderator's description replaces the stored one unconditionally, so the
     -- mark is re-derived from it unconditionally too.
     via_recruiter = EXCLUDED.via_recruiter,
@@ -1397,7 +1399,7 @@ RETURNING *;
 -- comparable if it were ever to matter, even though it is never indexed or clustered.
 INSERT INTO jobs (
     source, external_id, url, title, company, company_slug, company_slug_folded, location, remote, description,
-    public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter,
+    public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter, clearance_levels,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     content_hash, role_fingerprint, requirements_derived,
     created_by, is_private
@@ -1408,7 +1410,7 @@ INSERT INTO jobs (
     sqlc.arg(public_slug),
     COALESCE(sqlc.arg(countries)::text[], '{}'), COALESCE(sqlc.arg(regions)::text[], '{}'), COALESCE(sqlc.arg(cities)::text[], '{}'), COALESCE(sqlc.arg(metros)::text[], '{}'),
     sqlc.arg(work_mode), COALESCE(sqlc.arg(skills)::text[], '{}'),
-    sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech), sqlc.arg(requires_clearance), sqlc.arg(via_recruiter),
+    sqlc.arg(seniority), sqlc.arg(category), sqlc.arg(is_tech), sqlc.arg(requires_clearance), sqlc.arg(via_recruiter), COALESCE(sqlc.arg(clearance_levels)::text[], '{}'),
     sqlc.arg(posting_language), sqlc.arg(employment_type), sqlc.arg(education_level), sqlc.arg(english_level), sqlc.arg(experience_years_min),
     sqlc.arg(content_hash), sqlc.arg(role_fingerprint),
     -- A pasted private JD is exactly the text the tailor reads requirements out of,
@@ -1466,6 +1468,7 @@ SET title        = sqlc.arg(title),
     category     = sqlc.arg(category),
     is_tech      = sqlc.arg(is_tech),
     requires_clearance = sqlc.arg(requires_clearance),
+    clearance_levels   = COALESCE(sqlc.arg(clearance_levels)::text[], '{}'),
     via_recruiter = sqlc.arg(via_recruiter),
     posting_language     = sqlc.arg(posting_language),
     employment_type      = sqlc.arg(employment_type),
@@ -1531,6 +1534,7 @@ SET title        = sqlc.arg(title),
     category     = sqlc.arg(category),
     is_tech      = sqlc.arg(is_tech),
     requires_clearance = sqlc.arg(requires_clearance),
+    clearance_levels   = COALESCE(sqlc.arg(clearance_levels)::text[], '{}'),
     via_recruiter = sqlc.arg(via_recruiter),
     posting_language     = sqlc.arg(posting_language),
     employment_type      = sqlc.arg(employment_type),
@@ -2544,7 +2548,7 @@ WHERE id = sqlc.arg(id);
 -- One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 -- ingest computes as a pure function of a row's own raw/immutable fields — the
 -- deterministic dictionary facets (countries, regions, cities, work_mode, skills,
--- seniority, category, is_tech, requires_clearance, via_recruiter, plus the synthetic enrichment
+-- seniority, category, is_tech, requires_clearance, via_recruiter, clearance_levels, plus the synthetic enrichment
 -- facets posting_language,
 -- employment_type, education_level, english_level, experience_years_min, all from
 -- jobderive.Derive), the repost-identity role_fingerprint (internal/job/jobhash), and the
@@ -2575,6 +2579,7 @@ SET countries = COALESCE(sqlc.arg(countries)::text[], '{}'),
     category  = sqlc.arg(category),
     is_tech   = sqlc.arg(is_tech),
     requires_clearance = sqlc.arg(requires_clearance),
+    clearance_levels   = COALESCE(sqlc.arg(clearance_levels)::text[], '{}'),
     via_recruiter = sqlc.arg(via_recruiter),
     posting_language     = sqlc.arg(posting_language),
     employment_type      = sqlc.arg(employment_type),
@@ -2863,7 +2868,10 @@ SELECT id, description FROM jobs
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
 -- name: SetJobRequiresClearance :execrows
--- Write one row's requires_clearance, for cmd/backfill-clearance.
+-- Write one row's requires_clearance and clearance_levels, for cmd/backfill-clearance.
+-- Both together, because they come from one reading of the description and a row whose
+-- levels are empty beside a TRUE requires_clearance would fall under the levels
+-- filter's "no explicit reference" while the boolean filter says it needs a clearance.
 --
 -- The IS DISTINCT FROM guard is what makes the pass idempotent: a row already carrying
 -- the derived value is not rewritten, so a re-run writes nothing, produces no dead
@@ -2873,9 +2881,11 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- the guard answers that per row, which is cheaper and more honest than a cursor that
 -- would go stale the moment ingest writes a new posting behind it.
 UPDATE jobs
-SET requires_clearance = sqlc.arg(requires_clearance)
+SET requires_clearance = sqlc.arg(requires_clearance),
+    clearance_levels   = COALESCE(sqlc.arg(clearance_levels)::text[], '{}')
 WHERE id = sqlc.arg(id)
-  AND requires_clearance IS DISTINCT FROM sqlc.arg(requires_clearance);
+  AND (requires_clearance IS DISTINCT FROM sqlc.arg(requires_clearance)
+       OR clearance_levels IS DISTINCT FROM COALESCE(sqlc.arg(clearance_levels)::text[], '{}'));
 
 -- name: JobsForWorkModeRecheckByIDs :many
 -- Location, description and the currently-stored work_mode for a named set of ids, for

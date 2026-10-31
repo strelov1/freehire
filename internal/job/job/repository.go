@@ -79,6 +79,7 @@ func jobFromRow(r db.Job) (Job, error) {
 
 		RequiresClearance: boolPtr(r.RequiresClearance),
 		ViaRecruiter:      boolPtr(r.ViaRecruiter),
+		ClearanceLevels:   r.ClearanceLevels,
 
 		PostingLanguage:    r.PostingLanguage,
 		EmploymentType:     r.EmploymentType,

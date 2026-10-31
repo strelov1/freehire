@@ -106,6 +106,13 @@ type Job struct {
 	// RequiresClearance: a recruiter who never says so is not detected, so an absent
 	// key does not mean "posted by the employer".
 	ViaRecruiter bool `json:"via_recruiter,omitempty"`
+	// ClearanceLevels names the clearance levels the posting states, from the closed
+	// vocabulary vocab.ClearanceLevelValues — the US ladder (confidential, secret,
+	// top_secret, ts_sci, public_trust), interim, and other (a non-US scheme, or a
+	// clearance stated with no level). Present exactly when RequiresClearance is true
+	// and omitted otherwise: an empty list would read as a claim about levels the
+	// posting never made.
+	ClearanceLevels []string `json:"clearance_levels,omitempty"`
 	// AutoApplyAvailable marks a posting whose ATS provider (Source) is one
 	// internal/api/atsapply can currently attempt to fill and submit for (see
 	// AutoApplyProviders) — a best-effort, provider-level eligibility signal,
@@ -271,6 +278,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		IsTech:             isTechFacet(f.IsTech),
 		RequiresClearance:  f.RequiresClearance != nil && *f.RequiresClearance,
 		ViaRecruiter:       f.ViaRecruiter != nil && *f.ViaRecruiter,
+		ClearanceLevels:    f.ClearanceLevels,
 		AutoApplyAvailable: AutoApplyProviders[f.Source],
 		PostedAt:           rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
 		CreatedAt:          rfc3339Ptr(f.CreatedAt),
