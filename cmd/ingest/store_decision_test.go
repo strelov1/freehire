@@ -23,6 +23,17 @@ func cheap() written {
 	return cheapWrite(db.RefreshUnchangedJobRow{})
 }
 
+func TestExpiredPostingDoesNotReachSearchOrRecentFeed(t *testing.T) {
+	w := fullWrite(db.UpsertJobRow{
+		Job:      db.Job{ClosedAt: pgtype.Timestamptz{Valid: true}},
+		Inserted: pgtype.Bool{Bool: true, Valid: true},
+		Changed:  true,
+	})
+	if needsIndex(w) || needsRecentFeed(w, false, pgtype.Bool{Bool: true, Valid: true}) {
+		t.Fatal("expired posting queued for search or the recently added feed")
+	}
+}
+
 func TestNeedsIndex(t *testing.T) {
 	cases := []struct {
 		name string
@@ -32,8 +43,7 @@ func TestNeedsIndex(t *testing.T) {
 		{"new posting", full(true, true), true},
 		{"edited posting", full(false, true), true},
 		{"liveness-only refresh", cheap(), false},
-		// Still reachable through the FULL upsert: a closed posting reopening with identical
-		// content, or a cities-only drift, both miss the cheap write and then report neither.
+		// A cities-only drift misses the cheap write without changing indexed content.
 		{"full write that changed nothing", full(false, false), false},
 	}
 	for _, c := range cases {

@@ -17,6 +17,9 @@ import (
 // jobview wire shape with the caller's interaction timestamps riding alongside
 // (not flattened in — the job shape stays identical to every other job surface).
 type myJobResponse struct {
+	// AddedToBoardAt is when the save or application record was first recorded, independent
+	// of passive views and an application date the candidate can correct retroactively.
+	AddedToBoardAt *time.Time `json:"added_to_board_at"`
 	// ID addresses the row. The board keys, routes and opens by it rather than by the
 	// posting's slug, which an application whose posting was pruned does not have.
 	ID string `json:"id"`
@@ -91,6 +94,7 @@ func (h *trackingHandlers) ListTrackedJobs(c *fiber.Ctx) error {
 	for _, it := range listing.Items {
 		item := myJobResponse{
 			ID:              it.ID,
+			AddedToBoardAt:  it.AddedToBoardAt,
 			Company:         it.CompanySlug,
 			RoleTitle:       it.RoleTitle,
 			Job:             it.Job,

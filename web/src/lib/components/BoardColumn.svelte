@@ -12,6 +12,8 @@
     onconsider,
     onfinalize,
     onopen,
+    onremove,
+    removing = [],
     dragDisabled = false,
   }: {
     id: BoardColumnId;
@@ -27,6 +29,8 @@
     // BoardItem extends MyJob; the card calls back with the item it received,
     // which satisfies MyJob. The parent can widen back to BoardItem via cast.
     onopen: (item: MyJob) => void;
+    onremove?: (item: MyJob) => void;
+    removing?: string[];
   } = $props();
 
   // Neutral drop-target frame — overrides svelte-dnd-action's default yellow
@@ -111,7 +115,7 @@
   >
     {#each visible as item (item.id)}
       <div>
-        <BoardCard {item} {onopen} />
+        <BoardCard {item} {onopen} {onremove} removing={removing.includes(item.id)} />
       </div>
     {/each}
   </div>

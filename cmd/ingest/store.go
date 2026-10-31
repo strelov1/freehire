@@ -136,6 +136,7 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 		SalaryPeriodSource:   p.SalaryPeriodSource,
 		EnglishLevel:         p.EnglishLevel,
 		IsTech:               p.IsTech,
+		ApplicationDeadline:  p.ApplicationDeadline,
 	})
 	if err == nil {
 		return cheapWrite(cheap), nil
@@ -157,6 +158,9 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 // Changed is already true on insert (a NULL prior hash is DISTINCT FROM any value);
 // Inserted is OR-ed in to keep the "new or changed" intent explicit.
 func needsIndex(w written) bool {
+	if w.row != nil && w.row.ClosedAt.Valid {
+		return false
+	}
 	return w.changed || w.inserted
 }
 

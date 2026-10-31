@@ -151,3 +151,20 @@ func DurationPtr(t pgtype.Time) *time.Duration {
 	d := time.Duration(t.Microseconds) * time.Microsecond
 	return &d
 }
+
+// Date maps an optional calendar date to its nullable database value.
+func Date(t *time.Time) pgtype.Date {
+	if t == nil {
+		return pgtype.Date{}
+	}
+	return pgtype.Date{Time: *t, Valid: true}
+}
+
+// DatePtr maps a nullable calendar date to an optional time without shifting its day.
+func DatePtr(d pgtype.Date) *time.Time {
+	if !d.Valid {
+		return nil
+	}
+	t := d.Time
+	return &t
+}

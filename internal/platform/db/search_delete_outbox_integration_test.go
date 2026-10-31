@@ -200,6 +200,15 @@ func TestEveryClosingQueryQueuesTheRemoval(t *testing.T) {
 		// prove nothing (the assertion below catches exactly that).
 		setup func(t *testing.T, pool *pgxpool.Pool)
 	}{
+		{"CloseJobsPastApplicationDeadline", func(ctx context.Context, q *Queries, _ int64) error {
+			_, err := q.CloseJobsPastApplicationDeadline(ctx, "greenhouse")
+			return err
+		}, func(t *testing.T, pool *pgxpool.Pool) {
+			t.Helper()
+			if _, err := pool.Exec(context.Background(), `UPDATE jobs SET application_deadline = (now() AT TIME ZONE 'UTC')::date - 1`); err != nil {
+				t.Fatal(err)
+			}
+		}},
 		{"CloseUnseenJobs", func(ctx context.Context, q *Queries, _ int64) error {
 			_, err := q.CloseUnseenJobs(ctx, CloseUnseenJobsParams{
 				Source:       "greenhouse",

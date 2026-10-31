@@ -994,6 +994,8 @@ type Job struct {
 	Metros                    []string           `json:"metros"`
 	SemanticEmbeddedInputHash pgtype.Text        `json:"semantic_embedded_input_hash"`
 	ViaRecruiter              pgtype.Bool        `json:"via_recruiter"`
+	// Source-stated last application day, inclusive; NULL when unstated.
+	ApplicationDeadline pgtype.Date `json:"application_deadline"`
 }
 
 type JobDailyStat struct {

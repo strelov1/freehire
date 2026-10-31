@@ -1544,8 +1544,9 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical)
 			SalaryPeriod:       j.SalaryPeriod,
 			IsTechHint:         j.IsTechHint,
 		},
-		URL:      j.URL,
-		Remote:   j.Remote,
-		PostedAt: j.PostedAt,
+		URL:                 j.URL,
+		Remote:              j.Remote,
+		PostedAt:            j.PostedAt,
+		ApplicationDeadline: j.ApplicationDeadline,
 	})
 }

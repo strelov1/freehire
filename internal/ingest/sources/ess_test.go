@@ -137,8 +137,9 @@ func TestESSHydratesUnseenVacancies(t *testing.T) {
 	if nurse.Company != "Dom na Krasu" || nurse.Location != "Nova Gorica" {
 		t.Errorf("company/location = %q / %q", nurse.Company, nurse.Location)
 	}
-	if nurse.URL != essPostingURL+"3475977" {
-		t.Errorf("url = %q", nurse.URL)
+	wantURL := "https://www.ess.gov.si/iskalci-zaposlitve/iskanje-zaposlitve/iskanje-dela/?idp=3475977/#/pdm/3475977"
+	if nurse.URL != wantURL {
+		t.Errorf("url = %q, want vacancy detail route %q", nurse.URL, wantURL)
 	}
 	if len(nurse.Countries) != 1 || nurse.Countries[0] != "si" {
 		t.Errorf("countries = %v, want [si] from the query", nurse.Countries)

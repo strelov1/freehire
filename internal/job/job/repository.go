@@ -9,6 +9,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
 // Extras is the read-only projection data that rides on the jobs row but is NOT
@@ -55,17 +56,18 @@ func jobFromRow(r db.Job) (Job, error) {
 		}
 	}
 	return Job{f: Fields{
-		Source:      r.Source,
-		ExternalID:  r.ExternalID,
-		URL:         r.URL,
-		Title:       r.Title,
-		Company:     r.Company,
-		CompanySlug: r.CompanySlug,
-		PublicSlug:  r.PublicSlug,
-		Location:    r.Location,
-		Remote:      r.Remote,
-		Description: r.Description,
-		PostedAt:    tsPtr(r.PostedAt),
+		Source:              r.Source,
+		ExternalID:          r.ExternalID,
+		URL:                 r.URL,
+		Title:               r.Title,
+		Company:             r.Company,
+		CompanySlug:         r.CompanySlug,
+		PublicSlug:          r.PublicSlug,
+		Location:            r.Location,
+		Remote:              r.Remote,
+		Description:         r.Description,
+		PostedAt:            tsPtr(r.PostedAt),
+		ApplicationDeadline: pgconv.DatePtr(r.ApplicationDeadline),
 
 		Countries: r.Countries,
 		Regions:   r.Regions,

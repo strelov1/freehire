@@ -364,7 +364,7 @@ func (q *Queries) ListSavedJobSlugs(ctx context.Context, userID int64) ([]string
 }
 
 const listUserJobs = `-- name: ListUserJobs :many
-SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, jobs.closed_at,
+SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, jobs.closed_at, jobs.application_deadline,
        jobs.location, jobs.work_mode, jobs.seniority, jobs.employment_type,
        jobs.countries, jobs.regions, jobs.skills, jobs.collections,
        jobs.posted_at, jobs.created_at,
@@ -385,6 +385,10 @@ SELECT jobs.id, jobs.public_slug, jobs.title, jobs.company, jobs.company_slug, j
        ARRAY(SELECT jsonb_array_elements_text(jobs.enrichment -> 'countries'))::text[] AS llm_countries,
        ARRAY(SELECT jsonb_array_elements_text(jobs.enrichment -> 'regions'))::text[]   AS llm_regions,
        uj.viewed_at, uj.saved_at, a.applied_at, a.stage, a.notes,
+       -- When tracking was recorded, not the user-editable historical apply date.
+       -- Preparing has no applied_at; passive views and notes alone do not join the board.
+       LEAST(uj.saved_at, CASE WHEN a.applied_at IS NOT NULL OR a.stage IS NOT NULL
+                              THEN a.created_at END)::timestamptz AS added_to_board_at,
        COALESCE(mail.email_count, 0)::bigint AS email_count,
        (a.applied_at IS NOT NULL
         AND COALESCE(mail.suggestion_pending, false))::boolean AS has_pending_suggestion,
@@ -470,6 +474,7 @@ type ListUserJobsRow struct {
 	Company                  string             `json:"company"`
 	CompanySlug              string             `json:"company_slug"`
 	ClosedAt                 pgtype.Timestamptz `json:"closed_at"`
+	ApplicationDeadline      pgtype.Date        `json:"application_deadline"`
 	Location                 string             `json:"location"`
 	WorkMode                 string             `json:"work_mode"`
 	Seniority                string             `json:"seniority"`
@@ -488,6 +493,7 @@ type ListUserJobsRow struct {
 	AppliedAt                pgtype.Timestamptz `json:"applied_at"`
 	Stage                    pgtype.Text        `json:"stage"`
 	Notes                    pgtype.Text        `json:"notes"`
+	AddedToBoardAt           pgtype.Timestamptz `json:"added_to_board_at"`
 	EmailCount               int64              `json:"email_count"`
 	HasPendingSuggestion     bool               `json:"has_pending_suggestion"`
 	FollowedUpAt             pgtype.Timestamptz `json:"followed_up_at"`
@@ -555,6 +561,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.Company,
 			&i.CompanySlug,
 			&i.ClosedAt,
+			&i.ApplicationDeadline,
 			&i.Location,
 			&i.WorkMode,
 			&i.Seniority,
@@ -573,6 +580,7 @@ func (q *Queries) ListUserJobs(ctx context.Context, arg ListUserJobsParams) ([]L
 			&i.AppliedAt,
 			&i.Stage,
 			&i.Notes,
+			&i.AddedToBoardAt,
 			&i.EmailCount,
 			&i.HasPendingSuggestion,
 			&i.FollowedUpAt,

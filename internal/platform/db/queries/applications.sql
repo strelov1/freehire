@@ -60,6 +60,7 @@ UPDATE emails e
 -- not ask at all when the page is already full. It handed the same window to both until
 -- 2026-09-06, which returned up to 2*limit rows and skipped a window per page.
 SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.followed_up_at,
+       a.created_at AS added_to_board_at,
        (SELECT count(*)
           FROM emails e
          WHERE e.application_id = a.id

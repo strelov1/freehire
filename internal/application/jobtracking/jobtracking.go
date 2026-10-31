@@ -101,6 +101,9 @@ func (c Counts) Total(f Filter) int64 {
 // interaction marks. The job carries identity via its slug; the embedded
 // Interaction's JobID is the internal id, never serialized.
 type TrackedJob struct {
+	// AddedToBoardAt is the earliest stored save or application-record creation timestamp.
+	// It stays independent of passive views and the candidate's editable application date.
+	AddedToBoardAt *time.Time
 	// ID addresses the row. The board has always been a list of applications and only
 	// borrowed the posting's slug because one was always at hand; an application whose
 	// posting was pruned has none to borrow, so the row carries its own.

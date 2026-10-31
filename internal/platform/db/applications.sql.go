@@ -125,6 +125,7 @@ func (q *Queries) CountOrphanedApplications(ctx context.Context, userID int64) (
 
 const listOrphanedApplications = `-- name: ListOrphanedApplications :many
 SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.followed_up_at,
+       a.created_at AS added_to_board_at,
        (SELECT count(*)
           FROM emails e
          WHERE e.application_id = a.id
@@ -160,6 +161,7 @@ type ListOrphanedApplicationsRow struct {
 	Stage          pgtype.Text        `json:"stage"`
 	Notes          pgtype.Text        `json:"notes"`
 	FollowedUpAt   pgtype.Timestamptz `json:"followed_up_at"`
+	AddedToBoardAt pgtype.Timestamptz `json:"added_to_board_at"`
 	EmailCount     int64              `json:"email_count"`
 	LastActivityAt pgtype.Timestamptz `json:"last_activity_at"`
 }
@@ -198,6 +200,7 @@ func (q *Queries) ListOrphanedApplications(ctx context.Context, arg ListOrphaned
 			&i.Stage,
 			&i.Notes,
 			&i.FollowedUpAt,
+			&i.AddedToBoardAt,
 			&i.EmailCount,
 			&i.LastActivityAt,
 		); err != nil {

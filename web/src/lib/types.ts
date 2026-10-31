@@ -886,6 +886,8 @@ export interface UserJob {
 /** One item of the my-jobs listing: the job in the shared wire shape with the
  *  caller's interaction timestamps riding alongside. */
 export interface MyJob {
+  /** First save or application creation, independent of later pipeline activity. */
+  added_to_board_at?: string | null;
   /** Addresses the row. The board keys, routes and opens by this rather than by the
    *  posting's slug: an application whose posting was pruned has no slug to borrow. */
   id: string;

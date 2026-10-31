@@ -17,6 +17,9 @@
     matchesQuery,
     matchesStage,
     needsAttention,
+    sortBoardItems,
+    parseBoardSort,
+    type BoardSort,
     type BoardColumnId,
     type BoardItem,
     type ClosedOutcome,
@@ -167,19 +170,21 @@
   // which lags after a shallow-routing back/forward. Filtering is local and
   // instant, so there is nothing to debounce — setNow writes and applies
   // together, and the view reads `value`.
-  const filters = new UrlSyncedState<{ q: string; attention: boolean; stage: string }>(
+  const filters = new UrlSyncedState<{ q: string; attention: boolean; stage: string; sort: BoardSort }>(
     new URLSearchParams(page.url.search),
     {
       parse: (p) => ({
         q: p.get('q') ?? '',
         attention: p.get('attention') === '1',
         stage: p.get('stage') ?? '',
+        sort: parseBoardSort(p.get('sort')),
       }),
       serialize: (v) =>
         new URLSearchParams({
           ...(v.q ? { q: v.q } : {}),
           ...(v.attention ? { attention: '1' } : {}),
           ...(v.stage ? { stage: v.stage } : {}),
+          ...(v.sort !== 'default' ? { sort: v.sort } : {}),
         }),
     },
   );
@@ -191,26 +196,20 @@
   // list must not quietly empty five of the six columns.
   const stageFilter = $derived(view === 'list' ? filters.value.stage : '');
 
+  const sort = $derived(filters.value.sort);
   const searching = $derived(query.trim().length > 0);
   const filtering = $derived(searching || attentionOnly || stageFilter !== '');
   const matchesFilters = (i: BoardItem) =>
     matchesQuery(i, query) && (!attentionOnly || needsAttention(i)) && matchesStage(i, stageFilter);
   const shown = $derived<Record<BoardColumnId, BoardItem[]>>(
-    filtering
-      ? (Object.fromEntries(
-          BOARD_COLUMNS.map((c) => [c.id, columns[c.id].filter(matchesFilters)]),
-        ) as Record<BoardColumnId, BoardItem[]>)
-      : columns,
+    Object.fromEntries(BOARD_COLUMNS.map((c) => [
+      c.id,
+      sortBoardItems(filtering ? columns[c.id].filter(matchesFilters) : columns[c.id], sort),
+    ])) as Record<BoardColumnId, BoardItem[]>,
   );
-
-  // The list is the same rows, read in one sequence instead of four. Ordered by last
-  // activity — an application that moved yesterday is the one worth seeing first, which
-  // the columns cannot express because they order by stage.
-  const listItems = $derived(
-    Object.values(shown)
-      .flat()
-      .sort((a, b) => (b.last_activity_at ?? '').localeCompare(a.last_activity_at ?? '')),
-  );
+  const listItems = $derived(sort === 'default'
+    ? Object.values(shown).flat().sort((a, b) => (b.last_activity_at ?? '').localeCompare(a.last_activity_at ?? ''))
+    : sortBoardItems(Object.values(shown).flat(), sort));
   const total = $derived(Object.values(columns).flat().length);
   const matched = $derived(Object.values(shown).flat().length);
 
@@ -407,12 +406,9 @@
     item.notes = notes;
   }
 
-  // Called from the drawer's confirmation. Not optimistic: untracking deletes the stage, the
-  // notes and the history, so the card leaves only once the server agrees, and a failure is
-  // thrown back for the dialog to show in place.
-  async function remove() {
-    if (!openItem) return;
-    const item = openItem;
+  // Shared by the card and drawer. Untracking clears progress and notes, so the
+  // card leaves only after the server agrees. Each caller displays a failure in place.
+  async function removeItem(item: MyJob) {
     try {
       await api.untrackApplication(item.id);
     } catch {
@@ -423,13 +419,31 @@
       columns[col] = columns[col].filter((i) => i.id !== item.id);
       Reflect.deleteProperty(cardCol, item.id);
     }
-    closeDrawer();
+    if (openItem?.id === item.id) closeDrawer();
     announce(format(s.removed, { job: jobName(item) }));
     // The card that opened the drawer is gone, so the drawer's own focus return would land
     // on <body>. The search field is the board's first control and is there in both views.
     // The last card going takes the field with it; the empty state stands in.
     await tick();
     (searchInput ?? emptyState)?.focus();
+  }
+
+  async function remove() {
+    if (openItem) await removeItem(openItem);
+  }
+
+  let removing = $state<string[]>([]);
+  async function quickRemove(item: MyJob) {
+    if (removing.includes(item.id)) return;
+    removing = [...removing, item.id];
+    actionError = null;
+    try {
+      await removeItem(item);
+    } catch {
+      showError(s.removeFailed);
+    } finally {
+      removing = removing.filter((id) => id !== item.id);
+    }
   }
 
   // The row of columns is wider than a phone, and a hidden scrollbar leaves nothing saying
@@ -556,7 +570,7 @@
 {:else}
   <!-- One field over both views. It narrows what is already loaded: the listing is
        bounded, and a request per keystroke would buy nothing. -->
-  <div class="mb-3 flex items-center gap-2">
+  <div class="mb-3 flex flex-wrap items-center gap-2">
     <div class="relative flex-1 sm:max-w-xs">
       <Search
         class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -595,6 +609,17 @@
     >
       {s.needsAttention}
     </button>
+    <select
+      value={sort}
+      onchange={(e) => filters.setNow({ ...filters.value, sort: parseBoardSort(e.currentTarget.value) })}
+      aria-label={s.sortAria}
+      class="rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm"
+    >
+      <option value="default">{s.sortDefault}</option>
+      <option value="company">{s.sortCompany}</option>
+      <option value="added">{s.sortAdded}</option>
+      <option value="deadline">{s.sortDeadline}</option>
+    </select>
     {#if view === 'list'}
       <select
         value={stageFilter}
@@ -620,8 +645,8 @@
     <!-- Keyed on the filters so a new search starts from the first page: the list draws
          rows a page at a time, and a cleared filter would otherwise redraw every row a
          long scroll had reached, in one update. -->
-    {#key `${query}|${attentionOnly}|${stageFilter}`}
-      <BoardList items={listItems} onopen={openDrawer} onsetstage={applyStage} />
+    {#key `${query}|${attentionOnly}|${stageFilter}|${sort}`}
+      <BoardList items={listItems} onopen={openDrawer} onsetstage={applyStage} onremove={quickRemove} {removing} />
     {/key}
   {:else}
     <div
@@ -638,10 +663,12 @@
           id={col.id}
           label={columnLabel(col)}
           items={shown[col.id]}
-          dragDisabled={filtering}
+          dragDisabled={filtering || sort !== 'default'}
           {onconsider}
           {onfinalize}
           onopen={openDrawer}
+          onremove={quickRemove}
+          {removing}
         />
       {/each}
     </div>

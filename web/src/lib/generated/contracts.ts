@@ -96,6 +96,10 @@ export interface Requirement {
  * reads the one application it opened.
  */
 export interface Card {
+  /**
+   * ApplicationDeadline is the source-stated last application day (YYYY-MM-DD), inclusive.
+   */
+  application_deadline?: string;
   public_slug: string;
   title: string;
   company: string;
@@ -289,6 +293,10 @@ export interface Job {
    * providers we can drive" must not be read as "checked and ineligible".
    */
   auto_apply_available?: boolean;
+  /**
+   * ApplicationDeadline is the source-stated last application day (YYYY-MM-DD), inclusive.
+   */
+  application_deadline?: string;
   posted_at?: string;
   created_at?: string;
   updated_at?: string;

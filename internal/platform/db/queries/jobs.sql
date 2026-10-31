@@ -351,10 +351,30 @@ LIMIT $2 OFFSET $3;
 -- statement), so RETURNING can report whether the write inserted a new row
 -- (`inserted`) or changed its searchable content (`changed`, true on insert and
 -- for a legacy NULL hash). A re-ingest that only bumps last_seen_at reports both
--- false and needs no re-push to the search index.
+-- false and needs no re-push to the search index. A reopen deliberately reads a NULL old
+-- hash, so identical content still returns to search.
 WITH existing AS (
-    SELECT content_hash AS old_hash, true AS existed FROM jobs
+    SELECT id, closed_at, closed_reason, application_deadline, is_private,
+           CASE WHEN closed_at IS NULL THEN content_hash END AS old_hash, true AS existed
+    FROM jobs
     WHERE source = sqlc.arg(source) AND external_id = sqlc.arg(external_id)
+),
+-- An employer extending the deadline reopens the posting. Remove an older expiry's
+-- pending deletion so a delayed retry cannot delete the newly re-indexed document.
+reopened_dequeued AS (
+    DELETE FROM search_delete_outbox
+    WHERE job_id IN (
+        SELECT id FROM existing
+        WHERE closed_at IS NOT NULL AND closed_reason = 'expired'
+          AND sqlc.narg(application_deadline)::date >= (now() AT TIME ZONE 'UTC')::date
+    )
+),
+expired_queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM existing
+    WHERE closed_at IS NULL AND NOT is_private
+      AND COALESCE(sqlc.narg(application_deadline)::date, application_deadline) < (now() AT TIME ZONE 'UTC')::date
+    ON CONFLICT (job_id) DO NOTHING
 ),
 company_upsert AS (
     INSERT INTO companies (slug, name)
@@ -379,7 +399,7 @@ INSERT INTO jobs (
     public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
-    content_hash, role_fingerprint, requirements_derived, hydrated_at
+    content_hash, role_fingerprint, requirements_derived, hydrated_at, application_deadline, closed_at, closed_reason
 ) VALUES (
     sqlc.arg(source), sqlc.arg(external_id), sqlc.arg(url), sqlc.arg(title),
     sqlc.arg(company), sqlc.arg(company_slug), replace(sqlc.arg(company_slug), '-', ''), sqlc.arg(location), sqlc.arg(remote),
@@ -397,7 +417,9 @@ INSERT INTO jobs (
     COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb),
     -- A first ingest reads the posting's body, so the row starts out freshly hydrated. NULL
     -- is reserved for the rows that predate the column (see 0144), which read as stale.
-    now()
+    now(), sqlc.narg(application_deadline)::date,
+    CASE WHEN sqlc.narg(application_deadline)::date < (now() AT TIME ZONE 'UTC')::date THEN now() END,
+    CASE WHEN sqlc.narg(application_deadline)::date < (now() AT TIME ZONE 'UTC')::date THEN 'expired' ELSE '' END
 )
 -- public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 -- at insert and is the row's stable public identity. Re-ingest of the same
@@ -421,6 +443,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- rebuilds its doc from the RETURNING row, which carries this preserved value.)
     description  = COALESCE(NULLIF(EXCLUDED.description, ''), jobs.description),
     posted_at    = EXCLUDED.posted_at,
+    application_deadline = COALESCE(EXCLUDED.application_deadline, jobs.application_deadline),
     countries    = EXCLUDED.countries,
     regions      = EXCLUDED.regions,
     cities       = EXCLUDED.cities,
@@ -470,8 +493,13 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- reopen (the row was closed) resets the strike count so a single later expired
     -- probe can't immediately re-close it — the two-strike grace survives a reopen.
     last_seen_at = now(),
-    closed_at    = NULL,
-    closed_reason = '',
+    closed_at = CASE
+        WHEN COALESCE(EXCLUDED.application_deadline, jobs.application_deadline) < (now() AT TIME ZONE 'UTC')::date
+        THEN COALESCE(jobs.closed_at, now())
+        ELSE NULL END,
+    closed_reason = CASE
+        WHEN COALESCE(EXCLUDED.application_deadline, jobs.application_deadline) < (now() AT TIME ZONE 'UTC')::date
+        THEN 'expired' ELSE '' END,
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     -- A company correction (rare, but real — e.g. a slug fix on re-ingest) invalidates
     -- this job's already-precomputed similar-jobs list: it may have been computed
@@ -489,7 +517,13 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     updated_at   = now()
 RETURNING sqlc.embed(jobs),
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
-    ((SELECT old_hash FROM existing) IS DISTINCT FROM sqlc.arg(content_hash)) AS changed;
+    -- The deadline rides the search document without changing the global content-hash
+    -- format. Compare the resulting stored date: a missing incoming date preserves it.
+    COALESCE(
+        (SELECT old_hash FROM existing) IS DISTINCT FROM sqlc.arg(content_hash)
+        OR (SELECT application_deadline FROM existing) IS DISTINCT FROM jobs.application_deadline,
+        false
+    )::boolean AS changed;
 
 -- name: BackfillBoardCompany :one
 -- Fills company/company_slug/company_slug_folded for rows still blank under one board of a
@@ -602,6 +636,8 @@ WHERE source = sqlc.arg(source)
   AND salary_period_source = sqlc.arg(salary_period_source)
   AND english_level = sqlc.arg(english_level)
   AND is_tech IS NOT DISTINCT FROM sqlc.arg(is_tech)
+  AND application_deadline IS NOT DISTINCT FROM COALESCE(sqlc.narg(application_deadline)::date, application_deadline)
+  AND (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
   AND closed_at IS NULL
 RETURNING id, source, company_slug, duplicate_of;
 
@@ -2198,28 +2234,56 @@ WHERE source = sqlc.arg(source)
 -- name: TouchJob :one
 -- Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the
 -- crawl re-listed the offer but fetched no fresh content (detail is fetched only for new
--- offers), so refresh last_seen_at and reopen if it had been closed — WITHOUT touching the
+-- offers), so refresh last_seen_at and reopen if it had been closed, unless its stored
+-- application deadline has passed. Expiry closes and queues removal atomically, WITHOUT touching the
 -- content columns. A full upsert of the content-less listing would re-derive the deterministic
 -- facets from an empty description and wipe the row's hydrated description/skills. This is the
 -- reopen half of UpsertJob's ON CONFLICT, minus every content write. RETURNING company_slug so
 -- the caller records the company into the crawled-set that scopes the post-run unseen sweep —
 -- exactly as UpsertJob's write path does — otherwise a company whose offers were all touched
 -- (not newly saved) would drop out of the sweep and its removed offers would never close.
-UPDATE jobs
-SET last_seen_at = now(),
-    closed_at    = NULL,
-    closed_reason = '',
-    -- A reopen resets the strike count so a single later expired probe can't immediately
-    -- re-close it, mirroring UpsertJob.
-    liveness_strikes = CASE WHEN closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
-    -- updated_at moves ONLY on a reopen. A re-listing that changed nothing is not a content
-    -- change, and stamping it would keep the column meaning "last crawled" — the same economy
-    -- RefreshUnchangedJob brings to the board path, applied to the hydrating one. A reopen IS a
-    -- change the search reconciler must see, so that case still stamps. The RHS reads the row's
-    -- pre-update closed_at, which is why one CASE serves both this and the strike reset above.
-    updated_at   = CASE WHEN closed_at IS NOT NULL THEN now() ELSE updated_at END
-WHERE source = sqlc.arg(source) AND external_id = sqlc.arg(external_id)
-RETURNING company_slug;
+WITH existing AS (
+    SELECT id, closed_at, is_private FROM jobs
+    WHERE jobs.source = sqlc.arg(source) AND jobs.external_id = sqlc.arg(external_id)
+), touched AS (
+    UPDATE jobs
+    SET last_seen_at = now(),
+        closed_at = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
+                         THEN COALESCE(closed_at, now()) ELSE NULL END,
+        closed_reason = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
+                             THEN 'expired' ELSE '' END,
+        liveness_strikes = CASE WHEN closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
+        -- Stamp a lifecycle transition, not another observation of an expired posting.
+        updated_at = CASE
+            WHEN (closed_at IS NULL) IS DISTINCT FROM
+                 (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
+            THEN now() ELSE updated_at END
+    WHERE jobs.source = sqlc.arg(source) AND jobs.external_id = sqlc.arg(external_id)
+    RETURNING id, company_slug, closed_at
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT t.id FROM touched t JOIN existing e ON e.id = t.id
+    WHERE t.closed_at IS NOT NULL AND e.closed_at IS NULL AND NOT e.is_private
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT company_slug FROM touched;
+
+-- name: CloseJobsPastApplicationDeadline :one
+-- The source's deadline is inclusive: it expires on the following UTC date. Independent of
+-- crawl success/quiet periods, and atomically queued for removal from the live search index.
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at = now(), closed_reason = 'expired', updated_at = now()
+    WHERE application_deadline < (now() AT TIME ZONE 'UTC')::date
+      AND closed_at IS NULL AND NOT is_private
+      AND (sqlc.arg(source)::text = '' OR jobs.source = sqlc.arg(source)::text)
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed;
 
 -- name: RefreshCoveredJobs :many
 -- Liveness refresh for the postings an aggregator board listed but the coverage gate kept out

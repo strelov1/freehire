@@ -1885,6 +1885,10 @@ components:
         external_id:
           type: string
           description: The source's own identifier for the posting.
+        application_deadline:
+          type: string
+          format: date
+          description: Source-stated last application day, inclusive. Absent when the source states no deadline.
         manually_added:
           type: boolean
           description: True for a hand-curated posting rather than an automated crawl.

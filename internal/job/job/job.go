@@ -47,9 +47,10 @@ type Salary struct {
 type Draft struct {
 	jobderive.Input
 
-	URL      string
-	Remote   bool
-	PostedAt *time.Time
+	URL                 string
+	Remote              bool
+	PostedAt            *time.Time
+	ApplicationDeadline *time.Time
 
 	ManualSalary *Salary
 
@@ -68,17 +69,18 @@ type Draft struct {
 // the wire projection and search indexing. A Fields can be freely constructed, but
 // it is not a Job and cannot be persisted, so the construction invariant holds.
 type Fields struct {
-	Source      string
-	ExternalID  string
-	URL         string
-	Title       string
-	Company     string
-	CompanySlug string
-	PublicSlug  string
-	Location    string
-	Remote      bool
-	Description string
-	PostedAt    *time.Time
+	Source              string
+	ExternalID          string
+	URL                 string
+	Title               string
+	Company             string
+	CompanySlug         string
+	PublicSlug          string
+	Location            string
+	Remote              bool
+	Description         string
+	PostedAt            *time.Time
+	ApplicationDeadline *time.Time
 
 	// deterministic dictionary facets
 	Countries []string
@@ -179,17 +181,18 @@ func New(d Draft) (Job, error) {
 		der.CompanySlug = d.CanonicalCompanySlug
 	}
 	return Job{f: Fields{
-		Source:      d.Source,
-		ExternalID:  d.ExternalID,
-		URL:         d.URL,
-		Title:       d.Title,
-		Company:     d.Company,
-		CompanySlug: der.CompanySlug,
-		PublicSlug:  der.PublicSlug,
-		Location:    in.Location,
-		Remote:      d.Remote,
-		Description: d.Description,
-		PostedAt:    d.PostedAt,
+		Source:              d.Source,
+		ExternalID:          d.ExternalID,
+		URL:                 d.URL,
+		Title:               d.Title,
+		Company:             d.Company,
+		CompanySlug:         der.CompanySlug,
+		PublicSlug:          der.PublicSlug,
+		Location:            in.Location,
+		Remote:              d.Remote,
+		Description:         d.Description,
+		PostedAt:            d.PostedAt,
+		ApplicationDeadline: d.ApplicationDeadline,
 
 		Countries: der.Countries,
 		Regions:   der.Regions,
@@ -240,26 +243,27 @@ func (j Job) Fields() Fields { return j.f }
 // Enrichment columns are deliberately excluded — SetJobEnrichment owns those.
 func (f Fields) UpsertParams() db.UpsertJobParams {
 	p := db.UpsertJobParams{
-		Source:      f.Source,
-		ExternalID:  f.ExternalID,
-		URL:         f.URL,
-		Title:       f.Title,
-		Company:     f.Company,
-		CompanySlug: f.CompanySlug,
-		PublicSlug:  f.PublicSlug,
-		Location:    f.Location,
-		Remote:      f.Remote,
-		Description: f.Description,
-		PostedAt:    pgconv.Timestamptz(f.PostedAt),
-		Countries:   f.Countries,
-		Regions:     f.Regions,
-		Cities:      f.Cities,
-		Metros:      f.Metros,
-		WorkMode:    f.WorkMode,
-		Skills:      f.Skills,
-		Seniority:   f.Seniority,
-		Category:    f.Category,
-		IsTech:      pgconv.Bool(f.IsTech),
+		Source:              f.Source,
+		ExternalID:          f.ExternalID,
+		URL:                 f.URL,
+		Title:               f.Title,
+		Company:             f.Company,
+		CompanySlug:         f.CompanySlug,
+		PublicSlug:          f.PublicSlug,
+		Location:            f.Location,
+		Remote:              f.Remote,
+		Description:         f.Description,
+		PostedAt:            pgconv.Timestamptz(f.PostedAt),
+		ApplicationDeadline: pgconv.Date(f.ApplicationDeadline),
+		Countries:           f.Countries,
+		Regions:             f.Regions,
+		Cities:              f.Cities,
+		Metros:              f.Metros,
+		WorkMode:            f.WorkMode,
+		Skills:              f.Skills,
+		Seniority:           f.Seniority,
+		Category:            f.Category,
+		IsTech:              pgconv.Bool(f.IsTech),
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
 		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
