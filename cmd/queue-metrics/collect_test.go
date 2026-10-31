@@ -401,12 +401,9 @@ func TestCountEmploymentBoilerplate(t *testing.T) {
 		"contract_boilerplate": 1,
 		"permanent_status":     1,
 	}
-	if len(got.counts) != len(want) {
-		t.Fatalf("kinds = %d, want %d", len(got.counts), len(want))
-	}
-	for _, c := range got.counts {
-		if c.count != want[c.kind] {
-			t.Errorf("kind %s = %d, want %d", c.kind, c.count, want[c.kind])
+	for kind, n := range want {
+		if got.counts[kind] != n {
+			t.Errorf("kind %s = %d, want %d", kind, got.counts[kind], n)
 		}
 	}
 }
@@ -423,10 +420,8 @@ func TestCountEmploymentBoilerplateCapsTheSample(t *testing.T) {
 	if !got.truncated || got.sampleSize != 500 {
 		t.Fatalf("sample = %d truncated %v, want 500/true", got.sampleSize, got.truncated)
 	}
-	for _, c := range got.counts {
-		if c.kind == "part_time_pay_policy" && c.count != 500 {
-			t.Errorf("part_time_pay_policy = %d, want 500", c.count)
-		}
+	if got.counts["part_time_pay_policy"] != 500 {
+		t.Errorf("part_time_pay_policy = %d, want 500", got.counts["part_time_pay_policy"])
 	}
 }
 
@@ -441,17 +436,8 @@ func TestCollectCountsEmploymentBoilerplate(t *testing.T) {
 	if got.boilerplate.sampleSize != 1 || got.boilerplate.truncated {
 		t.Fatalf("sample = %+v, want size 1", got.boilerplate)
 	}
-	var found bool
-	for _, c := range got.boilerplate.counts {
-		if c.kind == "part_time_pay_policy" {
-			found = true
-			if c.count != 1 {
-				t.Errorf("part_time_pay_policy = %d, want 1", c.count)
-			}
-		}
-	}
-	if !found {
-		t.Fatal("part_time_pay_policy was not published")
+	if got.boilerplate.counts["part_time_pay_policy"] != 1 {
+		t.Errorf("part_time_pay_policy = %d, want 1", got.boilerplate.counts["part_time_pay_policy"])
 	}
 }
 

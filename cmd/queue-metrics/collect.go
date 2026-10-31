@@ -224,11 +224,7 @@ func countEmploymentBoilerplate(rows []db.EmploymentBoilerplateCandidatesRow) em
 		}
 		counts[kind]++
 	}
-	out := employmentBoilerplate{sampleSize: int64(len(rows)), truncated: truncated}
-	for _, kind := range employmentBoilerplateKinds {
-		out.counts = append(out.counts, boilerplateCount{kind: kind, count: counts[kind]})
-	}
-	return out
+	return employmentBoilerplate{counts: counts, sampleSize: int64(len(rows)), truncated: truncated}
 }
 
 // newestJobTime reports when the catalogue last gained an open posting, or the zero time

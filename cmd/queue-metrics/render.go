@@ -111,13 +111,8 @@ type snapshot struct {
 	boilerplate employmentBoilerplate
 }
 
-type boilerplateCount struct {
-	kind  string
-	count int64
-}
-
 type employmentBoilerplate struct {
-	counts     []boilerplateCount
+	counts     map[string]int64
 	sampleSize int64
 	truncated  bool
 }
@@ -316,14 +311,10 @@ func render(s snapshot) string {
 }
 
 func writeEmploymentBoilerplate(b *strings.Builder, measured employmentBoilerplate) {
-	counts := make(map[string]int64, len(measured.counts))
-	for _, c := range measured.counts {
-		counts[c.kind] = c.count
-	}
 	writeHeader(b, "freehire_employment_boilerplate",
 		"Open postings in the recent sample whose stored employment type is explained only by boilerplate the dictionary ignores.")
 	for _, kind := range employmentBoilerplateKinds {
-		fmt.Fprintf(b, "freehire_employment_boilerplate{kind=%q} %d\n", kind, counts[kind])
+		fmt.Fprintf(b, "freehire_employment_boilerplate{kind=%q} %d\n", kind, measured.counts[kind])
 	}
 	writeHeader(b, "freehire_employment_boilerplate_sample_size",
 		"Open postings examined for an employment-type boilerplate label, at most 500.")

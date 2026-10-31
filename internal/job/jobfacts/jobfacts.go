@@ -128,8 +128,7 @@ var (
 // returning one of vocab.EmploymentTypeValues or "" when nothing is stated. It
 // never assumes full-time for an unstated posting.
 func EmploymentType(title, description string) string {
-	t := strings.ReplaceAll(strings.ToLower(title), "’", "'")
-	s := t + "\n" + strings.ReplaceAll(strings.ToLower(description), "’", "'")
+	t, s := employmentText(title, description)
 	switch {
 	case reFellowship.MatchString(s) && !reFellowshipStaffRole.MatchString(s):
 		return "fellowship"
@@ -186,12 +185,14 @@ func PartTimePayPolicyOnly(title, description string) bool {
 }
 
 func EmploymentBoilerplateKind(stored, title, description string) string {
-	_, s := employmentText(title, description)
-	switch stored {
-	case "part_time":
-		if rePartTime.MatchString(s) && !partTimeSchedule(s) {
+	if stored == "part_time" {
+		if PartTimePayPolicyOnly(title, description) {
 			return "part_time_pay_policy"
 		}
+		return ""
+	}
+	_, s := employmentText(title, description)
+	switch stored {
 	case "full_time":
 		if fullTimePayPolicyOnly(s) {
 			return "full_time_pay_policy"
@@ -214,73 +215,103 @@ func employmentText(title, description string) (string, string) {
 
 func fullTimePayPolicyOnly(s string) bool {
 	saw := false
-	for _, loc := range reFullTime.FindAllStringIndex(s, -1) {
-		if s[loc[0]:loc[1]] == "permanent" {
-			if permanentSchedule(s, loc[0]) {
-				return false
+	real := false
+	eachMatch(s, reFullTime, func(at int, word string) bool {
+		if word == "permanent" {
+			if permanentSchedule(s, at) {
+				real = true
+				return true
 			}
-			if !classPayPolicy(s, loc[0], rePermanentPolicy) {
-				continue
+			if classPayPolicy(s, at, rePermanentPolicy) {
+				saw = true
 			}
-			saw = true
-			continue
-		}
-		if !classPayPolicy(s, loc[0], reFullTimePolicy) {
 			return false
 		}
+		if !classPayPolicy(s, at, reFullTimePolicy) {
+			real = true
+			return true
+		}
 		saw = true
-	}
-	return saw
+		return false
+	})
+	return saw && !real
 }
 
 func permanentStatusOnly(s string) bool {
 	saw := false
-	for _, loc := range reFullTime.FindAllStringIndex(s, -1) {
-		if s[loc[0]:loc[1]] != "permanent" {
-			return false
+	real := false
+	eachMatch(s, reFullTime, func(at int, word string) bool {
+		if word != "permanent" {
+			real = true
+			return true
 		}
-		if permanentSchedule(s, loc[0]) || classPayPolicy(s, loc[0], rePermanentPolicy) {
-			return false
+		if permanentSchedule(s, at) || classPayPolicy(s, at, rePermanentPolicy) {
+			real = true
+			return true
 		}
 		saw = true
-	}
-	return saw
+		return false
+	})
+	return saw && !real
 }
 
 func contractBoilerplateOnly(s string) bool {
 	if contractSchedule(s) {
 		return false
 	}
-	return reContract.MatchString(s) || reContractInstrument.MatchString(s)
+	return reContract.MatchString(s)
 }
 
 func partTimeSchedule(s string) bool {
-	for _, loc := range rePartTime.FindAllStringIndex(s, -1) {
-		if !partTimePayPolicy(s, loc[0]) {
+	found := false
+	eachMatch(s, rePartTime, func(at int, _ string) bool {
+		if !classPayPolicy(s, at, rePartTimePolicy) {
+			found = true
 			return true
 		}
-	}
-	return false
-}
-
-func partTimePayPolicy(s string, at int) bool {
-	return classPayPolicy(s, at, rePartTimePolicy)
+		return false
+	})
+	return found
 }
 
 func fullTimeSchedule(s string) bool {
-	for _, loc := range reFullTime.FindAllStringIndex(s, -1) {
-		switch s[loc[0]:loc[1]] {
+	found := false
+	eachMatch(s, reFullTime, func(at int, word string) bool {
+		switch word {
 		case "permanent":
-			if permanentSchedule(s, loc[0]) {
+			if permanentSchedule(s, at) {
+				found = true
 				return true
 			}
 		default:
-			if !classPayPolicy(s, loc[0], reFullTimePolicy) {
+			if !classPayPolicy(s, at, reFullTimePolicy) {
+				found = true
 				return true
 			}
 		}
+		return false
+	})
+	return found
+}
+
+func eachMatch(s string, re *regexp.Regexp, fn func(at int, word string) bool) {
+	from := 0
+	for from <= len(s) {
+		loc := re.FindStringIndex(s[from:])
+		if loc == nil {
+			return
+		}
+		at := from + loc[0]
+		end := from + loc[1]
+		if fn(at, s[at:end]) {
+			return
+		}
+		if end <= from {
+			from = at + 1
+		} else {
+			from = end
+		}
 	}
-	return false
 }
 
 func permanentSchedule(s string, at int) bool {
@@ -314,12 +345,16 @@ func sentenceAround(s string, at int) string {
 }
 
 func contractSchedule(s string) bool {
+	hits := reContract.FindAllStringIndex(s, -1)
+	if len(hits) == 0 {
+		return reContractShorthand.MatchString(s)
+	}
 	if reContractShorthand.MatchString(s) {
 		return true
 	}
 	covers := reContractInstrument.FindAllStringIndex(s, -1)
 	notJob := reTemporaryNotJob.FindAllStringIndex(s, -1)
-	for _, m := range reContract.FindAllStringIndex(s, -1) {
+	for _, m := range hits {
 		if spanCovered(m, covers) || spanCovered(m, notJob) {
 			continue
 		}
