@@ -7,6 +7,7 @@
   import { timeAgo } from '#lib/utils.js';
   import type { BoardItem } from '#lib/board.js';
   import type { MyJob } from '#lib/types.js';
+  import InfiniteScroll from './InfiniteScroll.svelte';
   import { messages } from './BoardList.messages';
   import { format, plural, t } from '#lib/i18n/t.js';
 
@@ -27,13 +28,21 @@
   const company = (i: BoardItem) => i.job?.company || i.company_slug;
   const title = (i: BoardItem) => i.job?.title || i.role_title;
   const s = $derived(t(messages, locale()));
+
+  // Rows are drawn a page at a time as the list scrolls: each carries a stage select of
+  // every stage, so 500 applications were ~10k nodes built on load. Nothing is fetched —
+  // the rows are already here — so there is no failure to retry, and a keyboard user
+  // tabbing down scrolls the next page in like anyone else.
+  const PAGE = 50;
+  let limit = $state(PAGE);
+  const visible = $derived(items.length > limit ? items.slice(0, limit) : items);
 </script>
 
 {#if items.length === 0}
   <p class="py-8 text-center text-sm text-muted-foreground">{s.empty}</p>
 {:else}
   <ul class="flex flex-col divide-y divide-border rounded-xl border border-border">
-    {#each items as item (item.id)}
+    {#each visible as item (item.id)}
       <li class="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/50">
         <!-- The employer and role open the application; the stage control beside them
              does not, so it is a sibling rather than a child. -->
@@ -93,4 +102,5 @@
       </li>
     {/each}
   </ul>
+  <InfiniteScroll enabled={items.length > limit} onLoad={() => (limit += PAGE)} />
 {/if}
