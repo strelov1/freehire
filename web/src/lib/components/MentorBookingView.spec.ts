@@ -71,7 +71,7 @@ describe('MentorBookingView', () => {
     view(loadSlots);
 
     await waitFor(() => expect(screen.getByText('March 2027')).toBeTruthy());
-    expect(screen.getByRole('button', { name: '1', exact: true }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: '1' }).hasAttribute('disabled')).toBe(false);
   });
 
   it('opens on the first month with an open hour when the current month has none', async () => {
