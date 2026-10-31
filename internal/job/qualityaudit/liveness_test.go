@@ -2,6 +2,7 @@ package qualityaudit
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -300,5 +301,46 @@ func TestAuditRobotsRefusalEndsTheHost(t *testing.T) {
 	got := byID(newAuditor(100).Run(context.Background(), []Posting{posting(1, "x", srv.URL, "120001", "/j/120001")}))
 	if got[1].Reason != ReasonRefused || asked.Load() != 0 {
 		t.Errorf("result = %+v after %d requests, want refused and nothing asked", got[1], asked.Load())
+	}
+}
+
+func TestAuditRedirectHopsArePacedAndBudgeted(t *testing.T) {
+	var hits atomic.Int64
+	mux := http.NewServeMux()
+	mux.HandleFunc("/j/130001", func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		http.Redirect(w, r, "/j/130001/", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("/j/130001/", func(w http.ResponseWriter, _ *http.Request) { hits.Add(1); _, _ = w.Write([]byte("ok")) })
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { hits.Add(1); http.NotFound(w, r) })
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	// robots.txt + canary + the posting's first hop: the budget has nothing left for the second.
+	got := byID(newAuditor(3).Run(context.Background(), []Posting{posting(1, "x", srv.URL, "130001", "/j/130001")}))
+	if got[1].Reason != ReasonBudget {
+		t.Errorf("result = %+v, want budget", got[1])
+	}
+	if n := hits.Load(); n != 3 {
+		t.Errorf("host was asked %d times, want 3", n)
+	}
+}
+
+func TestAuditFollowsFiveRedirects(t *testing.T) {
+	mux := http.NewServeMux()
+	for i := range 5 {
+		mux.HandleFunc(fmt.Sprintf("/j/140001/%d", i), func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, fmt.Sprintf("/j/140001/%d", i+1), http.StatusFound)
+		})
+	}
+	var reached atomic.Int64
+	mux.HandleFunc("/j/140001/5", func(w http.ResponseWriter, _ *http.Request) { reached.Add(1); _, _ = w.Write([]byte("ok")) })
+	mux.HandleFunc("/", http.NotFound)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	newAuditor(100).Run(context.Background(), []Posting{posting(1, "x", srv.URL, "140001", "/j/140001/0")})
+	if reached.Load() != 1 {
+		t.Error("the fifth redirect was not followed")
 	}
 }

@@ -3,6 +3,7 @@ package qualityaudit
 import (
 	"cmp"
 	"context"
+	"errors"
 	"io"
 	"math/rand/v2"
 	"net/http"
@@ -135,7 +136,7 @@ func (a *Auditor) host(ctx context.Context, origin string, postings []Posting, b
 	}
 	p := pacer{interval: a.HostInterval, budget: budget}
 
-	status, _, body, ok := p.get(ctx, sameHostClient(a.Client, host, robots{}), origin+"/robots.txt", true)
+	status, _, body, ok := p.get(ctx, p.client(a.Client, host, robots{}), origin+"/robots.txt", true)
 	if !ok {
 		return rest(0, p.stopReason(ctx))
 	}
@@ -145,7 +146,7 @@ func (a *Auditor) host(ctx context.Context, origin string, postings []Posting, b
 		return rest(0, ReasonRefused)
 	}
 	rules := robotsFromStatus(status, body)
-	client := sameHostClient(a.Client, host, rules)
+	client := p.client(a.Client, host, rules)
 	if rules.crawlDelay > a.MaxCrawlDelay {
 		return rest(0, ReasonRobots)
 	}
@@ -211,15 +212,23 @@ func calibrate(ctx context.Context, p *pacer, client *http.Client, rules robots,
 	return false, ""
 }
 
-// sameHostClient returns a copy of base that follows a redirect only while it stays on host, on a
-// path rules allow, within maxRedirects hops. Any other redirect is handed back unfollowed (and
-// reads as moved): the robots check and the pacing were done for THIS host, and following a
-// posting off to somebody else's site would probe it with neither.
-func sameHostClient(base *http.Client, host string, rules robots) *http.Client {
+// errStopped ends a redirect chain whose next hop the pacer would not grant.
+var errStopped = errors.New("qualityaudit: budget spent or run stopped")
+
+// client returns a copy of base that follows a redirect only while it stays on host, on a path
+// rules allow, within maxRedirects hops — and each hop waits its turn and draws on the budget like
+// any other request to the host. Any other redirect is handed back unfollowed (and reads as
+// moved): the robots check and the pacing were done for THIS host, and following a posting off to
+// somebody else's site would probe it with neither.
+func (p *pacer) client(base *http.Client, host string, rules robots) *http.Client {
 	c := *base
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) >= maxRedirects || !strings.EqualFold(req.URL.Host, host) || !rules.allowed(req.URL.RequestURI()) {
+		// via holds every request made so far, so the fifth redirect sees five.
+		if len(via) > maxRedirects || !strings.EqualFold(req.URL.Host, host) || !rules.allowed(req.URL.RequestURI()) {
 			return http.ErrUseLastResponse
+		}
+		if !p.turn(req.Context()) {
+			return errStopped
 		}
 		return nil
 	}
@@ -238,21 +247,9 @@ type pacer struct {
 // returns up to maxRobots of the body as text (robots.txt); otherwise up to maxDrain is drained
 // and dropped.
 func (p *pacer) get(ctx context.Context, client *http.Client, rawURL string, withBody bool) (status int, final *url.URL, body string, ok bool) {
-	if !p.last.IsZero() {
-		if wait := time.Until(p.last.Add(p.interval)); wait > 0 {
-			t := time.NewTimer(wait)
-			select {
-			case <-ctx.Done():
-				t.Stop()
-				return 0, nil, "", false
-			case <-t.C:
-			}
-		}
-	}
-	if ctx.Err() != nil || p.budget.Add(-1) < 0 {
+	if !p.turn(ctx) {
 		return 0, nil, "", false
 	}
-	p.last = time.Now()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -261,6 +258,9 @@ func (p *pacer) get(ctx context.Context, client *http.Client, rawURL string, wit
 	req.Header.Set("User-Agent", liveness.UserAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 	resp, err := client.Do(req)
+	if errors.Is(err, errStopped) {
+		return 0, nil, "", false
+	}
 	if err != nil {
 		return 0, nil, "", true
 	}
@@ -278,6 +278,27 @@ func (p *pacer) get(ctx context.Context, client *http.Client, rawURL string, wit
 		body = string(b)
 	}
 	return resp.StatusCode, resp.Request.URL, body, true
+}
+
+// turn waits until the host's interval has passed since the last request and takes one request
+// from the budget. False means the budget is spent or the run was stopped.
+func (p *pacer) turn(ctx context.Context) bool {
+	if !p.last.IsZero() {
+		if wait := time.Until(p.last.Add(p.interval)); wait > 0 {
+			t := time.NewTimer(wait)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return false
+			case <-t.C:
+			}
+		}
+	}
+	if ctx.Err() != nil || p.budget.Add(-1) < 0 {
+		return false
+	}
+	p.last = time.Now()
+	return true
 }
 
 // stopReason names why get refused to make a request.
