@@ -26,13 +26,15 @@ var (
 	reDay    = regexp.MustCompile(`(?i)(?:per\s+day|/\s*day\b|p/d\b|man-day|/\s*md\b)`)
 	reUpTo   = regexp.MustCompile(`(?i)\bup to\b`)
 	reFrom   = regexp.MustCompile(`(?i)\bfrom\b`)
-	reMoney  = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)\+?|(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?)\+?`)
-	// reScaled is a money token with a k/m suffix ("$120k", "1,200k"). reMoney
-	// would keep the digits and drop the suffix. A benefit word ("401k") is not
-	// a money token, so it is not this.
-	reScaled = regexp.MustCompile(`(?i)(?:(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*|\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?)\s*[km]\b`)
+	reMoney  = regexp.MustCompile(`(?i)(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)\+?|(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?)\+?`)
+	// reScaled is a money token with a k/m suffix ("$120k", "1,200k", "100,000 - 150k").
+	// reMoney would keep the digits and drop the suffix. A benefit word ("401k")
+	// is not a money token and is not a range bound, so it is not this.
+	reScaled = regexp.MustCompile(`(?i)(?:` +
+		`(?:(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*|\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|[-–—]\s*\d[\d.,]*)\s*[km]\b` +
+		`|\d[\d.,]*\s*[km]\b\s*[-–—])`)
 	// reOpenRange is a dash-joined second bound reMoney does not read ("$50 - 60").
-	reOpenRange     = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
+	reOpenRange     = regexp.MustCompile(`(?i)(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
 	reTrailRange    = regexp.MustCompile(`(?i)\d[\d.,]+\s*(?:us\$|ca\$|au\$|nz\$|hk\$|a\$|c\$|s\$|rp|zł|£|€|\$|usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\s*[-–—]\s*\d`)
 	reBenefitClause = regexp.MustCompile(`(?i)` +
 		`(?:(?:[$£€]|zł|(?:us|ca|au|nz|hk|a|c|s)\$|rp)\s*)?` +
@@ -87,7 +89,7 @@ func Parse(description string, countries []string) (Salary, bool) {
 					continue
 				}
 				if loc := reMoney.FindStringIndex(next); loc != nil && loc[0] == 0 && !benefitOnly(next) {
-					body = next
+					body = withoutBenefit(next)
 				}
 				break
 			}
@@ -130,7 +132,7 @@ func parseLine(body string, countries []string) (Salary, bool) {
 		sal.Min, sal.Max = ip(lo), ip(hi)
 	case reUpTo.MatchString(body):
 		sal.Max = ip(nums[0])
-	case reFrom.MatchString(body) || strings.Contains(body, "+"):
+	case reFrom.MatchString(body) || figurePlus(body):
 		sal.Min = ip(nums[0])
 	default:
 		n := nums[0]
@@ -160,7 +162,20 @@ func benefitOnly(line string) bool {
 	if !reBenefitClause.MatchString(line) {
 		return false
 	}
-	return len(amountsIn(reBenefitClause.ReplaceAllString(line, " "))) == 0
+	return len(amountsIn(withoutBenefit(line))) == 0
+}
+
+func withoutBenefit(line string) string {
+	return strings.TrimSpace(reBenefitClause.ReplaceAllString(line, " "))
+}
+
+func figurePlus(body string) bool {
+	for _, loc := range reMoney.FindAllStringIndex(body, -1) {
+		if strings.HasSuffix(body[loc[0]:loc[1]], "+") {
+			return true
+		}
+	}
+	return false
 }
 
 func contradicts(lines []string, used string, sal Salary) bool {
