@@ -451,8 +451,14 @@ func ParseIn(location string, known []string) Geo {
 		stated = hint
 	}
 	resolvePending(pending, stated, citySet)
+	// Keep aliases separate until their metros are resolved: two segments can name
+	// different places called Franklin, each with its own metro.
+	aliasesBySegment := map[string]map[string]struct{}{}
 	for _, h := range aliasCities {
-		addAliasCity(citySet, h.ce, h.tok, stated, segmentSubdivisions[h.segment])
+		if aliasesBySegment[h.segment] == nil {
+			aliasesBySegment[h.segment] = map[string]struct{}{}
+		}
+		addAliasCity(aliasesBySegment[h.segment], h.ce, h.tok, stated, segmentSubdivisions[h.segment])
 	}
 
 	// Nothing in the line stated a country, so the long-tail cities get to — but only
@@ -478,7 +484,6 @@ func ParseIn(location string, known []string) Geo {
 
 	// A metro needs one stated country: a line naming two cannot place a city in either
 	// without guessing.
-	var metros []string
 	metroCountry := ""
 	if len(countrySet) == 1 {
 		for c := range countrySet {
@@ -489,15 +494,25 @@ func ParseIn(location string, known []string) Geo {
 			metroCountry = c
 		}
 	}
-	if metroCountry != "" && len(citySet) > 0 {
-		metroSet := map[string]struct{}{}
+	metroSet := map[string]struct{}{}
+	if metroCountry != "" {
 		for name := range citySet {
 			if v, ok := metroFor(name, metroCountry, statedSubdivisions); ok {
 				metroSet[v] = struct{}{}
 			}
 		}
-		metros = stringset.Sorted(metroSet)
 	}
+	for segment, names := range aliasesBySegment {
+		for name := range names {
+			citySet[name] = struct{}{}
+			if metroCountry != "" {
+				if v, ok := metroFor(name, metroCountry, segmentSubdivisions[segment]); ok {
+					metroSet[v] = struct{}{}
+				}
+			}
+		}
+	}
+	metros := stringset.Sorted(metroSet)
 	// A metropolitan region the line named ("Delhi NCR", "GBA", a Buenos Aires barrio) adds
 	// its metro, in that metro's country only.
 	if metroCountry != "" && len(regionMetros) > 0 {
