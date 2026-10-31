@@ -2307,6 +2307,15 @@ type Querier interface {
 	// any row, which is how the caller expresses "disabled" without a second query.
 	//
 	// hashtext is cast to bigint before abs(): abs() of int4's most negative value raises.
+	//
+	// A row whose stored application deadline has passed, but no earlier than
+	// deadline_recheck_from, is withheld as well. The listing carries no deadline (EURES states it
+	// only on the detail), so a re-listed posting's touch would close it on the stored date even
+	// when the employer has since extended it; re-reading the detail lets the upsert store the
+	// current date and reopen the row. Bounded, because a source that keeps listing an expired
+	// posting would otherwise cost a detail request on every crawl for good. Written as an OR over
+	// the kept cases rather than NOT over the withheld one: a NULL deadline (every source but EURES)
+	// would make the NOT form NULL and drop the row from the set.
 	ExistingExternalIDs(ctx context.Context, arg ExistingExternalIDsParams) ([]ExistingExternalIDsRow, error)
 	// Seen-set of ONE board of a multi-board provider. The lookup runs once per crawled board, so a
 	// provider-wide read is unaffordable where the provider is large: on workday it returns 1.27M ids
@@ -2321,7 +2330,8 @@ type Querier interface {
 	//
 	// hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried,
 	// and the body_refresh_* arm withholds one whose stored body has gone stale so an employer's
-	// edit is re-read; see ExistingExternalIDs for both.
+	// edit is re-read, and the deadline arm re-reads a posting whose stored deadline has just
+	// passed; see ExistingExternalIDs for all three.
 	ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error)
 	// Take up to batch_size STALE matches out of the pending set by stamping expired_at: a
 	// match older than the freshness window, or one whose job has closed. A stale match is

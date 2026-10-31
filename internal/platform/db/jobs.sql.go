@@ -1866,14 +1866,18 @@ WHERE source = $1
   AND (hydrated_at >= $3
        OR abs(hashtext(external_id)::bigint) % $4::bigint
           <> $5::bigint)
+  AND (application_deadline IS NULL
+       OR application_deadline >= (now() AT TIME ZONE 'UTC')::date
+       OR application_deadline < $6::date)
 `
 
 type ExistingExternalIDsParams struct {
-	Source            string             `json:"source"`
-	HydrationCutoff   pgtype.Timestamptz `json:"hydration_cutoff"`
-	BodyRefreshCutoff pgtype.Timestamptz `json:"body_refresh_cutoff"`
-	BodyRefreshSlices int64              `json:"body_refresh_slices"`
-	BodyRefreshSlot   int64              `json:"body_refresh_slot"`
+	Source              string             `json:"source"`
+	HydrationCutoff     pgtype.Timestamptz `json:"hydration_cutoff"`
+	BodyRefreshCutoff   pgtype.Timestamptz `json:"body_refresh_cutoff"`
+	BodyRefreshSlices   int64              `json:"body_refresh_slices"`
+	BodyRefreshSlot     int64              `json:"body_refresh_slot"`
+	DeadlineRecheckFrom pgtype.Date        `json:"deadline_recheck_from"`
 }
 
 type ExistingExternalIDsRow struct {
@@ -1909,6 +1913,15 @@ type ExistingExternalIDsRow struct {
 // any row, which is how the caller expresses "disabled" without a second query.
 //
 // hashtext is cast to bigint before abs(): abs() of int4's most negative value raises.
+//
+// A row whose stored application deadline has passed, but no earlier than
+// deadline_recheck_from, is withheld as well. The listing carries no deadline (EURES states it
+// only on the detail), so a re-listed posting's touch would close it on the stored date even
+// when the employer has since extended it; re-reading the detail lets the upsert store the
+// current date and reopen the row. Bounded, because a source that keeps listing an expired
+// posting would otherwise cost a detail request on every crawl for good. Written as an OR over
+// the kept cases rather than NOT over the withheld one: a NULL deadline (every source but EURES)
+// would make the NOT form NULL and drop the row from the set.
 func (q *Queries) ExistingExternalIDs(ctx context.Context, arg ExistingExternalIDsParams) ([]ExistingExternalIDsRow, error) {
 	rows, err := q.db.Query(ctx, existingExternalIDs,
 		arg.Source,
@@ -1916,6 +1929,7 @@ func (q *Queries) ExistingExternalIDs(ctx context.Context, arg ExistingExternalI
 		arg.BodyRefreshCutoff,
 		arg.BodyRefreshSlices,
 		arg.BodyRefreshSlot,
+		arg.DeadlineRecheckFrom,
 	)
 	if err != nil {
 		return nil, err
@@ -1943,15 +1957,19 @@ WHERE source = $1
   AND (hydrated_at >= $4
        OR abs(hashtext(external_id)::bigint) % $5::bigint
           <> $6::bigint)
+  AND (application_deadline IS NULL
+       OR application_deadline >= (now() AT TIME ZONE 'UTC')::date
+       OR application_deadline < $7::date)
 `
 
 type ExistingExternalIDsByBoardParams struct {
-	Source            string             `json:"source"`
-	Pattern           string             `json:"pattern"`
-	HydrationCutoff   pgtype.Timestamptz `json:"hydration_cutoff"`
-	BodyRefreshCutoff pgtype.Timestamptz `json:"body_refresh_cutoff"`
-	BodyRefreshSlices int64              `json:"body_refresh_slices"`
-	BodyRefreshSlot   int64              `json:"body_refresh_slot"`
+	Source              string             `json:"source"`
+	Pattern             string             `json:"pattern"`
+	HydrationCutoff     pgtype.Timestamptz `json:"hydration_cutoff"`
+	BodyRefreshCutoff   pgtype.Timestamptz `json:"body_refresh_cutoff"`
+	BodyRefreshSlices   int64              `json:"body_refresh_slices"`
+	BodyRefreshSlot     int64              `json:"body_refresh_slot"`
+	DeadlineRecheckFrom pgtype.Date        `json:"deadline_recheck_from"`
 }
 
 type ExistingExternalIDsByBoardRow struct {
@@ -1972,7 +1990,8 @@ type ExistingExternalIDsByBoardRow struct {
 //
 // hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried,
 // and the body_refresh_* arm withholds one whose stored body has gone stale so an employer's
-// edit is re-read; see ExistingExternalIDs for both.
+// edit is re-read, and the deadline arm re-reads a posting whose stored deadline has just
+// passed; see ExistingExternalIDs for all three.
 func (q *Queries) ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error) {
 	rows, err := q.db.Query(ctx, existingExternalIDsByBoard,
 		arg.Source,
@@ -1981,6 +2000,7 @@ func (q *Queries) ExistingExternalIDsByBoard(ctx context.Context, arg ExistingEx
 		arg.BodyRefreshCutoff,
 		arg.BodyRefreshSlices,
 		arg.BodyRefreshSlot,
+		arg.DeadlineRecheckFrom,
 	)
 	if err != nil {
 		return nil, err

@@ -121,12 +121,10 @@ export function boardRefFor(e: {
 
 export type BoardSort = 'default' | 'company' | 'added' | 'deadline';
 
-export function deadlineRemainingLabel(deadline: string, now = new Date()): string {
+/** Whole UTC calendar days from today to an inclusive deadline: 0 is the last day, negative is past. */
+export function daysUntilDeadline(deadline: string, now = new Date()): number {
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const days = Math.round((Date.parse(deadline) - today) / 86_400_000);
-  if (days < 0) return 'Application deadline passed';
-  if (days === 0) return 'Last day to apply';
-  return `${days} ${days === 1 ? 'day' : 'days'} left`;
+  return Math.round((Date.parse(deadline) - today) / 86_400_000);
 }
 
 export function parseBoardSort(value: string | null): BoardSort {

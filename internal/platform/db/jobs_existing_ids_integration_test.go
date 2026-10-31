@@ -381,3 +381,66 @@ func TestExistingExternalIDsSlicesStaleRowsAcrossRuns(t *testing.T) {
 		}
 	}
 }
+
+// The listing of a deadline-bearing source carries no deadline, so a row whose stored deadline
+// has just passed is withheld and its detail re-read — that is how an extension reaches it.
+// A row with no deadline, a future one, or one long past stays seen; the NULL case is the
+// regression to guard, since every other source stores no deadline at all.
+func TestExistingExternalIDsWithholdsRecentlyExpiredDeadlines(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	deadlines := map[string]string{
+		"acme:none":    "",
+		"acme:future":  "now()::date + 5",
+		"acme:recent":  "now()::date - 3",
+		"acme:ancient": "now()::date - 30",
+	}
+	for ext, expr := range deadlines {
+		if _, err := ingestUpsert(ctx, q, ingestParams(ext, "Engineer")); err != nil {
+			t.Fatalf("upsert %s: %v", ext, err)
+		}
+		if expr == "" {
+			continue
+		}
+		if _, err := pool.Exec(ctx, "UPDATE jobs SET application_deadline = "+expr+" WHERE external_id = $1", ext); err != nil {
+			t.Fatalf("set deadline %s: %v", ext, err)
+		}
+	}
+
+	offCutoff, offSlices, offSlot := bodyRefreshOff()
+	from := pgtype.Date{Time: time.Now().UTC().AddDate(0, 0, -14), Valid: true}
+	rows, err := q.ExistingExternalIDs(ctx, ExistingExternalIDsParams{
+		Source:              "greenhouse",
+		HydrationCutoff:     farFuture(),
+		BodyRefreshCutoff:   offCutoff,
+		BodyRefreshSlices:   offSlices,
+		BodyRefreshSlot:     offSlot,
+		DeadlineRecheckFrom: from,
+	})
+	if err != nil {
+		t.Fatalf("ExistingExternalIDs: %v", err)
+	}
+	want := []string{"acme:ancient", "acme:future", "acme:none"}
+	if got := seenIDs(rows); !slices.Equal(got, want) {
+		t.Errorf("provider seen = %v, want %v", got, want)
+	}
+
+	boardRows, err := q.ExistingExternalIDsByBoard(ctx, ExistingExternalIDsByBoardParams{
+		Source:              "greenhouse",
+		Pattern:             externalid.BoardPattern("acme"),
+		HydrationCutoff:     farFuture(),
+		BodyRefreshCutoff:   offCutoff,
+		BodyRefreshSlices:   offSlices,
+		BodyRefreshSlot:     offSlot,
+		DeadlineRecheckFrom: from,
+	})
+	if err != nil {
+		t.Fatalf("ExistingExternalIDsByBoard: %v", err)
+	}
+	if got := seenBoardIDs(boardRows); !slices.Equal(got, want) {
+		t.Errorf("board seen = %v, want %v", got, want)
+	}
+}

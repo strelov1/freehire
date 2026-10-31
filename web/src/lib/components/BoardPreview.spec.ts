@@ -10,8 +10,8 @@ vi.mock('$app/state', () => ({ page: { data: { locale: 'en' } } }));
 const getTrackedApplication = vi.hoisted(() => vi.fn());
 vi.mock('#lib/api.js', () => ({ api: { getTrackedApplication } }));
 const item: MyJob = {
-  id: 'role', company_slug: 'acme', role_title: 'Engineer',
-  job: { public_slug: 'role', company: 'Acme', title: 'Engineer', closed_at: undefined },
+  id: 'track-1', company_slug: 'acme', role_title: 'Engineer',
+  job: { public_slug: 'engineer-acme', company: 'Acme', title: 'Engineer', closed_at: undefined },
   viewed_at: '', saved_at: '2026-10-01T00:00:00Z', applied_at: null, stage: null,
   notes: null, email_count: 0, last_activity_at: null, days_silent: null,
   silence_state: null, followed_up_at: null, cv_opened_at: null,
@@ -25,7 +25,7 @@ it('fetches a plain-text preview on keyboard focus, caches it, and dismisses on 
   const card = screen.getByRole('button', { name: 'Open Engineer at Acme' });
   await fireEvent.focusIn(card);
   await waitFor(() => expect(screen.getByRole('tooltip').textContent).toContain('Build & maintain reliable systems.'));
-  expect(getTrackedApplication).toHaveBeenCalledWith('role');
+  expect(getTrackedApplication).toHaveBeenCalledWith('engineer-acme');
   expect(card.getAttribute('aria-describedby')).toContain(screen.getByRole('tooltip').id);
   await fireEvent.keyDown(window, { key: 'Escape' });
   expect(screen.queryByRole('tooltip')).toBeNull();

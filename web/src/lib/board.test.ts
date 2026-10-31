@@ -8,7 +8,7 @@ import {
   matchesStage,
   needsAttention,
   sortBoardItems,
-  deadlineRemainingLabel,
+  daysUntilDeadline,
 } from './board';
 import { STAGE_GROUPS } from './generated/contracts';
 import { must } from './utils';
@@ -222,12 +222,12 @@ describe('sortBoardItems', () => {
   });
 });
 
-describe('deadlineRemainingLabel', () => {
+describe('daysUntilDeadline', () => {
   it('counts inclusive UTC calendar days, regardless of the local timezone', () => {
     const now = new Date('2026-10-31T23:30:00-03:00');
-    expect(deadlineRemainingLabel('2026-11-03', now)).toBe('2 days left');
-    expect(deadlineRemainingLabel('2026-11-02', now)).toBe('1 day left');
-    expect(deadlineRemainingLabel('2026-11-01', now)).toBe('Last day to apply');
-    expect(deadlineRemainingLabel('2026-10-31', now)).toBe('Application deadline passed');
+    expect(daysUntilDeadline('2026-11-03', now)).toBe(2);
+    expect(daysUntilDeadline('2026-11-02', now)).toBe(1);
+    expect(daysUntilDeadline('2026-11-01', now)).toBe(0);
+    expect(daysUntilDeadline('2026-10-31', now)).toBe(-1);
   });
 });

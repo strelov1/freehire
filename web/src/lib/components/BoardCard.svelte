@@ -30,6 +30,8 @@
   const indicatorsId = $props.id();
   const hintId = `${indicatorsId}-hint`;
   const locationId = `${indicatorsId}-location`;
+  const statusId = `${indicatorsId}-status`;
+  const hasStatus = $derived(Boolean(item.job?.closed_at || item.job?.application_deadline));
   const s = $derived(t(messages, locale()));
 
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
@@ -101,7 +103,7 @@
   onclick={() => onopen(item)}
   onkeydowncapture={openOnKey}
   aria-label="Open {title} at {company || 'unknown company'}"
-  aria-describedby="{location ? `${locationId} ` : ''}{indicatorsId} {hintId}"
+  aria-describedby="{location ? `${locationId} ` : ''}{hasStatus ? `${statusId} ` : ''}{indicatorsId} {hintId}"
   class="relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
   <span class="flex items-center gap-1.5 pr-7 text-sm font-semibold">
@@ -118,7 +120,7 @@
   <!-- Indicators, every one of them. The silence marker used to be the way into the
        follow-up draft; that offer moved into the opened application when the card gave
        up its controls, and the marker went back to reporting. -->
-  <BoardPostingStatus job={item.job} />
+  <BoardPostingStatus job={item.job} id={statusId} />
   <span id={indicatorsId} class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
     {#if item.stage}
       <Badge variant="secondary">{humanizeStage(item.stage, locale())}</Badge>

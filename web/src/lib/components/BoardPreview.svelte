@@ -3,6 +3,9 @@
   import { api } from '#lib/api.js';
   import { portal } from '#lib/actions/portal.js';
   import type { MyJob } from '#lib/types.js';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { t } from '#lib/i18n/t.js';
+  import { messages } from './BoardPreview.messages';
 
   let { item, children, class: className }: { item: MyJob; children: Snippet; class?: string } = $props();
   let trigger = $state<HTMLDivElement | null>(null);
@@ -14,6 +17,7 @@
   let top = $state(0);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const id = $props.id();
+  const s = $derived(t(messages, locale()));
 
   async function show() {
     clearTimeout(timer);
@@ -25,7 +29,7 @@
     if (text !== null || loading) return;
     loading = true;
     try {
-      const app = await api.getTrackedApplication(item.id);
+      const app = await api.getTrackedApplication(item.job.public_slug);
       const doc = new DOMParser().parseFromString(app.job?.description ?? '', 'text/html');
       doc.querySelectorAll('script, style').forEach((node) => node.remove());
       doc.querySelectorAll('p, div, li, br, h1, h2, h3, h4, tr').forEach((node) => node.append(' '));
@@ -94,6 +98,6 @@
     class="fixed z-popover w-80 max-w-11/12 rounded-md border border-border bg-popover p-3 text-sm text-popover-foreground shadow-md"
     style:left="{left}px" style:top="{top}px"
   >
-    {loading ? 'Loading description…' : text || 'Description unavailable.'}
+    {loading ? s.loading : text || s.unavailable}
   </div>
 {/if}

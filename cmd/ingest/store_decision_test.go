@@ -34,6 +34,21 @@ func TestExpiredPostingDoesNotReachSearchOrRecentFeed(t *testing.T) {
 	}
 }
 
+// closed gates enrichment and the apply-form capture as well as the index: a write that left
+// the row closed (a deadline already past) must not pay for an LLM call or a form request.
+func TestClosedReportsOnlyARowTheWriteLeftClosed(t *testing.T) {
+	expired := fullWrite(db.UpsertJobRow{Job: db.Job{ClosedAt: pgtype.Timestamptz{Valid: true}}})
+	if !expired.closed() {
+		t.Error("closed() = false for a row the write left closed")
+	}
+	if full(true, true).closed() {
+		t.Error("closed() = true for an open row")
+	}
+	if cheap().closed() {
+		t.Error("closed() = true for the cheap write, which carries no row")
+	}
+}
+
 func TestNeedsIndex(t *testing.T) {
 	cases := []struct {
 		name string
