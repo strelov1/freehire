@@ -27,20 +27,27 @@ var (
 	reUpTo   = regexp.MustCompile(`(?i)\bup to\b`)
 	reFrom   = regexp.MustCompile(`(?i)\bfrom\b`)
 	reMoney  = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)\+?|(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?)\+?`)
-	// reScaled is a money token with a k/m suffix ("$120k", "$1.5m"). reMoney
-	// would keep the digits and drop the suffix. A benefit word ("401k") has no
-	// currency marker in front of the suffix, so it is not this.
-	reScaled = regexp.MustCompile(`(?i)(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\s*[km]\b`)
-	// reOpenRange is a symboled amount whose dash-joined second bound carries no
-	// symbol and no thousands grouping ("$50 - 60"), which reMoney does not read.
-	reOpenRange = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
-	reDotGrp    = regexp.MustCompile(`^\d{1,3}(\.\d{3})+$`)
-	reComGrp    = regexp.MustCompile(`^\d{1,3}(,\d{3})+(\.\d+)?$`)
-	reEuDec     = regexp.MustCompile(`^\d{1,3}(\.\d{3})+,\d+$`)
-	reDec       = regexp.MustCompile(`^\d+[.,]\d{1,2}$`)
-	reInt       = regexp.MustCompile(`^\d+$`)
-	reLeadISO   = regexp.MustCompile(`(?i)^(usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\b`)
-	reTrailISO  = regexp.MustCompile(`(?i)\b(usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)$`)
+	// reScaled is a money token with a k/m suffix ("$120k", "1,200k"). reMoney
+	// would keep the digits and drop the suffix. A benefit word ("401k") is not
+	// a money token, so it is not this.
+	reScaled = regexp.MustCompile(`(?i)(?:(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*|\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?)\s*[km]\b`)
+	// reOpenRange is a dash-joined second bound reMoney does not read ("$50 - 60").
+	reOpenRange     = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
+	reTrailRange    = regexp.MustCompile(`(?i)\d[\d.,]+\s*(?:us\$|ca\$|au\$|nz\$|hk\$|a\$|c\$|s\$|rp|zł|£|€|\$|usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\s*[-–—]\s*\d`)
+	reBenefitClause = regexp.MustCompile(`(?i)` +
+		`(?:(?:[$£€]|zł|(?:us|ca|au|nz|hk|a|c|s)\$|rp)\s*)?` +
+		`\d[\d.,]*\s*` +
+		`(?:(?:[$£€]|zł|(?:us|ca|au|nz|hk|a|c|s)\$|rp)\s*)?` +
+		`(?:sign[\s-]?on\s+|signing\s+)?` +
+		`(?:bonus(?:es)?|benefits?)\b` +
+		`|(?:sign[\s-]?on|signing|bonus(?:es)?|benefits?)\b`)
+	reDotGrp   = regexp.MustCompile(`^\d{1,3}(\.\d{3})+$`)
+	reComGrp   = regexp.MustCompile(`^\d{1,3}(,\d{3})+(\.\d+)?$`)
+	reEuDec    = regexp.MustCompile(`^\d{1,3}(\.\d{3})+,\d+$`)
+	reDec      = regexp.MustCompile(`^\d+[.,]\d{1,2}$`)
+	reInt      = regexp.MustCompile(`^\d+$`)
+	reLeadISO  = regexp.MustCompile(`(?i)^(usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\b`)
+	reTrailISO = regexp.MustCompile(`(?i)\b(usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)$`)
 )
 
 var dollarCurrency = map[string]string{
@@ -79,7 +86,7 @@ func Parse(description string, countries []string) (Salary, bool) {
 				if next == "" {
 					continue
 				}
-				if loc := reMoney.FindStringIndex(next); loc != nil && loc[0] == 0 {
+				if loc := reMoney.FindStringIndex(next); loc != nil && loc[0] == 0 && !benefitOnly(next) {
 					body = next
 				}
 				break
@@ -110,7 +117,7 @@ func parseLine(body string, countries []string) (Salary, bool) {
 	if len(nums) == 0 || len(nums) > 2 || reScaled.MatchString(body) {
 		return Salary{}, false
 	}
-	if len(nums) == 1 && reOpenRange.MatchString(body) {
+	if len(nums) == 1 && (reOpenRange.MatchString(body) || reTrailRange.MatchString(body)) {
 		return Salary{}, false
 	}
 	var sal Salary
@@ -147,6 +154,13 @@ func parseLine(body string, countries []string) (Salary, bool) {
 	}
 	sal.Currency = cur
 	return sal, true
+}
+
+func benefitOnly(line string) bool {
+	if !reBenefitClause.MatchString(line) {
+		return false
+	}
+	return len(amountsIn(reBenefitClause.ReplaceAllString(line, " "))) == 0
 }
 
 func contradicts(lines []string, used string, sal Salary) bool {

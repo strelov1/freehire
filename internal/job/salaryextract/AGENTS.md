@@ -10,6 +10,8 @@ order — the same precedence `SetJobEnrichment` already applies once the model 
 - **A label, or nothing.** The line must start with `Salary:`, `Pay:`, `Compensation:`
   or `Remuneration:`; `Salary Range:` is also accepted. A standalone label may
   precede its value on the next non-empty line, which must start with an amount.
+  A next line whose only amount is a benefit (a sign-on bonus) is not that
+  value; a line that still states pay is.
   A number anywhere else in the posting is not a salary. SEEK and
   WhatJobs already put the source's own salary field on such a line; "Rates Negotiable"
   carries the label and no number, and yields nothing.
@@ -28,10 +30,11 @@ order — the same precedence `SetJobEnrichment` already applies once the model 
   header says `$104,000 - 208,000 per year` and the body says the work is paid hourly
   up to `$100+`. Returning the header would publish the wrong period with confidence.
   The same amount repeated in another period is not a contradiction.
-- **A scaled or half-read amount refuses the line.** `$120k` would read as 120 and
-  `$50 - 60` would drop the unsymboled, ungrouped second bound, so both are refused
-  rather than published as a confident wrong figure. The `k`/`m` suffix counts only
-  on a money token. `401k` in a benefits clause is not one.
+- **A scaled or half-read amount refuses the line.** `$120k` and `1,200k` would
+  read as 120 and 1,200, and `$50 - 60` or `27.510,00 € - 51090 €` would drop the
+  ungrouped second bound, so each is refused rather than published as a confident
+  wrong figure. The `k`/`m` suffix counts only on a money token, including one
+  with no currency marker. `401k` in a benefits clause is not one.
 - **The currency is the marker on the amount, not the first word on the line.**
   `A$120,000 per year (USD equivalent)` is AUD. `$120,000 USD` is USD, and that
   word wins over the posting's country. Two different markers on one amount
