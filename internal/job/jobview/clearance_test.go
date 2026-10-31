@@ -2,6 +2,7 @@ package jobview
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,16 +15,25 @@ import (
 // needs no clearance" — a distinction the dictionary cannot make and must not imply.
 func TestFromDomain_RequiresClearanceFacet(t *testing.T) {
 	tests := []struct {
-		name    string
-		desc    string
-		want    bool
-		wantKey bool
+		name       string
+		desc       string
+		want       bool
+		wantKey    bool
+		wantLevels []string
 	}{
 		{
-			name:    "stated requirement is served as true",
-			desc:    "You must hold or be eligible for SC clearance.",
-			want:    true,
-			wantKey: true,
+			name:       "stated requirement is served as true",
+			desc:       "You must hold or be eligible for SC clearance.",
+			want:       true,
+			wantKey:    true,
+			wantLevels: []string{"other"},
+		},
+		{
+			name:       "a stated level is served beside the boolean",
+			desc:       "An active Secret clearance is required.",
+			want:       true,
+			wantKey:    true,
+			wantLevels: []string{"secret"},
 		},
 		{
 			name:    "unknown is omitted entirely",
@@ -59,6 +69,14 @@ func TestFromDomain_RequiresClearanceFacet(t *testing.T) {
 			}
 			if gotKey := strings.Contains(string(b), `"requires_clearance"`); gotKey != tt.wantKey {
 				t.Errorf("requires_clearance key present = %v, want %v", gotKey, tt.wantKey)
+			}
+			// The levels follow the boolean exactly: absent when it is, because the
+			// search filter reads an absent attribute as "no explicit reference".
+			if !slices.Equal(v.ClearanceLevels, tt.wantLevels) {
+				t.Errorf("ClearanceLevels = %v, want %v", v.ClearanceLevels, tt.wantLevels)
+			}
+			if gotKey := strings.Contains(string(b), `"clearance_levels"`); gotKey != tt.wantKey {
+				t.Errorf("clearance_levels key present = %v, want %v", gotKey, tt.wantKey)
 			}
 		})
 	}

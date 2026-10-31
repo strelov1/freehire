@@ -33,11 +33,19 @@ function valuesOf(options?: { value: string }[]): string {
 }
 
 // StringFacets keys the SPA registry (facets.ts) does not render, kept in sync by
-// hand. Values mirror the Go enrichment vocabularies (internal/enrich).
+// hand. Values mirror the Go vocabularies (internal/dict/vocab).
 const API_ONLY_FACETS: FilterRow[] = [
   { param: 'company_size', label: 'Company size', values: '1-10, 11-50, 51-200, 201-500, 501-1000, 1000+' },
   { param: 'education_level', label: 'Education level', values: 'none, bachelor, master, phd' },
   { param: 'salary_period', label: 'Salary period', values: 'year, month, day, hour' },
+  // API-only until the SPA's clearance control moves from the requires_clearance toggle
+  // to these chips. Values mirror vocab.ClearanceLevelValues plus the reserved none.
+  {
+    param: 'clearance_levels',
+    label: 'Security clearance level',
+    values:
+      'none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no explicit reference to clearance (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one',
+  },
   {
     param: 'perks',
     label: 'Perks mentioned',
@@ -163,6 +171,7 @@ export const RECIPES: Recipe[] = [
   { title: 'Must use both Go and Rust', query: 'skills=go,rust&skills_mode=and' },
   { title: 'Exclude outstaff companies', query: 'company_type_exclude=outstaff' },
   { title: 'At least $100k, with visa sponsorship', query: 'salary_currency=USD&salary_min=100000&visa_sponsorship=true' },
-  { title: 'Excluding jobs that need a security clearance', query: 'requires_clearance=false' },
+  { title: 'Excluding jobs that need a security clearance', query: 'clearance_levels=none' },
+  { title: 'Jobs a Secret or Top Secret holder can work', query: 'clearance_levels=secret,top_secret' },
   { title: 'Only jobs that need a security clearance', query: 'requires_clearance=true' },
 ];

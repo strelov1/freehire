@@ -99,6 +99,10 @@ type Fields struct {
 	// ViaRecruiter marks a posting that states it is published by an intermediary on a
 	// client's behalf (nil = not stated); served as a filterable facet.
 	ViaRecruiter *bool
+	// ClearanceLevels names the clearance levels the posting states (vocab.
+	// ClearanceLevelValues); non-empty exactly when RequiresClearance is set. See
+	// jobderive.Derived.ClearanceLevels.
+	ClearanceLevels []string
 	// Perks are the benefits the description states it offers (vocab.PerkValues),
 	// served as the multi-value `perks` facet. Empty means none mentioned — see
 	// internal/dict/perks.
@@ -207,6 +211,7 @@ func New(d Draft) (Job, error) {
 
 		RequiresClearance: der.RequiresClearance,
 		ViaRecruiter:      der.ViaRecruiter,
+		ClearanceLevels:   der.ClearanceLevels,
 		Perks:             der.Perks,
 
 		PostingLanguage:    der.PostingLanguage,
@@ -268,6 +273,7 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
 		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
+		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
 
 		PostingLanguage:    f.PostingLanguage,
@@ -362,6 +368,7 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
 		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
+		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
 
 		PostingLanguage:    f.PostingLanguage,
@@ -428,6 +435,7 @@ func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJo
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
 		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
+		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
 
 		PostingLanguage:    f.PostingLanguage,
@@ -475,6 +483,7 @@ func (f Fields) UpdateEmployerParams(slug string, actorID int64) db.UpdateEmploy
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
 		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
+		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
 
 		PostingLanguage:    f.PostingLanguage,
@@ -523,6 +532,7 @@ func (f Fields) InsertPrivateParams(createdBy int64) db.InsertPrivateJobParams {
 
 		RequiresClearance: pgconv.Bool(f.RequiresClearance),
 		ViaRecruiter:      pgconv.Bool(f.ViaRecruiter),
+		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
 
 		PostingLanguage:    f.PostingLanguage,

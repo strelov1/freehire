@@ -288,6 +288,15 @@ export interface Job {
    */
   via_recruiter?: boolean;
   /**
+   * ClearanceLevels names the clearance levels the posting states, from the closed
+   * vocabulary vocab.ClearanceLevelValues — the US ladder (confidential, secret,
+   * top_secret, ts_sci, public_trust), interim, and other (a non-US scheme, or a
+   * clearance stated with no level). Present exactly when RequiresClearance is true
+   * and omitted otherwise: an empty list would read as a claim about levels the
+   * posting never made.
+   */
+  clearance_levels?: string[];
+  /**
    * AutoApplyAvailable marks a posting whose ATS provider (Source) is one
    * internal/api/atsapply can currently attempt to fill and submit for (see
    * AutoApplyProviders) — a best-effort, provider-level eligibility signal,
