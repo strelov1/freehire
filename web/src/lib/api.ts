@@ -256,6 +256,17 @@ export interface InsightSkill {
   open_count: number;
   growth: number;
 }
+/** One month of a category's salary history (`month` is YYYY-MM). */
+export interface InsightSalaryMonth {
+  currency: string;
+  period: string;
+  month: string;
+  sample_size: number;
+  p25: number;
+  p50: number;
+  p75: number;
+}
+
 export interface InsightSalaryBand {
   seniority: string;
   currency: string;
@@ -1198,6 +1209,13 @@ export function createApi(
   /** Every seniority's salary bands for one category, in a single call (the
    *  per-category salary page). Rows carry their own `seniority` ('' = the
    *  category-wide band). */
+  /** One category's monthly salary history, every (currency, period) it has. */
+  async function insightsSalaryHistory(category: string): Promise<InsightSalaryMonth[]> {
+    return requestData<InsightSalaryMonth[]>(
+      `/api/v1/insights/salary/history?category=${encodeURIComponent(category)}`,
+    );
+  }
+
   async function insightsSalaryByCategory(category: string): Promise<InsightSalaryBand[]> {
     return requestData<InsightSalaryBand[]>(
       `/api/v1/insights/salary?category=${encodeURIComponent(category)}`,
@@ -3264,6 +3282,7 @@ export function createApi(
     searchCities,
     insightsRoles,
     insightsRoleCountries,
+    insightsSalaryHistory,
     insightsRole,
     insightsSkills,
     insightsSalaryByCategory,

@@ -2,6 +2,7 @@
   import { page } from '$app/state';
   import Seo from '#lib/components/Seo.svelte';
   import InsightsPageShell from '#lib/components/InsightsPageShell.svelte';
+  import SalaryHistoryChart from '#lib/components/SalaryHistoryChart.svelte';
   import { breadcrumbJsonLd, datasetJsonLd, jsonLdScript } from '#lib/seo.js';
   import { formatSalary, seniorityLabel } from '#lib/insights.js';
   import { Table } from '#lib/ui/index.js';
@@ -46,6 +47,7 @@
   {updated}
   covered={data.covered}
 >
+  <SalaryHistoryChart rows={data.history} currentMonth={data.currentMonth} />
   {#if data.bands.length === 0}
     <p class="text-muted-foreground">No salary figures disclosed for this category yet.</p>
   {:else}

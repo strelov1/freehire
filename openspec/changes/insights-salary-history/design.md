@@ -67,14 +67,16 @@ what is stored; the page needs ≥ 3 points to draw anything.
 time series as SVG with no chart library; the salary chart follows them: a pure model
 (`salaryHistoryChart.ts`: x per month slot, y scaled to the series' p25..p75 range,
 segments split at gaps) with vitest tests, and a thin component. The current month is
-partial; its point is drawn hollow and labelled "so far". A visually hidden table
-carries the same numbers for screen readers and no-JS readers.
+partial; its point is drawn hollow and labelled "so far". A visually hidden list of
+buttons carries the same numbers for screen readers and no-JS readers and is the
+keyboard's way along the line, as on the skill-pulse chart. In-SVG axis text shrinks to
+~4px on a phone, so there it is hidden and the range is written as text below.
 
 ## Risks / Trade-offs
 
-- [Composition shifts move the median] → stated on the page; the sample size is
-  printed per month so a jump with a 10x sample is visibly different from one
-  without.
+- [Composition shifts move the median] → a month whose sample is ≥ 3× the month
+  before is drawn with a dashed step and says so in its tooltip (backend EUR/year:
+  €62,500 → €45,000 as the sample went 104 → 548). The sample size is in every tooltip.
 - [Bands change on deploy] → expected: they gain non-technical source salaries.
   Called out in the PR with before/after for one non-technical category.
 - [Rollup run time] → one scan of ~12 months of postings with a jsonb read; measured

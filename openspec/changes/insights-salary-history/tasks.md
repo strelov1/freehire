@@ -18,10 +18,10 @@
 
 ## 4. Page
 
-- [ ] 4.1 Pure chart model with vitest tests: default series, ≥3-point rule, gaps split segments, partial current month, y scale
-- [ ] 4.2 API client + load in `+page.server.ts` (a failed read drops the chart, short cache)
-- [ ] 4.3 Chart component (SVG, median line + p25–p75 band, series switch, hidden data table, caveat) on the salary page
-- [ ] 4.4 svelte-check, eslint, vitest; SSR check without JS; screenshots at 1440 and 390 px
+- [x] 4.1 Pure chart model with vitest tests: default series, ≥3-point rule, gaps split segments, partial current month, y scale
+- [x] 4.2 API client + load in `+page.server.ts` (a failed read drops the chart, short cache)
+- [x] 4.3 Chart component (SVG, median line + p25–p75 band, series switch, hidden data table, caveat) on the salary page
+- [x] 4.4 svelte-check, eslint, vitest; SSR check without JS; screenshots at 1440 and 390 px
 
 ## 5. Ship
 

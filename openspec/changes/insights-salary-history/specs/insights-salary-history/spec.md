@@ -57,12 +57,17 @@ endpoints. The response SHALL be aggregate-only.
 The `/insights/salary/<category>` page SHALL draw the history above its bands table
 when the chosen (currency, period) has at least 3 stored months: a line through the
 monthly medians and a shaded band from the 25th to the 75th percentile. It SHALL
-default to the (currency, period) with the largest total sample and offer the others
-that also have at least 3 months. A missing month SHALL be a gap, never interpolated.
+default to the (currency, period) with the largest total sample and offer the next
+three largest that also have at least 3 months — no more, since a category can carry a
+dozen pairs. A missing month SHALL be a gap, never interpolated. A month whose sample is
+at least three times the adjacent month before it SHALL be marked — the step into it
+drawn dashed and its tooltip saying so — because a jump that size changes which
+postings are measured: on prod, backend's EUR/year median fell from €62,500 to €45,000
+the month its sample went from 104 to 548.
 The page SHALL state that months follow the publication date, that a month needs 30
 postings to be shown, and that the figures describe postings on freehire rather than
-the whole market. The same figures SHALL be present as a table in the server-rendered
-HTML, so the history reads without JavaScript and to a screen reader.
+the whole market. The same figures SHALL be present as text in the server-rendered HTML,
+so the history reads without JavaScript and to a screen reader.
 
 #### Scenario: Default series
 
@@ -74,6 +79,12 @@ HTML, so the history reads without JavaScript and to a screen reader.
 
 - **WHEN** no (currency, period) has 3 stored months
 - **THEN** no chart is drawn and the bands table is unchanged
+
+#### Scenario: A sample jump is marked
+
+- **WHEN** August has 548 postings and July 104
+- **THEN** the step from July to August is dashed and August's tooltip says the
+  sample jumped
 
 #### Scenario: A gap stays a gap
 
