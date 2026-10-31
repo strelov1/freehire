@@ -76,6 +76,7 @@ func TestSearchJobsHideAppliedCompanies_ResponseIsPrivate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
+	defer func() { _ = resp.Body.Close() }()
 	if got := resp.Header.Get(fiber.HeaderCacheControl); got != "private, no-store" {
 		t.Errorf("Cache-Control = %q, want private — the body depends on who asked", got)
 	}
