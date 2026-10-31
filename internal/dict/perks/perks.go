@@ -49,6 +49,9 @@ type rule struct {
 	// notAfter, when set, disqualifies a match the text right after it continues into
 	// something that is not the perk ("health insurance portability" is HIPAA).
 	notAfter *regexp.Regexp
+	// notInside, when set, disqualifies a match whose own span carries a denial the
+	// guards around it cannot see ("401(k): no employer match" spans the "no").
+	notInside *regexp.Regexp
 }
 
 // pto is what a time-off phrase may be called.
@@ -82,7 +85,11 @@ var rules = []rule{
 	{slug: "401k_match", label: "401(k) Matching", patterns: []*regexp.Regexp{
 		re(`\b` + retirementAccount + `[^.;•]{0,60}?\bmatch`),
 		re(`\bmatch\w*[^.;•]{0,40}?\b` + retirementAccount),
-	}},
+	},
+		// Only a denial governing "match" itself: "401(k) with no vesting period and a
+		// 4% company match" is a match.
+		notInside: re(`\b(?:no|not|without|n't)\s+(?:\w+\s+){0,2}match`),
+	},
 	// 3.0% / 4.9%. Any stated parental leave, not only a "generous" one: outside the
 	// statutory minimum the US does not have, offering it at all is the signal.
 	{slug: "parental_leave", label: "Parental Leave", patterns: []*regexp.Regexp{
@@ -112,7 +119,7 @@ var rules = []rule{
 		patterns: []*regexp.Regexp{
 			re(`\b(?:health|medical|healthcare) (?:insurance|coverage|cover|benefits?)\b|\bprivate (?:medical|health(?:care)?)\b|\b(?:medical|health)(?:,| and| &|/)\s*dental\b|\bseguro (?:m[eé]dico|de gastos m[eé]dicos)\b`),
 		},
-		notAfter: re(`^\s*(?:portability|claims?|billing|verification|compan|carriers?|industry)`),
+		notAfter: re(`^\s*(?:portability|claims?|billing|verification|compan|carriers?|industry|providers?|payers?|plans? members)`),
 	},
 	// 0.7% / 0.8%. An Employee Assistance Program is NOT counted on its own: it is
 	// benefits-list boilerplate at every large US employer. "mental health services"
@@ -191,6 +198,9 @@ func (r rule) asserted(text string) bool {
 			after := text[loc[1]:min(len(text), loc[1]+afterWindow)]
 			if denialBefore.MatchString(before) || denialAfter.MatchString(after) ||
 				dutyBefore.MatchString(before) {
+				continue
+			}
+			if r.notInside != nil && r.notInside.MatchString(text[loc[0]:loc[1]]) {
 				continue
 			}
 			if r.notAfter != nil && r.notAfter.MatchString(after) {

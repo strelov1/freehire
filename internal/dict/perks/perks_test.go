@@ -52,6 +52,8 @@ func TestFromDescription(t *testing.T) {
 		{"in-office desk", "One Medical membership In-office desk setup stipend", nil},
 		{"sign-on denied", "Recruitment/Relocation Incentives (Sign-on Bonus): Not Authorized", nil},
 		{"does not include", "The rate displayed does not include benefits such as health insurance, paid or unpaid time off", nil},
+		{"match denied inside the phrase", "401(k) plan with no employer match", []string{"retirement_plan"}},
+		{"insurance customers", "We build software for health insurance providers.", nil},
 		{"no 401k", "This is a contract role with no 401(k).", nil},
 		{"empty", "", nil},
 

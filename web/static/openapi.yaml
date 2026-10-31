@@ -222,6 +222,7 @@ paths:
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
         - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksMode"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -313,6 +314,7 @@ paths:
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
         - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksMode"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -576,6 +578,7 @@ paths:
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
         - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksMode"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -1352,6 +1355,16 @@ components:
         RRSP). Values OR by default; `perks_mode=and` requires every one.
         Visa sponsorship and relocation are separate filters
         (`visa_sponsorship`, `relocation`).
+    PerksMode:
+      name: perks_mode
+      in: query
+      schema:
+        type: string
+        enum:
+          - and
+      description: |
+        `and` requires a posting to mention EVERY listed perk instead of any
+        of them.
     AutoApplyAvailable:
       name: auto_apply_available
       in: query
