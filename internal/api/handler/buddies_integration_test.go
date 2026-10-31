@@ -526,3 +526,39 @@ func TestBuddyPayloadsNeverNameTheAccount(t *testing.T) {
 		}
 	}
 }
+
+func TestBuddyReactions(t *testing.T) {
+	env := newBuddyEnv(t, "a", "b")
+	env.join("a")
+	env.join("b")
+	ctx := context.Background()
+	var appID, eventID int64
+	if err := env.pool.QueryRow(ctx, `INSERT INTO applications (user_id, company_slug, applied_at, stage)
+		VALUES ($1, 'acme', now() - interval '2 days', 'offer') RETURNING id`, env.users["b"]).Scan(&appID); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.pool.QueryRow(ctx, `INSERT INTO application_events (user_id, application_id, company_slug, kind, signal, occurred_at, source)
+		VALUES ($1, $2, 'acme', 'stage_set', 'offer', now() - interval '1 hour', 'user') RETURNING id`, env.users["b"], appID).Scan(&eventID); err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/v1/me/buddies/feed/" + strconv.FormatInt(eventID, 10) + "/reaction"
+
+	out := env.want(http.StatusOK, http.MethodPut, path, "a", map[string]any{"kind": "congrats"})
+	r := out["data"].(map[string]any)
+	if r["mine"] != "congrats" || r["counts"].(map[string]any)["congrats"] != float64(1) {
+		t.Fatalf("after reacting = %v", r)
+	}
+	// The feed carries it, for the viewer and for everyone else.
+	feed := env.want(http.StatusOK, http.MethodGet, "/api/v1/me/buddies/feed?mode=all", "a", nil)["data"].([]any)
+	if got := feed[0].(map[string]any)["reactions"].(map[string]any); got["mine"] != "congrats" {
+		t.Fatalf("feed reactions = %v", got)
+	}
+	env.want(http.StatusBadRequest, http.MethodPut, path, "a", map[string]any{"kind": "love"})
+	// Your own event is not in your feed, so it cannot be reacted to.
+	env.want(http.StatusNotFound, http.MethodPut, path, "b", map[string]any{"kind": "congrats"})
+
+	out = env.want(http.StatusOK, http.MethodDelete, path, "a", nil)
+	if r := out["data"].(map[string]any); r["mine"] != "" || len(r["counts"].(map[string]any)) != 0 {
+		t.Fatalf("after clearing = %v", r)
+	}
+}

@@ -75,6 +75,12 @@ type Repository interface {
 	// first page; the cursor's own event is included when the viewer may see it). When
 	// authorsOnly is set only the authors named by handle are read.
 	Feed(ctx context.Context, viewerID int64, authors []string, authorsOnly bool, cursorID int64, limit int) ([]FeedRow, error)
+	// React sets userID's one reaction to eventID; Unreact removes it.
+	React(ctx context.Context, userID, eventID int64, kind string) error
+	Unreact(ctx context.Context, userID, eventID int64) error
+	// ReactionCounts is each event's reactions as viewerID may see them, keyed by event;
+	// an event nobody reacted to has no entry.
+	ReactionCounts(ctx context.Context, viewerID int64, eventIDs []int64) (map[int64]Reactions, error)
 	// Activity counts authorID's feed events per UTC day from since on, under the same
 	// visibility rules as Feed for viewerID. Days without an event are absent.
 	Activity(ctx context.Context, viewerID, authorID int64, since time.Time) ([]ActivityDay, error)

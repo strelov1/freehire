@@ -345,6 +345,13 @@ type BuddyMockSetting struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
+type BuddyReaction struct {
+	EventID   int64              `json:"event_id"`
+	UserID    int64              `json:"user_id"`
+	Kind      string             `json:"kind"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type CandidateSurvey struct {
 	UserID                int64              `json:"user_id"`
 	JobSearchStage        pgtype.Text        `json:"job_search_stage"`

@@ -283,3 +283,31 @@ func textPtr(t pgtype.Text) *string {
 	}
 	return &t.String
 }
+
+func (r *QueriesRepository) React(ctx context.Context, userID, eventID int64, kind string) error {
+	return r.q.UpsertBuddyReaction(ctx, db.UpsertBuddyReactionParams{EventID: eventID, UserID: userID, Kind: kind})
+}
+
+func (r *QueriesRepository) Unreact(ctx context.Context, userID, eventID int64) error {
+	return r.q.DeleteBuddyReaction(ctx, db.DeleteBuddyReactionParams{EventID: eventID, UserID: userID})
+}
+
+func (r *QueriesRepository) ReactionCounts(ctx context.Context, viewerID int64, eventIDs []int64) (map[int64]Reactions, error) {
+	rows, err := r.q.ListBuddyReactionCounts(ctx, db.ListBuddyReactionCountsParams{ViewerID: viewerID, EventIds: eventIDs})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]Reactions)
+	for _, row := range rows {
+		re := out[row.EventID]
+		if re.Counts == nil {
+			re.Counts = make(map[string]int)
+		}
+		re.Counts[row.Kind] = int(row.Reactions)
+		if row.Mine {
+			re.Mine = row.Kind
+		}
+		out[row.EventID] = re
+	}
+	return out, nil
+}
