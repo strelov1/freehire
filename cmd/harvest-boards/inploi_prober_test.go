@@ -49,9 +49,21 @@ func TestInploiCompanyNameDecodesHTMLEntities(t *testing.T) {
 	for _, title := range []string{
 		`Jobs and Careers at Smith &amp; Co | Apply for Vacancies`,
 		`Jobs and Careers &#97;t Smith &amp; Co | Apply for Vacancies`,
+		`Jobs and Careers AT Smith &amp; Co | Apply for Vacancies`,
 	} {
 		if got := inploiCompanyName("<title>" + title + "</title>"); got != "Smith & Co" {
 			t.Errorf("inploiCompanyName(%q) = %q, want Smith & Co", title, got)
+		}
+	}
+}
+
+func TestInploiCompanyNameWithUnicodePrefix(t *testing.T) {
+	for _, title := range []string{
+		`&#304;ş &#304;lanları at Acme | Careers`,
+		`İş İlanları AT Acme | Careers`,
+	} {
+		if got := inploiCompanyName("<title>" + title + "</title>"); got != "Acme" {
+			t.Errorf("inploiCompanyName(%q) = %q, want Acme", title, got)
 		}
 	}
 }
