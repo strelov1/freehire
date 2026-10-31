@@ -64,6 +64,18 @@ type MockRepository interface {
 	CreateMockReview(ctx context.Context, id uuid.UUID, authorID int64, rating int, comment string) (bool, error)
 	// MockSummary is subjectID's completed count and revealed-review aggregate.
 	MockSummary(ctx context.Context, subjectID int64, recent int32) (MockSummary, error)
+	// MockSummaries is MockSummary's aggregate, without the recent reviews, for each of
+	// subjectIDs.
+	MockSummaries(ctx context.Context, subjectIDs []int64) (map[int64]MockSummary, error)
+	// MockHostCandidates is up to limit active members viewerID may see who have saved,
+	// unpaused settings (offering topic, unless it is empty) and at least one availability
+	// row, most recently updated settings first. Whether they have an open slot is the
+	// service's to compute.
+	MockHostCandidates(ctx context.Context, viewerID int64, topic string, limit int32) ([]MockHostCandidate, error)
+	// MockAvailabilityFor is MockAvailability for many members, keyed by member.
+	MockAvailabilityFor(ctx context.Context, userIDs []int64) (map[int64][]slots.Rule, error)
+	// MockBusyFor is MockBusy for many members, keyed by member.
+	MockBusyFor(ctx context.Context, userIDs []int64, from, to time.Time) (map[int64][]slots.Interval, error)
 	// MocksDueForReminder is confirmed mocks starting in (floor, offset] from now and not
 	// yet reminded at offset.
 	MocksDueForReminder(ctx context.Context, offset, floor time.Duration, limit int32) ([]Mock, error)
