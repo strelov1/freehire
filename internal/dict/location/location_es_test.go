@@ -70,8 +70,9 @@ func TestSpanishAndLatinAmericanLines(t *testing.T) {
 		// own place of the name, when it has exactly one (location_fr.go).
 		{"León, ES", []string{"es"}, []string{"León"}},
 		{"Annapolis, MD", []string{"us"}, []string{"Annapolis"}}, // was Simão Dias, Brazil
-		{"Canton, Ohio", []string{"us"}, nil},                    // was Guangzhou
-		{"Salem, MA", []string{"us"}, nil},                       // was Jerusalem
+		// ...and the stated state names the town of the name in it (alias_place.go).
+		{"Canton, Ohio", []string{"us"}, []string{"Canton"}}, // was Guangzhou
+		{"Salem, MA", []string{"us"}, []string{"Salem"}},     // was Jerusalem
 		{"Córdoba, Spain", []string{"es"}, []string{"Córdoba"}},
 	}
 	for _, tt := range tests {

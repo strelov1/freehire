@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skillvec"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
+	"github.com/strelov1/freehire/internal/job/formeremployer"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -55,6 +56,13 @@ type searchHandlers struct {
 	// /jobs/search's hide_applied_companies. Nil leaves the param unhonoured, and
 	// reported as such.
 	appliedCompanies appliedCompanyReader
+	// formerEmployers resolves a signed-in caller's experience bank to the companies the
+	// "Hiring again" filter narrows to. Nil leaves former_employers unread, so it is
+	// reported in meta.ignored_params like any other param nothing reads.
+	formerEmployers formerEmployerLookup
+	// seen reads the jobs a signed-in caller has already opened, for /jobs/search's
+	// hide_seen. Nil leaves the param unhonoured, and reported as such.
+	seen seenJobs
 }
 
 // appliedCompanyReader reads the company slugs of the employers a caller has applied
@@ -62,6 +70,26 @@ type searchHandlers struct {
 type appliedCompanyReader interface {
 	AppliedCompanySlugs(ctx context.Context, userID int64) ([]string, error)
 }
+
+// seenJobs reads the job ids a caller has already opened. It is the same set the feed
+// dims a card by — every user_jobs row carries viewed_at, so any interaction is a view —
+// capped to the most recently touched. *jobtracking.Service satisfies it.
+type seenJobs interface {
+	ExcludedJobIDs(ctx context.Context, userID int64) ([]int64, error)
+}
+
+// formerEmployerLookup resolves a person's past employers to company slugs.
+// *formeremployer.Store satisfies it; tests inject a fake.
+type formerEmployerLookup interface {
+	Slugs(ctx context.Context, userID int64) ([]string, error)
+}
+
+// formerEmployersParam is the "Hiring again" filter: only postings at companies the
+// signed-in caller has worked at and left, per their experience bank. It is not part of
+// the search package's vocabulary because it is not a facet of the posting — it is a fact
+// about the CALLER, resolved per request — so the endpoint reads it itself, and declares it
+// as its own only when it did (see jobSearchOutcome.own).
+const formerEmployersParam = "former_employers"
 
 // profileReader loads a caller's profile. *userprofile.Service satisfies it; tests
 // inject a fake. Only the skills are read here — the match sort has no opinion on
@@ -78,6 +106,7 @@ func newSearchHandlers(search searcher, facets facetCounter, queries *db.Queries
 	// Assign only when set: a nil *db.Queries in the interface would be non-nil.
 	if queries != nil {
 		h.companyNames = queries
+		h.formerEmployers = formeremployer.NewStore(queries)
 	}
 	return h
 }
@@ -137,8 +166,14 @@ var jobSearchParams = slices.Concat(searchParams, []string{"q_fields"})
 // search reports it like any other unread param.
 const hideAppliedCompaniesParam = "hide_applied_companies"
 
+// hideSeenParam asks /jobs/search to leave out the jobs the caller has already opened.
+// It is a per-person preference, not a filter: search.FilterFromValues does not read it,
+// so a saved search carrying it narrows nothing and its digest ignores it. Only the
+// public /jobs/search reads it; the agent search reports it like any other unread param.
+const hideSeenParam = "hide_seen"
+
 // publicJobSearchParams is what /jobs/search itself reads beyond the filter vocabulary.
-var publicJobSearchParams = slices.Concat(jobSearchParams, []string{hideAppliedCompaniesParam})
+var publicJobSearchParams = slices.Concat(jobSearchParams, []string{hideSeenParam, hideAppliedCompaniesParam})
 
 // agentSearchParams is jobSearchParams plus the agent endpoint's own two: the
 // response-format selector and the opt-in semantic search.
@@ -215,14 +250,18 @@ func (h *searchHandlers) matchVector(c *fiber.Ctx) []float32 {
 // view...], "meta": {total, limit, offset}} — results carry public_slug and never
 // the internal id.
 func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
+	seen, seenIgnored := h.seenExclusion(c)
 	appliedFrag, appliedIgnored := h.appliedCompanyExclusion(c)
-	out, err := h.runJobSearch(c, false, appliedFrag)
+	out, err := h.runJobSearch(c, false, seen, appliedFrag)
 	if err != nil {
 		return err
 	}
 	res, limit, offset, dropped := out.res, out.limit, out.offset, out.dropped
 	if appliedIgnored {
 		dropped = append(dropped, search.UnknownParam{Param: hideAppliedCompaniesParam})
+	}
+	if seenIgnored {
+		dropped = append(dropped, search.UnknownParam{Param: hideSeenParam})
 	}
 
 	views := make([]jobview.Job, len(res.Hits))
@@ -231,7 +270,7 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 	}
 	h.attachGhost(c, res.Hits, views)
 
-	ignored := mergedJobSearchIgnored(c, publicJobSearchParams, dropped)
+	ignored := mergedJobSearchIgnored(c, out.own(publicJobSearchParams), dropped)
 	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignored, ignoredJobValues(c))
 }
 
@@ -278,6 +317,44 @@ func (h *searchHandlers) appliedCompanyExclusion(c *fiber.Ctx) (frag string, ign
 	return search.NotInStrings("company_slug", slugs), false
 }
 
+// seenExclusion resolves ?hide_seen=true into the job ids to keep out of this search,
+// and reports whether the param has to be named in meta.ignored_params instead.
+//
+// The exclusion happens inside the index query rather than over the returned page, so
+// meta.total and every later page stay honest: hiding hits after the fact would shrink
+// a page below its limit and leave the total counting what the caller never sees.
+//
+// It is honoured for a signed-in caller only, because "seen" is the server's record of
+// what that account opened — the same record the feed dims cards by. An anonymous
+// caller, an unparseable value, or a record that could not be read all fall back to the
+// unhidden search and say so, rather than refusing a shared link or quietly widening.
+func (h *searchHandlers) seenExclusion(c *fiber.Ctx) (ids []int64, ignored bool) {
+	vals := queryValues(c)
+	if !vals.Has(hideSeenParam) {
+		return nil, false
+	}
+	// A present but empty `?hide_seen=` is unreadable like any other non-boolean.
+	want, err := strconv.ParseBool(vals.Get(hideSeenParam))
+	if err != nil {
+		return nil, true
+	}
+	if !want {
+		return nil, false
+	}
+	userID, ok := auth.UserID(c)
+	if !ok || h.seen == nil {
+		return nil, true
+	}
+	ids, err = h.seen.ExcludedJobIDs(c.Context(), userID)
+	if err != nil {
+		log.Printf("search: hide_seen: read seen jobs of user %d: %v", userID, err)
+		return nil, true
+	}
+	// The answer now depends on who asked, under a URL that does not say so.
+	c.Set(fiber.HeaderCacheControl, "private, no-store")
+	return ids, false
+}
+
 // jobSearchOutcome is what runJobSearch hands back: the raw hits, the applied
 // limit/offset, every value-level ignored-param report gathered while building the
 // query, and — only when the caller asked for semantic search and it could be tried —
@@ -288,6 +365,41 @@ type jobSearchOutcome struct {
 	offset   int
 	dropped  []search.UnknownParam
 	semantic string
+	// formerEmployers reports that the "Hiring again" filter was applied, which makes
+	// former_employers one of the endpoint's own params rather than an ignored one.
+	formerEmployers bool
+}
+
+// own is the endpoint's own params for this request: base, plus former_employers when the
+// filter read it. Anonymous, it was not read, and the report must say so — the answer then
+// is the whole catalogue, which a caller who asked for their former employers must not
+// mistake for them.
+func (o jobSearchOutcome) own(base []string) []string {
+	if !o.formerEmployers {
+		return base
+	}
+	return append(slices.Clip(base), formerEmployersParam)
+}
+
+// formerEmployerSlugs resolves the "Hiring again" filter for this request. applied is false
+// when the param is absent or false, or when nothing can read it — no session, no lookup
+// wired — and the caller then searches as if it were absent (and reports it, see own).
+// Applied with no slugs is a real answer: nothing banked resolves to a hiring company.
+func (h *searchHandlers) formerEmployerSlugs(c *fiber.Ctx) (slugs []string, applied bool, err error) {
+	if h.formerEmployers == nil || !c.QueryBool(formerEmployersParam) {
+		return nil, false, nil
+	}
+	userID, ok := auth.UserID(c)
+	if !ok {
+		return nil, false, nil
+	}
+	// The answer is this person's own history; no shared cache may keep it.
+	c.Set(fiber.HeaderCacheControl, "private, no-store")
+	slugs, err = h.formerEmployers.Slugs(c.Context(), userID)
+	if err != nil {
+		return nil, false, err
+	}
+	return slugs, true, nil
 }
 
 // runJobSearch performs the request handling shared by both job-search endpoints:
@@ -300,10 +412,10 @@ type jobSearchOutcome struct {
 // ignoredParams(c, own) report.
 //
 // wantSemantic runs the query as a hybrid through h.semantic; a flag it cannot honour
-// (see semanticDropped) is reported as a dropped param. personal is a filter fragment
-// the caller derived from who is asking (hide_applied_companies), ANDed onto the
-// request's own filter; "" adds nothing.
-func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, personal string) (jobSearchOutcome, error) {
+// (see semanticDropped) is reported as a dropped param. exclude names job ids to keep
+// out of the result (hide_seen); nil excludes nothing. personal is the applied-company
+// exclusion fragment; an empty fragment leaves the result unchanged.
+func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude []int64, personal string) (jobSearchOutcome, error) {
 	if h.search == nil {
 		return jobSearchOutcome{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
 	}
@@ -313,13 +425,29 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, personal 
 		return jobSearchOutcome{}, err
 	}
 
+	former, formerApplied, err := h.formerEmployerSlugs(c)
+	if err != nil {
+		return jobSearchOutcome{}, err
+	}
+	if formerApplied && len(former) == 0 {
+		// Narrow to nothing rather than drop the filter: the set the caller asked for is
+		// empty, and searching without it would answer with strangers.
+		return jobSearchOutcome{limit: limit, offset: offset, formerEmployers: true}, nil
+	}
+
 	vector := h.matchVector(c)
 	sort := searchSort(c, vector != nil)
-	filter := buildSearchFilter(c)
+	base := buildSearchFilter(c)
+	// formerFilter is the "Hiring again" group alone, kept for the degrade below.
+	filter, formerFilter := base, any(nil)
+	if formerApplied {
+		filter = search.AndInStrings(base, "company_slug", former)
+		formerFilter = search.AndInStrings(nil, "company_slug", former)
+	}
 	qFields, qFieldsIgnored := search.QFieldsFromValues(queryValues(c))
 	params := search.SearchParams{
 		Query:   c.Query("q"),
-		Filter:  withFilterGroup(filter, personal),
+		Filter:  withExcludedIDs(withFilterGroup(filter, personal), exclude),
 		Sort:    sort,
 		Vector:  vector,
 		QFields: qFields,
@@ -339,19 +467,21 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, personal 
 		// before the live index catches up (AGENTS.md's "Adding a filterable
 		// attribute") is the realistic trigger, not a malformed client value
 		// (every facet/scalar value is already escaped before it reaches a filter
-		// expression — see search.quote). filter == nil means there is nothing to
+		// expression — see search.quote). base == nil means there is nothing to
 		// blame — retrying an unchanged query would just fail again identically.
-		if filter == nil || !errors.Is(err, search.ErrBadQuery) {
+		// The "Hiring again" group is not blamed and survives the retry: company_slug
+		// has been filterable since the index existed, and dropping it would answer a
+		// request for former employers with the whole catalogue.
+		if base == nil || !errors.Is(err, search.ErrBadQuery) {
 			// RenderError renders a generic 500 (or 400 for ErrBadQuery); returning
 			// the error keeps the failure cause visible to logging instead of
 			// swallowing it.
 			return jobSearchOutcome{}, err
 		}
-		// The personal fragment survives the retry: it filters on company_slug, an
-		// attribute the index has always declared filterable, so it is never what
-		// Meilisearch minded — and dropping it would show the caller what they hid.
+		// Both personal exclusions survive the retry: id and company_slug have always
+		// been filterable, so an undeclared facet cannot justify dropping either.
 		res, err = h.search.Search(c.Context(), search.SearchParams{
-			Query: c.Query("q"), Filter: withFilterGroup(nil, personal),
+			Query: c.Query("q"), Filter: withExcludedIDs(withFilterGroup(formerFilter, personal), exclude),
 			Sort: sort, Vector: vector, QFields: qFields, Limit: limit, Offset: offset,
 		})
 		if err != nil {
@@ -369,7 +499,8 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, personal 
 	h.recordQuery(c.Query("q"))
 	return jobSearchOutcome{
 		res: res, limit: limit, offset: offset, dropped: dropped,
-		semantic: outcome.wire(ojcp.SemanticApplied, ojcp.SemanticUnavailable),
+		semantic:        outcome.wire(ojcp.SemanticApplied, ojcp.SemanticUnavailable),
+		formerEmployers: formerApplied,
 	}, nil
 }
 
@@ -450,16 +581,6 @@ func buildSearchFilter(c *fiber.Ctx) any {
 	return search.FilterFromValues(queryValues(c))
 }
 
-// withFilterGroup ANDs one more fragment onto buildSearchFilter's result — either a
-// [][]string of facet groups or nil. An empty fragment leaves the filter untouched.
-func withFilterGroup(base any, frag string) any {
-	if frag == "" {
-		return base
-	}
-	groups, _ := base.([][]string) // nil base → nil groups; append allocates
-	return append(groups, []string{frag})
-}
-
 // attachGhost attaches the ghost signal to a page of search hits.
 //
 // Search is the surface where job cards are actually browsed, so leaving it out
@@ -519,4 +640,14 @@ func (h *searchHandlers) attachGhost(c *fiber.Ctx, hits []search.JobDocument, vi
 			Evidence:     evidence[hit.ID],
 		})
 	}
+}
+
+// withFilterGroup ANDs one more fragment onto buildSearchFilter's result — either a
+// [][]string of facet groups or nil. An empty fragment leaves the filter untouched.
+func withFilterGroup(base any, frag string) any {
+	if frag == "" {
+		return base
+	}
+	groups, _ := base.([][]string) // nil base → nil groups; append allocates
+	return append(groups, []string{frag})
 }

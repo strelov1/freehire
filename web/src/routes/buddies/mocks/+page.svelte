@@ -1,15 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '#lib/api.js';
+  import BuddyMockHosts from '#lib/components/BuddyMockHosts.svelte';
   import BuddyMockList from '#lib/components/BuddyMockList.svelte';
   import BuddyMockSettingsForm from '#lib/components/BuddyMockSettingsForm.svelte';
   import MentorScheduleEditor from '#lib/components/MentorScheduleEditor.svelte';
   import States from '#lib/components/States.svelte';
   import type { AvailabilityApi, BuddyMockSettings, BuddyMocks, MentorAvailabilityRule } from '#lib/types.js';
 
-  // The caller's own mock interviews: what is coming, when they host, and what is past.
-  // Booking happens on another member's page (/buddies/[handle]). The space's layout shows
-  // the join screen to a non-member, so this page only ever renders for a member.
+  // Mock interviews: who the caller could book now, what they have coming, how they host,
+  // and what is past. Booking happens on the host's page (/buddies/[handle], mock tab). The
+  // space's layout shows the join screen to a non-member, so this page only ever renders
+  // for a member.
 
   const mockSchedule: AvailabilityApi = {
     replaceWeek: api.replaceBuddyMockWeekly,
@@ -43,42 +45,41 @@
 
 <svelte:head><title>Mock interviews · Interview buddies</title></svelte:head>
 
-<div class="flex max-w-4xl flex-col gap-5">
+<div class="flex max-w-4xl flex-col gap-4">
   <header class="flex flex-col gap-1">
     <h1 class="text-2xl font-semibold">Mock interviews</h1>
-    <p class="text-muted-foreground text-sm">
+    <p class="text-sm text-muted-foreground">
       Practise with another member: sixty minutes on the host's own call link, booked at least
-      twelve hours ahead. Members book you from your buddy page; you book them from theirs.
+      twelve hours ahead. Book someone below; members book you from your buddy page.
     </p>
   </header>
 
-  {#if view === 'loading'}<States state="loading" />
-  {:else if view === 'error'}<States state="error" />
+  <BuddyMockHosts hostingAnchor="#hosting" hosting={!!settings && !settings.paused} />
+
+  {#if view === 'loading'}<States state="loading" rows={3} />
+  {:else if view === 'error'}<States state="error" message="Could not load your mock interviews." />
   {:else}
-    <section class="flex flex-col gap-3">
-      <h2 class="text-lg font-medium">Upcoming</h2>
+    <section class="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+      <h2 class="text-base font-semibold">Your upcoming mocks</h2>
       {#if mocks.upcoming.length === 0}
-        <p class="text-muted-foreground text-sm">No mock interviews booked.</p>
+        <p class="text-sm text-muted-foreground">Nothing booked. Pick a host above, or wait for a member to book you.</p>
       {:else}
         <BuddyMockList mocks={mocks.upcoming} upcoming onchange={refreshMocks} />
       {/if}
     </section>
 
-    <BuddyMockSettingsForm bind:settings />
-
-    <section class="flex flex-col gap-3">
-      <h2 class="text-lg font-medium">When you can host</h2>
-      <p class="text-muted-foreground text-sm">Hours are in the time zone saved above.</p>
+    <div id="hosting" class="flex scroll-mt-20 flex-col gap-4">
+      <BuddyMockSettingsForm bind:settings />
       <MentorScheduleEditor
         bind:rules
         schedule={mockSchedule}
         emptyMessage="No hours yet — until you add some, nobody can book a mock interview with you."
       />
-    </section>
+    </div>
 
     {#if mocks.past.length > 0}
-      <section class="flex flex-col gap-3">
-        <h2 class="text-lg font-medium">Past</h2>
+      <section class="flex flex-col gap-3 rounded-xl border border-border bg-card p-5">
+        <h2 class="text-base font-semibold">Past mocks</h2>
         <BuddyMockList mocks={mocks.past} upcoming={false} onchange={refreshMocks} />
       </section>
     {/if}

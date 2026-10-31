@@ -2549,10 +2549,6 @@ type Querier interface {
 	GetBuddyMemberByHandle(ctx context.Context, handle string) (BuddyMember, error)
 	// A member's own row, active or left. The caller decides what left_at means.
 	GetBuddyMemberByUser(ctx context.Context, userID int64) (BuddyMember, error)
-	// What a member page shows: completed mocks (confirmed and ended, either role) and the
-	// count and average of REVEALED reviews about the member, minus any written across a
-	// block (the ListBuddyMocksForUser rule). Zeroes, never NULLs.
-	GetBuddyMemberMockSummary(ctx context.Context, subjectUserID int64) (GetBuddyMemberMockSummaryRow, error)
 	// One mock with what both participants' notices need: both handles, the host's CURRENT
 	// zone and link, and both addresses — each address only ever addresses its own owner's
 	// notice. Authorisation is the caller's: this answers for any id. The link is empty unless
@@ -3955,15 +3951,31 @@ type Querier interface {
 	// per-type counts split `events` by the feed's own vocabulary (the predicate admits only
 	// these three), so they always add up to it.
 	ListBuddyMemberActivity(ctx context.Context, arg ListBuddyMemberActivityParams) ([]ListBuddyMemberActivityRow, error)
+	// What a member page shows, for each of subject_ids (one row per id, zeroes, never NULLs):
+	// completed mocks (confirmed and ended, either role) and the count and average of REVEALED
+	// reviews about the member, minus any written across a block (the ListBuddyMocksForUser
+	// rule). A list of ids so the hosts listing reads every host's summary in one statement;
+	// a member page asks for one.
+	ListBuddyMemberMockSummaries(ctx context.Context, subjectIds []int64) ([]ListBuddyMemberMockSummariesRow, error)
 	// The most recent revealed reviews about a member, without their authors: who mocked with
 	// whom is a social graph no member page needs to publish.
 	ListBuddyMemberRevealedReviews(ctx context.Context, arg ListBuddyMemberRevealedReviewsParams) ([]ListBuddyMemberRevealedReviewsRow, error)
 	// Every availability row of a member, both shapes: an override only means anything beside
 	// the weekly rules it replaces.
 	ListBuddyMockAvailability(ctx context.Context, userID int64) ([]BuddyMockAvailability, error)
+	// ListBuddyMockAvailability for many members in one statement.
+	ListBuddyMockAvailabilityForUsers(ctx context.Context, userIds []int64) ([]BuddyMockAvailability, error)
 	// A member's occupied time in a window: every mock they are in, as host or as guest. The
 	// slot engine subtracts it from their availability.
 	ListBuddyMockBusy(ctx context.Context, arg ListBuddyMockBusyParams) ([]ListBuddyMockBusyRow, error)
+	// ListBuddyMockBusy for many members in one statement.
+	ListBuddyMockBusyForUsers(ctx context.Context, arg ListBuddyMockBusyForUsersParams) ([]ListBuddyMockBusyForUsersRow, error)
+	// Who may be listed as a mock host to the viewer, before their slots are computed: active
+	// members other than the viewer with saved, unpaused settings (offering the topic, when one
+	// is asked for), at least one availability row, and no block with the viewer either way.
+	// Most recently updated settings first, bounded by row_limit: the service computes every
+	// candidate's slots in memory, so the cap is what bounds that work.
+	ListBuddyMockHostCandidates(ctx context.Context, arg ListBuddyMockHostCandidatesParams) ([]ListBuddyMockHostCandidatesRow, error)
 	// Confirmed mocks starting inside one offset's window (floor, offset] and not yet reminded
 	// at it, between a pair that can still meet (the GetBuddyMock rule). starts_at > now()
 	// keeps a late run from reminding about a mock already under way.
@@ -3974,7 +3986,7 @@ type Querier interface {
 	// and the review ABOUT them only once revealed: they have written theirs, or seven days
 	// have passed since the end — and only while no block stands between its author and its
 	// subject, either way. The same reveal-and-block rule is restated in
-	// GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
+	// ListBuddyMemberMockSummaries and ListBuddyMemberRevealedReviews; change all three together.
 	ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksForUserParams) ([]ListBuddyMocksForUserRow, error)
 	// Each event's reaction counts by kind, and the viewer's own choice, for the events of one
 	// feed page. Only active members count, and never one on either side of a block with the
@@ -4420,6 +4432,17 @@ type Querier interface {
 	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
 	// The caller's hidden application ids, for the tracker's visibility switch.
 	ListHiddenBuddyApplications(ctx context.Context, userID int64) ([]int64, error)
+	// The companies carrying searchable jobs whose slug folds to one of the given keys, or IS one
+	// of the given slugs — the candidates the "Hiring again" filter (internal/job/formeremployer)
+	// chooses among. Both halves are needed: a name resolves either through the alias registry,
+	// whose canonical slug need not fold to the name's own key (a curated merge), or through the
+	// fold itself, where EVERY slug sharing the key must come back so a key two companies share
+	// can be refused rather than half-answered.
+	//
+	// The keys are joined through unnest rather than compared with `= ANY`, so each key is one
+	// probe of companies_folded_slug_idx (migration 0222) — see that file for why the `= ANY`
+	// form over an expression is the shape that went wrong on jobs.
+	ListHiringCompaniesByFoldedSlug(ctx context.Context, arg ListHiringCompaniesByFoldedSlugParams) ([]ListHiringCompaniesByFoldedSlugRow, error)
 	// Every claimed HEAVY-pool run, with what the scheduler needs to ask the service manager
 	// about it. See ListInFlightLightRuns for the other pool, and ClaimDueHeavyRuns for what
 	// "heavy" means and why the two pools are counted apart: the budget each pool claims
@@ -4921,6 +4944,11 @@ type Querier interface {
 	// not ask at all when the page is already full. It handed the same window to both until
 	// 2026-09-06, which returned up to 2*limit rows and skipped a window per page.
 	ListOrphanedApplications(ctx context.Context, arg ListOrphanedApplicationsParams) ([]ListOrphanedApplicationsRow, error)
+	// The places the caller has worked at and LEFT, for the "Hiring again" search filter: the
+	// company name and the location exactly as banked, one row per employment. Owner-scoped like
+	// every read here. Projects are not employers, a blank company names nobody, and a current
+	// role is not a former employer — the filter is about going BACK.
+	ListPastEmployerNames(ctx context.Context, userID int64) ([]ListPastEmployerNamesRow, error)
 	// The moderator review queue: every claim that could not auto-activate (unknown or
 	// mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 	// whose code was never entered is not reviewable — nobody has shown they can read that

@@ -48,6 +48,33 @@ type mcfPosting struct {
 	Metadata struct {
 		NewPostingDate string `json:"newPostingDate"`
 	} `json:"metadata"`
+	// Salary is the employer's stated range in Singapore dollars — MyCareersFuture
+	// requires one on every posting, in SGD, overseas roles included.
+	Salary struct {
+		Minimum float64 `json:"minimum"`
+		Maximum float64 `json:"maximum"`
+		Type    struct {
+			SalaryType string `json:"salaryType"`
+		} `json:"type"`
+	} `json:"salary"`
+}
+
+// mcfSalaryPeriod maps MyCareersFuture's salary type onto freehire's salary_period. Every
+// sampled posting (2026-10-31) said "Monthly"; an unrecognised type maps to "" and the
+// salary is dropped rather than published against a guessed period.
+func mcfSalaryPeriod(t string) string {
+	switch t {
+	case "Monthly":
+		return "month"
+	case "Annually", "Yearly":
+		return "year"
+	case "Daily":
+		return "day"
+	case "Hourly":
+		return "hour"
+	default:
+		return ""
+	}
 }
 
 func (s mycareersfuture) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
@@ -94,7 +121,7 @@ func (p mcfPosting) toJob() (Job, bool) {
 	if p.Address.IsOverseas && p.Address.OverseasCountry != "" {
 		location = p.Address.OverseasCountry
 	}
-	return Job{
+	job := Job{
 		ExternalID:  p.UUID,
 		URL:         fmt.Sprintf(mcfJobURL, p.UUID),
 		Title:       p.Title,
@@ -103,5 +130,12 @@ func (p mcfPosting) toJob() (Job, bool) {
 		Description: sanitizeHTML(p.Description),
 		Remote:      isRemote(p.Title),
 		PostedAt:    parseDate(p.Metadata.NewPostingDate),
-	}, true
+	}
+	if period := mcfSalaryPeriod(p.Salary.Type.SalaryType); period != "" {
+		salMin, salMax := roundSalaryPart(p.Salary.Minimum), roundSalaryPart(p.Salary.Maximum)
+		if salMin != nil || salMax != nil {
+			job.SalaryMin, job.SalaryMax, job.SalaryCurrency, job.SalaryPeriod = salMin, salMax, "SGD", period
+		}
+	}
+	return job, true
 }

@@ -81,6 +81,12 @@ export const FILTER_EXTRAS: FilterRow[] = [
     values: 'true — the description says so; false — every posting not marked, including recruiter posts that never say so',
   },
   {
+    param: 'former_employers',
+    label: 'Hiring again: companies you have worked at and left',
+    values:
+      'true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params',
+  },
+  {
     param: 'salary_min',
     label: 'Minimum salary',
     values: 'integer — jobs whose minimum salary is at least this (pair with salary_currency)',

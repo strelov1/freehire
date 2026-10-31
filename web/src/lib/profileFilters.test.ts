@@ -10,6 +10,7 @@ function mkProfile(
   location: LocationPreferences | null = null,
   excludedSkills: string[] = [],
   excludedSources: string[] = [],
+  excludedCompanies: string[] = [],
 ): UserProfile {
   return {
     specializations,
@@ -17,7 +18,7 @@ function mkProfile(
     seniorities: [],
     excluded_skills: excludedSkills,
     excluded_sources: excludedSources,
-    excluded_companies: [],
+    excluded_companies: excludedCompanies,
     location_preferences: location,
     derived_location: null,
     cv: null,
@@ -272,6 +273,50 @@ describe('filtersFromProfile', () => {
     });
   });
 
+  describe('excluded companies', () => {
+    it('stages an avoided company as an EXCLUDED company_slug facet value', () => {
+      // `company_slug_exclude` is the param the search backend reads (a StringFacet's
+      // `_exclude` modifier) and the one the MCP search already sends for
+      // exclude_company_slugs. It reaches the saved-search alert too, since
+      // profileAlertSync builds from the same function.
+      const f = filtersFromProfile(mkProfile([], [], null, [], [], ['acme', 'globex']));
+      const p = filtersToParams(f);
+
+      expect(p.getAll('company_slug_exclude')).toEqual(['acme,globex']);
+      expect(p.getAll('company_slug')).toEqual([]);
+    });
+
+    it('seeds nothing when the profile avoids no company', () => {
+      const p = filtersToParams(filtersFromProfile(mkProfile(['backend'], [])));
+
+      expect([...p.keys()]).not.toContain('company_slug_exclude');
+    });
+
+    it('keeps avoided companies and avoided sources independent', () => {
+      const p = filtersToParams(
+        filtersFromProfile(mkProfile([], [], null, [], ['smartrecruiters'], ['acme'])),
+      );
+
+      expect(p.getAll('source_exclude')).toEqual(['smartrecruiters']);
+      expect(p.getAll('company_slug_exclude')).toEqual(['acme']);
+    });
+
+    it('bounds the contribution so a maxed-out list cannot break the alert query', () => {
+      // A profile may hold up to 200 excluded companies (maxExcludedCount), each up to 100
+      // characters (maxExcludedLen).
+      const many = Array.from({ length: 200 }, (_, i) => `company-number-${i}`);
+
+      const p = filtersToParams(filtersFromProfile(mkProfile([], [], null, [], [], many)));
+      const kept = p.getAll('company_slug_exclude')[0]?.split(',') ?? [];
+
+      expect(kept.length).toBeGreaterThan(0);
+      expect(kept.length).toBeLessThan(many.length);
+      // A prefix of the profile's own order, whole values only — half a slug excludes an
+      // employer that does not exist and lets the real one through.
+      expect(many.slice(0, kept.length)).toEqual(kept);
+    });
+  });
+
   describe('bounding the skills contribution', () => {
     // Longer than any real dictionary skill name, to model the free-text worst case
     // rather than the ~8-character average a real pick from the skill picker produces.
@@ -290,11 +335,15 @@ describe('filtersFromProfile', () => {
           cities: Array.from({ length: 10 }, (_, i) => `City${i}`),
         },
       };
+      // Every list the seeder reads at its stored cap, so a budget added for one more list
+      // is measured against the others rather than alone.
       const profile = mkProfile(
         ['backend', 'devops'],
         longSkills('skill', 200),
         location,
         longSkills('avoid', 200),
+        longSkills('source', 200),
+        longSkills('company', 200),
       );
       const query = filtersToParams(filtersFromProfile(profile)).toString();
       // The saved-search service's own bound (internal/search/savedsearch/savedsearch.go);

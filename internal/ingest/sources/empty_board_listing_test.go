@@ -20,6 +20,7 @@ var emptyBoardListingAdapters = map[string]struct {
 	"recruitee":  {func(f *fakeHTTP) Source { return NewRecruitee(f) }, `{"offers":[]}`, []string{`{}`, `{"offers":null}`}},
 	"breezy":     {func(f *fakeHTTP) Source { return NewBreezy(f) }, `[]`, []string{`null`}},
 	"bamboohr":   {func(f *fakeHTTP) Source { return NewBambooHR(f) }, `{"meta":{"totalCount":0},"result":[]}`, []string{`{}`, `{"meta":{"totalCount":0}}`, `{"result":null}`}},
+	"beehire":    {func(f *fakeHTTP) Source { return NewBeehire(f) }, `{"campaigns":[]}`, []string{`{}`, `{"campaigns":null}`}},
 }
 
 // An emptied board is the source's own answer, with its posting collection present and empty:

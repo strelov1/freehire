@@ -205,6 +205,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Q"
         - $ref: "#/components/parameters/QFields"
+        - $ref: "#/components/parameters/HideSeen"
         - $ref: "#/components/parameters/HideAppliedCompanies"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
@@ -258,6 +259,7 @@ paths:
         - $ref: "#/components/parameters/SourceExclude"
         - $ref: "#/components/parameters/SourceTypeExclude"
         - $ref: "#/components/parameters/CompanySlugExclude"
+        - $ref: "#/components/parameters/FormerEmployers"
       responses:
         "200":
           description: Matching jobs with pagination metadata.
@@ -1089,6 +1091,22 @@ components:
         it narrows nothing. Without a session (or API key), or with a value
         that is not a boolean, the search runs unhidden and
         `hide_applied_companies` is reported in `meta.ignored_params`.
+    HideSeen:
+      name: hide_seen
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` leaves out the postings the signed-in caller has already
+        opened — the same record that marks a card as viewed. The exclusion
+        is applied inside the search, so `meta.total` and paging describe
+        what is left. It covers the 1000 postings the caller most recently
+        viewed, saved, applied to or hid.
+
+        It is a per-person preference, not a filter: a saved search carrying
+        it narrows nothing. Without a session (or API key), or with a value
+        that is not a boolean, the search runs unhidden and `hide_seen` is
+        reported in `meta.ignored_params`.
     Limit:
       name: limit
       in: query
@@ -1314,6 +1332,28 @@ components:
 
         `true` returns only the marked postings, for a cleared candidate seeking
         exactly that work. Omitting the parameter filters nothing.
+    FormerEmployers:
+      name: former_employers
+      in: query
+      schema:
+        type: boolean
+      description: |
+        "Hiring again": only postings at companies the signed-in caller has
+        worked at and left, as recorded in their own experience bank (current
+        roles and projects are not former employers). Combines with every other
+        filter; `meta.total` counts the narrowed result.
+
+        A banked company name counts only when it resolves to exactly one
+        catalogue company carrying open jobs. Names that name no employer
+        ("Freelance", "Confidential"), names two catalogue companies share, and
+        short names whose banked location does not match a country the company
+        hires in are left out — a missing company is preferred to a stranger
+        under a familiar name. When nothing resolves the answer is empty, never
+        the whole catalogue.
+
+        Read only for a signed-in caller (session cookie or API key). Anonymous, it filters
+        nothing and is reported in `meta.ignored_params`. `false` filters
+        nothing.
     ViaRecruiter:
       name: via_recruiter
       in: query

@@ -73,7 +73,7 @@
   "web/src/lib/components/ReminderSettings.svelte": 1,
   "web/src/lib/components/SavedSearches.svelte": 1,
   "web/src/lib/components/SkillDeltaBadge.svelte": 3,
-  "web/src/lib/components/StatusBoard.svelte": 7,
+  "web/src/lib/components/StatusBoard.svelte": 1,
   "web/src/lib/components/SwipeDeck.svelte": 8,
   "web/src/lib/components/TailorWorkspacePreview.svelte": 7,
   "web/src/lib/components/TalentView.svelte": 1,

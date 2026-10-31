@@ -47,3 +47,15 @@ func TestAndNotSkills_SkipsEmptySkill(t *testing.T) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
 }
+
+func TestAndInStrings_AppendsOneInGroup(t *testing.T) {
+	base := [][]string{{`category = "backend"`}}
+	got := AndInStrings(base, "company_slug", []string{"acme", `a"b`})
+	want := [][]string{{`category = "backend"`}, {`company_slug IN ["acme", "a\"b"]`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("AndInStrings = %#v, want %#v", got, want)
+	}
+	if got := AndInStrings(nil, "company_slug", []string{"acme"}); !reflect.DeepEqual(got, [][]string{{`company_slug IN ["acme"]`}}) {
+		t.Errorf("AndInStrings(nil) = %#v", got)
+	}
+}

@@ -817,6 +817,8 @@ func Register(app *fiber.App, cfg Config) {
 	trackingH := newTrackingHandlers(queries, tracking, reminders, jobSearch)
 	// hide_applied_companies on /jobs/search reads the same set the feed badges cards by.
 	searchH.appliedCompanies = tracking
+	// hide_seen on /jobs/search reads the same record the swipe deck excludes by.
+	searchH.seen = tracking
 	timelineH := newTimelineHandlers(queries)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)

@@ -32,7 +32,7 @@ type jobDescriptions interface {
 // request fell back to keywords ("unavailable"). Omitted when not asked. An applied one
 // also carries meta.total_is_lower_bound: its total is "at least", not a count.
 func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
-	out, err := h.runJobSearch(c, c.QueryBool("semantic"), "")
+	out, err := h.runJobSearch(c, c.QueryBool("semantic"), nil, "")
 	if err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func (h *searchHandlers) AgentSearchJobs(c *fiber.Ctx) error {
 		views[i] = hit.Job
 	}
 
-	ignored := mergedJobSearchIgnored(c, agentSearchParams, out.dropped)
+	ignored := mergedJobSearchIgnored(c, out.own(agentSearchParams), out.dropped)
 	meta := listMeta(res.Total, out.limit, out.offset, ignored, ignoredJobValues(c))
 	if out.semantic != "" {
 		meta["semantic"] = out.semantic

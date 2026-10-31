@@ -158,6 +158,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `visa_sponsorship` | Visa sponsorship | true, false |
 | `requires_clearance` | Security clearance required | true, false |
 | `via_recruiter` | Posting says a recruiter publishes it for a client | true — the description says so; false — every posting not marked, including recruiter posts that never say so |
+| `former_employers` | Hiring again: companies you have worked at and left | true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params |
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |
 | `salary_max` | Maximum salary | integer — jobs whose maximum salary is at most this (pair with salary_currency) |
 | `experience_years_min` | Minimum experience | integer — jobs requiring at least this many years |

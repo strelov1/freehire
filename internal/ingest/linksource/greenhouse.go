@@ -53,7 +53,7 @@ func (g greenhouse) Resolve(ctx context.Context, raw string) (sources.Job, bool,
 	if strings.Contains(host(u), "eu.greenhouse.io") {
 		apiHost = "boards-api.eu.greenhouse.io"
 	}
-	api := fmt.Sprintf("https://%s/v1/boards/%s/jobs/%s?content=true", apiHost, board, id)
+	api := fmt.Sprintf("https://%s/v1/boards/%s/jobs/%s?content=true&pay_transparency=true", apiHost, board, id)
 
 	var j sources.GreenhousePosting
 	if err := g.http.GetJSON(ctx, api, &j); err != nil {
