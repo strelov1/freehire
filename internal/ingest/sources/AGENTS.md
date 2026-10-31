@@ -1526,6 +1526,19 @@ detail pages redirect through the proxy to a DDoS-Guard captcha, so its build ha
 `direct` parameter, which is the PROXIED client whenever `SOURCES_PROXY_URL` is set for any
 other provider.
 
+**GulfTalent traps** (`gulftalent`; measured 2026-10-30):
+
+- **It is swept by source (`fullCatalog`).** The sitemap's job shards list the whole catalogue
+  (~36k postings), the listing fails on any unreadable shard or on a listing with no posting,
+  and a closed posting simply drops out of the sitemap (its page still answers 200, saying
+  "Job closed", with no JobPosting block). Under the company scope 12,906 of ~15k open postings
+  had sat unseen since 2026-07-07 — every one sampled was closed.
+- **A fixed hydration window never drains.** Most new postings belong to companies an ATS
+  already covers; they are skipped after hydration, never stored, and so stay "new" every run.
+  With the window fixed at the sitemap's head, 383 of each run's 500 detail pages were the same
+  covered postings, day after day, while ~33.5k live postings further down were never read.
+  So a run takes the newest 500 plus a backlog window of 1000 that moves every day.
+
 **Cake traps** (`cake`; live-verified 2026-10-25 from a residential IP and from fsn):
 
 - **The search reads at most 499 rows per query.** `page * per_page` must stay below 500 and `per_page` is capped at 50, so the adapter reads 45 rows over at most 11 pages. A query matching more answers `total_entries: 500, total_relation: "gte"`, so `"eq"` with a total inside the window is the only proof a slice was read whole. The whole catalogue (~16k postings, ~3.3k under the `it_` family) is read as slices split recursively over the platform's own facets — professions, then job type, seniority, experience bracket, remote mode, management span. Each is a partition: the 392 leaf professions' totals summed exactly to their 20 families', and every other facet's values summed exactly to the slice they split. Only LEAF professions (`family_leaf`) are queried; a family value overlaps its leaves. `available_facets` lists the whole catalogue's values whatever the filter, so a split also queries values the slice does not hold (an empty answer costs one request).

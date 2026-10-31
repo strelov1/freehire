@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -230,7 +231,7 @@ func TestGulfTalentFetchNewRefreshesSeenAndBudgetsNew(t *testing.T) {
 		route("sitemap_jx000.xml", gtShardXML(seenURL, newA, newB)).
 		route("role-a-201", gtDetailHTML("A", "2026-07-03T00:00:00+00:00", "Acme", "Dubai", "UAE")).
 		route("role-b-202", gtDetailHTML("B", "2026-07-03T00:00:00+00:00", "Beta", "Dubai", "UAE"))
-	src := gulftalent{http: fake, maxNewPerRun: 1}
+	src := gulftalent{http: fake, newestPerRun: 1}
 	jobs, err := src.FetchNew(context.Background(), CompanyEntry{}, func(id string) bool { return id == "100" })
 	if err != nil {
 		t.Fatalf("FetchNew: %v", err)
@@ -255,6 +256,74 @@ func TestGulfTalentUnreadableJobShardFailsTheCrawl(t *testing.T) {
 		route("role-a-201", gtDetailHTML("A", "2026-07-03T00:00:00+00:00", "Acme", "Dubai", "UAE"))
 	if _, err := (gulftalent{http: fake}).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
 		t.Fatal("want an error when a job shard cannot be read")
+	}
+}
+
+// gulftalent lists its whole catalogue every run (the sitemap and every job shard, or an error),
+// so it is swept by source: a posting gone from the sitemap closes whichever company it belonged
+// to. Under the company scope it closed only for companies a run happened to write; on
+// 2026-10-30, 12,906 of ~15k open postings had last been seen on 2026-07-07, and every one
+// sampled answered "Job closed".
+func TestGulfTalentIsFullCatalog(t *testing.T) {
+	if !isFullCatalog(NewGulfTalent(nil)) {
+		t.Fatal("gulftalent must be fullCatalog")
+	}
+}
+
+// A sitemap that names no job shard, or job shards that name no posting, is not an empty
+// catalogue but a page other than the one we read (a challenge, a moved layout). It must fail
+// the crawl: a source-scoped sweep reads an empty listing as every posting gone.
+func TestGulfTalentEmptyListingFailsTheCrawl(t *testing.T) {
+	cases := map[string]*routedHTTP{
+		"no job shard": (&routedHTTP{}).
+			route("/sitemap.xml", gtSitemapIndexXML("https://www.gulftalent.com/sitemaps/sitemap_jl000.xml")),
+		"no posting in the shards": (&routedHTTP{}).
+			route("/sitemap.xml", gtSitemapIndexXML("https://www.gulftalent.com/sitemaps/sitemap_jx000.xml")).
+			route("sitemap_jx000.xml", gtShardXML("https://www.gulftalent.com/jobs/category/accounting")),
+	}
+	for name, fake := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := (gulftalent{http: fake}).FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false }); err == nil {
+				t.Fatal("want an error for a listing with no postings")
+			}
+		})
+	}
+}
+
+// The new postings past the newest share are taken from a window that moves every day. A fixed
+// window starved the backlog for good: a posting whose company an ATS already covers is skipped
+// after hydration, so it is never stored and stays "new" — measured 2026-10-30, 383 of each
+// run's 500 hydrations were such postings, the same ones every day, while ~33.5k live postings
+// further down the sitemap were never read.
+func TestGulfTalentFetchNewRotatesTheBacklogWindow(t *testing.T) {
+	var urls []string
+	for i := 0; i < 10; i++ {
+		urls = append(urls, fmt.Sprintf("https://www.gulftalent.com/uae/jobs/role-%d", 100+i))
+	}
+	fake := (&routedHTTP{}).
+		route("/sitemap.xml", gtSitemapIndexXML("https://www.gulftalent.com/sitemaps/sitemap_jx000.xml")).
+		route("sitemap_jx000.xml", gtShardXML(urls...)).
+		route("/jobs/role-", gtDetailHTML("Role", "2026-07-03T00:00:00+00:00", "Acme", "Dubai", "UAE"))
+	day0 := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	reached := map[string]bool{}
+	for d := 0; d < 3; d++ {
+		now := day0.AddDate(0, 0, d)
+		src := gulftalent{http: fake, newestPerRun: 2, backlogPerRun: 3, now: func() time.Time { return now }}
+		jobs, err := src.FetchNew(context.Background(), CompanyEntry{}, func(string) bool { return false })
+		if err != nil {
+			t.Fatalf("day %d: FetchNew: %v", d, err)
+		}
+		got := map[string]bool{}
+		for _, j := range jobs {
+			got[j.ExternalID] = true
+			reached[j.ExternalID] = true
+		}
+		if len(got) != 5 || !got["100"] || !got["101"] {
+			t.Fatalf("day %d: hydrated %v, want the newest 2 plus a backlog window of 3", d, got)
+		}
+	}
+	if len(reached) != 10 {
+		t.Fatalf("three days of a 3-wide window must reach all 8 backlog postings; reached %d of 10: %v", len(reached), reached)
 	}
 }
 
