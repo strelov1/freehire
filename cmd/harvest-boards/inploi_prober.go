@@ -21,7 +21,7 @@ var (
 	inploiKeyPattern     = regexp.MustCompile(`\bpk_[A-Za-z0-9_-]{12,}\b`)
 	inploiSegmentPattern = regexp.MustCompile(`(?i)\\?"segment_ids\\?"\s*,\s*\\?"segment\\?"\s*,\s*\\?"(\d+)\\?"`)
 	inploiTitlePattern   = regexp.MustCompile(`(?i)<title>([^<]*)</title>`)
-	inploiAtPattern      = regexp.MustCompile(`(?i) at `)
+	inploiCompanyPattern = regexp.MustCompile(`(?i) at ([^|]*)`)
 )
 
 func (inploiProber) probe(ctx context.Context, c httpClient, board string) (string, int, error) {
@@ -68,11 +68,11 @@ func inploiCompanyName(page string) string {
 		return ""
 	}
 	title := strings.TrimSpace(html.UnescapeString(m[1]))
-	at := inploiAtPattern.FindStringIndex(title)
-	if at == nil {
+	company := inploiCompanyPattern.FindStringSubmatch(title)
+	if company == nil {
 		return ""
 	}
-	return strings.TrimSpace(strings.Split(title[at[1]:], "|")[0])
+	return strings.TrimSpace(company[1])
 }
 
 func (inploiProber) discover(ctx context.Context, c httpClient) ([]string, error) {

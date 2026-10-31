@@ -1,6 +1,6 @@
 module github.com/strelov1/freehire
 
-go 1.26.10
+go 1.27
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
@@ -11,8 +11,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.3
 	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.79.3
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.52.6
-	github.com/bogdanfinn/fhttp v0.6.9
-	github.com/bogdanfinn/tls-client v1.16.0
+	github.com/bogdanfinn/fhttp v0.7.1
+	github.com/bogdanfinn/tls-client v1.17.1
 	github.com/chromedp/chromedp v0.21.0
 	github.com/disintegration/imaging v1.6.2
 	github.com/fasthttp/websocket v1.5.12
@@ -86,16 +86,15 @@ require (
 	github.com/bdandy/go-errors v1.2.2 // indirect
 	github.com/bdandy/go-socks4 v1.2.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bogdanfinn/quic-go-utls v1.0.10-utls // indirect
-	github.com/bogdanfinn/utls v1.7.8-barnius // indirect
-	github.com/bogdanfinn/websocket v1.5.6-barnius // indirect
+	github.com/bogdanfinn/quic-go-utls v1.0.12-utls // indirect
+	github.com/bogdanfinn/utls v1.8.2-barnius // indirect
+	github.com/bogdanfinn/websocket v1.5.8-barnius // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cention-sany/utf7 v0.0.0-20170124080048-26cad61bd60a // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chromedp/cdproto v0.157.8 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/coder/websocket v1.8.12 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect

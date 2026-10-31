@@ -82,7 +82,7 @@ var blocks = map[string][]string{
 	},
 	"dict": {
 		"answertopic", "certification", "classify", "companyname", "edulevel", "industrytag",
-		"lang", "location", "normalize", "roletype", "skilladjacency", "skillbundle", "skilltag",
+		"lang", "location", "normalize", "perks", "roletype", "skilladjacency", "skillbundle", "skilltag",
 		// skillvec/gen is the registry generator — a main package that reads skilltag
 		// and writes skillvec's source. It never ships in a binary, but it is a package
 		// in the repo, so it needs a block like any other.
@@ -153,6 +153,11 @@ var blocks = map[string][]string{
 		// dictionaries — a fact about postings' recorded facets, not an AI/enrichment
 		// concern, the same footing reqextract and wikicompany take below.
 		"dictgap",
+		// formeremployer resolves the free-text company names of a person's experience bank
+		// to catalogue company slugs for the "Hiring again" search filter. It reads the
+		// bank's rows through platform/db only, so it needs nothing from candidate; what it
+		// decides is a fact about company identity, beside logodomain.
+		"formeremployer",
 		"ghost", "ghostreport", "job", "jobdedup",
 		"jobderive", "jobfacts", "jobhash", "jobreality", "jobview", "liveness",
 		// qualityaudit samples the catalogue against the world (is a shown posting live, is a

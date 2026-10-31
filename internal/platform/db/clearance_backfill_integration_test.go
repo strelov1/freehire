@@ -30,7 +30,7 @@ func TestSetJobRequiresClearanceIsIdempotent(t *testing.T) {
 	}
 
 	n, err := q.SetJobRequiresClearance(ctx, SetJobRequiresClearanceParams{
-		ID: job.ID, RequiresClearance: trueFlag(),
+		ID: job.ID, RequiresClearance: trueFlag(), ClearanceLevels: []string{"secret"},
 	})
 	if err != nil {
 		t.Fatalf("first write: %v", err)
@@ -40,7 +40,7 @@ func TestSetJobRequiresClearanceIsIdempotent(t *testing.T) {
 	}
 
 	n, err = q.SetJobRequiresClearance(ctx, SetJobRequiresClearanceParams{
-		ID: job.ID, RequiresClearance: trueFlag(),
+		ID: job.ID, RequiresClearance: trueFlag(), ClearanceLevels: []string{"secret"},
 	})
 	if err != nil {
 		t.Fatalf("second write: %v", err)
@@ -49,12 +49,27 @@ func TestSetJobRequiresClearanceIsIdempotent(t *testing.T) {
 		t.Fatalf("second write affected %d rows, want 0 — the guard did not hold", n)
 	}
 
+	// Levels alone moving is a change: a dictionary that learns a new rung must reach a
+	// row whose boolean was already right.
+	n, err = q.SetJobRequiresClearance(ctx, SetJobRequiresClearanceParams{
+		ID: job.ID, RequiresClearance: trueFlag(), ClearanceLevels: []string{"secret", "interim"},
+	})
+	if err != nil {
+		t.Fatalf("third write: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("levels-only change affected %d rows, want 1", n)
+	}
+
 	stored, err := q.GetJob(ctx, job.ID)
 	if err != nil {
 		t.Fatalf("read back: %v", err)
 	}
 	if !stored.RequiresClearance.Valid || !stored.RequiresClearance.Bool {
 		t.Fatalf("requires_clearance = %+v, want true", stored.RequiresClearance)
+	}
+	if got := stored.ClearanceLevels; len(got) != 2 || got[0] != "secret" || got[1] != "interim" {
+		t.Fatalf("clearance_levels = %v, want [secret interim]", got)
 	}
 }
 
@@ -103,5 +118,47 @@ func TestJobDescriptionsByIDsReadsOnlyTheNamedRows(t *testing.T) {
 	}
 	if len(rows) != 1 || rows[0].ID != wanted.ID {
 		t.Fatalf("rows = %+v, want exactly the one named id %d", rows, wanted.ID)
+	}
+}
+
+func TestUpsertPreservesClearanceAfterFailedDetailFetch(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+	p := ingestParams("acme:clearance", "Cleared Engineer")
+	p.Description = "Active Secret clearance required. Health insurance and stock options provided."
+	p.Equity = pgtype.Text{String: "salary_and_equity", Valid: true}
+	p.Perks = []string{"health_insurance"}
+	p.RequiresClearance = trueFlag()
+	p.ClearanceLevels = []string{"secret"}
+	if _, err := ingestUpsert(ctx, q, p); err != nil {
+		t.Fatal(err)
+	}
+	p.Description = ""
+	p.RequiresClearance = pgtype.Bool{}
+	p.ClearanceLevels = nil
+	p.Perks = nil
+	p.Equity = pgtype.Text{}
+	got, err := ingestUpsert(ctx, q, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.RequiresClearance.Bool || len(got.ClearanceLevels) != 1 || got.ClearanceLevels[0] != "secret" {
+		t.Fatalf("failed detail fetch erased clearance: %+v, %v", got.RequiresClearance, got.ClearanceLevels)
+	}
+	if len(got.Perks) != 1 || got.Perks[0] != "health_insurance" {
+		t.Fatalf("failed detail fetch erased perks: %v", got.Perks)
+	}
+	if !got.Equity.Valid || got.Equity.String != "salary_and_equity" {
+		t.Fatalf("failed detail fetch erased equity: %+v", got.Equity)
+	}
+	p.Description = "Build public web applications."
+	got, err = ingestUpsert(ctx, q, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RequiresClearance.Valid || len(got.ClearanceLevels) != 0 || len(got.Perks) != 0 || got.Equity.Valid {
+		t.Fatalf("real edit retained description facets: %+v, %v, %v, %+v", got.RequiresClearance, got.ClearanceLevels, got.Perks, got.Equity)
 	}
 }

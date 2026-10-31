@@ -1,8 +1,10 @@
-// Command backfill-clearance fills jobs.requires_clearance for the rows that predate
-// the column, then exits.
+// Command backfill-clearance fills jobs.requires_clearance and jobs.clearance_levels
+// for the rows that predate them, then exits.
 //
-// Every write path fills it going forward (jobderive, through the job aggregate); this
-// is the one-off pass for the catalogue already in the table.
+// Every write path fills them going forward (jobderive, through the job aggregate);
+// this is the pass for the catalogue already in the table. It writes the two together
+// because they come from one reading of the description: a TRUE requires_clearance
+// beside empty levels would sit under the levels filter's "no explicit reference".
 //
 // It does NOT walk the catalogue. A `description` predicate over the whole table
 // de-TOASTs the column for all 8M rows to find the ~38k that mention a clearance, and
@@ -117,13 +119,15 @@ func run() int {
 			// whatever it had, which for an unvisited row is NULL — the honest "not
 			// stated". Writing false here would assert the posting promises no
 			// clearance, which is a different claim.
-			if !location.RequiresClearanceFromDescription(r.Description) {
+			levels := location.ClearanceLevelsFromDescription(r.Description)
+			if len(levels) == 0 {
 				continue
 			}
 			marked++
 			n, err := q.SetJobRequiresClearance(ctx, db.SetJobRequiresClearanceParams{
 				ID:                r.ID,
 				RequiresClearance: pgconv.Bool(boolPtr(true)),
+				ClearanceLevels:   levels,
 			})
 			if err != nil {
 				log.Printf("backfill-clearance: write id=%d after %d written: %v", r.ID, written, err)

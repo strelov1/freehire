@@ -81,6 +81,9 @@ func jobFromRow(r db.Job) (Job, error) {
 
 		RequiresClearance: boolPtr(r.RequiresClearance),
 		ViaRecruiter:      boolPtr(r.ViaRecruiter),
+		Equity:            pgconv.TextString(r.Equity),
+		ClearanceLevels:   r.ClearanceLevels,
+		Perks:             r.Perks,
 
 		PostingLanguage:    r.PostingLanguage,
 		EmploymentType:     r.EmploymentType,

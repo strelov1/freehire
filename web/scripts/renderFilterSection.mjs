@@ -21,7 +21,7 @@ export function renderFilterSectionLines(filters) {
   out.push('## Filtering jobs');
   out.push('');
   out.push(
-    'These parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine ' +
+    'Except where noted below, these parameters apply to `GET /jobs/search` and `GET /jobs/facets`. Combine ' +
       'any of them with full-text `q`.',
   );
   out.push('');

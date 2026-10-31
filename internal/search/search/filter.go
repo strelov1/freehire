@@ -158,6 +158,18 @@ func AndNotSkills(base any, skills []string) any {
 	return Filter(groups...)
 }
 
+// AndInStrings narrows a base filter (as built by FilterFromValues, either a [][]string or
+// nil) to documents whose attr is one of values — one more AND group holding a single IN.
+// It backs the "Hiring again" filter, a company_slug set resolved per caller rather than read
+// from the query. Values are escaped like every other. A caller whose set is EMPTY answers
+// empty itself rather than calling this: the set it asked for holds nothing, and dropping
+// the group instead would widen the search to the whole catalogue.
+func AndInStrings(base any, attr string, values []string) any {
+	groups, _ := base.([][]string)
+	groups = append(groups, []string{InStrings(attr, values)})
+	return Filter(groups...)
+}
+
 // AndSkillsPresent narrows a base filter (as built by FilterFromValues) to
 // documents whose `skills` array is non-empty. It backs the verdict's
 // skill-bearing count: skill frequency is measured against vacancies that list

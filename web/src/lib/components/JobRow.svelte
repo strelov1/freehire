@@ -26,6 +26,7 @@
   import { credentialBadges } from '#lib/credentials.js';
   import AIInterviewBadge from './AIInterviewBadge.svelte';
   import DirectApplyBadge from './DirectApplyBadge.svelte';
+  import AppliedCompanyBadge from './AppliedCompanyBadge.svelte';
   import GhostBadge from './GhostBadge.svelte';
   import RealityBadge from './RealityBadge.svelte';
   import SkillIcon from './SkillIcon.svelte';
@@ -34,6 +35,7 @@
   import { cardFreshnessBadges } from '#lib/freshness.js';
   import { hasViewed } from '#lib/viewedJobs.svelte.js';
   import { isSaved, markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
+  import { hasAppliedToCompany } from '#lib/appliedCompanies.svelte.js';
   import { markDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
 
   // Single source of truth for how a job appears in any list (jobs list and
@@ -86,6 +88,10 @@
   } = $props();
 
   const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
+  // Whether the reader has applied to this employer before, through any of its postings.
+  // Only the catalogue's full posting carries `company_slug`; the tracking listing's card
+  // does not, and every row there is the reader's own tracked job anyway.
+  const appliedToCompany = $derived('company_slug' in job && hasAppliedToCompany(job.company_slug));
 
   const tags = $derived('enrichment' in job ? cardTags(job) : cardTagsFromCard(job));
   // Only the credential subset of job.collections renders here, so the signal row's
@@ -275,7 +281,13 @@
   const uid = $props.id();
   const summaryId = `${uid}-summary`;
   const summary = $derived(
-    [isViewed ? 'Viewed' : '', job.location ?? '', posted ? `Posted ${posted}` : '', salary ?? ''].filter(Boolean).join(', '),
+    [
+      isViewed ? 'Viewed' : '',
+      appliedToCompany ? 'Applied to this company' : '',
+      job.location ?? '',
+      posted ? `Posted ${posted}` : '',
+      salary ?? '',
+    ].filter(Boolean).join(', '),
   );
 
   // Apply-intent — fired regardless of auth, the same event and shape the job page's own
@@ -398,13 +410,19 @@
   <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply}
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
            checklist; where ghost is silent, reality renders exactly as before. -->
       {#if directApply}
         <DirectApplyBadge />
+      {/if}
+      <!-- A fact about the reader, not the posting: they applied to this employer before.
+           Ahead of the posting's own signals because it changes what the card is for —
+           a second application to the same company is a different decision. -->
+      {#if appliedToCompany}
+        <AppliedCompanyBadge />
       {/if}
       {#if supersedesReality(ghost, locale())}
         <GhostBadge {ghost} />

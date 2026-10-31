@@ -1,0 +1,17 @@
+-- clearance_levels names the security-clearance levels a posting states, from the
+-- closed vocabulary internal/dict/vocab.ClearanceLevelValues (confidential, secret,
+-- top_secret, ts_sci, public_trust, interim, other), derived from the description by
+-- internal/dict/location.ClearanceLevelsFromDescription.
+--
+-- It sits BESIDE requires_clearance (0119) rather than replacing it: saved searches,
+-- alerts and shared links carry requires_clearance=false|true, and the two come from
+-- one reading of the description, so a row's levels are non-empty exactly when its
+-- requires_clearance is TRUE.
+--
+-- Empty, not NULL, for "no level stated": the column is a set, and an empty set is
+-- what every reader (the search filter's "no explicit reference", the wire shape's
+-- omitted field) already means by it. A constant default makes this a catalogue-only
+-- change on PostgreSQL 11+: no table rewrite, no long lock.
+--
+-- Existing rows fill on the next backfill-derive pass; there is no dedicated backfill.
+ALTER TABLE jobs ADD COLUMN clearance_levels text[] NOT NULL DEFAULT '{}'::text[];

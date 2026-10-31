@@ -123,6 +123,69 @@ func (q *Queries) CountOrphanedApplications(ctx context.Context, userID int64) (
 	return count, err
 }
 
+const listAppliedCompanySlugs = `-- name: ListAppliedCompanySlugs :many
+WITH recent AS (
+    SELECT COALESCE(NULLIF(j.company_slug, ''), a.company_slug) AS slug, a.applied_at
+      FROM applications a
+      LEFT JOIN jobs j ON j.id = a.job_id
+     WHERE a.user_id = $1
+       AND a.applied_at IS NOT NULL
+     ORDER BY a.applied_at DESC
+     LIMIT $2
+)
+SELECT COALESCE(al.canonical_slug, r.slug)::text AS company_slug
+  FROM recent r
+  LEFT JOIN company_slug_aliases al ON al.alias_slug = r.slug
+ WHERE r.slug <> ''
+ GROUP BY COALESCE(al.canonical_slug, r.slug)
+ ORDER BY max(r.applied_at) DESC, company_slug
+`
+
+type ListAppliedCompanySlugsParams struct {
+	UserID          int64 `json:"user_id"`
+	MaxApplications int32 `json:"max_applications"`
+}
+
+// The employers the caller has applied to, as the company slugs the catalogue files
+// postings under — what the feed's "you already applied here" badge and its
+// hide_applied_companies exclusion compare a posting's company_slug against.
+//
+// Only an application that was MADE counts (applied_at IS NOT NULL, per 0065): a tracked
+// row the candidate is still preparing asserts nothing about the employer yet.
+//
+// The slug is the posting's CURRENT company_slug while the posting exists, and the
+// application's own snapshot only once it is gone. The snapshot is frozen at apply time,
+// and the slug rule has moved under it since (legal forms stripped, aggregators
+// re-attributed: measured 2026-10-31, 383 of 11,856 applications held a snapshot their
+// posting no longer carries, 165 of them with no alias to bridge the two). The posting's
+// own slug is what backfill-derive and merge-companies keep current; the snapshot is
+// only the fallback that keeps a deleted posting's employer counted. Either one is then
+// resolved through company_slug_aliases, so an employer merged since still matches.
+//
+// Bounded to the newest max_applications applications BEFORE the posting join, because
+// the join is a random heap read per application: unbounded, the heaviest account
+// (7,296 applications) took 10.7s cold. The overflow is a long-ago employer missing its
+// badge, never a wrong one.
+func (q *Queries) ListAppliedCompanySlugs(ctx context.Context, arg ListAppliedCompanySlugsParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listAppliedCompanySlugs, arg.UserID, arg.MaxApplications)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var company_slug string
+		if err := rows.Scan(&company_slug); err != nil {
+			return nil, err
+		}
+		items = append(items, company_slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrphanedApplications = `-- name: ListOrphanedApplications :many
 SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.followed_up_at,
        a.created_at AS added_to_board_at,

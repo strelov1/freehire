@@ -298,8 +298,8 @@ func TestNSZSplitEmployer(t *testing.T) {
 	for in, want := range map[string][2]string{
 		"Завод за геријатрију и палијативно збрињавање  Београд-Савски Венац": {"Завод за геријатрију и палијативно збрињавање", "Београд-Савски Венац"},
 		"JELENA BABIĆ PR KESTEN 2 BEOGRAD  Београд-Раковица":                  {"JELENA BABIĆ PR KESTEN 2 BEOGRAD", "Београд-Раковица"},
-		"“MINACORD MEDIA”  Београд":                                           {"“MINACORD MEDIA”", "Београд"},
-		"Dom zdravlja Niš":                                                    {"Dom zdravlja Niš", ""},
+		"“MINACORD MEDIA”  Београд": {"“MINACORD MEDIA”", "Београд"},
+		"Dom zdravlja Niš":          {"Dom zdravlja Niš", ""},
 	} {
 		employer, town := nszSplitEmployer(in)
 		if employer != want[0] || town != want[1] {
