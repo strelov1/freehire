@@ -3315,3 +3315,8 @@ WITH closed AS (
     ON CONFLICT (job_id) DO NOTHING
 )
 SELECT count(*) FROM closed;
+
+-- name: MaxJobID :one
+-- The top of the id space cmd/serve-probe draws its random sample windows from. One
+-- backward probe of the primary key, so it stays cheap on the whole table.
+SELECT COALESCE(MAX(id), 0)::bigint FROM jobs;

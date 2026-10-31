@@ -5634,6 +5634,9 @@ type Querier interface {
 	// first, inside the transaction that applies the counts, applies a file at most
 	// once even when two runs race past the IsViewLogFileProcessed read.
 	MarkViewLogFileProcessed(ctx context.Context, arg MarkViewLogFileProcessedParams) (int64, error)
+	// The top of the id space cmd/serve-probe draws its random sample windows from. One
+	// backward probe of the primary key, so it stays cheap on the whole table.
+	MaxJobID(ctx context.Context) (int64, error)
 	// The upper bound of the id-range walk above. MAX over a source is an index scan on
 	// (source, external_id)'s table, not a count of matching rows, so it is cheap even when the
 	// source holds millions.

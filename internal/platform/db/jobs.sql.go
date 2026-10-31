@@ -4932,6 +4932,19 @@ func (q *Queries) MarkLivenessExpired(ctx context.Context, arg MarkLivenessExpir
 	return i, err
 }
 
+const maxJobID = `-- name: MaxJobID :one
+SELECT COALESCE(MAX(id), 0)::bigint FROM jobs
+`
+
+// The top of the id space cmd/serve-probe draws its random sample windows from. One
+// backward probe of the primary key, so it stays cheap on the whole table.
+func (q *Queries) MaxJobID(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, maxJobID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const maxJobIDForSource = `-- name: MaxJobIDForSource :one
 SELECT COALESCE(MAX(id), 0)::bigint FROM jobs WHERE source = $1
 `
