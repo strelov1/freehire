@@ -196,6 +196,39 @@
     hovered = null;
   }
 
+  function focusDay(index: number) {
+    const data = days[index];
+    if (!data) return;
+    const widthEach = barWidth();
+    hovered = {
+      index,
+      x: Math.round(index * widthEach) + Math.round(widthEach) / 2,
+      day: data.day,
+      status: data.status,
+    };
+  }
+
+  function handleFocus() {
+    if (hovered) return;
+    focusDay(days.length - 1);
+  }
+
+  function handleBlur() {
+    hovered = null;
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (days.length === 0) return;
+    const current = hovered?.index ?? days.length - 1;
+    if (event.key === 'ArrowRight' || event.key === 'End') {
+      event.preventDefault();
+      focusDay(event.key === 'End' ? days.length - 1 : Math.min(days.length - 1, current + 1));
+    } else if (event.key === 'ArrowLeft' || event.key === 'Home') {
+      event.preventDefault();
+      focusDay(event.key === 'Home' ? 0 : Math.max(0, current - 1));
+    }
+  }
+
   function statusLabel(status: HealthStatus | null): string {
     if (status === 'down') return 'Down';
     if (status === 'degraded') return 'Degraded';
@@ -236,14 +269,27 @@
   });
 </script>
 
-<div class="relative w-full" bind:this={container}>
+<div
+  class="relative w-full rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+  bind:this={container}
+  tabindex="0"
+  role="slider"
+  aria-valuemin={0}
+  aria-valuemax={Math.max(0, days.length - 1)}
+  aria-valuenow={hovered?.index ?? Math.max(0, days.length - 1)}
+  aria-valuetext={hovered ? `${statusLabel(hovered.status)}, ${hovered.day}` : undefined}
+  aria-label="Status calendar showing {days.length}-day uptime data"
+  onfocus={handleFocus}
+  onblur={handleBlur}
+  onkeydown={handleKeydown}
+>
   <div class="overflow-hidden" style="border-radius: {radius}px;">
     <canvas
       bind:this={canvas}
       style="width: 100%; height: {barHeight + 8}px;"
       onmousemove={handleMouseMove}
       onmouseleave={handleMouseLeave}
-      aria-label="Status calendar showing {days.length}-day uptime data"
+      aria-hidden="true"
     ></canvas>
   </div>
   <ul class="sr-only">

@@ -57,7 +57,7 @@ describe('StatusBoard', () => {
     expect(screen.getByText('Status is unavailable right now. Try again in a moment.')).toBeTruthy();
   });
 
-  it('counts uptime only over days that have a sample', () => {
+  it('counts uptime only over days that have a sample', async () => {
     render(StatusBoard, { status: status() });
 
     expect(screen.getByText('API operational')).toBeTruthy();
@@ -65,6 +65,11 @@ describe('StatusBoard', () => {
     expect(screen.getByText('uptime')).toBeTruthy();
     expect(screen.getByLabelText('Status calendar showing 90-day uptime data')).toBeTruthy();
     expect(screen.getByText('2026-10-29: Down')).toBeTruthy();
+    const calendar = screen.getByRole('slider', { name: 'Status calendar showing 90-day uptime data' });
+    await fireEvent.focus(calendar);
+    await fireEvent.keyDown(calendar, { key: 'ArrowLeft' });
+    await fireEvent.keyDown(calendar, { key: 'ArrowLeft' });
+    expect(screen.getByText('Down')).toBeTruthy();
     expect(screen.getByText('2026-08-03')).toBeTruthy();
     expect(screen.getByText('2026-10-31')).toBeTruthy();
     expect(screen.getByText(/Database connections in use: 40%/)).toBeTruthy();
