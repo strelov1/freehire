@@ -138,7 +138,7 @@ WHERE m.id = $1;
 -- and the review ABOUT them only once revealed: they have written theirs, or seven days
 -- have passed since the end — and only while no block stands between its author and its
 -- subject, either way. The same reveal-and-block rule is restated in
--- GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
+-- ListBuddyMemberMockSummaries and ListBuddyMemberRevealedReviews; change all three together.
 SELECT m.id, m.host_user_id, m.guest_user_id, m.starts_at, m.ends_at, m.topic, m.status,
        m.cancel_reason,
        hm.handle AS host_handle, gm.handle AS guest_handle,
@@ -223,26 +223,29 @@ WHERE m.id = sqlc.arg(mock_id)
   AND (m.host_user_id = sqlc.arg(author_user_id)::bigint OR m.guest_user_id = sqlc.arg(author_user_id)::bigint)
 ON CONFLICT (mock_id, author_user_id) DO NOTHING;
 
--- name: GetBuddyMemberMockSummary :one
--- What a member page shows: completed mocks (confirmed and ended, either role) and the
--- count and average of REVEALED reviews about the member, minus any written across a
--- block (the ListBuddyMocksForUser rule). Zeroes, never NULLs.
-SELECT
+-- name: ListBuddyMemberMockSummaries :many
+-- What a member page shows, for each of subject_ids (one row per id, zeroes, never NULLs):
+-- completed mocks (confirmed and ended, either role) and the count and average of REVEALED
+-- reviews about the member, minus any written across a block (the ListBuddyMocksForUser
+-- rule). A list of ids so the hosts listing reads every host's summary in one statement;
+-- a member page asks for one.
+SELECT s.subject_user_id::bigint AS subject_user_id,
     (SELECT count(*) FROM buddy_mocks c
      WHERE c.status = 'confirmed' AND c.ends_at <= now()
-       AND (c.host_user_id = sqlc.arg(subject_user_id)::bigint
-            OR c.guest_user_id = sqlc.arg(subject_user_id)::bigint))::bigint AS completed,
+       AND (c.host_user_id = s.subject_user_id
+            OR c.guest_user_id = s.subject_user_id))::bigint AS completed,
     count(r.mock_id)::bigint AS rating_count,
     coalesce(avg(r.rating), 0)::float8 AS rating_avg
-FROM buddy_mock_reviews r
-JOIN buddy_mocks m ON m.id = r.mock_id
-WHERE r.subject_user_id = sqlc.arg(subject_user_id)::bigint
-  AND (EXISTS (SELECT 1 FROM buddy_mock_reviews o
-               WHERE o.mock_id = r.mock_id AND o.author_user_id = r.subject_user_id)
-       OR m.ends_at + interval '7 days' <= now())
-  AND NOT EXISTS (SELECT 1 FROM user_blocks b
-              WHERE (b.blocker_id = r.author_user_id AND b.blocked_id = r.subject_user_id)
-                 OR (b.blocker_id = r.subject_user_id AND b.blocked_id = r.author_user_id));
+FROM unnest(sqlc.arg(subject_ids)::bigint[]) AS s (subject_user_id)
+LEFT JOIN (buddy_mock_reviews r JOIN buddy_mocks m ON m.id = r.mock_id)
+       ON r.subject_user_id = s.subject_user_id
+      AND (EXISTS (SELECT 1 FROM buddy_mock_reviews o
+                   WHERE o.mock_id = r.mock_id AND o.author_user_id = r.subject_user_id)
+           OR m.ends_at + interval '7 days' <= now())
+      AND NOT EXISTS (SELECT 1 FROM user_blocks b
+                  WHERE (b.blocker_id = r.author_user_id AND b.blocked_id = r.subject_user_id)
+                     OR (b.blocker_id = r.subject_user_id AND b.blocked_id = r.author_user_id))
+GROUP BY s.subject_user_id;
 
 -- name: ListBuddyMemberRevealedReviews :many
 -- The most recent revealed reviews about a member, without their authors: who mocked with
@@ -301,3 +304,41 @@ ON CONFLICT DO NOTHING;
 -- Give a claim back after a failed delivery, so the next run retries.
 DELETE FROM buddy_mock_reminders
 WHERE mock_id = sqlc.arg(mock_id) AND offset_minutes = sqlc.arg(offset_minutes);
+
+-- name: ListBuddyMockHostCandidates :many
+-- Who may be listed as a mock host to the viewer, before their slots are computed: active
+-- members other than the viewer with saved, unpaused settings (offering the topic, when one
+-- is asked for), at least one availability row, and no block with the viewer either way.
+-- Most recently updated settings first, bounded by row_limit: the service computes every
+-- candidate's slots in memory, so the cap is what bounds that work.
+SELECT m.user_id, m.handle, m.countries, u.resume_structured,
+       s.timezone, s.topics
+FROM buddy_mock_settings s
+JOIN buddy_members m ON m.user_id = s.user_id AND m.left_at IS NULL
+JOIN users u ON u.id = m.user_id
+WHERE NOT s.paused
+  AND m.user_id <> sqlc.arg(viewer_id)::bigint
+  AND (sqlc.narg(topic)::text IS NULL OR sqlc.narg(topic)::text = ANY (s.topics))
+  AND EXISTS (SELECT 1 FROM buddy_mock_availability a WHERE a.user_id = m.user_id)
+  AND NOT EXISTS (
+      SELECT 1 FROM user_blocks b
+      WHERE (b.blocker_id = sqlc.arg(viewer_id)::bigint AND b.blocked_id = m.user_id)
+         OR (b.blocker_id = m.user_id AND b.blocked_id = sqlc.arg(viewer_id)::bigint))
+ORDER BY s.updated_at DESC, m.user_id
+LIMIT sqlc.arg(row_limit);
+
+-- name: ListBuddyMockAvailabilityForUsers :many
+-- ListBuddyMockAvailability for many members in one statement.
+SELECT * FROM buddy_mock_availability
+WHERE user_id = ANY (sqlc.arg(user_ids)::bigint[])
+ORDER BY user_id, id;
+
+-- name: ListBuddyMockBusyForUsers :many
+-- ListBuddyMockBusy for many members in one statement.
+SELECT user_id, starts_at, ends_at
+FROM buddy_mock_participants
+WHERE user_id = ANY (sqlc.arg(user_ids)::bigint[])
+  AND active
+  AND starts_at < sqlc.arg(window_end)
+  AND ends_at > sqlc.arg(window_start)
+ORDER BY user_id, starts_at;

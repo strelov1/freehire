@@ -156,7 +156,7 @@ info:
     Facets with a fixed vocabulary (`work_mode`, `regions`, `seniority`,
     `category`, `employment_type`, `education_level`, `company_type`,
     `company_size`, `salary_period`, `relocation`, `english_level`, `role_type`,
-    `source_type`, `ai_archetype`, `domains`, `reality`, `skills` and the boolean facets) still
+    `source_type`, `ai_archetype`, `domains`, `reality`, `perks`, `skills` and the boolean facets) still
     apply a value outside it — so `?work_mode=foo` answers `total: 0`, which reads
     exactly like an empty market. `meta.ignored_values` names such values per
     parameter (the `_exclude` form under its own name):
@@ -205,6 +205,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Q"
         - $ref: "#/components/parameters/QFields"
+        - $ref: "#/components/parameters/HideSeen"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
         - $ref: "#/components/parameters/Sort"
@@ -222,6 +223,12 @@ paths:
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
         - $ref: "#/components/parameters/Equity"
+        - $ref: "#/components/parameters/ClearanceLevels"
+        - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksExclude"
+        - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/ClearanceLevelsExclude"
+        - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -313,6 +320,12 @@ paths:
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
         - $ref: "#/components/parameters/Equity"
+        - $ref: "#/components/parameters/ClearanceLevels"
+        - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksExclude"
+        - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/ClearanceLevelsExclude"
+        - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -576,6 +589,12 @@ paths:
         - $ref: "#/components/parameters/RequiresClearance"
         - $ref: "#/components/parameters/ViaRecruiter"
         - $ref: "#/components/parameters/Equity"
+        - $ref: "#/components/parameters/ClearanceLevels"
+        - $ref: "#/components/parameters/Perks"
+        - $ref: "#/components/parameters/PerksExclude"
+        - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/ClearanceLevelsExclude"
+        - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
         - $ref: "#/components/parameters/AIArchetype"
         - $ref: "#/components/parameters/RoleType"
@@ -1076,6 +1095,22 @@ components:
         parameter entirely — `q` runs unrestricted, across all four fields —
         and `q_fields` is reported in `meta.ignored_params`, the same
         convention every other unrecognized filter follows.
+    HideSeen:
+      name: hide_seen
+      in: query
+      schema:
+        type: boolean
+      description: |
+        `true` leaves out the postings the signed-in caller has already
+        opened — the same record that marks a card as viewed. The exclusion
+        is applied inside the search, so `meta.total` and paging describe
+        what is left. It covers the 1000 postings the caller most recently
+        viewed, saved, applied to or hid.
+
+        It is a per-person preference, not a filter: a saved search carrying
+        it narrows nothing. Without a session (or API key), or with a value
+        that is not a boolean, the search runs unhidden and `hide_seen` is
+        reported in `meta.ignored_params`.
     Limit:
       name: limit
       in: query
@@ -1318,6 +1353,142 @@ components:
 
         `true` returns only the marked postings. Omitting the parameter filters
         nothing.
+    ClearanceLevelsExclude:
+      name: clearance_levels_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - none
+            - confidential
+            - secret
+            - top_secret
+            - ts_sci
+            - public_trust
+            - interim
+            - other
+      description: |
+        Exclude postings matching these clearance levels. `none` keeps only postings that state a clearance.
+    ClearanceLevels:
+      name: clearance_levels
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - none
+            - confidential
+            - secret
+            - top_secret
+            - ts_sci
+            - public_trust
+            - interim
+            - other
+      description: |
+        The security-clearance levels the posting states, derived
+        deterministically from the description. Values OR together.
+
+        The US ladder is `confidential`, `secret`, `top_secret`, `ts_sci` and
+        `public_trust`. `interim` marks a posting that accepts an interim
+        clearance; it is stated beside a level, not instead of one. `other` is a
+        non-US scheme (UK SC/DV/BPSS, AU Baseline/NV1, NATO) or a clearance
+        stated with no level at all. A posting may carry several values.
+
+        `none` selects the postings with no explicit reference to a clearance —
+        exactly the postings `requires_clearance=false` returns — and ORs with
+        real levels like any other value. `clearance_levels_exclude=none` keeps
+        only the postings that state a clearance.
+    PerksExclude:
+      name: perks_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - generous_pto
+            - four_day_week
+            - 401k_match
+            - parental_leave
+            - retirement_plan
+            - tuition_reimbursement
+            - unlimited_pto
+            - health_insurance
+            - mental_health
+            - learning_budget
+            - home_office_stipend
+            - sabbatical
+            - sign_on_bonus
+      description: |
+        Exclude postings that mention any of the selected perks.
+    Perks:
+      name: perks
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - generous_pto
+            - four_day_week
+            - 401k_match
+            - parental_leave
+            - retirement_plan
+            - tuition_reimbursement
+            - unlimited_pto
+            - health_insurance
+            - mental_health
+            - learning_budget
+            - home_office_stipend
+            - sabbatical
+            - sign_on_bonus
+      description: |
+        Benefits the posting's description states it offers, matched
+        deterministically from explicit text (never inferred). A posting
+        carrying no perk means its description names none of these — most
+        employers list only part of their package — not that it offers none.
+        `generous_pto` is the employer's own "generous"/"unlimited"/"flexible"
+        wording or a stated allowance of 25+ days; `unlimited_pto` is a subset
+        of it. `retirement_plan` covers non-US forms (pension, superannuation,
+        RRSP). Values OR by default; `perks_mode=and` requires every one.
+        Visa sponsorship and relocation are separate filters
+        (`visa_sponsorship`, `relocation`).
+    PerksMode:
+      name: perks_mode
+      in: query
+      schema:
+        type: string
+        enum:
+          - and
+      description: |
+        `and` requires a posting to mention EVERY listed perk instead of any
+        of them.
+    EquityExclude:
+      name: equity_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - salary_and_equity
+            - equity_only
+            - not_stated
+      description: |
+        Exclude postings matching these equity values. `not_stated` keeps only postings that state equity compensation.
     Equity:
       name: equity
       in: query
@@ -1968,6 +2139,30 @@ components:
             `salary_and_equity` (offered beside cash pay) or `equity_only`
             (equity is the whole pay). Absent when the posting states neither —
             "not stated", not "no equity".
+        clearance_levels:
+          type: array
+          items:
+            type: string
+            enum:
+              - confidential
+              - secret
+              - top_secret
+              - ts_sci
+              - public_trust
+              - interim
+              - other
+          description: |
+            The security-clearance levels the posting states. Present exactly
+            when `requires_clearance` is, absent otherwise. `other` is a non-US
+            scheme or a clearance stated with no level.
+        perks:
+          type: array
+          items:
+            type: string
+          description: |
+            Benefits the description states it offers (see the `perks` filter
+            for the vocabulary). Empty when it names none of them — not a claim
+            that the job offers none.
         auto_apply_available:
           type: boolean
           description: |

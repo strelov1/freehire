@@ -2549,10 +2549,6 @@ type Querier interface {
 	GetBuddyMemberByHandle(ctx context.Context, handle string) (BuddyMember, error)
 	// A member's own row, active or left. The caller decides what left_at means.
 	GetBuddyMemberByUser(ctx context.Context, userID int64) (BuddyMember, error)
-	// What a member page shows: completed mocks (confirmed and ended, either role) and the
-	// count and average of REVEALED reviews about the member, minus any written across a
-	// block (the ListBuddyMocksForUser rule). Zeroes, never NULLs.
-	GetBuddyMemberMockSummary(ctx context.Context, subjectUserID int64) (GetBuddyMemberMockSummaryRow, error)
 	// One mock with what both participants' notices need: both handles, the host's CURRENT
 	// zone and link, and both addresses — each address only ever addresses its own owner's
 	// notice. Authorisation is the caller's: this answers for any id. The link is empty unless
@@ -3934,15 +3930,31 @@ type Querier interface {
 	// per-type counts split `events` by the feed's own vocabulary (the predicate admits only
 	// these three), so they always add up to it.
 	ListBuddyMemberActivity(ctx context.Context, arg ListBuddyMemberActivityParams) ([]ListBuddyMemberActivityRow, error)
+	// What a member page shows, for each of subject_ids (one row per id, zeroes, never NULLs):
+	// completed mocks (confirmed and ended, either role) and the count and average of REVEALED
+	// reviews about the member, minus any written across a block (the ListBuddyMocksForUser
+	// rule). A list of ids so the hosts listing reads every host's summary in one statement;
+	// a member page asks for one.
+	ListBuddyMemberMockSummaries(ctx context.Context, subjectIds []int64) ([]ListBuddyMemberMockSummariesRow, error)
 	// The most recent revealed reviews about a member, without their authors: who mocked with
 	// whom is a social graph no member page needs to publish.
 	ListBuddyMemberRevealedReviews(ctx context.Context, arg ListBuddyMemberRevealedReviewsParams) ([]ListBuddyMemberRevealedReviewsRow, error)
 	// Every availability row of a member, both shapes: an override only means anything beside
 	// the weekly rules it replaces.
 	ListBuddyMockAvailability(ctx context.Context, userID int64) ([]BuddyMockAvailability, error)
+	// ListBuddyMockAvailability for many members in one statement.
+	ListBuddyMockAvailabilityForUsers(ctx context.Context, userIds []int64) ([]BuddyMockAvailability, error)
 	// A member's occupied time in a window: every mock they are in, as host or as guest. The
 	// slot engine subtracts it from their availability.
 	ListBuddyMockBusy(ctx context.Context, arg ListBuddyMockBusyParams) ([]ListBuddyMockBusyRow, error)
+	// ListBuddyMockBusy for many members in one statement.
+	ListBuddyMockBusyForUsers(ctx context.Context, arg ListBuddyMockBusyForUsersParams) ([]ListBuddyMockBusyForUsersRow, error)
+	// Who may be listed as a mock host to the viewer, before their slots are computed: active
+	// members other than the viewer with saved, unpaused settings (offering the topic, when one
+	// is asked for), at least one availability row, and no block with the viewer either way.
+	// Most recently updated settings first, bounded by row_limit: the service computes every
+	// candidate's slots in memory, so the cap is what bounds that work.
+	ListBuddyMockHostCandidates(ctx context.Context, arg ListBuddyMockHostCandidatesParams) ([]ListBuddyMockHostCandidatesRow, error)
 	// Confirmed mocks starting inside one offset's window (floor, offset] and not yet reminded
 	// at it, between a pair that can still meet (the GetBuddyMock rule). starts_at > now()
 	// keeps a late run from reminding about a mock already under way.
@@ -3953,7 +3965,7 @@ type Querier interface {
 	// and the review ABOUT them only once revealed: they have written theirs, or seven days
 	// have passed since the end — and only while no block stands between its author and its
 	// subject, either way. The same reveal-and-block rule is restated in
-	// GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
+	// ListBuddyMemberMockSummaries and ListBuddyMemberRevealedReviews; change all three together.
 	ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksForUserParams) ([]ListBuddyMocksForUserRow, error)
 	// Each event's reaction counts by kind, and the viewer's own choice, for the events of one
 	// feed page. Only active members count, and never one on either side of a block with the
@@ -7454,7 +7466,10 @@ type Querier interface {
 	// A nil slice encodes as NULL, which the NOT NULL columns refuse; COALESCE writes the empty
 	// array the ingest upserts write. IS DISTINCT FROM-guarded, so a re-run writes nothing.
 	SetJobPlaces(ctx context.Context, arg SetJobPlacesParams) (int64, error)
-	// Write one row's requires_clearance, for cmd/backfill-clearance.
+	// Write one row's requires_clearance and clearance_levels, for cmd/backfill-clearance.
+	// Both together, because they come from one reading of the description and a row whose
+	// levels are empty beside a TRUE requires_clearance would fall under the levels
+	// filter's "no explicit reference" while the boolean filter says it needs a clearance.
 	//
 	// The IS DISTINCT FROM guard is what makes the pass idempotent: a row already carrying
 	// the derived value is not rewritten, so a re-run writes nothing, produces no dead
@@ -8048,7 +8063,7 @@ type Querier interface {
 	// One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 	// ingest computes as a pure function of a row's own raw/immutable fields — the
 	// deterministic dictionary facets (countries, regions, cities, work_mode, skills,
-	// seniority, category, is_tech, requires_clearance, via_recruiter, equity, plus the synthetic enrichment
+	// seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, plus the synthetic enrichment
 	// facets posting_language,
 	// employment_type, education_level, english_level, experience_years_min, all from
 	// jobderive.Derive), the repost-identity role_fingerprint (internal/job/jobhash), and the

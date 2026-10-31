@@ -30,6 +30,10 @@ func TestEquity(t *testing.T) {
 		{"stock awards", "", "Total compensation is made up of base pay, bonus, and stock awards.", vocab.EquityWithSalary},
 		{"percent of equity", "", "Up to 0.5% equity, vested over four years.", vocab.EquityWithSalary},
 
+		{"paid in equity and cash", "", "Compensated in equity and cash.", vocab.EquityWithSalary},
+		{"paid in equity plus salary", "", "You will be paid in equity plus a competitive salary.", vocab.EquityWithSalary},
+		{"explicit equity only before salary", "", "Paid only in equity at this stage. Salary starts after funding.", vocab.EquityOnly},
+
 		// Equity is the whole pay.
 		{"equity-only statement", "", "This is an equity-only role at this stage. There is no salary or cash compensation pre-funding.", vocab.EquityOnly},
 		{"equity only title", "Founding Engineer (Equity Only Role)", "Compensation: 0.1% – 1.0%", vocab.EquityOnly},
@@ -59,6 +63,14 @@ func TestEquity(t *testing.T) {
 		{"stock associate", "Stock Associate", "Keep shelves stocked and share updates with the team.", ""},
 		{"commission only is not equity only", "", "This is a commission-only role, no salary.", ""},
 		{"unpaid internship", "Marketing Intern (Unpaid)", "This is an unpaid internship.", ""},
+		{"stock options denied", "", "We do not offer stock options.", ""},
+		{"modified equity grants denied", "", "We do not offer meaningful equity grants.", ""},
+		{"no modified equity grants", "", "No meaningful equity grants are offered.", ""},
+		{"no vesting period preserves offer", "", "Meaningful equity grants with no vesting period.", vocab.EquityWithSalary},
+		{"equity grants denied", "", "Compensation does not include equity grants.", ""},
+		{"RSUs denied", "", "No RSUs are offered for this role.", ""},
+		{"equity denied after", "", "Stock options are not available.", ""},
+		{"later offer survives denial", "", "No stock options. We offer RSUs instead.", vocab.EquityWithSalary},
 		{"no equity", "", "Compensation: no equity. This is an unpaid internship. There is no salary.", ""},
 		{"sweat equity studio", "", "We provide sweat equity ventures and pre-seed introductions.", ""},
 	}

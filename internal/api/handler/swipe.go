@@ -38,7 +38,7 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 
 	res, err := h.search.Search(c.Context(), search.SearchParams{
 		Query:  c.Query("q"),
-		Filter: withDeckExclusion(buildSearchFilter(c), excluded),
+		Filter: withExcludedIDs(buildSearchFilter(c), excluded),
 		// false: the deck sends no match vector. It is an obvious candidate for the
 		// match sort — it is already authenticated — but ordering the deck is its own
 		// product decision, so it keeps attribute sorting until that is made.
@@ -57,11 +57,11 @@ func (h *trackingHandlers) SwipeDeck(c *fiber.Ctx) error {
 	return listResponseWithIgnored(c, views, res.Total, limit, offset, ignoredParams(c, searchParams), ignoredJobValues(c))
 }
 
-// withDeckExclusion adds an `id NOT IN [...]` group to the facet filter so the
-// deck skips the caller's judged jobs. base is buildSearchFilter's result —
-// either a [][]string of facet groups or nil. An empty exclusion set leaves the
-// filter untouched.
-func withDeckExclusion(base any, excluded []int64) any {
+// withExcludedIDs adds an `id NOT IN [...]` group to the facet filter so the
+// search skips the caller's already-seen jobs (the swipe deck, and /jobs/search's
+// hide_seen). base is buildSearchFilter's result — either a [][]string of facet
+// groups or nil. An empty exclusion set leaves the filter untouched.
+func withExcludedIDs(base any, excluded []int64) any {
 	frag := search.NotIn("id", excluded)
 	if frag == "" {
 		return base

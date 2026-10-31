@@ -56,6 +56,11 @@ var StringFacets = map[string]string{
 	// attribute's absence, selected by the reserved EquityNotStated value. Enrolled in
 	// /jobs/facets like the two above, so the same settings-before-binary order applies.
 	EquityParam: EquityParam,
+	// clearance_levels is the multi-value level facet beside it: a posting carries the
+	// levels it states, and the attribute is absent exactly when requires_clearance
+	// is (see ClearanceLevelUnspecified). The settings-before-binary rule above
+	// applies to it as well.
+	"clearance_levels": "clearance_levels",
 	// ai_interview is written on the document at index time from the company's report
 	// count (see JobDocument.AIInterview), so it filters on the bare attribute.
 	"ai_interview": "ai_interview",
@@ -75,6 +80,10 @@ var StringFacets = map[string]string{
 	"relocation":       "enrichment.relocation",
 	"english_level":    "enrichment.english_level",
 	"posting_language": "enrichment.posting_language",
+	// perks are the benefits the description states (internal/dict/perks), a jobs
+	// column served top-level. Enrolled in /jobs/facets like requires_clearance, with
+	// the same settings-before-binary hazard.
+	"perks": "perks",
 }
 
 // locationFacets are the geography params that describe one user-facing concept
@@ -105,6 +114,21 @@ const EquityParam = "equity"
 // pattern, for a scalar attribute instead of an array.
 const EquityNotStated = "not_stated"
 
+// ClearanceLevelUnspecified is the reserved value of the `clearance_levels` facet that
+// selects postings with no explicit reference to a clearance — the SPA's "No explicit
+// reference to clearance" chip. Like RegionUnspecified it ORs with real levels in the
+// same group and supports exclude.
+//
+// It is answered from requires_clearance, not from the levels attribute. The two are
+// written from one reading of the description (jobderive), so "no level" and "not
+// marked" are the same postings — but requires_clearance already sits on every
+// document in the live index, while clearance_levels reaches an existing posting only
+// with the next backfill and reindex. Asking the levels attribute (NOT EXISTS) would
+// answer "every posting" until then; asking the boolean is right from the first
+// request. It also makes `clearance_levels=none` exactly the old
+// `requires_clearance=false`, which is how the SPA reads that legacy link.
+const ClearanceLevelUnspecified = "none"
+
 // regionImplies names, for a region filter value, the other regions choosing it
 // also selects. "eu" is Europe in the geographic sense, and the UK is in Europe, but
 // a British posting carries only its own "uk" region — so without this, choosing
@@ -124,7 +148,8 @@ func impliedRegions(val string) []string {
 }
 
 // facetEq builds a facet's include fragment: an equality, except the regions
-// unspecified sentinel, which becomes IS EMPTY, a region that implies others (see
+// unspecified sentinel, which becomes IS EMPTY, the clearance-level one, which becomes
+// "not marked as requiring a clearance", a region that implies others (see
 // regionImplies), which becomes an IN, and the retired management category, which
 // becomes the role_type equality (see retiredCategory).
 func facetEq(param, attr, val string) string {
@@ -133,6 +158,9 @@ func facetEq(param, attr, val string) string {
 	}
 	if param == EquityParam && strings.EqualFold(strings.TrimSpace(val), EquityNotStated) {
 		return NotExists(attr)
+	}
+	if param == "clearance_levels" && strings.EqualFold(strings.TrimSpace(val), ClearanceLevelUnspecified) {
+		return trueOrAbsentFragment(RequiresClearanceParam, "false")
 	}
 	if set := impliedRegions(val); param == "regions" && set != nil {
 		return InStrings(attr, set)
@@ -192,7 +220,8 @@ func trueOrAbsentFragment(attr, val string) string {
 }
 
 // facetNeq builds a facet's exclude fragment: an inequality, except the regions
-// unspecified sentinel, which becomes IS NOT EMPTY, and a region that implies others,
+// unspecified sentinel, which becomes IS NOT EMPTY, the clearance-level one, which
+// becomes "marked as requiring a clearance", and a region that implies others,
 // which excludes all of them.
 func facetNeq(param, attr, val string) string {
 	if param == "regions" && val == RegionUnspecified {
@@ -200,6 +229,9 @@ func facetNeq(param, attr, val string) string {
 	}
 	if param == EquityParam && strings.EqualFold(strings.TrimSpace(val), EquityNotStated) {
 		return Exists(attr)
+	}
+	if param == "clearance_levels" && strings.EqualFold(strings.TrimSpace(val), ClearanceLevelUnspecified) {
+		return trueOrAbsentFragment(RequiresClearanceParam, "true")
 	}
 	if set := impliedRegions(val); param == "regions" && set != nil {
 		return NotInStrings(attr, set)

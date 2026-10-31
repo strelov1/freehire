@@ -152,6 +152,8 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |
 | `education_level` | Education level | none, bachelor, master, phd |
 | `salary_period` | Salary period | year, month, day, hour |
+| `clearance_levels` | Security clearance level | none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no explicit reference to clearance (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one |
+| `perks` | Perks mentioned | generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it |
 
 ### Numeric & boolean filters
 
@@ -179,7 +181,8 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 - **Must use both Go and Rust** — `skills=go,rust&skills_mode=and`
 - **Exclude outstaff companies** — `company_type_exclude=outstaff`
 - **At least $100k, with visa sponsorship** — `salary_currency=USD&salary_min=100000&visa_sponsorship=true`
-- **Excluding jobs that need a security clearance** — `requires_clearance=false`
+- **Excluding jobs that need a security clearance** — `clearance_levels=none`
+- **Jobs a Secret or Top Secret holder can work** — `clearance_levels=secret,top_secret`
 - **Only jobs that need a security clearance** — `requires_clearance=true`
 
 ## Jobs
@@ -280,6 +283,7 @@ Combine free-text `q` with any of the filter params below. Repeated facet params
 | --- | --- | --- | --- |
 | `q` | string | no | Full-text query over `title`, `company`, `description`, and `location`. Plain words use the default engine matching: the first words are required and trailing ones are dropped when too few postings match, so word order can change the result. Operators: quotes (`"systems engineer"`) require every quoted word in any order (not a contiguous phrase); `-word` excludes; uppercase `OR` between words matches any alternative (at most 5, merged and deduplicated); `title:` at the start of an alternative matches it in the title only, e.g. `title:"product owner" -junior OR title:produktchef`. Narrow the fields of the other alternatives with `q_fields`. Exact-phrase matching is not offered, and default relevance order does not reliably rank a contiguous match above a scattered-token one. (e.g. `golang`) |
 | `q_fields` | string | no | Comma-separated subset of `title,company,description,location` to restrict `q` to, e.g. `title`. A name outside that set drops the whole parameter (reported in `meta.ignored_params`) rather than partially applying. (e.g. `title`) |
+| `hide_seen` | boolean | no | `true` leaves out the postings the signed-in caller has already opened (the 1000 most recently viewed, saved, applied to or hidden), inside the search, so `meta.total` and paging stay accurate. A per-person preference, not a filter: a saved search ignores it. Without a session or API key it is not applied and is listed in `meta.ignored_params`. (e.g. `true`) |
 | `sort` | string | no | One of `created_at`, `posted_at`, `view_count`, `salary_min`, `salary_max`. Omit for relevance/newest. (e.g. `posted_at`) |
 | `order` | string | no | `asc` or `desc` (default `desc`). (e.g. `desc`) |
 | `limit` | integer | no | Page size, 1–100. (e.g. `20`) |

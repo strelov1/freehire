@@ -110,3 +110,24 @@ func TestMyCareersFutureFirstPageErrorFails(t *testing.T) {
 		t.Fatal("Fetch should error when the very first page fails")
 	}
 }
+
+// The stated range is read in SGD over its own period; a type we do not recognise drops
+// the salary rather than publishing it against a guessed period.
+func TestMyCareersFutureReadsTheStatedSalary(t *testing.T) {
+	page := `{"results":[
+{"uuid":"a","title":"Role","postedCompany":{"name":"Acme"},"salary":{"minimum":3500,"maximum":5500,"type":{"id":4,"salaryType":"Monthly"}}},
+{"uuid":"b","title":"Role","postedCompany":{"name":"Acme"},"salary":{"minimum":3500,"maximum":5500,"type":{"id":9,"salaryType":"Fortnightly"}}}
+],"total":2}`
+	fake := (&routedHTTP{}).route("/v2/jobs", page)
+	jobs, _ := NewMyCareersFuture(fake).Fetch(context.Background(), CompanyEntry{})
+	if len(jobs) != 2 {
+		t.Fatalf("Fetch = %d jobs, want 2", len(jobs))
+	}
+	if r := jobs[0]; r.SalaryMin == nil || *r.SalaryMin != 3500 || r.SalaryMax == nil || *r.SalaryMax != 5500 ||
+		r.SalaryCurrency != "SGD" || r.SalaryPeriod != "month" {
+		t.Errorf("monthly = %v-%v %q/%q, want 3500-5500 SGD/month", r.SalaryMin, r.SalaryMax, r.SalaryCurrency, r.SalaryPeriod)
+	}
+	if r := jobs[1]; r.SalaryMin != nil || r.SalaryMax != nil || r.SalaryPeriod != "" {
+		t.Errorf("unknown type = %v-%v %q, want no salary", r.SalaryMin, r.SalaryMax, r.SalaryPeriod)
+	}
+}

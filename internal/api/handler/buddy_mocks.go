@@ -16,6 +16,7 @@ import (
 // like every buddy route, so a leaked API key cannot book or read a member's mocks.
 func (h *buddyHandlers) registerMocks(api fiber.Router, mw middleware) {
 	api.Get("/me/buddies/mocks", mw.cookie, h.ListMocks)
+	api.Get("/me/buddies/mocks/hosts", mw.cookie, h.MockHosts)
 	api.Get("/me/buddies/mocks/settings", mw.cookie, h.GetMockSettings)
 	api.Put("/me/buddies/mocks/settings", mw.cookie, h.SaveMockSettings)
 	api.Get("/me/buddies/mocks/availability", mw.cookie, h.GetMockAvailability)
@@ -35,6 +36,7 @@ func mockError(err error) error {
 	switch {
 	case errors.Is(err, buddy.ErrInvalidMockSettings), errors.Is(err, buddy.ErrInvalidTopic),
 		errors.Is(err, buddy.ErrInvalidReview), errors.Is(err, buddy.ErrMockNotCancellable),
+		errors.Is(err, buddy.ErrUnknownTopic),
 		errors.Is(err, slots.ErrInvalidTimeOfDay), errors.Is(err, slots.ErrInvalidDate),
 		errors.Is(err, slots.ErrInvalidWeekday), errors.Is(err, slots.ErrInvalidSpan):
 		return fiber.NewError(fiber.StatusUnprocessableEntity, err.Error())
@@ -273,6 +275,48 @@ func (h *buddyHandlers) MockSlots(c *fiber.Ctx) error {
 		"data": out,
 		"meta": fiber.Map{"timezone": res.Zone, "count": len(out), "topics": res.Topics},
 	})
+}
+
+// buddyMockHostResponse is one member who runs mocks, as the hosts listing shows them:
+// the handle and card summary every buddy list shows, the topics they offer, their
+// soonest open slot in the viewer's zone, and the member page's review aggregate. No
+// meeting link, no account id.
+type buddyMockHostResponse struct {
+	Handle      string                   `json:"handle"`
+	CardSummary buddyCardSummaryResponse `json:"card_summary"`
+	Topics      []string                 `json:"topics"`
+	NextSlot    buddyMockNextSlot        `json:"next_slot"`
+	RatingAvg   float64                  `json:"rating_avg"`
+	RatingCount int                      `json:"rating_count"`
+	Completed   int                      `json:"completed"`
+}
+
+type buddyMockNextSlot struct {
+	StartsAt   time.Time `json:"starts_at"`
+	LocalStart string    `json:"local_start"`
+	UTCOffset  string    `json:"utc_offset"`
+}
+
+// MockHosts lists the members the caller could book a mock with now, soonest first.
+func (h *buddyHandlers) MockHosts(c *fiber.Ctx) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	res, err := h.mocks.Hosts(c.Context(), userID, c.Query("topic"), c.Query("timezone"))
+	if err != nil {
+		return mockError(err)
+	}
+	out := make([]buddyMockHostResponse, 0, len(res.Hosts))
+	for _, host := range res.Hosts {
+		slot := slotResponses([]slots.Interval{host.NextSlot})[0]
+		out = append(out, buddyMockHostResponse{
+			Handle: host.Handle, CardSummary: toBuddyCardSummary(host.Card), Topics: host.Topics,
+			NextSlot:  buddyMockNextSlot{StartsAt: slot.StartsAt, LocalStart: slot.LocalStart, UTCOffset: slot.UTCOffset},
+			RatingAvg: host.Summary.RatingAvg, RatingCount: host.Summary.RatingCount, Completed: host.Summary.Completed,
+		})
+	}
+	return c.JSON(fiber.Map{"data": out, "meta": fiber.Map{"timezone": res.Zone, "count": len(out)}})
 }
 
 type buddyBookMockBody struct {

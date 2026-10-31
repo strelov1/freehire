@@ -109,6 +109,10 @@ var (
 	reEquityLegalSentence = regexp.MustCompile(`all forms of (?:pay|compensation)|wage rates|"wages"|discriminat`)
 	// "discounted stock options" is how a sampled retailer described its purchase plan.
 	reEquityPurchasePlan = regexp.MustCompile(`discounted\s+$`)
+	// Only governing denials: "not limited to" and "no vesting period" do not
+	// deny the offer. Keep this local to each match so a later offer can still count.
+	reEquityDeniedBefore = regexp.MustCompile(`(?:\b(?:no|without)\s+(?:(?:any|an?)\s+)?|\b(?:not|never|cannot|can't|don't|doesn't|won't)\s+(?:be\s+)?(?:offer|offered|offering|include|includes|including|provide|provided|providing|receive|eligible for)\s+(?:(?:any|an?)\s+)?)(?:` + equityMod + `\s+)*$`)
+	reEquityDeniedAfter  = regexp.MustCompile(`^[\s:,()-]*(?:(?:is|are|will be)\s+)?(?:not (?:offered|available|included|provided)|unavailable)\b`)
 )
 
 var equityOfferRules = []*regexp.Regexp{
@@ -172,7 +176,14 @@ func equityWordAt(s string, loc []int) int {
 // offerAt rejects a match whose equity word is another sense of it, or whose sentence
 // is a legal definition rather than an offer.
 func offerAt(s string, loc []int, word int) bool {
+	if reEquityDeniedBefore.MatchString(s[max(0, loc[0]-80):loc[0]]) ||
+		reEquityDeniedAfter.MatchString(s[loc[1]:min(len(s), loc[1]+50)]) {
+		return false
+	}
 	if word >= 0 {
+		if reEquityDeniedBefore.MatchString(s[max(0, word-80):word]) {
+			return false
+		}
 		if reEquityOtherSenseBefore.MatchString(s[max(0, word-40):word]) {
 			return false
 		}
@@ -201,6 +212,9 @@ var (
 		`|\b(?:purely|solely|entirely|100%) equity\b|\b(?:paid|compensated) (?:entirely |solely |only |purely )?(?:in|with|through) equity\b` +
 		`|\bequity[- ]based (?:role|position|internship|opportunity|founding|collaboration|participation|co-?founder|founder)` +
 		`|\(equity[- ]based\)`)
+	// An unqualified "paid in equity" can continue into an explicit mixed package.
+	// Adverbs such as "only" or "entirely" retain their equity-only precedence.
+	reEquityPaidWithCash = regexp.MustCompile(`^(?:paid|compensated) (?:in|with|through) equity\s*(?:and|plus|[+&])\s*(?:an? )?(?:competitive |base )?(?:cash|salary)\b`)
 	// "not equity-only", "non equity-only" deny it; "long-only equity" and "equity only
 	// funds" are an investment mandate (the other-sense check covers what follows).
 	reEquityOnlyDenied = regexp.MustCompile(`(?:\bnot|\bno|\bnon|\blong|\bshort)[\s-]+(?:an? )?$`)
@@ -216,6 +230,9 @@ func equityOnlyStated(s string) bool {
 		return false
 	}
 	for _, loc := range reEquityOnlyPhrase.FindAllStringIndex(s, -1) {
+		if reEquityPaidWithCash.MatchString(s[loc[0]:]) {
+			continue
+		}
 		if reEquityOnlyDenied.MatchString(s[max(0, loc[0]-12):loc[0]]) {
 			continue
 		}

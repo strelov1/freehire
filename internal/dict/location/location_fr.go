@@ -202,10 +202,11 @@ func flagsToCodes(s string) string {
 }
 
 // heldContested is a contested city alias held back until the line states a country,
-// with the token that named it.
+// with the token that named it and its own location segment.
 type heldContested struct {
-	ce  cityEntry
-	tok string
+	ce      cityEntry
+	tok     string
+	segment string
 }
 
 // isSubdivisionName reports whether tok is a US state or Canadian province by name or

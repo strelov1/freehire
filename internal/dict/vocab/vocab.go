@@ -56,7 +56,21 @@ var (
 	// a multi-company aggregator, or a community channel. The classifier is
 	// sources.ProviderKind; a source it cannot place (a manual import, a pasted link)
 	// carries no value, so it is reachable only through the `source` facet.
-	SourceTypeValues   = []string{"ats", "company", "aggregator", "social"}
+	SourceTypeValues = []string{"ats", "company", "aggregator", "social"}
+	// PerkValues are the benefits a posting's description states it offers — the
+	// `perks` facet, matched by internal/dict/perks from explicit text only. Absence
+	// means "not mentioned", never "not offered". Visa sponsorship and relocation are
+	// deliberately NOT here: both already have their own enrichment-backed controls
+	// (visa_sponsorship, relocation), and a dictionary reading of either is dominated by
+	// the denial ("visa sponsorship is not available"), which the model reads and a
+	// phrase list does not. Equity is not here either: it is its own compensation facet,
+	// and a perk chip beside it would answer the same question twice.
+	PerkValues = []string{
+		"generous_pto", "four_day_week", "401k_match", "parental_leave",
+		"retirement_plan", "tuition_reimbursement",
+		"unlimited_pto", "health_insurance", "mental_health",
+		"learning_budget", "home_office_stipend", "sabbatical", "sign_on_bonus",
+	}
 	EnglishLevelValues = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
 	// EquityValues answer "does this job pay in equity?" — derived from the posting's
 	// text by internal/job/jobfacts.Equity. There is no "no equity" value: a posting the
@@ -64,7 +78,16 @@ var (
 	// member of the vocabulary (the search filter names it EquityNotStated).
 	EquityValues         = []string{EquityWithSalary, EquityOnly}
 	EducationLevelValues = []string{"none", "bachelor", "master", "phd"}
-	CategoryValues       = []string{
+	// ClearanceLevelValues are the security-clearance levels a posting may state,
+	// written by internal/dict/location.ClearanceLevelsFromDescription. The US ladder
+	// in ascending order, then interim (a status stated beside a level) and other
+	// (a non-US scheme, or a clearance stated with no level). The location package
+	// argues the split with the measured numbers.
+	ClearanceLevelValues = []string{
+		ClearanceConfidential, ClearanceSecret, ClearanceTopSecret, ClearanceTSSCI,
+		ClearancePublicTrust, ClearanceInterim, ClearanceOther,
+	}
+	CategoryValues = []string{
 		// "software_engineering" is the generic bucket for a title the dictionary
 		// confirms is software/IT work (feeds is_tech via classify.IsTech's
 		// techTitleTerms) but that names no sub-discipline to resolve to — a bare
@@ -332,6 +355,17 @@ var (
 // a proxy for), and a profile save drops it from the specializations. Nothing may
 // write it again — it is deliberately absent from CategoryValues.
 const RetiredCategoryManagement = "management"
+
+// The values of ClearanceLevelValues, named for the dictionary that writes them.
+const (
+	ClearanceConfidential = "confidential"
+	ClearanceSecret       = "secret"
+	ClearanceTopSecret    = "top_secret"
+	ClearanceTSSCI        = "ts_sci"
+	ClearancePublicTrust  = "public_trust"
+	ClearanceInterim      = "interim"
+	ClearanceOther        = "other"
+)
 
 // JobChallengeOther is the JobChallengeValues member that admits a written note. Named
 // rather than spelled inline because two places depend on the exact string — the survey's

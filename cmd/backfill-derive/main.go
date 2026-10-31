@@ -1,8 +1,8 @@
 // Command backfill-derive re-derives, in a single keyset pass over the whole jobs
 // table, every column that ingest computes as a pure function of a row's own raw
 // fields: the deterministic dictionary facets (countries, regions, cities, work_mode,
-// skills, seniority, category, is_tech, requires_clearance, and the synthetic enrichment facets
-// posting_language, employment_type, education_level, english_level,
+// skills, seniority, category, is_tech, requires_clearance, clearance_levels, perks, and the
+// synthetic enrichment facets posting_language, employment_type, education_level, english_level,
 // experience_years_min — all from jobderive.Derive), the repost-identity
 // role_fingerprint (internal/job/jobhash), and the company_slug
 // (internal/dict/normalize, via jobderive). It replaces the three former one-shots
@@ -387,6 +387,8 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		requiresClearance != j.RequiresClearance ||
 		viaRecruiter != j.ViaRecruiter ||
 		equity != j.Equity ||
+		!slices.Equal(d.ClearanceLevels, j.ClearanceLevels) ||
+		!slices.Equal(d.Perks, j.Perks) ||
 		d.PostingLanguage != j.PostingLanguage ||
 		d.EmploymentType != j.EmploymentType ||
 		d.EducationLevel != j.EducationLevel ||
@@ -409,6 +411,8 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		RequiresClearance:  requiresClearance,
 		ViaRecruiter:       viaRecruiter,
 		Equity:             equity,
+		ClearanceLevels:    d.ClearanceLevels,
+		Perks:              d.Perks,
 		PostingLanguage:    d.PostingLanguage,
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,

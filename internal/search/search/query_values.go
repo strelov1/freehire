@@ -44,6 +44,8 @@ var closedFacets = map[string]func(string) bool{
 	// RegionUnspecified is a reserved value the filter maps to IS EMPTY.
 	"regions":   oneOf(append(slices.Clone(vocab.RegionValues), RegionUnspecified)),
 	"seniority": oneOf(vocab.SeniorityValues),
+	// ClearanceLevelUnspecified is a reserved value the filter maps to NOT EXISTS.
+	"clearance_levels": oneOf(append(slices.Clone(vocab.ClearanceLevelValues), ClearanceLevelUnspecified)),
 	// The retired category is translated, not dropped (see retiredCategory).
 	"category":        oneOf(append(slices.Clone(vocab.CategoryValues), vocab.RetiredCategoryManagement)),
 	"employment_type": oneOf(vocab.EmploymentTypeValues),
@@ -57,6 +59,7 @@ var closedFacets = map[string]func(string) bool{
 	"source_type":     oneOf(vocab.SourceTypeValues),
 	"ai_archetype":    oneOf(vocab.AIArchetypeValues),
 	"domains":         oneOf(vocab.DomainValues),
+	"perks":           oneOf(vocab.PerkValues),
 	"reality": oneOf([]string{
 		jobreality.ClassFresh, jobreality.ClassStale, jobreality.ClassLikelyEvergreen,
 	}),
