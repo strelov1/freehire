@@ -13,12 +13,16 @@
     oninvite,
     onconversation,
     size = 'sm',
+    quiet = false,
   }: {
     handle: string;
     conversations: Conversation[];
     oninvite: (handle: string) => void;
     onconversation: (id: number) => void;
     size?: 'sm' | 'md';
+    /** Always the outline style: for a list that repeats the button on every row, where a
+     *  column of filled buttons would outshout the content. */
+    quiet?: boolean;
   } = $props();
 
   const action = $derived(messageActionFor(conversations, handle));
@@ -26,7 +30,7 @@
 
 <Button
   {size}
-  variant={action.kind === 'invite' || action.kind === 'open' ? 'primary' : 'outline'}
+  variant={!quiet && (action.kind === 'invite' || action.kind === 'open') ? 'primary' : 'outline'}
   onclick={() => (action.kind === 'invite' ? oninvite(handle) : onconversation(action.conversationId))}
 >
   {messageActionLabel(action.kind)}

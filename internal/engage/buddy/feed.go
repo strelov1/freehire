@@ -45,8 +45,12 @@ type FeedEntry struct {
 	Card     CardSummary
 	Company  Company
 	JobTitle *string
-	Type     string
-	Day      string
+	// The posting's public address and its location, nil when the event names no posting
+	// or the posting is gone; the feed links to the job through the slug.
+	JobSlug     *string
+	JobLocation *string
+	Type        string
+	Day         string
 }
 
 // FeedPage is one page and the cursor of the next, empty when this is the last.
@@ -57,13 +61,15 @@ type FeedPage struct {
 
 // FeedRow is a Repository's raw answer for one event.
 type FeedRow struct {
-	ID       int64
-	Day      string
-	Kind     string
-	Signal   string
-	Company  Company
-	JobTitle *string
-	Author   SimilarRow
+	ID          int64
+	Day         string
+	Kind        string
+	Signal      string
+	Company     Company
+	JobTitle    *string
+	JobSlug     *string
+	JobLocation *string
+	Author      SimilarRow
 }
 
 // Feed reads one page of the viewer's buddy feed, newest first. limit is clamped to
@@ -169,7 +175,8 @@ func (s *Service) feedPage(ctx context.Context, viewerID int64, authors []string
 	for i, r := range rows {
 		page.Entries[i] = FeedEntry{
 			ID: r.ID, Handle: r.Author.Handle, Card: cardSummary(r.Author),
-			Company: r.Company, JobTitle: r.JobTitle, Type: feedType(r.Kind, r.Signal), Day: r.Day,
+			Company: r.Company, JobTitle: r.JobTitle, JobSlug: r.JobSlug, JobLocation: r.JobLocation,
+			Type: feedType(r.Kind, r.Signal), Day: r.Day,
 		}
 	}
 	return page, nil

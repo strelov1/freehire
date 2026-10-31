@@ -175,6 +175,8 @@ SELECT e.id,
        e.company_slug,
        coalesce(co.name, e.company_slug)::text AS company_name,
        j.title AS job_title,
+       j.public_slug AS job_slug,
+       j.location AS job_location,
        m.handle,
        m.countries,
        u.resume_structured

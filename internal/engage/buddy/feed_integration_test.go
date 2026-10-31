@@ -95,6 +95,8 @@ func TestFeedIncludesOnlyAllowedEventsAtDayPrecision(t *testing.T) {
 	}
 }
 
+// An entry names the posting it was about: title, its public address and where it is, so
+// the feed can link to the job. A posting since removed leaves all three empty.
 func TestFeedCarriesJobTitle(t *testing.T) {
 	pool, svc := setup(t)
 	ctx := context.Background()
@@ -102,8 +104,8 @@ func TestFeedCarriesJobTitle(t *testing.T) {
 	joinWith(t, pool, svc, viewer, "", nil, nil)
 	joinWith(t, pool, svc, author, "", nil, nil)
 	var jobID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO jobs (source, external_id, title, company, url, description, public_slug)
-		VALUES ('test', 'x1', 'Staff Go Engineer', 'Acme', 'https://example.test/x1', 'd', 'staff-go-x1') RETURNING id`).Scan(&jobID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO jobs (source, external_id, title, company, url, description, public_slug, location)
+		VALUES ('test', 'x1', 'Staff Go Engineer', 'Acme', 'https://example.test/x1', 'd', 'staff-go-x1', 'Berlin, Germany') RETURNING id`).Scan(&jobID); err != nil {
 		t.Fatalf("seed job: %v", err)
 	}
 	app := newApp(t, pool, author, "acme")
@@ -115,12 +117,15 @@ func TestFeedCarriesJobTitle(t *testing.T) {
 	if err != nil || len(got.Entries) != 1 || got.Entries[0].JobTitle == nil || *got.Entries[0].JobTitle != "Staff Go Engineer" {
 		t.Fatalf("feed = %+v, %v", got, err)
 	}
+	if e := got.Entries[0]; e.JobSlug == nil || *e.JobSlug != "staff-go-x1" || e.JobLocation == nil || *e.JobLocation != "Berlin, Germany" {
+		t.Fatalf("job link = %v / %v, want staff-go-x1 / Berlin, Germany", e.JobSlug, e.JobLocation)
+	}
 	// A pruned job leaves the event with a null title.
 	if _, err := pool.Exec(ctx, `DELETE FROM jobs WHERE id = $1`, jobID); err != nil {
 		t.Fatal(err)
 	}
 	got, err = svc.Feed(ctx, viewer, buddy.FeedAll, "", 10)
-	if err != nil || len(got.Entries) != 1 || got.Entries[0].JobTitle != nil {
+	if err != nil || len(got.Entries) != 1 || got.Entries[0].JobTitle != nil || got.Entries[0].JobSlug != nil || got.Entries[0].JobLocation != nil {
 		t.Fatalf("after prune = %+v, %v", got, err)
 	}
 }

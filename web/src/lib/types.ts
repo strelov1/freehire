@@ -1163,7 +1163,7 @@ export interface BuddyProfile { handle: string; card_summary: BuddySummary; card
 /** One member's feed events per UTC day over the last year; only days with an event. */
 /** One member's feed events per UTC day; `count` is always applied + interview + offer. */
 export interface BuddyActivity { days: { day: string; count: number; applied: number; interview: number; offer: number }[] }
-export interface BuddyFeedItem { id: number; handle: string; card_summary: BuddySummary; company: BuddyCompany; job_title: string | null; type: 'applied' | 'interview' | 'offer'; day: string }
+export interface BuddyFeedItem { id: number; handle: string; card_summary: BuddySummary; company: BuddyCompany; job_title: string | null; job_slug: string | null; job_location: string | null; type: 'applied' | 'interview' | 'offer'; day: string }
 /** How a buddy counterpart is drawn: by handle and card, and nothing at all once they are
  *  unreachable (left, blocked) — not even the handle. */
 type BuddyCounterpart =

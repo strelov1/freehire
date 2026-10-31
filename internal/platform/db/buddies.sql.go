@@ -231,6 +231,8 @@ SELECT e.id,
        e.company_slug,
        coalesce(co.name, e.company_slug)::text AS company_name,
        j.title AS job_title,
+       j.public_slug AS job_slug,
+       j.location AS job_location,
        m.handle,
        m.countries,
        u.resume_structured
@@ -274,6 +276,8 @@ type ListBuddyFeedRow struct {
 	CompanySlug      string      `json:"company_slug"`
 	CompanyName      string      `json:"company_name"`
 	JobTitle         pgtype.Text `json:"job_title"`
+	JobSlug          pgtype.Text `json:"job_slug"`
+	JobLocation      pgtype.Text `json:"job_location"`
 	Handle           string      `json:"handle"`
 	Countries        []string    `json:"countries"`
 	ResumeStructured []byte      `json:"resume_structured"`
@@ -324,6 +328,8 @@ func (q *Queries) ListBuddyFeed(ctx context.Context, arg ListBuddyFeedParams) ([
 			&i.CompanySlug,
 			&i.CompanyName,
 			&i.JobTitle,
+			&i.JobSlug,
+			&i.JobLocation,
 			&i.Handle,
 			&i.Countries,
 			&i.ResumeStructured,

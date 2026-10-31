@@ -26,7 +26,7 @@
         <Card class="flex flex-col gap-3 p-4">
           <div class="flex items-start justify-between gap-3">
             <BuddyIdentity handle={person.handle} summary={person.card_summary} />
-            <BuddyMessageButton handle={person.handle} conversations={messagingDock.conversations} oninvite={(h) => messagingDock.messageBuddy(h)} onconversation={(id) => messagingDock.openConversation(id)} />
+            <BuddyMessageButton quiet handle={person.handle} conversations={messagingDock.conversations} oninvite={(h) => messagingDock.messageBuddy(h)} onconversation={(id) => messagingDock.openConversation(id)} />
           </div>
           {#if person.shared_companies.length}
             <div class="flex flex-col gap-1.5 sm:pl-13">

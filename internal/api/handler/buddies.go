@@ -161,6 +161,8 @@ type buddyFeedEntryResponse struct {
 	CardSummary buddyCardSummaryResponse `json:"card_summary"`
 	Company     buddyCompanyResponse     `json:"company"`
 	JobTitle    *string                  `json:"job_title"`
+	JobSlug     *string                  `json:"job_slug"`
+	JobLocation *string                  `json:"job_location"`
 	Type        string                   `json:"type"`
 	Day         string                   `json:"day"`
 }
@@ -187,7 +189,7 @@ func (h *buddyHandlers) Feed(c *fiber.Ctx) error {
 		out[i] = buddyFeedEntryResponse{
 			ID: e.ID, Handle: e.Handle, CardSummary: toBuddyCardSummary(e.Card),
 			Company:  buddyCompanyResponse{Slug: e.Company.Slug, Name: e.Company.Name},
-			JobTitle: e.JobTitle, Type: e.Type, Day: e.Day,
+			JobTitle: e.JobTitle, JobSlug: e.JobSlug, JobLocation: e.JobLocation, Type: e.Type, Day: e.Day,
 		}
 	}
 	var next *string
