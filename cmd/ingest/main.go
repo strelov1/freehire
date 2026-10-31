@@ -641,7 +641,14 @@ func sweepableBoards(stats pipeline.Stats, scope boardScope, crossShardAmbiguous
 //
 // Returns nil rather than an empty slice when nothing is left, which the close reads as an
 // empty text[] and matches no row (`company_slug = ANY('{}')`), i.e. it closes nothing.
+//
+// A failed covered refresh (Stats.RefreshFailed) withholds the whole scope. Those rows keep their
+// old last_seen_at while the listing named them, their company can still be in the crawled set
+// through another board's refresh, and a covered row is never written again to reopen it.
 func sweepableCompanies(crawled []string, stats pipeline.Stats) []string {
+	if stats.RefreshFailed > 0 {
+		return nil
+	}
 	if len(stats.UnprovenCompanies) == 0 {
 		return crawled
 	}

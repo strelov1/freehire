@@ -103,6 +103,16 @@ func TestSweepBySource(t *testing.T) {
 // requests died wrote everything it could read while missing postings that are still live, so
 // its companies are subtracted here. Recording and closing are separate decisions, and only
 // the second one lacks the evidence.
+// A failed covered refresh leaves listed rows with their old last_seen_at. The company scope
+// could still name such a row's company through another board's refresh, and RefreshCoveredJobs
+// never reopens what it would wrongly close, so the run withholds the company scope too.
+func TestSweepableCompaniesWithheldAfterAFailedCoveredRefresh(t *testing.T) {
+	got := sweepableCompanies([]string{"acme", "globex"}, pipeline.Stats{Ingested: 5, Refreshed: 3, RefreshFailed: 2})
+	if got != nil {
+		t.Errorf("sweepableCompanies = %v, want nil", got)
+	}
+}
+
 func TestSweepableCompanies(t *testing.T) {
 	cases := []struct {
 		name    string

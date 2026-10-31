@@ -193,6 +193,20 @@ func TestJobStashShortListingIsAnError(t *testing.T) {
 	}
 }
 
+// A server that ignores the page parameter answers every page with the same postings, and a raw
+// count reaches the total anyway. The walk must count distinct postings, or the source-scoped
+// sweep would close everything past the first page.
+func TestJobStashRepeatedPagesAreAnError(t *testing.T) {
+	page := jobstashListPage(2,
+		jobstashJob("Z2IGg7", "Associate Tech Lead", "KAST", "", "public", "Remote", "REMOTE", 1781521356188, "a", "b"),
+	)
+	fake := (&routedHTTP{}).route("page=1", page).route("page=2", page)
+
+	if _, err := NewJobStash(fake).Fetch(context.Background(), CompanyEntry{Provider: "jobstash"}); err == nil {
+		t.Fatal("want an error: two pages, one distinct posting, a stated total of 2")
+	}
+}
+
 // A 200 that carries no total (an error object, a changed envelope) must not end the walk as
 // complete: with no total, any count read so far would pass for the whole catalogue.
 func TestJobStashPageWithoutTotalIsAnError(t *testing.T) {

@@ -25,6 +25,11 @@ const (
 	// jobstashMaxPages bounds pagination so a server that mis-reports total (never
 	// emptying its data) cannot loop forever; running out of pages fails the crawl.
 	jobstashMaxPages = 200
+	// jobstashMinDistinctPercent is how many of the stated total must be DISTINCT postings for a
+	// finished walk to count as the whole catalogue. Not 100: a posting published mid-walk shifts
+	// the pages, so one posting is read twice while the total grows by one. A server that ignores
+	// the page parameter repeats one page and falls far below it.
+	jobstashMinDistinctPercent = 99
 )
 
 // NewJobStash builds the JobStash adapter over the given HTTP client.
@@ -84,11 +89,13 @@ func (j jobstash) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 // the reported total. Each page carries postings with their body inline.
 //
 // The walk is the whole catalogue or an error, because jobstash is swept by source: a page that
-// states no total (an empty catalogue included), one that comes back empty before the total, or
-// a walk that runs out of pages would otherwise read as every unlisted posting gone. The total is the latest page's, so
-// a catalogue that shrinks during the walk still ends cleanly.
+// states no total (an empty catalogue included), one that comes back empty before the total, a
+// walk that runs out of pages, or one whose pages repeat (jobstashMinDistinctPercent) would
+// otherwise read as every unlisted posting gone. The total is the latest page's, so a catalogue
+// that shrinks during the walk still ends cleanly.
 func (j jobstash) list(ctx context.Context) ([]jobstashPosting, error) {
 	var all []jobstashPosting
+	distinct := make(map[string]bool)
 	for page := 1; page <= jobstashMaxPages; page++ {
 		var resp struct {
 			Total int               `json:"total"`
@@ -103,7 +110,13 @@ func (j jobstash) list(ctx context.Context) ([]jobstashPosting, error) {
 			return nil, fmt.Errorf("jobstash: page %d stated no total", page)
 		}
 		all = append(all, resp.Data...)
+		for _, p := range resp.Data {
+			distinct[p.ShortUUID] = true
+		}
 		if len(all) >= resp.Total {
+			if len(distinct)*100 < resp.Total*jobstashMinDistinctPercent {
+				return nil, fmt.Errorf("jobstash: walk read %d distinct postings of %d", len(distinct), resp.Total)
+			}
 			return all, nil
 		}
 		if len(resp.Data) == 0 {
