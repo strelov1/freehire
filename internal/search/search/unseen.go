@@ -44,5 +44,28 @@ func (w UnseenWindows) Unseen(j db.Job, now time.Time) bool {
 // rebuild — or sooner, on its next content write. The job page reads Postgres and keeps
 // serving a withheld posting, so a shared link still opens.
 func Withheld(j db.Job, now time.Time, unseen UnseenWindows) bool {
-	return CategoryUnresolved(j) || DescriptionMissing(j) || unseen.Unseen(j, now)
+	return WithheldBy(j, now, unseen) != ""
+}
+
+// WithholdReason names which of Withheld's rules keeps a job out of search; empty means none.
+type WithholdReason string
+
+const (
+	WithheldNoCategory    WithholdReason = "category_unresolved"
+	WithheldNoDescription WithholdReason = "description_missing"
+	WithheldUnseen        WithholdReason = "unseen"
+)
+
+// WithheldBy is Withheld with its reason: the first rule that holds, in the same order, so
+// counting reasons partitions the withheld jobs rather than counting one twice.
+func WithheldBy(j db.Job, now time.Time, unseen UnseenWindows) WithholdReason {
+	switch {
+	case CategoryUnresolved(j):
+		return WithheldNoCategory
+	case DescriptionMissing(j):
+		return WithheldNoDescription
+	case unseen.Unseen(j, now):
+		return WithheldUnseen
+	}
+	return ""
 }
