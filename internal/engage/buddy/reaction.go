@@ -83,14 +83,19 @@ func (s *Service) React(ctx context.Context, userID, eventID int64, kind string)
 // reactionNotice is what the author reads: the reaction and the news it answers, never who
 // gave it — a buddy is a handle, and the notice has no business naming one.
 func reactionNotice(kind, eventType, company string) (title, body string) {
-	var noun, news string
+	var noun, preposition string
 	switch eventType {
 	case "offer":
-		noun, news = "offer", "your offer from "+company
+		noun, preposition = "offer", "from"
 	case "interview":
-		noun, news = "interview", "your interview at "+company
+		noun, preposition = "interview", "at"
 	default:
-		noun, news = "application", "your application to "+company
+		noun, preposition = "application", "to"
+	}
+	news := "your " + noun
+	// An event recorded with no company names none rather than leaving "from" dangling.
+	if company != "" {
+		news += " " + preposition + " " + company
 	}
 	return "A buddy reacted to your " + noun, fmt.Sprintf("A buddy reacted “%s” to %s.", reactionLabels[kind], news)
 }

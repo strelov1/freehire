@@ -55,3 +55,19 @@ func TestNoticeLinksToBuddiesChats(t *testing.T) {
 		}
 	}
 }
+
+func TestReactionNoticeWording(t *testing.T) {
+	for _, c := range []struct{ kind, eventType, company, title, body string }{
+		{ReactionCongrats, "offer", "Stripe", "A buddy reacted to your offer", "A buddy reacted “Congrats” to your offer from Stripe."},
+		{ReactionLuck, "interview", "GitLab", "A buddy reacted to your interview", "A buddy reacted “Good luck” to your interview at GitLab."},
+		{ReactionRooting, "applied", "Revolut", "A buddy reacted to your application", "A buddy reacted “Rooting for you” to your application to Revolut."},
+		// An event recorded with no company says so by naming none, not with a dangling "from".
+		{ReactionSame, "offer", "", "A buddy reacted to your offer", "A buddy reacted “Same boat” to your offer."},
+		{ReactionInsight, "applied", "", "A buddy reacted to your application", "A buddy reacted “Insightful” to your application."},
+	} {
+		title, body := reactionNotice(c.kind, c.eventType, c.company)
+		if title != c.title || body != c.body {
+			t.Errorf("%s/%s/%q = %q / %q, want %q / %q", c.kind, c.eventType, c.company, title, body, c.title, c.body)
+		}
+	}
+}
