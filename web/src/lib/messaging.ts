@@ -78,8 +78,9 @@ export function isSendShortcut(e: { key: string; metaKey: boolean; ctrlKey: bool
 }
 
 // A link to one of our job pages, absolute (this site) or site-relative, standing on its
-// own: a bare "/jobs/…" inside someone else's URL is not ours.
-const JOB_LINK = /(?:^|\s)(?:(?:https?:\/\/)?(?:www\.)?freehire\.me)?\/jobs\/([a-z0-9-]+)/gi;
+// own — at the start, after a space, or after an opening bracket or quote: a bare
+// "/jobs/…" inside someone else's URL is not ours.
+const JOB_LINK = /(?:^|[\s([<"'«])(?:(?:https?:\/\/)?(?:www\.)?freehire\.me)?\/jobs\/([a-z0-9-]+)/gi;
 const JOB_PREVIEWS = 2;
 
 /** The job pages a message links to, once each, in order — what the chat previews under

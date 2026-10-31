@@ -48,6 +48,9 @@ describe('messageJobSlugs', () => {
     const body = 'Here: https://freehire.me/jobs/staff-go-x1 and also freehire.me/jobs/staff-go-x1?ref=chat, plus /jobs/backend-y2.';
     expect(messageJobSlugs(body)).toEqual(['staff-go-x1', 'backend-y2']);
   });
+  it('finds a link wrapped in brackets or quotes', () => {
+    expect(messageJobSlugs('Look (https://freehire.me/jobs/staff-go-x1) and "/jobs/backend-y2"')).toEqual(['staff-go-x1', 'backend-y2']);
+  });
   it('ignores other sites and other pages', () => {
     expect(messageJobSlugs('https://example.com/jobs/abc https://freehire.me/companies/gitlab')).toEqual([]);
   });

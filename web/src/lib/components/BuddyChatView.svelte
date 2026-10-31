@@ -29,6 +29,8 @@
   });
   let status = $state<'loading' | 'ready' | 'error'>('loading');
   const selected = $derived(selectedId === null ? null : messagingDock.conversation(selectedId) ?? null);
+  const handle = $derived(selected?.counterpart.reachable ? selected.counterpart.detail.handle : null);
+  const common = $derived(handle ? (shared.get(handle) ?? []) : []);
   let listTimer: ReturnType<typeof setInterval> | undefined;
 
   async function refreshList() {
@@ -56,22 +58,20 @@
   });
 </script>
 
-{#snippet together(companies: BuddyCompany[])}
+{#snippet together()}
   <p class="flex items-center gap-2 rounded-full bg-muted py-1 pr-3 pl-1.5 text-xs text-muted-foreground">
     <span class="flex" aria-hidden="true">
-      {#each companies.slice(0, 3) as c, i (c.slug)}
+      {#each common.slice(0, 3) as c, i (c.slug)}
         <BuddyCompanyLogo name={c.name} size="sm" class="size-5 ring-2 ring-muted {i > 0 ? '-ml-1.5' : ''}" />
       {/each}
     </span>
-    <span>You both applied to <span class="font-medium text-foreground">{companies.map((c) => c.name).join(', ')}</span></span>
+    <span>You both applied to <span class="font-medium text-foreground">{common.map((c) => c.name).join(', ')}</span></span>
   </p>
 {/snippet}
 
 {#if status === 'loading'}<States state="loading" />{:else if status === 'error'}<States state="error" message="Could not load your conversations." onRetry={() => { status = 'loading'; void refreshList(); }} />{:else}
-  {@const handle = selected?.counterpart.reachable ? selected.counterpart.detail.handle : null}
-  {@const common = handle ? (shared.get(handle) ?? []) : []}
   <div class="flex flex-col gap-4 lg:h-160 lg:flex-row">
-    <section aria-label="Conversations" class="flex shrink-0 flex-col overflow-y-auto rounded-xl border border-border bg-card p-1.5 lg:w-64">
+    <section aria-label="Conversations" class="flex max-h-64 shrink-0 flex-col overflow-y-auto rounded-xl border border-border bg-card p-1.5 lg:max-h-none lg:w-64">
       {#if messagingDock.conversations.length === 0}<p class="p-4 text-sm text-muted-foreground">No conversations yet. Message someone from the feed or your network.</p>{/if}
       {#each messagingDock.conversations as c (c.id)}<ConversationRow conversation={c} selected={selected?.id === c.id} onselect={(next) => (selectedId = next.id)} />{/each}
     </section>
@@ -79,9 +79,7 @@
       {#if !selected}<p class="m-auto text-sm text-muted-foreground">Choose a conversation to read.</p>
       {:else}
         {#key selected.id}
-          <ConversationPane conversation={selected} {oninvite} onchange={(change) => { if (change !== 'accepted') selectedId = null; }}>
-            {#snippet intro()}{#if common.length}{@render together(common)}{/if}{/snippet}
-          </ConversationPane>
+          <ConversationPane conversation={selected} {oninvite} intro={common.length ? together : undefined} onchange={(change) => { if (change !== 'accepted') selectedId = null; }} />
         {/key}
       {/if}
     </section>

@@ -236,6 +236,8 @@
       <span class="text-right text-xs text-muted-foreground">{reportNote.length}/1000</span>
       <div class="flex justify-end gap-2"><Button variant="outline" type="button" onclick={() => (reportOpen = false)}>Cancel</Button><Button variant="primary" type="submit" disabled={actionBusy || reportNote.length > 1000}>Send report</Button></div>
     </form>{/if}
+    <!-- Above the scroller, not in it: following new messages would scroll it away. -->
+    {#if intro}<div class="flex justify-center pt-3">{@render intro()}</div>{/if}
     <div bind:this={list} onscroll={() => { if (list) following = followsNewMessages(list); }} class="min-h-0 flex-1 overflow-y-auto py-4 pr-2">
       {#if history === 'loading' && messages.length === 0}
         <p class="text-sm text-muted-foreground">Loading messages…</p>
@@ -247,7 +249,6 @@
       {:else if messages.length === 0 && status === 'open' && live}
         <p class="text-sm text-muted-foreground">No messages yet. Say hello to {name}.</p>
       {/if}
-      {#if intro}<div class="mb-3 flex justify-center">{@render intro()}</div>{/if}
       <div role="log" aria-live={announce ? 'polite' : 'off'}>
         <ol aria-label="Messages with {name}" class="flex flex-col gap-1">
           {#each messageDays(messages) as group (group.day)}
