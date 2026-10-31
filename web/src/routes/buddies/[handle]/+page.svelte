@@ -222,8 +222,10 @@
       <div id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)} class="flex flex-col gap-4">
         {#if tab === 'activity'}
           {#if grid}
-            <!-- ActivityYear draws its own card; a second frame around it nests two. -->
-            <section>
+            <!-- ActivityYear draws its own cards (grid, totals, the selected day) as siblings and
+                 leaves the space between them to the host — the gap its totals use. No frame:
+                 a second one around it would nest cards. -->
+            <section class="flex flex-col gap-3">
               <ActivityYear
                 {grid}
                 heading="Their last year"
@@ -251,7 +253,7 @@
               </ActivityYear>
             </section>
           {/if}
-          <section class="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
+          <section class="flex flex-col gap-1 rounded-xl border border-border bg-card p-5">
             <h2 class="text-sm font-semibold">Activity</h2>
             {#if feed.length === 0}
               <p class="text-sm text-muted-foreground">No application updates yet.</p>
