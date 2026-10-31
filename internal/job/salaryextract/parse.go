@@ -25,7 +25,7 @@ var (
 	reDay    = regexp.MustCompile(`(?i)(?:per\s+day|/\s*day\b|p/d\b|man-day|/\s*md\b)`)
 	reUpTo   = regexp.MustCompile(`(?i)\bup to\b`)
 	reFrom   = regexp.MustCompile(`(?i)\bfrom\b`)
-	reMoney  = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)(\+)?|(\d{1,3}(?:[.,]\d{3})+)(\+)?`)
+	reMoney  = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)\+?|(\d{1,3}(?:[.,]\d{3})+)\+?`)
 	// reScaled is a "120k" or "1.5m" amount; reMoney would read it as 120 or 1.
 	reScaled = regexp.MustCompile(`(?i)\d[km]\b`)
 	// reOpenRange is a symboled amount whose dash-joined second bound carries no
@@ -68,11 +68,10 @@ var periodSpecs = []struct {
 }
 
 func Parse(description string, countries []string) (Salary, bool) {
-	text := plain(description)
+	lines := plain(description)
 	var got *Salary
 	var used string
-	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimSpace(line)
+	for _, line := range lines {
 		m := reLabel.FindStringSubmatch(line)
 		if m == nil {
 			continue
@@ -90,7 +89,7 @@ func Parse(description string, countries []string) (Salary, bool) {
 	if got == nil {
 		return Salary{}, false
 	}
-	if contradicts(text, used, *got) {
+	if contradicts(lines, used, *got) {
 		return Salary{}, false
 	}
 	return *got, true
@@ -121,22 +120,27 @@ func parseLine(body string, countries []string) (Salary, bool) {
 		n := nums[0]
 		sal.Min, sal.Max = ip(n), ip(n)
 	}
-	sal.Period = periodOf(body)
-	if sal.Period == "mixed" {
+	period, ok := periodOf(body)
+	if !ok {
 		return Salary{}, false
 	}
-	if sal.Period == "" && bound(sal) < 1000 {
+	sal.Period = period
+	larger := nums[0]
+	if len(nums) == 2 && nums[1] > larger {
+		larger = nums[1]
+	}
+	if sal.Period == "" && larger < 1000 {
 		return Salary{}, false
 	}
 	sal.Currency = currencyOf(body, countries)
 	return sal, true
 }
 
-func contradicts(text, used string, sal Salary) bool {
+func contradicts(lines []string, used string, sal Salary) bool {
 	if sal.Period == "" {
 		return false
 	}
-	rest := strings.Replace(text, used, "\n", 1)
+	rest := strings.Replace(strings.Join(lines, "\n"), used, "\n", 1)
 	for _, spec := range periodSpecs {
 		if spec.name == sal.Period {
 			continue
@@ -160,16 +164,18 @@ func contradicts(text, used string, sal Salary) bool {
 	return false
 }
 
-func plain(s string) string {
+func plain(s string) []string {
 	s = html.UnescapeString(s)
-	s = blockTag.ReplaceAllString(s, "\n")
-	s = anyTag.ReplaceAllString(s, " ")
+	if strings.Contains(s, "<") {
+		s = blockTag.ReplaceAllString(s, "\n")
+		s = anyTag.ReplaceAllString(s, " ")
+	}
 	s = strings.ReplaceAll(s, "\u00a0", " ")
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
 		lines[i] = strings.Join(strings.Fields(line), " ")
 	}
-	return strings.Join(lines, "\n")
+	return lines
 }
 
 func amountsIn(s string) []int {
@@ -177,7 +183,7 @@ func amountsIn(s string) []int {
 	for _, m := range reMoney.FindAllStringSubmatch(s, -1) {
 		raw := m[1]
 		if raw == "" {
-			raw = m[3]
+			raw = m[2]
 		}
 		n, ok := parseNumber(raw)
 		if ok {
@@ -223,17 +229,17 @@ func roundFloat(s string) (int, bool) {
 	return int(math.Round(f)), true
 }
 
-func periodOf(s string) string {
+func periodOf(s string) (string, bool) {
 	found := ""
 	for _, spec := range periodSpecs {
 		if spec.re.MatchString(s) {
 			if found != "" && found != spec.name {
-				return "mixed"
+				return "", false
 			}
 			found = spec.name
 		}
 	}
-	return found
+	return found, true
 }
 
 func currencyOf(line string, countries []string) string {
@@ -280,17 +286,6 @@ func bareDollar(countries []string) string {
 		}
 	}
 	return cur
-}
-
-func bound(s Salary) int {
-	hi := 0
-	if s.Min != nil && *s.Min > hi {
-		hi = *s.Min
-	}
-	if s.Max != nil && *s.Max > hi {
-		hi = *s.Max
-	}
-	return hi
 }
 
 func isBound(n int, s Salary) bool {
