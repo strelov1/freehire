@@ -267,9 +267,11 @@ func TestParseNorthAmerica(t *testing.T) {
 		want     Geo
 	}{
 		{
+			// "Lake Worth" is the old name of Lake Worth Beach, Florida; the Texan town is
+			// below the city table's floor, so the line names no city (alias_place.go).
 			name:     "US City, ST ZIP",
 			location: "Lake Worth, TX 76135",
-			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}, Cities: []string{"Lake Worth Beach"}},
+			want:     Geo{Countries: []string{"us"}, Regions: []string{"north_america"}},
 		},
 		{
 			name:     "US City, ST",
@@ -677,12 +679,11 @@ func TestParseCityFacetExpansion(t *testing.T) {
 		{
 			// Same rule with the signal on the other side of the separator: "Crossroads"
 			// is an alias of Woonsocket, RI, but London is what this line is about, so
-			// only gb lands. Woonsocket still reaches the CITIES facet — that is
-			// pre-existing behaviour and harmless, since a stray city name narrows a
-			// search while a stray country would misfile the posting entirely.
+			// only gb lands — and Woonsocket, a US place in a line that states Britain,
+			// is no city of it either (alias_place.go).
 			name:     "stated country wins over a long-tail city before it",
 			location: "Crossroads - London",
-			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London", "Woonsocket"}, Metros: []string{"London (GB)"}},
+			want:     Geo{Countries: []string{"gb"}, Regions: []string{"uk"}, Cities: []string{"London"}, Metros: []string{"London (GB)"}},
 		},
 		{
 			// With no other signal in the line, the city is all there is — and it speaks.

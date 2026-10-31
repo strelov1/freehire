@@ -80,6 +80,11 @@ type Job struct {
 	// deterministic source fact (no LLM counterpart) served straight from the jobs
 	// column; an untagged job serializes it as [].
 	Collections []string `json:"collections"`
+	// Perks are the benefits the description states it offers, from the closed
+	// vocabulary vocab.PerkValues and in its order (internal/dict/perks, never the LLM).
+	// Indexed as a filterable Meili facet. Always an array: [] means the description
+	// names none of them, not that the job offers none.
+	Perks []string `json:"perks"`
 	// AIInterviewReports is how many people have reported that this job's company
 	// screens candidates with an AI interviewer (internal/engage/processreport),
 	// denormalized from the company onto the job. Omitted at zero: the count is what
@@ -244,6 +249,10 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	}
 	skills := normalizeSet(f.Skills)
 	collections := normalizeSet(x.Collections)
+	perks := f.Perks
+	if perks == nil {
+		perks = []string{}
+	}
 	cities := cityFacet(f.Cities, e.Cities)
 	// Canonical "Name (CC)" labels: normalizeSet would lowercase them. Non-nil so the
 	// facet serializes as [] rather than null.
@@ -274,6 +283,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		Cities:             cities,
 		Metros:             metros,
 		Collections:        collections,
+		Perks:              perks,
 		AIInterviewReports: x.AIInterviewReports,
 		IsTech:             isTechFacet(f.IsTech),
 		RequiresClearance:  f.RequiresClearance != nil && *f.RequiresClearance,

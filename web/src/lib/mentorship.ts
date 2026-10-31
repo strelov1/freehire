@@ -447,6 +447,56 @@ export function splitAvailability(rules: MentorAvailabilityRule[]): {
   return { weekly, dated };
 }
 
+/** One editable range of a weekly schedule, wall clock "HH:MM". */
+export interface WeekRange {
+  start: string;
+  end: string;
+}
+
+/** The recurring week as the editor draws it: all seven days in display order, each with
+ *  its ranges (none for a day off). Built from the stored weekly rules. */
+export function weekDraft(weekly: MentorAvailabilityRule[]): { weekday: number; ranges: WeekRange[] }[] {
+  const { weekly: sorted } = splitAvailability(weekly);
+  return weekdayOrder().map((weekday) => ({
+    weekday,
+    ranges: sorted.filter((r) => r.weekday === weekday).map((r) => ({ start: r.start, end: r.end })),
+  }));
+}
+
+/** A draft week flattened into the rows the replace-week endpoint takes, in display order. */
+export function weekRows(draft: { weekday: number; ranges: WeekRange[] }[]): { weekday: number; start: string; end: string }[] {
+  return draft.flatMap((day) => day.ranges.map((r) => ({ weekday: day.weekday, start: r.start, end: r.end })));
+}
+
+function wallClock(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/** The range a day gains when another is added: two hours from where the day's last range
+ *  ends, or the early evening on an empty day. A range that would run past midnight falls
+ *  back to the evening default rather than wrapping. */
+export function nextWeekRange(ranges: WeekRange[]): WeekRange {
+  const last = ranges[ranges.length - 1];
+  const fallback = { start: '18:00', end: '20:00' };
+  if (!last) return fallback;
+  const m = /^(\d{2}):(\d{2})/.exec(last.end);
+  if (!m) return fallback;
+  const startMinutes = Number(m[1]) * 60 + Number(m[2]);
+  const endMinutes = startMinutes + 120;
+  if (endMinutes >= 24 * 60) return fallback;
+  return { start: wallClock(startMinutes), end: wallClock(endMinutes) };
+}
+
+/** A dated exception's day as "Tue 4 Nov 2026", read from its YYYY-MM-DD without a zone. */
+export function exceptionDayLabel(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) return date;
+  const at = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  const day = weekdayShortLabel(at.getUTCDay());
+  const month = at.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' });
+  return `${day} ${Number(m[3])} ${month} ${m[1]}`;
+}
+
 // ---- a booked session ---------------------------------------------------------------
 
 /** An absolute instant read in a named zone: the day it falls on, the wall clock, and the
@@ -526,6 +576,27 @@ export function withSearchParams(
     else params.delete(key);
   }
   return params.toString();
+}
+
+/** Search forward from today's UTC boundary within the endpoint's 62-day ceiling.
+ *  Shared bounds preserve the server cache; the slot engine applies the notice period.
+ *  Calendar-month boundaries can miss hours: 30 days from late January can reach March. */
+export function openingSlotWindow(now = new Date()): { from: string; to: string } {
+  const from = new Date(now);
+  from.setUTCHours(0, 0, 0, 0);
+  return {
+    from: from.toISOString(),
+    to: new Date(from.getTime() + 62 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+/** The month a calendar should open on: `current` while it has an open hour, otherwise the
+ *  month of the earliest open hour after it, otherwise `current` (nothing is open at all).
+ *  Slots before `current` — the padding day — never move it backwards. */
+export function firstOpenMonth(slots: MentorSlot[], current: string): string {
+  const months = slots.map((s) => monthOf(slotLocalDay(s))).filter((m) => m >= current);
+  if (months.length === 0 || months.includes(current)) return current;
+  return months.reduce((a, b) => (b < a ? b : a));
 }
 
 /** The instants to ask the slot endpoint for, to fill one month of the grid.

@@ -280,6 +280,8 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"pinpointhq.com", "pinpoint", modeSubdomain},
 	{"scalis.ai", "scalis", modeSubdomain},
 	{"keka.com", "keka", modeSubdomain},
+	{"hirehive.com", "hirehive", modeSubdomain},
+	{"app.beehire.com", "beehire", modePathPattern},
 	{"selfrecruit.ge", "selfrecruit", modeSubdomain},
 	{"talentlyft.com", "talentlyft", modeSubdomain},
 	{"traffit.com", "traffit", modeSubdomain},
@@ -656,6 +658,14 @@ var pathPatternBoards = map[string]pathPattern{
 	"careers.flatchr.io": {
 		path:    regexp.MustCompile(`^/(?:[a-z]{2}/)?company/([a-z0-9][a-z0-9-]*?)(?:\.json)?(?:/|$)`),
 		listing: "/fr/company/%s",
+	},
+	// Beehire: the career page is /career/<slug> (also /careerrss/<slug>) and the adapter reads
+	// /users/getPublicCampaigns/<slug> (internal/ingest/sources/beehire.go). An invite link
+	// (/invite/<key>) names a posting, not a board. The catalogue stores the slug lower-case.
+	"app.beehire.com": {
+		path:    regexp.MustCompile(`^/(?:career|careerrss)/([A-Za-z0-9][A-Za-z0-9_-]{0,127})/?$`),
+		listing: "/career/%s",
+		fold:    true,
 	},
 	// TriNet Hire: /companies/<numeric id>[-<slug>]/jobs[/<posting>] (internal/ingest/sources/
 	// trinethire.go). The leading id is what proves the segment is a company; the host's own
@@ -1626,7 +1636,8 @@ var platformLabelsByApex = map[string][]string{
 	"darwinbox.com": {"www", "explore", "lighthouse"},
 	"darwinbox.in":  {"www"},
 	// greytHR's marketing site, community forum, help centres, status page and campaign pages.
-	"greythr.com": {"www", "community", "admin-help", "ess-help", "status", "campaign"},
+	"greythr.com":  {"www", "community", "admin-help", "ess-help", "status", "campaign"},
+	"hirehive.com": {"www", "assets", "static", "hirehive-testing-account"},
 }
 
 // platformHost reports whether host is the ATS's own product host rather than a tenant's —

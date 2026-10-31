@@ -169,9 +169,12 @@ The bound on `skills`/`excluded_skills` exists because that set is expanded per
 element into the coverage verdict's search filter (one `skills != "<skill>"` AND
 group each), so a stored list is a multiplier on every later read of the profile
 against the index that also serves public search. `excluded_sources` and
-`excluded_companies` carry the same 200-entry cap for consistency, though neither
-feeds a per-element search filter today. A set past the bound SHALL be rejected with
-`400` and nothing stored, exactly as a specialization set past its own cap is.
+`excluded_companies` carry the same 200-entry cap for consistency. Both also reach a
+per-element search filter, as the `source_exclude` and `company_slug_exclude` values
+"Apply my profile" and the profile alert seed, but that path bounds each list by
+characters before it enters a query, so the cap is not what limits it there. A set
+past the bound SHALL be rejected with `400` and nothing stored, exactly as a
+specialization set past its own cap is.
 
 A single skill longer than 64 characters SHALL be dropped from the set rather than
 rejecting the save, the same treatment blanks and duplicates receive: a per-value

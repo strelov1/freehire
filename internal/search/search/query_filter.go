@@ -76,6 +76,10 @@ var StringFacets = map[string]string{
 	"relocation":       "enrichment.relocation",
 	"english_level":    "enrichment.english_level",
 	"posting_language": "enrichment.posting_language",
+	// perks are the benefits the description states (internal/dict/perks), a jobs
+	// column served top-level. Enrolled in /jobs/facets like requires_clearance, with
+	// the same settings-before-binary hazard.
+	"perks": "perks",
 }
 
 // locationFacets are the geography params that describe one user-facing concept
@@ -138,7 +142,7 @@ func facetEq(param, attr, val string) string {
 	if param == "regions" && val == RegionUnspecified {
 		return IsEmpty(attr)
 	}
-	if param == "clearance_levels" && val == ClearanceLevelUnspecified {
+	if param == "clearance_levels" && strings.EqualFold(strings.TrimSpace(val), ClearanceLevelUnspecified) {
 		return trueOrAbsentFragment(RequiresClearanceParam, "false")
 	}
 	if set := impliedRegions(val); param == "regions" && set != nil {
@@ -206,7 +210,7 @@ func facetNeq(param, attr, val string) string {
 	if param == "regions" && val == RegionUnspecified {
 		return IsNotEmpty(attr)
 	}
-	if param == "clearance_levels" && val == ClearanceLevelUnspecified {
+	if param == "clearance_levels" && strings.EqualFold(strings.TrimSpace(val), ClearanceLevelUnspecified) {
 		return trueOrAbsentFragment(RequiresClearanceParam, "true")
 	}
 	if set := impliedRegions(val); param == "regions" && set != nil {

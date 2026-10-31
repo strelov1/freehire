@@ -258,41 +258,6 @@ func (q *Queries) DeleteBuddyMockReminder(ctx context.Context, arg DeleteBuddyMo
 	return result.RowsAffected(), nil
 }
 
-const getBuddyMemberMockSummary = `-- name: GetBuddyMemberMockSummary :one
-SELECT
-    (SELECT count(*) FROM buddy_mocks c
-     WHERE c.status = 'confirmed' AND c.ends_at <= now()
-       AND (c.host_user_id = $1::bigint
-            OR c.guest_user_id = $1::bigint))::bigint AS completed,
-    count(r.mock_id)::bigint AS rating_count,
-    coalesce(avg(r.rating), 0)::float8 AS rating_avg
-FROM buddy_mock_reviews r
-JOIN buddy_mocks m ON m.id = r.mock_id
-WHERE r.subject_user_id = $1::bigint
-  AND (EXISTS (SELECT 1 FROM buddy_mock_reviews o
-               WHERE o.mock_id = r.mock_id AND o.author_user_id = r.subject_user_id)
-       OR m.ends_at + interval '7 days' <= now())
-  AND NOT EXISTS (SELECT 1 FROM user_blocks b
-              WHERE (b.blocker_id = r.author_user_id AND b.blocked_id = r.subject_user_id)
-                 OR (b.blocker_id = r.subject_user_id AND b.blocked_id = r.author_user_id))
-`
-
-type GetBuddyMemberMockSummaryRow struct {
-	Completed   int64   `json:"completed"`
-	RatingCount int64   `json:"rating_count"`
-	RatingAvg   float64 `json:"rating_avg"`
-}
-
-// What a member page shows: completed mocks (confirmed and ended, either role) and the
-// count and average of REVEALED reviews about the member, minus any written across a
-// block (the ListBuddyMocksForUser rule). Zeroes, never NULLs.
-func (q *Queries) GetBuddyMemberMockSummary(ctx context.Context, subjectUserID int64) (GetBuddyMemberMockSummaryRow, error) {
-	row := q.db.QueryRow(ctx, getBuddyMemberMockSummary, subjectUserID)
-	var i GetBuddyMemberMockSummaryRow
-	err := row.Scan(&i.Completed, &i.RatingCount, &i.RatingAvg)
-	return i, err
-}
-
 const getBuddyMock = `-- name: GetBuddyMock :one
 SELECT m.id, m.host_user_id, m.guest_user_id, m.starts_at, m.ends_at, m.topic, m.status,
        m.guest_timezone, m.cancel_reason,
@@ -383,6 +348,63 @@ func (q *Queries) GetBuddyMockSettings(ctx context.Context, userID int64) (Buddy
 	return i, err
 }
 
+const listBuddyMemberMockSummaries = `-- name: ListBuddyMemberMockSummaries :many
+SELECT s.subject_user_id::bigint AS subject_user_id,
+    (SELECT count(*) FROM buddy_mocks c
+     WHERE c.status = 'confirmed' AND c.ends_at <= now()
+       AND (c.host_user_id = s.subject_user_id
+            OR c.guest_user_id = s.subject_user_id))::bigint AS completed,
+    count(r.mock_id)::bigint AS rating_count,
+    coalesce(avg(r.rating), 0)::float8 AS rating_avg
+FROM unnest($1::bigint[]) AS s (subject_user_id)
+LEFT JOIN (buddy_mock_reviews r JOIN buddy_mocks m ON m.id = r.mock_id)
+       ON r.subject_user_id = s.subject_user_id
+      AND (EXISTS (SELECT 1 FROM buddy_mock_reviews o
+                   WHERE o.mock_id = r.mock_id AND o.author_user_id = r.subject_user_id)
+           OR m.ends_at + interval '7 days' <= now())
+      AND NOT EXISTS (SELECT 1 FROM user_blocks b
+                  WHERE (b.blocker_id = r.author_user_id AND b.blocked_id = r.subject_user_id)
+                     OR (b.blocker_id = r.subject_user_id AND b.blocked_id = r.author_user_id))
+GROUP BY s.subject_user_id
+`
+
+type ListBuddyMemberMockSummariesRow struct {
+	SubjectUserID int64   `json:"subject_user_id"`
+	Completed     int64   `json:"completed"`
+	RatingCount   int64   `json:"rating_count"`
+	RatingAvg     float64 `json:"rating_avg"`
+}
+
+// What a member page shows, for each of subject_ids (one row per id, zeroes, never NULLs):
+// completed mocks (confirmed and ended, either role) and the count and average of REVEALED
+// reviews about the member, minus any written across a block (the ListBuddyMocksForUser
+// rule). A list of ids so the hosts listing reads every host's summary in one statement;
+// a member page asks for one.
+func (q *Queries) ListBuddyMemberMockSummaries(ctx context.Context, subjectIds []int64) ([]ListBuddyMemberMockSummariesRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyMemberMockSummaries, subjectIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyMemberMockSummariesRow{}
+	for rows.Next() {
+		var i ListBuddyMemberMockSummariesRow
+		if err := rows.Scan(
+			&i.SubjectUserID,
+			&i.Completed,
+			&i.RatingCount,
+			&i.RatingAvg,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBuddyMemberRevealedReviews = `-- name: ListBuddyMemberRevealedReviews :many
 SELECT r.rating, r.comment, r.created_at, m.topic
 FROM buddy_mock_reviews r
@@ -471,6 +493,41 @@ func (q *Queries) ListBuddyMockAvailability(ctx context.Context, userID int64) (
 	return items, nil
 }
 
+const listBuddyMockAvailabilityForUsers = `-- name: ListBuddyMockAvailabilityForUsers :many
+SELECT id, user_id, weekday, on_date, start_time, end_time, created_at FROM buddy_mock_availability
+WHERE user_id = ANY ($1::bigint[])
+ORDER BY user_id, id
+`
+
+// ListBuddyMockAvailability for many members in one statement.
+func (q *Queries) ListBuddyMockAvailabilityForUsers(ctx context.Context, userIds []int64) ([]BuddyMockAvailability, error) {
+	rows, err := q.db.Query(ctx, listBuddyMockAvailabilityForUsers, userIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BuddyMockAvailability{}
+	for rows.Next() {
+		var i BuddyMockAvailability
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Weekday,
+			&i.OnDate,
+			&i.StartTime,
+			&i.EndTime,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBuddyMockBusy = `-- name: ListBuddyMockBusy :many
 SELECT starts_at, ends_at
 FROM buddy_mock_participants
@@ -504,6 +561,114 @@ func (q *Queries) ListBuddyMockBusy(ctx context.Context, arg ListBuddyMockBusyPa
 	for rows.Next() {
 		var i ListBuddyMockBusyRow
 		if err := rows.Scan(&i.StartsAt, &i.EndsAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBuddyMockBusyForUsers = `-- name: ListBuddyMockBusyForUsers :many
+SELECT user_id, starts_at, ends_at
+FROM buddy_mock_participants
+WHERE user_id = ANY ($1::bigint[])
+  AND active
+  AND starts_at < $2
+  AND ends_at > $3
+ORDER BY user_id, starts_at
+`
+
+type ListBuddyMockBusyForUsersParams struct {
+	UserIds     []int64            `json:"user_ids"`
+	WindowEnd   pgtype.Timestamptz `json:"window_end"`
+	WindowStart pgtype.Timestamptz `json:"window_start"`
+}
+
+type ListBuddyMockBusyForUsersRow struct {
+	UserID   int64              `json:"user_id"`
+	StartsAt pgtype.Timestamptz `json:"starts_at"`
+	EndsAt   pgtype.Timestamptz `json:"ends_at"`
+}
+
+// ListBuddyMockBusy for many members in one statement.
+func (q *Queries) ListBuddyMockBusyForUsers(ctx context.Context, arg ListBuddyMockBusyForUsersParams) ([]ListBuddyMockBusyForUsersRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyMockBusyForUsers, arg.UserIds, arg.WindowEnd, arg.WindowStart)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyMockBusyForUsersRow{}
+	for rows.Next() {
+		var i ListBuddyMockBusyForUsersRow
+		if err := rows.Scan(&i.UserID, &i.StartsAt, &i.EndsAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBuddyMockHostCandidates = `-- name: ListBuddyMockHostCandidates :many
+SELECT m.user_id, m.handle, m.countries, u.resume_structured,
+       s.timezone, s.topics
+FROM buddy_mock_settings s
+JOIN buddy_members m ON m.user_id = s.user_id AND m.left_at IS NULL
+JOIN users u ON u.id = m.user_id
+WHERE NOT s.paused
+  AND m.user_id <> $1::bigint
+  AND ($2::text IS NULL OR $2::text = ANY (s.topics))
+  AND EXISTS (SELECT 1 FROM buddy_mock_availability a WHERE a.user_id = m.user_id)
+  AND NOT EXISTS (
+      SELECT 1 FROM user_blocks b
+      WHERE (b.blocker_id = $1::bigint AND b.blocked_id = m.user_id)
+         OR (b.blocker_id = m.user_id AND b.blocked_id = $1::bigint))
+ORDER BY s.updated_at DESC, m.user_id
+LIMIT $3
+`
+
+type ListBuddyMockHostCandidatesParams struct {
+	ViewerID int64       `json:"viewer_id"`
+	Topic    pgtype.Text `json:"topic"`
+	RowLimit int32       `json:"row_limit"`
+}
+
+type ListBuddyMockHostCandidatesRow struct {
+	UserID           int64    `json:"user_id"`
+	Handle           string   `json:"handle"`
+	Countries        []string `json:"countries"`
+	ResumeStructured []byte   `json:"resume_structured"`
+	Timezone         string   `json:"timezone"`
+	Topics           []string `json:"topics"`
+}
+
+// Who may be listed as a mock host to the viewer, before their slots are computed: active
+// members other than the viewer with saved, unpaused settings (offering the topic, when one
+// is asked for), at least one availability row, and no block with the viewer either way.
+// Most recently updated settings first, bounded by row_limit: the service computes every
+// candidate's slots in memory, so the cap is what bounds that work.
+func (q *Queries) ListBuddyMockHostCandidates(ctx context.Context, arg ListBuddyMockHostCandidatesParams) ([]ListBuddyMockHostCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyMockHostCandidates, arg.ViewerID, arg.Topic, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyMockHostCandidatesRow{}
+	for rows.Next() {
+		var i ListBuddyMockHostCandidatesRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Handle,
+			&i.Countries,
+			&i.ResumeStructured,
+			&i.Timezone,
+			&i.Topics,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -628,7 +793,7 @@ type ListBuddyMocksForUserRow struct {
 // and the review ABOUT them only once revealed: they have written theirs, or seven days
 // have passed since the end — and only while no block stands between its author and its
 // subject, either way. The same reveal-and-block rule is restated in
-// GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
+// ListBuddyMemberMockSummaries and ListBuddyMemberRevealedReviews; change all three together.
 func (q *Queries) ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksForUserParams) ([]ListBuddyMocksForUserRow, error) {
 	rows, err := q.db.Query(ctx, listBuddyMocksForUser, arg.UserID, arg.RowLimit)
 	if err != nil {

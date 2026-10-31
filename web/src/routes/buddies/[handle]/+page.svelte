@@ -1,5 +1,6 @@
 <script lang="ts">
   import { BadgeCheck } from '@lucide/svelte';
+  import { untrack } from 'svelte';
   import { page } from '$app/state';
   import { ApiError, api } from '#lib/api.js';
   import { buildActivityGridFromCounts } from '#lib/activityGrid.js';
@@ -108,7 +109,9 @@
     const current = handle;
     let cancelled = false;
     view = 'loading'; profile = null; feed = []; cursor = null; feedError = false;
-    activity = null; dayView = null; tab = 'activity'; allSkills = false;
+    // `?tab=mock` opens straight on the booking tab: the mocks page's Book links there.
+    const opening = untrack(() => page.url.searchParams.get('tab'));
+    activity = null; dayView = null; tab = opening === 'mock' || opening === 'experience' ? opening : 'activity'; allSkills = false;
     history = []; historyCursor = null; historyPages = 0; historyLoad = Promise.resolve();
     api.getBuddyActivity(current).then(
       (a) => { if (!cancelled) activity = a; },

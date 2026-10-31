@@ -58,6 +58,10 @@ func TestFilterFromValues_ClearanceLevels(t *testing.T) {
 		query string
 		want  [][]string
 	}{
+		{name: "uppercase none", query: "clearance_levels=NONE", want: [][]string{{"NOT requires_clearance = true"}}},
+		{name: "padded none", query: "clearance_levels=+none+", want: [][]string{{"NOT requires_clearance = true"}}},
+		{name: "uppercase exclusion", query: "clearance_levels_exclude=NONE", want: [][]string{{"requires_clearance = true"}}},
+		{name: "padded exclusion", query: "clearance_levels_exclude=+none+", want: [][]string{{"requires_clearance = true"}}},
 		{
 			name:  "levels OR within the group",
 			query: "clearance_levels=secret&clearance_levels=ts_sci",

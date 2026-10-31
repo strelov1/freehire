@@ -120,3 +120,40 @@ func TestJobDescriptionsByIDsReadsOnlyTheNamedRows(t *testing.T) {
 		t.Fatalf("rows = %+v, want exactly the one named id %d", rows, wanted.ID)
 	}
 }
+
+func TestUpsertPreservesClearanceAfterFailedDetailFetch(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+	p := ingestParams("acme:clearance", "Cleared Engineer")
+	p.Description = "Active Secret clearance required. Health insurance provided."
+	p.Perks = []string{"health_insurance"}
+	p.RequiresClearance = trueFlag()
+	p.ClearanceLevels = []string{"secret"}
+	if _, err := ingestUpsert(ctx, q, p); err != nil {
+		t.Fatal(err)
+	}
+	p.Description = ""
+	p.RequiresClearance = pgtype.Bool{}
+	p.ClearanceLevels = nil
+	p.Perks = nil
+	got, err := ingestUpsert(ctx, q, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.RequiresClearance.Bool || len(got.ClearanceLevels) != 1 || got.ClearanceLevels[0] != "secret" {
+		t.Fatalf("failed detail fetch erased clearance: %+v, %v", got.RequiresClearance, got.ClearanceLevels)
+	}
+	if len(got.Perks) != 1 || got.Perks[0] != "health_insurance" {
+		t.Fatalf("failed detail fetch erased perks: %v", got.Perks)
+	}
+	p.Description = "Build public web applications."
+	got, err = ingestUpsert(ctx, q, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RequiresClearance.Valid || len(got.ClearanceLevels) != 0 || len(got.Perks) != 0 {
+		t.Fatalf("real edit retained description facets: %+v, %v, %v", got.RequiresClearance, got.ClearanceLevels, got.Perks)
+	}
+}

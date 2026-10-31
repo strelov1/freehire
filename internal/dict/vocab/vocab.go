@@ -47,7 +47,21 @@ var (
 	// a multi-company aggregator, or a community channel. The classifier is
 	// sources.ProviderKind; a source it cannot place (a manual import, a pasted link)
 	// carries no value, so it is reachable only through the `source` facet.
-	SourceTypeValues     = []string{"ats", "company", "aggregator", "social"}
+	SourceTypeValues = []string{"ats", "company", "aggregator", "social"}
+	// PerkValues are the benefits a posting's description states it offers — the
+	// `perks` facet, matched by internal/dict/perks from explicit text only. Absence
+	// means "not mentioned", never "not offered". Visa sponsorship and relocation are
+	// deliberately NOT here: both already have their own enrichment-backed controls
+	// (visa_sponsorship, relocation), and a dictionary reading of either is dominated by
+	// the denial ("visa sponsorship is not available"), which the model reads and a
+	// phrase list does not. Equity is not here either: it is its own compensation facet,
+	// and a perk chip beside it would answer the same question twice.
+	PerkValues = []string{
+		"generous_pto", "four_day_week", "401k_match", "parental_leave",
+		"retirement_plan", "tuition_reimbursement",
+		"unlimited_pto", "health_insurance", "mental_health",
+		"learning_budget", "home_office_stipend", "sabbatical", "sign_on_bonus",
+	}
 	EnglishLevelValues   = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
 	EducationLevelValues = []string{"none", "bachelor", "master", "phd"}
 	// ClearanceLevelValues are the security-clearance levels a posting may state,
