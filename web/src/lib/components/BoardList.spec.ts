@@ -91,4 +91,13 @@ describe('BoardList', () => {
     // Focus lands on the first row the press drew, not on <body>.
     await vi.waitFor(() => expect(document.activeElement?.closest('li')?.textContent).toContain('Role 50'));
   });
+
+  it('keeps focus in the list when the sentinel draws the last page while the button holds it', async () => {
+    render(BoardList, { props: { items: Array.from({ length: 60 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() } });
+
+    screen.getByRole('button', { name: 'Load more' }).focus();
+    reveal?.();
+
+    await vi.waitFor(() => expect(document.activeElement?.closest('li')?.textContent).toContain('Role 50'));
+  });
 });

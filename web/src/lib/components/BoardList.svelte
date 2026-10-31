@@ -38,6 +38,7 @@
   const visible = $derived(items.slice(0, limit));
   const showMore = () => (limit += PAGE);
   let list: HTMLUListElement | undefined = $state();
+  let fallback: HTMLDivElement | undefined = $state();
 
   // The button goes away with the last page, and focus would fall to <body> — back to the
   // top for a keyboard user. It moves to the first row the press drew instead.
@@ -47,6 +48,12 @@
     await tick();
     list?.children[first]?.querySelector('button')?.focus();
   }
+
+  // Tabbing onto the fallback scrolls it into view, and the sentinel just above it with
+  // it — so the observer can draw the last page while the button holds focus. Move focus
+  // on that path too, or it falls to <body> all the same.
+  const showMoreFromSentinel = () =>
+    fallback?.contains(document.activeElement) ? showMoreFromKeyboard() : showMore();
 </script>
 
 {#if items.length === 0}
@@ -117,12 +124,12 @@
     <!-- Remounted per page: on a viewport taller than a page the sentinel is still in
          view after the rows land, and only a fresh observer reports that. -->
     {#key limit}
-      <InfiniteScroll enabled onLoad={showMore} />
+      <InfiniteScroll enabled onLoad={showMoreFromSentinel} />
     {/key}
     <!-- The control InfiniteScroll leaves to its caller, for whoever moves by keyboard or
          reads with a screen reader rather than scrolls. Hidden until it takes focus: the
          list reads as one continuous list for everyone else. -->
-    <div class="sr-only focus-within:not-sr-only">
+    <div bind:this={fallback} class="sr-only focus-within:not-sr-only">
       <LoadMore loading={false} onclick={showMoreFromKeyboard} />
     </div>
   {/if}
