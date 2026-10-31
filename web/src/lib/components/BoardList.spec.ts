@@ -100,4 +100,18 @@ describe('BoardList', () => {
 
     await vi.waitFor(() => expect(document.activeElement?.closest('li')?.textContent).toContain('Role 50'));
   });
+
+  it('leaves focus on the button when the sentinel draws a page that is not the last', async () => {
+    render(BoardList, { props: { items: Array.from({ length: 120 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() } });
+    const more = screen.getByRole('button', { name: 'Load more' });
+
+    more.focus();
+    reveal?.();
+    flushSync();
+    // A focus move would land after a tick; give it one before checking it did not.
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(drawn()).toBe(100);
+    expect(document.activeElement).toBe(more);
+  });
 });

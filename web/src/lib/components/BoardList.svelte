@@ -50,10 +50,13 @@
   }
 
   // Tabbing onto the fallback scrolls it into view, and the sentinel just above it with
-  // it — so the observer can draw the last page while the button holds focus. Move focus
-  // on that path too, or it falls to <body> all the same.
+  // it — so the observer can draw a page while the button holds focus. Only the last page
+  // takes the button away; then focus moves, or it falls to <body> all the same. Before
+  // that it stays on the button, which the reader has not pressed.
   const showMoreFromSentinel = () =>
-    fallback?.contains(document.activeElement) ? showMoreFromKeyboard() : showMore();
+    fallback?.contains(document.activeElement) && limit + PAGE >= items.length
+      ? showMoreFromKeyboard()
+      : showMore();
 </script>
 
 {#if items.length === 0}
