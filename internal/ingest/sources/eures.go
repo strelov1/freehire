@@ -25,8 +25,8 @@ import (
 //
 // The search endpoint already returns each posting's full HTML description, translated to
 // requestLanguage when a translation exists — no detail fetch needed for title/company/
-// description, unlike arbeitsagentur. A per-posting detail fetch is still made, but ONLY to
-// resolve a human-readable Location: the search result's own locationMap carries opaque NUTS
+// description, unlike arbeitsagentur. A per-posting detail fetch resolves the application
+// deadline and a human-readable Location: the search result's own locationMap carries opaque NUTS
 // region codes, while the detail response's structured place data carries a real city name.
 // So it is a HydratingSource: the detail is fetched only for a posting the catalogue does not
 // hold, and a stored one is re-listed as a SeenRefresh.
@@ -56,7 +56,7 @@ type eures struct {
 }
 
 // euresHTTP is the transport eures needs: a JSON POST for the paginated search, a JSON GET for
-// the per-posting detail (location enrichment only).
+// the per-posting detail (location and application deadline).
 type euresHTTP interface {
 	JSONPoster
 	JSONGetter
@@ -65,8 +65,7 @@ type euresHTTP interface {
 const (
 	euresSearchURL = "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"
 	// euresDetailURL is the per-posting detail endpoint, keyed by the search result's own
-	// (already unique) id. Fetched only for its structured location data — see the eures
-	// doc comment.
+	// (already unique) id. Fetched for structured location and application deadline.
 	euresDetailURL = "https://europa.eu/eures/api/jv-searchengine/public/jv/id/"
 	// euresPortalURL is the public EURES portal page for a posting, used as Job.URL. Not
 	// documented by the (unofficial) API docs; confirmed live against the current portal.
@@ -231,8 +230,8 @@ type euresEmployer struct {
 	Name string `json:"name"`
 }
 
-// euresDetailResponse is the per-posting detail payload, read only for its structured location
-// data. requestLang does NOT select a translated profile the way the search endpoint's
+// euresDetailResponse carries location and application deadline. requestLang does NOT select
+// a translated profile the way the search endpoint's
 // requestLanguage does (confirmed live: jvProfiles only ever carried preferredLanguage's own
 // key), so the profile to read is always the one keyed by PreferredLanguage.
 type euresDetailResponse struct {
@@ -241,7 +240,8 @@ type euresDetailResponse struct {
 }
 
 type euresProfile struct {
-	Locations []euresLocation `json:"locations"`
+	Locations           []euresLocation `json:"locations"`
+	LastApplicationDate int64           `json:"lastApplicationDate"`
 }
 
 // euresLocation is one place entry. CityName and AddressLines[0] are both nullable/absent on
@@ -396,28 +396,26 @@ func (v euresVacancy) job() Job {
 func (e eures) toJob(ctx context.Context, board string, v euresVacancy) Job {
 	j := v.job()
 	j.Description = sanitizeHTML(v.Description)
-	j.Location = e.resolveLocation(ctx, v.ID, board)
-	j.PostedAt = euresPostedAt(v.CreationDate)
+	j.Location = euresCountryNames[strings.ToLower(board)]
+	var detail euresDetailResponse
+	if err := e.http.GetJSON(ctx, euresDetailURL+v.ID+"?requestLang=en", &detail); err == nil {
+		profile := detail.JvProfiles[detail.PreferredLanguage]
+		j.Location = profile.locationText(j.Location)
+		j.ApplicationDeadline = euresTime(profile.LastApplicationDate)
+	}
+	j.PostedAt = euresTime(v.CreationDate)
 	j.Countries = euresCountries(v.LocationMap)
 	j.EmploymentType = euresEmploymentType(v.PositionOfferingCode, v.PositionScheduleCodes)
 	j.IsTechHint = true
 	return j
 }
 
-// resolveLocation resolves a human-readable Location by fetching the posting's detail. A failed
-// fetch or a profile with no usable place data falls back to the board's own country name rather
-// than dropping the posting.
-func (e eures) resolveLocation(ctx context.Context, id, board string) string {
-	fallback := euresCountryNames[strings.ToLower(board)]
-	var d euresDetailResponse
-	if err := e.http.GetJSON(ctx, euresDetailURL+id+"?requestLang=en", &d); err != nil {
+// locationText falls back to the board's country when the profile has no usable place.
+func (p euresProfile) locationText(fallback string) string {
+	if len(p.Locations) == 0 {
 		return fallback
 	}
-	profile, ok := d.JvProfiles[d.PreferredLanguage]
-	if !ok || len(profile.Locations) == 0 {
-		return fallback
-	}
-	loc := profile.Locations[0]
+	loc := p.Locations[0]
 	countryName := euresCountryNames[strings.ToLower(loc.CountryCode)]
 	if countryName == "" {
 		countryName = fallback
@@ -470,9 +468,9 @@ func euresEmploymentType(offering string, schedules []string) string {
 	return ""
 }
 
-// euresPostedAt converts the API's unix-millisecond creationDate. Zero/negative is treated as
+// euresTime converts the API's Unix-millisecond dates. Zero/negative is treated as
 // absent rather than the 1970 epoch.
-func euresPostedAt(ms int64) *time.Time {
+func euresTime(ms int64) *time.Time {
 	if ms <= 0 {
 		return nil
 	}

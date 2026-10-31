@@ -13,10 +13,12 @@ package jobview
 // and 13 ms of a 40 ms query, for text no list row renders. A caller that wants the posting
 // reads the one application it opened.
 type Card struct {
-	PublicSlug string  `json:"public_slug"`
-	Title      string  `json:"title"`
-	Company    string  `json:"company"`
-	ClosedAt   *string `json:"closed_at"`
+	// ApplicationDeadline is the source-stated last application day (YYYY-MM-DD), inclusive.
+	ApplicationDeadline *string `json:"application_deadline,omitempty"`
+	PublicSlug          string  `json:"public_slug"`
+	Title               string  `json:"title"`
+	Company             string  `json:"company"`
+	ClosedAt            *string `json:"closed_at"`
 	// Location is the posting's own location line as it states it — what tells one employer's
 	// postings in different cities apart on a row whose flags all name the same country.
 	Location string `json:"location,omitempty"`

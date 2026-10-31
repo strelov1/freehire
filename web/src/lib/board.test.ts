@@ -7,6 +7,8 @@ import {
   matchesQuery,
   matchesStage,
   needsAttention,
+  sortBoardItems,
+  daysUntilDeadline,
 } from './board';
 import { STAGE_GROUPS } from './generated/contracts';
 import { must } from './utils';
@@ -195,5 +197,37 @@ describe('CLOSED_OUTCOMES', () => {
   it('is the generated closed group', () => {
     const closed = must(STAGE_GROUPS.find((g) => g.id === 'closed'));
     expect([...CLOSED_OUTCOMES]).toEqual([...closed.stages]);
+  });
+});
+
+
+describe('sortBoardItems', () => {
+  it('orders actual deadlines first and keeps missing dates last', () => {
+    const rows = [
+      job({ id: 'missing', job: null }),
+      job({ id: 'later', job: { public_slug: 'later', title: '', company: '', closed_at: undefined, application_deadline: '2026-11-10' } }),
+      job({ id: 'earlier', job: { public_slug: 'earlier', title: '', company: '', closed_at: undefined, application_deadline: '2026-11-01' } }),
+    ];
+    expect(sortBoardItems(rows, 'deadline').map((i) => i.id)).toEqual(['earlier', 'later', 'missing']);
+    expect(rows[0]?.id).toBe('missing');
+  });
+
+  it('sorts dates as instants and keeps unknown dates last', () => {
+    const rows = [
+      job({ id: 'unknown' }),
+      job({ id: 'new', added_to_board_at: '2026-10-02T00:00:00Z' }),
+      job({ id: 'old', added_to_board_at: '2026-10-02T01:00:00+02:00' }),
+    ];
+    expect(sortBoardItems(rows, 'added').map((i) => i.id)).toEqual(['new', 'old', 'unknown']);
+  });
+});
+
+describe('daysUntilDeadline', () => {
+  it('counts inclusive UTC calendar days, regardless of the local timezone', () => {
+    const now = new Date('2026-10-31T23:30:00-03:00');
+    expect(daysUntilDeadline('2026-11-03', now)).toBe(2);
+    expect(daysUntilDeadline('2026-11-02', now)).toBe(1);
+    expect(daysUntilDeadline('2026-11-01', now)).toBe(0);
+    expect(daysUntilDeadline('2026-10-31', now)).toBe(-1);
   });
 });

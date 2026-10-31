@@ -630,6 +630,31 @@ func (q *Queries) CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBy
 	return count, err
 }
 
+const closeJobsPastApplicationDeadline = `-- name: CloseJobsPastApplicationDeadline :one
+WITH closed AS (
+    UPDATE jobs
+    SET closed_at = now(), closed_reason = 'expired', updated_at = now()
+    WHERE application_deadline < (now() AT TIME ZONE 'UTC')::date
+      AND closed_at IS NULL AND NOT is_private
+      AND ($1::text = '' OR jobs.source = $1::text)
+    RETURNING id
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM closed
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT count(*) FROM closed
+`
+
+// The source's deadline is inclusive: it expires on the following UTC date. Independent of
+// crawl success/quiet periods, and atomically queued for removal from the live search index.
+func (q *Queries) CloseJobsPastApplicationDeadline(ctx context.Context, source string) (int64, error) {
+	row := q.db.QueryRow(ctx, closeJobsPastApplicationDeadline, source)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const closeMisattributedSourceJobs = `-- name: CloseMisattributedSourceJobs :one
 WITH closed AS (
     UPDATE jobs
@@ -1841,14 +1866,18 @@ WHERE source = $1
   AND (hydrated_at >= $3
        OR abs(hashtext(external_id)::bigint) % $4::bigint
           <> $5::bigint)
+  AND (application_deadline IS NULL
+       OR application_deadline >= (now() AT TIME ZONE 'UTC')::date
+       OR application_deadline < $6::date)
 `
 
 type ExistingExternalIDsParams struct {
-	Source            string             `json:"source"`
-	HydrationCutoff   pgtype.Timestamptz `json:"hydration_cutoff"`
-	BodyRefreshCutoff pgtype.Timestamptz `json:"body_refresh_cutoff"`
-	BodyRefreshSlices int64              `json:"body_refresh_slices"`
-	BodyRefreshSlot   int64              `json:"body_refresh_slot"`
+	Source              string             `json:"source"`
+	HydrationCutoff     pgtype.Timestamptz `json:"hydration_cutoff"`
+	BodyRefreshCutoff   pgtype.Timestamptz `json:"body_refresh_cutoff"`
+	BodyRefreshSlices   int64              `json:"body_refresh_slices"`
+	BodyRefreshSlot     int64              `json:"body_refresh_slot"`
+	DeadlineRecheckFrom pgtype.Date        `json:"deadline_recheck_from"`
 }
 
 type ExistingExternalIDsRow struct {
@@ -1884,6 +1913,15 @@ type ExistingExternalIDsRow struct {
 // any row, which is how the caller expresses "disabled" without a second query.
 //
 // hashtext is cast to bigint before abs(): abs() of int4's most negative value raises.
+//
+// A row whose stored application deadline has passed, but no earlier than
+// deadline_recheck_from, is withheld as well. The listing carries no deadline (EURES states it
+// only on the detail), so a re-listed posting's touch would close it on the stored date even
+// when the employer has since extended it; re-reading the detail lets the upsert store the
+// current date and reopen the row. Bounded, because a source that keeps listing an expired
+// posting would otherwise cost a detail request on every crawl for good. Written as an OR over
+// the kept cases rather than NOT over the withheld one: a NULL deadline (every source but EURES)
+// would make the NOT form NULL and drop the row from the set.
 func (q *Queries) ExistingExternalIDs(ctx context.Context, arg ExistingExternalIDsParams) ([]ExistingExternalIDsRow, error) {
 	rows, err := q.db.Query(ctx, existingExternalIDs,
 		arg.Source,
@@ -1891,6 +1929,7 @@ func (q *Queries) ExistingExternalIDs(ctx context.Context, arg ExistingExternalI
 		arg.BodyRefreshCutoff,
 		arg.BodyRefreshSlices,
 		arg.BodyRefreshSlot,
+		arg.DeadlineRecheckFrom,
 	)
 	if err != nil {
 		return nil, err
@@ -1918,15 +1957,19 @@ WHERE source = $1
   AND (hydrated_at >= $4
        OR abs(hashtext(external_id)::bigint) % $5::bigint
           <> $6::bigint)
+  AND (application_deadline IS NULL
+       OR application_deadline >= (now() AT TIME ZONE 'UTC')::date
+       OR application_deadline < $7::date)
 `
 
 type ExistingExternalIDsByBoardParams struct {
-	Source            string             `json:"source"`
-	Pattern           string             `json:"pattern"`
-	HydrationCutoff   pgtype.Timestamptz `json:"hydration_cutoff"`
-	BodyRefreshCutoff pgtype.Timestamptz `json:"body_refresh_cutoff"`
-	BodyRefreshSlices int64              `json:"body_refresh_slices"`
-	BodyRefreshSlot   int64              `json:"body_refresh_slot"`
+	Source              string             `json:"source"`
+	Pattern             string             `json:"pattern"`
+	HydrationCutoff     pgtype.Timestamptz `json:"hydration_cutoff"`
+	BodyRefreshCutoff   pgtype.Timestamptz `json:"body_refresh_cutoff"`
+	BodyRefreshSlices   int64              `json:"body_refresh_slices"`
+	BodyRefreshSlot     int64              `json:"body_refresh_slot"`
+	DeadlineRecheckFrom pgtype.Date        `json:"deadline_recheck_from"`
 }
 
 type ExistingExternalIDsByBoardRow struct {
@@ -1947,7 +1990,8 @@ type ExistingExternalIDsByBoardRow struct {
 //
 // hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried,
 // and the body_refresh_* arm withholds one whose stored body has gone stale so an employer's
-// edit is re-read; see ExistingExternalIDs for both.
+// edit is re-read, and the deadline arm re-reads a posting whose stored deadline has just
+// passed; see ExistingExternalIDs for all three.
 func (q *Queries) ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error) {
 	rows, err := q.db.Query(ctx, existingExternalIDsByBoard,
 		arg.Source,
@@ -1956,6 +2000,7 @@ func (q *Queries) ExistingExternalIDsByBoard(ctx context.Context, arg ExistingEx
 		arg.BodyRefreshCutoff,
 		arg.BodyRefreshSlices,
 		arg.BodyRefreshSlot,
+		arg.DeadlineRecheckFrom,
 	)
 	if err != nil {
 		return nil, err
@@ -2080,7 +2125,7 @@ func (q *Queries) GeoGapReportBounds(ctx context.Context) (GeoGapReportBoundsRow
 }
 
 const getJob = `-- name: GetJob :one
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE id = $1
 `
@@ -2162,12 +2207,13 @@ func (q *Queries) GetJob(ctx context.Context, id int64) (Job, error) {
 		&i.ClearanceLevels,
 		&i.Equity,
 		&i.Perks,
+		&i.ApplicationDeadline,
 	)
 	return i, err
 }
 
 const getJobBySlug = `-- name: GetJobBySlug :one
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE public_slug = $1
 `
@@ -2249,12 +2295,13 @@ func (q *Queries) GetJobBySlug(ctx context.Context, publicSlug string) (Job, err
 		&i.ClearanceLevels,
 		&i.Equity,
 		&i.Perks,
+		&i.ApplicationDeadline,
 	)
 	return i, err
 }
 
 const getJobBySourceExternalID = `-- name: GetJobBySourceExternalID :one
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE source = $1 AND external_id = $2
 `
@@ -2343,6 +2390,7 @@ func (q *Queries) GetJobBySourceExternalID(ctx context.Context, arg GetJobBySour
 		&i.ClearanceLevels,
 		&i.Equity,
 		&i.Perks,
+		&i.ApplicationDeadline,
 	)
 	return i, err
 }
@@ -2452,7 +2500,7 @@ INSERT INTO jobs (
     COALESCE($32::jsonb, '[]'::jsonb),
     $33::bigint, true
 )
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 `
 
 type InsertPrivateJobParams struct {
@@ -2620,6 +2668,7 @@ func (q *Queries) InsertPrivateJob(ctx context.Context, arg InsertPrivateJobPara
 		&i.ClearanceLevels,
 		&i.Equity,
 		&i.Perks,
+		&i.ApplicationDeadline,
 	)
 	return i, err
 }
@@ -2874,7 +2923,7 @@ func (q *Queries) ListBoardJobURLs(ctx context.Context, arg ListBoardJobURLsPara
 }
 
 const listClosedJobsByCompany = `-- name: ListClosedJobsByCompany :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE company_slug = $1 AND closed_at IS NOT NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY closed_at DESC, id DESC
@@ -2980,6 +3029,7 @@ func (q *Queries) ListClosedJobsByCompany(ctx context.Context, arg ListClosedJob
 			&i.ClearanceLevels,
 			&i.Equity,
 			&i.Perks,
+			&i.ApplicationDeadline,
 		); err != nil {
 			return nil, err
 		}
@@ -2992,7 +3042,7 @@ func (q *Queries) ListClosedJobsByCompany(ctx context.Context, arg ListClosedJob
 }
 
 const listEmployerJobs = `-- name: ListEmployerJobs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE created_by = $1::bigint
   AND source = 'employer'
@@ -3088,6 +3138,7 @@ func (q *Queries) ListEmployerJobs(ctx context.Context, actorID int64) ([]Job, e
 			&i.ClearanceLevels,
 			&i.Equity,
 			&i.Perks,
+			&i.ApplicationDeadline,
 		); err != nil {
 			return nil, err
 		}
@@ -3137,7 +3188,7 @@ func (q *Queries) ListIndexableJobIDsAfter(ctx context.Context, arg ListIndexabl
 }
 
 const listIndexableJobsByIDAfter = `-- name: ListIndexableJobsByIDAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE id > $1
   AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
@@ -3246,6 +3297,7 @@ func (q *Queries) ListIndexableJobsByIDAfter(ctx context.Context, arg ListIndexa
 			&i.ClearanceLevels,
 			&i.Equity,
 			&i.Perks,
+			&i.ApplicationDeadline,
 		); err != nil {
 			return nil, err
 		}
@@ -3666,7 +3718,7 @@ func (q *Queries) ListJobSkillsForGapReport(ctx context.Context, arg ListJobSkil
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY created_at DESC, id DESC
@@ -3771,6 +3823,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 			&i.ClearanceLevels,
 			&i.Equity,
 			&i.Perks,
+			&i.ApplicationDeadline,
 		); err != nil {
 			return nil, err
 		}
@@ -3783,7 +3836,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 }
 
 const listJobsByCompany = `-- name: ListJobsByCompany :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE company_slug = $1 AND closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
 ORDER BY created_at DESC, id DESC
@@ -3890,6 +3943,7 @@ func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyPa
 			&i.ClearanceLevels,
 			&i.Equity,
 			&i.Perks,
+			&i.ApplicationDeadline,
 		); err != nil {
 			return nil, err
 		}
@@ -3902,7 +3956,7 @@ func (q *Queries) ListJobsByCompany(ctx context.Context, arg ListJobsByCompanyPa
 }
 
 const listJobsByIDAfter = `-- name: ListJobsByIDAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE id > $1
 ORDER BY id
@@ -4000,6 +4054,7 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 			&i.ClearanceLevels,
 			&i.Equity,
 			&i.Perks,
+			&i.ApplicationDeadline,
 		); err != nil {
 			return nil, err
 		}
@@ -4012,7 +4067,7 @@ func (q *Queries) ListJobsByIDAfter(ctx context.Context, arg ListJobsByIDAfterPa
 }
 
 const listJobsBySlugCode = `-- name: ListJobsBySlugCode :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE right(public_slug, 8) = $1::text
 LIMIT 2
@@ -4106,6 +4161,7 @@ func (q *Queries) ListJobsBySlugCode(ctx context.Context, code string) ([]Job, e
 			&i.ClearanceLevels,
 			&i.Equity,
 			&i.Perks,
+			&i.ApplicationDeadline,
 		); err != nil {
 			return nil, err
 		}
@@ -4118,7 +4174,7 @@ func (q *Queries) ListJobsBySlugCode(ctx context.Context, code string) ([]Job, e
 }
 
 const listJobsBySourceAfter = `-- name: ListJobsBySourceAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE source = $1 AND id > $2
 ORDER BY id
@@ -4218,6 +4274,7 @@ func (q *Queries) ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourc
 			&i.ClearanceLevels,
 			&i.Equity,
 			&i.Perks,
+			&i.ApplicationDeadline,
 		); err != nil {
 			return nil, err
 		}
@@ -4285,7 +4342,7 @@ func (q *Queries) ListJobsForRequirementsBackfill(ctx context.Context, arg ListJ
 }
 
 const listJobsUpdatedAfter = `-- name: ListJobsUpdatedAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE id > $1 AND updated_at >= $2
 ORDER BY id
@@ -4388,6 +4445,7 @@ func (q *Queries) ListJobsUpdatedAfter(ctx context.Context, arg ListJobsUpdatedA
 			&i.ClearanceLevels,
 			&i.Equity,
 			&i.Perks,
+			&i.ApplicationDeadline,
 		); err != nil {
 			return nil, err
 		}
@@ -4438,7 +4496,7 @@ func (q *Queries) ListLiveJobIDsAfter(ctx context.Context, arg ListLiveJobIDsAft
 }
 
 const listLiveJobsByIDAfter = `-- name: ListLiveJobsByIDAfter :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE id > $1
   AND (closed_at IS NULL OR closed_at >= $2)
@@ -4554,6 +4612,7 @@ func (q *Queries) ListLiveJobsByIDAfter(ctx context.Context, arg ListLiveJobsByI
 			&i.ClearanceLevels,
 			&i.Equity,
 			&i.Perks,
+			&i.ApplicationDeadline,
 		); err != nil {
 			return nil, err
 		}
@@ -5274,6 +5333,8 @@ WHERE source = $1
   AND salary_period_source = $8
   AND english_level = $9
   AND is_tech IS NOT DISTINCT FROM $10
+  AND application_deadline IS NOT DISTINCT FROM COALESCE($11::date, application_deadline)
+  AND (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
   AND closed_at IS NULL
 RETURNING id, source, company_slug, duplicate_of
 `
@@ -5289,6 +5350,7 @@ type RefreshUnchangedJobParams struct {
 	SalaryPeriodSource   string      `json:"salary_period_source"`
 	EnglishLevel         string      `json:"english_level"`
 	IsTech               pgtype.Bool `json:"is_tech"`
+	ApplicationDeadline  pgtype.Date `json:"application_deadline"`
 }
 
 type RefreshUnchangedJobRow struct {
@@ -5374,6 +5436,7 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 		arg.SalaryPeriodSource,
 		arg.EnglishLevel,
 		arg.IsTech,
+		arg.ApplicationDeadline,
 	)
 	var i RefreshUnchangedJobRow
 	err := row.Scan(
@@ -6247,21 +6310,31 @@ func (q *Queries) SuppressAggregatorDuplicatesForCompanies(ctx context.Context, 
 }
 
 const touchJob = `-- name: TouchJob :one
-UPDATE jobs
-SET last_seen_at = now(),
-    closed_at    = NULL,
-    closed_reason = '',
-    -- A reopen resets the strike count so a single later expired probe can't immediately
-    -- re-close it, mirroring UpsertJob.
-    liveness_strikes = CASE WHEN closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
-    -- updated_at moves ONLY on a reopen. A re-listing that changed nothing is not a content
-    -- change, and stamping it would keep the column meaning "last crawled" — the same economy
-    -- RefreshUnchangedJob brings to the board path, applied to the hydrating one. A reopen IS a
-    -- change the search reconciler must see, so that case still stamps. The RHS reads the row's
-    -- pre-update closed_at, which is why one CASE serves both this and the strike reset above.
-    updated_at   = CASE WHEN closed_at IS NOT NULL THEN now() ELSE updated_at END
-WHERE source = $1 AND external_id = $2
-RETURNING company_slug
+WITH existing AS (
+    SELECT id, closed_at, is_private FROM jobs
+    WHERE jobs.source = $1 AND jobs.external_id = $2
+), touched AS (
+    UPDATE jobs
+    SET last_seen_at = now(),
+        closed_at = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
+                         THEN COALESCE(closed_at, now()) ELSE NULL END,
+        closed_reason = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
+                             THEN 'expired' ELSE '' END,
+        liveness_strikes = CASE WHEN closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
+        -- Stamp a lifecycle transition, not another observation of an expired posting.
+        updated_at = CASE
+            WHEN (closed_at IS NULL) IS DISTINCT FROM
+                 (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
+            THEN now() ELSE updated_at END
+    WHERE jobs.source = $1 AND jobs.external_id = $2
+    RETURNING id, company_slug, closed_at
+), queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT t.id FROM touched t JOIN existing e ON e.id = t.id
+    WHERE t.closed_at IS NOT NULL AND e.closed_at IS NULL AND NOT e.is_private
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT company_slug FROM touched
 `
 
 type TouchJobParams struct {
@@ -6271,7 +6344,8 @@ type TouchJobParams struct {
 
 // Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the
 // crawl re-listed the offer but fetched no fresh content (detail is fetched only for new
-// offers), so refresh last_seen_at and reopen if it had been closed — WITHOUT touching the
+// offers), so refresh last_seen_at and reopen if it had been closed, unless its stored
+// application deadline has passed. Expiry closes and queues removal atomically, WITHOUT touching the
 // content columns. A full upsert of the content-less listing would re-derive the deterministic
 // facets from an empty description and wipe the row's hydrated description/skills. This is the
 // reopen half of UpsertJob's ON CONFLICT, minus every content write. RETURNING company_slug so
@@ -6440,7 +6514,7 @@ WHERE public_slug = $31
   AND created_by = $32::bigint
   AND source = 'employer'
   AND NOT is_private
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 `
 
 type UpdateEmployerJobParams struct {
@@ -6597,6 +6671,7 @@ func (q *Queries) UpdateEmployerJob(ctx context.Context, arg UpdateEmployerJobPa
 		&i.ClearanceLevels,
 		&i.Equity,
 		&i.Perks,
+		&i.ApplicationDeadline,
 	)
 	return i, err
 }
@@ -6792,7 +6867,7 @@ SET title        = $1,
                                THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 WHERE public_slug = $31 AND created_by IS NOT NULL AND NOT is_private
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 `
 
 type UpdateManualJobParams struct {
@@ -6958,14 +7033,32 @@ func (q *Queries) UpdateManualJob(ctx context.Context, arg UpdateManualJobParams
 		&i.ClearanceLevels,
 		&i.Equity,
 		&i.Perks,
+		&i.ApplicationDeadline,
 	)
 	return i, err
 }
 
 const upsertJob = `-- name: UpsertJob :one
 WITH existing AS (
-    SELECT content_hash AS old_hash, true AS existed FROM jobs
+    SELECT id, closed_at, closed_reason, application_deadline, is_private,
+           CASE WHEN closed_at IS NULL THEN content_hash END AS old_hash, true AS existed
+    FROM jobs
     WHERE source = $1 AND external_id = $2
+),
+reopened_dequeued AS (
+    DELETE FROM search_delete_outbox
+    WHERE job_id IN (
+        SELECT id FROM existing
+        WHERE closed_at IS NOT NULL AND closed_reason = 'expired'
+          AND $38::date >= (now() AT TIME ZONE 'UTC')::date
+    )
+),
+expired_queued AS (
+    INSERT INTO search_delete_outbox (job_id)
+    SELECT id FROM existing
+    WHERE closed_at IS NULL AND NOT is_private
+      AND COALESCE($38::date, application_deadline) < (now() AT TIME ZONE 'UTC')::date
+    ON CONFLICT (job_id) DO NOTHING
 ),
 company_upsert AS (
     INSERT INTO companies (slug, name)
@@ -6990,7 +7083,7 @@ INSERT INTO jobs (
     public_slug, countries, regions, cities, metros, work_mode, skills, seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks,
     posting_language, employment_type, education_level, english_level, experience_years_min,
     salary_min_source, salary_max_source, salary_currency_source, salary_period_source,
-    content_hash, role_fingerprint, requirements_derived, hydrated_at
+    content_hash, role_fingerprint, requirements_derived, hydrated_at, application_deadline, closed_at, closed_reason
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, replace($6, '-', ''), $7, $8,
@@ -7008,7 +7101,9 @@ INSERT INTO jobs (
     COALESCE($37::jsonb, '[]'::jsonb),
     -- A first ingest reads the posting's body, so the row starts out freshly hydrated. NULL
     -- is reserved for the rows that predate the column (see 0144), which read as stale.
-    now()
+    now(), $38::date,
+    CASE WHEN $38::date < (now() AT TIME ZONE 'UTC')::date THEN now() END,
+    CASE WHEN $38::date < (now() AT TIME ZONE 'UTC')::date THEN 'expired' ELSE '' END
 )
 ON CONFLICT (source, external_id) DO UPDATE SET
     url          = EXCLUDED.url,
@@ -7028,6 +7123,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- rebuilds its doc from the RETURNING row, which carries this preserved value.)
     description  = COALESCE(NULLIF(EXCLUDED.description, ''), jobs.description),
     posted_at    = EXCLUDED.posted_at,
+    application_deadline = COALESCE(EXCLUDED.application_deadline, jobs.application_deadline),
     countries    = EXCLUDED.countries,
     regions      = EXCLUDED.regions,
     cities       = EXCLUDED.cities,
@@ -7096,8 +7192,13 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- reopen (the row was closed) resets the strike count so a single later expired
     -- probe can't immediately re-close it — the two-strike grace survives a reopen.
     last_seen_at = now(),
-    closed_at    = NULL,
-    closed_reason = '',
+    closed_at = CASE
+        WHEN COALESCE(EXCLUDED.application_deadline, jobs.application_deadline) < (now() AT TIME ZONE 'UTC')::date
+        THEN COALESCE(jobs.closed_at, now())
+        ELSE NULL END,
+    closed_reason = CASE
+        WHEN COALESCE(EXCLUDED.application_deadline, jobs.application_deadline) < (now() AT TIME ZONE 'UTC')::date
+        THEN 'expired' ELSE '' END,
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
     -- A company correction (rare, but real — e.g. a slug fix on re-ingest) invalidates
     -- this job's already-precomputed similar-jobs list: it may have been computed
@@ -7113,9 +7214,15 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- it there.
     hydrated_at  = now(),
     updated_at   = now()
-RETURNING jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, jobs.salary_min_manual, jobs.salary_max_manual, jobs.salary_currency_manual, jobs.salary_period_manual, jobs.upvote_count, jobs.downvote_count, jobs.ats_absent_at, jobs.closed_reason, jobs.is_private, jobs.similar_job_ids, jobs.similar_computed_at, jobs.salary_min_source, jobs.salary_max_source, jobs.salary_currency_source, jobs.salary_period_source, jobs.company_slug_folded, jobs.duplicate_of_aggregator, jobs.duplicate_of_role, jobs.duplicate_of_fuzzy, jobs.requires_clearance, jobs.requirements_derived, jobs.hydrated_at, jobs.ai_interview_reports, jobs.metros, jobs.semantic_embedded_input_hash, jobs.via_recruiter, jobs.clearance_levels, jobs.equity, jobs.perks,
+RETURNING jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, jobs.salary_min_manual, jobs.salary_max_manual, jobs.salary_currency_manual, jobs.salary_period_manual, jobs.upvote_count, jobs.downvote_count, jobs.ats_absent_at, jobs.closed_reason, jobs.is_private, jobs.similar_job_ids, jobs.similar_computed_at, jobs.salary_min_source, jobs.salary_max_source, jobs.salary_currency_source, jobs.salary_period_source, jobs.company_slug_folded, jobs.duplicate_of_aggregator, jobs.duplicate_of_role, jobs.duplicate_of_fuzzy, jobs.requires_clearance, jobs.requirements_derived, jobs.hydrated_at, jobs.ai_interview_reports, jobs.metros, jobs.semantic_embedded_input_hash, jobs.via_recruiter, jobs.clearance_levels, jobs.equity, jobs.perks, jobs.application_deadline,
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
-    ((SELECT old_hash FROM existing) IS DISTINCT FROM $35) AS changed
+    -- The deadline rides the search document without changing the global content-hash
+    -- format. Compare the resulting stored date: a missing incoming date preserves it.
+    COALESCE(
+        (SELECT old_hash FROM existing) IS DISTINCT FROM $35
+        OR (SELECT application_deadline FROM existing) IS DISTINCT FROM jobs.application_deadline,
+        false
+    )::boolean AS changed
 `
 
 type UpsertJobParams struct {
@@ -7156,6 +7263,7 @@ type UpsertJobParams struct {
 	ContentHash          pgtype.Text        `json:"content_hash"`
 	RoleFingerprint      pgtype.Text        `json:"role_fingerprint"`
 	RequirementsDerived  []byte             `json:"requirements_derived"`
+	ApplicationDeadline  pgtype.Date        `json:"application_deadline"`
 }
 
 type UpsertJobRow struct {
@@ -7179,7 +7287,10 @@ type UpsertJobRow struct {
 // statement), so RETURNING can report whether the write inserted a new row
 // (`inserted`) or changed its searchable content (`changed`, true on insert and
 // for a legacy NULL hash). A re-ingest that only bumps last_seen_at reports both
-// false and needs no re-push to the search index.
+// false and needs no re-push to the search index. A reopen deliberately reads a NULL old
+// hash, so identical content still returns to search.
+// An employer extending the deadline reopens the posting. Remove an older expiry's
+// pending deletion so a delayed retry cannot delete the newly re-indexed document.
 // public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 // at insert and is the row's stable public identity. Re-ingest of the same
 // (source, external_id) must not rewrite it, so external links stay valid even
@@ -7223,6 +7334,7 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJob
 		arg.ContentHash,
 		arg.RoleFingerprint,
 		arg.RequirementsDerived,
+		arg.ApplicationDeadline,
 	)
 	var i UpsertJobRow
 	err := row.Scan(
@@ -7299,6 +7411,7 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJob
 		&i.Job.ClearanceLevels,
 		&i.Job.Equity,
 		&i.Job.Perks,
+		&i.Job.ApplicationDeadline,
 		&i.Inserted,
 		&i.Changed,
 	)
@@ -7423,7 +7536,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM EXCLUDED.company_slug
                                THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
-RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks
+RETURNING id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 `
 
 type UpsertManualJobParams struct {
@@ -7598,6 +7711,7 @@ func (q *Queries) UpsertManualJob(ctx context.Context, arg UpsertManualJobParams
 		&i.ClearanceLevels,
 		&i.Equity,
 		&i.Perks,
+		&i.ApplicationDeadline,
 	)
 	return i, err
 }

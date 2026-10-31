@@ -335,6 +335,18 @@ func run() int {
 		log.Printf("liveness: restricted to source %q for this run", *sourceFilter)
 	}
 
+	var st stats
+
+	// A source's stated application deadline remains authoritative even when a crawl
+	// keeps listing the posting, or its board is quiet or temporarily unreachable.
+	deadlineExpired, err := queries.CloseJobsPastApplicationDeadline(ctx, *sourceFilter)
+	if err != nil {
+		st.failed.Add(1)
+		log.Printf("liveness: expire application deadlines: %v", err)
+	} else {
+		log.Printf("liveness: expired %d jobs past their application deadline", deadlineExpired)
+	}
+
 	// The other half of the same decision: what the probe cannot judge, age judges.
 	// Run before probing so a run that dies partway through the probe still expires.
 	// filterSources means a -source run that targets neither unsignalledSources member
@@ -372,8 +384,6 @@ func run() int {
 		log.Printf("liveness: expired %d jobs posted more than %d days ago and unseen for %d days, from %d expireDespiteRegistered sources",
 			expiredRegistered, int(expiryWindow.Hours()/24), int(unseenFor.Hours()/24), len(sourcesToExpireDespiteRegistered))
 	}
-
-	var st stats
 
 	// Each candidate set is judged by the evidence its source actually has, and every call
 	// below names that evidence at the call site. There is deliberately no source→judge

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import BoardPostingStatus from './BoardPostingStatus.svelte';
+  import BoardRemoveButton from './BoardRemoveButton.svelte';
+  import BoardPreview from './BoardPreview.svelte';
   import { tick } from 'svelte';
   import { Clock, Mail } from '@lucide/svelte';
   import { companyLogoUrl } from '#lib/logo.js';
@@ -18,8 +21,12 @@
     items,
     onopen,
     onsetstage,
+    onremove,
+    removing = [],
   }: {
     items: BoardItem[];
+    onremove?: (item: MyJob) => void;
+    removing?: string[];
     onopen: (item: MyJob) => void;
     // (item, stage) rather than (stage): the board's drawer acts on whatever is open,
     // but a list row acts on itself and there is nothing open.
@@ -67,17 +74,20 @@
       <li class="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/50">
         <!-- The employer and role open the application; the stage control beside them
              does not, so it is a sibling rather than a child. -->
+        <BoardPreview {item} class="min-w-0 flex-1">
         <button
           type="button"
           onclick={() => onopen(item)}
-          class="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+          class="flex w-full min-w-0 items-center gap-2.5 text-left"
         >
           <EntityLogo name={company(item)} src={companyLogoUrl(company(item)) ?? undefined} shape="square" size="xs" />
           <span class="min-w-0 flex-1">
             <span class="block truncate text-sm font-medium">{title(item)}</span>
             <span class="block truncate text-xs text-muted-foreground">{company(item) || s.unknownCompany}</span>
+            <BoardPostingStatus job={item.job} />
           </span>
         </button>
+        </BoardPreview>
 
         <span class="flex shrink-0 items-center gap-2.5">
           {#if item.silence_state === 'silent'}
@@ -119,6 +129,9 @@
               </optgroup>
             {/each}
           </select>
+          {#if onremove}
+            <BoardRemoveButton {item} {onremove} disabled={removing.includes(item.id)} />
+          {/if}
         </span>
       </li>
     {/each}

@@ -303,6 +303,8 @@ func mutateField(p db.UpsertJobParams, i int) (db.UpsertJobParams, bool) {
 	// nothing mutates reads as covered when it is not.
 	case []byte:
 		f.SetBytes(append(slices.Clone(v), []byte(`{"mutated":true}`)...))
+	case pgtype.Date:
+		f.Set(reflect.ValueOf(pgtype.Date{Time: v.Time.AddDate(0, 0, 1), Valid: true}))
 	case pgtype.Timestamptz:
 		f.Set(reflect.ValueOf(pgtype.Timestamptz{Time: v.Time.Add(time.Hour), Valid: true}))
 	case pgtype.Int4:

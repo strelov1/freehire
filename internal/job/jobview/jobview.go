@@ -130,10 +130,12 @@ type Job struct {
 	// never a guarantee that a real attempt would succeed. True-or-absent like
 	// RequiresClearance: omitted rather than false, because "not one of the
 	// providers we can drive" must not be read as "checked and ineligible".
-	AutoApplyAvailable bool    `json:"auto_apply_available,omitempty"`
-	PostedAt           *string `json:"posted_at"`
-	CreatedAt          *string `json:"created_at"`
-	UpdatedAt          *string `json:"updated_at"`
+	AutoApplyAvailable bool `json:"auto_apply_available,omitempty"`
+	// ApplicationDeadline is the source-stated last application day (YYYY-MM-DD), inclusive.
+	ApplicationDeadline *string `json:"application_deadline,omitempty"`
+	PostedAt            *string `json:"posted_at"`
+	CreatedAt           *string `json:"created_at"`
+	UpdatedAt           *string `json:"updated_at"`
 	// LastSeenAt is when a re-crawl last confirmed this posting still live — see
 	// docs/agents/job-lifecycle.md. The SPA uses it to estimate a rolling
 	// JobPosting.validThrough for an open job (seo.ts), since most sources carry
@@ -271,44 +273,45 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	e.Cities = nil
 
 	return Job{
-		PublicSlug:         f.PublicSlug,
-		Source:             f.Source,
-		ManuallyAdded:      f.ManuallyAdded,
-		ExternalID:         f.ExternalID,
-		URL:                outboundurl.Tag(f.URL),
-		DirectApply:        job.IsDirectApply(f.Source, f.ExternalID),
-		Title:              f.Title,
-		Company:            f.Company,
-		CompanySlug:        f.CompanySlug,
-		Location:           f.Location,
-		Description:        f.Description,
-		Countries:          countries,
-		Regions:            regions,
-		WorkMode:           workMode,
-		Skills:             skills,
-		Cities:             cities,
-		Metros:             metros,
-		Collections:        collections,
-		Perks:              perks,
-		AIInterviewReports: x.AIInterviewReports,
-		IsTech:             isTechFacet(f.IsTech),
-		RequiresClearance:  f.RequiresClearance != nil && *f.RequiresClearance,
-		ViaRecruiter:       f.ViaRecruiter != nil && *f.ViaRecruiter,
-		Equity:             f.Equity,
-		ClearanceLevels:    f.ClearanceLevels,
-		AutoApplyAvailable: AutoApplyProviders[f.Source],
-		PostedAt:           rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
-		CreatedAt:          rfc3339Ptr(f.CreatedAt),
-		UpdatedAt:          rfc3339Ptr(f.UpdatedAt),
-		LastSeenAt:         rfc3339Ptr(f.LastSeenAt),
-		ClosedAt:           rfc3339Ptr(f.ClosedAt),
-		Enrichment:         e,
-		EnrichedAt:         rfc3339Ptr(f.EnrichedAt),
-		EnrichmentVersion:  f.EnrichmentVersion,
-		ViewCount:          x.ViewCount,
-		AppliedCount:       x.AppliedCount,
-		UpvoteCount:        x.UpvoteCount,
-		DownvoteCount:      x.DownvoteCount,
+		PublicSlug:          f.PublicSlug,
+		Source:              f.Source,
+		ManuallyAdded:       f.ManuallyAdded,
+		ExternalID:          f.ExternalID,
+		URL:                 outboundurl.Tag(f.URL),
+		DirectApply:         job.IsDirectApply(f.Source, f.ExternalID),
+		Title:               f.Title,
+		Company:             f.Company,
+		CompanySlug:         f.CompanySlug,
+		Location:            f.Location,
+		Description:         f.Description,
+		Countries:           countries,
+		Regions:             regions,
+		WorkMode:            workMode,
+		Skills:              skills,
+		Cities:              cities,
+		Metros:              metros,
+		Collections:         collections,
+		Perks:               perks,
+		Equity:              f.Equity,
+		ClearanceLevels:     f.ClearanceLevels,
+		AIInterviewReports:  x.AIInterviewReports,
+		IsTech:              isTechFacet(f.IsTech),
+		RequiresClearance:   f.RequiresClearance != nil && *f.RequiresClearance,
+		ViaRecruiter:        f.ViaRecruiter != nil && *f.ViaRecruiter,
+		AutoApplyAvailable:  AutoApplyProviders[f.Source],
+		PostedAt:            rfc3339Ptr(effectivePosted(f.PostedAt, f.CreatedAt, now)),
+		CreatedAt:           rfc3339Ptr(f.CreatedAt),
+		UpdatedAt:           rfc3339Ptr(f.UpdatedAt),
+		LastSeenAt:          rfc3339Ptr(f.LastSeenAt),
+		ClosedAt:            rfc3339Ptr(f.ClosedAt),
+		ApplicationDeadline: dateString(f.ApplicationDeadline),
+		Enrichment:          e,
+		EnrichedAt:          rfc3339Ptr(f.EnrichedAt),
+		EnrichmentVersion:   f.EnrichmentVersion,
+		ViewCount:           x.ViewCount,
+		AppliedCount:        x.AppliedCount,
+		UpvoteCount:         x.UpvoteCount,
+		DownvoteCount:       x.DownvoteCount,
 	}, nil
 }
 
@@ -488,4 +491,13 @@ func FromRows(jobs []db.Job) ([]Job, error) {
 // ClassifyReality.
 func EffectivePostedAt(posted, created pgtype.Timestamptz, now time.Time) pgtype.Timestamptz {
 	return pgconv.Timestamptz(effectivePosted(pgconv.TimePtr(posted), pgconv.TimePtr(created), now))
+}
+
+// dateString preserves a source's calendar day rather than serializing an instant.
+func dateString(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	day := t.Format(time.DateOnly)
+	return &day
 }

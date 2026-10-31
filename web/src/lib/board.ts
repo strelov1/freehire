@@ -117,3 +117,33 @@ export function boardRefFor(e: {
   if (e.job_slug) return e.job_slug;
   return e.application_id ? `a${e.application_id}` : null;
 }
+
+
+export type BoardSort = 'default' | 'company' | 'added' | 'deadline';
+
+/** Whole UTC calendar days from today to an inclusive deadline: 0 is the last day, negative is past. */
+export function daysUntilDeadline(deadline: string, now = new Date()): number {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((Date.parse(deadline) - today) / 86_400_000);
+}
+
+export function parseBoardSort(value: string | null): BoardSort {
+  return value === 'company' || value === 'added' || value === 'deadline' ? value : 'default';
+}
+
+/** Sort a copy: drag-and-drop owns the original arrays. Unknown dates sort last. */
+export function sortBoardItems(items: BoardItem[], sort: BoardSort): BoardItem[] {
+  if (sort === 'default') return items;
+  const date = (item: MyJob) =>
+    sort === 'deadline' ? item.job?.application_deadline : item.added_to_board_at;
+  return [...items].sort((a, b) => {
+    if (sort === 'company') {
+      return (a.job?.company || a.company_slug).localeCompare(b.job?.company || b.company_slug, undefined, { sensitivity: 'base' });
+    }
+    const left = Date.parse(date(a) ?? '');
+    const right = Date.parse(date(b) ?? '');
+    if (!Number.isFinite(left)) return Number.isFinite(right) ? 1 : 0;
+    if (!Number.isFinite(right)) return -1;
+    return sort === 'deadline' ? left - right : right - left;
+  });
+}

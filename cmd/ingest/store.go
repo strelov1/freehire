@@ -136,6 +136,7 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 		SalaryPeriodSource:   p.SalaryPeriodSource,
 		EnglishLevel:         p.EnglishLevel,
 		IsTech:               p.IsTech,
+		ApplicationDeadline:  p.ApplicationDeadline,
 	})
 	if err == nil {
 		return cheapWrite(cheap), nil
@@ -157,8 +158,15 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 // Changed is already true on insert (a NULL prior hash is DISTINCT FROM any value);
 // Inserted is OR-ed in to keep the "new or changed" intent explicit.
 func needsIndex(w written) bool {
+	if w.closed() {
+		return false
+	}
 	return w.changed || w.inserted
 }
+
+// closed reports whether the write left the row closed — only the full write carries the row,
+// and the cheap write never changes closed_at.
+func (w written) closed() bool { return w.row != nil && w.row.ClosedAt.Valid }
 
 // tookCheapWrite reports which of the two writes produced this. The narrow write is the only
 // one that carries no row, so this is exact rather than a heuristic.
@@ -269,8 +277,9 @@ func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) err
 		}
 	}
 
-	// A duplicate never reaches search, so enriching it pays an LLM for an invisible row.
-	if !deduped {
+	// A duplicate never reaches search, so enriching it pays an LLM for an invisible row; so
+	// does a row the write left closed (a deadline already past).
+	if !deduped && !saved.closed() {
 		if _, err := qtx.EnqueueJobEnrichment(ctx, db.EnqueueJobEnrichmentParams{
 			TargetVersion: s.targetVersion,
 			JobID:         saved.id,
@@ -316,7 +325,7 @@ func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) err
 	// commit and this line — closes by itself, because the enqueue is gated on the job
 	// having no stored form rather than on it being new: the next crawl of the board
 	// queues it again.
-	if applyform.NeedsRequestCapture(saved.source) {
+	if applyform.NeedsRequestCapture(saved.source) && !saved.closed() {
 		if _, err := s.q.EnqueueApplyFormCapture(ctx, saved.id); err != nil {
 			log.Printf("ingest: queue apply-form capture for job %d: %v", saved.id, err)
 		}
@@ -378,6 +387,10 @@ func (s *dbStore) Close(ctx context.Context, source, externalID string) error {
 // HydrationRetryWindow old, so the crawl re-attempts the detail fetch its first pass lost rather
 // than treating the body-less row as finished.
 //
+// A row whose stored application deadline passed within pipeline.DeadlineRecheckWindow is
+// withheld too, so an extension the employer made after we first read the posting is picked up
+// instead of the touch closing it on the old date.
+//
 // A row whose stored BODY has gone stale is withheld too, so an employer's later edit reaches
 // the catalogue at all: without it, being stored is what stops a posting from ever being fetched
 // again, and a posting that gains a "this position is 100% on-site" paragraph keeps whatever we
@@ -398,13 +411,15 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 	}
 	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-s.seen.hydrationWindow), Valid: true}
 	bodyCutoff := pgtype.Timestamptz{Time: s.seen.bodies.cutoff, Valid: true}
+	deadlineFrom := pgtype.Date{Time: time.Now().UTC().Add(-pipeline.DeadlineRecheckWindow), Valid: true}
 	if board == "" {
 		rows, err := s.q.ExistingExternalIDs(ctx, db.ExistingExternalIDsParams{
-			Source:            source,
-			HydrationCutoff:   cutoff,
-			BodyRefreshCutoff: bodyCutoff,
-			BodyRefreshSlices: s.seen.bodies.slices,
-			BodyRefreshSlot:   s.seen.bodies.slot,
+			Source:              source,
+			HydrationCutoff:     cutoff,
+			BodyRefreshCutoff:   bodyCutoff,
+			BodyRefreshSlices:   s.seen.bodies.slices,
+			BodyRefreshSlot:     s.seen.bodies.slot,
+			DeadlineRecheckFrom: deadlineFrom,
 		})
 		if err != nil {
 			return nil, err
@@ -417,12 +432,13 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 	// The pattern is escaped by externalid.BoardPattern: a board name may contain LIKE syntax,
 	// and a third of the workday board names carry an underscore.
 	rows, err := s.q.ExistingExternalIDsByBoard(ctx, db.ExistingExternalIDsByBoardParams{
-		Source:            source,
-		Pattern:           externalid.BoardPattern(board),
-		HydrationCutoff:   cutoff,
-		BodyRefreshCutoff: bodyCutoff,
-		BodyRefreshSlices: s.seen.bodies.slices,
-		BodyRefreshSlot:   s.seen.bodies.slot,
+		Source:              source,
+		Pattern:             externalid.BoardPattern(board),
+		HydrationCutoff:     cutoff,
+		BodyRefreshCutoff:   bodyCutoff,
+		BodyRefreshSlices:   s.seen.bodies.slices,
+		BodyRefreshSlot:     s.seen.bodies.slot,
+		DeadlineRecheckFrom: deadlineFrom,
 	})
 	if err != nil {
 		return nil, err

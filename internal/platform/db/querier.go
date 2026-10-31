@@ -913,6 +913,9 @@ type Querier interface {
 	// for the still-open ones). WHERE closed_at IS NULL keeps it idempotent; a later
 	// upsert of the same (source, external_id) reopens it if the posting reappears.
 	CloseJobBySourceExternalID(ctx context.Context, arg CloseJobBySourceExternalIDParams) (int64, error)
+	// The source's deadline is inclusive: it expires on the following UTC date. Independent of
+	// crawl success/quiet periods, and atomically queued for removal from the live search index.
+	CloseJobsPastApplicationDeadline(ctx context.Context, source string) (int64, error)
 	// Closes one id-range chunk of a source whose stored rows carry an employer we now know is
 	// wrong and cannot repair in place (see migration 0165 for the case that forced the label).
 	//
@@ -2304,6 +2307,15 @@ type Querier interface {
 	// any row, which is how the caller expresses "disabled" without a second query.
 	//
 	// hashtext is cast to bigint before abs(): abs() of int4's most negative value raises.
+	//
+	// A row whose stored application deadline has passed, but no earlier than
+	// deadline_recheck_from, is withheld as well. The listing carries no deadline (EURES states it
+	// only on the detail), so a re-listed posting's touch would close it on the stored date even
+	// when the employer has since extended it; re-reading the detail lets the upsert store the
+	// current date and reopen the row. Bounded, because a source that keeps listing an expired
+	// posting would otherwise cost a detail request on every crawl for good. Written as an OR over
+	// the kept cases rather than NOT over the withheld one: a NULL deadline (every source but EURES)
+	// would make the NOT form NULL and drop the row from the set.
 	ExistingExternalIDs(ctx context.Context, arg ExistingExternalIDsParams) ([]ExistingExternalIDsRow, error)
 	// Seen-set of ONE board of a multi-board provider. The lookup runs once per crawled board, so a
 	// provider-wide read is unaffordable where the provider is large: on workday it returns 1.27M ids
@@ -2318,7 +2330,8 @@ type Querier interface {
 	//
 	// hydration_cutoff withholds a still-body-less row from the seen-set so its detail is retried,
 	// and the body_refresh_* arm withholds one whose stored body has gone stale so an employer's
-	// edit is re-read; see ExistingExternalIDs for both.
+	// edit is re-read, and the deadline arm re-reads a posting whose stored deadline has just
+	// passed; see ExistingExternalIDs for all three.
 	ExistingExternalIDsByBoard(ctx context.Context, arg ExistingExternalIDsByBoardParams) ([]ExistingExternalIDsByBoardRow, error)
 	// Take up to batch_size STALE matches out of the pending set by stamping expired_at: a
 	// match older than the freshness window, or one whose job has closed. A stale match is
@@ -6899,6 +6912,10 @@ type Querier interface {
 	// place, the drain would remove the reopened row after re-adding it) and the row is queued
 	// for the facet index. Returns the rows reopened, 0 when there was nothing to undo.
 	ReopenEmployerJob(ctx context.Context, arg ReopenEmployerJobParams) (int64, error)
+	// One-off repair for ESS's legacy query-only vacancy links. Compare the URL and
+	// hash read by the worker so a concurrent ingest cannot receive a stale hash.
+	// Closed rows are repaired too because a later liveness refresh can reopen them.
+	RepairESSJobURL(ctx context.Context, arg RepairESSJobURLParams) (RepairESSJobURLRow, error)
 	// Swap the recurring week in one statement, leaving dated overrides alone: half of the
 	// edit applied is a member bookable at hours they just removed. The three arrays are one
 	// row each, zipped back by position (WITH ORDINALITY: sqlc's analyzer does not resolve the
@@ -7966,7 +7983,8 @@ type Querier interface {
 	TouchCVLastClick(ctx context.Context, id pgtype.UUID) error
 	// Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the
 	// crawl re-listed the offer but fetched no fresh content (detail is fetched only for new
-	// offers), so refresh last_seen_at and reopen if it had been closed — WITHOUT touching the
+	// offers), so refresh last_seen_at and reopen if it had been closed, unless its stored
+	// application deadline has passed. Expiry closes and queues removal atomically, WITHOUT touching the
 	// content columns. A full upsert of the content-less listing would re-derive the deterministic
 	// facets from an empty description and wipe the row's hydrated description/skills. This is the
 	// reopen half of UpsertJob's ON CONFLICT, minus every content write. RETURNING company_slug so
@@ -8333,7 +8351,10 @@ type Querier interface {
 	// statement), so RETURNING can report whether the write inserted a new row
 	// (`inserted`) or changed its searchable content (`changed`, true on insert and
 	// for a legacy NULL hash). A re-ingest that only bumps last_seen_at reports both
-	// false and needs no re-push to the search index.
+	// false and needs no re-push to the search index. A reopen deliberately reads a NULL old
+	// hash, so identical content still returns to search.
+	// An employer extending the deadline reopens the posting. Remove an older expiry's
+	// pending deletion so a delayed retry cannot delete the newly re-indexed document.
 	// public_slug is deliberately NOT in the DO UPDATE SET: the slug is minted once
 	// at insert and is the row's stable public identity. Re-ingest of the same
 	// (source, external_id) must not rewrite it, so external links stay valid even

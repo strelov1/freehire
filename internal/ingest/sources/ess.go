@@ -47,8 +47,8 @@ const (
 	// public, embedded in the page's own script (ue_dataFor3ScaleApi_userKey), not a credential
 	// issued to us. A rotated key answers every request with an error, which fails the crawl.
 	essUserKey = "9b7dcbe8ec1855d14f0b2ec4f6335a91" // gitleaks:allow — public key served in the site's own JS
-	// essPostingURL opens the vacancy's detail panel on the public search page; the server
-	// renders the vacancy's title and duties into the page's og: tags for it.
+	// essPostingURL supplies the vacancy id for server-rendered metadata. The Angular detail
+	// panel also needs the /#/pdm/<id> fragment appended in essBaseJob; idp alone opens the list.
 	essPostingURL = "https://www.ess.gov.si/iskalci-zaposlitve/iskanje-zaposlitve/iskanje-dela/?idp="
 
 	// essPageSize is the listing page size. The API caps a page at 2,000; a page of 500 answered
@@ -338,7 +338,7 @@ func (s ess) walk(ctx context.Context, slice essSlice) ([]essCard, error) {
 func essBaseJob(p essPosting) Job {
 	j := Job{
 		ExternalID: p.card.ID,
-		URL:        essPostingURL + p.card.ID,
+		URL:        essPostingURL + p.card.ID + "/#/pdm/" + p.card.ID,
 		Title:      essTitle(p.card.Title),
 		Company:    essClean(p.card.Employer),
 		Location:   essPlace(p.card.Place),

@@ -746,7 +746,7 @@
      right of the provenance line from lg, and under the title below it, where that line
      already spends a phone's width on the company name and its badges. -->
 {#snippet postingMeta(className: string)}
-  {#if posted || views > 0 || applies > 0}
+  {#if posted || views > 0 || applies > 0 || job.application_deadline}
     <div class={`items-center gap-x-3 text-xs text-muted-foreground ${className}`}>
       {#if posted}
         <span
@@ -767,6 +767,11 @@
             <time datetime={job.updated_at}>{updated}</time>
           </span>
         {/if}
+      {/if}
+      {#if job.application_deadline}
+        <span class="inline-flex items-center gap-1 whitespace-nowrap">
+          Apply by <time datetime={job.application_deadline}>{job.application_deadline}</time>
+        </span>
       {/if}
       <!-- A zero counter is omitted rather than drawn: "0 views" on a posting nobody has
            opened yet measures our own traffic, not the job. -->

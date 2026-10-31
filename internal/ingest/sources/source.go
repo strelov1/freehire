@@ -54,6 +54,9 @@ type Job struct {
 	Description string
 	Remote      bool
 	PostedAt    *time.Time
+	// ApplicationDeadline is the source's inclusive last application date, in UTC.
+	// Nil means the source did not provide a deadline.
+	ApplicationDeadline *time.Time
 	// WorkMode is the work arrangement when the platform states it in a STRUCTURED
 	// field (a workplace-type enum or an explicit remote flag) — "remote",
 	// "hybrid", or "onsite", else "". It is left empty for adapters that only

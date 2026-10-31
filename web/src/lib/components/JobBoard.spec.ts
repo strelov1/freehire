@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyJob } from '#lib/types.js';
 import JobBoard from './JobBoard.svelte';
@@ -214,5 +214,51 @@ describe('JobBoard — the list view drawing a page at a time', () => {
 
     await waitFor(() => expect(drawn()).toBe(50));
     vi.unstubAllGlobals();
+  });
+});
+
+
+describe('JobBoard — quick triage', () => {
+  const posting = {
+    ...application,
+    id: 'closed-role',
+    saved_at: '2026-10-02T00:00:00Z',
+    job: { public_slug: 'closed-role', title: 'Backend Engineer', company: 'Acme', closed_at: '2026-10-30T00:00:00Z' },
+  };
+
+  it.each(['board', 'list'] as const)('shows posting closure independently of application stage in %s', (view) => {
+    render(JobBoard, { initial: [posting], view });
+    expect(screen.getByText('Vacancy closed')).toBeTruthy();
+    expect(screen.queryByText('Your board is empty')).toBeNull();
+  });
+
+  it.each(['board', 'list'] as const)('removes directly from the %s without opening the drawer', async (view) => {
+    render(JobBoard, { initial: [posting], view });
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Backend Engineer from board' }));
+    expect(untrackApplication).toHaveBeenCalledWith('closed-role');
+    await waitFor(() => expect(screen.getByText('Your board is empty')).toBeTruthy());
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('keeps a card and reports a failed quick removal', async () => {
+    untrackApplication.mockRejectedValue(new Error('offline'));
+    render(JobBoard, { initial: [posting] });
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Backend Engineer from board' }));
+    await waitFor(() => expect(screen.getByText("Couldn't remove it from your board. Try again.")).toBeTruthy());
+    expect(screen.getByText('Backend Engineer')).toBeTruthy();
+  });
+
+  it.each(['board', 'list'] as const)('sorts %s by company and date added', async (view) => {
+    const rows = [
+      { ...application, id: 'z', role_title: 'Z role', company_slug: 'zeta', added_to_board_at: '2026-10-30T00:00:00Z' },
+      { ...application, id: 'a', role_title: 'A role', company_slug: 'alpha', added_to_board_at: '2026-10-01T00:00:00Z' },
+    ];
+    render(JobBoard, { initial: rows, view });
+    const sort = screen.getByRole('combobox', { name: 'Sort applications' });
+    await fireEvent.change(sort, { target: { value: 'company' } });
+    const titles = () => (view === 'board' ? within(screen.getByRole('region', { name: 'Applied' })) : screen).getAllByText(/^[AZ] role$/).map((el) => el.textContent);
+    expect(titles()).toEqual(['A role', 'Z role']);
+    await fireEvent.change(sort, { target: { value: 'added' } });
+    expect(titles()).toEqual(['Z role', 'A role']);
   });
 });

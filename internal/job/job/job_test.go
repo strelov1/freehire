@@ -690,3 +690,17 @@ func TestFields_MetrosReachEveryWriteParams(t *testing.T) {
 		t.Errorf("UpsertManualParams.Metros = %v", got)
 	}
 }
+
+func TestUpsertParams_PreservesSourceApplicationDeadline(t *testing.T) {
+	deadline := time.Date(2026, time.November, 12, 0, 0, 0, 0, time.UTC)
+	draft := fullDraft()
+	draft.ApplicationDeadline = &deadline
+	got := mustParams(t, draft)
+	if !got.ApplicationDeadline.Valid || got.ApplicationDeadline.Time.Format(time.DateOnly) != "2026-11-12" {
+		t.Fatalf("ApplicationDeadline = %+v, want source-stated calendar day", got.ApplicationDeadline)
+	}
+	draft.ApplicationDeadline = nil
+	if got := mustParams(t, draft); got.ApplicationDeadline.Valid {
+		t.Fatalf("unknown deadline must stay NULL, got %+v", got.ApplicationDeadline)
+	}
+}

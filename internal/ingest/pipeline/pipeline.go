@@ -146,6 +146,13 @@ const CompanyDescriptionRefreshWindow = 7 * 24 * time.Hour
 // permanent retry loop.
 const HydrationRetryWindow = 14 * 24 * time.Hour
 
+// DeadlineRecheckWindow is how long after a stored application deadline passes the posting's
+// detail is still worth re-reading. The deadline lives only on the detail, so a re-listed
+// posting would otherwise close on the date stored when it was first seen, even after the
+// employer extended it. Two weeks covers a late extension without paying a detail request on
+// every crawl for each expired posting a source keeps listing.
+const DeadlineRecheckWindow = 14 * 24 * time.Hour
+
 // BoardHealth is the optional per-board health port: it tells the Runner whether a
 // board is currently cooled down (skip it) and records each crawl's outcome so a
 // repeatedly-failing board backs off. A nil BoardHealth disables the feature entirely
@@ -1544,8 +1551,9 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical)
 			SalaryPeriod:       j.SalaryPeriod,
 			IsTechHint:         j.IsTechHint,
 		},
-		URL:      j.URL,
-		Remote:   j.Remote,
-		PostedAt: j.PostedAt,
+		URL:                 j.URL,
+		Remote:              j.Remote,
+		PostedAt:            j.PostedAt,
+		ApplicationDeadline: j.ApplicationDeadline,
 	})
 }
