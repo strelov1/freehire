@@ -178,7 +178,7 @@ func (s phenom) list(ctx context.Context, board string) ([]phenomPosting, error)
 		return nil, err
 	}
 	if first.total <= phenomListingWindow {
-		return s.walk(ctx, board, nil, &first)
+		return s.walk(ctx, board, nil, first)
 	}
 	return s.listByState(ctx, board, first)
 }
@@ -231,7 +231,7 @@ func (s phenom) listByState(ctx context.Context, board string, first phenomPage)
 		if n := first.states[state]; n > 0 && (slice.total <= 0 || slice.total > phenomSliceLimit) {
 			return nil, fmt.Errorf("phenom: list board %s: state %q counted %d postings, and its slice states %d", board, state, n, slice.total)
 		}
-		got, err := s.walk(ctx, board, filter, &slice)
+		got, err := s.walk(ctx, board, filter, slice)
 		if err != nil {
 			return nil, err
 		}
@@ -251,15 +251,8 @@ type phenomPage struct {
 
 // walk pages one listing — the whole board, or the slice filter selects — to the total its
 // first page states, advancing by what each page actually held and stopping there or at an
-// empty page. first is that page when the caller already holds it, nil when it does not.
-func (s phenom) walk(ctx context.Context, board string, filter map[string][]string, first *phenomPage) ([]phenomPosting, error) {
-	if first == nil {
-		p, err := s.page(ctx, board, filter, 0, false)
-		if err != nil {
-			return nil, err
-		}
-		first = &p
-	}
+// empty page. The caller supplies the first page it already read.
+func (s phenom) walk(ctx context.Context, board string, filter map[string][]string, first phenomPage) ([]phenomPosting, error) {
 	if first.total < 0 {
 		return nil, errListingAbsent("phenom", board, "totalHits")
 	}

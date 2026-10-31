@@ -3757,6 +3757,27 @@ type Querier interface {
 	// Cancelled meetings are returned and marked rather than filtered: the view shows them
 	// struck through, because a silently missing interview reads as a fault.
 	ListApplicationInterviewsInRange(ctx context.Context, arg ListApplicationInterviewsInRangeParams) ([]ListApplicationInterviewsInRangeRow, error)
+	// The employers the caller has applied to, as the company slugs the catalogue files
+	// postings under — what the feed's "you already applied here" badge and its
+	// hide_applied_companies exclusion compare a posting's company_slug against.
+	//
+	// Only an application that was MADE counts (applied_at IS NOT NULL, per 0065): a tracked
+	// row the candidate is still preparing asserts nothing about the employer yet.
+	//
+	// The slug is the posting's CURRENT company_slug while the posting exists, and the
+	// application's own snapshot only once it is gone. The snapshot is frozen at apply time,
+	// and the slug rule has moved under it since (legal forms stripped, aggregators
+	// re-attributed: measured 2026-10-31, 383 of 11,856 applications held a snapshot their
+	// posting no longer carries, 165 of them with no alias to bridge the two). The posting's
+	// own slug is what backfill-derive and merge-companies keep current; the snapshot is
+	// only the fallback that keeps a deleted posting's employer counted. Either one is then
+	// resolved through company_slug_aliases, so an employer merged since still matches.
+	//
+	// Bounded to the newest max_applications applications BEFORE the posting join, because
+	// the join is a random heap read per application: unbounded, the heaviest account
+	// (7,296 applications) took 10.7s cold. The overflow is a long-ago employer missing its
+	// badge, never a wrong one.
+	ListAppliedCompanySlugs(ctx context.Context, arg ListAppliedCompanySlugsParams) ([]string, error)
 	// The notify fan-out targets: every approved referrer of a company with their email and
 	// linked Telegram chat (NULL when unlinked). Email is always present; chat_id drives the
 	// optional Telegram ping.
@@ -4411,6 +4432,17 @@ type Querier interface {
 	ListGhostReportEvidence(ctx context.Context, jobIds []int64) ([]ListGhostReportEvidenceRow, error)
 	// The caller's hidden application ids, for the tracker's visibility switch.
 	ListHiddenBuddyApplications(ctx context.Context, userID int64) ([]int64, error)
+	// The companies carrying searchable jobs whose slug folds to one of the given keys, or IS one
+	// of the given slugs — the candidates the "Hiring again" filter (internal/job/formeremployer)
+	// chooses among. Both halves are needed: a name resolves either through the alias registry,
+	// whose canonical slug need not fold to the name's own key (a curated merge), or through the
+	// fold itself, where EVERY slug sharing the key must come back so a key two companies share
+	// can be refused rather than half-answered.
+	//
+	// The keys are joined through unnest rather than compared with `= ANY`, so each key is one
+	// probe of companies_folded_slug_idx (migration 0222) — see that file for why the `= ANY`
+	// form over an expression is the shape that went wrong on jobs.
+	ListHiringCompaniesByFoldedSlug(ctx context.Context, arg ListHiringCompaniesByFoldedSlugParams) ([]ListHiringCompaniesByFoldedSlugRow, error)
 	// Every claimed HEAVY-pool run, with what the scheduler needs to ask the service manager
 	// about it. See ListInFlightLightRuns for the other pool, and ClaimDueHeavyRuns for what
 	// "heavy" means and why the two pools are counted apart: the budget each pool claims
@@ -4912,6 +4944,11 @@ type Querier interface {
 	// not ask at all when the page is already full. It handed the same window to both until
 	// 2026-09-06, which returned up to 2*limit rows and skipped a window per page.
 	ListOrphanedApplications(ctx context.Context, arg ListOrphanedApplicationsParams) ([]ListOrphanedApplicationsRow, error)
+	// The places the caller has worked at and LEFT, for the "Hiring again" search filter: the
+	// company name and the location exactly as banked, one row per employment. Owner-scoped like
+	// every read here. Projects are not employers, a blank company names nobody, and a current
+	// role is not a former employer — the filter is about going BACK.
+	ListPastEmployerNames(ctx context.Context, userID int64) ([]ListPastEmployerNamesRow, error)
 	// The moderator review queue: every claim that could not auto-activate (unknown or
 	// mismatched work-email domain), oldest first so the queue drains in claim order. A claim
 	// whose code was never entered is not reviewable — nobody has shown they can read that
@@ -7466,7 +7503,10 @@ type Querier interface {
 	// A nil slice encodes as NULL, which the NOT NULL columns refuse; COALESCE writes the empty
 	// array the ingest upserts write. IS DISTINCT FROM-guarded, so a re-run writes nothing.
 	SetJobPlaces(ctx context.Context, arg SetJobPlacesParams) (int64, error)
-	// Write one row's requires_clearance, for cmd/backfill-clearance.
+	// Write one row's requires_clearance and clearance_levels, for cmd/backfill-clearance.
+	// Both together, because they come from one reading of the description and a row whose
+	// levels are empty beside a TRUE requires_clearance would fall under the levels
+	// filter's "no explicit reference" while the boolean filter says it needs a clearance.
 	//
 	// The IS DISTINCT FROM guard is what makes the pass idempotent: a row already carrying
 	// the derived value is not rewritten, so a re-run writes nothing, produces no dead
@@ -8060,7 +8100,7 @@ type Querier interface {
 	// One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 	// ingest computes as a pure function of a row's own raw/immutable fields — the
 	// deterministic dictionary facets (countries, regions, cities, work_mode, skills,
-	// seniority, category, is_tech, requires_clearance, via_recruiter, plus the synthetic enrichment
+	// seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, plus the synthetic enrichment
 	// facets posting_language,
 	// employment_type, education_level, english_level, experience_years_min, all from
 	// jobderive.Derive), the repost-identity role_fingerprint (internal/job/jobhash), and the

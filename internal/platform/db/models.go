@@ -994,6 +994,8 @@ type Job struct {
 	Metros                    []string           `json:"metros"`
 	SemanticEmbeddedInputHash pgtype.Text        `json:"semantic_embedded_input_hash"`
 	ViaRecruiter              pgtype.Bool        `json:"via_recruiter"`
+	ClearanceLevels           []string           `json:"clearance_levels"`
+	Equity                    pgtype.Text        `json:"equity"`
 	Perks                     []string           `json:"perks"`
 }
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -23,7 +24,6 @@ const (
 	inploiPageSize  = 100
 	inploiMaxTotal  = 50000
 	inploiMaxNew    = 400
-	inploiCadence   = 2 * time.Hour
 	inploiKeyHeader = "x-publishable-key"
 )
 
@@ -43,6 +43,7 @@ type inploi struct {
 	http     inploiHTTP
 	pageSize int
 	maxNew   int
+	pick     func(int) int
 }
 
 func NewInploi(c inploiHTTP) Source {
@@ -77,16 +78,25 @@ func (s inploi) FetchNew(ctx context.Context, e CompanyEntry, seen func(external
 		}
 		fresh = append(fresh, p)
 	}
-	head := s.maxNew / 2
-	fresh = hydrationLanes(fresh, head, s.maxNew-head, inploiLaneClock(time.Now()))
+	if len(fresh) > s.maxNew {
+		// Keep half the budget on the head and sample the rest independently of the
+		// clock: hourly rotation can skip the same backlog on a two-hour cadence.
+		head := s.maxNew / 2
+		rest := fresh[head:]
+		pick := s.pick
+		if pick == nil {
+			pick = rand.IntN
+		}
+		start := pick(len(rest))
+		picked := append([]inploiPosting(nil), fresh[:head]...)
+		for i := range s.maxNew - head {
+			picked = append(picked, rest[(start+i)%len(rest)])
+		}
+		fresh = picked
+	}
 	return append(fetchDetails(fresh, defaultDetailWorkers, func(p inploiPosting) (Job, bool) {
 		return s.detail(ctx, p)
 	}), refresh...), nil
-}
-
-func inploiLaneClock(now time.Time) time.Time {
-	hours := int64(inploiCadence / time.Hour)
-	return time.Unix(now.Unix()/hours, 0).UTC()
 }
 
 func (s inploi) list(ctx context.Context, e CompanyEntry) ([]inploiPosting, error) {

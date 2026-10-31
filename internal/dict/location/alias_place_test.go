@@ -41,6 +41,9 @@ func TestAliasCityAgreesWithStatedPlace(t *testing.T) {
 		// another state, or another country.
 		{"Calcutta, OH", nil, nil},
 		{"Bombay, NY", nil, nil},
+		{"Annapolis, TX", nil, nil},
+		{"Annapolis, MD", []string{"Annapolis"}, []string{"Baltimore (US)"}},
+		{"Annapolis, United States", []string{"Annapolis"}, []string{"Baltimore (US)"}},
 		// The alias's own place, where the line states it, is untouched.
 		{"Scranton, PA", []string{"Scranton"}, []string{"Scranton (US)"}},
 		{"Calcutta", []string{"Kolkata"}, []string{"Kolkata (IN)"}},

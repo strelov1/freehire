@@ -49,6 +49,20 @@ func TestRequiresClearanceFromDescription(t *testing.T) {
 		{"medical clearance", "Medical clearance is required before your start date.", false},
 		{"clearance sale", "Plan the seasonal clearance sale campaign.", false},
 
+		// False friends found in the 2026-10-31 sample of clearance-marked postings:
+		// the US employer's statutory notice and a tuberculosis test.
+		{"polygraph protection act", "Know your rights: Employee Polygraph Protection Act (EPPA) poster.", false},
+		{"tb clearance", "TB clearance required (if applicable by location).", false},
+
+		// A question-form field states the requirement only by its answer. A Workday
+		// template carries it on every posting, answered "No" or left blank far more
+		// often than "Yes".
+		{"question field answered no", "<p><b>Government Clearance Required?</b> No</p>", false},
+		{"question field left blank", "<p><b>Government Clearance Required?</b></p><p><b>Job Posting End Date</b></p>", false},
+		{"question field answered yes", "<p><b>Government Clearance Required?</b> Yes</p>", true},
+		// ...but a doubled "??" is an emoji bullet a lossy feed mangled, not a question.
+		{"mangled emoji bullet", "?? Active SC clearance required ?? Contract until March", true},
+
 		// A bare mention of the word alone is never enough.
 		{"bare clearance token", "Clearance specialist for a central billing team.", false},
 

@@ -112,11 +112,11 @@ func TestMicro1PostID(t *testing.T) {
 	cases := map[string]string{
 		"https://jobs.micro1.ai/post/dcb37b06-8e05-434d-ac22-372a4c04cefc":  "dcb37b06-8e05-434d-ac22-372a4c04cefc",
 		"https://jobs.micro1.ai/post/416f4a44-95ff-455f-ab01-fa318a30dda8/": "416f4a44-95ff-455f-ab01-fa318a30dda8",
-		"https://jobs.micro1.ai":                                                 "", // board root
-		"https://jobs.micro1.ai/":                                                "",
-		"https://jobs.micro1.ai/post/not-a-uuid":                                 "",
+		"https://jobs.micro1.ai":                 "", // board root
+		"https://jobs.micro1.ai/":                "",
+		"https://jobs.micro1.ai/post/not-a-uuid": "",
 		"https://jobs.micro1.ai/post/dcb37b06-8e05-434d-ac22-372a4c04cefc/apply": "", // deeper path
-		"https://www.micro1.ai/jobs":                                             "", // wrong host
+		"https://www.micro1.ai/jobs": "", // wrong host
 	}
 	for u, want := range cases {
 		if got := micro1PostID(u); got != want {

@@ -76,6 +76,7 @@ func (h *trackingHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/me/tracking/viewed", mw.key, h.ListViewedSlugs)
 	api.Get("/me/tracking/saved", mw.key, h.ListSavedSlugs)
 	api.Get("/me/tracking/dismissed", mw.key, h.ListDismissedSlugs)
+	api.Get("/me/tracking/applied-companies", mw.key, h.ListAppliedCompanySlugs)
 	api.Get("/me/tracking/pipeline", mw.key, h.TrackingPipeline)
 	api.Get("/me/tracking/swipe", mw.key, h.SwipeDeck)
 

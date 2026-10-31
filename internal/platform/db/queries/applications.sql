@@ -137,3 +137,40 @@ DELETE FROM applications
  WHERE applications.id = sqlc.arg(id) AND applications.user_id = sqlc.arg(user_id)
 RETURNING job_id, applied_at, stage, notes, followed_up_at;
 
+
+-- name: ListAppliedCompanySlugs :many
+-- The employers the caller has applied to, as the company slugs the catalogue files
+-- postings under — what the feed's "you already applied here" badge and its
+-- hide_applied_companies exclusion compare a posting's company_slug against.
+--
+-- Only an application that was MADE counts (applied_at IS NOT NULL, per 0065): a tracked
+-- row the candidate is still preparing asserts nothing about the employer yet.
+--
+-- The slug is the posting's CURRENT company_slug while the posting exists, and the
+-- application's own snapshot only once it is gone. The snapshot is frozen at apply time,
+-- and the slug rule has moved under it since (legal forms stripped, aggregators
+-- re-attributed: measured 2026-10-31, 383 of 11,856 applications held a snapshot their
+-- posting no longer carries, 165 of them with no alias to bridge the two). The posting's
+-- own slug is what backfill-derive and merge-companies keep current; the snapshot is
+-- only the fallback that keeps a deleted posting's employer counted. Either one is then
+-- resolved through company_slug_aliases, so an employer merged since still matches.
+--
+-- Bounded to the newest max_applications applications BEFORE the posting join, because
+-- the join is a random heap read per application: unbounded, the heaviest account
+-- (7,296 applications) took 10.7s cold. The overflow is a long-ago employer missing its
+-- badge, never a wrong one.
+WITH recent AS (
+    SELECT COALESCE(NULLIF(j.company_slug, ''), a.company_slug) AS slug, a.applied_at
+      FROM applications a
+      LEFT JOIN jobs j ON j.id = a.job_id
+     WHERE a.user_id = sqlc.arg(user_id)
+       AND a.applied_at IS NOT NULL
+     ORDER BY a.applied_at DESC
+     LIMIT sqlc.arg(max_applications)
+)
+SELECT COALESCE(al.canonical_slug, r.slug)::text AS company_slug
+  FROM recent r
+  LEFT JOIN company_slug_aliases al ON al.alias_slug = r.slug
+ WHERE r.slug <> ''
+ GROUP BY COALESCE(al.canonical_slug, r.slug)
+ ORDER BY max(r.applied_at) DESC, company_slug;

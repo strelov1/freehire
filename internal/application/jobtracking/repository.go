@@ -515,6 +515,12 @@ func (r *QueriesRepository) ExcludedJobIDs(ctx context.Context, userID int64, li
 	return r.q.ExcludedJobIDs(ctx, db.ExcludedJobIDsParams{UserID: userID, Limit: limit})
 }
 
+// AppliedCompanySlugs returns the company slugs of the employers the caller has
+// applied to, from at most maxApplications of their newest applications.
+func (r *QueriesRepository) AppliedCompanySlugs(ctx context.Context, userID int64, maxApplications int32) ([]string, error) {
+	return r.q.ListAppliedCompanySlugs(ctx, db.ListAppliedCompanySlugsParams{UserID: userID, MaxApplications: maxApplications})
+}
+
 // PipelineCounts returns the caller's per-stage application counts. A NULL stage
 // (an applied row with no explicit stage) becomes an empty Stage, which
 // userjob.Aggregate folds into the no_answer bucket.

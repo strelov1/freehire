@@ -33,11 +33,19 @@ function valuesOf(options?: { value: string }[]): string {
 }
 
 // StringFacets keys the SPA registry (facets.ts) does not render, kept in sync by
-// hand. Values mirror the Go enrichment vocabularies (internal/enrich).
+// hand. Values mirror the Go vocabularies (internal/dict/vocab).
 const API_ONLY_FACETS: FilterRow[] = [
   { param: 'company_size', label: 'Company size', values: '1-10, 11-50, 51-200, 201-500, 501-1000, 1000+' },
   { param: 'education_level', label: 'Education level', values: 'none, bachelor, master, phd' },
   { param: 'salary_period', label: 'Salary period', values: 'year, month, day, hour' },
+  // API-only until the SPA's clearance control moves from the requires_clearance toggle
+  // to these chips. Values mirror vocab.ClearanceLevelValues plus the reserved none.
+  {
+    param: 'clearance_levels',
+    label: 'Security clearance level',
+    values:
+      'none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one',
+  },
   {
     param: 'perks',
     label: 'Perks mentioned',
@@ -82,9 +90,20 @@ export const FILTER_EXTRAS: FilterRow[] = [
   { param: 'visa_sponsorship', label: 'Visa sponsorship', values: 'true, false' },
   { param: 'requires_clearance', label: 'Security clearance required', values: 'true, false' },
   {
+    param: 'equity',
+    label: 'Equity compensation',
+    values: 'salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity',
+  },
+  {
     param: 'via_recruiter',
     label: 'Posting says a recruiter publishes it for a client',
     values: 'true — the description says so; false — every posting not marked, including recruiter posts that never say so',
+  },
+  {
+    param: 'former_employers',
+    label: 'Hiring again: companies you have worked at and left',
+    values:
+      'true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params. `/jobs/facets` never applies this filter, so its counts ignore it even for signed-in callers',
   },
   {
     param: 'salary_min',
@@ -163,6 +182,7 @@ export const RECIPES: Recipe[] = [
   { title: 'Must use both Go and Rust', query: 'skills=go,rust&skills_mode=and' },
   { title: 'Exclude outstaff companies', query: 'company_type_exclude=outstaff' },
   { title: 'At least $100k, with visa sponsorship', query: 'salary_currency=USD&salary_min=100000&visa_sponsorship=true' },
-  { title: 'Excluding jobs that need a security clearance', query: 'requires_clearance=false' },
+  { title: 'Excluding jobs that need a security clearance', query: 'clearance_levels=none' },
+  { title: 'Jobs stating Secret or Top Secret clearance', query: 'clearance_levels=secret,top_secret' },
   { title: 'Only jobs that need a security clearance', query: 'requires_clearance=true' },
 ];

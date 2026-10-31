@@ -56,6 +56,8 @@ type fakeRepo struct {
 	excludedResult      []int64
 	excludedErr         error
 	excludedLimit       int32
+	appliedCoResult     []string
+	appliedCoLimit      int32
 	pipelineResult      []userjob.StageCount
 	pipelineErr         error
 	replyRateYou        userjob.ReplyRateSide
@@ -180,6 +182,11 @@ func (f *fakeRepo) DismissedSlugs(_ context.Context, _ int64) ([]string, error) 
 func (f *fakeRepo) ExcludedJobIDs(_ context.Context, _ int64, limit int32) ([]int64, error) {
 	f.excludedLimit = limit
 	return f.excludedResult, f.excludedErr
+}
+
+func (f *fakeRepo) AppliedCompanySlugs(_ context.Context, _ int64, maxApplications int32) ([]string, error) {
+	f.appliedCoLimit = maxApplications
+	return f.appliedCoResult, nil
 }
 
 func (f *fakeRepo) PipelineCounts(_ context.Context, _ int64) ([]userjob.StageCount, error) {
@@ -768,6 +775,23 @@ func TestExcludedJobIDs_PassthroughWithCap(t *testing.T) {
 	}
 	if repo.excludedLimit != 1000 {
 		t.Errorf("repo received limit %d, want 1000 (excludedJobsCap)", repo.excludedLimit)
+	}
+}
+
+func TestAppliedCompanySlugs_PassthroughWithCap(t *testing.T) {
+	repo := newRepo()
+	repo.appliedCoResult = []string{"acme", "globex"}
+	svc := jobtracking.New(repo)
+
+	slugs, err := svc.AppliedCompanySlugs(ctx(), userID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(slugs) != 2 || slugs[0] != "acme" {
+		t.Errorf("slugs = %v, want [acme globex]", slugs)
+	}
+	if repo.appliedCoLimit != 1000 {
+		t.Errorf("repo received cap %d, want 1000 (appliedCompaniesCap)", repo.appliedCoLimit)
 	}
 }
 
