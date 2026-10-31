@@ -12,6 +12,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/job"
+	"github.com/strelov1/freehire/internal/platform/externalid"
 )
 
 // fakeStore records every saved job and every (source, external_id) closed. It implements
@@ -646,6 +647,9 @@ func TestRunSeenLookupErrorWithholdsTheBoardsCloses(t *testing.T) {
 	}
 	if !slices.Contains(st.UnprovenCompanies, "acme") {
 		t.Errorf("UnprovenCompanies = %v, want acme withheld from the company scope", st.UnprovenCompanies)
+	}
+	if !slices.Contains(st.SkippedBoards, externalid.BoardPattern("b1")) {
+		t.Errorf("SkippedBoards = %v, want b1 excluded from the company and source scopes", st.SkippedBoards)
 	}
 }
 

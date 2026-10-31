@@ -753,6 +753,10 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, fetch
 	if fetched.seenUnknown {
 		st.SeenUnknown = 1
 		st.UnprovenCompanies = resolveAll(canon, distinctCompanySlugs(raw))
+		// raw names only the companies of what the adapter yielded; a company found only among
+		// the postings it left out could still be closed through another board's crawl, so the
+		// board itself is excluded too.
+		st.SkippedBoards = append(st.SkippedBoards, skippedBoard(e)...)
 	} else if !boardReadWhatItListed(st) {
 		st.UnprovenCompanies = resolveAll(canon, distinctCompanySlugs(raw))
 		log.Printf("ingest: %s board %q (%s): %d/%d postings unreadable — withholding this run's stale-job close for it",
