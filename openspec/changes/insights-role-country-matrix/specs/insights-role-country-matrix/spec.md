@@ -133,6 +133,14 @@ publication date and describes freehire's catalogue, not the whole labour market
 - **WHEN** a cell's `open_count_prev` is below the floor
 - **THEN** the growth view shows "—" for it rather than a percentage
 
+#### Scenario: A country freehire just started covering shows no change
+
+- **WHEN** a column's open total is at least 1.75 times its total a window ago (on
+  2026-10-31 Taiwan stood at ×6.99 and France at ×1.94, every other column at ×0.92–×1.46)
+- **THEN** none of its cells prints a change or a growth shade, its heading carries a
+  marker, and the note under the grid says its coverage grew, because no per-posting
+  rule can separate onboarding from hiring there
+
 #### Scenario: Decline is distinguishable without colour
 
 - **WHEN** a cell's open count fell over the window
