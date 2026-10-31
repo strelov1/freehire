@@ -155,6 +155,10 @@ var blocks = map[string][]string{
 		"dictgap",
 		"ghost", "ghostreport", "job", "jobdedup",
 		"jobderive", "jobfacts", "jobhash", "jobreality", "jobview", "liveness",
+		// qualityaudit samples the catalogue against the world (is a shown posting live, is a
+		// remote tag honest) and only measures; beside liveness and ghost, it is about whether a
+		// posting is what it claims to be.
+		"qualityaudit",
 		// logodomain builds the company-name-to-domain map the logo proxy consults. It
 		// is here and not in dict because it is not a dictionary: it reads the stored
 		// company website and whatever spellings the catalogue happens to hold, which

@@ -1393,6 +1393,16 @@ type ReferralRequest struct {
 	ID              uuid.UUID          `json:"id"`
 }
 
+type RemoteAuditJudgement struct {
+	ID           int64              `json:"id"`
+	JobID        int64              `json:"job_id"`
+	Source       string             `json:"source"`
+	WorkMode     string             `json:"work_mode"`
+	Worldwide    string             `json:"worldwide"`
+	TaggedGlobal bool               `json:"tagged_global"`
+	JudgedAt     pgtype.Timestamptz `json:"judged_at"`
+}
+
 type SavedSearch struct {
 	ID                 int64              `json:"id"`
 	UserID             int64              `json:"user_id"`

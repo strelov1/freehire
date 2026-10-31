@@ -1362,6 +1362,9 @@ type Querier interface {
 	// applied_at set but no stage groups under a NULL stage. The Go layer folds these
 	// rows into the pipeline buckets.
 	CountMyJobsByStage(ctx context.Context, userID int64) ([]CountMyJobsByStageRow, error)
+	// How many open public postings each source tags remote — the weights the week's sources are
+	// drawn by. Narrow: no description is read.
+	CountOpenRemoteJobsBySource(ctx context.Context, minRemote int64) ([]CountOpenRemoteJobsBySourceRow, error)
 	// Open-thread count for one subject — the "Discussion · N" badge on the detail page.
 	// Served by the partial index threads_subject_open_created_idx; scoped to a single
 	// subject so it stays cheap (not the cross-subject count the design rules out).
@@ -3473,6 +3476,7 @@ type Querier interface {
 	// write path does (job.Fields.UpsertParams), so a private job's fingerprints are
 	// comparable if it were ever to matter, even though it is never indexed or clustered.
 	InsertPrivateJob(ctx context.Context, arg InsertPrivateJobParams) (Job, error)
+	InsertRemoteAuditJudgement(ctx context.Context, arg InsertRemoteAuditJudgementParams) error
 	// Append a reward: points earned (e.g. for an accepted board contribution), delta positive,
 	// feature NULL. Rewards bank above the monthly grant and survive the period reset. The
 	// partial unique index on (user_id, ref) WHERE kind='reward' guards against a double
@@ -3629,6 +3633,8 @@ type Querier interface {
 	// returns exactly one row — NULL for an empty catalogue — rather than the
 	// no-rows error a bare LIMIT 1 SELECT would give sqlc's :one on an empty table.
 	LatestOpenJobAddedAt(ctx context.Context) (pgtype.Timestamptz, error)
+	// When the remote check last judged anything, NULL when it never has.
+	LatestRemoteAuditJudgement(ctx context.Context) (pgtype.Timestamptz, error)
 	// Opt a member out, the leave's last statement: stamp left_at and cancel every future
 	// mock they are in (either role, freeing both people's time). Run in one transaction after
 	// CloseBuddyConversationsForLeave and LockBuddyMemberForLeave, so a leave cannot
@@ -4726,6 +4732,17 @@ type Querier interface {
 	// picks the cutoff; the pass degrades to the full table when it passes the zero time,
 	// which keeps the unfiltered behaviour one env var away.
 	ListLiveJobsByIDAfter(ctx context.Context, arg ListLiveJobsByIDAfterParams) ([]Job, error)
+	// The sampled quality audit (cmd/quality-audit, internal/job/qualityaudit): reads a random
+	// sample of the catalogue to check it against the world, and keeps the remote judgements.
+	// Nothing here writes to jobs — the audit measures, it never acts.
+	//
+	// Both samples draw the same way: a Bernoulli pre-filter (`random() < fraction`, the caller
+	// sizing the fraction to a few times the sample) and then ORDER BY random() over what passed,
+	// so the sort is over a few dozen rows instead of a source's whole catalogue, and the result is
+	// still uniform — a LIMIT without the sort would favour whatever order the scan visits rows in.
+	// Sources whose open public postings reach the floor, from Layer 1's snapshot, so the two
+	// layers share their denominator.
+	ListLivenessAuditSources(ctx context.Context, minOpen int64) ([]ListLivenessAuditSourcesRow, error)
 	// One chunk of the geo-gap report: every distinct (location string, LLM country list)
 	// pair among PUBLISHABLE postings in an id range, with how many postings in THIS CHUNK
 	// carried it. dictgap.GeoGapCandidates re-runs internal/dict/location on each location
@@ -7045,6 +7062,8 @@ type Querier interface {
 	// cannot type, and the surplus is bounded: a page holds few distinct companies, and a
 	// fingerprint belonging to another of them simply has no rows.
 	RoleClusterCountsFor(ctx context.Context, arg RoleClusterCountsForParams) ([]RoleClusterCountsForRow, error)
+	SampleLivenessAuditJobs(ctx context.Context, arg SampleLivenessAuditJobsParams) ([]SampleLivenessAuditJobsRow, error)
+	SampleRemoteAuditJobs(ctx context.Context, arg SampleRemoteAuditJobsParams) ([]SampleRemoteAuditJobsRow, error)
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:
 	// it inserts the row (viewed_at defaults) or refreshes saved_at in place.
 	SaveJob(ctx context.Context, arg SaveJobParams) (SaveJobRow, error)
@@ -7835,6 +7854,9 @@ type Querier interface {
 	// IS DISTINCT FROM keeps a no-op report from touching a single row, which also keeps
 	// the enqueue empty when nothing changed.
 	SyncJobsAIInterviewReports(ctx context.Context, arg SyncJobsAIInterviewReportsParams) error
+	// Per source, the judgements since the cutoff — the figures the gauges publish. Raw counts:
+	// what share is "accurate enough" is the alert rule's to decide.
+	TallyRemoteAuditJudgements(ctx context.Context, since pgtype.Timestamptz) ([]TallyRemoteAuditJudgementsRow, error)
 	// The day's candidates, most-viewed first, ranked on page_uniques — NOT on uniques.
 	// uniques fuses page opens with API reads and API reads carry no bot filtering, so on
 	// a host whose traffic is mostly crawlers it answers "what did robots fetch". See
