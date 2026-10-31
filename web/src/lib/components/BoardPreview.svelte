@@ -5,7 +5,7 @@
   import type { MyJob } from '#lib/types.js';
 
   let { item, children, class: className }: { item: MyJob; children: Snippet; class?: string } = $props();
-  let trigger: HTMLDivElement;
+  let trigger = $state<HTMLDivElement | null>(null);
   let visible = $state(false);
   let pointerPressed = $state(false);
   let text = $state<string | null>(null);
@@ -17,7 +17,7 @@
 
   async function show() {
     clearTimeout(timer);
-    if (!item.job) return;
+    if (!item.job || !trigger) return;
     const rect = trigger.getBoundingClientRect();
     left = Math.max(8, Math.min(rect.left, window.innerWidth - 328));
     top = Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 160));
@@ -63,7 +63,7 @@
   // Preserve the card's stage/location descriptions while adding this temporary one.
   $effect(() => {
     if (!visible) return;
-    const target = trigger.querySelector<HTMLElement>('button, [role="button"]');
+    const target = trigger?.querySelector<HTMLElement>('button, [role="button"]');
     const previous = target?.getAttribute('aria-describedby');
     target?.setAttribute('aria-describedby', [previous, id].filter(Boolean).join(' '));
     document.addEventListener('scroll', hide, true);
