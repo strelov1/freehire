@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -166,10 +167,15 @@ func MapGreenhousePosting(j GreenhousePosting) Job {
 // Range" at $190,000, "Pay Range" at $18) are dropped rather than given a period by
 // magnitude, because a wrong period publishes an hourly rate as a yearly salary.
 func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, currency, period string) {
-	if len(ranges) == 0 {
+	// The first range that is not a named bonus/commission/equity component. On the
+	// largest boards every multi-range posting lists one range per state or zone, all
+	// of them base pay, so this skips nothing today — it keeps a board that does list a
+	// bonus first from publishing the bonus as the salary.
+	i := slices.IndexFunc(ranges, func(r GreenhousePayRange) bool { return !greenhouseNonBase.MatchString(r.Title) })
+	if i < 0 {
 		return nil, nil, "", ""
 	}
-	r := ranges[0]
+	r := ranges[i]
 	period = greenhousePayPeriod(r.Title)
 	if period == "" {
 		period = greenhousePayPeriod(r.Blurb)
@@ -177,11 +183,12 @@ func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, c
 	if period == "" || r.CurrencyType == "" {
 		return nil, nil, "", ""
 	}
+	scale := currencyMinorUnits(r.CurrencyType)
 	if r.MinCents != nil {
-		salaryMin = roundSalaryPart(float64(*r.MinCents) / 100)
+		salaryMin = roundSalaryPart(float64(*r.MinCents) / scale)
 	}
 	if r.MaxCents != nil {
-		salaryMax = roundSalaryPart(float64(*r.MaxCents) / 100)
+		salaryMax = roundSalaryPart(float64(*r.MaxCents) / scale)
 	}
 	if salaryMin == nil && salaryMax == nil {
 		return nil, nil, "", ""
@@ -201,6 +208,24 @@ func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, c
 		}
 	}
 	return salaryMin, salaryMax, r.CurrencyType, period
+}
+
+// greenhouseNonBase names a pay range that is not the base wage.
+var greenhouseNonBase = regexp.MustCompile(`(?i)\bbonus|\bcommission|\bequity\b|\bstock\b|\bincentive`)
+
+// currencyMinorUnits is how many of a currency's smallest unit make one: Greenhouse's
+// "cents" are the currency's minor unit, so a JPY range is already in yen — Anduril's
+// Tokyo range reads 20,454,000, ¥20M a year, not ¥204,540. ISO 4217 exponents 0 and 3;
+// every other currency has two.
+func currencyMinorUnits(code string) float64 {
+	switch strings.ToUpper(code) {
+	case "BIF", "CLP", "DJF", "GNF", "ISK", "JPY", "KMF", "KRW", "PYG", "RWF", "UGX", "UYI", "VND", "VUV", "XAF", "XOF", "XPF":
+		return 1
+	case "BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND":
+		return 1000
+	default:
+		return 100
+	}
 }
 
 // greenhousePeriodWords are the phrases that state a pay period, in the languages the

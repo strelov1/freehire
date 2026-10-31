@@ -315,6 +315,7 @@ func TestGreenhouseSalaryReadsOnlyAStatedPeriod(t *testing.T) {
 		{"no period stated", GreenhousePayRange{MinCents: cents(19000000), MaxCents: cents(23000000), CurrencyType: "USD", Title: "US Salary Range"}, 0, ""},
 		{"hourly amount called annual", GreenhousePayRange{MinCents: cents(1800), MaxCents: cents(2500), CurrencyType: "USD", Title: "Colorado pay range", Blurb: "annual base pay"}, 0, ""},
 		{"no currency", GreenhousePayRange{MinCents: cents(2200), Title: "Hourly"}, 0, ""},
+		{"zero-decimal currency", GreenhousePayRange{MinCents: cents(20454000), CurrencyType: "JPY", Title: "Annual Salary Range"}, 20454000, "year"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -329,5 +330,17 @@ func TestGreenhouseSalaryReadsOnlyAStatedPeriod(t *testing.T) {
 				t.Errorf("salary = %v %q/%q, want %d %s/%s", job.SalaryMin, job.SalaryCurrency, job.SalaryPeriod, c.wantMin, c.r.CurrencyType, c.wantPeriod)
 			}
 		})
+	}
+}
+
+// A named bonus listed first is skipped for the base range after it.
+func TestGreenhouseSalarySkipsANamedBonusRange(t *testing.T) {
+	cents := func(v int64) *int64 { return &v }
+	job := MapGreenhousePosting(GreenhousePosting{PayInputRanges: []GreenhousePayRange{
+		{MinCents: cents(1000000), CurrencyType: "USD", Title: "Annual Bonus Range"},
+		{MinCents: cents(15000000), CurrencyType: "USD", Title: "Annual Base Salary"},
+	}})
+	if job.SalaryMin == nil || *job.SalaryMin != 150000 {
+		t.Errorf("SalaryMin = %v, want the base range's 150000", job.SalaryMin)
 	}
 }
