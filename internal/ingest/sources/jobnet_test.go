@@ -208,8 +208,11 @@ func TestJobnetFetchReadsPastTheResultWindow(t *testing.T) {
 // One occupation larger than the window cannot be read whole by any slice, so the crawl fails
 // rather than reporting the window as the end.
 func TestJobnetFetchFailsWhenAnOccupationOutgrowsTheWindow(t *testing.T) {
-	if _, err := fetchJobnet(t, &jobnetCatalogue{ads: jobnetFakeAds("huge", jobnetWindow+500)}); err == nil {
-		t.Fatal("Fetch: want an error when one occupation holds more ads than the search serves")
+	// +50 is less than a page past the window, which the drift tolerance alone would accept.
+	for _, over := range []int{50, 500} {
+		if _, err := fetchJobnet(t, &jobnetCatalogue{ads: jobnetFakeAds("huge", jobnetWindow+over)}); err == nil {
+			t.Errorf("Fetch: want an error when one occupation holds %d ads more than the search serves", over)
+		}
 	}
 }
 
