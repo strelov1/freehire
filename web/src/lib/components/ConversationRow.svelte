@@ -15,7 +15,7 @@
 
 <button
   type="button"
-  class="w-full p-3 text-left hover:bg-accent {selected ? 'bg-accent' : ''}"
+  class="w-full rounded-lg p-2.5 text-left transition-colors {selected ? 'bg-brand-muted' : 'hover:bg-muted'}"
   aria-pressed={selected}
   onclick={() => onselect(conversation)}
 >

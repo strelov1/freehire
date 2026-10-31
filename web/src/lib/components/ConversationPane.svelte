@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import { onDestroy, onMount, tick, untrack, type Snippet } from 'svelte';
   import { ApiError, api } from '#lib/api.js';
   import { messageActionFor } from '#lib/buddies.js';
-  import { counterpartName, followsNewMessages, isSendShortcut, kindCopy, mergeMessages } from '#lib/messaging.js';
+  import { buddyRelativeDay, localDay } from '#lib/buddyPresent.js';
+  import { counterpartName, followsNewMessages, isSendShortcut, kindCopy, mergeMessages, messageDays, messageJobSlugs } from '#lib/messaging.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
   import type { Conversation, ConversationMessage, ConversationReport } from '#lib/types.js';
   import { Button, ConfirmDialog } from '#lib/ui/index.js';
+  import ChatJobPreview from './ChatJobPreview.svelte';
   import ConversationCounterpart from './ConversationCounterpart.svelte';
 
   // One conversation of any kind: its messages, the invitation answer, the composer, block
@@ -32,6 +34,7 @@
     compact = false,
     onchange,
     oninvite,
+    intro,
   }: {
     conversation: Conversation;
     /** In a dock window, whose own header already names the other side. */
@@ -40,7 +43,16 @@
     onchange?: (change: 'accepted' | 'declined' | 'blocked') => void;
     /** A buddy conversation closed by a leave can be started again with a new first message. */
     oninvite?: (handle: string) => void;
+    /** Context above the first message (the full chat page's "you both applied to"). */
+    intro?: Snippet;
   } = $props();
+
+  const today = localDay();
+  const dayLabel = (day: string) => {
+    const label = buddyRelativeDay(day, today);
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
+  const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const id = untrack(() => conversation.id);
   const uid = $props.id();
@@ -209,8 +221,8 @@
       {/if}
       {#if live && (status === 'open' || status === 'incoming')}
         <div class="flex gap-2">
-          <Button variant="outline" size="sm" aria-expanded={reportOpen} aria-controls="{uid}-report" onclick={toggleReport}>Report</Button>
-          <Button variant="outline" size="sm" onclick={() => (confirmBlockOpen = true)}>Block</Button>
+          <Button variant="ghost" size="sm" aria-expanded={reportOpen} aria-controls="{uid}-report" onclick={toggleReport}>Report</Button>
+          <Button variant="ghost" size="sm" onclick={() => (confirmBlockOpen = true)}>Block</Button>
         </div>
       {/if}
     </header>
@@ -224,7 +236,7 @@
       <span class="text-right text-xs text-muted-foreground">{reportNote.length}/1000</span>
       <div class="flex justify-end gap-2"><Button variant="outline" type="button" onclick={() => (reportOpen = false)}>Cancel</Button><Button variant="primary" type="submit" disabled={actionBusy || reportNote.length > 1000}>Send report</Button></div>
     </form>{/if}
-    <div bind:this={list} onscroll={() => { if (list) following = followsNewMessages(list); }} class="min-h-0 flex-1 overflow-y-auto py-4">
+    <div bind:this={list} onscroll={() => { if (list) following = followsNewMessages(list); }} class="min-h-0 flex-1 overflow-y-auto py-4 pr-2">
       {#if history === 'loading' && messages.length === 0}
         <p class="text-sm text-muted-foreground">Loading messages…</p>
       {:else if history === 'error'}
@@ -235,19 +247,29 @@
       {:else if messages.length === 0 && status === 'open' && live}
         <p class="text-sm text-muted-foreground">No messages yet. Say hello to {name}.</p>
       {/if}
+      {#if intro}<div class="mb-3 flex justify-center">{@render intro()}</div>{/if}
       <div role="log" aria-live={announce ? 'polite' : 'off'}>
-        <ol aria-label="Messages with {name}" class="flex flex-col gap-3">
-          {#each messages as message (message.id)}
-            <li class="w-fit max-w-4/5 whitespace-pre-wrap break-words rounded-lg p-3 text-sm {message.mine ? 'self-end bg-brand-muted' : 'self-start bg-muted'}">
-              <span class="sr-only">{message.mine ? 'You' : name}: </span>{message.body}<time class="mt-1 block text-right text-xs text-muted-foreground">{new Date(message.created_at).toLocaleString()}</time>
-            </li>
+        <ol aria-label="Messages with {name}" class="flex flex-col gap-1">
+          {#each messageDays(messages) as group (group.day)}
+            <li class="py-2 text-center text-xs font-medium text-muted-foreground" aria-hidden="true">{dayLabel(group.day)}</li>
+            {#each group.messages as message (message.id)}
+              <!-- Bubbles: the viewer's own on the right in the brand fill, the other side's on
+                   the left; the corner nearest the sender is tucked in. -->
+              <li class="flex flex-col {message.mine ? 'items-end' : 'items-start'}">
+                <div class="w-fit max-w-4/5 whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm {message.mine ? 'rounded-br-md bg-brand text-brand-foreground' : 'rounded-bl-md bg-muted'}">
+                  <span class="sr-only">{message.mine ? 'You' : name}: </span>{message.body}
+                  {#each messageJobSlugs(message.body) as slug (slug)}<ChatJobPreview {slug} />{/each}
+                </div>
+                <time datetime={message.created_at} title={new Date(message.created_at).toLocaleString()} class="mx-2 mt-0.5 text-xs text-muted-foreground">{clock(message.created_at)}</time>
+              </li>
+            {/each}
           {/each}
         </ol>
       </div>
     </div>
     {#if status === 'incoming' && live}<div class="flex gap-2 border-t border-border py-3"><Button variant="primary" disabled={actionBusy} onclick={() => void invitation('accept')}>Accept</Button><Button variant="outline" disabled={actionBusy} onclick={() => void invitation('decline')}>Decline</Button></div>
     {:else if status === 'outgoing' && live}<p role="status" class="border-t border-border py-3 text-sm text-muted-foreground">Sent. You can keep chatting once they accept.</p>
-    {:else if status === 'open' && live}<form class="flex flex-col gap-2 border-t border-border py-3" onsubmit={(e) => { e.preventDefault(); void send(); }}><textarea bind:value={body} maxlength="4000" rows={compact ? 2 : 3} class="w-full rounded-md border border-border bg-background p-3 text-sm" aria-label="Message to {name}" aria-describedby="{uid}-composer-hint" placeholder="Write a message" onkeydown={onComposerKeydown}></textarea><div class="flex items-center justify-between gap-2"><span id="{uid}-composer-hint" class="text-xs text-muted-foreground">{body.length}/4000 · {sendKey}+Enter sends</span><Button variant="primary" size={compact ? 'sm' : 'md'} type="submit" disabled={actionBusy || !body.trim()}>Send</Button></div></form>
+    {:else if status === 'open' && live}<form class="flex flex-col gap-2 border-t border-border py-3" onsubmit={(e) => { e.preventDefault(); void send(); }}><textarea bind:value={body} maxlength="4000" rows={compact ? 2 : 3} class="w-full resize-none rounded-xl bg-muted p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-ring" aria-label="Message to {name}" aria-describedby="{uid}-composer-hint" placeholder="Write a message" onkeydown={onComposerKeydown}></textarea><div class="flex items-center justify-between gap-2"><span id="{uid}-composer-hint" class="text-xs text-muted-foreground">{body.length}/4000 · {sendKey}+Enter sends</span><Button variant="primary" size={compact ? 'sm' : 'md'} type="submit" disabled={actionBusy || !body.trim()}>Send</Button></div></form>
     {:else}
       <div class="flex flex-col items-start gap-2 border-t border-border py-3 text-sm text-muted-foreground">
         <p>{live ? copy.closed : copy.gone}</p>

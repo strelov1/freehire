@@ -2,6 +2,7 @@
 // free of Svelte so it unit-tests in plain node; the dock's window arithmetic is
 // `messagingDock.ts`, and what is buddy-only (the "Message" control) is `buddies.ts`.
 
+import { localDay } from './buddyPresent.js';
 import type { Conversation, ConversationReport, ConversationStatus, Counterpart } from './types.js';
 
 const STATUS_LABELS = {
@@ -74,4 +75,34 @@ export function followsNewMessages(list: { scrollTop: number; scrollHeight: numb
  *  input method is composing belongs to the composition. */
 export function isSendShortcut(e: { key: string; metaKey: boolean; ctrlKey: boolean; isComposing?: boolean }): boolean {
   return e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing;
+}
+
+// A link to one of our job pages, absolute (this site) or site-relative, standing on its
+// own: a bare "/jobs/…" inside someone else's URL is not ours.
+const JOB_LINK = /(?:^|\s)(?:(?:https?:\/\/)?(?:www\.)?freehire\.me)?\/jobs\/([a-z0-9-]+)/gi;
+const JOB_PREVIEWS = 2;
+
+/** The job pages a message links to, once each, in order — what the chat previews under
+ *  the message. At most two: a pasted list should stay a message, not a wall of cards. */
+export function messageJobSlugs(body: string): string[] {
+  const slugs: string[] = [];
+  for (const m of body.matchAll(JOB_LINK)) {
+    const slug = m[1]?.toLowerCase();
+    if (slug && !slugs.includes(slug)) slugs.push(slug);
+    if (slugs.length === JOB_PREVIEWS) break;
+  }
+  return slugs;
+}
+
+/** Messages under the viewer's local calendar day they were sent, in log order — the
+ *  chat's day separators. */
+export function messageDays<T extends { created_at: string }>(messages: readonly T[]): { day: string; messages: T[] }[] {
+  const out: { day: string; messages: T[] }[] = [];
+  for (const m of messages) {
+    const day = localDay(new Date(m.created_at));
+    const last = out[out.length - 1];
+    if (last && last.day === day) last.messages.push(m);
+    else out.push({ day, messages: [m] });
+  }
+  return out;
 }
