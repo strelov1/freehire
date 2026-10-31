@@ -75,7 +75,7 @@
   function cellLabel(category: string, country: string, cell: GridCell): string {
     const rounded = roundedGrowth(cell);
     let change: string;
-    if (jumped(country)) change = `change not shown, freehire's coverage of ${columnName(country)} at least ${COVERAGE_JUMP_RATIO}× in 30 days`;
+    if (jumped(country)) change = `change not shown: postings for ${columnName(country)} grew at least ${COVERAGE_JUMP_RATIO}× in 30 days, likely new coverage`;
     else if (rounded === null) change = `fewer than ${GROWTH_MIN_BASE} 30 days ago`;
     else if (rounded === 0) change = 'unchanged over 30 days';
     else change = `${rounded > 0 ? 'up' : 'down'} ${Math.abs(rounded)}% over 30 days`;
@@ -137,7 +137,7 @@
                   </a>
                 {/if}
                 {#if jumped(country)}
-                  <span title="Coverage grew {COVERAGE_JUMP_RATIO}× or more in 30 days; change not shown"
+                  <span title="Postings grew {COVERAGE_JUMP_RATIO}× or more in 30 days, likely new coverage; change not shown"
                     ><span aria-hidden="true">*</span><span class="sr-only"> (coverage grew, change not shown)</span></span
                   >
                 {/if}
@@ -198,8 +198,9 @@
       fewer than {GROWTH_MIN_BASE} a month ago. These are postings on freehire, not the whole
       job market.
       {#if grid.coverageJumps.size > 0}
-        * freehire's coverage of that country grew {COVERAGE_JUMP_RATIO}× or more in 30 days, so
-        its change would describe our new sources rather than hiring, and is not shown.
+        * postings freehire carries for that country grew {COVERAGE_JUMP_RATIO}× or more in 30
+        days — a jump that size is usually new sources rather than hiring, and the two cannot be
+        told apart, so its change is not shown.
       {/if}
     </p>
   </section>
