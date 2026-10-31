@@ -177,6 +177,10 @@ var blocks = map[string][]string{
 		// and returns them in the enrichment contract's shape, so it takes enrich the
 		// way jobview does — the block below it, not the model.
 		"reqextract",
+		// salaryextract reads a labeled salary line out of the description. It is the
+		// read-path fill for a posting the model has not priced, the same footing as
+		// reqextract: a fact the posting states, not a guess at any number in it.
+		"salaryextract",
 		// searchping announces a posting's public URL to the external search engines
 		// that accept being told (Google's Indexing API, IndexNow). It is here and not
 		// in search because search is OUR index — Meilisearch, the drain, saved
