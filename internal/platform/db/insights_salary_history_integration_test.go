@@ -199,3 +199,56 @@ func TestInsightsSalaryMonthlyRollup(t *testing.T) {
 		t.Errorf("EUR/month = %+v, want sample 30", e)
 	}
 }
+
+// TestEffectiveSalaryMidpointDoesNotOverflow pins the prod failure of 2026-10-31: the
+// view summed two integer bounds before halving them, so a source range of 1.5–1.6
+// billion (a yearly salary in VND or IRR) overflowed 32 bits and failed the whole
+// insights rebuild — every rollup in its transaction, not just salaries.
+func TestEffectiveSalaryMidpointDoesNotOverflow(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	// One posting per integer tier, each the only tier it has: the view picks the first
+	// complete tier, so a posting carrying both would never evaluate the source sum.
+	for _, tier := range []string{"source", "manual"} {
+		ext := "vnd-" + tier
+		seedInsightsJob(t, ctx, q, pool, ext, insightSeed{category: "backend", seniority: "senior", countries: []string{"vn"}, createdAgo: 5})
+		if _, err := pool.Exec(ctx, `UPDATE jobs SET salary_min_`+tier+` = 1500000000, salary_max_`+tier+` = 1600000000,
+			salary_currency_`+tier+` = 'VND', salary_period_`+tier+` = 'year' WHERE external_id = $1`, ext); err != nil {
+			t.Fatalf("seed %s range: %v", tier, err)
+		}
+	}
+
+	rows, err := pool.Query(ctx, `SELECT amount FROM jobs_effective_salary`)
+	if err != nil {
+		t.Fatalf("read the view: %v", err)
+	}
+	var amounts []float64
+	for rows.Next() {
+		var a float64
+		if err := rows.Scan(&a); err != nil {
+			t.Fatalf("scan amount: %v", err)
+		}
+		amounts = append(amounts, a)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read the view: %v", err)
+	}
+	if len(amounts) != 2 || amounts[0] != 1550000000 || amounts[1] != 1550000000 {
+		t.Errorf("amounts = %v, want two of 1550000000 (source tier and manual tier)", amounts)
+	}
+	if err := q.DeleteAllInsightsSalaryStats(ctx); err != nil {
+		t.Fatalf("delete salary: %v", err)
+	}
+	if _, err := q.RebuildInsightsSalaryStatsGlobal(ctx, 1); err != nil {
+		t.Errorf("rebuild salary bands: %v", err)
+	}
+	if err := q.DeleteAllInsightsSalaryMonthly(ctx); err != nil {
+		t.Fatalf("delete monthly: %v", err)
+	}
+	if _, err := q.RebuildInsightsSalaryMonthly(ctx, 1); err != nil {
+		t.Errorf("rebuild salary history: %v", err)
+	}
+}
