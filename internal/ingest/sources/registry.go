@@ -291,7 +291,7 @@ func All(c HTTPClient) map[string]Source {
 		NewApplicantPro(c),
 		NewPaylocity(c),
 		NewJibe(c),
-		// Rate-paced (pacedPhenomGetter): all ~95 boards share Phenom People's platform
+		// Rate-paced (pacedPhenomGetter): all ~380 boards share Phenom People's platform
 		// infrastructure, and the run's own aggregate volume 403s a large fraction of them
 		// unpaced. See pacer.go.
 		NewPhenom(pacedPhenomGetter(c)),

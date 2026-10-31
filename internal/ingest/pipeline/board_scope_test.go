@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"golang.org/x/time/rate"
 )
 
 // TestRunReportsQualifyingBoardOnASuccessfulCrawl is the ordinary case the sweep's board
@@ -439,6 +441,44 @@ func TestRunCountsAFetchTheDeadlineEndedAsInterrupted(t *testing.T) {
 	got := stats["workday"]
 	if got.Interrupted != 1 || got.Failed != 0 {
 		t.Errorf("Interrupted = %d, Failed = %d; want 1 and 0", got.Interrupted, got.Failed)
+	}
+}
+
+// limiterRefusedSource fails its fetch the way a paced adapter does when its rate limiter can
+// already tell that no slot opens before the run's deadline: with the limiter's own error,
+// returned at once while the run's context is still alive.
+type limiterRefusedSource struct{ provider string }
+
+func (s limiterRefusedSource) Provider() string { return s.provider }
+
+func (s limiterRefusedSource) Fetch(ctx context.Context, e sources.CompanyEntry) ([]sources.Job, error) {
+	l := rate.NewLimiter(rate.Every(time.Hour), 1)
+	l.Allow() // spend the only token: the next one is an hour away, past any test deadline
+	if err := l.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("%s: list board %s: %w", s.provider, e.Board, err)
+	}
+	return nil, errors.New("limiter admitted a request an hour early")
+}
+
+// A rate limiter refuses AHEAD of the deadline — "rate: Wait(n=1) would exceed context
+// deadline" arrives while ctx.Err() is still nil — so the context check alone read it as the
+// board's failure. That cooled 160 of phenom's 383 boards on 2026-10-30: every board still
+// queued when its shared limiter ran out of run failed in the last seconds of every run, and
+// the third such run in a row put it in cooldown.
+func TestRunCountsALimiterDeadlineRefusalAsInterrupted(t *testing.T) {
+	src := limiterRefusedSource{provider: "phenom"}
+	health := &fakeHealth{}
+	r := Runner{Registry: registry(src), Store: &fakeStore{}, BoardHealth: health}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	stats, _ := r.Run(ctx, []sources.CompanyEntry{{Company: "DHL", Provider: "phenom", Board: "careers.dhl.com"}})
+	got := stats["phenom"]
+	if got.Interrupted != 1 || got.Failed != 0 {
+		t.Errorf("Interrupted = %d, Failed = %d; want 1 and 0", got.Interrupted, got.Failed)
+	}
+	if len(health.failures) != 0 {
+		t.Errorf("recorded failures %v; running out of run is not the board's failure", health.failures)
 	}
 }
 

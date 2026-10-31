@@ -478,8 +478,8 @@ func pacedADPMyJobsGetter(c HeaderJSONGetter) HeaderJSONGetter {
 	}
 }
 
-// Phenom People serves ~95 boards, each its own vanity hostname (careers.blizzard.com,
-// careers.aegistherapies.com, ...) but — like eightfold's *.eightfold.ai tenants — all fronted
+// Phenom People serves ~380 boards (~95 until 2026-10-21), each its own vanity hostname
+// (careers.blizzard.com, careers.aegistherapies.com, ...) but — like eightfold's *.eightfold.ai tenants — all fronted
 // by the same underlying platform infrastructure, so the run's own aggregate volume across all
 // of them can trip one shared window. September 2026: 45 of ~95 boards took a 403 on their
 // listing POST during a run, while the same identical request against one of the failing
@@ -491,8 +491,15 @@ func pacedADPMyJobsGetter(c HeaderJSONGetter) HeaderJSONGetter {
 // over-shooting re-enters the 403s. Tune from observed convergence (the board_health unhealthy
 // count for this provider), downward while boards still 403 in isolation and upward only while
 // none do.
+//
+// 1 -> 3 req/s on 2026-10-30, measured as that asks. The provider had grown to 383 boards and
+// its board_health carried no 403 at all — every failure was the run running out of pace — and
+// from the crawl host, list requests round-robin over all 383 hosts answered 200 to every one of
+// 1,799 sent at 3 req/s over ten minutes (and 720 of 720 at 6 req/s over two). The September
+// burst was ~64 requests IN FLIGHT at once; a pace caps starts, and at ~1.4s a request 3 req/s
+// keeps about four in flight.
 const (
-	phenomRequestInterval = time.Second // ~1 req/s
+	phenomRequestInterval = time.Second / 3 // ~3 req/s
 	phenomRequestBurst    = 1
 )
 

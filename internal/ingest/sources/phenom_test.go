@@ -4,45 +4,93 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // phenomFake is a JSONPoster that routes by the request body's ddoKey: a refineSearch
 // returns the canned page for its "from" offset, a jobDetail returns the canned detail
-// for its jobSeqNo (or errors when absent, so the adapter skips that posting).
+// for its jobSeqNo (or errors when absent, so the adapter skips that posting). It records
+// every jobSeqNo whose detail was asked for.
 type phenomFake struct {
 	pages   map[int]string
 	details map[string]string
+
+	mu     sync.Mutex
+	detail []string
 }
 
-func (f phenomFake) PostJSON(_ context.Context, _ string, body, v any) error {
+func (f *phenomFake) PostJSON(_ context.Context, _ string, body, v any) error {
 	m := body.(map[string]any)
 	switch m["ddoKey"] {
 	case "refineSearch":
-		return json.Unmarshal([]byte(f.pages[m["from"].(int)]), v)
-	case "jobDetail":
-		js, ok := f.details[m["jobSeqNo"].(string)]
+		page, ok := f.pages[m["from"].(int)]
 		if !ok {
-			return fmt.Errorf("no detail for %v", m["jobSeqNo"])
+			return fmt.Errorf("unexpected page from=%v", m["from"])
+		}
+		return json.Unmarshal([]byte(page), v)
+	case "jobDetail":
+		seq := m["jobSeqNo"].(string)
+		f.mu.Lock()
+		f.detail = append(f.detail, seq)
+		f.mu.Unlock()
+		js, ok := f.details[seq]
+		if !ok {
+			return fmt.Errorf("no detail for %v", seq)
 		}
 		return json.Unmarshal([]byte(js), v)
 	}
 	return fmt.Errorf("unexpected ddoKey %v", m["ddoKey"])
 }
 
-// phenomListPage renders a refineSearch page from a list of jobSeqNos.
-func phenomListPage(seqs ...string) string {
+func (f *phenomFake) detailsAsked() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.detail...)
+}
+
+// phenomListPage renders a refineSearch page from a list of jobSeqNos, stating total as the
+// board's totalHits.
+func phenomListPage(total int, seqs ...string) string {
 	jobs := make([]string, len(seqs))
 	for i, s := range seqs {
 		jobs[i] = fmt.Sprintf(`{"jobSeqNo":%q,"title":"Engineer %s","cityState":"Bonn, NRW","locale":"en_GLOBAL","postedDate":"2026-05-17T22:00:00.000+0000"}`, s, s)
 	}
-	return `{"refineSearch":{"data":{"jobs":[` + strings.Join(jobs, ",") + `]}}}`
+	return fmt.Sprintf(`{"refineSearch":{"totalHits":%d,"data":{"jobs":[%s]}}}`, total, strings.Join(jobs, ","))
 }
 
 func phenomDetail(desc string) string {
 	return fmt.Sprintf(`{"jobDetail":{"data":{"job":{"description":%q,"title":"Detail Title"}}}}`, desc)
 }
+
+// phenomSeqs returns n sequence ids starting at S<from>.
+func phenomSeqs(from, n int) []string {
+	out := make([]string, n)
+	for i := range out {
+		out[i] = fmt.Sprintf("S%d", from+i)
+	}
+	return out
+}
+
+// newPhenomFake serves a board of total postings in pages of pageLen — the server's own
+// page length, which may be shorter than the size the adapter asks for — every one with a
+// detail.
+func newPhenomFake(total, pageLen int) *phenomFake {
+	f := &phenomFake{pages: map[int]string{}, details: map[string]string{}}
+	for from := 0; from < total; from += pageLen {
+		seqs := phenomSeqs(from, min(pageLen, total-from))
+		f.pages[from] = phenomListPage(total, seqs...)
+		for _, s := range seqs {
+			f.details[s] = phenomDetail("<p>full body for " + s + "</p>")
+		}
+	}
+	f.pages[total] = phenomListPage(total)
+	return f
+}
+
+var phenomEntry = CompanyEntry{Company: "DHL", Provider: "phenom", Board: "careers.dhl.com"}
 
 func TestPhenomProvider(t *testing.T) {
 	if got := NewPhenom(nil).Provider(); got != "phenom" {
@@ -50,44 +98,25 @@ func TestPhenomProvider(t *testing.T) {
 	}
 }
 
-func TestPhenomFetchPaginatesAndFetchesDetail(t *testing.T) {
-	// A full first page (phenomPageSize seqs) forces a second request; the short second
-	// page stops the loop.
-	first := make([]string, phenomPageSize)
-	for i := range first {
-		first[i] = fmt.Sprintf("S%d", i)
-	}
-	fake := phenomFake{
-		pages: map[int]string{
-			0:              phenomListPage(first...),
-			phenomPageSize: phenomListPage("LAST", "NODETAIL"),
-		},
-		details: map[string]string{},
-	}
-	for _, s := range first {
-		fake.details[s] = phenomDetail("<p>full body for " + s + "</p>")
-	}
-	fake.details["LAST"] = phenomDetail("<p>last one</p>")
-	// "NODETAIL" has no detail route -> its detail fetch errors and it is skipped.
+func TestPhenomFetchListsToTheStatedTotalAndFetchesDetail(t *testing.T) {
+	// The server clamps a page below the size asked for, so the walk advances by what each
+	// page held and stops at the board's stated total, not at the first page shorter than
+	// phenomPageSize.
+	fake := newPhenomFake(7, 3)
+	delete(fake.details, "S6") // its detail errors -> that posting is skipped
 
-	jobs, err := NewPhenom(fake).Fetch(context.Background(), CompanyEntry{
-		Company: "DHL", Provider: "phenom", Board: "careers.dhl.com",
-	})
+	jobs, err := NewPhenom(fake).Fetch(context.Background(), phenomEntry)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if want := phenomPageSize + 1; len(jobs) != want {
-		t.Fatalf("len(jobs) = %d, want %d (full page + LAST, NODETAIL skipped)", len(jobs), want)
+	if len(jobs) != 6 {
+		t.Fatalf("len(jobs) = %d, want 6 (7 listed, S6 without detail)", len(jobs))
 	}
 
 	byID := map[string]Job{}
 	for _, j := range jobs {
 		byID[j.ExternalID] = j
 	}
-	if _, present := byID["NODETAIL"]; present {
-		t.Error("NODETAIL should have been skipped (no detail)")
-	}
-
 	j, ok := byID["S0"]
 	if !ok {
 		t.Fatal("posting S0 missing")
@@ -106,6 +135,132 @@ func TestPhenomFetchPaginatesAndFetchesDetail(t *testing.T) {
 	}
 	if j.PostedAt == nil || j.PostedAt.UTC().Year() != 2026 {
 		t.Errorf("PostedAt = %v, want parsed postedDate (2026)", j.PostedAt)
+	}
+}
+
+// The listing serves nothing once from+size reaches 10,000: a page past that window answers
+// empty with a total of 0, however many postings the board states. The walk ends there with
+// what it read rather than failing the board — a board over the window would otherwise never
+// be crawled at all.
+func TestPhenomEndsTheWalkAtTheListingWindow(t *testing.T) {
+	fake := &phenomFake{
+		pages: map[int]string{
+			0: phenomListPage(15000, "S0", "S1"),
+			2: phenomListPage(0),
+		},
+		details: map[string]string{"S0": phenomDetail("<p>a</p>"), "S1": phenomDetail("<p>b</p>")},
+	}
+	jobs, err := NewPhenom(fake).Fetch(context.Background(), phenomEntry)
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("Fetch = %d jobs, %v; want the 2 read and no error", len(jobs), err)
+	}
+}
+
+// An answer without totalHits is not a listing this adapter can prove complete.
+func TestPhenomFailsAListingWithoutATotal(t *testing.T) {
+	fake := &phenomFake{pages: map[int]string{
+		0: `{"refineSearch":{"data":{"jobs":[]}}}`,
+	}}
+	if _, err := NewPhenom(fake).Fetch(context.Background(), phenomEntry); err == nil {
+		t.Fatal("Fetch succeeded on a listing that stated no total")
+	}
+}
+
+func TestPhenomEmptyBoardIsAnEmptyListing(t *testing.T) {
+	fake := &phenomFake{pages: map[int]string{0: phenomListPage(0)}}
+	jobs, err := NewPhenom(fake).Fetch(context.Background(), phenomEntry)
+	if err != nil || len(jobs) != 0 {
+		t.Fatalf("Fetch = %d jobs, %v; want none and no error", len(jobs), err)
+	}
+}
+
+func TestPhenomFailsAListingPastItsPageCeiling(t *testing.T) {
+	// Every page claims more remains; the walk must stop at its ceiling and fail.
+	fake := &phenomFake{pages: map[int]string{}}
+	for p := 0; p <= phenomMaxPages; p++ {
+		fake.pages[p] = phenomListPage(1<<30, fmt.Sprintf("S%d", p))
+	}
+	if _, err := NewPhenom(fake).Fetch(context.Background(), phenomEntry); err == nil {
+		t.Fatal("Fetch succeeded past its page ceiling")
+	}
+}
+
+// A stored posting is re-listed as a SeenRefresh with no detail request: re-reading every
+// stored body on every run is what kept phenom's crawl from reaching most of its boards.
+func TestPhenomFetchNewHydratesOnlyUnseenPostings(t *testing.T) {
+	fake := newPhenomFake(4, 4)
+	seen := func(id string) bool { return id == "S0" || id == "S2" }
+
+	jobs, err := NewPhenom(fake).(HydratingSource).FetchNew(context.Background(), phenomEntry, seen)
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if got := strings.Join(slices.Sorted(slices.Values(fake.detailsAsked())), ","); got != "S1,S3" {
+		t.Errorf("details asked for %q, want only the unseen S1,S3", got)
+	}
+	byID := map[string]Job{}
+	for _, j := range jobs {
+		byID[j.ExternalID] = j
+	}
+	if len(byID) != 4 {
+		t.Fatalf("yielded %d postings, want all 4", len(byID))
+	}
+	r := byID["S0"]
+	if !r.SeenRefresh || r.Description != "" || r.URL != "https://careers.dhl.com/global/en/job/S0" || r.Company != "DHL" {
+		t.Errorf("S0 = %+v, want a SeenRefresh carrying the listing's identity", r)
+	}
+	if h := byID["S1"]; h.SeenRefresh || !strings.Contains(h.Description, "full body for S1") {
+		t.Errorf("S1 = %+v, want a hydrated posting", h)
+	}
+}
+
+func TestPhenomFetchNewBoundsHydrationPerBoard(t *testing.T) {
+	fake := newPhenomFake(phenomMaxNewPerBoard+5, phenomPageSize)
+	never := func(string) bool { return false }
+
+	jobs, err := NewPhenom(fake).(HydratingSource).FetchNew(context.Background(), phenomEntry, never)
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if n := len(fake.detailsAsked()); n != phenomMaxNewPerBoard {
+		t.Errorf("asked %d details, want the per-board bound %d", n, phenomMaxNewPerBoard)
+	}
+	if len(jobs) != phenomMaxNewPerBoard {
+		t.Errorf("yielded %d postings, want %d (the rest left for a later run)", len(jobs), phenomMaxNewPerBoard)
+	}
+}
+
+// Every board of a run shares one ~1 req/s pace, so the boards crawled first must not spend the
+// run's time on bodies and leave the later boards' listings unread at the deadline.
+func TestPhenomFetchNewBoundsHydrationPerRun(t *testing.T) {
+	src := NewPhenom(nil).(phenom)
+	never := func(string) bool { return false }
+	asked := 0
+	for i := 0; asked < phenomMaxNewPerRun+phenomMaxNewPerBoard; i++ {
+		fake := newPhenomFake(phenomMaxNewPerBoard, phenomPageSize)
+		src.http = fake
+		e := phenomEntry
+		e.Board = fmt.Sprintf("board%d.phenompro.com", i)
+		if _, err := src.FetchNew(context.Background(), e, never); err != nil {
+			t.Fatalf("FetchNew: %v", err)
+		}
+		n := len(fake.detailsAsked())
+		if n == 0 {
+			break
+		}
+		asked += n
+	}
+	if asked != phenomMaxNewPerRun {
+		t.Errorf("run hydrated %d postings, want the run bound %d", asked, phenomMaxNewPerRun)
+	}
+}
+
+// Phenom's offset paging is not a stable slice: two walks of one board at the same moment read
+// different subsets (careers.kohls.com, 2026-10-30: 4,403 and 4,398 distinct of a stated 5,211,
+// together exactly 5,211), so no single crawl proves it read the whole board.
+func TestPhenomIsNotFullBoardListing(t *testing.T) {
+	if FullBoardListingProviders(map[string]Source{"phenom": NewPhenom(nil)})["phenom"] {
+		t.Error("phenom carries fullBoardListing, but one walk of its listing reads ~85-92% of a board")
 	}
 }
 
