@@ -124,6 +124,9 @@ func (r *trackingRepo) ReplyRateCounts(context.Context, int64) (userjob.ReplyRat
 func (r *trackingRepo) ViewedSlugs(context.Context, int64) ([]string, error)    { return nil, nil }
 func (r *trackingRepo) SavedSlugs(context.Context, int64) ([]string, error)     { return nil, nil }
 func (r *trackingRepo) DismissedSlugs(context.Context, int64) ([]string, error) { return nil, nil }
+func (r *trackingRepo) AppliedCompanySlugs(context.Context, int64, int32) ([]string, error) {
+	return nil, nil
+}
 
 func (r *trackingRepo) ExcludedJobIDs(context.Context, int64, int32) ([]int64, error) {
 	return nil, nil

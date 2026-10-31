@@ -73,6 +73,9 @@ func (stubTrackingRepo) CountInteractions(context.Context, int64) (jobtracking.C
 func (stubTrackingRepo) ViewedSlugs(context.Context, int64) ([]string, error)    { return nil, nil }
 func (stubTrackingRepo) SavedSlugs(context.Context, int64) ([]string, error)     { return nil, nil }
 func (stubTrackingRepo) DismissedSlugs(context.Context, int64) ([]string, error) { return nil, nil }
+func (stubTrackingRepo) AppliedCompanySlugs(context.Context, int64, int32) ([]string, error) {
+	return nil, nil
+}
 func (stubTrackingRepo) ExcludedJobIDs(context.Context, int64, int32) ([]int64, error) {
 	return nil, nil
 }
