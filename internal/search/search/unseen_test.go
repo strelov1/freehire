@@ -70,4 +70,24 @@ func TestWithheld(t *testing.T) {
 	if Withheld(stale, now, nil) {
 		t.Errorf("no windows must mean no unseen rule")
 	}
+
+	// The reason names the first rule that holds, in Withheld's own order, so a caller
+	// counting reasons partitions the withheld rows instead of counting one row twice.
+	both := uncategorised
+	both.Description = ""
+	for _, c := range []struct {
+		name string
+		job  db.Job
+		want WithholdReason
+	}{
+		{"showable", showable, ""},
+		{"stale", stale, WithheldUnseen},
+		{"bodiless", bodiless, WithheldNoDescription},
+		{"uncategorised", uncategorised, WithheldNoCategory},
+		{"uncategorised and bodiless", both, WithheldNoCategory},
+	} {
+		if got := WithheldBy(c.job, now, windows); got != c.want {
+			t.Errorf("%s: WithheldBy = %q, want %q", c.name, got, c.want)
+		}
+	}
 }
