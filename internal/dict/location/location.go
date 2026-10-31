@@ -116,9 +116,9 @@ func ParseIn(location string, known []string) Geo {
 	// pending holds the tokens that name a city only in a country the line states, resolved
 	// once the whole line has been read (resolvePending).
 	var pending []pendingCity
-	// renamedContested holds the contested long-tail cities the line names by an alias of
-	// a differently named place, emitted after the loop only if the line states its country.
-	var renamedContested []heldContested
+	// aliasCities holds the long-tail cities the line names by an alias of a differently
+	// named place, resolved after the loop against what the line states (addAliasCity).
+	var aliasCities []heldContested
 	// placeToks counts the tokens left once work-mode words are cut. Whether one came before
 	// matters because a province named after its capital is the province only after another
 	// place (provinceAfterCity); the count, because the caller's countries name a pending or
@@ -344,7 +344,10 @@ func ParseIn(location string, known []string) Geo {
 				// The token is a curated place: emit the city name only when cityDict agrees
 				// on its country, so a country/region token ("usa") never emits the unrelated
 				// city buried in its GeoNames alternate names ("Yokkaichi").
-				if _, agree := tokCountry[ce.Country]; agree {
+				// An alias still waits for the rest of the line: "Calcutta, OH" is no Kolkata.
+				if _, agree := tokCountry[ce.Country]; agree && !sameCityName(ce.Name, tok) {
+					aliasCities = append(aliasCities, heldContested{ce, tok})
+				} else if agree {
 					citySet[ce.Name] = struct{}{}
 				}
 			} else {
@@ -353,11 +356,12 @@ func ParseIn(location string, known []string) Geo {
 				// LAST-RESORT candidate. It is applied after the whole string is read
 				// and only if nothing else stated a country — see cityFallback below.
 				//
-				// A contested alias whose city is named differently from the line is held
-				// back until the country is known: "León" is León de los Aldama only in a
-				// line that places it in Mexico, and "León, España" must not name it.
-				if ce.Contested && !strings.EqualFold(foldIndianName(ce.Name), foldIndianName(tok)) {
-					renamedContested = append(renamedContested, heldContested{ce, tok})
+				// A city named differently from the line — read through an alias — is held
+				// until the line's country and state are known (addAliasCity): "León" is
+				// León de los Aldama only in a line that places it in Mexico, and "Harrison,
+				// NJ" is not Scranton, PA, whose old name it is.
+				if !sameCityName(ce.Name, tok) {
+					aliasCities = append(aliasCities, heldContested{ce, tok})
 				} else {
 					citySet[ce.Name] = struct{}{}
 				}
@@ -437,22 +441,8 @@ func ParseIn(location string, known []string) Geo {
 		stated = hint
 	}
 	resolvePending(pending, stated, citySet)
-	for _, h := range renamedContested {
-		if _, ok := stated[h.ce.Country]; ok {
-			citySet[h.ce.Name] = struct{}{}
-			continue
-		}
-		// The line's own country may have a place of the name too: "Valence, France" is
-		// Valence, where the table's first reading of "valence" is Valencia; "Ribnica,
-		// Slovenija" the Slovenian town below the main table's floor, where the table's
-		// reading is Rîbnița in Moldova (contestedSmallPlaces).
-		for c := range stated {
-			if name := contestedCityIn(h.tok, c); name != "" {
-				citySet[name] = struct{}{}
-			} else if name := contestedSmallPlaces[[2]string{h.tok, c}]; name != "" {
-				citySet[name] = struct{}{}
-			}
-		}
+	for _, h := range aliasCities {
+		addAliasCity(citySet, h.ce, h.tok, stated, statedSubdivisions)
 	}
 
 	// Nothing in the line stated a country, so the long-tail cities get to — but only
