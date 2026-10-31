@@ -63,15 +63,13 @@ func hirehiveEmployer(page string) string {
 		return ""
 	}
 	title := strings.TrimSpace(pageTitle(root))
-	_, rest, ok := strings.Cut(title, "|")
-	if ok {
-		title = strings.TrimSpace(rest)
+	for _, part := range strings.Split(title, "|") {
+		name, ok := strings.CutPrefix(strings.TrimSpace(part), "Jobs at ")
+		if ok {
+			return strings.TrimSpace(name)
+		}
 	}
-	name, ok := strings.CutPrefix(title, "Jobs at ")
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(name)
+	return ""
 }
 
 func (hirehiveProber) discover(ctx context.Context, c httpClient) ([]string, error) {

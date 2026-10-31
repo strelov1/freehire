@@ -15,6 +15,8 @@ func TestHireHiveProbe(t *testing.T) {
 			"https://emptyco.hirehive.com/api/v2/jobs?page=1&page_size=1":  `{"meta":{"total_items":0},"items":[]}`,
 			"https://reshaped.hirehive.com/api/v2/jobs?page=1&page_size=1": `{"items":[]}`,
 			"https://nameless.hirehive.com/api/v2/jobs?page=1&page_size=1": `{"meta":{"total_items":3},"items":[{"id":"job_x"}]}`,
+			"https://reversed.hirehive.com/api/v2/jobs?page=1&page_size=1": `{"meta":{"total_items":1},"items":[{"id":"job_y"}]}`,
+			"https://reversed.hirehive.com/":                               `<html><head><title>Jobs at Acme | HireHive</title></head></html>`,
 		},
 		status: map[string]int{
 			"https://missing.hirehive.com/api/v2/jobs?page=1&page_size=1": http.StatusNotFound,
@@ -23,6 +25,9 @@ func TestHireHiveProbe(t *testing.T) {
 	p := hirehiveProber{}
 	if name, n, err := p.probe(context.Background(), g, "AMCSGroup"); err != nil || name != "AMCS Group" || n != 59 {
 		t.Errorf("live: got (%q,%d,%v), want (AMCS Group,59,nil)", name, n, err)
+	}
+	if name, n, err := p.probe(context.Background(), g, "reversed"); err != nil || name != "Acme" || n != 1 {
+		t.Errorf("reversed title: got (%q,%d,%v), want (Acme,1,nil)", name, n, err)
 	}
 	if name, n, err := p.probe(context.Background(), g, "nameless"); err != nil || name != "" || n != 3 {
 		t.Errorf("nameless: got (%q,%d,%v), want a live unnamed board", name, n, err)
