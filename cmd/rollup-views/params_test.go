@@ -30,12 +30,9 @@ func TestBuildParamsIsDeterministicallyOrderedByJobID(t *testing.T) {
 		"alpha": 10, "bravo": 20, "charlie": 30, "delta": 40, "echo": 50,
 	}
 
-	want, wantTotal, err := buildParams(counts, ids)
+	want, err := buildParams(counts, ids)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if wantTotal != 24 {
-		t.Errorf("total = %d, want 24", wantTotal)
 	}
 	if len(want) != 6 {
 		t.Fatalf("got %d params, want 6", len(want))
@@ -51,7 +48,7 @@ func TestBuildParamsIsDeterministicallyOrderedByJobID(t *testing.T) {
 	}
 
 	for run := 0; run < 50; run++ {
-		got, _, err := buildParams(counts, ids)
+		got, err := buildParams(counts, ids)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -66,7 +63,7 @@ func TestBuildParamsIsDeterministicallyOrderedByJobID(t *testing.T) {
 // A slug the catalogue no longer knows is skipped, not carried into the batch as a
 // zero job id — which would update whatever row happens to have id 0, or none.
 func TestBuildParamsDropsUnresolvedSlugs(t *testing.T) {
-	got, total, err := buildParams(
+	got, err := buildParams(
 		map[string]map[string]viewlog.Counts{
 			"2026-07-21": {"known": {Total: 3, Page: 2}, "vanished": {Total: 7, Page: 7}},
 		},
@@ -81,14 +78,10 @@ func TestBuildParamsDropsUnresolvedSlugs(t *testing.T) {
 	if got[0].TotalDelta != 3 || got[0].PageDelta != 2 {
 		t.Errorf("deltas = %d/%d, want 3/2", got[0].TotalDelta, got[0].PageDelta)
 	}
-	// The reported figure counts only what was applied.
-	if total != 3 {
-		t.Errorf("total = %d, want 3 — an unresolved slug applies nothing", total)
-	}
 }
 
 func TestBuildParamsRejectsAnUnparseableDay(t *testing.T) {
-	if _, _, err := buildParams(
+	if _, err := buildParams(
 		map[string]map[string]viewlog.Counts{"not-a-day": {"s": {Total: 1}}},
 		map[string]int64{"s": 1},
 	); err == nil {

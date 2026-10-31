@@ -15,7 +15,7 @@ WHERE public_slug = ANY(sqlc.arg('slugs')::text[]);
 -- Apply one (day, job) unique count additively: upsert the daily rollup and add the
 -- total delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 -- though the primary query does not read it. Issued as a pgx batch (one call per
--- tuple) so a file's rows land in a single round trip; view_count accumulates across
+-- tuple) so a chunk's rows land in a single round trip; view_count accumulates across
 -- a job's day-rows, and additivity lets a day spanning two rotated files sum right.
 --
 -- Two deltas, not one plus a breakdown. `total_delta` counts the visitors who
@@ -64,3 +64,18 @@ WITH ins AS (
 )
 UPDATE jobs SET view_count = view_count + sqlc.arg('delta')
 WHERE id = sqlc.arg('job_id');
+
+-- name: GetViewLogCursor :one
+-- The last (job_id, day) key applied from a part-applied file. No row: nothing applied.
+SELECT job_id, day FROM view_log_cursors WHERE signature = sqlc.arg('signature');
+
+-- name: AdvanceViewLogCursor :execrows
+-- Move a file's cursor from the key this run read to the last key of the chunk it is
+-- applying, in the chunk's own transaction. A compare-and-swap: with no previous key it
+-- only inserts, and with one it only moves a cursor still standing there — so 0 rows means
+-- another run has applied this file since, and the chunk must roll back.
+INSERT INTO view_log_cursors AS c (signature, filename, job_id, day)
+VALUES (sqlc.arg('signature'), sqlc.arg('filename'), sqlc.arg('job_id'), sqlc.arg('day'))
+ON CONFLICT (signature) DO UPDATE
+    SET job_id = EXCLUDED.job_id, day = EXCLUDED.day, updated_at = now()
+    WHERE c.job_id = sqlc.narg('prev_job_id') AND c.day = sqlc.narg('prev_day');

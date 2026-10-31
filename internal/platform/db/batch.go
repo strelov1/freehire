@@ -107,7 +107,7 @@ type ApplyDailyViewParams struct {
 // Apply one (day, job) unique count additively: upsert the daily rollup and add the
 // total delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 // though the primary query does not read it. Issued as a pgx batch (one call per
-// tuple) so a file's rows land in a single round trip; view_count accumulates across
+// tuple) so a chunk's rows land in a single round trip; view_count accumulates across
 // a job's day-rows, and additivity lets a day spanning two rotated files sum right.
 //
 // Two deltas, not one plus a breakdown. `total_delta` counts the visitors who

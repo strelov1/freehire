@@ -12,7 +12,10 @@
 //
 // Without --backfill it processes only uncompressed rotated files (the recent ones,
 // a light daily run); with --backfill it also reads the older .gz history to seed
-// the baseline. Either way the per-file cursor makes re-runs idempotent. Where no
+// the baseline. Either way the per-file cursor makes re-runs idempotent. A file is
+// committed in chunks of applyChunkRows, each moving a resume cursor in the same
+// transaction, so no jobs row stays locked against ingest for the whole file and a run
+// that fails part-way resumes rather than counting twice (see applyChunked). Where no
 // log dir exists (local/dev) it is a clean no-op. It is a run-once-and-exit worker
 // (cron-scheduled daily), exiting non-zero on failure so cron can alert.
 //
@@ -23,6 +26,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"hash/fnv"
@@ -113,9 +117,10 @@ func process(ctx context.Context, pool *pgxpool.Pool, files []viewlog.LogFile) (
 		if done {
 			continue
 		}
-		applied, err := applyWithRetry(ctx, filepath.Base(f.Path), func() (int, error) {
-			return applyFile(ctx, pool, q, f, counts, sig)
-		})
+		applied, err := applyFile(ctx, pool, q, f, counts, sig)
+		if errors.Is(err, errAlreadyApplied) {
+			continue
+		}
 		if err != nil {
 			return nFiles, nViews, err
 		}
@@ -125,32 +130,30 @@ func process(ctx context.Context, pool *pgxpool.Pool, files []viewlog.LogFile) (
 	return nFiles, nViews, nil
 }
 
-// deadlockRetries is how many times a file's apply is re-attempted after PostgreSQL
+// deadlockRetries is how many times a chunk's apply is re-attempted after PostgreSQL
 // breaks a lock cycle by aborting it. Small on purpose: a deadlock clears as soon as
 // the other writer commits, so if three tries in a row lose, something other than
 // ordinary contention is wrong and the run should say so rather than grind.
 const deadlockRetries = 3
 
-// applyWithRetry runs apply — one file's all-or-nothing transaction — re-attempting it
+// applyWithRetry runs apply — one chunk's all-or-nothing transaction — re-attempting it
 // when PostgreSQL aborts the transaction to break a deadlock. name labels the file in
 // the log and the error. Both passes (nginx and agent views) go through it.
 //
 // A deadlock says nothing was wrong with the work — only that two writers wanted the
-// same rows in opposite orders — and apply is all-or-nothing: the file's counts
-// and its processed-file mark commit together, so an aborted attempt leaves no
+// same rows in opposite orders — and apply is all-or-nothing: the chunk's counts
+// and the file cursor's move commit together, so an aborted attempt leaves no
 // partial state and a retry cannot double-count. Treating 40P01 as fatal is what
 // stopped the view rollup for two days in September 2026 while every other worker
 // carried on and nothing looked broken.
-func applyWithRetry(ctx context.Context, name string, apply func() (int, error)) (int, error) {
+func applyWithRetry(ctx context.Context, name string, apply func() error) error {
 	var err error
 	for attempt := 1; attempt <= deadlockRetries; attempt++ {
-		var applied int
-		applied, err = apply()
-		if err == nil {
-			return applied, nil
+		if err = apply(); err == nil {
+			return nil
 		}
 		if !pgerr.IsDeadlock(err) {
-			return 0, err
+			return err
 		}
 		log.Printf("rollup-views: %s: deadlock on attempt %d/%d, retrying: %v",
 			name, attempt, deadlockRetries, err)
@@ -161,11 +164,11 @@ func applyWithRetry(ctx context.Context, name string, apply func() (int, error))
 		delay := time.Duration(attempt) * 2 * time.Second
 		select {
 		case <-ctx.Done():
-			return 0, ctx.Err()
+			return ctx.Err()
 		case <-time.After(delay + time.Duration(rand.Int64N(int64(time.Second)))):
 		}
 	}
-	return 0, fmt.Errorf("apply %s: still deadlocking after %d attempts: %w",
+	return fmt.Errorf("apply %s: still deadlocking after %d attempts: %w",
 		name, deadlockRetries, err)
 }
 
@@ -186,52 +189,26 @@ func aggregateFile(f viewlog.LogFile) (map[string]map[string]viewlog.Counts, int
 	return counts, int64(h.Sum64()), nil
 }
 
-// applyFile applies one file's already-aggregated counts, then marks the file
-// processed — all in one transaction, so a crash leaves neither a double-count nor
-// a lost mark. It returns the total views applied. A file with no resolvable views
-// is still marked (so it is not rescanned).
+// applyFile applies one file's already-aggregated counts in chunks and then marks the
+// file processed (see applyChunked). It returns the views this run applied. A file with
+// no resolvable views is still marked, so it is not rescanned.
 func applyFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f viewlog.LogFile, counts map[string]map[string]viewlog.Counts, sig int64) (int, error) {
 	ids, err := resolveSlugs(ctx, q, counts)
 	if err != nil {
 		return 0, err
 	}
-
-	params, total, err := buildParams(counts, ids)
+	params, err := buildParams(counts, ids)
 	if err != nil {
 		return 0, err
 	}
-
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback(ctx)
-	qtx := q.WithTx(tx)
-
-	if len(params) > 0 {
-		br := qtx.ApplyDailyView(ctx, params)
-		var batchErr error
-		br.Exec(func(_ int, e error) {
-			if e != nil && batchErr == nil {
-				batchErr = e
-			}
+	return applyChunked(ctx, pool, q, sig, filepath.Base(f.Path), params,
+		func(p db.ApplyDailyViewParams) viewKey { return viewKey{jobID: p.JobID, day: p.Day} },
+		// The reported figure is the total: it is what jobs.view_count accrues and what
+		// this worker has always logged.
+		func(p db.ApplyDailyViewParams) int { return int(p.TotalDelta) },
+		func(ctx context.Context, qtx *db.Queries, chunk []db.ApplyDailyViewParams) error {
+			return execBatch(qtx.ApplyDailyView(ctx, chunk))
 		})
-		if cerr := br.Close(); cerr != nil && batchErr == nil {
-			batchErr = cerr
-		}
-		if batchErr != nil {
-			return 0, batchErr
-		}
-	}
-	if _, err := qtx.MarkViewLogFileProcessed(ctx, db.MarkViewLogFileProcessedParams{
-		Signature: sig, Filename: filepath.Base(f.Path),
-	}); err != nil {
-		return 0, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return 0, err
-	}
-	return total, nil
 }
 
 // buildParams turns a file's aggregated counts into the batch, in a deterministic
@@ -248,13 +225,12 @@ func applyFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, f viewlog
 // Ascending job id gives this worker one stable order. Two of its own batches can no
 // longer deadlock each other at all, and against another writer an overlap becomes a
 // wait rather than a cycle.
-func buildParams(counts map[string]map[string]viewlog.Counts, ids map[string]int64) ([]db.ApplyDailyViewParams, int, error) {
+func buildParams(counts map[string]map[string]viewlog.Counts, ids map[string]int64) ([]db.ApplyDailyViewParams, error) {
 	var params []db.ApplyDailyViewParams
-	total := 0
 	for day, perSlug := range counts {
 		d, err := time.Parse("2006-01-02", day)
 		if err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		for slug, c := range perSlug {
 			id, ok := ids[slug]
@@ -267,9 +243,6 @@ func buildParams(counts map[string]map[string]viewlog.Counts, ids map[string]int
 				TotalDelta: int32(c.Total),
 				PageDelta:  int32(c.Page),
 			})
-			// The reported figure stays the total: it is what jobs.view_count accrues
-			// and what this worker has always logged.
-			total += c.Total
 		}
 	}
 
@@ -279,7 +252,7 @@ func buildParams(counts map[string]map[string]viewlog.Counts, ids map[string]int
 		}
 		return params[i].Day.Time.Before(params[j].Day.Time)
 	})
-	return params, total, nil
+	return params, nil
 }
 
 // resolveSlugs maps every slug appearing in counts to its job id in one query.

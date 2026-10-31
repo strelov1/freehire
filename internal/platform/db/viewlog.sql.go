@@ -7,7 +7,62 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const advanceViewLogCursor = `-- name: AdvanceViewLogCursor :execrows
+INSERT INTO view_log_cursors AS c (signature, filename, job_id, day)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (signature) DO UPDATE
+    SET job_id = EXCLUDED.job_id, day = EXCLUDED.day, updated_at = now()
+    WHERE c.job_id = $5 AND c.day = $6
+`
+
+type AdvanceViewLogCursorParams struct {
+	Signature int64       `json:"signature"`
+	Filename  string      `json:"filename"`
+	JobID     int64       `json:"job_id"`
+	Day       pgtype.Date `json:"day"`
+	PrevJobID pgtype.Int8 `json:"prev_job_id"`
+	PrevDay   pgtype.Date `json:"prev_day"`
+}
+
+// Move a file's cursor from the key this run read to the last key of the chunk it is
+// applying, in the chunk's own transaction. A compare-and-swap: with no previous key it
+// only inserts, and with one it only moves a cursor still standing there — so 0 rows means
+// another run has applied this file since, and the chunk must roll back.
+func (q *Queries) AdvanceViewLogCursor(ctx context.Context, arg AdvanceViewLogCursorParams) (int64, error) {
+	result, err := q.db.Exec(ctx, advanceViewLogCursor,
+		arg.Signature,
+		arg.Filename,
+		arg.JobID,
+		arg.Day,
+		arg.PrevJobID,
+		arg.PrevDay,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getViewLogCursor = `-- name: GetViewLogCursor :one
+SELECT job_id, day FROM view_log_cursors WHERE signature = $1
+`
+
+type GetViewLogCursorRow struct {
+	JobID int64       `json:"job_id"`
+	Day   pgtype.Date `json:"day"`
+}
+
+// The last (job_id, day) key applied from a part-applied file. No row: nothing applied.
+func (q *Queries) GetViewLogCursor(ctx context.Context, signature int64) (GetViewLogCursorRow, error) {
+	row := q.db.QueryRow(ctx, getViewLogCursor, signature)
+	var i GetViewLogCursorRow
+	err := row.Scan(&i.JobID, &i.Day)
+	return i, err
+}
 
 const isViewLogFileProcessed = `-- name: IsViewLogFileProcessed :one
 SELECT EXISTS(

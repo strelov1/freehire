@@ -64,6 +64,11 @@ type Querier interface {
 	// job_id and company_slug come off the application, like TrackApplicationByID: the row is
 	// the application, and the employer is denormalised on it.
 	AdvanceUserJobStage(ctx context.Context, arg AdvanceUserJobStageParams) error
+	// Move a file's cursor from the key this run read to the last key of the chunk it is
+	// applying, in the chunk's own transaction. A compare-and-swap: with no previous key it
+	// only inserts, and with one it only moves a cursor still standing there — so 0 rows means
+	// another run has applied this file since, and the chunk must roll back.
+	AdvanceViewLogCursor(ctx context.Context, arg AdvanceViewLogCursorParams) (int64, error)
 	// Same shape and same reasoning as SearchOutboxMetrics. Same bounded-drain question as
 	// apply_form_outbox: ADZUNA_DESCRIPTION_MAX_PER_RUN defaults to 500 and is deliberately
 	// conservative, so the depth is what says whether that figure is still the right one.
@@ -156,7 +161,7 @@ type Querier interface {
 	// Apply one (day, job) unique count additively: upsert the daily rollup and add the
 	// total delta to jobs.view_count, in one statement. The data-modifying CTE runs even
 	// though the primary query does not read it. Issued as a pgx batch (one call per
-	// tuple) so a file's rows land in a single round trip; view_count accumulates across
+	// tuple) so a chunk's rows land in a single round trip; view_count accumulates across
 	// a job's day-rows, and additivity lets a day spanning two rotated files sum right.
 	//
 	// Two deltas, not one plus a breakdown. `total_delta` counts the visitors who
@@ -3213,6 +3218,8 @@ type Querier interface {
 	// allocated default written by SetUsernameIfAbsent, which never touches this
 	// column (see the add-username-claim change's design.md, Decision 2).
 	GetUsernameByUser(ctx context.Context, id int64) (GetUsernameByUserRow, error)
+	// The last (job_id, day) key applied from a part-applied file. No row: nothing applied.
+	GetViewLogCursor(ctx context.Context, signature int64) (GetViewLogCursorRow, error)
 	// The user's webhook destination, if any. No row means the user has never
 	// configured one — the caller (both the settings API and delivery's recipient
 	// resolution) treats absence as "not configured" rather than an error.

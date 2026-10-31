@@ -57,3 +57,10 @@ parses as nothing silently counts nothing.
   transparency number; over-aggressive matching would drop real people.
 - **Semantics live here, not in SQL.** The worker's queries are additive plumbing;
   what counts as a view and how it dedups is defined in this package.
+- **The worker commits a file in chunks, never whole.** Every applied row bumps
+  `jobs.view_count`, which holds that jobs row's lock until commit; one transaction per
+  file held ~1M rows for 45 minutes (nginx) plus ~1.4M for 71 (agent views) on
+  2026-10-31 and stalled every ingest write behind them. Because the apply is additive, a
+  chunk is only safe beside `view_log_cursors`: each chunk moves the file's resume key
+  (ascending `(job_id, day)`) in its own transaction, compare-and-swap, and
+  `processed_view_logs` still marks the file finished.

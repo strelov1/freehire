@@ -1760,6 +1760,14 @@ type UserPushToken struct {
 	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
 }
 
+type ViewLogCursor struct {
+	Signature int64              `json:"signature"`
+	Filename  string             `json:"filename"`
+	JobID     int64              `json:"job_id"`
+	Day       pgtype.Date        `json:"day"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type WebhookConfig struct {
 	UserID              int64              `json:"user_id"`
 	URL                 string             `json:"url"`

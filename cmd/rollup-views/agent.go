@@ -25,8 +25,8 @@ const agentLogRetention = 14 * 24 * time.Hour
 
 // processAgent applies every finished, not-yet-applied day of the agent-view log and
 // removes the applied files past retention. The cursor is the same content-signature
-// table the nginx pass uses, claimed inside each file's transaction, so a re-run applies
-// nothing twice.
+// table the nginx pass uses, with the same chunked apply and resume cursor, so a re-run
+// applies nothing twice.
 func processAgent(ctx context.Context, pool *pgxpool.Pool, dir string, now time.Time) (nFiles, nViews int, err error) {
 	files, err := agentview.ListFiles(dir, now)
 	if err != nil {
@@ -56,15 +56,25 @@ func processAgent(ctx context.Context, pool *pgxpool.Pool, dir string, now time.
 	return nFiles, nViews, errors.Join(errs...)
 }
 
-// applyAgentDay reads one day file and applies it, retrying a deadlock.
+// applyAgentDay reads one day file and applies it in chunks (see applyChunked).
 func applyAgentDay(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, path string) (int, error) {
 	counts, sig, err := aggregateAgentFile(path)
 	if err != nil {
 		return 0, err
 	}
-	return applyWithRetry(ctx, filepath.Base(path), func() (int, error) {
-		return applyAgentFile(ctx, pool, q, path, counts, sig)
-	})
+	done, err := q.IsViewLogFileProcessed(ctx, sig)
+	if err != nil {
+		return 0, err
+	}
+	if done {
+		return 0, errAlreadyApplied
+	}
+	return applyChunked(ctx, pool, q, sig, filepath.Base(path), buildAgentParams(counts),
+		func(p db.ApplyDailyAgentViewParams) viewKey { return viewKey{jobID: p.JobID, day: p.Day} },
+		func(p db.ApplyDailyAgentViewParams) int { return int(p.Delta) },
+		func(ctx context.Context, qtx *db.Queries, chunk []db.ApplyDailyAgentViewParams) error {
+			return execBatch(qtx.ApplyDailyAgentView(ctx, chunk))
+		})
 }
 
 // aggregateAgentFile reads one day file and its cursor signature in one pass. A file
@@ -90,61 +100,16 @@ func aggregateAgentFile(path string) (map[time.Time]map[int64]int, int64, error)
 	return counts, int64(h.Sum64()), nil
 }
 
-// errAlreadyApplied reports a file another run has already claimed.
-var errAlreadyApplied = errors.New("agent view file already applied")
-
-// applyAgentFile claims one file's signature and applies its counts in one transaction.
-// The claim comes FIRST: a run that loses it to another run waits on that run's row and
-// then adds nothing, where a read-then-apply would let both add the day's counts.
-func applyAgentFile(ctx context.Context, pool *pgxpool.Pool, q *db.Queries, path string, counts map[time.Time]map[int64]int, sig int64) (int, error) {
-	params, total := buildAgentParams(counts)
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback(ctx)
-	qtx := q.WithTx(tx)
-	claimed, err := qtx.MarkViewLogFileProcessed(ctx, db.MarkViewLogFileProcessedParams{
-		Signature: sig, Filename: filepath.Base(path),
-	})
-	if err != nil {
-		return 0, err
-	}
-	if claimed == 0 {
-		return 0, errAlreadyApplied
-	}
-	if len(params) > 0 {
-		br := qtx.ApplyDailyAgentView(ctx, params)
-		var batchErr error
-		br.Exec(func(_ int, e error) {
-			if e != nil && batchErr == nil {
-				batchErr = e
-			}
-		})
-		if cerr := br.Close(); cerr != nil && batchErr == nil {
-			batchErr = cerr
-		}
-		if batchErr != nil {
-			return 0, batchErr
-		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return 0, err
-	}
-	return total, nil
-}
-
 // buildAgentParams flattens counts into the batch in ascending (job, day) order — the
-// lock-order rule buildParams documents — and reports the views it carries.
-func buildAgentParams(counts map[time.Time]map[int64]int) ([]db.ApplyDailyAgentViewParams, int) {
+// lock-order rule buildParams documents, which is also the order applyChunked's cursor
+// walks.
+func buildAgentParams(counts map[time.Time]map[int64]int) []db.ApplyDailyAgentViewParams {
 	var params []db.ApplyDailyAgentViewParams
-	total := 0
 	for day, perJob := range counts {
 		for id, n := range perJob {
 			params = append(params, db.ApplyDailyAgentViewParams{
 				Day: pgtype.Date{Time: day, Valid: true}, JobID: id, Delta: int32(n),
 			})
-			total += n
 		}
 	}
 	sort.Slice(params, func(i, j int) bool {
@@ -153,5 +118,5 @@ func buildAgentParams(counts map[time.Time]map[int64]int) ([]db.ApplyDailyAgentV
 		}
 		return params[i].Day.Time.Before(params[j].Day.Time)
 	})
-	return params, total
+	return params
 }

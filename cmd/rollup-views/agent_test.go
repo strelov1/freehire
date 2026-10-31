@@ -10,13 +10,10 @@ func TestAgentParamsAreOrderedByJobThenDay(t *testing.T) {
 	// transaction is a deadlock waiting for an ingest writer.
 	d1 := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
 	d2 := d1.AddDate(0, 0, 1)
-	params, total := buildAgentParams(map[time.Time]map[int64]int{
+	params := buildAgentParams(map[time.Time]map[int64]int{
 		d2: {9: 1, 3: 2},
 		d1: {9: 4},
 	})
-	if total != 7 {
-		t.Errorf("total = %d, want 7", total)
-	}
 	want := []struct {
 		id  int64
 		day time.Time
