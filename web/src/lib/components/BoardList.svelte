@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { Clock, Mail } from '@lucide/svelte';
   import { companyLogoUrl } from '#lib/logo.js';
   import { EntityLogo, LoadMore } from '#lib/ui/index.js';
@@ -36,12 +37,22 @@
   let limit = $state(PAGE);
   const visible = $derived(items.slice(0, limit));
   const showMore = () => (limit += PAGE);
+  let list: HTMLUListElement | undefined = $state();
+
+  // The button goes away with the last page, and focus would fall to <body> — back to the
+  // top for a keyboard user. It moves to the first row the press drew instead.
+  async function showMoreFromKeyboard() {
+    const first = limit;
+    showMore();
+    await tick();
+    list?.children[first]?.querySelector('button')?.focus();
+  }
 </script>
 
 {#if items.length === 0}
   <p class="py-8 text-center text-sm text-muted-foreground">{s.empty}</p>
 {:else}
-  <ul class="flex flex-col divide-y divide-border rounded-xl border border-border">
+  <ul bind:this={list} class="flex flex-col divide-y divide-border rounded-xl border border-border">
     {#each visible as item (item.id)}
       <li class="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/50">
         <!-- The employer and role open the application; the stage control beside them
@@ -112,7 +123,7 @@
          reads with a screen reader rather than scrolls. Hidden until it takes focus: the
          list reads as one continuous list for everyone else. -->
     <div class="sr-only focus-within:not-sr-only">
-      <LoadMore loading={false} onclick={showMore} />
+      <LoadMore loading={false} onclick={showMoreFromKeyboard} />
     </div>
   {/if}
 {/if}

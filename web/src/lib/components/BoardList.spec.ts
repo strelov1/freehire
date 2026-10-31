@@ -81,10 +81,14 @@ describe('BoardList', () => {
   it('offers a load-more control for keyboard and screen-reader users', async () => {
     render(BoardList, { props: { items: Array.from({ length: 60 }, (_, i) => row(i)), onopen: vi.fn(), onsetstage: vi.fn() } });
 
-    screen.getByRole('button', { name: 'Load more' }).click();
+    const more = screen.getByRole('button', { name: 'Load more' });
+    more.focus();
+    more.click();
     flushSync();
 
     expect(drawn()).toBe(60);
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    // Focus lands on the first row the press drew, not on <body>.
+    await vi.waitFor(() => expect(document.activeElement?.closest('li')?.textContent).toContain('Role 50'));
   });
 });
