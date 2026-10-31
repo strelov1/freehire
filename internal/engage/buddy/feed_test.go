@@ -63,6 +63,11 @@ func (f *feedRepo) Similar(_ context.Context, _ int64, limit, _ int) ([]SimilarR
 	return f.top, nil
 }
 
+// Nobody has reacted to anything here.
+func (f *feedRepo) ReactionCounts(context.Context, int64, []int64) (map[int64]Reactions, error) {
+	return nil, nil
+}
+
 func (f *feedRepo) Feed(_ context.Context, _ int64, authors []string, similarOnly bool, _ int64, _ int) ([]FeedRow, error) {
 	f.authors, f.similar = authors, similarOnly
 	return f.rows, nil

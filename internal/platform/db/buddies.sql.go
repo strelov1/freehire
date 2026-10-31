@@ -34,6 +34,20 @@ func (q *Queries) CloseBuddyConversationsForLeave(ctx context.Context, userID in
 	return err
 }
 
+const deleteBuddyReaction = `-- name: DeleteBuddyReaction :exec
+DELETE FROM buddy_reactions WHERE event_id = $1 AND user_id = $2
+`
+
+type DeleteBuddyReactionParams struct {
+	EventID int64 `json:"event_id"`
+	UserID  int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteBuddyReaction(ctx context.Context, arg DeleteBuddyReactionParams) error {
+	_, err := q.db.Exec(ctx, deleteBuddyReaction, arg.EventID, arg.UserID)
+	return err
+}
+
 const getBuddyMemberByHandle = `-- name: GetBuddyMemberByHandle :one
 SELECT user_id, handle, category, countries, regions, joined_at, left_at FROM buddy_members WHERE handle = $1
 `
@@ -478,6 +492,61 @@ func (q *Queries) ListBuddyMemberActivity(ctx context.Context, arg ListBuddyMemb
 	return items, nil
 }
 
+const listBuddyReactionCounts = `-- name: ListBuddyReactionCounts :many
+SELECT r.event_id,
+       r.kind,
+       count(*)::int AS reactions,
+       bool_or(r.user_id = $1)::bool AS mine
+FROM buddy_reactions r
+JOIN buddy_members m ON m.user_id = r.user_id AND m.left_at IS NULL
+WHERE r.event_id = ANY($2::bigint[])
+  AND NOT EXISTS (
+      SELECT 1 FROM user_blocks b
+      WHERE (b.blocker_id = $1 AND b.blocked_id = r.user_id)
+         OR (b.blocker_id = r.user_id AND b.blocked_id = $1))
+GROUP BY r.event_id, r.kind
+`
+
+type ListBuddyReactionCountsParams struct {
+	ViewerID int64   `json:"viewer_id"`
+	EventIds []int64 `json:"event_ids"`
+}
+
+type ListBuddyReactionCountsRow struct {
+	EventID   int64  `json:"event_id"`
+	Kind      string `json:"kind"`
+	Reactions int32  `json:"reactions"`
+	Mine      bool   `json:"mine"`
+}
+
+// Each event's reaction counts by kind, and the viewer's own choice, for the events of one
+// feed page. Only active members count, and never one on either side of a block with the
+// viewer: a reaction is as visible as the member who gave it.
+func (q *Queries) ListBuddyReactionCounts(ctx context.Context, arg ListBuddyReactionCountsParams) ([]ListBuddyReactionCountsRow, error) {
+	rows, err := q.db.Query(ctx, listBuddyReactionCounts, arg.ViewerID, arg.EventIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBuddyReactionCountsRow{}
+	for rows.Next() {
+		var i ListBuddyReactionCountsRow
+		if err := rows.Scan(
+			&i.EventID,
+			&i.Kind,
+			&i.Reactions,
+			&i.Mine,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listHiddenBuddyApplications = `-- name: ListHiddenBuddyApplications :many
 SELECT application_id FROM buddy_hidden_applications
 WHERE user_id = $1
@@ -706,5 +775,24 @@ func (q *Queries) UpdateBuddyMemberRankingKeys(ctx context.Context, arg UpdateBu
 		arg.Regions,
 		arg.UserID,
 	)
+	return err
+}
+
+const upsertBuddyReaction = `-- name: UpsertBuddyReaction :exec
+INSERT INTO buddy_reactions (event_id, user_id, kind)
+VALUES ($1, $2, $3)
+ON CONFLICT (event_id, user_id) DO UPDATE SET kind = EXCLUDED.kind, created_at = now()
+`
+
+type UpsertBuddyReactionParams struct {
+	EventID int64  `json:"event_id"`
+	UserID  int64  `json:"user_id"`
+	Kind    string `json:"kind"`
+}
+
+// Sets the member's one reaction to an event, replacing any other kind they chose before.
+// The caller has already checked the event is in the member's own feed.
+func (q *Queries) UpsertBuddyReaction(ctx context.Context, arg UpsertBuddyReactionParams) error {
+	_, err := q.db.Exec(ctx, upsertBuddyReaction, arg.EventID, arg.UserID, arg.Kind)
 	return err
 }

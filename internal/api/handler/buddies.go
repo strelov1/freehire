@@ -33,6 +33,8 @@ func (h *buddyHandlers) register(api fiber.Router, mw middleware) {
 	api.Delete("/me/buddies", mw.cookie, h.Leave)
 	api.Get("/me/buddies/similar", mw.cookie, h.Similar)
 	api.Get("/me/buddies/feed", mw.cookie, h.Feed)
+	api.Put("/me/buddies/feed/:id/reaction", mw.cookie, h.React)
+	api.Delete("/me/buddies/feed/:id/reaction", mw.cookie, h.Unreact)
 	api.Get("/me/buddies/profiles/:handle", mw.cookie, h.Profile)
 	api.Get("/me/buddies/profiles/:handle/activity", mw.cookie, h.Activity)
 	api.Get("/me/buddies/hidden-applications", mw.cookie, h.HiddenApplications)
@@ -55,6 +57,8 @@ func buddyError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "not found")
 	case errors.Is(err, buddy.ErrBadFeedRequest):
 		return fiber.NewError(fiber.StatusBadRequest, "invalid feed mode or cursor")
+	case errors.Is(err, buddy.ErrBadReaction):
+		return fiber.NewError(fiber.StatusBadRequest, "unknown reaction")
 	}
 	return messagingError(err)
 }
@@ -168,6 +172,7 @@ type buddyFeedEntryResponse struct {
 	JobTitle    *string                  `json:"job_title"`
 	JobSlug     *string                  `json:"job_slug"`
 	JobLocation *string                  `json:"job_location"`
+	Reactions   buddyReactionsResponse   `json:"reactions"`
 	Type        string                   `json:"type"`
 	Day         string                   `json:"day"`
 }
@@ -194,7 +199,8 @@ func (h *buddyHandlers) Feed(c *fiber.Ctx) error {
 		out[i] = buddyFeedEntryResponse{
 			ID: e.ID, Handle: e.Handle, CardSummary: toBuddyCardSummary(e.Card),
 			Company:  buddyCompanyResponse{Slug: e.Company.Slug, Name: e.Company.Name},
-			JobTitle: e.JobTitle, JobSlug: e.JobSlug, JobLocation: e.JobLocation, Type: e.Type, Day: e.Day,
+			JobTitle: e.JobTitle, JobSlug: e.JobSlug, JobLocation: e.JobLocation, Reactions: toBuddyReactions(e.Reactions),
+			Type: e.Type, Day: e.Day,
 		}
 	}
 	var next *string
@@ -323,4 +329,53 @@ func (h *buddyHandlers) Invite(c *fiber.Ctx) error {
 		return buddyError(err)
 	}
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{"data": toConversation(conv)})
+}
+
+// buddyReactionsResponse is one feed event's reactions: count per kind (no key for a kind
+// nobody chose — always an object, never null) and the viewer's own choice, "" for none.
+type buddyReactionsResponse struct {
+	Counts map[string]int `json:"counts"`
+	Mine   string         `json:"mine"`
+}
+
+func toBuddyReactions(r buddy.Reactions) buddyReactionsResponse {
+	counts := r.Counts
+	if counts == nil {
+		counts = map[string]int{}
+	}
+	return buddyReactionsResponse{Counts: counts, Mine: r.Mine}
+}
+
+type buddyReactBody struct {
+	Kind string `json:"kind"`
+}
+
+// React sets the caller's one reaction to a feed event they can see, replacing any other.
+func (h *buddyHandlers) React(c *fiber.Ctx) error {
+	var body buddyReactBody
+	if err := c.BodyParser(&body); err != nil || body.Kind == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "kind is required")
+	}
+	return h.react(c, body.Kind)
+}
+
+// Unreact removes the caller's reaction to a feed event.
+func (h *buddyHandlers) Unreact(c *fiber.Ctx) error {
+	return h.react(c, "")
+}
+
+func (h *buddyHandlers) react(c *fiber.Ctx, kind string) error {
+	userID, err := requireUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := pathID(c)
+	if err != nil {
+		return err
+	}
+	r, err := h.buddy.React(c.Context(), userID, id, kind)
+	if err != nil {
+		return buddyError(err)
+	}
+	return c.JSON(fiber.Map{"data": toBuddyReactions(r)})
 }

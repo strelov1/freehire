@@ -313,3 +313,30 @@ WHERE m.user_id = ANY(sqlc.arg(user_ids)::bigint[]);
 -- The handles behind account ids, active or left, for a moderator reading a reported
 -- buddy conversation by what its members saw.
 SELECT user_id, handle FROM buddy_members WHERE user_id = ANY(sqlc.arg(user_ids)::bigint[]);
+
+-- name: UpsertBuddyReaction :exec
+-- Sets the member's one reaction to an event, replacing any other kind they chose before.
+-- The caller has already checked the event is in the member's own feed.
+INSERT INTO buddy_reactions (event_id, user_id, kind)
+VALUES (sqlc.arg(event_id), sqlc.arg(user_id), sqlc.arg(kind))
+ON CONFLICT (event_id, user_id) DO UPDATE SET kind = EXCLUDED.kind, created_at = now();
+
+-- name: DeleteBuddyReaction :exec
+DELETE FROM buddy_reactions WHERE event_id = sqlc.arg(event_id) AND user_id = sqlc.arg(user_id);
+
+-- name: ListBuddyReactionCounts :many
+-- Each event's reaction counts by kind, and the viewer's own choice, for the events of one
+-- feed page. Only active members count, and never one on either side of a block with the
+-- viewer: a reaction is as visible as the member who gave it.
+SELECT r.event_id,
+       r.kind,
+       count(*)::int AS reactions,
+       bool_or(r.user_id = sqlc.arg(viewer_id))::bool AS mine
+FROM buddy_reactions r
+JOIN buddy_members m ON m.user_id = r.user_id AND m.left_at IS NULL
+WHERE r.event_id = ANY(sqlc.arg(event_ids)::bigint[])
+  AND NOT EXISTS (
+      SELECT 1 FROM user_blocks b
+      WHERE (b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = r.user_id)
+         OR (b.blocker_id = r.user_id AND b.blocked_id = sqlc.arg(viewer_id)))
+GROUP BY r.event_id, r.kind;

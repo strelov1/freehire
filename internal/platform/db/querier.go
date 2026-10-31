@@ -1696,6 +1696,7 @@ type Querier interface {
 	DeleteBuddyMockAvailabilityRule(ctx context.Context, arg DeleteBuddyMockAvailabilityRuleParams) (int64, error)
 	// Give a claim back after a failed delivery, so the next run retries.
 	DeleteBuddyMockReminder(ctx context.Context, arg DeleteBuddyMockReminderParams) (int64, error)
+	DeleteBuddyReaction(ctx context.Context, arg DeleteBuddyReactionParams) error
 	// Delete a CV owned by the user. Returns the affected-row count so the handler can 404
 	// when nothing was deleted (foreign or missing id).
 	DeleteCV(ctx context.Context, arg DeleteCVParams) (int64, error)
@@ -3950,6 +3951,10 @@ type Querier interface {
 	// have passed since the end. The same reveal rule is restated in
 	// GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
 	ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksForUserParams) ([]ListBuddyMocksForUserRow, error)
+	// Each event's reaction counts by kind, and the viewer's own choice, for the events of one
+	// feed page. Only active members count, and never one on either side of a block with the
+	// viewer: a reaction is as visible as the member who gave it.
+	ListBuddyReactionCounts(ctx context.Context, arg ListBuddyReactionCountsParams) ([]ListBuddyReactionCountsRow, error)
 	// The feed, newest first.
 	ListCVRevisions(ctx context.Context, arg ListCVRevisionsParams) ([]CvRevision, error)
 	// Every revision of one agent turn or autopilot run that is still standing, newest first —
@@ -8147,6 +8152,9 @@ type Querier interface {
 	// Save the whole settings block. The service validates zone, link and topics first; the
 	// CHECKs repeat the link and topic rules so no other writer can skip them.
 	UpsertBuddyMockSettings(ctx context.Context, arg UpsertBuddyMockSettingsParams) (BuddyMockSetting, error)
+	// Sets the member's one reaction to an event, replacing any other kind they chose before.
+	// The caller has already checked the event is in the member's own feed.
+	UpsertBuddyReaction(ctx context.Context, arg UpsertBuddyReactionParams) error
 	// Replaces the user's CV appearance defaults wholesale — there is exactly one row per user,
 	// so a save always means "this is the new complete set", never a partial patch.
 	UpsertCVAppearanceDefaults(ctx context.Context, arg UpsertCVAppearanceDefaultsParams) (CvAppearanceDefault, error)

@@ -51,6 +51,8 @@ type FeedEntry struct {
 	JobLocation *string
 	Type        string
 	Day         string
+	// Reactions the event has drawn, as this viewer may see them.
+	Reactions Reactions
 }
 
 // FeedPage is one page and the cursor of the next, empty when this is the last.
@@ -178,6 +180,20 @@ func (s *Service) feedPage(ctx context.Context, viewerID int64, authors []string
 			Company: r.Company, JobTitle: r.JobTitle, JobSlug: r.JobSlug, JobLocation: r.JobLocation,
 			Type: feedType(r.Kind, r.Signal), Day: r.Day,
 		}
+	}
+	if len(rows) == 0 {
+		return page, nil
+	}
+	ids := make([]int64, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	reactions, err := s.repo.ReactionCounts(ctx, viewerID, ids)
+	if err != nil {
+		return FeedPage{}, err
+	}
+	for i := range page.Entries {
+		page.Entries[i].Reactions = reactions[page.Entries[i].ID]
 	}
 	return page, nil
 }
