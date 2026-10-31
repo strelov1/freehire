@@ -68,7 +68,7 @@ func (b *insertBarrier) CreateMock(ctx context.Context, in buddy.NewMock) (buddy
 
 func TestConcurrentBookingsOfOneSlotConfirmExactlyOne(t *testing.T) {
 	pool, svc, _, _ := mockSetup(t)
-	repo := &insertBarrier{QueriesRepository: buddy.NewQueriesRepository(db.New(pool))}
+	repo := &insertBarrier{QueriesRepository: buddy.NewQueriesRepository(db.New(pool), pool)}
 	repo.arrived.Add(2)
 	mocks := buddy.NewMockService(svc, repo, &recordingNotifier{})
 	host, hostHandle := joined(t, pool, svc, "host@example.test")

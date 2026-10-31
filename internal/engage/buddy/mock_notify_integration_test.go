@@ -30,7 +30,7 @@ func TestBookingNoticesNameHandlesOnly(t *testing.T) {
 	ctx := context.Background()
 	q := db.New(pool)
 	box := &mailbox{}
-	mocks := buddy.NewMockService(svc, buddy.NewQueriesRepository(q),
+	mocks := buddy.NewMockService(svc, buddy.NewQueriesRepository(q, pool),
 		buddy.NewMockMailNotifier(q, box, "noreply@freehire.test", "https://freehire.test"))
 	host, hostHandle := joined(t, pool, svc, "host@example.test")
 	guest, guestHandle := joined(t, pool, svc, "guest@example.test")

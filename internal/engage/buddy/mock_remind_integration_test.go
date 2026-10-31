@@ -105,7 +105,7 @@ func (c *cancelBeforeClaim) ClaimMockReminder(ctx context.Context, id uuid.UUID,
 func TestAMockCancelledMidRunIsNotReminded(t *testing.T) {
 	pool, svc, _, _ := mockSetup(t)
 	n := &recordingNotifier{}
-	mocks := buddy.NewMockService(svc, &cancelBeforeClaim{buddy.NewQueriesRepository(db.New(pool)), pool}, n)
+	mocks := buddy.NewMockService(svc, &cancelBeforeClaim{buddy.NewQueriesRepository(db.New(pool), pool), pool}, n)
 	host, _ := joined(t, pool, svc, "host@example.test")
 	guest, _ := joined(t, pool, svc, "guest@example.test")
 	seedMock(t, pool, host, guest, time.Now().Add(30*time.Minute))

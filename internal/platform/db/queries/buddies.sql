@@ -17,25 +17,40 @@ SET left_at   = NULL,
     regions   = EXCLUDED.regions
 RETURNING *;
 
+-- name: CloseBuddyConversationsForLeave :exec
+-- A leave's first statement: close every pending or open buddy conversation the member is
+-- in. The conversations are the messaging core's (kind 'buddy'); closing them in the
+-- leave's own transaction rather than through the core is what keeps the leave atomic.
+-- Not guarded on membership, which is harmless: a left member has no pending or open buddy
+-- conversation. It runs BEFORE LockBuddyMemberForLeave on purpose: a block
+-- (BlockFromConversation) locks the pair's conversations before its trigger locks their
+-- buddy_members rows, so a leave taking the member row first and the conversations second
+-- would close a lock cycle with it.
+UPDATE conversations c
+SET status = 'closed', closed_at = now()
+WHERE c.kind = 'buddy'
+  AND c.status IN ('pending', 'open')
+  AND EXISTS (
+      SELECT 1 FROM conversation_participants p
+      WHERE p.conversation_id = c.id AND p.user_id = sqlc.arg(user_id));
+
+-- name: LockBuddyMemberForLeave :exec
+-- The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
+-- the member's own row FOR UPDATE, in a statement of its own, before LeaveBuddyMember. A
+-- booking holding its share lock makes this wait until the mock is committed, and
+-- LeaveBuddyMember, starting a fresh snapshot after the wait, then sees it and cancels it.
+SELECT user_id FROM buddy_members WHERE user_id = sqlc.arg(user_id) FOR UPDATE;
+
 -- name: LeaveBuddyMember :one
--- Opt a member out: stamp left_at, close every pending or open buddy conversation they
--- are in, and cancel every future mock they are in (either role, freeing both people's
--- time), in one statement so a leave cannot half-apply. The conversations are the
--- messaging core's (kind 'buddy'); closing them here rather than through the core is what
--- keeps the writes atomic. The row is kept, so rejoining restores the handle. The member
--- update is guarded by left_at IS NULL, so for a member who is not active it returns no
--- row; the close and the cancel are not guarded, which is harmless because a left member
--- has no pending or open buddy conversation and no future mock. cancelled_by is the
--- leaver: the caller claims the cancellation notices by it afterwards.
-WITH closed AS (
-    UPDATE conversations c
-    SET status = 'closed', closed_at = now()
-    WHERE c.kind = 'buddy'
-      AND c.status IN ('pending', 'open')
-      AND EXISTS (
-          SELECT 1 FROM conversation_participants p
-          WHERE p.conversation_id = c.id AND p.user_id = sqlc.arg(user_id))
-), cancelled AS (
+-- Opt a member out, the leave's last statement: stamp left_at and cancel every future
+-- mock they are in (either role, freeing both people's time). Run in one transaction after
+-- CloseBuddyConversationsForLeave and LockBuddyMemberForLeave, so a leave cannot
+-- half-apply and cannot miss a booking racing it. The row is kept, so rejoining restores
+-- the handle. The member update is guarded by left_at IS NULL, so for a member who is not
+-- active it returns no row; the cancel is not guarded, which is harmless because a left
+-- member has no future mock. cancelled_by is the leaver: the caller claims the
+-- cancellation notices by it afterwards.
+WITH cancelled AS (
     UPDATE buddy_mocks m
     SET status = 'cancelled', cancelled_at = now(), cancelled_by = sqlc.arg(user_id)::bigint,
         cancel_reason = 'left'

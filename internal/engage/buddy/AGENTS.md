@@ -33,8 +33,8 @@ second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.g
   holds the grid's total to the member feed's length. Never reuse the tracker's activity
   query for another person: it counts follow-ups and every stage move.
 - **One conversation per pair**: the messaging pair key `"<low>:<high>"`. Leaving closes every
-  pending or open buddy conversation the member is in, in the same statement as the leave
-  (`LeaveBuddyMember` touches the core's `conversations` for exactly that); the row and
+  pending or open buddy conversation the member is in, in the same transaction as the leave
+  (`CloseBuddyConversationsForLeave` touches the core's `conversations` for exactly that); the row and
   handle survive, so rejoining restores the handle and a new invitation reopens the closed
   conversation.
 - **Membership is checked by a read before the start, not inside it.** A block is checked in
@@ -64,13 +64,32 @@ second pass of `cmd/mentorship-remind`, HTTP `internal/api/handler/buddy_mocks.g
 - **The meeting link reaches the two participants of a confirmed mock and nobody else** —
   never a slot listing, a member page or a notice to anyone else. It is read live from the
   host's settings, so a corrected link reaches guests who already booked.
-- **A leave or a block cancels future mocks in its own statement.** `LeaveBuddyMember`
+- **A leave or a block cancels future mocks in its own transaction.** `LeaveBuddyMember`
   cancels in a CTE; a block cancels through an AFTER INSERT trigger this feature puts on
   `user_blocks`, because the block is the messaging core's statement and the core never
   imports a feature. Both record `cancelled_by`; the notice is sent afterwards by
   `MockService.AnnounceCancellations(actor)`, which the api layer calls after the leave and
   after `POST /me/conversations/:id/block`. A new path that writes a block or a leave must
   call it too.
+- **Booking, leave and block serialise on `buddy_members` rows.** Without a shared lock a
+  booking and a leave or block each read the other's pre-state under READ COMMITTED: the
+  booking commits confirmed, the cancel never saw it, and the blocked member keeps the
+  host's link. So the three writers lock the lifecycle rows first: a booking (`CreateMock`)
+  takes both participants' rows `FOR SHARE` in `user_id` order (`LockBuddyMembersForMock`);
+  a leave (`Leave`) takes the member's own row `FOR UPDATE` (`LockBuddyMemberForLeave`);
+  the block trigger takes both rows `FOR UPDATE` in `user_id` order. Each lock is a
+  statement of its OWN, before the check or cancel: a statement keeps the snapshot it
+  started with even after waiting on a row lock, so only a later statement sees what
+  committed during the wait. One order everywhere means no lock cycle between them; the
+  leave closes its conversations BEFORE locking the member row, because a block locks the
+  conversations before its trigger reaches `buddy_members`. A new writer that creates or
+  ends a mock relationship joins this protocol. `TestABookingRacing*` and
+  `TestABookingWaitsForAnUncommittedBlock` hold it, and fail without the locks.
+- **The link is withheld at read too.** `GetBuddyMock`, `ListBuddyMocksForUser`, the
+  reminder due-list and the reminder claim return the link, or claim, only while the mock
+  is confirmed, both are active members and no block stands either way — the defence
+  should a writer ever miss a cancel. The rule is restated in those four queries; change
+  them together.
 - **Reviews are blind.** A review is shown to its subject and on their page only once the
   subject has reviewed back or seven days have passed since the end. The rule is computed in
   `ListBuddyMocksForUser`, `GetBuddyMemberMockSummary` and `ListBuddyMemberRevealedReviews`;

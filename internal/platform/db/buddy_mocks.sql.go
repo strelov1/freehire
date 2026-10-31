@@ -125,9 +125,12 @@ type CreateBuddyMockParams struct {
 	GuestTimezone string             `json:"guest_timezone"`
 }
 
-// Book a mock and both participant rows in ONE statement. The guard repeats, inside the
-// write, what the service read before it: both people are active members and no block
-// stands between them; a pair that cannot meet inserts nothing and returns no row. The
+// Book a mock and both participant rows in ONE statement, after LockBuddyMembersForMock in
+// the same transaction. The guard repeats, inside the write, what the service read before
+// it: both people are active members and no block stands between them; a pair that cannot
+// meet inserts nothing and returns no row. The guard is only race-free because of that
+// lock: without it a leave or block committing beside this statement is invisible to it,
+// and its own cancel cannot see this uncommitted mock. The
 // buddy_mock_participants_no_overlap EXCLUDE refuses a person already in an overlapping
 // mock in either role; the repository maps that 23P01 to the same "slot unavailable" a
 // stale page gets.
@@ -291,7 +294,7 @@ SELECT m.id, m.host_user_id, m.guest_user_id, m.starts_at, m.ends_at, m.topic, m
        m.guest_timezone, m.cancel_reason,
        hm.handle AS host_handle, gm.handle AS guest_handle,
        coalesce(s.timezone, '')::text AS host_timezone,
-       coalesce(s.meeting_url, '')::text AS meeting_url,
+       coalesce(link.meeting_url, '')::text AS meeting_url,
        hu.email AS host_email, gu.email AS guest_email
 FROM buddy_mocks m
 JOIN buddy_members hm ON hm.user_id = m.host_user_id
@@ -299,6 +302,12 @@ JOIN buddy_members gm ON gm.user_id = m.guest_user_id
 JOIN users hu ON hu.id = m.host_user_id
 JOIN users gu ON gu.id = m.guest_user_id
 LEFT JOIN buddy_mock_settings s ON s.user_id = m.host_user_id
+LEFT JOIN buddy_mock_settings link
+       ON link.user_id = m.host_user_id
+      AND m.status = 'confirmed' AND hm.left_at IS NULL AND gm.left_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM user_blocks b
+              WHERE (b.blocker_id = m.host_user_id AND b.blocked_id = m.guest_user_id)
+                 OR (b.blocker_id = m.guest_user_id AND b.blocked_id = m.host_user_id))
 WHERE m.id = $1
 `
 
@@ -322,7 +331,11 @@ type GetBuddyMockRow struct {
 
 // One mock with what both participants' notices need: both handles, the host's CURRENT
 // zone and link, and both addresses — each address only ever addresses its own owner's
-// notice. Authorisation is the caller's: this answers for any id.
+// notice. Authorisation is the caller's: this answers for any id. The link is empty unless
+// the pair can still meet: confirmed, both active members, no block either way. The
+// writers cancel in that case, and this is the defence should one ever be missed. The same
+// "can meet" rule is restated in ListBuddyMocksForUser, ListBuddyMocksDueForReminder and
+// RecordBuddyMockReminder; change all four together.
 func (q *Queries) GetBuddyMock(ctx context.Context, id pgtype.UUID) (GetBuddyMockRow, error) {
 	row := q.db.QueryRow(ctx, getBuddyMock, id)
 	var i GetBuddyMockRow
@@ -497,7 +510,12 @@ func (q *Queries) ListBuddyMockBusy(ctx context.Context, arg ListBuddyMockBusyPa
 const listBuddyMocksDueForReminder = `-- name: ListBuddyMocksDueForReminder :many
 SELECT m.id
 FROM buddy_mocks m
+JOIN buddy_members hm ON hm.user_id = m.host_user_id AND hm.left_at IS NULL
+JOIN buddy_members gm ON gm.user_id = m.guest_user_id AND gm.left_at IS NULL
 WHERE m.status = 'confirmed'
+  AND NOT EXISTS (SELECT 1 FROM user_blocks b
+              WHERE (b.blocker_id = m.host_user_id AND b.blocked_id = m.guest_user_id)
+                 OR (b.blocker_id = m.guest_user_id AND b.blocked_id = m.host_user_id))
   AND m.starts_at > now()
   AND m.starts_at <= now() + make_interval(mins => $1::int)
   AND m.starts_at > now() + make_interval(mins => $2::int)
@@ -515,7 +533,8 @@ type ListBuddyMocksDueForReminderParams struct {
 }
 
 // Confirmed mocks starting inside one offset's window (floor, offset] and not yet reminded
-// at it. starts_at > now() keeps a late run from reminding about a mock already under way.
+// at it, between a pair that can still meet (the GetBuddyMock rule). starts_at > now()
+// keeps a late run from reminding about a mock already under way.
 func (q *Queries) ListBuddyMocksDueForReminder(ctx context.Context, arg ListBuddyMocksDueForReminderParams) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, listBuddyMocksDueForReminder, arg.OffsetMinutes, arg.FloorMinutes, arg.RowLimit)
 	if err != nil {
@@ -540,7 +559,7 @@ const listBuddyMocksForUser = `-- name: ListBuddyMocksForUser :many
 SELECT m.id, m.host_user_id, m.guest_user_id, m.starts_at, m.ends_at, m.topic, m.status,
        m.cancel_reason,
        hm.handle AS host_handle, gm.handle AS guest_handle,
-       s.meeting_url AS host_meeting_url,
+       link.meeting_url AS host_meeting_url,
        (cm.left_at IS NULL
         AND NOT EXISTS (
             SELECT 1 FROM user_blocks b
@@ -553,7 +572,12 @@ JOIN buddy_members hm ON hm.user_id = m.host_user_id
 JOIN buddy_members gm ON gm.user_id = m.guest_user_id
 JOIN buddy_members cm ON cm.user_id = CASE WHEN m.host_user_id = $1::bigint
                                            THEN m.guest_user_id ELSE m.host_user_id END
-LEFT JOIN buddy_mock_settings s ON s.user_id = m.host_user_id
+LEFT JOIN buddy_mock_settings link
+       ON link.user_id = m.host_user_id
+      AND m.status = 'confirmed' AND hm.left_at IS NULL AND gm.left_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM user_blocks b
+              WHERE (b.blocker_id = m.host_user_id AND b.blocked_id = m.guest_user_id)
+                 OR (b.blocker_id = m.guest_user_id AND b.blocked_id = m.host_user_id))
 LEFT JOIN buddy_mock_reviews mine
        ON mine.mock_id = m.id AND mine.author_user_id = $1::bigint
 LEFT JOIN buddy_mock_reviews theirs
@@ -588,10 +612,11 @@ type ListBuddyMocksForUserRow struct {
 	TheirComment       pgtype.Text        `json:"their_comment"`
 }
 
-// A member's own mocks, newest first, with the host's current link, whether the other side
-// may still be drawn (both active, no block either way — the ListBuddyCounterparts rule),
-// the member's own review, and the review ABOUT them only once revealed: they have written
-// theirs, or seven days have passed since the end. The same reveal rule is restated in
+// A member's own mocks, newest first, with the host's current link while the pair can
+// still meet (the GetBuddyMock rule), whether the other side may still be drawn (both
+// active, no block either way — the ListBuddyCounterparts rule), the member's own review,
+// and the review ABOUT them only once revealed: they have written theirs, or seven days
+// have passed since the end. The same reveal rule is restated in
 // GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
 func (q *Queries) ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksForUserParams) ([]ListBuddyMocksForUserRow, error) {
 	rows, err := q.db.Query(ctx, listBuddyMocksForUser, arg.UserID, arg.RowLimit)
@@ -630,11 +655,40 @@ func (q *Queries) ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksF
 	return items, nil
 }
 
+const lockBuddyMembersForMock = `-- name: LockBuddyMembersForMock :exec
+SELECT user_id FROM buddy_members
+WHERE user_id IN ($1::bigint, $2::bigint)
+ORDER BY user_id
+FOR SHARE
+`
+
+type LockBuddyMembersForMockParams struct {
+	HostUserID  int64 `json:"host_user_id"`
+	GuestUserID int64 `json:"guest_user_id"`
+}
+
+// The booking's half of the buddy_members lock protocol: share-lock both participants'
+// rows, in user_id order, in the booking's transaction and BEFORE CreateBuddyMock. A leave
+// (LockBuddyMemberForLeave) and a block (the buddy_mocks_cancel_on_block trigger) take the
+// same rows FOR UPDATE, so a booking and either of them serialise instead of each reading
+// the other's pre-state. It must be a statement of its own: a statement keeps the snapshot
+// it started with even after waiting on a row lock, so the eligibility check has to be a
+// LATER statement to see a leave or block that committed while this one waited.
+func (q *Queries) LockBuddyMembersForMock(ctx context.Context, arg LockBuddyMembersForMockParams) error {
+	_, err := q.db.Exec(ctx, lockBuddyMembersForMock, arg.HostUserID, arg.GuestUserID)
+	return err
+}
+
 const recordBuddyMockReminder = `-- name: RecordBuddyMockReminder :execrows
 INSERT INTO buddy_mock_reminders (mock_id, offset_minutes)
 SELECT m.id, $1::int
 FROM buddy_mocks m
+JOIN buddy_members hm ON hm.user_id = m.host_user_id AND hm.left_at IS NULL
+JOIN buddy_members gm ON gm.user_id = m.guest_user_id AND gm.left_at IS NULL
 WHERE m.id = $2 AND m.status = 'confirmed' AND m.starts_at > now()
+  AND NOT EXISTS (SELECT 1 FROM user_blocks b
+              WHERE (b.blocker_id = m.host_user_id AND b.blocked_id = m.guest_user_id)
+                 OR (b.blocker_id = m.guest_user_id AND b.blocked_id = m.host_user_id))
 ON CONFLICT DO NOTHING
 `
 
@@ -644,8 +698,9 @@ type RecordBuddyMockReminderParams struct {
 }
 
 // Claim one reminder. Zero rows means another run holds it, or the mock was cancelled or
-// has started since the due read: send only after this returns 1. The status is checked
-// here, in the claim, because a batch leaves time between that read and this statement.
+// has started since the due read, or the pair can no longer meet (the GetBuddyMock rule):
+// send only after this returns 1. The rule is checked here, in the claim, because a batch
+// leaves time between that read and this statement.
 func (q *Queries) RecordBuddyMockReminder(ctx context.Context, arg RecordBuddyMockReminderParams) (int64, error) {
 	result, err := q.db.Exec(ctx, recordBuddyMockReminder, arg.OffsetMinutes, arg.MockID)
 	if err != nil {

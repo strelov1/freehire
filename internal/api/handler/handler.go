@@ -945,7 +945,7 @@ func Register(app *fiber.App, cfg Config) {
 	referralsH := newReferralHandlers(referralSvc, cfg.Blob, cvRenderer, cvStore, photoStore, queries)
 	// Conversations are the messaging core's; each persona a participant may speak as is
 	// registered here.
-	buddyRepo := buddy.NewQueriesRepository(queries)
+	buddyRepo := buddy.NewQueriesRepository(queries, cfg.Pool)
 	messagingSvc := messaging.New(messaging.NewQueriesRepository(queries), buddy.NewPersona(buddyRepo))
 	buddySvc := buddy.New(buddyRepo, messagingSvc)
 	// Buddy mock interviews. Without a mail transport the notices still reach the

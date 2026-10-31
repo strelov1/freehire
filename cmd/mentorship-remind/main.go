@@ -82,7 +82,7 @@ func run() int {
 		},
 	)
 	// The buddy pass needs no messaging core: reminders never start a conversation.
-	buddyRepo := buddy.NewQueriesRepository(q)
+	buddyRepo := buddy.NewQueriesRepository(q, pool)
 	mocks := buddy.NewMockService(buddy.New(buddyRepo, nil), buddyRepo,
 		buddy.NewMockMailNotifier(q, sender, cfg.NotifyEmailFrom, cfg.FrontendOrigin))
 

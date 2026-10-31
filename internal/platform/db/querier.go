@@ -804,6 +804,15 @@ type Querier interface {
 	// yield, and the chronic pass waits 60 days. jobs_closed_reason_check bounds the values. The
 	// search_delete_outbox CTE rides the statement as in CloseEmptyFeedBoardJobs.
 	CloseBoardJobsWithReason(ctx context.Context, arg CloseBoardJobsWithReasonParams) (int64, error)
+	// A leave's first statement: close every pending or open buddy conversation the member is
+	// in. The conversations are the messaging core's (kind 'buddy'); closing them in the
+	// leave's own transaction rather than through the core is what keeps the leave atomic.
+	// Not guarded on membership, which is harmless: a left member has no pending or open buddy
+	// conversation. It runs BEFORE LockBuddyMemberForLeave on purpose: a block
+	// (BlockFromConversation) locks the pair's conversations before its trigger locks their
+	// buddy_members rows, so a leave taking the member row first and the conversations second
+	// would close a lock cycle with it.
+	CloseBuddyConversationsForLeave(ctx context.Context, userID int64) error
 	// The chronic-board safety net (openspec change close-chronically-unreachable-boards, issue
 	// #2017), board-scoped: closes every open job of ONE board that board_health.ListChronicBoards
 	// has already proven unreachable for the closure window — no per-run cutoff, because the
@@ -1421,9 +1430,12 @@ type Querier interface {
 	// 'tailor'); cv_id/job_id bind a tailoring session to its CV and vacancy and are NULL
 	// for a chat. The label is set later, from the first user message.
 	CreateAssistantSession(ctx context.Context, arg CreateAssistantSessionParams) (CreateAssistantSessionRow, error)
-	// Book a mock and both participant rows in ONE statement. The guard repeats, inside the
-	// write, what the service read before it: both people are active members and no block
-	// stands between them; a pair that cannot meet inserts nothing and returns no row. The
+	// Book a mock and both participant rows in ONE statement, after LockBuddyMembersForMock in
+	// the same transaction. The guard repeats, inside the write, what the service read before
+	// it: both people are active members and no block stands between them; a pair that cannot
+	// meet inserts nothing and returns no row. The guard is only race-free because of that
+	// lock: without it a leave or block committing beside this statement is invisible to it,
+	// and its own cancel cannot see this uncommitted mock. The
 	// buddy_mock_participants_no_overlap EXCLUDE refuses a person already in an overlapping
 	// mock in either role; the repository maps that 23P01 to the same "slot unavailable" a
 	// stale page gets.
@@ -2511,7 +2523,11 @@ type Querier interface {
 	GetBuddyMemberMockSummary(ctx context.Context, subjectUserID int64) (GetBuddyMemberMockSummaryRow, error)
 	// One mock with what both participants' notices need: both handles, the host's CURRENT
 	// zone and link, and both addresses — each address only ever addresses its own owner's
-	// notice. Authorisation is the caller's: this answers for any id.
+	// notice. Authorisation is the caller's: this answers for any id. The link is empty unless
+	// the pair can still meet: confirmed, both active members, no block either way. The
+	// writers cancel in that case, and this is the defence should one ever be missed. The same
+	// "can meet" rule is restated in ListBuddyMocksForUser, ListBuddyMocksDueForReminder and
+	// RecordBuddyMockReminder; change all four together.
 	GetBuddyMock(ctx context.Context, id pgtype.UUID) (GetBuddyMockRow, error)
 	// A member's mock-host settings, or no row when they never saved any.
 	GetBuddyMockSettings(ctx context.Context, userID int64) (BuddyMockSetting, error)
@@ -3586,15 +3602,14 @@ type Querier interface {
 	// returns exactly one row — NULL for an empty catalogue — rather than the
 	// no-rows error a bare LIMIT 1 SELECT would give sqlc's :one on an empty table.
 	LatestOpenJobAddedAt(ctx context.Context) (pgtype.Timestamptz, error)
-	// Opt a member out: stamp left_at, close every pending or open buddy conversation they
-	// are in, and cancel every future mock they are in (either role, freeing both people's
-	// time), in one statement so a leave cannot half-apply. The conversations are the
-	// messaging core's (kind 'buddy'); closing them here rather than through the core is what
-	// keeps the writes atomic. The row is kept, so rejoining restores the handle. The member
-	// update is guarded by left_at IS NULL, so for a member who is not active it returns no
-	// row; the close and the cancel are not guarded, which is harmless because a left member
-	// has no pending or open buddy conversation and no future mock. cancelled_by is the
-	// leaver: the caller claims the cancellation notices by it afterwards.
+	// Opt a member out, the leave's last statement: stamp left_at and cancel every future
+	// mock they are in (either role, freeing both people's time). Run in one transaction after
+	// CloseBuddyConversationsForLeave and LockBuddyMemberForLeave, so a leave cannot
+	// half-apply and cannot miss a booking racing it. The row is kept, so rejoining restores
+	// the handle. The member update is guarded by left_at IS NULL, so for a member who is not
+	// active it returns no row; the cancel is not guarded, which is harmless because a left
+	// member has no future mock. cancelled_by is the leaver: the caller claims the
+	// cancellation notices by it afterwards.
 	LeaveBuddyMember(ctx context.Context, userID int64) (BuddyMember, error)
 	// Bind a Discord account to a freehire account, or move an existing binding to a different
 	// Discord account.
@@ -3885,12 +3900,14 @@ type Querier interface {
 	// slot engine subtracts it from their availability.
 	ListBuddyMockBusy(ctx context.Context, arg ListBuddyMockBusyParams) ([]ListBuddyMockBusyRow, error)
 	// Confirmed mocks starting inside one offset's window (floor, offset] and not yet reminded
-	// at it. starts_at > now() keeps a late run from reminding about a mock already under way.
+	// at it, between a pair that can still meet (the GetBuddyMock rule). starts_at > now()
+	// keeps a late run from reminding about a mock already under way.
 	ListBuddyMocksDueForReminder(ctx context.Context, arg ListBuddyMocksDueForReminderParams) ([]pgtype.UUID, error)
-	// A member's own mocks, newest first, with the host's current link, whether the other side
-	// may still be drawn (both active, no block either way — the ListBuddyCounterparts rule),
-	// the member's own review, and the review ABOUT them only once revealed: they have written
-	// theirs, or seven days have passed since the end. The same reveal rule is restated in
+	// A member's own mocks, newest first, with the host's current link while the pair can
+	// still meet (the GetBuddyMock rule), whether the other side may still be drawn (both
+	// active, no block either way — the ListBuddyCounterparts rule), the member's own review,
+	// and the review ABOUT them only once revealed: they have written theirs, or seven days
+	// have passed since the end. The same reveal rule is restated in
 	// GetBuddyMemberMockSummary and ListBuddyMemberRevealedReviews; change all three together.
 	ListBuddyMocksForUser(ctx context.Context, arg ListBuddyMocksForUserParams) ([]ListBuddyMocksForUserRow, error)
 	// The feed, newest first.
@@ -5326,6 +5343,19 @@ type Querier interface {
 	// Verified accounts inside the window that have not been greeted yet. This is the
 	// only step with no waiting period: it goes out on the next pass after signup.
 	ListWelcomeCandidates(ctx context.Context, arg ListWelcomeCandidatesParams) ([]ListWelcomeCandidatesRow, error)
+	// The leave's half of the buddy_members lock protocol (see LockBuddyMembersForMock): lock
+	// the member's own row FOR UPDATE, in a statement of its own, before LeaveBuddyMember. A
+	// booking holding its share lock makes this wait until the mock is committed, and
+	// LeaveBuddyMember, starting a fresh snapshot after the wait, then sees it and cancels it.
+	LockBuddyMemberForLeave(ctx context.Context, userID int64) error
+	// The booking's half of the buddy_members lock protocol: share-lock both participants'
+	// rows, in user_id order, in the booking's transaction and BEFORE CreateBuddyMock. A leave
+	// (LockBuddyMemberForLeave) and a block (the buddy_mocks_cancel_on_block trigger) take the
+	// same rows FOR UPDATE, so a booking and either of them serialise instead of each reading
+	// the other's pre-state. It must be a statement of its own: a statement keeps the snapshot
+	// it started with even after waiting on a row lock, so the eligibility check has to be a
+	// LATER statement to see a leave or block that committed while this one waited.
+	LockBuddyMembersForMock(ctx context.Context, arg LockBuddyMembersForMockParams) error
 	// Per-(user, company) thumbs votes. Unlike a job vote (a nullable column on the
 	// user_jobs row that persists for other marks), a company_votes row exists solely to
 	// hold the vote, so clearing a vote DELETEs the row. The domain layer branches in Go
@@ -6178,8 +6208,9 @@ type Querier interface {
 	// Closes out one (user, campaign) whether or not the send worked.
 	RecordBroadcastEmail(ctx context.Context, arg RecordBroadcastEmailParams) error
 	// Claim one reminder. Zero rows means another run holds it, or the mock was cancelled or
-	// has started since the due read: send only after this returns 1. The status is checked
-	// here, in the claim, because a batch leaves time between that read and this statement.
+	// has started since the due read, or the pair can no longer meet (the GetBuddyMock rule):
+	// send only after this returns 1. The rule is checked here, in the claim, because a batch
+	// leaves time between that read and this statement.
 	RecordBuddyMockReminder(ctx context.Context, arg RecordBuddyMockReminderParams) (int64, error)
 	// Record that this company page was announced to this engine. Idempotent, for the same
 	// reason its job sibling is: the row is what stops a re-run after a partial failure from

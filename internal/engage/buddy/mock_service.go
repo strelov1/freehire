@@ -43,7 +43,7 @@ type MockRepository interface {
 	MockBusy(ctx context.Context, userID int64, from, to time.Time) ([]slots.Interval, error)
 	// FutureGuestMocks counts the member's confirmed, not yet started mocks as guest.
 	FutureGuestMocks(ctx context.Context, guestID int64) (int, error)
-	// CreateMock writes the mock and both participant rows in one statement. It returns
+	// CreateMock writes the mock and both participant rows in one transaction. It returns
 	// ErrSlotUnavailable when either person is already in an overlapping mock, or when the
 	// pair can no longer meet (one left, or a block landed since the service's read).
 	CreateMock(ctx context.Context, in NewMock) (Mock, error)
@@ -314,7 +314,7 @@ func (s *MockService) Cancel(ctx context.Context, userID int64, id uuid.UUID) er
 
 // AnnounceCancellations tells the other participant of every mock actorID's own act
 // cancelled and nobody has announced yet: a participant's Cancel, the leave
-// (LeaveBuddyMember cancels in its own statement) or a block (a trigger on user_blocks
+// (LeaveBuddyMember cancels in the leave's transaction) or a block (a trigger on user_blocks
 // cancels inside the block's statement). The api layer calls it after a leave and after a
 // block. Best-effort: a failure is logged, never returned, because the cancellation it
 // reports has already happened.

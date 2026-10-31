@@ -159,9 +159,23 @@ CREATE TABLE IF NOT EXISTS buddy_mock_reminders (
 -- written by the messaging core (BlockFromConversation), which never imports a feature, so
 -- the feature reacts here; every path that ever inserts a block is covered by construction.
 -- cancelled_by is the blocker, which is how the caller claims the notice afterwards.
+--
+-- The block's half of the buddy_members lock protocol (the booking's is
+-- LockBuddyMembersForMock, the leave's LockBuddyMemberForLeave): lock both people's rows
+-- FOR UPDATE in user_id order, the order a booking takes its share locks, and only then
+-- cancel, in a separate statement. A booking holding its share locks makes this wait until
+-- the mock is committed; under READ COMMITTED each statement of a plpgsql function takes a
+-- fresh snapshot, so the cancel after the wait sees that mock. A booking arriving after
+-- this lock waits for the block to commit and then sees the block. A non-member has no
+-- row, which locks nothing and is fine: there is no mock to race.
 CREATE OR REPLACE FUNCTION public.buddy_mocks_cancel_on_block() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
+    PERFORM 1 FROM buddy_members
+    WHERE user_id IN (NEW.blocker_id, NEW.blocked_id)
+    ORDER BY user_id
+    FOR UPDATE;
+
     WITH cancelled AS (
         UPDATE buddy_mocks m
         SET status = 'cancelled', cancelled_at = now(), cancelled_by = NEW.blocker_id,

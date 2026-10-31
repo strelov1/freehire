@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
@@ -17,13 +18,18 @@ import (
 
 var _ Repository = (*QueriesRepository)(nil)
 
-// QueriesRepository is the production Repository over sqlc's *db.Queries.
+// QueriesRepository is the production Repository over sqlc's *db.Queries. The pool is
+// for the writes that need a transaction: a booking and a leave each lock buddy_members
+// rows in a statement of their own before writing (see CreateMock).
 type QueriesRepository struct {
-	q *db.Queries
+	q    *db.Queries
+	pool *pgxpool.Pool
 }
 
 // NewQueriesRepository builds a QueriesRepository.
-func NewQueriesRepository(q *db.Queries) *QueriesRepository { return &QueriesRepository{q: q} }
+func NewQueriesRepository(q *db.Queries, pool *pgxpool.Pool) *QueriesRepository {
+	return &QueriesRepository{q: q, pool: pool}
+}
 
 func categoryText(k Keys) pgtype.Text {
 	return pgtype.Text{String: k.Category, Valid: k.Category != ""}
@@ -43,12 +49,34 @@ func (r *QueriesRepository) Join(ctx context.Context, userID int64, handle strin
 	return memberFromRow(row), nil
 }
 
+// Leave runs in one transaction, in this order: close the member's buddy conversations,
+// lock their buddy_members row FOR UPDATE, then cancel their future mocks and stamp
+// left_at. The lock is the leave's half of the protocol CreateMock describes: a booking
+// holding its share lock makes the leave wait until the mock is committed, and the cancel,
+// a later statement with a fresh snapshot, then sees it. Conversations go first because a
+// block locks them before its trigger locks buddy_members; the reverse order here would
+// be a lock cycle with a concurrent block.
 func (r *QueriesRepository) Leave(ctx context.Context, userID int64) (bool, error) {
-	_, err := r.q.LeaveBuddyMember(ctx, userID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
+	left := false
+	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		if err := q.CloseBuddyConversationsForLeave(ctx, userID); err != nil {
+			return err
+		}
+		if err := q.LockBuddyMemberForLeave(ctx, userID); err != nil {
+			return err
+		}
+		_, err := q.LeaveBuddyMember(ctx, userID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil // not an active member
+		}
+		if err != nil {
+			return err
+		}
+		left = true
+		return nil
+	})
+	return left, err
 }
 
 func (r *QueriesRepository) Member(ctx context.Context, userID int64) (Member, bool, error) {

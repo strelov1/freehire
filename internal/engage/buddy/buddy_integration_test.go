@@ -25,7 +25,7 @@ const secretText = "Led the Initech billing rewrite"
 func setup(t *testing.T) (*pgxpool.Pool, *buddy.Service) {
 	t.Helper()
 	pool := testdb.Pool(t)
-	return pool, buddy.New(buddy.NewQueriesRepository(db.New(pool)), chat(pool))
+	return pool, buddy.New(buddy.NewQueriesRepository(db.New(pool), pool), chat(pool))
 }
 
 // otherHandle is the other member's handle as a conversation draws them, empty when they
@@ -39,7 +39,7 @@ func otherHandle(c messaging.Conversation) string {
 // sends, lists, blocks and reports a buddy conversation.
 func chat(pool *pgxpool.Pool) *messaging.Service {
 	q := db.New(pool)
-	return messaging.New(messaging.NewQueriesRepository(q), buddy.NewPersona(buddy.NewQueriesRepository(q)))
+	return messaging.New(messaging.NewQueriesRepository(q), buddy.NewPersona(buddy.NewQueriesRepository(q, pool)))
 }
 
 func seedUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {

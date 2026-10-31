@@ -66,7 +66,7 @@ func newBuddyEnv(t *testing.T, names ...string) *buddyEnv {
 		env.users[name] = id
 	}
 
-	repo := buddy.NewQueriesRepository(queries)
+	repo := buddy.NewQueriesRepository(queries, pool)
 	msg := messaging.New(messaging.NewQueriesRepository(queries), buddy.NewPersona(repo))
 	env.app = fiber.New(fiber.Config{ErrorHandler: RenderError})
 	mw := middleware{

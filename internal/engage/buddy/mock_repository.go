@@ -161,6 +161,12 @@ func (r *QueriesRepository) FutureGuestMocks(ctx context.Context, guestID int64)
 // createMockAttempts bounds the deadlock retry in CreateMock.
 const createMockAttempts = 3
 
+// CreateMock books in one transaction: LockBuddyMembersForMock share-locks both
+// participants' buddy_members rows in user_id order, THEN CreateBuddyMock checks
+// eligibility and writes. That is the booking's half of the lock protocol a leave
+// (Leave) and a block (the buddy_mocks_cancel_on_block trigger) take the same rows
+// FOR UPDATE under; the check must be a later statement than the lock, since a statement
+// keeps the snapshot it started with even after waiting on a row lock.
 func (r *QueriesRepository) CreateMock(ctx context.Context, in NewMock) (Mock, error) {
 	p := db.CreateBuddyMockParams{
 		HostUserID: in.HostUserID, GuestUserID: in.GuestUserID,
@@ -169,12 +175,13 @@ func (r *QueriesRepository) CreateMock(ctx context.Context, in NewMock) (Mock, e
 	}
 	// Two bookings racing for one person's time each insert a participant row and then
 	// wait on the other's uncommitted one, and Postgres breaks that cycle by aborting one
-	// with 40P01 instead of answering 23P01. The statement wrote nothing, so it is run
-	// again: the retry waits for the survivor's commit and then meets the EXCLUDE plainly.
+	// with 40P01 instead of answering 23P01. The aborted transaction wrote nothing, so it
+	// is run again: the retry waits for the survivor's commit and then meets the EXCLUDE
+	// plainly.
 	var id pgtype.UUID
 	var err error
 	for range createMockAttempts {
-		if id, err = r.q.CreateBuddyMock(ctx, p); !pgerr.IsDeadlock(err) {
+		if id, err = r.createMockTx(ctx, p); !pgerr.IsDeadlock(err) {
 			break
 		}
 	}
@@ -200,6 +207,22 @@ func (r *QueriesRepository) CreateMock(ctx context.Context, in NewMock) (Mock, e
 		StartsAt: in.StartsAt, EndsAt: in.EndsAt, Topic: in.Topic, Status: MockConfirmed,
 		GuestTimezone: in.GuestTimezone,
 	}, nil
+}
+
+func (r *QueriesRepository) createMockTx(ctx context.Context, p db.CreateBuddyMockParams) (pgtype.UUID, error) {
+	var id pgtype.UUID
+	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+		q := r.q.WithTx(tx)
+		if err := q.LockBuddyMembersForMock(ctx, db.LockBuddyMembersForMockParams{
+			HostUserID: p.HostUserID, GuestUserID: p.GuestUserID,
+		}); err != nil {
+			return err
+		}
+		var err error
+		id, err = q.CreateBuddyMock(ctx, p)
+		return err
+	})
+	return id, err
 }
 
 func (r *QueriesRepository) MockByID(ctx context.Context, id uuid.UUID) (Mock, bool, error) {

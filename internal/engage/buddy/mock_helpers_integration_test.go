@@ -60,7 +60,7 @@ func mockSetup(t *testing.T) (*pgxpool.Pool, *buddy.Service, *buddy.MockService,
 	t.Helper()
 	pool, svc := setup(t)
 	n := &recordingNotifier{}
-	return pool, svc, buddy.NewMockService(svc, buddy.NewQueriesRepository(db.New(pool)), n), n
+	return pool, svc, buddy.NewMockService(svc, buddy.NewQueriesRepository(db.New(pool), pool), n), n
 }
 
 // joined seeds an account, joins it, and returns its id and handle.
