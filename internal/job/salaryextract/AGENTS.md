@@ -28,6 +28,11 @@ order — the same precedence `SetJobEnrichment` already applies once the model 
   The same amount repeated in another period is not a contradiction.
 - **A scaled or half-read amount refuses the line.** `$120k` would read as 120 and
   `$50 - 60` would drop the unsymboled, ungrouped second bound, so both are refused
-  rather than published as a confident wrong figure.
-- **Longer currency markers are tested first.** `US$` contains `S$` and `CA$` contains
-  `A$`, so the order of the cases in `currencyOf` is the rule.
+  rather than published as a confident wrong figure. The `k`/`m` suffix counts only
+  on a money token. `401k` in a benefits clause is not one.
+- **The currency is the marker on the amount, not the first word on the line.**
+  `A$120,000 per year (USD equivalent)` is AUD. `$120,000 USD` is USD, and that
+  word wins over the posting's country. Two different markers on one amount
+  (`A$120,000 USD`), or two amounts in different currencies, refuse the line.
+  `US$` is still not `S$`, and `CA$` is still not `A$`: the letters immediately
+  before the symbol belong to the marker.

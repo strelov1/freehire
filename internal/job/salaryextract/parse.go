@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type Salary struct {
@@ -26,8 +27,10 @@ var (
 	reUpTo   = regexp.MustCompile(`(?i)\bup to\b`)
 	reFrom   = regexp.MustCompile(`(?i)\bfrom\b`)
 	reMoney  = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)\+?|(\d{1,3}(?:[.,]\d{3})+)\+?`)
-	// reScaled is a "120k" or "1.5m" amount; reMoney would read it as 120 or 1.
-	reScaled = regexp.MustCompile(`(?i)\d[km]\b`)
+	// reScaled is a money token with a k/m suffix ("$120k", "$1.5m"). reMoney
+	// would keep the digits and drop the suffix. A benefit word ("401k") has no
+	// currency marker in front of the suffix, so it is not this.
+	reScaled = regexp.MustCompile(`(?i)(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\s*[km]\b`)
 	// reOpenRange is a symboled amount whose dash-joined second bound carries no
 	// symbol and no thousands grouping ("$50 - 60"), which reMoney does not read.
 	reOpenRange = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
@@ -36,16 +39,8 @@ var (
 	reEuDec     = regexp.MustCompile(`^\d{1,3}(\.\d{3})+,\d+$`)
 	reDec       = regexp.MustCompile(`^\d+[.,]\d{1,2}$`)
 	reInt       = regexp.MustCompile(`^\d+$`)
-	reAUD       = regexp.MustCompile(`(?i)\baud\b`)
-	reCAD       = regexp.MustCompile(`(?i)\bcad\b`)
-	reNZD       = regexp.MustCompile(`(?i)\bnzd\b`)
-	reHKD       = regexp.MustCompile(`(?i)\bhkd\b`)
-	reSGD       = regexp.MustCompile(`(?i)\bsgd\b`)
-	reUSD       = regexp.MustCompile(`(?i)\busd\b`)
-	reIDR       = regexp.MustCompile(`(?i)\brp\b|\bidr\b`)
-	reGBP       = regexp.MustCompile(`(?i)\bgbp\b`)
-	reEUR       = regexp.MustCompile(`(?i)\beur\b`)
-	rePLN       = regexp.MustCompile(`(?i)\bpln\b`)
+	reLeadISO   = regexp.MustCompile(`(?i)^(usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\b`)
+	reTrailISO  = regexp.MustCompile(`(?i)\b(usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)$`)
 )
 
 var dollarCurrency = map[string]string{
@@ -132,7 +127,11 @@ func parseLine(body string, countries []string) (Salary, bool) {
 	if sal.Period == "" && larger < 1000 {
 		return Salary{}, false
 	}
-	sal.Currency = currencyOf(body, countries)
+	cur, okCur := currencyOf(body, countries)
+	if !okCur {
+		return Salary{}, false
+	}
+	sal.Currency = cur
 	return sal, true
 }
 
@@ -242,32 +241,129 @@ func periodOf(s string) (string, bool) {
 	return found, true
 }
 
-func currencyOf(line string, countries []string) string {
-	switch {
-	case strings.Contains(line, "US$") || reUSD.MatchString(line):
-		return "USD"
-	case strings.Contains(line, "CA$") || strings.Contains(line, "C$") || reCAD.MatchString(line):
-		return "CAD"
-	case strings.Contains(line, "NZ$") || reNZD.MatchString(line):
-		return "NZD"
-	case strings.Contains(line, "HK$") || reHKD.MatchString(line):
-		return "HKD"
-	case strings.Contains(line, "AU$") || strings.Contains(line, "A$") || reAUD.MatchString(line):
-		return "AUD"
-	case strings.Contains(line, "S$") || reSGD.MatchString(line):
-		return "SGD"
-	case reIDR.MatchString(line):
-		return "IDR"
-	case strings.Contains(line, "£") || reGBP.MatchString(line):
-		return "GBP"
-	case strings.Contains(line, "€") || reEUR.MatchString(line):
-		return "EUR"
-	case strings.Contains(line, "zł") || rePLN.MatchString(line):
-		return "PLN"
-	case strings.Contains(line, "$"):
-		return bareDollar(countries)
+func currencyOf(line string, countries []string) (string, bool) {
+	found := ""
+	set := false
+	for _, loc := range reMoney.FindAllStringSubmatchIndex(line, -1) {
+		cur, ok := currencyAt(line, loc[0], loc[1], countries)
+		if !ok {
+			return "", false
+		}
+		if cur == "" {
+			continue
+		}
+		if set && cur != found {
+			return "", false
+		}
+		found = cur
+		set = true
+	}
+	return found, true
+}
+
+var currencyMarks = []string{"US$", "CA$", "AU$", "NZ$", "HK$", "A$", "C$", "S$", "Rp", "zł", "£", "€", "$"}
+
+func currencyAt(line string, start, end int, countries []string) (string, bool) {
+	marker := strings.TrimSpace(extendMarker(line, start, line[start:end]))
+	near := neighborMark(line, start, end)
+	explicit := explicitCode(marker)
+	beside := explicitCode(near)
+	if explicit != "" && beside != "" && explicit != beside {
+		return "", false
+	}
+	if explicit != "" {
+		return explicit, true
+	}
+	if beside != "" {
+		return beside, true
+	}
+	if marker == "$" {
+		return bareDollar(countries), true
+	}
+	return "", true
+}
+
+func extendMarker(line string, start int, matched string) string {
+	i := 0
+	for i < len(matched) && (matched[i] < '0' || matched[i] > '9') {
+		i++
+	}
+	j := start
+	n := 0
+	for j > 0 && n < 2 {
+		c := line[j-1]
+		if (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') {
+			break
+		}
+		j--
+		n++
+	}
+	return line[j:start] + matched[:i]
+}
+
+func neighborMark(line string, start, end int) string {
+	if m := leadingMark(strings.TrimLeftFunc(line[end:], unicode.IsSpace)); m != "" {
+		return m
+	}
+	return trailingMark(strings.TrimRightFunc(line[:start], unicode.IsSpace))
+}
+
+func leadingMark(s string) string {
+	if s == "" {
+		return ""
+	}
+	if m := reLeadISO.FindString(s); m != "" {
+		return m
+	}
+	for _, sym := range currencyMarks {
+		if strings.HasPrefix(strings.ToUpper(s), strings.ToUpper(sym)) {
+			return sym
+		}
 	}
 	return ""
+}
+
+func trailingMark(s string) string {
+	if s == "" {
+		return ""
+	}
+	if m := reTrailISO.FindString(s); m != "" {
+		return m
+	}
+	upper := strings.ToUpper(s)
+	for _, sym := range currencyMarks {
+		if strings.HasSuffix(upper, strings.ToUpper(sym)) {
+			return sym
+		}
+	}
+	return ""
+}
+
+func explicitCode(marker string) string {
+	switch strings.ToUpper(strings.TrimSpace(marker)) {
+	case "US$", "USD":
+		return "USD"
+	case "CA$", "C$", "CAD":
+		return "CAD"
+	case "AU$", "A$", "AUD":
+		return "AUD"
+	case "NZ$", "NZD":
+		return "NZD"
+	case "HK$", "HKD":
+		return "HKD"
+	case "S$", "SGD":
+		return "SGD"
+	case "£", "GBP":
+		return "GBP"
+	case "€", "EUR":
+		return "EUR"
+	case "ZŁ", "PLN":
+		return "PLN"
+	case "RP", "IDR":
+		return "IDR"
+	default:
+		return ""
+	}
 }
 
 func bareDollar(countries []string) string {
