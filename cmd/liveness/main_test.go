@@ -20,6 +20,10 @@ var probedButWithheld = map[string]string{
 	// the probe reads ~6k a day, so the marker would put them back in search for days. Grant it
 	// once the backlog has been worked off and only the live tail is left unseen.
 	"4dayweek": "the probe's backlog is days deep",
+	// The API names only the last week, so most of what it stopped listing is still up — but
+	// 64 of 100 such rows sampled when the probe landed were dead (~7k of ~11k), and the probe
+	// reads ~5k a day. Same as 4dayweek: grant the marker once the backlog is worked off.
+	"arbeitnow": "the probe's backlog is days deep",
 }
 
 // A source this worker probes is usually one whose crawl cannot re-list every live posting, so

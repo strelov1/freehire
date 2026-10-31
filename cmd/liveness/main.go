@@ -13,8 +13,8 @@
 // echojobs.io's, so its candidates are checked against echojobs.io's own per-posting
 // API instead (see echojobs.go); hh.ru's pages embed an "archived" phrase even when live, so
 // its candidates are read for the page's own archived flag instead, one page a second (see
-// hh.go); djinni, 4dayweek and torre are paced the same way, each against its own evidence
-// (djinni.go, fourdayweek.go, torre.go). A source with the same leak but NO evidence a probe
+// hh.go); djinni, 4dayweek, torre and arbeitnow are paced the same way, each against its own
+// evidence (djinni.go, fourdayweek.go, torre.go, arbeitnow.go). A source with the same leak but NO evidence a probe
 // could ever read — see expireDespiteRegistered — falls back to the same age-based
 // guess as unsignalledSources instead of a verdict.)
 //
@@ -102,8 +102,9 @@ const expiryWindow = 45 * 24 * time.Hour
 // every posting that names a state but cannot prove it read the rest (see empregos.go), so it
 // is not fullCatalog and its sweep is company-scoped too. So do djinni (its listing names only
 // the last month), 4dayweek (its list feed omits postings the site still serves) and torre
-// (its sitemap still names a few closed postings) — none of them fullCatalog, all boardless.
-var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre"}
+// (its sitemap still names a few closed postings), and arbeitnow (its API names only the last
+// week) — none of them fullCatalog, all boardless.
+var probeDespiteRegistered = []string{"himalayas", "echojobs", "jobicy", "remoteok", "hh", "empregos", "djinni", "4dayweek", "torre", "arbeitnow"}
 
 // probeDespiteRegisteredGET is the probeDespiteRegistered subset verified by the same
 // plain-GET-then-Classify probe as every orphan candidate — their job pages answer a
@@ -124,6 +125,7 @@ func pacedPasses(client *http.Client) []pacedPass {
 		djinniPass(client),
 		fourDayWeekPass(client, fourDayWeekJobAPI),
 		torrePass(client, torrePostPage),
+		arbeitnowPass(client),
 	}
 }
 

@@ -10,6 +10,10 @@ import (
 // employers, so it stays in the source facet and takes each posting's company from the
 // feed. The job-board API carries every posting's body inline and paginates via a "next"
 // link, so there is no per-posting detail request.
+//
+// The API names only the last week of postings, so a posting older than that is never listed
+// again while it stays up and the company-scoped sweep cannot reach it; cmd/liveness's arbeitnow
+// pass closes those on the site's own 410 (see cmd/liveness/arbeitnow.go).
 type arbeitnow struct {
 	http JSONGetter
 }
