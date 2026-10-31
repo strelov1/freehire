@@ -189,6 +189,12 @@ func (s phenom) list(ctx context.Context, board string) ([]phenomPosting, error)
 // them under two hostnames each.
 const phenomListingWindow = 10000
 
+// phenomSliceLimit is the largest state slice listByState accepts: a walk advances by what each
+// page held, so its last request may start anywhere below the slice's total, and a slice of up
+// to this size keeps that request's from+size inside the window however the pages fell. The
+// largest state on 2026-10-31 held 2,357.
+const phenomSliceLimit = phenomListingWindow - phenomPageSize
+
 // listByState reads a board over the listing window as one walk per state (the
 // selected_fields facet filter), every one under the window. The partition is checked against
 // the counts the board's first page stated before anything is read: every state must fit the
@@ -205,8 +211,8 @@ const phenomListingWindow = 10000
 func (s phenom) listByState(ctx context.Context, board string, first phenomPage) ([]phenomPosting, error) {
 	counted := 0
 	for state, n := range first.states {
-		if n > phenomListingWindow {
-			return nil, fmt.Errorf("phenom: list board %s: %d postings, and state %q alone holds %d, over the %d the listing serves", board, first.total, state, n, phenomListingWindow)
+		if n > phenomSliceLimit {
+			return nil, fmt.Errorf("phenom: list board %s: %d postings, and state %q alone holds %d, over the %d one walk is sure to reach", board, first.total, state, n, phenomSliceLimit)
 		}
 		counted += n
 	}
@@ -216,7 +222,17 @@ func (s phenom) listByState(ctx context.Context, board string, first phenomPage)
 	var postings []phenomPosting
 	for _, state := range slices.Sorted(maps.Keys(first.states)) {
 		filter := map[string][]string{"state": {state}}
-		got, err := s.walk(ctx, board, filter, nil)
+		slice, err := s.page(ctx, board, filter, 0, false)
+		if err != nil {
+			return nil, err
+		}
+		// A slice stating nothing for a state the board counted, or more than the window, is a
+		// filter the API did not apply as asked; reading on would drop the state or re-read the
+		// board's first window under its name.
+		if n := first.states[state]; n > 0 && (slice.total <= 0 || slice.total > phenomListingWindow) {
+			return nil, fmt.Errorf("phenom: list board %s: state %q counted %d postings, and its slice states %d", board, state, n, slice.total)
+		}
+		got, err := s.walk(ctx, board, filter, &slice)
 		if err != nil {
 			return nil, err
 		}

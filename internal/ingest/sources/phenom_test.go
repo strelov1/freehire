@@ -174,14 +174,27 @@ func TestPhenomReadsABoardOverTheWindowStateByState(t *testing.T) {
 // each fits under the window; otherwise the crawl fails rather than passing a partial read off
 // as the board.
 func TestPhenomFailsABoardOverTheWindowItCannotSlice(t *testing.T) {
-	cases := map[string]string{
-		"states short of the total": phenomOverWindowPage(15000, map[string]int{"Ohio": 9000, "Texas": 5000}),
-		"a state over the window":   phenomOverWindowPage(15000, map[string]int{"Ohio": 12000, "Texas": 3000}),
-		"no state counts":           phenomListPage(15000),
+	twoStates := phenomOverWindowPage(15000, map[string]int{"Ohio": 9000, "Texas": 7000})
+	readable := map[int]string{0: phenomListPage(7000, "T1"), 1: phenomListPage(0)}
+	cases := map[string]struct {
+		first  string
+		slices map[string]map[int]string
+	}{
+		"states short of the total": {first: phenomOverWindowPage(15000, map[string]int{"Ohio": 9000, "Texas": 5000})},
+		"a state over the window":   {first: phenomOverWindowPage(15000, map[string]int{"Ohio": 12000, "Texas": 3000})},
+		// Its last page may start anywhere below 9,700, so from+size can cross 10,000.
+		"a state too close to the window": {first: phenomOverWindowPage(15000, map[string]int{"Ohio": 9700, "Texas": 5300})},
+		"no state counts":                 {first: phenomListPage(15000)},
+		"a counted state's slice is empty": {first: twoStates, slices: map[string]map[int]string{
+			"Ohio": {0: phenomListPage(0)}, "Texas": readable,
+		}},
+		"a slice the filter did not narrow": {first: twoStates, slices: map[string]map[int]string{
+			"Ohio": {0: phenomListPage(15000, "S0")}, "Texas": readable,
+		}},
 	}
-	for name, first := range cases {
+	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			fake := &phenomFake{pages: map[int]string{0: first}}
+			fake := &phenomFake{pages: map[int]string{0: c.first}, slices: c.slices}
 			if _, err := NewPhenom(fake).Fetch(context.Background(), phenomEntry); err == nil {
 				t.Fatal("Fetch succeeded on a board over the window it could not slice")
 			}
