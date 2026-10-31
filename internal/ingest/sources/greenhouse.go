@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"html"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -112,8 +111,7 @@ type GreenhousePosting struct {
 	Offices []GreenhouseOffice `json:"offices"`
 }
 
-// GreenhouseOffice is one office a Greenhouse posting is filed under.
-// GreenhousePayRange is one pay_input_ranges entry. The amounts are in CENTS. The API
+// GreenhousePayRange is one pay_input_ranges entry. Amounts use the currency's minor unit. The API
 // carries no period field: the period is stated, when it is, only in the range's Title
 // ("Hourly Pay Range") or its HTML Blurb ("the annual base salary range"; matched as
 // markup, since a word boundary holds beside a tag), so
@@ -126,6 +124,7 @@ type GreenhousePayRange struct {
 	Blurb        string `json:"blurb"`
 }
 
+// GreenhouseOffice is one office a Greenhouse posting is filed under.
 type GreenhouseOffice struct {
 	Name     string `json:"name"`
 	Location string `json:"location"`
@@ -162,7 +161,7 @@ func MapGreenhousePosting(j GreenhousePosting) Job {
 	return job
 }
 
-// greenhouseSalary reads the first pay range whose period the employer states. Measured
+// greenhouseSalary reads the first base pay range if the employer states its period. Measured
 // on the 25 largest boards (2026-10-31) about half state it; the rest ("US Salary
 // Range" at $190,000, "Pay Range" at $18) are dropped rather than given a period by
 // magnitude, because a wrong period publishes an hourly rate as a yearly salary.
@@ -171,12 +170,24 @@ func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, c
 	// largest boards every multi-range posting lists one range per state or zone, all
 	// of them base pay, so this skips nothing today — it keeps a board that does list a
 	// bonus first from publishing the bonus as the salary.
-	i := slices.IndexFunc(ranges, func(r GreenhousePayRange) bool { return !greenhouseNonBase.MatchString(r.Title) })
-	if i < 0 {
+	selected := -1
+	title := ""
+	for i, r := range ranges {
+		// "Base salary (excluding equity and bonus)" names a salary, not a bonus.
+		// Keep only that title for period lookup too: an excluded annual bonus
+		// does not make the base salary annual.
+		candidateTitle := greenhousePayExclusion.Split(r.Title, 2)[0]
+		if greenhouseNonBase.MatchString(candidateTitle) {
+			continue
+		}
+		selected, title = i, candidateTitle
+		break
+	}
+	if selected < 0 {
 		return nil, nil, "", ""
 	}
-	r := ranges[i]
-	period = greenhousePayPeriod(r.Title)
+	r := ranges[selected]
+	period = greenhousePayPeriod(title)
 	if period == "" {
 		period = greenhousePayPeriod(r.Blurb)
 	}
@@ -212,6 +223,8 @@ func greenhouseSalary(ranges []GreenhousePayRange) (salaryMin, salaryMax *int, c
 
 // greenhouseNonBase names a pay range that is not the base wage.
 var greenhouseNonBase = regexp.MustCompile(`(?i)\bbonus|\bcommission|\bequity\b|\bstock\b|\bincentive`)
+
+var greenhousePayExclusion = regexp.MustCompile(`(?i)\b(excluding|exclusive of|without)\b`)
 
 // currencyMinorUnits is how many of a currency's smallest unit make one: Greenhouse's
 // "cents" are the currency's minor unit, so a JPY range is already in yen — Anduril's

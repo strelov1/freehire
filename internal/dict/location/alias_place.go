@@ -52,13 +52,18 @@ func addAliasCity(cities map[string]struct{}, ce cityEntry, tok string, stated, 
 		// "Valence, France" is Valence, where the table's first reading of "valence" is
 		// Valencia; "Ribnica, Slovenija" the Slovenian town below the main table's floor,
 		// where it is Rîbnița in Moldova (contestedSmallPlaces).
-		if name := townIn(tok, c, subdivisionsOf(c, subdivisions)); name != "" {
-			add(name)
-		} else if name := contestedCityIn(tok, c); name != "" {
-			add(name)
-		} else {
-			add(contestedSmallPlaces[[2]string{tok, c}])
+		subs := subdivisionsOf(c, subdivisions)
+		name := townIn(tok, c, subs)
+		if name == "" {
+			name = contestedCityIn(tok, c)
 		}
+		if name == "" {
+			name = contestedSmallPlaces[[2]string{tok, c}]
+		}
+		if len(subs) > 0 && !placeInSubdivision(name, c, subs) {
+			continue
+		}
+		add(name)
 	}
 }
 

@@ -310,6 +310,12 @@ func TestGreenhouseSalaryReadsOnlyAStatedPeriod(t *testing.T) {
 		wantPeriod string
 	}{
 		{"title hourly", GreenhousePayRange{MinCents: cents(2200), MaxCents: cents(3050), CurrencyType: "USD", Title: "Hourly Pay Range"}, 22, "hour"},
+		{"base salary excluding extras", GreenhousePayRange{MinCents: cents(15000000), CurrencyType: "USD", Title: "Annual base salary range (excluding equity and bonus):"}, 150000, "year"},
+		{"base salary without extras", GreenhousePayRange{MinCents: cents(15000000), CurrencyType: "USD", Title: "Annual salary without commission"}, 150000, "year"},
+		{"base salary exclusive of extras", GreenhousePayRange{MinCents: cents(15000000), CurrencyType: "USD", Title: "Annual salary exclusive of stock incentives"}, 150000, "year"},
+		{"bonus excluding equity", GreenhousePayRange{MinCents: cents(1000000), CurrencyType: "USD", Title: "Annual bonus range (excluding equity)"}, 0, ""},
+		{"combined base and bonus", GreenhousePayRange{MinCents: cents(15000000), CurrencyType: "USD", Title: "Annual base salary and bonus"}, 0, ""},
+		{"period only in excluded bonus", GreenhousePayRange{MinCents: cents(15000000), CurrencyType: "USD", Title: "Base salary (excluding annual bonus)"}, 0, ""},
 		{"blurb annual", GreenhousePayRange{MinCents: cents(19000000), MaxCents: cents(23000000), CurrencyType: "USD", Title: "Pay Range", Blurb: "<p>The annual compensation range is below.</p>"}, 190000, "year"},
 		{"french monthly", GreenhousePayRange{MinCents: cents(220000), CurrencyType: "EUR", Title: "Echelle salariale", Blurb: "Salaire brut mensuel"}, 2200, "month"},
 		{"no period stated", GreenhousePayRange{MinCents: cents(19000000), MaxCents: cents(23000000), CurrencyType: "USD", Title: "US Salary Range"}, 0, ""},
