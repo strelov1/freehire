@@ -7,6 +7,21 @@ describe('formatSalary', () => {
     expect(formatSalary({} as Enrichment)).toBeNull();
   });
 
+  it('preserves both source bounds on a job detail page', () => {
+    expect(formatSalary({
+      salary_min: 2_501, salary_max: 3_000, salary_currency: 'EUR', salary_period: 'month',
+    } as Enrichment, 'standard')).toBe('2,501 – 3,000 € / mo');
+  });
+
+  it.each([
+    [{ salary_min: 27_510, salary_max: 51_090, salary_currency: 'EUR' }, '27,510 – 51,090 €'],
+    [{ salary_min: 45_500 }, 'from 45,500'],
+    [{ salary_max: 80_125 }, 'up to 80,125'],
+    [{}, null],
+  ])('preserves exact amounts and open bounds in standard notation', (salary, expected) => {
+    expect(formatSalary(salary as Enrichment, 'standard')).toBe(expected);
+  });
+
   it('compacts a full range to K, with the currency trailing', () => {
     expect(
       formatSalary({ salary_min: 30_000, salary_max: 50_000, salary_currency: 'GBP' } as Enrichment),

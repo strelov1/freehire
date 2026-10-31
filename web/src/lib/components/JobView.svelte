@@ -150,7 +150,7 @@
   // earns a line beside the posting date.
   const updated = $derived(formatDateOrAgo(job.updated_at, locale(), 'short'));
   const e = $derived(job.enrichment ?? {});
-  const salary = $derived(formatSalary(e));
+  const salary = $derived(formatSalary(e, 'standard'));
   const facets = $derived(summaryFacets(job));
   // Engagement counters (distinct signed-in viewers / applicants), served on the
   // job. A zero metric is omitted so the line never reads as a dead "0 views".

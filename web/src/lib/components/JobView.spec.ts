@@ -143,3 +143,10 @@ it('includes the applied employer in the card link description', () => {
   const description = document.getElementById(link.getAttribute('aria-describedby') ?? '');
   expect(description?.textContent).toContain('Applied to this company');
 });
+
+it('shows exact source salary bounds in the job detail summary', () => {
+  render(JobView, { job: { ...job, enrichment: {
+    salary_min: 2_501, salary_max: 3_000, salary_currency: 'EUR', salary_period: 'month',
+  } } });
+  expect(screen.getByText('2,501 – 3,000 € / mo')).not.toBeNull();
+});

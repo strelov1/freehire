@@ -72,9 +72,10 @@ function compactAmount(n: number): string {
 /**
  * Render the compensation line, or null when no salary is stated. Handles the
  * full range, a min-only floor ("from …"), and a max-only ceiling ("up to …").
- * The currency symbol and period suffix trail the amount, as in the design.
+ * Standard notation preserves the source bounds on detail pages; compact notation
+ * fits feed cards. The currency symbol and period suffix trail the amount.
  */
-export function formatSalary(e: Enrichment): string | null {
+export function formatSalary(e: Enrichment, notation: 'compact' | 'standard' = 'compact'): string | null {
   const { salary_min, salary_max } = e;
   if (salary_min == null && salary_max == null) return null;
 
@@ -84,13 +85,17 @@ export function formatSalary(e: Enrichment): string | null {
   const period = e.salary_period ? (PERIOD_SUFFIX[e.salary_period] ?? '') : '';
   const tail = `${symbol}${period}`;
 
+  const formatAmount = notation === 'compact'
+    ? compactAmount
+    : (n: number) => n.toLocaleString('en-US');
+
   let amount: string;
   if (salary_min != null && salary_max != null) {
-    amount = `${compactAmount(salary_min)} – ${compactAmount(salary_max)}`;
+    amount = `${formatAmount(salary_min)} – ${formatAmount(salary_max)}`;
   } else if (salary_min != null) {
-    amount = `from ${compactAmount(salary_min)}`;
+    amount = `from ${formatAmount(salary_min)}`;
   } else {
-    amount = `up to ${compactAmount(salary_max as number)}`;
+    amount = `up to ${formatAmount(salary_max as number)}`;
   }
 
   return tail ? `${amount} ${tail}` : amount;

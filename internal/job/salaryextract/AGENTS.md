@@ -8,7 +8,9 @@ order — the same precedence `SetJobEnrichment` already applies once the model 
 ## Always true
 
 - **A label, or nothing.** The line must start with `Salary:`, `Pay:`, `Compensation:`
-  or `Remuneration:`. A number anywhere else in the posting is not a salary. SEEK and
+  or `Remuneration:`; `Salary Range:` is also accepted. A standalone label may
+  precede its value on the next non-empty line, which must start with an amount.
+  A number anywhere else in the posting is not a salary. SEEK and
   WhatJobs already put the source's own salary field on such a line; "Rates Negotiable"
   carries the label and no number, and yields nothing.
 - **One or two amounts.** A third figure on the line (a level, a bonus percent) is

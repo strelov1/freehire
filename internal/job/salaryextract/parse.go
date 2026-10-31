@@ -19,14 +19,14 @@ type Salary struct {
 var (
 	blockTag = regexp.MustCompile(`(?i)<\s*/?\s*(?:p|div|br|li|h[1-6]|tr)\b[^>]*>`)
 	anyTag   = regexp.MustCompile(`<[^>]+>`)
-	reLabel  = regexp.MustCompile(`(?i)^(salary|pay|compensation|remuneration)\s*:\s*(.*)$`)
+	reLabel  = regexp.MustCompile(`(?i)^(salary(?: range)?|pay|compensation|remuneration)\s*:\s*(.*)$`)
 	reYear   = regexp.MustCompile(`(?i)(?:per\s+annum|per\s+year|/\s*year|/\s*yr\b|p\.a\.|annually|yearly)`)
 	reMonth  = regexp.MustCompile(`(?i)(?:per\s+month|/\s*month|p/m\b|monthly)`)
 	reHour   = regexp.MustCompile(`(?i)(?:per\s+hour|per\s+hr|/\s*hour|/\s*hr\b|p/h\b|hourly|an hour)`)
 	reDay    = regexp.MustCompile(`(?i)(?:per\s+day|/\s*day\b|p/d\b|man-day|/\s*md\b)`)
 	reUpTo   = regexp.MustCompile(`(?i)\bup to\b`)
 	reFrom   = regexp.MustCompile(`(?i)\bfrom\b`)
-	reMoney  = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)\+?|(\d{1,3}(?:[.,]\d{3})+)\+?`)
+	reMoney  = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)\+?|(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?)\+?`)
 	// reScaled is a money token with a k/m suffix ("$120k", "$1.5m"). reMoney
 	// would keep the digits and drop the suffix. A benefit word ("401k") has no
 	// currency marker in front of the suffix, so it is not this.
@@ -66,12 +66,26 @@ func Parse(description string, countries []string) (Salary, bool) {
 	lines := plain(description)
 	var got *Salary
 	var used string
-	for _, line := range lines {
+	for i, line := range lines {
 		m := reLabel.FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}
-		sal, ok := parseLine(m[2], countries)
+		body := m[2]
+		if body == "" {
+			// Workday renders the label and its value in separate HTML blocks.
+			// Only the next non-empty line belongs to that label.
+			for _, next := range lines[i+1:] {
+				if next == "" {
+					continue
+				}
+				if loc := reMoney.FindStringIndex(next); loc != nil && loc[0] == 0 {
+					body = next
+				}
+				break
+			}
+		}
+		sal, ok := parseLine(body, countries)
 		if !ok {
 			continue
 		}
@@ -79,7 +93,7 @@ func Parse(description string, countries []string) (Salary, bool) {
 			return Salary{}, false
 		}
 		got = &sal
-		used = line
+		used = body
 	}
 	if got == nil {
 		return Salary{}, false

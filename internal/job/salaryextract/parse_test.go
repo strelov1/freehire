@@ -14,6 +14,21 @@ func TestParseLabeledSalary(t *testing.T) {
 		period    string
 		ok        bool
 	}{
+		{
+			name: "workday salary heading followed by European range",
+			text: "<p><b>Salary Range:</b></p>27.510,00 € - 51.090,00 €<p><br/> </p><p><b>Job Description Summary</b></p>Build things.",
+			min:  27510, max: 51090, minSet: true, maxSet: true,
+			currency: "EUR", ok: true,
+		},
+		{
+			name: "European fractional amount with trailing currency",
+			text: "Salary: 27.510,60 € - 51.090,40 € per year",
+			min:  27511, max: 51090, minSet: true, maxSet: true,
+			currency: "EUR", period: "year", ok: true,
+		},
+		{name: "empty salary heading does not reach into benefits", text: "<p>Salary Range:</p><p>Benefits</p><p>€5,000 bonus</p>"},
+		{name: "empty salary heading does not adopt a benefits line", text: "<p>Salary Range:</p><p>Benefits: €5,000 bonus</p>"},
+		{name: "unlabeled range is not a salary", text: "<p>27.510,00 € - 51.090,00 €</p>"},
 		{name: "k suffix is not read as 120", text: "Salary: $120k per year", countries: []string{"us"}},
 		{name: "ungrouped second bound is not dropped", text: "Pay: $50 - 60 per hour", countries: []string{"us"}},
 		{
