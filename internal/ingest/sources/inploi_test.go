@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -224,6 +225,53 @@ func TestInploiFetchNewReachesBacklogAtTwoHourCadence(t *testing.T) {
 		}
 		if got := fake.htmlN.Load(); got != 4 {
 			t.Fatalf("detail requests = %d, want two per crawl", got)
+		}
+	})
+}
+
+func TestInploiFetchNewCanSelectEveryBacklogOffsetAtTwoHourCadence(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var rows []string
+		htmls := map[string]string{}
+		for i := 1; i <= 5; i++ {
+			id := strconv.Itoa(i)
+			rows = append(rows, `{"id":`+id+`,"title":"Role"}`)
+			htmls["https://jobs.example.test/job/"+id] = `<html><script type="application/ld+json">{"@type":"JobPosting","description":"<p>x</p>"}</script></html>`
+		}
+		body := `{"data":[` + strings.Join(rows, ",") + `],"pagination":{"total":5,"current_page":1,"last_page":1}}`
+		got := map[string]bool{}
+		// Enumerate picker offsets; random production picks do not guarantee coverage
+		// within four crawls. Every backlog position must remain reachable at this cadence.
+		for offset := range 4 {
+			fake := inploiOne(body)
+			fake.html = htmls
+			src := NewInploi(fake).(inploi)
+			src.maxNew = 2
+			src.pick = func(n int) int {
+				if n != 4 {
+					t.Fatalf("picker range = %d, want four backlog positions", n)
+				}
+				return offset
+			}
+			jobs, err := src.FetchNew(context.Background(), CompanyEntry{Board: "haven"}, func(string) bool { return false })
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(jobs) != 2 {
+				t.Fatalf("hydrated %d, want the budget of 2", len(jobs))
+			}
+			if jobs[0].ExternalID != "1" || jobs[1].ExternalID != strconv.Itoa(offset+2) {
+				t.Fatalf("offset %d selected %s,%s, want head 1 and backlog %d", offset, jobs[0].ExternalID, jobs[1].ExternalID, offset+2)
+			}
+			for _, job := range jobs {
+				got[job.ExternalID] = true
+			}
+			time.Sleep(2 * time.Hour)
+		}
+		for _, id := range []string{"1", "2", "3", "4", "5"} {
+			if !got[id] {
+				t.Errorf("posting %s was unreachable while enumerating backlog offsets", id)
+			}
 		}
 	})
 }
