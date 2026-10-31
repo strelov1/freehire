@@ -129,6 +129,7 @@ func TestSearchJobsHideSeen_ValueRules(t *testing.T) {
 		{"hide_seen=false", false, false},
 		{"hide_seen=1", true, false},
 		{"hide_seen=yes", false, true},
+		{"hide_seen=", false, true},
 	} {
 		t.Run(tc.query, func(t *testing.T) {
 			seen := &fakeSeen{ids: []int64{11}}

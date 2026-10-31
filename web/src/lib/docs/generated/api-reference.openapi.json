@@ -185,7 +185,7 @@
             "name": "hide_seen",
             "in": "query",
             "required": false,
-            "description": "`true` leaves out the postings the signed-in caller has already opened (the 1000 most recent), inside the search, so `meta.total` and paging stay accurate. A per-person preference, not a filter: a saved search ignores it. Without a session or API key it is not applied and is listed in `meta.ignored_params`.",
+            "description": "`true` leaves out the postings the signed-in caller has already opened (the 1000 most recently viewed, saved, applied to or hidden), inside the search, so `meta.total` and paging stay accurate. A per-person preference, not a filter: a saved search ignores it. Without a session or API key it is not applied and is listed in `meta.ignored_params`.",
             "schema": {
               "type": "boolean"
             },

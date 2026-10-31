@@ -246,11 +246,12 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 // caller, an unparseable value, or a record that could not be read all fall back to the
 // unhidden search and say so, rather than refusing a shared link or quietly widening.
 func (h *searchHandlers) seenExclusion(c *fiber.Ctx) (ids []int64, ignored bool) {
-	raw := c.Query(hideSeenParam)
-	if raw == "" {
+	vals := queryValues(c)
+	if !vals.Has(hideSeenParam) {
 		return nil, false
 	}
-	want, err := strconv.ParseBool(raw)
+	// A present but empty `?hide_seen=` is unreadable like any other non-boolean.
+	want, err := strconv.ParseBool(vals.Get(hideSeenParam))
 	if err != nil {
 		return nil, true
 	}

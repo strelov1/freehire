@@ -1083,7 +1083,8 @@ components:
         `true` leaves out the postings the signed-in caller has already
         opened — the same record that marks a card as viewed. The exclusion
         is applied inside the search, so `meta.total` and paging describe
-        what is left. It covers the 1000 most recently opened postings.
+        what is left. It covers the 1000 postings the caller most recently
+        viewed, saved, applied to or hid.
 
         It is a per-person preference, not a filter: a saved search carrying
         it narrows nothing. Without a session (or API key), or with a value
