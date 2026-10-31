@@ -53,11 +53,11 @@ func TestStoreSlugs(t *testing.T) {
 
 	seedCompany(t, pool, "fe-globex", 5, []string{"us"})
 	seedCompany(t, pool, "fe-initech", 0, []string{"us"}) // carries no searchable job
-	seedCompany(t, pool, "fe-umbrella", 3, nil)           // the canon of a squashed spelling
-	seedCompany(t, pool, "feumbrella", 2, nil)            // its unmerged twin
-	seedCompany(t, pool, "fe-hooli", 4, nil)              // two slugs, one fold, no registry
-	seedCompany(t, pool, "feho-oli", 4, nil)
-	seedCompany(t, pool, "fe-stark", 9, nil)
+	seedCompany(t, pool, "fe-umbrella", 3, []string{})    // the canon of a squashed spelling
+	seedCompany(t, pool, "feumbrella", 2, []string{})     // its unmerged twin
+	seedCompany(t, pool, "fe-hooli", 4, []string{})       // two slugs, one fold, no registry
+	seedCompany(t, pool, "feho-oli", 4, []string{})
+	seedCompany(t, pool, "fe-stark", 9, []string{})
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO company_slug_aliases (alias_slug, canonical_slug, folded_key, reason)
 		 VALUES ('feumbrella', 'fe-umbrella', 'feumbrella', 'spelling')`); err != nil {
