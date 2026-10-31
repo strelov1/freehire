@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/outboundurl"
+	"github.com/strelov1/freehire/internal/job/salaryextract"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
@@ -217,14 +218,21 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	if len(e.Requirements) == 0 {
 		e.Requirements = f.RequirementsDerived
 	}
-	// Salary has three producers, folded here for the same reason: SetJobEnrichment's
+	// Salary has four producers, folded here for the same reason: SetJobEnrichment's
 	// overlay copies the ATS's and the moderator's ranges into the payload only when
 	// the model runs, so an unenriched posting served no salary although its source
 	// stated one. Manual beats source beats model, and a stated layer replaces the
-	// whole range rather than lending one bound to another layer's currency.
+	// whole range rather than lending one bound to another layer's currency. The
+	// description's own labeled pay line is read only when none of those three
+	// stated a bound.
 	for _, s := range []*job.Salary{f.SourceSalary, f.ManualSalary} {
 		if s != nil {
 			e.SalaryMin, e.SalaryMax, e.SalaryCurrency, e.SalaryPeriod = s.Min, s.Max, s.Currency, s.Period
+		}
+	}
+	if e.SalaryMin == nil && e.SalaryMax == nil {
+		if r, found := salaryextract.Parse(f.Description, f.Countries); found {
+			e.SalaryMin, e.SalaryMax, e.SalaryCurrency, e.SalaryPeriod = r.Min, r.Max, r.Currency, r.Period
 		}
 	}
 	skills := normalizeSet(f.Skills)
