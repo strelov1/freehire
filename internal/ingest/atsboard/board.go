@@ -282,6 +282,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"keka.com", "keka", modeSubdomain},
 	{"hirehive.com", "hirehive", modeSubdomain},
 	{"app.beehire.com", "beehire", modePathPattern},
+	{"inploi.com", "inploi", modePathPattern},
 	{"selfrecruit.ge", "selfrecruit", modeSubdomain},
 	{"talentlyft.com", "talentlyft", modeSubdomain},
 	{"traffit.com", "traffit", modeSubdomain},
@@ -665,6 +666,14 @@ var pathPatternBoards = map[string]pathPattern{
 	"app.beehire.com": {
 		path:    regexp.MustCompile(`^/(?:career|careerrss)/([A-Za-z0-9][A-Za-z0-9_-]{0,127})/?$`),
 		listing: "/career/%s",
+		fold:    true,
+	},
+	// Inploi: a company page is /company/<slug> and redirects to that employer's career host.
+	// The adapter reads /company/<slug>/search (internal/ingest/sources/inploi.go). A job URL
+	// under the same prefix is the same board. The marketing site has no /company/ segment.
+	"inploi.com": {
+		path:    regexp.MustCompile(`^/company/([A-Za-z0-9][A-Za-z0-9-]{0,127})(?:/|$)`),
+		listing: "/company/%s",
 		fold:    true,
 	},
 	// TriNet Hire: /companies/<numeric id>[-<slug>]/jobs[/<posting>] (internal/ingest/sources/
