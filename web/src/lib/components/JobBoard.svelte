@@ -617,7 +617,12 @@
   </div>
 
   {#if view === 'list'}
-    <BoardList items={listItems} onopen={openDrawer} onsetstage={applyStage} />
+    <!-- Keyed on the filters so a new search starts from the first page: the list draws
+         rows a page at a time, and a cleared filter would otherwise redraw every row a
+         long scroll had reached, in one update. -->
+    {#key `${query}|${attentionOnly}|${stageFilter}`}
+      <BoardList items={listItems} onopen={openDrawer} onsetstage={applyStage} />
+    {/key}
   {:else}
     <div
       {@attach rowEdges.attach}

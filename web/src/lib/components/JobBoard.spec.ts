@@ -166,3 +166,35 @@ describe('JobBoard — notes', () => {
     );
   });
 });
+
+describe('JobBoard — the list view drawing a page at a time', () => {
+  it('starts from the first page again when the search changes', async () => {
+    let reveal: (() => void) | undefined;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        cb: (e: { isIntersecting: boolean }[]) => void;
+        constructor(cb: (e: { isIntersecting: boolean }[]) => void) {
+          this.cb = cb;
+        }
+        observe() {
+          reveal = () => this.cb([{ isIntersecting: true }]);
+        }
+        disconnect() {}
+      },
+    );
+    const rows = Array.from({ length: 120 }, (_, i) => ({ ...application, id: `app-${i}`, role_title: `Role ${i}` }));
+    render(JobBoard, { initial: rows, view: 'list' });
+    const drawn = () => screen.queryAllByText(/^Role \d+$/).length;
+
+    reveal?.();
+    await waitFor(() => expect(drawn()).toBe(100));
+
+    const search = screen.getByRole('searchbox', { name: 'Search applications by company or role' });
+    await fireEvent.input(search, { target: { value: 'Role 1' } });
+    await fireEvent.input(search, { target: { value: '' } });
+
+    await waitFor(() => expect(drawn()).toBe(50));
+    vi.unstubAllGlobals();
+  });
+});
