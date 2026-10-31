@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -65,7 +66,7 @@ func inploiCompanyName(page string) string {
 	if m == nil {
 		return ""
 	}
-	title := strings.TrimSpace(m[1])
+	title := strings.TrimSpace(html.UnescapeString(m[1]))
 	at := strings.Index(strings.ToLower(title), " at ")
 	if at < 0 {
 		return ""
