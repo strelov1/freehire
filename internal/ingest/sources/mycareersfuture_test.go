@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -74,6 +75,54 @@ func TestMyCareersFutureOverseasLocation(t *testing.T) {
 	jobs, _ := NewMyCareersFuture(fake).Fetch(context.Background(), CompanyEntry{})
 	if len(jobs) != 1 || jobs[0].Location != "Malaysia" {
 		t.Fatalf("Location = %q, want Malaysia (overseas)", jobs[0].Location)
+	}
+}
+
+func TestMyCareersFutureFetchEmitsEachUsableUUIDOnce(t *testing.T) {
+	posting := func(id, title, company string) mcfPosting {
+		p := mcfPosting{UUID: id, Title: title}
+		p.PostedCompany.Name = company
+		return p
+	}
+	pageJSON := func(rows []mcfPosting) string {
+		t.Helper()
+		body, err := json.Marshal(map[string]any{"results": rows})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(body)
+	}
+	first := posting("a", "First title", "Acme")
+	page0 := make([]mcfPosting, mcfPageSize)
+	page1 := make([]mcfPosting, mcfPageSize)
+	for i := range page0 {
+		page0[i], page1[i] = first, first
+	}
+	page0[mcfPageSize-2] = posting("b", "Unusable company", "")
+	page0[mcfPageSize-1] = posting("c", "Another posting", "Acme")
+	fake := (&routedHTTP{}).
+		route("page=0", pageJSON(page0)).
+		route("page=1", pageJSON(page1)).
+		route("page=2", pageJSON([]mcfPosting{
+			posting("b", "Now usable", "Acme"),
+			posting("a", "Later title", "Acme"),
+			posting("", "No identity", "Acme"),
+		}))
+
+	jobs, err := NewMyCareersFuture(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 3 {
+		t.Fatalf("got %d jobs, want three distinct usable postings across all pages", len(jobs))
+	}
+	for i, wantID := range []string{"a", "c", "b"} {
+		if jobs[i].ExternalID != wantID {
+			t.Errorf("jobs[%d].ExternalID = %q, want %q", i, jobs[i].ExternalID, wantID)
+		}
+	}
+	if jobs[0].Title != first.Title {
+		t.Errorf("first posting title = %q, want %q", jobs[0].Title, first.Title)
 	}
 }
 
