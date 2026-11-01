@@ -50,7 +50,9 @@ export function lookupIndustry(term: string): IndustryLookup {
 }
 
 export function isIndustryMiss(term: string): boolean {
-  return term.trim().length > 0 && lookupIndustry(term).type === 'miss';
+  const trimmed = term.trim();
+  if (!trimmed || [...trimmed].length > 80 || !/[\p{L}\p{Nd}&]/u.test(trimmed)) return false;
+  return lookupIndustry(term).type === 'miss';
 }
 
 export function searchIndustries(term: string): IndustryOption[] {

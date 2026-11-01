@@ -65,6 +65,17 @@ describe('lookupIndustry', () => {
     expect(isIndustryMiss('製造業')).toBe(true);
   });
 
+  it('does not offer requests the server rejects while allowing valid Unicode terms', () => {
+    expect(isIndustryMiss('!!!')).toBe(false);
+    expect(isIndustryMiss('a'.repeat(81))).toBe(false);
+    expect(isIndustryMiss('漢'.repeat(81))).toBe(false);
+    expect(isIndustryMiss('漢'.repeat(80))).toBe(true);
+    const supplementaryLetter = String.fromCodePoint(0x10400);
+    expect(isIndustryMiss(supplementaryLetter.repeat(80))).toBe(true);
+    expect(isIndustryMiss(supplementaryLetter.repeat(81))).toBe(false);
+    expect(isIndustryMiss('製造業')).toBe(true);
+  });
+
   it('still offers a request for an exact miss when partial matches exist', () => {
     expect(lookupIndustry('bank')).toEqual({ type: 'miss' });
     expect(searchIndustries('bank')).toContainEqual({ slug: 'banking', label: 'Banking' });
