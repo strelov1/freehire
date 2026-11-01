@@ -57,7 +57,7 @@ func TestStreamOpenDocs_CarriesTheDescriptionVectors(t *testing.T) {
 	}}
 
 	var got []search.JobDocument
-	_, _, err := streamOpenDocs(context.Background(), reader, nil, nil, chunks, time.Now(),
+	_, _, err := streamOpenDocs(context.Background(), reader, nil, nil, chunks, nil, time.Now(),
 		func(_ context.Context, docs []search.JobDocument) error {
 			got = append(got, docs...)
 			return nil

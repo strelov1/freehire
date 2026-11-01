@@ -1,0 +1,102 @@
+{
+  "fields": [
+    {
+      "id": "name",
+      "label": "Full name",
+      "raw_type": "name",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "email",
+      "label": "Email",
+      "raw_type": "email",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "cv",
+      "label": "CV",
+      "raw_type": "options_cv",
+      "required": true,
+      "type": "file"
+    },
+    {
+      "id": "cover_letter",
+      "label": "Cover letter",
+      "raw_type": "options_cover_letter",
+      "required": true,
+      "type": "file"
+    },
+    {
+      "id": "phone",
+      "label": "Phone",
+      "raw_type": "options_phone",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "1114929",
+      "label": "Wat is je gewenst brutosalaris (op fulltime basis)?",
+      "raw_type": "string",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "1761964",
+      "label": "Hoeveel uur per week ben je beschikbaar?",
+      "raw_type": "string",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "1114931",
+      "label": "Waar heb je onze vacature gevonden?",
+      "options": [
+        {
+          "label": "LinkedIn",
+          "value": "1375887"
+        },
+        {
+          "label": "Indeed",
+          "value": "1375888"
+        },
+        {
+          "label": "Instagram",
+          "value": "1375889"
+        },
+        {
+          "label": "Facebook",
+          "value": "1375890"
+        },
+        {
+          "label": "Google",
+          "value": "1375891"
+        },
+        {
+          "label": "Medewerker Corendon",
+          "value": "1375892"
+        },
+        {
+          "label": "Reiswerk",
+          "value": "1375893"
+        },
+        {
+          "label": "Anders",
+          "value": "1375894"
+        }
+      ],
+      "raw_type": "single_choice",
+      "required": true,
+      "type": "select"
+    },
+    {
+      "id": "1114932",
+      "label": "Heb je ons gevonden via een ander kanaal? Zo ja, waar?",
+      "raw_type": "string",
+      "required": false,
+      "type": "text"
+    }
+  ],
+  "provider": "recruitee"
+}

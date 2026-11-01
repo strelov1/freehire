@@ -258,6 +258,7 @@ paths:
         - $ref: "#/components/parameters/SeniorityIncludeUnspecified"
         - $ref: "#/components/parameters/PostedWithinDays"
         - $ref: "#/components/parameters/OpenWithinDays"
+        - $ref: "#/components/parameters/ApplyQuestionsMax"
         - $ref: "#/components/parameters/RegionsExclude"
         - $ref: "#/components/parameters/CountriesExclude"
         - $ref: "#/components/parameters/WorkModeExclude"
@@ -356,6 +357,7 @@ paths:
         - $ref: "#/components/parameters/SeniorityIncludeUnspecified"
         - $ref: "#/components/parameters/PostedWithinDays"
         - $ref: "#/components/parameters/OpenWithinDays"
+        - $ref: "#/components/parameters/ApplyQuestionsMax"
         - $ref: "#/components/parameters/RegionsExclude"
         - $ref: "#/components/parameters/CountriesExclude"
         - $ref: "#/components/parameters/WorkModeExclude"
@@ -627,6 +629,7 @@ paths:
         - $ref: "#/components/parameters/SeniorityIncludeUnspecified"
         - $ref: "#/components/parameters/PostedWithinDays"
         - $ref: "#/components/parameters/OpenWithinDays"
+        - $ref: "#/components/parameters/ApplyQuestionsMax"
       responses:
         "200":
           description: Facet distribution for matching jobs.
@@ -1944,6 +1947,19 @@ components:
         states. Omit for no restriction. This is the bound to use for "nothing that has
         been sitting here for months"; `posted_within_days` answers the different
         question of what the board claims.
+    ApplyQuestionsMax:
+      name: apply_questions_max
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+      description: >-
+        Keep postings whose application form requires at most N questions beyond the
+        standard fields every form asks for (name, contact details, CV, cover letter) —
+        the posting's `apply_questions`. `3` is the "short form" filter. A posting with
+        no `apply_questions` (no form freehire could read) is EXCLUDED: an unknown
+        form is not a short one. A value that is not a non-negative integer imposes no
+        bound and is named in `meta.ignored_values`.
     RegionsExclude:
       name: regions_exclude
       in: query
@@ -2215,6 +2231,21 @@ components:
             freehire's auto-apply feature can currently attempt to fill and
             submit for. Absent otherwise — a best-effort provider-eligibility
             signal, never a guarantee of successful submission.
+        apply_questions:
+          type: integer
+          minimum: 0
+          description: |
+            How many questions the posting's application form REQUIRES beyond the
+            standard fields every form asks for (name, contact details, CV, cover
+            letter), counted from the form freehire captured from the employer's
+            ATS. Optional questions, the equal-opportunity survey and consent boxes
+            are not counted. `0` means no REQUIRED question beyond the basics
+            (the form may still offer optional ones). Absent when freehire holds
+            no form for the posting (none captured from its ATS, and none written
+            for a vacancy taking applications on freehire) — "not known", never
+            "long".
+            Served by search hits and the job detail; a list read straight from
+            the database may omit it.
         posted_at:
           type: string
           format: date-time
@@ -2680,6 +2711,9 @@ components:
         carried a value outside its vocabulary — keyed by the parameter as sent,
         each listing the unknown values. The value is still applied, so the
         filter matches nothing on that axis; this says why the answer is empty.
+        `apply_questions_max` is reported here too when its value is not a
+        non-negative integer — that bound is then NOT applied, so the answer is
+        wider than asked.
       additionalProperties:
         type: array
         items:

@@ -735,6 +735,13 @@ func facetSettings() *meilisearch.Settings {
 			// StringFacets, so the settings-before-binary warning above applies, and a
 			// full rebuild must follow the backfill-derive that fills existing rows.
 			"perks",
+			// apply_questions is the captured application form's required-question
+			// count (jobview.Job.ApplyQuestions), attached at index time from apply_forms
+			// and ABSENT when no form was captured, so `apply_questions <= N` never
+			// matches a posting whose form we have not read. Numeric, behind the
+			// `apply_questions_max` bound. Same settings-before-binary order: a binary
+			// filtering on it before the live index declares it gets a Meili 400.
+			"apply_questions",
 			"enrichment.employment_type", "enrichment.education_level", "enrichment.seniority",
 			"enrichment.category", "enrichment.domains",
 			"enrichment.company_type", "enrichment.company_size", "enrichment.visa_sponsorship",

@@ -20,6 +20,7 @@ var scalarFilters = []string{
 	"experience_years_max",
 	"posted_within_days",
 	"open_within_days",
+	ApplyQuestionsMaxParam,
 }
 
 // ExperienceIncludeUnspecifiedParam widens the experience bounds to also admit the

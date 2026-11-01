@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -114,6 +115,15 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 		return fmt.Errorf("%w: %v", searchdrain.ErrSkipWave, err)
 	}
 
+	// The application forms' question counts. A document without one would not erase a
+	// stored count (the push merges fields), but a document indexed for the first time
+	// would go without until something queued it again — so a failed read skips the wave
+	// like the two reads above, and the lease brings it back.
+	questions, err := applyform.QuestionCounts(ctx, ix.q, geoIDs)
+	if err != nil {
+		return fmt.Errorf("%w: apply-form question counts for wave: %v", searchdrain.ErrSkipWave, err)
+	}
+
 	docs := make([]search.JobDocument, 0, len(jobs))
 	now := time.Now()
 	for _, job := range jobs {
@@ -130,6 +140,7 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 		if err != nil {
 			return fmt.Errorf("build document (job %d): %w", job.ID, err)
 		}
+		doc.AttachApplyQuestions(questions)
 		repost, mass := int64(1), int64(1)
 		if job.RoleFingerprint.Valid && job.RoleFingerprint.String != "" {
 			if c, ok := counts[clusterKey{job.CompanySlug, job.RoleFingerprint.String}]; ok {

@@ -1,0 +1,355 @@
+{
+  "fields": [
+    {
+      "id": "firstname",
+      "label": "First name",
+      "raw_type": "text",
+      "required": true,
+      "section": "Personal information",
+      "type": "text"
+    },
+    {
+      "id": "lastname",
+      "label": "Last name",
+      "raw_type": "text",
+      "required": true,
+      "section": "Personal information",
+      "type": "text"
+    },
+    {
+      "id": "email",
+      "label": "Email",
+      "raw_type": "email",
+      "required": true,
+      "section": "Personal information",
+      "type": "text"
+    },
+    {
+      "id": "phone",
+      "label": "Phone",
+      "raw_type": "phone",
+      "required": true,
+      "section": "Personal information",
+      "type": "text"
+    },
+    {
+      "id": "address",
+      "label": "Address",
+      "raw_type": "text",
+      "required": true,
+      "section": "Personal information",
+      "type": "text"
+    },
+    {
+      "id": "CA_37138",
+      "label": "City, State Zip Code",
+      "raw_type": "text",
+      "required": true,
+      "section": "Personal information",
+      "type": "text"
+    },
+    {
+      "id": "summary",
+      "label": "Summary",
+      "raw_type": "paragraph",
+      "required": false,
+      "section": "Profile",
+      "type": "textarea"
+    },
+    {
+      "id": "resume",
+      "label": "Resume",
+      "raw_type": "file",
+      "required": true,
+      "section": "Profile",
+      "type": "file"
+    },
+    {
+      "id": "CA_39783",
+      "label": "Portfolio Upload (Preferred)",
+      "raw_type": "file",
+      "required": false,
+      "section": "Profile",
+      "type": "file"
+    },
+    {
+      "id": "CA_39784",
+      "label": "Portfolio Link",
+      "raw_type": "text",
+      "required": false,
+      "section": "Profile",
+      "type": "text"
+    },
+    {
+      "id": "CA_41038",
+      "label": "Why are you interested in working at Celsius?",
+      "raw_type": "paragraph",
+      "required": true,
+      "section": "Profile",
+      "type": "textarea"
+    },
+    {
+      "id": "CA_35296",
+      "label": "Are you at least 18 years of age?",
+      "options": [
+        {
+          "label": "Yes",
+          "value": "341692"
+        },
+        {
+          "label": "No",
+          "value": "341693"
+        },
+        {
+          "label": "No, but I am able to provide a work permit and/or age certificate as required by state law.",
+          "value": "341694"
+        }
+      ],
+      "raw_type": "dropdown",
+      "required": true,
+      "section": "Details",
+      "type": "select"
+    },
+    {
+      "id": "CA_35297",
+      "label": "Have you previously been employed by Celsius?",
+      "options": [
+        {
+          "label": "Yes",
+          "value": "341695"
+        },
+        {
+          "label": "No",
+          "value": "341696"
+        }
+      ],
+      "raw_type": "dropdown",
+      "required": true,
+      "section": "Details",
+      "type": "select"
+    },
+    {
+      "id": "CA_35298",
+      "label": "Are you legally authorized to work in the United States?",
+      "options": [
+        {
+          "label": "Yes",
+          "value": "341697"
+        },
+        {
+          "label": "No",
+          "value": "341698"
+        }
+      ],
+      "raw_type": "dropdown",
+      "required": true,
+      "section": "Details",
+      "type": "select"
+    },
+    {
+      "id": "CA_35299",
+      "label": "Will you now or in the future require sponsorship for an employment-based visa to work in the United States?",
+      "options": [
+        {
+          "label": "Yes",
+          "value": "341699"
+        },
+        {
+          "label": "No",
+          "value": "341700"
+        }
+      ],
+      "raw_type": "dropdown",
+      "required": true,
+      "section": "Details",
+      "type": "select"
+    },
+    {
+      "id": "CA_50333",
+      "label": "Do you have a family member or close personal relationship with a current Celsius employee? (Only used to identify potential conflicts or reporting relationships.)",
+      "options": [
+        {
+          "label": "Parent",
+          "value": "525295"
+        },
+        {
+          "label": "Sibling",
+          "value": "525296"
+        },
+        {
+          "label": "Spouse or Domestic Partner",
+          "value": "525297"
+        },
+        {
+          "label": "Other Relative",
+          "value": "525298"
+        },
+        {
+          "label": "Other Close Personal Relationship",
+          "value": "525299"
+        },
+        {
+          "label": "None",
+          "value": "525562"
+        }
+      ],
+      "raw_type": "multiple",
+      "required": true,
+      "section": "Details",
+      "type": "multiselect"
+    },
+    {
+      "id": "CA_35301",
+      "label": "How did you hear about this opportunity?",
+      "options": [
+        {
+          "label": "Celsius Recruiter",
+          "value": "341701"
+        },
+        {
+          "label": "LinkedIn Job Posting",
+          "value": "341702"
+        },
+        {
+          "label": "Indeed Job Posting",
+          "value": "341703"
+        },
+        {
+          "label": "Celsius Careers page",
+          "value": "341704"
+        },
+        {
+          "label": "Handshake",
+          "value": "341705"
+        },
+        {
+          "label": "If you are a current employee - STOP and apply through the internal job board",
+          "value": "341706"
+        },
+        {
+          "label": "Employee Referral - STOP and ask the employee to provide you their referral link or upload your resume.",
+          "value": "341707"
+        },
+        {
+          "label": "Networking / Trade Event",
+          "value": "341709"
+        },
+        {
+          "label": "Career or Job Fair",
+          "value": "341710"
+        },
+        {
+          "label": "Other Job Board / Not Listed",
+          "value": "341711"
+        }
+      ],
+      "raw_type": "multiple",
+      "required": true,
+      "section": "Details",
+      "type": "multiselect"
+    },
+    {
+      "id": "CA_41039",
+      "label": "What is your target annual base salary? (This is just base, not bonus, etc.)",
+      "options": [
+        {
+          "label": "Hourly Rate (PT or FT) $20 and up",
+          "value": "398316"
+        },
+        {
+          "label": "$50,000 - $60,000",
+          "value": "398317"
+        },
+        {
+          "label": "$60,000 - $70,000",
+          "value": "398318"
+        },
+        {
+          "label": "$70,000 - $80,000",
+          "value": "398319"
+        },
+        {
+          "label": "$80,000 - $90,000",
+          "value": "398320"
+        },
+        {
+          "label": "$90,000 - $100,000",
+          "value": "398321"
+        },
+        {
+          "label": "$100,000 - $115,000",
+          "value": "398322"
+        },
+        {
+          "label": "$115,000 - $130,000",
+          "value": "398323"
+        },
+        {
+          "label": "$130,000 - $145,000",
+          "value": "398324"
+        },
+        {
+          "label": "$145,000 - $160,000",
+          "value": "398325"
+        },
+        {
+          "label": "$160,000 - $175,000",
+          "value": "398326"
+        },
+        {
+          "label": "$175,000 - $190,000",
+          "value": "398327"
+        },
+        {
+          "label": "$190,000 - $200,000",
+          "value": "398328"
+        },
+        {
+          "label": "$200,000 - $225,000",
+          "value": "398329"
+        },
+        {
+          "label": "$225,000 - $250,000",
+          "value": "398330"
+        },
+        {
+          "label": "$250,000 and above",
+          "value": "398331"
+        },
+        {
+          "label": "$300,000 and above",
+          "value": "398332"
+        }
+      ],
+      "raw_type": "dropdown",
+      "required": true,
+      "section": "Details",
+      "type": "select"
+    },
+    {
+      "id": "QA_9694334",
+      "label": "Do you have a 4 year degree in Accounting or Finance?",
+      "raw_type": "boolean",
+      "required": true,
+      "section": "Details",
+      "type": "boolean"
+    },
+    {
+      "id": "QA_9694337",
+      "label": "Do you have 5+ years of accounting experience (preferably in a SOX environment)?",
+      "raw_type": "text",
+      "required": true,
+      "section": "Details",
+      "type": "text"
+    },
+    {
+      "id": "QA_11211792",
+      "label": "Are you willing to work onsite daily at HQ in Boca Raton, FL?  If you do not currently reside in the area, are you willing to relocate and work onsite?",
+      "raw_type": "text",
+      "required": true,
+      "section": "Details",
+      "type": "text"
+    }
+  ],
+  "provider": "workable"
+}

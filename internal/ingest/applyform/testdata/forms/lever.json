@@ -1,0 +1,428 @@
+{
+  "fields": [
+    {
+      "id": "resume",
+      "label": "Resume/CV",
+      "raw_type": "file",
+      "required": false,
+      "type": "file"
+    },
+    {
+      "id": "name",
+      "label": "Full name",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "email",
+      "label": "Email",
+      "raw_type": "email",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "phone",
+      "label": "Phone",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "location",
+      "label": "Current location",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "selectedLocation",
+      "label": "Current location",
+      "raw_type": "hidden",
+      "required": false,
+      "type": "hidden"
+    },
+    {
+      "id": "org",
+      "label": "Current company",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "urls[LinkedIn]",
+      "label": "LinkedIn URL",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "urls[Github / Portfolio]",
+      "label": "Github / Portfolio URL",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "cards[2377ebc0-98c8-41cd-ba35-cb7a8056028a][field0]",
+      "label": "Confirmation of Information Provided",
+      "raw_type": "checkbox",
+      "required": false,
+      "type": "boolean"
+    },
+    {
+      "id": "cards[c459c8ae-8486-40e5-bb2e-f80182b36bf0][field0]",
+      "label": "How long is your commitment period for a full-time internship? (Mondays to Fridays, entire workday)",
+      "options": [
+        {
+          "label": "Summer (May to August), full time",
+          "value": "Summer (May to August), full time"
+        },
+        {
+          "label": "6 months, full time",
+          "value": "6 months, full time"
+        },
+        {
+          "label": "9-12 months, full time",
+          "value": "9-12 months, full time"
+        }
+      ],
+      "raw_type": "select",
+      "required": false,
+      "type": "select"
+    },
+    {
+      "id": "cards[c459c8ae-8486-40e5-bb2e-f80182b36bf0][field1]",
+      "label": "When is your availability (eg. Jan to Jun 2027)?",
+      "raw_type": "text",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "cards[c459c8ae-8486-40e5-bb2e-f80182b36bf0][field2]",
+      "label": "Is your internship - ?",
+      "options": [
+        {
+          "label": "Credit Bearing",
+          "value": "Credit Bearing"
+        },
+        {
+          "label": "Leave of Absence",
+          "value": "Leave of Absence"
+        },
+        {
+          "label": "Outside of School",
+          "value": "Outside of School"
+        },
+        {
+          "label": "Others",
+          "value": "Others"
+        }
+      ],
+      "raw_type": "select",
+      "required": false,
+      "type": "select"
+    },
+    {
+      "id": "cards[c459c8ae-8486-40e5-bb2e-f80182b36bf0][field3]",
+      "label": "Which year of study will you be in when embarking on this internship?",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "cards[c459c8ae-8486-40e5-bb2e-f80182b36bf0][field4]",
+      "label": "What is your current GPA?",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "cards[c459c8ae-8486-40e5-bb2e-f80182b36bf0][field5]",
+      "label": "Citizenship/Visa Status",
+      "options": [
+        {
+          "label": "Citizen",
+          "value": "Citizen"
+        },
+        {
+          "label": "Permanent Resident",
+          "value": "Permanent Resident"
+        },
+        {
+          "label": "Require relevant work visa",
+          "value": "Require relevant work visa"
+        },
+        {
+          "label": "Possess relevant work visa",
+          "value": "Possess relevant work visa"
+        }
+      ],
+      "raw_type": "select",
+      "required": false,
+      "type": "select"
+    },
+    {
+      "id": "cards[c459c8ae-8486-40e5-bb2e-f80182b36bf0][field6]",
+      "label": "Varsity",
+      "options": [
+        {
+          "label": "University",
+          "value": "University"
+        },
+        {
+          "label": "Polytechnic",
+          "value": "Polytechnic"
+        },
+        {
+          "label": "Others",
+          "value": "Others"
+        }
+      ],
+      "raw_type": "select",
+      "required": false,
+      "type": "select"
+    },
+    {
+      "id": "cards[c459c8ae-8486-40e5-bb2e-f80182b36bf0][field7]",
+      "label": "How did you hear about this position?",
+      "options": [
+        {
+          "label": "ShopBack career website",
+          "value": "ShopBack career website"
+        },
+        {
+          "label": "LinkedIn",
+          "value": "LinkedIn"
+        },
+        {
+          "label": "Indeed",
+          "value": "Indeed"
+        },
+        {
+          "label": "Josdb",
+          "value": "Josdb"
+        },
+        {
+          "label": "ZipRecruiter",
+          "value": "ZipRecruiter"
+        },
+        {
+          "label": "Employee referral",
+          "value": "Employee referral"
+        },
+        {
+          "label": "Campus recruitment / university career portal",
+          "value": "Campus recruitment / university career portal"
+        },
+        {
+          "label": "Job fair / career fair",
+          "value": "Job fair / career fair"
+        },
+        {
+          "label": "Recruitment agency / headhunter",
+          "value": "Recruitment agency / headhunter"
+        },
+        {
+          "label": "Returning candidate",
+          "value": "Returning candidate"
+        },
+        {
+          "label": "Other",
+          "value": "Other"
+        }
+      ],
+      "raw_type": "select",
+      "required": false,
+      "type": "select"
+    },
+    {
+      "id": "cards[c459c8ae-8486-40e5-bb2e-f80182b36bf0][field8]",
+      "label": "If you selected “Other” in the last question, please specify below:",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "cards[d8608bfb-5f26-429e-a4c1-b4c629e5e4ce][field0]",
+      "label": "How long is your commitment period for a full time internship? (Mondays to Fridays, entire workday)",
+      "options": [
+        {
+          "label": "Summer (May - Aug), full time",
+          "value": "Summer (May - Aug), full time"
+        },
+        {
+          "label": "6 months, full time",
+          "value": "6 months, full time"
+        },
+        {
+          "label": "9-12 months, full time",
+          "value": "9-12 months, full time"
+        }
+      ],
+      "raw_type": "select",
+      "required": false,
+      "type": "select"
+    },
+    {
+      "id": "cards[d8608bfb-5f26-429e-a4c1-b4c629e5e4ce][field1]",
+      "label": "When is your availability (eg. June to December 2026)?",
+      "raw_type": "text",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "cards[d8608bfb-5f26-429e-a4c1-b4c629e5e4ce][field2]",
+      "label": "Is your internship - ?",
+      "options": [
+        {
+          "label": "Credit Bearing",
+          "value": "Credit Bearing"
+        },
+        {
+          "label": "Leave of Absence",
+          "value": "Leave of Absence"
+        },
+        {
+          "label": "Outside of School",
+          "value": "Outside of School"
+        },
+        {
+          "label": "Others",
+          "value": "Others"
+        }
+      ],
+      "raw_type": "select",
+      "required": false,
+      "type": "select"
+    },
+    {
+      "id": "cards[d8608bfb-5f26-429e-a4c1-b4c629e5e4ce][field3]",
+      "label": "Which year of study will you be in when embarking on this internship?",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "cards[d8608bfb-5f26-429e-a4c1-b4c629e5e4ce][field4]",
+      "label": "What is your current GPA?",
+      "raw_type": "text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "cards[d8608bfb-5f26-429e-a4c1-b4c629e5e4ce][field5]",
+      "label": "Citizenship/Visa Status",
+      "options": [
+        {
+          "label": "Citizen",
+          "value": "Citizen"
+        },
+        {
+          "label": "Permanent Resident",
+          "value": "Permanent Resident"
+        },
+        {
+          "label": "Require relevant work visa",
+          "value": "Require relevant work visa"
+        },
+        {
+          "label": "Possess relevant work visa",
+          "value": "Possess relevant work visa"
+        }
+      ],
+      "raw_type": "select",
+      "required": false,
+      "type": "select"
+    },
+    {
+      "id": "cards[d8608bfb-5f26-429e-a4c1-b4c629e5e4ce][field6]",
+      "label": "Varsity",
+      "options": [
+        {
+          "label": "University",
+          "value": "University"
+        },
+        {
+          "label": "Polytechnic",
+          "value": "Polytechnic"
+        },
+        {
+          "label": "Others",
+          "value": "Others"
+        }
+      ],
+      "raw_type": "select",
+      "required": false,
+      "type": "select"
+    },
+    {
+      "id": "cards[d8608bfb-5f26-429e-a4c1-b4c629e5e4ce][field7]",
+      "label": "How did you hear about this position?",
+      "options": [
+        {
+          "label": "ShopBack career website",
+          "value": "ShopBack career website"
+        },
+        {
+          "label": "LinkedIn",
+          "value": "LinkedIn"
+        },
+        {
+          "label": "Indeed",
+          "value": "Indeed"
+        },
+        {
+          "label": "Josdb",
+          "value": "Josdb"
+        },
+        {
+          "label": "ZipRecruiter",
+          "value": "ZipRecruiter"
+        },
+        {
+          "label": "Employee referral",
+          "value": "Employee referral"
+        },
+        {
+          "label": "Campus recruitment / university career portal",
+          "value": "Campus recruitment / university career portal"
+        },
+        {
+          "label": "Job fair / career fair",
+          "value": "Job fair / career fair"
+        },
+        {
+          "label": "Recruitment agency / headhunter",
+          "value": "Recruitment agency / headhunter"
+        },
+        {
+          "label": "Returning candidate",
+          "value": "Returning candidate"
+        },
+        {
+          "label": "Other",
+          "value": "Other"
+        }
+      ],
+      "raw_type": "select",
+      "required": false,
+      "type": "select"
+    },
+    {
+      "id": "cards[d8608bfb-5f26-429e-a4c1-b4c629e5e4ce][field8]",
+      "label": "If you selected “Other” in the last question, please specify below:",
+      "raw_type": "textarea",
+      "required": false,
+      "type": "textarea"
+    },
+    {
+      "id": "consent[marketing]",
+      "label": "Yes, ShopBack can contact me about future job opportunities for up to 4 yearsPrivacy policy",
+      "raw_type": "checkbox",
+      "required": false,
+      "type": "boolean"
+    }
+  ],
+  "provider": "lever"
+}

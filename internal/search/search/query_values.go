@@ -76,6 +76,17 @@ var closedFacets = map[string]func(string) bool{
 	AutoApplyAvailableParam: oneOf(boolValues),
 }
 
+// checkedScalars are the scalar filters whose value IgnoredValues checks: a value the
+// filter declines imposes no bound, so the answer WIDENS — the case a dropped filter must
+// say so about. Only the newest scalar is here; the older numeric bounds drop a bad value
+// just as silently, and joining them is a change of its own.
+var checkedScalars = map[string]func(string) bool{
+	ApplyQuestionsMaxParam: func(val string) bool {
+		_, ok := applyQuestionsMax(val)
+		return ok
+	},
+}
+
 // UnknownFacetValue reports whether value falls outside the closed vocabulary of a facet
 // param (or its `_exclude` form) — the value IgnoredValues would name. false for a param
 // with no closed vocabulary: an open facet has nothing to be unknown against.
@@ -108,23 +119,32 @@ func UnknownFacetValue(param, value string) bool {
 func IgnoredValues(v url.Values) map[string][]string {
 	var params []string
 	out := map[string][]string{}
+	report := func(param string, vals []string, known func(string) bool) {
+		var bad []string
+		for _, val := range vals {
+			if !known(val) && !slices.Contains(bad, val) {
+				bad = append(bad, val)
+			}
+		}
+		if len(bad) == 0 {
+			return
+		}
+		sort.Strings(bad)
+		if len(bad) > maxUnknownParamsReported {
+			bad = bad[:maxUnknownParamsReported]
+		}
+		out[param] = bad
+		params = append(params, param)
+	}
 	for facet, known := range closedFacets {
 		for _, param := range []string{facet, facet + "_exclude"} {
-			var bad []string
-			for _, val := range splitFacetValues(v[param]) {
-				if !known(val) && !slices.Contains(bad, val) {
-					bad = append(bad, val)
-				}
-			}
-			if len(bad) == 0 {
-				continue
-			}
-			sort.Strings(bad)
-			if len(bad) > maxUnknownParamsReported {
-				bad = bad[:maxUnknownParamsReported]
-			}
-			out[param] = bad
-			params = append(params, param)
+			report(param, splitFacetValues(v[param]), known)
+		}
+	}
+	// A scalar is read whole (v.Get), so its value is checked whole rather than split.
+	for param, valid := range checkedScalars {
+		if raw, ok := v[param]; ok && len(raw) > 0 {
+			report(param, raw[:1], valid)
 		}
 	}
 	if len(params) == 0 {

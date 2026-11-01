@@ -318,3 +318,120 @@ func TestApplyFormCompletionAndFailure(t *testing.T) {
 		}
 	})
 }
+
+func searchOutboxHas(t *testing.T, pool *pgxpool.Pool, jobID int64) bool {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM search_outbox WHERE job_id = $1", jobID).Scan(&n); err != nil {
+		t.Fatalf("select search_outbox: %v", err)
+	}
+	return n > 0
+}
+
+// The search document carries the form's question count, so a form that arrives or
+// changes after the job was indexed must queue the job for the live index — and a crawl
+// rewriting the same form every run must not.
+func TestUpsertApplyFormQueuesSearch(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	upsert := func(t *testing.T, job int64, marker string) {
+		t.Helper()
+		if err := q.UpsertApplyForm(ctx, UpsertApplyFormParams{
+			JobID: job, Provider: "greenhouse", Payload: applyFormPayload(marker),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clearOutbox := func(t *testing.T) {
+		t.Helper()
+		if _, err := pool.Exec(ctx, "DELETE FROM search_outbox"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("a new form queues the job", func(t *testing.T) {
+		truncate(t, pool)
+		job := insertJob(t, pool, "gh-q1")
+		clearOutbox(t)
+		upsert(t, job, "first")
+		if !searchOutboxHas(t, pool, job) {
+			t.Error("a newly captured form did not queue its job for search")
+		}
+	})
+
+	t.Run("an identical rewrite queues nothing, a changed form does", func(t *testing.T) {
+		truncate(t, pool)
+		job := insertJob(t, pool, "gh-q2")
+		upsert(t, job, "same")
+		clearOutbox(t)
+		upsert(t, job, "same")
+		if searchOutboxHas(t, pool, job) {
+			t.Error("rewriting the identical form queued the job — every crawl would")
+		}
+		upsert(t, job, "changed")
+		if !searchOutboxHas(t, pool, job) {
+			t.Error("a changed form did not queue its job")
+		}
+	})
+
+	t.Run("a changed form re-stamps an entry already pending", func(t *testing.T) {
+		truncate(t, pool)
+		job := insertJob(t, pool, "gh-q4")
+		upsert(t, job, "first")
+		if _, err := pool.Exec(ctx,
+			"UPDATE search_outbox SET created_at = now() - interval '1 day' WHERE job_id = $1", job); err != nil {
+			t.Fatal(err)
+		}
+		upsert(t, job, "second")
+		var fresh bool
+		if err := pool.QueryRow(ctx,
+			"SELECT created_at > now() - interval '1 minute' FROM search_outbox WHERE job_id = $1", job).Scan(&fresh); err != nil {
+			t.Fatal(err)
+		}
+		if !fresh {
+			t.Error("pending entry kept its old created_at; a rebuild's cleanup would drop the new count")
+		}
+	})
+
+	t.Run("completing an old claim preserves a changed form", func(t *testing.T) {
+		truncate(t, pool)
+		job := insertJob(t, pool, "gh-changed-in-flight")
+		clearOutbox(t)
+		upsert(t, job, "first")
+		claimed, err := q.ClaimSearchOutboxBatch(ctx, ClaimSearchOutboxBatchParams{LeaseSeconds: 3600, BatchSize: 10})
+		if err != nil || len(claimed) != 1 {
+			t.Fatalf("claim: %v, %v", claimed, err)
+		}
+		upsert(t, job, "second")
+		if err := q.DeleteSearchOutboxEntries(ctx, []int64{claimed[0].ID}); err != nil {
+			t.Fatal(err)
+		}
+		if !searchOutboxHas(t, pool, job) {
+			t.Fatal("old claim deleted the changed form's pending update")
+		}
+		again, err := q.ClaimSearchOutboxBatch(ctx, ClaimSearchOutboxBatchParams{LeaseSeconds: 3600, BatchSize: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(again) != 0 {
+			t.Fatal("new generation must retain the in-flight write's lease")
+		}
+	})
+
+	t.Run("a closed job is not queued", func(t *testing.T) {
+		truncate(t, pool)
+		job := insertJob(t, pool, "gh-q3")
+		if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id = $1", job); err != nil {
+			t.Fatal(err)
+		}
+		clearOutbox(t)
+		upsert(t, job, "first")
+		if searchOutboxHas(t, pool, job) {
+			t.Error("a closed job was queued for an index it is not in")
+		}
+		storedApplyForm(t, pool, job) // the form is still stored
+	})
+}

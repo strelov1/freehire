@@ -29,6 +29,18 @@ on the job page. Providers: greenhouse, ashby, workable, lever, dover. Queue dra
   about the answer. It drops hidden/info/demographic/consent controls and folds the standard
   fields (name, email, CV) into one `basics` line, keyed on the identifiers our own mappers
   produce, not on labels (display.go:51-90, 120-166).
+- **The question count is the display's required half, counted at index time.**
+  `Form.RequiredQuestions` (questions.go) counts the required entries of `ForDisplay`'s
+  Questions, so a change to what counts as standard moves the job page's list and the
+  `apply_questions` search attribute together. It is NOT stored: `cmd/reindex` and
+  `cmd/search-drain` read each batch's payloads (`QuestionCounts`) because `search` sits
+  below `ingest` and cannot import this package — so a rule change reaches search with a
+  plain reindex, no backfill. No form → no count, never zero. `UpsertApplyForm` queues
+  the job into `search_outbox` in the same statement when the payload is new or changed
+  and the job is open, canonical and public, so a capture made after indexing reaches
+  search without waiting for the rebuild; an identical rewrite (Recruitee, every crawl)
+  queues nothing. Workable carries TWO employer markers — `QA_` per job, `CA_` per
+  account — and missing the second filed account-wide questions among the basics.
 - **One registry map sits behind both gate and drain.** `fetcherFor` (fetch.go:78-83) backs
   both the ingest enqueue gate (`NeedsRequestCapture`, fetch.go:70-73) and the worker's
   fetcher set, so the two cannot drift into a queue full of undrainable work; a test holds
