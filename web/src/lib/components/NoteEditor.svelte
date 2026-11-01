@@ -193,7 +193,7 @@
       <button
         type="button"
         onclick={() => void persist()}
-        class="min-h-11 rounded px-2 font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground sm:min-h-0"
+        class="min-h-11 rounded px-2 font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground sm:pointer-fine:min-h-0"
       >
         {s.retry}
       </button>

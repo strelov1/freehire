@@ -9,7 +9,7 @@
   import { cardLocation } from '#lib/cardLocation.js';
   import JobMatchBar from './JobMatchBar.svelte';
   import { api } from '#lib/api.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { track } from '#lib/analytics.js';
@@ -74,7 +74,7 @@
     compact = false,
     footer,
     onHide,
-    onUnsave,
+    unsave = api.unsaveJob,
   }: {
     // Either the catalogue's full posting or the tracking listing's card. The row draws the
     // same thing from both: the card carries a server-cut blurb where the posting carries the
@@ -86,7 +86,8 @@
     compact?: boolean;
     footer?: Snippet;
     onHide?: (slug: string) => void;
-    onUnsave?: (slug: string) => void;
+    /** Allows a saved list to serialize removal with pagination. */
+    unsave?: (slug: string) => Promise<unknown>;
   } = $props();
 
   const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
@@ -232,21 +233,30 @@
     }
     if (saving) return;
     saving = true;
-    const wasSaved = saved;
-    justSaved = false;
-    if (wasSaved) markUnsaved(job.public_slug);
-    else markSaved(job.public_slug);
+    const userID = currentUser()?.id;
+    let wasSaved = saved;
+    let changed = false;
     try {
+      // Read the final set before changing it: a late initial load must never undo
+      // the user's toggle, and a handoff to another account cancels this action.
+      await ensureSavedLoaded();
+      if (currentUser()?.id !== userID) return;
+      wasSaved = isSaved(job.public_slug);
+      justSaved = false;
+      if (wasSaved) markUnsaved(job.public_slug);
+      else markSaved(job.public_slug);
+      changed = true;
       if (wasSaved) {
-        await api.unsaveJob(job.public_slug);
-        onUnsave?.(job.public_slug);
+        await unsave(job.public_slug);
       } else {
         await api.saveJob(job.public_slug);
         justSaved = true;
       }
     } catch {
-      if (wasSaved) markSaved(job.public_slug);
-      else markUnsaved(job.public_slug);
+      if (changed && currentUser()?.id === userID) {
+        if (wasSaved) markSaved(job.public_slug);
+        else markUnsaved(job.public_slug);
+      }
     } finally {
       saving = false;
     }

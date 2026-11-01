@@ -100,7 +100,7 @@
 </script>
 
 <div class="flex flex-col gap-2">
-  <Input bind:value={filter} {placeholder} aria-label={label ?? placeholder ?? s.search} class="w-full" />
+  <Input bind:value={filter} placeholder={placeholder ?? s.search} aria-label={label ?? placeholder ?? s.search} class="w-full" />
   <div class={expand ? 'flex flex-wrap gap-1.5' : 'flex max-h-44 flex-wrap gap-1.5 overflow-y-auto'}>
     {#each shown as opt (opt.value)}
       {@const excluded = exclude.includes(opt.value)}

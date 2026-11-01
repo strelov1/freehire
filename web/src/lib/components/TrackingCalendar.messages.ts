@@ -31,7 +31,11 @@ export const messages = defineMessages(
   {
     ru: {
       weekdays: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
-      loadError: 'Не удалось загрузить события этого месяца.',
+      previousWeek: 'Предыдущая неделя',
+      nextWeek: 'Следующая неделя',
+      today: 'Сегодня',
+      weekLabel: 'Неделя',
+      loadError: 'Не удалось загрузить события этой недели.',
       interviewCancelled: 'Собеседование — отменено',
       interview: 'Собеседование',
       entries: plurals({

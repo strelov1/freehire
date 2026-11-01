@@ -94,7 +94,7 @@
       onclick={() => (drawerOpen = true)}
       aria-haspopup="dialog"
       aria-expanded={drawerOpen}
-      class="-mr-3 mb-3 ml-auto flex min-h-8 items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
+      class="-mr-3 mb-3 ml-auto flex min-h-8 w-fit items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground lg:hidden"
     >
       <span class="sr-only">{s.shell.accountSections}:</span>
       {#if activeItem}

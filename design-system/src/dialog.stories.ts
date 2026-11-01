@@ -19,6 +19,13 @@ export const Default: Story = {
     description: 'The employer keeps the messages you already sent.',
   },
 };
+export const DescriptionOnly: Story = {
+  args: {
+    title: '',
+    description: 'Choose whether to withdraw this application. Your messages will remain available.',
+  },
+};
+
 export const TitleOnly: Story = { args: { title: 'Withdraw application?' } };
 
 // Held open: Escape, the backdrop and the close button all go away together,
