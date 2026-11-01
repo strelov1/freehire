@@ -6,7 +6,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, type Slice } from '#lib/api.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { PUBLIC_OPEN_WITHIN } from '$app/env/public';
@@ -110,6 +110,8 @@
   // (company_slug, …). Reads `applied` so typing doesn't fetch per keystroke.
   const scopedParams = () => {
     const p = filtersToParams(filters.applied);
+    // Scoped loaders render anonymously and offer no control for this preference.
+    if (!standalone) p.delete('hide_seen');
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return p;
   };
@@ -502,11 +504,15 @@
     });
   });
 
+  // Personal feed preferences must be re-applied when the reader changes in-tab.
+  const searchUserID = $derived(filters.applied.hideSeen ? currentUser()?.id ?? null : null);
+
   // Reload the list whenever the debounced filters change — a settled keystroke, an
   // immediate facet toggle, or a back/forward re-seed. The first run is a no-op: the
   // SSR `initial` already seeded page one.
   $effect(() => {
     void filters.applied; // track the debounced snapshot
+    void searchUserID;
     untrack(() => {
       const firstRun = !started;
       if (firstRun) {
