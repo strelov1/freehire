@@ -207,7 +207,7 @@
   }
 
   // Whether the signed-in user has saved this job, read from the shared saved set
-  // (loaded once on the browse view). The bookmark reflects this and updates the
+  // (loaded once and shared across cards). The bookmark reflects this and updates the
   // set on toggle, so every card for the same job stays in sync.
   const saved = $derived(isSaved(job.public_slug));
   $effect(() => {
@@ -240,8 +240,7 @@
       if (wasSaved) {
         await api.unsaveJob(job.public_slug);
         onUnsave?.(job.public_slug);
-      }
-      else {
+      } else {
         await api.saveJob(job.public_slug);
         justSaved = true;
       }

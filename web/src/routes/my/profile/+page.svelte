@@ -26,7 +26,6 @@
 
 {#if profile}
   <ProfileForm
-    {profile}
     hasCv={resumeStore.present}
     uploadedAt={resumeMeta?.uploaded_at}
     onSaved={handleSaved}

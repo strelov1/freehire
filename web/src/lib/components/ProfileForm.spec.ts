@@ -1,27 +1,13 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { UserProfile } from '#lib/types.js';
 import ProfileForm from './ProfileForm.svelte';
 
 vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/') } }));
 
-const { extractResumeProfile, getPhoto, mergeResumeExtraction, profile } = vi.hoisted(() => ({
+const { extractResumeProfile, getPhoto, mergeResumeExtraction } = vi.hoisted(() => ({
   extractResumeProfile: vi.fn(),
   getPhoto: vi.fn(),
   mergeResumeExtraction: vi.fn(),
-  profile: {
-    specializations: ['backend'],
-    skills: ['go'],
-    seniorities: [],
-    excluded_skills: [],
-    excluded_sources: [],
-    excluded_companies: [],
-    location_preferences: null,
-    derived_location: null,
-    cv: null,
-    created_at: null,
-    updated_at: null,
-  } as UserProfile,
 }));
 
 vi.mock('#lib/api.js', async (importOriginal) => {
@@ -31,9 +17,6 @@ vi.mock('#lib/api.js', async (importOriginal) => {
 
 vi.mock('#lib/profile.svelte.js', () => ({
   profileStore: {
-    get profile() {
-      return profile;
-    },
     mergeResumeExtraction,
   },
 }));
@@ -46,32 +29,31 @@ function uploadResume(file: File) {
 
 beforeEach(() => {
   getPhoto.mockReset().mockRejectedValue(new Error('no photo'));
-  mergeResumeExtraction.mockReset().mockResolvedValue(profile);
+  mergeResumeExtraction.mockReset().mockResolvedValue({ addedSkills: 1, addedSpecializations: 0, droppedSpecializations: 0 });
 });
 
 describe('ProfileForm', () => {
   it('calls onSaved after a CV re-upload merges new skills into an existing profile', async () => {
     extractResumeProfile.mockReset().mockResolvedValue({ skills: ['rust'], categories: [] });
     const onSaved = vi.fn();
-    render(ProfileForm, { props: { profile, hasCv: false, onSaved } });
+    render(ProfileForm, { props: { hasCv: false, onSaved } });
 
     await uploadResume(new File(['pdf'], 'cv.pdf', { type: 'application/pdf' }));
-    await vi.waitFor(() => expect(mergeResumeExtraction).toHaveBeenCalledWith(['rust'], ['backend']));
+    await vi.waitFor(() => expect(mergeResumeExtraction).toHaveBeenCalledWith(['rust'], []));
 
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
   it('does not call onSaved when the extraction adds nothing new', async () => {
-    // The profile already has 'go'; extracting the same skill again adds nothing, so
-    // analyzeResume's `editing` branch never reaches profileStore.mergeResumeExtraction.
     extractResumeProfile.mockReset().mockResolvedValue({ skills: ['go'], categories: [] });
+    mergeResumeExtraction.mockResolvedValue({ addedSkills: 0, addedSpecializations: 0, droppedSpecializations: 0 });
     const onSaved = vi.fn();
-    render(ProfileForm, { props: { profile, hasCv: false, onSaved } });
+    render(ProfileForm, { props: { hasCv: false, onSaved } });
 
     await uploadResume(new File(['pdf'], 'cv.pdf', { type: 'application/pdf' }));
     await vi.waitFor(() => expect(extractResumeProfile).toHaveBeenCalled());
 
-    expect(mergeResumeExtraction).not.toHaveBeenCalled();
+    expect(mergeResumeExtraction).toHaveBeenCalledWith(['go'], []);
     expect(onSaved).not.toHaveBeenCalled();
   });
 });

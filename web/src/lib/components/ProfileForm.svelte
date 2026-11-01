@@ -6,9 +6,7 @@
   import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
   import { cvUploadReason, track } from '#lib/analytics.js';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { capSpecializations, MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
-  import type { UserProfile } from '#lib/types.js';
-  import { withSkills } from '#lib/profileSkills.js';
+  import { MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
   import { Button, ConfirmDialog } from '#lib/ui/index.js';
   import { announce } from '#lib/announce.svelte.js';
   import HeadshotField from './HeadshotField.svelte';
@@ -16,14 +14,12 @@
   // Photo and CV management. Roles, skills and location autosave in their own
   // sections; a CV import merges its extracted skills and roles into the same profile.
   let {
-    profile,
     hasCv,
     uploadedAt = null,
     onSaved,
     onCvUploaded,
     onCvDeleted,
   }: {
-    profile: UserProfile;
     hasCv: boolean;
     /** When the stored CV was uploaded (ISO). Shown in the uploaded-state box instead of
      *  the bare "CV on file" a candidate had no way to act on — a date at least answers
@@ -40,7 +36,11 @@
 
   const uploadedAtLabel = $derived(
     uploadedAt
-      ? format(s.uploaded, { date: new Date(uploadedAt).toLocaleDateString(locale(), { year: 'numeric', month: 'short', day: 'numeric' }) })
+      ? format(s.uploaded, {
+          date: new Date(uploadedAt).toLocaleDateString(locale(), {
+            year: 'numeric', month: 'short', day: 'numeric',
+          }),
+        })
       : s.onFile,
   );
 
@@ -49,7 +49,6 @@
   let resumeNote = $state<string | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
   let dragActive = $state(false);
-
 
   // Each message below appears where the action was, which a screen reader never visits on
   // its own — so each is also spoken the moment it changes. Errors interrupt; notes wait.
@@ -70,17 +69,14 @@
       track('cv_upload', { ok: true, origin: 'profile' });
       onCvUploaded?.();
 
-      const current = profileStore.profile ?? profile;
-      const { kept: nextSpecializations, dropped: cappedSpecs } =
-        capSpecializations(current.specializations, cv.categories);
-      const addedSpecs = nextSpecializations.length - current.specializations.length;
-      const addedSkills = withSkills(current, cv.skills).skills.length - current.skills.length;
-      if (addedSkills > 0 || addedSpecs > 0) {
-        await profileStore.mergeResumeExtraction(cv.skills, nextSpecializations);
-        onSaved?.();
-      }
+      const {
+        addedSkills,
+        addedSpecializations: addedSpecs,
+        droppedSpecializations: cappedSpecs,
+      } = await profileStore.mergeResumeExtraction(cv.skills, cv.categories);
 
       if (addedSkills > 0 || addedSpecs > 0) {
+        onSaved?.();
         resumeNote = format(s.added, { skills: String(addedSkills), roles: String(addedSpecs) });
         if (addedSkills > 0) resumeNote += ' ' + s.seeSkills;
       } else if (cappedSpecs > 0)
@@ -143,7 +139,6 @@
     }
     void analyzeResume(file);
   }
-
 </script>
 
 <div class="flex flex-col gap-6">
