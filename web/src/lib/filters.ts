@@ -6,7 +6,6 @@
 import { UrlSyncedState } from './urlSynced.svelte';
 import { saveJobFilters } from './filterStorage';
 import {
-  type ClearanceFilter,
   type FacetState,
   type JobFilters,
   type JobSort,
@@ -143,10 +142,6 @@ export class FilterStore {
 
   setSeniorityIncludeUnspecified(on: boolean) {
     this.#url.setNow({ ...this.#url.value, seniorityIncludeUnspecified: on });
-  }
-
-  setClearance(v: ClearanceFilter) {
-    this.#url.setNow({ ...this.#url.value, clearance: v });
   }
 
   /** The summary chip's remove: one chip stands for the whole salary range, so it

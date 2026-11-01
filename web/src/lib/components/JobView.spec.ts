@@ -150,3 +150,11 @@ it('shows exact source salary bounds in the job detail summary', () => {
   } } });
   expect(screen.getByText('2,501 – 3,000 € / mo')).not.toBeNull();
 });
+
+it.each([JobView, JobRow])('shows the application deadline when the source states it', (component) => {
+  const datedJob = { ...job, application_deadline: '2026-11-11' };
+  const view = render(component, { job: datedJob });
+  const deadline = view.container.querySelector('time[datetime="2026-11-11"]');
+  expect(deadline?.textContent).toBe('2026-11-11');
+  expect(deadline?.parentElement?.textContent).toContain('Apply by');
+});

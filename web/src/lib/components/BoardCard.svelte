@@ -1,4 +1,7 @@
 <script lang="ts">
+  import BoardPostingStatus from './BoardPostingStatus.svelte';
+  import BoardRemoveButton from './BoardRemoveButton.svelte';
+  import BoardPreview from './BoardPreview.svelte';
   import { Clock, FileCheck, Mail, MapPin, MessageSquare } from '@lucide/svelte';
   import { companyLogoUrl } from '#lib/logo.js';
   import { Badge, EntityLogo } from '#lib/ui/index.js';
@@ -13,9 +16,13 @@
   let {
     item,
     onopen,
+    onremove,
+    removing = false,
   }: {
     item: MyJob;
     onopen: (item: MyJob) => void;
+    onremove?: (item: MyJob) => void;
+    removing?: boolean;
   } = $props();
 
   // The card's aria-label is its name and REPLACES its content, so the indicator row is
@@ -23,6 +30,8 @@
   const indicatorsId = $props.id();
   const hintId = `${indicatorsId}-hint`;
   const locationId = `${indicatorsId}-location`;
+  const statusId = `${indicatorsId}-status`;
+  const hasStatus = $derived(Boolean(item.job?.closed_at || item.job?.application_deadline));
   const s = $derived(t(messages, locale()));
 
   const hasNotes = $derived(!!item.notes && item.notes.trim().length > 0);
@@ -66,8 +75,8 @@
   }
 </script>
 
-<!-- The card carries no controls: it is dragged, and it is opened. Every action on the
-     application lives in the panel that opens, which has the room for them.
+<!-- The open target remains a div so the drag library can pick it up.
+     The remove button is a sibling, outside the open target.
 
      That is not only a layout preference. svelte-dnd-action refuses to begin a drag
      whose event target carries a `value` property — a guard written for <input>, which
@@ -86,16 +95,18 @@
      `relative` keeps the `sr-only` move hint inside the card. That hint is absolutely
      positioned, and without a positioned ancestor it escaped the column's scroll box and
      stretched the page by the column's full height: blank scrolling past the footer. -->
+<div class="relative">
+<BoardPreview {item}>
 <div
   role="button"
   tabindex="0"
   onclick={() => onopen(item)}
   onkeydowncapture={openOnKey}
   aria-label="Open {title} at {company || 'unknown company'}"
-  aria-describedby="{location ? `${locationId} ` : ''}{indicatorsId} {hintId}"
+  aria-describedby="{location ? `${locationId} ` : ''}{hasStatus ? `${statusId} ` : ''}{indicatorsId} {hintId}"
   class="relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
-  <span class="flex items-center gap-1.5 text-sm font-semibold">
+  <span class="flex items-center gap-1.5 pr-7 text-sm font-semibold">
     <EntityLogo name={company} src={companyLogoUrl(company) ?? undefined} shape="square" size="xs" />
     <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
   </span>
@@ -109,6 +120,7 @@
   <!-- Indicators, every one of them. The silence marker used to be the way into the
        follow-up draft; that offer moved into the opened application when the card gave
        up its controls, and the marker went back to reporting. -->
+  <BoardPostingStatus job={item.job} id={statusId} />
   <span id={indicatorsId} class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
     {#if item.stage}
       <Badge variant="secondary">{humanizeStage(item.stage, locale())}</Badge>
@@ -180,4 +192,12 @@
     {/if}
   </span>
   <span id={hintId} class="sr-only">{s.moveHint}</span>
+</div>
+
+</BoardPreview>
+{#if onremove}
+  <span class="absolute right-1.5 top-1.5">
+    <BoardRemoveButton {item} {onremove} disabled={removing} />
+  </span>
+{/if}
 </div>

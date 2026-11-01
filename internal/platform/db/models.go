@@ -997,6 +997,8 @@ type Job struct {
 	ClearanceLevels           []string           `json:"clearance_levels"`
 	Equity                    pgtype.Text        `json:"equity"`
 	Perks                     []string           `json:"perks"`
+	// Source-stated last application day, inclusive; NULL when unstated.
+	ApplicationDeadline pgtype.Date `json:"application_deadline"`
 }
 
 type JobDailyStat struct {

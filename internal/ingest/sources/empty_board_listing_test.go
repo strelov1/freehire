@@ -13,14 +13,15 @@ var emptyBoardListingAdapters = map[string]struct {
 	empty     string   // the source's own answer for a board with no postings
 	notEmpty  []string // decodable answers that carry no posting collection
 }{
-	"greenhouse": {func(f *fakeHTTP) Source { return NewGreenhouse(f) }, `{"jobs":[],"meta":{"total":0}}`, []string{`{}`, `{"jobs":null}`, `{"status":404}`}},
-	"ashby":      {func(f *fakeHTTP) Source { return NewAshby(f) }, `{"jobs":[],"apiVersion":"1"}`, []string{`{}`, `{"jobs":null}`, `{"apiVersion":"1"}`}},
-	"lever":      {func(f *fakeHTTP) Source { return NewLever(f) }, `[]`, []string{`null`}},
-	"workable":   {func(f *fakeHTTP) Source { return NewWorkable(f) }, `{"name":"Acme","description":"","jobs":[]}`, []string{`{}`, `{"name":"Acme"}`, `{"jobs":null}`}},
-	"recruitee":  {func(f *fakeHTTP) Source { return NewRecruitee(f) }, `{"offers":[]}`, []string{`{}`, `{"offers":null}`}},
-	"breezy":     {func(f *fakeHTTP) Source { return NewBreezy(f) }, `[]`, []string{`null`}},
-	"bamboohr":   {func(f *fakeHTTP) Source { return NewBambooHR(f) }, `{"meta":{"totalCount":0},"result":[]}`, []string{`{}`, `{"meta":{"totalCount":0}}`, `{"result":null}`}},
-	"beehire":    {func(f *fakeHTTP) Source { return NewBeehire(f) }, `{"campaigns":[]}`, []string{`{}`, `{"campaigns":null}`}},
+	"greenhouse":     {func(f *fakeHTTP) Source { return NewGreenhouse(f) }, `{"jobs":[],"meta":{"total":0}}`, []string{`{}`, `{"jobs":null}`, `{"status":404}`}},
+	"ashby":          {func(f *fakeHTTP) Source { return NewAshby(f) }, `{"jobs":[],"apiVersion":"1"}`, []string{`{}`, `{"jobs":null}`, `{"apiVersion":"1"}`}},
+	"lever":          {func(f *fakeHTTP) Source { return NewLever(f) }, `[]`, []string{`null`}},
+	"workable":       {func(f *fakeHTTP) Source { return NewWorkable(f) }, `{"name":"Acme","description":"","jobs":[]}`, []string{`{}`, `{"name":"Acme"}`, `{"jobs":null}`}},
+	"recruitee":      {func(f *fakeHTTP) Source { return NewRecruitee(f) }, `{"offers":[]}`, []string{`{}`, `{"offers":null}`}},
+	"breezy":         {func(f *fakeHTTP) Source { return NewBreezy(f) }, `[]`, []string{`null`}},
+	"bamboohr":       {func(f *fakeHTTP) Source { return NewBambooHR(f) }, `{"meta":{"totalCount":0},"result":[]}`, []string{`{}`, `{"meta":{"totalCount":0}}`, `{"result":null}`}},
+	"beehire":        {func(f *fakeHTTP) Source { return NewBeehire(f) }, `{"campaigns":[]}`, []string{`{}`, `{"campaigns":null}`}},
+	"seamlesshiring": {func(f *fakeHTTP) Source { return NewSeamlessHiring(f) }, `{"status":"success","status_code":200,"data":{"jobs":{"data":[],"total":0,"current_page":1,"last_page":1,"per_page":100}}}`, []string{`{}`, `{"status":"success","status_code":200,"data":null}`, `{"status":"success","status_code":200,"data":{"jobs":null}}`, `{"status":"success","status_code":200,"data":{"jobs":{"total":0,"current_page":1,"last_page":1,"per_page":100,"data":null}}}`}},
 }
 
 // An emptied board is the source's own answer, with its posting collection present and empty:

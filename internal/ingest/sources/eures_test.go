@@ -392,6 +392,39 @@ func TestEuresLocationFallsBackWhenDetailFails(t *testing.T) {
 	}
 }
 
+func TestEuresReadsApplicationDeadlineFromPreferredProfile(t *testing.T) {
+	const page = `{"numberRecords":1,"jvs":[{"id":"MzQ5MDQ0MCAxNA","title":"Engineer","employer":{"name":"Co"}}]}`
+	for _, tc := range []struct {
+		name    string
+		profile string
+		want    string
+	}{
+		{"reported date without location", `{"lastApplicationDate":1792627200000}`, "2026-10-22"},
+		{"missing", `{}`, ""},
+		{"null", `{"lastApplicationDate":null}`, ""},
+		{"zero", `{"lastApplicationDate":0}`, ""},
+		{"negative", `{"lastApplicationDate":-1}`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &euresFake{
+				searchByPage: map[int]string{1: page},
+				detailByID:   map[string]string{"MzQ5MDQ0MCAxNA": `{"preferredLanguage":"sl","jvProfiles":{"en":{"lastApplicationDate":1792540800000},"sl":` + tc.profile + `}}`},
+			}
+			jobs, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "si"})
+			if err != nil || len(jobs) != 1 {
+				t.Fatalf("Fetch: jobs=%d, err=%v", len(jobs), err)
+			}
+			got := ""
+			if jobs[0].ApplicationDeadline != nil {
+				got = jobs[0].ApplicationDeadline.Format("2006-01-02")
+			}
+			if got != tc.want {
+				t.Errorf("ApplicationDeadline = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestEuresEmploymentTypeMapping(t *testing.T) {
 	cases := []struct {
 		name     string

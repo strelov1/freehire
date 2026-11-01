@@ -283,6 +283,7 @@ var atsBoards = []struct{ host, source, mode string }{
 	{"hirehive.com", "hirehive", modeSubdomain},
 	{"app.beehire.com", "beehire", modePathPattern},
 	{"inploi.com", "inploi", modePathPattern},
+	{"seamlesshiring.com", "seamlesshiring", modeSubdomain},
 	{"selfrecruit.ge", "selfrecruit", modeSubdomain},
 	{"talentlyft.com", "talentlyft", modeSubdomain},
 	{"traffit.com", "traffit", modeSubdomain},

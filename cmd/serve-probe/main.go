@@ -16,7 +16,9 @@ import (
 	"math/rand/v2"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/config"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
@@ -76,12 +78,18 @@ func run() int {
 		return 1
 	}
 
-	rep := serveprobe.Check(rows, docs)
+	unseen := search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow))
+	now := time.Now()
+	rep := serveprobe.Check(rows, docs, func(j db.Job) search.WithholdReason { return search.WithheldBy(j, now, unseen) })
 	if err := worker.WriteTextfile(dir, textfileName, render(rep)); err != nil {
 		log.Printf("serve-probe: %v", err)
 		return 1
 	}
-	log.Printf("serve-probe: sampled=%d unindexed=%d unreadable=%d", rep.Sampled, rep.Unindexed, rep.Unreadable)
+	var unindexed []string
+	for _, k := range serveprobe.UnindexedReasons {
+		unindexed = append(unindexed, fmt.Sprintf("%s=%d", k, rep.Unindexed[k]))
+	}
+	log.Printf("serve-probe: sampled=%d unreadable=%d unindexed: %s", rep.Sampled, rep.Unreadable, strings.Join(unindexed, " "))
 	for _, l := range serveprobe.Layers {
 		var gaps []string
 		for _, f := range serveprobe.Fields() {

@@ -129,6 +129,7 @@ type mojedeloJob struct {
 		WeOffer             string          `json:"weOffer"`
 		AboutTheCompany     string          `json:"aboutTheCompany"`
 		AdSummary           string          `json:"adSummary"`
+		EndDate             string          `json:"endDate"`
 		Salary              *mojedeloNamed  `json:"salary"`
 		WorkTime            *mojedeloNamed  `json:"workTime"`
 		EmploymentTypes     []mojedeloNamed `json:"employmentTypes"`
@@ -354,6 +355,12 @@ func (s mojedelo) detail(ctx context.Context, it mojedeloItem) (Job, bool, error
 		if lo, hi, ok := mojedeloSalary(d.Salary.Name); ok {
 			j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod = &lo, &hi, "EUR", "month"
 		}
+	}
+	// endDate is the last day's end in Slovenian time (22:59:59Z in winter, 21:59:59Z in
+	// summer), so its UTC date is that last day either way.
+	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(d.EndDate)); err == nil {
+		t = t.UTC()
+		j.ApplicationDeadline = &t
 	}
 	return j, true, nil
 }

@@ -286,6 +286,7 @@
       appliedToCompany ? 'Applied to this company' : '',
       job.location ?? '',
       posted ? `Posted ${posted}` : '',
+      job.application_deadline ? `Apply by ${job.application_deadline}` : '',
       salary ?? '',
     ].filter(Boolean).join(', '),
   );
@@ -386,6 +387,11 @@
       {/if}
       {#if posted}
         <span class="text-xs tabular-nums">{posted}</span>
+      {/if}
+      {#if job.application_deadline}
+        <span class="whitespace-nowrap text-xs tabular-nums">
+          Apply by <time datetime={job.application_deadline}>{job.application_deadline}</time>
+        </span>
       {/if}
     </div>
   </div>

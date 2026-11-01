@@ -23,6 +23,32 @@ func cheap() written {
 	return cheapWrite(db.RefreshUnchangedJobRow{})
 }
 
+func TestExpiredPostingDoesNotReachSearchOrRecentFeed(t *testing.T) {
+	w := fullWrite(db.UpsertJobRow{
+		Job:      db.Job{ClosedAt: pgtype.Timestamptz{Valid: true}},
+		Inserted: pgtype.Bool{Bool: true, Valid: true},
+		Changed:  true,
+	})
+	if needsIndex(w) || needsRecentFeed(w, false, pgtype.Bool{Bool: true, Valid: true}) {
+		t.Fatal("expired posting queued for search or the recently added feed")
+	}
+}
+
+// closed gates enrichment and the apply-form capture as well as the index: a write that left
+// the row closed (a deadline already past) must not pay for an LLM call or a form request.
+func TestClosedReportsOnlyARowTheWriteLeftClosed(t *testing.T) {
+	expired := fullWrite(db.UpsertJobRow{Job: db.Job{ClosedAt: pgtype.Timestamptz{Valid: true}}})
+	if !expired.closed() {
+		t.Error("closed() = false for a row the write left closed")
+	}
+	if full(true, true).closed() {
+		t.Error("closed() = true for an open row")
+	}
+	if cheap().closed() {
+		t.Error("closed() = true for the cheap write, which carries no row")
+	}
+}
+
 func TestNeedsIndex(t *testing.T) {
 	cases := []struct {
 		name string
@@ -32,8 +58,7 @@ func TestNeedsIndex(t *testing.T) {
 		{"new posting", full(true, true), true},
 		{"edited posting", full(false, true), true},
 		{"liveness-only refresh", cheap(), false},
-		// Still reachable through the FULL upsert: a closed posting reopening with identical
-		// content, or a cities-only drift, both miss the cheap write and then report neither.
+		// A cities-only drift misses the cheap write without changing indexed content.
 		{"full write that changed nothing", full(false, false), false},
 	}
 	for _, c := range cases {

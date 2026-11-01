@@ -48,6 +48,19 @@ export const SENIORITY_LABELS: Record<string, string> = { c_level: 'C-level' };
 // which must never be labelled "Individual contributor" anywhere.
 export const ROLE_TYPE_LABELS: Record<string, string> = { people_manager: 'People manager' };
 
+// Security-clearance levels (vocab.ClearanceLevelValues). `other` is a non-US scheme
+// (UK SC/DV, AU NV1, NATO) or a clearance stated with no level — see
+// internal/dict/location.ClearanceLevelsFromDescription.
+export const CLEARANCE_LEVEL_LABELS: Record<string, string> = {
+  confidential: 'Confidential',
+  secret: 'Secret',
+  top_secret: 'Top Secret',
+  ts_sci: 'Top Secret/SCI',
+  public_trust: 'Public Trust',
+  interim: 'Interim Clearances',
+  other: 'Other',
+};
+
 // Source kinds (vocab.SourceTypeValues), as sources.ProviderKind assigns them.
 export const SOURCE_TYPE_LABELS: Record<string, string> = {
   ats: 'ATS',

@@ -92,15 +92,7 @@
       push('AI interview', [
         { key: 'ai_interview', text: 'Hidden', exclude: true, remove: () => store.setHideAIInterview(false) },
       ]);
-    if (f.clearance !== 'any')
-      push('Clearance', [
-        {
-          key: 'clearance',
-          text: f.clearance === 'hide' ? 'Hidden' : 'Required only',
-          exclude: false,
-          remove: () => store.setClearance('any'),
-        },
-      ]);
+    facetGroup('clearance_levels', 'Clearance');
     // Two chips under two headings, never merged: they are separate bounds, and a
     // reader who set only one must be able to see which. `Open` is not gated on the
     // feature flag — a bound arriving from a shared link applies whether or not the
