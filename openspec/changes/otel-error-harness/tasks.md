@@ -26,6 +26,7 @@ preserve service/version/stack and distinguish trusted events from browser event
 Independent review findings were fixed, including credential redaction in Go
 exception records. Receiver/delivery alerts, host identity and release build
 settings were validated locally in the operations repository.
-Production activation remains unchecked: no live deployment or Telegram delivery
-has been claimed. Full web testing/build verification needs sufficient free disk;
-the broad test attempt hit ENOSPC before some suites could collect.
+The later full web run passed, as did production web and extension builds. Live
+receiver, storage, private metrics, Grafana and notifier checks also passed.
+Production application deployment remains pending until the security-fixed
+dependencies pass checks and the instrumented builds are serving traffic.

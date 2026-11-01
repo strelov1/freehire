@@ -86,22 +86,22 @@ func shutdownLogs() {
 
 // CaptureError reports an explicit unexpected failure. Callers classify routine
 // client errors before calling; attributes must contain no request/user payloads.
-func CaptureError(ctx context.Context, err error, attrs ...otellog.KeyValue) {
+func CaptureError(ctx context.Context, err error, attrs ...attribute.KeyValue) {
 	if err == nil {
 		return
 	}
-	attrs = append(attrs, otellog.String("error.source", "exception"))
+	attrs = append(attrs, attribute.String("error.source", "exception"))
 	emitException(ctx, err, otellog.SeverityError, attrs)
 }
 
 // CapturePanic reports a recovered panic while its stack is still available.
 // The caller decides whether to re-panic or render the normal failure response.
-func CapturePanic(ctx context.Context, value any, attrs ...otellog.KeyValue) {
-	attrs = append(attrs, otellog.String("error.source", "panic"))
+func CapturePanic(ctx context.Context, value any, attrs ...attribute.KeyValue) {
+	attrs = append(attrs, attribute.String("error.source", "panic"))
 	emitException(ctx, value, otellog.SeverityFatal, attrs)
 }
 
-func emitException(ctx context.Context, value any, severity otellog.Severity, attrs []otellog.KeyValue) {
+func emitException(ctx context.Context, value any, severity otellog.Severity, attrs []attribute.KeyValue) {
 	logs.RLock()
 	defer logs.RUnlock()
 	if logs.provider == nil {
@@ -117,13 +117,13 @@ func emitException(ctx context.Context, value any, severity otellog.Severity, at
 		record.SetSeverityText("ERROR")
 	}
 	message := exceptionMessage(value)
-	record.SetBody(otellog.StringValue(message))
+	record.SetBody(attribute.StringValue(message))
 	record.AddAttributes(attrs...)
 	record.AddAttributes(
-		otellog.String("event.name", "exception"),
-		otellog.String("exception.type", sanitizeException(fmt.Sprintf("%T", value), 128)),
-		otellog.String("exception.message", message),
-		otellog.String("exception.stacktrace", sanitizeException(string(debug.Stack()), 8192)),
+		attribute.String("event.name", "exception"),
+		attribute.String("exception.type", sanitizeException(fmt.Sprintf("%T", value), 128)),
+		attribute.String("exception.message", message),
+		attribute.String("exception.stacktrace", sanitizeException(string(debug.Stack()), 8192)),
 	)
 	logs.provider.Logger("github.com/strelov1/freehire/errors").Emit(ctx, record)
 }

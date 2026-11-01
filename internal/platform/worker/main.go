@@ -9,7 +9,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/strelov1/freehire/internal/platform/observability"
-	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/strelov1/freehire/internal/platform/config"
 )
@@ -35,7 +35,7 @@ func runReported(run func() int) int {
 	defer capturePanic()
 	code := runOrPause(run)
 	if code != 0 {
-		observability.CaptureError(context.Background(), fmt.Errorf("worker %s exited with status %d", workerJob(), code), otellog.String("worker.name", workerJob()), otellog.Int("process.exit.code", code))
+		observability.CaptureError(context.Background(), fmt.Errorf("worker %s exited with status %d", workerJob(), code), attribute.String("worker.name", workerJob()), attribute.Int("process.exit.code", code))
 	}
 	return code
 }
@@ -65,7 +65,7 @@ func runOrPause(run func() int) int {
 // harmless when Sentry is unconfigured (the global hub's capture is a no-op).
 func capturePanic() {
 	if r := recover(); r != nil {
-		observability.CapturePanic(context.Background(), r, otellog.String("worker.name", workerJob()))
+		observability.CapturePanic(context.Background(), r, attribute.String("worker.name", workerJob()))
 		sentry.CurrentHub().Recover(r)
 		sentry.Flush(panicFlushTimeout)
 		panic(r)

@@ -21,13 +21,16 @@ another host need their own reachable trusted receiver: loopback on the crawl
 host does not reach host2, and the public browser route deliberately labels all
 events as client-origin events.
 
-The web build declares `PUBLIC_OTEL_LOGS_ENDPOINT=/telemetry/v1/logs`,
+The Node runtime declares `PUBLIC_OTEL_LOGS_ENDPOINT=/telemetry/v1/logs`,
 `PUBLIC_OTEL_ENVIRONMENT=production` and `PUBLIC_OTEL_SERVICE_VERSION` equal to
-the build's git SHA. SSR also needs its private OTLP endpoint in the Node runtime.
+the build's git SHA. SvelteKit 3 exposes these declared public variables dynamically;
+setting them only while building is insufficient. SSR also needs its private OTLP
+endpoint in the Node runtime.
 The extension build uses `WXT_OTEL_LOGS_ENDPOINT=https://freehire.me/telemetry/v1/logs`
 and `WXT_OTEL_ENVIRONMENT=production`; its manifest supplies the version. These
-public settings contain no credentials. Changing a build setting requires a new
-build; changing only a systemd environment file cannot alter an installed extension.
+public settings contain no credentials. Restart Node after changing its environment.
+Changing the extension settings requires a new build; changing a systemd environment
+file cannot alter an installed extension.
 
 Without an OTLP endpoint, collection is disabled and existing Sentry configuration
 can be used. With an endpoint configured, OpenTelemetry takes precedence. Removing
@@ -37,7 +40,8 @@ collection. Keep valid Sentry settings during the transition if fallback is need
 On the existing host layout, put Go runtime settings in the environment files its
 units already read and Node/SSR settings in `/opt/freehire/env/hire-web.env`.
 The release script also reads the public OTLP endpoint/environment from that web
-file for builds and stamps the release SHA as the public service version.
+file for builds and stamps the actual source SHA into the inactive colour's Node
+environment before starting it. Go builds retain VCS metadata for exception versions.
 When retiring Sentry uploads, remove the entire optional
 `/opt/freehire/env/sentry-build.env` file: leaving org/project settings while
 clearing only its token still trips the existing credential gate. Remove
@@ -80,13 +84,12 @@ Set `VECTOR_HOST_NAME=fsn` for the fsn receiver so its OTLP records are not
 labelled with the default `host2` identity. Review existing journald host labels
 when adapting the historical host2 configuration to another machine.
 
-Vector exports its own metrics on loopback port 9598 by default. Before making
-the metrics available to the existing Prometheus scraper, restrict both host and
-provider firewalls to the monitoring host, then set `VECTOR_METRICS_ADDRESS` in
-the existing Vector environment file to the intended listen address. The scrape
-targets must match the hosts where receivers are installed. A stopped or missing
-target alerts after two minutes; delivery-error counters expose failures to reach
-the VictoriaLogs sink. Do not expose the metrics port unrestricted to the Internet.
+Vector exports its own metrics on port 9598. Host2 keeps it on loopback; fsn binds
+only its WireGuard address with a firewall rule admitting the host2 peer. nginx on
+host2's private address exposes separate metrics paths for the two hosts, admitting
+only the monitoring host's private address. Prometheus scrapes those private paths;
+there is no public metrics listener. A stopped or missing target alerts after two
+minutes; delivery-error counters expose failures to reach the VictoriaLogs sink.
 
 The public ingress is unauthenticated, rate-limited and body-limited. Browser
 events cannot claim server origin. VictoriaLogs query endpoints remain private.

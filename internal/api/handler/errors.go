@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/platform/observability"
-	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/attribute"
 
 	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
@@ -97,12 +97,12 @@ func ReportPanic(c *fiber.Ctx, value any) {
 	c.Locals(LocalPanicReported, true)
 }
 
-func requestErrorAttributes(c *fiber.Ctx) []otellog.KeyValue {
+func requestErrorAttributes(c *fiber.Ctx) []attribute.KeyValue {
 	route := "unmatched"
 	if registered := c.Route(); len(registered.Handlers) != 0 {
 		route = registered.Path
 	}
-	return []otellog.KeyValue{otellog.String("http.request.method", strings.Clone(c.Method())), otellog.String("http.route", strings.Clone(route))}
+	return []attribute.KeyValue{attribute.String("http.request.method", strings.Clone(c.Method())), attribute.String("http.route", strings.Clone(route))}
 }
 
 // classify maps an error to its HTTP status and message and reports whether it is
