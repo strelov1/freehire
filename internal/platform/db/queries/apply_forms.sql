@@ -39,7 +39,13 @@ WHERE j.closed_at IS NULL
   AND j.duplicate_of IS NULL
   AND NOT j.is_private
   AND (SELECT payload FROM previous) IS DISTINCT FROM sqlc.arg(payload)::jsonb
-ON CONFLICT (job_id) DO NOTHING;
+-- An entry already pending is RE-STAMPED rather than left alone, unlike
+-- EnqueueSearchOutbox's DO NOTHING. cmd/reindex clears every entry older than its run once
+-- the rebuild is promoted (DeleteSearchOutboxCreatedBefore), trusting jobs.updated_at to
+-- catch a job that changed again during the run — and this write does not touch jobs, so
+-- an old entry for a job whose form arrived after the rebuild read it would be cleared
+-- with the new count never indexed. Moving created_at is what marks it as newer.
+ON CONFLICT (job_id) DO UPDATE SET created_at = now();
 
 -- name: EnqueueApplyFormCapture :execrows
 -- Transactional-outbox enqueue for the ingest write path: queue this one job for a form

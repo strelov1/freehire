@@ -377,6 +377,25 @@ func TestUpsertApplyFormQueuesSearch(t *testing.T) {
 		}
 	})
 
+	t.Run("a changed form re-stamps an entry already pending", func(t *testing.T) {
+		truncate(t, pool)
+		job := insertJob(t, pool, "gh-q4")
+		upsert(t, job, "first")
+		if _, err := pool.Exec(ctx,
+			"UPDATE search_outbox SET created_at = now() - interval '1 day' WHERE job_id = $1", job); err != nil {
+			t.Fatal(err)
+		}
+		upsert(t, job, "second")
+		var fresh bool
+		if err := pool.QueryRow(ctx,
+			"SELECT created_at > now() - interval '1 minute' FROM search_outbox WHERE job_id = $1", job).Scan(&fresh); err != nil {
+			t.Fatal(err)
+		}
+		if !fresh {
+			t.Error("pending entry kept its old created_at; a rebuild's cleanup would drop the new count")
+		}
+	})
+
 	t.Run("a closed job is not queued", func(t *testing.T) {
 		truncate(t, pool)
 		job := insertJob(t, pool, "gh-q3")

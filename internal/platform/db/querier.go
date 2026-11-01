@@ -8243,6 +8243,12 @@ type Querier interface {
 	// ClaimSearchOutboxBatch would drain; anything else is a row the drain would claim and
 	// discard. The form is still stored for those, so a posting that becomes canonical later
 	// is indexed with its count by the write that makes it so.
+	// An entry already pending is RE-STAMPED rather than left alone, unlike
+	// EnqueueSearchOutbox's DO NOTHING. cmd/reindex clears every entry older than its run once
+	// the rebuild is promoted (DeleteSearchOutboxCreatedBefore), trusting jobs.updated_at to
+	// catch a job that changed again during the run — and this write does not touch jobs, so
+	// an old entry for a job whose form arrived after the rebuild read it would be cleared
+	// with the new count never indexed. Moving created_at is what marks it as newer.
 	UpsertApplyForm(ctx context.Context, arg UpsertApplyFormParams) error
 	// Save the whole settings block. The service validates zone, link and topics first; the
 	// CHECKs repeat the link and topic rules so no other writer can skip them.
