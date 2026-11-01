@@ -133,3 +133,60 @@ func TestGhostCrosscheck_StampAndClearRoundTrip(t *testing.T) {
 		t.Fatalf("rows = %+v, want the stamp withdrawn", rows)
 	}
 }
+
+// via_recruiter is true-or-NULL, and the candidate read reports NULL as false rather
+// than failing to scan it.
+func TestGhostCrosscheck_CandidatesCarryTheRecruiterStatement(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	recruiter := insertCrosscheckJob(t, q, "jobstash", "vr-1", "acme-staffing", "Go Developer")
+	insertCrosscheckJob(t, q, "jobstash", "vr-2", "acme", "Go Developer")
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET via_recruiter = true WHERE id = $1`, recruiter); err != nil {
+		t.Fatalf("mark recruiter: %v", err)
+	}
+
+	rows, err := q.ListAggregatorJobsForCrosscheckBySource(ctx, ListAggregatorJobsForCrosscheckBySourceParams{
+		Source: "jobstash", AfterID: 0, PageSize: 100,
+	})
+	if err != nil {
+		t.Fatalf("ListAggregatorJobsForCrosscheckBySource: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %+v, want both postings", rows)
+	}
+	for _, r := range rows {
+		if want := r.ID == recruiter; r.ViaRecruiter != want {
+			t.Errorf("posting %d: ViaRecruiter = %v, want %v", r.ID, r.ViaRecruiter, want)
+		}
+	}
+}
+
+// The agency count covers every source and only open, public postings that say so.
+func TestGhostCrosscheck_CountCompanyRecruiterPostings(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+
+	said := insertCrosscheckJob(t, q, "jobstash", "cr-1", "acme-staffing", "Go Developer")
+	board := insertCrosscheckJob(t, q, "greenhouse", "cr-2", "acme-staffing", "Rust Developer")
+	closed := insertCrosscheckJob(t, q, "jobstash", "cr-3", "acme-staffing", "Java Developer")
+	insertCrosscheckJob(t, q, "jobstash", "cr-4", "acme-staffing", "Silent Developer")
+	other := insertCrosscheckJob(t, q, "jobstash", "cr-5", "acme", "Go Developer")
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET via_recruiter = true WHERE id = ANY($1)`,
+		[]int64{said, board, closed, other}); err != nil {
+		t.Fatalf("mark recruiter: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closed); err != nil {
+		t.Fatalf("close job: %v", err)
+	}
+
+	n, err := q.CountCompanyRecruiterPostings(ctx, "acme-staffing")
+	if err != nil {
+		t.Fatalf("CountCompanyRecruiterPostings: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("count = %d, want 2 — the open aggregator and board postings that say so", n)
+	}
+}
