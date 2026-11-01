@@ -12,7 +12,7 @@ vi.mock('$app/state', () => ({ page: { data: {}, url: new URL('http://localhost/
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true }));
 vi.mock('#lib/profile.svelte.js', () => ({
-  profileStore: { profile: { skills: [] }, ensureLoaded: () => Promise.resolve() },
+  profileStore: { profile: { skills: [] }, loaded: true, ensureLoaded: () => Promise.resolve() },
 }));
 vi.mock('#lib/resume.svelte.js', () => ({
   resumeStore: { meta: null, present: false, loaded: true, ensureLoaded: () => Promise.resolve() },

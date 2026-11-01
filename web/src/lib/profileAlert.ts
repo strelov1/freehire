@@ -18,16 +18,26 @@ export function profileAlertSearch(): SavedSearch | null {
   return savedSearches.items.find((s) => s.derived_from_profile) ?? null;
 }
 
+function profileQuery(profile: UserProfile): string {
+  return filtersToParams(filtersFromProfile(profile)).toString();
+}
+
+/** Only normalized profile filters that narrow the feed can be subscribed to. */
+export function canEnableProfileAlert(profile: UserProfile | null): boolean {
+  return profile !== null && profileQuery(profile) !== '';
+}
+
 /** Create the profile search if there is none, then subscribe it on `channel`.
  *
  *  A search this call created is removed again if the subscribe fails, so a half-done
  *  enable leaves nothing the user never asked for; an existing one is the user's and is
  *  never removed. Throws the subscribe's error. */
 export async function enableProfileAlert(profile: UserProfile, channel: string): Promise<void> {
+  const query = profileQuery(profile);
+  if (!query) throw new Error('Add a role, skill or work preference before enabling alerts.');
   let search = profileAlertSearch();
   let created: SavedSearch | undefined;
   if (!search) {
-    const query = filtersToParams(filtersFromProfile(profile)).toString();
     search = created = await savedSearches.create('My profile', query, true);
   }
   try {

@@ -1,37 +1,25 @@
 <script lang="ts">
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
+  import { messages } from './ProfileForm.messages';
   import { ArrowUp, Check, Trash2 } from '@lucide/svelte';
   import { api, ApiError, RESUME_MAX_MB } from '#lib/api.js';
   import { cvUploadReason, track } from '#lib/analytics.js';
-  import { CATEGORY_OPTIONS } from '#lib/facets.js';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { MAX_SPECIALIZATIONS, capSpecializations } from '#lib/profileLimits.js';
-  import { withSkills } from '#lib/profileSkills.js';
-  import type { LocationPreferences, UserProfile } from '#lib/types.js';
+  import { MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
   import { Button, ConfirmDialog } from '#lib/ui/index.js';
   import { announce } from '#lib/announce.svelte.js';
   import HeadshotField from './HeadshotField.svelte';
-  import SearchSelect from './facets/SearchSelect.svelte';
-  import LocationPreferencesFields from './profile/LocationPreferencesFields.svelte';
-  import SkillsPicker from './profile/SkillsPicker.svelte';
 
-  // Inline editor for the single profile. `profile` seeds the fields (null = first-time
-  // set-up); `hasCv` drives the CV block's uploaded/empty state. `onSaved` fires after a
-  // successful save (the page re-fetches coverage); `onCvUploaded` fires after a résumé
-  // upload stores a new CV server-side (the page re-fetches the ATS report / has_cv).
-  //
-  // Once a profile exists, Roles/Skills/Location each have their own view (autosaving
-  // there, the same way this form always required a separate save click) — so `editing`
-  // mode only ever shows the CV/photo block, leading the Profile view itself rather than
-  // living in Settings.
+  // Photo and CV management. Roles, skills and location autosave in their own
+  // sections; a CV import merges its extracted skills and roles into the same profile.
   let {
-    profile,
     hasCv,
     uploadedAt = null,
     onSaved,
     onCvUploaded,
     onCvDeleted,
   }: {
-    profile: UserProfile | null;
     hasCv: boolean;
     /** When the stored CV was uploaded (ISO). Shown in the uploaded-state box instead of
      *  the bare "CV on file" a candidate had no way to act on — a date at least answers
@@ -44,39 +32,23 @@
     onCvDeleted?: () => void;
   } = $props();
 
+  const s = $derived(t(messages, locale()));
+
   const uploadedAtLabel = $derived(
     uploadedAt
-      ? `Uploaded ${new Date(uploadedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`
-      : 'CV on file',
+      ? format(s.uploaded, {
+          date: new Date(uploadedAt).toLocaleDateString(locale(), {
+            year: 'numeric', month: 'short', day: 'numeric',
+          }),
+        })
+      : s.onFile,
   );
 
-  const editing = $derived(profile !== null);
-
-  // Seed the fields once from the profile prop (null on first mount, i.e. always for
-  // set-up — this whole block only renders pre-profile). Local, unsaved state until the
-  // form's own Save.
-  // svelte-ignore state_referenced_locally
-  let specializations = $state.raw<string[]>(profile ? [...profile.specializations] : []);
-  // svelte-ignore state_referenced_locally
-  let skills = $state.raw<string[]>(profile ? [...profile.skills] : []);
-  let formError = $state<string | null>(null);
-  let busy = $state(false);
-
-  // Location & work preferences — the optional "where & how I want to work" block, held via
-  // LocationPreferencesFields' own internal state and only reassembled here on change.
-  // svelte-ignore state_referenced_locally
-  let location = $state<LocationPreferences | null>(profile?.location_preferences ?? null);
-
-  // Résumé upload → skill extraction. The server also stores the CV (used by the CV
-  // readiness tab); the returned slugs merge (union) into the skills field without
-  // wiping manual entries. They persist to the profile only on Save.
   let resumeBusy = $state(false);
   let resumeError = $state<string | null>(null);
   let resumeNote = $state<string | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
   let dragActive = $state(false);
-
-  const canSubmit = $derived(specializations.length > 0 && skills.length > 0);
 
   // Each message below appears where the action was, which a screen reader never visits on
   // its own — so each is also spoken the moment it changes. Errors interrupt; notes wait.
@@ -86,20 +58,8 @@
   $effect(() => {
     if (resumeNote) announce(resumeNote);
   });
-  $effect(() => {
-    if (formError) announce(formError, 'assertive');
-  });
 
-  // Derive skills + specialization from a résumé PDF. Before a profile exists, both merge
-  // into local fields the same way (a profile needs both up front, so Save persists them
-  // together). Once a profile exists, Skills has moved to its own autosaving tab, so the
-  // extraction writes both fields straight to the profile in one PUT instead: not skills
-  // alone, because a specialization it also resolved would otherwise sit in this
-  // component's local (unsaved) state right as a skills-only write's reseed discards it —
-  // this component is keyed on the profile's own `updated_at` (see +page.svelte), so any
-  // write to the row remounts it fresh from the server, wiping whatever wasn't included in
-  // that write. The upload also stores the CV server-side, so notify the parent to refresh
-  // the CV-readiness state.
+  // Merge the extraction into the current store copy, preserving manual additions.
   async function analyzeResume(file: File) {
     resumeBusy = true;
     resumeError = null;
@@ -109,42 +69,22 @@
       track('cv_upload', { ok: true, origin: 'profile' });
       onCvUploaded?.();
 
-      // Merge every specialization the CV resolved, respecting the cap; track how many
-      // were added vs. left out by the cap so the note is accurate. Always local first —
-      // `nextSpecializations` is what an editing-mode write below persists alongside skills.
-      const { kept: nextSpecializations, dropped: cappedSpecs } = capSpecializations(specializations, cv.categories);
-      const addedSpecs = nextSpecializations.length - specializations.length;
-      specializations = nextSpecializations;
+      const {
+        addedSkills,
+        addedSpecializations: addedSpecs,
+        droppedSpecializations: cappedSpecs,
+      } = await profileStore.mergeResumeExtraction(cv.skills, cv.categories);
 
-      let addedSkills: number;
-      if (editing) {
-        const current = profileStore.profile;
-        const before = current?.skills ?? [];
-        addedSkills = current ? withSkills(current, cv.skills).skills.length - before.length : 0;
-        if (addedSkills > 0 || addedSpecs > 0) {
-          await profileStore.mergeResumeExtraction(cv.skills, nextSpecializations);
-          onSaved?.();
-        }
-      } else {
-        const beforeSkills = skills.length;
-        skills = [...new Set([...skills, ...cv.skills])];
-        addedSkills = skills.length - beforeSkills;
-      }
-
-      const parts: string[] = [];
-      if (addedSkills > 0) parts.push(`${addedSkills} skill${addedSkills === 1 ? '' : 's'}`);
-      if (addedSpecs > 0) parts.push(`${addedSpecs} specialization${addedSpecs === 1 ? '' : 's'}`);
-      if (parts.length) {
-        resumeNote =
-          editing && addedSkills > 0
-            ? `Added ${parts.join(' and ')} from your CV — see the Skills tab.`
-            : `Added ${parts.join(' and ')} from your CV.`;
+      if (addedSkills > 0 || addedSpecs > 0) {
+        onSaved?.();
+        resumeNote = format(s.added, { skills: String(addedSkills), roles: String(addedSpecs) });
+        if (addedSkills > 0) resumeNote += ' ' + s.seeSkills;
       } else if (cappedSpecs > 0)
-        resumeNote = `Reached the ${MAX_SPECIALIZATIONS}-specialization limit — nothing more added.`;
-      else if (cv.skills.length === 0 && cv.categories.length === 0) resumeNote = 'No known skills found in the CV.';
-      else resumeNote = 'Everything from your CV was already listed.';
+        resumeNote = format(s.limitReached, { max: String(MAX_SPECIALIZATIONS) });
+      else if (cv.skills.length === 0 && cv.categories.length === 0) resumeNote = s.noSkills;
+      else resumeNote = s.alreadyListed;
     } catch (err) {
-      resumeError = err instanceof ApiError ? err.message : 'Could not read the CV. Please try again.';
+      resumeError = err instanceof ApiError ? err.message : s.cvReadError;
       // The reason goes out as a bounded code, never the message itself: the copy is
       // written for the user and rewording it must not split the metric in two.
       track('cv_upload', {
@@ -168,7 +108,7 @@
       await api.deleteResume();
       onCvDeleted?.();
     } catch (err) {
-      resumeError = err instanceof ApiError ? err.message : 'Could not delete the CV. Please try again.';
+      resumeError = err instanceof ApiError ? err.message : s.cvDeleteError;
     } finally {
       deletingCv = false;
     }
@@ -194,48 +134,10 @@
     const file = e.dataTransfer?.files?.[0];
     if (!file) return;
     if (!isPdf(file)) {
-      resumeError = 'Please drop a PDF file.';
+      resumeError = s.dropPdfError;
       return;
     }
     void analyzeResume(file);
-  }
-
-  // Multi-select with a cap: toggling off is always allowed; toggling on is refused past
-  // MAX_SPECIALIZATIONS (with a hint) so the form matches the server's limit.
-  function toggleSpecialization(value: string) {
-    if (specializations.includes(value)) {
-      specializations = specializations.filter((s) => s !== value);
-      formError = null;
-      return;
-    }
-    if (specializations.length >= MAX_SPECIALIZATIONS) {
-      formError = `You can pick at most ${MAX_SPECIALIZATIONS} specializations.`;
-      return;
-    }
-    specializations = [...specializations, value];
-    formError = null;
-  }
-
-  function toggleSkill(value: string) {
-    skills = skills.includes(value) ? skills.filter((s) => s !== value) : [...skills, value];
-  }
-
-  async function submit(e: SubmitEvent) {
-    e.preventDefault();
-    if (!canSubmit || busy) return;
-    busy = true;
-    formError = null;
-    try {
-      // Skills/sources/companies to avoid are not offered during this pre-profile
-      // set-up — they're edited in the Avoid part of the Skills tab once the profile exists.
-      await profileStore.save(specializations, skills, profile?.seniorities ?? [], [], [], [], location);
-      onSaved?.();
-    } catch (err) {
-      formError =
-        err instanceof ApiError ? err.message : 'Could not save the profile. Please try again.';
-    } finally {
-      busy = false;
-    }
   }
 </script>
 
@@ -249,15 +151,13 @@
        first uploaded to is still where they manage it, not a bare row that replaces it.
        A div, not a button, once a CV exists: Replace and Delete are their own buttons,
        which can't nest inside one. Drag-to-replace still works on the box either way.
-       Uploading extracts skills into the fields below during set-up; once a profile
-       exists, it merges straight into the profile (Roles/Skills have their own views by
-       then). -->
+       Uploading merges extracted roles and skills straight into the profile. -->
   <!-- `account-cv` is the anchor the account-setup checklist's CV step links to (see
        accountCompleteness.ts) — this box is the only place under /my/ that takes a base
        résumé, /my/cvs being the per-vacancy builder. `scroll-mt-20` clears the sticky
        `h-14` TopBar. -->
   <div id="account-cv" class="flex scroll-mt-20 flex-col gap-1.5">
-    <span class="text-sm font-medium">Your CV</span>
+    <span class="text-sm font-medium">{s.cv}</span>
     <input
       type="file"
       accept="application/pdf,.pdf"
@@ -287,10 +187,10 @@
           <Check class="size-5" />
         </span>
         <span class="flex flex-col items-start gap-1.5 text-left">
-          <span class="text-sm font-semibold">{resumeBusy ? 'Analyzing…' : uploadedAtLabel}</span>
+          <span class="text-sm font-semibold">{resumeBusy ? s.analyzing : uploadedAtLabel}</span>
           <span class="flex items-center gap-2">
             <Button variant="outline" size="sm" disabled={resumeBusy} onclick={() => fileInput?.click()}>
-              Replace
+              {s.replace}
             </Button>
             <Button
               variant="ghost"
@@ -300,7 +200,7 @@
               class="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 class="size-4" />
-              Delete
+              {s.delete}
             </Button>
           </span>
         </span>
@@ -315,10 +215,10 @@
             <ArrowUp class="size-5" />
           </span>
           <span class="flex flex-col gap-0.5 text-left">
-            <span class="text-sm font-semibold">{resumeBusy ? 'Analyzing…' : 'Drop PDF here'}</span>
+            <span class="text-sm font-semibold">{resumeBusy ? s.analyzing : s.dropPdf}</span>
             {#if !resumeBusy}
               <span class="text-xs text-muted-foreground">
-                or <span class="text-primary underline">choose from disk</span>
+                <span class="text-primary underline">{s.chooseFile}</span>
               </span>
             {/if}
           </span>
@@ -326,9 +226,7 @@
       {/if}
     </div>
     <span class="text-xs text-muted-foreground">
-      PDF with selectable text, up to {RESUME_MAX_MB} MB ·
-      {editing ? 'adds new skills to your profile' : 'extracts your skills below'}; the file is
-      stored to score its readiness.
+      {format(s.cvHintEditing, { max: String(RESUME_MAX_MB) })}
     </span>
     {#if resumeError}
       <p class="text-sm text-destructive">{resumeError}</p>
@@ -337,60 +235,14 @@
     {/if}
   </div>
 
-  {#if !editing}
-    <!-- Set-up only, one flat scroll — no sub-tabs. The server requires at least one skill
-         and one specialization to create a profile, so both are asked here; once a profile
-         exists Roles/Skills/Location move to their own views, autosaving there instead of
-         behind a Save button. -->
-    <form onsubmit={submit} class="flex flex-col gap-6 border-t border-border pt-6">
-      <SkillsPicker {skills} onToggleSkill={toggleSkill} />
 
-      <div class="flex flex-col gap-2">
-        <div class="flex items-baseline justify-between">
-          <span class="text-sm font-medium">Roles</span>
-          <span class="text-xs tabular-nums text-muted-foreground">
-            {specializations.length}/{MAX_SPECIALIZATIONS}
-          </span>
-        </div>
-        <SearchSelect
-          options={CATEGORY_OPTIONS}
-          include={specializations}
-          placeholder="Search specializations"
-          onToggle={toggleSpecialization}
-          clearOnSelect
-        />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <span class="text-sm font-medium">Location & work</span>
-        <LocationPreferencesFields
-          value={location}
-          derivedLocation={profile?.derived_location}
-          onChange={(next) => (location = next)}
-        />
-      </div>
-
-      {#if formError}
-        <p class="text-sm text-destructive">{formError}</p>
-      {/if}
-
-      <div class="flex items-center gap-3 border-t border-border pt-4">
-        <Button variant="primary" type="submit" disabled={!canSubmit || busy}>
-          {busy ? 'Saving…' : 'Create profile'}
-        </Button>
-        {#if !canSubmit}
-          <span class="text-xs text-muted-foreground">Add a role and at least one skill to save.</span>
-        {/if}
-      </div>
-    </form>
-  {/if}
 </div>
 
 <ConfirmDialog
   bind:open={confirmDeleteCvOpen}
-  title="Delete your CV?"
-  description="Removes the stored file and its parsed profile. Your contact info stays."
-  confirmLabel="Delete"
+  title={s.deleteCvTitle}
+  description={s.deleteCvDescription}
+  confirmLabel={s.delete}
   variant="destructive"
   onConfirm={deleteCv}
 />

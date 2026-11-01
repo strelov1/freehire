@@ -1,14 +1,14 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight } from '@lucide/svelte';
-  import { onMount, tick } from 'svelte';
-  import { scrollBehavior } from '#lib/motion.js';
+  import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { api } from '#lib/api.js';
-  import { eventLabel, eventTone } from '#lib/events.js';
+  import { eventTone } from '#lib/events.js';
   import {
-    buildCalendarMonth,
+    buildCalendarWeek,
+    calendarDayKey,
     monthLabel,
-    rangeForMonth,
+    rangeForWeek,
     splitDayEvents,
     type CalendarDay,
   } from '#lib/calendarModel.js';
@@ -35,9 +35,10 @@
   const s = $derived(t(messages, locale()));
 
   const now = new Date();
-  let year = $state(now.getFullYear());
-  let month = $state(now.getMonth());
-  let selectedKey = $state<string | null>(null);
+  let cursor = $state(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const year = $derived(cursor.getFullYear());
+  const month = $derived(cursor.getMonth());
+  let selectedKey = $state(calendarDayKey(now));
   // The server payload is a fallback, not a seed: copying a prop into state freezes it at
   // its first value, and the two would then disagree after a navigation. Once the client
   // has fetched a month of its own, that is what the grid reads.
@@ -57,20 +58,16 @@
   const serverMonthIsOurs = $derived(prefetched?.year === year && prefetched?.month === month);
 
   // Only the newest request may write. Stepping twice quickly leaves two in flight, and
-  // without this the slower one lands last and paints one month's events under another's
-  // grid — with phase 'ready' and nothing to say the data is not this month's.
+  // without this the slower one lands last and paints the wrong week's events.
   let inFlight = 0;
 
-  // Deliberately not an $effect: this function writes year and month, and an effect that
-  // read them would re-run on its own writes. Navigation is the only thing that moves the
-  // cursor, so navigation fetches.
-  async function show(y: number, m: number) {
-    year = y;
-    month = m;
-    selectedKey = null;
+  // Navigation moves the cursor and fetches its week; choosing a day reuses that data.
+  async function show(date: Date) {
+    cursor = date;
+    selectedKey = calendarDayKey(date);
     phase = 'loading';
     const generation = ++inFlight;
-    const { from, to } = rangeForMonth(y, m);
+    const { from, to } = rangeForWeek(date);
     try {
       // Both layers together, so selecting a day still needs no request of its own.
       const [events, interviews] = await Promise.all([api.myTimeline(from, to), api.myInterviews(from, to)]);
@@ -95,7 +92,7 @@
   // One fetch on mount when the server load failed, or when it answered for a month other
   // than the reader's. Once, not reactively.
   onMount(() => {
-    if (!serverMonthIsOurs) void show(year, month);
+    if (!serverMonthIsOurs) void show(cursor);
     if (isAuthenticated()) {
       void api
         .gmailStatus()
@@ -107,40 +104,34 @@
     }
   });
 
-  const grid = $derived(buildCalendarMonth(year, month, series, meetings));
-  const selected = $derived(grid.days.find((d) => d.key === selectedKey) ?? null);
+  const days = $derived(buildCalendarWeek(cursor, series, meetings));
+  const selected = $derived(days.find((d) => d.key === selectedKey) ?? null);
   const weekdays = $derived(s.weekdays);
-  const CELL_MARKS = 4;
+  const CELL_MARKS = 3;
 
-  // A month of mostly-empty cells is tall, so on a laptop the panel opens below the fold
-  // and the click reads as having done nothing. Only scrolls when it actually is out of
-  // view, and only as far as it must — an unconditional jump is worse than the problem.
-  async function selectDay(key: string) {
-    selectedKey = selectedKey === key ? null : key;
-    if (!selectedKey) return;
-    await tick();
-    const panel = document.getElementById('calendar-day-panel');
-    if (panel && panel.getBoundingClientRect().bottom > window.innerHeight) {
-      panel.scrollIntoView({ block: 'nearest', behavior: scrollBehavior() });
-    }
+  function selectDay(key: string) {
+    selectedKey = key;
   }
 
   function step(by: number) {
-    const d = new Date(year, month + by, 1);
-    void show(d.getFullYear(), d.getMonth());
+    const date = selected?.date ?? cursor;
+    void show(new Date(date.getFullYear(), date.getMonth(), date.getDate() + by * 7));
   }
+
+  const weekRange = $derived(days.length
+    ? `${days[0]?.date.toLocaleDateString(locale(), { month: 'short', day: 'numeric' })} – ${days[6]?.date.toLocaleDateString(locale(), { month: 'short', day: 'numeric' })}`
+    : '');
 
   // The mark colours carry the kind; filled versus hollow carries whether anybody but the
   // candidate set the date. Both the label and the tone come from #lib/events, shared with
   // the application panel:
   // the same event captioned two ways on two screens is what putting them here caused.
   const tone = (kind: string) => eventTone(kind);
-  const label = (e: TimelineEvent) => eventLabel(e, locale());
 
   // Only the meetings are clocked here now; a ledger event's own time is rendered by
   // ApplicationEventList, which both day panels share.
   const clockOf = (instant: string) =>
-    new Date(instant).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    new Date(instant).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
 
   /** An arranged meeting is drawn as arranged, never as observed: it has not happened
    *  yet and may still move. A cancelled one keeps its place — an interview that simply
@@ -149,7 +140,7 @@
     iv.status === 'cancelled' ? 'text-muted-foreground' : 'text-brand-strong';
 
   const dayHeading = (d: CalendarDay) =>
-    d.date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+    d.date.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' });
 
   /** What a cell announces. An empty day says nothing about a count: "0 events" on the
    *  thirty-odd empty cells is noise a screen reader has to walk through. */
@@ -169,12 +160,16 @@
 
 <div class="flex flex-col gap-3">
   <div class="flex items-center justify-between gap-3">
-    <h2 class="text-lg font-medium">{monthLabel(year, month)}</h2>
+    <div>
+      <h2 class="text-lg font-medium">{monthLabel(year, month)}</h2>
+      <p class="text-xs text-muted-foreground">{weekRange}</p>
+    </div>
     <div class="flex items-center gap-1">
-      <Button variant="outline" size="icon" onclick={() => step(-1)} aria-label={s.previousMonth}>
+      <Button variant="ghost" size="sm" onclick={() => show(new Date())}>{s.today}</Button>
+      <Button variant="outline" size="icon" onclick={() => step(-1)} aria-label={s.previousWeek}>
         <ChevronLeft class="size-4" />
       </Button>
-      <Button variant="outline" size="icon" onclick={() => step(1)} aria-label={s.nextMonth}>
+      <Button variant="outline" size="icon" onclick={() => step(1)} aria-label={s.nextWeek}>
         <ChevronRight class="size-4" />
       </Button>
     </div>
@@ -185,79 +180,20 @@
   {:else if status === 'loading'}
     <States state="loading" rows={3} />
   {:else}
-    <!-- The grid below seven columns is unreadable on a phone, so the same month is
-         presented there as the list of days that hold something. -->
-    <div class="hidden rounded-lg border bg-card p-3 sm:block">
-      <div class="mb-1 grid grid-cols-7 gap-1">
-        {#each weekdays as w (w)}
-          <div class="px-1 py-0.5 text-xs font-medium text-muted-foreground">{w}</div>
-        {/each}
-      </div>
-      <div class="grid grid-cols-7 gap-1">
-        {#each grid.days as day (day.key)}
-          {@const marks = splitDayEvents(day.events, CELL_MARKS)}
-          <button
-            type="button"
-            onclick={() => selectDay(day.key)}
-            aria-expanded={selectedKey === day.key}
-            aria-controls={selectedKey === day.key ? 'calendar-day-panel' : undefined}
-            aria-label={cellLabel(day)}
-            class="flex min-h-16 flex-col items-start gap-1 rounded-md border p-1.5 text-left transition-colors
-                   {selectedKey === day.key ? 'border-primary bg-accent' : 'hover:bg-accent'}"
-          >
-            <!-- Out-of-month days read as secondary by colour and weight, not opacity:
-                 dimming the whole cell took muted-foreground to ~2.2:1 on the card. -->
-            <span
-              class="text-xs {day.isToday
-                ? 'flex h-5 w-5 items-center justify-center rounded-full bg-primary font-medium text-primary-foreground'
-                : day.inMonth
-                  ? 'font-medium text-foreground'
-                  : 'text-muted-foreground'}">{day.dayOfMonth}</span
-            >
-            <span class="flex flex-wrap items-center gap-0.5">
-              {#each day.interviews as iv (iv.id)}
-                <!-- A square marks an appointment, a circle a record. Shape rather than
-                     hue alone, so the difference does not depend on seeing colour.
-                     rounded-none and not the radius token: radius-sm is 6px, which on an
-                     8px mark rounds the square back into a circle — the distinction was
-                     invisible on screen until it was looked at. -->
-                <span
-                  class="inline-block h-2 w-2 rounded-none border {meetingTone(iv)}"
-                  class:bg-current={iv.status !== 'cancelled'}
-                  style="border-color: currentColor"
-                  title={iv.status === 'cancelled' ? s.interviewCancelled : s.interview}
-                ></span>
-              {/each}
-              {#each marks.shown as e (e.id)}
-                <!-- Filled = a date somebody other than the candidate set. Hollow = one
-                     they recorded themselves. -->
-                <span
-                  class="inline-block h-2 w-2 rounded-full border {tone(e.kind)}"
-                  class:bg-current={e.observed}
-                  style="border-color: currentColor"
-                  title={label(e)}
-                ></span>
-              {/each}
-              {#if marks.remaining > 0}
-                <span class="text-xs leading-none text-muted-foreground">+{marks.remaining}</span>
-              {/if}
-            </span>
-          </button>
-        {/each}
-      </div>
-    </div>
-
-    <div class="flex flex-col gap-2 sm:hidden">
-      {#each grid.daysWithEvents as day (day.key)}
-        <button
-          type="button"
-          onclick={() => selectDay(day.key)}
-          aria-pressed={selectedKey === day.key}
-          class="flex items-center justify-between gap-3 rounded-lg border bg-card p-3 text-left text-sm
-                 {selectedKey === day.key ? 'border-primary' : ''}"
-        >
-          <span>{dayHeading(day)}</span>
-          <span class="text-muted-foreground">{day.events.length}</span>
+    <div class="grid grid-cols-7 gap-1 border-b border-border pb-3" role="group" aria-label={s.weekLabel}>
+      {#each days as day, index (day.key)}
+        {@const marks = splitDayEvents(day.events, CELL_MARKS)}
+        <button type="button" onclick={() => selectDay(day.key)} aria-pressed={selectedKey === day.key}
+          aria-controls="calendar-day-panel" aria-label={cellLabel(day)}
+          class="flex min-h-20 min-w-0 flex-col items-center gap-1.5 rounded-lg py-2 text-center transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+          <span class="text-xs text-muted-foreground">{weekdays[index]}</span>
+          <span class="flex size-8 items-center justify-center rounded-full text-sm font-medium
+            {selectedKey === day.key ? 'bg-brand text-brand-foreground' : day.isToday ? 'bg-brand-muted text-brand-strong' : 'text-foreground'}">{day.dayOfMonth}</span>
+          <span class="flex h-2 items-center justify-center gap-0.5" aria-hidden="true">
+            {#if day.interviews.length}<span class="size-1.5 bg-brand" title={s.interview}></span>{/if}
+            {#each marks.shown as e (e.id)}<span class="size-1.5 rounded-full {tone(e.kind)}" class:bg-current={e.observed} style="border: 1px solid currentColor"></span>{/each}
+            {#if marks.remaining}<span class="text-xs text-muted-foreground">+</span>{/if}
+          </span>
         </button>
       {/each}
     </div>
@@ -336,11 +272,5 @@
       </div>
     {/if}
 
-    {#if grid.total === 0}
-      <p class="text-sm text-muted-foreground">
-        {format(s.emptyMonthLead, { month: monthLabel(year, month) })}
-        <a class="underline hover:no-underline" href={resolve('/my/tracking')}>{s.boardLink}</a>.
-      </p>
-    {/if}
   {/if}
 </div>

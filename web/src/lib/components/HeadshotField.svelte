@@ -3,6 +3,9 @@
   import { api, ApiError, PHOTO_ACCEPT, PHOTO_MAX_MB } from '#lib/api.js';
   import type { PhotoMeta } from '#lib/types.js';
   import HeadshotSilhouette from './HeadshotSilhouette.svelte';
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
+  import { messages } from './ProfileForm.messages';
 
   // The profile's headshot control: preview, upload/replace, remove. One photo per member,
   // reused by every CV whose template prints a portrait — so it lives here rather than in
@@ -21,6 +24,9 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
+  let loadFailed = $state(false);
+  let loading = $state(false);
+  const s = $derived(t(messages, locale()));
 
   // The upload time doubles as a cache buster: the image URL is stable, so without it a
   // replacement would keep showing the old photo for the life of the cached response.
@@ -30,23 +36,32 @@
 
   $effect(() => {
     let cancelled = false;
-    void (async () => {
-      try {
-        const loaded = await api.getPhoto();
-        if (!cancelled) meta = loaded;
-      } catch {
-        // Best-effort: a failed status read leaves the control hidden rather than
-        // showing an error on a section the member did not ask about.
-      }
-    })();
+    void load(() => cancelled);
     return () => {
       cancelled = true;
     };
   });
 
+  async function load(cancelled = () => false) {
+    loading = true;
+    loadFailed = false;
+    try {
+      const loaded = await api.getPhoto();
+      if (!cancelled()) meta = loaded;
+    } catch {
+      if (!cancelled()) loadFailed = true;
+    } finally {
+      if (!cancelled()) loading = false;
+    }
+  }
+
   async function upload(file: File) {
     if (!PHOTO_ACCEPT.split(',').includes(file.type)) {
-      error = 'Choose a JPEG, PNG, or WebP image.';
+      error = s.photoTypeError;
+      return;
+    }
+    if (file.size > PHOTO_MAX_MB * 1024 * 1024) {
+      error = format(s.photoSizeError, { max: String(PHOTO_MAX_MB) });
       return;
     }
     busy = true;
@@ -54,7 +69,7 @@
     try {
       meta = await api.putPhoto(file);
     } catch (e) {
-      error = e instanceof ApiError ? e.message : 'Could not upload the photo. Please try again.';
+      error = e instanceof ApiError ? e.message : s.photoUploadError;
     } finally {
       busy = false;
     }
@@ -67,7 +82,7 @@
       await api.deletePhoto();
       meta = { enabled: true, present: false };
     } catch (e) {
-      error = e instanceof ApiError ? e.message : 'Could not remove the photo. Please try again.';
+      error = e instanceof ApiError ? e.message : s.photoRemoveError;
     } finally {
       busy = false;
     }
@@ -82,9 +97,19 @@
   }
 </script>
 
-{#if meta?.enabled}
+{#if loadFailed || loading}
+  <div class="flex flex-col gap-2" aria-busy={loading}>
+    <span class="text-sm font-medium">{s.photo}</span>
+    {#if loadFailed}
+      <p class="text-sm text-muted-foreground" role="status">{s.photoLoadError}</p>
+      <button type="button" onclick={() => void load()} class="self-start text-sm underline underline-offset-4">{s.retry}</button>
+    {:else}
+      <p class="text-xs text-muted-foreground" role="status">{s.working}</p>
+    {/if}
+  </div>
+{:else if meta?.enabled}
   <div class="flex flex-col gap-1.5">
-    <span class="text-sm font-medium">Your photo</span>
+    <span class="text-sm font-medium">{s.photo}</span>
     <div class="flex items-center gap-4">
       <input
         type="file"
@@ -93,29 +118,31 @@
         bind:this={fileInput}
         onchange={onFile}
       />
-      <div class="relative size-20 shrink-0">
+      <button
+        type="button"
+        disabled={busy}
+        onclick={() => fileInput?.click()}
+        aria-label={meta.present ? s.replacePhoto : s.uploadPhoto}
+        class="relative size-20 shrink-0 rounded-full transition-opacity hover:opacity-90 disabled:opacity-70"
+      >
         {#if imageSrc}
-          <img src={imageSrc} alt="Your headshot" class="size-20 rounded-full border border-border object-cover" />
+          <img src={imageSrc} alt="" class="size-20 rounded-full border border-border object-cover" />
         {:else}
           <HeadshotSilhouette class="size-20 rounded-full border border-border" />
         {/if}
-        <button
-          type="button"
-          disabled={busy}
-          onclick={() => fileInput?.click()}
-          aria-label={meta.present ? 'Replace photo' : 'Upload photo'}
-          class="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full border-2 border-background bg-brand text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-70"
+        <span
+          aria-hidden="true"
+          class="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full border-2 border-background bg-brand text-brand-foreground"
         >
           <Camera class="size-3.5" />
-        </button>
-      </div>
+        </span>
+      </button>
       <div class="flex flex-col items-start gap-2">
         <span class="text-xs text-muted-foreground">
           {#if busy}
-            Working…
+            {s.working}
           {:else}
-            JPEG, PNG, or WebP up to {PHOTO_MAX_MB} MB · cropped to a square. Printed only by
-            the CV templates that show a photo.
+            {format(s.photoHint, { max: String(PHOTO_MAX_MB) })}
           {/if}
         </span>
         {#if meta.present}
@@ -126,7 +153,7 @@
             class="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-70"
           >
             <Trash2 class="size-3.5" />
-            Remove photo
+            {s.removePhoto}
           </button>
         {/if}
       </div>

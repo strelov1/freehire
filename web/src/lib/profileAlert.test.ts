@@ -82,3 +82,23 @@ describe('enableProfileAlert', () => {
     expect(remove).not.toHaveBeenCalled();
   });
 });
+
+describe('incomplete profile alerts', () => {
+  const empty = { ...profile, specializations: [], skills: [] };
+
+  it('rejects an empty profile before creating a search or subscribing', async () => {
+    const { canEnableProfileAlert, enableProfileAlert } = await import('./profileAlert');
+    expect(canEnableProfileAlert(empty)).toBe(false);
+    expect(canEnableProfileAlert(null)).toBe(false);
+    await expect(enableProfileAlert(empty, 'email')).rejects.toThrow('Add a role');
+    expect(create).not.toHaveBeenCalled();
+    expect(subscribe).not.toHaveBeenCalled();
+  });
+
+  it('allows a skill-only profile and ignores a non-filtering seniority selection', async () => {
+    const { canEnableProfileAlert } = await import('./profileAlert');
+    const { SENIORITY_VALUES } = await import('./generated/contracts');
+    expect(canEnableProfileAlert({ ...empty, skills: ['go'] })).toBe(true);
+    expect(canEnableProfileAlert({ ...empty, seniorities: [...SENIORITY_VALUES] })).toBe(false);
+  });
+});

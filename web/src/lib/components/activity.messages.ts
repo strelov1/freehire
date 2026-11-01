@@ -1,12 +1,6 @@
 import { defineMessages } from '#lib/i18n/t.js';
 
-// One catalog for the whole Activity section rather than five. Its four tab views
-// (`SavedJobs`, `JobHistory`, `AnalysesView`, `Hidden`) carry two or three strings
-// each and are reachable from nowhere else, so they are one surface with one
-// vocabulary — splitting it per component would spread eight lines over five files
-// and make the four empty states drift apart. The route layout and its child pages
-// read the same catalog, which is why it lives here rather than under the route:
-// a `#lib` component may not import from `routes/`.
+// Shared copy for Activity's saved, viewed and hidden jobs, plus the legacy analyses route.
 export const messages = defineMessages(
   {
     // The layout's base title; each child page overrides it with its own.
@@ -15,13 +9,12 @@ export const messages = defineMessages(
     tablistLabel: 'Activity view',
     tabs: {
       saved: 'Saved',
-      history: 'History',
-      matches: 'Matches',
+      history: 'Viewed',
       hidden: 'Hidden',
     },
     headTitles: {
       saved: 'Saved — Activity — freehire',
-      history: 'History — Activity — freehire',
+      history: 'Viewed — Activity — freehire',
       matches: 'Matches — Activity — freehire',
       hidden: 'Hidden — Activity — freehire',
     },
@@ -30,7 +23,7 @@ export const messages = defineMessages(
       empty: 'Nothing saved yet. Jobs you save will show up here.',
     },
     history: {
-      loadError: "Couldn't load your history.",
+      loadError: "Couldn't load your viewed jobs.",
       empty: 'Nothing viewed yet. Jobs you open will show up here.',
     },
     matches: {
@@ -54,13 +47,12 @@ export const messages = defineMessages(
       tablistLabel: 'Раздел активности',
       tabs: {
         saved: 'Сохранённые',
-        history: 'История',
-        matches: 'Совпадения',
+        history: 'Просмотренные',
         hidden: 'Скрытые',
       },
       headTitles: {
         saved: 'Сохранённые — Активность — freehire',
-        history: 'История — Активность — freehire',
+        history: 'Просмотренные — Активность — freehire',
         matches: 'Совпадения — Активность — freehire',
         hidden: 'Скрытые — Активность — freehire',
       },

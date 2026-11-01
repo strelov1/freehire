@@ -210,7 +210,7 @@
     role="tablist"
     aria-label={label}
     style={maskStyle}
-    class="flex gap-4 overflow-x-auto border-b border-border sm:gap-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    class="relative flex gap-4 overflow-x-auto border-b border-border sm:gap-5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
   >
     {#each tabs as t, i (t.id)}
       {@const cls = cn(

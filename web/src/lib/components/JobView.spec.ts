@@ -21,9 +21,10 @@ vi.mock('#lib/auth.svelte.js', () => ({
 }));
 vi.mock('#lib/analytics.js', () => ({ track() {} }));
 
-const { markJobApplied, listAppliedCompanySlugs, getProfile, getDirectApplyForm } = vi.hoisted(() => ({
+const { markJobApplied, listAppliedCompanySlugs, listSavedSlugs, getProfile, getDirectApplyForm } = vi.hoisted(() => ({
   markJobApplied: vi.fn(),
   listAppliedCompanySlugs: vi.fn(),
+  listSavedSlugs: vi.fn(),
   getProfile: vi.fn(),
   getDirectApplyForm: vi.fn(),
 }));
@@ -33,6 +34,7 @@ vi.mock('#lib/api.js', () => ({
   api: {
     markJobApplied,
     listAppliedCompanySlugs,
+    listSavedSlugs,
     getProfile,
     getDirectApplyForm,
     countThreads: async () => 0,
@@ -56,6 +58,7 @@ beforeEach(() => {
   resetUserStores();
   markJobApplied.mockReset();
   listAppliedCompanySlugs.mockReset().mockResolvedValue([]);
+  listSavedSlugs.mockReset().mockResolvedValue([]);
   getProfile.mockReset().mockResolvedValue(null);
   const form: DirectApplyForm = {
     company_name: 'Acme', questions: [], open: true, applied: false, prefill: {},
@@ -157,4 +160,23 @@ it.each([JobView, JobRow])('shows the application deadline when the source state
   const deadline = view.container.querySelector('time[datetime="2026-11-11"]');
   expect(deadline?.textContent).toBe('2026-11-11');
   expect(deadline?.parentElement?.textContent).toContain('Apply by');
+});
+
+it('shows removal for a saved job when the card loads before the saved cache', async () => {
+  listSavedSlugs.mockResolvedValue([job.public_slug]);
+  render(JobRow, { job });
+  expect(await screen.findByRole('button', { name: 'Remove from saved' })).toBeTruthy();
+  expect(listSavedSlugs).toHaveBeenCalledOnce();
+});
+
+it('waits for saved state before toggling a card while its initial load is pending', async () => {
+  const saved = Promise.withResolvers<string[]>();
+  listSavedSlugs.mockReturnValue(saved.promise);
+  const unsave = vi.fn().mockResolvedValue(undefined);
+  render(JobRow, { job, unsave });
+  await fireEvent.click(screen.getByRole('button', { name: 'Save to board' }));
+  expect(unsave).not.toHaveBeenCalled();
+
+  saved.resolve([job.public_slug]);
+  await waitFor(() => expect(unsave).toHaveBeenCalledWith(job.public_slug));
 });

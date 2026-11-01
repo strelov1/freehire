@@ -4,7 +4,7 @@
 //
 // SSR-safe and auth-agnostic (see UserResource): the load is a browser-only no-op and
 // the profile stays null for signed-out users. Mutations surface API errors to the
-// caller (a bad specialization or empty skills is a 400) so the UI can show them.
+// caller (a bad specialization or an over-cap set is a 400) so the UI can show them.
 
 import { api } from '#lib/api.js';
 import {
@@ -16,6 +16,7 @@ import {
   type ProfileSkillSets,
 } from '#lib/profileSkills.js';
 import { withExcluded, withoutExcluded } from '#lib/profileExclusions.js';
+import { capSpecializations } from '#lib/profileLimits.js';
 import { serialQueue } from '#lib/serialQueue.js';
 import { UserResource } from '#lib/userResource.svelte.js';
 import type { LocationPreferences, UserProfile } from '#lib/types.js';
@@ -60,7 +61,8 @@ class ProfileStore extends UserResource<UserProfile | null> {
   /** Create-or-replace the profile. `seniorities` are the desired experience levels (may be
    *  empty). `excludedSkills`/`excludedSources`/`excludedCompanies` are what to avoid (each
    *  may be empty). `location` is the optional location-preferences block (null clears it).
-   *  Throws on a bad specialization, empty skills, an unknown seniority, an over-cap
+   *  Empty role and skill lists are allowed while filling in the profile. Throws
+   *  on a bad specialization, an unknown seniority, an over-cap
    *  excluded set, or an out-of-vocabulary location value (the caller shows the error). */
   async save(
     specializations: string[],
@@ -93,26 +95,29 @@ class ProfileStore extends UserResource<UserProfile | null> {
     return this.#queue(() => this.#writeSkills((sets) => withSkill(sets, skill)));
   }
 
-  /** Merge résumé-extracted skills into the profile, replacing its specializations with
-   *  `specializations` in the same write — what a résumé upload against an already-existing
-   *  profile does with both fields the extraction resolved (the set-up form instead merges
-   *  both into its own unsaved fields, before there is a profile to write to). Both land in
-   *  one PUT rather than two, so a specialization the extraction also found never sits in
-   *  the caller's local state alone — a second, skills-only write would trigger the same
-   *  reseed-from-profile the caller's own save does, discarding an unsaved specialization
-   *  before the caller ever gets to persist it separately. Reads `#profile` at call time,
-   *  inside the queue, so a concurrent skill edit elsewhere isn't clobbered. Rejects when
-   *  there is no profile, same as `addSkill`. */
-  mergeResumeExtraction(newSkills: string[], specializations: string[]): Promise<UserProfile> {
-    return this.#queue(() => {
+  /** Merge a CV's skills and roles into the latest profile inside the write queue.
+   *  Manual edits queued before the import survive, and both the cap and the reported
+   *  additions are computed from the same snapshot that is actually saved. */
+  mergeResumeExtraction(newSkills: string[], newSpecializations: string[]): Promise<{
+    addedSkills: number;
+    addedSpecializations: number;
+    droppedSpecializations: number;
+  }> {
+    return this.#queue(async () => {
       const current = this.#profile;
-      if (!current) return Promise.reject(new Error('No profile to edit.'));
+      if (!current) throw new Error('No profile to edit.');
       const sets = withSkills(current, newSkills);
-      return this.#saveFrom(current, {
-        specializations,
-        skills: sets.skills,
-        excluded_skills: sets.excluded_skills,
-      });
+      const { kept, dropped } = capSpecializations(current.specializations, newSpecializations);
+      const addedSkills = sets.skills.length - current.skills.length;
+      const addedSpecializations = kept.length - current.specializations.length;
+      if (addedSkills > 0 || addedSpecializations > 0) {
+        await this.#saveFrom(current, {
+          specializations: kept,
+          skills: sets.skills,
+          excluded_skills: sets.excluded_skills,
+        });
+      }
+      return { addedSkills, addedSpecializations, droppedSpecializations: dropped };
     });
   }
 

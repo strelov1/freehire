@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyJob } from '#lib/types.js';
 import JobDrawer from './JobDrawer.svelte';
@@ -58,8 +58,6 @@ const props = (over: Partial<MyJob> = {}) => ({
   onautoapplyreview: noop,
   onremove: async () => {},
   onclose: noop,
-  onrehearse: noop,
-  ondebrief: noop,
   onfollowup: noop,
 });
 
@@ -100,10 +98,6 @@ describe('JobDrawer — phone layout in Russian', () => {
 
     // The badge beside the facet pills.
     expect(screen.getAllByText('Подготовка').some((el) => el.tagName === 'SPAN')).toBe(true);
-    // The history row interpolates the label, not the raw `preparing` key.
-    await waitFor(() => expect(screen.getByText('Переход на этап «Подготовка»')).toBeTruthy());
-    expect(screen.queryByText(/preparing/)).toBeNull();
-
     const select = screen.getByRole('combobox') as HTMLSelectElement;
     const options = within(select).getAllByRole('option').map((o) => o.textContent);
     expect(options).toContain('Собеседование');
@@ -112,28 +106,32 @@ describe('JobDrawer — phone layout in Russian', () => {
     const groups = Array.from(select.querySelectorAll('optgroup')).map((g) => g.label);
     expect(groups).toContain('Закрыто');
     expect(select.value).toBe('preparing');
+    const historyTab = screen.getAllByRole('tab').find((tab) => tab.id === 'jobdrawer-tab-history');
+    if (!historyTab) throw new Error('Missing History tab');
+    await fireEvent.click(historyTab);
+    // The history row interpolates the label, not the raw `preparing` key.
+    await waitFor(() => expect(screen.getByText('Переход на этап «Подготовка»')).toBeTruthy());
+    expect(screen.queryByText(/preparing/)).toBeNull();
+
+
   });
 
-  it('gathers every action into one grid, View job included, with Tailor CV leading', () => {
+  it('keeps View job in the employer row and Tailor CV in the action row', () => {
     render(JobDrawer, props());
 
     const viewJob = screen.getByRole('link', { name: 'Открыть вакансию' });
-    const grid = viewJob.parentElement as HTMLElement;
-    expect(grid.className).toContain('grid-cols-2');
-    const names = Array.from(grid.children).map((el) => el.textContent?.trim());
-    expect(names).toEqual(['Открыть вакансию', 'Адаптировать CV', 'Репетировать', 'Анализ']);
+    expect(viewJob.parentElement?.textContent).toContain('Acme');
+    expect(viewJob.getAttribute('target')).toBe('_blank');
     // The one framed call to action, while the application is still being prepared.
     const tailor = screen.getByRole('button', { name: 'Адаптировать CV' });
-    expect(tailor.className).toContain('ring-brand/30');
-    for (const name of ['Репетировать', 'Анализ']) {
-      expect(screen.getByRole('button', { name }).className).not.toContain('ring-brand/30');
-    }
+    expect(tailor.className).toContain('bg-brand');
+    expect(tailor.parentElement).not.toBe(viewJob.parentElement);
   });
 
   it('weighs every action the same once the application has been sent', () => {
     render(JobDrawer, props({ applied_at: '2026-10-02T00:00:00Z', stage: 'applied' }));
 
-    expect(screen.getByRole('button', { name: 'Адаптировать CV' }).className).not.toContain('ring-brand/30');
+    expect(screen.getByRole('button', { name: 'Адаптировать CV' }).className).not.toContain('bg-brand');
     expect(screen.getAllByText('Отклик отправлен').length).toBeGreaterThan(0);
   });
 
@@ -146,4 +144,25 @@ describe('JobDrawer — phone layout in Russian', () => {
     expect(tabs.map((t) => t.textContent?.trim())).toContain('Описание');
     expect(tabs.filter((t) => t.tabIndex === 0)).toHaveLength(1);
   });
+});
+
+it('shows unavailable history when the original posting cannot be read', async () => {
+  render(JobDrawer, props({ job: null }));
+  await fireEvent.click(screen.getByRole('tab', { name: 'История' }));
+  expect(screen.getByText('История этой заявки недоступна.')).toBeTruthy();
+  expect(screen.queryByText('Для этой заявки пока нет записей.')).toBeNull();
+  expect(getTrackedApplication).not.toHaveBeenCalled();
+});
+
+it('keeps a history load failure stable until the user retries', async () => {
+  getTrackedApplication.mockRejectedValueOnce(new Error('offline'));
+  render(JobDrawer, props());
+  await fireEvent.click(screen.getByRole('tab', { name: 'История' }));
+  expect(await screen.findByText('offline')).toBeTruthy();
+  expect(getTrackedApplication).toHaveBeenCalledOnce();
+
+  getTrackedApplication.mockResolvedValueOnce({ job, emails: [], events: [] });
+  await fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  expect(await screen.findByText('Для этой заявки пока нет записей.')).toBeTruthy();
+  expect(getTrackedApplication).toHaveBeenCalledTimes(2);
 });

@@ -88,7 +88,7 @@
 
 <!-- The wrapper delegates hover and keyboard focus to its interactive child. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div bind:this={trigger} class={className} onmouseenter={scheduleShow} onmouseleave={scheduleHide} onfocusin={focusIn} onfocusout={hide} onpointerdown={pointerDown}>
+<div bind:this={trigger} class={className} onpointerenter={(e) => { if (e.pointerType === 'mouse') scheduleShow(); }} onmouseleave={scheduleHide} onfocusin={focusIn} onfocusout={hide} onpointerdown={pointerDown}>
   {@render children()}
 </div>
 {#if visible}

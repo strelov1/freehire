@@ -49,7 +49,7 @@
   "web/src/lib/components/HomeView.svelte": 14,
   "web/src/lib/components/InboxLandingView.svelte": 2,
   "web/src/lib/components/InboxView.svelte": 8,
-  "web/src/lib/components/JobDrawer.svelte": 1,
+  "web/src/lib/components/JobDrawer.svelte": 3,
   "web/src/lib/components/JobMatch.svelte": 1,
   "web/src/lib/components/JobMatchBar.svelte": 1,
   "web/src/lib/components/JobRow.svelte": 4,

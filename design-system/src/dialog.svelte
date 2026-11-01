@@ -23,13 +23,7 @@
      * held and is not.
      */
     dismissible?: boolean;
-    /**
-     * Size the card at `sm` and up with an `sm:max-w-*` utility, never a bare
-     * `max-w-*` — the base classes carry an unprefixed `max-w-none` for the
-     * mobile takeover, and `cn()`'s twMerge keeps only the last unprefixed
-     * value in the group, so a bare override wins at every width and cancels
-     * the takeover below `sm` too.
-     */
+    /** Override the card's maximum width; responsive classes size only wider screens. */
     class?: string;
     children: Snippet;
   } = $props();
@@ -48,10 +42,8 @@
     if (open && !el.open) {
       el.showModal();
       // showModal() focuses the first focusable descendant (often a button below
-      // the fold) and the platform scrolls it into view — invisible for a dialog
-      // that always fit the viewport, but on the mobile takeover it opens already
-      // scrolled past the title. The dialog is its own scroll container now, so
-      // reset it without touching the page scroll lockScroll owns.
+      // the fold) and the platform scrolls it into view. Start at the title even when
+      // the content needs scrolling, without touching the page scroll lockScroll owns.
       el.scrollTop = 0;
     }
     if (!open && el.open) el.close();
@@ -94,47 +86,25 @@
 
 <dialog
   bind:this={el}
-  aria-labelledby={title ? titleId : undefined}
-  aria-describedby={description ? descriptionId : undefined}
+  aria-labelledby={title ? titleId : description ? descriptionId : undefined}
+  aria-describedby={title && description ? descriptionId : undefined}
   {onclose}
   {oncancel}
   {onclick}
   class={cn(
-    // Below sm: fills the viewport edge-to-edge, same breakpoint FilterModalShell
-    // uses for its own mobile takeover. At sm and up: the original centered card.
-    // max-h-none is load-bearing: the UA stylesheet gives dialog:modal its own
-    // max-height reserve (leaving a gap around the edges by default), which
-    // silently clamps h-dvh short of the actual viewport unless overridden.
-    // dvh, not h-full (%): a mobile browser's toolbar grows and shrinks the
-    // visual viewport without firing a resize, and a percentage height resolves
-    // against the larger, toolbar-collapsed one, reopening the same gap.
-    'm-0 h-dvh max-h-none w-full max-w-none overflow-y-auto overscroll-contain rounded-none border-0 bg-card p-0 text-card-foreground shadow-lg backdrop:bg-black/50 backdrop:backdrop-blur-sm',
-    // Grows out of the centre on open; see animate-modal-pop in theme.css.
+    // A content-sized card on every screen, with room around it and bounded scrolling.
+    // fit-content avoids the native dialog's inset:0 stretching an auto-height box.
+    'm-auto h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-0 text-card-foreground shadow-lg outline-none backdrop:bg-black/50',
     'animate-modal-pop backdrop:animate-modal-fade',
-    // h-fit, not h-auto: a top-layer <dialog> with inset:0 from the UA stylesheet
-    // stretches to fill when height is the keyword 'auto' — a well-known quirk of
-    // the CSS positioned-box sizing algorithm. fit-content bypasses it outright.
-    // max-h is explicit (matching FilterModalShell's own cap) rather than left to
-    // the UA default reserve, which isn't a documented, cross-browser-stable value.
-    'sm:m-auto sm:h-fit sm:max-h-[calc(100vh-3rem)] sm:w-full sm:max-w-lg sm:rounded-lg sm:border sm:border-border',
     className,
   )}
 >
-  <!--
-    Below sm the takeover is a full viewport, so flow layout leaves a short
-    dialog pinned to the top edge with the rest of the screen empty under it,
-    and true centering leaves it looking as if it slid down. optical-center
-    seats it in the upper third instead, and is safe for tall content: past
-    min-h-dvh the box grows and the spacers collapse, so it can never push
-    content above the scroll container's top. Back to flow at sm, where the
-    card is h-fit and there is no spare height to place it in.
-  -->
-  <div class="relative flex min-h-dvh flex-col p-6 max-sm:optical-center sm:block sm:min-h-full">
+  <div class="relative p-5 sm:p-6">
     {#if title}
-      <h2 id={titleId} class="pr-8 text-lg font-semibold">{title}</h2>
+      <h2 id={titleId} class="pr-8 text-base font-semibold sm:text-lg">{title}</h2>
     {/if}
     {#if description}
-      <p id={descriptionId} class="mt-1 text-sm text-muted-foreground">{description}</p>
+      <p id={descriptionId} class={cn('mt-2 text-sm leading-relaxed text-muted-foreground', !title && dismissible && 'pr-8')}>{description}</p>
     {/if}
     <div class="mt-4">
       {@render children()}
@@ -142,7 +112,7 @@
     {#if dismissible}
       <button
         type="button"
-        class="fixed right-4 top-4 flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:absolute"
+        class="absolute right-3 top-3 flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onclick={() => (open = false)}
         aria-label="Close"
       >

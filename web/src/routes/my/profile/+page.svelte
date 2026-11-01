@@ -25,16 +25,13 @@
 </script>
 
 {#if profile}
-  {#key profile.updated_at}
-    <ProfileForm
-      {profile}
-      hasCv={resumeStore.present}
-      uploadedAt={resumeMeta?.uploaded_at}
-      onSaved={handleSaved}
-      onCvUploaded={handleCvUploaded}
-      onCvDeleted={handleCvDeleted}
-    />
-  {/key}
+  <ProfileForm
+    hasCv={resumeStore.present}
+    uploadedAt={resumeMeta?.uploaded_at}
+    onSaved={handleSaved}
+    onCvUploaded={handleCvUploaded}
+    onCvDeleted={handleCvDeleted}
+  />
 
   <div class="mt-4">
     <CvSummaryCard structured={resumeMeta?.structured ?? null} />

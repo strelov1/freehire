@@ -3,6 +3,9 @@
   // into (it's the one piece of the old identity header that doesn't carry enough content
   // to earn its own view, unlike Contacts/Location which do). Autosaves straight to
   // profileStore on every change, the same way the Skills view does.
+  import { locale } from '#lib/i18n/currentLocale.svelte.js';
+  import { format, t } from '#lib/i18n/t.js';
+  import { messages } from '../ProfileForm.messages';
   import { CATEGORY_OPTIONS } from '#lib/facets.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { MAX_SPECIALIZATIONS } from '#lib/profileLimits.js';
@@ -26,18 +29,15 @@
   // Each half saves on its own, so each reports on its own label row. `specError` is the
   // limit check that stops a toggle before any write; a failed write is the status's.
   let specError = $state<string | null>(null);
+  const s = $derived(t(messages, locale()));
   const specStatus = new SaveStatus();
   const levelStatus = new SaveStatus();
 
   async function toggleSpecialization(value: string) {
     if (specStatus.saving) return;
     const has = profile.specializations.includes(value);
-    if (has && profile.specializations.length === 1) {
-      specError = 'You need at least one role — add another before removing this one.';
-      return;
-    }
     if (!has && profile.specializations.length >= MAX_SPECIALIZATIONS) {
-      specError = `You can pick at most ${MAX_SPECIALIZATIONS} specializations.`;
+      specError = format(s.rolesLimit, { max: String(MAX_SPECIALIZATIONS) });
       return;
     }
     specError = null;
@@ -74,7 +74,7 @@
 <div id="account-role" class="flex scroll-mt-20 flex-col gap-6">
   <div class="flex flex-col gap-2">
     <div class="flex items-baseline justify-between">
-      <span class="text-sm font-medium">Roles</span>
+      <span class="text-sm font-medium">{s.roles}</span>
       <span class="flex items-baseline gap-3">
         <SaveStatusLine status={specStatus} />
         <span class="text-xs tabular-nums text-muted-foreground">
@@ -86,7 +86,8 @@
       <SearchSelect
         options={CATEGORY_OPTIONS}
         include={profile.specializations}
-        placeholder="Search specializations"
+        placeholder={s.searchRoles}
+        cap={6}
         onToggle={toggleSpecialization}
         clearOnSelect
       />
@@ -100,13 +101,11 @@
        inside the onboarding wizard, so a profile whose level needed changing had no surface
        at all. The control itself is the wizard's own, shared (SeniorityPills). -->
   <div class="flex flex-col gap-2">
-    <div class="flex items-baseline justify-between">
-      <span class="text-sm font-medium">Level</span>
-      <span class="flex items-baseline gap-3">
-        <SaveStatusLine status={levelStatus} />
-        <span class="text-xs text-muted-foreground">Pick every level you'd take</span>
-      </span>
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <span class="text-sm font-medium">{s.level}</span>
+      <SaveStatusLine status={levelStatus} />
     </div>
+    <p class="text-xs text-muted-foreground">{s.levelHint}</p>
     <SeniorityPills selected={profile.seniorities} onToggle={toggleSeniority} busy={levelStatus.saving} />
   </div>
 </div>

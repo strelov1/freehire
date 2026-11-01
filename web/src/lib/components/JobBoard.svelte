@@ -1,9 +1,10 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
-  import { goto, pushState, replaceState } from '$app/navigation';
+  import { SvelteURLSearchParams } from 'svelte/reactivity';
+  import { pushState, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
-  import { Search, X as XIcon } from '@lucide/svelte';
+  import { CircleAlert, Search, X as XIcon } from '@lucide/svelte';
   import { refreshAppliedCompanies } from '#lib/appliedCompanies.svelte.js';
   import { api } from '#lib/api.js';
   import { Button, EmptyState, alertVariants, cn } from '#lib/ui/index.js';
@@ -25,7 +26,6 @@
     type BoardItem,
     type ClosedOutcome,
   } from '#lib/board.js';
-  import { createRehearsal, createDebrief } from '#lib/assistant/api.js';
   import { assertNever } from '#lib/utils.js';
   import { humanizeStage, stageGroupLabel } from '#lib/stages.js';
   import BoardColumn from './BoardColumn.svelte';
@@ -86,11 +86,6 @@
   // The follow-up dialog is its own overlay, not a drawer tab: it is reached from
   // the card's silence badge and closes back to the board.
   let followUpItem = $state.raw<BoardItem | null>(null);
-  // Starting a rehearsal or a debrief is one round trip before the navigation, so a
-  // second click in that window would mint a second conversation. One flag for both:
-  // they end in the same navigation, and only one of them can be underway.
-  let startingSession = $state(false);
-  let sessionError = $state<string | null>(null);
   // A write that failed and was rolled back. Shown as a pinned alert rather than beside the
   // board, because the drawer covers the viewport and a stage picked there fails there too.
   let actionError = $state<string | null>(null);
@@ -213,6 +208,16 @@
     : sortBoardItems(Object.values(shown).flat(), sort));
   const total = $derived(Object.values(columns).flat().length);
   const matched = $derived(Object.values(shown).flat().length);
+
+  function clearSearch() {
+    filters.setNow({ ...filters.value, q: '' });
+    searchInput?.focus();
+  }
+
+  function clearFilters() {
+    filters.setNow({ ...filters.value, q: '', attention: false, stage: '' });
+    searchInput?.focus();
+  }
 
   function onconsider(id: BoardColumnId, items: BoardItem[]) {
     dragging = true;
@@ -452,6 +457,41 @@
   // The row of columns is wider than a phone, and a hidden scrollbar leaves nothing saying
   // so: fade whichever edge still has columns beyond it.
   const rowEdges = new ScrollEdges();
+  let boardRow = $state<HTMLDivElement>();
+  let visibleColumn = $state<BoardColumnId>('unstaged');
+
+  $effect(() => {
+    if (boardRow) untrack(() => {
+      const first = (initialId ? cardCol[initialId] : undefined)
+        ?? BOARD_COLUMNS.find((column) => shown[column.id].length > 0)?.id;
+      if (first) goToColumn(first);
+      else syncVisibleColumn();
+    });
+  });
+
+  function syncVisibleColumn() {
+    if (!boardRow) return;
+    const left = boardRow.getBoundingClientRect().left;
+    let nearest = Infinity;
+    for (const [index, column] of BOARD_COLUMNS.entries()) {
+      const section = boardRow.children[index];
+      if (!section) continue;
+      const rect = section.getBoundingClientRect();
+      const distance = Math.abs(rect.left - left);
+      if (distance < nearest) {
+        nearest = distance;
+        visibleColumn = column.id;
+      }
+    }
+  }
+
+  function goToColumn(id: string) {
+    const index = BOARD_COLUMNS.findIndex((col) => col.id === id);
+    const section = boardRow?.children[index];
+    if (!boardRow || !section) return;
+    boardRow.scrollLeft += section.getBoundingClientRect().left - boardRow.getBoundingClientRect().left;
+    syncVisibleColumn();
+  }
 
   // Close the drawer without touching the URL — Back has already moved it.
   function dismissDrawer() {
@@ -475,8 +515,11 @@
     } else if (onDeepLink) {
       // Arrived on a deep link: swap the per-application URL for the board's own.
       onDeepLink = false;
-      // eslint-disable-next-line svelte/no-navigation-without-resolve -- the path IS resolved; only the current query string is appended
-      replaceState(resolve('/my/tracking') + location.search, {});
+      const params = new SvelteURLSearchParams(location.search);
+      params.delete('application');
+      const base = view === 'list' ? resolve('/my/tracking/list') : resolve('/my/tracking');
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- both possible base routes above are resolved
+      replaceState(base + (params.size ? `?${params}` : ''), {});
     }
   }
 
@@ -507,32 +550,6 @@
     followUpItem = item as BoardItem;
   }
 
-  // Start a conversation held against one application and hand it over to the assistant
-  // page, which opens it — the agent speaks first, so there is nothing to type on the way
-  // in. The board does not wait for the turn: creating the session is the whole of its
-  // job here.
-  async function startApplicationSession(
-    item: MyJob,
-    create: (slug: string) => Promise<{ id: string }>,
-    failure: string,
-  ) {
-    if (startingSession || !item.job) return;
-    startingSession = true;
-    try {
-      const session = await create(item.job.public_slug);
-      await goto(resolve('/my/assistant/[[id]]', { id: session.id }));
-    } catch {
-      sessionError = failure;
-    } finally {
-      startingSession = false;
-    }
-  }
-
-  const startRehearsal = (item: MyJob) =>
-    startApplicationSession(item, createRehearsal, s.rehearsalFailed);
-  const startDebrief = (item: MyJob) =>
-    startApplicationSession(item, createDebrief, s.debriefFailed);
-
   // Stamp the recorded chase onto the card in place. The board holds the only copy
   // of the row, and reloading the whole listing to learn one timestamp is noise —
   // the same optimistic treatment stage moves already get.
@@ -548,8 +565,15 @@
     // The query rides along so the filtered rows behind the drawer stay filtered.
     const id = (item as BoardItem).id;
     drawerInHistory = true;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve -- the path IS resolved; only the current query string is appended
-    pushState(resolve('/my/tracking/[id]', { id }) + location.search, { trackingItem: id });
+    if (view === 'list') {
+      const params = new SvelteURLSearchParams(location.search);
+      params.set('application', id);
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- the route is resolved before its query is added
+      pushState(resolve('/my/tracking/list') + `?${params}`, { trackingItem: id });
+    } else {
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- the route is resolved before its query is added
+      pushState(resolve('/my/tracking/[id]', { id }) + location.search, { trackingItem: id });
+    }
   }
 </script>
 
@@ -574,11 +598,8 @@
   <!-- One field over both views. It narrows what is already loaded: the listing is
        bounded, and a request per keystroke would buy nothing. -->
   <div class="mb-3 flex flex-wrap items-center gap-2">
-    <div class="relative flex-1 sm:max-w-xs">
-      <Search
-        class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-        aria-hidden="true"
-      />
+    <div class="relative w-full sm:max-w-xs sm:flex-1">
+      <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
       <input
         bind:this={searchInput}
         type="search"
@@ -586,65 +607,59 @@
         oninput={(e) => filters.setNow({ ...filters.value, q: e.currentTarget.value })}
         placeholder={s.searchPlaceholder}
         aria-label={s.searchAria}
-        class="w-full rounded-md border border-input bg-transparent py-1.5 pl-8 pr-8 text-sm"
+        class="h-10 w-full rounded-md border border-input bg-transparent pl-8 pr-10 text-base focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:text-sm [&::-webkit-search-cancel-button]:appearance-none"
       />
       {#if searching}
-        <button
-          type="button"
-          onclick={() => filters.setNow({ ...filters.value, q: '' })}
-          aria-label={s.clearSearchAria}
-          class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
+        <button type="button" onclick={clearSearch} aria-label={s.clearSearchAria}
+          class="absolute right-0 top-0 flex size-10 items-center justify-center rounded text-muted-foreground hover:text-foreground sm:size-9">
           <XIcon class="size-3.5" />
         </button>
       {/if}
     </div>
-    <button
-      type="button"
-      aria-pressed={attentionOnly}
-      onclick={() => filters.setNow({ ...filters.value, attention: !attentionOnly })}
-      class={cn(
-        'shrink-0 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors',
-        attentionOnly
-          ? 'border-warning/50 bg-warning-muted/40 text-warning-strong'
-          : 'border-input text-muted-foreground hover:bg-accent hover:text-foreground',
-      )}
-    >
-      {s.needsAttention}
-    </button>
-    <select
-      value={sort}
-      onchange={(e) => filters.setNow({ ...filters.value, sort: parseBoardSort(e.currentTarget.value) })}
-      aria-label={s.sortAria}
-      class="rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm"
-    >
-      <option value="default">{s.sortDefault}</option>
-      <option value="company">{s.sortCompany}</option>
-      <option value="added">{s.sortAdded}</option>
-      <option value="deadline">{s.sortDeadline}</option>
-    </select>
-    {#if view === 'list'}
-      <select
-        value={stageFilter}
-        onchange={(e) => filters.setNow({ ...filters.value, stage: e.currentTarget.value })}
-        aria-label={s.stageFilterAria}
-        class={cn(
-          'shrink-0 rounded-md border bg-transparent px-2.5 py-1.5 text-sm font-medium',
-          stageFilter ? 'border-ring text-foreground' : 'border-input text-muted-foreground',
-        )}
-      >
-        <option value="">{s.allStages}</option>
-        {#each BOARD_COLUMNS as col (col.id)}
-          <option value={col.id}>{columnLabel(col)}</option>
-        {/each}
+    <div class="flex w-full items-center gap-2 sm:w-auto">
+      <button type="button" aria-label={s.needsAttention} title={s.needsAttention} aria-pressed={attentionOnly}
+        onclick={() => filters.setNow({ ...filters.value, attention: !attentionOnly })}
+        class={cn('inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors',
+          attentionOnly ? 'bg-warning-muted text-warning-strong' : 'text-muted-foreground hover:bg-accent hover:text-foreground')}>
+        <CircleAlert class="size-4 shrink-0" aria-hidden="true" />
+        <span class="sr-only sm:not-sr-only">{s.needsAttention}</span>
+      </button>
+      <select value={sort} onchange={(e) => filters.setNow({ ...filters.value, sort: parseBoardSort(e.currentTarget.value) })}
+        aria-label={s.sortAria} class="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:w-40 sm:flex-none sm:text-sm">
+        <option value="default">{s.sortDefault}</option>
+        <option value="company">{s.sortCompany}</option>
+        <option value="added">{s.sortAdded}</option>
+        <option value="deadline">{s.sortDeadline}</option>
       </select>
-    {/if}
+      {#if view === 'board'}
+        <select value={visibleColumn} onchange={(e) => goToColumn(e.currentTarget.value)}
+          aria-label={s.boardStage} class="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:w-40 sm:flex-none sm:text-sm">
+          {#each BOARD_COLUMNS as col (col.id)}
+            <option value={col.id}>{columnLabel(col)} ({shown[col.id].length})</option>
+          {/each}
+        </select>
+      {:else}
+        <select value={stageFilter} onchange={(e) => filters.setNow({ ...filters.value, stage: e.currentTarget.value })}
+          aria-label={s.stageFilterAria} class="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:w-40 sm:flex-none sm:text-sm">
+          <option value="">{s.allStages}</option>
+          {#each BOARD_COLUMNS as col (col.id)}<option value={col.id}>{columnLabel(col)}</option>{/each}
+        </select>
+      {/if}
+    </div>
     {#if filtering}
-      <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{format(s.matchedOfTotal, { matched: String(matched), total: String(total) })}</span>
+      <span role="status" class="text-xs tabular-nums text-muted-foreground">{format(s.matchedOfTotal, { matched: String(matched), total: String(total) })}</span>
     {/if}
   </div>
 
-  {#if view === 'list'}
+  {#if filtering && matched === 0}
+    <div class="rounded-xl border border-dashed border-border">
+      <EmptyState title={s.noMatches} description={s.noMatchesDescription}>
+        {#snippet action()}
+          <Button variant="outline" size="sm" class="min-h-11 sm:min-h-0" onclick={clearFilters}>{s.clearFilters}</Button>
+        {/snippet}
+      </EmptyState>
+    </div>
+  {:else if view === 'list'}
     <!-- Keyed on the filters so a new search starts from the first page: the list draws
          rows a page at a time, and a cleared filter would otherwise redraw every row a
          long scroll had reached, in one update. -->
@@ -653,6 +668,8 @@
     {/key}
   {:else}
     <div
+      bind:this={boardRow}
+      onscroll={syncVisibleColumn}
       {@attach rowEdges.attach}
       class={cn(
         'no-scrollbar flex gap-3 overflow-x-auto pb-2',
@@ -687,7 +704,7 @@
         type="button"
         onclick={() => (actionError = null)}
         aria-label={s.dismissError}
-        class="shrink-0 rounded p-1 transition-colors hover:bg-destructive/10"
+        class="flex size-11 shrink-0 items-center justify-center rounded transition-colors hover:bg-destructive/10 sm:size-auto sm:p-1"
       >
         <XIcon class="size-4" aria-hidden="true" />
       </button>
@@ -707,11 +724,7 @@
       onautoapplyreview={applyAutoApplyReview}
       onremove={remove}
       onclose={closeDrawer}
-      onrehearse={startRehearsal}
-      ondebrief={startDebrief}
       onfollowup={openFollowUp}
-      {startingSession}
-      {sessionError}
       blocked={!!followUpItem}
     />
   {/key}

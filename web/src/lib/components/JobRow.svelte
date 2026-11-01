@@ -9,7 +9,7 @@
   import { cardLocation } from '#lib/cardLocation.js';
   import JobMatchBar from './JobMatchBar.svelte';
   import { api } from '#lib/api.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { track } from '#lib/analytics.js';
@@ -34,7 +34,7 @@
   import { formatCount, timeAgo } from '#lib/utils.js';
   import { cardFreshnessBadges } from '#lib/freshness.js';
   import { hasViewed } from '#lib/viewedJobs.svelte.js';
-  import { isSaved, markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
+  import { ensureSavedLoaded, isSaved, markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
   import { hasAppliedToCompany } from '#lib/appliedCompanies.svelte.js';
   import { markDismissed, markUndismissed } from '#lib/dismissedJobs.svelte.js';
 
@@ -74,6 +74,7 @@
     compact = false,
     footer,
     onHide,
+    unsave = api.unsaveJob,
   }: {
     // Either the catalogue's full posting or the tracking listing's card. The row draws the
     // same thing from both: the card carries a server-cut blurb where the posting carries the
@@ -85,6 +86,8 @@
     compact?: boolean;
     footer?: Snippet;
     onHide?: (slug: string) => void;
+    /** Allows a saved list to serialize removal with pagination. */
+    unsave?: (slug: string) => Promise<unknown>;
   } = $props();
 
   const isViewed = $derived(dimViewed && hasViewed(job.public_slug));
@@ -205,9 +208,12 @@
   }
 
   // Whether the signed-in user has saved this job, read from the shared saved set
-  // (loaded once on the browse view). The bookmark reflects this and updates the
+  // (loaded once and shared across cards). The bookmark reflects this and updates the
   // set on toggle, so every card for the same job stays in sync.
   const saved = $derived(isSaved(job.public_slug));
+  $effect(() => {
+    if (isAuthenticated()) void ensureSavedLoaded();
+  });
   // Guards against a double-click racing two requests for the same job.
   let saving = $state(false);
   // Set by a save made from THIS card, so the "view it on your board" strip answers
@@ -227,19 +233,30 @@
     }
     if (saving) return;
     saving = true;
-    const wasSaved = saved;
-    justSaved = false;
-    if (wasSaved) markUnsaved(job.public_slug);
-    else markSaved(job.public_slug);
+    const userID = currentUser()?.id;
+    let wasSaved = saved;
+    let changed = false;
     try {
-      if (wasSaved) await api.unsaveJob(job.public_slug);
-      else {
+      // Read the final set before changing it: a late initial load must never undo
+      // the user's toggle, and a handoff to another account cancels this action.
+      await ensureSavedLoaded();
+      if (currentUser()?.id !== userID) return;
+      wasSaved = isSaved(job.public_slug);
+      justSaved = false;
+      if (wasSaved) markUnsaved(job.public_slug);
+      else markSaved(job.public_slug);
+      changed = true;
+      if (wasSaved) {
+        await unsave(job.public_slug);
+      } else {
         await api.saveJob(job.public_slug);
         justSaved = true;
       }
     } catch {
-      if (wasSaved) markSaved(job.public_slug);
-      else markUnsaved(job.public_slug);
+      if (changed && currentUser()?.id === userID) {
+        if (wasSaved) markSaved(job.public_slug);
+        else markUnsaved(job.public_slug);
+      }
     } finally {
       saving = false;
     }
@@ -630,7 +647,7 @@
       type="button"
       onclick={toggleSave}
       disabled={saving}
-      aria-label={saved ? 'Remove from your board' : undefined}
+      aria-label={saved ? 'Remove from saved' : undefined}
       class={[
         'flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium transition disabled:pointer-events-none disabled:opacity-50',
         saved
@@ -639,7 +656,7 @@
       ]}
     >
       <Bookmark class="size-4 {saved ? 'fill-current' : ''}" aria-hidden="true" />
-      {saved ? 'On your board' : 'Save to board'}
+      {saved ? 'Remove from saved' : 'Save to board'}
     </button>
 
     <!-- The caller's own controls share this row rather than getting a second bordered

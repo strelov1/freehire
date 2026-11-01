@@ -108,13 +108,16 @@ func TestPutProfile_ValidationErrors(t *testing.T) {
 		body string
 		want int
 	}{
-		{"empty specializations", `{"specializations":[],"skills":["go"]}`, fiber.StatusBadRequest},
+		{"missing lists", `{}`, fiber.StatusBadRequest},
+		{"missing skills", `{"specializations":[]}`, fiber.StatusBadRequest},
+		{"missing specializations", `{"skills":[]}`, fiber.StatusBadRequest},
+		{"null skills", `{"specializations":[],"skills":null}`, fiber.StatusBadRequest},
+		{"null specializations", `{"specializations":null,"skills":[]}`, fiber.StatusBadRequest},
 		{"unknown specialization", `{"specializations":["wizardry"],"skills":["go"]}`, fiber.StatusBadRequest},
 		// One past userprofile.MaxSpecializations. The set below the cap is exercised by
 		// TestPutProfile_AcceptsSpecializationsUpToTheCap — a cap only holds if both sides
 		// of it are checked.
 		{"too many specializations", `{"specializations":["backend","frontend","fullstack","mobile","devops","sre","qa","security","hardware","embedded","blockchain"],"skills":["go"]}`, fiber.StatusBadRequest},
-		{"empty skills", `{"specializations":["backend"],"skills":[]}`, fiber.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -444,5 +447,27 @@ func TestDeleteProfile_Idempotent(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Errorf("status = %d, want 204", resp.StatusCode)
+	}
+}
+
+func TestPutProfile_AcceptsIncompleteProfile(t *testing.T) {
+	for _, body := range []string{
+		`{"specializations":[],"skills":[]}`,
+		`{"specializations":["backend"],"skills":[]}`,
+		`{"specializations":[],"skills":["go"]}`,
+		`{"specializations":[],"skills":[],"location_preferences":{"work_modes":["remote"]}}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			repo := &fakeProfileRepo{}
+			app, token := profileApp(t, repo)
+			resp := doProfile(t, app, fiber.MethodPut, body, token)
+			defer resp.Body.Close()
+			if resp.StatusCode != fiber.StatusOK {
+				t.Fatalf("status = %d, want 200 for incomplete profile", resp.StatusCode)
+			}
+			if repo.upserted.UserID == 0 {
+				t.Fatal("incomplete profile was not persisted")
+			}
+		})
 	}
 }

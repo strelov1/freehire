@@ -2,7 +2,7 @@
   import { Check, User } from '@lucide/svelte';
   import { ApiError } from '#lib/api.js';
   import { notifications } from '#lib/notifications.svelte.js';
-  import { enableProfileAlert, profileAlertSearch } from '#lib/profileAlert.js';
+  import { canEnableProfileAlert, enableProfileAlert, profileAlertSearch } from '#lib/profileAlert.js';
   import { savedSearches } from '#lib/savedSearches.svelte.js';
   import { cn } from '#lib/ui/index.js';
   import type { UserProfile } from '#lib/types.js';
@@ -30,6 +30,7 @@
   );
   // Until both stores have answered, "off" would be a guess rather than a reading, and
   // acting on a guess is how the toggle wrote past a subscription that already existed.
+  const canEnable = $derived(canEnableProfileAlert(profile));
   const ready = $derived(savedSearches.loaded && notifications.loaded);
 
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -99,8 +100,11 @@
       <span class="text-xs text-destructive">{saveError}</span>
     {/if}
 
-    {@render toggleSwitch(enabled, 'Notify me about jobs matching my profile', toggle, saveState === 'saving' || !ready)}
+    {@render toggleSwitch(enabled, 'Notify me about jobs matching my profile', toggle, saveState === 'saving' || !ready || (!enabled && !canEnable))}
   </div>
+  {#if !enabled && !canEnable}
+    <p class="mt-3 text-xs text-muted-foreground">Add a role, skill or work preference to enable profile alerts.</p>
+  {/if}
 </section>
 
 {#snippet toggleSwitch(on: boolean, label: string, onToggle: () => void, disabled: boolean)}

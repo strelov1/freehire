@@ -1,3 +1,4 @@
+import { pushState } from '$app/navigation';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MyJob } from '#lib/types.js';
@@ -15,7 +16,6 @@ vi.mock('$app/navigation', () => ({
   replaceState: vi.fn(),
 }));
 vi.mock('#lib/auth.svelte.js', () => ({ isAuthenticated: () => true, currentUser: () => null }));
-vi.mock('#lib/assistant/api.js', () => ({ createRehearsal: vi.fn(), createDebrief: vi.fn() }));
 
 // EasyMDE stands in as a plain text holder: what is under test is when the board persists
 // the notes, not the markdown editor. `typed` is what the next editor will hold.
@@ -136,6 +136,47 @@ describe('JobBoard — removing an application', () => {
       expect(screen.getByText("Couldn't remove it from your board. Try again.")).toBeTruthy(),
     );
     expect(screen.queryByText('Your board is empty')).toBeNull();
+  });
+});
+
+describe('JobBoard — column navigation', () => {
+  it('jumps to a column and follows scrolling without changing application stages', async () => {
+    render(JobBoard, { initial: [application] });
+    const sections = screen.getAllByRole('region');
+    const row = screen.getByRole('region', { name: 'No stage' }).parentElement;
+    if (!row) throw new Error('Missing board row');
+    Object.defineProperty(row, 'clientWidth', { value: 300 });
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({ left: 0 } as DOMRect);
+    sections.forEach((section, index) => {
+      vi.spyOn(section, 'getBoundingClientRect').mockImplementation(
+        () => ({ left: index * 300 - row.scrollLeft, width: 300 }) as DOMRect,
+      );
+    });
+    const picker = screen.getByRole('combobox', { name: 'Go to stage' }) as HTMLSelectElement;
+
+    await fireEvent.change(picker, { target: { value: 'offer' } });
+    expect(row.scrollLeft).toBe(1200);
+    expect(picker.value).toBe('offer');
+
+    row.scrollLeft = 600;
+    await fireEvent.scroll(row);
+    expect(picker.value).toBe('applied');
+    expect(trackApplication).not.toHaveBeenCalled();
+  });
+});
+
+describe('JobBoard — search recovery', () => {
+  it('explains an empty search and restores the board with focus in the search field', async () => {
+    render(JobBoard, { initial: [application] });
+    const search = screen.getByRole('searchbox', { name: 'Search applications by company or role' });
+    await fireEvent.input(search, { target: { value: 'unmatched company' } });
+    expect(screen.getByText('No matching applications')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Applied' })).toBeNull();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(screen.getByRole('region', { name: 'Applied' })).toBeTruthy();
+    expect(document.activeElement).toBe(search);
+    expect((search as HTMLInputElement).value).toBe('');
   });
 });
 
@@ -260,5 +301,16 @@ describe('JobBoard — quick triage', () => {
     expect(titles()).toEqual(['A role', 'Z role']);
     await fireEvent.change(sort, { target: { value: 'added' } });
     expect(titles()).toEqual(['Z role', 'A role']);
+  });
+});
+
+
+describe('JobBoard — List navigation', () => {
+  it('keeps a list application on the List route so refresh preserves its presentation', async () => {
+    render(JobBoard, { initial: [application], view: 'list' });
+    const target = screen.getByText('Backend Engineer').closest('button');
+    if (!target) throw new Error('Missing application button');
+    await fireEvent.click(target);
+    expect(pushState).toHaveBeenLastCalledWith('/my/tracking/list?application=app-1', { trackingItem: 'app-1' });
   });
 });

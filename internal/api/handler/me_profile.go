@@ -61,7 +61,7 @@ func (h *profileHandlers) register(api fiber.Router, mw middleware) {
 }
 
 // profileResponse is the public shape of the user's single profile. user_id is omitted
-// (ownership, internal); there is no id or name. specializations are one or more job
+// (ownership, internal); there is no id or name. specializations are zero or more job
 // categories; skills are canonical lowercase tokens; location_preferences is the stored
 // location block echoed verbatim, or null when the user set none.
 //
@@ -166,20 +166,16 @@ func (h *profileHandlers) structuredCV(ctx context.Context, userID int64) *resum
 	return &professional
 }
 
-// profileError maps the user-profile sentinels onto HTTP statuses: an unknown/empty/
-// over-long specialization set or empty skills is a 400; a missing profile is a 404 (the
+// profileError maps the user-profile sentinels onto HTTP statuses: an unknown or
+// over-long specialization set is a 400; a missing profile is a 404 (the
 // verdict/ATS sub-resources). GET translates ErrNotFound to a null payload itself, so it
 // does not go through here. Anything else falls through to RenderError as a 500.
 func profileError(err error) error {
 	switch {
 	case errors.Is(err, userprofile.ErrInvalidSpecialization):
 		return fiber.NewError(fiber.StatusBadRequest, "specialization is not a known category")
-	case errors.Is(err, userprofile.ErrEmptySpecializations):
-		return fiber.NewError(fiber.StatusBadRequest, "at least one specialization is required")
 	case errors.Is(err, userprofile.ErrTooManySpecializations):
 		return fiber.NewError(fiber.StatusBadRequest, fmt.Sprintf("too many specializations (max %d)", userprofile.MaxSpecializations))
-	case errors.Is(err, userprofile.ErrEmptySkills):
-		return fiber.NewError(fiber.StatusBadRequest, "at least one skill is required")
 	case errors.Is(err, userprofile.ErrTooManySkills):
 		return fiber.NewError(fiber.StatusBadRequest, "too many skills (max 200)")
 	case errors.Is(err, userprofile.ErrTooManySources):
@@ -249,6 +245,11 @@ func (h *profileHandlers) PutProfile(c *fiber.Ctx) error {
 	var in saveProfileRequest
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	// Empty lists support progressive autosave; omitted/null lists are still malformed
+	// replacement requests and must not silently clear an existing profile.
+	if in.Specializations == nil || in.Skills == nil {
+		return fiber.NewError(fiber.StatusBadRequest, "specializations and skills must be arrays; use [] for an empty list")
 	}
 
 	profile, err := h.userProfile.Save(c.Context(), userID, in.Specializations, in.Skills, in.Seniorities, in.ExcludedSkills, in.ExcludedSources, in.ExcludedCompanies, in.LocationPreferences)

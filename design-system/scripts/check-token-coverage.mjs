@@ -99,9 +99,8 @@ const ALLOWED = [
     file: 'dialog.svelte',
     kind: 'Tailwind arbitrary value',
     reason:
-      "sm:max-h-[calc(100vh-3rem)] mirrors FilterModalShell's own mobile-takeover cap " +
-      '(web/src, not subject to this radius) exactly; no token expresses a dvh-safe ' +
-      'viewport-minus-margin reserve, and the two are meant to move together',
+      'viewport-relative width and height leave safe margins around compact dialogs ' +
+      'on mobile and bound long content; fixed scale tokens cannot express these reserves',
   },
 ];
 

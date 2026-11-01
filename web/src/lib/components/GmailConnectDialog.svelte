@@ -41,7 +41,7 @@
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onClose()} />
 
-<div class="fixed inset-0 z-50 flex flex-col items-center p-4 max-sm:optical-center sm:justify-center">
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
   <button type="button" aria-label="Close dialog" class="absolute inset-0 animate-modal-fade bg-black/50" onclick={onClose}></button>
 
   <div

@@ -9,6 +9,14 @@ const slot = (html: string) => createRawSnippet(() => ({ render: () => html }));
 const open = (open: boolean) => ({ open, children: slot('<p>body</p>') });
 
 describe('Dialog', () => {
+  it('uses the description as its accessible name when no title is provided', () => {
+    const dialog = render(Dialog, {
+      ...open(true),
+      description: 'Review your application before withdrawing.',
+    });
+    expect(dialog.getByRole('dialog', { name: 'Review your application before withdrawing.' })).toBeTruthy();
+  });
+
   beforeEach(() => {
     document.body.style.overflow = 'scroll';
   });
@@ -77,18 +85,6 @@ describe('Dialog', () => {
     const { getByRole } = render(Dialog, open(true));
 
     expect(getByRole('dialog', { hidden: true }).getAttribute('aria-labelledby')).toBeNull();
-  });
-
-  // A bare `max-w-*` override used to share twMerge's conflict group with the
-  // base's unprefixed `max-w-none`, so the caller's class won at every width
-  // and cancelled the mobile takeover below `sm`. An `sm:`-prefixed override
-  // lives in its own group and must leave `max-w-none` in place.
-  it('keeps the mobile takeover when the caller sizes the card at sm and up', () => {
-    const { getByRole } = render(Dialog, { ...open(true), class: 'sm:max-w-md' });
-    const el = getByRole('dialog', { hidden: true });
-
-    expect(el.className).toContain('max-w-none');
-    expect(el.className).toContain('sm:max-w-md');
   });
 
   // A dialog holding the outcome of a request that cannot be repeated has to be

@@ -10,7 +10,7 @@
     description,
     dismissible = true,
     // 'long' stands in for a tall consumer (e.g. AuthDialog's form) to show the
-    // mobile takeover actually scrolling, with the close button pinned in place.
+    // bounded dialog content actually scrolling on a phone.
     body = 'short',
   }: {
     title?: string;

@@ -29,7 +29,6 @@ import {
   HandHelping,
   UserPlus,
   Briefcase,
-  Search,
 } from '@lucide/svelte';
 import type { LucideIcon } from '@lucide/svelte';
 import type { AccountNavItem, WorkspaceId } from './accountNav';
@@ -69,7 +68,7 @@ export const accountNavIcons: Record<AccountNavItem['href'], LucideIcon> = {
 // reuses the icon of the section that best stands for the role, so the switcher and the
 // sidebar read as one thing.
 export const workspaceIcons: Record<WorkspaceId, LucideIcon> = {
-  seeker: Search,
+  seeker: User,
   buddies: UsersRound,
   mentor: GraduationCap,
   referrer: Handshake,

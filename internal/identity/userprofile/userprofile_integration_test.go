@@ -62,3 +62,34 @@ func TestUpsertIfUnchanged_GuardsOnUpdatedAt(t *testing.T) {
 		t.Errorf("Skills after rejected conflicting write = %v, want unchanged [go docker]", current.Skills)
 	}
 }
+
+func TestSave_IncompleteProfileRoundTrip(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ($1) RETURNING id`, "profile-partial@example.test").Scan(&userID); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+	service := userprofile.New(userprofile.NewQueriesRepository(db.New(pool)))
+	for _, values := range []struct{ roles, skills []string }{
+		{[]string{}, []string{}},
+		{[]string{"backend"}, []string{}},
+		{[]string{}, []string{"go"}},
+		{[]string{}, []string{}},
+	} {
+		_, err := service.Save(ctx, userID, values.roles, values.skills, nil, nil, nil, nil, &userprofile.LocationPreferences{WorkModes: []string{"remote"}})
+		if err != nil {
+			t.Fatalf("Save(%v, %v): %v", values.roles, values.skills, err)
+		}
+		stored, err := service.Get(ctx, userID)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if len(stored.Specializations) != len(values.roles) || len(stored.Skills) != len(values.skills) {
+			t.Fatalf("round trip: roles=%v, skills=%v", stored.Specializations, stored.Skills)
+		}
+		if len(stored.LocationPreferences) == 0 {
+			t.Fatal("location was lost on partial save")
+		}
+	}
+}
