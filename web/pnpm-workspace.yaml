@@ -85,3 +85,8 @@ overrides:
   # in setup ("Cannot define property modal, object is not extensible"). A floor,
   # not a pin: it only lifts the older copy onto the newer one.
   vue@<3.5.44: 3.5.44
+  # CVE-2026-118764: Sentry 11.x still requires glob 13, whose minimatch 10
+  # has no patched release. glob 14 preserves the glob(patterns, options) API
+  # Sentry uses and the same Node engines, and brings patched minimatch 11 itself.
+  # Remove this scoped pin when Sentry accepts glob 14 natively.
+  '@sentry/bundler-plugins>glob': 14.0.3

@@ -2,11 +2,14 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/strelov1/freehire/internal/platform/observability"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/strelov1/freehire/internal/platform/config"
 )
@@ -15,24 +18,26 @@ import (
 // to Sentry before re-raising. It runs on the crash path, so it stays short.
 const panicFlushTimeout = 2 * time.Second
 
-// Main is the entry wrapper every cron worker uses in place of a bare
-// os.Exit(run()). On the normal path it times the run, writes it to
-// PROM_TEXTFILE_DIR (see writeRunMetrics — a no-op when unset), and exits with
-// run's status; Sentry was already flushed by Bootstrap's cleanup, which run
-// defers. Before any of that it consults the pause switch (see runOrPause), so a
-// held fleet exits zero without run being called at all.
-//
-// If run panics, the deferred capturePanic reports the panic to Sentry,
-// flushes it, and re-panics so the process still crashes with the original stack
-// and a non-zero exit code — the metrics write is skipped on that path, since
-// Main never regains control to reach it.
-//
-// Sentry is initialized inside Bootstrap (run's first call), so a panic after
-// bootstrap is captured; a panic before it (e.g. bad config) is not — acceptable,
-// as those paths already log and exit non-zero.
+// Main runs a worker and exits only after its final outcome has been reported.
+// Reporting lives outside run so Bootstrap's deferred cleanup cannot shut it
+// down before the worker's terminal error or panic is known.
 func Main(run func() int) {
+	os.Exit(runReported(run))
+}
+
+func runReported(run func() int) int {
+	shutdown, err := observability.InitLogs("freehire-"+workerJob(), config.Load().SentryEnvironment)
+	if err != nil {
+		log.Printf("exception reporting: %v", err)
+		return 1
+	}
+	defer shutdown()
 	defer capturePanic()
-	os.Exit(runOrPause(run))
+	code := runOrPause(run)
+	if code != 0 {
+		observability.CaptureError(context.Background(), fmt.Errorf("worker %s exited with status %d", workerJob(), code), attribute.String("worker.name", workerJob()), attribute.Int("process.exit.code", code))
+	}
+	return code
 }
 
 // runOrPause consults the pause switch and, unless it is held, times the run and
@@ -60,6 +65,7 @@ func runOrPause(run func() int) int {
 // harmless when Sentry is unconfigured (the global hub's capture is a no-op).
 func capturePanic() {
 	if r := recover(); r != nil {
+		observability.CapturePanic(context.Background(), r, attribute.String("worker.name", workerJob()))
 		sentry.CurrentHub().Recover(r)
 		sentry.Flush(panicFlushTimeout)
 		panic(r)

@@ -28,6 +28,7 @@ const HOSTED_ELSEWHERE: Record<string, string> = {
   posting_language: 'language pane',
   relocation: 'relocation pane',
   salary_currency: 'salary pane, beside the minimum',
+  equity: 'salary pane, beneath the range',
   reality: 'posted pane, beneath the age bound',
   source_type: 'source pane, above the source picker',
   clearance_levels: 'relocation pane (Security clearance)',

@@ -1,6 +1,10 @@
 package jobhash
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+	"unicode"
+)
 
 // RoleKey returns a CROSS-SOURCE role identity: the company slug and the
 // normalized, trailing-clause-stripped title, joined. Two postings of one role
@@ -43,4 +47,47 @@ var parens = regexp.MustCompile(`[()]`)
 // the whitespace this leaves behind.
 func unwrapParens(title string) string {
 	return parens.ReplaceAllString(title, " ")
+}
+
+// TitleKeys returns every key under which a title may appear on ANOTHER source for
+// the same company — the looser, punctuation-blind sibling of RoleKey that the ghost
+// cross-check matches on. A title is the same role as another when their key sets
+// intersect.
+//
+// RoleKey alone is too strict for that question, and the error is not symmetric: a
+// key that fails to match makes the cross-check ACCUSE the employer of advertising a
+// role it does not have. Measured on prod (2026-11-01), aggregators routinely drop
+// the board's punctuation — jobstash lists Plaid's "Account Executive - Fraud" as
+// "Account Executive Fraud" — and RoleKey strips " - Fraud" as a trailing clause on
+// one side only, so the same role produced two keys. Two keys per title cover it:
+//
+//   - the whole title, with every run of punctuation folded to a space, so a dash, a
+//     comma or a slash the other source dropped does not matter;
+//   - the same with its trailing clause stripped first, so a per-city variant still
+//     meets its base role, as it does under RoleKey.
+//
+// Erring toward a match is deliberate: a missed absence costs one uncounted ghost
+// criterion, a false one accuses an honest employer. A title that normalizes to
+// nothing yields no keys.
+func TitleKeys(title string) []string {
+	title = unwrapParens(title)
+	full := foldPunctuation(normalizeRoleText(title))
+	if full == "" {
+		return nil
+	}
+	stripped := foldPunctuation(normalizeRoleText(stripTrailingClause(title)))
+	if stripped == "" || stripped == full {
+		return []string{full}
+	}
+	return []string{full, stripped}
+}
+
+// foldPunctuation replaces every run of characters that is neither a letter, a digit
+// nor a combining mark with one space, so "front-end/back-end" and "front end back
+// end" agree. Marks are kept because scripts such as Devanagari write vowels with
+// them, and splitting a word on its own vowel would be no fold at all.
+func foldPunctuation(s string) string {
+	return strings.Join(strings.FieldsFunc(s, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.IsMark(r)
+	}), " ")
 }

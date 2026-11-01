@@ -69,6 +69,7 @@ type himalayasPosting struct {
 
 func (s himalayas) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	var jobs []Job
+	seen := make(map[string]bool)
 	for offset, page := 0, 0; page < himalayasMaxPages; page++ {
 		var resp himalayasResponse
 		url := fmt.Sprintf(himalayasListURL, himalayasLimit, offset)
@@ -84,7 +85,10 @@ func (s himalayas) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 			return jobs, nil
 		}
 		for _, p := range resp.Jobs {
-			if job, ok := p.toJob(); ok {
+			if job, ok := p.toJob(); ok && !seen[job.ExternalID] {
+				// Offset pages can repeat a GUID. Emit it once so concurrent
+				// ingest writers cannot race on the same identity and public slug.
+				seen[job.ExternalID] = true
 				jobs = append(jobs, job)
 			}
 		}

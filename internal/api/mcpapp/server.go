@@ -114,7 +114,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 	addPrompts(server)
 	addWidget(server)
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolSearchJobs,
 		Title: "Search jobs",
 		Description: "Search freehire's catalogue of IT job postings. Use for any question " +
@@ -133,7 +133,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.SearchJobs(ctx, in))
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolGetJob,
 		Title: "Read one job posting",
 		Description: "Read one posting in full by the slug a search result carries: the whole " +
@@ -146,7 +146,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.JobDetail(ctx, in.Slug))
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolSearchCompanies,
 		Title: "Search employers",
 		Description: "Find employers in freehire's catalogue by name or by where they hire, " +
@@ -157,7 +157,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.SearchCompanies(ctx, in))
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolGetCompany,
 		Title: "Read one employer",
 		Description: "Read what freehire holds about one employer by the slug a result " +
@@ -168,7 +168,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.CompanyDetail(ctx, in.Slug))
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolCheckJobsOpen,
 		Title: "Check whether postings are still open",
 		Description: "Check whether postings are still open, by the slugs search results carry — " +
@@ -181,7 +181,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(JobsOpenResult{Jobs: states, Unchecked: unchecked}, err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolSearch,
 		Title: "Search jobs (research)",
 		Description: "Search freehire's IT job postings by free text. Returns matching postings " +
@@ -192,7 +192,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(researchResults(found), err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolFetch,
 		Title: "Read one job posting (research)",
 		Description: "Read one posting in full by an id search returned: its full text, " +
@@ -203,7 +203,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(researchDocument(job), err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolSimilarJobs,
 		Title: "Find similar postings",
 		Description: "Postings most similar to one posting, by its slug, nearest first — for " +
@@ -214,7 +214,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.SimilarJobs(ctx, in.Slug, similarLimit(in.Limit)))
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolSalaryStats,
 		Title: "Salary ranges",
 		Description: "Salary percentiles (25th, median, 75th) from open postings that state " +
@@ -225,7 +225,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.SalaryStats(ctx, in))
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolMarketStats,
 		Title: "Job market breakdown",
 		Description: "How many open postings match a set of filters, and their most common " +
@@ -236,7 +236,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.MarketStats(ctx, in))
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	addLoggedTool(server, &mcp.Tool{
 		Name:  toolFilterValues,
 		Title: "List filter values",
 		Description: "The values one job-search filter accepts — skills, categories, " +

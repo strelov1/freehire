@@ -23,8 +23,31 @@ func (q *Queries) ClearJobATSAbsent(ctx context.Context, jobIds []int64) error {
 	return err
 }
 
+const countCompanyRecruiterPostings = `-- name: CountCompanyRecruiterPostings :one
+SELECT count(*) FROM jobs
+WHERE closed_at IS NULL
+  AND NOT is_private
+  AND company_slug = $1
+  AND via_recruiter IS TRUE
+`
+
+// How many of a company's open postings, from ANY source, state that they are published
+// on a client's behalf (jobs.via_recruiter). The cross-check reads it to recognise a
+// staffing agency as a whole: one agency posting that says "our client" marks only
+// itself, while the same agency's other postings — which say nothing — advertise
+// clients' roles just the same, and are just as legitimately absent from its board.
+// Private postings are excluded: a user's pasted JD must not change another company's
+// verdict. Rides jobs_open_company_created_at_id_idx.
+func (q *Queries) CountCompanyRecruiterPostings(ctx context.Context, companySlug string) (int64, error) {
+	row := q.db.QueryRow(ctx, countCompanyRecruiterPostings, companySlug)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const listAggregatorJobsForCrosscheckBySource = `-- name: ListAggregatorJobsForCrosscheckBySource :many
-SELECT j.id, j.company_slug, j.title, j.ats_absent_at
+SELECT j.id, j.company_slug, j.title, j.ats_absent_at,
+       (j.via_recruiter IS TRUE)::boolean AS via_recruiter
 FROM jobs j
 WHERE j.closed_at IS NULL
   AND j.source = $1
@@ -40,10 +63,11 @@ type ListAggregatorJobsForCrosscheckBySourceParams struct {
 }
 
 type ListAggregatorJobsForCrosscheckBySourceRow struct {
-	ID          int64              `json:"id"`
-	CompanySlug string             `json:"company_slug"`
-	Title       string             `json:"title"`
-	AtsAbsentAt pgtype.Timestamptz `json:"ats_absent_at"`
+	ID           int64              `json:"id"`
+	CompanySlug  string             `json:"company_slug"`
+	Title        string             `json:"title"`
+	AtsAbsentAt  pgtype.Timestamptz `json:"ats_absent_at"`
+	ViaRecruiter bool               `json:"via_recruiter"`
 }
 
 // Keyset page of one AGGREGATOR SOURCE's open postings.
@@ -56,6 +80,10 @@ type ListAggregatorJobsForCrosscheckBySourceRow struct {
 //
 // Requires jobs_source_id_open_idx (migration 0056); without it this is the same scan
 // restricted to one source.
+//
+// via_recruiter is read rather than filtered so the worker can still CLEAR a stamp on a
+// posting that has since been recognised as a recruiter's, and report how many it
+// declined for that reason. The column is true-or-NULL (migration 0214), hence IS TRUE.
 func (q *Queries) ListAggregatorJobsForCrosscheckBySource(ctx context.Context, arg ListAggregatorJobsForCrosscheckBySourceParams) ([]ListAggregatorJobsForCrosscheckBySourceRow, error) {
 	rows, err := q.db.Query(ctx, listAggregatorJobsForCrosscheckBySource, arg.Source, arg.AfterID, arg.PageSize)
 	if err != nil {
@@ -70,6 +98,7 @@ func (q *Queries) ListAggregatorJobsForCrosscheckBySource(ctx context.Context, a
 			&i.CompanySlug,
 			&i.Title,
 			&i.AtsAbsentAt,
+			&i.ViaRecruiter,
 		); err != nil {
 			return nil, err
 		}

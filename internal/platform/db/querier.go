@@ -1300,6 +1300,14 @@ type Querier interface {
 	// to ListCompanies (including the job_count > 0 hiring scope).
 	CountCompanies(ctx context.Context, arg CountCompaniesParams) (int64, error)
 	CountCompanyFeedback(ctx context.Context, companySlug string) (int64, error)
+	// How many of a company's open postings, from ANY source, state that they are published
+	// on a client's behalf (jobs.via_recruiter). The cross-check reads it to recognise a
+	// staffing agency as a whole: one agency posting that says "our client" marks only
+	// itself, while the same agency's other postings — which say nothing — advertise
+	// clients' roles just the same, and are just as legitimately absent from its board.
+	// Private postings are excluded: a user's pasted JD must not change another company's
+	// verdict. Rides jobs_open_company_created_at_id_idx.
+	CountCompanyRecruiterPostings(ctx context.Context, companySlug string) (int64, error)
 	// How many company pages this engine has been sent since a moment. Counted separately
 	// from the job ledger and then ADDED by the caller: the budget belongs to the engine,
 	// and a company page costs it exactly what a job page does.
@@ -3723,6 +3731,10 @@ type Querier interface {
 	//
 	// Requires jobs_source_id_open_idx (migration 0056); without it this is the same scan
 	// restricted to one source.
+	//
+	// via_recruiter is read rather than filtered so the worker can still CLEAR a stamp on a
+	// posting that has since been recognised as a recruiter's, and report how many it
+	// declined for that reason. The column is true-or-NULL (migration 0214), hence IS TRUE.
 	ListAggregatorJobsForCrosscheckBySource(ctx context.Context, arg ListAggregatorJobsForCrosscheckBySourceParams) ([]ListAggregatorJobsForCrosscheckBySourceRow, error)
 	// One application's live events, newest first — what the application panel renders as its
 	// history, where ListApplicationEventsInRange paints a month for the calendar.

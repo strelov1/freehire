@@ -3,10 +3,24 @@ package subscription
 import (
 	"context"
 	"errors"
+	"net/url"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/engage/notify"
+	"github.com/strelov1/freehire/internal/search/search"
 )
+
+func TestCreateRefusesAnExistingSearchThatCannotRun(t *testing.T) {
+	query := url.Values{"q": {"go OR rust OR java OR python OR ruby OR php"}}.Encode()
+	repo := &fakeRepo{savedSearchQuery: query}
+	_, err := New(repo).Create(context.Background(), 1, 2, ChannelEmail)
+	if !errors.Is(err, search.ErrTooManyAlternatives) {
+		t.Fatalf("error = %v, want ErrTooManyAlternatives", err)
+	}
+	if repo.created != nil {
+		t.Fatal("subscribed to an existing search that the matcher cannot execute")
+	}
+}
 
 // createArgs captures the primitive params Create is handed, so a test can assert them
 // without a db.* params struct.
