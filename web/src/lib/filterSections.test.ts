@@ -30,6 +30,7 @@ const HOSTED_ELSEWHERE: Record<string, string> = {
   salary_currency: 'salary pane, beside the minimum',
   reality: 'posted pane, beneath the age bound',
   source_type: 'source pane, above the source picker',
+  clearance_levels: 'relocation pane (Security clearance)',
 };
 
 // Nothing is withheld today — every declared job facet is reachable, either by its own
