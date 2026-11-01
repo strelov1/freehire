@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	dictclassify "github.com/strelov1/freehire/internal/dict/classify"
+	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -34,14 +35,16 @@ func (h *dictionaryHandlers) register(api fiber.Router, mw middleware) {
 }
 
 // dictionaryKnown reports whether the dictionary behind `kind` already resolves
-// term, and refuses a kind it does not hold. A specialization is resolved the way a
-// job title is (classify.Parse), a skill the way a stated skill is (skilltag).
+// term, and refuses a kind it does not hold. Specializations, skills, and
+// industries use the same dictionaries as their job/company pipelines.
 func dictionaryKnown(kind, term string) (bool, error) {
 	switch kind {
 	case "specialization":
 		return dictclassify.Parse(term).Category != "", nil
 	case "skill":
 		return len(skilltag.Canonicalize([]string{term})) > 0, nil
+	case "industry":
+		return len(industrytag.Canonicalize([]string{term})) > 0, nil
 	}
 	return false, errUnknownDictionaryKind
 }

@@ -89,6 +89,8 @@ func TestDictionaryRecord(t *testing.T) {
 		`{"kind":"specialization","term":"Backend"}`,
 		`{"kind":"specialization","term":"Senior Backend Engineer"}`,
 		`{"kind":"skill","term":"k8s"}`,
+		`{"kind":"industry","term":"software development"}`,
+		`{"kind":"industry","term":"finance"}`,
 	} {
 		code, _ = doDictionary(t, app, http.MethodPost, "/api/v1/dictionary/gaps", known, cookie)
 		if code != http.StatusConflict || calls != 0 {
