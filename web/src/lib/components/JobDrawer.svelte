@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
@@ -373,11 +374,10 @@
   const canRecall = $derived(hasPosting && !!item.applied_at);
 
   async function loadEmails(force = false) {
-    if ((emails !== null && !force) || emailsLoading) return;
+    if (!item.job || (emails !== null && !force) || emailsLoading) return;
     emailsLoading = true;
     emailsError = null;
     try {
-      if (!item.job) return;
       const app = await api.getTrackedApplication(item.job.public_slug);
       emails = app.emails;
       stageSuggestion = app.stage_suggestion ?? null;
@@ -433,7 +433,7 @@
   // Load the linked mail eagerly (moderator or beta only) so the tab shows its count
   // before it's opened. Re-keyed per job by the parent, so this runs once per application.
   $effect(() => {
-    if (canSeeMail) void loadEmails();
+    if (canSeeMail) untrack(() => void loadEmails());
   });
 
   async function toggleEmail(id: number) {
@@ -754,7 +754,9 @@
           </div>
         </div>
       {:else if tab === 'history'}
-        {#if emailsLoading}
+        {#if !item.job}
+          <p class="text-sm text-muted-foreground">{s.historyUnavailable}</p>
+        {:else if emailsLoading}
           <p class="text-sm text-muted-foreground">{s.loading}</p>
         {:else if emailsError}
           <p class="text-sm text-destructive" role="alert">{emailsError}</p>

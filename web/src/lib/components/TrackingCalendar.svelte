@@ -119,7 +119,7 @@
   }
 
   const weekRange = $derived(days.length
-    ? `${days[0]?.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${days[6]?.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+    ? `${days[0]?.date.toLocaleDateString(locale(), { month: 'short', day: 'numeric' })} – ${days[6]?.date.toLocaleDateString(locale(), { month: 'short', day: 'numeric' })}`
     : '');
 
   // The mark colours carry the kind; filled versus hollow carries whether anybody but the
@@ -131,7 +131,7 @@
   // Only the meetings are clocked here now; a ledger event's own time is rendered by
   // ApplicationEventList, which both day panels share.
   const clockOf = (instant: string) =>
-    new Date(instant).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    new Date(instant).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
 
   /** An arranged meeting is drawn as arranged, never as observed: it has not happened
    *  yet and may still move. A cancelled one keeps its place — an interview that simply
@@ -140,7 +140,7 @@
     iv.status === 'cancelled' ? 'text-muted-foreground' : 'text-brand-strong';
 
   const dayHeading = (d: CalendarDay) =>
-    d.date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+    d.date.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' });
 
   /** What a cell announces. An empty day says nothing about a count: "0 events" on the
    *  thirty-odd empty cells is noise a screen reader has to walk through. */

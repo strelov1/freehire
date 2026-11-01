@@ -145,3 +145,24 @@ describe('JobDrawer — phone layout in Russian', () => {
     expect(tabs.filter((t) => t.tabIndex === 0)).toHaveLength(1);
   });
 });
+
+it('shows unavailable history when the original posting cannot be read', async () => {
+  render(JobDrawer, props({ job: null }));
+  await fireEvent.click(screen.getByRole('tab', { name: 'История' }));
+  expect(screen.getByText('История этой заявки недоступна.')).toBeTruthy();
+  expect(screen.queryByText('Для этой заявки пока нет записей.')).toBeNull();
+  expect(getTrackedApplication).not.toHaveBeenCalled();
+});
+
+it('keeps a history load failure stable until the user retries', async () => {
+  getTrackedApplication.mockRejectedValueOnce(new Error('offline'));
+  render(JobDrawer, props());
+  await fireEvent.click(screen.getByRole('tab', { name: 'История' }));
+  expect(await screen.findByText('offline')).toBeTruthy();
+  expect(getTrackedApplication).toHaveBeenCalledOnce();
+
+  getTrackedApplication.mockResolvedValueOnce({ job, emails: [], events: [] });
+  await fireEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  expect(await screen.findByText('Для этой заявки пока нет записей.')).toBeTruthy();
+  expect(getTrackedApplication).toHaveBeenCalledTimes(2);
+});

@@ -1,9 +1,5 @@
 import { defineMessages, plurals } from '#lib/i18n/t.js';
 
-// `dayHeading`/`clockOf` pass `undefined` to `toLocaleDateString`/`toLocaleTimeString`
-// (the BROWSER's locale, not the account's) — a known, already-documented gap
-// (design.md's "Dates and relative times follow the BROWSER's locale"); threading the
-// resolved locale through is that change's own scope, not this one's.
 export const messages = defineMessages(
   {
     weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],

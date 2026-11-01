@@ -28,10 +28,11 @@ const staleProfile: UserProfile = {
 };
 const freshProfile = { ...staleProfile, skills: ['rust'] };
 
-const { profileStoreMock, ensureLoaded, update } = vi.hoisted(() => ({
+const { profileStoreMock, ensureLoaded, update, remove } = vi.hoisted(() => ({
   profileStoreMock: { profile: null as UserProfile | null },
   ensureLoaded: vi.fn().mockResolvedValue(undefined),
   update: vi.fn(),
+  remove: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('#lib/profile.svelte.js', () => ({
@@ -43,6 +44,7 @@ vi.mock('#lib/savedSearches.svelte.js', () => ({
     ensureLoaded,
     items: [{ id: 42, derived_from_profile: true }],
     update,
+    remove,
   },
 }));
 
@@ -117,4 +119,29 @@ describe('syncProfileAlert', () => {
     expect(ensureLoaded).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
+});
+
+
+it('removes the derived alert when the last effective profile preference is cleared', async () => {
+  const { syncProfileAlert } = await import('./profileAlertSync');
+  profileStoreMock.profile = { ...staleProfile, skills: [], specializations: [] };
+  update.mockReset();
+  remove.mockClear();
+  await syncProfileAlert();
+  expect(remove).toHaveBeenCalledWith(42);
+  expect(update).not.toHaveBeenCalled();
+});
+
+it('reads the current profile after the saved-search load finishes', async () => {
+  const { syncProfileAlert } = await import('./profileAlertSync');
+  const load = deferred();
+  ensureLoaded.mockReturnValueOnce(load.promise);
+  profileStoreMock.profile = staleProfile;
+  update.mockReset().mockResolvedValue(undefined);
+  const saving = syncProfileAlert();
+  await flush();
+  profileStoreMock.profile = freshProfile;
+  load.resolve();
+  await saving;
+  expect(update).toHaveBeenCalledWith(42, { query: 'skills=rust' });
 });

@@ -11,7 +11,7 @@
   import { ApiError } from '#lib/api.js';
   import { APP_STORE_URL } from '#lib/appLinks.js';
   import { notifications } from '#lib/notifications.svelte.js';
-  import { enableProfileAlert, profileAlertSearch } from '#lib/profileAlert.js';
+  import { canEnableProfileAlert, enableProfileAlert, profileAlertSearch } from '#lib/profileAlert.js';
   import { savedSearches } from '#lib/savedSearches.svelte.js';
   import { Button, ProviderIcon } from '#lib/ui/index.js';
   import JobAlertDigestPreview from '#lib/components/JobAlertDigestPreview.svelte';
@@ -30,6 +30,7 @@
     void notifications.ensureLoaded();
   });
 
+  const canEnable = $derived(canEnableProfileAlert(profile));
   const search = $derived(profileAlertSearch());
   const on = (channel: string) => search !== null && notifications.forSavedSearch(search.id, channel) !== undefined;
   const emailOn = $derived(on('email'));
@@ -41,7 +42,7 @@
   let telegramPending = $state(false);
 
   async function turnOn(channel: 'email' | 'telegram') {
-    if (!profile || busy) return;
+    if (!profile || !canEnable || busy) return;
     busy = channel;
     error = null;
     try {
@@ -68,6 +69,7 @@
   }
 
   async function connectTelegram() {
+    if (!canEnable) return;
     if (notifications.telegram.linked) return turnOn('telegram');
     busy = 'telegram';
     error = null;
@@ -105,9 +107,9 @@
   When a new job matches your feed, we send it to you — the moment it appears, or once a day.
 </p>
 
-{#if !profile}
+{#if !canEnable}
   <p class="mt-4 rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground">
-    Alerts follow your feed. Go back a step and pick a specialization and a skill to turn them on.
+    Alerts follow your feed. Go back a step and pick a role, skill or work preference to turn them on.
   </p>
 {/if}
 
@@ -126,7 +128,7 @@
         role="switch"
         aria-checked={emailOn}
         aria-label="Email me new jobs matching my feed"
-        disabled={!profile || busy !== null}
+        disabled={(!emailOn && !canEnable) || busy !== null}
         onclick={() => void (emailOn ? turnEmailOff() : turnOn('email'))}
         class={[
           'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
@@ -155,7 +157,7 @@
           I pressed Start
         </Button>
       {:else}
-        <Button variant="outline" size="sm" class="w-full" disabled={!profile || busy !== null} onclick={() => void connectTelegram()}>
+        <Button variant="outline" size="sm" class="w-full" disabled={!canEnable || busy !== null} onclick={() => void connectTelegram()}>
           {#if busy === 'telegram'}<LoaderCircle class="size-4 animate-spin" aria-hidden="true" />{/if}
           {notifications.telegram.linked ? 'Turn on' : 'Connect'}
         </Button>
