@@ -36,13 +36,13 @@ var (
 	// reOpenRange is a dash-joined second bound reMoney does not read ("$50 - 60").
 	reOpenRange     = regexp.MustCompile(`(?i)(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
 	reTrailRange    = regexp.MustCompile(`(?i)\d[\d.,]+\s*(?:us\$|ca\$|au\$|nz\$|hk\$|a\$|c\$|s\$|rp|zł|£|€|\$|usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\s*[-–—]\s*\d`)
-	reBenefitClause = regexp.MustCompile(`(?i)` +
+	reBenefitClause = regexp.MustCompile(`(?i)(?:^|\+\s*)` +
 		`(?:(?:[$£€]|zł|(?:us|ca|au|nz|hk|a|c|s)\$|rp)\s*)?` +
 		`\d[\d.,]*\s*` +
 		`(?:(?:[$£€]|zł|(?:us|ca|au|nz|hk|a|c|s)\$|rp)\s*)?` +
 		`(?:sign[\s-]?on\s+|signing\s+)?` +
-		`(?:bonus(?:es)?|benefits?)\b` +
-		`|(?:sign[\s-]?on|signing|bonus(?:es)?|benefits?)\b`)
+		`(?:bonus(?:es)?|benefits?)\b(?:\s+per\s+(?:annum|year|month|hour|hr|day))?` +
+		`|\+?\s*(?:sign[\s-]?on|signing|bonus(?:es)?|benefits?)\b`)
 	reDotGrp   = regexp.MustCompile(`^\d{1,3}(\.\d{3})+$`)
 	reComGrp   = regexp.MustCompile(`^\d{1,3}(,\d{3})+(\.\d+)?$`)
 	reEuDec    = regexp.MustCompile(`^\d{1,3}(\.\d{3})+,\d+$`)
@@ -172,6 +172,10 @@ func withoutBenefit(line string) string {
 func figurePlus(body string) bool {
 	for _, loc := range reMoney.FindAllStringIndex(body, -1) {
 		if strings.HasSuffix(body[loc[0]:loc[1]], "+") {
+			tail := strings.TrimSpace(body[loc[1]:])
+			if tail != "" && tail[0] >= '0' && tail[0] <= '9' {
+				continue
+			}
 			return true
 		}
 	}

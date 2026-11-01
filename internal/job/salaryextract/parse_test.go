@@ -15,6 +15,26 @@ func TestParseLabeledSalary(t *testing.T) {
 		ok        bool
 	}{
 		{
+			name:      "benefits wording preserves both range bounds",
+			text:      "Salary: $100,000 - $150,000 benefits included",
+			countries: []string{"us"}, min: 100000, max: 150000, minSet: true, maxSet: true, currency: "USD", ok: true,
+		},
+		{
+			name:      "bonus period does not override salary period",
+			text:      "Salary Range:\n$120,000 per year + $5,000 bonus per month",
+			countries: []string{"us"}, min: 120000, max: 120000, minSet: true, maxSet: true, currency: "USD", period: "year", ok: true,
+		},
+		{
+			name:      "attached bonus label is not a floor",
+			text:      "Salary: $120,000+ Bonus",
+			countries: []string{"us"}, min: 120000, max: 120000, minSet: true, maxSet: true, currency: "USD", ok: true,
+		},
+		{
+			name:      "attached bonus percentage is not a floor",
+			text:      "Salary: $120,000+17%",
+			countries: []string{"us"}, min: 120000, max: 120000, minSet: true, maxSet: true, currency: "USD", ok: true,
+		},
+		{
 			name: "workday salary heading followed by European range",
 			text: "<p><b>Salary Range:</b></p>27.510,00 € - 51.090,00 €<p><br/> </p><p><b>Job Description Summary</b></p>Build things.",
 			min:  27510, max: 51090, minSet: true, maxSet: true,
