@@ -56,7 +56,12 @@ var answerWords = map[FieldType]string{
 // with `_systemfield_`, which isStandard checks directly.
 var standardFieldIDs = map[string][]string{
 	"greenhouse": {
-		"first_name", "last_name", "email", "phone",
+		// preferred_name is Greenhouse's own built-in "Preferred First Name", not an
+		// employer question: it carries a field name rather than a `question_<id>`, and
+		// measured 2026-10-31 it sat on ~9 in 10 sampled Greenhouse forms, required on one
+		// in ten — counted as a question, it made the "Preferred First Name" box the most
+		// common screening question on the platform.
+		"first_name", "last_name", "preferred_name", "email", "phone",
 		"resume", "resume_text", "cover_letter", "cover_letter_text",
 		"location", "longitude", "latitude",
 	},
@@ -70,13 +75,19 @@ var standardFieldIDs = map[string][]string{
 //
 // Three platforms answer it by their own convention rather than by a list, which is both
 // exact and immune to the platform adding profile fields later: Ashby prefixes every
-// standard field's path with `_systemfield_`, while Workable (`QA_`) and Lever
+// standard field's path with `_systemfield_`, while Workable (`QA_`, `CA_`) and Lever
 // (`cards[`) prefix every EMPLOYER question — the inverse marker, so for those two the
 // test is inverted too.
+//
+// Workable has TWO employer markers: `QA_` is a question written on the job, `CA_` one the
+// employer configured once for every job on its account ("Why are you interested in
+// working at Celsius?", "Are you at least 18?"). Reading only the first filed the second
+// among the basics, beside "Email" — measured 2026-10-31, `CA_` fields sat on 220 of 570
+// sampled open Workable forms, 930 of them required.
 func isStandard(provider string, f Field) bool {
 	switch provider {
 	case "workable":
-		return !strings.HasPrefix(f.ID, "QA_")
+		return !strings.HasPrefix(f.ID, "QA_") && !strings.HasPrefix(f.ID, "CA_")
 	case "lever":
 		// Lever names an employer's question `cards[<uuid>][fieldN]`; everything else —
 		// name, email, phone, the profile links, the CV, the consent boxes — is the

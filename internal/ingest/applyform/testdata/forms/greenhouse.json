@@ -1,0 +1,102 @@
+{
+  "fields": [
+    {
+      "id": "first_name",
+      "label": "First Name",
+      "raw_type": "input_text",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "last_name",
+      "label": "Last Name",
+      "raw_type": "input_text",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "email",
+      "label": "Email",
+      "raw_type": "input_text",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "phone",
+      "label": "Phone",
+      "raw_type": "input_text",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "resume",
+      "label": "Resume/CV",
+      "raw_type": "input_file",
+      "required": true,
+      "type": "file"
+    },
+    {
+      "id": "resume_text",
+      "label": "Resume/CV",
+      "raw_type": "textarea",
+      "required": true,
+      "type": "textarea"
+    },
+    {
+      "id": "question_6279957101",
+      "label": "Salary expectations",
+      "raw_type": "input_text",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "question_6279960101",
+      "label": "Will you need visa sponsorship in the future?",
+      "options": [
+        {
+          "label": "Yes",
+          "value": "1"
+        },
+        {
+          "label": "No",
+          "value": "0"
+        }
+      ],
+      "raw_type": "multi_value_single_select",
+      "required": true,
+      "type": "select"
+    },
+    {
+      "id": "question_6279954101",
+      "label": "Are you legally entitled to work in the EU?",
+      "options": [
+        {
+          "label": "Yes",
+          "value": "1"
+        },
+        {
+          "label": "No",
+          "value": "0"
+        }
+      ],
+      "raw_type": "multi_value_single_select",
+      "required": true,
+      "type": "select"
+    },
+    {
+      "id": "question_8265775101",
+      "label": "What was your final grade point average (GPA) when you completed your studies?",
+      "raw_type": "input_text",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "question_9424146101",
+      "label": "Which ATOSS office locations would you be interested in?",
+      "raw_type": "input_text",
+      "required": true,
+      "type": "text"
+    }
+  ],
+  "provider": "greenhouse"
+}

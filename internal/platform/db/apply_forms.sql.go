@@ -160,6 +160,42 @@ func (q *Queries) GetApplyFormByJobID(ctx context.Context, jobID int64) (GetAppl
 	return i, err
 }
 
+const listApplyFormsForJobs = `-- name: ListApplyFormsForJobs :many
+SELECT job_id, provider, payload
+FROM apply_forms
+WHERE job_id = ANY($1::bigint[])
+`
+
+type ListApplyFormsForJobsRow struct {
+	JobID    int64  `json:"job_id"`
+	Provider string `json:"provider"`
+	Payload  []byte `json:"payload"`
+}
+
+// The captured forms of a BATCH of jobs, for the search-index writers that count each
+// form's questions onto its document (applyform.QuestionCounts). One call per writer
+// batch, never one per document — the same shape ListSemanticChunksForJobs gives the
+// description vectors. A job with no captured form simply has no row.
+func (q *Queries) ListApplyFormsForJobs(ctx context.Context, jobIds []int64) ([]ListApplyFormsForJobsRow, error) {
+	rows, err := q.db.Query(ctx, listApplyFormsForJobs, jobIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListApplyFormsForJobsRow{}
+	for rows.Next() {
+		var i ListApplyFormsForJobsRow
+		if err := rows.Scan(&i.JobID, &i.Provider, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const recordApplyFormFailure = `-- name: RecordApplyFormFailure :one
 UPDATE apply_form_outbox
 SET attempts   = attempts + 1,
@@ -195,25 +231,56 @@ func (q *Queries) RecordApplyFormFailure(ctx context.Context, arg RecordApplyFor
 }
 
 const upsertApplyForm = `-- name: UpsertApplyForm :exec
-INSERT INTO apply_forms (job_id, provider, payload)
-VALUES ($1, $2, $3)
-ON CONFLICT (job_id) DO UPDATE
-SET provider    = EXCLUDED.provider,
-    payload     = EXCLUDED.payload,
-    captured_at = now()
+WITH previous AS (
+    SELECT f.payload FROM apply_forms f WHERE f.job_id = $2::bigint
+),
+stored AS (
+    INSERT INTO apply_forms (job_id, provider, payload)
+    VALUES ($2, $3, $1)
+    ON CONFLICT (job_id) DO UPDATE
+    SET provider    = EXCLUDED.provider,
+        payload     = EXCLUDED.payload,
+        captured_at = now()
+    RETURNING apply_forms.job_id
+)
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT j.id, COALESCE(j.posted_at, j.created_at)
+FROM stored s
+JOIN jobs j ON j.id = s.job_id
+WHERE j.closed_at IS NULL
+  AND j.duplicate_of IS NULL
+  AND NOT j.is_private
+  AND (SELECT payload FROM previous) IS DISTINCT FROM $1::jsonb
+ON CONFLICT (job_id) DO NOTHING
 `
 
 type UpsertApplyFormParams struct {
+	Payload  []byte `json:"payload"`
 	JobID    int64  `json:"job_id"`
 	Provider string `json:"provider"`
-	Payload  []byte `json:"payload"`
 }
 
 // Store a job's captured application form, replacing whatever was there. job_id is the
 // primary key, so this is the only shape a write can take: a job carries one current
 // form, and a re-capture supersedes rather than accumulates. captured_at is refreshed on
 // every write so a form's age always describes the payload actually stored.
+//
+// A form that is new or different also queues the job for the live search index, in the
+// same statement, because the search document carries the form's question count
+// (`apply_questions`, counted from this payload at index time) and nothing else would
+// carry the change there: cmd/capture-apply-form fills a form hours or days after
+// cmd/ingest queued the job's document, and an employer saves a vacancy's questions after
+// the vacancy itself. Without this the count reached Meilisearch only at the next full
+// rebuild. In the statement rather than in each writer so no writer can forget it — there
+// are three.
+//
+// `previous` reads the row as it stood before this statement (every CTE shares one
+// snapshot), so a Recruitee crawl rewriting the identical form on every run queues
+// nothing. Only an open, canonical, public job is queued — the same rows
+// ClaimSearchOutboxBatch would drain; anything else is a row the drain would claim and
+// discard. The form is still stored for those, so a posting that becomes canonical later
+// is indexed with its count by the write that makes it so.
 func (q *Queries) UpsertApplyForm(ctx context.Context, arg UpsertApplyFormParams) error {
-	_, err := q.db.Exec(ctx, upsertApplyForm, arg.JobID, arg.Provider, arg.Payload)
+	_, err := q.db.Exec(ctx, upsertApplyForm, arg.Payload, arg.JobID, arg.Provider)
 	return err
 }

@@ -155,6 +155,11 @@ export const FILTER_EXTRAS: FilterRow[] = [
     label: 'Open within',
     values:
       'integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together',
+  },  {
+    param: 'apply_questions_max',
+    label: 'Application questions',
+    values:
+      'integer ≥ 0 — jobs whose application form requires at most N questions beyond name, contact details and CV (3 = the "short form" filter). Jobs whose form freehire has not captured are excluded: unknown is not short',
   },
 ];
 

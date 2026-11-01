@@ -171,6 +171,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `seniority_include_unspecified` | Include unstated seniority | true — with seniority, also keep the jobs that carry no seniority level (most of the catalogue). Has no effect without an included seniority |
 | `posted_within_days` | Posted within | integer — jobs whose SOURCE states a posting date in the last N days. Some boards restate that date on every crawl, so a job open for months can satisfy a narrow bound here; open_within_days is the one that cannot be rewritten from outside |
 | `open_within_days` | Open within | integer — jobs first recorded by freehire in the last N days, i.e. how long the posting has been in the catalogue regardless of the date its source states. Independent of posted_within_days; both may be set and they narrow together |
+| `apply_questions_max` | Application questions | integer ≥ 0 — jobs whose application form requires at most N questions beyond name, contact details and CV (3 = the "short form" filter). Jobs whose form freehire has not captured are excluded: unknown is not short |
 
 ### Recipes
 

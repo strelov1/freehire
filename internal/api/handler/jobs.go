@@ -11,6 +11,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/identity/auth"
+	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/catalogstats"
 	"github.com/strelov1/freehire/internal/ingest/moderation"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -189,6 +190,15 @@ func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
 		HasATSAbsent: job.AtsAbsentAt.Valid,
 		Evidence:     h.ghostEvidence(c, job.ID),
 	})
+
+	// The application form's required-question count, the same figure the posting's search
+	// document carries. Best-effort: a failed read leaves the key absent, which says "not
+	// known" — never a count of zero.
+	if counts, err := applyform.QuestionCounts(c.Context(), h.queries, []int64{job.ID}); err == nil {
+		if n, ok := counts[job.ID]; ok {
+			view.ApplyQuestions = &n
+		}
+	}
 
 	// Referral availability: true when the company has an approved referrer, so the detail
 	// page can show the "ask for a referral" block. Best-effort — a lookup error degrades

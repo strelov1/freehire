@@ -3,12 +3,43 @@
 -- primary key, so this is the only shape a write can take: a job carries one current
 -- form, and a re-capture supersedes rather than accumulates. captured_at is refreshed on
 -- every write so a form's age always describes the payload actually stored.
-INSERT INTO apply_forms (job_id, provider, payload)
-VALUES (sqlc.arg(job_id), sqlc.arg(provider), sqlc.arg(payload))
-ON CONFLICT (job_id) DO UPDATE
-SET provider    = EXCLUDED.provider,
-    payload     = EXCLUDED.payload,
-    captured_at = now();
+--
+-- A form that is new or different also queues the job for the live search index, in the
+-- same statement, because the search document carries the form's question count
+-- (`apply_questions`, counted from this payload at index time) and nothing else would
+-- carry the change there: cmd/capture-apply-form fills a form hours or days after
+-- cmd/ingest queued the job's document, and an employer saves a vacancy's questions after
+-- the vacancy itself. Without this the count reached Meilisearch only at the next full
+-- rebuild. In the statement rather than in each writer so no writer can forget it — there
+-- are three.
+--
+-- `previous` reads the row as it stood before this statement (every CTE shares one
+-- snapshot), so a Recruitee crawl rewriting the identical form on every run queues
+-- nothing. Only an open, canonical, public job is queued — the same rows
+-- ClaimSearchOutboxBatch would drain; anything else is a row the drain would claim and
+-- discard. The form is still stored for those, so a posting that becomes canonical later
+-- is indexed with its count by the write that makes it so.
+WITH previous AS (
+    SELECT f.payload FROM apply_forms f WHERE f.job_id = sqlc.arg(job_id)::bigint
+),
+stored AS (
+    INSERT INTO apply_forms (job_id, provider, payload)
+    VALUES (sqlc.arg(job_id), sqlc.arg(provider), sqlc.arg(payload))
+    ON CONFLICT (job_id) DO UPDATE
+    SET provider    = EXCLUDED.provider,
+        payload     = EXCLUDED.payload,
+        captured_at = now()
+    RETURNING apply_forms.job_id
+)
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT j.id, COALESCE(j.posted_at, j.created_at)
+FROM stored s
+JOIN jobs j ON j.id = s.job_id
+WHERE j.closed_at IS NULL
+  AND j.duplicate_of IS NULL
+  AND NOT j.is_private
+  AND (SELECT payload FROM previous) IS DISTINCT FROM sqlc.arg(payload)::jsonb
+ON CONFLICT (job_id) DO NOTHING;
 
 -- name: EnqueueApplyFormCapture :execrows
 -- Transactional-outbox enqueue for the ingest write path: queue this one job for a form
@@ -103,3 +134,12 @@ RETURNING attempts, failed_at;
 SELECT provider, captured_at, payload
 FROM apply_forms
 WHERE job_id = sqlc.arg(job_id);
+
+-- name: ListApplyFormsForJobs :many
+-- The captured forms of a BATCH of jobs, for the search-index writers that count each
+-- form's questions onto its document (applyform.QuestionCounts). One call per writer
+-- batch, never one per document — the same shape ListSemanticChunksForJobs gives the
+-- description vectors. A job with no captured form simply has no row.
+SELECT job_id, provider, payload
+FROM apply_forms
+WHERE job_id = ANY(sqlc.arg(job_ids)::bigint[]);

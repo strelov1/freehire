@@ -133,9 +133,22 @@ type Job struct {
 	AutoApplyAvailable bool `json:"auto_apply_available,omitempty"`
 	// ApplicationDeadline is the source-stated last application day (YYYY-MM-DD), inclusive.
 	ApplicationDeadline *string `json:"application_deadline,omitempty"`
-	PostedAt            *string `json:"posted_at"`
-	CreatedAt           *string `json:"created_at"`
-	UpdatedAt           *string `json:"updated_at"`
+	// ApplyQuestions is how many questions the posting's application form REQUIRES
+	// beyond the standard fields every form asks for (name, contact details, CV) —
+	// counted from the form captured for it (applyform.Form.RequiredQuestions), so the
+	// job card can say "3 questions" and the `apply_questions_max` filter can find the
+	// short forms.
+	//
+	// nil, and omitted, when no form has been captured — which is most postings: the
+	// platforms whose forms can be read at all are a minority of the catalogue. 0 is a
+	// real answer ("nothing beyond the basics") and is serialized; an absent key is
+	// "we do not know", and the two must never read alike. Not set by FromRow, which
+	// sees only the jobs row: the search-index writers and the detail endpoint attach
+	// it from apply_forms, so a list served straight from Postgres omits it.
+	ApplyQuestions *int    `json:"apply_questions,omitempty"`
+	PostedAt       *string `json:"posted_at"`
+	CreatedAt      *string `json:"created_at"`
+	UpdatedAt      *string `json:"updated_at"`
 	// LastSeenAt is when a re-crawl last confirmed this posting still live — see
 	// docs/agents/job-lifecycle.md. The SPA uses it to estimate a rolling
 	// JobPosting.validThrough for an open job (seo.ts), since most sources carry

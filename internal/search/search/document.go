@@ -197,6 +197,16 @@ func FromJob(j db.Job, desc [][]float32, sourceType string) (JobDocument, error)
 	return doc, nil
 }
 
+// AttachApplyQuestions sets the document's apply_questions from a batch's counts
+// (applyform.QuestionCounts, which this package may not import — the writers read them and
+// hand them in). A job missing from counts has no captured form and keeps the key absent:
+// that is "we do not know", which the `apply_questions_max` filter must not read as short.
+func (d *JobDocument) AttachApplyQuestions(counts map[int64]int) {
+	if n, ok := counts[d.ID]; ok {
+		d.ApplyQuestions = &n
+	}
+}
+
 // CategoryUnresolved reports whether a job's category is unresolved by both the
 // deterministic title dictionary and the LLM: internal/dict/classify's title match left
 // jobs.category empty, and enrichment either never found one or fell back to the

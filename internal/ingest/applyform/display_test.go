@@ -282,7 +282,8 @@ func TestForDisplayFlattensHTMLInABasic(t *testing.T) {
 }
 
 // Workable marks an employer's question by prefixing its identifier — the platform's own
-// convention, the same kind of marker Ashby's `_systemfield_` provides. Everything else
+// convention — `QA_` on the job, `CA_` across the account — the same kind of marker
+// Ashby's `_systemfield_` provides. Everything else
 // is the standard profile every Workable application collects, and there is a lot of it:
 // name, contact details, CV, plus repeatable education and experience blocks.
 func TestForDisplaySeparatesWorkablesStandardProfile(t *testing.T) {
@@ -297,12 +298,14 @@ func TestForDisplaySeparatesWorkablesStandardProfile(t *testing.T) {
 			{ID: "experience", Label: "Experience", RawType: "group"},
 			{ID: "QA_1", Label: "Why this role?", Type: TypeTextarea, Required: true},
 			{ID: "QA_2", Label: "Which AWS services have you used?", Type: TypeMultiSelect},
+			// An account-level question: the employer configured it once, for every job.
+			{ID: "CA_35296", Label: "Are you at least 18 years of age?", Type: TypeSelect, Required: true},
 		},
 	}.ForDisplay()
 
 	got := questionTexts(d)
-	if len(got) != 2 || got[0] != "Why this role?" {
-		t.Errorf("questions = %v, want only the two the employer wrote", got)
+	if len(got) != 3 || got[0] != "Why this role?" || got[2] != "Are you at least 18 years of age?" {
+		t.Errorf("questions = %v, want only the three the employer wrote", got)
 	}
 	// Six standard controls, stated once each — including the two history blocks, which
 	// are real work for a candidate and worth naming.

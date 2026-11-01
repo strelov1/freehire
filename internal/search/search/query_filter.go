@@ -428,6 +428,16 @@ func filterFromValues(v url.Values, now time.Time) any {
 		groups = append(groups, experienceGroup(Lte("enrichment.experience_years_min", n)))
 	}
 
+	// Application cost: apply_questions_max=N keeps the postings whose captured form
+	// requires at most N questions beyond the standard fields. A posting with no captured
+	// form carries no apply_questions at all, and Meilisearch compares only documents that
+	// carry the attribute — so "we do not know" is excluded rather than read as short,
+	// which is the point. A negative bound can only match nothing (the count is never
+	// below zero), so it is dropped and reported (ApplyQuestionsMaxParam).
+	if n, ok := applyQuestionsMax(v.Get(ApplyQuestionsMaxParam)); ok {
+		groups = append(groups, []string{Lte("apply_questions", n)})
+	}
+
 	// Freshness: posted_within_days=N restricts to jobs posted in the last N days,
 	// i.e. whose effective posting date (posted_ts, unix seconds) is at or after
 	// now - N*86400. A non-positive or non-numeric value imposes no restriction.
@@ -467,6 +477,21 @@ func splitFacetValues(in []string) []string {
 		}
 	}
 	return out
+}
+
+// ApplyQuestionsMaxParam bounds how many required questions a posting's application
+// form may ask beyond the standard fields. The search box's "short form" toggle sends 3:
+// measured 2026-10-31 over a sample of open postings with a captured form, about half ask
+// three or fewer, and the share with a required written answer steps from ~20% at one to
+// three questions up to ~31% at four.
+const ApplyQuestionsMaxParam = "apply_questions_max"
+
+// applyQuestionsMax reads the apply_questions_max bound: a non-negative integer, or no
+// bound. IgnoredValues names every value this declines, so a caller whose typo widened
+// the answer is told.
+func applyQuestionsMax(s string) (int, bool) {
+	n, ok := atoiOK(strings.TrimSpace(s))
+	return n, ok && n >= 0
 }
 
 // atoiOK reports whether a query value is a valid integer, so a missing or

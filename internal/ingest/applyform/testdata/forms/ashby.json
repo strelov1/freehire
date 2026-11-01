@@ -1,0 +1,67 @@
+{
+  "fields": [
+    {
+      "id": "_systemfield_name",
+      "label": "Name",
+      "raw_type": "String",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "_systemfield_email",
+      "label": "Email",
+      "raw_type": "Email",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "b80bcab9-d24c-4691-9676-ea757b25107b",
+      "label": "Phone Number",
+      "raw_type": "Phone",
+      "required": true
+    },
+    {
+      "id": "_systemfield_location",
+      "label": "Where are you currently located?",
+      "raw_type": "Location",
+      "required": true
+    },
+    {
+      "id": "_systemfield_resume",
+      "label": "Resume",
+      "raw_type": "File",
+      "required": true,
+      "type": "file"
+    },
+    {
+      "id": "57869fc2-3438-4299-9eab-5e054e96db57",
+      "label": "LinkedIn",
+      "raw_type": "String",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "045f5c4a-2b61-4f76-8070-5b9ba04a4a55",
+      "label": "GitHub",
+      "raw_type": "String",
+      "required": true,
+      "type": "text"
+    },
+    {
+      "id": "7bf59c7e-5ab0-451e-9134-347b43df67b1",
+      "label": "Other URL",
+      "raw_type": "String",
+      "required": false,
+      "type": "text"
+    },
+    {
+      "id": "57d81988-934d-4b55-8539-fc566bdce594",
+      "label": "Will you now or in the future require authorization to work in the United States?",
+      "raw_type": "Boolean",
+      "required": true,
+      "section": "Work Authorization",
+      "type": "boolean"
+    }
+  ],
+  "provider": "ashby"
+}

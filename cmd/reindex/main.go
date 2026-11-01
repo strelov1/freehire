@@ -24,6 +24,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/config"
@@ -155,7 +156,7 @@ func run() int {
 	// Builds a fresh index and atomically swaps it in — transiently a second full copy
 	// of the index (disk already guarded up front, before the recompute).
 	log.Print("reindex: target=facet scope=full mode=swap")
-	indexed, skipped, err := reindexFull(ctx, reader, client.NewFacetRebuild(), lookup, geo, q, time.Now())
+	indexed, skipped, err := reindexFull(ctx, reader, client.NewFacetRebuild(), lookup, geo, q, q, time.Now())
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
@@ -249,7 +250,7 @@ type rebuilder interface {
 // index never held them, so unlike the in-place path there is nothing to delete).
 // fetch pages by keyset (id > last seen) so rows inserted or re-ordered during the
 // run cannot be skipped or repeated.
-func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo closureGeoLookup, chunks search.ChunkLister, now time.Time) (int, int, error) {
+func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, lookup realityLookup, geo closureGeoLookup, chunks search.ChunkLister, forms applyform.FormLister, now time.Time) (int, int, error) {
 	if err := b.Prepare(ctx); err != nil {
 		return 0, 0, err
 	}
@@ -271,7 +272,7 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 		}
 	}()
 
-	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, chunks, now, b.Push)
+	indexed, skipped, err := streamOpenDocs(ctx, reader, lookup, geo, chunks, forms, now, b.Push)
 	if err != nil {
 		return indexed, skipped, err
 	}
@@ -291,8 +292,9 @@ func reindexFull(ctx context.Context, reader worker.PageReader, b rebuilder, loo
 // drop-hybrid-search-pgvector-similar), so reindexFull is its only caller now.
 //
 // chunks supplies each batch's description vectors in one query per batch; nil (tests
-// that do not exercise vectors) writes every document with none.
-func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo closureGeoLookup, chunks search.ChunkLister, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
+// that do not exercise vectors) writes every document with none. forms supplies each
+// batch's application-form question counts the same way; nil writes none.
+func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realityLookup, geo closureGeoLookup, chunks search.ChunkLister, forms applyform.FormLister, now time.Time, push func(context.Context, []search.JobDocument) error) (int, int, error) {
 	var indexed atomic.Int64
 	stopHeartbeat := worker.Heartbeat(progressInterval, func() {
 		log.Printf("reindex: progress indexed=%d", indexed.Load())
@@ -316,6 +318,15 @@ func streamOpenDocs(ctx context.Context, reader worker.PageReader, lookup realit
 			docs, _, err := splitJobs(jobs, lookup, geo, desc, now) // closed jobs (deleteIDs) are dropped, not indexed
 			if err != nil {
 				return int(indexed.Load()), skipped, err
+			}
+			// Asked for the whole page, like the vectors above. A job with no captured form
+			// is absent from the map and its document carries no count — unknown, not short.
+			questions, err := applyform.QuestionCounts(ctx, forms, pageIDs(jobs))
+			if err != nil {
+				return int(indexed.Load()), skipped, err
+			}
+			for i := range docs {
+				docs[i].AttachApplyQuestions(questions)
 			}
 			if err := push(ctx, docs); err != nil {
 				return int(indexed.Load()), skipped, err
@@ -341,11 +352,16 @@ func batchChunkVectors(ctx context.Context, chunks search.ChunkLister, jobs []db
 	if chunks == nil {
 		return nil, nil
 	}
+	return search.ChunkVectorsForJobs(ctx, chunks, pageIDs(jobs))
+}
+
+// pageIDs is the ids of one page of the reindex feed.
+func pageIDs(jobs []db.Job) []int64 {
 	ids := make([]int64, len(jobs))
 	for i, j := range jobs {
 		ids[i] = j.ID
 	}
-	return search.ChunkVectorsForJobs(ctx, chunks, ids)
+	return ids
 }
 
 // realityLookup returns a role cluster's repost and concurrent-open counts for the
