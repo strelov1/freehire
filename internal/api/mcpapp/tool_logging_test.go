@@ -52,8 +52,8 @@ func TestToolLogsSpanActualExecutionAndExcludePayloads(t *testing.T) {
 			records := captureToolLogs(t)
 			release := make(chan struct{})
 			// Unblock a failed test before closing its SDK sessions.
-			var releaseOnce sync.Once
-			defer releaseOnce.Do(func() { close(release) })
+			unblock := sync.OnceFunc(func() { close(release) })
+			defer unblock()
 			var server *mcp.Server
 			if surface == "public" {
 				reader := readerThatFinds(t)
@@ -104,7 +104,7 @@ func TestToolLogsSpanActualExecutionAndExcludePayloads(t *testing.T) {
 				t.Fatalf("call finished before release: %v", err)
 			default:
 			}
-			releaseOnce.Do(func() { close(release) })
+			unblock()
 			select {
 			case err := <-done:
 				if err != nil {

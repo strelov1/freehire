@@ -39,11 +39,11 @@ func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolRe
 func addLoggedTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, Out]) {
 	// Capture the registered name so a caller cannot inject a name into the log.
 	name := tool.Name
-	mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in In) (result *mcp.CallToolResult, output Out, err error) {
+	mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
 		finish := observeTool(ctx, "public", name)
 		// A panic deliberately leaves the start unmatched; do not recover it or log
 		// its value, which can contain input or other sensitive data.
-		result, output, err = handler(ctx, req, in)
+		result, output, err := handler(ctx, req, in)
 		finish(result, err)
 		return result, output, err
 	})
