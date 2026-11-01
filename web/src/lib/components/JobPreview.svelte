@@ -65,7 +65,7 @@
       salary_max: salaryMax ?? undefined,
       salary_currency: salaryCurrency || undefined,
       salary_period: salaryPeriod || undefined,
-    }),
+    }, 'standard'),
   );
 
   // Draft facets: label + value pairs for whatever the submitter has filled in so far.

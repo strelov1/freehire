@@ -144,6 +144,13 @@ it('includes the applied employer in the card link description', () => {
   expect(description?.textContent).toContain('Applied to this company');
 });
 
+it('shows exact source salary bounds in the job detail summary', () => {
+  render(JobView, { job: { ...job, enrichment: {
+    salary_min: 2_501, salary_max: 3_000, salary_currency: 'EUR', salary_period: 'month',
+  } } });
+  expect(screen.getByText('2,501 – 3,000 € / mo')).not.toBeNull();
+});
+
 it.each([JobView, JobRow])('shows the application deadline when the source states it', (component) => {
   const datedJob = { ...job, application_deadline: '2026-11-11' };
   const view = render(component, { job: datedJob });

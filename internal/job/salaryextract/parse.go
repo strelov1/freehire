@@ -19,28 +19,37 @@ type Salary struct {
 var (
 	blockTag = regexp.MustCompile(`(?i)<\s*/?\s*(?:p|div|br|li|h[1-6]|tr)\b[^>]*>`)
 	anyTag   = regexp.MustCompile(`<[^>]+>`)
-	reLabel  = regexp.MustCompile(`(?i)^(salary|pay|compensation|remuneration)\s*:\s*(.*)$`)
+	reLabel  = regexp.MustCompile(`(?i)^(salary(?: range)?|pay|compensation|remuneration)\s*:\s*(.*)$`)
 	reYear   = regexp.MustCompile(`(?i)(?:per\s+annum|per\s+year|/\s*year|/\s*yr\b|p\.a\.|annually|yearly)`)
 	reMonth  = regexp.MustCompile(`(?i)(?:per\s+month|/\s*month|p/m\b|monthly)`)
 	reHour   = regexp.MustCompile(`(?i)(?:per\s+hour|per\s+hr|/\s*hour|/\s*hr\b|p/h\b|hourly|an hour)`)
 	reDay    = regexp.MustCompile(`(?i)(?:per\s+day|/\s*day\b|p/d\b|man-day|/\s*md\b)`)
 	reUpTo   = regexp.MustCompile(`(?i)\bup to\b`)
 	reFrom   = regexp.MustCompile(`(?i)\bfrom\b`)
-	reMoney  = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)\+?|(\d{1,3}(?:[.,]\d{3})+)\+?`)
-	// reScaled is a money token with a k/m suffix ("$120k", "$1.5m"). reMoney
-	// would keep the digits and drop the suffix. A benefit word ("401k") has no
-	// currency marker in front of the suffix, so it is not this.
-	reScaled = regexp.MustCompile(`(?i)(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\s*[km]\b`)
-	// reOpenRange is a symboled amount whose dash-joined second bound carries no
-	// symbol and no thousands grouping ("$50 - 60"), which reMoney does not read.
-	reOpenRange = regexp.MustCompile(`(?i)(?:a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
-	reDotGrp    = regexp.MustCompile(`^\d{1,3}(\.\d{3})+$`)
-	reComGrp    = regexp.MustCompile(`^\d{1,3}(,\d{3})+(\.\d+)?$`)
-	reEuDec     = regexp.MustCompile(`^\d{1,3}(\.\d{3})+,\d+$`)
-	reDec       = regexp.MustCompile(`^\d+[.,]\d{1,2}$`)
-	reInt       = regexp.MustCompile(`^\d+$`)
-	reLeadISO   = regexp.MustCompile(`(?i)^(usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\b`)
-	reTrailISO  = regexp.MustCompile(`(?i)\b(usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)$`)
+	reMoney  = regexp.MustCompile(`(?i)(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*(\d[\d.,]*)\+?|(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?)\+?`)
+	// reScaled is a money token with a k/m suffix ("$120k", "1,200k", "100,000 - 150k").
+	// reMoney would keep the digits and drop the suffix. A benefit word ("401k")
+	// is not a money token and is not a range bound, so it is not this.
+	reScaled = regexp.MustCompile(`(?i)(?:` +
+		`(?:(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*|\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|[-–—]\s*\d[\d.,]*)\s*[km]\b` +
+		`|\d[\d.,]*\s*[km]\b\s*[-–—])`)
+	// reOpenRange is a dash-joined second bound reMoney does not read ("$50 - 60").
+	reOpenRange     = regexp.MustCompile(`(?i)(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
+	reTrailRange    = regexp.MustCompile(`(?i)\d[\d.,]+\s*(?:us\$|ca\$|au\$|nz\$|hk\$|a\$|c\$|s\$|rp|zł|£|€|\$|usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\s*[-–—]\s*\d`)
+	reBenefitClause = regexp.MustCompile(`(?i)(?:^|\+\s*)` +
+		`(?:(?:[$£€]|zł|(?:us|ca|au|nz|hk|a|c|s)\$|rp)\s*)?` +
+		`\d[\d.,]*\s*` +
+		`(?:(?:[$£€]|zł|(?:us|ca|au|nz|hk|a|c|s)\$|rp)\s*)?` +
+		`(?:sign[\s-]?on\s+|signing\s+)?` +
+		`(?:bonus(?:es)?|benefits?)\b(?:\s+per\s+(?:annum|year|month|hour|hr|day))?` +
+		`|\+?\s*(?:sign[\s-]?on|signing|bonus(?:es)?|benefits?)\b`)
+	reDotGrp   = regexp.MustCompile(`^\d{1,3}(\.\d{3})+$`)
+	reComGrp   = regexp.MustCompile(`^\d{1,3}(,\d{3})+(\.\d+)?$`)
+	reEuDec    = regexp.MustCompile(`^\d{1,3}(\.\d{3})+,\d+$`)
+	reDec      = regexp.MustCompile(`^\d+[.,]\d{1,2}$`)
+	reInt      = regexp.MustCompile(`^\d+$`)
+	reLeadISO  = regexp.MustCompile(`(?i)^(usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\b`)
+	reTrailISO = regexp.MustCompile(`(?i)\b(usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)$`)
 )
 
 var dollarCurrency = map[string]string{
@@ -66,12 +75,26 @@ func Parse(description string, countries []string) (Salary, bool) {
 	lines := plain(description)
 	var got *Salary
 	var used string
-	for _, line := range lines {
+	for i, line := range lines {
 		m := reLabel.FindStringSubmatch(line)
 		if m == nil {
 			continue
 		}
-		sal, ok := parseLine(m[2], countries)
+		body := m[2]
+		if body == "" {
+			// Workday renders the label and its value in separate HTML blocks.
+			// Only the next non-empty line belongs to that label.
+			for _, next := range lines[i+1:] {
+				if next == "" {
+					continue
+				}
+				if loc := reMoney.FindStringIndex(next); loc != nil && loc[0] == 0 && !benefitOnly(next) {
+					body = next
+				}
+				break
+			}
+		}
+		sal, ok := parseLine(withoutBenefit(body), countries)
 		if !ok {
 			continue
 		}
@@ -79,7 +102,7 @@ func Parse(description string, countries []string) (Salary, bool) {
 			return Salary{}, false
 		}
 		got = &sal
-		used = line
+		used = body
 	}
 	if got == nil {
 		return Salary{}, false
@@ -96,7 +119,7 @@ func parseLine(body string, countries []string) (Salary, bool) {
 	if len(nums) == 0 || len(nums) > 2 || reScaled.MatchString(body) {
 		return Salary{}, false
 	}
-	if len(nums) == 1 && reOpenRange.MatchString(body) {
+	if len(nums) == 1 && (reOpenRange.MatchString(body) || reTrailRange.MatchString(body)) {
 		return Salary{}, false
 	}
 	var sal Salary
@@ -109,7 +132,7 @@ func parseLine(body string, countries []string) (Salary, bool) {
 		sal.Min, sal.Max = ip(lo), ip(hi)
 	case reUpTo.MatchString(body):
 		sal.Max = ip(nums[0])
-	case reFrom.MatchString(body) || strings.Contains(body, "+"):
+	case reFrom.MatchString(body) || figurePlus(body):
 		sal.Min = ip(nums[0])
 	default:
 		n := nums[0]
@@ -133,6 +156,30 @@ func parseLine(body string, countries []string) (Salary, bool) {
 	}
 	sal.Currency = cur
 	return sal, true
+}
+
+func benefitOnly(line string) bool {
+	if !reBenefitClause.MatchString(line) {
+		return false
+	}
+	return len(amountsIn(withoutBenefit(line))) == 0
+}
+
+func withoutBenefit(line string) string {
+	return strings.TrimSpace(reBenefitClause.ReplaceAllString(line, " "))
+}
+
+func figurePlus(body string) bool {
+	for _, loc := range reMoney.FindAllStringIndex(body, -1) {
+		if strings.HasSuffix(body[loc[0]:loc[1]], "+") {
+			tail := strings.TrimSpace(body[loc[1]:])
+			if tail != "" && tail[0] >= '0' && tail[0] <= '9' {
+				continue
+			}
+			return true
+		}
+	}
+	return false
 }
 
 func contradicts(lines []string, used string, sal Salary) bool {
