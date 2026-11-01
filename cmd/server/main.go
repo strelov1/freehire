@@ -20,7 +20,7 @@ import (
 	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/recover"
+	recovermiddleware "github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -57,8 +57,31 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func main() {
+func main() { os.Exit(runMain()) }
+
+func runMain() int {
 	cfg := config.Load()
+	shutdown, err := observability.InitLogs("freehire-api", cfg.SentryEnvironment)
+	if err != nil {
+		log.Printf("exception reporting: %v", err)
+		return 1
+	}
+	defer shutdown()
+	defer func() {
+		if value := recover(); value != nil {
+			observability.CapturePanic(context.Background(), value)
+			panic(value)
+		}
+	}()
+	if err := runServer(cfg); err != nil {
+		observability.CaptureError(context.Background(), err)
+		log.Print(err)
+		return 1
+	}
+	return 0
+}
+
+func runServer(cfg config.Settings) error {
 	cv.SetMaxBullets(cfg.CVMaxBullets)
 	matchanalysis.SetBounds(matchanalysis.Bounds{
 		MaxCommentRunes:       cfg.MatchAnalysis.MaxCommentRunes,
@@ -75,18 +98,18 @@ func main() {
 	})
 
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("invalid configuration: %v", err)
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 	rateTiers, err := handler.RateTiersFromEnv(os.Getenv, cfg.StrictAnonLimits())
 	if err != nil {
-		log.Fatalf("invalid configuration: %v", err)
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	// Error reporting is optional and env-gated: no DSN ⇒ Init is a no-op. A
 	// malformed DSN is fatal — a misconfigured gateway must not boot silently.
 	sentryFlush, err := observability.Init(cfg.SentryDSN, cfg.SentryEnvironment)
 	if err != nil {
-		log.Fatalf("sentry: %v", err)
+		return fmt.Errorf("sentry: %w", err)
 	}
 	defer sentryFlush()
 
@@ -98,7 +121,7 @@ func main() {
 
 	pool, err := database.Connect(ctx, cfg.DatabaseURL, database.WithStatementTimeout(apiStatementTimeout))
 	if err != nil {
-		log.Fatalf("database: %v", err)
+		return fmt.Errorf("database: %w", err)
 	}
 	defer pool.Close()
 
@@ -107,7 +130,7 @@ func main() {
 	// REDIS_URL is fatal at startup rather than degrading rate limiting silently.
 	redisOpts, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
-		log.Fatalf("redis: %v", err)
+		return fmt.Errorf("redis: %w", err)
 	}
 	redisClient := redis.NewClient(redisOpts)
 	defer func() { _ = redisClient.Close() }()
@@ -158,13 +181,12 @@ func main() {
 	// records the status the client actually got.
 	app.Use(observability.HTTPMetrics())
 
-	// The recover middleware marks each unwound panic via c.Locals so RenderError
-	// won't double-report it: the sentryfiber middleware below already captures the
-	// panic (with a stack) before Fiber re-delivers the recovered error to the
-	// ErrorHandler. The silent handler keeps the previous no-stderr-stack behavior.
-	app.Use(recover.New(recover.Config{
+	// Report the panic while its stack is available and mark it so RenderError
+	// cannot report it a second time. Sentry's fallback middleware captures first
+	// when configured; the callback preserves the no-stderr-stack behavior.
+	app.Use(recovermiddleware.New(recovermiddleware.Config{
 		EnableStackTrace:  true,
-		StackTraceHandler: func(c *fiber.Ctx, _ any) { c.Locals(handler.LocalPanicReported, true) },
+		StackTraceHandler: handler.ReportPanic,
 	}))
 	// The request log goes to journald and on into /var/log/syslog, never to a terminal, so
 	// Fiber's default colours are ANSI escapes written into a file nobody reads in a terminal.
@@ -204,7 +226,7 @@ func main() {
 	// unreadable fails the start, for the same reason the semantic-search knobs below do.
 	directApplyLimit, err := config.LoadDirectApplyDailyLimit()
 	if err != nil {
-		log.Fatalf("direct apply: %v", err)
+		return fmt.Errorf("direct apply: %w", err)
 	}
 
 	// An agent's opt-in semantic search embeds its query against EMBED_URL. Unset, the
@@ -213,7 +235,7 @@ func main() {
 	// threshold would otherwise look exactly like a tuned one.
 	semanticCfg, err := config.LoadSemanticSearch()
 	if err != nil {
-		log.Fatalf("semantic search: %v", err)
+		return fmt.Errorf("semantic search: %w", err)
 	}
 	queryEmbedder := search.NewQueryEmbedder(semanticCfg.URL, semanticCfg.APIKey, semanticCfg.QueryTimeout)
 
@@ -228,7 +250,7 @@ func main() {
 		SecretKey: cfg.S3SecretKey,
 	})
 	if err != nil {
-		log.Fatalf("blobstore: %v", err)
+		return fmt.Errorf("blobstore: %w", err)
 	}
 
 	// The LLM is optional and built through the shared construction path
@@ -239,7 +261,7 @@ func main() {
 	// boot silently).
 	llmClient, llmFlush, err := llm.NewClient(cfg.Settings(cfg.Model), "cv-ats")
 	if err != nil {
-		log.Fatalf("llm: %v", err)
+		return fmt.Errorf("llm: %w", err)
 	}
 	defer llmFlush()
 
@@ -249,7 +271,7 @@ func main() {
 	// deployment still works. Traced under its own source label.
 	assistantLLM, assistantFlush, err := llm.NewClient(cfg.Settings(cmp.Or(cfg.AssistantModel, cfg.Model)), "assistant")
 	if err != nil {
-		log.Fatalf("llm (assistant): %v", err)
+		return fmt.Errorf("llm (assistant): %w", err)
 	}
 	defer assistantFlush()
 
@@ -261,7 +283,7 @@ func main() {
 	// accuracy. Unset falls back to LLM_MODEL.
 	intentLLM, intentFlush, err := llm.NewClient(cfg.Settings(cmp.Or(cfg.SearchIntentModel, cfg.Model)), "search-intent")
 	if err != nil {
-		log.Fatalf("llm (search intent): %v", err)
+		return fmt.Errorf("llm (search intent): %w", err)
 	}
 	defer intentFlush()
 
@@ -270,7 +292,7 @@ func main() {
 	// back to LLM_MODEL.
 	resumeExtractLLM, resumeExtractFlush, err := llm.NewClient(cfg.Settings(cmp.Or(cfg.ResumeExtractModel, cfg.Model)), "resume-extract")
 	if err != nil {
-		log.Fatalf("llm (resume extract): %v", err)
+		return fmt.Errorf("llm (resume extract): %w", err)
 	}
 	defer resumeExtractFlush()
 
@@ -314,11 +336,11 @@ func main() {
 		appleCreds := cfg.OAuth["apple"]
 		appleNative, err = appleauth.New(appleauth.Config{TeamID: appleCreds.TeamID, KeyID: appleCreds.KeyID, PrivateKeyPEM: appleCreds.PrivateKey, ClientIDs: []string{cfg.AppleNativeClientID}})
 		if err != nil {
-			log.Fatalf("native Apple: %v", err)
+			return fmt.Errorf("native Apple: %w", err)
 		}
 		appleGrantKeys, err = appleauth.NewKeyRing(cfg.AppleGrantActiveKeyID, cfg.AppleGrantKeys)
 		if err != nil {
-			log.Fatalf("native Apple grant encryption: %v", err)
+			return fmt.Errorf("native Apple grant encryption: %w", err)
 		}
 	}
 
@@ -329,7 +351,7 @@ func main() {
 	if cfg.OJCPSigningKeyFile != "" {
 		ojcpSigner, err = loadOJCPSigner(cfg.OJCPSigningKeyFile, cfg.FrontendOrigin)
 		if err != nil {
-			log.Fatalf("ojcp signing key: %v", err)
+			return fmt.Errorf("ojcp signing key: %w", err)
 		}
 	}
 
@@ -450,11 +472,8 @@ func main() {
 
 	// Run the server in a goroutine so main can wait for a shutdown signal.
 	// Fiber's Listen returns nil on graceful shutdown, so any error is fatal.
-	go func() {
-		if err := app.Listen(":" + cfg.Port); err != nil {
-			log.Fatalf("listen: %v", err)
-		}
-	}()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- app.Listen(":" + cfg.Port) }()
 	log.Printf("hire listening on :%s", cfg.Port)
 
 	// Registered here rather than beside the pool's creation because the collector reads
@@ -466,14 +485,21 @@ func main() {
 
 	// Graceful shutdown on SIGINT/SIGTERM: block until the signal-bound context is
 	// cancelled (the signal arrived) or startup cancelled it.
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+	case err := <-serveErr:
+		if err != nil {
+			return fmt.Errorf("listen: %w", err)
+		}
+	}
 	log.Println("shutting down...")
 
 	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
-		log.Printf("shutdown: %v", err)
+		return fmt.Errorf("shutdown: %w", err)
 	}
 	// Flushes the buffered agent-view events; no handler can write after the shutdown above.
 	agentViewWriter.Close()
+	return nil
 }
 
 // buildDiscordLinker adapts discordlink.NewFromSettings to what the handler config takes.

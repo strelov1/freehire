@@ -16,6 +16,7 @@ export default defineConfig({
     __SENTRY_TRACING__: false,
   },
   build: {
+    sourcemap: 'hidden',
     // Keep flag-icons' ~500 flag SVGs as external files instead of inlining them
     // as data-URIs into the global CSS. They're each under Vite's 4KB inline
     // threshold, so the default would embed the whole sheet (~100KB gzip) into the
@@ -48,6 +49,8 @@ export default defineConfig({
     sentrySvelteKit({
       // v11 flattened these onto the plugin options directly; the nested
       // `sourceMapsUploadOptions` wrapper from v10 no longer exists.
+      // Retain hidden maps as release artifacts for local symbolication too.
+      sourcemaps: { filesToDeleteAfterUpload: [] },
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,

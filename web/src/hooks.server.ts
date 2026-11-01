@@ -1,4 +1,6 @@
-import { PUBLIC_SENTRY_DSN, PUBLIC_SENTRY_ENVIRONMENT } from '$app/env/public';
+import { OTEL_EXPORTER_OTLP_LOGS_ENDPOINT, OTEL_EXPORTER_OTLP_ENDPOINT } from '$app/env/private';
+import { PUBLIC_OTEL_ENVIRONMENT, PUBLIC_OTEL_SERVICE_VERSION, PUBLIC_SENTRY_DSN, PUBLIC_SENTRY_ENVIRONMENT } from '$app/env/public';
+import { createErrorTelemetry } from '#lib/errorTelemetry.js';
 import { sequence } from '@sveltejs/kit/hooks';
 import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 import * as Sentry from '@sentry/sveltekit';
@@ -7,6 +9,11 @@ import { cachePolicy, variesOnCookie } from '#lib/httpCache.js';
 import { isTranslatedLocale, LOCALE_COOKIE } from '#lib/locale.js';
 import { isTransientNoise } from '#lib/sentryNoise.js';
 import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '#lib/referral.js';
+
+const otelEndpoint = OTEL_EXPORTER_OTLP_LOGS_ENDPOINT || (OTEL_EXPORTER_OTLP_ENDPOINT ? `${OTEL_EXPORTER_OTLP_ENDPOINT.replace(/\/$/, '')}/v1/logs` : undefined);
+const telemetry = createErrorTelemetry({ endpoint: otelEndpoint, service: 'freehire-web-ssr', environment: PUBLIC_OTEL_ENVIRONMENT, version: PUBLIC_OTEL_SERVICE_VERSION });
+// adapter-node emits this before graceful shutdown; each export has a 3s timeout.
+if (telemetry) process.once('sveltekit:shutdown', () => { void telemetry.shutdown(); });
 
 // Resolves the account-section locale for `<html lang>` before the response
 // streams. Path-gated: only `/my/**` may render non-English — every other route
@@ -42,7 +49,7 @@ const locale: Handle = async ({ event, resolve }) => {
 // Same opt-in, env-gated init as the client: no PUBLIC_SENTRY_DSN ⇒ no init, and
 // SSR runs unchanged. Errors-only, PII off. The server reports to the same
 // (frontend) Sentry project as the browser.
-if (PUBLIC_SENTRY_DSN) {
+if (!otelEndpoint && PUBLIC_SENTRY_DSN) {
   Sentry.init({
     dsn: PUBLIC_SENTRY_DSN,
     environment: PUBLIC_SENTRY_ENVIRONMENT || 'development',
@@ -203,7 +210,7 @@ const permissionsPolicy: Handle = async ({ event, resolve }) => {
 
 // sentryHandle scopes each SSR request; it is a passthrough when init was skipped.
 export const handle = sequence(
-  Sentry.sentryHandle(),
+  ...(otelEndpoint ? [] : [Sentry.sentryHandle()]),
   permissionsPolicy,
   preloadPolicy,
   locale,
@@ -221,7 +228,9 @@ export const handle = sequence(
 // other kind carries its status on `error`. Reading the old `status` field compiles —
 // Sentry's wrapper types the input loosely — and is always undefined, which is how every
 // 404 came back into the journal.
-export const handleError = Sentry.handleErrorWithSentry<HandleServerError>((input) => {
+const reportError: HandleServerError = (input) => {
   if (input.kind !== 'unknown' && input.error.status >= 400 && input.error.status < 500) return;
+  if (otelEndpoint) { telemetry?.capture(input.error); return; }
   console.error((input.error as Error | undefined)?.stack ?? input.error);
-});
+};
+export const handleError: HandleServerError = otelEndpoint ? reportError : Sentry.handleErrorWithSentry<HandleServerError>(reportError);

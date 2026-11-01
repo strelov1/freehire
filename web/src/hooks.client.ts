@@ -1,4 +1,5 @@
-import { PUBLIC_SENTRY_DSN, PUBLIC_SENTRY_ENVIRONMENT } from '$app/env/public';
+import { PUBLIC_OTEL_LOGS_ENDPOINT, PUBLIC_OTEL_ENVIRONMENT, PUBLIC_OTEL_SERVICE_VERSION, PUBLIC_SENTRY_DSN, PUBLIC_SENTRY_ENVIRONMENT } from '$app/env/public';
+import { createErrorTelemetry, installErrorListeners } from '#lib/errorTelemetry.js';
 import * as Sentry from '@sentry/sveltekit';
 import { isTransientNoise } from '#lib/sentryNoise.js';
 import { startTrackersIfAllowed } from '#lib/trackers.js';
@@ -7,7 +8,7 @@ import { startTrackersIfAllowed } from '#lib/trackers.js';
 // uninitialized and the app runs unchanged (mirrors the backend integration).
 // Errors-only — no performance tracing, no session replay; sendDefaultPii is off
 // so URLs/inputs/headers are not shipped.
-if (PUBLIC_SENTRY_DSN) {
+if (!PUBLIC_OTEL_LOGS_ENDPOINT && PUBLIC_SENTRY_DSN) {
   Sentry.init({
     dsn: PUBLIC_SENTRY_DSN,
     environment: PUBLIC_SENTRY_ENVIRONMENT || 'development',
@@ -47,4 +48,12 @@ if (PUBLIC_SENTRY_DSN) {
 startTrackersIfAllowed();
 
 // Reports uncaught client-side errors to Sentry; inert when init was skipped above.
-export const handleError = Sentry.handleErrorWithSentry();
+const telemetry = createErrorTelemetry({ endpoint: PUBLIC_OTEL_LOGS_ENDPOINT, service: 'freehire-web', environment: PUBLIC_OTEL_ENVIRONMENT, version: PUBLIC_OTEL_SERVICE_VERSION });
+if (telemetry) {
+  installErrorListeners(window, telemetry);
+  // The SDK flushes on document hide too; pagehide covers navigation/bfcache.
+  window.addEventListener('pagehide', () => { void telemetry.flush(); });
+}
+export const handleError = PUBLIC_OTEL_LOGS_ENDPOINT
+  ? ({ error }: { error: unknown }) => { telemetry?.capture(error); }
+  : Sentry.handleErrorWithSentry();

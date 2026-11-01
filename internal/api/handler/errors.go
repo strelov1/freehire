@@ -3,6 +3,10 @@ package handler
 import (
 	"context"
 	"errors"
+	"strings"
+
+	"github.com/strelov1/freehire/internal/platform/observability"
+	otellog "go.opentelemetry.io/otel/log"
 
 	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
@@ -19,11 +23,9 @@ import (
 // an application fault — we classify it away from the reported 500s.
 const statusClientClosedRequest = 499
 
-// LocalPanicReported is a c.Locals key set by the server's recover middleware when
-// it unwinds a panic. The sentryfiber middleware has already captured that panic
-// (with a stack) before re-raising it, and Fiber then re-delivers the recovered
-// error to the ErrorHandler — so RenderError checks this marker to avoid reporting
-// the same panic a second time (as a stackless 500).
+// LocalPanicReported marks a panic captured by the server's recovery callback.
+// Fiber re-delivers the recovered error to the ErrorHandler, so RenderError
+// checks this marker to avoid reporting the same panic a second time.
 const LocalPanicReported = "sentry_panic_reported"
 
 type codedError struct {
@@ -64,13 +66,10 @@ func RenderError(c *fiber.Ctx, err error) error {
 	}
 	status, msg, report := classify(err)
 
-	// Report only genuine, not-yet-reported faults. A recovered panic is already
-	// captured (with a stack) by the sentryfiber middleware, which flags it via
-	// LocalPanicReported; reporting the re-delivered error again would duplicate it.
+	// A recovered panic was already captured with its stack by ReportPanic;
+	// reporting the re-delivered error again would duplicate it.
 	if report && c.Locals(LocalPanicReported) == nil {
-		if hub := sentryfiber.GetHubFromContext(c); hub != nil {
-			hub.CaptureException(err)
-		}
+		reportUnexpected(c, err)
 	}
 
 	return c.Status(status).JSON(fiber.Map{"error": msg})
@@ -81,9 +80,29 @@ func RenderError(c *fiber.Ctx, err error) error {
 // returning through RenderError, but still want the same "only real faults
 // reach the error inbox" gate RenderError applies to everything else.
 func reportUnexpected(c *fiber.Ctx, err error) {
+	if _, _, report := classify(err); !report {
+		return
+	}
+	observability.CaptureError(c.UserContext(), err, requestErrorAttributes(c)...)
+
 	if hub := sentryfiber.GetHubFromContext(c); hub != nil {
 		hub.CaptureException(err)
 	}
+}
+
+// ReportPanic is Fiber's recovery callback. It records the panic with its stack
+// even without Sentry, then marks it so RenderError cannot emit a second event.
+func ReportPanic(c *fiber.Ctx, value any) {
+	observability.CapturePanic(c.UserContext(), value, requestErrorAttributes(c)...)
+	c.Locals(LocalPanicReported, true)
+}
+
+func requestErrorAttributes(c *fiber.Ctx) []otellog.KeyValue {
+	route := "unmatched"
+	if registered := c.Route(); len(registered.Handlers) != 0 {
+		route = registered.Path
+	}
+	return []otellog.KeyValue{otellog.String("http.request.method", strings.Clone(c.Method())), otellog.String("http.route", strings.Clone(route))}
 }
 
 // classify maps an error to its HTTP status and message and reports whether it is
