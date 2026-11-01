@@ -15,7 +15,7 @@ const LIMIT = 20;
 // pagination URL shared while it did still resolves — the homepage loader 301s them
 // here — so this route inherits an audience that has been linking to it under the
 // other path for a year.
-export const load: PageServerLoad = async ({ url, fetch }) => {
+export const load: PageServerLoad = async ({ url, fetch, request }) => {
   const params = new URLSearchParams(url.searchParams);
   // `page` addresses the feed rather than filtering it; the API would ignore it,
   // and leaving it in would make it part of what the client seeds its filters from.
@@ -27,7 +27,12 @@ export const load: PageServerLoad = async ({ url, fetch }) => {
   // Before the search, not after: a page past the window is the most expensive one
   // the URL could name, and refusing it afterwards would mean paying for it first.
   if (!pageWithinWindow(pageNumber)) error(404, 'Page not found');
-  const initial = await serverApi(fetch).searchJobs(params, LIMIT, pageOffset(pageNumber));
+  // "Hiring again" is answered from the reader's own experience bank, so that one search
+  // goes out as them. Every other render stays anonymous: the feed is the same for
+  // everyone, and a signed-in page is never stored by a shared cache either way (see
+  // #lib/httpCache), so forwarding the cookie here cannot leak one reader's answer.
+  const cookie = params.get('former_employers') === 'true' ? request.headers.get('cookie') : null;
+  const initial = await serverApi(fetch, cookie).searchJobs(params, LIMIT, pageOffset(pageNumber));
   // See the collections loader: a page past the last one the matches fill is an
   // empty, self-canonical 200 — a soft 404 dressed as a listing. Page 1 always
   // stands, so a filter combination nothing matches still renders the feed's own

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { ArrowRight, ChevronDown, Layers, Map as MapIcon, Target } from '@lucide/svelte';
+  import { ArrowRight, ChevronDown, History, Layers, Map as MapIcon, Target } from '@lucide/svelte';
   import { browser } from '$app/env';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -205,6 +205,9 @@
     if (isAuthenticated()) profileStore.ensureLoaded();
   });
   const profileSkills = $derived(profileStore.profile?.skills ?? []);
+  // The server reads former_employers only for a signed-in caller, so only then does it
+  // explain an empty list.
+  const formerEmployersApplied = $derived(standalone && isAuthenticated() && filters.applied.formerEmployers);
   const matchFilterAvailable = $derived(isAuthenticated() && profileStore.loaded && profileSkills.length > 0);
   // Drop a stale threshold the moment the slider would disappear (sign-out, profile
   // cleared) so it can't silently keep hiding jobs with no control left to reset it.
@@ -776,6 +779,28 @@
   </Button>
 {/snippet}
 
+<!-- "Hiring again": narrow the feed to the companies the reader has worked at and left,
+     which the server reads from their own experience bank. Signed-in only and only on
+     the standalone feed — a company page is already one company, and signed out the
+     server could not read a bank (it would ignore the param and say so). The URL carries
+     it, so the choice survives a reload and a shared link is a harmless no-op for anyone
+     else. Never part of a saved search: see savedSearchQuery. -->
+{#snippet hiringAgainToggle()}
+  {@const on = filters.value.formerEmployers}
+  <Button
+    variant="outline"
+    size="sm"
+    aria-pressed={on}
+    aria-label="Hiring again: only companies you have worked at"
+    title="Only open jobs at companies you have worked at"
+    class={on ? 'border-brand bg-brand/5 text-brand-strong' : ''}
+    onclick={() => filters.setFormerEmployers(!on)}
+  >
+    <History class="size-4" aria-hidden="true" />
+    <span class="hidden sm:inline">Hiring again</span>
+  </Button>
+{/snippet}
+
 <!-- The two above, in one slot. Rendered as a fragment so ListToolbar keeps deciding
      where the row sits and how it collapses on a phone.
 
@@ -783,6 +808,9 @@
      `reality` facet. The whole facet now sits in the modal's Posted pane, beside the age
      bound it belongs with. -->
 {#snippet listControls()}
+  {#if standalone && isAuthenticated()}
+    {@render hiringAgainToggle()}
+  {/if}
   {@render postedSelect()}
   <!-- Unconditional. This used to be guarded against a one-option select - a label
        wearing a control's clothes - which could happen when match was hidden from a
@@ -892,6 +920,17 @@
       <!-- Retry re-runs the same query on the page being read, the same reload a changed
            filter would start. -->
       <States state="error" message="Failed to load jobs." onRetry={() => reloadList(pageOffset(activePage))} />
+    {:else if displayItems.length === 0 && formerEmployersApplied}
+      <!-- Empty here usually means nothing in the experience bank resolved to a company
+           that is hiring, not that the other filters are too tight — so the way out is
+           the bank. A company name that matches more than one employer is left out on
+           purpose rather than guessed at. -->
+      <States state="empty" message="None of your former employers is hiring right now." />
+      <p class="mt-2 text-center text-sm text-muted-foreground">
+        We match the companies in
+        <a href={resolve('/my/profile/experience')} class="font-medium text-foreground underline underline-offset-2">your experience</a>,
+        and leave out any name that could be more than one company.
+      </p>
     {:else if displayItems.length === 0}
       <States state="empty" message="No matching jobs." />
       {#if standalone && relaxTarget}
