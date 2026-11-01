@@ -246,6 +246,11 @@ func (h *profileHandlers) PutProfile(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
+	// Empty lists support progressive autosave; omitted/null lists are still malformed
+	// replacement requests and must not silently clear an existing profile.
+	if in.Specializations == nil || in.Skills == nil {
+		return fiber.NewError(fiber.StatusBadRequest, "specializations and skills must be arrays; use [] for an empty list")
+	}
 
 	profile, err := h.userProfile.Save(c.Context(), userID, in.Specializations, in.Skills, in.Seniorities, in.ExcludedSkills, in.ExcludedSources, in.ExcludedCompanies, in.LocationPreferences)
 	if err != nil {

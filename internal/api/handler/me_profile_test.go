@@ -108,6 +108,11 @@ func TestPutProfile_ValidationErrors(t *testing.T) {
 		body string
 		want int
 	}{
+		{"missing lists", `{}`, fiber.StatusBadRequest},
+		{"missing skills", `{"specializations":[]}`, fiber.StatusBadRequest},
+		{"missing specializations", `{"skills":[]}`, fiber.StatusBadRequest},
+		{"null skills", `{"specializations":[],"skills":null}`, fiber.StatusBadRequest},
+		{"null specializations", `{"specializations":null,"skills":[]}`, fiber.StatusBadRequest},
 		{"unknown specialization", `{"specializations":["wizardry"],"skills":["go"]}`, fiber.StatusBadRequest},
 		// One past userprofile.MaxSpecializations. The set below the cap is exercised by
 		// TestPutProfile_AcceptsSpecializationsUpToTheCap — a cap only holds if both sides
