@@ -32,6 +32,7 @@
   import SkillIcon from './SkillIcon.svelte';
   import { skillLabel } from '#lib/facets.js';
   import { formatCount, timeAgo } from '#lib/utils.js';
+  import { applyQuestionsLabel, equityLabel } from '#lib/jobFacts.js';
   import { cardFreshnessBadges } from '#lib/freshness.js';
   import { hasViewed } from '#lib/viewedJobs.svelte.js';
   import { ensureSavedLoaded, isSaved, markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
@@ -117,6 +118,10 @@
   // Salary lives in the enrichment, which a card does not carry: the tracking lists never
   // showed it (their rows came from the same listing) and a row without one simply omits it.
   const salary = $derived('enrichment' in job && job.enrichment ? formatSalary(job.enrichment) : null);
+  // Two facts only the catalogue's full posting carries, each absent when unknown — and
+  // absent renders nothing: "no equity" and "a long form" are claims we cannot make.
+  const equity = $derived('equity' in job ? equityLabel(job.equity) : null);
+  const questions = $derived('apply_questions' in job ? applyQuestionsLabel(job.apply_questions) : null);
   // Top-level `skills` is the served (deterministic-dictionary) facet; the raw
   // `enrichment.skills` is kept in the JSONB and NOT served, so it's always absent
   // here — read the dictionary field so the card's skill chips actually populate.
@@ -305,6 +310,8 @@
       posted ? `Posted ${posted}` : '',
       job.application_deadline ? `Apply by ${job.application_deadline}` : '',
       salary ?? '',
+      equity ?? '',
+      questions ?? '',
     ].filter(Boolean).join(', '),
   );
 
@@ -433,7 +440,7 @@
   <!-- ai_interview_reports belongs in this guard on its own: a card can carry the
        label while having no reality verdict, no freshness, no tags, no countries and no
        credentials, and the row would then be suppressed with the badge inside it. -->
-  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany}
+  {#if reality || freshness.length > 0 || tags.length > 0 || job.countries?.length || place || credentials.length > 0 || job.ai_interview_reports || directApply || appliedToCompany || equity || questions}
     <div class="mt-2 flex flex-wrap items-center gap-1.5">
       <!-- evergreen_posting IS the reality verdict, so showing both chips states one
            fact twice, the second time louder. The ghost chip carries it inside its
@@ -474,6 +481,14 @@
       {#each tags as tag (tag)}
         <Badge variant="outline">{tag}</Badge>
       {/each}
+      <!-- Facts about the pay and the cost of applying, after the role's own facets.
+           Outside the tags' each block: a tag's text could equal one of these. -->
+      {#if equity}
+        <Badge variant="outline">{equity}</Badge>
+      {/if}
+      {#if questions}
+        <Badge variant="outline">{questions}</Badge>
+      {/if}
       <!-- Register-backed employer credentials (visa-sponsor licences). A fact about
            the employer, so it sits with the metadata chips and carries its own
            disclaimer rather than reading as a promise about this role. -->
