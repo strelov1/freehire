@@ -131,6 +131,7 @@ function buildJobCatalog(): FilterSearchHit[] {
     hits.push(optionHit('source', 'source', 'Source', { value, label }));
   }
   pushFacet(hits, 'salary', 'salary_currency');
+  pushFacet(hits, 'salary', 'equity');
   pushFacet(hits, 'language', 'english_level');
   hits.push(jumpHit('language', 'Job language', 'Job language'));
   pushFacet(hits, 'relocation', 'relocation');
@@ -140,6 +141,7 @@ function buildJobCatalog(): FilterSearchHit[] {
     actionHit('relocation', 'AI interviews', 'Hide employers reported to interview with AI', 'hide-ai'),
   );
   hits.push(actionHit('relocation', 'Auto-apply', 'Auto-apply available', 'auto-apply'));
+  hits.push(actionHit('relocation', 'Application', 'Short application', 'short-apply'));
   pushFacet(hits, 'relocation', 'clearance_levels', undefined, 'Security clearance');
   return hits;
 }

@@ -24,6 +24,7 @@
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { formatSalary, summaryFacets } from '#lib/enrichment.js';
+  import { applyQuestionsLabel, equityLabel } from '#lib/jobFacts.js';
   import { freshnessBadges } from '#lib/freshness.js';
   import { markViewed } from '#lib/viewedJobs.svelte.js';
   import { markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
@@ -151,6 +152,9 @@
   const updated = $derived(formatDateOrAgo(job.updated_at, locale(), 'short'));
   const e = $derived(job.enrichment ?? {});
   const salary = $derived(formatSalary(e, 'standard'));
+  const equity = $derived(equityLabel(job.equity));
+  // A closed posting takes no applications, so what its form asks is beside the point.
+  const questions = $derived(closed ? null : applyQuestionsLabel(job.apply_questions));
   const facets = $derived(summaryFacets(job));
   // Engagement counters (distinct signed-in viewers / applicants), served on the
   // job. A zero metric is omitted so the line never reads as a dead "0 views".
@@ -1162,12 +1166,22 @@
     <div class="sticky top-20 flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
       <JobMatch {job} {matchAnalysis} />
 
-      {#if salary}
-        <p
-          class="border-t border-border pt-4 text-xl font-semibold tabular-nums tracking-tight first:border-t-0 first:pt-0"
-        >
-          {salary}
-        </p>
+      <!-- The pay and what applying costs, together: equity is the other half of the
+           pay (a posting may offer it with no salary figure), and the question count is
+           what stands between the reader and the Apply button. Each renders only when
+           known — absence is "not stated", never "none". -->
+      {#if salary || equity || questions}
+        <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
+          {#if salary}
+            <p class="text-xl font-semibold tabular-nums tracking-tight">{salary}</p>
+          {/if}
+          {#if equity || questions}
+            <div class="flex flex-wrap gap-1.5">
+              {#if equity}<Chip>{equity}</Chip>{/if}
+              {#if questions}<Chip>{questions}</Chip>{/if}
+            </div>
+          {/if}
+        </div>
       {/if}
 
       {#if facets.length}
