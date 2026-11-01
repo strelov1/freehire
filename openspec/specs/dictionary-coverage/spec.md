@@ -2,12 +2,13 @@
 
 ## Purpose
 
-The public /dictionary page: what the specialization and skill dictionaries recognize,
-and the signed-in, rate-limited queue through which a visitor asks for a missing term.
+The public /dictionary page: what the specialization, skill, and company-industry
+dictionaries recognize, and the signed-in, rate-limited queue through which a visitor
+asks for a missing term.
 ## Requirements
 
 ### Requirement: The page lists what the dictionaries hold
-The `/dictionary` page MUST be public and MUST show two sections. The Specialization section MUST list every specialization in the client vocabulary (`CATEGORY_GROUPS`), grouped and collapsible, using the filter modal's `CategoryPane` in include-only mode. The Skills section MUST list every skill in the skills glossary catalog, using the filter modal's `SearchSelect` with tech icons. A term MUST be listed whether or not it has open jobs.
+The `/dictionary` page MUST be public and MUST show three sections: Specialization, Skills, and Industries. The Specialization section MUST list every specialization in the client vocabulary (`CATEGORY_GROUPS`), grouped and collapsible, using the filter modal's `CategoryPane` in include-only mode. The Skills section MUST list every skill in the skills glossary catalog, using the filter modal's `SearchSelect` with tech icons. The Industries section MUST list every canonical company industry in the existing company-industry taxonomy, searchable by its canonical label and aliases, and MUST display the canonical label. Specializations and skills MUST be listed whether or not they have open jobs; the Industries list MUST NOT depend on job counts.
 
 #### Scenario: A term with no open jobs is listed
 - **WHEN** a specialization or skill in the dictionary has no open jobs
@@ -15,14 +16,14 @@ The `/dictionary` page MUST be public and MUST show two sections. The Specializa
 
 #### Scenario: An anonymous visitor sees the page
 - **WHEN** a visitor who is not signed in opens `/dictionary`
-- **THEN** both sections render
+- **THEN** all three sections render
 
 ### Requirement: Open-job counts are best-effort
-The page MUST get its counts from one unfiltered facet call for `category` and `skills`. When that call fails, the page MUST still render every term, without numbers.
+The page MUST get best-effort open-job counts from one unfiltered facet call for `category` and `skills`; those counts apply only to Specialization and Skills. Industries MUST show no counts because these facets count job openings, not companies. When the facet call fails, the page MUST still render every term, without numbers.
 
 #### Scenario: Search is down
 - **WHEN** the facet call fails
-- **THEN** the page renders both lists and shows no counts
+- **THEN** the page renders all three lists and shows no counts
 
 ### Requirement: Picked chips link to jobs
 When the visitor picks one or more chips, the page MUST show a "Show jobs" link to `/jobs` carrying those filters. With nothing picked, the link MUST NOT appear.
@@ -43,7 +44,7 @@ When a section's search matches no listed term, the page MUST show "“term” i
 - **THEN** the new or updated row has kind `skill`
 
 ### Requirement: Anonymous add goes through sign-in
-An anonymous add MUST be refused with 401 and MUST NOT write a row. The page MUST then open sign-in with the term in the URL (`?specialization=` or `?skill=`), so the visitor returns with the term in that section's search box.
+An anonymous add MUST be refused with 401 and MUST NOT write a row. The page MUST then open sign-in with the term in the URL (`?specialization=`, `?skill=`, or `?industry=`), so the visitor returns with the term in that section's search box. For an industry term, the return URL MUST also select the Industries tab.
 
 #### Scenario: Anonymous click
 - **WHEN** a visitor who is not signed in clicks "Add to the list"
