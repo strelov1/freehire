@@ -3,6 +3,7 @@
   import { type FilterStore, savedSearchQuery, displayQuery } from '#lib/filters.js';
   import { experienceLabel, freshnessLabel, salaryLabel } from '#lib/filterControls.js';
   import { unsummarized } from '#lib/filterSummary.js';
+  import { applyQuestionsBoundLabel } from '#lib/jobFacts.js';
   import FilterSummaryShell, { type SummaryChip, type SummaryGroup } from './FilterSummaryShell.svelte';
   import SaveSearchAlert from './SaveSearchAlert.svelte';
 
@@ -83,11 +84,21 @@
     if (f.salaryMin != null || f.salaryMax != null)
       salary.push({ key: 'salary_range', text: salaryLabel(f.salaryMin, f.salaryMax), exclude: false, remove: () => store.clearSalary() });
     push('Salary', salary);
+    facetGroup('equity', 'Equity');
 
     if (f.visa) push('Visa', [{ key: 'visa', text: 'Sponsorship', exclude: false, remove: () => store.setVisa(false) }]);
     if (f.autoApplyAvailable)
       push('Auto-apply', [
         { key: 'auto_apply_available', text: 'Available', exclude: false, remove: () => store.setAutoApplyAvailable(false) },
+      ]);
+    if (f.applyQuestionsMax != null)
+      push('Application', [
+        {
+          key: 'apply_questions_max',
+          text: applyQuestionsBoundLabel(f.applyQuestionsMax),
+          exclude: false,
+          remove: () => store.setApplyQuestionsMax(null),
+        },
       ]);
     if (f.hideAIInterview)
       push('AI interview', [

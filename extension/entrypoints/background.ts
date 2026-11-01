@@ -1,3 +1,4 @@
+import { startErrorTelemetry } from '../lib/telemetry';
 import {
   emptySnapshot,
   type RuntimeMessage,
@@ -32,6 +33,7 @@ import {
  *    frame ids, so it is also what tags the fields it reads back.
  */
 export default defineBackground(() => {
+  startErrorTelemetry('background');
   if (import.meta.env.FIREFOX) {
     // Firefox's sidebar has no "open on action click" setting; toggling it from the
     // click handler is the user gesture sidebarAction requires.

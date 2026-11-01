@@ -134,12 +134,20 @@ func crosscheckAll(ctx context.Context, q *db.Queries, aggregators, boards []str
 			return fmt.Errorf("source %s: %w", source, err)
 		}
 		log.Printf("ghost-crosscheck: [%d/%d] %s — %d postings considered (running totals: %d stamped, %d cleared, %d skipped)",
-			i+1, len(aggregators), source, seen, rep.stamped, rep.cleared, rep.skipped)
+			i+1, len(aggregators), source, seen, rep.stamped, rep.cleared, rep.skips.Total())
 	}
 	return nil
 }
 
-// crosscheckSource pages through one source's open postings and returns how many it read.
+// crosscheckSource reads one source's open postings in full, cross-checks them company
+// by company, and returns how many it read.
+//
+// The whole source is held before anything is judged, because Crosscheck judges a
+// company's batch AS A WHOLE — its gates ask how much of the batch the board carries
+// — and postings arrive by id, so one company's are scattered across pages. Judging
+// per page would hand it fragments and let a gate pass or fail on whichever fragment
+// a page boundary cut. The cost is memory: the largest source (job104, ~426k open
+// postings on 2026-11-01) holds a few tens of MB of ids and titles.
 func crosscheckSource(ctx context.Context, q *db.Queries, source string, boards []string, rep *report) (int, error) {
 	var afterID int64
 	var seen int
@@ -161,52 +169,30 @@ func crosscheckSource(ctx context.Context, q *db.Queries, source string, boards 
 			afterID = r.ID
 			seen++
 			pending[r.CompanySlug] = append(pending[r.CompanySlug], ghost.Posting{
-				ID:          r.ID,
-				CompanySlug: r.CompanySlug,
-				Title:       r.Title,
-				Stamped:     r.AtsAbsentAt.Valid,
+				ID:           r.ID,
+				CompanySlug:  r.CompanySlug,
+				Title:        r.Title,
+				Stamped:      r.AtsAbsentAt.Valid,
+				ViaRecruiter: r.ViaRecruiter,
 			})
 		}
-		// Postings arrive by id, so one company's can straddle pages. Flushing only at
-		// the end would hold a whole source in memory; flushing per page would read a
-		// straddling company's board twice. Keeping the last company back until the
-		// next page is the cheap middle.
-		if err := flush(ctx, q, boards, pending, rep, len(rows) == pageSize); err != nil {
-			return seen, err
+		if len(rows) < pageSize {
+			break
 		}
 	}
-	return seen, flush(ctx, q, boards, pending, rep, false)
+	return seen, judge(ctx, q, source, boards, pending, rep)
 }
 
-// flush cross-checks the companies buffered so far. When more pages follow, the
-// company with the highest-id postings is held back, since the next page may carry
-// more of its postings.
-func flush(ctx context.Context, q *db.Queries, boards []string, pending map[string][]ghost.Posting, rep *report, morePages bool) error {
-	var hold string
-	if morePages {
-		var maxID int64
-		for slug, ps := range pending {
-			for _, p := range ps {
-				if p.ID > maxID {
-					maxID, hold = p.ID, slug
-				}
-			}
-		}
-	}
-
+// judge cross-checks each buffered company against its own board and writes the
+// verdict when the run applies.
+func judge(ctx context.Context, q *db.Queries, source string, boards []string, pending map[string][]ghost.Posting, rep *report) error {
 	for slug, postings := range pending {
-		if slug == hold {
-			continue
-		}
-		titles, err := q.ListCompanyBoardTitles(ctx, db.ListCompanyBoardTitlesParams{
-			CompanySlug:  slug,
-			BoardSources: boards,
-		})
+		board, err := readBoard(ctx, q, slug, boards)
 		if err != nil {
 			return err
 		}
-		res := ghost.Crosscheck(postings, titles)
-		rep.add(slug, postings, res)
+		res := ghost.Crosscheck(postings, board)
+		rep.add(source, slug, postings, res)
 
 		if rep.apply {
 			if len(res.Stamp) > 0 {
@@ -220,7 +206,28 @@ func flush(ctx context.Context, q *db.Queries, boards []string, pending map[stri
 				}
 			}
 		}
-		delete(pending, slug)
 	}
 	return nil
+}
+
+// readBoard reads what Crosscheck needs of one company's own board. An empty slug is
+// not a company: Crosscheck skips every such posting whatever the board says, so its
+// board — every company-less board posting in the catalogue — is not worth reading.
+// Nor is the recruiter count of a company we crawl no board of, which is skipped by
+// the coverage gate first.
+func readBoard(ctx context.Context, q *db.Queries, slug string, boards []string) (ghost.Board, error) {
+	var b ghost.Board
+	if slug == "" {
+		return b, nil
+	}
+	titles, err := q.ListCompanyBoardTitles(ctx, db.ListCompanyBoardTitlesParams{
+		CompanySlug:  slug,
+		BoardSources: boards,
+	})
+	if err != nil || len(titles) == 0 {
+		return b, err
+	}
+	b.Titles = titles
+	b.RecruiterPostings, err = q.CountCompanyRecruiterPostings(ctx, slug)
+	return b, err
 }

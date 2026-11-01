@@ -14,6 +14,19 @@ type workable struct {
 	http JSONGetter
 }
 
+type workablePosting struct {
+	Title         string `json:"title"`
+	Shortcode     string `json:"shortcode"`
+	URL           string `json:"url"`
+	Description   string `json:"description"`
+	PublishedOn   string `json:"published_on"`
+	City          string `json:"city"`
+	State         string `json:"state"`
+	Country       string `json:"country"`
+	Telecommuting bool   `json:"telecommuting"`
+	Type          string `json:"type"`
+}
+
 // NewWorkable builds the Workable adapter over the given HTTP client.
 func NewWorkable(c JSONGetter) Source { return workable{http: c} }
 
@@ -32,18 +45,7 @@ func (w workable) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	url := fmt.Sprintf("%s/%s?details=true", workableBaseURL, e.Board)
 
 	var resp struct {
-		Jobs []struct {
-			Title         string `json:"title"`
-			Shortcode     string `json:"shortcode"`
-			URL           string `json:"url"`
-			Description   string `json:"description"`
-			PublishedOn   string `json:"published_on"`
-			City          string `json:"city"`
-			State         string `json:"state"`
-			Country       string `json:"country"`
-			Telecommuting bool   `json:"telecommuting"`
-			Type          string `json:"type"`
-		} `json:"jobs"`
+		Jobs []workablePosting `json:"jobs"`
 	}
 	if err := w.http.GetJSON(ctx, url, &resp); err != nil {
 		return nil, fmt.Errorf("workable: fetch board %s: %w", e.Board, err)
@@ -52,14 +54,38 @@ func (w workable) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, errListingAbsent("workable", e.Board, "jobs")
 	}
 
-	jobs := make([]Job, 0, len(resp.Jobs))
+	// Workable repeats a posting once per location under the same shortcode. Sending
+	// those rows to the pipeline separately races identical inserts and overwrites
+	// geography. Keep one posting with every location, in first-seen order.
+	byShortcode := make(map[string][]workablePosting)
+	var order []string
 	for _, j := range resp.Jobs {
+		if j.Shortcode == "" {
+			return nil, fmt.Errorf("workable: listing contains a posting without a shortcode")
+		}
+		if _, ok := byShortcode[j.Shortcode]; !ok {
+			order = append(order, j.Shortcode)
+		}
+		byShortcode[j.Shortcode] = append(byShortcode[j.Shortcode], j)
+	}
+
+	jobs := make([]Job, 0, len(order))
+	for _, shortcode := range order {
+		rows := byShortcode[shortcode]
+		j := rows[0]
+		countries := make([]string, 0, len(rows))
+		for _, row := range rows {
+			countries = append(countries, row.Country)
+		}
 		jobs = append(jobs, Job{
-			ExternalID:     j.Shortcode,
-			URL:            j.URL,
-			Title:          j.Title,
-			Company:        e.Company,
-			Location:       joinNonEmpty(j.City, j.State, j.Country),
+			ExternalID: j.Shortcode,
+			URL:        j.URL,
+			Title:      j.Title,
+			Company:    e.Company,
+			Location: distinctJoin(rows, "; ", func(row workablePosting) string {
+				return joinNonEmpty(row.City, row.State, row.Country)
+			}),
+			Countries:      countriesFromCodes(countries),
 			Description:    sanitizeHTML(j.Description),
 			Remote:         j.Telecommuting,
 			WorkMode:       workModeFromRemote(j.Telecommuting),

@@ -75,6 +75,44 @@ func TestHimalayasFetchPaginatesAndMaps(t *testing.T) {
 	}
 }
 
+func TestHimalayasDeduplicatesGUIDsAcrossPages(t *testing.T) {
+	// Offset pages can overlap. Advance by raw row counts even through a page
+	// containing only repeats, and keep the first usable version of each posting.
+	page1 := `{"totalCount":8,"jobs":[
+{"guid":"a","title":"Go Engineer","companyName":"Acme","locationRestrictions":["Canada"],"description":"<p>Build APIs.</p>"},
+{"guid":"b","title":"Data Analyst","companyName":""},
+{"guid":"c","title":"Designer","companyName":"Beta"},
+{"guid":"a","title":"Older title","companyName":"Acme"}
+]}`
+	page2 := `{"totalCount":8,"jobs":[
+{"guid":"a","title":"Older title","companyName":"Acme"},
+{"guid":"c","title":"Designer","companyName":"Beta"}
+]}`
+	page3 := `{"totalCount":8,"jobs":[
+{"guid":"b","title":"Data Analyst","companyName":"Gamma"},
+{"guid":"d","title":"QA Engineer","companyName":"Delta"}
+]}`
+	fake := (&routedHTTP{}).route("offset=0", page1).route("offset=4", page2).route("offset=6", page3)
+	jobs, err := NewHimalayas(fake).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if fake.calls != 3 {
+		t.Errorf("made %d requests, want 3 (including the page after only repeats)", fake.calls)
+	}
+	if len(jobs) != 4 {
+		t.Fatalf("got %d jobs, want 4 distinct usable GUIDs", len(jobs))
+	}
+	for i, id := range []string{"a", "c", "b", "d"} {
+		if jobs[i].ExternalID != id {
+			t.Errorf("jobs[%d].ExternalID = %q, want %q", i, jobs[i].ExternalID, id)
+		}
+	}
+	if first := jobs[0]; first.Title != "Go Engineer" || first.Location != "Canada" || first.Description != "<p>Build APIs.</p>" {
+		t.Errorf("first posting's fields changed: %+v", first)
+	}
+}
+
 func TestHimalayasCompanyNameSentinelFallsBackToCompanySlug(t *testing.T) {
 	// Himalayas' feed renders companyName as the literal "name" for some postings (an
 	// unresolved template field on their end). companySlug, a separate JSON field, stays

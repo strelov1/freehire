@@ -19,14 +19,14 @@ import {
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
   COMPANY_TYPE_VALUES, DOMAIN_VALUES, INDUSTRY_VALUES, FACET_ALIASES,
   AI_ARCHETYPE_VALUES, SKILL_LABELS, INDUSTRY_LABELS, ROLE_TYPE_VALUES, SOURCE_TYPE_VALUES,
-  CLEARANCE_LEVEL_VALUES, PERK_VALUES, PERK_LABELS,
+  CLEARANCE_LEVEL_VALUES, PERK_VALUES, PERK_LABELS, EQUITY_VALUES,
 } from './generated/contracts';
 import { fuzzyMatch } from './fuzzy';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
   RELOCATION_LABELS, AI_ARCHETYPE_LABELS, ROLE_TYPE_LABELS, SOURCE_TYPE_LABELS,
-  CLEARANCE_LEVEL_LABELS, titleCase,
+  CLEARANCE_LEVEL_LABELS, EQUITY_LABELS, titleCase,
 } from './labels';
 import { COLLECTIONS } from './collections';
 import { TIMEZONE_REGIONS } from './talentFacetModel';
@@ -587,6 +587,16 @@ const CLEARANCE_LEVEL: FacetOption[] = [
   ...options(CLEARANCE_LEVEL_VALUES, CLEARANCE_LEVEL_LABELS),
 ];
 
+// Reserved `equity` value selecting the postings that state nothing about equity
+// (search.EquityNotStated) — the attribute's absence, not a member of the vocabulary,
+// so it is added here rather than generated. Last, unlike clearance's `none`: people
+// filter on equity to FIND it. Uncounted for the same reason as CLEARANCE_UNSPECIFIED.
+const EQUITY_NOT_STATED = 'not_stated';
+const EQUITY: FacetOption[] = [
+  ...options(EQUITY_VALUES, EQUITY_LABELS),
+  { value: EQUITY_NOT_STATED, label: 'Not stated', uncounted: true },
+];
+
 // Work-mode and region options, exported for the profile's location preferences editor so
 // it shares the filter panel's vocabulary/order instead of duplicating it.
 export const WORK_MODE_OPTIONS: FacetOption[] = WORK_MODE;
@@ -900,6 +910,7 @@ export const FACETS: FacetDef[] = [
   // Include-only: a posting without a perk is one whose description does not MENTION it,
   // so "exclude 401(k) matching" would hide jobs that may well offer it.
   { param: 'perks', label: 'Perks mentioned', control: 'pills', options: PERKS, excludable: false, hasAndOr: true, searchAliases: PERK_ALIASES },
+  { param: 'equity', label: 'Equity', control: 'pills', options: EQUITY, excludable: true },
   { param: 'company_slug', label: 'Company', control: 'remote', excludable: true, placeholder: 'Search companies', remote: companySearch },
   { param: 'source_type', label: 'Source type', control: 'pills', options: SOURCE_TYPE, excludable: true },
   { param: 'clearance_levels', label: 'Clearance level', control: 'pills', options: CLEARANCE_LEVEL, excludable: true },

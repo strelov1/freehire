@@ -145,6 +145,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `reality` | Posting reality | fresh, stale, likely-evergreen |
 | `salary_currency` | Currency | USD, EUR, GBP, RUB |
 | `perks` | Perks mentioned | generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it, which is not the same as not offering it |
+| `equity` | Equity | salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity |
 | `company_slug` | Company | Open vocabulary — call /jobs/facets for live values |
 | `source_type` | Source type | ats, company, aggregator, social |
 | `clearance_levels` | Clearance level | none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one |
@@ -159,7 +160,6 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | --- | --- | --- |
 | `visa_sponsorship` | Visa sponsorship | true, false |
 | `requires_clearance` | Security clearance required | true, false |
-| `equity` | Equity compensation | salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity |
 | `via_recruiter` | Posting says a recruiter publishes it for a client | true — the description says so; false — every posting not marked, including recruiter posts that never say so |
 | `former_employers` | Hiring again: companies you have worked at and left | true — signed in only, read from your experience bank; a name that does not resolve to exactly one company is left out. Anonymous, it is reported in meta.ignored_params. `/jobs/facets` never applies this filter, so its counts ignore it even for signed-in callers |
 | `salary_min` | Minimum salary | integer — jobs whose minimum salary is at least this (pair with salary_currency) |

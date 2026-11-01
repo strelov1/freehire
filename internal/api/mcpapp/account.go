@@ -62,7 +62,7 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.
 			Description: t.Description,
 			InputSchema: t.Schema,
 			Annotations: accountAnnotations(t.Effect),
-		}, accountToolHandler(t, userID))
+		}, loggedAccountTool(t.Name, accountToolHandler(t, userID)))
 	}
 	return server
 }

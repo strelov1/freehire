@@ -154,6 +154,23 @@ it('shows exact source salary bounds in the job detail summary', () => {
   expect(screen.getByText('2,501 – 3,000 € / mo')).not.toBeNull();
 });
 
+it.each([JobView, JobRow])('shows the equity and application-form chips when the posting carries them', (component) => {
+  render(component, { job: { ...job, equity: 'salary_and_equity', apply_questions: 0 } });
+  expect(screen.getByText('Salary + equity')).not.toBeNull();
+  expect(screen.getByText('No extra questions')).not.toBeNull();
+});
+
+it.each([JobView, JobRow])('drops the question count once the posting has closed', (component) => {
+  render(component, { job: { ...job, apply_questions: 2, closed_at: '2026-10-01T00:00:00Z' } });
+  expect(screen.queryByText('2 questions')).toBeNull();
+});
+
+it.each([JobView, JobRow])('shows neither chip when the posting states neither', (component) => {
+  render(component, { job });
+  expect(screen.queryByText(/equity/i)).toBeNull();
+  expect(screen.queryByText(/question/i)).toBeNull();
+});
+
 it.each([JobView, JobRow])('shows the application deadline when the source states it', (component) => {
   const datedJob = { ...job, application_deadline: '2026-11-11' };
   const view = render(component, { job: datedJob });

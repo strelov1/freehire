@@ -87,3 +87,45 @@ func TestDictionaryRecordWritesInsideTheDailyCap(t *testing.T) {
 		t.Fatalf("blank consumed a write: %d", writes)
 	}
 }
+
+func TestIndustryDictionaryGapIsDeduplicatedByTheExistingQueue(t *testing.T) {
+	pool := startPostgres(t)
+	ctx := context.Background()
+	var userID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO users (email) VALUES ($1) RETURNING id`, "industry-gap@example.test").Scan(&userID); err != nil {
+		t.Fatal(err)
+	}
+	iss := auth.NewIssuer("test-secret", time.Hour)
+	token, err := iss.Issue(userID, testTokenVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{Name: auth.CookieName, Value: token}
+	h := &dictionaryHandlers{pool: pool, queries: db.New(pool)}
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	api := app.Group("/api/v1")
+	h.register(api, middleware{cookie: auth.RequireAuth(iss, testVersions)})
+
+	const path = "/api/v1/dictionary/gaps"
+	for i, term := range []string{"underwater basket weaving industry", "UNDERWATER BASKET WEAVING INDUSTRY"} {
+		code, body := doDictionary(t, app, http.MethodPost, path, `{"kind":"industry","term":"`+term+`"}`, cookie)
+		want := float64(i + 1)
+		if code != http.StatusOK || body["data"].(map[string]any)["request_count"] != want {
+			t.Fatalf("industry request %d = %d %#v, want count %v", i+1, code, body, want)
+		}
+	}
+	var kind, raw string
+	var count, writes int32
+	if err := pool.QueryRow(ctx, `SELECT kind, raw_term, request_count FROM dictionary_gaps WHERE kind = 'industry'`).Scan(&kind, &raw, &count); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "industry" || raw != "underwater basket weaving industry" || count != 2 {
+		t.Fatalf("stored kind=%q raw=%q count=%d", kind, raw, count)
+	}
+	if err := pool.QueryRow(ctx, `SELECT writes FROM dictionary_gap_daily WHERE user_id = $1`, userID).Scan(&writes); err != nil {
+		t.Fatal(err)
+	}
+	if writes != 2 {
+		t.Fatalf("daily writes = %d, want 2", writes)
+	}
+}

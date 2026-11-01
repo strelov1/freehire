@@ -44,6 +44,13 @@ export interface JobFilters {
    *  `hideAIInterview`'s underlying facet: nothing in the index is ever written
    *  false, so turning this off must omit the param rather than write `=false`. */
   autoApplyAvailable: boolean;
+  /** Keep only postings whose captured application form requires at most this many
+   *  questions beyond the CV and contact details (null = no bound). The filter modal's
+   *  "Short application" toggle writes SHORT_APPLICATION_MAX; any other bound arrives
+   *  from a shared link or the API and is kept as it came. `0` is a real bound — every
+   *  read must test for null, never for falsiness. Serialized as `apply_questions_max`;
+   *  a posting whose form we have not read never matches it. */
+  applyQuestionsMax: number | null;
   salaryMin: number | null;
   /** Keep only jobs whose stated MAXIMUM salary is at most this (null = no ceiling).
    *  Serialized as `salary_max`, which bounds a different attribute than `salaryMin`
@@ -251,6 +258,7 @@ export function emptyFilters(): JobFilters {
     visa: false,
     hideAIInterview: false,
     autoApplyAvailable: false,
+    applyQuestionsMax: null,
     salaryMin: null,
     salaryMax: null,
     postedWithinDays: null,
@@ -282,6 +290,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.visa) p.set('visa_sponsorship', 'true');
   if (f.hideAIInterview) p.set('ai_interview', 'false');
   if (f.autoApplyAvailable) p.set('auto_apply_available', 'true');
+  if (f.applyQuestionsMax != null) p.set('apply_questions_max', String(f.applyQuestionsMax));
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.salaryMax != null) p.set('salary_max', String(f.salaryMax));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
@@ -341,6 +350,18 @@ function salaryBound(raw: string | null): number | null {
   return raw !== null && ATOI.test(raw) ? Number(raw) : null;
 }
 
+/** A non-negative whole number, or null for anything else. For the bounds where zero
+ *  is a real answer (`experience_years_max=0`, `apply_questions_max=0`). The syntax is
+ *  Go's Atoi (ATOI), not `Number`, which also reads `0x0`, `1e1` and a blank string —
+ *  `?experience_years_max=%20` would otherwise become the entry-level filter, and
+ *  `apply_questions_max=0x0` a bound the server never applies. */
+function nonNegativeInt(raw: string | null): number | null {
+  const trimmed = raw?.trim() ?? '';
+  if (!ATOI.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return n >= 0 ? n : null;
+}
+
 /** Parse filters back from URL query params. Include and exclude are independent
  *  sets; if a value appears in both (a malformed or legacy link), exclude wins and
  *  it is dropped from include so a value carries exactly one sign. */
@@ -363,6 +384,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.visa = p.get('visa_sponsorship') === 'true';
   f.hideAIInterview = p.get('ai_interview') === 'false';
   f.autoApplyAvailable = p.get('auto_apply_available') === 'true';
+  f.applyQuestionsMax = nonNegativeInt(p.get('apply_questions_max'));
   readLegacyClearance(p, f.facets);
   f.salaryMin = salaryBound(p.get('salary_min'));
   f.salaryMax = salaryBound(p.get('salary_max'));
@@ -372,12 +394,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.openWithinDays = positiveDays(p.get('open_within_days'));
   // Zero IS a bound here — it selects the postings stating no prior experience is
   // required — so the guard admits it and rejects only what cannot be a year count.
-  // The presence test is on the TRIMMED string, not the raw one: `Number('')` and
-  // `Number(' ')` are both 0 while `' '` is truthy, so a naive check would turn
-  // `?experience_years_max=%20` in a shared link into the entry-level filter.
-  const rawYears = p.get('experience_years_max')?.trim() ?? '';
-  const years = Number(rawYears);
-  f.experienceYearsMax = rawYears !== '' && Number.isInteger(years) && years >= 0 ? years : null;
+  f.experienceYearsMax = nonNegativeInt(p.get('experience_years_max'));
   f.experienceIncludeUnspecified = p.get('experience_include_unspecified') === 'true';
   f.experienceOnlySeniorityUnspecified = p.get('experience_only_seniority_unspecified') === 'true';
   f.seniorityIncludeUnspecified = p.get('seniority_include_unspecified') === 'true';
@@ -423,6 +440,7 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.visa) n += 1;
   if (f.hideAIInterview) n += 1;
   if (f.autoApplyAvailable) n += 1;
+  if (f.applyQuestionsMax != null) n += 1;
   // One control and one summary chip, so one count whichever ends are set.
   if (f.salaryMin != null || f.salaryMax != null) n += 1;
   if (f.postedWithinDays != null) n += 1;

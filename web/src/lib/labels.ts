@@ -61,6 +61,13 @@ export const CLEARANCE_LEVEL_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
+// Equity compensation (vocab.EquityValues). There is deliberately no "No equity": a
+// posting that states neither is NOT STATED, which is not a claim about the offer.
+export const EQUITY_LABELS: Record<string, string> = {
+  salary_and_equity: 'Salary + equity',
+  equity_only: 'Equity only',
+};
+
 // Source kinds (vocab.SourceTypeValues), as sources.ProviderKind assigns them.
 export const SOURCE_TYPE_LABELS: Record<string, string> = {
   ats: 'ATS',

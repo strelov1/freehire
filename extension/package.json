@@ -2,7 +2,7 @@
   "name": "freehire-extension",
   "description": "Browser extension: a job-application agent side panel, on any page.",
   "private": true,
-  "version": "0.1.12",
+  "version": "0.1.13",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -19,6 +19,10 @@
   },
   "dependencies": {
     "@lucide/svelte": "^1.65.0",
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/exporter-logs-otlp-proto": "^0.300.0",
+    "@opentelemetry/resources": "^3.0.0",
+    "@opentelemetry/sdk-logs": "^3.0.0",
     "flag-icons": "^7.5.0",
     "freehire-design-system": "file:../design-system",
     "svelte": "^5.57.2"

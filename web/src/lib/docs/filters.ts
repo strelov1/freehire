@@ -61,6 +61,7 @@ const VALUES_NOTE: Record<string, string> = {
     '. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one',
   category: '. The retired value management is still accepted and answered as role_type=people_manager',
   perks: ' — matched from the description; a posting without one does not mention it, which is not the same as not offering it',
+  equity: ' — not_stated means none was read, not that the job offers no equity',
 };
 
 /** Every string facet: the SPA-derived rows plus the API-only ones. */
@@ -78,11 +79,6 @@ export const FILTER_FACETS: FilterRow[] = [
 export const FILTER_EXTRAS: FilterRow[] = [
   { param: 'visa_sponsorship', label: 'Visa sponsorship', values: 'true, false' },
   { param: 'requires_clearance', label: 'Security clearance required', values: 'true, false' },
-  {
-    param: 'equity',
-    label: 'Equity compensation',
-    values: 'salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity',
-  },
   {
     param: 'via_recruiter',
     label: 'Posting says a recruiter publishes it for a client',

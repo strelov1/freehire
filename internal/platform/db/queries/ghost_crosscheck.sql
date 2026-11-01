@@ -9,7 +9,12 @@
 --
 -- Requires jobs_source_id_open_idx (migration 0056); without it this is the same scan
 -- restricted to one source.
-SELECT j.id, j.company_slug, j.title, j.ats_absent_at
+--
+-- via_recruiter is read rather than filtered so the worker can still CLEAR a stamp on a
+-- posting that has since been recognised as a recruiter's, and report how many it
+-- declined for that reason. The column is true-or-NULL (migration 0214), hence IS TRUE.
+SELECT j.id, j.company_slug, j.title, j.ats_absent_at,
+       (j.via_recruiter IS TRUE)::boolean AS via_recruiter
 FROM jobs j
 WHERE j.closed_at IS NULL
   AND j.source = sqlc.arg(source)
@@ -55,3 +60,17 @@ WHERE id = ANY(sqlc.arg(job_ids)::bigint[]) AND ats_absent_at IS NOT NULL;
 -- until a reindex, whose timer is disabled. Reading the truth from Postgres is what
 -- stops a warning appearing on a posting that has already been taken down.
 SELECT id, ats_absent_at, closed_at FROM jobs WHERE id = ANY(sqlc.arg(job_ids)::bigint[]);
+
+-- name: CountCompanyRecruiterPostings :one
+-- How many of a company's open postings, from ANY source, state that they are published
+-- on a client's behalf (jobs.via_recruiter). The cross-check reads it to recognise a
+-- staffing agency as a whole: one agency posting that says "our client" marks only
+-- itself, while the same agency's other postings — which say nothing — advertise
+-- clients' roles just the same, and are just as legitimately absent from its board.
+-- Private postings are excluded: a user's pasted JD must not change another company's
+-- verdict. Rides jobs_open_company_created_at_id_idx.
+SELECT count(*) FROM jobs
+WHERE closed_at IS NULL
+  AND NOT is_private
+  AND company_slug = sqlc.arg(company_slug)
+  AND via_recruiter IS TRUE;
