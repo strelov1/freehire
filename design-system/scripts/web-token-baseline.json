@@ -8,7 +8,7 @@
   "web/src/lib/components/ActivityBars.svelte": 3,
   "web/src/lib/components/AdvancedSearchLandingView.svelte": 5,
   "web/src/lib/components/AdzunaAttribution.svelte": 2,
-  "web/src/lib/components/AgentsLandingView.svelte": 8,
+  "web/src/lib/components/AgentsLandingView.svelte": 1,
   "web/src/lib/components/AnalysesView.svelte": 2,
   "web/src/lib/components/AnalyticsView.svelte": 1,
   "web/src/lib/components/ATSReportView.svelte": 4,

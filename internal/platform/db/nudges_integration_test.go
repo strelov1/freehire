@@ -148,7 +148,7 @@ func TestListInterviewPrepCandidates(t *testing.T) {
 	}
 }
 
-func TestListJobClosedCandidates(t *testing.T) {
+func TestSettleClosedApplications(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
 	ctx := context.Background()
@@ -185,25 +185,21 @@ func TestListJobClosedCandidates(t *testing.T) {
 	openJob := insertJob(t, pool, "still-open")
 	insertApplication(t, pool, uid, openJob, appliedAt, "screening")
 
-	rows, err := q.ListJobClosedCandidates(ctx, 7)
+	count, err := q.SettleClosedApplications(ctx, 7)
 	if err != nil {
-		t.Fatalf("list: %v", err)
+		t.Fatal(err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("candidates = %d, want 2 (both in-window closures; the Go-side active-stage filter drops the settled one)", len(rows))
+	if count != 1 {
+		t.Fatalf("notifications = %d, want 1", count)
 	}
-	byJob := map[int64]ListJobClosedCandidatesRow{}
-	for _, r := range rows {
-		byJob[r.JobID.Int64] = r
-	}
-	if _, ok := byJob[activeJob]; !ok {
-		t.Errorf("missing the active application's closed job, got %+v", rows)
-	}
-	if _, ok := byJob[settledJob]; !ok {
-		t.Errorf("missing the settled application's closed job (SQL doesn't filter stage; Go does), got %+v", rows)
-	}
-	if got := byJob[activeJob]; !got.ClosedAt.Valid || !got.ClosedAt.Time.Equal(recentClose) {
-		t.Errorf("closed_at = %v, want %v", got.ClosedAt, recentClose)
+	for id, want := range map[int64]string{activeJob: "expired", staleJob: "expired", settledJob: "withdrawn", openJob: "screening"} {
+		var stage string
+		if err := pool.QueryRow(ctx, "SELECT stage FROM applications WHERE user_id = $1 AND job_id = $2", uid, id).Scan(&stage); err != nil {
+			t.Fatal(err)
+		}
+		if stage != want {
+			t.Errorf("job %d stage = %s, want %s", id, stage, want)
+		}
 	}
 }
 

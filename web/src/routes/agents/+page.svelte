@@ -19,8 +19,8 @@
 </script>
 
 <Seo
-  title="freehire for AI agents — CLI, MCP and ChatGPT"
-  description="Point your AI agent at the freehire job catalogue. A local harness driving the CLI reaches the whole surface; an MCP host or ChatGPT covers most of it. Search needs no API key."
+  title="freehire AI — Assistant, MCP and CLI"
+  description="Use the freehire Assistant with Pro, connect your own AI assistant through MCP, or search from the CLI. Choose your setup and start your job search."
   {canonical}
 />
 

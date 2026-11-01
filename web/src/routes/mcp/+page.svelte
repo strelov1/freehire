@@ -7,7 +7,7 @@
 </script>
 
 <Seo
-  title="freehire MCP — search IT jobs inside Claude, ChatGPT and Cursor"
+  title="freehire MCP — search IT jobs inside Claude, ChatGPT, Codex and Cursor"
   description="Add freehire as a connector to your AI assistant and search the live IT job catalogue from a chat. Free, no account needed to search; sign in to save and track jobs."
   {canonical}
 />

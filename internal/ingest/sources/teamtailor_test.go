@@ -252,6 +252,28 @@ func TestTeamtailorFetchReachesAPostingPastADuplicateOnlyPage(t *testing.T) {
 	}
 }
 
+// A board whose page chrome links a posting on EVERY page (an FAQ answer pointing at the
+// open-application role) must still end where its job list does. Measured 2026-11-01: on
+// weroad, platsa and d-tec the past-the-end page carries no jobs_list_container, only that
+// chrome link, so the walk read every page as non-empty and failed at the ceiling on every
+// crawl — 74 boards on prod.
+func TestTeamtailorFetchEndsWhereTheJobListDoes(t *testing.T) {
+	d := ttDetailHTML("Role", "&lt;p&gt;x&lt;/p&gt;", "2026-06-08T00:00:00+02:00", "Milan", "IT", "")
+	chrome := `<div class="prose"><a href="https://b/jobs/9-open-application">Apply anyway</a></div>`
+	fake := (&routedHTTP{}).
+		route("page=1", `<html><body><ul id="jobs_list_container"><li><a href="https://b/jobs/1-a">A</a></li></ul>`+chrome+`</body></html>`).
+		route("/jobs?page", `<html><body>`+chrome+`</body></html>`).
+		route("/jobs/1", d).route("/jobs/9", d)
+
+	jobs, err := NewTeamtailor(fake).Fetch(context.Background(), CompanyEntry{Board: "b"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].ExternalID != "1" {
+		t.Fatalf("got %+v, want only posting 1 from the job list", jobs)
+	}
+}
+
 // A later-page listing failure must fail the whole crawl, not return the pages gathered so
 // far — this is the fullBoardListing bar (source.go), and the exact assumption that let a
 // real board (tantor.teamtailor.com, live-probed 2026-09) get silently truncated at

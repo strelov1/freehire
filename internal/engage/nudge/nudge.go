@@ -31,7 +31,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/deliverywindow"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/job/silence"
@@ -125,7 +124,7 @@ var _ Store = (*db.Queries)(nil)
 type Store interface {
 	ListFollowUpCandidates(ctx context.Context, windowDays int32) ([]db.ListFollowUpCandidatesRow, error)
 	ListInterviewPrepCandidates(ctx context.Context, windowDays int32) ([]db.ListInterviewPrepCandidatesRow, error)
-	ListJobClosedCandidates(ctx context.Context, windowDays int32) ([]db.ListJobClosedCandidatesRow, error)
+	SettleClosedApplications(ctx context.Context, windowDays int32) (int64, error)
 	// ListAutoApplySubmittedCandidates, ListAutoApplyBlockedCandidates and
 	// ListAutoApplyFailedCandidates back the three KindAutoApply* MATCH loops. See
 	// add-auto-apply-outcome-notifications.
@@ -133,11 +132,6 @@ type Store interface {
 	ListAutoApplyBlockedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplyBlockedCandidatesRow, error)
 	ListAutoApplyFailedCandidates(ctx context.Context, windowDays int32) ([]db.ListAutoApplyFailedCandidatesRow, error)
 	RecordNudge(ctx context.Context, arg db.RecordNudgeParams) (int64, error)
-	// TrackJob is jobtracking's own stage-set write (upserts applications.stage and
-	// emits the paired application_events row in one statement, only when the stage
-	// actually moves). MATCH reuses it directly, rather than duplicating the CTE,
-	// to auto-settle an application whose listing closed — see the job-closed loop.
-	TrackJob(ctx context.Context, arg db.TrackJobParams) (db.TrackJobRow, error)
 	ClaimDueNudges(ctx context.Context, arg db.ClaimDueNudgesParams) ([]int64, error)
 	GetNudgeForDelivery(ctx context.Context, id int64) (db.GetNudgeForDeliveryRow, error)
 	MarkNudgeDelivered(ctx context.Context, id int64) (int64, error)
@@ -165,7 +159,7 @@ type Config struct {
 	// InterviewPrepWindowDays is the same bound on ListInterviewPrepCandidates'
 	// occurred_at.
 	InterviewPrepWindowDays int32
-	// JobClosedWindowDays is the same bound on ListJobClosedCandidates' closed_at.
+	// JobClosedWindowDays bounds closure notifications; tracker settlement has no age limit.
 	JobClosedWindowDays int32
 	// AutoApplyOutcomeWindowDays is the same first-deploy bound shared by all three
 	// ListAutoApply*Candidates queries (on occurred_at/blocked_at/failed_at
@@ -319,45 +313,11 @@ func (r *Runner) match(ctx context.Context, stats *Stats) error {
 		stats.Matched += int(affected)
 	}
 
-	closed, err := r.store.ListJobClosedCandidates(ctx, r.cfg.JobClosedWindowDays)
+	closed, err := r.store.SettleClosedApplications(ctx, r.cfg.JobClosedWindowDays)
 	if err != nil {
-		return fmt.Errorf("list job-closed candidates: %w", err)
+		return fmt.Errorf("settle closed applications: %w", err)
 	}
-	for _, c := range closed {
-		if !c.JobID.Valid || !c.ClosedAt.Valid {
-			continue // defensive: the query's WHERE clause already guarantees both are set
-		}
-		stage := ""
-		if c.Stage.Valid {
-			stage = c.Stage.String
-		}
-		if _, active := silence.ThresholdDays(stage); !active {
-			continue // a settled application does not care that the listing closed
-		}
-		affected, err := r.store.RecordNudge(ctx, db.RecordNudgeParams{
-			UserID: c.UserID, JobID: c.JobID.Int64, Kind: KindJobClosed,
-			EpisodeKey: c.ClosedAt,
-		})
-		if err != nil {
-			return fmt.Errorf("record job-closed nudge: %w", err)
-		}
-		stats.Matched += int(affected)
-
-		// Auto-settle the board: a closed listing is not something to leave sitting
-		// on an active stage waiting for the candidate to notice and clear by hand.
-		// Ordered AFTER RecordNudge — TrackJob only writes a stage_set event when the
-		// stage actually moves, so it is naturally idempotent on retry, but running it
-		// first would flip the stage to `expired` before the notification is durably
-		// recorded; a failure between the two would then leave the candidate never
-		// notified and the next pass no longer finding an active stage to re-check.
-		if _, err := r.store.TrackJob(ctx, db.TrackJobParams{
-			UserID: c.UserID, JobID: c.JobID.Int64,
-			Stage:       pgtype.Text{String: "expired", Valid: true},
-			EventSource: appevent.SourceSystem,
-		}); err != nil {
-			return fmt.Errorf("auto-expire job-closed application: %w", err)
-		}
-	}
+	stats.Matched += int(closed)
 
 	submitted, err := r.store.ListAutoApplySubmittedCandidates(ctx, r.cfg.AutoApplyOutcomeWindowDays)
 	if err != nil {
@@ -546,8 +506,8 @@ func (r *Runner) deliverBatch(ctx context.Context, b *batch, stats *Stats) {
 // disabled notification rule cancels every kind. follow-up and interview-prep
 // additionally need the job still open (closing settles the application one way
 // or another) and their own live condition; job-closed needs the opposite — the
-// job stays closed once closed, so it only needs the application to still be in a
-// stage that accrues silence (a settled one no longer cares that the listing shut).
+// listing must remain closed, and automatic expiry must not cancel its notification.
+// Other settled outcomes or removing the application cancel the notification.
 // The three auto-apply outcome kinds need no re-derivation at all: their condition
 // cannot lapse once matched.
 func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
@@ -571,11 +531,11 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 	case KindInterviewPrep:
 		return info.JobOpen && info.ApplicationExists && stage == "interview"
 	case KindJobClosed:
-		if !info.ApplicationExists {
+		if !info.ApplicationExists || !info.JobClosedEpisodeCurrent {
 			return false
 		}
 		_, active := silence.ThresholdDays(stage)
-		return active
+		return !info.JobOpen && (active || stage == "expired")
 	case KindAutoApplySubmitted, KindAutoApplyBlocked, KindAutoApplyFailed:
 		// Permanent once matched — an applied event, a blocked_at, a failed_at never
 		// lapse the way silence or an interview stage can, so there is nothing here to

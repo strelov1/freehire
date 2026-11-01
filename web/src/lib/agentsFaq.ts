@@ -1,42 +1,25 @@
-// FAQ for the /agents landing — the single source for both the visible section
-// (AgentsLandingView.svelte) and the FAQPage JSON-LD. Google drops the rich result
-// when the two disagree, so they share this array. Mirrors homeFaq.ts.
-//
-// Answers stay honest to what the surfaces actually do: public reads need no key,
-// anything touching an account needs one, and the ranking of the three tracks is a
-// consequence of what each host can run — not a preference.
-
+// Shared by the visible /agents FAQ and its FAQPage JSON-LD.
 import type { FaqItem } from './seo';
 
 export const AGENTS_FAQ: FaqItem[] = [
   {
-    question: 'Do I need an API key to let an agent search freehire?',
-    answer:
-      'No. Job search, company data and facets are public and need no authentication, so an agent can search the whole catalogue the moment it is installed. A key is only needed for the parts that belong to your account: saving, applying, application stages, notes, CV tailoring and application mail.',
+    question: 'Which option should I choose?',
+    answer: 'Choose freehire Assistant to work directly on the site with Pro. Choose MCP to connect an assistant you already use, such as Claude, ChatGPT, Codex or Cursor. Choose CLI to work from your terminal or give a local agent access to freehire alongside your files.',
   },
   {
-    question: 'Which kind of agent works best with freehire?',
-    answer:
-      'A local harness — Claude Code, Codex, Cursor, Cline and the like — driving the freehire CLI. It gets the whole surface, including CV edits and PDF rendering, it can read and write files on your machine, and nothing caps how many tool calls one task may make. Hosted assistants come next: an MCP host such as Claude Desktop runs the same tools over the Model Context Protocol.',
+    question: 'Do I need Pro or an account to get started?',
+    answer: 'The built-in freehire Assistant is included in Pro and uses your signed-in account. Public job search, employer data and market figures through MCP or CLI need no freehire account. Connect your account when you want to save jobs, update application stages or use your profile. Your external assistant may have its own subscription requirements.',
   },
   {
-    question: 'How do I connect freehire to Claude?',
-    answer:
-      'Two ways. In Claude Code, install the CLI and its agent skills, or add the plugin marketplace. In Claude Desktop, add the freehire MCP server — it runs via npx, needs no global install, and reuses the CLI credentials if you have already signed in.',
+    question: 'How do I connect my account?',
+    answer: 'For MCP, choose With your account in the connection steps and approve the freehire connection in your browser. Codex uses codex mcp login freehire to start that sign-in. For the CLI, run freehire auth login. The built-in assistant uses your existing freehire sign-in.',
   },
   {
-    question: 'Can ChatGPT use freehire?',
-    answer:
-      'Yes. freehire is in the ChatGPT app directory: add it in one click and search the catalogue with no account. To save, apply and track from ChatGPT, add the account connector, which signs in with freehire, or paste your own API key into the older custom GPT. You can also import the OpenAPI schema into an Action of your own.',
+    question: 'Can my assistant submit applications for me?',
+    answer: 'You submit applications on the employer’s site. Saving a job or marking it applied in freehire updates your tracking board; it does not submit an application. The browser extension can fill an application form for you to review before you send it.',
   },
   {
-    question: 'Can my agent apply to jobs for me?',
-    answer:
-      'No, and that is deliberate. Applications are submitted on the employer’s own site by you; freehire records that you applied, moves the application through its stages and reads the replies. The browser extension can fill an application form for you to review, but it never submits one on its own.',
-  },
-  {
-    question: 'Is there a rate limit for agents?',
-    answer:
-      'Yes, and every response reports where you stand in the X-RateLimit-Remaining header. Without a key the budget is per address. Signed in through MCP or the CLI, or with a full-access API key, it is per account instead, larger on Pro and Ultra, and largest on the API plans. The figures in force are in GET /api/v1/plans under api_limits. Read the header and pace yourself rather than waiting for a 429.',
+    question: 'Does each option use the same tracking board?',
+    answer: 'Yes. When connected to the same freehire account, the built-in assistant, MCP and CLI save jobs and update stages on the same board you see on the website.',
   },
 ];
