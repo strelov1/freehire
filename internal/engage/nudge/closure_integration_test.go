@@ -82,3 +82,36 @@ func TestClosedListingSettlement(t *testing.T) {
 		})
 	}
 }
+
+func TestJobClosedEpisodeAfterReopening(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	queries := db.New(pool)
+	userID := seedNudgeIntegrationUser(t, pool, "closure-episode@example.test")
+	jobID := seedClosedJob(t, pool, "closure-episode")
+	seedApplication(t, pool, userID, jobID, "expired")
+	nudgeID := seedPendingJobClosedNudge(t, pool, userID, jobID)
+	for _, tc := range []struct {
+		name, update string
+		current      bool
+	}{
+		{"original closure", "SELECT 1", true},
+		{"reopened", "UPDATE jobs SET closed_at = NULL WHERE id = $1", false},
+		{"closed again", "UPDATE jobs SET closed_at = now() WHERE id = $1", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.update != "SELECT 1" {
+				if _, err := pool.Exec(ctx, tc.update, jobID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			info, err := queries.GetNudgeForDelivery(ctx, nudgeID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.JobClosedEpisodeCurrent != tc.current {
+				t.Fatalf("current = %v, want %v", info.JobClosedEpisodeCurrent, tc.current)
+			}
+		})
+	}
+}

@@ -531,7 +531,7 @@ func (r *Runner) actionable(info db.GetNudgeForDeliveryRow) bool {
 	case KindInterviewPrep:
 		return info.JobOpen && info.ApplicationExists && stage == "interview"
 	case KindJobClosed:
-		if !info.ApplicationExists {
+		if !info.ApplicationExists || !info.JobClosedEpisodeCurrent {
 			return false
 		}
 		_, active := silence.ThresholdDays(stage)

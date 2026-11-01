@@ -172,6 +172,7 @@ SELECT id FROM claimed ORDER BY created_at, id;
 SELECT n.id, n.user_id, n.job_id, n.kind,
        j.title, j.company, j.public_slug, j.url,
        (j.closed_at IS NULL)::bool AS job_open,
+       COALESCE(n.episode_key = j.closed_at, false)::bool AS job_closed_episode_current,
        COALESCE(ns.enabled, false)::bool AS notifications_enabled,
        COALESCE(ns.channels, '{}'::text[]) AS channels,
        ns.quiet_hours_start AS quiet_hours_start,

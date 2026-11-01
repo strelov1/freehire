@@ -267,8 +267,9 @@ func deliveryRow(kind string, stage string, daysSilent int, notificationsEnabled
 		ID: 1, JobID: 2, Kind: kind,
 		Title: "Go Dev", Company: "Acme", PublicSlug: "go-dev-acme", URL: "https://ats/x",
 		JobOpen: jobOpen, NotificationsEnabled: notificationsEnabled, Channels: channels,
-		Stage:             pgtype.Text{String: stage, Valid: stage != ""},
-		ApplicationExists: true,
+		Stage:                   pgtype.Text{String: stage, Valid: stage != ""},
+		ApplicationExists:       true,
+		JobClosedEpisodeCurrent: true,
 		LastActivityAt: pgtype.Timestamptz{
 			Time: fixedNow.Add(-time.Duration(daysSilent) * 24 * time.Hour), Valid: true,
 		},
@@ -926,5 +927,17 @@ func TestDeliver_RecipientGoneOnOneChannelStillDeliversTheOther(t *testing.T) {
 	}
 	if len(store.unlinkedTelegram) != 1 {
 		t.Errorf("unlinkedTelegram = %v, want the dead chat forgotten anyway", store.unlinkedTelegram)
+	}
+}
+
+func TestJobClosedRejectsStaleEpisode(t *testing.T) {
+	for _, stage := range []string{"applied", "expired"} {
+		t.Run(stage, func(t *testing.T) {
+			row := deliveryRow(KindJobClosed, stage, 0, true, false, nil, nil, "")
+			row.JobClosedEpisodeCurrent = false
+			if newRunner(&fakeStore{}, &fakeNotifier{}).actionable(row) {
+				t.Fatal("stale closure episode must not be delivered")
+			}
+		})
 	}
 }

@@ -86,7 +86,7 @@ func seedPendingJobClosedNudge(t *testing.T, pool *pgxpool.Pool, userID, jobID i
 	var id int64
 	if err := pool.QueryRow(context.Background(),
 		`INSERT INTO application_nudges (user_id, job_id, kind, episode_key, status)
-		 VALUES ($1, $2, 'job_closed', now(), 'pending') RETURNING id`,
+		 SELECT $1, $2, 'job_closed', closed_at, 'pending' FROM jobs WHERE id = $2 RETURNING id`,
 		userID, jobID).Scan(&id); err != nil {
 		t.Fatalf("insert application_nudges: %v", err)
 	}

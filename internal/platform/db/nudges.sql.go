@@ -87,6 +87,7 @@ const getNudgeForDelivery = `-- name: GetNudgeForDelivery :one
 SELECT n.id, n.user_id, n.job_id, n.kind,
        j.title, j.company, j.public_slug, j.url,
        (j.closed_at IS NULL)::bool AS job_open,
+       COALESCE(n.episode_key = j.closed_at, false)::bool AS job_closed_episode_current,
        COALESCE(ns.enabled, false)::bool AS notifications_enabled,
        COALESCE(ns.channels, '{}'::text[]) AS channels,
        ns.quiet_hours_start AS quiet_hours_start,
@@ -117,27 +118,28 @@ WHERE n.id = $1
 `
 
 type GetNudgeForDeliveryRow struct {
-	ID                   int64              `json:"id"`
-	UserID               int64              `json:"user_id"`
-	JobID                int64              `json:"job_id"`
-	Kind                 string             `json:"kind"`
-	Title                string             `json:"title"`
-	Company              string             `json:"company"`
-	PublicSlug           string             `json:"public_slug"`
-	URL                  string             `json:"url"`
-	JobOpen              bool               `json:"job_open"`
-	NotificationsEnabled bool               `json:"notifications_enabled"`
-	Channels             []string           `json:"channels"`
-	QuietHoursStart      pgtype.Time        `json:"quiet_hours_start"`
-	QuietHoursEnd        pgtype.Time        `json:"quiet_hours_end"`
-	Stage                pgtype.Text        `json:"stage"`
-	ApplicationExists    bool               `json:"application_exists"`
-	LastActivityAt       pgtype.Timestamptz `json:"last_activity_at"`
-	HasPendingSuggestion bool               `json:"has_pending_suggestion"`
-	AccountEmail         string             `json:"account_email"`
-	Timezone             pgtype.Text        `json:"timezone"`
-	TelegramChatID       pgtype.Int8        `json:"telegram_chat_id"`
-	HasPushDevice        bool               `json:"has_push_device"`
+	ID                      int64              `json:"id"`
+	UserID                  int64              `json:"user_id"`
+	JobID                   int64              `json:"job_id"`
+	Kind                    string             `json:"kind"`
+	Title                   string             `json:"title"`
+	Company                 string             `json:"company"`
+	PublicSlug              string             `json:"public_slug"`
+	URL                     string             `json:"url"`
+	JobOpen                 bool               `json:"job_open"`
+	JobClosedEpisodeCurrent bool               `json:"job_closed_episode_current"`
+	NotificationsEnabled    bool               `json:"notifications_enabled"`
+	Channels                []string           `json:"channels"`
+	QuietHoursStart         pgtype.Time        `json:"quiet_hours_start"`
+	QuietHoursEnd           pgtype.Time        `json:"quiet_hours_end"`
+	Stage                   pgtype.Text        `json:"stage"`
+	ApplicationExists       bool               `json:"application_exists"`
+	LastActivityAt          pgtype.Timestamptz `json:"last_activity_at"`
+	HasPendingSuggestion    bool               `json:"has_pending_suggestion"`
+	AccountEmail            string             `json:"account_email"`
+	Timezone                pgtype.Text        `json:"timezone"`
+	TelegramChatID          pgtype.Int8        `json:"telegram_chat_id"`
+	HasPushDevice           bool               `json:"has_push_device"`
 }
 
 // The re-check-before-send context for one nudge: the job display fields, the
@@ -166,6 +168,7 @@ func (q *Queries) GetNudgeForDelivery(ctx context.Context, id int64) (GetNudgeFo
 		&i.PublicSlug,
 		&i.URL,
 		&i.JobOpen,
+		&i.JobClosedEpisodeCurrent,
 		&i.NotificationsEnabled,
 		&i.Channels,
 		&i.QuietHoursStart,
