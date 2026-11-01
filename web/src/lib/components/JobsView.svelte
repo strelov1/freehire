@@ -784,9 +784,14 @@
      bound it belongs with. -->
 <!-- Signed in only: "seen" is the server's record of what this account opened, and a
      signed-out visitor has none, so the control would do nothing. A link carrying
-     hide_seen still loads for them; the server just ignores it and says so. -->
+     hide_seen still loads for them; the server just ignores it and says so.
+
+     Standalone /jobs only: it is the daily feed this exists for, and the only loader
+     that hands the session to its server-rendered search. On a scoped list (a company,
+     a role, a skill, a collection) the first page would render unhidden under a
+     checked box. -->
 {#snippet hideSeenToggle()}
-  {#if isAuthenticated()}
+  {#if standalone && isAuthenticated()}
     <label class="flex shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
       <input
         type="checkbox"
