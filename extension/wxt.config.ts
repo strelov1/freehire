@@ -35,6 +35,8 @@ export default defineConfig({
   // (a `file:` dependency), and names .env.production explicitly: hidden files
   // are skipped by default, and without it a reviewer's build points at localhost.
   zip: {
+    // Keep hidden maps beside the private build, out of store artifacts.
+    exclude: ['**/*.map'],
     sourcesRoot: '..',
     includeSources: [
       'extension/**',
@@ -42,7 +44,7 @@ export default defineConfig({
       'design-system/**',
     ],
   },
-  vite: () => ({ plugins: [tailwindcss()] }),
+  vite: () => ({ plugins: [tailwindcss()], build: { sourcemap: 'hidden' } }),
   manifest: ({ browser }) =>
     ({
       // Firefox ignores `key` and pins its id through `gecko.id` instead.

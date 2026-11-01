@@ -136,6 +136,10 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, formerEmployers: on });
   }
 
+  setApplyQuestionsMax(n: number | null) {
+    this.#url.setNow({ ...this.#url.value, applyQuestionsMax: n });
+  }
+
   setExperienceIncludeUnspecified(on: boolean) {
     this.#url.setNow({ ...this.#url.value, experienceIncludeUnspecified: on });
   }
@@ -159,6 +163,12 @@ export class FilterStore {
    *  would leave the old order on screen with no indication anything is coming. */
   setSort(sort: JobSort) {
     this.#url.setNow({ ...this.#url.value, sort });
+  }
+
+  /** Hide or show the postings already opened. setNow: a discrete toggle that
+   *  re-filters the whole feed, for the same reason as setSort. */
+  setHideSeen(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, hideSeen: on });
   }
 
   /** Toggle a facet between match-all (AND) and match-any (OR) of its included values. */

@@ -6,7 +6,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, type Slice } from '#lib/api.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { PUBLIC_OPEN_WITHIN } from '$app/env/public';
@@ -110,6 +110,11 @@
   // (company_slug, …). Reads `applied` so typing doesn't fetch per keystroke.
   const scopedParams = () => {
     const p = filtersToParams(filters.applied);
+    // Scoped loaders render anonymously and offer no control for this preference.
+    if (!standalone) {
+      p.delete('hide_seen');
+      p.delete('former_employers');
+    }
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return p;
   };
@@ -174,7 +179,9 @@
   // jobs each has under the current filters. A failed fetch leaves the prior
   // counts — the selects degrade to plain (countless) options, never break.
   // latestOnly stops a slow earlier response overwriting a newer one.
-  let counts = $state.raw<FacetCounts | null>(null);
+  let catalogCounts = $state.raw<FacetCounts | null>(null);
+  // Facet counts cannot apply the former-employer constraint.
+  const counts = $derived(filters.value.formerEmployers ? null : catalogCounts);
   // The map dialog reads and writes `filters` itself, so a click on the map narrows the
   // list behind it. Its module (the land outline among it) loads on the first open only.
   let mapOpen = $state(false);
@@ -187,7 +194,7 @@
   // `q` — so the figure still answers what a click would give.
   const refreshCounts = latestOnly(
     () => api.facetCounts(scopedParams()),
-    (facets) => (counts = facets),
+    (facets) => (catalogCounts = facets),
   );
 
   // Minimum profile-match slider: a client-only post-filter over the already-fetched
@@ -505,11 +512,17 @@
     });
   });
 
+  // Personal feed preferences must be re-applied when the reader changes in-tab.
+  const searchUserID = $derived(
+    standalone && (filters.applied.hideSeen || filters.applied.formerEmployers) ? currentUser()?.id ?? null : null,
+  );
+
   // Reload the list whenever the debounced filters change — a settled keystroke, an
   // immediate facet toggle, or a back/forward re-seed. The first run is a no-op: the
   // SSR `initial` already seeded page one.
   $effect(() => {
     void filters.applied; // track the debounced snapshot
+    void searchUserID;
     untrack(() => {
       const firstRun = !started;
       if (firstRun) {
@@ -768,6 +781,8 @@
   <Button
     variant="outline"
     size="sm"
+    disabled={filters.value.formerEmployers}
+    title={filters.value.formerEmployers ? 'Turn off Hiring again to explore the map' : undefined}
     aria-label="Map"
     onclick={() => {
       mapLoaded = true;
@@ -807,10 +822,33 @@
      A "Hide evergreen" toggle used to lead this row, writing one sign of one value of the
      `reality` facet. The whole facet now sits in the modal's Posted pane, beside the age
      bound it belongs with. -->
+<!-- Signed in only: "seen" is the server's record of what this account opened, and a
+     signed-out visitor has none, so the control would do nothing. A link carrying
+     hide_seen still loads for them; the server just ignores it and says so.
+
+     Standalone /jobs only: it is the daily feed this exists for, and the only loader
+     that hands the session to its server-rendered search. On a scoped list (a company,
+     a role, a skill, a collection) the first page would render unhidden under a
+     checked box. -->
+{#snippet hideSeenToggle()}
+  {#if standalone && isAuthenticated()}
+    <label class="flex shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+      <input
+        type="checkbox"
+        class="size-4 rounded border-border"
+        checked={filters.value.hideSeen}
+        onchange={(e) => filters.setHideSeen(e.currentTarget.checked)}
+      />
+      <span>Hide viewed</span>
+    </label>
+  {/if}
+{/snippet}
+
 {#snippet listControls()}
   {#if standalone && isAuthenticated()}
     {@render hiringAgainToggle()}
   {/if}
+  {@render hideSeenToggle()}
   {@render postedSelect()}
   <!-- Unconditional. This used to be guarded against a one-option select - a label
        wearing a control's clothes - which could happen when match was hidden from a
@@ -921,11 +959,9 @@
            filter would start. -->
       <States state="error" message="Failed to load jobs." onRetry={() => reloadList(pageOffset(activePage))} />
     {:else if displayItems.length === 0 && formerEmployersApplied}
-      <!-- Empty here usually means nothing in the experience bank resolved to a company
-           that is hiring, not that the other filters are too tight — so the way out is
-           the bank. A company name that matches more than one employer is left out on
-           purpose rather than guessed at. -->
-      <States state="empty" message="None of your former employers is hiring right now." />
+      <!-- Offer the experience bank without attributing a combined-filter miss to
+           the employers' hiring activity. Ambiguous company names are not guessed. -->
+      <States state="empty" message="No jobs at your former employers match the current filters." />
       <p class="mt-2 text-center text-sm text-muted-foreground">
         We match the companies in
         <a href={resolve('/my/profile/experience')} class="font-medium text-foreground underline underline-offset-2">your experience</a>,
@@ -1000,7 +1036,7 @@
   </button>
 {/if}
 
-{#if standalone && mapLoaded}
+{#if standalone && mapLoaded && !filters.value.formerEmployers}
   {#await import('./map/JobsMapDialog.svelte') then { default: JobsMapDialog }}
     <JobsMapDialog bind:open={mapOpen} store={filters} />
   {/await}

@@ -12,6 +12,11 @@ import { defineEnvVars } from '@sveltejs/kit/env';
 const optional = (value: string | undefined) => value;
 
 export const variables = defineEnvVars({
+  PUBLIC_OTEL_LOGS_ENDPOINT: { public: true, schema: optional },
+  PUBLIC_OTEL_ENVIRONMENT: { public: true, schema: optional },
+  PUBLIC_OTEL_SERVICE_VERSION: { public: true, schema: optional },
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: { schema: optional },
+  OTEL_EXPORTER_OTLP_ENDPOINT: { schema: optional },
   PUBLIC_SENTRY_DSN: { public: true, schema: optional },
   PUBLIC_SENTRY_ENVIRONMENT: { public: true, schema: optional },
   PUBLIC_POSTHOG_KEY: { public: true, schema: optional },

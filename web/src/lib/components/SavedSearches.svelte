@@ -97,7 +97,7 @@
 
   // Overwrite the applied set's query with the current filters (the "Update <name>").
   async function update() {
-    if (!base || busy) return;
+    if (!base || busy || store.value.formerEmployers) return;
     busy = true;
     error = null;
     try {
@@ -150,9 +150,13 @@
       <span class="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Bell class="size-3.5 shrink-0" aria-hidden="true" /> Notify me when a new job matches these filters
       </span>
-      <SaveSearchAlert query={current} variant="full" alertsLabel={false} />
+      {#if store.value.formerEmployers}
+        <p class="text-sm text-muted-foreground">Turn off Hiring again to save this search or set up alerts.</p>
+      {:else}
+        <SaveSearchAlert query={current} variant="full" alertsLabel={false} />
+      {/if}
 
-      {#if dirty}
+      {#if dirty && !store.value.formerEmployers}
         <Button variant="secondary" size="sm" onclick={update} disabled={busy} class="self-start">
           Update “{base?.name}”
         </Button>

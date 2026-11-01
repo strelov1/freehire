@@ -338,6 +338,33 @@ describe('autoApplyAvailable', () => {
   });
 });
 
+describe('hideSeen', () => {
+  it('serializes as hide_seen=true and reads it back', () => {
+    const p = filtersToParams({ ...emptyFilters(), hideSeen: true });
+    expect(p.get('hide_seen')).toBe('true');
+    expect(filtersFromParams(p).hideSeen).toBe(true);
+  });
+
+  it('is absent when off, and only the literal true turns it on', () => {
+    expect(filtersToParams(emptyFilters()).has('hide_seen')).toBe(false);
+    expect(filtersFromParams(new URLSearchParams('hide_seen=1')).hideSeen).toBe(false);
+  });
+
+  // A feed preference, like the ordering: it is not a filter of the catalogue, so the
+  // badge and the clear-all count must not treat it as one.
+  it('is not counted as an active filter', () => {
+    expect(activeFilterCount({ ...emptyFilters(), hideSeen: true })).toBe(0);
+  });
+
+  // A digest has no "seen" to apply, so a saved search must neither store the flag
+  // nor read as dirty when the visitor toggles it.
+  it('is left out of the saved-search query', () => {
+    const f: JobFilters = { ...emptyFilters(), q: 'go', hideSeen: true };
+    expect(new URLSearchParams(savedSearchQuery(f)).has('hide_seen')).toBe(false);
+    expect(savedSearchQuery(f)).toBe(savedSearchQuery({ ...f, hideSeen: false }));
+  });
+});
+
 describe('the retired role facet', () => {
   // `role` is gone from FACETS, so emptyFilters no longer seeds it and the generic
   // param path has nothing to serialize. A stale `role=` in a URL is simply not read —

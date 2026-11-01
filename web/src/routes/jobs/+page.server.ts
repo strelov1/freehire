@@ -27,11 +27,10 @@ export const load: PageServerLoad = async ({ url, fetch, request }) => {
   // Before the search, not after: a page past the window is the most expensive one
   // the URL could name, and refusing it afterwards would mean paying for it first.
   if (!pageWithinWindow(pageNumber)) error(404, 'Page not found');
-  // "Hiring again" is answered from the reader's own experience bank, so that one search
-  // goes out as them. Every other render stays anonymous: the feed is the same for
-  // everyone, and a signed-in page is never stored by a shared cache either way (see
-  // #lib/httpCache), so forwarding the cookie here cannot leak one reader's answer.
-  const cookie = params.get('former_employers') === 'true' ? request.headers.get('cookie') : null;
+  // Personal filters read the caller's history or experience bank. The cache hook
+  // keeps requests carrying a session private (see #lib/httpCache).
+  const personal = params.get('former_employers') === 'true' || params.get('hide_seen') === 'true';
+  const cookie = personal ? request.headers.get('cookie') : null;
   const initial = await serverApi(fetch, cookie).searchJobs(params, LIMIT, pageOffset(pageNumber));
   // See the collections loader: a page past the last one the matches fill is an
   // empty, self-canonical 200 — a soft 404 dressed as a listing. Page 1 always

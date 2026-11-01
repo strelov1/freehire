@@ -24,6 +24,7 @@
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { formatSalary, summaryFacets } from '#lib/enrichment.js';
+  import { applyQuestionsLabel, equityLabel } from '#lib/jobFacts.js';
   import { freshnessBadges } from '#lib/freshness.js';
   import { markViewed } from '#lib/viewedJobs.svelte.js';
   import { markSaved, markUnsaved } from '#lib/savedJobs.svelte.js';
@@ -151,6 +152,9 @@
   const updated = $derived(formatDateOrAgo(job.updated_at, locale(), 'short'));
   const e = $derived(job.enrichment ?? {});
   const salary = $derived(formatSalary(e, 'standard'));
+  const equity = $derived(equityLabel(job.equity));
+  // A closed posting takes no applications, so what its form asks is beside the point.
+  const questions = $derived(closed ? null : applyQuestionsLabel(job.apply_questions));
   const facets = $derived(summaryFacets(job));
   // Engagement counters (distinct signed-in viewers / applicants), served on the
   // job. A zero metric is omitted so the line never reads as a dead "0 views".
@@ -1073,11 +1077,28 @@
             This position is no longer accepting applications{closedOn ? ` (closed ${closedOn})` : ''}.
           </span>
         </p>
-        {#if hasSimilar}
-          <a href="#similar-jobs" class="font-medium text-brand-strong underline underline-offset-4">
-            See similar open jobs →
-          </a>
-        {/if}
+        <!-- The posting's own page stays reachable: a reader who doubts the closure (or
+             a crawl that read it wrong) has nowhere else to check, and the Apply buttons
+             that used to carry this link are withheld. A quiet link, not a CTA, so it does
+             not read as a way to apply; `nofollow` for the reason `applyCta` states. -->
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {#if job.url && !job.direct_apply}
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
+              href={job.url}
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              class="inline-flex items-center gap-1.5 font-medium text-muted-foreground hover:text-foreground"
+            >
+              <ExternalLink class="size-4 shrink-0" aria-hidden="true" />
+              View the original posting
+            </a>
+          {/if}
+          {#if hasSimilar}
+            <a href="#similar-jobs" class="font-medium text-brand-strong underline underline-offset-4">
+              See similar open jobs →
+            </a>
+          {/if}
+        </div>
       </div>
     {/if}
 
@@ -1145,12 +1166,22 @@
     <div class="sticky top-20 flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
       <JobMatch {job} {matchAnalysis} />
 
-      {#if salary}
-        <p
-          class="border-t border-border pt-4 text-xl font-semibold tabular-nums tracking-tight first:border-t-0 first:pt-0"
-        >
-          {salary}
-        </p>
+      <!-- The pay and what applying costs, together: equity is the other half of the
+           pay (a posting may offer it with no salary figure), and the question count is
+           what stands between the reader and the Apply button. Each renders only when
+           known — absence is "not stated", never "none". -->
+      {#if salary || equity || questions}
+        <div class="flex flex-col gap-2 border-t border-border pt-4 first:border-t-0 first:pt-0">
+          {#if salary}
+            <p class="text-xl font-semibold tabular-nums tracking-tight">{salary}</p>
+          {/if}
+          {#if equity || questions}
+            <div class="flex flex-wrap gap-1.5">
+              {#if equity}<Chip>{equity}</Chip>{/if}
+              {#if questions}<Chip>{questions}</Chip>{/if}
+            </div>
+          {/if}
+        </div>
       {/if}
 
       {#if facets.length}

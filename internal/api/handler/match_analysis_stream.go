@@ -14,6 +14,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
+	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/valyala/fasthttp"
 
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
@@ -295,13 +296,13 @@ func capFinalEvent(e matchanalysis.Event, blockers []hardconstraint.Blocker) mat
 // who walked away is an error. Only classify's status mapping is dropped — the response
 // status was fixed when the stream opened, long before this failure existed.
 func reportStreamFault(hub *sentry.Hub, err error) {
-	if hub == nil {
-		return
-	}
 	if _, _, report := classify(err); !report {
 		return
 	}
-	hub.CaptureException(err)
+	observability.CaptureError(context.Background(), err)
+	if hub != nil {
+		hub.CaptureException(err)
+	}
 }
 
 // recoverStream catches a panic on a goroutine this package hands to fasthttp, reports
@@ -323,6 +324,7 @@ func recoverStream(hub *sentry.Hub, what string, terminal func()) {
 	if r == nil {
 		return
 	}
+	observability.CapturePanic(context.Background(), r)
 	log.Printf("%s: panic: %v\n%s", what, r, debug.Stack())
 	if hub != nil {
 		hub.Recover(r)

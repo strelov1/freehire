@@ -38,17 +38,37 @@ The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
   mark an honest posting alone — lowering it breaks a privacy guarantee and an abuse
   guarantee at once. Contributors are distinct people across BOTH channels: a person who
   applied and also reported is one witness (evidence.go:34-42).
-- **An empty board-title list means "no coverage", not "absent"** (crosscheck.go:28-33).
-  `Crosscheck` (crosscheck.go:37) judges one company's postings against the titles we crawl
-  from that company's own `ats`/`company` boards; an empty list skips every posting and
-  reports the skip. Stamping there would report our coverage gaps as the employer's fault —
-  how the previous attempt at this feature failed. `Skipped` is always reported: a run that
-  silently judged nothing looks identical to one that judged everything present.
+- **No board, or a board too small, means "no coverage", not "absent"** (crosscheck.go,
+  `minBoardTitles`). `Crosscheck` judges one company's postings FROM ONE SOURCE against the
+  titles we crawl from that company's own `ats`/`company` boards; without one every posting
+  is skipped and the skip reported. Stamping there would report our coverage gaps as the
+  employer's fault — how the previous attempt at this feature failed. Skips are reported BY
+  REASON (`Skips`): a run that silently judged nothing looks identical to one that judged
+  everything present.
+- **A batch is gated as a whole before any posting in it is stamped.** The board must carry
+  at least one of the batch (`minCorroborated` — otherwise it is another tenant behind the
+  slug, a regional board, or a source that rewrites titles) and at most half of the batch
+  may be absent (`maxAbsentShare` — otherwise absence is the company's pattern: an agency
+  advertising clients' roles, or a board we only partly crawl). Both were measured on prod
+  (2026-11-01); the numbers are beside the constants. The worker therefore holds a whole
+  source before judging it — judging per page would gate on fragments.
+- **Postings that can never be evidence are skipped before matching**: an empty company
+  slug (the empty slug was once the single largest "company" in the stamp list), a posting
+  with `via_recruiter`, and every posting of a company with `minRecruiterPostings` open
+  postings that say they publish for clients.
+- **Title matching leans toward "carried"** (`boardIndex`): an exact `jobhash.TitleKeys`
+  key (punctuation-blind, trailing clause optional), or two thirds of the shorter title's
+  stemmed words shared. A match too generous costs a missed ghost; a match too strict
+  accuses an honest employer, and a 35-posting precision sample found most exact-key
+  absences were the same role retitled. A title that yields no key is skipped, never
+  stamped.
 - **Stamps expire and are re-stamped.** The reader ignores an absence stamp older than
   `absenceStampMaxAgeDays = 14` (classify.go:61-66), so a stopped worker falls silent rather
   than accusing the catalogue from a frozen snapshot; the worker therefore re-stamps a still-
-  absent posting on every run instead of leaving the stamp alone (crosscheck.go:34-36).
-  A posting already correct in the database produces no write.
+  absent posting on every run instead of leaving the stamp alone. **A stamp is the latest
+  run's verdict and nothing else**: every stamped OPEN posting a run does not re-stamp —
+  present, skipped or gated — is cleared (a closed one carries no signal and is not re-read), so a rule tightened after a stamp was written stops
+  accusing on the next run. A posting already unstamped and not stamped now produces no write.
 - **Outcome judgement reuses `internal/application/userjob`'s silence ladder** (evidence.go:49-52,
   68-77). An application counts as silent only when `userjob.SilenceStateFor` returns
   outright `silent`; a user report counts only after the reported apply date clears the
@@ -56,9 +76,6 @@ The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
   be judged by two ladders with nothing binding them.
 - **A closed job carries no signal** (`internal/job/jobview/ghost_classify.go:29-31`) — the
   posting is already down, so there is nobody left to warn.
-- Title matching in the cross-check goes through `jobhash.RoleKey("", title)` — title alone,
-  scoped by the fixed company. A title that yields no key is skipped, never stamped
-  (crosscheck.go:53-61).
 
 ## Consumers
 - `cmd/gen-contracts` — emits `CriterionCodes` into the web contracts as

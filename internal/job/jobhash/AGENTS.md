@@ -47,8 +47,9 @@ Pure functions over `db.UpsertJobParams` / `db.Job`; no I/O.
 ## Consumers
 - `internal/job` — the ingest write path: `Of` decides changed-vs-unchanged on re-ingest,
   `RoleFingerprint` feeds repost clustering.
-- `internal/job/ghost` (crosscheck.go) — `RoleKey` matches aggregator postings against the
-  employer's own board titles.
+- `internal/job/ghost` (crosscheck.go) — `TitleKeys`, RoleKey's punctuation-blind sibling
+  with an optional trailing clause, matches aggregator postings against the employer's own
+  board titles. RoleKey itself stayed as it was for `cmd/reindex`'s fuzzy pass.
 - `cmd/reindex` (fuzzy.go) — description-signature similarity for fuzzy role matching.
 - `cmd/hydrate-adzuna-description`, `cmd/backfill-descriptions`, `cmd/backfill-echojobs` —
   `OfRow`/`RoleKey` for rewriting stored rows without breaking the change signal.
