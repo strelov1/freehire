@@ -89,12 +89,12 @@ func Parse(description string, countries []string) (Salary, bool) {
 					continue
 				}
 				if loc := reMoney.FindStringIndex(next); loc != nil && loc[0] == 0 && !benefitOnly(next) {
-					body = withoutBenefit(next)
+					body = next
 				}
 				break
 			}
 		}
-		sal, ok := parseLine(body, countries)
+		sal, ok := parseLine(withoutBenefit(body), countries)
 		if !ok {
 			continue
 		}
