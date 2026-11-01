@@ -160,6 +160,11 @@ it.each([JobView, JobRow])('shows the equity and application-form chips when the
   expect(screen.getByText('No extra questions')).not.toBeNull();
 });
 
+it.each([JobView, JobRow])('drops the question count once the posting has closed', (component) => {
+  render(component, { job: { ...job, apply_questions: 2, closed_at: '2026-10-01T00:00:00Z' } });
+  expect(screen.queryByText('2 questions')).toBeNull();
+});
+
 it.each([JobView, JobRow])('shows neither chip when the posting states neither', (component) => {
   render(component, { job });
   expect(screen.queryByText(/equity/i)).toBeNull();

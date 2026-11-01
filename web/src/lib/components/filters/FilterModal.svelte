@@ -801,7 +801,7 @@
       <span>Short application</span>
     </label>
     <p class="mt-1 text-xs text-muted-foreground">
-      {SHORT_APPLICATION_MAX} or fewer required questions beyond your CV and contact details;
+      {staged.value.applyQuestionsMax ?? SHORT_APPLICATION_MAX} or fewer required questions beyond your CV and contact details;
       jobs whose form we haven't read are hidden.
     </p>
     <!-- The levels a posting states, not a yes/no: someone who cannot hold a clearance

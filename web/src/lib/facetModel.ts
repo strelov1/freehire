@@ -351,14 +351,15 @@ function salaryBound(raw: string | null): number | null {
 }
 
 /** A non-negative whole number, or null for anything else. For the bounds where zero
- *  is a real answer (`experience_years_max=0`, `apply_questions_max=0`). The presence
- *  test is on the TRIMMED string, not the raw one: `Number('')` and `Number(' ')` are
- *  both 0 while `' '` is truthy, so a naive check would turn `?experience_years_max=%20`
- *  in a shared link into the entry-level filter. */
+ *  is a real answer (`experience_years_max=0`, `apply_questions_max=0`). The syntax is
+ *  Go's Atoi (ATOI), not `Number`, which also reads `0x0`, `1e1` and a blank string —
+ *  `?experience_years_max=%20` would otherwise become the entry-level filter, and
+ *  `apply_questions_max=0x0` a bound the server never applies. */
 function nonNegativeInt(raw: string | null): number | null {
   const trimmed = raw?.trim() ?? '';
+  if (!ATOI.test(trimmed)) return null;
   const n = Number(trimmed);
-  return trimmed !== '' && Number.isInteger(n) && n >= 0 ? n : null;
+  return n >= 0 ? n : null;
 }
 
 /** Parse filters back from URL query params. Include and exclude are independent

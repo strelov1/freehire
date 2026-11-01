@@ -55,7 +55,7 @@ describe('short application bound', () => {
     expect(filtersFromParams(new URLSearchParams({ apply_questions_max: raw })).applyQuestionsMax).toBe(want);
   });
 
-  it.each(['', ' ', '-1', '1.5', 'three'])('ignores the malformed bound %j', (raw) => {
+  it.each(['', ' ', '-1', '1.5', 'three', '0x0', '1e1'])('ignores the malformed bound %j', (raw) => {
     expect(filtersFromParams(new URLSearchParams({ apply_questions_max: raw })).applyQuestionsMax).toBeNull();
   });
 

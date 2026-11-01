@@ -121,7 +121,10 @@
   // Two facts only the catalogue's full posting carries, each absent when unknown — and
   // absent renders nothing: "no equity" and "a long form" are claims we cannot make.
   const equity = $derived('equity' in job ? equityLabel(job.equity) : null);
-  const questions = $derived('apply_questions' in job ? applyQuestionsLabel(job.apply_questions) : null);
+  // A closed posting takes no applications, so what its form asks is beside the point.
+  const questions = $derived(
+    'apply_questions' in job && !job.closed_at ? applyQuestionsLabel(job.apply_questions) : null,
+  );
   // Top-level `skills` is the served (deterministic-dictionary) facet; the raw
   // `enrichment.skills` is kept in the JSONB and NOT served, so it's always absent
   // here — read the dictionary field so the card's skill chips actually populate.
