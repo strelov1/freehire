@@ -6,7 +6,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { api, type Slice } from '#lib/api.js';
-  import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { PUBLIC_OPEN_WITHIN } from '$app/env/public';
@@ -110,6 +110,8 @@
   // (company_slug, …). Reads `applied` so typing doesn't fetch per keystroke.
   const scopedParams = () => {
     const p = filtersToParams(filters.applied);
+    // Scoped loaders render anonymously and offer no control for this preference.
+    if (!standalone) p.delete('hide_seen');
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return p;
   };
@@ -502,12 +504,20 @@
     });
   });
 
+  // Personal feed preferences must be re-applied when the reader changes in-tab.
+  const searchUserID = $derived(filters.applied.hideSeen ? currentUser()?.id ?? null : null);
+
+  let lastSearchUserID = untrack(() => searchUserID);
+
   // Reload the list whenever the debounced filters change — a settled keystroke, an
   // immediate facet toggle, or a back/forward re-seed. The first run is a no-op: the
   // SSR `initial` already seeded page one.
   $effect(() => {
     void filters.applied; // track the debounced snapshot
+    void searchUserID;
     untrack(() => {
+      const readerChanged = searchUserID !== lastSearchUserID;
+      lastSearchUserID = searchUserID;
       const firstRun = !started;
       if (firstRun) {
         started = true;
@@ -527,9 +537,16 @@
       }
       // Same query: this is a re-seed (initial navigation, back/forward), not a new
       // search — reload the page being read instead of snapping back to the first.
-      const sameQuery = searchKey === lastSearchKey;
+      const sameQuery = searchKey === lastSearchKey && !readerChanged;
       lastSearchKey = searchKey;
       if (!sameQuery) activePage = 1;
+      if (readerChanged) {
+        // A new reader has a different result set; an old offset can be past its end.
+        const url = new URL(location.href);
+        url.searchParams.delete('page');
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query update to the current URL
+        replaceState(url, page.state);
+      }
       reloadList(sameQuery ? pageOffset(activePage) : 0);
     });
   });
@@ -782,7 +799,30 @@
      A "Hide evergreen" toggle used to lead this row, writing one sign of one value of the
      `reality` facet. The whole facet now sits in the modal's Posted pane, beside the age
      bound it belongs with. -->
+<!-- Signed in only: "seen" is the server's record of what this account opened, and a
+     signed-out visitor has none, so the control would do nothing. A link carrying
+     hide_seen still loads for them; the server just ignores it and says so.
+
+     Standalone /jobs only: it is the daily feed this exists for, and the only loader
+     that hands the session to its server-rendered search. On a scoped list (a company,
+     a role, a skill, a collection) the first page would render unhidden under a
+     checked box. -->
+{#snippet hideSeenToggle()}
+  {#if standalone && isAuthenticated()}
+    <label class="flex shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+      <input
+        type="checkbox"
+        class="size-4 rounded border-border"
+        checked={filters.value.hideSeen}
+        onchange={(e) => filters.setHideSeen(e.currentTarget.checked)}
+      />
+      <span>Hide viewed</span>
+    </label>
+  {/if}
+{/snippet}
+
 {#snippet listControls()}
+  {@render hideSeenToggle()}
   {@render postedSelect()}
   <!-- Unconditional. This used to be guarded against a one-option select - a label
        wearing a control's clothes - which could happen when match was hidden from a
