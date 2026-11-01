@@ -157,6 +157,12 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, sort });
   }
 
+  /** Hide or show the postings already opened. setNow: a discrete toggle that
+   *  re-filters the whole feed, for the same reason as setSort. */
+  setHideSeen(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, hideSeen: on });
+  }
+
   /** Toggle a facet between match-all (AND) and match-any (OR) of its included values. */
   setMatchAll(param: string, on: boolean) {
     this.#setFacet(param, { ...this.facet(param), matchAll: on });

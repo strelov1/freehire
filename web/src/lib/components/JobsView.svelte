@@ -782,7 +782,25 @@
      A "Hide evergreen" toggle used to lead this row, writing one sign of one value of the
      `reality` facet. The whole facet now sits in the modal's Posted pane, beside the age
      bound it belongs with. -->
+<!-- Signed in only: "seen" is the server's record of what this account opened, and a
+     signed-out visitor has none, so the control would do nothing. A link carrying
+     hide_seen still loads for them; the server just ignores it and says so. -->
+{#snippet hideSeenToggle()}
+  {#if isAuthenticated()}
+    <label class="flex shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+      <input
+        type="checkbox"
+        class="size-4 rounded border-border"
+        checked={filters.value.hideSeen}
+        onchange={(e) => filters.setHideSeen(e.currentTarget.checked)}
+      />
+      <span>Hide viewed</span>
+    </label>
+  {/if}
+{/snippet}
+
 {#snippet listControls()}
+  {@render hideSeenToggle()}
   {@render postedSelect()}
   <!-- Unconditional. This used to be guarded against a one-option select - a label
        wearing a control's clothes - which could happen when match was hidden from a

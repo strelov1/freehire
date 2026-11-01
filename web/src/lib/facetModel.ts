@@ -111,6 +111,15 @@ export interface JobFilters {
    *  outlives the search it was scoped to. Mirrors `q_fields` in
    *  internal/search/search/query_params.go. */
   qFields: string[] | null;
+  /** Leave out the postings the signed-in caller has already opened — the cards the
+   *  feed would otherwise dim. Serialized as `hide_seen=true`, true-or-absent.
+   *
+   *  A preference about the FEED, like `sort`, not a filter of the catalogue: the
+   *  server reads it from the caller's own view history, which a saved search's digest
+   *  has no equivalent of, so `savedSearchQuery` drops it and it is not counted as an
+   *  active filter. A signed-out caller gets the unhidden feed (the server says so in
+   *  `meta.ignored_params`), which is why the control is only offered signed in. */
+  hideSeen: boolean;
 }
 
 /** Strips a title suggestion's Meilisearch quoting wrapper (see `apiSuggestions.ts`'s
@@ -261,6 +270,7 @@ export function emptyFilters(): JobFilters {
     seniorityIncludeUnspecified: false,
     sort: null,
     qFields: null,
+    hideSeen: false,
   };
 }
 
@@ -301,6 +311,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   const sort = effectiveSort(f);
   const sortParam = SORT_PARAM[sort];
   if (sortParam && sort !== defaultSortFor(f.q)) p.set('sort', sortParam);
+  if (f.hideSeen) p.set('hide_seen', 'true');
   return p;
 }
 
@@ -388,6 +399,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // disagree about what a stale link means. Reads `f.q`, so it must follow the line
   // that sets it.
   f.sort = SORT_FROM_PARAM[p.get('sort') ?? ''] ?? null;
+  f.hideSeen = p.get('hide_seen') === 'true';
   return f;
 }
 
@@ -455,7 +467,8 @@ export function canonicalQuery(query: string): string {
  *  `null` is the type's own word for "no choice", and filtersToParams already writes
  *  nothing for it, so this cannot drift if the wire parameter is ever renamed. */
 export function savedSearchQuery(f: JobFilters): string {
-  return filtersToParams({ ...f, sort: null }).toString();
+  // hideSeen goes the same way, for its own reason: a digest has no "seen" to apply.
+  return filtersToParams({ ...f, sort: null, hideSeen: false }).toString();
 }
 
 // ---- per-value sign transitions (pure: FacetState -> FacetState) ----
