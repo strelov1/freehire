@@ -143,3 +143,11 @@ it('includes the applied employer in the card link description', () => {
   const description = document.getElementById(link.getAttribute('aria-describedby') ?? '');
   expect(description?.textContent).toContain('Applied to this company');
 });
+
+it.each([JobView, JobRow])('shows the application deadline when the source states it', (component) => {
+  const datedJob = { ...job, application_deadline: '2026-11-11' };
+  const view = render(component, { job: datedJob });
+  const deadline = view.container.querySelector('time[datetime="2026-11-11"]');
+  expect(deadline?.textContent).toBe('2026-11-11');
+  expect(deadline?.parentElement?.textContent).toContain('Apply by');
+});
