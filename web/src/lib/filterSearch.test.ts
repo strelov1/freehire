@@ -42,6 +42,14 @@ describe('matchFilterSearch', () => {
 });
 
 describe('jobFilterSearchItems', () => {
+  it('offers Hiring again only in an eligible Company pane, including former-employer aliases', () => {
+    const enabled = jobFilterSearchItems({ formerEmployers: true });
+    expect(matchFilterSearch(enabled, 'former employers').some((h) => h.action === 'former-employers')).toBe(true);
+    expect(jobFilterSearchItems().some((h) => h.action === 'former-employers')).toBe(false);
+    expect(jobFilterSearchItems({ formerEmployers: true, exclude: ['company_slug'] }).some((h) => h.action === 'former-employers')).toBe(false);
+    expect(jobFilterSearchItems({ formerEmployers: true, railKeys: ['salary'] }).some((h) => h.action === 'former-employers')).toBe(false);
+  });
+
   it('hides panes and params the modal is not showing', () => {
     const salary = jobFilterSearchItems({ railKeys: ['salary'] });
     expect(salary.length).toBeGreaterThan(0);

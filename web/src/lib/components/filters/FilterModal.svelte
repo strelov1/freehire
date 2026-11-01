@@ -53,6 +53,7 @@
     canApply,
     plain = false,
     savedSearches = false,
+    formerEmployersAvailable = false,
     open = false,
     onClose,
     previewCount,
@@ -70,6 +71,8 @@
     // Show the "My filters" (saved searches) tab. Opt-in: the standalone job list enables
     // it; reuse like the profile comparison modal leaves it off.
     savedSearches?: boolean;
+    /** Personal company filter: enabled only by a feed whose search uses the session. */
+    formerEmployersAvailable?: boolean;
     title?: string;
     applyLabel?: string;
     onApply?: (staged: StagedFilters) => void | Promise<void>;
@@ -103,6 +106,7 @@
   // Gates the tab itself (visibleRail), its data warm-up, and the footer nudge that jumps
   // to it, so the jump never lands on a missing tab.
   const hasSavedTab = $derived(savedSearches && !railKeys);
+  const showFormerEmployers = $derived(formerEmployersAvailable && !plain && isAuthenticated());
 
   // Warm the Telegram feature flag and the user's profile when the modal opens for a
   // signed-in user on the full job modal: the footer "save for TG alerts" nudge gates on
@@ -198,6 +202,7 @@
     // The Minimum skill match threshold lives at the top of the Skills pane, so it
     // counts toward that tab's badge alongside the skills facet selections.
     if (e.key === 'skills') return selCount(f, 'skills') + (matchAvailable && draftMinMatch != null ? 1 : 0);
+    if (e.key === 'company_slug') return selCount(f, 'company_slug') + (showFormerEmployers && f.formerEmployers ? 1 : 0);
     if (e.key === 'source') return selCount(f, 'source_type') + selCount(f, 'source');
     return selCount(f, e.facetParam ?? e.key);
   }
@@ -259,7 +264,7 @@
           },
         ]
       : []),
-    ...jobFilterSearchItems({ exclude, railKeys, openWithin: openWithinAvailable }),
+    ...jobFilterSearchItems({ exclude, railKeys, openWithin: openWithinAvailable, formerEmployers: showFormerEmployers }),
     ...remoteHits,
   ]);
 
@@ -313,7 +318,7 @@
     if (!action) return null;
     const colon = action.indexOf(':');
     if (colon < 0) {
-      if (action === 'visa' || action === 'hide-ai' || action === 'auto-apply' || action === 'short-apply')
+      if (action === 'visa' || action === 'hide-ai' || action === 'auto-apply' || action === 'short-apply' || action === 'former-employers')
         return { kind: action, rest: '' };
       return null;
     }
@@ -328,6 +333,8 @@
     const off = { included: false, excluded: false, excludable: false };
     const action = splitAction(hit.action);
     switch (action?.kind) {
+      case 'former-employers':
+        return { ...off, included: staged.value.formerEmployers };
       case 'visa':
         return { ...off, included: staged.value.visa };
       case 'hide-ai':
@@ -355,6 +362,9 @@
   function onSearchToggle(hit: FilterSearchHit) {
     const action = splitAction(hit.action);
     switch (action?.kind) {
+      case 'former-employers':
+        if (showFormerEmployers) staged.setFormerEmployers(!staged.value.formerEmployers);
+        return;
       case 'visa':
         staged.setVisa(!staged.value.visa);
         return;
@@ -576,6 +586,20 @@
     <LocationPane store={staged} counts={c} />
   {:else if entry.kind === 'facet'}
     {@const def = facetDefFor(entry.facetParam)}
+    {#if entry.key === 'company_slug' && showFormerEmployers}
+      <div class="mb-6">
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            class="size-4 rounded border-border"
+            checked={staged.value.formerEmployers}
+            onchange={(e) => staged.setFormerEmployers(e.currentTarget.checked)}
+          />
+          <span>Hiring again</span>
+        </label>
+        <p class="mt-1 text-xs text-muted-foreground">Only jobs at companies you have worked at and left.</p>
+      </div>
+    {/if}
     {#if entry.key === 'skills' && matchAvailable}
       <!-- Client-only post-filter (see `minMatch`/`onMinMatchChange` props), staged in
            `draftMinMatch` until Apply like every other control here. It narrows the

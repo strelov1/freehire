@@ -57,6 +57,13 @@ function mountList(params: string, scope = {}) {
 }
 
 describe('personal job filters', () => {
+  it('keeps Hide viewed in the toolbar without a separate Hiring again button', () => {
+    session.set('id', 7);
+    mountList('');
+    expect(screen.getAllByRole('checkbox', { name: 'Hide viewed' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Hiring again: only companies you have worked at' })).toBeNull();
+  });
+
   it.each(['former_employers', 'hide_seen'])('reloads %s on sign-in, account switch and sign-out', async (param) => {
     mountList(`${param}=true`);
     await tick();
