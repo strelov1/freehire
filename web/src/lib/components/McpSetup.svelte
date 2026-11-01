@@ -110,6 +110,18 @@
       snippet: (u) => `claude mcp add --transport http freehire ${u}`,
     },
     {
+      id: 'codex',
+      label: 'Codex',
+      domain: 'openai.com',
+      logo: '/brands/codex.svg',
+      mono: true,
+      steps: [
+        'Run the command below in your terminal to add freehire to Codex.',
+        'Run codex mcp list to verify the server is configured, then start a new Codex session and ask a job question.',
+      ],
+      snippet: (u) => `codex mcp add freehire --url ${u}`,
+    },
+    {
       // Gemini's own web app has no way to add an MCP server; its CLI does.
       id: 'gemini-cli',
       label: 'Gemini CLI',
@@ -294,8 +306,12 @@
         {/if}
         {#if mode === 'account'}
           <p class="mt-5 text-sm leading-relaxed text-muted-foreground">
-            The first time it is used, your assistant opens a freehire sign-in page and asks you to approve the
-            connection.
+            {#if h.id === 'codex'}
+              Run <code>codex mcp login freehire</code> to open the freehire sign-in page and approve the connection.
+            {:else}
+              The first time it is used, your assistant opens a freehire sign-in page and asks you to approve the
+              connection.
+            {/if}
           </p>
         {/if}
       </div>
