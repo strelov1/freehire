@@ -50,6 +50,9 @@ const (
 	ttMaxPages = 1000
 )
 
+// ttJobListID is the id of the element a standard Teamtailor listing renders its postings in.
+const ttJobListID = "jobs_list_container"
+
 func (t teamtailor) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	urls, err := t.jobURLs(ctx, e)
 	if err != nil {
@@ -131,6 +134,7 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 	listPath := "jobs"
 	var urls []string
 	seen := make(map[string]bool)
+	listed := false // page 1 carried the job-list element; see the scope below
 	for page := 1; page <= ttMaxPages; page++ {
 		listURL := fmt.Sprintf("https://%s/%s?page=%d", e.Board, listPath, page)
 		root, err := t.http.GetHTML(ctx, listURL)
@@ -157,7 +161,27 @@ func (t teamtailor) jobURLs(ctx context.Context, e CompanyEntry) ([]string, erro
 		// both answer a genuinely empty page past their real end, not a repeat, so this is
 		// not a regression against an observed pattern; it closes the same class of gap
 		// found and fixed for the hand-rolled batch (openspec/changes/fullboardlisting-hand-rolled-batch).
-		links := ttJobLinks(base, root)
+		//
+		// A standard site renders its postings in ul#jobs_list_container and drops that
+		// element past the board's end, while its page chrome may link a posting on EVERY
+		// page — an FAQ answer pointing at the open-application role. Read whole, such a
+		// page is never empty and the walk runs into ttMaxPages on every crawl (74 boards
+		// on prod, measured 2026-11-01). So when page 1 carries the list, every page is read
+		// through it alone. A custom site without it (www.agidens.com) keeps the whole-page
+		// read; deciding per page instead would read a later page that lacks the list whole
+		// and reintroduce the chrome link.
+		list := firstByID(root, ttJobListID)
+		if page == 1 {
+			listed = list != nil
+		}
+		var links []string
+		switch {
+		case !listed:
+			links = ttJobLinks(base, root)
+		case list != nil:
+			links = ttJobLinks(base, list)
+		} // listed, and this page has no list: past the end, zero links
+
 		for _, link := range links {
 			if !seen[link] {
 				seen[link] = true
