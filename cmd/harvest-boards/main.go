@@ -14,7 +14,9 @@
 //	go run ./cmd/harvest-boards -pace 2 -workers 4 workable seed.json   # rate-limited platform
 //	go run ./cmd/harvest-boards --apply greenhouse seed.json            # persist what probed live
 //
-// Needs DATABASE_URL.
+// Needs DATABASE_URL, except for -audit-feeds with an explicit seed file. Feed audits
+// compare Scalis/Teamtailor machine feeds with the current adapter and emit JSON lines;
+// without a seed they inspect existing catalog boards. See README.md for limits and output.
 //
 // A seed entry is either a bare slug or an object. The object may claim two things about the
 // candidate, and a seed source that knows either should say so:
@@ -37,6 +39,7 @@ import (
 	"log"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -56,6 +59,9 @@ func run() int {
 	pace := flag.Float64("pace", 0, "cap the probe rate at this many requests per second (0 = unpaced)")
 	workers := flag.Int("workers", defaultProbeWorkers, "concurrent probes in flight")
 	apply := flag.Bool("apply", false, "actually add the boards it kept; without it the run only reports")
+	auditFeeds := flag.Bool("audit-feeds", false, "compare documented feeds with the current adapter (scalis, teamtailor); read-only JSON lines")
+	auditLimit := flag.Int("audit-limit", 20, "maximum boards for -audit-feeds; uses the catalog when no seed is supplied")
+	auditTimeout := flag.Duration("audit-timeout", 2*time.Minute, "per-board deadline for -audit-feeds, including the adapter comparison")
 	rotating := flag.Bool("rotating", false, "probe every request through SOURCES_ROTATING_PROXY_URL instead of the provider's usual egress")
 	flag.Parse()
 	args := flag.Args()
@@ -71,6 +77,12 @@ func run() int {
 	if *workers < 1 {
 		log.Printf("harvest-boards: -workers must be at least 1")
 		return 2
+	}
+	if *auditFeeds {
+		return runFeedAuditCommand(provider, seedPath, feedAuditOptions{
+			Apply: *apply, Limit: *auditLimit, Pace: *pace, Rotating: *rotating,
+			Timeout: *auditTimeout,
+		})
 	}
 
 	p, ok := proberFor(provider)

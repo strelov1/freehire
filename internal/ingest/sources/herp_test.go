@@ -197,3 +197,21 @@ func TestHerpFetchMarksOnlyFailedDetailUnreadable(t *testing.T) {
 		t.Errorf("job2 = %+v, want Unreadable=true", job2)
 	}
 }
+
+// JSON-LD escapes are decoded after HTML tokenization, so the description can
+// contain NUL even though the fetched page itself contains no NUL bytes.
+func TestHerpDescriptionRemovesDecodedNUL(t *testing.T) {
+	fake := (&routedHTTP{}).
+		route("/v1/acme/job1", herpJobHTML("Backend Engineer", `<p>Build\u0000 reliable systems.</p>`, "Tokyo")).
+		route("/v1/acme", `<a href="/v1/acme/job1">Backend Engineer</a>`)
+	jobs, err := NewHerp(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("got %d jobs, want 1", len(jobs))
+	}
+	if got, want := jobs[0].Description, "<p>Build reliable systems.</p>"; got != want {
+		t.Errorf("Description = %q, want %q", got, want)
+	}
+}

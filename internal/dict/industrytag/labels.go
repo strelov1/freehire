@@ -106,6 +106,22 @@ func Labels() map[string]string {
 	return out
 }
 
+// SearchAliases returns aliases grouped by canonical slug for the SPA's searchable
+// dictionary. Keys and values use the normalized lookup strings Canonicalize
+// resolves. Both the map and slices are fresh copies.
+func SearchAliases() map[string][]string {
+	out := make(map[string][]string)
+	for alias, canonical := range aliases {
+		if _, ok := displayNames[canonical]; ok {
+			out[canonical] = append(out[canonical], alias)
+		}
+	}
+	for canonical := range out {
+		slices.Sort(out[canonical])
+	}
+	return out
+}
+
 // Canonicals returns every canonical slug, sorted — the source for the facet's
 // option list, so the UI cannot drift from the dictionary.
 func Canonicals() []string {

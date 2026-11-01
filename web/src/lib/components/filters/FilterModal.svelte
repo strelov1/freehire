@@ -13,6 +13,7 @@
   import { notifications } from '#lib/notifications.svelte.js';
   import { emptyFilters, type FilterStore, type JobFilters } from '#lib/filters.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
+  import { SHORT_APPLICATION_MAX } from '#lib/jobFacts.js';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '#lib/filterSections.js';
   import type { FacetCounts } from '#lib/types.js';
   import {
@@ -169,7 +170,11 @@
       return selCount(f, 'seniority') + selCount(f, 'role_type') + (f.experienceYearsMax != null ? 1 : 0);
     if (e.kind === 'location') return selCount(f, 'regions') + selCount(f, 'countries') + selCount(f, 'metros') + selCount(f, 'cities');
     if (e.kind === 'salary')
-      return selCount(f, 'salary_currency') + (f.salaryMin != null || f.salaryMax != null ? 1 : 0);
+      return (
+        selCount(f, 'salary_currency') +
+        (f.salaryMin != null || f.salaryMax != null ? 1 : 0) +
+        selCount(f, 'equity')
+      );
     if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type');
     if (e.kind === 'industry')
       return selCount(f, 'domains') + selCount(f, 'company_type') + selCount(f, 'collections', jobCollectionValues);
@@ -180,6 +185,7 @@
         (f.visa ? 1 : 0) +
         (f.hideAIInterview ? 1 : 0) +
         (f.autoApplyAvailable ? 1 : 0) +
+        (f.applyQuestionsMax != null ? 1 : 0) +
         selCount(f, 'clearance_levels') +
         selCount(f, 'collections', employerCredentialValues)
       );
@@ -307,7 +313,8 @@
     if (!action) return null;
     const colon = action.indexOf(':');
     if (colon < 0) {
-      if (action === 'visa' || action === 'hide-ai' || action === 'auto-apply') return { kind: action, rest: '' };
+      if (action === 'visa' || action === 'hide-ai' || action === 'auto-apply' || action === 'short-apply')
+        return { kind: action, rest: '' };
       return null;
     }
     const kind = action.slice(0, colon);
@@ -327,6 +334,8 @@
         return { ...off, included: staged.value.hideAIInterview };
       case 'auto-apply':
         return { ...off, included: staged.value.autoApplyAvailable };
+      case 'short-apply':
+        return { ...off, included: staged.value.applyQuestionsMax != null };
       case 'posted':
         return { ...off, included: staged.value.postedWithinDays === Number(action.rest) };
       case 'open':
@@ -354,6 +363,9 @@
         return;
       case 'auto-apply':
         staged.setAutoApplyAvailable(!staged.value.autoApplyAvailable);
+        return;
+      case 'short-apply':
+        staged.setApplyQuestionsMax(staged.value.applyQuestionsMax != null ? null : SHORT_APPLICATION_MAX);
         return;
       case 'posted':
         staged.setPostedWithinDays(staged.value.postedWithinDays === Number(action.rest) ? null : Number(action.rest));
@@ -619,6 +631,14 @@
     <p class="mt-2 text-xs text-muted-foreground">
       Matches postings whose stated salary range falls entirely within these bounds.
     </p>
+    <!-- Beside the salary because it is the other half of the pay: a posting can offer
+         equity with no salary figure at all, so this is not a refinement of the range. -->
+    <div class="mt-6">
+      <ChipFacet store={staged} param="equity" label="Equity" counts={c} />
+    </div>
+    <p class="mt-2 text-xs text-muted-foreground">
+      Not stated means the posting says nothing about equity, not that it offers none.
+    </p>
   {:else if entry.kind === 'experience'}
     {@const showSeniority = !exclude.includes('seniority')}
     {@const showRoleType = !exclude.includes('role_type')}
@@ -766,6 +786,23 @@
     </label>
     <p class="mt-1 text-xs text-muted-foreground">
       Best-effort — successful submission isn't guaranteed.
+    </p>
+    <!-- Checked for ANY bound, not only the toggle's own: a link carrying
+         apply_questions_max=5 still narrows the list, and a box reading unchecked over
+         it would lie. Unchecking clears whichever bound it was. -->
+    <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Application</h3>
+    <label class="flex cursor-pointer items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        class="size-4 rounded border-border"
+        checked={staged.value.applyQuestionsMax != null}
+        onchange={(e) => staged.setApplyQuestionsMax(e.currentTarget.checked ? SHORT_APPLICATION_MAX : null)}
+      />
+      <span>Short application</span>
+    </label>
+    <p class="mt-1 text-xs text-muted-foreground">
+      {staged.value.applyQuestionsMax ?? SHORT_APPLICATION_MAX} or fewer required questions beyond your CV and contact details;
+      jobs whose form we haven't read are hidden.
     </p>
     <!-- The levels a posting states, not a yes/no: someone who cannot hold a clearance
          picks "No explicit reference", someone who holds Secret picks the rungs they

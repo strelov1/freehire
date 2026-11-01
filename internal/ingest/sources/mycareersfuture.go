@@ -79,6 +79,7 @@ func mcfSalaryPeriod(t string) string {
 
 func (s mycareersfuture) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, error) {
 	var jobs []Job
+	seen := make(map[string]bool)
 	for page := 0; page < mcfMaxPages; page++ {
 		var resp struct {
 			Results []mcfPosting `json:"results"`
@@ -99,7 +100,10 @@ func (s mycareersfuture) Fetch(ctx context.Context, _ CompanyEntry) ([]Job, erro
 			break
 		}
 		for _, p := range resp.Results {
-			if job, ok := p.toJob(); ok {
+			// Offset pages can overlap as the live catalogue changes. Keep the first
+			// usable row so one identity cannot race through the parallel save workers.
+			if job, ok := p.toJob(); ok && !seen[job.ExternalID] {
+				seen[job.ExternalID] = true
 				jobs = append(jobs, job)
 			}
 		}

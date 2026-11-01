@@ -140,6 +140,11 @@ func (s *Service) Create(ctx context.Context, userID, savedSearchID int64, chann
 	// make of this query, not whether it is well-formed. A query nothing survives parses
 	// to nothing, which Narrows already refuses.
 	vals, _ := url.ParseQuery(query)
+	// A saved search may predate syntax validation. Refuse a new subscription when
+	// the matcher would reject its query rather than promising an alert it cannot send.
+	if _, err := search.ParseQuery(vals.Get("q")); err != nil {
+		return Subscription{}, err
+	}
 	if !search.Narrows(vals) {
 		return Subscription{}, ErrUnfilteredSearch
 	}

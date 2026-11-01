@@ -442,6 +442,7 @@ func genVocab() string {
 	// options cannot drift from the dictionary the column is written through.
 	b.WriteString(emitVocab("Industry", "INDUSTRY_VALUES", industrytag.Canonicals()))
 	b.WriteString(emitMap("IndustryLabels", "INDUSTRY_LABELS", industrytag.Labels()))
+	b.WriteString(emitMapOfSlices("IndustryAliases", "INDUSTRY_ALIASES", industrytag.SearchAliases()))
 	// The six AI skill-signature archetype slugs (internal/ai/aiarchetype), generated
 	// so the AI Specialization filter's valid values can't drift from the rule table.
 	b.WriteString(emitVocab("AIArchetype", "AI_ARCHETYPE_VALUES", vocab.AIArchetypeValues))
@@ -453,6 +454,10 @@ func genVocab() string {
 	// The clearance levels (internal/dict/location), so the Security clearance chips
 	// cannot offer a level the dictionary never writes.
 	b.WriteString(emitVocab("ClearanceLevel", "CLEARANCE_LEVEL_VALUES", vocab.ClearanceLevelValues))
+	// The equity vocabulary (internal/job/jobfacts.Equity), so the Equity chips cannot
+	// offer a value the derivation never writes. The reserved "not stated" value is the
+	// attribute's absence (search.EquityNotStated), not a member, so the SPA adds it.
+	b.WriteString(emitVocab("Equity", "EQUITY_VALUES", vocab.EquityValues))
 	// The source-type vocabulary (sources.ProviderKind's searchable kinds), so the Source
 	// pane's pills cannot offer a kind no document carries.
 	b.WriteString(emitVocab("SourceType", "SOURCE_TYPE_VALUES", vocab.SourceTypeValues))

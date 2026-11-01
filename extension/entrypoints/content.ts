@@ -1,3 +1,4 @@
+import { startErrorTelemetry } from '../lib/telemetry';
 import { extractSnapshot, hasJobPostingMarkup } from '../lib/scraper';
 import { extractForm, extractUploads, fillByLabel, revealField } from '../lib/form';
 import { runStep } from '../lib/combobox';
@@ -27,6 +28,7 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   allFrames: true,
   main() {
+    startErrorTelemetry('content');
     browser.runtime.onMessage.addListener((message: RuntimeMessage) => {
       switch (message.kind) {
         case 'GET_PAGE_SNAPSHOT':

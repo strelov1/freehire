@@ -64,6 +64,9 @@ func newDescriptionPolicy() *bluemonday.Policy {
 // runs first for the same reason: it reads the markup around each escape to decide what the
 // escape meant, and it may emit a <br> the policy must then vet like any other tag.
 func Sanitize(s string) string {
+	// JSON-LD can decode a \u0000 escape into NUL. PostgreSQL text cannot
+	// store it; remove it before parsing so it cannot split an HTML tag either.
+	s = strings.ReplaceAll(s, "\x00", "")
 	stripped, dropped := dropSelfLabelledAnchors(repairLiteralNewlines(s))
 	out := noBreakSpaces.Replace(descriptionPolicy.Sanitize(stripped))
 	if dropped {
