@@ -8,9 +8,12 @@ package savedsearch
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // Sentinel errors mapped to HTTP statuses by the handler.
@@ -117,8 +120,8 @@ func (s *Service) Create(ctx context.Context, userID int64, name, query string, 
 }
 
 // Update overwrites a saved search's name and/or query, scoped to its owner. A nil field
-// is left unchanged (partial update). A provided name is validated; a provided query is
-// taken as-is (an empty string is a real "show all" value). A missing or non-owned row
+// is left unchanged (partial update). A provided name and query are validated; an empty
+// query is a real "show all" value. A missing or non-owned row
 // surfaces as ErrNotFound (mapped by the repository).
 func (s *Service) Update(ctx context.Context, userID, id int64, name, query *string) (SavedSearch, error) {
 	if name != nil {
@@ -153,12 +156,16 @@ func validName(name string) (string, error) {
 	return name, nil
 }
 
-// validQuery enforces the maxQueryLen bound (counted in runes, matching validName and
-// the DB CHECK's character semantics). Unlike name, an empty query is valid — it is the
-// unfiltered "show all" view — so this only ever rejects an over-long value.
+// validQuery bounds the stored query and checks its free-text syntax with the same
+// parser the search and notification matcher use. The stored URL-encoded filter state
+// stays unchanged, including an empty query for the unfiltered "show all" view.
 func validQuery(query string) error {
 	if utf8.RuneCountInString(query) > maxQueryLen {
 		return ErrQueryTooLong
 	}
-	return nil
+	// Match notify's reading of partially malformed filter state: retain every pair
+	// url.ParseQuery can read, then validate the q that will actually execute.
+	values, _ := url.ParseQuery(query)
+	_, err := search.ParseQuery(values.Get("q"))
+	return err
 }
