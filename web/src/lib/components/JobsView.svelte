@@ -507,6 +507,8 @@
   // Personal feed preferences must be re-applied when the reader changes in-tab.
   const searchUserID = $derived(filters.applied.hideSeen ? currentUser()?.id ?? null : null);
 
+  let lastSearchUserID = untrack(() => searchUserID);
+
   // Reload the list whenever the debounced filters change — a settled keystroke, an
   // immediate facet toggle, or a back/forward re-seed. The first run is a no-op: the
   // SSR `initial` already seeded page one.
@@ -514,6 +516,8 @@
     void filters.applied; // track the debounced snapshot
     void searchUserID;
     untrack(() => {
+      const readerChanged = searchUserID !== lastSearchUserID;
+      lastSearchUserID = searchUserID;
       const firstRun = !started;
       if (firstRun) {
         started = true;
@@ -533,9 +537,16 @@
       }
       // Same query: this is a re-seed (initial navigation, back/forward), not a new
       // search — reload the page being read instead of snapping back to the first.
-      const sameQuery = searchKey === lastSearchKey;
+      const sameQuery = searchKey === lastSearchKey && !readerChanged;
       lastSearchKey = searchKey;
       if (!sameQuery) activePage = 1;
+      if (readerChanged) {
+        // A new reader has a different result set; an old offset can be past its end.
+        const url = new URL(location.href);
+        url.searchParams.delete('page');
+        // eslint-disable-next-line svelte/no-navigation-without-resolve -- in-place query update to the current URL
+        replaceState(url, page.state);
+      }
       reloadList(sameQuery ? pageOffset(activePage) : 0);
     });
   });
