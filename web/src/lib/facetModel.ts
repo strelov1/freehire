@@ -5,7 +5,7 @@
 // match what the search API (GET /api/v1/jobs/search) expects, including the
 // `<param>_exclude` and `<param>_mode=and` conventions.
 
-import { FACETS, type FacetSelection } from './facets';
+import { CLEARANCE_UNSPECIFIED, FACETS, type FacetSelection } from './facets';
 import { SENIORITY_VALUES } from './generated/contracts';
 import type { UserProfile } from './types';
 
@@ -22,19 +22,15 @@ export type Sign = 'off' | 'include' | 'exclude';
  *  shape `FacetSection` reads — one canonical type so the two can't drift. */
 export type FacetState = FacetSelection;
 
-/** The clearance control's three states. `any` writes no param at all, so the default
- *  listing is untouched. */
-export type ClearanceFilter = 'any' | 'hide' | 'only';
-
 export interface JobFilters {
   q: string;
   /** Facet state keyed by the facet's query param (see FACETS). */
   facets: Record<string, FacetState>;
   visa: boolean;
   /** Hide the postings of employers candidates have reported screening with an AI
-   *  interviewer. A boolean, not the three states `clearance` carries: that facet
-   *  answers two different people, while nobody searches FOR an AI screen — the only
-   *  useful question here is "not these".
+   *  interviewer. A boolean, not a set of levels like `clearance_levels`: that facet
+   *  answers several different people, while nobody searches FOR an AI screen — the
+   *  only useful question here is "not these".
    *
    *  Serialized as `ai_interview=false`, whose value names the FACET while this names
    *  the INTENT. It has to be the negative of the positive rather than an equality,
@@ -48,16 +44,6 @@ export interface JobFilters {
    *  `hideAIInterview`'s underlying facet: nothing in the index is ever written
    *  false, so turning this off must omit the param rather than write `=false`. */
   autoApplyAvailable: boolean;
-  /** What to do about postings that state a government security-clearance requirement
-   *  (UK SC/DV, US Secret/TS-SCI, AU NV1). Three states rather than a boolean because
-   *  the facet answers two different people: someone who cannot hold a clearance wants
-   *  these gone, someone who holds one wants nothing else.
-   *
-   *  Serialized as `requires_clearance`, whose value names the FACET while this names
-   *  the INTENT — so `hide` writes `false` and `only` writes `true`. An unrecognised
-   *  value in a hand-edited link reads as `any` rather than leaving the control in a
-   *  state it cannot render. */
-  clearance: ClearanceFilter;
   salaryMin: number | null;
   /** Keep only jobs whose stated MAXIMUM salary is at most this (null = no ceiling).
    *  Serialized as `salary_max`, which bounds a different attribute than `salaryMin`
@@ -265,7 +251,6 @@ export function emptyFilters(): JobFilters {
     visa: false,
     hideAIInterview: false,
     autoApplyAvailable: false,
-    clearance: 'any',
     salaryMin: null,
     salaryMax: null,
     postedWithinDays: null,
@@ -297,8 +282,6 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.visa) p.set('visa_sponsorship', 'true');
   if (f.hideAIInterview) p.set('ai_interview', 'false');
   if (f.autoApplyAvailable) p.set('auto_apply_available', 'true');
-  if (f.clearance === 'hide') p.set('requires_clearance', 'false');
-  if (f.clearance === 'only') p.set('requires_clearance', 'true');
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.salaryMax != null) p.set('salary_max', String(f.salaryMax));
   if (f.postedWithinDays != null) p.set('posted_within_days', String(f.postedWithinDays));
@@ -380,8 +363,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.visa = p.get('visa_sponsorship') === 'true';
   f.hideAIInterview = p.get('ai_interview') === 'false';
   f.autoApplyAvailable = p.get('auto_apply_available') === 'true';
-  const clearance = p.get('requires_clearance');
-  f.clearance = clearance === 'false' ? 'hide' : clearance === 'true' ? 'only' : 'any';
+  readLegacyClearance(p, f.facets);
   f.salaryMin = salaryBound(p.get('salary_min'));
   f.salaryMax = salaryBound(p.get('salary_max'));
   // Both date bounds are a positive whole number of days; anything else (absent,
@@ -409,6 +391,28 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   return f;
 }
 
+/** The security-clearance control used to be a three-state toggle serialized as
+ *  `requires_clearance=false|true`, and saved searches, alerts and shared links still
+ *  carry it. It is now the `clearance_levels` chips, whose reserved `none` ("no
+ *  explicit reference to clearance") the backend answers with exactly the old
+ *  `requires_clearance=false` (search.ClearanceLevelUnspecified) — so the old link
+ *  reads as that chip: `false` includes it, `true` excludes it (every posting that
+ *  states a clearance). The URL is rewritten in the new form on the next change, and
+ *  the backend still honours the old param for every client that never moves.
+ *
+ *  A link carrying both forms keeps what `clearance_levels` says about `none`, and an
+ *  unrecognised value is ignored rather than guessed at. */
+function readLegacyClearance(p: URLSearchParams, facets: Record<string, FacetState>): void {
+  const legacy = p.get('requires_clearance');
+  if (legacy !== 'false' && legacy !== 'true') return;
+  const st = facets.clearance_levels ?? emptyFacet();
+  if (st.include.includes(CLEARANCE_UNSPECIFIED) || st.exclude.includes(CLEARANCE_UNSPECIFIED)) return;
+  facets.clearance_levels =
+    legacy === 'false'
+      ? { ...st, include: [...st.include, CLEARANCE_UNSPECIFIED] }
+      : { ...st, exclude: [...st.exclude, CLEARANCE_UNSPECIFIED] };
+}
+
 /** Total selected facet values (plus visa/salary/freshness) — drives the mobile badge. */
 export function activeFilterCount(f: JobFilters): number {
   let n = 0;
@@ -419,7 +423,6 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.visa) n += 1;
   if (f.hideAIInterview) n += 1;
   if (f.autoApplyAvailable) n += 1;
-  if (f.clearance !== 'any') n += 1;
   // One control and one summary chip, so one count whichever ends are set.
   if (f.salaryMin != null || f.salaryMax != null) n += 1;
   if (f.postedWithinDays != null) n += 1;

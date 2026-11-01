@@ -11,7 +11,7 @@
   import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
-  import { emptyFilters, type ClearanceFilter, type FilterStore, type JobFilters } from '#lib/filters.js';
+  import { emptyFilters, type FilterStore, type JobFilters } from '#lib/filters.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '#lib/filterSections.js';
   import type { FacetCounts } from '#lib/types.js';
@@ -147,15 +147,6 @@
     ),
   ]);
 
-  // The clearance control's three states. It is not a FACETS entry (it filters on a
-  // single boolean attribute, not a value vocabulary), so its options live here rather
-  // than in the facet registry.
-  const CLEARANCE_OPTIONS: { value: ClearanceFilter; label: string }[] = [
-    { value: 'any', label: 'Any' },
-    { value: 'hide', label: 'Hide' },
-    { value: 'only', label: 'Only' },
-  ];
-
   const jobCollectionValues = JOB_COLLECTION.map((o) => o.value);
   const employerCredentialValues = EMPLOYER_CREDENTIALS.map((o) => o.value);
 
@@ -189,7 +180,7 @@
         (f.visa ? 1 : 0) +
         (f.hideAIInterview ? 1 : 0) +
         (f.autoApplyAvailable ? 1 : 0) +
-        (f.clearance !== 'any' ? 1 : 0) +
+        selCount(f, 'clearance_levels') +
         selCount(f, 'collections', employerCredentialValues)
       );
     if (e.kind === 'posted')
@@ -320,7 +311,7 @@
       return null;
     }
     const kind = action.slice(0, colon);
-    if (kind === 'clearance' || kind === 'posted' || kind === 'open' || kind === 'experience') {
+    if (kind === 'posted' || kind === 'open' || kind === 'experience') {
       return { kind, rest: action.slice(colon + 1) };
     }
     return null;
@@ -336,8 +327,6 @@
         return { ...off, included: staged.value.hideAIInterview };
       case 'auto-apply':
         return { ...off, included: staged.value.autoApplyAvailable };
-      case 'clearance':
-        return { ...off, included: staged.value.clearance === action.rest };
       case 'posted':
         return { ...off, included: staged.value.postedWithinDays === Number(action.rest) };
       case 'open':
@@ -365,11 +354,6 @@
         return;
       case 'auto-apply':
         staged.setAutoApplyAvailable(!staged.value.autoApplyAvailable);
-        return;
-      case 'clearance':
-        if (action.rest === 'hide' || action.rest === 'only') {
-          staged.setClearance(staged.value.clearance === action.rest ? 'any' : action.rest);
-        }
         return;
       case 'posted':
         staged.setPostedWithinDays(staged.value.postedWithinDays === Number(action.rest) ? null : Number(action.rest));
@@ -783,24 +767,17 @@
     <p class="mt-1 text-xs text-muted-foreground">
       Best-effort — successful submission isn't guaranteed.
     </p>
+    <!-- The levels a posting states, not a yes/no: someone who cannot hold a clearance
+         picks "No explicit reference", someone who holds Secret picks the rungs they
+         can work under. The old Hide/Only toggle is this facet's `none` chip, included
+         or excluded, and its links still read that way (facetModel.readLegacyClearance). -->
     <h3 class="mb-2 mt-6 text-sm font-semibold tracking-tight">Security clearance</h3>
-    <div class="inline-flex overflow-hidden rounded-md border border-border" role="group" aria-label="Security clearance">
-      {#each CLEARANCE_OPTIONS as opt (opt.value)}
-        <button
-          type="button"
-          class="px-3 py-1.5 text-sm transition-colors {staged.value.clearance === opt.value
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-background hover:bg-muted'}"
-          aria-pressed={staged.value.clearance === opt.value}
-          onclick={() => staged.setClearance(opt.value)}
-        >
-          {opt.label}
-        </button>
-      {/each}
-    </div>
+    <ChipFacet store={staged} param="clearance_levels" label="Clearance level" counts={c} />
     <p class="mt-2 text-xs text-muted-foreground">
-      Government vetting — UK SC/DV, US Secret/TS-SCI, AU NV1. Only is for candidates who
-      already hold one.
+      {#if selCount(staged.value, 'clearance_levels') === 0}
+        Showing every level — select one or more to narrow.
+      {/if}
+      Other covers non-US vetting (UK SC/DV, AU NV1, NATO) and clearances stated without a level.
     </p>
   {:else if entry.kind === 'posted'}
     <!-- Two bounds over one set of stops, each labelled for WHOSE date it reads. They

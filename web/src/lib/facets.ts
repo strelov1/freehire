@@ -19,12 +19,14 @@ import {
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
   COMPANY_TYPE_VALUES, DOMAIN_VALUES, INDUSTRY_VALUES, FACET_ALIASES,
   AI_ARCHETYPE_VALUES, SKILL_LABELS, INDUSTRY_LABELS, ROLE_TYPE_VALUES, SOURCE_TYPE_VALUES,
+  CLEARANCE_LEVEL_VALUES,
 } from './generated/contracts';
 import { fuzzyMatch } from './fuzzy';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
   CATEGORY_LABELS, DOMAIN_LABELS, COMPANY_TYPE_LABELS, ENGLISH_LEVEL_LABELS,
-  RELOCATION_LABELS, AI_ARCHETYPE_LABELS, ROLE_TYPE_LABELS, SOURCE_TYPE_LABELS, titleCase,
+  RELOCATION_LABELS, AI_ARCHETYPE_LABELS, ROLE_TYPE_LABELS, SOURCE_TYPE_LABELS,
+  CLEARANCE_LEVEL_LABELS, titleCase,
 } from './labels';
 import { COLLECTIONS } from './collections';
 import { TIMEZONE_REGIONS } from './talentFacetModel';
@@ -37,6 +39,9 @@ export interface FacetOption {
   label: string;
   /** Number of matching jobs, for dynamic (distribution-driven) options. */
   count?: number;
+  /** A value the facet distribution cannot count (a reserved "not stated" value), so
+   *  its pill shows no number rather than a 0 that would read as "no postings". */
+  uncounted?: boolean;
   /** ISO 3166-1 alpha-2 code for country options, so the pill shows a flag icon. */
   flag?: string;
   /** Sub-heading this option renders under, for a facet whose options are not all
@@ -571,6 +576,17 @@ const AI_ARCHETYPE: FacetOption[] = options(AI_ARCHETYPE_VALUES, AI_ARCHETYPE_LA
 const ROLE_TYPE: FacetOption[] = options(ROLE_TYPE_VALUES, ROLE_TYPE_LABELS);
 const SOURCE_TYPE: FacetOption[] = options(SOURCE_TYPE_VALUES, SOURCE_TYPE_LABELS);
 
+// Reserved `clearance_levels` value selecting postings with no explicit reference to a
+// clearance (search.ClearanceLevelUnspecified). It is the old `requires_clearance=false`
+// under a new name, so it leads the chips: it is the one most people want. Uncounted —
+// the facet distribution counts the levels postings carry, and "none" is the absence
+// of one, so any number shown for it would be invented.
+export const CLEARANCE_UNSPECIFIED = 'none';
+const CLEARANCE_LEVEL: FacetOption[] = [
+  { value: CLEARANCE_UNSPECIFIED, label: 'No explicit reference to clearance', uncounted: true },
+  ...options(CLEARANCE_LEVEL_VALUES, CLEARANCE_LEVEL_LABELS),
+];
+
 // Work-mode and region options, exported for the profile's location preferences editor so
 // it shares the filter panel's vocabulary/order instead of duplicating it.
 export const WORK_MODE_OPTIONS: FacetOption[] = WORK_MODE;
@@ -863,5 +879,6 @@ export const FACETS: FacetDef[] = [
   { param: 'salary_currency', label: 'Currency', control: 'pills', options: CURRENCY, excludable: true },
   { param: 'company_slug', label: 'Company', control: 'remote', excludable: true, placeholder: 'Search companies', remote: companySearch },
   { param: 'source_type', label: 'Source type', control: 'pills', options: SOURCE_TYPE, excludable: true },
+  { param: 'clearance_levels', label: 'Clearance level', control: 'pills', options: CLEARANCE_LEVEL, excludable: true },
   { param: 'source', label: 'Source', control: 'select', dynamic: true, excludable: true, placeholder: 'Search sources', entityLogos: true },
 ];
