@@ -603,6 +603,11 @@
     {/if}
     {#if def}<FacetSection {def} store={staged} counts={c} expand empty={entry.key === 'skills' ? unrecognizedSkill : undefined} />{/if}
     {#if entry.key === 'skills'}{@render recognizeLink('skill', '?tab=skill')}{/if}
+    {#if entry.key === 'perks'}
+      <p class="mt-2 text-xs text-muted-foreground">
+        Based on job descriptions — not every employer lists every perk.
+      </p>
+    {/if}
   {:else if entry.kind === 'salary'}
     <ChipFacet store={staged} param="salary_currency" label="Currency" counts={c} />
     <div class="mb-2 mt-6 flex items-center justify-between">

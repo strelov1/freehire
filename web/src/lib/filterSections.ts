@@ -238,6 +238,7 @@ export const RAIL: RailEntry[] = [
   { key: 'company_slug', label: 'Company', section: 'ROLE', kind: 'facet', facetParam: 'company_slug' },
   { key: 'source', label: 'Source', section: 'ROLE', kind: 'facet', facetParam: 'source' },
   { key: 'salary', label: 'Salary', section: 'PAY & BENEFITS', kind: 'salary' },
+  { key: 'perks', label: 'Benefits & Perks', section: 'PAY & BENEFITS', kind: 'facet', facetParam: 'perks' },
   { key: 'language', label: 'Language', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'language' },
   { key: 'relocation', label: 'Relocation', section: 'REQUIREMENTS & ELIGIBILITY', kind: 'relocation' },
 ];

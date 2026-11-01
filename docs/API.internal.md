@@ -144,6 +144,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `posting_language` | Job language | Open vocabulary — call /jobs/facets for live values |
 | `reality` | Posting reality | fresh, stale, likely-evergreen |
 | `salary_currency` | Currency | USD, EUR, GBP, RUB |
+| `perks` | Perks mentioned | generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it, which is not the same as not offering it |
 | `equity` | Equity | salary_and_equity, equity_only, not_stated — not_stated means none was read, not that the job offers no equity |
 | `company_slug` | Company | Open vocabulary — call /jobs/facets for live values |
 | `source_type` | Source type | ats, company, aggregator, social |
@@ -152,7 +153,6 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |
 | `education_level` | Education level | none, bachelor, master, phd |
 | `salary_period` | Salary period | year, month, day, hour |
-| `perks` | Perks mentioned | generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it |
 
 ### Numeric & boolean filters
 

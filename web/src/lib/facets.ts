@@ -19,7 +19,7 @@ import {
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
   COMPANY_TYPE_VALUES, DOMAIN_VALUES, INDUSTRY_VALUES, FACET_ALIASES,
   AI_ARCHETYPE_VALUES, SKILL_LABELS, INDUSTRY_LABELS, ROLE_TYPE_VALUES, SOURCE_TYPE_VALUES,
-  CLEARANCE_LEVEL_VALUES, EQUITY_VALUES,
+  CLEARANCE_LEVEL_VALUES, PERK_VALUES, PERK_LABELS, EQUITY_VALUES,
 } from './generated/contracts';
 import { fuzzyMatch } from './fuzzy';
 import {
@@ -614,6 +614,26 @@ const DOMAINS: FacetOption[] = options(DOMAIN_VALUES, DOMAIN_LABELS);
 // backend answers from the curated column and the job-derived domains alike.
 // Generated, like DOMAINS, so the options cannot drift from the Go dictionary.
 const INDUSTRIES: FacetOption[] = options(INDUSTRY_VALUES, INDUSTRY_LABELS);
+// The perks the description states (internal/dict/perks); values and labels are both
+// generated from the dictionary, so a chip cannot offer a perk it never writes.
+const PERKS: FacetOption[] = options(PERK_VALUES, PERK_LABELS);
+// The words people type for a perk that its label does not contain, so the filter search
+// finds "pension" under Retirement Plan and "pto" under Generous Paid Time Off.
+const PERK_ALIASES: Record<string, readonly string[]> = {
+  generous_pto: ['pto', 'vacation', 'holiday', 'annual leave', 'time off'],
+  four_day_week: ['4 day week', 'four-day week'],
+  '401k_match': ['401k', 'retirement match', 'employer match'],
+  parental_leave: ['maternity', 'paternity', 'family leave'],
+  retirement_plan: ['pension', '401k', 'superannuation', 'rrsp'],
+  tuition_reimbursement: ['tuition', 'education assistance'],
+  unlimited_pto: ['unlimited vacation', 'unlimited holiday'],
+  health_insurance: ['medical', 'healthcare', 'private medical'],
+  mental_health: ['therapy', 'counseling', 'wellbeing'],
+  learning_budget: ['training budget', 'conference', 'l&d', 'professional development'],
+  home_office_stipend: ['wfh stipend', 'remote stipend', 'home office'],
+  sabbatical: ['career break'],
+  sign_on_bonus: ['signing bonus', 'joining bonus'],
+};
 
 // The job-reality classes (internal/jobreality) — a small closed set, spelled out
 // like CURRENCY (not a generated values array). Offered excludable so the common use
@@ -887,6 +907,9 @@ export const FACETS: FacetDef[] = [
   { param: 'posting_language', label: 'Job language', control: 'select', dynamic: true, excludable: true, placeholder: 'Search languages' },
   { param: 'reality', label: 'Posting reality', control: 'pills', options: REALITY, excludable: true },
   { param: 'salary_currency', label: 'Currency', control: 'pills', options: CURRENCY, excludable: true },
+  // Include-only: a posting without a perk is one whose description does not MENTION it,
+  // so "exclude 401(k) matching" would hide jobs that may well offer it.
+  { param: 'perks', label: 'Perks mentioned', control: 'pills', options: PERKS, excludable: false, hasAndOr: true, searchAliases: PERK_ALIASES },
   { param: 'equity', label: 'Equity', control: 'pills', options: EQUITY, excludable: true },
   { param: 'company_slug', label: 'Company', control: 'remote', excludable: true, placeholder: 'Search companies', remote: companySearch },
   { param: 'source_type', label: 'Source type', control: 'pills', options: SOURCE_TYPE, excludable: true },

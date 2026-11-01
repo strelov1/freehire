@@ -131,6 +131,7 @@ function buildJobCatalog(): FilterSearchHit[] {
     hits.push(optionHit('source', 'source', 'Source', { value, label }));
   }
   pushFacet(hits, 'salary', 'salary_currency');
+  pushFacet(hits, 'perks', 'perks');
   pushFacet(hits, 'salary', 'equity');
   pushFacet(hits, 'language', 'english_level');
   hits.push(jumpHit('language', 'Job language', 'Job language'));
