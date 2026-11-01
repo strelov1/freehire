@@ -32,7 +32,7 @@ When the visitor picks one or more chips, the page MUST show a "Show jobs" link 
 - **THEN** a "Show jobs" link to `/jobs` with that skill filter appears
 
 ### Requirement: A search with no match offers to add the term
-When a section's search matches no listed term, the page MUST show "“term” is not in the dictionary." and an "Add to the list" button in place of "Nothing found". It MUST NOT send a write until the button is clicked. The stored kind MUST be the section's: `specialization` or `skill`.
+When a section's search matches no listed term, the page MUST show "“term” is not in the dictionary." and an "Add to the list" button in place of "Nothing found". It MUST NOT send a write until the button is clicked. The stored kind MUST be the section's: `specialization`, `skill` or `industry`.
 
 #### Scenario: A miss waits for the click
 - **WHEN** the visitor searches for a term no listed specialization matches
@@ -50,7 +50,7 @@ An anonymous add MUST be refused with 401 and MUST NOT write a row. The page MUS
 - **THEN** no row is written and the visitor is sent to sign in, returning with the term seeded in the search
 
 ### Requirement: The server decides whether a term is known
-`POST /api/v1/dictionary/gaps` MUST check the term against the dictionary for its kind. A `specialization` is known when `classify.Parse(term).Category` is not empty. A `skill` is known when `skilltag.Canonicalize` returns a canonical for it. A known term MUST be refused with 409 and MUST NOT change a row. An unknown kind MUST be refused with 400. The page MUST show a 409 as "already in the dictionary under another name".
+`POST /api/v1/dictionary/gaps` MUST check the term against the dictionary for its kind. A `specialization` is known when `classify.Parse(term).Category` is not empty. A `skill` is known when `skilltag.Canonicalize` returns a canonical for it. An `industry` is known when `industrytag.Canonicalize` returns a canonical for it. A known term MUST be refused with 409 and MUST NOT change a row. An unknown kind MUST be refused with 400. The page MUST show a 409 as "already in the dictionary under another name".
 
 #### Scenario: A known synonym is found, not offered as missing
 - **WHEN** a visitor searches specializations for a curated alias such as `react developer` or `фронтенд`
@@ -61,7 +61,7 @@ An anonymous add MUST be refused with 401 and MUST NOT write a row. The page MUS
 - **THEN** the request is refused with 409, no row changes, and the page says it is already in the dictionary under another name
 
 #### Scenario: An unknown kind is rejected
-- **WHEN** a request uses a kind other than `specialization` or `skill`
+- **WHEN** a request uses a kind other than `specialization`, `skill` or `industry`
 - **THEN** the request is refused with 400 and no row is written
 
 ### Requirement: One live row per kind and normalized term

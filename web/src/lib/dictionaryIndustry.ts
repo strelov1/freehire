@@ -55,6 +55,9 @@ export function isIndustryMiss(term: string): boolean {
 
 export function searchIndustries(term: string): IndustryOption[] {
   const query = normalize(term);
+  // A term that folds to nothing ("!!!", non-Latin script) matches nothing; only a
+  // blank search lists the whole dictionary.
+  if (!query && term.trim()) return [];
   return INDUSTRY_VALUES
     .filter((slug) => {
       if (!query) return true;

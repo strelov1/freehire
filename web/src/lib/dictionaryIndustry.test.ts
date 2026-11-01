@@ -58,6 +58,13 @@ describe('lookupIndustry', () => {
     expect(searchIndustries('underwater basket weaving')).toEqual([]);
   });
 
+  it('lists everything only for a blank search, never for a term that folds to nothing', () => {
+    expect(searchIndustries('').length).toBeGreaterThan(0);
+    expect(searchIndustries('!!!')).toEqual([]);
+    expect(searchIndustries('製造業')).toEqual([]);
+    expect(isIndustryMiss('製造業')).toBe(true);
+  });
+
   it('still offers a request for an exact miss when partial matches exist', () => {
     expect(lookupIndustry('bank')).toEqual({ type: 'miss' });
     expect(searchIndustries('bank')).toContainEqual({ slug: 'banking', label: 'Banking' });

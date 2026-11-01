@@ -167,7 +167,7 @@
         </p>
       {/if}
       {#if industryResults.length}
-        <ul class="max-h-[28rem] space-y-1 overflow-y-auto rounded-md border p-2" aria-label="Recognized industries">
+        <ul class="max-h-96 space-y-1 overflow-y-auto rounded-md border p-2" aria-label="Recognized industries">
           {#each industryResults as industry (industry.slug)}
             <li class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded px-2 py-1.5 text-sm">
               <span>{industry.label} <code class="ml-1 text-xs text-muted-foreground">{industry.slug}</code></span>
