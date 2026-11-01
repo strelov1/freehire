@@ -132,6 +132,10 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, autoApplyAvailable: on });
   }
 
+  setFormerEmployers(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, formerEmployers: on });
+  }
+
   setApplyQuestionsMax(n: number | null) {
     this.#url.setNow({ ...this.#url.value, applyQuestionsMax: n });
   }

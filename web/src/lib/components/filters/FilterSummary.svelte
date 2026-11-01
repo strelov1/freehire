@@ -3,6 +3,7 @@
   import { type FilterStore, savedSearchQuery, displayQuery } from '#lib/filters.js';
   import { experienceLabel, freshnessLabel, salaryLabel } from '#lib/filterControls.js';
   import { unsummarized } from '#lib/filterSummary.js';
+  import { isAuthenticated } from '#lib/auth.svelte.js';
   import { applyQuestionsBoundLabel } from '#lib/jobFacts.js';
   import FilterSummaryShell, { type SummaryChip, type SummaryGroup } from './FilterSummaryShell.svelte';
   import SaveSearchAlert from './SaveSearchAlert.svelte';
@@ -74,6 +75,11 @@
     facetGroup('employment_type', 'Employment');
     facetGroup('collections', 'Collection');
     facetGroup('company_slug', 'Company');
+    // Signed out the server ignores it, so a chip would claim a narrowing that did not happen.
+    if (f.formerEmployers && isAuthenticated())
+      push('Hiring again', [
+        { key: 'former_employers', text: 'Your former employers', exclude: false, remove: () => store.setFormerEmployers(false) },
+      ]);
     facetGroup('english_level', 'English');
     facetGroup('posting_language', 'Job language');
     facetGroup('relocation', 'Relocation');
@@ -130,7 +136,9 @@
 
 <FilterSummaryShell {groups} active={store.active} onReset={() => store.clear()} {onOpen} {description}>
   {#snippet afterButton()}
-    {#if canSave}
+    {#if canSave && store.value.formerEmployers}
+      <p class="text-sm text-muted-foreground">Turn off Hiring again to save this search or set up alerts.</p>
+    {:else if canSave}
       <SaveSearchAlert query={current} variant="full" alerts="manage" />
     {/if}
   {/snippet}

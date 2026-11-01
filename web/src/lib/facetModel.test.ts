@@ -801,3 +801,25 @@ describe('seniorityIncludeUnspecified', () => {
     expect(filtersToParams(f).has('seniority_include_unspecified')).toBe(false);
   });
 });
+
+describe('formerEmployers ("Hiring again")', () => {
+  it('round-trips as former_employers=true and is absent when off', () => {
+    expect(filtersToParams(emptyFilters()).has('former_employers')).toBe(false);
+    const p = filtersToParams({ ...emptyFilters(), formerEmployers: true });
+    expect(p.get('former_employers')).toBe('true');
+    expect(filtersFromParams(p).formerEmployers).toBe(true);
+    expect(filtersFromParams(new URLSearchParams('former_employers=false')).formerEmployers).toBe(false);
+  });
+
+  it('counts as an active filter', () => {
+    expect(activeFilterCount({ ...emptyFilters(), formerEmployers: true })).toBe(1);
+  });
+
+  // The digest matcher replays a saved query with nobody to resolve a bank for, so an
+  // alert carrying it would mail the whole catalogue.
+  it('never reaches a saved search', () => {
+    const q = savedSearchQuery({ ...emptyFilters(), q: 'go', formerEmployers: true });
+    expect(new URLSearchParams(q).has('former_employers')).toBe(false);
+    expect(new URLSearchParams(q).get('q')).toBe('go');
+  });
+});

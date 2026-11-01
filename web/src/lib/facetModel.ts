@@ -44,6 +44,12 @@ export interface JobFilters {
    *  `hideAIInterview`'s underlying facet: nothing in the index is ever written
    *  false, so turning this off must omit the param rather than write `=false`. */
   autoApplyAvailable: boolean;
+  /** "Hiring again": keep only postings at companies the signed-in reader has worked at
+   *  and left, read from their own experience bank by the server. Serialized as
+   *  `former_employers=true`, true-or-absent. It is a fact about the READER, not the
+   *  posting, so it never reaches a saved search (see savedSearchQuery); signed out, the
+   *  server ignores it and says so in `meta.ignored_params`. */
+  formerEmployers: boolean;
   /** Keep only postings whose captured application form requires at most this many
    *  questions beyond the CV and contact details (null = no bound). The filter modal's
    *  "Short application" toggle writes SHORT_APPLICATION_MAX; any other bound arrives
@@ -267,6 +273,7 @@ export function emptyFilters(): JobFilters {
     visa: false,
     hideAIInterview: false,
     autoApplyAvailable: false,
+    formerEmployers: false,
     applyQuestionsMax: null,
     salaryMin: null,
     salaryMax: null,
@@ -300,6 +307,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   if (f.visa) p.set('visa_sponsorship', 'true');
   if (f.hideAIInterview) p.set('ai_interview', 'false');
   if (f.autoApplyAvailable) p.set('auto_apply_available', 'true');
+  if (f.formerEmployers) p.set('former_employers', 'true');
   if (f.applyQuestionsMax != null) p.set('apply_questions_max', String(f.applyQuestionsMax));
   if (f.salaryMin != null) p.set('salary_min', String(f.salaryMin));
   if (f.salaryMax != null) p.set('salary_max', String(f.salaryMax));
@@ -395,6 +403,7 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   f.visa = p.get('visa_sponsorship') === 'true';
   f.hideAIInterview = p.get('ai_interview') === 'false';
   f.autoApplyAvailable = p.get('auto_apply_available') === 'true';
+  f.formerEmployers = p.get('former_employers') === 'true';
   f.applyQuestionsMax = nonNegativeInt(p.get('apply_questions_max'));
   readLegacyClearance(p, f.facets);
   f.salaryMin = salaryBound(p.get('salary_min'));
@@ -452,6 +461,7 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.visa) n += 1;
   if (f.hideAIInterview) n += 1;
   if (f.autoApplyAvailable) n += 1;
+  if (f.formerEmployers) n += 1;
   if (f.applyQuestionsMax != null) n += 1;
   // One control and one summary chip, so one count whichever ends are set.
   if (f.salaryMin != null || f.salaryMax != null) n += 1;
@@ -483,10 +493,14 @@ export function canonicalQuery(query: string): string {
  *
  *  It serializes with the ordering UNCHOSEN rather than deleting the key afterwards:
  *  `null` is the type's own word for "no choice", and filtersToParams already writes
- *  nothing for it, so this cannot drift if the wire parameter is ever renamed. */
+ *  nothing for it, so this cannot drift if the wire parameter is ever renamed.
+ *
+ *  "Hiring again" is dropped for a different reason: it is resolved per request from the
+ *  reader's experience bank, and the digest matcher replays a stored query with no reader
+ *  to resolve it for — an alert carrying it would mail the whole catalogue. */
 export function savedSearchQuery(f: JobFilters): string {
-  // hideSeen goes the same way, for its own reason: a digest has no "seen" to apply.
-  return filtersToParams({ ...f, sort: null, hideSeen: false }).toString();
+  // Neither feed preference can be replayed by a digest.
+  return filtersToParams({ ...f, sort: null, hideSeen: false, formerEmployers: false }).toString();
 }
 
 // ---- per-value sign transitions (pure: FacetState -> FacetState) ----

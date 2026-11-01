@@ -443,7 +443,7 @@
   {applyDisabled}
   {applyLabel}
   {previewCount}
-  countsFetch={stagedCounts}
+  countsFetch={staged.value.formerEmployers ? undefined : stagedCounts}
   {pane}
   headerAction={showProfileAction ? profileAction : undefined}
   {titleHint}
@@ -560,7 +560,7 @@
 {/snippet}
 
 {#snippet pane(entry: RailEntry, live: FacetCounts | null)}
-  {@const c = live ?? counts}
+  {@const c = staged.value.formerEmployers ? null : live ?? counts}
   {#if entry.kind === 'saved'}
     <SavedSearches store={staged} />
   {:else if entry.kind === 'category'}

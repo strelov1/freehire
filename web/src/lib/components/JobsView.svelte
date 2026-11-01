@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { ArrowRight, ChevronDown, Layers, Map as MapIcon, Target } from '@lucide/svelte';
+  import { ArrowRight, ChevronDown, History, Layers, Map as MapIcon, Target } from '@lucide/svelte';
   import { browser } from '$app/env';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -111,7 +111,10 @@
   const scopedParams = () => {
     const p = filtersToParams(filters.applied);
     // Scoped loaders render anonymously and offer no control for this preference.
-    if (!standalone) p.delete('hide_seen');
+    if (!standalone) {
+      p.delete('hide_seen');
+      p.delete('former_employers');
+    }
     for (const [k, v] of Object.entries(scope)) p.set(k, v);
     return p;
   };
@@ -176,7 +179,9 @@
   // jobs each has under the current filters. A failed fetch leaves the prior
   // counts — the selects degrade to plain (countless) options, never break.
   // latestOnly stops a slow earlier response overwriting a newer one.
-  let counts = $state.raw<FacetCounts | null>(null);
+  let catalogCounts = $state.raw<FacetCounts | null>(null);
+  // Facet counts cannot apply the former-employer constraint.
+  const counts = $derived(filters.value.formerEmployers ? null : catalogCounts);
   // The map dialog reads and writes `filters` itself, so a click on the map narrows the
   // list behind it. Its module (the land outline among it) loads on the first open only.
   let mapOpen = $state(false);
@@ -189,7 +194,7 @@
   // `q` — so the figure still answers what a click would give.
   const refreshCounts = latestOnly(
     () => api.facetCounts(scopedParams()),
-    (facets) => (counts = facets),
+    (facets) => (catalogCounts = facets),
   );
 
   // Minimum profile-match slider: a client-only post-filter over the already-fetched
@@ -207,6 +212,9 @@
     if (isAuthenticated()) profileStore.ensureLoaded();
   });
   const profileSkills = $derived(profileStore.profile?.skills ?? []);
+  // The server reads former_employers only for a signed-in caller, so only then does it
+  // explain an empty list.
+  const formerEmployersApplied = $derived(standalone && isAuthenticated() && filters.applied.formerEmployers);
   const matchFilterAvailable = $derived(isAuthenticated() && profileStore.loaded && profileSkills.length > 0);
   // Drop a stale threshold the moment the slider would disappear (sign-out, profile
   // cleared) so it can't silently keep hiding jobs with no control left to reset it.
@@ -505,7 +513,9 @@
   });
 
   // Personal feed preferences must be re-applied when the reader changes in-tab.
-  const searchUserID = $derived(filters.applied.hideSeen ? currentUser()?.id ?? null : null);
+  const searchUserID = $derived(
+    standalone && (filters.applied.hideSeen || filters.applied.formerEmployers) ? currentUser()?.id ?? null : null,
+  );
 
   let lastSearchUserID = untrack(() => searchUserID);
 
@@ -782,6 +792,8 @@
   <Button
     variant="outline"
     size="sm"
+    disabled={filters.value.formerEmployers}
+    title={filters.value.formerEmployers ? 'Turn off Hiring again to explore the map' : undefined}
     aria-label="Map"
     onclick={() => {
       mapLoaded = true;
@@ -790,6 +802,28 @@
   >
     <MapIcon class="size-4" />
     <span class="hidden sm:inline">Map</span>
+  </Button>
+{/snippet}
+
+<!-- "Hiring again": narrow the feed to the companies the reader has worked at and left,
+     which the server reads from their own experience bank. Signed-in only and only on
+     the standalone feed — a company page is already one company, and signed out the
+     server could not read a bank (it would ignore the param and say so). The URL carries
+     it, so the choice survives a reload and a shared link is a harmless no-op for anyone
+     else. Never part of a saved search: see savedSearchQuery. -->
+{#snippet hiringAgainToggle()}
+  {@const on = filters.value.formerEmployers}
+  <Button
+    variant="outline"
+    size="sm"
+    aria-pressed={on}
+    aria-label="Hiring again: only companies you have worked at"
+    title="Only open jobs at companies you have worked at"
+    class={on ? 'border-brand bg-brand/5 text-brand-strong' : ''}
+    onclick={() => filters.setFormerEmployers(!on)}
+  >
+    <History class="size-4" aria-hidden="true" />
+    <span class="hidden sm:inline">Hiring again</span>
   </Button>
 {/snippet}
 
@@ -822,6 +856,9 @@
 {/snippet}
 
 {#snippet listControls()}
+  {#if standalone && isAuthenticated()}
+    {@render hiringAgainToggle()}
+  {/if}
   {@render hideSeenToggle()}
   {@render postedSelect()}
   <!-- Unconditional. This used to be guarded against a one-option select - a label
@@ -932,6 +969,15 @@
       <!-- Retry re-runs the same query on the page being read, the same reload a changed
            filter would start. -->
       <States state="error" message="Failed to load jobs." onRetry={() => reloadList(pageOffset(activePage))} />
+    {:else if displayItems.length === 0 && formerEmployersApplied}
+      <!-- Offer the experience bank without attributing a combined-filter miss to
+           the employers' hiring activity. Ambiguous company names are not guessed. -->
+      <States state="empty" message="No jobs at your former employers match the current filters." />
+      <p class="mt-2 text-center text-sm text-muted-foreground">
+        We match the companies in
+        <a href={resolve('/my/profile/experience')} class="font-medium text-foreground underline underline-offset-2">your experience</a>,
+        and leave out any name that could be more than one company.
+      </p>
     {:else if displayItems.length === 0}
       <States state="empty" message="No matching jobs." />
       {#if standalone && relaxTarget}
@@ -1001,7 +1047,7 @@
   </button>
 {/if}
 
-{#if standalone && mapLoaded}
+{#if standalone && mapLoaded && !filters.value.formerEmployers}
   {#await import('./map/JobsMapDialog.svelte') then { default: JobsMapDialog }}
     <JobsMapDialog bind:open={mapOpen} store={filters} />
   {/await}
