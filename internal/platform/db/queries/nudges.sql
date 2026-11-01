@@ -37,19 +37,46 @@ WHERE ev.kind = 'stage_set'
   AND ev.job_id IS NOT NULL
   AND ev.occurred_at > now() - make_interval(days => sqlc.arg(window_days)::int);
 
--- name: ListJobClosedCandidates :many
--- Jobs that closed recently while the tracking user still has an application in a
--- non-terminal stage on them (any stage silence.ThresholdDays accrues
--- silence for — the same active/terminal split every other silence reader uses).
--- Bounded to a recency window on closed_at for the same first-deploy reason as
--- the other two candidate scans.
-SELECT a.user_id, a.job_id, a.stage, j.closed_at
-FROM applications a
-JOIN notification_settings ns ON ns.user_id = a.user_id AND ns.enabled
-JOIN jobs j ON j.id = a.job_id
-WHERE a.applied_at IS NOT NULL
-  AND j.closed_at IS NOT NULL
-  AND j.closed_at > now() - make_interval(days => sqlc.arg(window_days)::int);
+-- name: SettleClosedApplications :one
+-- Settle every active tracked application whose listing closed, regardless of
+-- notification settings, application date, or closure age. The update guard is
+-- rechecked under the row lock, preserving outcomes set concurrently by a user.
+-- Lock matching jobs first so a concurrent reopen cannot leave a stale closure.
+-- Events and notification records commit with the transition. Only notifications
+-- have a recency window, so repairing old tracker entries does not flood inboxes.
+WITH locked AS (
+    SELECT j.id, j.closed_at
+    FROM jobs j
+    WHERE j.closed_at IS NOT NULL
+      AND EXISTS (
+          SELECT 1 FROM applications a
+          WHERE a.job_id = j.id
+            AND (a.stage IN ('preparing', 'applied', 'screening', 'responded', 'interview', 'offer')
+                 OR (a.stage IS NULL AND a.applied_at IS NOT NULL)))
+    ORDER BY j.id
+    FOR UPDATE OF j
+), expired AS (
+    UPDATE applications a
+    SET stage = 'expired'
+    FROM locked j
+    WHERE j.id = a.job_id
+      AND (a.stage IN ('preparing', 'applied', 'screening', 'responded', 'interview', 'offer')
+           OR (a.stage IS NULL AND a.applied_at IS NOT NULL))
+    RETURNING a.id, a.user_id, a.job_id, a.company_slug, j.closed_at
+), events AS (
+    INSERT INTO application_events (user_id, application_id, job_id, company_slug, kind, signal, occurred_at, source)
+    SELECT user_id, id, job_id, company_slug, 'stage_set', 'expired', now(), 'system'
+    FROM expired
+), nudges AS (
+    INSERT INTO application_nudges (user_id, job_id, kind, episode_key)
+    SELECT e.user_id, e.job_id, 'job_closed', e.closed_at
+    FROM expired e
+    JOIN notification_settings ns ON ns.user_id = e.user_id AND ns.enabled
+    WHERE e.closed_at > now() - make_interval(days => sqlc.arg(window_days)::int)
+    ON CONFLICT (user_id, job_id, kind, episode_key) DO NOTHING
+    RETURNING user_id, job_id, episode_key
+)
+SELECT count(*) FROM nudges;
 
 -- name: ListAutoApplySubmittedCandidates :many
 -- application_events rows auto-apply itself wrote on a successful, unattended
@@ -157,6 +184,7 @@ SELECT id FROM claimed ORDER BY created_at, id;
 SELECT n.id, n.user_id, n.job_id, n.kind,
        j.title, j.company, j.public_slug, j.url,
        (j.closed_at IS NULL)::bool AS job_open,
+       COALESCE(n.episode_key = j.closed_at, false)::bool AS job_closed_episode_current,
        COALESCE(ns.enabled, false)::bool AS notifications_enabled,
        COALESCE(ns.channels, '{}'::text[]) AS channels,
        ns.quiet_hours_start AS quiet_hours_start,
