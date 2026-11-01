@@ -4,7 +4,10 @@
 // dedup, content-hashing, and liveness probing keep working on the canonical URL.
 package outboundurl
 
-import "net/url"
+import (
+	"net/url"
+	"strings"
+)
 
 // utmSource is the fixed utm_source value stamped on every outbound link, mirroring
 // how the notification builders hardcode "telegram-bot"/"email" for internal links.
@@ -30,20 +33,21 @@ func Untag(tagged string) string {
 	if err != nil {
 		return tagged
 	}
-	q := u.Query()
-	if q.Get("utm_source") != utmSource {
+	ours := "utm_source=" + utmSource
+	kept, found := withoutParams(u.RawQuery, func(param string) bool { return param == ours })
+	if !found {
 		return tagged
 	}
-	q.Del("utm_source")
-	u.RawQuery = q.Encode()
+	u.RawQuery = kept
 	return u.String()
 }
 
-// Tag returns raw with utm_source=freehire.me set as a query parameter. It parses
-// the URL so an existing query string is preserved (the tag is appended with the
-// correct "?"/"&" separator) and any pre-existing utm_source is overwritten, keeping
-// attribution consistently ours. An empty or unparseable URL is returned unchanged
-// rather than mangled.
+// Tag returns raw with utm_source=freehire.me appended as a query parameter, after
+// removing any utm_source the source published, so attribution is consistently ours.
+// Every other byte of the query is kept as the source wrote it: re-encoding it through
+// url.Values reorders parameters and escapes characters a source may read raw — ESS
+// opens a posting from "?idp=3419120/" and shows an empty page for "?idp=3419120%2F"
+// (freehire#4003). An empty or unparseable URL is returned unchanged rather than mangled.
 func Tag(raw string) string {
 	if raw == "" {
 		return raw
@@ -52,8 +56,29 @@ func Tag(raw string) string {
 	if err != nil {
 		return raw
 	}
-	q := u.Query()
-	q.Set("utm_source", utmSource)
-	u.RawQuery = q.Encode()
+	kept, _ := withoutParams(u.RawQuery, func(param string) bool {
+		key, _, _ := strings.Cut(param, "=")
+		return key == "utm_source"
+	})
+	if kept != "" {
+		kept += "&"
+	}
+	u.RawQuery = kept + "utm_source=" + utmSource
 	return u.String()
+}
+
+// withoutParams drops the &-separated parameters of rawQuery that drop matches, leaving
+// the rest byte for byte and in order, and reports whether any was dropped.
+func withoutParams(rawQuery string, drop func(param string) bool) (string, bool) {
+	if rawQuery == "" {
+		return "", false
+	}
+	params := strings.Split(rawQuery, "&")
+	kept := params[:0]
+	for _, param := range params {
+		if !drop(param) {
+			kept = append(kept, param)
+		}
+	}
+	return strings.Join(kept, "&"), len(kept) != len(params)
 }
