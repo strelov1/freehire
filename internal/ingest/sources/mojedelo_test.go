@@ -135,6 +135,10 @@ func TestMojeDeloHydratesNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	if g.SalaryMin == nil || *g.SalaryMin != 1501 || *g.SalaryMax != 2000 || g.SalaryCurrency != "EUR" || g.SalaryPeriod != "month" {
 		t.Errorf("salary = %v-%v %q %q", g.SalaryMin, g.SalaryMax, g.SalaryCurrency, g.SalaryPeriod)
 	}
+	// endDate is the last day's local end (23:59:59 CET), so its UTC date is that day.
+	if g.ApplicationDeadline == nil || g.ApplicationDeadline.Format("2006-01-02") != "2026-11-07" {
+		t.Errorf("application deadline = %v, want 2026-11-07", g.ApplicationDeadline)
+	}
 	if g.ExperienceYearsMin == nil || *g.ExperienceYearsMin != 1 {
 		t.Errorf("experience = %v, want 1", g.ExperienceYearsMin)
 	}
