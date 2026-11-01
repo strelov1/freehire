@@ -76,6 +76,7 @@
     facetGroup('english_level', 'English');
     facetGroup('posting_language', 'Job language');
     facetGroup('relocation', 'Relocation');
+    facetGroup('perks', 'Perks');
 
     // Salary: currency + one chip for the range, however many ends are set.
     const salary: SummaryChip[] = facetChips('salary_currency');
