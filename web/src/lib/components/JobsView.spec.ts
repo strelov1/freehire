@@ -68,6 +68,17 @@ describe('personal job filters', () => {
     }
   });
 
+  it('starts a new reader on page one instead of retaining a deep offset', async () => {
+    render(JobsView, {
+      initial: { items: [], total: 100, hasMore: false },
+      initialParams: 'former_employers=true', currentPage: 4,
+    });
+    await tick();
+    session.set('id', 7);
+    await waitFor(() => expect(searchJobs).toHaveBeenCalled());
+    expect(searchJobs.mock.lastCall?.[2]).toBe(0);
+  });
+
   it('ignores feed-only filters in scoped searches', async () => {
     mountList('hide_seen=true&former_employers=true', { company_slug: 'acme' });
     const sort = screen.getAllByRole('combobox', { name: 'Sort jobs' })[0];
