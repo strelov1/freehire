@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/location"
@@ -118,7 +119,9 @@ func (s successfactors) detail(ctx context.Context, e CompanyEntry, entry sitema
 // string; the standard template also renders the place as a jobGeoLocation line, which is
 // the most complete form (it spells out the region), so it is preferred when present.
 // addressRegion is never used: the platform truncates it to four characters ("Québ",
-// "II d"). The structured addressCountry is returned as the posting's country, since in a
+// "II d"). Custom layouts may instead name a "Job Location" token. A complete list
+// of city/country pairs supplies every country; otherwise structured addressCountry
+// is returned as the posting's country, since in a
 // free-text line "CA" reads as California rather than Canada. A tenant whose custom layout
 // drops both the microdata and the rendered line states no place, and gets none.
 func sfLocation(root *html.Node) (string, []string) {
@@ -128,17 +131,62 @@ func sfLocation(root *html.Node) (string, []string) {
 	if n := firstByClass(root, "jobGeoLocation"); n != nil {
 		rendered = textContent(n)
 	}
+	if rendered == "" {
+		walk(root, func(n *html.Node) bool {
+			if rendered != "" {
+				return false
+			}
+			if !HasClass(n, "joblayouttoken-label") || strings.TrimSpace(strings.TrimSuffix(textContent(n), ":")) != "Job Location" {
+				return true
+			}
+			for sibling := n.NextSibling; sibling != nil; sibling = sibling.NextSibling {
+				if sibling.Type == html.ElementNode {
+					if sibling.Data == "span" {
+						rendered = textContent(sibling)
+					}
+					break
+				}
+			}
+			return false
+		})
+	}
 	place := firstNonEmpty(
 		rendered,
 		itempropAttr(root, "streetAddress"),
 		joinNonEmpty(itempropAttr(root, "addressLocality"), country),
 	)
 
+	// Some tenants publish repeated city/country pairs while microdata names only
+	// the primary country. Read every pair before falling back to that single value.
+	if countries := sfLocationCountries(place); len(countries) > 0 {
+		return place, countries
+	}
 	var countries []string
 	if c := location.NormalizeCountry(country); c != "" {
 		countries = []string{c}
 	}
 	return place, countries
+}
+
+// sfLocationCountries recognizes only a complete list of at least two city/country
+// pairs. A region or postcode at a country position declines the shape, preserving
+// the structured-country handling of single addresses such as Lachine, Québec, CA.
+func sfLocationCountries(place string) []string {
+	parts := strings.Split(place, ",")
+	if len(parts) < 4 || len(parts)%2 != 0 {
+		return nil
+	}
+	countries := make([]string, 0, len(parts)/2)
+	for i := 0; i < len(parts); i += 2 {
+		code := strings.TrimSpace(parts[i+1])
+		country := location.NormalizeCountry(code)
+		if strings.TrimSpace(parts[i]) == "" || len(code) != 2 || country == "" {
+			return nil
+		}
+		countries = append(countries, country)
+	}
+	slices.Sort(countries)
+	return slices.Compact(countries)
 }
 
 // sfJobIDPattern captures the leading digits of a job URL's last path segment, ignoring a

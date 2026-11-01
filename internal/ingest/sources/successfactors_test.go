@@ -504,3 +504,27 @@ func TestSuccessFactorsDetailReadsTheLocation(t *testing.T) {
 		})
 	}
 }
+
+func TestSuccessFactorsMultipleLocations(t *testing.T) {
+	const places = "Ljubljana-Sentvid, SI, Nordborg, DK, Sofia, BG, Zagreb, HR"
+	for _, page := range []string{
+		`<span class="jobGeoLocation">` + places + `</span><meta itemprop="addressCountry" content="BG">`,
+		`<span class="joblayouttoken-label">Job Location: </span><span class="rtltextaligneligible">` + places + `</span>`,
+	} {
+		place, countries := sfLocation(parseHTML(t, page))
+		if place != places {
+			t.Errorf("location = %q, want %q", place, places)
+		}
+		if !slices.Equal(countries, []string{"bg", "dk", "hr", "si"}) {
+			t.Errorf("countries = %v", countries)
+		}
+	}
+}
+
+func TestSuccessFactorsLocationDoesNotTreatRegionsAsCountryPairs(t *testing.T) {
+	page := `<span class="jobGeoLocation">Lachine, Québec, CA, H8R 1A1</span><meta itemprop="addressCountry" content="CA">`
+	_, countries := sfLocation(parseHTML(t, page))
+	if !slices.Equal(countries, []string{"ca"}) {
+		t.Errorf("countries = %v, want [ca]", countries)
+	}
+}
