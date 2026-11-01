@@ -41,13 +41,25 @@ WHERE ev.kind = 'stage_set'
 -- Settle every active tracked application whose listing closed, regardless of
 -- notification settings, application date, or closure age. The update guard is
 -- rechecked under the row lock, preserving outcomes set concurrently by a user.
+-- Lock matching jobs first so a concurrent reopen cannot leave a stale closure.
 -- Events and notification records commit with the transition. Only notifications
 -- have a recency window, so repairing old tracker entries does not flood inboxes.
-WITH expired AS (
+WITH locked AS (
+    SELECT j.id, j.closed_at
+    FROM jobs j
+    WHERE j.closed_at IS NOT NULL
+      AND EXISTS (
+          SELECT 1 FROM applications a
+          WHERE a.job_id = j.id
+            AND (a.stage IN ('preparing', 'applied', 'screening', 'responded', 'interview', 'offer')
+                 OR (a.stage IS NULL AND a.applied_at IS NOT NULL)))
+    ORDER BY j.id
+    FOR UPDATE OF j
+), expired AS (
     UPDATE applications a
     SET stage = 'expired'
-    FROM jobs j
-    WHERE j.id = a.job_id AND j.closed_at IS NOT NULL
+    FROM locked j
+    WHERE j.id = a.job_id
       AND (a.stage IN ('preparing', 'applied', 'screening', 'responded', 'interview', 'offer')
            OR (a.stage IS NULL AND a.applied_at IS NOT NULL))
     RETURNING a.id, a.user_id, a.job_id, a.company_slug, j.closed_at

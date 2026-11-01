@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/testdb"
@@ -113,5 +114,55 @@ func TestJobClosedEpisodeAfterReopening(t *testing.T) {
 				t.Fatalf("current = %v, want %v", info.JobClosedEpisodeCurrent, tc.current)
 			}
 		})
+	}
+}
+
+func TestSettlementWaitsForConcurrentReopen(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	userID := seedNudgeIntegrationUser(t, pool, "concurrent-reopen@example.test")
+	jobID := seedClosedJob(t, pool, "concurrent-reopen")
+	seedApplication(t, pool, userID, jobID, "interview")
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(context.Background())
+	if _, err := tx.Exec(ctx, "UPDATE jobs SET closed_at = NULL WHERE id = $1", jobID); err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	go func() { _, err := db.New(pool).SettleClosedApplications(ctx, 7); result <- err }()
+	// Observe the blocked statement before committing, so its snapshot predates
+	// the reopen. Without the job lock it expires the application immediately.
+	for {
+		var waiting bool
+		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '-- name: SettleClosedApplications%')`).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			break
+		}
+		select {
+		case err := <-result:
+			t.Fatalf("settlement did not wait for the reopening job: %v", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	var stage string
+	if err := pool.QueryRow(ctx, "SELECT stage FROM applications WHERE user_id = $1 AND job_id = $2", userID, jobID).Scan(&stage); err != nil {
+		t.Fatal(err)
+	}
+	if stage != "interview" {
+		t.Fatalf("stage = %s, want interview for a reopened listing", stage)
 	}
 }
