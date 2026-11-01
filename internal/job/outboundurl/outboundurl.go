@@ -58,7 +58,8 @@ func Tag(raw string) string {
 	}
 	kept, _ := withoutParams(u.RawQuery, func(param string) bool {
 		key, _, _ := strings.Cut(param, "=")
-		return key == "utm_source"
+		decoded, err := url.QueryUnescape(key)
+		return err == nil && decoded == "utm_source"
 	})
 	if kept != "" {
 		kept += "&"

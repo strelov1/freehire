@@ -2,6 +2,14 @@ package outboundurl
 
 import "testing"
 
+func TestTagEncodedSource(t *testing.T) {
+	got := Tag("https://example.com/?z=1&utm%5Fsource=indeed&a=x%2Fy")
+	want := "https://example.com/?z=1&a=x%2Fy&utm_source=freehire.me"
+	if got != want {
+		t.Fatalf("Tag() = %q, want %q", got, want)
+	}
+}
+
 func TestTag(t *testing.T) {
 	tests := []struct {
 		name string
