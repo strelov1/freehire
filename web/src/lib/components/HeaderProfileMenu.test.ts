@@ -60,9 +60,11 @@ describe('HeaderProfileMenu', () => {
     expect(SOURCE).toContain('closedOverlay(closeSelf)');
   });
 
-  it('shows a direct, labelled Sign-in action with no dropdown when signed out', () => {
+  it('shows an accessible icon-only Sign-in action with no dropdown when signed out', () => {
     const signedOutBranch = SOURCE.slice(SOURCE.indexOf('{:else}'));
-    expect(signedOutBranch).toMatch(/\/>\s*Sign in\s*<\/button>/);
+    expect(signedOutBranch).toContain('aria-label="Sign in"');
+    expect(signedOutBranch).toContain('title="Sign in"');
+    expect(signedOutBranch).toMatch(/<LogIn[^>]*aria-hidden="true"[^>]*\/>\s*<\/button>/);
     expect(signedOutBranch).toContain('onclick={signIn}');
     expect(signedOutBranch).not.toContain('aria-haspopup="menu"');
   });
