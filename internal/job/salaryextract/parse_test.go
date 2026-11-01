@@ -107,6 +107,7 @@ func TestParseLabeledSalary(t *testing.T) {
 			min:       120000, max: 120000, minSet: true, maxSet: true,
 			currency: "USD", period: "year", ok: true,
 		},
+		{name: "dashed 401k with a later amount still refuses", text: "Salary: $120,000 per year, 401k - employer match up to $5,000", countries: []string{"us"}},
 		{name: "scaled first bound before a dash still refuses", text: "Salary Range:\n100k - 150,000 per year"},
 		{name: "ungrouped trailing-currency second bound is not dropped", text: "Salary Range:\n27.510,00 € - 51090 € per year"},
 		{name: "unmarked scaled bounds are not read as thousands", text: "Salary Range:\n1,200k - 1,500k per year"},

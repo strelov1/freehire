@@ -32,9 +32,10 @@ var (
 	// is not a money token and is not a range bound, so it is not this.
 	reScaled = regexp.MustCompile(`(?i)(?:` +
 		`(?:(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*|\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|[-–—]\s*\d[\d.,]*)\s*[km]\b` +
-		// A scaled first bound needs an amount after its dash: "401k - employer
-		// matched" is a benefit, not a range.
-		`|\d[\d.,]*\s*[km]\b\s*[-–—]\s*(?:(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*)?\d)`)
+		// A scaled token before a dash refuses the line once any figure follows
+		// the dash: "401k - employer matched" is a benefit, but "100k - 150,000"
+		// and "401k - match up to $5,000" leave an amount we cannot place.
+		`|\d[\d.,]*\s*[km]\b\s*[-–—][^\d]*\d)`)
 	// reOpenRange is a dash-joined second bound reMoney does not read ("$50 - 60").
 	reOpenRange     = regexp.MustCompile(`(?i)(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
 	reTrailRange    = regexp.MustCompile(`(?i)\d[\d.,]+\s*(?:us\$|ca\$|au\$|nz\$|hk\$|a\$|c\$|s\$|rp|zł|£|€|\$|usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\s*[-–—]\s*\d`)
