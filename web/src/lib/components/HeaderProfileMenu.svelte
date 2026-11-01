@@ -135,9 +135,11 @@
     <button
       type="button"
       onclick={signIn}
-      class="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label="Sign in"
+      title="Sign in"
+      class="inline-flex size-9 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <LogIn class="size-4" aria-hidden="true" /> Sign in
+      <LogIn class="size-4" aria-hidden="true" />
     </button>
   {/if}
 </div>
