@@ -13,11 +13,12 @@ import (
 
 const clearJobATSAbsent = `-- name: ClearJobATSAbsent :exec
 UPDATE jobs SET ats_absent_at = NULL
-WHERE id = ANY($1::bigint[]) AND ats_absent_at IS NOT NULL
+WHERE id = ANY($1::bigint[]) AND ats_absent_at IS NOT NULL AND closed_at IS NULL
 `
 
 // Withdraw the absence stamp: the role turned up on the company's board after all.
 // Scoped to rows that carry a stamp so a run over a healthy company writes nothing.
+// Open postings only, for the same reason as the stamp.
 func (q *Queries) ClearJobATSAbsent(ctx context.Context, jobIds []int64) error {
 	_, err := q.db.Exec(ctx, clearJobATSAbsent, jobIds)
 	return err
@@ -191,12 +192,15 @@ func (q *Queries) ListJobGhostStamps(ctx context.Context, jobIds []int64) ([]Lis
 }
 
 const stampJobATSAbsent = `-- name: StampJobATSAbsent :exec
-UPDATE jobs SET ats_absent_at = now() WHERE id = ANY($1::bigint[])
+UPDATE jobs SET ats_absent_at = now()
+WHERE id = ANY($1::bigint[]) AND closed_at IS NULL
 `
 
 // Record that this posting's role was not found on its company's own board, as of now.
 // Re-stamped on every run, so the reader can ignore a stamp that has aged out and a
 // worker that has stopped falls silent instead of accusing from a frozen snapshot.
+// Open postings only: the worker holds a whole source before it writes, and a posting
+// that closed meanwhile is no longer judged (it carries no signal).
 func (q *Queries) StampJobATSAbsent(ctx context.Context, jobIds []int64) error {
 	_, err := q.db.Exec(ctx, stampJobATSAbsent, jobIds)
 	return err

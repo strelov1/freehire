@@ -753,6 +753,7 @@ type Querier interface {
 	ClearApplicationProgressByID(ctx context.Context, arg ClearApplicationProgressByIDParams) (ClearApplicationProgressByIDRow, error)
 	// Withdraw the absence stamp: the role turned up on the company's board after all.
 	// Scoped to rows that carry a stamp so a run over a healthy company writes nothing.
+	// Open postings only, for the same reason as the stamp.
 	ClearJobATSAbsent(ctx context.Context, jobIds []int64) error
 	// Reset a tracked job to the wishlist: drop stage and applied state, keep saved/viewed/notes.
 	// The application record stays: it holds the notes, and clearing progress is the
@@ -7798,6 +7799,8 @@ type Querier interface {
 	// Record that this posting's role was not found on its company's own board, as of now.
 	// Re-stamped on every run, so the reader can ignore a stamp that has aged out and a
 	// worker that has stopped falls silent instead of accusing from a frozen snapshot.
+	// Open postings only: the worker holds a whole source before it writes, and a posting
+	// that closed meanwhile is no longer judged (it carries no signal).
 	StampJobATSAbsent(ctx context.Context, jobIds []int64) error
 	// Record that a batch of jobs' content is embedded under the given model. Run in the
 	// same transaction as DeleteSemanticEntriesBatch on the success path, so a crash between
