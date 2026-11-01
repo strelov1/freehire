@@ -32,7 +32,7 @@ var (
 	// is not a money token and is not a range bound, so it is not this.
 	reScaled = regexp.MustCompile(`(?i)(?:` +
 		`(?:(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*|\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|[-–—]\s*\d[\d.,]*)\s*[km]\b` +
-		`|\d[\d.,]*\s*[km]\b\s*[-–—])`)
+		`|\d[\d.,]*\s*[km]\b\s*[-–—]\s*(?:(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*)?\d)`)
 	// reOpenRange is a dash-joined second bound reMoney does not read ("$50 - 60").
 	reOpenRange     = regexp.MustCompile(`(?i)(?:ca\$|au\$|a\$|c\$|nz\$|us\$|s\$|hk\$|rp|£|€|\$|zł)\s*\d[\d.,]*\+?\s*[-–—]\s*\d`)
 	reTrailRange    = regexp.MustCompile(`(?i)\d[\d.,]+\s*(?:us\$|ca\$|au\$|nz\$|hk\$|a\$|c\$|s\$|rp|zł|£|€|\$|usd|aud|cad|nzd|hkd|sgd|gbp|eur|pln|idr)\s*[-–—]\s*\d`)
@@ -42,7 +42,13 @@ var (
 		`(?:(?:[$£€]|zł|(?:us|ca|au|nz|hk|a|c|s)\$|rp)\s*)?` +
 		`(?:sign[\s-]?on\s+|signing\s+)?` +
 		`(?:bonus(?:es)?|benefits?)\b` +
-		`|(?:sign[\s-]?on|signing|bonus(?:es)?|benefits?)\b`)
+		// A benefit's own period leaves with it, or periodOf sees two.
+		`(?:\s*(?:per\s+(?:month|year|annum|hour|day)|monthly|annually|yearly|hourly|/\s*(?:month|year|yr|hour|hr|day)\b))?` +
+		`|\+?\s*(?:sign[\s-]?on|signing|bonus(?:es)?|benefits?)\b`)
+	// reRangeJoin ends a text that leaves the next amount as a range's second bound.
+	reRangeJoin = regexp.MustCompile(`(?i)(?:[-–—]|\bto)\s*$`)
+	// reRider follows a figure's "+" when the plus adds a bonus, not a floor.
+	reRider    = regexp.MustCompile(`(?i)^\s*(?:bonus|\d)`)
 	reDotGrp   = regexp.MustCompile(`^\d{1,3}(\.\d{3})+$`)
 	reComGrp   = regexp.MustCompile(`^\d{1,3}(,\d{3})+(\.\d+)?$`)
 	reEuDec    = regexp.MustCompile(`^\d{1,3}(\.\d{3})+,\d+$`)
@@ -94,7 +100,11 @@ func Parse(description string, countries []string) (Salary, bool) {
 				break
 			}
 		}
-		sal, ok := parseLine(withoutBenefit(body), countries)
+		pay, ok := withoutBenefit(body)
+		if !ok {
+			continue
+		}
+		sal, ok := parseLine(pay, countries)
 		if !ok {
 			continue
 		}
@@ -162,16 +172,26 @@ func benefitOnly(line string) bool {
 	if !reBenefitClause.MatchString(line) {
 		return false
 	}
-	return len(amountsIn(withoutBenefit(line))) == 0
+	pay, ok := withoutBenefit(line)
+	return ok && len(amountsIn(pay)) == 0
 }
 
-func withoutBenefit(line string) string {
-	return strings.TrimSpace(reBenefitClause.ReplaceAllString(line, " "))
+// withoutBenefit drops the benefit clauses from a line. A benefit amount that
+// stands where a range's second bound would ("$100,000 - $150,000 benefits")
+// cannot be told from that bound, so the line is refused.
+func withoutBenefit(line string) (string, bool) {
+	for _, loc := range reBenefitClause.FindAllStringIndex(line, -1) {
+		first := []rune(strings.TrimLeft(line[loc[0]:loc[1]], "+ "))[0]
+		if !unicode.IsLetter(first) && reRangeJoin.MatchString(line[:loc[0]]) {
+			return "", false
+		}
+	}
+	return strings.TrimSpace(reBenefitClause.ReplaceAllString(line, " ")), true
 }
 
 func figurePlus(body string) bool {
 	for _, loc := range reMoney.FindAllStringIndex(body, -1) {
-		if strings.HasSuffix(body[loc[0]:loc[1]], "+") {
+		if strings.HasSuffix(body[loc[0]:loc[1]], "+") && !reRider.MatchString(body[loc[1]:]) {
 			return true
 		}
 	}

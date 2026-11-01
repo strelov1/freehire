@@ -11,7 +11,9 @@ order — the same precedence `SetJobEnrichment` already applies once the model 
   or `Remuneration:`; `Salary Range:` is also accepted. A standalone label may
   precede its value on the next non-empty line, which must start with an amount.
   A next line whose only amount is a benefit (a sign-on bonus) is not that
-  value. A benefit amount beside a pay figure is dropped, and the pay figure stays.
+  value. A benefit amount beside a pay figure is dropped with its own period, and
+  the pay figure stays. A benefit amount where a range's second bound would stand
+  (`$100,000 - $150,000 benefits`) cannot be told from that bound and refuses the line.
   A number anywhere else in the posting is not a salary. SEEK and
   WhatJobs already put the source's own salary field on such a line; "Rates Negotiable"
   carries the label and no number, and yields nothing.
