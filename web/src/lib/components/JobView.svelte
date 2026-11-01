@@ -1073,11 +1073,28 @@
             This position is no longer accepting applications{closedOn ? ` (closed ${closedOn})` : ''}.
           </span>
         </p>
-        {#if hasSimilar}
-          <a href="#similar-jobs" class="font-medium text-brand-strong underline underline-offset-4">
-            See similar open jobs →
-          </a>
-        {/if}
+        <!-- The posting's own page stays reachable: a reader who doubts the closure (or
+             a crawl that read it wrong) has nowhere else to check, and the Apply buttons
+             that used to carry this link are withheld. A quiet link, not a CTA, so it does
+             not read as a way to apply; `nofollow` for the reason `applyCta` states. -->
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {#if job.url && !job.direct_apply}
+            <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the posting's own URL on its employer's site; there is no route to resolve --><a
+              href={job.url}
+              target="_blank"
+              rel="nofollow noopener noreferrer"
+              class="inline-flex items-center gap-1.5 font-medium text-muted-foreground hover:text-foreground"
+            >
+              <ExternalLink class="size-4 shrink-0" aria-hidden="true" />
+              View the original posting
+            </a>
+          {/if}
+          {#if hasSimilar}
+            <a href="#similar-jobs" class="font-medium text-brand-strong underline underline-offset-4">
+              See similar open jobs →
+            </a>
+          {/if}
+        </div>
       </div>
     {/if}
 
