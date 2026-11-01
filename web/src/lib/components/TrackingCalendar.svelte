@@ -192,7 +192,7 @@
           <span class="flex h-2 items-center justify-center gap-0.5" aria-hidden="true">
             {#if day.interviews.length}<span class="size-1.5 bg-brand" title={s.interview}></span>{/if}
             {#each marks.shown as e (e.id)}<span class="size-1.5 rounded-full {tone(e.kind)}" class:bg-current={e.observed} style="border: 1px solid currentColor"></span>{/each}
-            {#if marks.remaining}<span class="text-[10px] text-muted-foreground">+</span>{/if}
+            {#if marks.remaining}<span class="text-xs text-muted-foreground">+</span>{/if}
           </span>
         </button>
       {/each}

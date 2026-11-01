@@ -4,7 +4,7 @@
 //
 // SSR-safe and auth-agnostic (see UserResource): the load is a browser-only no-op and
 // the profile stays null for signed-out users. Mutations surface API errors to the
-// caller (a bad specialization or empty skills is a 400) so the UI can show them.
+// caller (a bad specialization or an over-cap set is a 400) so the UI can show them.
 
 import { api } from '#lib/api.js';
 import {
@@ -60,7 +60,8 @@ class ProfileStore extends UserResource<UserProfile | null> {
   /** Create-or-replace the profile. `seniorities` are the desired experience levels (may be
    *  empty). `excludedSkills`/`excludedSources`/`excludedCompanies` are what to avoid (each
    *  may be empty). `location` is the optional location-preferences block (null clears it).
-   *  Throws on a bad specialization, empty skills, an unknown seniority, an over-cap
+   *  Empty role and skill lists are allowed while filling in the profile. Throws
+   *  on a bad specialization, an unknown seniority, an over-cap
    *  excluded set, or an out-of-vocabulary location value (the caller shows the error). */
   async save(
     specializations: string[],

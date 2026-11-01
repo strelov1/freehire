@@ -14,21 +14,15 @@
   import { resumeStore } from '#lib/resume.svelte.js';
   import { experienceBankStore } from '#lib/experienceBank.svelte.js';
   import { screeningStore } from '#lib/screening.svelte.js';
-  import AccountPreferences from '#lib/components/AccountPreferences.svelte';
   import AccountSetupCard from '#lib/components/AccountSetupCard.svelte';
-  import ProfileForm from '#lib/components/ProfileForm.svelte';
   import States from '#lib/components/States.svelte';
   import { profileStore } from '#lib/profile.svelte.js';
-  import { handleCvDeleted, handleCvUploaded, handleSaved } from './actions';
   import { messages } from './messages';
 
   // The account shell (my/+layout) owns the container, auth gate, and noindex; this
-  // layout adds Profile's own section navigation and the shared load gate. Each
-  // section is its own route so it is linkable, bookmarkable, and survives a reload —
-  // see docs/superpowers/specs/2026-09-04-profile-section-routes-design.md. Before a
-  // profile exists there is nothing to navigate between, so the tab strip (and
-  // `children`) stay hidden on every one of these routes, same as the old single-page
-  // version.
+  // layout adds Profile's navigation and shared load gate. Visiting Profile creates
+  // an empty editable profile so every section can autosave independently, including
+  // before a candidate has chosen any roles or skills.
 
   let { children }: { children: Snippet } = $props();
 
@@ -62,8 +56,6 @@
   };
 
   const s = $derived(t(messages, locale()));
-  const profile = $derived(profileStore.profile);
-  const resumeMeta = $derived(resumeStore.meta);
   const completeness = $derived(profileCompleteness());
   const activeSectionId = $derived(activeRouteTab(page.url.pathname, SECTIONS, 'profile'));
   const tabs = $derived(
@@ -91,7 +83,14 @@
       // every field it did not carry. ensureLoaded swallows a failure, so `loaded` is
       // what says whether it arrived.
       await Promise.all([profileStore.ensureLoaded(), resumeStore.ensureLoaded()]);
-      status = resumeStore.loaded ? 'ready' : 'error';
+      if (!profileStore.loaded || !resumeStore.loaded) {
+        status = 'error';
+        return;
+      }
+      if (profileStore.profile === null) {
+        await profileStore.save([], [], [], [], [], [], null);
+      }
+      status = 'ready';
     } catch {
       status = 'error';
     }
@@ -177,21 +176,6 @@
   <States state="loading" />
 {:else if status === 'error'}
   <States state="error" message={s.loadError} onRetry={() => void load()} />
-{:else if profile === null}
-  <!-- Set-up: the inline form only; coverage appears once a profile exists. -->
-  <div class="w-full">
-    <ProfileForm
-      profile={null}
-      hasCv={resumeStore.present}
-      uploadedAt={resumeMeta?.uploaded_at}
-      onSaved={handleSaved}
-      onCvUploaded={handleCvUploaded}
-      onCvDeleted={handleCvDeleted}
-    />
-    <!-- Account-level (not candidate-profile) settings live here too, so they never wait on
-         a CV upload; once a profile exists they move to Profile's Location part and /my/account. -->
-    <AccountPreferences class="mt-6" />
-  </div>
 {:else}
   <!-- Above the tab strip: what is left to set up belongs to the account rather than to
        whichever section happens to be open — a card inside a section would be

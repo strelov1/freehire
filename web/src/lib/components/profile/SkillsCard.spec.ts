@@ -53,6 +53,7 @@ vi.mock('#lib/skillDictionary.js', async (importOriginal) => ({
 }));
 
 beforeEach(() => {
+  baseProfile.skills = ['go', 'python'];
   addSkill.mockReset().mockResolvedValue(baseProfile);
   removeSkill.mockReset().mockResolvedValue(baseProfile);
 });
@@ -62,6 +63,13 @@ afterEach(() => {
 });
 
 describe('SkillsCard', () => {
+  it('autosaves removal of the last skill', async () => {
+    baseProfile.skills = ['go'];
+    render(SkillsCard, { props: {} });
+    await fireEvent.click(screen.getByTitle('go'));
+    expect(removeSkill).toHaveBeenCalledWith('go');
+  });
+
   it('notifies onProfileChanged after removing a skill succeeds', async () => {
     const onProfileChanged = vi.fn();
     render(SkillsCard, { props: { onProfileChanged } });

@@ -290,7 +290,7 @@ func TestMergeSkills_GivesUpAfterRepeatedConflicts(t *testing.T) {
 	}
 }
 
-func TestSave_RejectsEmptySpecializations(t *testing.T) {
+func TestSave_AcceptsEmptySpecializations(t *testing.T) {
 	cases := []struct {
 		name string
 		in   []string
@@ -299,18 +299,18 @@ func TestSave_RejectsEmptySpecializations(t *testing.T) {
 		{"empty slice", []string{}},
 		{"only blanks", []string{"  ", ""}},
 		// The retired category is dropped like a blank, so a profile that carried
-		// nothing else has to choose again.
+		// nothing else keeps an empty role list.
 		{"only the retired management category", []string{"management"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
 			_, err := userprofile.New(repo).Save(context.Background(), 7, tc.in, []string{"go"}, nil, nil, nil, nil, nil)
-			if !errors.Is(err, userprofile.ErrEmptySpecializations) {
-				t.Errorf("err = %v, want ErrEmptySpecializations", err)
+			if err != nil {
+				t.Fatalf("Save incomplete profile: %v", err)
 			}
-			if repo.upsertCalled {
-				t.Error("repo.Upsert should not be called on empty specializations")
+			if !repo.upsertCalled {
+				t.Fatal("incomplete profile was not saved")
 			}
 		})
 	}
@@ -347,7 +347,7 @@ func TestSave_AcceptsSpecializationsUpToTheCap(t *testing.T) {
 	}
 }
 
-func TestSave_RejectsEmptySkills(t *testing.T) {
+func TestSave_AcceptsEmptySkills(t *testing.T) {
 	cases := []struct {
 		name string
 		in   []string
@@ -360,11 +360,11 @@ func TestSave_RejectsEmptySkills(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &fakeRepo{}
 			_, err := userprofile.New(repo).Save(context.Background(), 7, []string{"backend"}, tc.in, nil, nil, nil, nil, nil)
-			if !errors.Is(err, userprofile.ErrEmptySkills) {
-				t.Errorf("err = %v, want ErrEmptySkills", err)
+			if err != nil {
+				t.Fatalf("Save incomplete profile: %v", err)
 			}
-			if repo.upsertCalled {
-				t.Error("repo.Upsert should not be called on empty skills")
+			if !repo.upsertCalled {
+				t.Fatal("incomplete profile was not saved")
 			}
 		})
 	}

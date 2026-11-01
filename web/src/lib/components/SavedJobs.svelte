@@ -3,6 +3,7 @@
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
   import { t } from '#lib/i18n/t.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
+  import { markSaved } from '#lib/savedJobs.svelte.js';
   import { Paginator } from '#lib/paginated.svelte.js';
   import JobRow from './JobRow.svelte';
   import { LoadMore } from '#lib/ui/index.js';
@@ -13,12 +14,20 @@
   const s = $derived(t(messages, locale()).saved);
   const page = new Paginator(async (limit, offset) => {
     const slice = await api.listMyJobs('saved', limit, offset);
+    for (const item of slice.items) {
+      if (item.job) markSaved(item.job.public_slug);
+    }
     return slice;
   });
 
   $effect(() => {
     if (isAuthenticated()) void page.start();
   });
+
+  function removed(slug: string) {
+    page.items = page.items.filter((item) => item.job?.public_slug !== slug);
+    page.total = Math.max(0, page.total - 1);
+  }
 </script>
 
 {#if page.status === 'loading'}
@@ -33,7 +42,7 @@
          goes with it. The guard satisfies the type rather than a real case. -->
     {#each page.items.filter((i) => i.job) as item (item.id)}
       <li>
-        <JobRow job={must(item.job, 'item.job')} dimViewed={false} />
+        <JobRow job={must(item.job, 'item.job')} dimViewed={false} onUnsave={removed} />
       </li>
     {/each}
   </ul>

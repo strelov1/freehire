@@ -1018,7 +1018,7 @@
       aria-expanded={suggestOpen}
       aria-controls="role-suggestions"
       aria-activedescendant={activeIndex >= 0 ? `role-suggestion-${activeIndex}` : undefined}
-      class="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+      class={cn('min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground', !hero && 'placeholder:text-sm')}
     />
     {#if draft.text}
       <!-- Clearing is an explicit act, not typing, so it commits at once: the visitor

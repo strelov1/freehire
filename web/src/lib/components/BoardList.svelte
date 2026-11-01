@@ -71,10 +71,10 @@
 {:else}
   <ul bind:this={list} class="flex flex-col divide-y divide-border rounded-xl border border-border">
     {#each visible as item (item.id)}
-      <li class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-3 py-3 transition-colors hover:bg-accent/50 sm:flex sm:gap-4">
+      <li class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 transition-colors hover:bg-accent/50 sm:flex-nowrap sm:gap-4">
         <!-- The employer and role open the application; the stage control beside them
              does not, so it is a sibling rather than a child. -->
-        <BoardPreview {item} class="min-w-0 sm:flex-1">
+        <BoardPreview {item} class="min-w-0 flex-1">
         <button
           type="button"
           onclick={() => onopen(item)}
@@ -90,11 +90,11 @@
         </BoardPreview>
 
         {#if onremove}
-          <div class="col-start-2 row-start-1 sm:order-last">
+          <div class="sm:order-last">
             <BoardRemoveButton {item} {onremove} disabled={removing.includes(item.id)} />
           </div>
         {/if}
-        <div class="col-span-2 flex flex-wrap items-center gap-2 pl-7 sm:flex-nowrap sm:gap-3 sm:pl-0">
+        <div class="flex basis-full flex-wrap items-center gap-2 pl-7 sm:basis-auto sm:flex-nowrap sm:gap-3 sm:pl-0">
           <select
             value={item.stage ?? ''}
             onchange={(e) => onsetstage(item, e.currentTarget.value)}

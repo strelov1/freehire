@@ -61,13 +61,14 @@
 </script>
 
 <Dialog bind:open {title} {description} dismissible={!busy}>
+  <div class="flex flex-col gap-4">
   {#if children}
     {@render children()}
   {/if}
   {#if error}
-    <p class="mt-3 text-sm text-destructive">{error}</p>
+    <p role="alert" class="text-sm text-destructive">{error}</p>
   {/if}
-  <div class="mt-5 flex items-center justify-end gap-2">
+  <div class="flex items-center justify-end gap-2">
     <!-- md, not sm: the two buttons are the whole point of the dialog, and a bare ghost
          Cancel read as a stray word beside the confirm. -->
     <Button variant="outline" disabled={busy} onclick={() => (open = false)}>
@@ -76,5 +77,6 @@
     <Button {variant} disabled={busy} onclick={confirm}>
       {busy ? `${confirmLabel}…` : confirmLabel}
     </Button>
+  </div>
   </div>
 </Dialog>

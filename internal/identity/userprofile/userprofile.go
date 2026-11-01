@@ -1,6 +1,6 @@
 // Package userprofile is the single-per-user profile use case: a signed-in user records
-// their professional self — a non-empty set of specializations (job categories) and a
-// non-empty set of skills — and can fetch, save (create-or-replace), and clear that one
+// their professional self — specializations (job categories) and skills, which may be
+// empty while being filled in — and can fetch, save (create-or-replace), and clear that one
 // profile. It owns validation (the specialization vocabulary and cap, skill
 // normalization and cap); the Repository owns persistence and maps the no-row condition onto
 // ErrNotFound. There is at most one profile per user (keyed by user_id), so there is no
@@ -24,13 +24,8 @@ var (
 	// ErrInvalidSpecialization is a specialization outside the category vocabulary
 	// (mapped to 400).
 	ErrInvalidSpecialization = errors.New("userprofile: specialization is not a known category")
-	// ErrEmptySpecializations is a profile whose specializations are empty after
-	// normalization (mapped to 400).
-	ErrEmptySpecializations = errors.New("userprofile: at least one specialization is required")
 	// ErrTooManySpecializations is a specialization set past MaxSpecializations (mapped to 400).
 	ErrTooManySpecializations = errors.New("userprofile: too many specializations")
-	// ErrEmptySkills is a profile whose skills are empty after normalization (mapped to 400).
-	ErrEmptySkills = errors.New("userprofile: at least one skill is required")
 	// ErrTooManySkills is a wanted or avoided skill set past maxSkills (mapped to 400).
 	ErrTooManySkills = errors.New("userprofile: too many skills")
 	// ErrTooManySources is an excluded-sources set past maxExcludedCount (mapped to 400).
@@ -143,8 +138,8 @@ func (s *Service) Get(ctx context.Context, userID int64) (Profile, error) {
 }
 
 // Save validates and upserts the user's single profile. The specializations are
-// normalized (each a known category, deduped, non-empty, capped); the skills are
-// normalized and must be non-empty; the seniorities are normalized (each a known level,
+// normalized (each a known category, deduped, capped, may be empty); the skills are
+// normalized and may also be empty while the profile is being filled in; the seniorities are normalized (each a known level,
 // deduped, may be empty); the excluded skills are normalized (deduped, may be empty) and
 // any that also appear in skills are dropped — a skill cannot be both wanted and avoided,
 // and the wanted set wins; the excluded sources and excluded companies are each
@@ -157,7 +152,7 @@ func (s *Service) Save(ctx context.Context, userID int64, specializations, skill
 	if err != nil {
 		return Profile{}, err
 	}
-	normalized, err := normalizeSkills(skills)
+	normalized, err := normalizeSkillList(skills)
 	if err != nil {
 		return Profile{}, err
 	}
@@ -284,16 +279,15 @@ func mergeSkills(held, additions, excluded []string) ([]string, bool) {
 
 // normalizeSpecializations trims each value, drops blanks, deduplicates (preserving
 // first-seen order), and checks membership in the controlled category vocabulary (the same
-// enum the rest of the app validates against). It returns ErrEmptySpecializations if nothing
-// remains, ErrInvalidSpecialization for an unknown category, and ErrTooManySpecializations
-// past MaxSpecializations — mirroring normalizeSkills.
+// enum the rest of the app validates against). Empty is valid for an incomplete profile.
+// It returns ErrInvalidSpecialization for an unknown category and
+// ErrTooManySpecializations past MaxSpecializations.
 //
 // The retired `management` category (vocab.RetiredCategoryManagement) is dropped like a
 // blank rather than refused: 829 stored profiles carried it when it was retired, and the
 // form sends the stored list back on every save, so refusing it would leave those users
 // unable to save anything until they found and removed a value the picker no longer
-// shows. A profile that carried nothing else fails as an empty one, which asks the user
-// to choose — the honest outcome, since there is no category to keep for them.
+// shows. A profile that carried nothing else keeps an empty role list.
 func normalizeSpecializations(specializations []string) ([]string, error) {
 	out := make([]string, 0, len(specializations))
 	seen := make(map[string]struct{}, len(specializations))
@@ -311,9 +305,6 @@ func normalizeSpecializations(specializations []string) ([]string, error) {
 		seen[spec] = struct{}{}
 		out = append(out, spec)
 	}
-	if len(out) == 0 {
-		return nil, ErrEmptySpecializations
-	}
 	if len(out) > MaxSpecializations {
 		return nil, ErrTooManySpecializations
 	}
@@ -322,8 +313,7 @@ func normalizeSpecializations(specializations []string) ([]string, error) {
 
 // normalizeSeniorities trims each value, drops blanks, deduplicates (preserving
 // first-seen order), and checks membership in the controlled seniority vocabulary.
-// Unlike normalizeSpecializations, an empty result is valid — a profile need not state a
-// level — and there is no cap: the vocabulary itself only has 8 values.
+// An empty result is valid, and there is no cap: the vocabulary itself has only 8 values.
 func normalizeSeniorities(seniorities []string) ([]string, error) {
 	out := make([]string, 0, len(seniorities))
 	seen := make(map[string]struct{}, len(seniorities))
@@ -340,19 +330,6 @@ func normalizeSeniorities(seniorities []string) ([]string, error) {
 		}
 		seen[level] = struct{}{}
 		out = append(out, level)
-	}
-	return out, nil
-}
-
-// normalizeSkills normalizes the wanted skills and additionally requires the set to be
-// non-empty — a profile without skills has no meaning.
-func normalizeSkills(skills []string) ([]string, error) {
-	out, err := normalizeSkillList(skills)
-	if err != nil {
-		return nil, err
-	}
-	if len(out) == 0 {
-		return nil, ErrEmptySkills
 	}
 	return out, nil
 }

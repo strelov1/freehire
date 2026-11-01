@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { Bookmark, EyeOff, History, Target } from '@lucide/svelte';
+  import { Bookmark, Eye, EyeOff } from '@lucide/svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { TabStrip, tabStripId } from '#lib/ui/index.js';
@@ -16,15 +16,14 @@
   // The account shell (my/+layout) owns the container, auth gate, and noindex;
   // this layout adds only Activity's own sub-navigation. Each view is its own URL
   // so it is linkable, bookmarkable, and survives a reload. Saved is the index
-  // route; History/Matches/Hidden get their own paths.
+  // route; Viewed and Hidden get their own paths.
   //
   // The strip is the same underline `TabStrip` every other account section navigates
   // with, icons included — a sibling section of one account area reading differently
   // looks like a bug rather than a choice.
   const SECTIONS = [
     { id: 'saved', href: '/my/activity', icon: Bookmark },
-    { id: 'history', href: '/my/activity/history', icon: History },
-    { id: 'matches', href: '/my/activity/matches', icon: Target },
+    { id: 'history', href: '/my/activity/history', icon: Eye },
     { id: 'hidden', href: '/my/activity/hidden', icon: EyeOff },
   ] as const;
   const PANEL_ID = 'activity-tabpanel';
