@@ -607,6 +607,23 @@ const INDUSTRIES: FacetOption[] = options(INDUSTRY_VALUES, INDUSTRY_LABELS);
 // The perks the description states (internal/dict/perks); values and labels are both
 // generated from the dictionary, so a chip cannot offer a perk it never writes.
 const PERKS: FacetOption[] = options(PERK_VALUES, PERK_LABELS);
+// The words people type for a perk that its label does not contain, so the filter search
+// finds "pension" under Retirement Plan and "pto" under Generous Paid Time Off.
+const PERK_ALIASES: Record<string, readonly string[]> = {
+  generous_pto: ['pto', 'vacation', 'holiday', 'annual leave', 'time off'],
+  four_day_week: ['4 day week', 'four-day week'],
+  '401k_match': ['401k', 'retirement match', 'employer match'],
+  parental_leave: ['maternity', 'paternity', 'family leave'],
+  retirement_plan: ['pension', '401k', 'superannuation', 'rrsp'],
+  tuition_reimbursement: ['tuition', 'education assistance'],
+  unlimited_pto: ['unlimited vacation', 'unlimited holiday'],
+  health_insurance: ['medical', 'healthcare', 'private medical'],
+  mental_health: ['therapy', 'counseling', 'wellbeing'],
+  learning_budget: ['training budget', 'conference', 'l&d', 'professional development'],
+  home_office_stipend: ['wfh stipend', 'remote stipend', 'home office'],
+  sabbatical: ['career break'],
+  sign_on_bonus: ['signing bonus', 'joining bonus'],
+};
 
 // The job-reality classes (internal/jobreality) — a small closed set, spelled out
 // like CURRENCY (not a generated values array). Offered excludable so the common use
@@ -882,7 +899,7 @@ export const FACETS: FacetDef[] = [
   { param: 'salary_currency', label: 'Currency', control: 'pills', options: CURRENCY, excludable: true },
   // Include-only: a posting without a perk is one whose description does not MENTION it,
   // so "exclude 401(k) matching" would hide jobs that may well offer it.
-  { param: 'perks', label: 'Perks mentioned', control: 'pills', options: PERKS, excludable: false, hasAndOr: true },
+  { param: 'perks', label: 'Perks mentioned', control: 'pills', options: PERKS, excludable: false, hasAndOr: true, searchAliases: PERK_ALIASES },
   { param: 'company_slug', label: 'Company', control: 'remote', excludable: true, placeholder: 'Search companies', remote: companySearch },
   { param: 'source_type', label: 'Source type', control: 'pills', options: SOURCE_TYPE, excludable: true },
   { param: 'clearance_levels', label: 'Clearance level', control: 'pills', options: CLEARANCE_LEVEL, excludable: true },

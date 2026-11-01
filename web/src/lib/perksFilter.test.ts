@@ -28,6 +28,10 @@ describe('perks facet', () => {
     expect(filtersFromParams(p).facets.perks).toEqual(f.facets.perks);
   });
 
+  it('names every perk in the search aliases', () => {
+    expect(Object.keys(def?.searchAliases ?? {}).toSorted()).toEqual([...PERK_VALUES].toSorted());
+  });
+
   it('has a rail pane under Pay & Benefits', () => {
     const entry = RAIL.find((e) => e.facetParam === 'perks');
     expect(entry?.label).toBe('Benefits & Perks');

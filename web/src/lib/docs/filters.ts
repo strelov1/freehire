@@ -60,6 +60,7 @@ const VALUES_NOTE: Record<string, string> = {
   clearance_levels:
     '. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one',
   category: '. The retired value management is still accepted and answered as role_type=people_manager',
+  perks: ' — matched from the description; a posting without one does not mention it, which is not the same as not offering it',
 };
 
 /** Every string facet: the SPA-derived rows plus the API-only ones. */
