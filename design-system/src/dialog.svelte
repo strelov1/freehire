@@ -86,8 +86,8 @@
 
 <dialog
   bind:this={el}
-  aria-labelledby={title ? titleId : undefined}
-  aria-describedby={description ? descriptionId : undefined}
+  aria-labelledby={title ? titleId : description ? descriptionId : undefined}
+  aria-describedby={title && description ? descriptionId : undefined}
   {onclose}
   {oncancel}
   {onclick}

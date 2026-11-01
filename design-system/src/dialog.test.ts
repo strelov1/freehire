@@ -9,6 +9,14 @@ const slot = (html: string) => createRawSnippet(() => ({ render: () => html }));
 const open = (open: boolean) => ({ open, children: slot('<p>body</p>') });
 
 describe('Dialog', () => {
+  it('uses the description as its accessible name when no title is provided', () => {
+    const dialog = render(Dialog, {
+      ...open(true),
+      description: 'Review your application before withdrawing.',
+    });
+    expect(dialog.getByRole('dialog', { name: 'Review your application before withdrawing.' })).toBeTruthy();
+  });
+
   beforeEach(() => {
     document.body.style.overflow = 'scroll';
   });

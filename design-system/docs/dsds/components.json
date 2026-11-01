@@ -173,7 +173,7 @@
       "id": "component.dialog",
       "type": "component",
       "name": "Dialog",
-      "description": "Native <dialog> opened with showModal(), so the browser supplies the top layer, focus trap, inert background and Escape-to-close. Uses a compact content-sized card on every viewport with screen-edge margins and bounded scrolling. Adds the backdrop styling, a scroll lock and an in-card close button with reserved space even in title-less descriptions. Stacks without a z-index — the top layer is above every one of them.",
+      "description": "Native <dialog> opened with showModal(), so the browser supplies the top layer, focus trap, inert background and Escape-to-close. Uses a compact content-sized card on every viewport with screen-edge margins and bounded scrolling. Adds the backdrop styling, a scroll lock and an in-card close button with reserved space even in title-less descriptions. A description-only dialog uses that text as its accessible name. Stacks without a z-index — the top layer is above every one of them.",
       "source": {
         "file": "../../src/dialog.svelte"
       },
