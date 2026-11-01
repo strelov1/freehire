@@ -5,18 +5,8 @@
 // registered device (via internal/platform/testdb's throwaway, fully-migrated Postgres),
 // and soft-skips cleanly when the account has none.
 //
-// job_closed is deliberately the kind exercised here: its actionable() re-check
-// (internal/engage/nudge/nudge.go) only requires the application to still sit in a
-// silence-accruing stage — unlike follow_up/interview_prep it does not depend on
-// re-deriving elapsed silence or a live stage_set event. The job's closed_at is
-// seeded outside JobClosedWindowDays (the default 7-day MATCH window) so
-// Runner.match's own ListJobClosedCandidates scan never picks up this
-// application — avoiding its auto-expire side effect (match() drives the stage
-// to `expired` for every job-closed candidate it finds, which would flip the
-// very stage actionable() re-checks before delivery even runs). The nudge here
-// is inserted directly as an already-pending application_nudges row instead,
-// so only Runner.deliver (claim → actionable re-check → PushNotifier.Send) is
-// exercised, exactly what this task is about.
+// The listing is old enough to skip new closure notifications. Tracker settlement
+// still expires the application; the seeded pending notification must survive it.
 //
 // Run with: go test -tags=integration ./internal/engage/nudge/
 // Requires Docker (testcontainers spins up a throwaway Postgres with the
@@ -56,8 +46,7 @@ func seedNudgeIntegrationUser(t *testing.T, pool *pgxpool.Pool, email string) in
 }
 
 // seedClosedJob inserts a job that closed well outside the default
-// JobClosedWindowDays (7 days), so Runner.match's own candidate scan never
-// picks it up (see the package doc above for why that matters here).
+// JobClosedWindowDays (7 days), so settlement does not create a new notification.
 func seedClosedJob(t *testing.T, pool *pgxpool.Pool, externalID string) int64 {
 	t.Helper()
 	var id int64

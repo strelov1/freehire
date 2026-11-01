@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/engage/notify"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -22,12 +21,11 @@ type fakeStore struct {
 
 	followUp        []db.ListFollowUpCandidatesRow
 	interviewPrep   []db.ListInterviewPrepCandidatesRow
-	jobClosed       []db.ListJobClosedCandidatesRow
+	jobClosed       int64
 	autoApplySubmit []db.ListAutoApplySubmittedCandidatesRow
 	autoApplyBlock  []db.ListAutoApplyBlockedCandidatesRow
 	autoApplyFail   []db.ListAutoApplyFailedCandidatesRow
 	recorded        []db.RecordNudgeParams
-	tracked         []db.TrackJobParams
 
 	due []int64
 	row db.GetNudgeForDeliveryRow
@@ -50,7 +48,7 @@ func (s *fakeStore) ListFollowUpCandidates(context.Context, int32) ([]db.ListFol
 func (s *fakeStore) ListInterviewPrepCandidates(context.Context, int32) ([]db.ListInterviewPrepCandidatesRow, error) {
 	return s.interviewPrep, nil
 }
-func (s *fakeStore) ListJobClosedCandidates(context.Context, int32) ([]db.ListJobClosedCandidatesRow, error) {
+func (s *fakeStore) SettleClosedApplications(context.Context, int32) (int64, error) {
 	return s.jobClosed, nil
 }
 func (s *fakeStore) ListAutoApplySubmittedCandidates(context.Context, int32) ([]db.ListAutoApplySubmittedCandidatesRow, error) {
@@ -70,10 +68,6 @@ func (s *fakeStore) RecordNudge(_ context.Context, arg db.RecordNudgeParams) (in
 	}
 	s.recorded = append(s.recorded, arg)
 	return 1, nil
-}
-func (s *fakeStore) TrackJob(_ context.Context, arg db.TrackJobParams) (db.TrackJobRow, error) {
-	s.tracked = append(s.tracked, arg)
-	return db.TrackJobRow{}, nil
 }
 func (s *fakeStore) ClaimDueNudges(context.Context, db.ClaimDueNudgesParams) ([]int64, error) {
 	return s.due, nil
@@ -240,56 +234,29 @@ func TestMatch_InterviewPrep_RecordsCandidate(t *testing.T) {
 
 // --- MATCH: job-closed ---------------------------------------------------------
 
-func TestMatch_JobClosed_ActiveApplicationIsRecorded(t *testing.T) {
-	closedAt := fixedNow.Add(-2 * time.Hour)
-	store := &fakeStore{jobClosed: []db.ListJobClosedCandidatesRow{
-		{UserID: 5, JobID: pgtype.Int8{Int64: 6, Valid: true}, Stage: pgtype.Text{String: "screening", Valid: true}, ClosedAt: ts(closedAt)},
-	}}
-	r := newRunner(store, &fakeNotifier{})
-
-	stats, err := r.Run(context.Background())
+func TestMatch_JobClosed_CountsAtomicallyRecordedNotifications(t *testing.T) {
+	store := &fakeStore{jobClosed: 1}
+	stats, err := newRunner(store, &fakeNotifier{}).Run(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(store.recorded) != 1 {
-		t.Fatalf("recorded = %d, want 1", len(store.recorded))
-	}
-	got := store.recorded[0]
-	if got.UserID != 5 || got.JobID != 6 || got.Kind != KindJobClosed {
-		t.Errorf("recorded = %+v, want (5,6,job_closed)", got)
-	}
-	if !got.EpisodeKey.Time.Equal(closedAt) {
-		t.Errorf("episode key = %v, want closed_at %v", got.EpisodeKey.Time, closedAt)
-	}
 	if stats.Matched != 1 {
-		t.Errorf("stats.Matched = %d, want 1", stats.Matched)
+		t.Fatalf("matched = %d, want 1", stats.Matched)
 	}
-	if len(store.tracked) != 1 {
-		t.Fatalf("tracked = %d, want 1 (the board auto-settles alongside the nudge)", len(store.tracked))
-	}
-	tracked := store.tracked[0]
-	if tracked.UserID != 5 || tracked.JobID != 6 || tracked.Stage.String != "expired" || !tracked.Stage.Valid {
-		t.Errorf("tracked = %+v, want (5,6,expired)", tracked)
-	}
-	if tracked.EventSource != appevent.SourceSystem {
-		t.Errorf("event source = %q, want %q", tracked.EventSource, appevent.SourceSystem)
+	if len(store.recorded) != 0 {
+		t.Fatal("closure notifications must be recorded by the settlement query")
 	}
 }
 
-func TestMatch_JobClosed_SettledApplicationIsNotRecorded(t *testing.T) {
-	store := &fakeStore{jobClosed: []db.ListJobClosedCandidatesRow{
-		{UserID: 5, JobID: pgtype.Int8{Int64: 6, Valid: true}, Stage: pgtype.Text{String: "withdrawn", Valid: true}, ClosedAt: ts(fixedNow)},
-	}}
-	r := newRunner(store, &fakeNotifier{})
-
-	if _, err := r.Run(context.Background()); err != nil {
+func TestDeliver_JobClosed_DeliversAfterAutomaticExpiry(t *testing.T) {
+	chat := int64(42)
+	store := &fakeStore{due: []int64{1}, row: deliveryRow(KindJobClosed, "expired", 0, true, false, []string{"telegram"}, &chat, "")}
+	stats, err := newRunner(store, &fakeNotifier{}).Run(context.Background())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if len(store.recorded) != 0 {
-		t.Errorf("recorded = %d, want 0 (a settled application does not care that the listing closed)", len(store.recorded))
-	}
-	if len(store.tracked) != 0 {
-		t.Errorf("tracked = %d, want 0 (nothing to auto-settle on an already-settled application)", len(store.tracked))
+	if stats.Delivered != 1 {
+		t.Fatalf("delivered = %d, want 1", stats.Delivered)
 	}
 }
 

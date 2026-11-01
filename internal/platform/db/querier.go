@@ -4557,12 +4557,6 @@ type Querier interface {
 	// requested bucket (day/week/month) so empty buckets still appear as zeros. `unit`
 	// is a caller-validated date_trunc field (day/week/month), never raw user input.
 	ListJobActivity(ctx context.Context, arg ListJobActivityParams) ([]ListJobActivityRow, error)
-	// Jobs that closed recently while the tracking user still has an application in a
-	// non-terminal stage on them (any stage silence.ThresholdDays accrues
-	// silence for — the same active/terminal split every other silence reader uses).
-	// Bounded to a recency window on closed_at for the same first-deploy reason as
-	// the other two candidate scans.
-	ListJobClosedCandidates(ctx context.Context, windowDays int32) ([]ListJobClosedCandidatesRow, error)
 	// The open postings the anchor's OWNER represents — the "N openings across cities" list for a
 	// collapsed role. Each copy keeps its own location and apply URL, so a seeker picks their city;
 	// the owner itself is included (it is one of the openings). Ordered by location.
@@ -7741,6 +7735,12 @@ type Querier interface {
 	// username means another account already holds it. The caller resolves either
 	// case by re-reading GetUsernameByUser.
 	SetUsernameIfAbsent(ctx context.Context, arg SetUsernameIfAbsentParams) (int64, error)
+	// Settle every active tracked application whose listing closed, regardless of
+	// notification settings, application date, or closure age. The update guard is
+	// rechecked under the row lock, preserving outcomes set concurrently by a user.
+	// Events and notification records commit with the transition. Only notifications
+	// have a recency window, so repairing old tracker entries does not flood inboxes.
+	SettleClosedApplications(ctx context.Context, windowDays int32) (int64, error)
 	// Lift a hide. Keyed on the caller, so it can only ever remove the caller's own mark.
 	ShowBuddyApplication(ctx context.Context, arg ShowBuddyApplicationParams) error
 	// The trailing 90 UTC calendar days of recorded daily status (today and the 89
