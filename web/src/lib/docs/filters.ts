@@ -38,14 +38,6 @@ const API_ONLY_FACETS: FilterRow[] = [
   { param: 'company_size', label: 'Company size', values: '1-10, 11-50, 51-200, 201-500, 501-1000, 1000+' },
   { param: 'education_level', label: 'Education level', values: 'none, bachelor, master, phd' },
   { param: 'salary_period', label: 'Salary period', values: 'year, month, day, hour' },
-  // API-only until the SPA's clearance control moves from the requires_clearance toggle
-  // to these chips. Values mirror vocab.ClearanceLevelValues plus the reserved none.
-  {
-    param: 'clearance_levels',
-    label: 'Security clearance level',
-    values:
-      'none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one',
-  },
   {
     param: 'perks',
     label: 'Perks mentioned',
@@ -71,6 +63,8 @@ const VALUES_OVERRIDE: Record<string, string> = {
 // longer a category, but an integration built before its retirement still sends it, and
 // the filter answers it rather than matching nothing (search.retiredCategory).
 const VALUES_NOTE: Record<string, string> = {
+  clearance_levels:
+    '. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one',
   category: '. The retired value management is still accepted and answered as role_type=people_manager',
 };
 

@@ -146,11 +146,11 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `salary_currency` | Currency | USD, EUR, GBP, RUB |
 | `company_slug` | Company | Open vocabulary — call /jobs/facets for live values |
 | `source_type` | Source type | ats, company, aggregator, social |
+| `clearance_levels` | Clearance level | none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one |
 | `source` | Source | Open vocabulary — call /jobs/facets for live values |
 | `company_size` | Company size | 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+ |
 | `education_level` | Education level | none, bachelor, master, phd |
 | `salary_period` | Salary period | year, month, day, hour |
-| `clearance_levels` | Security clearance level | none, confidential, secret, top_secret, ts_sci, public_trust, interim, other. none = no detected clearance requirement (the same postings as requires_clearance=false); other = a non-US scheme (UK SC/DV, AU NV1, NATO) or a clearance stated with no level; interim is stated beside a level, not instead of one |
 | `perks` | Perks mentioned | generous_pto, four_day_week, 401k_match, parental_leave, retirement_plan, tuition_reimbursement, unlimited_pto, health_insurance, mental_health, learning_budget, home_office_stipend, sabbatical, sign_on_bonus — matched from the description; a posting without one does not mention it |
 
 ### Numeric & boolean filters

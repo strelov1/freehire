@@ -36,7 +36,7 @@
   // Merge the live distribution counts into the static registry options.
   const options = $derived.by(() => {
     const dist = counts?.facets?.[param];
-    return dist ? baseOptions.map((o) => ({ ...o, count: dist[o.value] ?? 0 })) : baseOptions;
+    return dist ? baseOptions.map((o) => (o.uncounted ? o : { ...o, count: dist[o.value] ?? 0 })) : baseOptions;
   });
 </script>
 

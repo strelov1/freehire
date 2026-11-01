@@ -140,8 +140,7 @@ function buildJobCatalog(): FilterSearchHit[] {
     actionHit('relocation', 'AI interviews', 'Hide employers reported to interview with AI', 'hide-ai'),
   );
   hits.push(actionHit('relocation', 'Auto-apply', 'Auto-apply available', 'auto-apply'));
-  hits.push(actionHit('relocation', 'Security clearance', 'Security clearance: Hide', 'clearance:hide'));
-  hits.push(actionHit('relocation', 'Security clearance', 'Security clearance: Only', 'clearance:only'));
+  pushFacet(hits, 'relocation', 'clearance_levels', undefined, 'Security clearance');
   return hits;
 }
 

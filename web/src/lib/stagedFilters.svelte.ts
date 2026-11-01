@@ -9,7 +9,6 @@
 import type { FacetStore } from './facets';
 import type { UserProfile } from './types';
 import {
-  type ClearanceFilter,
   activeFilterCount,
   emptyFacet,
   emptyFilters,
@@ -95,10 +94,6 @@ export class StagedFilters implements FacetStore {
 
   setAutoApplyAvailable(on: boolean): void {
     this.#f = { ...this.#f, autoApplyAvailable: on };
-  }
-
-  setClearance(v: ClearanceFilter): void {
-    this.#f = { ...this.#f, clearance: v };
   }
 
   setPostedWithinDays(n: number | null): void {
