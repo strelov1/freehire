@@ -251,7 +251,7 @@ WHERE j.closed_at IS NULL
   AND j.duplicate_of IS NULL
   AND NOT j.is_private
   AND (SELECT payload FROM previous) IS DISTINCT FROM $1::jsonb
-ON CONFLICT (job_id) DO UPDATE SET created_at = now()
+ON CONFLICT (job_id) DO UPDATE SET id = DEFAULT, created_at = now()
 `
 
 type UpsertApplyFormParams struct {
@@ -286,6 +286,9 @@ type UpsertApplyFormParams struct {
 // catch a job that changed again during the run — and this write does not touch jobs, so
 // an old entry for a job whose form arrived after the rebuild read it would be cleared
 // with the new count never indexed. Moving created_at is what marks it as newer.
+// A changed form also replaces the entry's identity. A drain that already claimed the
+// old id can finish (or fail) only that old generation, leaving this update pending.
+// Keep its lease so a second drain cannot overtake the in-flight index write.
 func (q *Queries) UpsertApplyForm(ctx context.Context, arg UpsertApplyFormParams) error {
 	_, err := q.db.Exec(ctx, upsertApplyForm, arg.Payload, arg.JobID, arg.Provider)
 	return err

@@ -396,6 +396,31 @@ func TestUpsertApplyFormQueuesSearch(t *testing.T) {
 		}
 	})
 
+	t.Run("completing an old claim preserves a changed form", func(t *testing.T) {
+		truncate(t, pool)
+		job := insertJob(t, pool, "gh-changed-in-flight")
+		clearOutbox(t)
+		upsert(t, job, "first")
+		claimed, err := q.ClaimSearchOutboxBatch(ctx, ClaimSearchOutboxBatchParams{LeaseSeconds: 3600, BatchSize: 10})
+		if err != nil || len(claimed) != 1 {
+			t.Fatalf("claim: %v, %v", claimed, err)
+		}
+		upsert(t, job, "second")
+		if err := q.DeleteSearchOutboxEntries(ctx, []int64{claimed[0].ID}); err != nil {
+			t.Fatal(err)
+		}
+		if !searchOutboxHas(t, pool, job) {
+			t.Fatal("old claim deleted the changed form's pending update")
+		}
+		again, err := q.ClaimSearchOutboxBatch(ctx, ClaimSearchOutboxBatchParams{LeaseSeconds: 3600, BatchSize: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(again) != 0 {
+			t.Fatal("new generation must retain the in-flight write's lease")
+		}
+	})
+
 	t.Run("a closed job is not queued", func(t *testing.T) {
 		truncate(t, pool)
 		job := insertJob(t, pool, "gh-q3")
