@@ -66,8 +66,8 @@ The verdict is TIME-DEPENDENT, so it is computed on read, never stored.
   `absenceStampMaxAgeDays = 14` (classify.go:61-66), so a stopped worker falls silent rather
   than accusing the catalogue from a frozen snapshot; the worker therefore re-stamps a still-
   absent posting on every run instead of leaving the stamp alone. **A stamp is the latest
-  run's verdict and nothing else**: every stamped posting a run does not re-stamp — present,
-  skipped or gated — is cleared, so a rule tightened after a stamp was written stops
+  run's verdict and nothing else**: every stamped OPEN posting a run does not re-stamp —
+  present, skipped or gated — is cleared (a closed one carries no signal and is not re-read), so a rule tightened after a stamp was written stops
   accusing on the next run. A posting already unstamped and not stamped now produces no write.
 - **Outcome judgement reuses `internal/application/userjob`'s silence ladder** (evidence.go:49-52,
   68-77). An application counts as silent only when `userjob.SilenceStateFor` returns

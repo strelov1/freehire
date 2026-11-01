@@ -21,8 +21,10 @@ them are absent. A board that carries none of what a source lists is not evidenc
 source, and a batch that is mostly absent describes the company — an agency, or a board we
 only partly crawl — rather than any one posting.
 
-A stamp is the latest run's verdict: a stamped job that a run does not stamp again SHALL lose
-its stamp. A stamp older than 14 days SHALL be ignored. The worker re-stamps on every run, so
+A stamp on an open job is the latest run's verdict: a stamped open aggregator job that a run
+does not stamp again SHALL lose its stamp. A closed job is not re-judged and keeps whatever stamp
+it had, which is harmless — a closed job carries no ghost signal, and a stamp it still holds if it
+reopens ages out within 14 days or is replaced by the next run's verdict on the reopened job. A stamp older than 14 days SHALL be ignored. The worker re-stamps on every run, so
 an expired stamp means the worker has stopped — and a stopped worker must fall silent rather
 than keep accusing the catalogue from a frozen snapshot.
 
