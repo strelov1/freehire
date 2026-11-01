@@ -3,9 +3,9 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { SvelteURLSearchParams } from 'svelte/reactivity';
-  import { Briefcase, Tags } from '@lucide/svelte';
+  import { Briefcase, Building2, Tags } from '@lucide/svelte';
   import Seo from '#lib/components/Seo.svelte';
-  import { TabStrip, tabStripId } from '#lib/ui/index.js';
+  import { Input, TabStrip, tabStripId } from '#lib/ui/index.js';
   import CategoryPane from '#lib/components/filters/CategoryPane.svelte';
   import SearchSelect from '#lib/components/facets/SearchSelect.svelte';
   import { ApiError, api } from '#lib/api.js';
@@ -13,8 +13,9 @@
   import { filtersToParams } from '#lib/filters.js';
   import { promptSignIn } from '#lib/signin.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
+  import { lookupIndustry, isIndustryMiss, searchIndustries, seedDictionaryReturnParams } from '#lib/dictionaryIndustry.js';
 
-  type Kind = 'specialization' | 'skill';
+  type Kind = 'specialization' | 'skill' | 'industry';
 
   let { data } = $props();
 
@@ -22,13 +23,19 @@
   // Seeded from the URL so a visitor sent to sign in comes back to the term they typed.
   let specQuery = $state(page.url.searchParams.get('specialization') ?? '');
   let skillQuery = $state(page.url.searchParams.get('skill') ?? '');
-  // A skill term (back from sign-in, or handed over by the filter) or ?tab=skill opens Skills.
+  let industryQuery = $state(page.url.searchParams.get('industry') ?? '');
+  // A dictionary query (back from sign-in) or an explicit tab query reopens its tab.
   let tab = $state<Kind>(
-    page.url.searchParams.has('skill') || page.url.searchParams.get('tab') === 'skill' ? 'skill' : 'specialization',
+    page.url.searchParams.has('industry') || page.url.searchParams.get('tab') === 'industry'
+      ? 'industry'
+      : page.url.searchParams.has('skill') || page.url.searchParams.get('tab') === 'skill'
+        ? 'skill'
+        : 'specialization',
   );
   const tabs = [
     { id: 'specialization', label: 'Specialization', icon: Briefcase },
     { id: 'skill', label: 'Skills', icon: Tags },
+    { id: 'industry', label: 'Industries', icon: Building2 },
   ] as const;
   const PANEL_ID = 'dictionary-panel';
 
@@ -40,6 +47,8 @@
   const key = (kind: Kind, term: string) => `${kind}:${term.toLowerCase()}`;
 
   const skills = $derived(store.facet('skills'));
+  const industryResults = $derived(searchIndustries(industryQuery));
+  const industryLookup = $derived(lookupIndustry(industryQuery));
   // Every skill the dictionary knows, busiest first; without counts, no numbers.
   const skillOptions = $derived.by(() => {
     const options = dynamicOptions('skills', data.counts?.facets.skills ?? {}, [...data.skillSlugs, ...skills.include]);
@@ -49,7 +58,7 @@
 
   async function rememberTerm(kind: Kind, term: string) {
     const params = new SvelteURLSearchParams();
-    params.set(kind, term);
+    seedDictionaryReturnParams(params, kind, term);
     const next = `${resolve('/dictionary')}?${params}`;
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- query is appended to resolve('/dictionary')
     await goto(next, { replaceState: true, reset: false });
@@ -77,8 +86,8 @@
 </script>
 
 <Seo
-  title="Help us recognize your role · freehire"
-  description="Every specialization and skill freehire recognizes in job posts. Can't find your role? Add it and help us recognize it."
+  title="Dictionary · freehire"
+  description="Explore the specializations, skills, and company industries freehire recognizes. Request a term the dictionaries do not know yet."
   canonical={`${page.url.origin}/dictionary`}
 />
 
@@ -109,12 +118,13 @@
 
 {#snippet missingSpecialization(term: string)}{@render missing('specialization', term)}{/snippet}
 {#snippet missingSkill(term: string)}{@render missing('skill', term)}{/snippet}
+{#snippet missingIndustry(term: string)}{@render missing('industry', term)}{/snippet}
 
 <div class="mx-auto w-full max-w-4xl px-4 py-6">
   <header class="mb-6">
-    <h1 class="text-2xl font-semibold tracking-tight">Can't find your role? Help us recognize it</h1>
+    <h1 class="text-2xl font-semibold tracking-tight">Explore the dictionaries</h1>
     <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      These are the specializations and skills we recognize in job posts. Search for yours. If it isn't here, add it and we'll teach the dictionary.
+      Search the specializations and skills we recognize in job posts, or the industries we use to classify companies. If a term is missing, request it for review.
     </p>
   </header>
 
@@ -123,7 +133,7 @@
   <section id={PANEL_ID} role="tabpanel" aria-labelledby={tabStripId(PANEL_ID, tab)} tabindex="-1">
     {#if tab === 'specialization'}
       <CategoryPane {store} plain counts={data.counts} bind:query={specQuery} empty={missingSpecialization} />
-    {:else}
+    {:else if tab === 'skill'}
       <h2 class="mb-2 text-sm font-semibold tracking-tight">Skills</h2>
       <SearchSelect
         options={skillOptions}
@@ -135,6 +145,41 @@
         bind:filter={skillQuery}
         empty={missingSkill}
       />
+    {:else}
+      <h2 class="mb-1 text-sm font-semibold tracking-tight">Industries</h2>
+      <p class="mb-3 text-xs text-muted-foreground">
+        These labels classify companies, not job posts; this dictionary has no counts.
+      </p>
+      <Input
+        type="search"
+        bind:value={industryQuery}
+        placeholder="Search company industries"
+        aria-label="Search company industries"
+        class="mb-3 w-full"
+      />
+      {#if industryQuery.trim() && industryLookup.type === 'canonical'}
+        <p class="mb-3 text-sm text-muted-foreground">
+          Canonical entry: <code>{industryLookup.slug}</code> — {industryLookup.label}
+        </p>
+      {:else if industryQuery.trim() && industryLookup.type === 'alias'}
+        <p class="mb-3 text-sm text-muted-foreground">
+          Alias “{industryQuery.trim()}” resolves to <code>{industryLookup.slug}</code> — {industryLookup.label}
+        </p>
+      {/if}
+      {#if industryResults.length}
+        <ul class="max-h-[28rem] space-y-1 overflow-y-auto rounded-md border p-2" aria-label="Recognized industries">
+          {#each industryResults as industry (industry.slug)}
+            <li class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded px-2 py-1.5 text-sm">
+              <span>{industry.label} <code class="ml-1 text-xs text-muted-foreground">{industry.slug}</code></span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      {#if isIndustryMiss(industryQuery)}
+        {@render missingIndustry(industryQuery.trim())}
+      {:else if !industryQuery.trim() && !industryResults.length}
+        <p class="text-sm text-muted-foreground">No industries are available right now.</p>
+      {/if}
     {/if}
   </section>
 

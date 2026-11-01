@@ -442,6 +442,7 @@ func genVocab() string {
 	// options cannot drift from the dictionary the column is written through.
 	b.WriteString(emitVocab("Industry", "INDUSTRY_VALUES", industrytag.Canonicals()))
 	b.WriteString(emitMap("IndustryLabels", "INDUSTRY_LABELS", industrytag.Labels()))
+	b.WriteString(emitMapOfSlices("IndustryAliases", "INDUSTRY_ALIASES", industrytag.SearchAliases()))
 	// The six AI skill-signature archetype slugs (internal/ai/aiarchetype), generated
 	// so the AI Specialization filter's valid values can't drift from the rule table.
 	b.WriteString(emitVocab("AIArchetype", "AI_ARCHETYPE_VALUES", vocab.AIArchetypeValues))
