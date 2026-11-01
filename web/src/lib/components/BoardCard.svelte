@@ -106,7 +106,7 @@
   aria-describedby="{location ? `${locationId} ` : ''}{hasStatus ? `${statusId} ` : ''}{indicatorsId} {hintId}"
   class="relative flex w-full cursor-pointer flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 >
-  <span class="flex items-center gap-1.5 pr-7 text-sm font-semibold">
+  <span class="flex min-h-8 items-center gap-1.5 pr-11 text-sm font-semibold sm:min-h-0 sm:pr-7">
     <EntityLogo name={company} src={companyLogoUrl(company) ?? undefined} shape="square" size="xs" />
     <span class="min-w-0 truncate">{company || 'Unknown company'}</span>
   </span>

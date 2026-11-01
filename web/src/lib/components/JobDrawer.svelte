@@ -2,9 +2,9 @@
   import { resolve } from '$app/paths';
   import { goto } from '$app/navigation';
   import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
-  import { Trash2, X, ExternalLink, Mic, NotebookPen, Send, Target, SquarePen, Check } from '@lucide/svelte';
+  import { Trash2, X, ExternalLink, Send, SquarePen, Check } from '@lucide/svelte';
   import { askConfirmTailor, confirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
-  import { groupedStages, humanizeStage, offersDebrief } from '#lib/stages.js';
+  import { groupedStages, humanizeStage } from '#lib/stages.js';
   import { canFollowUp } from '#lib/followup.js';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '#lib/board.js';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -57,11 +57,7 @@
     onautoapplyreview,
     onremove,
     onclose,
-    onrehearse,
-    ondebrief,
     onfollowup,
-    startingSession = false,
-    sessionError = null,
     blocked = false,
   }: {
     item: MyJob;
@@ -82,17 +78,7 @@
     onclose: () => void;
     // The actions the card used to carry. They live here because a card carries no
     // controls — one on its surface is what stopped it being dragged at all.
-    onrehearse: (item: MyJob) => void;
-    ondebrief: (item: MyJob) => void;
     onfollowup: (item: MyJob) => void;
-    // Starting either conversation is one round trip before the navigation; the board
-    // owns the flag so a second click in that window cannot mint a second one. Both
-    // buttons share it because both end in the same navigation away from here.
-    startingSession?: boolean;
-    // ...and the board owns the failure too. It has to be rendered in here: this panel
-    // covers the viewport, so a message left behind on the board would be invisible to
-    // the person who pressed the button.
-    sessionError?: string | null;
     // True while something is stacked above this panel — today, the follow-up dialog it
     // now opens. Both listen for Escape on the window, so without this one press would
     // close the dialog and the application underneath it in the same keystroke. The
@@ -101,6 +87,7 @@
   } = $props();
 
   const s = $derived(t(messages, locale()));
+  let buddyVisibilityError = $state<string | null>(null);
 
   // Removing untracks the application — its stage, notes and history go with it — so it is
   // asked first, the way deleting a list is.
@@ -122,17 +109,12 @@
     await goto(resolve('/tailor/[slug]', { slug: item.job.public_slug }));
   }
 
-  // Rehearse, Analyze and Tailor all need the posting. Absent rather than disabled when
+  // Tailoring needs the posting. Absent rather than disabled when
   // it is gone — the same treatment View job gets. Follow up does not need one: the chase
   // is addressed to the employer, which the application knows by itself.
   const hasPosting = $derived(!!item.job);
   const offersFollowUp = $derived(canFollowUp(item));
-  // The debrief reviews an interview that has already happened, so it appears only once
-  // the stage says one plausibly did. The backend takes it from any stage — this is
-  // where to advertise it, not who may have it.
-  const offersDebriefAction = $derived(hasPosting && offersDebrief(item.stage ?? ''));
-
-  type Tab = 'application' | 'fit' | 'description' | 'emails' | 'auto_apply';
+  type Tab = 'application' | 'history' | 'fit' | 'description' | 'emails' | 'auto_apply';
   // The Emails tab shows linked mail — open to every signed-in user.
   const canSeeMail = $derived(!!currentUser());
 
@@ -215,7 +197,7 @@
       await api.setBuddyApplicationHidden(String(buddyApplicationId), hiddenInBuddyFeed);
     } catch (err) {
       hiddenInBuddyFeed = previous;
-      sessionError = err instanceof Error ? err.message : s.errors.buddyVisibility;
+      buddyVisibilityError = err instanceof Error ? err.message : s.errors.buddyVisibility;
     } finally { buddyVisibilityBusy = false; }
   }
 
@@ -364,6 +346,7 @@
     ...(autoApply || autoApplied ? [{ id: 'auto_apply' as Tab, label: s.tabs.progress }] : []),
     { id: 'fit', label: s.tabs.jobMatch },
     { id: 'description', label: s.tabs.jobDescription },
+    { id: 'history', label: s.history },
     ...(canSeeMail
       ? [{ id: 'emails' as Tab, label: emails ? format(s.tabs.emailsWithCount, { count: String(emails.length) }) : s.tabs.emails }]
       : []),
@@ -517,18 +500,15 @@
     if (active) tabEdges.reveal(active);
   });
 
-  // One action block: a two-column grid of equal buttons on a phone, where a wrapping row
-  // left three outline buttons of different widths in a ragged pair of lines; a single
-  // wrapping row from sm up. An odd last button spans both columns rather than leaving a
-  // hole beside it. The label truncates rather than overflow a 170px column.
-  const actionClass = 'h-10 min-w-0 gap-1.5 px-2 sm:h-8 sm:px-3';
+  // Actions keep their natural width, including when only Tailor CV is offered.
+  const actionClass = 'h-9 min-w-0 gap-1.5 px-3 sm:h-8';
 
   const tabClass = (active: boolean) =>
     cn(
-      'shrink-0 rounded-full px-4 py-1.5 text-sm transition-colors',
+      'min-h-11 shrink-0 border-b-2 px-1 py-2 text-xs font-medium transition-colors sm:px-2 sm:text-sm',
       active
-        ? 'bg-card font-medium text-foreground shadow-sm'
-        : 'text-muted-foreground hover:text-foreground',
+        ? 'border-foreground text-foreground'
+        : 'border-transparent text-muted-foreground hover:text-foreground',
     );
   const sectionLabel = 'text-sm font-medium text-muted-foreground';
 </script>
@@ -592,21 +572,18 @@
     e.key === 'Escape' && !blocked && !confirmRemoveOpen && !applyChatOpen && !confirmTailorDialog.open && close()}
 />
 
-<!-- Fullscreen job panel (like the swipe deck): a centered column with a fixed
-     header + pill tabs, a scrolling tab body, and a pinned View-job footer. It covers
-     the screen edge to edge, so it fades in rather than growing from the centre. -->
+<!-- A focused desktop dialog; the same application uses the full screen on phones. -->
+<div class="fixed inset-0 z-50 bg-foreground/30" aria-hidden="true"></div>
 <div
-  class="fixed inset-0 z-50 flex animate-modal-fade flex-col bg-background text-foreground"
+  class="fixed inset-0 z-50 flex animate-modal-fade flex-col overflow-hidden bg-background text-foreground outline-none sm:inset-6 sm:mx-auto sm:my-auto sm:max-h-[52rem] sm:max-w-3xl sm:rounded-2xl sm:border sm:border-border sm:shadow-xl"
   role="dialog"
   aria-modal="true"
   aria-label={s.dialogAria}
   {@attach focusTrap()}
 >
-  <!-- Header: employer · close, then the title at full width, its pills, the actions and
-       the tabs. The title used to share a row with View job and the close button, which
-       on a phone left it a column one word wide. -->
+  <!-- Employer, role, and posting details lead; status and application actions follow. -->
   <div class="shrink-0 border-b border-border">
-    <div class="mx-auto flex w-full max-w-2xl flex-col gap-3 px-5 pb-3 pt-4 sm:gap-4 sm:px-6 sm:pt-5">
+    <div class="mx-auto flex w-full max-w-2xl flex-col gap-3 px-5 pt-4 sm:gap-4 sm:px-6 sm:pt-5">
       <div class="flex items-center gap-3">
         <EntityLogo
           name={company || s.unknownCompany}
@@ -615,11 +592,22 @@
           size="sm"
           class="shrink-0"
         />
-        <p class="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">{company || s.unknownCompany}</p>
+        <p class="min-w-0 flex-1 break-words text-sm font-medium text-muted-foreground">{company || s.unknownCompany}</p>
+        {#if item.job}
+          <a
+            href={resolve('/jobs/[slug]', { slug: item.job.public_slug })}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:min-h-8 sm:text-sm"
+          >
+            <ExternalLink class="size-3.5" aria-hidden="true" />
+            {s.viewJob}
+          </a>
+        {/if}
         <button
           type="button"
           onclick={close}
-          class="-mr-1.5 shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          class="-mr-1.5 flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:size-8"
           aria-label={s.close}
         >
           <X class="size-5" />
@@ -628,78 +616,50 @@
 
       <h2 class="text-balance text-xl font-semibold leading-tight tracking-tight">{title}</h2>
 
-      {#if tags.length || stageLabel}
-        <div class="flex flex-wrap items-center gap-2">
+      {#if tags.length}
+        <p class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {#each tags as tag (tag)}
-            <span class="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">{tag}</span>
+            <span>{tag}</span>
           {/each}
-          {#if stageLabel}
-            <span class="rounded-full bg-brand-muted px-2.5 py-0.5 text-xs font-medium text-brand-strong">{stageLabel}</span>
-          {/if}
-        </div>
+        </p>
       {/if}
 
-      <!-- What the candidate can do about this application, on every tab. The card used
-           to carry Rehearse and Follow up in a strip beside its badges, which is both
-           less room than they need and the reason the card could not be dragged. -->
-      {#if item.job || offersFollowUp}
-        <div class="grid grid-cols-2 gap-2 *:last:odd:col-span-2 sm:flex sm:flex-wrap sm:items-center">
-          {#if item.job}
-            <Button
-              variant="outline"
-              size="sm"
-              href={resolve('/jobs/[slug]', { slug: item.job.public_slug })}
-              target="_blank"
-              rel="noopener noreferrer"
-              class={actionClass}
-            >
-              <ExternalLink class="size-3.5 shrink-0" />
-              <span class="truncate">{s.viewJob}</span>
-            </Button>
-            <Button
-              variant={tailorIsPrimary ? 'cta' : 'outline'}
-              size="sm"
-              onclick={startTailoring}
-              disabled={tailoring}
-              class={actionClass}
-            >
-              <SquarePen class="size-3.5 shrink-0" />
-              <span class="truncate">{tailoring ? s.preparing : s.tailorCv}</span>
-            </Button>
-            <Button variant="outline" size="sm" onclick={() => onrehearse(item)} disabled={startingSession} class={actionClass}>
-              <Mic class="size-3.5 shrink-0" />
-              <span class="truncate">{startingSession ? s.starting : s.rehearse}</span>
-            </Button>
+      {#if stageLabel || item.job || offersFollowUp}
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {#if stageLabel}
+            <span class="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+              <span class="size-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true"></span>
+              {stageLabel}
+            </span>
           {/if}
-          {#if offersDebriefAction}
-            <!-- Sits next to Rehearse: the pair reads as before and after the interview. -->
-            <Button variant="outline" size="sm" onclick={() => ondebrief(item)} disabled={startingSession} class={actionClass}>
-              <NotebookPen class="size-3.5 shrink-0" />
-              <span class="truncate">{startingSession ? s.starting : s.debrief}</span>
-            </Button>
-          {/if}
-          {#if item.job}
-            <!-- The analysis is already in this panel; sending the user to /tailor would
-                 close the application to show them something it contains. -->
-            <Button variant="outline" size="sm" onclick={() => (tab = 'fit')} class={actionClass}>
-              <Target class="size-3.5 shrink-0" />
-              <span class="truncate">{s.analyze}</span>
-            </Button>
-          {/if}
-          {#if offersFollowUp}
-            <Button
-              variant="outline"
-              size="sm"
-              onclick={() => onfollowup(item)}
-              class={cn(
-                actionClass,
-                'border-transparent bg-warning-muted text-warning-strong hover:bg-warning-muted hover:opacity-80',
-              )}
-            >
-              <Send class="size-3.5 shrink-0" />
-              <span class="truncate">{item.followed_up_at ? s.chaseAgain : s.followUp}</span>
-            </Button>
-          {/if}
+          <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {#if item.job}
+              <Button
+                variant={tailorIsPrimary ? 'primary' : 'outline'}
+                size="sm"
+                onclick={startTailoring}
+                disabled={tailoring}
+                class={actionClass}
+              >
+                <SquarePen class="size-3.5 shrink-0" />
+                <span class="truncate">{tailoring ? s.preparing : s.tailorCv}</span>
+              </Button>
+            {/if}
+            {#if offersFollowUp}
+              <Button
+                variant="outline"
+                size="sm"
+                onclick={() => onfollowup(item)}
+                class={cn(
+                  actionClass,
+                  'border-transparent bg-warning-muted text-warning-strong hover:bg-warning-muted hover:opacity-80',
+                )}
+              >
+                <Send class="size-3.5 shrink-0" />
+                <span class="truncate">{item.followed_up_at ? s.chaseAgain : s.followUp}</span>
+              </Button>
+            {/if}
+          </div>
         </div>
       {/if}
       {#if buddyMember && buddyApplicationId !== null}
@@ -708,8 +668,8 @@
           {s.showInBuddyFeed}
         </label>
       {/if}
-      {#if sessionError}
-        <p class="text-sm text-warning-strong" role="alert">{sessionError}</p>
+      {#if buddyVisibilityError}
+        <p class="text-sm text-warning-strong" role="alert">{buddyVisibilityError}</p>
       {/if}
 
       <div
@@ -725,7 +685,7 @@
           role="tablist"
           aria-label={s.tabsAria}
           use:tablist={tab}
-          class="flex w-max items-center gap-1 rounded-full bg-muted p-1"
+          class="flex w-max min-w-full items-center gap-3 sm:gap-4"
         >
           {#each TABS as t (t.id)}
             <button
@@ -767,37 +727,12 @@
             </div>
           {/if}
 
-          <!-- What happened, newest first. Absent entirely when the ledger holds nothing:
-               an application saved but never applied to has no history, and an empty frame
-               would say otherwise. -->
-          {#if events.length}
-            <div class="flex flex-col gap-1 text-sm">
-              <span class="font-medium">{s.history}</span>
-              <ol class="flex flex-col gap-1.5">
-                {#each events as e (e.id)}
-                  <!-- The event first and its age beneath it on a phone, where a fixed time
-                       column wrapped "11 секунд назад" onto two lines beside a one-line
-                       event; side by side from sm up, the age kept whole on the right. -->
-                  <li class="flex items-baseline gap-2">
-                    <span class="shrink-0 text-xs {eventTone(e.kind)}" aria-hidden="true">●</span>
-                    <div class="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-                      <span class="min-w-0 text-sm">{eventLabel(e, locale())}</span>
-                      <time datetime={e.occurred_at} class="text-xs text-muted-foreground sm:shrink-0 sm:whitespace-nowrap">
-                        {timeAgo(e.occurred_at, locale())}
-                      </time>
-                    </div>
-                  </li>
-                {/each}
-              </ol>
-            </div>
-          {/if}
-
           <label class="flex flex-col gap-1 text-sm">
             <span class="font-medium">{s.stage}</span>
             <select
               value={item.stage ?? ''}
               onchange={(e) => onsetstage(e.currentTarget.value)}
-              class="rounded-md border border-input bg-transparent px-2 py-1.5 text-sm"
+              class="min-h-11 rounded-md border border-input bg-transparent px-2 py-1.5 text-base sm:min-h-0 sm:text-sm"
             >
               <option value="">{s.noStage}</option>
               <!-- Grouped so `Closed` reads as a heading over its three outcomes rather than
@@ -818,6 +753,37 @@
             <NoteEditor value={item.notes ?? ''} onsave={onsavenotes} label={s.notes} showSaveState />
           </div>
         </div>
+      {:else if tab === 'history'}
+        {#if emailsLoading}
+          <p class="text-sm text-muted-foreground">{s.loading}</p>
+        {:else if emailsError}
+          <p class="text-sm text-destructive" role="alert">{emailsError}</p>
+          <Button variant="outline" size="sm" onclick={() => loadEmails(true)}>{s.retryHistory}</Button>
+        {:else}
+          {#if events.length}
+            <div class="flex flex-col gap-1 text-sm">
+              <ol class="flex flex-col gap-1.5">
+                {#each events as e (e.id)}
+                  <!-- The event first and its age beneath it on a phone, where a fixed time
+                       column wrapped "11 секунд назад" onto two lines beside a one-line
+                       event; side by side from sm up, the age kept whole on the right. -->
+                  <li class="flex items-baseline gap-2">
+                    <span class="shrink-0 text-xs {eventTone(e.kind)}" aria-hidden="true">●</span>
+                    <div class="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+                      <span class="min-w-0 text-sm">{eventLabel(e, locale())}</span>
+                      <time datetime={e.occurred_at} class="text-xs text-muted-foreground sm:shrink-0 sm:whitespace-nowrap">
+                        {timeAgo(e.occurred_at, locale())}
+                      </time>
+                    </div>
+                  </li>
+                {/each}
+              </ol>
+            </div>
+          {:else}
+            <p class="text-sm text-muted-foreground">{s.noHistory}</p>
+          {/if}
+
+        {/if}
       {:else if tab === 'auto_apply'}
         <div class="flex flex-col gap-4">
           {#if progressSteps}
@@ -1075,6 +1041,12 @@
               </button>
             </div>
           {/if}
+          <div class="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" href={resolve('/my/inbox')} class="h-9">
+              {s.linkEmail}
+            </Button>
+            <span class="text-xs text-muted-foreground">{s.linkEmailHint}</span>
+          </div>
           <!-- The pull direction. Everything else in the mail stack starts from a message
                and asks which application it belongs to; this asks the opposite, which is
                the only way an application that plainly ought to have mail can say so. -->
@@ -1252,15 +1224,15 @@
   </div>
 
   <!-- Pinned footer: remove-from-board (destructive card action). A flex sibling of the
-       scrolling body, not an overlay, so it never sits over the notes editor; `pb-safe`
-       lifts it clear of the home indicator. -->
+       scrolling body, not an overlay, so it never sits over the notes editor. The bottom
+       padding leaves room for both the button and the home indicator. -->
   <div class="shrink-0 border-t border-border">
-    <div class="mx-auto flex w-full max-w-2xl justify-end px-5 pb-safe pt-3 sm:px-6">
+    <div class="mx-auto flex w-full max-w-2xl justify-end px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
       <Button
         variant="ghost"
         size="sm"
         onclick={() => (confirmRemoveOpen = true)}
-        class="gap-1.5 text-destructive-strong hover:bg-destructive/10 hover:text-destructive-strong"
+        class="h-11 gap-1.5 text-destructive-strong hover:bg-destructive/10 hover:text-destructive-strong sm:h-8"
       >
         <Trash2 class="size-4" />
         {s.removeFromBoard}

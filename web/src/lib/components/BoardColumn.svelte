@@ -36,6 +36,8 @@
   // Neutral drop-target frame — overrides svelte-dnd-action's default yellow
   // outline, which clashes with the monochrome palette.
   const dropTargetStyle = { outline: '2px solid var(--ring)', borderRadius: 'var(--radius-md)' };
+  // Leave ordinary swipes to scrolling; a deliberate hold starts a touch drag.
+  const touchDragDelay = 250;
 
   // A labelled <section> is a region landmark, so each column is reachable by its name.
   const titleId = $props.id();
@@ -100,7 +102,7 @@
     class="flex max-h-[calc(100dvh-14rem)] min-h-24 flex-col gap-2 overflow-y-auto"
     bind:this={zone}
     onscroll={grow}
-    use:dndzone={{ items: visible, flipDurationMs: 150, type: 'board', dropTargetStyle, dragDisabled }}
+    use:dndzone={{ items: visible, flipDurationMs: 150, type: 'board', dropTargetStyle, dragDisabled, delayTouchStart: touchDragDelay }}
     onconsider={(e) => {
       // Paused only while the dragged card is in this zone: a card that passes through
       // and leaves, or a keyboard drag cancelled here, sends no finalize to this column.

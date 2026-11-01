@@ -71,25 +71,49 @@
 {:else}
   <ul bind:this={list} class="flex flex-col divide-y divide-border rounded-xl border border-border">
     {#each visible as item (item.id)}
-      <li class="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-accent/50">
+      <li class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-3 py-3 transition-colors hover:bg-accent/50 sm:flex sm:gap-4">
         <!-- The employer and role open the application; the stage control beside them
              does not, so it is a sibling rather than a child. -->
-        <BoardPreview {item} class="min-w-0 flex-1">
+        <BoardPreview {item} class="min-w-0 sm:flex-1">
         <button
           type="button"
           onclick={() => onopen(item)}
-          class="flex w-full min-w-0 items-center gap-2.5 text-left"
+          class="flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <EntityLogo name={company(item)} src={companyLogoUrl(company(item)) ?? undefined} shape="square" size="xs" />
           <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-medium">{title(item)}</span>
+            <span class="block line-clamp-2 text-sm font-medium sm:truncate">{title(item)}</span>
             <span class="block truncate text-xs text-muted-foreground">{company(item) || s.unknownCompany}</span>
             <BoardPostingStatus job={item.job} />
           </span>
         </button>
         </BoardPreview>
 
-        <span class="flex shrink-0 items-center gap-2.5">
+        {#if onremove}
+          <div class="col-start-2 row-start-1 sm:order-last">
+            <BoardRemoveButton {item} {onremove} disabled={removing.includes(item.id)} />
+          </div>
+        {/if}
+        <div class="col-span-2 flex flex-wrap items-center gap-2 pl-7 sm:flex-nowrap sm:gap-3 sm:pl-0">
+          <select
+            value={item.stage ?? ''}
+            onchange={(e) => onsetstage(item, e.currentTarget.value)}
+            aria-label={format(s.stageAria, { title: title(item), company: company(item) || s.unknownCompanyLower })}
+            class="h-8 w-32 max-w-full shrink-0 rounded-md border border-input bg-background px-2 py-1 text-xs sm:text-sm"
+          >
+            <option value="">{s.noStage}</option>
+            <!-- Grouped exactly as the drawer's selector is: two stage pickers in one
+                 section that organise their options differently is the confusion this
+                 change is removing, in miniature. -->
+            {#each groupedStages(locale()) as g (g.id)}
+              <optgroup label={g.label}>
+                {#each g.options as s (s.value)}
+                  <option value={s.value}>{s.label}</option>
+                {/each}
+              </optgroup>
+            {/each}
+          </select>
+
           {#if item.silence_state === 'silent'}
             <span
               class="flex items-center gap-0.5 text-xs tabular-nums text-warning-strong"
@@ -109,30 +133,9 @@
             </span>
           {/if}
           {#if item.last_activity_at}
-            <span class="hidden text-xs text-muted-foreground sm:inline">{timeAgo(item.last_activity_at, locale())}</span>
+            <span class="ml-auto shrink-0 text-xs text-muted-foreground sm:ml-0 sm:w-24 sm:text-right">{timeAgo(item.last_activity_at, locale())}</span>
           {/if}
-          <select
-            value={item.stage ?? ''}
-            onchange={(e) => onsetstage(item, e.currentTarget.value)}
-            aria-label={format(s.stageAria, { title: title(item), company: company(item) || s.unknownCompanyLower })}
-            class="rounded-md border border-input bg-transparent px-2 py-1 text-xs"
-          >
-            <option value="">{s.noStage}</option>
-            <!-- Grouped exactly as the drawer's selector is: two stage pickers in one
-                 section that organise their options differently is the confusion this
-                 change is removing, in miniature. -->
-            {#each groupedStages(locale()) as g (g.id)}
-              <optgroup label={g.label}>
-                {#each g.options as s (s.value)}
-                  <option value={s.value}>{s.label}</option>
-                {/each}
-              </optgroup>
-            {/each}
-          </select>
-          {#if onremove}
-            <BoardRemoveButton {item} {onremove} disabled={removing.includes(item.id)} />
-          {/if}
-        </span>
+        </div>
       </li>
     {/each}
   </ul>

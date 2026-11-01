@@ -20,7 +20,7 @@
   onclick={() => onremove(item)}
   aria-label={format(s.removeAria, { title })}
   title={s.removeTitle}
-  class="inline-flex size-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+  class="inline-flex size-11 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 sm:size-7"
 >
   <BookmarkMinus class="size-4" aria-hidden="true" />
 </button>

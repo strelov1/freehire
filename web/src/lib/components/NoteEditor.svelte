@@ -193,7 +193,7 @@
       <button
         type="button"
         onclick={() => void persist()}
-        class="rounded font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground"
+        class="min-h-11 rounded px-2 font-medium text-foreground underline underline-offset-2 hover:text-muted-foreground sm:min-h-0"
       >
         {s.retry}
       </button>
@@ -224,6 +224,21 @@
     color: var(--muted-foreground) !important;
     font-weight: 600;
     border-color: transparent;
+  }
+  @media (max-width: 639px), (pointer: coarse) {
+    :global(.editor-toolbar) {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+    }
+    :global(.editor-toolbar button) {
+      min-width: 44px;
+      min-height: 44px;
+      margin: 0;
+    }
+    :global(.editor-toolbar i.separator) {
+      display: none;
+    }
   }
   :global(.editor-toolbar button:hover),
   :global(.editor-toolbar button.active) {
