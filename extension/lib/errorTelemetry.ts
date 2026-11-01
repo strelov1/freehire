@@ -24,7 +24,7 @@ function sanitize(value: string, limit: number): string {
     })
     .replace(/\bBearer\s+\S+/gi, 'Bearer [redacted]')
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]')
-    .replace(/\b(?:token|password|secret|api[_-]?key|authorization)\s*[:=]\s*[^\s,;]+/gi, '[redacted]')
+    .replace(/\b[a-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key|authorization|credentials?)["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|(?:(?:basic|bearer)\s+)?[^\s,;"']+)/gi, '[redacted]')
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[token]')
     .slice(0, limit);
 }

@@ -11,7 +11,7 @@ import { isTransientNoise } from '#lib/sentryNoise.js';
 import { CAPTURE_MAX_AGE_SECONDS, REF_COOKIE, captureRef, capturePromo } from '#lib/referral.js';
 
 const otelEndpoint = OTEL_EXPORTER_OTLP_LOGS_ENDPOINT || (OTEL_EXPORTER_OTLP_ENDPOINT ? `${OTEL_EXPORTER_OTLP_ENDPOINT.replace(/\/$/, '')}/v1/logs` : undefined);
-const telemetry = createErrorTelemetry({ endpoint: otelEndpoint, service: 'freehire-web-ssr', environment: PUBLIC_OTEL_ENVIRONMENT, version: PUBLIC_OTEL_SERVICE_VERSION });
+const telemetry = createErrorTelemetry({ endpoint: otelEndpoint, service: 'freehire-web-ssr', environment: PUBLIC_OTEL_ENVIRONMENT, version: PUBLIC_OTEL_SERVICE_VERSION, logToConsole: true });
 // adapter-node emits this before graceful shutdown; each export has a 3s timeout.
 if (telemetry) process.once('sveltekit:shutdown', () => { void telemetry.shutdown(); });
 

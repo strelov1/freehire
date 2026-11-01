@@ -1,8 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: Headless fault collection
-The system SHALL store unexpected application failures as OpenTelemetry exception
-logs that can be queried without opening a web interface.
+When the applicable OTLP endpoint is configured, the system SHALL store unexpected
+application failures as OpenTelemetry exception logs that can be queried without
+opening a web interface. Each scenario below assumes that configuration; without
+an endpoint, the optional fallback and local logging remain available as configured.
 
 #### Scenario: Unexpected HTTP error
 - **WHEN** an API handler returns an unexpected failure

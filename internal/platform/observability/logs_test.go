@@ -101,14 +101,14 @@ func TestLogsRedactsSecretsAndDoesNotSerializePanicObjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer shutdown()
-	failure := &url.Error{Op: "Post", URL: "https://user:private-password@example.com/path?token=query-secret#fragment-secret", Err: errors.New("Bearer bearer-secret token=field-secret password:password-secret contact=user@example.com postgres://db-user:db-password@db.internal/db?credential=dsn-secret")}
+	failure := &url.Error{Op: "Post", URL: "https://user:private-password@example.com/path?token=query-secret#fragment-secret", Err: errors.New("Bearer bearer-secret token=field-secret password:password-secret contact=user@example.com postgres://db-user:db-password@db.internal/db?credential=dsn-secret access_token=access-private refresh_token:refresh-private client_secret=client-private \"token\":\"json-private\" authorization: Basic dXNlcjpwYXNz")}
 	CaptureError(context.Background(), fmt.Errorf("upstream: %w", failure))
 	CapturePanic(context.Background(), map[string]string{"candidate": "private-panic-payload"})
 	shutdown()
 	select {
 	case request := <-requests:
 		payload := request.String()
-		for _, secret := range []string{"private-password", "query-secret", "fragment-secret", "bearer-secret", "field-secret", "password-secret", "user@example.com", "db-user", "db-password", "dsn-secret", "private-panic-payload"} {
+		for _, secret := range []string{"private-password", "query-secret", "fragment-secret", "bearer-secret", "field-secret", "password-secret", "user@example.com", "db-user", "db-password", "dsn-secret", "private-panic-payload", "access-private", "refresh-private", "client-private", "json-private", "dXNlcjpwYXNz"} {
 			if strings.Contains(payload, secret) {
 				t.Errorf("telemetry contains %q", secret)
 			}

@@ -149,7 +149,7 @@ var (
 	exceptionURLs    = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s)"'<>]+`)
 	exceptionBearer  = regexp.MustCompile(`(?i)\bBearer\s+\S+`)
 	exceptionEmails  = regexp.MustCompile(`(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b`)
-	exceptionSecrets = regexp.MustCompile(`(?i)\b(?:token|password|secret|api[_-]?key|authorization)\s*[:=]\s*[^\s,;]+`)
+	exceptionSecrets = regexp.MustCompile(`(?i)\b[a-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key|authorization|credentials?)["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|(?:(?:basic|bearer)\s+)?[^\s,;"']+)`)
 	exceptionJWTs    = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b`)
 )
 

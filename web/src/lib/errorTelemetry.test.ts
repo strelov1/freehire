@@ -109,3 +109,40 @@ it('records primitive rejections and opaque thrown objects without serializing p
   expect(JSON.stringify(records.map((record) => record.attributes))).not.toContain('private');
   await telemetry?.shutdown();
 });
+
+
+it('redacts prefixed, quoted and Basic credential values before export', async () => {
+  const exporter = new InMemoryLogRecordExporter();
+  const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
+  const error = new Error('access_token=access-private refresh_token:refresh-private client_secret=client-private {"token":"json-private"} authorization: Basic dXNlcjpwYXNz');
+  error.stack = error.message;
+  telemetry?.capture(error);
+  await telemetry?.flush();
+  const records = exporter.getFinishedLogRecords();
+  expect(records).toHaveLength(1);
+  const payload = JSON.stringify(records[0]?.attributes);
+  for (const secret of ['access-private', 'refresh-private', 'client-private', 'json-private', 'dXNlcjpwYXNz']) expect(payload).not.toContain(secret);
+  await telemetry?.shutdown();
+});
+
+
+it('keeps sanitized local SSR errors when the telemetry volume bound drops records', async () => {
+  const local = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const exporter = new InMemoryLogRecordExporter();
+  const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web-ssr', exporter, logToConsole: true });
+  try {
+    telemetry?.capture(new Error('Failed to fetch'));
+    for (let i = 0; i < 21; i++) {
+      const error = new Error(`defect ${i} access_token=local-private authorization: Basic dXNlcjpwYXNz`);
+      error.stack = error.message;
+      telemetry?.capture(error);
+    }
+    await telemetry?.flush();
+    expect(exporter.getFinishedLogRecords()).toHaveLength(20);
+    expect(local).toHaveBeenCalledTimes(21);
+    expect(JSON.stringify(local.mock.calls)).not.toMatch(/local-private|dXNlcjpwYXNz/);
+  } finally {
+    await telemetry?.shutdown();
+    local.mockRestore();
+  }
+});

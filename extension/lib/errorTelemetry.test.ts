@@ -75,3 +75,18 @@ it('records primitive rejections and opaque thrown objects without serializing p
   expect(JSON.stringify(records.map((record) => record.attributes))).not.toContain('private');
   await telemetry?.shutdown();
 });
+
+
+it('redacts prefixed, quoted and Basic credential values before export', async () => {
+  const exporter = new InMemoryLogRecordExporter();
+  const telemetry = createErrorTelemetry({ endpoint: 'http://localhost/v1/logs', service: 'freehire-web', exporter });
+  const error = new Error('access_token=access-private refresh_token:refresh-private client_secret=client-private {"token":"json-private"} authorization: Basic dXNlcjpwYXNz');
+  error.stack = error.message;
+  telemetry?.capture(error);
+  await telemetry?.flush();
+  const records = exporter.getFinishedLogRecords();
+  expect(records).toHaveLength(1);
+  const payload = JSON.stringify(records[0]?.attributes);
+  for (const secret of ['access-private', 'refresh-private', 'client-private', 'json-private', 'dXNlcjpwYXNz']) expect(payload).not.toContain(secret);
+  await telemetry?.shutdown();
+});
