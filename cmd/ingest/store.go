@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/adzunadesc"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
@@ -20,6 +21,7 @@ import (
 	"github.com/strelov1/freehire/internal/job/jobdedup"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
+	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
 
 // dbStore adapts the generated queries + connection pool to pipeline.Store. Save runs
@@ -220,6 +222,17 @@ func (s *dbStore) SaveWithApplyForm(ctx context.Context, j job.Job, form applyfo
 }
 
 func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) error {
+	err := s.saveOnce(ctx, j, form, false)
+	if constraint, ok := pgerr.UniqueViolationConstraint(err); !ok || constraint != "jobs_public_slug_key" {
+		return err
+	}
+	// A failed statement aborts the transaction. saveOnce has rolled it back before
+	// this retry, so the posting and all of its outboxes still commit together.
+	log.Print("ingest: public slug collision; retrying with the full identity hash")
+	return s.saveOnce(ctx, j, form, true)
+}
+
+func (s *dbStore) saveOnce(ctx context.Context, j job.Job, form *applyform.Form, fullSlugHash bool) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -232,6 +245,11 @@ func (s *dbStore) save(ctx context.Context, j job.Job, form *applyform.Form) err
 	// The mapping also stamps content_hash — which the upsert reports back as
 	// inserted/changed, driving the incremental index push below — and role_fingerprint.
 	params := j.Fields().UpsertParams()
+	if fullSlugHash {
+		params.PublicSlug = normalize.JobSlugWithFullHash(params.Title, params.Company, params.Source, params.ExternalID)
+		// Keep the incoming content hash, just as UpsertJob does when it preserves
+		// an existing URL after a title edit. An unchanged recrawl must stay cheap.
+	}
 
 	qtx := s.q.WithTx(tx)
 	saved, err := persist(ctx, qtx, params)

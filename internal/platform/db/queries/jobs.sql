@@ -167,12 +167,11 @@ WHERE public_slug = $1;
 -- The jobs whose slug ends with a shortcode — the last eight characters of a public_slug,
 -- derived from (source, external_id) alone and so the one part of a job URL nothing can
 -- move. Resolves a link to a slug that no longer exists (freehire#3284); backed by
--- jobs_public_slug_code_idx. LIMIT 2 is enough to tell one match from an ambiguous code,
--- which the caller refuses rather than guessing between postings.
+-- jobs_public_slug_code_idx. The caller distinguishes full-hash collision recovery
+-- URLs before refusing ambiguous ordinary shortcodes.
 SELECT *
 FROM jobs
-WHERE right(public_slug, 8) = sqlc.arg(code)::text
-LIMIT 2;
+WHERE right(public_slug, 8) = sqlc.arg(code)::text;
 
 -- name: ListJobLivenessBySlugs :many
 -- What the ChatGPT app's check_jobs_open needs to say whether each posting in a shortlist is

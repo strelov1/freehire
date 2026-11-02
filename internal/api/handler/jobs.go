@@ -322,11 +322,9 @@ func (h *jobsHandlers) roleClusterCounts(c *fiber.Ctx, rows []db.Job) map[cluste
 	return out
 }
 
-// jobBySlugOrCode loads a job by its public slug, falling back to the slug's shortcode
-// when no row carries the slug itself: the code depends on (source, external_id) alone,
-// so it still identifies a posting whose slug was re-minted from a changed title
-// (freehire#3284). An ambiguous code answers pgx.ErrNoRows — another employer's posting
-// is a worse answer than a 404.
+// jobBySlugOrCode resolves stale links by identity. Collision recovery URLs carry
+// the full hash; legacy links resolve only among original short-format URLs.
+// Genuine shortcode ambiguity still answers pgx.ErrNoRows rather than guessing.
 func (h *jobsHandlers) jobBySlugOrCode(ctx context.Context, slug string) (db.Job, error) {
 	job, err := h.queries.GetJobBySlug(ctx, slug)
 	if !errors.Is(err, pgx.ErrNoRows) {
@@ -340,8 +338,25 @@ func (h *jobsHandlers) jobBySlugOrCode(ctx context.Context, slug string) (db.Job
 	if err != nil {
 		return db.Job{}, err
 	}
-	if len(jobs) != 1 {
+	identity, _ := normalize.JobSlugIdentityCode(slug)
+	var matched db.Job
+	matches := 0
+	for _, candidate := range jobs {
+		fullIdentity := normalize.JobSlugWithFullHash("", "", candidate.Source, candidate.ExternalID)
+		storedIdentity, _ := normalize.JobSlugIdentityCode(candidate.PublicSlug)
+		if identity == fullIdentity {
+			return candidate, nil
+		}
+		// A long legacy title or company can have the same shape as a hash.
+		// Without an exact full-hash match it still uses the ordinary shortcode.
+		if storedIdentity == fullIdentity {
+			continue
+		}
+		matched = candidate
+		matches++
+	}
+	if matches != 1 {
 		return db.Job{}, pgx.ErrNoRows
 	}
-	return jobs[0], nil
+	return matched, nil
 }
