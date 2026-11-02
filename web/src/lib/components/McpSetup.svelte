@@ -152,7 +152,9 @@
 }`,
     },
   ];
-  let host = $state('claude');
+  // A link from elsewhere (the homepage icons) names the host to open on; anything unknown falls back to Claude.
+  const requestedHost = page.url.searchParams.get('host');
+  let host = $state(hosts.some((h) => h.id === requestedHost) ? (requestedHost as string) : 'claude');
   const selected = $derived(hosts.find((h) => h.id === host));
 
   // One copy confirmation at a time, keyed by the text that was copied.
@@ -187,8 +189,9 @@
   <!-- Just the marks, each a way into the full setup on /mcp. -->
   <nav class="flex gap-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Assistants">
     {#each hosts as h (h.id)}
+      <!-- eslint-disable svelte/no-navigation-without-resolve -- resolve() path plus the host query -->
       <a
-        href={resolve('/mcp')}
+        href={`${resolve('/mcp')}?host=${h.id}`}
         class="flex shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <EntityLogo
@@ -200,6 +203,7 @@
         />
         {h.label}
       </a>
+      <!-- eslint-enable svelte/no-navigation-without-resolve -->
     {/each}
   </nav>
 {:else}
