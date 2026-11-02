@@ -4998,6 +4998,10 @@ type Querier interface {
 	// its hits from Meilisearch alone, so without this a posting stays in the results for as long
 	// as the drain is paused (a facet rebuild holds it for hours). The primary-key lookup is
 	// bounded by the page size.
+	// A queued row is not enough on its own: TouchJob and UpsertJob reopen a posting without
+	// dequeuing it, and a reopened posting is open and must stay in the results. So the job
+	// must be gone or still closed. A missing row stays hidden (the removal outlives the job,
+	// see the queue's missing foreign key).
 	ListPendingSearchRemovals(ctx context.Context, jobIds []int64) ([]int64, error)
 	// id+url of every pending submission, used only to find which OTHER pending rows share the
 	// host being blocked (see RejectAndBlockHost in the submission package): host matching needs

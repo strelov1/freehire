@@ -514,6 +514,10 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude [
 	}, nil
 }
 
+// pendingRemovalsTimeout bounds the lookup dropPendingRemovals makes. It is a primary-key
+// read over one page of ids, so a healthy answer takes milliseconds.
+const pendingRemovalsTimeout = 300 * time.Millisecond
+
 // dropPendingRemovals takes out of a page the postings that have closed but are still in
 // the index. The drain applies a closure asynchronously, and a facet rebuild pauses it for
 // hours, so the queue it works from (search_delete_outbox) is exactly the set the index
@@ -536,6 +540,9 @@ func (h *searchHandlers) dropPendingRemovals(ctx context.Context, res search.Sea
 	for i, hit := range res.Hits {
 		ids[i] = hit.ID
 	}
+	// An optional check must not hold the search behind a saturated pool or a stalled query.
+	ctx, cancel := context.WithTimeout(ctx, pendingRemovalsTimeout)
+	defer cancel()
 	gone, err := h.removals.ListPendingSearchRemovals(ctx, ids)
 	if err != nil {
 		log.Printf("search: read pending removals: %v", err)

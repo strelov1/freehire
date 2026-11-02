@@ -608,3 +608,53 @@ func TestCompleteSearchDeleteOutboxRemovesTheEntries(t *testing.T) {
 		t.Errorf("deletion queue holds %d rows after completion, want 0", got)
 	}
 }
+
+// A search page hides a posting whose removal is queued, but only while it is still closed
+// or gone: TouchJob and UpsertJob reopen a posting without dequeuing it, and hiding a
+// reopened one would make a live posting vanish from search.
+func TestListPendingSearchRemovalsKeepsReopenedPostings(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	closed, err := ingestUpsert(ctx, q, ingestParams("acme:closed", "Closed"))
+	if err != nil {
+		t.Fatalf("upsert closed: %v", err)
+	}
+	reopened, err := ingestUpsert(ctx, q, ingestParams("acme:reopened", "Reopened"))
+	if err != nil {
+		t.Fatalf("upsert reopened: %v", err)
+	}
+	gone, err := ingestUpsert(ctx, q, ingestParams("acme:gone", "Gone"))
+	if err != nil {
+		t.Fatalf("upsert gone: %v", err)
+	}
+	unqueued, err := ingestUpsert(ctx, q, ingestParams("acme:open", "Open"))
+	if err != nil {
+		t.Fatalf("upsert open: %v", err)
+	}
+	for _, id := range []int64{closed.ID, reopened.ID, gone.ID} {
+		enqueueDeletion(t, pool, id)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closed.ID); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM jobs WHERE id = $1`, gone.ID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	got, err := q.ListPendingSearchRemovals(ctx, []int64{closed.ID, reopened.ID, gone.ID, unqueued.ID})
+	if err != nil {
+		t.Fatalf("ListPendingSearchRemovals: %v", err)
+	}
+	want := map[int64]bool{closed.ID: true, gone.ID: true}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want exactly the closed and the deleted posting", got)
+	}
+	for _, id := range got {
+		if !want[id] {
+			t.Errorf("job %d reported as pending removal, but it is open (reopened or never queued)", id)
+		}
+	}
+}

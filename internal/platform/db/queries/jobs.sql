@@ -3473,5 +3473,11 @@ SELECT COALESCE(MAX(id), 0)::bigint FROM jobs;
 -- its hits from Meilisearch alone, so without this a posting stays in the results for as long
 -- as the drain is paused (a facet rebuild holds it for hours). The primary-key lookup is
 -- bounded by the page size.
-SELECT job_id FROM search_delete_outbox
-WHERE job_id = ANY(sqlc.arg(job_ids)::bigint[]);
+-- A queued row is not enough on its own: TouchJob and UpsertJob reopen a posting without
+-- dequeuing it, and a reopened posting is open and must stay in the results. So the job
+-- must be gone or still closed. A missing row stays hidden (the removal outlives the job,
+-- see the queue's missing foreign key).
+SELECT d.job_id FROM search_delete_outbox d
+LEFT JOIN jobs j ON j.id = d.job_id
+WHERE d.job_id = ANY(sqlc.arg(job_ids)::bigint[])
+  AND (j.id IS NULL OR j.closed_at IS NOT NULL);
