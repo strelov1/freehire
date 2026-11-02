@@ -6,8 +6,7 @@
   import { bannerVisible } from '#lib/consent.svelte.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
   import { dockToastOffsetClass } from '#lib/messagingDock.js';
-  import { ProviderIcon } from '#lib/ui/index.js';
-  import { cn } from '#lib/ui/index.js';
+  import { cn, ProviderIcon } from '#lib/ui/index.js';
   import {
     ownsMobileStickyCta,
     readDismissed,

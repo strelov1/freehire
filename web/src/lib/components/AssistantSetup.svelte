@@ -2,9 +2,7 @@
   import McpSetup from './McpSetup.svelte';
   import CliSetup from './CliSetup.svelte';
 
-  // The setup half of /mcp — MCP or CLI, then the assistant — shared with the homepage card.
-  let { compact = false }: { compact?: boolean } = $props();
-
+  // The setup half of /mcp: MCP or CLI, then the assistant.
   let view = $state<'mcp' | 'cli'>('mcp');
 </script>
 
@@ -27,7 +25,7 @@
 </div>
 
 {#if view === 'mcp'}
-  <McpSetup {compact} />
+  <McpSetup />
 {:else}
-  <CliSetup {compact} />
+  <CliSetup />
 {/if}

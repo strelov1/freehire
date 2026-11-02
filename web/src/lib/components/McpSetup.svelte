@@ -9,7 +9,7 @@
   import { EntityLogo } from '#lib/ui/index.js';
 
   // Pick an assistant, then follow its steps — the setup half of /mcp, shared with the
-  // onboarding tour. `compact` draws smaller host tiles for a narrow column;
+  // onboarding tour. `compact` drops the section frame and the agent prompt for a narrow column;
   // `initialMode` lets a signed-in surface open on the account connector.
   let {
     compact = false,

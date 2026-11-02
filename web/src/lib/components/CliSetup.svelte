@@ -2,8 +2,6 @@
   import { CLI_INSTALL } from '#lib/cliLinks.js';
   import { announce } from '#lib/announce.svelte.js';
 
-  let { compact = false }: { compact?: boolean } = $props();
-
   // The CLI half of /mcp: one prompt a person hands to a terminal agent, which does the
   // three steps itself. The same steps are spelled out on /cli for someone typing them.
   const prompt = `Set up freehire for me so you can search jobs and track my applications.
@@ -28,8 +26,8 @@ Once that is done, let me know it is ready.`;
   }
 </script>
 
-<section class={compact ? '' : 'rounded-2xl border border-border bg-secondary/20 p-5 sm:p-8'}>
-  <h2 class={compact ? 'text-base font-semibold tracking-tight' : 'text-xl font-semibold tracking-tight'}>Copy and send this to your agent</h2>
+<section class="rounded-2xl border border-border bg-secondary/20 p-5 sm:p-8">
+  <h2 class="text-xl font-semibold tracking-tight">Copy and send this to your agent</h2>
   <p class="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
     Works with Codex, Claude Code, Gemini CLI and any agent that can run a terminal command. Sign-in opens your
     browser, so there is no key to paste.
