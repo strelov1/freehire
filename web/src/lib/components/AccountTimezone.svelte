@@ -14,8 +14,9 @@
   // it rides GET /me already). Used to interpret a daily search-alert digest time
   // and a quiet-hours window in the account's own local time
   // (internal/deliverywindow); unset reads as UTC there. A password registration
-  // already captures the browser's detected zone (api.ts's register()), so this
-  // mainly matters for a pre-existing account: if none is stored yet, the field
+  // already captures the browser's detected zone (api.ts's register()), and the
+  // root layout stores it for any other signed-in account without one
+  // (adoptBrowserTimezone), so this is the fallback: if none is stored yet, the field
   // pre-fills with — and silently saves — the browser's detection the first time
   // this section renders, so a user never has to deliberately set it.
   // `Intl.supportedValuesOf('timeZone')` omits the bare "UTC" identifier (it only
