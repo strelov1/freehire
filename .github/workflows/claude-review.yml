@@ -6,10 +6,6 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: claude-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   review:
     # Fork PRs cannot access the subscription secret. Keep their existing review
@@ -19,6 +15,9 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.user.type != 'Bot' &&
       !endsWith(github.actor, '[bot]')
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
