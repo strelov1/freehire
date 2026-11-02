@@ -2,10 +2,19 @@ package search
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
 func TestSourceFamilyFilter(t *testing.T) {
+	for _, value := range []string{"WhatJobs", "WHATJOBS", "whatjobs"} {
+		if got, want := facetEq("source", "source", value), facetEq("source", "source", "whatjobs"); got != want {
+			t.Errorf("include %q = %q, want %q", value, got, want)
+		}
+		if got, want := facetNeq("source", "source", value), facetNeq("source", "source", "whatjobs"); got != want {
+			t.Errorf("exclude %q = %q, want %q", value, got, want)
+		}
+	}
 	in := facetEq("source", "source", "whatjobs")
 	if want := `source IN ["whatjobs", "whatjobs-ae"`; len(in) < len(want) || in[:len(want)] != want {
 		t.Errorf("include = %.60s…, want an IN over the family", in)
@@ -13,7 +22,7 @@ func TestSourceFamilyFilter(t *testing.T) {
 	if got := facetEq("source", "source", "greenhouse"); got != `source = "greenhouse"` {
 		t.Errorf("plain source = %q", got)
 	}
-	if ex := facetNeq("source", "source", "whatjobs"); ex[:len("source NOT IN")] != "source NOT IN" {
+	if ex := facetNeq("source", "source", "whatjobs"); !strings.HasPrefix(ex, "source NOT IN") {
 		t.Errorf("exclude = %.40s…", ex)
 	}
 }
