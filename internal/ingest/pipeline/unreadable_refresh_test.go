@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/ingest/sources"
@@ -45,5 +46,24 @@ func TestUnreadablePostingRefreshesOpenRowsWithoutDoubleCounting(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestUnreadableBoardWithholdsStoredFranchiseCompany(t *testing.T) {
+	for _, unknown := range []bool{false, true} {
+		t.Run(fmt.Sprintf("seenUnknown=%t", unknown), func(t *testing.T) {
+			store := &fakeStore{refreshCompanies: []string{"franchise"}}
+			r := Runner{Store: store}
+			e := sources.CompanyEntry{Provider: "careerplug", Board: "corporate", Company: "Configured Employer"}
+			st := r.ingestFetched(context.Background(), e, fetchedBoard{
+				jobs:        []sources.Job{{ExternalID: "1", Company: "Configured Employer", Unreadable: true}},
+				seenUnknown: unknown,
+			})
+			for _, slug := range []string{"configured-employer", "franchise"} {
+				if !slices.Contains(st.UnprovenCompanies, slug) {
+					t.Fatalf("unproven companies=%v, want configured and actual stored employers", st.UnprovenCompanies)
+				}
+			}
+		})
 	}
 }
