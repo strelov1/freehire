@@ -6586,6 +6586,11 @@ type Querier interface {
 	// query analyzer cannot type the latter (see jobs.sql's MarkFuzzyDuplicatesForCompany,
 	// same pattern for the same reason); Postgres runs same-length SELECT-list set-returning
 	// functions in lockstep, pairing subscription_ids[i] with job_ids[i].
+	//
+	// Subscriptions may be deleted after ListActiveSubscriptions but before this write.
+	// Join their current rows so one unsubscribe cannot fail the entire query group's
+	// batch. Lock those parents through the insert: an existence check alone still races
+	// with a DELETE that commits after this statement takes its snapshot.
 	RecordSubscriptionMatches(ctx context.Context, arg RecordSubscriptionMatchesParams) (int64, error)
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
