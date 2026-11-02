@@ -458,9 +458,6 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 		Source:     source,
 		ExternalID: externalID,
 	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
-	}
 	if err != nil {
 		return fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
 	}
@@ -484,11 +481,11 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 // statement's row locks and runtime small beside the crawl's own writes.
 const refreshCoveredChunk = 5000
 
-// RefreshCovered refreshes the liveness of the open stored rows among a board's covered
-// postings, and records each refreshed row's company as crawled, as Touch does, so the sweep's
+// RefreshCovered refreshes open stored rows listed without a write (coverage-gated or
+// unreadable), and records each refreshed row's company as crawled, as Touch does, so the sweep's
 // company scope reaches the rows the aggregator no longer lists. Implements
-// pipeline.CoveredRefresher. Not counted in the write tally: the gate declined these postings,
-// so they are not writes of the run.
+// pipeline.CoveredRefresher. Not counted in the write tally: these postings bypassed
+// content writes.
 //
 // The companies are recorded only once every chunk has succeeded: a company whose postings span
 // two chunks, one refreshed and one not, must not enter the sweep's scope, or the sweep would

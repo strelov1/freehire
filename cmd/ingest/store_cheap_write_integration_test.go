@@ -239,16 +239,3 @@ func TestTouch_CountsAsACheapWrite(t *testing.T) {
 		t.Errorf("tally = %q, want %q — the touch is a cheap write and must be counted", got, want)
 	}
 }
-
-// A newly listed unreadable posting has no stored row to refresh.
-func TestTouchMissingPostingIsANoop(t *testing.T) {
-	pool := testdb.Pool(t)
-	tally := newWriteTally()
-	store := newDBStore(pool, 1, newCrawledSet(), tally, defaultSeenPolicy())
-	if err := store.Touch(context.Background(), "lever", "missing-unreadable-posting"); err != nil {
-		t.Fatalf("touch missing posting: %v", err)
-	}
-	if got := tally.summary(); got != "" {
-		t.Fatalf("missing posting counted as a write: %q", got)
-	}
-}
