@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"reflect"
 	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 // recordingJSON is a JSONGetter that records every URL it is asked for and replies with the first
@@ -740,5 +744,20 @@ func TestSliceBoardListingRequiresASweepGrace(t *testing.T) {
 		if _, ok := grace[provider]; !ok {
 			t.Errorf("%q is a sliceBoardListing provider but declares no sweepGrace", provider)
 		}
+	}
+}
+
+// The source filter offers WhatJobs once (vocab.SourceFamilies). A market added to
+// whatjobsMarkets without joining that list would show up as a separate picker entry.
+func TestWhatJobsFamilyListsEveryMarket(t *testing.T) {
+	var providers []string
+	for _, m := range whatjobsMarkets {
+		providers = append(providers, m.provider)
+	}
+	got := append([]string(nil), vocab.SourceFamilies["whatjobs"]...)
+	sort.Strings(providers)
+	sort.Strings(got)
+	if !reflect.DeepEqual(providers, got) {
+		t.Errorf("vocab.SourceFamilies[whatjobs] = %v, markets = %v", got, providers)
 	}
 }
