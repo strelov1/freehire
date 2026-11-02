@@ -5,7 +5,8 @@
 // match what the search API (GET /api/v1/jobs/search) expects, including the
 // `<param>_exclude` and `<param>_mode=and` conventions.
 
-import { CLEARANCE_UNSPECIFIED, FACETS, type FacetSelection } from './facets';
+import { CLEARANCE_UNSPECIFIED, FACETS, REGION_UNSPECIFIED, type FacetSelection } from './facets';
+import { REGION_LABELS } from './labels';
 import { SENIORITY_VALUES } from './generated/contracts';
 import type { UserProfile } from './types';
 
@@ -457,7 +458,7 @@ export function appliesWorkModeRemoteAnywhere(f: JobFilters): boolean {
   // Folded like the server's workModeValues, so `Remote` from a hand-written link
   // shows the checkbox and chip whenever the server applies the modifier.
   const modes = wm.include.map((m) => m.trim().toLowerCase());
-  const hasLocation = LOCATION_FACET_PARAMS.some((p) => (f.facets[p]?.include.length ?? 0) > 0);
+  const hasLocation = LOCATION_FACET_PARAMS.some((p) => (f.facets[p]?.include ?? []).some((v) => knownLocation(p, v)));
   return modes.includes('remote') && modes.some(isPhysicalMode) && hasLocation;
 }
 
@@ -465,6 +466,14 @@ export function appliesWorkModeRemoteAnywhere(f: JobFilters): boolean {
 const LOCATION_FACET_PARAMS = ['regions', 'countries', 'cities', 'metros'];
 
 const isPhysicalMode = (m: string) => m === 'hybrid' || m === 'onsite';
+
+/** `regions` is the one closed location facet: like the server's
+ *  `hasLocationInclude`, an unknown region (a hand-edited link) is not a location. */
+function knownLocation(param: string, value: string): boolean {
+  if (param !== 'regions') return true;
+  const v = value.trim().toLowerCase();
+  return v === REGION_UNSPECIFIED || v in REGION_LABELS;
+}
 
 /** The security-clearance control used to be a three-state toggle serialized as
  *  `requires_clearance=false|true`, and saved searches, alerts and shared links still
