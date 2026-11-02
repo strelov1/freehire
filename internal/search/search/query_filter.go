@@ -164,7 +164,7 @@ func facetEq(param, attr, val string) string {
 	if set := impliedRegions(val); param == "regions" && set != nil {
 		return InStrings(attr, set)
 	}
-	if members := vocab.SourceFamilies[strings.ToLower(val)]; param == "source" && members != nil {
+	if members := vocab.SourceFamilies[strings.ToLower(strings.TrimSpace(val))]; param == "source" && members != nil {
 		return InStrings(attr, members)
 	}
 	attr, val = retiredCategory(param, attr, val)
@@ -239,7 +239,7 @@ func facetNeq(param, attr, val string) string {
 	if set := impliedRegions(val); param == "regions" && set != nil {
 		return NotInStrings(attr, set)
 	}
-	if members := vocab.SourceFamilies[strings.ToLower(val)]; param == "source" && members != nil {
+	if members := vocab.SourceFamilies[strings.ToLower(strings.TrimSpace(val))]; param == "source" && members != nil {
 		return NotInStrings(attr, members)
 	}
 	// A true-or-absent facet is never stored false, so `attr != "false"` matches every

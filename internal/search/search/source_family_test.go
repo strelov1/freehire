@@ -7,7 +7,7 @@ import (
 )
 
 func TestSourceFamilyFilter(t *testing.T) {
-	for _, value := range []string{"WhatJobs", "WHATJOBS", "whatjobs"} {
+	for _, value := range []string{"WhatJobs", "WHATJOBS", "whatjobs", " whatjobs ", "\tWhatJobs\t"} {
 		if got, want := facetEq("source", "source", value), facetEq("source", "source", "whatjobs"); got != want {
 			t.Errorf("include %q = %q, want %q", value, got, want)
 		}
