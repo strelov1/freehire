@@ -2631,7 +2631,7 @@
       "post": {
         "operationId": "post_assistant_sessions",
         "summary": "Start a new conversation.",
-        "description": "For shortlisting the current jobs list, pass search_query (the complete serialized query; an empty string is valid) and a client-generated request_id UUID. Only chat sessions accept this binding. Reusing the UUID with the same owner and canonical query returns the same session; changing its query returns 409. Unknown or unenforceable conditions return 400. Search-bound responses include search_context: { query, brief }; the original query is immutable and the selection brief is local to the conversation.",
+        "description": "For shortlisting the current jobs list, pass search_query (the complete serialized query; an empty string is valid) and a client-generated request_id UUID. Only chat sessions accept this binding. Reusing the UUID with the same owner and canonical query returns the same session; changing its query returns 409. Unknown search parameters return 400 at creation. A condition that cannot be enforced when a search runs (for example hide_seen without a readable history) fails that search instead, and the assistant reports it rather than widening the search. Search-bound responses include search_context: { query, brief }; the original query is immutable and the selection brief is local to the conversation.",
         "parameters": [
           {
             "name": "preset",
