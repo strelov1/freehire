@@ -10,14 +10,9 @@
   // Names the <select> after the visible heading — it has no <label> of its own.
   const headingId = $props.id();
 
-  // The account's IANA timezone: read from the resolved session (no extra fetch —
-  // it rides GET /me already). Used to interpret a daily search-alert digest time
-  // and a quiet-hours window in the account's own local time
-  // (internal/deliverywindow); unset reads as UTC there. A password registration
-  // already captures the browser's detected zone (api.ts's register()), so this
-  // mainly matters for a pre-existing account: if none is stored yet, the field
-  // pre-fills with — and silently saves — the browser's detection the first time
-  // this section renders, so a user never has to deliberately set it.
+  // The root layout persists the detected zone for accounts without one. This
+  // field shows only the stored value so a failed adoption can be retried by picking
+  // any zone, including the browser's. Explicit picks save here.
   // `Intl.supportedValuesOf('timeZone')` omits the bare "UTC" identifier (it only
   // lists Area/Location names) even though it's a real IANA zone Go's
   // time.LoadLocation accepts — prepend it so a stored/detected "UTC" has a
@@ -32,31 +27,22 @@
     ]),
   ];
 
-  let detected = '';
-  try {
-    detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    detected = '';
-  }
-
-  let value = $state(currentUser()?.timezone ?? detected);
+  let value = $state(currentUser()?.timezone ?? '');
   const status = new SaveStatus();
+  let pendingSave = $state<ReturnType<typeof setTimeout>>();
 
-  // Re-seed from the session on a real identity change (sign-in/out, or this
-  // component's own save round-tripping through invalidateAll) — keyed on email
-  // rather than running every render, so a value mid-pick is never clobbered by
-  // an unrelated session refresh. Auto-persists the detected zone once for an
-  // account that has never had one stored.
+  // Follow adoption and other session refreshes unless a local pick is pending or
+  // failed. A real identity change discards that account's edit state.
   let seededFor: string | null = null;
   $effect(() => {
     const user = currentUser();
-    if (!user || user.email === seededFor) return;
-    seededFor = user.email;
-    if (user.timezone) {
-      value = user.timezone;
-    } else if (detected) {
-      value = detected;
-      void save();
+    if ((user?.email ?? null) !== seededFor) {
+      seededFor = user?.email ?? null;
+      clearTimeout(pendingSave);
+      pendingSave = undefined;
+      value = user?.timezone ?? '';
+    } else if (pendingSave === undefined && !status.saving && status.state !== 'error') {
+      value = user?.timezone ?? '';
     }
   });
 
@@ -64,7 +50,6 @@
   // time — so a save per change wrote every zone the user stepped past. The save waits for
   // the value to settle, and leaving the control commits whatever is pending at once.
   const SAVE_DEBOUNCE_MS = 600;
-  let pendingSave: ReturnType<typeof setTimeout> | undefined;
 
   function scheduleSave() {
     clearTimeout(pendingSave);

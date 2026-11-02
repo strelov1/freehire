@@ -119,8 +119,8 @@ type Repository interface {
 	CreateUser(ctx context.Context, email, passwordHash string, emailVerified bool, timezone *string) (User, error)
 
 	// UpdateTimezone sets (or clears, with nil) the account's IANA timezone name.
-	// The caller has already validated it.
-	UpdateTimezone(ctx context.Context, userID int64, timezone *string) (User, error)
+	// With onlyIfUnset, preserves an existing zone atomically. The caller validates it.
+	UpdateTimezone(ctx context.Context, userID int64, timezone *string, onlyIfUnset bool) (User, error)
 
 	// UpdateLanguage sets the account's preferred interface language. The caller
 	// has already validated it against supportedLanguages.
@@ -303,12 +303,12 @@ func validTimezone(tz string) bool {
 
 // UpdateTimezone sets the caller's IANA timezone name. Unlike Register's silent
 // drop, an explicit profile edit with a bad value is a real error the caller
-// should see and correct.
-func (s *Service) UpdateTimezone(ctx context.Context, userID int64, timezone string) (User, error) {
+// should see and correct. onlyIfUnset protects preferences from automatic adoption.
+func (s *Service) UpdateTimezone(ctx context.Context, userID int64, timezone string, onlyIfUnset bool) (User, error) {
 	if !validTimezone(timezone) {
 		return User{}, ErrInvalidTimezone
 	}
-	return s.repo.UpdateTimezone(ctx, userID, &timezone)
+	return s.repo.UpdateTimezone(ctx, userID, &timezone, onlyIfUnset)
 }
 
 // ErrInvalidLanguage is a language code outside supportedLanguages (mapped to 400).

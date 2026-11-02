@@ -40,6 +40,26 @@ export async function updateTimezone(timezone: string) {
   await invalidateAll();
 }
 
+/** Best-effort default for accounts without a timezone, including OAuth sign-ups.
+ * Password registration already captures it. The server preserves any preference
+ * saved since this session snapshot; failures retry on the next full page load. */
+export async function adoptBrowserTimezone(user: User) {
+  if (user.timezone) return;
+  let zone: string;
+  try {
+    zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return;
+  }
+  if (!zone) return;
+  try {
+    await api.updateTimezone(zone, true);
+    await invalidateAll();
+  } catch {
+    // ignore
+  }
+}
+
 /** Sets the account's preferred interface language and re-resolves the session
  *  so `currentUser()` reflects it everywhere. */
 export async function updateLanguage(language: string) {

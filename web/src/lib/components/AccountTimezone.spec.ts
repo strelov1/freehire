@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { tick } from 'svelte';
 import AccountTimezone from './AccountTimezone.svelte';
 
 // Mutable, like SkillsCard.spec.ts's `localeRef` — needed so a test can flip the
@@ -18,16 +19,17 @@ vi.mock('$app/state', () => ({
 
 const { updateTimezone, user } = vi.hoisted(() => ({
   updateTimezone: vi.fn(),
-  user: { current: { email: 'a@b.co', timezone: 'Europe/Moscow' } as { email: string; timezone?: string } },
+  user: { current: { email: 'a@b.co', timezone: 'Europe/Moscow' } as { email: string; timezone?: string }, notify: () => {} },
 }));
 
 const { announce } = vi.hoisted(() => ({ announce: vi.fn() }));
 vi.mock('#lib/announce.svelte.js', () => ({ announce }));
 
-vi.mock('#lib/auth.svelte.js', () => ({
-  currentUser: () => user.current,
-  updateTimezone,
-}));
+vi.mock('#lib/auth.svelte.js', async () => {
+  const { createSubscriber } = await import('svelte/reactivity');
+  const subscribe = createSubscriber((notify) => { user.notify = notify; });
+  return { currentUser: () => { subscribe(); return user.current; }, updateTimezone };
+});
 
 describe('AccountTimezone — Russian locale', () => {
   beforeEach(() => {
@@ -152,4 +154,40 @@ describe('AccountTimezone — saving', () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+it('keeps an unsaved timezone unset so it can be selected explicitly', async () => {
+  updateTimezone.mockReset().mockResolvedValue(undefined);
+  user.current = { email: 'a@b.co', timezone: undefined };
+  render(AccountTimezone);
+  const select = screen.getByRole('combobox') as HTMLSelectElement;
+  expect(select.value).toBe('');
+  select.value = 'Europe/Paris';
+  await fireEvent.change(select);
+  await fireEvent.blur(select);
+  expect(updateTimezone).toHaveBeenCalledWith('Europe/Paris');
+});
+
+it('reflects the timezone preserved by adoption after a session refresh', async () => {
+  user.current = { email: 'a@b.co', timezone: undefined };
+  render(AccountTimezone);
+  user.current = { email: 'a@b.co', timezone: 'Europe/Berlin' };
+  user.notify();
+  await tick();
+  expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('Europe/Berlin');
+});
+
+it('preserves a pending explicit pick when the session refreshes', async () => {
+  updateTimezone.mockReset().mockResolvedValue(undefined);
+  user.current = { email: 'a@b.co', timezone: 'Europe/Moscow' };
+  render(AccountTimezone);
+  const select = screen.getByRole('combobox') as HTMLSelectElement;
+  select.value = 'Europe/Paris';
+  await fireEvent.change(select);
+  user.current = { email: 'a@b.co', timezone: 'Europe/Berlin' };
+  user.notify();
+  await tick();
+  expect(select.value).toBe('Europe/Paris');
+  await fireEvent.blur(select);
+  expect(updateTimezone).toHaveBeenCalledWith('Europe/Paris');
 });

@@ -33,6 +33,14 @@ export default defineConfig({
   test: {
     projects: [
       {
+        // Only the two auth.test.ts mocks. The full appStubAlias would also catch
+        // `$app/env/private` by its `$app/env` prefix and point it at a file that isn't there.
+        resolve: {
+          alias: {
+            '$app/state': appStubAlias['$app/state'],
+            '$app/navigation': appStubAlias['$app/navigation'],
+          },
+        },
         test: {
           name: 'unit',
           environment: 'node',
