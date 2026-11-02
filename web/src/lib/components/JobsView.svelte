@@ -815,7 +815,12 @@
      checked box. -->
 {#snippet hideSeenToggle()}
   {#if standalone && isAuthenticated()}
-    <label class="flex shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+    <!-- Below `sm` the toolbar is two rows already: the eye says what the box does, and the
+         words stay for assistive tech and the tooltip rather than costing a third of the row. -->
+    <label
+      title="Hide viewed jobs"
+      class="flex shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground"
+    >
       <input
         type="checkbox"
         class="size-4 rounded border-border"
@@ -823,7 +828,7 @@
         onchange={(e) => filters.setHideSeen(e.currentTarget.checked)}
       />
       <Eye class="size-4 shrink-0" aria-hidden="true" />
-      <span>Hide viewed</span>
+      <span class="sr-only sm:not-sr-only">Hide viewed</span>
     </label>
   {/if}
 {/snippet}
