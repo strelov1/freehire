@@ -63,6 +63,15 @@ type searchHandlers struct {
 	// seen reads the jobs a signed-in caller has already opened, for /jobs/search's
 	// hide_seen. Nil leaves the param unhonoured, and reported as such.
 	seen seenJobs
+	// removals reads which of a page's jobs are already closed but still indexed. Nil
+	// skips the check, which is how a search without a database behind it runs.
+	removals pendingRemovals
+}
+
+// pendingRemovals names the jobs, among those given, whose removal from the index is
+// queued but not yet applied. *db.Queries satisfies it.
+type pendingRemovals interface {
+	ListPendingSearchRemovals(ctx context.Context, jobIds []int64) ([]int64, error)
 }
 
 // appliedCompanyReader reads the company slugs of the employers a caller has applied
@@ -496,12 +505,65 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude [
 		}
 	}
 
+	res = h.dropPendingRemovals(c.Context(), res)
 	h.recordQuery(c.Query("q"))
 	return jobSearchOutcome{
 		res: res, limit: limit, offset: offset, dropped: dropped,
 		semantic:        outcome.wire(ojcp.SemanticApplied, ojcp.SemanticUnavailable),
 		formerEmployers: formerApplied,
 	}, nil
+}
+
+// pendingRemovalsTimeout bounds the lookup dropPendingRemovals makes. It is a primary-key
+// read over one page of ids, so a healthy answer takes milliseconds.
+const pendingRemovalsTimeout = 300 * time.Millisecond
+
+// dropPendingRemovals takes out of a page the postings that have closed but are still in
+// the index. The drain applies a closure asynchronously, and a facet rebuild pauses it for
+// hours, so the queue it works from (search_delete_outbox) is exactly the set the index
+// still shows wrongly. Asking it about the page's own ids is a primary-key lookup; asking the
+// index to exclude the whole queue is not possible, it can hold a six-figure number of ids.
+//
+// This is the one place a hit is dropped after the query, which the hide_applied_companies
+// note above avoids because it shrinks the page and leaves the total counting what the
+// caller never sees. Here the dropped hit is by definition not a result, so the total is
+// lowered by the same count; what stays over-counted is the part of the backlog on later
+// pages, and it is gone once the drain catches up.
+//
+// Best-effort: a failed lookup logs and serves the page as the index has it, as the search
+// did before this check existed.
+func (h *searchHandlers) dropPendingRemovals(ctx context.Context, res search.SearchResult) search.SearchResult {
+	if h.removals == nil || len(res.Hits) == 0 {
+		return res
+	}
+	ids := make([]int64, len(res.Hits))
+	for i, hit := range res.Hits {
+		ids[i] = hit.ID
+	}
+	// An optional check must not hold the search behind a saturated pool or a stalled query.
+	ctx, cancel := context.WithTimeout(ctx, pendingRemovalsTimeout)
+	defer cancel()
+	gone, err := h.removals.ListPendingSearchRemovals(ctx, ids)
+	if err != nil {
+		log.Printf("search: read pending removals: %v", err)
+		return res
+	}
+	if len(gone) == 0 {
+		return res
+	}
+	closed := make(map[int64]struct{}, len(gone))
+	for _, id := range gone {
+		closed[id] = struct{}{}
+	}
+	kept := make([]search.JobDocument, 0, len(res.Hits))
+	for _, hit := range res.Hits {
+		if _, ok := closed[hit.ID]; !ok {
+			kept = append(kept, hit)
+		}
+	}
+	res.Total = max(res.Total-int64(len(res.Hits)-len(kept)), 0)
+	res.Hits = kept
+	return res
 }
 
 // recordQuery notes what the catalogue was asked for, so the suggestion dictionary can

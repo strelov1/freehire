@@ -61,7 +61,7 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.
 			Title:       t.Title,
 			Description: t.Description,
 			InputSchema: t.Schema,
-			Annotations: accountAnnotations(t.Effect),
+			Annotations: accountAnnotations(t),
 		}, loggedAccountTool(t.Name, accountToolHandler(t, userID)))
 	}
 	return server
@@ -88,10 +88,12 @@ func accountInstructions(tools []assistant.Tool) string {
 // so they are not decoration: unset, every search is a confirmation prompt. Every tool is
 // open-world for the same reason the anonymous server's are: the catalogue and the
 // tracking board both change outside this conversation, on the website.
-func accountAnnotations(effect assistant.Effect) *mcp.ToolAnnotations {
-	destructive, openWorld := effect == assistant.EffectOverwrites, true
+func accountAnnotations(t assistant.Tool) *mcp.ToolAnnotations {
+	destructive, openWorld := t.Effect == assistant.EffectOverwrites, true
 	return &mcp.ToolAnnotations{
-		ReadOnlyHint:    effect == assistant.EffectReads,
+		Title:           t.Title,
+		IdempotentHint:  t.Idempotent,
+		ReadOnlyHint:    t.Effect == assistant.EffectReads,
 		DestructiveHint: &destructive,
 		OpenWorldHint:   &openWorld,
 	}

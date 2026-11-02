@@ -4697,6 +4697,42 @@ func (q *Queries) ListLocationsForGeoGap(ctx context.Context, arg ListLocationsF
 	return items, nil
 }
 
+const listPendingSearchRemovals = `-- name: ListPendingSearchRemovals :many
+SELECT d.job_id FROM search_delete_outbox d
+LEFT JOIN jobs j ON j.id = d.job_id
+WHERE d.job_id = ANY($1::bigint[])
+  AND (j.id IS NULL OR j.closed_at IS NOT NULL)
+`
+
+// Which of these jobs are closed but still have a document in the live index: the ones
+// search_delete_outbox has queued and the drain has not yet applied. A search page reads
+// its hits from Meilisearch alone, so without this a posting stays in the results for as long
+// as the drain is paused (a facet rebuild holds it for hours). The primary-key lookup is
+// bounded by the page size.
+// A queued row is not enough on its own: TouchJob and UpsertJob reopen a posting without
+// dequeuing it, and a reopened posting is open and must stay in the results. So the job
+// must be gone or still closed. A missing row stays hidden (the removal outlives the job,
+// see the queue's missing foreign key).
+func (q *Queries) ListPendingSearchRemovals(ctx context.Context, jobIds []int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listPendingSearchRemovals, jobIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var job_id int64
+		if err := rows.Scan(&job_id); err != nil {
+			return nil, err
+		}
+		items = append(items, job_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTitlesForClassifyDrift = `-- name: ListTitlesForClassifyDrift :many
 SELECT title,
        count(*)::bigint AS job_count,

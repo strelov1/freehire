@@ -3479,3 +3479,18 @@ SELECT count(*) FROM closed;
 -- The top of the id space cmd/serve-probe draws its random sample windows from. One
 -- backward probe of the primary key, so it stays cheap on the whole table.
 SELECT COALESCE(MAX(id), 0)::bigint FROM jobs;
+
+-- name: ListPendingSearchRemovals :many
+-- Which of these jobs are closed but still have a document in the live index: the ones
+-- search_delete_outbox has queued and the drain has not yet applied. A search page reads
+-- its hits from Meilisearch alone, so without this a posting stays in the results for as long
+-- as the drain is paused (a facet rebuild holds it for hours). The primary-key lookup is
+-- bounded by the page size.
+-- A queued row is not enough on its own: TouchJob and UpsertJob reopen a posting without
+-- dequeuing it, and a reopened posting is open and must stay in the results. So the job
+-- must be gone or still closed. A missing row stays hidden (the removal outlives the job,
+-- see the queue's missing foreign key).
+SELECT d.job_id FROM search_delete_outbox d
+LEFT JOIN jobs j ON j.id = d.job_id
+WHERE d.job_id = ANY(sqlc.arg(job_ids)::bigint[])
+  AND (j.id IS NULL OR j.closed_at IS NOT NULL);

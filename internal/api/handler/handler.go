@@ -819,6 +819,8 @@ func Register(app *fiber.App, cfg Config) {
 	searchH.appliedCompanies = tracking
 	// hide_seen on /jobs/search reads the same record the swipe deck excludes by.
 	searchH.seen = tracking
+	// A closed posting stays in the index until the drain removes it; the page hides it meanwhile.
+	searchH.removals = queries
 	timelineH := newTimelineHandlers(queries)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)

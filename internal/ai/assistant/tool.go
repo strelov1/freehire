@@ -29,6 +29,11 @@ type Tool struct {
 	// ignores it; a surface that must declare a tool's effects to its client (the
 	// signed-in MCP server's annotations) reads it.
 	Effect Effect
+
+	// Idempotent says a repeated call with the same arguments changes nothing the
+	// first did not. The in-app loop ignores it; the signed-in MCP server announces
+	// it so a client may retry the call without asking again.
+	Idempotent bool
 }
 
 // Effect is what a tool does to the account it runs as.
