@@ -1,8 +1,12 @@
-import { SeverityNumber } from '@opentelemetry/api';
-import { resourceFromAttributes } from '@opentelemetry/resources';
-import { BatchLogRecordProcessor, LoggerProvider, type LogRecordExporter } from '@opentelemetry/sdk-logs';
-import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-proto';
-import { isTransientNoise } from './sentryNoise.js';
+import { SeverityNumber } from "@opentelemetry/api";
+import { resourceFromAttributes } from "@opentelemetry/resources";
+import {
+  BatchLogRecordProcessor,
+  LoggerProvider,
+  type LogRecordExporter,
+} from "@opentelemetry/sdk-logs";
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
+import { isTransientNoise } from "./sentryNoise.js";
 
 interface ErrorTelemetryOptions {
   endpoint?: string;
@@ -16,17 +20,29 @@ interface ErrorTelemetryOptions {
 // Only exception fields enter telemetry. Never serialize a thrown object, a request,
 // or a rejection value: these often contain API responses or personal input.
 function sanitize(value: string, limit: number): string {
-  return value.slice(0, limit * 2)
-    .replace(/(?:https?|file|chrome-extension|moz-extension):\/\/[^\s)"'<>]+/gi, (raw) => {
-      try {
-        const url = new URL(raw);
-        return `${url.protocol}//${url.host}${url.pathname}`;
-      } catch { return '[url]'; }
-    })
-    .replace(/\bBearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]')
-    .replace(/\b[a-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key|authorization|credentials?)["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|(?:(?:basic|bearer)\s+)?[^\s,;"']+)/gi, '[redacted]')
-    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[token]')
+  return value
+    .slice(0, limit * 2)
+    .replace(
+      /(?:https?|file|chrome-extension|moz-extension):\/\/[^\s)"'<>]+/gi,
+      (raw) => {
+        try {
+          const url = new URL(raw);
+          return `${url.protocol}//${url.host}${url.pathname}`;
+        } catch {
+          return "[url]";
+        }
+      },
+    )
+    .replace(/\bBearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email]")
+    .replace(
+      /\b[a-z0-9_-]*(?:token|password|passwd|secret|api[_-]?key|authorization|credentials?)["']?\s*[:=]\s*(?:"(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|(?:(?:basic|bearer)\s+)?[^\s,;"']+)/gi,
+      "[redacted]",
+    )
+    .replace(
+      /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
+      "[token]",
+    )
     .slice(0, limit);
 }
 
@@ -36,34 +52,64 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
   try {
     provider = new LoggerProvider({
       resource: resourceFromAttributes({
-        'service.name': options.service,
-        'service.version': options.version || 'unknown',
-        'deployment.environment.name': options.environment || 'development',
+        "service.name": options.service,
+        "service.version": options.version || "unknown",
+        "deployment.environment.name": options.environment || "development",
       }),
-      logRecordLimits: { attributeCountLimit: 8, attributeValueLengthLimit: 8192 },
-      processors: [new BatchLogRecordProcessor({
-        exporter: options.exporter ?? new OTLPLogExporter({ url: options.endpoint, timeoutMillis: 3000, concurrencyLimit: 1 }),
-        maxQueueSize: 20, maxExportBatchSize: 5, scheduledDelayMillis: 500, exportTimeoutMillis: 3000,
-      })],
+      logRecordLimits: {
+        attributeCountLimit: 8,
+        attributeValueLengthLimit: 8192,
+      },
+      processors: [
+        new BatchLogRecordProcessor({
+          exporter:
+            options.exporter ??
+            new OTLPLogExporter({
+              url: options.endpoint,
+              timeoutMillis: 3000,
+              concurrencyLimit: 1,
+            }),
+          maxQueueSize: 20,
+          maxExportBatchSize: 5,
+          scheduledDelayMillis: 500,
+          exportTimeoutMillis: 3000,
+        }),
+      ],
     });
-  } catch { return undefined; }
-  const logger = provider.getLogger('freehire.errors');
+  } catch {
+    return undefined;
+  }
+  const logger = provider.getLogger("freehire.errors");
   const seen = new Set<string>();
   let windowStart = Date.now();
   return {
     capture(error: unknown) {
       try {
         if (isTransientNoise(error)) return;
-        if (error instanceof Error && /\[['"]@context['"]\]\.toLowerCase/.test(error.message)) return;
-        let rawMessage = 'Non-Error exception';
+        if (
+          error instanceof Error &&
+          /\[['"]@context['"]\]\.toLowerCase/.test(error.message)
+        )
+          return;
+        let rawMessage = "Non-Error exception";
         if (error instanceof Error) rawMessage = error.message;
-        else if (['string', 'number', 'boolean', 'bigint'].includes(typeof error)) rawMessage = String(error);
+        else if (
+          ["string", "number", "boolean", "bigint"].includes(typeof error)
+        )
+          rawMessage = String(error);
         const type = error instanceof Error ? error.name : typeof error;
         const message = sanitize(rawMessage, 1024);
-        const stack = sanitize(error instanceof Error ? error.stack || '' : '', 8192);
+        const stack = sanitize(
+          error instanceof Error ? error.stack || "" : "",
+          8192,
+        );
         // Preserve a sanitized local copy before delivery bounds can drop an event.
         if (options.logToConsole) {
-          try { console.error(stack || `${sanitize(type, 128)}: ${message}`); } catch { /* Continue exporting if local logging fails. */ }
+          try {
+            console.error(stack || `${sanitize(type, 128)}: ${message}`);
+          } catch {
+            /* Continue exporting if local logging fails. */
+          }
         }
         const key = `${message}\n${stack}`;
         const now = Date.now();
@@ -74,31 +120,81 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         if (seen.size >= 20 || seen.has(key)) return;
         seen.add(key);
         logger.emit({
-          severityNumber: SeverityNumber.ERROR, severityText: 'ERROR', body: 'Unhandled exception',
+          severityNumber: SeverityNumber.ERROR,
+          severityText: "ERROR",
+          body: "Unhandled exception",
           attributes: {
-            'event.name': 'exception',
-            'exception.type': sanitize(type, 128),
-            'exception.message': message,
-            'exception.stacktrace': stack,
+            "event.name": "exception",
+            "exception.type": sanitize(type, 128),
+            "exception.message": message,
+            "exception.stacktrace": stack,
           },
         });
-      } catch { /* Reporting must never become an application error. */ }
+      } catch {
+        /* Reporting must never become an application error. */
+      }
     },
-    async flush() { try { await provider.forceFlush({ timeoutMillis: 3000 }); } catch { /* Best effort. */ } },
-    async shutdown() { try { await provider.shutdown(); } catch { /* Best effort. */ } },
+    async flush() {
+      try {
+        await provider.forceFlush({ timeoutMillis: 3000 });
+      } catch {
+        /* Best effort. */
+      }
+    },
+    async shutdown() {
+      try {
+        await provider.shutdown();
+      } catch {
+        /* Best effort. */
+      }
+    },
   };
 }
 
 type ErrorTelemetry = ReturnType<typeof createErrorTelemetry>;
 
 /** A provenance predicate is required in content scripts sharing a host page. */
-export function installErrorListeners(target: EventTarget, telemetry: Pick<NonNullable<ErrorTelemetry>, 'capture'> | undefined, owns?: (error: Error, filename: string) => boolean) {
-  target.addEventListener('error', (event) => {
+// True when a stack's frames belong to a browser extension's injected script rather than
+// to any page script. A thrown value whose EVERY frame lives under an extension origin was
+// raised by the visitor's own software (content script, injected executor) and is not a
+// defect of this site — the extension throws the same way on every page it runs on. A value
+// that mentions an extension frame but carries at least one frame from elsewhere still
+// belongs to whoever owns those other frames, so it stays.
+const EXTENSION_FRAME = /(?:chrome|moz|safari|edge)-extension:\/\//i;
+export function fromExtensionOnly(error: Error): boolean {
+  const frames = (error.stack || "")
+    .split("\n")
+    .filter((line) => /\bat\s+/.test(line));
+  return (
+    frames.length > 0 && frames.every((line) => EXTENSION_FRAME.test(line))
+  );
+}
+
+export function installErrorListeners(
+  target: EventTarget,
+  telemetry: Pick<NonNullable<ErrorTelemetry>, "capture"> | undefined,
+  owns?: (error: Error, filename: string) => boolean,
+) {
+  // The extension-only filter serves the caller with no predicate of its own (the web
+  // client, where every window event is adopted by default). A caller that passes `owns`
+  // already answers provenance — for a browser extension the extension's own frames ARE
+  // its code — so its answer stands alone.
+  const foreign = owns ? undefined : fromExtensionOnly;
+  target.addEventListener("error", (event) => {
     const failure = event as ErrorEvent;
-    if (failure.error != null && (!owns || (failure.error instanceof Error && owns(failure.error, failure.filename || '')))) telemetry?.capture(failure.error);
+    if (failure.error == null) return;
+    if (foreign?.(failure.error)) return;
+    if (
+      !owns ||
+      (failure.error instanceof Error &&
+        owns(failure.error, failure.filename || ""))
+    )
+      telemetry?.capture(failure.error);
   });
-  target.addEventListener('unhandledrejection', (event) => {
+  target.addEventListener("unhandledrejection", (event) => {
     const reason: unknown = (event as PromiseRejectionEvent).reason;
-    if (!owns || (reason instanceof Error && owns(reason, ''))) telemetry?.capture(reason);
+    if (!(reason instanceof Error)) return;
+    if (foreign?.(reason)) return;
+    if (!owns || owns(reason, "")) telemetry?.capture(reason);
   });
 }
