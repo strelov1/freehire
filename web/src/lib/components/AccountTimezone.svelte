@@ -36,15 +36,16 @@
   let value = $state(currentUser()?.timezone ?? detected);
   const status = new SaveStatus();
 
-  // Re-seed from the session on a real identity change (sign-in/out, or this
-  // component's own save round-tripping through invalidateAll) — keyed on email
-  // rather than running every render, so a value mid-pick is never clobbered by
-  // an unrelated session refresh.
+  // Re-seed from the session when the account or its stored zone changes (sign-in/out,
+  // the layout's browser adoption, or this component's own save round-tripping through
+  // invalidateAll) rather than on every render, and never over a pick still waiting
+  // to save, so a value mid-pick is not clobbered by a session refresh.
   let seededFor: string | null = null;
   $effect(() => {
     const user = currentUser();
-    if (!user || user.email === seededFor) return;
-    seededFor = user.email;
+    const key = user ? `${user.email}|${user.timezone ?? ''}` : null;
+    if (!user || key === seededFor || pendingSave !== undefined) return;
+    seededFor = key;
     if (user.timezone) {
       value = user.timezone;
     } else if (detected) {

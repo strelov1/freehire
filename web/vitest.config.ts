@@ -33,6 +33,7 @@ export default defineConfig({
   test: {
     projects: [
       {
+        resolve: { alias: appStubAlias },
         test: {
           name: 'unit',
           environment: 'node',
