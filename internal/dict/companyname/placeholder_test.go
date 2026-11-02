@@ -3,7 +3,11 @@ package companyname
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // fakeHTTP serves canned bodies keyed by URL for both GetText and GetJSON, since the
@@ -18,6 +22,16 @@ func (f fakeHTTP) GetJSON(_ context.Context, url string, v any) error {
 		return nil
 	}
 	return json.Unmarshal([]byte(body), v)
+}
+
+type recordingFakeHTTP struct {
+	fakeHTTP
+	requests []string
+}
+
+func (f *recordingFakeHTTP) GetText(ctx context.Context, url string) (string, error) {
+	f.requests = append(f.requests, url)
+	return f.fakeHTTP.GetText(ctx, url)
 }
 
 // Live-verified 2026-10-23: 15 of 15 sampled placeholder boards titled their listing page
@@ -346,6 +360,116 @@ func TestPlaceholderZohoRecruitUsesTheSiteName(t *testing.T) {
 		"nometa.zohorecruit.in":             "",
 	} {
 		got, err := reg["zohorecruit"].Name(context.Background(), board)
+		if err != nil || got != want {
+			t.Errorf("Name(%s) = %q, %v; want %q", board, got, err, want)
+		}
+	}
+}
+
+func TestHostOnlyBoardRequiresBareHost(t *testing.T) {
+	for board, want := range map[string]bool{
+		"jobs.bookbeat.com":         true,
+		"":                          false,
+		"jobs.example.com/path":     false,
+		"jobs.example.com:8443":     false,
+		"user@jobs.example.com":     false,
+		"jobs.example.com?region=1": false,
+		"jobs.example.com#fragment": false,
+		"jobs..example.com":         false,
+		"jobs_.example.com":         false,
+		"-jobs.example.com":         false,
+		"jobs.example-.com":         false,
+		"jobs.example.com.":         false,
+		"jobs":                      false,
+		"127.0.0.1":                 false,
+		"xn--bcher-kva.example":     true} {
+		if got := hostOnlyBoard(board); got != want {
+			t.Errorf("hostOnlyBoard(%q) = %v; want %v", board, got, want)
+		}
+	}
+}
+
+func TestPlaceholderResolversDoNotFetchNonHostBoards(t *testing.T) {
+	for _, provider := range []string{"successfactors", "teamtailor"} {
+		t.Run(provider, func(t *testing.T) {
+			for _, board := range []string{"jobs.invalid/path", "bad_host.example", "127.0.0.1", "jobs..example.com"} {
+				getter := &recordingFakeHTTP{}
+				resolver := NewPlaceholderRegistry(getter)[provider]
+				got, err := resolver.Name(context.Background(), board)
+				if err != nil || got != "" {
+					t.Errorf("Name(%q) = %q, %v; want empty, nil", board, got, err)
+				}
+				if len(getter.requests) != 0 {
+					t.Errorf("non-host board %q triggered HTTP requests: %v", board, getter.requests)
+				}
+			}
+		})
+	}
+}
+
+func TestProductionSourcesClientBlocksLoopback(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := sources.NewClient().GetText(ctx, "https://127.0.0.1/")
+	if err == nil || !strings.Contains(err.Error(), "blocked") {
+		t.Errorf("sources client error = %v; want safehttp block for loopback target", err)
+	}
+}
+
+// Live-verified 2026-11-02: the SuccessFactors host's title is "Jobs at Volvo Group".
+func TestPlaceholderSuccessFactorsUsesCareerPageTitle(t *testing.T) {
+	getter := fakeHTTP{
+		"https://jobs.volvogroup.com/":  `<html><head><title>Jobs at Volvo Group</title></head></html>`,
+		"https://jobs.generic.com/":     `<html><head><title>Job Search</title></head></html>`,
+		"https://jobs.careers.example/": `<html><head><title>Jobs at Careers</title></head></html>`,
+		"https://jobs.invalid/path/":    `<html><head><title>Jobs at Should Not Accept</title></head></html>`,
+	}
+	reg := NewPlaceholderRegistry(getter)
+	resolver, ok := reg["successfactors"]
+	if !ok {
+		t.Fatal("placeholder registry has no SuccessFactors resolver")
+	}
+	for board, want := range map[string]string{
+		"jobs.volvogroup.com":  "Volvo Group",
+		"jobs.generic.com":     "",
+		"jobs.careers.example": "",
+		"jobs.invalid/path":    "",
+	} {
+		got, err := resolver.Name(context.Background(), board)
+		if err != nil || got != want {
+			t.Errorf("Name(%s) = %q, %v; want %q", board, got, err, want)
+		}
+	}
+}
+
+// Live-verified 2026-11-02: the Teamtailor jobs page's og:site_name is "BookBeat".
+func TestPlaceholderTeamtailorUsesSiteName(t *testing.T) {
+	getter := fakeHTTP{
+		"https://jobs.bookbeat.com/jobs":     `<head><meta property="og:site_name" content="BookBeat" /></head>`,
+		"https://jobs.no-meta.com/jobs":      `<head><title>Jobs at No Meta</title></head>`,
+		"https://jobs.careers.example/jobs":  `<head><meta property="og:site_name" content="Careers" /></head>`,
+		"https://jobs.platform.example/jobs": `<head><meta property="og:site_name" content="Teamtailor" /></head>`,
+		"https://jobs.empty.example/jobs":    `<head><meta property="og:site_name" content="" /></head>`,
+		"https://jobs.entity.example/jobs":   `<head><meta property="og:site_name" content="BookBeat &amp; Co" /></head>`,
+		"https://jobs.spaces.example/jobs":   `<head><meta property="og:site_name" content=" Careers " /></head>`,
+		"https://jobs.invalid/path/jobs":     `<head><meta property="og:site_name" content="Should Not Accept" /></head>`,
+	}
+	reg := NewPlaceholderRegistry(getter)
+	resolver, ok := reg["teamtailor"]
+	if !ok {
+		t.Fatal("placeholder registry has no Teamtailor resolver")
+	}
+	for board, want := range map[string]string{
+		"jobs.bookbeat.com":     "BookBeat",
+		"jobs.no-meta.com":      "",
+		"jobs.careers.example":  "",
+		"jobs.platform.example": "",
+		"jobs.empty.example":    "",
+		"jobs.entity.example":   "BookBeat & Co",
+		"jobs.spaces.example":   "",
+		"jobs.invalid/path":     "",
+	} {
+		got, err := resolver.Name(context.Background(), board)
 		if err != nil || got != want {
 			t.Errorf("Name(%s) = %q, %v; want %q", board, got, err, want)
 		}

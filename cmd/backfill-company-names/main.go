@@ -18,7 +18,7 @@
 // search.
 //
 // A second pass fixes the boards whose company is not a slug but the board id itself — a
-// "<host>/<site>" path or a GUID a harvest wrote into boards.company verbatim (measured
+// bare host, a "<host>/<site>" path, or a GUID a harvest wrote into boards.company verbatim (measured
 // 2026-10-23: ~2,200 companies carrying ~156k open postings under a host path, ~7,400 carrying
 // ~44k under a GUID). It is driven by the board rather than by the jobs, asks the ATS for
 // exactly that board's name (companyname.NewPlaceholderRegistry), and renames the board and its

@@ -12,28 +12,34 @@ import (
 )
 
 // TestListPlaceholderCompanyBoards pins what counts as a placeholder: the company equal to the
-// board id (case-insensitively), on a live board, of a provider the caller can resolve.
+// board id (case-insensitively), on a live board, of a provider the caller can resolve; a
+// SuccessFactors hub is excluded because its host page names the hub rather than its tenants.
 func TestListPlaceholderCompanyBoards(t *testing.T) {
 	pool := startPostgres(t)
 	ctx := context.Background()
 	q := New(pool)
 
-	seed := func(provider, board, company, status string) {
+	seed := func(provider, board, company, status string, hub bool) {
 		t.Helper()
 		if _, err := q.InsertBoard(ctx, InsertBoardParams{
-			Provider: provider, Board: board, Company: company,
+			Provider: provider, Board: board, Company: company, Hub: hub,
 			Tenants: []byte("{}"), Status: status, Surface: "curator",
 		}); err != nil {
 			t.Fatalf("seed %s/%s: %v", provider, board, err)
 		}
 	}
-	seed("oracle", "eabw.fa.us2.oraclecloud.com/CX", "eabw.fa.us2.oraclecloud.com/CX", "active")
-	seed("oracle", "egmn.fa.us2.oraclecloud.com/CX", "EGMN.fa.us2.oraclecloud.com/cx", "pending")
-	seed("oracle", "edva.fa.us2.oraclecloud.com/CX", "Archrock", "active")                        // already named
-	seed("oracle", "ebtw.fa.us2.oraclecloud.com/CX", "ebtw.fa.us2.oraclecloud.com/CX", "retired") // not live
-	seed("taleo", "mch.taleo.net/2", "mch.taleo.net/2", "active")                                 // provider not asked for
+	seed("oracle", "eabw.fa.us2.oraclecloud.com/CX", "eabw.fa.us2.oraclecloud.com/CX", "active", false)
+	seed("oracle", "egmn.fa.us2.oraclecloud.com/CX", "EGMN.fa.us2.oraclecloud.com/cx", "pending", false)
+	seed("oracle", "edva.fa.us2.oraclecloud.com/CX", "Archrock", "active", false)                        // already named
+	seed("oracle", "ebtw.fa.us2.oraclecloud.com/CX", "ebtw.fa.us2.oraclecloud.com/CX", "retired", false) // not live
+	seed("taleo", "mch.taleo.net/2", "mch.taleo.net/2", "active", false)                                 // provider not asked for
+	seed("successfactors", "jobs.volvogroup.com", "jobs.volvogroup.com", "active", false)
+	seed("successfactors", "jobs.example.com", "Example Group", "active", false)           // curator already named it
+	seed("successfactors", "jobs.hub.example.com", "jobs.hub.example.com", "active", true) // hub page names its parent, not its tenants
+	seed("teamtailor", "jobs.bookbeat.com", "jobs.bookbeat.com", "pending", false)
 
-	rows, err := q.ListPlaceholderCompanyBoards(ctx, []string{"oracle", "paylocity"})
+	providers := []string{"oracle", "paylocity", "successfactors", "teamtailor"}
+	rows, err := q.ListPlaceholderCompanyBoards(ctx, providers)
 	if err != nil {
 		t.Fatalf("ListPlaceholderCompanyBoards: %v", err)
 	}
@@ -41,8 +47,19 @@ func TestListPlaceholderCompanyBoards(t *testing.T) {
 	for _, r := range rows {
 		got[r.Board] = true
 	}
-	if len(rows) != 2 || !got["eabw.fa.us2.oraclecloud.com/CX"] || !got["egmn.fa.us2.oraclecloud.com/CX"] {
-		t.Fatalf("rows = %+v, want the two live oracle placeholders", rows)
+	want := []string{
+		"eabw.fa.us2.oraclecloud.com/CX",
+		"egmn.fa.us2.oraclecloud.com/CX",
+		"jobs.volvogroup.com",
+		"jobs.bookbeat.com",
+	}
+	if len(rows) != len(want) {
+		t.Fatalf("got %d placeholder boards: %+v; want %d", len(rows), rows, len(want))
+	}
+	for _, board := range want {
+		if !got[board] {
+			t.Errorf("missing placeholder board %q in rows: %+v", board, rows)
+		}
 	}
 }
 
