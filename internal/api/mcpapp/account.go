@@ -53,7 +53,14 @@ const accountAlertInstructions = "Job alerts are saved searches over any filters
 // reimplemented so a tool result here and in the assistant can never disagree.
 func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.Server {
 	server := mcp.NewServer(Identity("freehire-account", Version, origin),
-		&mcp.ServerOptions{Instructions: accountInstructions(tools)})
+		&mcp.ServerOptions{
+			Instructions: accountInstructions(tools),
+			// The authenticated tool list is fixed for this request's server.
+			Capabilities: &mcp.ServerCapabilities{
+				Logging: &mcp.LoggingCapabilities{}, //nolint:staticcheck // Preserve the SDK default for older MCP clients.
+				Tools:   &mcp.ToolCapabilities{},
+			},
+		})
 
 	for _, t := range tools {
 		server.AddTool(&mcp.Tool{
