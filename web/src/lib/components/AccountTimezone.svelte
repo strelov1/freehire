@@ -11,7 +11,8 @@
   const headingId = $props.id();
 
   // The root layout persists the detected zone for accounts without one. This
-  // field displays that default immediately; only an explicit pick saves here.
+  // field shows only the stored value so a failed adoption can be retried by picking
+  // any zone, including the browser's. Explicit picks save here.
   // `Intl.supportedValuesOf('timeZone')` omits the bare "UTC" identifier (it only
   // lists Area/Location names) even though it's a real IANA zone Go's
   // time.LoadLocation accepts — prepend it so a stored/detected "UTC" has a
@@ -26,30 +27,22 @@
     ]),
   ];
 
-  let detected = '';
-  try {
-    detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    detected = '';
-  }
-
-  let value = $state(currentUser()?.timezone ?? detected);
+  let value = $state(currentUser()?.timezone ?? '');
   const status = new SaveStatus();
+  let pendingSave = $state<ReturnType<typeof setTimeout>>();
 
-  // Re-seed from the session when the account or its stored zone changes (sign-in/out,
-  // the layout's browser adoption, or this component's own save round-tripping through
-  // invalidateAll) rather than on every render, and never over a pick still waiting
-  // to save, so a value mid-pick is not clobbered by a session refresh.
+  // Follow adoption and other session refreshes unless a local pick is pending or
+  // failed. A real identity change discards that account's edit state.
   let seededFor: string | null = null;
   $effect(() => {
     const user = currentUser();
-    const key = user ? `${user.email}|${user.timezone ?? ''}` : null;
-    if (!user || key === seededFor || pendingSave !== undefined) return;
-    seededFor = key;
-    if (user.timezone) {
-      value = user.timezone;
-    } else if (detected) {
-      value = detected;
+    if ((user?.email ?? null) !== seededFor) {
+      seededFor = user?.email ?? null;
+      clearTimeout(pendingSave);
+      pendingSave = undefined;
+      value = user?.timezone ?? '';
+    } else if (pendingSave === undefined && !status.saving && status.state !== 'error') {
+      value = user?.timezone ?? '';
     }
   });
 
@@ -57,7 +50,6 @@
   // time — so a save per change wrote every zone the user stepped past. The save waits for
   // the value to settle, and leaving the control commits whatever is pending at once.
   const SAVE_DEBOUNCE_MS = 600;
-  let pendingSave: ReturnType<typeof setTimeout> | undefined;
 
   function scheduleSave() {
     clearTimeout(pendingSave);
