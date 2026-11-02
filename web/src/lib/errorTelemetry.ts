@@ -161,7 +161,7 @@ type ErrorTelemetry = ReturnType<typeof createErrorTelemetry>;
 // that mentions an extension frame but carries at least one frame from elsewhere still
 // belongs to whoever owns those other frames, so it stays.
 const EXTENSION_FRAME = /(?:chrome|moz|safari|edge)-extension:\/\//i;
-export function fromExtensionOnly(error: Error): boolean {
+function fromExtensionOnly(error: Error): boolean {
   const frames = (error.stack || "")
     .split("\n")
     .filter((line) => /\bat\s+/.test(line));
