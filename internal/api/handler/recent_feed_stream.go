@@ -82,6 +82,8 @@ func (h *recentFeedHandlers) StreamRecentJobs(c *fiber.Ctx) error {
 
 	sseHeaders(c)
 	conn := c.Context().Conn()
+	// fasthttp closes Done when the server shuts down, not when a client leaves.
+	serverDone := c.Context().Done()
 
 	var hub *sentry.Hub
 	if reqHub := sentryfiber.GetHubFromContext(c); reqHub != nil {
@@ -103,6 +105,8 @@ func (h *recentFeedHandlers) StreamRecentJobs(c *fiber.Ctx) error {
 		defer ping.Stop()
 		for {
 			select {
+			case <-serverDone:
+				return
 			case e, ok := <-entries:
 				if !ok {
 					return
