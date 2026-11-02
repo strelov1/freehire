@@ -37,6 +37,9 @@ stated geography — by staging the `work_mode_remote_anywhere` modifier rather 
 narrowing the remote reach to the home geography. A profile without that shape
 (remote only; physical only; no geography; a stated remote reach) SHALL flatten
 exactly as before — the modifier would drop a stated reach from the remote arm.
+When it stages the modifier it SHALL NOT stage the relocation facet: that facet
+ANDs around the whole disjunction and would demand relocation from remote
+postings; the relocation targets remain in the physical arm's geography.
 
 #### Scenario: Hybrid at home plus remote anywhere from the profile
 

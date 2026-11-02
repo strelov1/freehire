@@ -402,6 +402,10 @@ describe('filtersFromProfile remote-anywhere flattening', () => {
       filtersFromProfile(mkProfile([], [], loc(['remote', 'onsite'], { relocation: { open: true, countries: ['pl'] } }))),
     );
     expect(p.get('work_mode_remote_anywhere')).toBe('true');
+    expect(p.get('countries')?.split(',')).toContain('pl');
+    // ANDed around the whole disjunction, the relocation facet would demand that
+    // remote postings offer relocation too.
+    expect(p.has('relocation')).toBe(false);
   });
 
   // The modifier would drop the reach from the remote arm; the plain flatten keeps

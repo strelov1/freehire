@@ -775,6 +775,11 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
     const remoteAnywhere = !(loc.remote.regions?.length || loc.remote.countries?.length);
     if (remoteAnywhere && appliesWorkModeRemoteAnywhere(f)) {
       f.workModeRemoteAnywhere = true;
+      // The relocation facet is not a location facet: the server ANDs it around the
+      // whole disjunction, so remote postings would have to offer relocation too —
+      // few do, and "remote from anywhere" would collapse to almost nothing. The
+      // relocation targets stay in the physical arm's geography.
+      f.facets.relocation = emptyFacet();
     }
   }
   return f;
