@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
 
@@ -24,6 +26,13 @@ func TestStatelessServersDoNotAdvertiseListChanges(t *testing.T) {
 			for _, list := range []string{"tools", "prompts", "resources"} {
 				if cap, ok := caps[list].(map[string]any); ok && cap["listChanged"] == true {
 					t.Errorf("%s advertises changes to its per-request list", list)
+				}
+			}
+			if name == "public" {
+				for _, list := range []string{"prompts", "resources"} {
+					if caps[list] == nil {
+						t.Errorf("%s capability is missing", list)
+					}
 				}
 			}
 			if caps["tools"] == nil {
@@ -74,6 +83,7 @@ func TestStatelessListSubscriptionCompletesWithoutWaiting(t *testing.T) {
 					continue
 				}
 				var envelope struct {
+					Params json.RawMessage `json:"params"`
 					Method string          `json:"method"`
 					Result json.RawMessage `json:"result"`
 					Error  json.RawMessage `json:"error"`
@@ -84,7 +94,17 @@ func TestStatelessListSubscriptionCompletesWithoutWaiting(t *testing.T) {
 				if len(envelope.Error) != 0 {
 					t.Fatalf("subscription error: %s", envelope.Error)
 				}
-				acknowledged = acknowledged || envelope.Method == "notifications/subscriptions/acknowledged"
+				if envelope.Method == "notifications/subscriptions/acknowledged" {
+					var params mcp.SubscriptionsAcknowledgedParams
+					if err := json.Unmarshal(envelope.Params, &params); err != nil {
+						t.Fatal(err)
+					}
+					n := params.Notifications
+					if n.ToolsListChanged || n.PromptsListChanged || n.ResourcesListChanged || len(n.ResourceSubscriptions) != 0 {
+						t.Fatalf("static server accepted subscriptions: %+v", n)
+					}
+					acknowledged = true
+				}
 				completed = completed || len(envelope.Result) != 0
 			}
 			if !acknowledged || !completed {
