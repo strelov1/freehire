@@ -133,6 +133,19 @@ export interface JobFilters {
    *  active filter. A signed-out caller gets the unhidden feed (the server says so in
    *  `meta.ignored_params`), which is why the control is only offered signed in. */
   hideSeen: boolean;
+  /** Change how work_mode composes with the location facets: instead of ANDing
+   *  them (which narrows remote work to the home country), the server builds
+   *  "any selected mode anywhere, OR a physical mode within the location group"
+   *  — remote from anywhere plus hybrid/on-site at home. Serialized as
+   *  `work_mode_remote_anywhere=true`. The server applies it only when remote AND
+   *  a physical mode are both selected AND a location facet carries a value
+   *  (mirrors `remoteAnywhereActive`, see `appliesWorkModeRemoteAnywhere`), so
+   *  every read here gates on the same condition: the checkbox only shows when
+   *  it changes the answer, and only then it counts as an active filter. A saved
+   *  search KEEPS it — the digest matcher replays the stored query through the
+   *  same server builder, so the alert mails the set the subscriber saw. Mirrors
+   *  `WorkModeRemoteAnywhereParam` in internal/search/search/query_filter.go. */
+  workModeRemoteAnywhere: boolean;
 }
 
 /** Strips a title suggestion's Meilisearch quoting wrapper (see `apiSuggestions.ts`'s
@@ -286,6 +299,7 @@ export function emptyFilters(): JobFilters {
     sort: null,
     qFields: null,
     hideSeen: false,
+    workModeRemoteAnywhere: false,
   };
 }
 
@@ -329,6 +343,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   const sortParam = SORT_PARAM[sort];
   if (sortParam && sort !== defaultSortFor(f.q)) p.set('sort', sortParam);
   if (f.hideSeen) p.set('hide_seen', 'true');
+  if (f.workModeRemoteAnywhere) p.set('work_mode_remote_anywhere', 'true');
   return p;
 }
 
@@ -426,7 +441,18 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // that sets it.
   f.sort = SORT_FROM_PARAM[p.get('sort') ?? ''] ?? null;
   f.hideSeen = p.get('hide_seen') === 'true';
+  f.workModeRemoteAnywhere = p.get('work_mode_remote_anywhere') === 'true';
   return f;
+}
+
+/** Whether the remote-anywhere modifier actually changes the answer for this filter
+ *  set — the server's precondition (`remoteAnywhereActive` in
+ *  internal/search/search/query_filter.go), mirrored so the checkbox shows only when
+ *  it has something to do and the count only rises when it does. */
+export function appliesWorkModeRemoteAnywhere(f: JobFilters): boolean {
+  const modes = f.facets.work_mode?.include ?? [];
+  const hasLocation = ['regions', 'countries', 'cities', 'metros'].some((p) => (f.facets[p]?.include.length ?? 0) > 0);
+  return modes.includes('remote') && modes.some((m) => m === 'hybrid' || m === 'onsite') && hasLocation;
 }
 
 /** The security-clearance control used to be a three-state toggle serialized as
@@ -468,6 +494,9 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.postedWithinDays != null) n += 1;
   if (f.openWithinDays != null) n += 1;
   if (f.experienceYearsMax != null) n += 1;
+  // The modifier counts only when it changes the answer — off or inert, it narrows
+  // nothing and a badge for it would lie.
+  if (f.workModeRemoteAnywhere && appliesWorkModeRemoteAnywhere(f)) n += 1;
   return n;
 }
 
@@ -728,6 +757,21 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
       ...(reloc.cities ?? []),
     ]);
     if (loc.relocation.open) f.facets.relocation = seed(['supported', 'required']);
+    // The profile's most common shape — remote anywhere, physical work near home —
+    // cannot survive the plain flatten: ANDing the location facets over the remote
+    // modes would narrow remote work to the home geography. When the user accepted
+    // remote AND a physical format AND stated any geography for the physical side,
+    // stage the server's remote-anywhere modifier instead: remote postings from
+    // anywhere, physical ones within the location facets above. Every other shape
+    // (remote only, physical only, no geography) flattens exactly as before.
+    const statedGeo =
+      f.facets.regions.include.length > 0 ||
+      f.facets.countries.include.length > 0 ||
+      f.facets.cities.include.length > 0 ||
+      (f.facets.metros?.include.length ?? 0) > 0;
+    if (wantsPhysical && (loc.work_modes ?? []).includes('remote') && statedGeo) {
+      f.workModeRemoteAnywhere = true;
+    }
   }
   return f;
 }

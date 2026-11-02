@@ -205,6 +205,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Q"
         - $ref: "#/components/parameters/QFields"
+        - $ref: "#/components/parameters/WorkModeRemoteAnywhere"
         - $ref: "#/components/parameters/HideSeen"
         - $ref: "#/components/parameters/HideAppliedCompanies"
         - $ref: "#/components/parameters/Limit"
@@ -304,6 +305,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Q"
         - $ref: "#/components/parameters/QFields"
+        - $ref: "#/components/parameters/WorkModeRemoteAnywhere"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
         - $ref: "#/components/parameters/Sort"
@@ -1102,6 +1104,23 @@ components:
         parameter entirely — `q` runs unrestricted, across all four fields —
         and `q_fields` is reported in `meta.ignored_params`, the same
         convention every other unrecognized filter follows.
+    WorkModeRemoteAnywhere:
+      name: work_mode_remote_anywhere
+      in: query
+      schema:
+        type: boolean
+      description: |
+        Changes how `work_mode` composes with the location facets: instead of
+        ANDing them (which narrows remote work to the home geography), the
+        work-mode group becomes "any selected mode anywhere, OR a physical mode
+        (hybrid, onsite) within the location facets" — remote from anywhere plus
+        hybrid/on-site at home, the profile preference no AND of facets can
+        state. Applied only when `remote` and a physical mode are both selected
+        AND at least one location facet (regions, countries, cities, metros)
+        carries a value; otherwise it changes nothing. Ignored entirely when
+        `work_mode_mode=and` is set. Location excludes (`countries_exclude`)
+        hold in every arm of the disjunction. A value other than `true` is
+        reported in `meta.ignored_values`.
     HideAppliedCompanies:
       name: hide_applied_companies
       in: query
@@ -1292,6 +1311,16 @@ components:
         Work format, resolved from a deterministic dictionary. Absent on a
         posting whose format could not be resolved, so this filter narrows to
         postings that stated it.
+
+        Set `work_mode_remote_anywhere=true` alongside this to keep remote
+        postings from anywhere while the physical modes stay bounded by the
+        location facets (regions, countries, cities, metros) — "remote from
+        anywhere, hybrid/on-site at home". Applied only when `remote` and a
+        physical mode are both selected AND at least one location facet carries
+        a value; otherwise it changes nothing, and it is ignored entirely when
+        `work_mode_mode=and` is set. Location EXCLUDES hold in every arm of the
+        resulting disjunction (`countries_exclude=us` drops US postings in all
+        modes). A value other than `true` is reported in `meta.ignored_values`.
     Category:
       name: category
       in: query

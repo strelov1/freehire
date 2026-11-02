@@ -134,6 +134,100 @@ func TestFilterFromValues_StrayCommasIgnored(t *testing.T) {
 	}
 }
 
+// WorkModeRemoteAnywhereParam is the modifier behind the profile's most common
+// shape: remote from anywhere, plus hybrid/on-site within the chosen geography.
+// One group of the filter is swapped for a disjunction; every test here asserts
+// the exact Meili expression so the swap cannot silently change shape.
+func TestFilterFromValues_RemoteAnywhereDisjunction(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true")))
+	want := [][]string{{`(work_mode IN ["hybrid", "onsite"] AND (countries = "de"))`, `work_mode = "hybrid"`, `work_mode = "remote"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// The whole location group joins the physical arm — regions/countries/cities/
+// metros OR together into it, exactly as they OR in the plain location group.
+func TestFilterFromValues_RemoteAnywhereSpansTheLocationGroup(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid,onsite&regions=eu&cities=Berlin&work_mode_remote_anywhere=true")))
+	want := [][]string{{`(work_mode IN ["hybrid", "onsite"] AND (cities = "Berlin" OR regions IN ["eu", "uk"]))`, `work_mode = "hybrid"`, `work_mode = "onsite"`, `work_mode = "remote"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// No location include → nothing to bound the physical arm by, so the modifier
+// would only widen the answer past the caller's mode list. Inert.
+func TestFilterFromValues_RemoteAnywhereNeedsALocation(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&work_mode_remote_anywhere=true")))
+	want := [][]string{{`work_mode = "hybrid"`, `work_mode = "remote"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Without remote among the modes the physical arm would RELAX the filter the
+// caller wrote (they named no remote arm to trade against). Inert.
+func TestFilterFromValues_RemoteAnywhereNeedsRemote(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=hybrid,onsite&countries=de&work_mode_remote_anywhere=true")))
+	want := [][]string{{`countries = "de"`}, {`work_mode = "hybrid"`, `work_mode = "onsite"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// AND mode is a different filter (a job must be every named mode) and cannot
+// compose with the disjunction. The explicit `_mode` wins; the modifier is inert.
+func TestFilterFromValues_RemoteAnywhereYieldsToAndMode(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&work_mode_mode=and&countries=de&work_mode_remote_anywhere=true")))
+	want := [][]string{{`countries = "de"`}, {`work_mode = "hybrid"`}, {`work_mode = "remote"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Excludes are not folded into the disjunction: "not the US" holds in every arm.
+// A location include AND a location exclude is contradictory on the plain reading
+// too (the include group and the exclude group AND together), and this reading is
+// no different — the exclude group sits beside the swapped work-mode group.
+func TestFilterFromValues_RemoteAnywhereKeepsGlobalExcludes(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&countries_exclude=us&work_mode_remote_anywhere=true")))
+	want := [][]string{
+		{`(work_mode IN ["hybrid", "onsite"] AND (countries = "de"))`, `work_mode = "hybrid"`, `work_mode = "remote"`},
+		{`countries != "us"`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Other facets keep their ordinary AND beside the disjunction.
+func TestFilterFromValues_RemoteAnywhereComposesWithOtherFacets(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&seniority=senior&work_mode_remote_anywhere=true")))
+	want := [][]string{
+		{`(work_mode IN ["hybrid", "onsite"] AND (countries = "de"))`, `work_mode = "hybrid"`, `work_mode = "remote"`},
+		{`enrichment.seniority = "senior"`},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// The value is read as a boolean: anything but "true" (case-insensitively, like
+// every other bool scalar) leaves the modifier unset.
+func TestFilterFromValues_RemoteAnywhereReadsTrueOnly(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=yes")))
+	want := [][]string{{`countries = "de"`}, {`work_mode = "hybrid"`, `work_mode = "remote"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("yes: got %v, want %v", got, want)
+	}
+	got = normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=TRUE")))
+	want = [][]string{{`(work_mode IN ["hybrid", "onsite"] AND (countries = "de"))`, `work_mode = "hybrid"`, `work_mode = "remote"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TRUE: got %v, want %v", got, want)
+	}
+}
+
 func TestFilterFromValues_AndMode(t *testing.T) {
 	// skills_mode=and → each value its own AND group (a job must have both).
 	got := normalizeGroups(t, FilterFromValues(vals("skills=go&skills=rust&skills_mode=and")))
@@ -608,6 +702,8 @@ func TestNarrows(t *testing.T) {
 		{"posted_within_days=7", true},
 		{"skills_exclude=php", true},
 		{"countries=de&sort=created_at", true},
+		// A modifier alone reads nothing, like every other modifier.
+		{"work_mode_remote_anywhere=true", false},
 	}
 	for _, c := range cases {
 		if got := Narrows(vals(c.query)); got != c.want {
