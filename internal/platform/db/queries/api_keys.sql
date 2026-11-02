@@ -37,7 +37,7 @@ UPDATE api_keys
 SET last_used_at = now()
 WHERE token_hash = $1
   AND (expires_at IS NULL OR expires_at > now())
-RETURNING user_id, scope;
+RETURNING user_id, scope, id;
 
 -- name: ResolveAPIKeyTier :one
 -- Resolve a presented token to its owner, the key's scope and how far the owner's paid

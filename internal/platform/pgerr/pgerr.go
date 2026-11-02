@@ -10,6 +10,13 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// IsPostgresError reports whether err wraps a server-side PostgreSQL error.
+// Diagnostic logs use this coarse classification without exposing SQL or messages.
+func IsPostgresError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr)
+}
+
 // SQLSTATE codes the app branches on.
 const (
 	codeUniqueViolation      = "23505"

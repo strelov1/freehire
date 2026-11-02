@@ -16,12 +16,13 @@ UPDATE api_keys
 SET last_used_at = now()
 WHERE token_hash = $1
   AND (expires_at IS NULL OR expires_at > now())
-RETURNING user_id, scope
+RETURNING user_id, scope, id
 `
 
 type AuthenticateAPIKeyRow struct {
 	UserID int64  `json:"user_id"`
 	Scope  string `json:"scope"`
+	ID     int64  `json:"id"`
 }
 
 // Resolve a presented token (by its SHA-256 hash) to the owning user id and the key's
@@ -31,7 +32,7 @@ type AuthenticateAPIKeyRow struct {
 func (q *Queries) AuthenticateAPIKey(ctx context.Context, tokenHash string) (AuthenticateAPIKeyRow, error) {
 	row := q.db.QueryRow(ctx, authenticateAPIKey, tokenHash)
 	var i AuthenticateAPIKeyRow
-	err := row.Scan(&i.UserID, &i.Scope)
+	err := row.Scan(&i.UserID, &i.Scope, &i.ID)
 	return i, err
 }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 // Version is what this server reports itself as. It is the app's version, not the
@@ -315,7 +316,16 @@ func toolResult[T any](out T, err error) (*mcp.CallToolResult, T, error) {
 		message = notFound.Error() + "; search for it instead"
 	}
 	return &mcp.CallToolResult{
+		Meta:    mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": publicErrorCode(err)}},
 		IsError: true,
 		Content: []mcp.Content{&mcp.TextContent{Text: message}},
 	}, zero, nil
+}
+
+func publicErrorCode(err error) string {
+	var notFound NotFoundError
+	if errors.As(err, &notFound) {
+		return "not_found"
+	}
+	return observability.ErrorCode(err)
 }

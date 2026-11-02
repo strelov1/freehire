@@ -180,6 +180,7 @@ func runServer(cfg config.Settings) error {
 	// 500 further in, so only a middleware the response passes through on its way back out
 	// records the status the client actually got.
 	app.Use(observability.HTTPMetrics())
+	app.Use(observability.RequestIDs())
 
 	// Report the panic while its stack is available and mark it so RenderError
 	// cannot report it a second time. Sentry's fallback middleware captures first
@@ -193,7 +194,9 @@ func runServer(cfg config.Settings) error {
 	// They were ~28% of syslog's lines on prod, where the API's per-request log is ~71% of a
 	// file that reaches 3.9 GB a week — on a host whose facet reindex refuses to run below a
 	// 70 GiB free-space floor it clears by about 1 GiB. They also make the log ungreppable.
-	app.Use(logger.New(logger.Config{DisableColors: true}))
+	app.Use(logger.New(logger.Config{DisableColors: true,
+		Format: "${time} | ${status} | ${latency} | ${ip} | ${method} | ${path} | ${error} | request_id=${locals:diagnostics.request_id}\n",
+	}))
 
 	// Sentry request middleware, wired only when error reporting is configured. It
 	// sits AFTER recover.New so its deferred capture runs first on a panic (reporting
