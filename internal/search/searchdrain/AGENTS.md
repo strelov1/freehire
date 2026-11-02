@@ -19,31 +19,32 @@ Incremental facet-search indexing via the `search_outbox` queue, mirroring `inte
 
 ## The removal queue
 
+Ordinary closures now update `is_closed = true` through Meilisearch's native
+edit-documents-by-function API, preserving text and vectors. Search, facet/distinct
+counts and job sitemaps exclude the marker inside the engine; legacy unmarked
+records remain eligible. Full replacements clear the marker when a posting reopens.
+Missing, private and noncanonical rows keep physical deletion. The existing
+`DeletionStats.Deleted` counts acknowledged queue entries, including markers and
+no-ops; it is not a physical-document deletion counter.
+
+**Roll out settings before binaries:** enable `editDocumentsByFunction`, append
+`is_closed` to the LIVE jobs index's filterable attributes and await the settings
+task, then deploy the reader/worker together. Engine upgrades must verify the
+experimental API. Rollback to an old reader requires physically removing marked
+documents first, since that reader would not exclude them. The existing rebuild
+pause remains in place until contention is measured on the full-size index.
+
 `search_delete_outbox` is the mirror of `search_outbox`: that one says "index this job", this
 one says "drop this job's document". `cmd/search-drain` drains both in one pass — **removals
 first, then indexing**, and that order is load-bearing rather than incidental.
 
-It used to be the other way round, so that "a fault in the newer path cannot delay the
-established one". The reasoning inverted in practice, because each pass drains **until its
-queue is empty** and on this fleet the index queue need never be empty. Measured on prod
-2026-09-06, after a 5h `reindex` had paused this unit and left both queues five hours deep:
-arrivals into `search_outbox` ran at 2504/min against a drain of 2614/min, so the indexing
-pass hovered at a 9-11k depth and did not return for over two hours. `Type=oneshot` means no
-second instance starts, so removals had not run once in that window and **134k closed
-postings stayed visible in search**. Indexing was healthy throughout — `failed=0`, `dead=0`,
-200k+ pushed. Going second was not a delay, it was starvation, and nothing in the old
-ordering could end it.
-
-Removals cannot starve pushes symmetrically: a wave is ONE index task for the whole batch,
-the queue is fed only by closures rather than by every content change, and a wave that goes
-wrong is bounded by the same `CallTimeout` and dead-lettering as an index wave.
-
-**`SEARCH_DRAIN_MAX_PER_RUN` bounds how much of EITHER queue one run takes; 0 (the default)
-is unbounded.** It is the lever for handing the process back on a schedule rather than on
-exhaustion, and it is deliberately off by default: a cap is not free — the run ends, the
-timer waits its interval, and a new process pays startup again, so a cap set below the
-arrival rate turns a queue that was draining into one that grows. Set it against a measured
-arrival rate, and measure again after.
+`searchdrain.Drain` alternates ONE wave of removals and ONE wave of indexing, with
+removals first. Each queue keeps its own `SEARCH_DRAIN_MAX_PER_RUN` budget; deferred
+waves count as claimed work without spending attempts. A short wave ends that queue's
+pass until the next scheduled invocation, so incoming trickles accumulate instead of
+forcing repeated small index mutations. Housekeeping remains bounded once per invocation.
+This replaces two exhaustion-based passes: even with a 5,000-entry budget, the indexing
+pass spent fifteen minutes sending tiny waves while the next deletion pass waited.
 
 It exists because nothing removed documents incrementally. `ClaimSearchOutboxBatch` filters
 `closed_at IS NULL`, so a job that closes is never claimed again and its document simply
@@ -81,15 +82,19 @@ were integration tests. Measured on prod 2026-08-18: **19,827 jobs close per day
   tables that reference `jobs`, so this one must be named explicitly. `internal/platform/db`'s
   `truncate` helper does. Leave it out and rows leak between tests, which reads as a passing
   assertion about code that was never touched — it happened while building this.
-- **The claim has no `EXISTS (SELECT 1 FROM jobs ...)` guard**, unlike the indexing claim.
-  There a closed or demoted job is nothing to index; here it is precisely the work. Adding the
-  guard would make the queue skip every entry it was created for.
-- **No `Reap` either.** `Store.Reap` exists because the indexing claim strands entries it can
-  never take. This claim skips nothing, so nothing strands.
-- **The index/delete race is already closed on the other side.** A job queued for indexing and
-  then closed is never claimed by that entry, because `ClaimSearchOutboxBatch` filters
-  `closed_at IS NULL`. The two queues cannot fight over the same job, and `DeleteJobs` is
-  idempotent, so overlapping or retried removals cost nothing.
+- **Reopening is checked before removal and repaired at acknowledgment.**
+  `PrepareSearchDeletions` briefly locks open public canonical jobs, atomically cancels
+  their obsolete removals and queues current content for indexing, then returns only ids
+  still needing removal (including missing rows). A later close creates a NEW outbox id,
+  so acknowledging the old one cannot erase it. `CompleteSearchDeleteOutbox` atomically
+  queues a job reopened DURING the Meilisearch call before discarding its removal.
+  `TouchJob` queues closed-to-open transitions too, covering a reopen AFTER acknowledgment.
+  Ordinary open-to-open touches remain cheap. A failed preparation skips the whole wave
+  for lease-expiry retry rather than fanning out per item or spending attempts.
+- **Missing job rows still need removal.** The deletion queue has no cascading job foreign
+  key and the preparation returns missing ids; an indexing-style EXISTS guard would
+  strand their documents permanently.
+
 - **A search page hides what the queue still holds.** The drain is paused for the whole of a facet rebuild, so a closure can stay in the index for hours (freehire#4040: 112k entries deep at 18:39 on 2026-11-01). `searchHandlers.dropPendingRemovals` asks this table about the ids on the page it is about to serve (`ListPendingSearchRemovals`, a primary-key lookup) and drops the ones queued, lowering `meta.total` by the same count. The queue is the right set to ask because it is exactly the closed-but-indexed postings, and it cannot be handed to Meilisearch as an `id NOT IN` filter the way `hide_seen` is, at that size. It lives in `runJobSearch`; a path that reads the index elsewhere (facets, companies, the agent endpoints that do not go through it) still sees the lag. A queued row alone does not hide a posting: `TouchJob` and `UpsertJob` reopen a posting WITHOUT dequeuing it, so the lookup joins `jobs` and hides only a job that is gone or still closed. The lookup is bounded by `pendingRemovalsTimeout`, so a stalled database serves the page as the index has it. Known limit: a page whose every hit is queued comes back empty although later pages hold matches.
 - **Duplicates are still rebuild-only.** `duplicate_of` is set by bulk `UPDATE`s inside the
   dedup passes — 478,366 rows in one statement on 2026-08-18 — which is a different shape of

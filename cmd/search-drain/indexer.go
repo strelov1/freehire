@@ -157,14 +157,31 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	return ix.client.IndexJobs(ctx, docs)
 }
 
-// facetDeleter adapts the search client to searchdrain.Deleter.
-//
-// Unlike searchIndexer it needs no queries: a removal is identified by primary key alone,
-// and by the time an entry drains its job row may be gone (a hard delete).
+// facetDeleter rechecks current state before removing documents. A missing row
+// still needs removal, while an open row must survive its old queued closure.
 type facetDeleter struct {
 	client *search.Client
+	q      *db.Queries
 }
 
 func (d facetDeleter) DeleteBatch(ctx context.Context, jobIDs []int64) error {
-	return d.client.DeleteJobs(ctx, jobIDs)
+	rows, err := d.q.PrepareSearchDeletions(ctx, jobIDs)
+	if err != nil {
+		return fmt.Errorf("%w: prepare removals: %v", searchdrain.ErrSkipWave, err)
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	var closed, removed []int64
+	for _, row := range rows {
+		if row.HardDelete {
+			removed = append(removed, row.JobID)
+		} else {
+			closed = append(closed, row.JobID)
+		}
+	}
+	if err := d.client.CloseJobs(ctx, closed); err != nil {
+		return fmt.Errorf("%w: update closure markers: %v", searchdrain.ErrSkipWave, err)
+	}
+	return d.client.DeleteJobs(ctx, removed)
 }
