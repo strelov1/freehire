@@ -5019,8 +5019,9 @@ type Querier interface {
 	// (source, external_id LIKE) reaches its rows directly — so the sort is over one board only.
 	ListPlaceholderBoardDescriptions(ctx context.Context, arg ListPlaceholderBoardDescriptionsParams) ([]string, error)
 	// Live boards whose company is still the board id itself — what a harvest writes when it
-	// never resolved the tenant's display name, so the id ("<host>/<site>", a GUID) becomes the
-	// employer's public name on every posting. cmd/backfill-company-names resolves the real name
+	// never resolved the tenant's display name, so the id (a host, "<host>/<site>", a GUID) becomes the
+	// employer's public name on every posting. SuccessFactors hubs are excluded: their root careers
+	// page names the hub, not the tenants behind its host. cmd/backfill-company-names resolves the real name
 	// from the ATS by that exact id and writes it back through RenameSlugBoardCompany. Limited to
 	// the providers that have a resolver, since a board no resolver can read is not work.
 	ListPlaceholderCompanyBoards(ctx context.Context, providers []string) ([]ListPlaceholderCompanyBoardsRow, error)

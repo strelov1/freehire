@@ -5,13 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"net"
+	"net/url"
 	"regexp"
 	"strings"
 	"unicode"
 )
 
 // NewPlaceholderRegistry wires the resolvers for a board whose company is still its own board
-// id — a "<host>/<site>" path or a GUID that a harvest wrote into boards.company verbatim and
+// id — a bare host, a "<host>/<site>" path, or a GUID that a harvest wrote into boards.company verbatim and
 // every posting then carried as its employer's public name. Unlike NewRegistry, the input is
 // the board id itself (no URL to parse, no slug to compare against), and each resolver reads
 // the name the ATS states for exactly that board, so AcceptPlaceholder needs no confidence
@@ -48,6 +50,12 @@ import (
 // suppression from pairing a posting with its WhatJobs copy, since "scrumconnect.zohorecruit.eu"
 // and "Scrumconnect Limited" fold to different company slugs.
 //
+// Live-verified 2026-11-02 against the two examples in issue #4033: the SuccessFactors host
+// jobs.volvogroup.com titles its root page "Jobs at Volvo Group"; the Teamtailor host
+// jobs.bookbeat.com states "BookBeat" in og:site_name on /jobs. These resolvers only run for a
+// board whose stored company exactly equals its board id (ListPlaceholderCompanyBoards). The query
+// excludes SuccessFactors hubs because their root title names the hub, not its tenants.
+//
 // Deliberately absent, each having been tried against live boards: adp (neither the listing nor the requisition detail names the client), and workday (the
 // detail's hiringOrganization is a per-posting legal entity — Dover's postings name
 // "Engineered Controls International, LLC" — so it would split one employer per subsidiary).
@@ -62,8 +70,88 @@ func NewPlaceholderRegistry(http httpGetter) Registry {
 		"ukg":      ukgResolver{http: http},
 		"taleo":    taleoResolver{http: http},
 		// The portal's /jobs redirects to /portal on the newer layout; the client follows it.
-		"hiringroom":  newTitleResolver(http, "https://%s.hiringroom.com/jobs", ExtractHiringRoomTitle),
-		"zohorecruit": zohoResolver{http: http},
+		"hiringroom": newTitleResolver(http, "https://%s.hiringroom.com/jobs", ExtractHiringRoomTitle),
+		// SuccessFactors and Teamtailor boards are career-site hosts. Their own pages
+		// state the employer as a title or og:site_name, respectively.
+		"successfactors": successfactorsResolver{http: http},
+		"teamtailor":     teamtailorResolver{http: http},
+		"zohorecruit":    zohoResolver{http: http},
+	}
+}
+
+// hostOnlyBoard admits only bare, ASCII DNS hostnames with at least two labels. It refuses
+// URL components, ports, IP literals, malformed labels, and single-label hosts rather than
+// treating arbitrary board text as a career-site host. The production HTTP client separately
+// blocks non-public resolved addresses and rechecks redirects.
+func hostOnlyBoard(board string) bool {
+	if board == "" || len(board) > 253 || net.ParseIP(board) != nil {
+		return false
+	}
+	u, err := url.Parse("//" + board)
+	if err != nil || u.User != nil || u.Port() != "" || u.Host != board ||
+		u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return false
+	}
+	labels := strings.Split(board, ".")
+	if len(labels) < 2 {
+		return false
+	}
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+type successfactorsResolver struct{ http textGetter }
+
+func (r successfactorsResolver) Name(ctx context.Context, board string) (string, error) {
+	if !hostOnlyBoard(board) {
+		return "", nil
+	}
+	name, err := newTitleResolver(r.http, "https://%s/", ExtractTitleName).Name(ctx, board)
+	if err != nil {
+		return "", err
+	}
+	return employerNameFromHostPage(name), nil
+}
+
+// teamtailorResolver reads the employer name from the Teamtailor career site's
+// Open Graph metadata. The board is the career-site host itself.
+type teamtailorResolver struct{ http textGetter }
+
+func (r teamtailorResolver) Name(ctx context.Context, board string) (string, error) {
+	if !hostOnlyBoard(board) {
+		return "", nil
+	}
+	body, err := r.http.GetText(ctx, "https://"+board+"/jobs")
+	if err != nil {
+		return "", err
+	}
+	m := ogSiteName.FindStringSubmatch(body)
+	if m == nil {
+		return "", nil
+	}
+	return employerNameFromHostPage(html.UnescapeString(m[1])), nil
+}
+
+// employerNameFromHostPage rejects exact career-site boilerplate and platform labels that can be
+// page metadata, not the employer, without blacklisting words that may occur in longer names.
+func employerNameFromHostPage(name string) string {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	switch normalized {
+	case "careers", "jobs", "job search", "job opportunities", "career opportunities":
+		return ""
+	case "teamtailor", "successfactors", "sap successfactors":
+		return ""
+	default:
+		return strings.TrimSpace(name)
 	}
 }
 
