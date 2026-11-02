@@ -11,17 +11,11 @@ type SearchDrain struct {
 	LeaseSeconds int           // how long a claim is held before it can be reclaimed
 	MaxAttempts  int           // failed attempts before an entry is dead-lettered
 	CallTimeout  time.Duration // bounds a single batch's index operation
-	// MaxPerRun bounds how much of EITHER queue one run takes; 0 is unbounded and is
-	// the default. It exists because each pass drains until its queue is empty, and on
-	// this fleet a queue need never be empty — see the ordering note in
-	// cmd/search-drain/main.go for the run that measured it. Reordering the passes is
-	// what stopped removals starving; this is the lever for the case where one pass has
-	// to yield the process to the other on a schedule rather than on exhaustion.
-	//
-	// Left unbounded by default deliberately. A cap is not free: the run ends, the
-	// timer waits its interval, and a new process pays startup again, so a cap set below
-	// the arrival rate turns a queue that was draining into one that grows. Set it only
-	// against a measured arrival rate, and measure again after.
+	// MaxPerRun independently bounds claimed entries from EACH queue; 0 is
+	// unbounded. The drain alternates one wave per queue and stops a queue after
+	// a short claim, allowing incoming trickles to accumulate until the next run.
+	// Deferred waves count toward the budget without spending retry attempts.
+	// Set a cap against measured arrival rates so it does not limit throughput.
 	MaxPerRun int
 }
 

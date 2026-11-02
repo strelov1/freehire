@@ -6310,28 +6310,37 @@ func (q *Queries) SuppressAggregatorDuplicatesForCompanies(ctx context.Context, 
 }
 
 const touchJob = `-- name: TouchJob :one
-WITH existing AS (
+WITH existing AS MATERIALIZED (
     SELECT id, closed_at, is_private FROM jobs
     WHERE jobs.source = $1 AND jobs.external_id = $2
+    FOR UPDATE
 ), touched AS (
     UPDATE jobs
     SET last_seen_at = now(),
         closed_at = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
-                         THEN COALESCE(closed_at, now()) ELSE NULL END,
+                         THEN COALESCE(jobs.closed_at, now()) ELSE NULL END,
         closed_reason = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
                              THEN 'expired' ELSE '' END,
-        liveness_strikes = CASE WHEN closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
+        liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
         -- Stamp a lifecycle transition, not another observation of an expired posting.
         updated_at = CASE
-            WHEN (closed_at IS NULL) IS DISTINCT FROM
+            WHEN (jobs.closed_at IS NULL) IS DISTINCT FROM
                  (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
             THEN now() ELSE updated_at END
-    WHERE jobs.source = $1 AND jobs.external_id = $2
-    RETURNING id, company_slug, closed_at
+    FROM existing e
+    WHERE jobs.id = e.id
+    RETURNING jobs.id, jobs.company_slug, jobs.closed_at,
+              COALESCE(jobs.posted_at, jobs.created_at) AS job_posted_at
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT t.id FROM touched t JOIN existing e ON e.id = t.id
     WHERE t.closed_at IS NOT NULL AND e.closed_at IS NULL AND NOT e.is_private
+    ON CONFLICT (job_id) DO NOTHING
+), reopened_queued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT t.id, t.job_posted_at
+    FROM touched t JOIN existing e ON e.id = t.id
+    WHERE t.closed_at IS NULL AND e.closed_at IS NOT NULL AND NOT e.is_private
     ON CONFLICT (job_id) DO NOTHING
 )
 SELECT company_slug FROM touched
@@ -6348,10 +6357,14 @@ type TouchJobParams struct {
 // application deadline has passed. Expiry closes and queues removal atomically, WITHOUT touching the
 // content columns. A full upsert of the content-less listing would re-derive the deterministic
 // facets from an empty description and wipe the row's hydrated description/skills. This is the
-// reopen half of UpsertJob's ON CONFLICT, minus every content write. RETURNING company_slug so
+// reopen half of UpsertJob's ON CONFLICT, minus every content write. A closed-to-open
+// transition queues search restoration atomically; open-to-open touches queue nothing.
+// RETURNING company_slug so
 // the caller records the company into the crawled-set that scopes the post-run unseen sweep —
 // exactly as UpsertJob's write path does — otherwise a company whose offers were all touched
 // (not newly saved) would drop out of the sweep and its removed offers would never close.
+// Lock the prior state before updating: after waiting for a concurrent close,
+// transition detection must observe the committed closed row, not an older snapshot.
 func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (string, error) {
 	row := q.db.QueryRow(ctx, touchJob, arg.Source, arg.ExternalID)
 	var company_slug string

@@ -592,6 +592,7 @@ const semanticRatio = 0.7
 
 // Search runs a query against the jobs (facet/keyword) index and decodes the hits.
 func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, error) {
+	p.Filter = withOpenJobs(p.Filter)
 	alts, err := ParseQuery(p.Query)
 	if err != nil {
 		return SearchResult{}, err
@@ -680,7 +681,7 @@ func facetSettings() *meilisearch.Settings {
 			// id backs the swipe deck's `id NOT IN [...]` per-user exclusion. Adding
 			// a new filterable attribute needs a reindex before it takes effect —
 			// reindex first on deploy, or /jobs 500s on the new attribute.
-			"id",
+			"id", "is_closed",
 			"source", "company_slug",
 			"work_mode", "regions", "countries", "cities", "metros", "skills", "collections",
 			// is_tech is the served top-level tech/non-tech facet (jobview), filtered on

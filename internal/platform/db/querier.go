@@ -618,12 +618,9 @@ type Querier interface {
 	ClaimRecentFeedOutboxBatch(ctx context.Context, batchSize int32) ([]ClaimRecentFeedOutboxBatchRow, error)
 	// Claim a batch of live, unleased removals by stamping claimed_at.
 	//
-	// Deliberately has NO `EXISTS (SELECT 1 FROM jobs ...)` guard, unlike
-	// ClaimSearchOutboxBatch. That query skips entries whose job closed or became a duplicate,
-	// because there is nothing left to index. Here the opposite holds: a job that is closed,
-	// demoted, or hard-deleted is exactly what this queue exists to act on, and a removal needs
-	// only the primary key. Adding the guard would make the queue skip every entry it was
-	// created for.
+	// Claims retain missing rows: removal needs only the document id. The worker's
+	// PrepareSearchDeletions cancels stale removals for open public canonical jobs
+	// immediately before sending a wave to Meilisearch.
 	//
 	// Claim order is insertion order (the id index), not freshest-first. Indexing sorts by
 	// job_posted_at because a searcher notices a missing new posting sooner than a missing old
@@ -1232,9 +1229,9 @@ type Querier interface {
 	// (ties broken by value), serving the searchable option list for the subindustry facet.
 	// Counts are unconditional — they do not reflect other active list filters.
 	CompanySubindustries(ctx context.Context) ([]CompanySubindustriesRow, error)
-	// Drop the entries for removals that landed. Deleting a document that was never indexed is
-	// a no-op in Meilisearch, so "landed" includes the common case where the job had no document
-	// to begin with — there is nothing to distinguish and nothing to retry.
+	// A job may reopen while its Meilisearch removal is in flight. Atomically queue
+	// its current content for restoration before forgetting the removal. Missing or
+	// closed jobs need no restoration, and private/repost rows must not be published.
 	CompleteSearchDeleteOutbox(ctx context.Context, ids []int64) error
 	// Records that the claimant consumed the code mailed to work_email. COALESCE keeps the
 	// first confirmation time; scoped to status='pending' like ActivateCompanyAccount.
@@ -5931,6 +5928,11 @@ type Querier interface {
 	// asking anyway would be one API call per person who signed up and never bought, which is
 	// almost all of them.
 	PendingInviteRewards(ctx context.Context, maxRows int32) ([]PendingInviteRewardsRow, error)
+	// Cancel obsolete removals and requeue their current content before acknowledging
+	// them. Lock only the reopened job rows for this statement: a concurrent close
+	// waits, then inserts a NEW removal whose id an old acknowledgment cannot delete.
+	// Missing, closed, private, or noncanonical jobs still need their document removed.
+	PrepareSearchDeletions(ctx context.Context, jobIds []int64) ([]PrepareSearchDeletionsRow, error)
 	// What ClaimDueHeavyRuns WOULD take from the heavy pool, without taking it. Shadow mode's
 	// read: the first deployment lands underneath a fleet still driven by the static timers, so
 	// a tick that advanced a due time would desynchronise state the real timers know nothing
@@ -8005,10 +8007,14 @@ type Querier interface {
 	// application deadline has passed. Expiry closes and queues removal atomically, WITHOUT touching the
 	// content columns. A full upsert of the content-less listing would re-derive the deterministic
 	// facets from an empty description and wipe the row's hydrated description/skills. This is the
-	// reopen half of UpsertJob's ON CONFLICT, minus every content write. RETURNING company_slug so
+	// reopen half of UpsertJob's ON CONFLICT, minus every content write. A closed-to-open
+	// transition queues search restoration atomically; open-to-open touches queue nothing.
+	// RETURNING company_slug so
 	// the caller records the company into the crawled-set that scopes the post-run unseen sweep —
 	// exactly as UpsertJob's write path does — otherwise a company whose offers were all touched
 	// (not newly saved) would drop out of the sweep and its removed offers would never close.
+	// Lock the prior state before updating: after waiting for a concurrent close,
+	// transition detection must observe the committed closed row, not an older snapshot.
 	TouchJob(ctx context.Context, arg TouchJobParams) (string, error)
 	// Resolve a token to where the visitor must be sent, plus what the click needs to be attributed:
 	// the link's own id and the id of the user whose CV it belongs to (so a click by that user can be

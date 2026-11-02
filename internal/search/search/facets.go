@@ -104,6 +104,7 @@ func widenImpliedRegionCounts(ctx context.Context, query string, filter any, dis
 // Search does: a single alternative is today's single-index request, several are
 // one federated request whose merged counts are per document.
 func (c *Client) facetSearch(ctx context.Context, query string, filter any, facets []string) (*meilisearch.SearchResponse, error) {
+	filter = withOpenJobs(filter)
 	alts, err := ParseQuery(query)
 	if err != nil {
 		return nil, err
@@ -138,6 +139,7 @@ func (c *Client) facetSearch(ctx context.Context, query string, filter any, face
 // per-alternative distinct counts a company matched by two alternatives twice,
 // and a count that is not exact is what this exists to avoid.
 func (c *Client) DistinctCount(ctx context.Context, query string, filter any, attr string) (int64, error) {
+	filter = withOpenJobs(filter)
 	alts, err := ParseQuery(query)
 	if err != nil {
 		return 0, err
