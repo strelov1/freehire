@@ -481,16 +481,16 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 // statement's row locks and runtime small beside the crawl's own writes.
 const refreshCoveredChunk = 5000
 
-// RefreshCovered refreshes the liveness of the open stored rows among a board's covered
-// postings, and records each refreshed row's company as crawled, as Touch does, so the sweep's
+// RefreshCovered refreshes open stored rows listed without a write (coverage-gated or
+// unreadable), and records each refreshed row's company as crawled, as Touch does, so the sweep's
 // company scope reaches the rows the aggregator no longer lists. Implements
-// pipeline.CoveredRefresher. Not counted in the write tally: the gate declined these postings,
-// so they are not writes of the run.
+// pipeline.CoveredRefresher. Not counted in the write tally: these postings bypassed
+// content writes.
 //
 // The companies are recorded only once every chunk has succeeded: a company whose postings span
 // two chunks, one refreshed and one not, must not enter the sweep's scope, or the sweep would
 // close its listed-but-unrefreshed rows.
-func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs []string) (int, error) {
+func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs []string) ([]string, error) {
 	var refreshed []string
 	for chunk := range slices.Chunk(externalIDs, refreshCoveredChunk) {
 		slugs, err := s.q.RefreshCoveredJobs(ctx, db.RefreshCoveredJobsParams{
@@ -498,7 +498,7 @@ func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs
 			ExternalIds: chunk,
 		})
 		if err != nil {
-			return 0, fmt.Errorf("refresh covered jobs %s: %w", source, err)
+			return nil, fmt.Errorf("refresh covered jobs %s: %w", source, err)
 		}
 		refreshed = append(refreshed, slugs...)
 	}
@@ -507,7 +507,7 @@ func (s *dbStore) RefreshCovered(ctx context.Context, source string, externalIDs
 			s.crawled.record(source, slug)
 		}
 	}
-	return len(refreshed), nil
+	return refreshed, nil
 }
 
 // CompanyDescriptionDue implements pipeline.CompanyDescriptionFiller: whether the company

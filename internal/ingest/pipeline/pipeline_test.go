@@ -20,17 +20,18 @@ import (
 // It also implements the optional seenLookup capability (ExistingExternalIDs), so a hydrating
 // source can be driven by a canned seen-set.
 type fakeStore struct {
-	mu         sync.Mutex
-	saved      []job.Job
-	closed     [][2]string
-	touched    [][2]string
-	refreshed  map[string][]string // source -> external ids passed to RefreshCovered
-	refreshErr error               // when set, RefreshCovered fails (writes still succeed)
-	err        error
-	seenIDs    map[string]bool            // stored (namespaced) external_id -> is_tech evidence
-	seenByBrd  map[string]map[string]bool // per-board sets, keyed by the requested board
-	seenAsked  []string                   // every board the runner scoped a lookup to
-	seenErr    error                      // when set, ExistingExternalIDs fails
+	mu               sync.Mutex
+	saved            []job.Job
+	closed           [][2]string
+	touched          [][2]string
+	refreshed        map[string][]string // source -> external ids passed to RefreshCovered
+	refreshErr       error               // when set, RefreshCovered fails (writes still succeed)
+	refreshCompanies []string            // optional actual stored companies returned by the refresh
+	err              error
+	seenIDs          map[string]bool            // stored (namespaced) external_id -> is_tech evidence
+	seenByBrd        map[string]map[string]bool // per-board sets, keyed by the requested board
+	seenAsked        []string                   // every board the runner scoped a lookup to
+	seenErr          error                      // when set, ExistingExternalIDs fails
 	// filled records every RecordCompanyDescription call, in order.
 	filled []filledDescription
 	// descNotDue makes CompanyDescriptionDue answer false (the company already has a
@@ -109,20 +110,27 @@ func (s *fakeStore) Touch(_ context.Context, source, externalID string) error {
 }
 
 // RefreshCovered reports every id as a stored open row.
-func (s *fakeStore) RefreshCovered(_ context.Context, source string, externalIDs []string) (int, error) {
+func (s *fakeStore) RefreshCovered(_ context.Context, source string, externalIDs []string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil {
-		return 0, s.err
+		return nil, s.err
 	}
 	if s.refreshErr != nil {
-		return 0, s.refreshErr
+		return nil, s.refreshErr
 	}
 	if s.refreshed == nil {
 		s.refreshed = map[string][]string{}
 	}
 	s.refreshed[source] = append(s.refreshed[source], externalIDs...)
-	return len(externalIDs), nil
+	if s.refreshCompanies != nil {
+		return slices.Clone(s.refreshCompanies), nil
+	}
+	companies := make([]string, len(externalIDs))
+	for i := range companies {
+		companies[i] = "acme"
+	}
+	return companies, nil
 }
 
 // fakeCoverage answers NonAggregatorCompanies from a canned covered set, and records every
