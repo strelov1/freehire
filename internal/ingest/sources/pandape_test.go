@@ -327,13 +327,81 @@ func TestPandapeLatamEmploymentType(t *testing.T) {
 	}
 }
 
-func TestPandapeBrazilStillRequiresAJobPosting(t *testing.T) {
+func TestPandapeBrazilRejectsAnUnidentifiedPageWithoutJobPosting(t *testing.T) {
 	root, err := html.Parse(strings.NewReader(pdFixture(t, "latam_avostech_detail_noposting.html")))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := pandapeBrazil.job(root, pandapeCard{ID: "1", Title: "x"}, "x", CompanyEntry{}); ok {
-		t.Error("a Brazilian page with no JobPosting must not be read as a vacancy")
+		t.Error("a page with no JobPosting or matching vacancy identity must not be read as a Brazilian vacancy")
+	}
+}
+
+func TestPandapeHydratesBrazilianPageWithoutJobPosting(t *testing.T) {
+	f := braspressFake(t)
+	f.pages[pdBraspress+"/Detail/3861560"] = pdFixture(t, "brazil_detail_no_jobposting.html")
+	jobs, err := pdAdapter(f).FetchNew(context.Background(), CompanyEntry{Board: "braspress", Company: "Braspress"}, func(id string) bool {
+		return id != "3861560"
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 5 {
+		t.Fatalf("jobs = %d, want one hydrated vacancy and four refreshes", len(jobs))
+	}
+	j := jobs[0]
+	if j.SeenRefresh || j.ExternalID != "3861560" || j.Title != "Ajudante de Manutenção Mecânica" || j.Company != "Braspress" || j.Location != "Guarulhos - SP" {
+		t.Errorf("hydrated vacancy lost listing fields: %+v", j)
+	}
+	if !strings.Contains(j.Description, "Maintain equipment") || !strings.Contains(j.Description, "Secondary education") {
+		t.Errorf("description lost the page's body or requirements: %q", j.Description)
+	}
+	if len(j.FallbackCountries) != 1 || j.FallbackCountries[0] != "br" || j.WorkMode != "onsite" {
+		t.Errorf("listing work mode or Brazilian fallback missing: %+v", j)
+	}
+	if j.PostedAt != nil || j.SalaryMin != nil || j.SalaryMax != nil || j.EmploymentType != "" {
+		t.Errorf("invented absent structured fields: %+v", j)
+	}
+}
+
+func TestPandapeBrazilWithoutJobPostingRequiresIdentityAndBody(t *testing.T) {
+	page := pdFixture(t, "brazil_detail_no_jobposting.html")
+	for _, tc := range []struct {
+		name string
+		page string
+	}{
+		{"different vacancy", strings.Replace(page, `value="3861560"`, `value="999"`, 1)},
+		{"missing identity", strings.Replace(page, `id="HdnIdVacancy"`, `id="other"`, 1)},
+		{"visible identity", strings.Replace(page, `type="hidden"`, `type="text"`, 1)},
+		{"missing description", strings.Replace(page, `id="description"`, `id="other"`, 1)},
+		{"missing body", strings.Replace(page, `class="order-1"`, `class="other"`, 1)},
+		{"empty body", strings.Replace(page, "Maintain equipment and follow safety procedures.", " ", 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, err := html.Parse(strings.NewReader(tc.page))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := pandapeBrazil.job(root, pandapeCard{ID: "3861560", Title: "Maintenance Assistant"}, "x", CompanyEntry{}); ok {
+				t.Fatal("accepted a page without matching identity and a real vacancy body")
+			}
+		})
+	}
+}
+
+func TestPandapeBrazilDiscardsUndecodableStructuredFields(t *testing.T) {
+	page := strings.Replace(pdFixture(t, "brazil_detail_no_jobposting.html"), "<body>", `<body>
+<script type="application/ld+json">{"@type":"JobPosting","datePosted":"2026-10-23T15:59:35.1108602","baseSalary":{"value":{"minValue":"invalid"}}}</script>`, 1)
+	root, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, ok := pandapeBrazil.job(root, pandapeCard{ID: "3861560", Title: "Maintenance Assistant"}, "x", CompanyEntry{})
+	if !ok {
+		t.Fatal("a matching vacancy with a real body should survive undecodable JSON-LD")
+	}
+	if j.PostedAt != nil || j.SalaryMin != nil || j.SalaryMax != nil {
+		t.Errorf("used partially decoded structured fields: %+v", j)
 	}
 }
 
