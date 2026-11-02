@@ -1119,8 +1119,8 @@ components:
         AND at least one location facet (regions, countries, cities, metros)
         carries a value; otherwise it changes nothing. Ignored entirely when
         `work_mode_mode=and` is set. Location excludes (`countries_exclude`)
-        hold in every arm of the disjunction. A value other than `true` is
-        reported in `meta.ignored_values`.
+        hold in every arm of the disjunction. `false` leaves it off; a value
+        other than `true` or `false` is reported in `meta.ignored_values`.
     HideAppliedCompanies:
       name: hide_applied_companies
       in: query
@@ -1320,7 +1320,8 @@ components:
         a value; otherwise it changes nothing, and it is ignored entirely when
         `work_mode_mode=and` is set. Location EXCLUDES hold in every arm of the
         resulting disjunction (`countries_exclude=us` drops US postings in all
-        modes). A value other than `true` is reported in `meta.ignored_values`.
+        modes). `false` leaves it off; a value other than `true` or `false` is
+        reported in `meta.ignored_values`.
     Category:
       name: category
       in: query

@@ -162,6 +162,15 @@ func TestFilterFromValues_RemoteAnywhereSpansTheLocationGroup(t *testing.T) {
 
 // No location include → nothing to bound the physical arm by, so the modifier
 // would only widen the answer past the caller's mode list. Inert.
+// The value check accepts work modes case-insensitively, so the modifier must too.
+func TestFilterFromValues_RemoteAnywhereNormalizesModes(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=Remote,%20Hybrid&countries=de&work_mode_remote_anywhere=true")))
+	want := [][]string{{`(work_mode IN ["hybrid"] AND (countries = "de"))`, `work_mode = "remote"`}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 func TestFilterFromValues_RemoteAnywhereNeedsALocation(t *testing.T) {
 	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&work_mode_remote_anywhere=true")))
 	want := [][]string{{`work_mode = "hybrid"`, `work_mode = "remote"`}}

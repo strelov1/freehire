@@ -55,11 +55,11 @@ group:
 
 Only `remote` stands bare: a bare physical mode would admit a hybrid posting from
 any country. The right side carries only the physical modes the caller selected,
-and the location group is consumed into it rather than ANDed beside it. Location excludes are NOT folded in: they stay their
-own AND group, so `countries_exclude=us` keeps excluding the US from the remote
-arm too (excluding a country from "remote anywhere" is the normal reading; a
-caller who wants remote-US-only can say `countries=us`, which lands on the right
-side's geography for the physical arm and its own AND group for remote).
+and the location group is consumed into it rather than ANDed beside it. Location
+excludes are NOT folded in: they stay their own AND group, so `countries_exclude=us`
+keeps excluding the US from the remote arm too (excluding a country from "remote
+anywhere" is the normal reading). A caller who wants remote work bounded by
+geography as well leaves the modifier off: the plain AND does exactly that.
 
 `work_mode_mode=and` disables the modifier: ANDing every selected mode is
 incompatible with the disjunction's OR, and the one caller who asks for `and`

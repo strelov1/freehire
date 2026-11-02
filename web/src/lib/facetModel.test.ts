@@ -834,6 +834,7 @@ describe('workModeRemoteAnywhere', () => {
     expect(p.get('work_mode_remote_anywhere')).toBe('true');
     expect(filtersFromParams(p).workModeRemoteAnywhere).toBe(true);
     expect(filtersFromParams(new URLSearchParams('work_mode_remote_anywhere=false')).workModeRemoteAnywhere).toBe(false);
+    expect(filtersFromParams(new URLSearchParams('work_mode_remote_anywhere=%20TRUE')).workModeRemoteAnywhere).toBe(true);
   });
 
   // A saved search keeps it: the digest matcher replays the stored query through the

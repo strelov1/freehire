@@ -395,7 +395,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 	// disjunction's physical arm: appending it standalone as well would AND it over
 	// the remote arm too, narrowing remote work back to the home geography.
 	if remoteAnywhere {
-		groups = append(groups, remoteAnywhereGroup(splitFacetValues(v["work_mode"]), locationGroup))
+		groups = append(groups, remoteAnywhereGroup(workModeValues(v), locationGroup))
 	} else if len(locationGroup) > 0 {
 		groups = append(groups, locationGroup)
 	}
@@ -486,7 +486,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 // Without remote the physical arm would relax the caller's filter; without a
 // location the arm would widen past the mode list; `and` is a different filter.
 func remoteAnywhereActive(v url.Values) bool {
-	modes := splitFacetValues(v["work_mode"])
+	modes := workModeValues(v)
 	return strings.EqualFold(strings.TrimSpace(v.Get(WorkModeRemoteAnywhereParam)), "true") &&
 		v.Get("work_mode_mode") != "and" &&
 		slices.Contains(modes, "remote") &&
@@ -501,6 +501,17 @@ func hasLocationInclude(v url.Values) bool {
 		}
 	}
 	return false
+}
+
+// workModeValues reads the work_mode includes with the case and whitespace rules
+// the value check accepts (`Remote` passes it), so the modifier's precondition
+// does not fail on a spelling the rest of the filter honours.
+func workModeValues(v url.Values) []string {
+	modes := splitFacetValues(v["work_mode"])
+	for i, m := range modes {
+		modes[i] = strings.ToLower(strings.TrimSpace(m))
+	}
+	return modes
 }
 
 func isPhysicalMode(m string) bool { return m == "hybrid" || m == "onsite" }

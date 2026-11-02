@@ -441,7 +441,9 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // that sets it.
   f.sort = SORT_FROM_PARAM[p.get('sort') ?? ''] ?? null;
   f.hideSeen = p.get('hide_seen') === 'true';
-  f.workModeRemoteAnywhere = p.get('work_mode_remote_anywhere') === 'true';
+  // Read like the server reads it (trimmed, case-insensitive), so a hand-written TRUE
+  // does not silently drop a modifier the server would apply.
+  f.workModeRemoteAnywhere = p.get('work_mode_remote_anywhere')?.trim().toLowerCase() === 'true';
   return f;
 }
 
