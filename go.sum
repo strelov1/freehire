@@ -66,8 +66,8 @@ github.com/bdandy/go-socks4 v1.2.3 h1:Q6Y2heY1GRjCtHbmlKfnwrKVU/k81LS8mRGLRlmDli
 github.com/bdandy/go-socks4 v1.2.3/go.mod h1:98kiVFgpdogR8aIGLWLvjDVZ8XcKPsSI/ypGrO+bqHI=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
-github.com/bogdanfinn/fhttp v0.7.1 h1:Vrw5Fo3sbEPD4s2kds7/vuM74i9JXxeK8E3GczofwOw=
-github.com/bogdanfinn/fhttp v0.7.1/go.mod h1:Pco5Ml+HnzrBRAu+6BORirlCAF9JqKmAvC0vI3JSjss=
+github.com/bogdanfinn/fhttp v0.7.2 h1:8yIaIr95zVv+czuDmfTS3b2nZh6qtErpVKYjXH22Hxo=
+github.com/bogdanfinn/fhttp v0.7.2/go.mod h1:Pco5Ml+HnzrBRAu+6BORirlCAF9JqKmAvC0vI3JSjss=
 github.com/bogdanfinn/quic-go-utls v1.0.12-utls h1:uuWyRGD1jZQl2IAL9rTDVA5V0Mm8VlIoBPhTu6IaynU=
 github.com/bogdanfinn/quic-go-utls v1.0.12-utls/go.mod h1:Uq7Hfq7wNs7N8JirJMLy7hRyAE0tcrvcWoITfDpjrMw=
 github.com/bogdanfinn/tls-client v1.17.1 h1:X03STW0lc/Fnt9ihcbrJqoDmM3JBGY9JBTtmchNc7tc=
