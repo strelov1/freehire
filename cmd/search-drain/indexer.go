@@ -157,8 +157,8 @@ func (ix searchIndexer) IndexBatch(ctx context.Context, jobs []db.Job) error {
 	return ix.client.IndexJobs(ctx, docs)
 }
 
-// facetDeleter rechecks current state before removing documents. A missing row
-// still needs removal, while an open row must survive its old queued closure.
+// facetDeleter rechecks current state before changing index visibility. Missing
+// and private rows are removed; closed and duplicate rows retain their content.
 type facetDeleter struct {
 	client *search.Client
 	q      *db.Queries
@@ -172,16 +172,24 @@ func (d facetDeleter) DeleteBatch(ctx context.Context, jobIDs []int64) error {
 	if len(rows) == 0 {
 		return nil
 	}
-	var closed, removed []int64
+	var closed, duplicates, removed []int64
 	for _, row := range rows {
 		if row.HardDelete {
 			removed = append(removed, row.JobID)
 		} else {
-			closed = append(closed, row.JobID)
+			if row.IsClosed {
+				closed = append(closed, row.JobID)
+			}
+			if row.IsDuplicate {
+				duplicates = append(duplicates, row.JobID)
+			}
 		}
 	}
 	if err := d.client.CloseJobs(ctx, closed); err != nil {
 		return fmt.Errorf("%w: update closure markers: %v", searchdrain.ErrSkipWave, err)
+	}
+	if err := d.client.MarkDuplicateJobs(ctx, duplicates); err != nil {
+		return fmt.Errorf("%w: update duplicate markers: %v", searchdrain.ErrSkipWave, err)
 	}
 	return d.client.DeleteJobs(ctx, removed)
 }

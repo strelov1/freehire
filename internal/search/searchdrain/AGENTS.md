@@ -23,19 +23,20 @@ Ordinary closures now update `is_closed = true` through Meilisearch's native
 edit-documents-by-function API, preserving text and vectors. Search, facet/distinct
 counts and job sitemaps exclude the marker inside the engine; legacy unmarked
 records remain eligible. Full replacements clear the marker when a posting reopens.
-Missing, private and noncanonical rows keep physical deletion. The existing
+Duplicate public rows use `is_duplicate` through the same state-checked queue.
+Missing and private rows keep physical deletion. The existing
 `DeletionStats.Deleted` counts acknowledged queue entries, including markers and
 no-ops; it is not a physical-document deletion counter.
 
 **Roll out settings before binaries:** enable `editDocumentsByFunction`, append
-`is_closed` to the LIVE jobs index's filterable attributes and await the settings
+`is_closed` and `is_duplicate` to the LIVE jobs index's filterable attributes and await the settings
 task, then deploy the reader/worker together. Engine upgrades must verify the
 experimental API. Rollback to an old reader requires physically removing marked
 documents first, since that reader would not exclude them. The existing rebuild
 pause remains in place until contention is measured on the full-size index.
 
-`search_delete_outbox` is the mirror of `search_outbox`: that one says "index this job", this
-one says "drop this job's document". `cmd/search-drain` drains both in one pass — **removals
+`search_delete_outbox` mirrors `search_outbox`: one publishes current content, the other
+rechecks whether the document must be hidden or physically removed. `cmd/search-drain` drains both in one pass — **removals
 first, then indexing**, and that order is load-bearing rather than incidental.
 
 `searchdrain.Drain` alternates ONE wave of removals and ONE wave of indexing, with
@@ -96,10 +97,12 @@ were integration tests. Measured on prod 2026-08-18: **19,827 jobs close per day
   strand their documents permanently.
 
 - **A search page hides what the queue still holds.** The drain is paused for the whole of a facet rebuild, so a closure can stay in the index for hours (freehire#4040: 112k entries deep at 18:39 on 2026-11-01). `searchHandlers.dropPendingRemovals` asks this table about the ids on the page it is about to serve (`ListPendingSearchRemovals`, a primary-key lookup) and drops the ones queued, lowering `meta.total` by the same count. The queue is the right set to ask because it is exactly the closed-but-indexed postings, and it cannot be handed to Meilisearch as an `id NOT IN` filter the way `hide_seen` is, at that size. It lives in `runJobSearch`; a path that reads the index elsewhere (facets, companies, the agent endpoints that do not go through it) still sees the lag. A queued row alone does not hide a posting: `TouchJob` and `UpsertJob` reopen a posting WITHOUT dequeuing it, so the lookup joins `jobs` and hides only a job that is gone or still closed. The lookup is bounded by `pendingRemovalsTimeout`, so a stalled database serves the page as the index has it. Known limit: a page whose every hit is queued comes back empty although later pages hold matches.
-- **Duplicates are still rebuild-only.** `duplicate_of` is set by bulk `UPDATE`s inside the
-  dedup passes — 478,366 rows in one statement on 2026-08-18 — which is a different shape of
-  problem and runs adjacent to a rebuild anyway. **Whoever lengthens the reindex cadence
-  should know that a demoted repost still lingers for a full cycle even after this shipped.**
+- **Duplicate markers use the removal queue too.** Each marker-writing SQL statement
+  atomically queues canonical-to-duplicate transitions. The worker rereads current state
+  and marks existing public documents `is_duplicate`, rather than deleting their content.
+  Link import uses this same queue without a second direct engine mutation. A release
+  during an in-flight status update is repaired by acknowledgment requeueing the now-open
+  canonical job. Full rebuilds still omit duplicates and reclaim retained storage.
 
 ## How it works
 The facet index (`jobs`, plain keyword/facet, no embedder) can otherwise only be refreshed by a full `reindex` — a swap-rebuild from zero on a multi-hour schedule — or by `internal/ingest/linkimport`'s single-document `SubmitJobs` push for its own on-demand imports. `cmd/search-drain` fills the gap `cmd/embed` fills for the semantic index: work flows through `search_outbox`, claimed in waves, indexed in one batch, completed (rows deleted) in one call. The runner lives in `internal/search/searchdrain` behind `Store` + `Indexer` ports (unit-tested with fakes, mirroring `internal/ai/embed/runner_test.go`); `cmd/search-drain` wires the concrete Postgres + Meilisearch adapters. Tuning via `SEARCH_DRAIN_BATCH_SIZE`/`SEARCH_DRAIN_LEASE_SECONDS`/`SEARCH_DRAIN_MAX_ATTEMPTS`/`SEARCH_DRAIN_CALL_TIMEOUT_SECONDS` (`config.LoadSearchDrain`).

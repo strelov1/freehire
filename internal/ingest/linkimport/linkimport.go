@@ -267,9 +267,9 @@ func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, b
 	if err := tx.Commit(ctx); err != nil {
 		return Result{}, false, err
 	}
-	if deduped {
-		im.unindex(ctx, res.Job.ID)
-	} else {
+	// MarkJobDuplicateOfRole already queued a visibility update in the transaction.
+	// Let the drain recheck current state instead of submitting a second mutation.
+	if !deduped {
 		im.index(ctx, res)
 	}
 
@@ -284,20 +284,6 @@ func (im *Importer) Write(ctx context.Context, r linksource.Resolved) (Result, b
 		out.PublicSlug = canon.PublicSlug
 	}
 	return out, true, nil
-}
-
-// unindex drops a row that was just demoted to a duplicate from the live index. A row written
-// for the first time was never there, but a re-import of a URL written before its canon existed
-// was — and skipping the push alone would leave that stale document searchable until the next
-// reindex, which is not on a tight schedule. Best-effort, like the push: the marking is
-// committed either way and the batch rebuild reconciles.
-func (im *Importer) unindex(ctx context.Context, id int64) {
-	if im.idx == nil {
-		return
-	}
-	if err := im.idx.SubmitJobDeletion(ctx, []int64{id}); err != nil {
-		log.Printf("linkimport: drop duplicate job %d from the index: %v", id, err)
-	}
 }
 
 // index pushes a just-written open job to the live search index, best-effort — same doc
