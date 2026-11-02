@@ -335,13 +335,26 @@ type pandapeLD struct {
 	} `json:"baseSalary"`
 }
 
-// job maps a vacancy page plus its card. ok is false when the page is not a vacancy
-// page: on the Brazilian domain it carries no JobPosting; on the Latin-American one, where the
-// JobPosting is optional (templatedJobPosting), it carries no body either.
+// job maps a vacancy page plus its card. Brazilian pages without a JobPosting must
+// identify the requested vacancy and carry its main description. The Latin-American
+// deployment's JobPosting is optional and templated (templatedJobPosting).
 func (d pandapeDomain) job(root *xhtml.Node, c pandapeCard, link string, e CompanyEntry) (Job, bool) {
 	var ld pandapeLD
 	if !ldJobPosting(root, &ld) && !d.templatedJobPosting {
-		return Job{}, false
+		identity := firstByID(root, "HdnIdVacancy")
+		if c.ID == "" || identity == nil || identity.Data != "input" || Attr(identity, "type") != "hidden" || Attr(identity, "value") != c.ID {
+			return Job{}, false
+		}
+		description := firstByID(root, "description")
+		if description == nil {
+			return Job{}, false
+		}
+		body := firstByClass(description, "order-1")
+		if body == nil || strings.TrimSpace(textContent(body)) == "" {
+			return Job{}, false
+		}
+		// A failed JSON decode may have filled only some fields. Use none of them.
+		ld = pandapeLD{}
 	}
 	job := Job{
 		ExternalID:  c.ID,
