@@ -43,6 +43,8 @@
   import { track } from '#lib/analytics.js';
   import type { Job, FacetCounts } from '#lib/types.js';
   import FilterSummary from './filters/FilterSummary.svelte';
+  import ShortlistAssistant from './ShortlistAssistant.svelte';
+  import { dockOffset } from '#lib/assistantDock.svelte.js';
   import FilterModal from './filters/FilterModal.svelte';
   import ListToolbar from './ListToolbar.svelte';
   import States from './States.svelte';
@@ -838,7 +840,7 @@
   {@render sortSelect()}
 {/snippet}
 
-<div class="flex gap-6">
+<div class="flex gap-6" style:margin-right={standalone ? `${dockOffset()}px` : undefined}>
   <aside class="hidden w-72 shrink-0 md:block">
     <!-- `top-20` is the site header's own `h-14` plus 24px of air. At `top-6` the rail
          pinned 24px from the VIEWPORT, so the opaque header (`sticky top-0`) covered its
@@ -853,6 +855,13 @@
   </aside>
 
   <div class="min-w-0 flex-1">
+    {#if standalone}
+      <div class="mb-3">
+        {#key currentUser()?.id ?? 'guest'}
+          <ShortlistAssistant params={filters.params} userId={currentUser()?.id ?? null} />
+        {/key}
+      </div>
+    {/if}
     <ListToolbar
       total={displayItems.length > 0 ? listTotal : null}
       unit={listTotal === 1 ? 'job' : 'jobs'}

@@ -2631,6 +2631,7 @@
       "post": {
         "operationId": "post_assistant_sessions",
         "summary": "Start a new conversation.",
+        "description": "For shortlisting the current jobs list, pass search_query (the complete serialized query; an empty string is valid) and a client-generated request_id UUID. Only chat sessions accept this binding. Reusing the UUID with the same owner and canonical query returns the same session; changing its query returns 409. Unknown or unenforceable conditions return 400. Search-bound responses include search_context: { query, brief }; the original query is immutable and the selection brief is local to the conversation.",
         "parameters": [
           {
             "name": "preset",
@@ -2653,6 +2654,29 @@
             "example": "senior-go-engineer-acme-1a2b"
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "search_query": {
+                    "type": "string",
+                    "description": "Optional complete job-search query, at most 8000 bytes. Pagination and tracking parameters are removed.",
+                    "example": "skills=go&salary_min=80000&work_mode=remote"
+                  },
+                  "request_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Required with search_query. Reuse the same UUID when retrying creation.",
+                    "example": "b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success",

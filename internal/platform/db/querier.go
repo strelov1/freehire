@@ -1447,6 +1447,9 @@ type Querier interface {
 	// the statement means no call site can mint around it. Inserting nothing yields no row,
 	// which the caller reads as "not allowed" (403).
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (CreateAPIKeyRow, error)
+	// A client-generated request id makes retrying session creation idempotent. A conflict
+	// never overwrites the owner or initial search; the caller reads and compares instead.
+	CreateAssistantSearchSession(ctx context.Context, arg CreateAssistantSearchSessionParams) (CreateAssistantSearchSessionRow, error)
 	// Start a conversation for a user. preset selects the prompt and tool set ('chat' or
 	// 'tailor'); cv_id/job_id bind a tailoring session to its CV and vacancy and are NULL
 	// for a chat. The label is set later, from the first user message.
@@ -8095,6 +8098,8 @@ type Querier interface {
 	// record and theirs alone to make. A catalogue clean-up has no such standing, which is the
 	// whole distinction this change draws.
 	UntrackJob(ctx context.Context, arg UntrackJobParams) (UntrackJobRow, error)
+	// Only the owner can update preferences, and never the immutable initial search.
+	UpdateAssistantSelectionBrief(ctx context.Context, arg UpdateAssistantSelectionBriefParams) (int64, error)
 	// Persist the post-transaction balance: the current period and remaining points. Called at
 	// the end of the debit transaction to write back any lazy reset and/or decrement. The row is
 	// guaranteed to exist (EnsureBalance ran first).

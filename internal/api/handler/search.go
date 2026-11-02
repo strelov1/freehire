@@ -3,7 +3,9 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -227,17 +229,21 @@ const sortMatch = "match"
 // for — the same reason the jobs list ignores unknown filters rather than refusing
 // them.
 func (h *searchHandlers) matchVector(c *fiber.Ctx) []float32 {
-	if c.Query("sort") != sortMatch || h.userProfile == nil {
+	userID, _ := auth.UserID(c)
+	return h.matchVectorFor(c.Context(), userID, queryValues(c))
+}
+
+func (h *searchHandlers) matchVectorFor(ctx context.Context, userID int64, vals url.Values) []float32 {
+	if vals.Get("sort") != sortMatch || h.userProfile == nil {
 		return nil
 	}
 	// auth.UserID is what mw.optional populates; it reports false for an anonymous
 	// caller rather than erroring. requireUserID is the wrong helper here — its 401 is
 	// exactly the outcome this must avoid.
-	userID, ok := auth.UserID(c)
-	if !ok {
+	if userID == 0 {
 		return nil
 	}
-	profile, err := h.userProfile.Get(c.Context(), userID)
+	profile, err := h.userProfile.Get(ctx, userID)
 	if err != nil || len(profile.Skills) == 0 {
 		return nil
 	}
@@ -289,8 +295,17 @@ func (h *searchHandlers) SearchJobs(c *fiber.Ctx) error {
 // shared link or quietly widening. A caller with no applications gets "" — nothing to
 // exclude, and nothing ignored either.
 func (h *searchHandlers) appliedCompanyExclusion(c *fiber.Ctx) (frag string, ignored bool) {
-	raw := c.Query(hideAppliedCompaniesParam)
-	if !c.Context().QueryArgs().Has(hideAppliedCompaniesParam) {
+	userID, _ := auth.UserID(c)
+	value, ignored := h.appliedCompanyExclusionFor(c.Context(), userID, queryValues(c))
+	if userID != 0 && !ignored && c.QueryBool(hideAppliedCompaniesParam) {
+		c.Set(fiber.HeaderCacheControl, "private, no-store")
+	}
+	return value, ignored
+}
+
+func (h *searchHandlers) appliedCompanyExclusionFor(ctx context.Context, userID int64, vals url.Values) (frag string, ignored bool) {
+	raw := vals.Get(hideAppliedCompaniesParam)
+	if !vals.Has(hideAppliedCompaniesParam) {
 		return "", false
 	}
 	want, err := strconv.ParseBool(raw)
@@ -300,17 +315,15 @@ func (h *searchHandlers) appliedCompanyExclusion(c *fiber.Ctx) (frag string, ign
 	if !want {
 		return "", false
 	}
-	userID, ok := auth.UserID(c)
-	if !ok || h.appliedCompanies == nil {
+	if userID == 0 || h.appliedCompanies == nil {
 		return "", true
 	}
-	slugs, err := h.appliedCompanies.AppliedCompanySlugs(c.Context(), userID)
+	slugs, err := h.appliedCompanies.AppliedCompanySlugs(ctx, userID)
 	if err != nil {
 		log.Printf("search: hide_applied_companies: read applied companies of user %d: %v", userID, err)
 		return "", true
 	}
 	// The answer now depends on who asked, under a URL that does not say so.
-	c.Set(fiber.HeaderCacheControl, "private, no-store")
 	if len(slugs) == 0 {
 		return "", false
 	}
@@ -329,7 +342,15 @@ func (h *searchHandlers) appliedCompanyExclusion(c *fiber.Ctx) (frag string, ign
 // caller, an unparseable value, or a record that could not be read all fall back to the
 // unhidden search and say so, rather than refusing a shared link or quietly widening.
 func (h *searchHandlers) seenExclusion(c *fiber.Ctx) (ids []int64, ignored bool) {
-	vals := queryValues(c)
+	userID, _ := auth.UserID(c)
+	value, ignored := h.seenExclusionFor(c.Context(), userID, queryValues(c))
+	if userID != 0 && !ignored && c.QueryBool(hideSeenParam) {
+		c.Set(fiber.HeaderCacheControl, "private, no-store")
+	}
+	return value, ignored
+}
+
+func (h *searchHandlers) seenExclusionFor(ctx context.Context, userID int64, vals url.Values) (ids []int64, ignored bool) {
 	if !vals.Has(hideSeenParam) {
 		return nil, false
 	}
@@ -341,17 +362,15 @@ func (h *searchHandlers) seenExclusion(c *fiber.Ctx) (ids []int64, ignored bool)
 	if !want {
 		return nil, false
 	}
-	userID, ok := auth.UserID(c)
-	if !ok || h.seen == nil {
+	if userID == 0 || h.seen == nil {
 		return nil, true
 	}
-	ids, err = h.seen.ExcludedJobIDs(c.Context(), userID)
+	ids, err = h.seen.ExcludedJobIDs(ctx, userID)
 	if err != nil {
 		log.Printf("search: hide_seen: read seen jobs of user %d: %v", userID, err)
 		return nil, true
 	}
 	// The answer now depends on who asked, under a URL that does not say so.
-	c.Set(fiber.HeaderCacheControl, "private, no-store")
 	return ids, false
 }
 
@@ -386,16 +405,28 @@ func (o jobSearchOutcome) own(base []string) []string {
 // wired — and the caller then searches as if it were absent (and reports it, see own).
 // Applied with no slugs is a real answer: nothing banked resolves to a hiring company.
 func (h *searchHandlers) formerEmployerSlugs(c *fiber.Ctx) (slugs []string, applied bool, err error) {
-	if h.formerEmployers == nil || !c.QueryBool(formerEmployersParam) {
+	userID, _ := auth.UserID(c)
+	vals := queryValues(c)
+	// QueryBool historically accepts the alternate strconv boolean spellings.
+	if c.QueryBool(formerEmployersParam) {
+		vals.Set(formerEmployersParam, "true")
+	}
+	slugs, applied, err = h.formerEmployerSlugsFor(c.Context(), userID, vals)
+	if applied {
+		c.Set(fiber.HeaderCacheControl, "private, no-store")
+	}
+	return
+}
+
+func (h *searchHandlers) formerEmployerSlugsFor(ctx context.Context, userID int64, vals url.Values) (slugs []string, applied bool, err error) {
+	if h.formerEmployers == nil || vals.Get(formerEmployersParam) != "true" {
 		return nil, false, nil
 	}
-	userID, ok := auth.UserID(c)
-	if !ok {
+	if userID == 0 {
 		return nil, false, nil
 	}
 	// The answer is this person's own history; no shared cache may keep it.
-	c.Set(fiber.HeaderCacheControl, "private, no-store")
-	slugs, err = h.formerEmployers.Slugs(c.Context(), userID)
+	slugs, err = h.formerEmployers.Slugs(ctx, userID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -429,24 +460,40 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude [
 	if err != nil {
 		return jobSearchOutcome{}, err
 	}
+	return h.executeJobSearch(c.Context(), queryValues(c), jobSearchInput{limit: limit, offset: offset, former: former, hasFormer: formerApplied, vector: h.matchVector(c), exclude: exclude, personal: personal, wantSemantic: wantSemantic})
+}
+
+type jobSearchInput struct {
+	limit, offset        int
+	former               []string
+	hasFormer            bool
+	vector               []float32
+	exclude              []int64
+	personal             string
+	wantSemantic, strict bool
+}
+
+func (h *searchHandlers) executeJobSearch(ctx context.Context, vals url.Values, in jobSearchInput) (jobSearchOutcome, error) {
+	limit, offset, former, formerApplied := in.limit, in.offset, in.former, in.hasFormer
+	vector, exclude, personal, wantSemantic, strict := in.vector, in.exclude, in.personal, in.wantSemantic, in.strict
+
 	if formerApplied && len(former) == 0 {
 		// Narrow to nothing rather than drop the filter: the set the caller asked for is
 		// empty, and searching without it would answer with strangers.
 		return jobSearchOutcome{limit: limit, offset: offset, formerEmployers: true}, nil
 	}
 
-	vector := h.matchVector(c)
-	sort := searchSort(c, vector != nil)
-	base := buildSearchFilter(c)
+	sort := searchSortValues(vals, vector != nil)
+	base := search.FilterFromValues(vals)
 	// formerFilter is the "Hiring again" group alone, kept for the degrade below.
 	filter, formerFilter := base, any(nil)
 	if formerApplied {
 		filter = search.AndInStrings(base, "company_slug", former)
 		formerFilter = search.AndInStrings(nil, "company_slug", former)
 	}
-	qFields, qFieldsIgnored := search.QFieldsFromValues(queryValues(c))
+	qFields, qFieldsIgnored := search.QFieldsFromValues(vals)
 	params := search.SearchParams{
-		Query:   c.Query("q"),
+		Query:   vals.Get("q"),
 		Filter:  withExcludedIDs(withFilterGroup(filter, personal), exclude),
 		Sort:    sort,
 		Vector:  vector,
@@ -455,8 +502,11 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude [
 		Offset:  offset,
 	}
 
+	if strict && len(qFieldsIgnored) > 0 {
+		return jobSearchOutcome{}, fmt.Errorf("search fields cannot be enforced")
+	}
 	dropped := qFieldsIgnored
-	res, outcome, err := h.semantic.search(c.Context(), h.search, params, wantSemantic)
+	res, outcome, err := h.semantic.search(ctx, h.search, params, wantSemantic)
 	if outcome == semanticDropped {
 		dropped = append(dropped, search.UnknownParam{Param: "semantic"})
 	}
@@ -472,7 +522,7 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude [
 		// The "Hiring again" group is not blamed and survives the retry: company_slug
 		// has been filterable since the index existed, and dropping it would answer a
 		// request for former employers with the whole catalogue.
-		if base == nil || !errors.Is(err, search.ErrBadQuery) {
+		if strict || base == nil || !errors.Is(err, search.ErrBadQuery) {
 			// RenderError renders a generic 500 (or 400 for ErrBadQuery); returning
 			// the error keeps the failure cause visible to logging instead of
 			// swallowing it.
@@ -480,8 +530,8 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude [
 		}
 		// Both personal exclusions survive the retry: id and company_slug have always
 		// been filterable, so an undeclared facet cannot justify dropping either.
-		res, err = h.search.Search(c.Context(), search.SearchParams{
-			Query: c.Query("q"), Filter: withExcludedIDs(withFilterGroup(formerFilter, personal), exclude),
+		res, err = h.search.Search(ctx, search.SearchParams{
+			Query: vals.Get("q"), Filter: withExcludedIDs(withFilterGroup(formerFilter, personal), exclude),
 			Sort: sort, Vector: vector, QFields: qFields, Limit: limit, Offset: offset,
 		})
 		if err != nil {
@@ -489,14 +539,14 @@ func (h *searchHandlers) runJobSearch(c *fiber.Ctx, wantSemantic bool, exclude [
 		}
 		// Which single param Meilisearch minded is not knowable from its own
 		// error, so every active filter param is reported rather than a guess.
-		dropped = append(dropped, search.ActiveFilterParams(queryValues(c))...)
+		dropped = append(dropped, search.ActiveFilterParams(vals)...)
 		// The retry is keyword-only, so a semantic request was not answered by meaning.
 		if outcome == semanticApplied {
 			outcome = semanticUnavailable
 		}
 	}
 
-	h.recordQuery(c.Query("q"))
+	h.recordQuery(vals.Get("q"))
 	return jobSearchOutcome{
 		res: res, limit: limit, offset: offset, dropped: dropped,
 		semantic:        outcome.wire(ojcp.SemanticApplied, ojcp.SemanticUnavailable),
@@ -556,17 +606,21 @@ func demandKey(raw string) string {
 // silently discard the match order the caller asked for — not error, just quietly
 // serve something else.
 func searchSort(c *fiber.Ctx, ranked bool) []string {
+	return searchSortValues(queryValues(c), ranked)
+}
+
+func searchSortValues(vals url.Values, ranked bool) []string {
 	if ranked {
 		return nil
 	}
-	attr, ok := searchSortable[c.Query("sort")]
+	attr, ok := searchSortable[vals.Get("sort")]
 	if !ok {
-		if c.Query("q") == "" {
+		if vals.Get("q") == "" {
 			return []string{"posted_at:desc"}
 		}
 		return nil
 	}
-	order := c.Query("order", "desc")
+	order := vals.Get("order")
 	if order != "asc" && order != "desc" {
 		order = "desc"
 	}
