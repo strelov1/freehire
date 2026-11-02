@@ -4,6 +4,7 @@ package db
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -70,8 +71,9 @@ func TestSuppressAggregator_HimalayasMidWordPrefix(t *testing.T) {
 func TestSuppressAggregator_HimalayasPrefixGuards(t *testing.T) {
 	pool := startPostgres(t)
 	q := New(pool)
-	const full = "Distributed Systems Engineer for Payment Infrastructure"
-	const prefix = "Distributed Systems Engineer for Payment Infra"
+	const full = "Distributed Systems Engineer for Global Payment Processing Platform Infrastructure Services"
+	const prefix = "Distributed Systems Engineer for Global Payment Processing Platform Infrastructu"
+	const fourTokens = "Distributed Infrastructure Observability Engin"
 	for _, tc := range []struct {
 		name       string
 		atsTitle   string
@@ -83,18 +85,21 @@ func TestSuppressAggregator_HimalayasPrefixGuards(t *testing.T) {
 		state      string
 		match      bool
 	}{
-		{name: "normalized and folded company", atsTitle: full, aggTitle: "DISTRIBUTED systems engineer, for PAYMENT infra", company: "ac-me", match: true},
+		{name: "normalized and folded company", atsTitle: full, aggTitle: strings.Replace(strings.ToUpper(prefix), " ", "_", 1), company: "ac-me", match: true},
 		{name: "empty ATS country", atsTitle: full, aggTitle: prefix, aggCountry: []string{"US"}, match: true},
 		{name: "empty aggregator country", atsTitle: full, aggTitle: prefix, atsCountry: []string{"US"}, match: true},
 		{name: "different company", atsTitle: full, aggTitle: prefix, company: "other"},
 		{name: "different country", atsTitle: full, aggTitle: prefix, atsCountry: []string{"US"}, aggCountry: []string{"DE"}},
+		{name: "complete final word", atsTitle: "Senior Software Platform Infrastructure Engineering Manager", aggTitle: "Senior Software Platform Infrastructure Engineer"},
+		{name: "below feed ceiling", atsTitle: full, aggTitle: prefix[:79]},
+		{name: "above feed ceiling", atsTitle: full, aggTitle: full[:81]},
 		{name: "short title", atsTitle: "Applied AI Engineer Evaluation", aggTitle: "Applied AI Engineer Evalua"},
 		{name: "empty title", atsTitle: full},
-		{name: "short fragment", atsTitle: full, aggTitle: "Distributed Systems Engineer for Payment Inf"},
-		{name: "too few complete tokens", atsTitle: "Distributed Infrastructure Observability Engineering", aggTitle: "Distributed Infrastructure Observability Engin"},
-		{name: "non prefix", atsTitle: full, aggTitle: "Distributed Systems Engineer for Payments Infra"},
-		{name: "literal punctuation", atsTitle: full, aggTitle: "Distributed Systems Engineer for Pay%ment Infra"},
-		{name: "reversed", atsTitle: prefix, aggTitle: full},
+		{name: "short fragment", atsTitle: full, aggTitle: strings.TrimSuffix(prefix, "Infrastructu") + strings.Repeat(" ", 9) + "Inf"},
+		{name: "too few complete tokens", atsTitle: "Distributed Infrastructure Observability Engineering", aggTitle: strings.Replace(fourTokens, " ", strings.Repeat(" ", 81-len(fourTokens)), 1)},
+		{name: "non prefix", atsTitle: full, aggTitle: strings.Replace(prefix, "Payment", "Payroll", 1)},
+		{name: "literal punctuation", atsTitle: full, aggTitle: strings.Replace(prefix, "Payment", "Pay%ent", 1)},
+		{name: "reversed", atsTitle: prefix[:79], aggTitle: prefix},
 		{name: "other aggregator", atsTitle: full, aggTitle: prefix, source: "gulftalent"},
 		{name: "private exact ATS", atsTitle: full, aggTitle: full, state: "private"},
 		{name: "private suffix ATS", atsTitle: full, aggTitle: full + " - Remote", state: "private"},

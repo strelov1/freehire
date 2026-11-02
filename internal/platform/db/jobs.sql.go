@@ -6181,6 +6181,7 @@ WITH ats AS (
 agg AS (
     SELECT a.id,
            a.source,
+           char_length(a.title) AS title_chars,
            a.company_slug_folded AS fcompany,
            btrim(regexp_replace(lower(a.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
            btrim(regexp_replace(lower(
@@ -6257,8 +6258,12 @@ existing_matches AS (
 prefix_candidates AS MATERIALIZED (
     -- Resolve the residual before expanding prefix pairs. Without this boundary the
     -- planner can place the anti-join after expansion and repeat it for every ATS pair.
-    SELECT a.id, a.source, a.fcompany, a.ntitle, a.ntitle2, a.countries FROM agg a
+    SELECT a.id, a.source, a.title_chars, a.fcompany, a.ntitle, a.ntitle2, a.countries FROM agg a
     WHERE a.source = 'himalayas'
+      -- Measured feed ceiling: 260 live API titles and 8,820 open stored titles
+      -- never exceed 80 characters. Only that raw boundary is evidence of a cut;
+      -- a shorter complete role like Engineer must not match Engineering Manager.
+      AND a.title_chars = 80
       AND length(a.ntitle) >= 40
       AND array_length(string_to_array(a.ntitle, ' '), 1) >= 5
       AND a.ntitle ~ '[a-z0-9]{4,}$'
@@ -6271,7 +6276,7 @@ matches AS (
     -- stripping decoration could erase the specialty that distinguishes two roles.
     -- Literal starts_with avoids LIKE wildcards. At least 40 normalized characters,
     -- four complete preceding tokens and a four-character final fragment supply evidence
-    -- beyond a short role prefix; these are safety limits, not a feed-length assumption.
+    -- beyond a short role prefix, in addition to the observed raw feed ceiling above.
     -- Only residual rows reach this arm, and fcompany bounds comparisons to one employer
     -- while the existing equality arms retain their separate hash joins.
     SELECT a.id, t.id
