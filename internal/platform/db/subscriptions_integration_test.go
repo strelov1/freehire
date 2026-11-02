@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -196,6 +197,99 @@ func TestSubscriptionMatchLedger(t *testing.T) {
 		}
 		if total != 3 {
 			t.Errorf("total matches = %d, want 3 (1 seeded + 2 newly batched)", total)
+		}
+	})
+
+	t.Run("deleted subscriptions do not discard other subscribers' matches", func(t *testing.T) {
+		truncateSubs(t, pool)
+		removed := seed("removed@example.test")
+		remaining := seed("remaining@example.test")
+		j1 := insertJob(t, pool, "removed-batch-1")
+		j2 := insertJob(t, pool, "removed-batch-2")
+
+		// The worker has already listed both subscriptions when someone unsubscribes.
+		if _, err := pool.Exec(ctx, "DELETE FROM subscriptions WHERE id=$1", removed); err != nil {
+			t.Fatal(err)
+		}
+		args := RecordSubscriptionMatchesParams{
+			SubscriptionIds: []int64{removed, remaining, remaining},
+			JobIds:          []int64{j1, j1, j2},
+		}
+		n, err := q.RecordSubscriptionMatches(ctx, args)
+		if err != nil || n != 2 {
+			t.Fatalf("record with deleted subscriber: rows=%d err=%v, want 2", n, err)
+		}
+		var count int
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM subscription_matches WHERE subscription_id=$1", remaining).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 2 {
+			t.Fatalf("remaining subscriber has %d matches, want 2", count)
+		}
+		if n, err := q.RecordSubscriptionMatches(ctx, args); err != nil || n != 0 {
+			t.Fatalf("repeat record: rows=%d err=%v, want 0", n, err)
+		}
+	})
+
+	t.Run("concurrent deletion does not discard other subscribers' matches", func(t *testing.T) {
+		truncateSubs(t, pool)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		removed := seed("concurrent-removed@example.test")
+		remaining := seed("concurrent-remaining@example.test")
+		job := insertJob(t, pool, "concurrent-match")
+		deleting, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = deleting.Rollback(context.Background()) }()
+		if _, err := deleting.Exec(ctx, "DELETE FROM subscriptions WHERE id=$1", removed); err != nil {
+			t.Fatal(err)
+		}
+		recording, err := pool.Acquire(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer recording.Release()
+		type result struct {
+			rows int64
+			err  error
+		}
+		recorded := make(chan result, 1)
+		go func() {
+			n, err := New(recording).RecordSubscriptionMatches(ctx, RecordSubscriptionMatchesParams{
+				SubscriptionIds: []int64{removed, remaining},
+				JobIds:          []int64{job, job},
+			})
+			recorded <- result{n, err}
+		}()
+		// Prove the INSERT took its snapshot before the DELETE committed. A plain
+		// existence check without a parent-row lock still races in this ordering.
+		for {
+			var blocked bool
+			if err := pool.QueryRow(ctx, `SELECT COALESCE(wait_event_type='Lock',false) FROM pg_stat_activity WHERE pid=$1`, recording.Conn().PgConn().PID()).Scan(&blocked); err != nil {
+				t.Fatal(err)
+			}
+			if blocked {
+				break
+			}
+			select {
+			case r := <-recorded:
+				t.Fatalf("recording finished before deletion committed: %+v", r)
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+		if err := deleting.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		r := <-recorded
+		if r.err != nil || r.rows != 1 {
+			t.Fatalf("record after concurrent deletion: rows=%d err=%v, want 1", r.rows, r.err)
+		}
+		if n, err := recordMatch(ctx, q, remaining, job); err != nil || n != 0 {
+			t.Fatalf("remaining subscriber's match was not recorded: rows=%d err=%v", n, err)
 		}
 	})
 

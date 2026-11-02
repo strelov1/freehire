@@ -72,9 +72,19 @@ WHERE s.active
 -- query analyzer cannot type the latter (see jobs.sql's MarkFuzzyDuplicatesForCompany,
 -- same pattern for the same reason); Postgres runs same-length SELECT-list set-returning
 -- functions in lockstep, pairing subscription_ids[i] with job_ids[i].
+--
+-- Subscriptions may be deleted after ListActiveSubscriptions but before this write.
+-- Join their current rows so one unsubscribe cannot fail the entire query group's
+-- batch. Lock those parents through the insert: an existence check alone still races
+-- with a DELETE that commits after this statement takes its snapshot.
 INSERT INTO subscription_matches (subscription_id, job_id)
-SELECT unnest(sqlc.arg(subscription_ids)::bigint[]) AS subscription_id,
-       unnest(sqlc.arg(job_ids)::bigint[]) AS job_id
+SELECT s.id, pairs.job_id
+FROM (
+    SELECT unnest(sqlc.arg(subscription_ids)::bigint[]) AS subscription_id,
+           unnest(sqlc.arg(job_ids)::bigint[]) AS job_id
+) pairs
+JOIN subscriptions s ON s.id = pairs.subscription_id
+FOR KEY SHARE OF s
 ON CONFLICT (subscription_id, job_id) DO NOTHING;
 
 -- name: ClaimSubscriptionMatches :many
