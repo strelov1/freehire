@@ -41,7 +41,12 @@ const maxIndexedDescriptionRunes = 1000
 // embedded view alone. Meilisearch filters/sorts on the nested enrichment facets
 // via dot paths (e.g. "enrichment.seniority", "enrichment.salary_min").
 type JobDocument struct {
-	ID int64 `json:"id"`
+	// IsClosed is internal search state. A full replacement of an open job
+	// clears the marker, while legacy documents without it remain searchable.
+	IsClosed bool `json:"is_closed,omitempty"`
+	// IsDuplicate hides a retained copy without discarding its text and vectors.
+	IsDuplicate bool  `json:"is_duplicate,omitempty"`
+	ID          int64 `json:"id"`
 	jobview.Job
 	// PostedTS is the job's effective posting date in unix seconds — the numeric
 	// encoding of the same date jobview.Job.PostedAt renders as an RFC3339 string.
@@ -175,6 +180,8 @@ func FromJob(j db.Job, desc [][]float32, sourceType string) (JobDocument, error)
 	view.Description = truncateRunes(view.Description, maxIndexedDescriptionRunes)
 	doc := JobDocument{
 		ID:          j.ID,
+		IsClosed:    j.ClosedAt.Valid,
+		IsDuplicate: j.DuplicateOf.Valid,
 		Job:         view,
 		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
 		RoleType:    roletype.Derive(j.Title),

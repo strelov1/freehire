@@ -187,7 +187,7 @@ func (f *fakeRepo) CreateUser(_ context.Context, email, passwordHash string, ema
 	return r.user, r.err
 }
 
-func (f *fakeRepo) UpdateTimezone(_ context.Context, userID int64, timezone *string) (User, error) {
+func (f *fakeRepo) UpdateTimezone(_ context.Context, userID int64, timezone *string, _ bool) (User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.updateTimezoneCalls = append(f.updateTimezoneCalls, updateTimezoneCall{userID, timezone})
@@ -600,7 +600,7 @@ func TestUpdateTimezone_Valid(t *testing.T) {
 	}
 	svc := New(repo, &fakeHasher{})
 
-	if _, err := svc.UpdateTimezone(context.Background(), 1, "Europe/Moscow"); err != nil {
+	if _, err := svc.UpdateTimezone(context.Background(), 1, "Europe/Moscow", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(repo.updateTimezoneCalls) != 1 || *repo.updateTimezoneCalls[0].timezone != "Europe/Moscow" {
@@ -612,7 +612,7 @@ func TestUpdateTimezone_Invalid(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := New(repo, &fakeHasher{})
 
-	_, err := svc.UpdateTimezone(context.Background(), 1, "Not/AZone")
+	_, err := svc.UpdateTimezone(context.Background(), 1, "Not/AZone", false)
 	if !errors.Is(err, ErrInvalidTimezone) {
 		t.Errorf("want ErrInvalidTimezone, got %v", err)
 	}
@@ -627,7 +627,7 @@ func TestUpdateTimezone_RejectsEmptyString(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := New(repo, &fakeHasher{})
 
-	_, err := svc.UpdateTimezone(context.Background(), 1, "")
+	_, err := svc.UpdateTimezone(context.Background(), 1, "", false)
 	if !errors.Is(err, ErrInvalidTimezone) {
 		t.Errorf("want ErrInvalidTimezone, got %v", err)
 	}

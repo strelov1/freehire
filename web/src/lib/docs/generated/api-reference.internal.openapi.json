@@ -2788,6 +2788,10 @@
                     "type": "string",
                     "description": "IANA timezone name.",
                     "example": "Europe/Berlin"
+                  },
+                  "only_if_unset": {
+                    "type": "boolean",
+                    "description": "Automatically adopt the zone only when no timezone is stored. Defaults to false; explicit edits replace the stored zone."
                   }
                 },
                 "required": [

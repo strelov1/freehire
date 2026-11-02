@@ -254,6 +254,7 @@ FROM boards
 WHERE provider = ANY($1::text[])
   AND status IN ('pending', 'active')
   AND lower(company) = lower(board)
+  AND NOT (provider = 'successfactors' AND hub)
 ORDER BY provider, id
 `
 
@@ -264,8 +265,9 @@ type ListPlaceholderCompanyBoardsRow struct {
 }
 
 // Live boards whose company is still the board id itself — what a harvest writes when it
-// never resolved the tenant's display name, so the id ("<host>/<site>", a GUID) becomes the
-// employer's public name on every posting. cmd/backfill-company-names resolves the real name
+// never resolved the tenant's display name, so the id (a host, "<host>/<site>", a GUID) becomes the
+// employer's public name on every posting. SuccessFactors hubs are excluded: their root careers
+// page names the hub, not the tenants behind its host. cmd/backfill-company-names resolves the real name
 // from the ATS by that exact id and writes it back through RenameSlugBoardCompany. Limited to
 // the providers that have a resolver, since a board no resolver can read is not work.
 func (q *Queries) ListPlaceholderCompanyBoards(ctx context.Context, providers []string) ([]ListPlaceholderCompanyBoardsRow, error) {

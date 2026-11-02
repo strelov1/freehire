@@ -33,7 +33,7 @@ func (fakeRepo) LinkOrCreateByEmail(context.Context, string, string, string) (in
 func (fakeRepo) CreateUser(context.Context, string, string, bool, *string) (accounts.User, error) {
 	return accounts.User{}, nil
 }
-func (fakeRepo) UpdateTimezone(context.Context, int64, *string) (accounts.User, error) {
+func (fakeRepo) UpdateTimezone(context.Context, int64, *string, bool) (accounts.User, error) {
 	return accounts.User{}, nil
 }
 func (fakeRepo) UpdateLanguage(context.Context, int64, string) (accounts.User, error) {
@@ -240,11 +240,15 @@ func TestLogin_DBDown(t *testing.T) {
 
 type fakeRepoTimezone struct {
 	fakeRepo
-	user accounts.User
-	err  error
+	user                accounts.User
+	err                 error
+	expectedOnlyIfUnset bool
 }
 
-func (f fakeRepoTimezone) UpdateTimezone(context.Context, int64, *string) (accounts.User, error) {
+func (f fakeRepoTimezone) UpdateTimezone(_ context.Context, _ int64, _ *string, onlyIfUnset bool) (accounts.User, error) {
+	if onlyIfUnset != f.expectedOnlyIfUnset {
+		return accounts.User{}, errors.New("wrong timezone adoption mode")
+	}
 	return f.user, f.err
 }
 
@@ -332,5 +336,13 @@ func TestUpdateLanguage_RejectsInvalid(t *testing.T) {
 	token, _ := iss.Issue(7, testTokenVersion)
 	if got := patchJSON(t, app, "/me/language", token, `{"language":"xx"}`); got != fiber.StatusBadRequest {
 		t.Errorf("status = %d, want 400", got)
+	}
+}
+
+func TestUpdateTimezone_Adoption(t *testing.T) {
+	app, iss := timezoneApp(fakeRepoTimezone{user: accounts.User{ID: 7}, expectedOnlyIfUnset: true})
+	token, _ := iss.Issue(7, testTokenVersion)
+	if got := patchJSON(t, app, "/me/timezone", token, `{"timezone":"Europe/Moscow","only_if_unset":true}`); got != fiber.StatusOK {
+		t.Fatalf("status = %d, want 200", got)
 	}
 }

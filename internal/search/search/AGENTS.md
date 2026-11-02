@@ -15,6 +15,17 @@ reads a precomputed pgvector lookup instead (`internal/search/similarjobs`,
 
 ## Always true
 
+- **Closed and duplicate index documents carry internal visibility markers.** Every
+  jobs query, including keyword/vector/federated search, facet/distinct counts and job
+  sitemaps, keeps `NOT is_closed = true AND NOT is_duplicate = true`. Legacy documents
+  without markers remain eligible. Full replacement from a canonical open row clears
+  both markers. Status updates use the experimental edit-documents-by-function API:
+  enable it and await both live filterable-attribute settings before deploying readers
+  or the drain. Updates touch existing documents only, preserving text/vectors without
+  creating skeletons. Private/missing rows still require physical removal; a full rebuild
+  omits closed/duplicate rows to reclaim retained storage. Before rolling back readers,
+  physically remove marked documents and await completion or the old filter exposes them.
+
 - **A job whose category is unresolved by both the title dictionary and the LLM never
   enters the index.** `search.CategoryUnresolved` (`document.go`) reports true when
   `jobs.category` is empty (`internal/dict/classify` found nothing in the title) AND the raw

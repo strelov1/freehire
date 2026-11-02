@@ -2874,7 +2874,10 @@ data: {"type":"result","stop_reason":"completed"}
         path: '/me/timezone',
         auth: 'cookie',
         summary: 'Set your account’s IANA timezone.',
-        body: [{ name: 'timezone', type: 'string', required: true, description: 'IANA timezone name.', example: 'Europe/Berlin' }],
+        body: [
+          { name: 'timezone', type: 'string', required: true, description: 'IANA timezone name.', example: 'Europe/Berlin' },
+          { name: 'only_if_unset', type: 'boolean', description: 'Automatically adopt the zone only when no timezone is stored. Defaults to false; explicit edits replace the stored zone.' },
+        ],
         curl: `curl -X PATCH "${BASE_URL}/me/timezone" \\
   -H 'Content-Type: application/json' -b cookies.txt \\
   -d '{"timezone":"Europe/Berlin"}'`,

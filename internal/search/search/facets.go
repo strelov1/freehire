@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/meilisearch/meilisearch-go"
+
+	"github.com/strelov1/freehire/internal/dict/vocab"
 )
 
 // FacetParams is a facet-distribution request: it reports the count of matching
@@ -104,6 +106,7 @@ func widenImpliedRegionCounts(ctx context.Context, query string, filter any, dis
 // Search does: a single alternative is today's single-index request, several are
 // one federated request whose merged counts are per document.
 func (c *Client) facetSearch(ctx context.Context, query string, filter any, facets []string) (*meilisearch.SearchResponse, error) {
+	filter = withOpenJobs(filter)
 	alts, err := ParseQuery(query)
 	if err != nil {
 		return nil, err
@@ -138,6 +141,7 @@ func (c *Client) facetSearch(ctx context.Context, query string, filter any, face
 // per-alternative distinct counts a company matched by two alternatives twice,
 // and a count that is not exact is what this exists to avoid.
 func (c *Client) DistinctCount(ctx context.Context, query string, filter any, attr string) (int64, error) {
+	filter = withOpenJobs(filter)
 	alts, err := ParseQuery(query)
 	if err != nil {
 		return 0, err
@@ -259,7 +263,20 @@ func buildFacetResult(resp *meilisearch.SearchResponse) (FacetResult, error) {
 	if err != nil {
 		return FacetResult{}, err
 	}
+	foldSourceFamilies(facets["source"])
 	return FacetResult{Total: resp.EstimatedTotalHits, Facets: facets, Stats: stats}, nil
+}
+
+// foldSourceFamilies adds each family member's count into the family's own bucket
+// (vocab.SourceFamilies), so the picker offers "whatjobs" once. A posting has exactly
+// one source, so summing the members counts nothing twice.
+func foldSourceFamilies(dist map[string]int64) {
+	for val, n := range dist {
+		if family := vocab.SourceFamilyOf(val); family != val {
+			dist[family] += n
+			delete(dist, val)
+		}
+	}
 }
 
 // decodeFacetDistribution parses Meilisearch's raw facetDistribution JSON into

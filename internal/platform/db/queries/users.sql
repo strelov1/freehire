@@ -42,9 +42,10 @@ WHERE id = $1;
 -- name: UpdateUserTimezone :one
 -- Set (or clear, with NULL) the account's IANA timezone name. The handler validates
 -- the name against time.LoadLocation before this runs — the query itself trusts its
--- input, same as every other single-column update in this file.
+-- input, same as every other single-column update in this file. Automatic adoption
+-- preserves a concurrently saved preference under the row lock.
 UPDATE users
-SET timezone = $2
+SET timezone = CASE WHEN sqlc.arg(only_if_unset)::boolean THEN COALESCE(timezone, sqlc.narg(timezone)::text) ELSE sqlc.narg(timezone)::text END
 WHERE id = $1
 RETURNING id, email, role, beta_tester, email_verified,
           (password_hash IS NOT NULL)::boolean AS has_password,

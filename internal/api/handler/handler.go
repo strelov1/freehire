@@ -819,6 +819,8 @@ func Register(app *fiber.App, cfg Config) {
 	searchH.appliedCompanies = tracking
 	// hide_seen on /jobs/search reads the same record the swipe deck excludes by.
 	searchH.seen = tracking
+	// A closed posting stays in the index until the drain removes it; the page hides it meanwhile.
+	searchH.removals = queries
 	timelineH := newTimelineHandlers(queries)
 	resumeH := newResumeHandlers(resumeStore, structuredExtractor, facets, profileSvc, atsAnalyzer, queries)
 	photoH := newPhotoHandlers(photoStore)
@@ -853,6 +855,7 @@ func Register(app *fiber.App, cfg Config) {
 		assistantH.events = p
 	}
 	assistantH.answerBank = answerBank
+	assistantH.reports = reportsH
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	// The autofill planner is one cheap structured call per run, so it travels on the

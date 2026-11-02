@@ -411,9 +411,9 @@ func (c *Client) SubmitJobs(ctx context.Context, docs []JobDocument) error {
 	return nil
 }
 
-// DeleteJobs removes documents from the facet index by primary key. Used by
-// reindex to drop closed jobs; deleting an id that is not indexed is a no-op,
-// keeping re-runs idempotent.
+// DeleteJobs physically removes private or missing jobs from the facet index.
+// Closed and duplicate public jobs use visibility markers instead. Deleting an
+// id that is not indexed is a no-op, keeping retries idempotent.
 func (c *Client) DeleteJobs(ctx context.Context, ids []int64) error {
 	return c.deleteFrom(ctx, c.facet, ids)
 }
@@ -424,22 +424,6 @@ func (c *Client) deleteFrom(ctx context.Context, idx meilisearch.IndexManager, i
 		return err
 	}
 	return c.awaitTask(ctx, idx, task)
-}
-
-// SubmitJobDeletion enqueues a facet-index deletion WITHOUT waiting for it.
-//
-// Meilisearch runs one task per index at a time and a delete-by-id rebuilds the
-// affected parts of the inverted index, so its cost tracks the size of the index
-// rather than the number of ids: measured on prod, one batch took minutes while the
-// database sat idle waiting for it. A bulk campaign that awaits every batch spends
-// almost all of its time not deleting.
-//
-// The trade this accepts is real and visible: until the tasks drain, search serves
-// documents whose rows are gone and those results 404. Use it only for a bulk pass
-// that ends in a full reindex, never on a path a user waits on.
-func (c *Client) SubmitJobDeletion(ctx context.Context, ids []int64) error {
-	_, err := c.submitDelete(ctx, c.facet, ids)
-	return err
 }
 
 // submitDelete enqueues the deletion and returns its task id, or 0 when there was
@@ -592,6 +576,7 @@ const semanticRatio = 0.7
 
 // Search runs a query against the jobs (facet/keyword) index and decodes the hits.
 func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, error) {
+	p.Filter = withOpenJobs(p.Filter)
 	alts, err := ParseQuery(p.Query)
 	if err != nil {
 		return SearchResult{}, err
@@ -680,7 +665,7 @@ func facetSettings() *meilisearch.Settings {
 			// id backs the swipe deck's `id NOT IN [...]` per-user exclusion. Adding
 			// a new filterable attribute needs a reindex before it takes effect —
 			// reindex first on deploy, or /jobs 500s on the new attribute.
-			"id",
+			"id", "is_closed", "is_duplicate",
 			"source", "company_slug",
 			"work_mode", "regions", "countries", "cities", "metros", "skills", "collections",
 			// is_tech is the served top-level tech/non-tech facet (jobview), filtered on

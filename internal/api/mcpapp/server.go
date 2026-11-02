@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 // Version is what this server reports itself as. It is the app's version, not the
@@ -109,7 +110,18 @@ func Handler(r Reader, origin string) http.Handler {
 
 func newServer(r Reader, origin string) *mcp.Server {
 	server := mcp.NewServer(Identity("freehire", Version, origin),
-		&mcp.ServerOptions{Instructions: serverInstructions, CompletionHandler: completePromptArgument})
+		&mcp.ServerOptions{
+			Instructions:      serverInstructions,
+			CompletionHandler: completePromptArgument,
+			// Lists are fixed for this per-request server. The SDK otherwise
+			// advertises listChanged and accepts subscriptions that never update.
+			Capabilities: &mcp.ServerCapabilities{
+				Logging:   &mcp.LoggingCapabilities{}, //nolint:staticcheck // Preserve the SDK default for older MCP clients.
+				Tools:     &mcp.ToolCapabilities{},
+				Prompts:   &mcp.PromptCapabilities{},
+				Resources: &mcp.ResourceCapabilities{},
+			},
+		})
 
 	addPrompts(server)
 	addWidget(server)
@@ -304,7 +316,16 @@ func toolResult[T any](out T, err error) (*mcp.CallToolResult, T, error) {
 		message = notFound.Error() + "; search for it instead"
 	}
 	return &mcp.CallToolResult{
+		Meta:    mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": publicErrorCode(err)}},
 		IsError: true,
 		Content: []mcp.Content{&mcp.TextContent{Text: message}},
 	}, zero, nil
+}
+
+func publicErrorCode(err error) string {
+	var notFound NotFoundError
+	if errors.As(err, &notFound) {
+		return "not_found"
+	}
+	return observability.ErrorCode(err)
 }

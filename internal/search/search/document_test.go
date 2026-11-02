@@ -401,3 +401,31 @@ func TestMergeClosureGeographyWidensMetros(t *testing.T) {
 		t.Errorf("Metros = %v", d.Metros)
 	}
 }
+
+func TestFromJob_DuplicateStatusIsInternal(t *testing.T) {
+	for _, duplicate := range []bool{false, true} {
+		row := db.Job{ID: 42, Title: "Engineer", PublicSlug: "engineer", DuplicateOf: pgtype.Int8{Int64: 7, Valid: duplicate}}
+		doc, err := FromJob(row, nil, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := fields["is_duplicate"].(bool); got != duplicate {
+			t.Errorf("duplicate=%t: indexed marker=%v", duplicate, fields["is_duplicate"])
+		}
+		public, err := json.Marshal(doc.Job)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(public), "is_duplicate") {
+			t.Fatal("internal duplicate marker leaked into public job")
+		}
+	}
+}

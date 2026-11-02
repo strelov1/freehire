@@ -10,6 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 // accountServerInstructions tells the model this surface acts as a specific,
@@ -53,7 +54,14 @@ const accountAlertInstructions = "Job alerts are saved searches over any filters
 // reimplemented so a tool result here and in the assistant can never disagree.
 func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.Server {
 	server := mcp.NewServer(Identity("freehire-account", Version, origin),
-		&mcp.ServerOptions{Instructions: accountInstructions(tools)})
+		&mcp.ServerOptions{
+			Instructions: accountInstructions(tools),
+			// The authenticated tool list is fixed for this request's server.
+			Capabilities: &mcp.ServerCapabilities{
+				Logging: &mcp.LoggingCapabilities{}, //nolint:staticcheck // Preserve the SDK default for older MCP clients.
+				Tools:   &mcp.ToolCapabilities{},
+			},
+		})
 
 	for _, t := range tools {
 		server.AddTool(&mcp.Tool{
@@ -109,7 +117,9 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		out, err := t.Run(ctx, userID, req.Params.Arguments)
 		if err != nil {
-			return errorResult(err.Error()), nil
+			result := errorResult(err.Error())
+			result.Meta = mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": observability.ErrorCode(err)}}
+			return result, nil
 		}
 		payload, err := json.Marshal(out)
 		if err != nil {

@@ -388,7 +388,8 @@ func (h *authHandlers) resolveTier(ctx context.Context, userID int64) plan.Tier 
 
 // timezoneRequest is the PATCH /me/timezone body.
 type timezoneRequest struct {
-	Timezone string `json:"timezone"`
+	Timezone    string `json:"timezone"`
+	OnlyIfUnset bool   `json:"only_if_unset"`
 }
 
 // UpdateTimezone sets the caller's IANA timezone name. Cookie-only.
@@ -401,7 +402,7 @@ func (h *authHandlers) UpdateTimezone(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
-	user, err := h.accounts.UpdateTimezone(c.Context(), userID, in.Timezone)
+	user, err := h.accounts.UpdateTimezone(c.Context(), userID, in.Timezone, in.OnlyIfUnset)
 	if err != nil {
 		return accountsError(err)
 	}
@@ -616,7 +617,7 @@ type apiKeys struct{ q *db.Queries }
 func (a apiKeys) AuthenticateAPIKey(ctx context.Context, tokenHash string) (auth.APIKeyIdentity, error) {
 	row, err := a.q.AuthenticateAPIKey(ctx, tokenHash)
 	if err == nil {
-		return auth.APIKeyIdentity{UserID: row.UserID, Scope: row.Scope}, nil
+		return auth.APIKeyIdentity{UserID: row.UserID, Scope: row.Scope, KeyID: row.ID}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return auth.APIKeyIdentity{}, err
@@ -625,5 +626,5 @@ func (a apiKeys) AuthenticateAPIKey(ctx context.Context, tokenHash string) (auth
 	if err != nil {
 		return auth.APIKeyIdentity{}, err
 	}
-	return auth.APIKeyIdentity{UserID: userID, Scope: auth.ScopeFull}, nil
+	return auth.APIKeyIdentity{UserID: userID, Scope: auth.ScopeFull, OAuthGrant: true}, nil
 }

@@ -86,15 +86,15 @@ type RunOptions struct {
 	// CallTimeout bounds a single batch's (or fallback item's) index operation; 0
 	// means no per-call timeout.
 	CallTimeout time.Duration
-	// MaxPerRun bounds how many entries one Run takes; 0 is unbounded. Both this
-	// runner and DeletionRunner honour it, and cmd/search-drain passes the same value
-	// to each, so a bounded run splits its budget between the two passes rather than
-	// letting whichever goes first spend the whole process. See config.SearchDrain.
+	// MaxPerRun independently bounds claimed entries from each queue; 0 is
+	// unbounded. Deferred waves consume this budget without spending attempts.
 	MaxPerRun int
 }
 
 // Stats reports what a run did.
 type Stats struct {
+	// Claimed includes waves deferred for lease-expiry retry.
+	Claimed      int
 	Indexed      int
 	Failed       int
 	DeadLettered int
@@ -119,34 +119,53 @@ type Runner struct {
 // Run drains the queue until no claimable entries remain. A failure on a single
 // entry is recorded and never aborts the run.
 func (r Runner) Run(ctx context.Context, opt RunOptions) (Stats, error) {
+	return r.run(ctx, opt, false)
+}
+
+func (r Runner) run(ctx context.Context, opt RunOptions, oneWave bool) (Stats, error) {
 	rn := &run{store: r.Store, indexer: r.Indexer, opt: opt}
 
-	// Reap BEFORE claiming: these entries are pure garbage to the claim query, which
-	// pays an EXISTS probe per row only to skip them, and they inflate
-	// freehire_queue_depth with work nobody will ever do. Best-effort — housekeeping
-	// must never be the reason the queue stops draining.
-	if n, err := r.Store.Reap(ctx, reapLimit); err != nil {
-		log.Printf("search-drain: reap ineligible entries (continuing): %v", err)
-	} else if n > 0 {
-		rn.stats.Reaped = int(n)
-		log.Printf("search-drain: reaped %d entries whose job closed or became a repost", n)
+	if !oneWave {
+		rn.stats.Reaped = reap(ctx, r.Store)
 	}
 
-	_, err := outbox.RunBatch(ctx, r.Store, outbox.RunOptions{
+	_, err := outbox.RunBatch(ctx, claimFunc(func(ctx context.Context, batch, lease int) ([]Claimed, error) {
+		if oneWave && rn.stats.Claimed > 0 {
+			return nil, nil
+		}
+		entries, err := r.Store.Claim(ctx, batch, lease)
+		rn.stats.Claimed += len(entries)
+		return entries, err
+	}), outbox.RunOptions{
 		BatchSize:    opt.BatchSize,
 		LeaseSeconds: opt.LeaseSeconds,
 		MaxPerRun:    opt.MaxPerRun,
 		OnWave: func(outbox.Stats) {
 			// A heartbeat per wave so a long drain shows running totals instead of
 			// going silent for hours.
-			log.Printf("search-drain: progress indexed=%d failed=%d dead=%d",
-				rn.stats.Indexed, rn.stats.Failed, rn.stats.DeadLettered)
+			if !oneWave {
+				log.Printf("search-drain: progress indexed=%d failed=%d dead=%d",
+					rn.stats.Indexed, rn.stats.Failed, rn.stats.DeadLettered)
+			}
 		},
 	}, rn.processWave, rn.unreachableFallback)
 	if err != nil {
 		return rn.stats, fmt.Errorf("claim: %w", err)
 	}
 	return rn.stats, nil
+}
+
+// reap bounds housekeeping across the whole invocation, not each cooperative wave.
+func reap(ctx context.Context, store Store) int {
+	n, err := store.Reap(ctx, reapLimit)
+	if err != nil {
+		log.Printf("search-drain: reap ineligible entries (continuing): %v", err)
+		return 0
+	}
+	if n > 0 {
+		log.Printf("search-drain: reaped %d entries whose job closed or became a repost", n)
+	}
+	return int(n)
 }
 
 // run accumulates one Run's options and tallies. Waves are processed sequentially,
@@ -166,11 +185,13 @@ type run struct {
 func (rn *run) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, error) {
 	before := rn.stats
 	rn.processBatch(ctx, batch)
-	return outbox.Stats{
+	delta := outbox.Stats{
 		Succeeded:    rn.stats.Indexed - before.Indexed,
 		Failed:       rn.stats.Failed - before.Failed,
 		DeadLettered: rn.stats.DeadLettered - before.DeadLettered,
-	}, nil
+	}
+	delta.Deferred = len(batch) - delta.Succeeded - delta.Failed - delta.DeadLettered
+	return delta, nil
 }
 
 // unreachableFallback satisfies outbox.RunBatch's Processor parameter. processWave

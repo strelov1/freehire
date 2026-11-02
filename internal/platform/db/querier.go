@@ -618,12 +618,9 @@ type Querier interface {
 	ClaimRecentFeedOutboxBatch(ctx context.Context, batchSize int32) ([]ClaimRecentFeedOutboxBatchRow, error)
 	// Claim a batch of live, unleased removals by stamping claimed_at.
 	//
-	// Deliberately has NO `EXISTS (SELECT 1 FROM jobs ...)` guard, unlike
-	// ClaimSearchOutboxBatch. That query skips entries whose job closed or became a duplicate,
-	// because there is nothing left to index. Here the opposite holds: a job that is closed,
-	// demoted, or hard-deleted is exactly what this queue exists to act on, and a removal needs
-	// only the primary key. Adding the guard would make the queue skip every entry it was
-	// created for.
+	// Claims retain missing rows: removal needs only the document id. The worker's
+	// PrepareSearchDeletions cancels stale removals for open public canonical jobs
+	// immediately before sending a wave to Meilisearch.
 	//
 	// Claim order is insertion order (the id index), not freshest-first. Indexing sorts by
 	// job_posted_at because a searcher notices a missing new posting sooner than a missing old
@@ -1232,9 +1229,9 @@ type Querier interface {
 	// (ties broken by value), serving the searchable option list for the subindustry facet.
 	// Counts are unconditional — they do not reflect other active list filters.
 	CompanySubindustries(ctx context.Context) ([]CompanySubindustriesRow, error)
-	// Drop the entries for removals that landed. Deleting a document that was never indexed is
-	// a no-op in Meilisearch, so "landed" includes the common case where the job had no document
-	// to begin with — there is nothing to distinguish and nothing to retry.
+	// A job may reopen while its Meilisearch removal is in flight. Atomically queue
+	// its current content for restoration before forgetting the removal. Missing or
+	// closed jobs need no restoration, and private/repost rows must not be published.
 	CompleteSearchDeleteOutbox(ctx context.Context, ids []int64) error
 	// Records that the claimant consumed the code mailed to work_email. COALESCE keeps the
 	// first confirmation time; scoped to status='pending' like ActivateCompanyAccount.
@@ -4718,8 +4715,8 @@ type Querier interface {
 	// The jobs whose slug ends with a shortcode — the last eight characters of a public_slug,
 	// derived from (source, external_id) alone and so the one part of a job URL nothing can
 	// move. Resolves a link to a slug that no longer exists (freehire#3284); backed by
-	// jobs_public_slug_code_idx. LIMIT 2 is enough to tell one match from an ambiguous code,
-	// which the caller refuses rather than guessing between postings.
+	// jobs_public_slug_code_idx. The caller distinguishes full-hash collision recovery
+	// URLs before refusing ambiguous ordinary shortcodes.
 	ListJobsBySlugCode(ctx context.Context, code string) ([]Job, error)
 	// Keyset scan over one provider's rows, for the per-source repair workers (e.g.
 	// cmd/backfill-echojobs, cmd/backfill-descriptions): pages by the immutable primary key
@@ -4996,6 +4993,16 @@ type Querier interface {
 	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a queue
 	// that deep needs bulk triage, not a longer page.
 	ListPendingReports(ctx context.Context) ([]ListPendingReportsRow, error)
+	// Which of these jobs are closed but still have a document in the live index: the ones
+	// search_delete_outbox has queued and the drain has not yet applied. A search page reads
+	// its hits from Meilisearch alone, so without this a posting stays in the results for as long
+	// as the drain is paused (a facet rebuild holds it for hours). The primary-key lookup is
+	// bounded by the page size.
+	// A queued row is not enough on its own: TouchJob and UpsertJob reopen a posting without
+	// dequeuing it, and a reopened posting is open and must stay in the results. So the job
+	// must be gone or still closed. A missing row stays hidden (the removal outlives the job,
+	// see the queue's missing foreign key).
+	ListPendingSearchRemovals(ctx context.Context, jobIds []int64) ([]int64, error)
 	// id+url of every pending submission, used only to find which OTHER pending rows share the
 	// host being blocked (see RejectAndBlockHost in the submission package): host matching needs
 	// Go's net/url normalization (see submission.normalizeHost), so this fetches the candidates
@@ -5015,8 +5022,9 @@ type Querier interface {
 	// (source, external_id LIKE) reaches its rows directly — so the sort is over one board only.
 	ListPlaceholderBoardDescriptions(ctx context.Context, arg ListPlaceholderBoardDescriptionsParams) ([]string, error)
 	// Live boards whose company is still the board id itself — what a harvest writes when it
-	// never resolved the tenant's display name, so the id ("<host>/<site>", a GUID) becomes the
-	// employer's public name on every posting. cmd/backfill-company-names resolves the real name
+	// never resolved the tenant's display name, so the id (a host, "<host>/<site>", a GUID) becomes the
+	// employer's public name on every posting. SuccessFactors hubs are excluded: their root careers
+	// page names the hub, not the tenants behind its host. cmd/backfill-company-names resolves the real name
 	// from the ATS by that exact id and writes it back through RenameSlugBoardCompany. Limited to
 	// the providers that have a resolver, since a board no resolver can read is not work.
 	ListPlaceholderCompanyBoards(ctx context.Context, providers []string) ([]ListPlaceholderCompanyBoardsRow, error)
@@ -5934,6 +5942,12 @@ type Querier interface {
 	// asking anyway would be one API call per person who signed up and never bought, which is
 	// almost all of them.
 	PendingInviteRewards(ctx context.Context, maxRows int32) ([]PendingInviteRewardsRow, error)
+	// Cancel obsolete removals and requeue their current content before acknowledging
+	// them. Lock only the reopened job rows for this statement: a concurrent close
+	// waits, then inserts a NEW removal whose id an old acknowledgment cannot delete.
+	// Closed and duplicate public jobs retain documents with visibility markers;
+	// missing or private rows require physical removal.
+	PrepareSearchDeletions(ctx context.Context, jobIds []int64) ([]PrepareSearchDeletionsRow, error)
 	// What ClaimDueHeavyRuns WOULD take from the heavy pool, without taking it. Shadow mode's
 	// read: the first deployment lands underneath a fleet still driven by the static timers, so
 	// a tick that advanced a due time would desynchronise state the real timers know nothing
@@ -6577,6 +6591,11 @@ type Querier interface {
 	// query analyzer cannot type the latter (see jobs.sql's MarkFuzzyDuplicatesForCompany,
 	// same pattern for the same reason); Postgres runs same-length SELECT-list set-returning
 	// functions in lockstep, pairing subscription_ids[i] with job_ids[i].
+	//
+	// Subscriptions may be deleted after ListActiveSubscriptions but before this write.
+	// Join their current rows so one unsubscribe cannot fail the entire query group's
+	// batch. Lock those parents through the insert: an existence check alone still races
+	// with a DELETE that commits after this statement takes its snapshot.
 	RecordSubscriptionMatches(ctx context.Context, arg RecordSubscriptionMatchesParams) (int64, error)
 	// Count a failed attempt: bump attempts, record the error, and dead-letter (set
 	// failed_at) once attempts reach the max. The lease (claimed_at) is intentionally
@@ -8008,10 +8027,14 @@ type Querier interface {
 	// application deadline has passed. Expiry closes and queues removal atomically, WITHOUT touching the
 	// content columns. A full upsert of the content-less listing would re-derive the deterministic
 	// facets from an empty description and wipe the row's hydrated description/skills. This is the
-	// reopen half of UpsertJob's ON CONFLICT, minus every content write. RETURNING company_slug so
+	// reopen half of UpsertJob's ON CONFLICT, minus every content write. A closed-to-open
+	// transition queues search restoration atomically; open-to-open touches queue nothing.
+	// RETURNING company_slug so
 	// the caller records the company into the crawled-set that scopes the post-run unseen sweep —
 	// exactly as UpsertJob's write path does — otherwise a company whose offers were all touched
 	// (not newly saved) would drop out of the sweep and its removed offers would never close.
+	// Lock the prior state before updating: after waiting for a concurrent close,
+	// transition detection must observe the committed closed row, not an older snapshot.
 	TouchJob(ctx context.Context, arg TouchJobParams) (string, error)
 	// Resolve a token to where the visitor must be sent, plus what the click needs to be attributed:
 	// the link's own id and the id of the user whose CV it belongs to (so a click by that user can be
@@ -8210,7 +8233,8 @@ type Querier interface {
 	UpdateUserLanguage(ctx context.Context, arg UpdateUserLanguageParams) (UpdateUserLanguageRow, error)
 	// Set (or clear, with NULL) the account's IANA timezone name. The handler validates
 	// the name against time.LoadLocation before this runs — the query itself trusts its
-	// input, same as every other single-column update in this file.
+	// input, same as every other single-column update in this file. Automatic adoption
+	// preserves a concurrently saved preference under the row lock.
 	UpdateUserTimezone(ctx context.Context, arg UpdateUserTimezoneParams) (UpdateUserTimezoneRow, error)
 	// Record a meeting the sync attached to an application, or move the one already recorded,
 	// and note in the ledger that the scheduling was observed.

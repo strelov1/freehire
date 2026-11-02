@@ -38,12 +38,12 @@ func TestRefreshCovered_RefreshesOpenStoredRowsOnly(t *testing.T) {
 	store.crawled = crawled
 	before := loadJob(t, pool, "covered:open")
 
-	n, err := store.RefreshCovered(ctx, "lever", []string{"covered:open", "covered:closed", "covered:never-stored"})
+	slugs, err := store.RefreshCovered(ctx, "lever", []string{"covered:open", "covered:closed", "covered:never-stored"})
 	if err != nil {
 		t.Fatalf("RefreshCovered: %v", err)
 	}
-	if n != 1 {
-		t.Errorf("refreshed %d rows, want 1 — the open stored one", n)
+	if len(slugs) != 1 || slugs[0] != before.CompanySlug {
+		t.Errorf("refreshed company slugs = %v, want only %q", slugs, before.CompanySlug)
 	}
 
 	open := loadJob(t, pool, "covered:open")

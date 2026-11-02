@@ -4070,14 +4070,13 @@ const listJobsBySlugCode = `-- name: ListJobsBySlugCode :many
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE right(public_slug, 8) = $1::text
-LIMIT 2
 `
 
 // The jobs whose slug ends with a shortcode — the last eight characters of a public_slug,
 // derived from (source, external_id) alone and so the one part of a job URL nothing can
 // move. Resolves a link to a slug that no longer exists (freehire#3284); backed by
-// jobs_public_slug_code_idx. LIMIT 2 is enough to tell one match from an ambiguous code,
-// which the caller refuses rather than guessing between postings.
+// jobs_public_slug_code_idx. The caller distinguishes full-hash collision recovery
+// URLs before refusing ambiguous ordinary shortcodes.
 func (q *Queries) ListJobsBySlugCode(ctx context.Context, code string) ([]Job, error) {
 	rows, err := q.db.Query(ctx, listJobsBySlugCode, code)
 	if err != nil {
@@ -4690,6 +4689,42 @@ func (q *Queries) ListLocationsForGeoGap(ctx context.Context, arg ListLocationsF
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPendingSearchRemovals = `-- name: ListPendingSearchRemovals :many
+SELECT d.job_id FROM search_delete_outbox d
+LEFT JOIN jobs j ON j.id = d.job_id
+WHERE d.job_id = ANY($1::bigint[])
+  AND (j.id IS NULL OR j.closed_at IS NOT NULL)
+`
+
+// Which of these jobs are closed but still have a document in the live index: the ones
+// search_delete_outbox has queued and the drain has not yet applied. A search page reads
+// its hits from Meilisearch alone, so without this a posting stays in the results for as long
+// as the drain is paused (a facet rebuild holds it for hours). The primary-key lookup is
+// bounded by the page size.
+// A queued row is not enough on its own: TouchJob and UpsertJob reopen a posting without
+// dequeuing it, and a reopened posting is open and must stay in the results. So the job
+// must be gone or still closed. A missing row stays hidden (the removal outlives the job,
+// see the queue's missing foreign key).
+func (q *Queries) ListPendingSearchRemovals(ctx context.Context, jobIds []int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listPendingSearchRemovals, jobIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var job_id int64
+		if err := rows.Scan(&job_id); err != nil {
+			return nil, err
+		}
+		items = append(items, job_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -6310,28 +6345,37 @@ func (q *Queries) SuppressAggregatorDuplicatesForCompanies(ctx context.Context, 
 }
 
 const touchJob = `-- name: TouchJob :one
-WITH existing AS (
+WITH existing AS MATERIALIZED (
     SELECT id, closed_at, is_private FROM jobs
     WHERE jobs.source = $1 AND jobs.external_id = $2
+    FOR UPDATE
 ), touched AS (
     UPDATE jobs
     SET last_seen_at = now(),
         closed_at = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
-                         THEN COALESCE(closed_at, now()) ELSE NULL END,
+                         THEN COALESCE(jobs.closed_at, now()) ELSE NULL END,
         closed_reason = CASE WHEN application_deadline < (now() AT TIME ZONE 'UTC')::date
                              THEN 'expired' ELSE '' END,
-        liveness_strikes = CASE WHEN closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
+        liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE liveness_strikes END,
         -- Stamp a lifecycle transition, not another observation of an expired posting.
         updated_at = CASE
-            WHEN (closed_at IS NULL) IS DISTINCT FROM
+            WHEN (jobs.closed_at IS NULL) IS DISTINCT FROM
                  (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
             THEN now() ELSE updated_at END
-    WHERE jobs.source = $1 AND jobs.external_id = $2
-    RETURNING id, company_slug, closed_at
+    FROM existing e
+    WHERE jobs.id = e.id
+    RETURNING jobs.id, jobs.company_slug, jobs.closed_at,
+              COALESCE(jobs.posted_at, jobs.created_at) AS job_posted_at
 ), queued AS (
     INSERT INTO search_delete_outbox (job_id)
     SELECT t.id FROM touched t JOIN existing e ON e.id = t.id
     WHERE t.closed_at IS NOT NULL AND e.closed_at IS NULL AND NOT e.is_private
+    ON CONFLICT (job_id) DO NOTHING
+), reopened_queued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT t.id, t.job_posted_at
+    FROM touched t JOIN existing e ON e.id = t.id
+    WHERE t.closed_at IS NULL AND e.closed_at IS NOT NULL AND NOT e.is_private
     ON CONFLICT (job_id) DO NOTHING
 )
 SELECT company_slug FROM touched
@@ -6348,10 +6392,14 @@ type TouchJobParams struct {
 // application deadline has passed. Expiry closes and queues removal atomically, WITHOUT touching the
 // content columns. A full upsert of the content-less listing would re-derive the deterministic
 // facets from an empty description and wipe the row's hydrated description/skills. This is the
-// reopen half of UpsertJob's ON CONFLICT, minus every content write. RETURNING company_slug so
+// reopen half of UpsertJob's ON CONFLICT, minus every content write. A closed-to-open
+// transition queues search restoration atomically; open-to-open touches queue nothing.
+// RETURNING company_slug so
 // the caller records the company into the crawled-set that scopes the post-run unseen sweep —
 // exactly as UpsertJob's write path does — otherwise a company whose offers were all touched
 // (not newly saved) would drop out of the sweep and its removed offers would never close.
+// Lock the prior state before updating: after waiting for a concurrent close,
+// transition detection must observe the committed closed row, not an older snapshot.
 func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (string, error) {
 	row := q.db.QueryRow(ctx, touchJob, arg.Source, arg.ExternalID)
 	var company_slug string

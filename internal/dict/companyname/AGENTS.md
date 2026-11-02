@@ -41,7 +41,7 @@ undone by that board's next crawl.
 ## Placeholder boards
 
 A second, separate case: a board whose `company` is not a slug but **the board id itself** —
-`fa-etjg-saasfaprod1.fa.ocs.oraclecloud.com/Maggianos`, a Paylocity GUID — written verbatim by
+a bare host (`jobs.volvogroup.com`), a `<host>/<site>` path (`fa-etjg-saasfaprod1.fa.ocs.oraclecloud.com/Maggianos`), or a Paylocity GUID — written verbatim by
 a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 companies carrying
 ~156k open postings under a host path, ~7,400 carrying ~44k under a GUID.
 
@@ -54,9 +54,12 @@ a harvest that never resolved the tenant's name. Measured 2026-10-23: ~2,200 com
   header-logo alt text ("Default Brand" refused, a " Brand" tail cut), Taleo's footer
   copyright, falling back to its header-logo alt text, HiringRoom's portal title
   (`¡Oportunidades de Empleo en {Name}!` or `{Name} | Portal externo`), Zoho Recruit's careers
-  page `og:site_name` (its `<title>` is free text). Workday was tried and is absent on
-  purpose; ADP is not in this registry either, because it states the employer nowhere but in
-  the posting text — see below;
+  page `og:site_name` (its `<title>` is free text). SuccessFactors' career-host title is parsed
+  for the observed `Jobs at {Name}` shape, and Teamtailor reads `/jobs` `og:site_name`; both are
+  grounded in the two #4033 examples only (Volvo Group and BookBeat), not a generic hostname rule.
+  SuccessFactors hub boards are excluded because their root page names the hub, not the tenants.
+  Workday was tried and is absent on purpose; ADP is not in this registry either, because it
+  states the employer nowhere but in the posting text — see below;
   the constructor's comment says why for each.
 - **`AcceptPlaceholder`** — no confidence match: the lookup is by the exact board id, so there
   is no slug to compare against and nothing an unrelated page could slip through (join's

@@ -3,6 +3,8 @@ package sources
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -253,6 +255,31 @@ func TestComputrabajoCardReadsHybridAndAge(t *testing.T) {
 		if got := computrabajoAge(in); got != want {
 			t.Errorf("computrabajoAge(%q) = %d, want %d", in, got, want)
 		}
+	}
+}
+
+func TestComputrabajoCardStripsBrowserURLWhitespace(t *testing.T) {
+	for _, whitespace := range []string{"\t", "\n", "\r", "\t\r\n"} {
+		t.Run(fmt.Sprintf("control bytes %x", whitespace), func(t *testing.T) {
+			root, err := html.Parse(strings.NewReader(`<article class="box_offer"><a class="js-o-link" href="/ofertas-de-trabajo/oferta-de-trabajo-de-backend-` + whitespace + `engineer-092F54B5435B3F1A61373E686DCF3405#apply">Backend Engineer</a></article>`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cards := computrabajoCards(root, "https://ar.computrabajo.com")
+			if len(cards) != 1 {
+				t.Fatalf("cards = %d, want one posting", len(cards))
+			}
+			const wantURL = "https://ar.computrabajo.com/ofertas-de-trabajo/oferta-de-trabajo-de-backend-engineer-092F54B5435B3F1A61373E686DCF3405"
+			if cards[0].url != wantURL {
+				t.Errorf("url = %q, want %q", cards[0].url, wantURL)
+			}
+			if _, err := http.NewRequestWithContext(t.Context(), http.MethodGet, cards[0].url, nil); err != nil {
+				t.Errorf("posting URL cannot be requested: %v", err)
+			}
+			if cards[0].id != ctGlobalMedica || cards[0].title != "Backend Engineer" {
+				t.Errorf("card identity/title = %q / %q", cards[0].id, cards[0].title)
+			}
+		})
 	}
 }
 

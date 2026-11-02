@@ -16,6 +16,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 // mountMCPAccount wires the signed-in MCP server at /api/v1/mcp/account. It
@@ -65,6 +66,7 @@ func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.T
 // (its routes are cookie-only), so arriving here is not a reason to widen it.
 func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool {
 	all := append(assistants.assistantDiscoveryTools(), assistants.assistantTrackingTools()...)
+	all = append(all, assistants.reportMCPTools()...)
 	all = append(all, assistants.subscriptionMCPTools(origin)...)
 	return slices.DeleteFunc(all, func(t assistant.Tool) bool { return t.Name == presentJobsToolName })
 }
@@ -93,9 +95,11 @@ const localsMCPAccountViaKey = "mcpAccount.viaKey"
 func mcpAccountAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber.Handler {
 	challenge := `Bearer resource_metadata="` + frontendOrigin + `/.well-known/oauth-protected-resource"`
 	return func(c *fiber.Ctx) error {
+		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "unknown"})
 		const prefix = "Bearer "
 		authorization := c.Get(fiber.HeaderAuthorization)
 		if !strings.HasPrefix(authorization, prefix) {
+			observability.LogAuthFailure(c, fiber.StatusUnauthorized, "missing_bearer_token")
 			c.Set(fiber.HeaderWWWAuthenticate, challenge)
 			return fiber.NewError(fiber.StatusUnauthorized, "missing bearer token")
 		}
@@ -109,17 +113,26 @@ func mcpAccountAuthenticate(assistants *assistantHandlers, frontendOrigin string
 				// RFC 6750 §3.1: a presented token we refuse is invalid_token, which
 				// tells the client to sign in again rather than retry the same token.
 				c.Set(fiber.HeaderWWWAuthenticate, challenge+`, error="invalid_token"`)
+				observability.LogAuthFailure(c, fiber.StatusUnauthorized, "invalid_or_expired_credential")
 				return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired token")
 			case keyErr != nil:
+				observability.LogAuthFailure(c, fiber.StatusInternalServerError, "credential_lookup_failed")
 				return fmt.Errorf("authenticate api key for mcp account: %w", keyErr)
-			case key.Scope != auth.ScopeFull:
+			}
+			observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "api_key", UserID: key.UserID, KeyID: key.ID, Scope: key.Scope})
+			if key.Scope != auth.ScopeFull {
+				observability.LogAuthFailure(c, fiber.StatusForbidden, "insufficient_scope")
 				return fiber.NewError(fiber.StatusForbidden, "api key scope is insufficient for this endpoint")
 			}
 			userID, err = key.UserID, nil
 			c.Locals(localsMCPAccountViaKey, true)
 		}
 		if err != nil {
+			observability.LogAuthFailure(c, fiber.StatusInternalServerError, "credential_lookup_failed")
 			return fmt.Errorf("authenticate oauth grant for mcp account: %w", err)
+		}
+		if c.Locals(localsMCPAccountViaKey) == nil {
+			observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "oauth_grant", UserID: userID})
 		}
 
 		c.Request().Header.Set(mcpapp.AccountUserIDHeader, strconv.FormatInt(userID, 10))

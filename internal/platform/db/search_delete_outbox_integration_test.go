@@ -608,3 +608,200 @@ func TestCompleteSearchDeleteOutboxRemovesTheEntries(t *testing.T) {
 		t.Errorf("deletion queue holds %d rows after completion, want 0", got)
 	}
 }
+
+func TestCompleteSearchDeleteOutboxRepairsReopenedJob(t *testing.T) {
+	ctx := context.Background()
+	pool := startPostgres(t)
+	q := New(pool)
+	job, err := ingestUpsert(ctx, q, ingestParams("acme:reopened-removal", "Engineer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = q.CloseJobByID(ctx, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := q.ClaimSearchDeleteOutboxBatch(ctx, ClaimSearchDeleteOutboxBatchParams{BatchSize: 10, LeaseSeconds: 300})
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim=%v err=%v", claimed, err)
+	}
+	// Reopen while the index deletion is in flight. The acknowledgement must repair it.
+	if _, err = pool.Exec(ctx, `UPDATE jobs SET closed_at=NULL,closed_reason='' WHERE id=$1`, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = q.CompleteSearchDeleteOutbox(ctx, []int64{claimed[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	var queued bool
+	if err = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM search_outbox WHERE job_id=$1)`, job.ID).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if !queued {
+		t.Fatal("reopened job lost its pending removal without being queued for indexing")
+	}
+	if got := countDeletionQueue(t, pool); got != 0 {
+		t.Fatalf("pending removals=%d, want 0", got)
+	}
+}
+
+func TestTouchJobQueuesOnlyReopeningForSearch(t *testing.T) {
+	for _, closed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("closed=%t", closed), func(t *testing.T) {
+			ctx := context.Background()
+			pool := startPostgres(t)
+			q := New(pool)
+			job, err := ingestUpsert(ctx, q, ingestParams("acme:touched-reopen", "Engineer"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if closed {
+				if _, err = q.CloseJobByID(ctx, job.ID); err != nil {
+					t.Fatal(err)
+				}
+				// Model the previous removal having completed before the source sees the job again.
+				if _, err = pool.Exec(ctx, `DELETE FROM search_delete_outbox WHERE job_id=$1`, job.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err = q.TouchJob(ctx, TouchJobParams{Source: "greenhouse", ExternalID: "acme:touched-reopen"}); err != nil {
+				t.Fatal(err)
+			}
+			var queued bool
+			if err = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM search_outbox WHERE job_id=$1)`, job.ID).Scan(&queued); err != nil {
+				t.Fatal(err)
+			}
+			if queued != closed {
+				t.Fatalf("queued=%t, want %t (only a reopen needs an index push)", queued, closed)
+			}
+		})
+	}
+}
+
+func TestTouchJobQueuesReopeningAfterConcurrentClose(t *testing.T) {
+	pool := startPostgres(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	q := New(pool)
+	job, err := ingestUpsert(ctx, q, ingestParams("acme:concurrent-reopen", "Engineer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	closing, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = closing.Rollback(context.Background()) }()
+	if _, err = q.WithTx(closing).CloseJobByID(ctx, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	touching, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer touching.Release()
+	touched := make(chan error, 1)
+	go func() {
+		_, err := New(touching).TouchJob(ctx, TouchJobParams{Source: "greenhouse", ExternalID: "acme:concurrent-reopen"})
+		touched <- err
+	}()
+	// Wait until TouchJob has taken its snapshot and is waiting for the uncommitted close.
+	for {
+		var blocked bool
+		if err := pool.QueryRow(ctx, `SELECT COALESCE(wait_event_type='Lock',false) FROM pg_stat_activity WHERE pid=$1`, touching.Conn().PgConn().PID()).Scan(&blocked); err != nil {
+			t.Fatal(err)
+		}
+		if blocked {
+			break
+		}
+		select {
+		case err := <-touched:
+			t.Fatalf("touch finished before close committed: %v", err)
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if err := closing.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-touched; err != nil {
+		t.Fatal(err)
+	}
+	var open, queued bool
+	if err := pool.QueryRow(ctx, `SELECT closed_at IS NULL,EXISTS(SELECT 1 FROM search_outbox WHERE job_id=$1) FROM jobs WHERE id=$1`, job.ID).Scan(&open, &queued); err != nil {
+		t.Fatal(err)
+	}
+	if !open || !queued {
+		t.Fatalf("concurrent close/reopen: open=%t queued=%t, want true/true", open, queued)
+	}
+}
+
+func TestListPendingSearchRemovalsKeepsReopenedPostings(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	truncate(t, pool)
+
+	closed, err := ingestUpsert(ctx, q, ingestParams("acme:closed", "Closed"))
+	if err != nil {
+		t.Fatalf("upsert closed: %v", err)
+	}
+	reopened, err := ingestUpsert(ctx, q, ingestParams("acme:reopened", "Reopened"))
+	if err != nil {
+		t.Fatalf("upsert reopened: %v", err)
+	}
+	gone, err := ingestUpsert(ctx, q, ingestParams("acme:gone", "Gone"))
+	if err != nil {
+		t.Fatalf("upsert gone: %v", err)
+	}
+	unqueued, err := ingestUpsert(ctx, q, ingestParams("acme:open", "Open"))
+	if err != nil {
+		t.Fatalf("upsert open: %v", err)
+	}
+	for _, id := range []int64{closed.ID, reopened.ID, gone.ID} {
+		enqueueDeletion(t, pool, id)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at = now() WHERE id = $1`, closed.ID); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM jobs WHERE id = $1`, gone.ID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	got, err := q.ListPendingSearchRemovals(ctx, []int64{closed.ID, reopened.ID, gone.ID, unqueued.ID})
+	if err != nil {
+		t.Fatalf("ListPendingSearchRemovals: %v", err)
+	}
+	want := map[int64]bool{closed.ID: true, gone.ID: true}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want exactly the closed and the deleted posting", got)
+	}
+	for _, id := range got {
+		if !want[id] {
+			t.Errorf("job %d reported as pending removal, but it is open (reopened or never queued)", id)
+		}
+	}
+}
+
+func TestPrepareSearchDeletionsRetainsPublicDuplicates(t *testing.T) {
+	ctx := context.Background()
+	pool := startPostgres(t)
+	q := New(pool)
+	canon, err := ingestUpsert(ctx, q, ingestParams("acme:canon", "Engineer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate, err := ingestUpsert(ctx, q, ingestParams("acme:duplicate", "Engineer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.MarkJobDuplicateOfRole(ctx, MarkJobDuplicateOfRoleParams{ID: duplicate.ID, DuplicateOfRole: pgtype.Int8{Int64: canon.ID, Valid: true}}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := q.PrepareSearchDeletions(ctx, []int64{duplicate.ID})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("rows=%v err=%v", rows, err)
+	}
+	if rows[0].HardDelete {
+		t.Fatal("public duplicate routed to physical deletion instead of a status update")
+	}
+}

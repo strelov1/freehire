@@ -72,17 +72,15 @@ type Toucher interface {
 	Touch(ctx context.Context, source, externalID string) error
 }
 
-// CoveredRefresher is the optional Store capability behind the aggregator-coverage gate: refresh
-// the liveness (last_seen_at) of the OPEN stored rows among the postings a board listed but the
-// gate kept out of the write path, by their (source, external_id) identity, writing nothing
-// else. An id the catalogue does not hold matches no row, so the gate's decision about what to
-// WRITE is untouched. Without it a covered posting stored before its employer's own board joined
-// the fleet kept the last_seen_at of its last write and its company stayed out of the sweep's
-// scope, so it stayed open whether or not the aggregator still listed it. Only the ingest
-// dbStore implements it; a Store without it (a test fake) drops the refresh, like Toucher. It
-// reports how many rows it refreshed (Stats.Refreshed).
+// CoveredRefresher refreshes the liveness of OPEN stored rows a board listed but did
+// not write, either because of the aggregator-coverage gate or an unreadable detail.
+// Missing and closed rows are no-ops: only successfully hydrated content may reopen
+// an unreadable posting. It reports refreshed rows without counting another posting;
+// failures withhold the board's close scopes through Stats.RefreshFailed. Return one
+// stored company slug per refreshed row so an unproven board can withhold the actual
+// employers too, even when an unreadable marker names the configured board owner.
 type CoveredRefresher interface {
-	RefreshCovered(ctx context.Context, source string, externalIDs []string) (int, error)
+	RefreshCovered(ctx context.Context, source string, externalIDs []string) ([]string, error)
 }
 
 // SeenLookup is the optional Store capability a HydratingSource needs: the external_ids already
@@ -260,11 +258,11 @@ type Stats struct {
 	Quiet      int
 	Rejected   int
 	ATSCovered int // aggregator postings skipped: company already covered by a non-aggregator source
-	// Refreshed counts the stored open rows among the ATSCovered postings whose liveness the
-	// run refreshed (CoveredRefresher). Not Ingested — the gate wrote nothing — but evidence the
+	// Refreshed counts the stored open rows among covered or unreadable postings whose liveness the
+	// run refreshed (CoveredRefresher). Not Ingested — no content was written — but evidence the
 	// crawl worked all the same, so cmd/ingest sweeps a provider whose every posting was covered.
 	Refreshed int
-	// RefreshFailed counts the ATSCovered postings whose refresh failed. The listing named them,
+	// RefreshFailed counts covered or unreadable postings whose refresh failed. The listing named them,
 	// but their stored rows keep the last_seen_at they had, so the board's close scopes are
 	// withheld (boardQualifies, cmd/ingest's sweepBySource): reading that age as absence would
 	// close a posting still listed, and a covered row is never written again to reopen it.
@@ -747,7 +745,8 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, fetch
 	covered := r.aggregatorCoverageForBatch(ctx, e, raw, canon)
 	t := r.writeBoard(ctx, e, raw, seen, covered, canon)
 	st, rej, firstErr := t.st, t.rej, t.firstErr
-	st.Refreshed, st.RefreshFailed = r.refreshCovered(ctx, e, t.covered)
+	var refreshedCompanies []string
+	st.Refreshed, st.RefreshFailed, refreshedCompanies = r.refreshCovered(ctx, e, t.refreshIDs)
 	// One line per board with skips (not one per job), so a systemic failure — e.g.
 	// the DB behind a migration, or a board whose postings won't construct — is visible
 	// without flooding the log.
@@ -795,6 +794,10 @@ func (r Runner) ingestFetched(ctx context.Context, e sources.CompanyEntry, fetch
 		log.Printf("ingest: %s board %q (%s): %d/%d postings unreadable — withholding this run's stale-job close for it",
 			e.Provider, e.Board, e.Company, st.Unreadable, len(raw))
 	}
+	if fetched.seenUnknown || !boardReadWhatItListed(st) {
+		st.UnprovenCompanies = append(st.UnprovenCompanies, refreshedCompanies...)
+		st.UnprovenCompanies = slices.Compact(slices.Sorted(slices.Values(st.UnprovenCompanies)))
+	}
 	markInterrupted(ctx, &st)
 	return st
 }
@@ -826,9 +829,8 @@ type boardTally struct {
 	st       Stats
 	rej      rejections
 	firstErr error
-	// covered is the external ids of the postings the coverage gate kept out of the write path,
-	// for refreshCovered.
-	covered []string
+	// refreshIDs holds listed identities needing an open-only liveness refresh.
+	refreshIDs []string
 }
 
 // writeBoard writes raw through saveConcurrency workers, each tallying into its own
@@ -863,7 +865,7 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 		if merged.firstErr == nil {
 			merged.firstErr = t.firstErr
 		}
-		merged.covered = append(merged.covered, t.covered...)
+		merged.refreshIDs = append(merged.refreshIDs, t.refreshIDs...)
 	}
 	return merged
 }
@@ -872,12 +874,13 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 // and saves the rest, tallying the outcome into t.
 func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, seen map[string]bool, covered aggregatorCoverage, canon companyCanonical, t *boardTally) {
 	// A posting the listing named but whose detail could not be read. There is nothing to
-	// write and nothing to refresh — the crawl never saw it — so it is only counted, and
-	// counting it is the point: it is what tells the sweep this board's evidence has holes
-	// in it. Handled ahead of the filter so it never enters the rejection denominator,
+	// write, but a stored row must retain the listing's liveness evidence. Count it
+	// as unreadable even after refreshing: the sweep still has incomplete evidence. Handled ahead of the filter so it never enters the rejection denominator,
 	// exactly like the SeenRefresh branch below.
 	if j.Unreadable {
 		t.st.Unreadable++
+		_, externalID := jobIdentity(e, j)
+		t.refreshIDs = append(t.refreshIDs, externalID)
 		return
 	}
 	// A HydratingSource marks an already-ingested posting it re-listed but did not
@@ -931,7 +934,7 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 	}
 	if covered != nil && covered(dj.Fields().CompanySlug) {
 		t.st.ATSCovered++
-		t.covered = append(t.covered, dj.Fields().ExternalID)
+		t.refreshIDs = append(t.refreshIDs, dj.Fields().ExternalID)
 		return
 	}
 	if err := r.save(ctx, dj, j.ApplyForm); err != nil {
@@ -944,22 +947,22 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 	t.st.Ingested++
 }
 
-// refreshCovered refreshes the liveness of whichever of a board's covered postings the
+// refreshCovered refreshes the liveness of whichever listed, unwritten postings the
 // catalogue already holds (see CoveredRefresher). It only logs a failure: a row the refresh
 // misses is left exactly as stale as it was, and is never closed because of it. It returns how
 // many rows were refreshed.
-func (r Runner) refreshCovered(ctx context.Context, e sources.CompanyEntry, externalIDs []string) (refreshed, failed int) {
+func (r Runner) refreshCovered(ctx context.Context, e sources.CompanyEntry, externalIDs []string) (refreshed, failed int, companies []string) {
 	cr, ok := r.Store.(CoveredRefresher)
 	if !ok || len(externalIDs) == 0 {
-		return 0, 0
+		return 0, 0, nil
 	}
-	n, err := cr.RefreshCovered(ctx, e.Provider, externalIDs)
+	companies, err := cr.RefreshCovered(ctx, e.Provider, externalIDs)
 	if err != nil {
-		log.Printf("ingest: %s board %q (%s): refresh %d covered postings: %v",
+		log.Printf("ingest: %s board %q (%s): refresh %d listed postings: %v",
 			e.Provider, e.Board, e.Company, len(externalIDs), err)
-		return 0, len(externalIDs)
+		return 0, len(externalIDs), nil
 	}
-	return n, 0
+	return len(companies), 0, companies
 }
 
 // aggregatorGate reports whether the ingest-time coverage gate applies to e's board: a
@@ -1473,7 +1476,7 @@ func (r Runner) ingestStream(ctx context.Context, e sources.CompanyEntry, ss sou
 
 	err := ss.FetchStream(ctx, e, emit)
 	st := t.st
-	st.Refreshed, st.RefreshFailed = r.refreshCovered(ctx, e, t.covered)
+	st.Refreshed, st.RefreshFailed, _ = r.refreshCovered(ctx, e, t.refreshIDs)
 	t.rej.log(e)
 	if st.Skipped > 0 {
 		log.Printf("ingest: %s board %q (%s): skipped %d/%d jobs on save error (e.g. %v)",

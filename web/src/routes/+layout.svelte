@@ -5,7 +5,7 @@
   import { resolve } from '$app/paths';
   import { onMount, untrack } from 'svelte';
   import { initTheme } from '#lib/theme.svelte.js';
-  import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import { adoptBrowserTimezone, currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { confirmTailorDialog, settleConfirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
   import { onboardingGate, onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { isAccountArea, isFullBleedRoute } from '#lib/shellLayout.js';
@@ -222,6 +222,7 @@
       // from any other. A just-created account is the signal; the call itself is
       // idempotent per account.
       trackSignupIfNew(page.data.user);
+      void adoptBrowserTimezone(page.data.user);
     } else resetIdentity();
   });
 </script>
