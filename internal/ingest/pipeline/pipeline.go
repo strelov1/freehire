@@ -872,12 +872,17 @@ func (r Runner) writeBoard(ctx context.Context, e sources.CompanyEntry, raw []so
 // and saves the rest, tallying the outcome into t.
 func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, seen map[string]bool, covered aggregatorCoverage, canon companyCanonical, t *boardTally) {
 	// A posting the listing named but whose detail could not be read. There is nothing to
-	// write and nothing to refresh — the crawl never saw it — so it is only counted, and
-	// counting it is the point: it is what tells the sweep this board's evidence has holes
-	// in it. Handled ahead of the filter so it never enters the rejection denominator,
+	// write, but a stored row must retain the listing's liveness evidence. Count it
+	// as unreadable even after refreshing: the sweep still has incomplete evidence. Handled ahead of the filter so it never enters the rejection denominator,
 	// exactly like the SeenRefresh branch below.
 	if j.Unreadable {
 		t.st.Unreadable++
+		if err := r.touch(ctx, e, j); err != nil {
+			t.st.Skipped++
+			if t.firstErr == nil {
+				t.firstErr = err
+			}
+		}
 		return
 	}
 	// A HydratingSource marks an already-ingested posting it re-listed but did not

@@ -458,6 +458,9 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 		Source:     source,
 		ExternalID: externalID,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
 	}
