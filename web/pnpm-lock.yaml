@@ -73,8 +73,8 @@ importers:
         specifier: ^0.3.2
         version: 0.3.2
       simple-icons:
-        specifier: ^16.35.0
-        version: 16.35.0
+        specifier: ^16.36.0
+        version: 16.36.0
       svelte-dnd-action:
         specifier: ^0.9.80
         version: 0.9.80(svelte@5.57.2(@typescript-eslint/types@8.65.0))
@@ -3231,8 +3231,8 @@ packages:
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
 
-  simple-icons@16.35.0:
-    resolution: {integrity: sha512-TCfl/2+GTrx0nCo4pEWGvxhOb8c6NsqOU1OpwjtF4lwJAthB8IYVD0fuIMjLMg6JFuG1YBO0t1iETQqJLqkoJA==}
+  simple-icons@16.36.0:
+    resolution: {integrity: sha512-+VNPPkqSOLidFeSgBKUWX4n50WPpDC09hav+BgS26anIF1oQOlGBb8LvwGR+6fYRjo+B6CiKzNBceMPkSVXANQ==}
     engines: {node: '>=0.12.18'}
 
   sirv@3.0.2:
@@ -7287,7 +7287,7 @@ snapshots:
 
   siginfo@2.0.0: {}
 
-  simple-icons@16.35.0: {}
+  simple-icons@16.36.0: {}
 
   sirv@3.0.2:
     dependencies:
