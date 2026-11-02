@@ -855,6 +855,7 @@ func Register(app *fiber.App, cfg Config) {
 		assistantH.events = p
 	}
 	assistantH.answerBank = answerBank
+	assistantH.reports = reportsH
 	resumeH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	matchH.llm = llmBinding{client: cfg.LLM, keys: llmKeys}
 	// The autofill planner is one cheap structured call per run, so it travels on the

@@ -65,6 +65,7 @@ func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.T
 // (its routes are cookie-only), so arriving here is not a reason to widen it.
 func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool {
 	all := append(assistants.assistantDiscoveryTools(), assistants.assistantTrackingTools()...)
+	all = append(all, assistants.reportMCPTools()...)
 	all = append(all, assistants.subscriptionMCPTools(origin)...)
 	return slices.DeleteFunc(all, func(t assistant.Tool) bool { return t.Name == presentJobsToolName })
 }
