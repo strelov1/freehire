@@ -3466,3 +3466,12 @@ SELECT count(*) FROM closed;
 -- The top of the id space cmd/serve-probe draws its random sample windows from. One
 -- backward probe of the primary key, so it stays cheap on the whole table.
 SELECT COALESCE(MAX(id), 0)::bigint FROM jobs;
+
+-- name: ListPendingSearchRemovals :many
+-- Which of these jobs are closed but still have a document in the live index: the ones
+-- search_delete_outbox has queued and the drain has not yet applied. A search page reads
+-- its hits from Meilisearch alone, so without this a posting stays in the results for as long
+-- as the drain is paused (a facet rebuild holds it for hours). The primary-key lookup is
+-- bounded by the page size.
+SELECT job_id FROM search_delete_outbox
+WHERE job_id = ANY(sqlc.arg(job_ids)::bigint[]);

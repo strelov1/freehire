@@ -4993,6 +4993,12 @@ type Querier interface {
 	// Capped at 500 as a runaway-growth guard — far above any plausible backlog; a queue
 	// that deep needs bulk triage, not a longer page.
 	ListPendingReports(ctx context.Context) ([]ListPendingReportsRow, error)
+	// Which of these jobs are closed but still have a document in the live index: the ones
+	// search_delete_outbox has queued and the drain has not yet applied. A search page reads
+	// its hits from Meilisearch alone, so without this a posting stays in the results for as long
+	// as the drain is paused (a facet rebuild holds it for hours). The primary-key lookup is
+	// bounded by the page size.
+	ListPendingSearchRemovals(ctx context.Context, jobIds []int64) ([]int64, error)
 	// id+url of every pending submission, used only to find which OTHER pending rows share the
 	// host being blocked (see RejectAndBlockHost in the submission package): host matching needs
 	// Go's net/url normalization (see submission.normalizeHost), so this fetches the candidates

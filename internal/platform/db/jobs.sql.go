@@ -4697,6 +4697,36 @@ func (q *Queries) ListLocationsForGeoGap(ctx context.Context, arg ListLocationsF
 	return items, nil
 }
 
+const listPendingSearchRemovals = `-- name: ListPendingSearchRemovals :many
+SELECT job_id FROM search_delete_outbox
+WHERE job_id = ANY($1::bigint[])
+`
+
+// Which of these jobs are closed but still have a document in the live index: the ones
+// search_delete_outbox has queued and the drain has not yet applied. A search page reads
+// its hits from Meilisearch alone, so without this a posting stays in the results for as long
+// as the drain is paused (a facet rebuild holds it for hours). The primary-key lookup is
+// bounded by the page size.
+func (q *Queries) ListPendingSearchRemovals(ctx context.Context, jobIds []int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listPendingSearchRemovals, jobIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var job_id int64
+		if err := rows.Scan(&job_id); err != nil {
+			return nil, err
+		}
+		items = append(items, job_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTitlesForClassifyDrift = `-- name: ListTitlesForClassifyDrift :many
 SELECT title,
        count(*)::bigint AS job_count,

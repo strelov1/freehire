@@ -90,6 +90,7 @@ were integration tests. Measured on prod 2026-08-18: **19,827 jobs close per day
   then closed is never claimed by that entry, because `ClaimSearchOutboxBatch` filters
   `closed_at IS NULL`. The two queues cannot fight over the same job, and `DeleteJobs` is
   idempotent, so overlapping or retried removals cost nothing.
+- **A search page hides what the queue still holds.** The drain is paused for the whole of a facet rebuild, so a closure can stay in the index for hours (freehire#4040: 112k entries deep at 18:39 on 2026-11-01). `searchHandlers.dropPendingRemovals` asks this table about the ids on the page it is about to serve (`ListPendingSearchRemovals`, a primary-key lookup) and drops the ones queued, lowering `meta.total` by the same count. The queue is the right set to ask because it is exactly the closed-but-indexed postings, and it cannot be handed to Meilisearch as an `id NOT IN` filter the way `hide_seen` is, at that size. It lives in `runJobSearch`; a path that reads the index elsewhere (facets, companies, the agent endpoints that do not go through it) still sees the lag. Anything that takes an entry OUT of this table without removing the document (a reopen does, deliberately) is what lets the posting reappear.
 - **Duplicates are still rebuild-only.** `duplicate_of` is set by bulk `UPDATE`s inside the
   dedup passes — 478,366 rows in one statement on 2026-08-18 — which is a different shape of
   problem and runs adjacent to a rebuild anyway. **Whoever lengthens the reindex cadence
