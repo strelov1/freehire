@@ -361,6 +361,13 @@ func computrabajoCardFrom(n *html.Node, base string) (computrabajoCard, bool) {
 		return computrabajoCard{}, false
 	}
 	path, _, _ := strings.Cut(strings.TrimSpace(Attr(a, "href")), "#")
+	// Browsers discard ASCII tabs and newlines inside hrefs; Go's URL parser rejects them.
+	path = strings.Map(func(r rune) rune {
+		if r == '\t' || r == '\r' || r == '\n' {
+			return -1
+		}
+		return r
+	}, path)
 	m := computrabajoIDPath.FindStringSubmatch(path)
 	if m == nil {
 		return computrabajoCard{}, false
