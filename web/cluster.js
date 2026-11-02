@@ -22,12 +22,27 @@ if (workers <= 1) {
   console.log(`cluster primary ${process.pid}: forking ${workers} workers`);
   for (let i = 0; i < workers; i++) cluster.fork();
 
+  // Keep the IPC parent alive while adapter-node closes its workers' servers
+  // and drains requests. Exiting first makes their Server.close() throw EPIPE.
+  let stopping = false;
+  function shutdown(signal) {
+    if (stopping) return;
+    stopping = true;
+    for (const worker of Object.values(cluster.workers)) worker.process.kill(signal);
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
   // Replace a dead worker, or capacity decays back towards the single process
   // this file exists to get away from.
   cluster.on('exit', (worker, code, signal) => {
+    if (stopping) return;
     console.log(`worker ${worker.process.pid} exited (${signal || code}) — forking a replacement`);
     cluster.fork();
   });
 } else {
+  // adapter-node emits this after draining; release the IPC handle so both
+  // worker and primary can exit naturally.
+  process.once('sveltekit:shutdown', () => cluster.worker.disconnect());
   await import('./build/index.js');
 }
