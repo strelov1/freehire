@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { SectionLabel } from '#lib/ui/index.js';
-  import McpSetup from './McpSetup.svelte';
+  import AssistantSetup from './AssistantSetup.svelte';
 
   // Things to ask, grouped by what the visitor is after. Each one is answerable by
   // the anonymous server's tools alone, except the last group, which needs the account.
@@ -26,19 +26,10 @@
       items: ['Find jobs that fit my profile and save the best three', 'Which of my applications have gone quiet?'],
     },
   ];
-
-  // The hero's sample conversation. Illustrative, so no real employer is named.
-  const heroJobs = [
-    { title: 'Senior Go Engineer — payments platform', meta: 'Remote · EU · €85–100k' },
-    { title: 'Senior Backend Engineer (Go, Kafka)', meta: 'Remote · Germany, Netherlands' },
-    { title: 'Staff Go Developer — observability', meta: 'Remote · Europe · posted 2 days ago' },
-  ];
 </script>
 
-
-
-<!-- Hero. Left: the pitch. Right: what a conversation with the connector looks like. -->
-<section class="grid items-center gap-10 pb-10 pt-12 sm:pt-16 lg:grid-cols-2">
+<!-- Hero: the pitch. -->
+<section class="pb-10 pt-12 sm:pt-16">
   <div>
     <SectionLabel text="mcp" />
     <h1 class="mt-6 max-w-3xl text-balance text-4xl font-semibold leading-none tracking-tighter sm:text-6xl">
@@ -49,34 +40,9 @@
       you.
     </p>
   </div>
-
-  <figure class="overflow-hidden rounded-xl border border-border bg-secondary/60 text-sm shadow-sm">
-    <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
-      <span class="size-2.5 rounded-full bg-muted-foreground/30"></span>
-      Your assistant · freehire connector
-    </figcaption>
-    <div class="flex flex-col gap-3 p-4 leading-relaxed">
-      <div class="max-w-xs self-end rounded-2xl rounded-br-sm bg-foreground px-3.5 py-2 text-background">
-        Remote senior Go jobs in Europe, posted this week
-      </div>
-      <p class="text-xs text-muted-foreground">Used freehire · Search jobs</p>
-      <div class="max-w-md rounded-2xl rounded-bl-sm border border-border bg-background px-3.5 py-2.5">
-        <p class="text-muted-foreground">Here are the strongest matches:</p>
-        {#each heroJobs as job (job.title)}
-          <div class="mt-2.5">
-            <p class="font-medium text-foreground">{job.title}</p>
-            <p class="text-xs text-muted-foreground">{job.meta}</p>
-          </div>
-        {/each}
-      </div>
-      <div class="max-w-xs self-end rounded-2xl rounded-br-sm bg-foreground px-3.5 py-2 text-background">
-        Save the first one to my board
-      </div>
-    </div>
-  </figure>
 </section>
 
-<McpSetup />
+<AssistantSetup />
 
 <!-- Things to ask. -->
 <section class="border-t border-border py-14 sm:py-16">

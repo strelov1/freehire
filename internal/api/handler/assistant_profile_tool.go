@@ -44,7 +44,7 @@ func (h *assistantHandlers) getProfileTool() assistant.Tool {
 			"before asking the user what they are looking for; only ask about what the profile " +
 			"does not answer. The experience section reports the SHAPE of what they have told us — " +
 			"which roles we know and how much evidence each carries — not the achievements " +
-			"themselves; read those with experience_search when you need them. Takes no arguments.",
+			"themselves. Takes no arguments.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{}},
 		Run: func(ctx context.Context, userID int64, _ json.RawMessage) (any, error) {
 			// Registered for every session, so it is registered on every assembly — and the

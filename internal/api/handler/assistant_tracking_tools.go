@@ -23,7 +23,7 @@ func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 			"save_job",
 			"Save a job",
 			"Bookmark a vacancy for the user. Idempotent.",
-			assistant.EffectAdds,
+			assistant.EffectAdds, true,
 			func(ctx context.Context, userID int64, slug string) (jobtracking.Interaction, error) {
 				return h.tracking.tracking.SaveJob(ctx, userID, slug)
 			}),
@@ -31,7 +31,7 @@ func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 			"unsave_job",
 			"Remove a saved job",
 			"Remove a vacancy from the user's bookmarks. Idempotent.",
-			assistant.EffectOverwrites,
+			assistant.EffectOverwrites, true,
 			func(ctx context.Context, userID int64, slug string) (jobtracking.Interaction, error) {
 				return h.tracking.tracking.Unsave(ctx, userID, slug)
 			}),
@@ -39,7 +39,7 @@ func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 			"apply_job",
 			"Mark a job as applied",
 			"Mark a vacancy as applied to. This records the user's own application; it does not submit anything to the employer.",
-			assistant.EffectAdds,
+			assistant.EffectAdds, false,
 			func(ctx context.Context, userID int64, slug string) (jobtracking.Interaction, error) {
 				// The assistant acts as the caller, but the ledger records who
 				// observed the application, and that was the agent — not a person
@@ -53,12 +53,13 @@ func (h *assistantHandlers) assistantTrackingTools() []assistant.Tool {
 
 // slugActionTool builds the tools that take a single vacancy slug and perform one
 // idempotent action on the caller's interaction with it.
-func (h *assistantHandlers) slugActionTool(name, title, description string, effect assistant.Effect, act func(context.Context, int64, string) (jobtracking.Interaction, error)) assistant.Tool {
+func (h *assistantHandlers) slugActionTool(name, title, description string, effect assistant.Effect, idempotent bool, act func(context.Context, int64, string) (jobtracking.Interaction, error)) assistant.Tool {
 	return assistant.Tool{
 		Name:        name,
 		Title:       title,
 		Description: description,
 		Effect:      effect,
+		Idempotent:  idempotent,
 		Schema: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"slug": map[string]any{"type": "string", "description": "The vacancy's public_slug."}},
