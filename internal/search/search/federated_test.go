@@ -149,3 +149,29 @@ func TestFacetSearchWithoutOperatorsStaysSingleIndex(t *testing.T) {
 		t.Fatalf("query = %q, want golang", gotQuery)
 	}
 }
+
+func TestSearchTreatsStoredTitlesAsLiteralText(t *testing.T) {
+	for _, title := range []string{
+		"Go OR Python OR Java OR Ruby OR C++ OR PHP Developer",
+		`title:"Go Developer" -remote C# Full-stack`,
+	} {
+		t.Run(title, func(t *testing.T) {
+			var gotQuery string
+			var got *meilisearch.SearchRequest
+			c := &Client{facet: fakeSearchIndex{searchFn: func(_ context.Context, q string, req *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error) {
+				gotQuery, got = q, req
+				return &meilisearch.SearchResponse{}, nil
+			}}}
+			_, err := c.Search(t.Context(), SearchParams{Query: title, LiteralQuery: true, Limit: 6})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got == nil || gotQuery == "" || len(got.AttributesToSearchOn) != 0 {
+				t.Fatalf("stored title became query syntax: %q %+v", gotQuery, got)
+			}
+			if title[0] == 't' && gotQuery != "title: Go Developer remote C# Full-stack" {
+				t.Fatalf("literal query=%q", gotQuery)
+			}
+		})
+	}
+}

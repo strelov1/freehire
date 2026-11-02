@@ -94,3 +94,13 @@ func splitOutsideQuotes(q string) []string {
 	}
 	return tokens
 }
+
+// literalSearchText preserves title words and language tokens such as C++ and C#,
+// while removing the quote and unary-minus syntax Meilisearch would execute.
+func literalSearchText(text string) string {
+	words := strings.Fields(strings.ReplaceAll(text, "\"", " "))
+	for i, word := range words {
+		words[i] = strings.TrimLeft(word, "-")
+	}
+	return strings.Join(words, " ")
+}

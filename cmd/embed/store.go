@@ -60,7 +60,7 @@ func (s *dbStore) CompleteOpen(ctx context.Context, entries []embed.Claimed, mod
 		// replaced, even one with zero new chunks this time (an empty/very short
 		// description), so a job never ends up with a mix of stale and fresh rows. The
 		// delete is ONE batched call for the whole wave's job ids (mirrors
-		// StampSemanticEmbeddedBatch/ClearSimilarComputedAtBatch above, not a per-job
+		// StampSemanticEmbeddedBatch above, not a per-job
 		// round trip — see DeleteJobSemanticChunks' doc comment); only the insert
 		// genuinely needs a per-job call, since each job's chunk vectors are their own
 		// parallel-array parameter set.
@@ -91,20 +91,12 @@ func (s *dbStore) CompleteOpen(ctx context.Context, entries []embed.Claimed, mod
 				return fmt.Errorf("insert chunks: %w", err)
 			}
 		}
-		// A re-embed's fresh chunk set makes any precomputed similar_job_ids stale (or
-		// changes the job's eligibility for the precompute entirely), so clear the
-		// staleness stamp for the whole batch — cmd/similar-backfill's incremental
-		// predicate picks the job back up on its next pass.
-		if err := qtx.ClearSimilarComputedAtBatch(ctx, jobIDs); err != nil {
-			return fmt.Errorf("clear similar_computed_at: %w", err)
-		}
 		return qtx.DeleteSemanticEntriesBatch(ctx, outboxIDs)
 	})
 }
 
 // CompleteUnchanged brings the stamp current and drains the entries, nothing else: the
-// chunk rows are still the embedding of this text, so neither they nor the precomputed
-// similar-jobs list (similar_computed_at) is touched.
+// chunk rows are still the embedding of this text and stay untouched.
 func (s *dbStore) CompleteUnchanged(ctx context.Context, entries []embed.Claimed, model string, inputHashes map[int64]string) error {
 	jobIDs, outboxIDs := splitIDs(entries)
 	return s.tx(ctx, func(qtx *db.Queries) error {

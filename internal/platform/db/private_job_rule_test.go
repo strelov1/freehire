@@ -50,7 +50,7 @@ var privatePredicateExemptions = map[string]string{
 	"EnqueuePendingJobs":               "queues a row for enrichment; the model's answer is written back to that same row",
 	"EnqueueEnrichmentForCompanySlugs": "the same queue, scoped to named company slugs",
 	"ClaimEnrichmentBatch":             "leases enrichment entries; the jobs join only orders them by freshness and skips closed rows",
-	"EnqueuePendingSemanticJobs":       "queues embedding for a row; the one reader of those vectors that answers anyone else, NearestJobsToJob, excludes private candidates itself",
+	"EnqueuePendingSemanticJobs":       "queues embeddings for a row; index writers exclude private jobs before publishing vectors",
 	"SelectOrphanLivenessCandidates":   "the liveness probe's candidate set; a strike or a close changes what the creator sees, not what anyone else does",
 	"SelectStaleRegisteredCandidates":  "the same probe's registered-source candidate set",
 	"MarkLivenessExpired":              "the strike write for one probed row",
@@ -93,13 +93,6 @@ var privatePredicateExemptions = map[string]string{
 
 	// --- Answers only about content the caller already holds. ---
 	"FindOpenJobByURL": "matches on the URL the caller supplied, and a private posting carries a URL only when it was created BY scraping that page (a pasted-text one has none), so the slug it can return always points at content the caller had the address for",
-}
-
-// privatePredicatePinned names statements that carry NOT is_private for a load-bearing
-// reason but whose shape leaves them outside the population below — so the rule would not
-// notice the clause being deleted again.
-var privatePredicatePinned = map[string]string{
-	"NearestJobsToJob": "GET /jobs/:slug/similar is unauthenticated and lists whole postings; the predicate sits on a JOIN condition, which the population detector deliberately does not read as a filter",
 }
 
 // TestEveryOpenCatalogueReadExcludesPrivateJobs pins a rule that only a comment would
@@ -146,12 +139,6 @@ func TestEveryOpenCatalogueReadExcludesPrivateJobs(t *testing.T) {
 				"postings — it was renamed, deleted, or the detector no longer sees it", name, reason)
 		}
 	}
-	for name, reason := range privatePredicatePinned {
-		if seen[name] {
-			t.Errorf("privatePredicatePinned[%q] (%q) is now inside the population, which checks it "+
-				"already — move it out of the pinned list", name, reason)
-		}
-	}
 
 	// Counting the population, not just the violations: a detector that silently stops
 	// matching looks exactly like a rule that passes. The number moves whenever a
@@ -160,27 +147,6 @@ func TestEveryOpenCatalogueReadExcludesPrivateJobs(t *testing.T) {
 	if len(queries) < 35 {
 		t.Errorf("only %d statements matched as open-catalogue reads of jobs, expected at least 35 "+
 			"— scopesToOpenPostings has probably drifted from how the queries are written", len(queries))
-	}
-}
-
-// TestPinnedPrivatePredicatesSurvive holds the clause on the statements the population
-// cannot see. Today that is the /similar rollup, the first of the four leaks and the one
-// whose fix has no other guard.
-func TestPinnedPrivatePredicatesSurvive(t *testing.T) {
-	found := make(map[string]bool, len(privatePredicatePinned))
-	for _, q := range allNamedJobsQueries(t) {
-		if _, want := privatePredicatePinned[q.name]; !want {
-			continue
-		}
-		found[q.name] = true
-		if !q.hasPrivatePredicate {
-			t.Errorf("%s: %s lost its NOT is_private — %s", q.file, q.name, privatePredicatePinned[q.name])
-		}
-	}
-	for name := range privatePredicatePinned {
-		if !found[name] {
-			t.Errorf("privatePredicatePinned[%q] matches no statement reading jobs", name)
-		}
 	}
 }
 

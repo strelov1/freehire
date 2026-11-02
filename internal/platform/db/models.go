@@ -976,8 +976,6 @@ type Job struct {
 	AtsAbsentAt           pgtype.Timestamptz `json:"ats_absent_at"`
 	ClosedReason          string             `json:"closed_reason"`
 	IsPrivate             bool               `json:"is_private"`
-	SimilarJobIds         []int64            `json:"similar_job_ids"`
-	SimilarComputedAt     pgtype.Timestamptz `json:"similar_computed_at"`
 	SalaryMinSource       pgtype.Int4        `json:"salary_min_source"`
 	SalaryMaxSource       pgtype.Int4        `json:"salary_max_source"`
 	SalaryCurrencySource  string             `json:"salary_currency_source"`

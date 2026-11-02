@@ -140,11 +140,8 @@ func (h *searchHandlers) register(api fiber.Router, mw middleware) {
 
 // searcher is the search backend the handler depends on. *search.Client
 // satisfies it; tests inject a fake. A nil searcher means search is not
-// configured (no MEILI_MASTER_KEY) and the endpoint reports 503. SimilarJobs and
-// RecommendByVector were dropped from this interface when the Meili-backed
-// jobs_semantic index they queried was removed — /similar now reads a precomputed
-// pgvector lookup (see internal/api/handler/similar.go) and /me/recommendations was
-// removed outright (see openspec/changes/drop-hybrid-search-pgvector-similar).
+// configured (no MEILI_MASTER_KEY) and search endpoints report 503. Similar jobs
+// use the same Search method with mandatory location and specialization filters.
 type searcher interface {
 	Search(ctx context.Context, p search.SearchParams) (search.SearchResult, error)
 }

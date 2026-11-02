@@ -1,7 +1,11 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    schema: "migrations"
+    # Stage the contraction outside migrate's top-level glob for the code-first
+    # rollout. Promote it to migrations/ after every old sqlc binary is retired.
+    schema:
+      - "migrations/*.sql"
+      - "migrations/pending-similarity-cleanup/*.sql"
     queries: "internal/platform/db/queries"
     gen:
       go:
