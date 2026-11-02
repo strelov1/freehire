@@ -2,6 +2,23 @@ package normalize
 
 import "testing"
 
+func TestJobSlugWithFullHashSeparatesRealShortcodeCollision(t *testing.T) {
+	const firstID, secondID = "collision-224028", "collision-1908612"
+	if JobSlug("Backend Engineer", "Acme", "lever", firstID) != JobSlug("Backend Engineer", "Acme", "lever", secondID) {
+		t.Fatal("fixture must have a real short-hash collision")
+	}
+	a := JobSlugWithFullHash("Backend Engineer", "Acme", "lever", firstID)
+	b := JobSlugWithFullHash("Backend Engineer", "Acme", "lever", secondID)
+	if a == b {
+		t.Fatal("full identity hashes must distinguish the colliding postings")
+	}
+	for _, slug := range []string{a, b} {
+		if code, ok := JobSlugCode(slug); !ok || code != "75jwd7n2" {
+			t.Fatalf("JobSlugCode(%q) = %q, %v; want the original shortcode", slug, code, ok)
+		}
+	}
+}
+
 func TestJobSlug(t *testing.T) {
 	cases := []struct {
 		name                         string

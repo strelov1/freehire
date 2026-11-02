@@ -7,8 +7,8 @@ import (
 )
 
 // shortcodeLen is the number of base32 characters kept from the hash. 8 chars =
-// 40 bits — enough that a slug collision (which also needs a matching title and
-// company) is negligible; the jobs.public_slug UNIQUE constraint is the backstop.
+// 40 bits. The jobs.public_slug UNIQUE constraint detects collisions, and ingest
+// retries those with JobSlugWithFullHash.
 const shortcodeLen = 8
 
 // JobSlug builds a job's public slug: the normalized title and company joined
@@ -35,8 +35,21 @@ func JobSlug(title, company, source, externalID string) string {
 // shortcode hashes source and external_id into a lowercased base32 prefix. The
 // NUL separator keeps ("ab","c") and ("a","bc") distinct.
 func shortcode(source, externalID string) string {
+	return jobSlugHash(source, externalID)[:shortcodeLen]
+}
+
+func jobSlugHash(source, externalID string) string {
 	sum := sha256.Sum256([]byte(source + "\x00" + externalID))
-	return strings.ToLower(base32.StdEncoding.EncodeToString(sum[:]))[:shortcodeLen]
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:]))
+}
+
+// JobSlugWithFullHash resolves a short-hash collision without changing the final
+// eight-character identity code used by old-slug redirects. Existing published
+// slugs stay untouched; this is only the fallback for a rejected insert.
+func JobSlugWithFullHash(title, company, source, externalID string) string {
+	slug := JobSlug(title, company, source, externalID)
+	hash := jobSlugHash(source, externalID)
+	return strings.TrimSuffix(slug, hash[:shortcodeLen]) + hash[shortcodeLen:] + "-" + hash[:shortcodeLen]
 }
 
 // JobSlugCode returns the shortcode a job slug ends with — the part JobSlug derives
