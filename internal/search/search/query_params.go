@@ -44,7 +44,7 @@ const ExperienceOnlySeniorityUnspecifiedParam = "experience_only_seniority_unspe
 // WorkModeRemoteAnywhereParam changes how the work-mode facet composes with the
 // location facets: instead of ANDing the modes with the geography (which narrows
 // remote work to the home country), the work-mode group becomes the disjunction
-// "any selected mode anywhere, OR a physical mode within the location group" —
+// "remote anywhere, OR a selected physical mode within the location group" —
 // remote from anywhere plus hybrid/on-site at home, the preference the profile's
 // location block collects and no AND of facets can state. See filterFromValues,
 // where the swap happens. Alone it reads nothing.

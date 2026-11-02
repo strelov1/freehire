@@ -31,16 +31,22 @@ NOT appear outside the condition: a toggle that changes nothing reads as broken.
 ### Requirement: Apply my profile flattens the location block without losing the remote reach
 
 "Apply my profile" SHALL flatten the profile's location block so that a user who
-accepts remote AND at least one physical format AND states a base or relocation
-geography gets remote postings from anywhere plus physical postings within the
+accepts remote from anywhere (no remote reach) AND at least one physical format
+AND states a base or relocation geography gets remote postings from anywhere plus physical postings within the
 stated geography — by staging the `work_mode_remote_anywhere` modifier rather than
 narrowing the remote reach to the home geography. A profile without that shape
-(remote only; physical only; no geography) SHALL flatten exactly as before.
+(remote only; physical only; no geography; a stated remote reach) SHALL flatten
+exactly as before — the modifier would drop a stated reach from the remote arm.
 
 #### Scenario: Hybrid at home plus remote anywhere from the profile
 
-- **WHEN** a user whose profile lists work_modes remote+hybrid, a base country DE, and remote reach Europe applies their profile
+- **WHEN** a user whose profile lists work_modes remote+hybrid, a base country DE, and no remote reach applies their profile
 - **THEN** the staged filters carry work_mode remote+hybrid, the location facets from the block, and `work_mode_remote_anywhere=true`
+
+#### Scenario: A stated remote reach keeps the plain flatten
+
+- **WHEN** a user whose profile lists work_modes remote+hybrid, a base country DE, and remote reach Europe applies their profile
+- **THEN** the staged filters carry the location facets from the block and no modifier — remote work stays within the reach
 
 #### Scenario: Remote-only profile stays global
 

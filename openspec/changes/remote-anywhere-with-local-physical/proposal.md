@@ -23,8 +23,8 @@ if I choose all 3, I see on-site jobs from other countries".
   digest matcher and `Narrows` already share — so all three surfaces learn it at
   once.
 - When set, the work-mode facet's include group becomes a disjunction:
-  `(work_mode IN [selected]) OR (work_mode IN [onsite,hybrid] AND <all location
-  facets>)`. With no location facets set the modifier is a no-op (plain OR over the
+  `work_mode = remote OR (work_mode IN [selected physical modes] AND <all
+  location facets>)`. With no location facets set the modifier is a no-op (plain OR over the
   selected modes — "remote anywhere" is already what that means); with `remote`
   unselected it is a no-op too. `_mode=and` on `work_mode` disables it (ANDing a
   disjunction is contradictory, and a caller asking `and` is past this feature).

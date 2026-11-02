@@ -1112,8 +1112,8 @@ components:
       description: |
         Changes how `work_mode` composes with the location facets: instead of
         ANDing them (which narrows remote work to the home geography), the
-        work-mode group becomes "any selected mode anywhere, OR a physical mode
-        (hybrid, onsite) within the location facets" — remote from anywhere plus
+        work-mode and location groups become "remote anywhere, OR a selected
+        physical mode (hybrid, onsite) within the location facets" — remote from anywhere plus
         hybrid/on-site at home, the profile preference no AND of facets can
         state. Applied only when `remote` and a physical mode are both selected
         AND at least one location facet (regions, countries, cities, metros)

@@ -404,6 +404,15 @@ describe('filtersFromProfile remote-anywhere flattening', () => {
     expect(p.get('work_mode_remote_anywhere')).toBe('true');
   });
 
+  // The modifier would drop the reach from the remote arm; the plain flatten keeps
+  // remote work inside it and bounds physical work no wider.
+  it('keeps the plain flatten when the profile states a remote reach', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['eu'] } }))));
+    expect(p.getAll('regions')).toContain('eu');
+    expect(p.getAll('countries')).toContain('de');
+    expect(p.has('work_mode_remote_anywhere')).toBe(false);
+  });
+
   it('leaves a remote-only profile global — no base-country narrowing, no modifier', () => {
     const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote']))));
     expect(p.get('work_mode')).toBe('remote');

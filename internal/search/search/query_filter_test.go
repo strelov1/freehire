@@ -138,9 +138,13 @@ func TestFilterFromValues_StrayCommasIgnored(t *testing.T) {
 // shape: remote from anywhere, plus hybrid/on-site within the chosen geography.
 // One group of the filter is swapped for a disjunction; every test here asserts
 // the exact Meili expression so the swap cannot silently change shape.
+//
+// Only `remote` stands bare in the group: a bare physical mode would admit a
+// hybrid posting from any country. And only the SELECTED physical modes join the
+// geography arm — remote+hybrid does not quietly add on-site at home.
 func TestFilterFromValues_RemoteAnywhereDisjunction(t *testing.T) {
 	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true")))
-	want := [][]string{{`(work_mode IN ["hybrid", "onsite"] AND (countries = "de"))`, `work_mode = "hybrid"`, `work_mode = "remote"`}}
+	want := [][]string{{`(work_mode IN ["hybrid"] AND (countries = "de"))`, `work_mode = "remote"`}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
@@ -150,7 +154,7 @@ func TestFilterFromValues_RemoteAnywhereDisjunction(t *testing.T) {
 // metros OR together into it, exactly as they OR in the plain location group.
 func TestFilterFromValues_RemoteAnywhereSpansTheLocationGroup(t *testing.T) {
 	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid,onsite&regions=eu&cities=Berlin&work_mode_remote_anywhere=true")))
-	want := [][]string{{`(work_mode IN ["hybrid", "onsite"] AND (cities = "Berlin" OR regions IN ["eu", "uk"]))`, `work_mode = "hybrid"`, `work_mode = "onsite"`, `work_mode = "remote"`}}
+	want := [][]string{{`(work_mode IN ["hybrid", "onsite"] AND (cities = "Berlin" OR regions IN ["eu", "uk"]))`, `work_mode = "remote"`}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
@@ -193,7 +197,7 @@ func TestFilterFromValues_RemoteAnywhereYieldsToAndMode(t *testing.T) {
 func TestFilterFromValues_RemoteAnywhereKeepsGlobalExcludes(t *testing.T) {
 	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&countries_exclude=us&work_mode_remote_anywhere=true")))
 	want := [][]string{
-		{`(work_mode IN ["hybrid", "onsite"] AND (countries = "de"))`, `work_mode = "hybrid"`, `work_mode = "remote"`},
+		{`(work_mode IN ["hybrid"] AND (countries = "de"))`, `work_mode = "remote"`},
 		{`countries != "us"`},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -205,7 +209,7 @@ func TestFilterFromValues_RemoteAnywhereKeepsGlobalExcludes(t *testing.T) {
 func TestFilterFromValues_RemoteAnywhereComposesWithOtherFacets(t *testing.T) {
 	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&seniority=senior&work_mode_remote_anywhere=true")))
 	want := [][]string{
-		{`(work_mode IN ["hybrid", "onsite"] AND (countries = "de"))`, `work_mode = "hybrid"`, `work_mode = "remote"`},
+		{`(work_mode IN ["hybrid"] AND (countries = "de"))`, `work_mode = "remote"`},
 		{`enrichment.seniority = "senior"`},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -222,7 +226,7 @@ func TestFilterFromValues_RemoteAnywhereReadsTrueOnly(t *testing.T) {
 		t.Errorf("yes: got %v, want %v", got, want)
 	}
 	got = normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=TRUE")))
-	want = [][]string{{`(work_mode IN ["hybrid", "onsite"] AND (countries = "de"))`, `work_mode = "hybrid"`, `work_mode = "remote"`}}
+	want = [][]string{{`(work_mode IN ["hybrid"] AND (countries = "de"))`, `work_mode = "remote"`}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("TRUE: got %v, want %v", got, want)
 	}

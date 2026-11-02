@@ -135,7 +135,7 @@ export interface JobFilters {
   hideSeen: boolean;
   /** Change how work_mode composes with the location facets: instead of ANDing
    *  them (which narrows remote work to the home country), the server builds
-   *  "any selected mode anywhere, OR a physical mode within the location group"
+   *  "remote anywhere, OR a selected physical mode within the location group"
    *  — remote from anywhere plus hybrid/on-site at home. Serialized as
    *  `work_mode_remote_anywhere=true`. The server applies it only when remote AND
    *  a physical mode are both selected AND a location facet carries a value
@@ -450,10 +450,16 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
  *  internal/search/search/query_filter.go), mirrored so the checkbox shows only when
  *  it has something to do and the count only rises when it does. */
 export function appliesWorkModeRemoteAnywhere(f: JobFilters): boolean {
-  const modes = f.facets.work_mode?.include ?? [];
-  const hasLocation = ['regions', 'countries', 'cities', 'metros'].some((p) => (f.facets[p]?.include.length ?? 0) > 0);
-  return modes.includes('remote') && modes.some((m) => m === 'hybrid' || m === 'onsite') && hasLocation;
+  const wm = f.facets.work_mode;
+  if (!wm || wm.matchAll) return false; // the server ignores it under work_mode_mode=and
+  const hasLocation = LOCATION_FACET_PARAMS.some((p) => (f.facets[p]?.include.length ?? 0) > 0);
+  return wm.include.includes('remote') && wm.include.some(isPhysicalMode) && hasLocation;
 }
+
+/** The location facets that share one ORed group on the server (`locationFacets`). */
+const LOCATION_FACET_PARAMS = ['regions', 'countries', 'cities', 'metros'];
+
+const isPhysicalMode = (m: string) => m === 'hybrid' || m === 'onsite';
 
 /** The security-clearance control used to be a three-state toggle serialized as
  *  `requires_clearance=false|true`, and saved searches, alerts and shared links still
@@ -743,7 +749,7 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
     // This gate used to be implicit: the profile form collected `base` from on-site and
     // hybrid users only, and dropped it on save for everyone else. Now that the form asks
     // every user where they are, the gate has to be stated here instead.
-    const wantsPhysical = (loc.work_modes ?? []).some((m) => m === 'onsite' || m === 'hybrid');
+    const wantsPhysical = (loc.work_modes ?? []).some(isPhysicalMode);
     const base = wantsPhysical ? loc.base : {};
     f.facets.work_mode = seed(loc.work_modes ?? []);
     f.facets.regions = seed([...(loc.remote.regions ?? []), ...(reloc.regions ?? [])]);
@@ -760,16 +766,14 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
     // The profile's most common shape — remote anywhere, physical work near home —
     // cannot survive the plain flatten: ANDing the location facets over the remote
     // modes would narrow remote work to the home geography. When the user accepted
-    // remote AND a physical format AND stated any geography for the physical side,
-    // stage the server's remote-anywhere modifier instead: remote postings from
-    // anywhere, physical ones within the location facets above. Every other shape
-    // (remote only, physical only, no geography) flattens exactly as before.
-    const statedGeo =
-      f.facets.regions.include.length > 0 ||
-      f.facets.countries.include.length > 0 ||
-      f.facets.cities.include.length > 0 ||
-      (f.facets.metros?.include.length ?? 0) > 0;
-    if (wantsPhysical && (loc.work_modes ?? []).includes('remote') && statedGeo) {
+    // remote from ANYWHERE (no remote reach) AND a physical format AND stated a base
+    // or relocation geography, stage the server's remote-anywhere modifier instead:
+    // remote postings from anywhere, physical ones within the location facets above.
+    // A stated remote reach keeps the plain flatten: the modifier would drop the
+    // reach from the remote arm, while the plain AND keeps remote work inside it and
+    // bounds physical work no wider. Every other shape flattens exactly as before.
+    const remoteAnywhere = !(loc.remote.regions?.length || loc.remote.countries?.length);
+    if (remoteAnywhere && appliesWorkModeRemoteAnywhere(f)) {
       f.workModeRemoteAnywhere = true;
     }
   }

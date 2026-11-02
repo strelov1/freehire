@@ -51,10 +51,11 @@ When the modifier is on AND `remote` is among the included work modes AND there 
 at least one location include, the builder emits, in place of the plain work-mode
 group:
 
-    work_mode IN [all selected] OR (work_mode IN [onsite, hybrid] AND <location group>)
+    work_mode = remote OR (work_mode IN [selected physical modes] AND <location group>)
 
-The right side repeats the physical modes only — a posting already matched by the
-left side needs no geography. Location excludes are NOT folded in: they stay their
+Only `remote` stands bare: a bare physical mode would admit a hybrid posting from
+any country. The right side carries only the physical modes the caller selected,
+and the location group is consumed into it rather than ANDed beside it. Location excludes are NOT folded in: they stay their
 own AND group, so `countries_exclude=us` keeps excluding the US from the remote
 arm too (excluding a country from "remote anywhere" is the normal reading; a
 caller who wants remote-US-only can say `countries=us`, which lands on the right
@@ -68,13 +69,15 @@ filter the caller wrote) or when no location facet has an include (the right sid
 degenerates to the physical modes, widening past the caller's list for no reason).
 
 Every other facet keeps its ordinary AND. Two work modes + three countries thus
-yield: `wm IN [r,h,o] OR (wm IN [h,o] AND geo…)` AND `country NOT IN [..]` — one
+yield: `wm = r OR (wm IN [h,o] AND geo…)` AND `country NOT IN [..]` — one
 group swapped, nothing else moved.
 
 ### "Apply my profile" sets the flag; the modal can change it
 
-`filtersFromProfile` sets `workModeRemoteAnywhere` when the profile accepts remote,
-accepts at least one physical mode, and states a base or relocation geography —
+`filtersFromProfile` sets `workModeRemoteAnywhere` when the profile accepts remote
+with no remote reach, accepts at least one physical mode, and states a base or
+relocation geography (a stated reach keeps the plain flatten: the modifier would
+drop it from the remote arm) —
 the exact shape the location form collects, so the flag is the flattening of what
 the user actually answered rather than a new question. The modal's Work format
 pane gains a checkbox (shown only when remote AND a physical mode are both

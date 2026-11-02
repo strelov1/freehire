@@ -16,9 +16,10 @@ The filter language SHALL additionally honour the modifier
 `work_mode_remote_anywhere=true`. When it is set, `remote` is among the included
 `work_mode` values, at least one physical mode (hybrid, onsite) is included, and
 at least one location facet carries an include, the work-mode group SHALL become
-the disjunction `work_mode IN [selected modes] OR (work_mode IN [onsite,
-hybrid] AND <location group>)` — remote postings from anywhere, plus physical
-postings within the chosen geography. The modifier SHALL be a no-op when any of
+the disjunction `work_mode = remote OR (work_mode IN [selected physical
+modes] AND <location group>)` — remote postings from anywhere, plus postings in
+the selected physical modes within the chosen geography. The location group SHALL
+be consumed into the disjunction, not ANDed beside it. The modifier SHALL be a no-op when any of
 those preconditions fails, and SHALL be ignored when `work_mode_mode=and` is set.
 Location excludes SHALL keep their ordinary AND meaning (excluding a geography
 applies to every arm of the disjunction).
@@ -26,7 +27,7 @@ applies to every arm of the disjunction).
 #### Scenario: Remote anywhere with local physical work
 
 - **WHEN** a request carries `work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true`
-- **THEN** the filter is `(work_mode IN ["remote", "hybrid"] OR (work_mode IN ["hybrid", "onsite"] AND countries = "de"))`-shaped: a remote posting in Brazil matches, a hybrid posting in Germany matches, an on-site posting in Brazil does not, and a hybrid posting in France does not
+- **THEN** the filter is `(work_mode = "remote" OR (work_mode IN ["hybrid"] AND countries = "de"))`-shaped: a remote posting in Brazil matches, a hybrid posting in Germany matches, an on-site posting in Brazil does not, and a hybrid posting in France does not, and an on-site posting in Germany does not (on-site was not selected)
 
 #### Scenario: No location include leaves the modifier inert
 

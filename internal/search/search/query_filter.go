@@ -355,17 +355,16 @@ func filterFromValues(v url.Values, now time.Time) any {
 	// Included geography fragments across regions/countries/cities collect here and
 	// are appended as one OR group (see locationFacets).
 	var locationGroup []string
-	// The work-mode facet is read separately when the remote-anywhere modifier is
-	// active, so its group can be built as a disjunction over the location group.
-	var workModes []string
+	// Under the remote-anywhere modifier the work-mode includes are held back from
+	// the loop, so their group can be built as a disjunction over the location group.
+	remoteAnywhere := remoteAnywhereActive(v)
 	for param, attr := range StringFacets {
 		included := splitFacetValues(v[param])
 		for i, val := range included {
 			included[i] = facetValue(param, val)
 		}
 		switch {
-		case param == "work_mode":
-			workModes = included
+		case param == "work_mode" && remoteAnywhere:
 		case locationFacets[param]:
 			for _, val := range included {
 				locationGroup = append(locationGroup, facetEq(param, attr, val))
@@ -392,18 +391,13 @@ func filterFromValues(v url.Values, now time.Time) any {
 			groups = append(groups, []string{facetNeq(param, attr, facetValue(param, val))})
 		}
 	}
-	// The work-mode group and the location group are built together: under the
-	// remote-anywhere modifier the location group is CONSUMED into the disjunction's
-	// physical arm (appending it standalone as well would AND it over the remote arm
-	// too, narrowing remote work back to the home geography), otherwise both are
-	// appended as ordinary AND groups.
-	if remoteAnywhereActive(v, workModes, locationGroup) {
-		groups = append(groups, remoteAnywhereGroup(workModes, locationGroup))
-	} else {
-		if len(locationGroup) > 0 {
-			groups = append(groups, locationGroup)
-		}
-		groups = append(groups, workModeGroups(v, workModes)...)
+	// Under the remote-anywhere modifier the location group is CONSUMED into the
+	// disjunction's physical arm: appending it standalone as well would AND it over
+	// the remote arm too, narrowing remote work back to the home geography.
+	if remoteAnywhere {
+		groups = append(groups, remoteAnywhereGroup(splitFacetValues(v["work_mode"]), locationGroup))
+	} else if len(locationGroup) > 0 {
+		groups = append(groups, locationGroup)
 	}
 
 	if raw := v.Get("visa_sponsorship"); raw != "" {
@@ -489,54 +483,46 @@ func filterFromValues(v url.Values, now time.Time) any {
 // remoteAnywhereActive reports whether the remote-anywhere modifier is actually
 // in force for this query: set to true, `remote` and at least one physical mode
 // both selected, at least one location include, and no `_mode=and` on work_mode.
-// Each precondition guards a widening or a contradiction — see workModeGroups.
-func remoteAnywhereActive(v url.Values, modes, locationGroup []string) bool {
-	return len(modes) > 0 && len(locationGroup) > 0 &&
+// Without remote the physical arm would relax the caller's filter; without a
+// location the arm would widen past the mode list; `and` is a different filter.
+func remoteAnywhereActive(v url.Values) bool {
+	modes := splitFacetValues(v["work_mode"])
+	return strings.EqualFold(strings.TrimSpace(v.Get(WorkModeRemoteAnywhereParam)), "true") &&
 		v.Get("work_mode_mode") != "and" &&
-		strings.EqualFold(strings.TrimSpace(v.Get(WorkModeRemoteAnywhereParam)), "true") &&
 		slices.Contains(modes, "remote") &&
-		slices.ContainsFunc(modes, func(m string) bool { return m == "hybrid" || m == "onsite" })
+		slices.ContainsFunc(modes, isPhysicalMode) &&
+		hasLocationInclude(v)
 }
 
-// remoteAnywhereGroup builds the disjunctive group — see workModeGroups.
-func remoteAnywhereGroup(modes, locationGroup []string) []string {
-	physical := []string{"hybrid", "onsite"}
-	quoted := make([]string, len(physical))
-	for i, m := range physical {
-		quoted[i] = quote(m)
-	}
-	// A sorted COPY of the location fragments: the group is collected in map
-	// iteration order, and the disjunction embeds it as one string — the canonical
-	// query string a saved search is keyed on must not depend on that order.
-	geo := append([]string{}, locationGroup...)
-	sort.Strings(geo)
-	physicalArm := "(work_mode IN [" + strings.Join(quoted, ", ") + "] AND (" + strings.Join(geo, " OR ") + "))"
-	group := make([]string, 0, len(modes)+1)
-	for _, m := range modes {
-		group = append(group, Eq("work_mode", m))
-	}
-	return append(group, physicalArm)
-}
-
-// workModeGroups builds the work-mode facet's include groups for the PLAIN reading
-// (the modifier not in force — see remoteAnywhereActive): one OR group over the
-// selected modes, or per-value AND groups under `_mode=and`.
-func workModeGroups(v url.Values, modes []string) [][]string {
-	if len(modes) == 0 {
-		return nil
-	}
-	if v.Get("work_mode_mode") == "and" {
-		out := make([][]string, len(modes))
-		for i, m := range modes {
-			out[i] = []string{Eq("work_mode", m)}
+func hasLocationInclude(v url.Values) bool {
+	for param := range locationFacets {
+		if len(splitFacetValues(v[param])) > 0 {
+			return true
 		}
-		return out
 	}
-	group := make([]string, len(modes))
-	for i, m := range modes {
-		group[i] = Eq("work_mode", m)
+	return false
+}
+
+func isPhysicalMode(m string) bool { return m == "hybrid" || m == "onsite" }
+
+// remoteAnywhereGroup builds the disjunction that replaces the work-mode and
+// location groups: remote from anywhere, OR one of the selected physical modes
+// within the location group. Neither arm may carry a bare physical mode — that
+// would admit a hybrid posting from any country and undo the geography.
+func remoteAnywhereGroup(modes, locationGroup []string) []string {
+	var physical []string
+	for _, m := range modes {
+		if isPhysicalMode(m) {
+			physical = append(physical, m)
+		}
 	}
-	return [][]string{group}
+	sort.Strings(physical)
+	// Sorted: the group is collected in map iteration order, and the disjunction
+	// embeds it as one string — the canonical query string a saved search is keyed
+	// on must not depend on that order. locationGroup is not read again.
+	sort.Strings(locationGroup)
+	physicalArm := "(" + InStrings("work_mode", physical) + " AND (" + strings.Join(locationGroup, " OR ") + "))"
+	return []string{Eq("work_mode", "remote"), physicalArm}
 }
 
 // splitFacetValues splits each raw query value on comma and flattens the
