@@ -92,6 +92,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, hideAIInterview: on };
   }
 
+  setFormerEmployers(on: boolean): void {
+    this.#f = { ...this.#f, formerEmployers: on };
+  }
+
   setAutoApplyAvailable(on: boolean): void {
     this.#f = { ...this.#f, autoApplyAvailable: on };
   }

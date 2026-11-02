@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { ArrowRight, ChevronDown, History, Layers, Map as MapIcon, Target } from '@lucide/svelte';
+  import { ArrowRight, ChevronDown, Eye, Layers, Map as MapIcon, Target } from '@lucide/svelte';
   import { browser } from '$app/env';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -805,34 +805,6 @@
   </Button>
 {/snippet}
 
-<!-- "Hiring again": narrow the feed to the companies the reader has worked at and left,
-     which the server reads from their own experience bank. Signed-in only and only on
-     the standalone feed — a company page is already one company, and signed out the
-     server could not read a bank (it would ignore the param and say so). The URL carries
-     it, so the choice survives a reload and a shared link is a harmless no-op for anyone
-     else. Never part of a saved search: see savedSearchQuery. -->
-{#snippet hiringAgainToggle()}
-  {@const on = filters.value.formerEmployers}
-  <Button
-    variant="outline"
-    size="sm"
-    aria-pressed={on}
-    aria-label="Hiring again: only companies you have worked at"
-    title="Only open jobs at companies you have worked at"
-    class={on ? 'border-brand bg-brand/5 text-brand-strong' : ''}
-    onclick={() => filters.setFormerEmployers(!on)}
-  >
-    <History class="size-4" aria-hidden="true" />
-    <span class="hidden sm:inline">Hiring again</span>
-  </Button>
-{/snippet}
-
-<!-- The two above, in one slot. Rendered as a fragment so ListToolbar keeps deciding
-     where the row sits and how it collapses on a phone.
-
-     A "Hide evergreen" toggle used to lead this row, writing one sign of one value of the
-     `reality` facet. The whole facet now sits in the modal's Posted pane, beside the age
-     bound it belongs with. -->
 <!-- Signed in only: "seen" is the server's record of what this account opened, and a
      signed-out visitor has none, so the control would do nothing. A link carrying
      hide_seen still loads for them; the server just ignores it and says so.
@@ -850,15 +822,13 @@
         checked={filters.value.hideSeen}
         onchange={(e) => filters.setHideSeen(e.currentTarget.checked)}
       />
+      <Eye class="size-4 shrink-0" aria-hidden="true" />
       <span>Hide viewed</span>
     </label>
   {/if}
 {/snippet}
 
 {#snippet listControls()}
-  {#if standalone && isAuthenticated()}
-    {@render hiringAgainToggle()}
-  {/if}
   {@render hideSeenToggle()}
   {@render postedSelect()}
   <!-- Unconditional. This used to be guarded against a one-option select - a label
@@ -1067,6 +1037,7 @@
   {counts}
   exclude={excludeFacets}
   savedSearches={standalone}
+  formerEmployersAvailable={standalone}
   open={modalOpen}
   onClose={() => (modalOpen = false)}
   {stagedCounts}

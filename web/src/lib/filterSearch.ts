@@ -126,6 +126,11 @@ function buildJobCatalog(): FilterSearchHit[] {
   pushFacet(hits, 'industry', 'domains');
   pushFacet(hits, 'industry', 'company_type');
   pushFacet(hits, 'industry', 'collections', JOB_COLLECTION, 'Collection');
+  hits.push({
+    ...actionHit('company_slug', 'Company', 'Hiring again', 'former-employers'),
+    param: 'company_slug',
+    aliases: ['former employers', 'past employers', 'previous employers'],
+  });
   pushFacet(hits, 'source', 'source_type');
   for (const [value, label] of Object.entries(SOURCE_LABELS)) {
     hits.push(optionHit('source', 'source', 'Source', { value, label }));
@@ -151,6 +156,7 @@ export function jobFilterSearchItems(opts?: {
   exclude?: readonly string[];
   railKeys?: readonly string[];
   openWithin?: boolean;
+  formerEmployers?: boolean;
 }): FilterSearchHit[] {
   jobCatalog ??= buildJobCatalog();
   const exclude = new Set(opts?.exclude ?? []);
@@ -159,6 +165,7 @@ export function jobFilterSearchItems(opts?: {
     if (rails && !rails.has(hit.railKey)) return false;
     if (hit.param && exclude.has(hit.param)) return false;
     if (!opts?.openWithin && hit.action?.startsWith('open:')) return false;
+    if (!opts?.formerEmployers && hit.action === 'former-employers') return false;
     return true;
   });
 }
