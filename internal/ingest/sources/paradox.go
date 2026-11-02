@@ -62,6 +62,9 @@ func NewParadox(c HeaderJSONGetter) Source { return paradox{http: c} }
 const (
 	paradoxRequestInterval = 700 * time.Millisecond
 	paradoxRequestBurst    = 1
+	// Hydrated postings are buffered until FetchNew returns. Leave the pipeline
+	// time to persist them before the crawl context expires.
+	paradoxPersistenceReserve = 5 * time.Minute
 )
 
 // pacedParadoxGetter holds every request of a run to one limiter, wired once per registry
@@ -189,22 +192,45 @@ func (s paradox) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 	if err != nil {
 		return nil, err
 	}
+	detailCtx := ctx
+	if deadline, ok := ctx.Deadline(); ok {
+		var cancel context.CancelFunc
+		detailCtx, cancel = context.WithDeadline(ctx, deadline.Add(-paradoxPersistenceReserve))
+		defer cancel()
+	}
 	// refused is set by the first 403/429: the budget is the IP's, so every further detail
 	// request would only be refused too and keep it spent. The rest wait for the next crawl.
 	var refused atomic.Bool
-	return fetchDetails(postings, defaultDetailWorkers, func(p paradoxPosting) (Job, bool) {
+	var outOfTime atomic.Bool
+	var deferred atomic.Int64
+	jobs := fetchDetails(postings, defaultDetailWorkers, func(p paradoxPosting) (Job, bool) {
 		if seen(p.id) {
 			return Job{ExternalID: p.id, URL: p.url, Title: p.row.Title, Company: e.Company, SeenRefresh: true}, true
+		}
+		if outOfTime.Load() || detailCtx.Err() != nil {
+			deferred.Add(1)
+			return unreadableDetail(p.id, p.url, e.Company), true
 		}
 		if refused.Load() {
 			return Job{}, false
 		}
-		job, ok, err := s.detail(ctx, b, e, p)
+		job, ok, err := s.detail(detailCtx, b, e, p)
+		// rate.Wait refuses before cancellation if the next token is past the
+		// deadline. It exposes no sentinel; the pipeline recognizes the same text.
+		if err != nil && (detailCtx.Err() != nil || strings.Contains(err.Error(), "would exceed context deadline")) {
+			outOfTime.Store(true)
+			deferred.Add(1)
+			return unreadableDetail(p.id, p.url, e.Company), true
+		}
 		if isRateLimited(err) && !refused.Swap(true) {
 			log.Printf("paradox: %s: detail refused (%v); deferring the rest of this board's hydration", b, err)
 		}
 		return job, ok
-	}), nil
+	})
+	if n := deferred.Load(); n > 0 {
+		log.Printf("paradox: %s: %d postings deferred to leave time for persistence", b, n)
+	}
+	return jobs, nil
 }
 
 // list walks the site's job list to its natural end — a page shorter than asked for — and
