@@ -167,7 +167,7 @@ it("drops visitor browser-extension errors while keeping app defects", async () 
     "HierarchyRequestError",
   );
   domError.stack = `HierarchyRequestError: Failed to execute 'appendChild' on 'Node': This node type does not support this method.\n    at Cn (https://freehire.test/_app/immutable/chunks/app.js:1:1)\n    at Y (chrome-extension://eppiocemhmnlbhjplcgkofciiegomcon/executors/200.js:1:761)`;
-  Object.assign(domError, { target: target });
+  Object.assign(extensionDom, { error: domError });
   target.dispatchEvent(extensionDom);
   const defect = new Event("unhandledrejection");
   const appError = new TypeError("app defect");
@@ -178,7 +178,7 @@ it("drops visitor browser-extension errors while keeping app defects", async () 
   const records = exporter.getFinishedLogRecords();
   expect(
     records.map((record) => record.attributes["exception.message"]),
-  ).toEqual(["app defect"]);
+  ).toEqual([domError.message, "app defect"]);
   await telemetry?.shutdown();
 });
 
@@ -270,4 +270,38 @@ it("keeps sanitized local SSR errors when the telemetry volume bound drops recor
     await telemetry?.shutdown();
     local.mockRestore();
   }
+});
+
+it("handles Firefox and Safari extension stacks while retaining mixed stacks", () => {
+  const capture = vi.fn();
+  const target = new EventTarget();
+  installErrorListeners(target, { capture });
+  for (const stack of [
+    "execute@moz-extension://visitor/content.js:1:2\n@moz-extension://visitor/content.js:3:4",
+    "execute@safari-web-extension://visitor/content.js:1:2",
+    "Error: injected\n at execute (chrome-extension://visitor/content.js:1:2)",
+  ]) {
+    const error = new Error("injected");
+    error.stack = stack;
+    target.dispatchEvent(Object.assign(new Event("error"), { error }));
+  }
+  expect(capture).not.toHaveBeenCalled();
+  const mixed = new Error("mixed");
+  mixed.stack = "execute@moz-extension://visitor/content.js:1:2\nrender@https://freehire.test/app.js:3:4";
+  target.dispatchEvent(Object.assign(new Event("error"), { error: mixed }));
+  expect(capture).toHaveBeenCalledWith(mixed);
+});
+
+it("preserves opaque errors and primitive rejection reporting without provenance", () => {
+  const capture = vi.fn();
+  const target = new EventTarget();
+  installErrorListeners(target, { capture });
+  const opaque = { stack: 123 };
+  const unusual = Object.assign(new Error("unusual stack"), { stack: 123 });
+  for (const error of [opaque, unusual]) {
+    target.dispatchEvent(Object.assign(new Event("error"), { error }));
+    expect(capture).toHaveBeenCalledWith(error);
+  }
+  target.dispatchEvent(Object.assign(new Event("unhandledrejection"), { reason: "app rejection" }));
+  expect(capture).toHaveBeenCalledWith("app rejection");
 });

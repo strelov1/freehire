@@ -153,23 +153,19 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
 
 type ErrorTelemetry = ReturnType<typeof createErrorTelemetry>;
 
-/** A provenance predicate is required in content scripts sharing a host page. */
-// True when a stack's frames belong to a browser extension's injected script rather than
-// to any page script. A thrown value whose EVERY frame lives under an extension origin was
-// raised by the visitor's own software (content script, injected executor) and is not a
-// defect of this site — the extension throws the same way on every page it runs on. A value
-// that mentions an extension frame but carries at least one frame from elsewhere still
-// belongs to whoever owns those other frames, so it stays.
-const EXTENSION_FRAME = /(?:chrome|moz|safari|edge)-extension:\/\//i;
-function fromExtensionOnly(error: Error): boolean {
-  const frames = (error.stack || "")
-    .split("\n")
-    .filter((line) => /\bat\s+/.test(line));
-  return (
-    frames.length > 0 && frames.every((line) => EXTENSION_FRAME.test(line))
-  );
+// Only discard stacks whose every recognizable frame belongs to an extension.
+// V8 uses "at fn (url)"; Firefox and Safari use "fn@url".
+const EXTENSION_FRAME = /^(?:chrome|moz|safari|safari-web|edge)-extension:\/\//i;
+function fromExtensionOnly(error: unknown): boolean {
+  if (!(error instanceof Error) || typeof error.stack !== "string") return false;
+  const frames = error.stack.split("\n").filter((line) => /^\s*at\s+|@\S+:\d+/.test(line));
+  return frames.length > 0 && frames.every((line) => {
+    const location = line.trim().replace(/^at\s+(?:.*?\s+\()?/, "").replace(/^.*?@/, "");
+    return EXTENSION_FRAME.test(location);
+  });
 }
 
+/** A provenance predicate is required in content scripts sharing a host page. */
 export function installErrorListeners(
   target: EventTarget,
   telemetry: Pick<NonNullable<ErrorTelemetry>, "capture"> | undefined,
@@ -193,8 +189,7 @@ export function installErrorListeners(
   });
   target.addEventListener("unhandledrejection", (event) => {
     const reason: unknown = (event as PromiseRejectionEvent).reason;
-    if (!(reason instanceof Error)) return;
     if (foreign?.(reason)) return;
-    if (!owns || owns(reason, "")) telemetry?.capture(reason);
+    if (!owns || (reason instanceof Error && owns(reason, ""))) telemetry?.capture(reason);
   });
 }
