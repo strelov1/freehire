@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 // LocalsUserID is the c.Locals key under which RequireAuth and RequireAuthOrKey
@@ -173,8 +174,10 @@ func UserID(c *fiber.Ctx) (int64, bool) {
 // APIKeyIdentity is what a live API key resolves to: its owner and the scope it was
 // minted with. It is a plain struct so this package needs no database import.
 type APIKeyIdentity struct {
-	UserID int64
-	Scope  string
+	UserID     int64
+	Scope      string
+	KeyID      int64
+	OAuthGrant bool
 }
 
 // APIKeyAuthenticator resolves a presented API-key hash to its owner and scope,
@@ -206,23 +209,29 @@ func RequireAuthOrKey(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthe
 // a re-authentication loop it can never win.
 func RequireAuthOrScopedKey(iss *Issuer, versions TokenVersionLoader, keys APIKeyAuthenticator, allowed ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "unknown"})
 		if token := c.Cookies(CookieName); token != "" {
 			id, res, _ := resolveSession(c, iss, versions, token)
 			if res == sessionOK {
 				c.Locals(LocalsUserID, id)
 				c.Locals(localsViaCookie, true)
+				observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "session", UserID: id})
 				return c.Next()
 			}
 			if res == sessionInfraError {
+				observability.LogAuthFailure(c, fiber.StatusServiceUnavailable, "session_lookup_failed")
 				return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 			}
 		}
 		b, ok, err := resolveBearer(c, iss, versions, keys)
 		if err != nil {
+			observability.LogAuthFailure(c, fiber.StatusServiceUnavailable, "credential_lookup_failed")
 			return fiber.NewError(fiber.StatusServiceUnavailable, "service temporarily unavailable")
 		}
 		if ok {
+			observability.IdentifyRequest(c, observability.RequestIdentity{Kind: b.credentialType, UserID: b.userID, KeyID: b.keyID, Scope: b.scope})
 			if b.viaKey && !scopeAllowed(b.scope, allowed) {
+				observability.LogAuthFailure(c, fiber.StatusForbidden, "insufficient_scope")
 				return fiber.NewError(fiber.StatusForbidden, "api key scope is insufficient for this endpoint")
 			}
 			c.Locals(LocalsUserID, b.userID)
@@ -232,6 +241,11 @@ func RequireAuthOrScopedKey(iss *Issuer, versions TokenVersionLoader, keys APIKe
 			}
 			return c.Next()
 		}
+		reason := "invalid_or_expired_credential"
+		if c.Get(fiber.HeaderAuthorization) == "" && c.Cookies(CookieName) == "" {
+			reason = "missing_credential"
+		}
+		observability.LogAuthFailure(c, fiber.StatusUnauthorized, reason)
 		return fiber.NewError(fiber.StatusUnauthorized, "not authenticated")
 	}
 }
@@ -338,7 +352,7 @@ func resolveCredential(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, k
 	}
 	id, res, err := resolveSession(c, iss, versions, tok)
 	if res == sessionOK {
-		return bearerIdentity{userID: id}, true, nil
+		return bearerIdentity{userID: id, credentialType: "session"}, true, nil
 	}
 	if res == sessionInfraError {
 		return bearerIdentity{}, false, err
@@ -346,7 +360,11 @@ func resolveCredential(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, k
 	identity, err := keys.AuthenticateAPIKey(c.Context(), HashAPIKey(tok))
 	switch {
 	case err == nil:
-		return bearerIdentity{userID: identity.UserID, viaKey: true, scope: identity.Scope}, true, nil
+		kind := "api_key"
+		if identity.OAuthGrant {
+			kind = "oauth_grant"
+		}
+		return bearerIdentity{userID: identity.UserID, viaKey: true, scope: identity.Scope, keyID: identity.KeyID, credentialType: kind}, true, nil
 	case errors.Is(err, pgx.ErrNoRows):
 		// No live key matches — no credential resolved.
 		return bearerIdentity{}, false, nil
@@ -359,9 +377,11 @@ func resolveCredential(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, k
 // bearerIdentity is what a Bearer credential resolved to. viaKey distinguishes an API
 // key (scoped, flagged to handlers) from a session JWT (a full session, like the cookie).
 type bearerIdentity struct {
-	userID int64
-	viaKey bool
-	scope  string
+	userID         int64
+	viaKey         bool
+	scope          string
+	keyID          int64
+	credentialType string
 }
 
 // bearerToken extracts the credential from an `Authorization: Bearer <token>`

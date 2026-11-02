@@ -10,6 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 // accountServerInstructions tells the model this surface acts as a specific,
@@ -116,7 +117,9 @@ func accountToolHandler(t assistant.Tool, userID int64) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		out, err := t.Run(ctx, userID, req.Params.Arguments)
 		if err != nil {
-			return errorResult(err.Error()), nil
+			result := errorResult(err.Error())
+			result.Meta = mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": observability.ErrorCode(err)}}
+			return result, nil
 		}
 		payload, err := json.Marshal(out)
 		if err != nil {

@@ -616,7 +616,7 @@ type apiKeys struct{ q *db.Queries }
 func (a apiKeys) AuthenticateAPIKey(ctx context.Context, tokenHash string) (auth.APIKeyIdentity, error) {
 	row, err := a.q.AuthenticateAPIKey(ctx, tokenHash)
 	if err == nil {
-		return auth.APIKeyIdentity{UserID: row.UserID, Scope: row.Scope}, nil
+		return auth.APIKeyIdentity{UserID: row.UserID, Scope: row.Scope, KeyID: row.ID}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return auth.APIKeyIdentity{}, err
@@ -625,5 +625,5 @@ func (a apiKeys) AuthenticateAPIKey(ctx context.Context, tokenHash string) (auth
 	if err != nil {
 		return auth.APIKeyIdentity{}, err
 	}
-	return auth.APIKeyIdentity{UserID: userID, Scope: auth.ScopeFull}, nil
+	return auth.APIKeyIdentity{UserID: userID, Scope: auth.ScopeFull, OAuthGrant: true}, nil
 }

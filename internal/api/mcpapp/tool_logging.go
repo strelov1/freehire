@@ -3,11 +3,11 @@ package mcpapp
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"sync/atomic"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 var toolCallSequence atomic.Uint64
@@ -17,7 +17,7 @@ var toolCallSequence atomic.Uint64
 // A start without a finish identifies a call that is still running or was lost
 // when the process exited. Neither errors nor arguments are safe to log here.
 func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolResult, error) {
-	logger := slog.Default().With("surface", surface, "tool", name, "call_id", toolCallSequence.Add(1))
+	logger := observability.RequestLogger(ctx).With("surface", surface, "tool", name, "call_id", toolCallSequence.Add(1))
 	started := time.Now()
 	logger.InfoContext(ctx, "mcp tool started")
 	return func(result *mcp.CallToolResult, err error) {
@@ -32,7 +32,34 @@ func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolRe
 		case result != nil && result.IsError:
 			outcome = "tool_error"
 		}
-		logger.InfoContext(ctx, "mcp tool finished", "outcome", outcome, "duration_ms", time.Since(started).Milliseconds())
+		code := observability.ErrorCode(err)
+		if outcome == "canceled" || outcome == "deadline_exceeded" {
+			code = outcome
+		}
+		if result != nil && result.IsError {
+			if code == "" {
+				code = resultErrorCode(result)
+			}
+			if result.Meta == nil {
+				result.Meta = mcp.Meta{}
+			}
+			result.Meta[diagnosticsMetaKey] = map[string]any{"request_id": observability.RequestID(ctx), "error_code": code}
+		}
+		logger.InfoContext(ctx, "mcp tool finished", "outcome", outcome, "error_code", code, "duration_ms", time.Since(started).Milliseconds())
+	}
+}
+
+const diagnosticsMetaKey = "freehire.me/diagnostics"
+
+func resultErrorCode(result *mcp.CallToolResult) string {
+	diagnostics, _ := result.Meta[diagnosticsMetaKey].(map[string]any)
+	code, _ := diagnostics["error_code"].(string)
+	// Only codes authored here may enter the log; a result's text is private.
+	switch code {
+	case "canceled", "deadline_exceeded", "not_found", "invalid_request", "unauthenticated", "permission_denied", "conflict", "rate_limited", "unavailable", "database_error", "internal_error":
+		return code
+	default:
+		return "internal_error"
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"log/slog"
 	"strings"
 	"sync"
@@ -25,8 +26,13 @@ func captureToolLogs(t *testing.T) logRecords {
 	t.Helper()
 	records := make(logRecords, 32)
 	previous := slog.Default()
+	output, flags := log.Writer(), log.Flags()
 	slog.SetDefault(slog.New(slog.NewJSONHandler(records, nil)))
-	t.Cleanup(func() { slog.SetDefault(previous) })
+	t.Cleanup(func() {
+		slog.SetDefault(previous)
+		log.SetOutput(output)
+		log.SetFlags(flags)
+	})
 	return records
 }
 
@@ -147,13 +153,15 @@ func TestToolLogClassifiesFailuresWithoutErrorText(t *testing.T) {
 		result *mcp.CallToolResult
 		err    error
 		want   string
+		code   string
 	}{
-		{name: "error", ctx: context.Background(), err: errors.New("private-error-secret"), want: "error"},
-		{name: "tool_error", ctx: context.Background(), result: &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "private-error-secret"}}}, want: "tool_error"},
-		{name: "canceled", ctx: context.Background(), err: context.Canceled, want: "canceled"},
-		{name: "deadline", ctx: context.Background(), err: context.DeadlineExceeded, want: "deadline_exceeded"},
-		{name: "canceled_tool_result", ctx: canceled, result: &mcp.CallToolResult{IsError: true}, want: "canceled"},
-		{name: "expired_tool_result", ctx: expired, result: &mcp.CallToolResult{IsError: true}, want: "deadline_exceeded"},
+		{name: "error", ctx: context.Background(), err: errors.New("private-error-secret"), want: "error", code: "internal_error"},
+		{name: "tool_error", ctx: context.Background(), result: &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "private-error-secret"}}}, want: "tool_error", code: "internal_error"},
+		{name: "untrusted_code", ctx: context.Background(), result: &mcp.CallToolResult{IsError: true, Meta: mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": "private-error-secret"}}}, want: "tool_error", code: "internal_error"},
+		{name: "canceled", ctx: context.Background(), err: context.Canceled, want: "canceled", code: "canceled"},
+		{name: "deadline", ctx: context.Background(), err: context.DeadlineExceeded, want: "deadline_exceeded", code: "deadline_exceeded"},
+		{name: "canceled_tool_result", ctx: canceled, result: &mcp.CallToolResult{IsError: true}, want: "canceled", code: "canceled"},
+		{name: "expired_tool_result", ctx: expired, result: &mcp.CallToolResult{IsError: true}, want: "deadline_exceeded", code: "deadline_exceeded"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			records := captureToolLogs(t)
@@ -162,8 +170,14 @@ func TestToolLogClassifiesFailuresWithoutErrorText(t *testing.T) {
 			finish(tc.result, tc.err)
 			record := nextToolLog(t, records)
 			raw, _ := json.Marshal(record)
-			if record["outcome"] != tc.want || strings.Contains(string(raw), "private-error-secret") {
+			if record["outcome"] != tc.want || record["error_code"] != tc.code || strings.Contains(string(raw), "private-error-secret") {
 				t.Fatalf("unexpected failure log: %s", raw)
+			}
+			if tc.result != nil && tc.result.IsError {
+				diagnostics, _ := tc.result.Meta[diagnosticsMetaKey].(map[string]any)
+				if diagnostics["error_code"] != tc.code {
+					t.Errorf("response cause differs from log: %v", diagnostics)
+				}
 			}
 		})
 	}
