@@ -8,23 +8,34 @@ import (
 	"github.com/meilisearch/meilisearch-go"
 )
 
-// openJobsFilter also accepts legacy documents that have no closure marker.
-const openJobsFilter = "NOT is_closed = true"
+// openJobsFilter also accepts legacy documents that have no visibility markers.
+const openJobsFilter = "NOT is_closed = true AND NOT is_duplicate = true"
 
 // CloseJobs updates only existing documents, preserving their text and vectors.
 // The edit-documents-by-function engine feature must be enabled before rollout.
 // Unlike partial-document upserts this cannot create skeletal closed documents
 // for the many database jobs that never entered the searchable catalogue.
 func (c *Client) CloseJobs(ctx context.Context, ids []int64) error {
+	return c.markJobs(ctx, ids, "is_closed")
+}
+
+// MarkDuplicateJobs hides existing copies without replacing their text or vectors.
+func (c *Client) MarkDuplicateJobs(ctx context.Context, ids []int64) error {
+	return c.markJobs(ctx, ids, "is_duplicate")
+}
+
+// Each marker has its own idempotency guard: a closed duplicate still needs both
+// markers, so the public-search predicate cannot gate these writes.
+func (c *Client) markJobs(ctx context.Context, ids []int64, marker string) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	task, err := c.facet.UpdateDocumentsByFunctionWithContext(ctx, &meilisearch.UpdateDocumentByFunctionRequest{
-		Filter:   "(" + In("id", ids) + ") AND " + openJobsFilter,
-		Function: "doc.is_closed = true;",
+		Filter:   "(" + In("id", ids) + ") AND NOT " + marker + " = true",
+		Function: "doc." + marker + " = true;",
 	})
 	if err != nil {
-		return fmt.Errorf("search: update closure status: %w", err)
+		return fmt.Errorf("search: update %s status: %w", marker, err)
 	}
 	return c.awaitTask(ctx, c.facet, task.TaskUID)
 }

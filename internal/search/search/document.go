@@ -43,8 +43,10 @@ const maxIndexedDescriptionRunes = 1000
 type JobDocument struct {
 	// IsClosed is internal search state. A full replacement of an open job
 	// clears the marker, while legacy documents without it remain searchable.
-	IsClosed bool  `json:"is_closed,omitempty"`
-	ID       int64 `json:"id"`
+	IsClosed bool `json:"is_closed,omitempty"`
+	// IsDuplicate hides a retained copy without discarding its text and vectors.
+	IsDuplicate bool  `json:"is_duplicate,omitempty"`
+	ID          int64 `json:"id"`
 	jobview.Job
 	// PostedTS is the job's effective posting date in unix seconds — the numeric
 	// encoding of the same date jobview.Job.PostedAt renders as an RFC3339 string.
@@ -179,6 +181,7 @@ func FromJob(j db.Job, desc [][]float32, sourceType string) (JobDocument, error)
 	doc := JobDocument{
 		ID:          j.ID,
 		IsClosed:    j.ClosedAt.Valid,
+		IsDuplicate: j.DuplicateOf.Valid,
 		Job:         view,
 		AIArchetype: aiarchetype.Derive(j.Skills, j.Category),
 		RoleType:    roletype.Derive(j.Title),

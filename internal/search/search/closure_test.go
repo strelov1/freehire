@@ -10,10 +10,10 @@ func TestWithOpenJobsPreservesFilterGroups(t *testing.T) {
 		name        string
 		input, want any
 	}{
-		{"unfiltered", nil, "NOT is_closed = true"},
-		{"expression", `source = "a" OR source = "b"`, `(source = "a" OR source = "b") AND NOT is_closed = true`},
-		{"groups", [][]string{{`source = "a"`, `source = "b"`}, {`country = "DE"`}}, [][]string{{`source = "a"`, `source = "b"`}, {`country = "DE"`}, {"NOT is_closed = true"}}},
-		{"flat", []string{`country = "DE"`}, []string{`country = "DE"`, "NOT is_closed = true"}},
+		{"unfiltered", nil, "NOT is_closed = true AND NOT is_duplicate = true"},
+		{"expression", `source = "a" OR source = "b"`, `(source = "a" OR source = "b") AND NOT is_closed = true AND NOT is_duplicate = true`},
+		{"groups", [][]string{{`source = "a"`, `source = "b"`}, {`country = "DE"`}}, [][]string{{`source = "a"`, `source = "b"`}, {`country = "DE"`}, {"NOT is_closed = true AND NOT is_duplicate = true"}}},
+		{"flat", []string{`country = "DE"`}, []string{`country = "DE"`, "NOT is_closed = true AND NOT is_duplicate = true"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

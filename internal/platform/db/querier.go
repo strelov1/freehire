@@ -5941,7 +5941,8 @@ type Querier interface {
 	// Cancel obsolete removals and requeue their current content before acknowledging
 	// them. Lock only the reopened job rows for this statement: a concurrent close
 	// waits, then inserts a NEW removal whose id an old acknowledgment cannot delete.
-	// Missing, closed, private, or noncanonical jobs still need their document removed.
+	// Closed and duplicate public jobs retain documents with visibility markers;
+	// missing or private rows require physical removal.
 	PrepareSearchDeletions(ctx context.Context, jobIds []int64) ([]PrepareSearchDeletionsRow, error)
 	// What ClaimDueHeavyRuns WOULD take from the heavy pool, without taking it. Shadow mode's
 	// read: the first deployment lands underneath a fleet still driven by the static timers, so

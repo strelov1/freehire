@@ -781,3 +781,27 @@ func TestListPendingSearchRemovalsKeepsReopenedPostings(t *testing.T) {
 		}
 	}
 }
+
+func TestPrepareSearchDeletionsRetainsPublicDuplicates(t *testing.T) {
+	ctx := context.Background()
+	pool := startPostgres(t)
+	q := New(pool)
+	canon, err := ingestUpsert(ctx, q, ingestParams("acme:canon", "Engineer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate, err := ingestUpsert(ctx, q, ingestParams("acme:duplicate", "Engineer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.MarkJobDuplicateOfRole(ctx, MarkJobDuplicateOfRoleParams{ID: duplicate.ID, DuplicateOfRole: pgtype.Int8{Int64: canon.ID, Valid: true}}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := q.PrepareSearchDeletions(ctx, []int64{duplicate.ID})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("rows=%v err=%v", rows, err)
+	}
+	if rows[0].HardDelete {
+		t.Fatal("public duplicate routed to physical deletion instead of a status update")
+	}
+}

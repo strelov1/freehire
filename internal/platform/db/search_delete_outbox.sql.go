@@ -154,21 +154,26 @@ WITH reopened AS MATERIALIZED (
     ON CONFLICT (job_id) DO NOTHING
 )
 SELECT requested.id::bigint AS job_id,
-       (j.id IS NULL OR COALESCE(j.is_private, false) OR j.duplicate_of IS NOT NULL)::boolean AS hard_delete
+       (j.id IS NULL OR COALESCE(j.is_private, false))::boolean AS hard_delete,
+       (j.closed_at IS NOT NULL)::boolean AS is_closed,
+       (j.duplicate_of IS NOT NULL)::boolean AS is_duplicate
 FROM unnest($1::bigint[]) AS requested(id)
 LEFT JOIN jobs j ON j.id = requested.id
 WHERE NOT EXISTS (SELECT 1 FROM reopened r WHERE r.id = requested.id)
 `
 
 type PrepareSearchDeletionsRow struct {
-	JobID      int64 `json:"job_id"`
-	HardDelete bool  `json:"hard_delete"`
+	JobID       int64 `json:"job_id"`
+	HardDelete  bool  `json:"hard_delete"`
+	IsClosed    bool  `json:"is_closed"`
+	IsDuplicate bool  `json:"is_duplicate"`
 }
 
 // Cancel obsolete removals and requeue their current content before acknowledging
 // them. Lock only the reopened job rows for this statement: a concurrent close
 // waits, then inserts a NEW removal whose id an old acknowledgment cannot delete.
-// Missing, closed, private, or noncanonical jobs still need their document removed.
+// Closed and duplicate public jobs retain documents with visibility markers;
+// missing or private rows require physical removal.
 func (q *Queries) PrepareSearchDeletions(ctx context.Context, jobIds []int64) ([]PrepareSearchDeletionsRow, error) {
 	rows, err := q.db.Query(ctx, prepareSearchDeletions, jobIds)
 	if err != nil {
@@ -178,7 +183,12 @@ func (q *Queries) PrepareSearchDeletions(ctx context.Context, jobIds []int64) ([
 	items := []PrepareSearchDeletionsRow{}
 	for rows.Next() {
 		var i PrepareSearchDeletionsRow
-		if err := rows.Scan(&i.JobID, &i.HardDelete); err != nil {
+		if err := rows.Scan(
+			&i.JobID,
+			&i.HardDelete,
+			&i.IsClosed,
+			&i.IsDuplicate,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

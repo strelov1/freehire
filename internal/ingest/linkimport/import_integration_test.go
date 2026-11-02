@@ -10,7 +10,10 @@ package linkimport
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/strelov1/freehire/internal/platform/testdb"
@@ -22,6 +25,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobhash"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 func startPostgres(t *testing.T) *pgxpool.Pool {
@@ -220,7 +224,15 @@ func TestImport_CollapsesOntoAPostingTheCatalogAlreadyCarries(t *testing.T) {
 		t.Fatalf("seed the crawled posting: %v", err)
 	}
 
-	im := New(pool, q, nil, pageClient{body: jobPostingPage}, nil, nil)
+	var engineCalls atomic.Int32
+	engine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		engineCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"taskUid":1}`))
+	}))
+	defer engine.Close()
+	im := New(pool, q, search.NewClient(engine.URL, "test"), pageClient{body: jobPostingPage}, nil, nil)
 
 	res, ok, err := im.Import(ctx, pageURL, Board{})
 	if err != nil || !ok {
@@ -253,6 +265,17 @@ func TestImport_CollapsesOntoAPostingTheCatalogAlreadyCarries(t *testing.T) {
 	if queued != 0 {
 		t.Errorf("enrichment queue holds %d rows for the duplicate, want 0 — it never reaches search", queued)
 	}
+	if got := engineCalls.Load(); got != 0 {
+		t.Errorf("duplicate import sent %d direct engine requests instead of using the durable queue", got)
+	}
+	var pending bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM search_delete_outbox o JOIN jobs j ON j.id=o.job_id WHERE j.source='weblink' AND j.external_id=$1)`, pageURL).Scan(&pending); err != nil {
+		t.Fatal(err)
+	}
+	if !pending {
+		t.Error("duplicate import did not atomically queue its visibility update")
+	}
+
 }
 
 func TestImport_ABoardIdentityIsNeverCollapsed(t *testing.T) {
