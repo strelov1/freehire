@@ -378,10 +378,12 @@ export const GROUPS: Group[] = [
         method: 'GET',
         path: '/jobs/{slug}/similar',
         auth: 'none',
-        summary: 'Jobs similar to the given one (semantic; may be empty).',
+        summary: 'Similar jobs within the same location and specialization.',
         description:
-          'Backed by the optional semantic index. Returns an empty list (not an ' +
-          'error) when the source job is not indexed.',
+          'Searches the live Meilisearch index with the source job’s known location and ' +
+          'specialization as mandatory filters. Uses stored-vector hybrid ranking when ' +
+          'available, falling back to keyword search under the same filters. Returns an ' +
+          'empty list when location or specialization is unknown or no visible matches remain.',
         pathParams: [{ name: 'slug', type: 'string', required: true, description: 'The job `public_slug`.', example: 'senior-go-engineer-acme-1a2b' }],
         query: [{ name: 'limit', type: 'integer', description: 'Max similar jobs.', example: '10' }],
         curl: `curl "${BASE_URL}/jobs/senior-go-engineer-acme-1a2b/similar?limit=10"`,
