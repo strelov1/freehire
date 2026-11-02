@@ -10,10 +10,8 @@ vi.mock('$app/navigation', () => ({ goto }));
 vi.mock('#lib/assistant/AssistantChat.svelte', () => ({ default() {} }));
 vi.mock('@lucide/svelte', () => ({ MessageSquareText() {}, ExternalLink() {}, X() {} }));
 vi.mock('#lib/ui/index.js', async () => {
-  const [{ default: Button }, scroll] = await Promise.all([
-    import('freehire-design-system/button.svelte'), import('freehire-design-system/scroll-lock.js'),
-  ]);
-  return { Button, ...scroll };
+  const actual = await vi.importActual<typeof import('#lib/ui/index.js')>('#lib/ui/index.js');
+  return { Button: actual.Button, lockScroll: actual.lockScroll, unlockScroll: actual.unlockScroll };
 });
 
 beforeEach(() => {
