@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Search removals respect reopening
-A removal SHALL skip currently open jobs while still deleting closed or missing jobs. Acknowledging a pending removal SHALL atomically queue currently open public canonical jobs for indexing. A hydrating-source liveness touch that reopens a job SHALL atomically enqueue its return to search; an ordinary open-to-open touch SHALL enqueue nothing.
+A removal SHALL skip currently open public canonical jobs while still deleting closed or missing jobs. Acknowledging a pending removal SHALL atomically queue currently open public canonical jobs for indexing. A hydrating-source liveness touch that reopens a job SHALL atomically enqueue its return to search; an ordinary open-to-open touch SHALL enqueue nothing.
 
 #### Scenario: Job reopens before deletion
 - **WHEN** a job with a pending removal is open before the deletion wave

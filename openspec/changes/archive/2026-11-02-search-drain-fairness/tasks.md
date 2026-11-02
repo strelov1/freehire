@@ -12,5 +12,5 @@
 
 ## 4. Delivery
 - [x] 4.1 Update affected conventions and simplify the final diff.
-- [ ] 4.2 Run unit/integration checks and review the final implementation.
-- [ ] 4.3 Commit the isolated change, open a PR, and archive/sync the specification.
+- [x] 4.2 Run unit/integration checks and review the final implementation.
+- [x] 4.3 Commit the isolated change, open a PR, and archive/sync the specification.
