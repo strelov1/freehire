@@ -494,10 +494,16 @@ func remoteAnywhereActive(v url.Values) bool {
 		hasLocationInclude(v)
 }
 
+// hasLocationInclude reports whether any location facet carries a value the
+// vocabulary knows. An unknown value of a closed facet (`regions=not-a-region`)
+// matches nothing on the plain reading; letting it activate the modifier would
+// answer every remote posting through the unbounded remote arm instead.
 func hasLocationInclude(v url.Values) bool {
 	for param := range locationFacets {
-		if len(splitFacetValues(v[param])) > 0 {
-			return true
+		for _, val := range splitFacetValues(v[param]) {
+			if !UnknownFacetValue(param, val) {
+				return true
+			}
 		}
 	}
 	return false

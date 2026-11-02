@@ -171,6 +171,16 @@ func TestFilterFromValues_RemoteAnywhereNormalizesModes(t *testing.T) {
 	}
 }
 
+// An unknown closed-facet value is not a location: on the plain reading it matches
+// nothing, so it must not unlock the unbounded remote arm.
+func TestFilterFromValues_RemoteAnywhereIgnoresUnknownRegion(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&regions=not-a-region&work_mode_remote_anywhere=true")))
+	want := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&regions=not-a-region")))
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("modifier activated by an unknown region: got %v, want %v", got, want)
+	}
+}
+
 func TestFilterFromValues_RemoteAnywhereNeedsALocation(t *testing.T) {
 	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&work_mode_remote_anywhere=true")))
 	want := [][]string{{`work_mode = "hybrid"`, `work_mode = "remote"`}}

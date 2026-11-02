@@ -454,8 +454,11 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
 export function appliesWorkModeRemoteAnywhere(f: JobFilters): boolean {
   const wm = f.facets.work_mode;
   if (!wm || wm.matchAll) return false; // the server ignores it under work_mode_mode=and
+  // Folded like the server's workModeValues, so `Remote` from a hand-written link
+  // shows the checkbox and chip whenever the server applies the modifier.
+  const modes = wm.include.map((m) => m.trim().toLowerCase());
   const hasLocation = LOCATION_FACET_PARAMS.some((p) => (f.facets[p]?.include.length ?? 0) > 0);
-  return wm.include.includes('remote') && wm.include.some(isPhysicalMode) && hasLocation;
+  return modes.includes('remote') && modes.some(isPhysicalMode) && hasLocation;
 }
 
 /** The location facets that share one ORed group on the server (`locationFacets`). */

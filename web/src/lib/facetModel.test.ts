@@ -860,6 +860,7 @@ describe('workModeRemoteAnywhere', () => {
     expect(appliesWorkModeRemoteAnywhere(withCountry(modes(['hybrid', 'onsite'])))).toBe(false);
     expect(appliesWorkModeRemoteAnywhere(withCountry(modes(['remote', 'hybrid'])))).toBe(true);
     expect(appliesWorkModeRemoteAnywhere(withCountry(modes(['remote', 'onsite'])))).toBe(true);
+    expect(appliesWorkModeRemoteAnywhere(withCountry(modes(['Remote', 'Hybrid'])))).toBe(true); // folded like the server
     const andMode = withCountry(modes(['remote', 'hybrid']));
     const andModeFilters = { ...andMode, facets: { ...andMode.facets, work_mode: { include: ['remote', 'hybrid'], exclude: [], matchAll: true } } };
     expect(appliesWorkModeRemoteAnywhere(andModeFilters)).toBe(false); // the server ignores it under _mode=and
