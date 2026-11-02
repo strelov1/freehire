@@ -164,6 +164,9 @@ func facetEq(param, attr, val string) string {
 	if set := impliedRegions(val); param == "regions" && set != nil {
 		return InStrings(attr, set)
 	}
+	if members := vocab.SourceFamilies[val]; param == "source" && members != nil {
+		return InStrings(attr, members)
+	}
 	attr, val = retiredCategory(param, attr, val)
 	if trueOrAbsentParams[param] {
 		return trueOrAbsentFragment(attr, val)
@@ -221,7 +224,8 @@ func trueOrAbsentFragment(attr, val string) string {
 // facetNeq builds a facet's exclude fragment: an inequality, except the regions
 // unspecified sentinel, which becomes IS NOT EMPTY, the clearance-level one, which
 // becomes "marked as requiring a clearance", and a region that implies others,
-// which excludes all of them.
+// which excludes all of them. A source family (vocab.SourceFamilies) is the same
+// shape: choosing or excluding the family name reaches every member.
 func facetNeq(param, attr, val string) string {
 	if param == "regions" && val == RegionUnspecified {
 		return IsNotEmpty(attr)
@@ -234,6 +238,9 @@ func facetNeq(param, attr, val string) string {
 	}
 	if set := impliedRegions(val); param == "regions" && set != nil {
 		return NotInStrings(attr, set)
+	}
+	if members := vocab.SourceFamilies[val]; param == "source" && members != nil {
+		return NotInStrings(attr, members)
 	}
 	// A true-or-absent facet is never stored false, so `attr != "false"` matches every
 	// document: excluding a value means asking for its opposite.
