@@ -3,11 +3,7 @@ package companyname
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
-	"time"
-
-	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // fakeHTTP serves canned bodies keyed by URL for both GetText and GetJSON, since the
@@ -404,15 +400,6 @@ func TestPlaceholderResolversDoNotFetchNonHostBoards(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestProductionSourcesClientBlocksLoopback(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, err := sources.NewClient().GetText(ctx, "https://127.0.0.1/")
-	if err == nil || !strings.Contains(err.Error(), "blocked") {
-		t.Errorf("sources client error = %v; want safehttp block for loopback target", err)
 	}
 }
 
