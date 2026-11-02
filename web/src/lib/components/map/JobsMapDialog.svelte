@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Globe, RotateCcw } from '@lucide/svelte';
+  import { RotateCcw } from '@lucide/svelte';
   import { Button, Dialog } from '#lib/ui/index.js';
   import { api } from '#lib/api.js';
   import { dynamicLabel } from '#lib/facets.js';
@@ -41,7 +41,6 @@
 
   const countries = $derived(store.value.facets.countries?.include ?? []);
   const cities = $derived(store.value.facets.cities?.include ?? []);
-  const worldwideOn = $derived((store.value.facets.regions?.include ?? []).includes(WORLDWIDE_REGION));
   // A city set elsewhere (the filter modal) must not inherit a country drilled long ago.
   $effect(() => {
     if (cities.length === 0) drilled = null;
@@ -119,7 +118,6 @@
 
   const places = $derived(cityPlaces.length ? cityPlaces : countryPlaces);
   const total = $derived(counts?.total ?? null);
-  const worldwide = $derived(counts?.facets.regions?.[WORLDWIDE_REGION] ?? 0);
   const countryTotal = $derived((focusCountry && counts?.facets.countries?.[focusCountry]) || total || 0);
   // A posting listing two cities counts in both, so the sum can pass the country's total.
   const placed = $derived(Math.min(countryTotal, cityPlaces.reduce((n, c) => n + c.count, 0)));
@@ -162,17 +160,6 @@
     store.clearFacet('countries');
     store.clearFacet('cities');
   }
-
-  // "Anywhere" ORs with the places like any location facet, so leaving them set would
-  // widen the list to both; turning worldwide on drops them instead.
-  function toggleWorldwide() {
-    if (worldwideOn) {
-      store.remove('regions', WORLDWIDE_REGION);
-      return;
-    }
-    store.add('regions', WORLDWIDE_REGION);
-    worldView();
-  }
 </script>
 
 <Dialog bind:open title={s.title} description={summary} class="sm:max-w-6xl">
@@ -187,17 +174,6 @@
           <Button variant="outline" size="sm" onclick={worldView}>
             <RotateCcw class="size-3.5" />
             {s.worldView}
-          </Button>
-        {/if}
-        {#if worldwide > 0 || worldwideOn}
-          <Button
-            variant={worldwideOn ? 'primary' : 'outline'}
-            size="sm"
-            aria-pressed={worldwideOn}
-            onclick={toggleWorldwide}
-          >
-            <Globe class="size-3.5" />
-            {format(s.remoteWorldwide, { count: fmt(worldwide) })}
           </Button>
         {/if}
         <span class="ml-auto text-xs text-muted-foreground" aria-live="polite">

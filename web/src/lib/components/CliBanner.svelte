@@ -56,8 +56,8 @@
         <span class="font-medium text-foreground">Search jobs inside your AI agent.</span>
         <img
           src="/brands/agent-logos.svg"
-          alt="Claude, ChatGPT, Gemini, Cursor and Grok"
-          width="161"
+          alt="Claude, ChatGPT, Claude Code, Codex, Gemini, Cursor and Grok"
+          width="213"
           height="53"
           class="-my-1 h-8 w-auto shrink-0"
         />

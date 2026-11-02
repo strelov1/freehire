@@ -12,10 +12,12 @@
   import { countryLabel } from '#lib/facets.js';
   import { emptyFilters, filtersToParams } from '#lib/facetModel.js';
   import type { StagedFilters } from '#lib/stagedFilters.svelte.js';
-  import { CLI_INSTALL, CLI_REPO } from '#lib/cliLinks.js';
-  import { EXTENSION_CLAIMS, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import { EXTENSION_FIREFOX_URL, EXTENSION_STORE_URL } from '#lib/extensionLinks.js';
+  import ExtensionPanelPreview from './ExtensionPanelPreview.svelte';
   import { starterSuggestions } from '#lib/suggestions.js';
   import { Button, ProviderIcon, SectionLabel } from '#lib/ui/index.js';
+  import McpSetup from './McpSetup.svelte';
+  import ChatExample from './ChatExample.svelte';
   import type { CatalogScale, FacetCounts } from '#lib/types.js';
 
   // The homepage. One search box on an otherwise empty screen, and under it — for the
@@ -159,25 +161,13 @@
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- query appended to a resolved path
     void goto(query ? `${resolve('/jobs')}?${query}` : resolve('/jobs'));
   }
-
-  let copied = $state(false);
-  let copyTimer: ReturnType<typeof setTimeout> | undefined;
-  async function copyInstall() {
-    try {
-      await navigator.clipboard.writeText(CLI_INSTALL);
-      copied = true;
-      clearTimeout(copyTimer);
-      copyTimer = setTimeout(() => (copied = false), 1600);
-    } catch {
-      // Clipboard can be blocked (no permission, insecure context) — the command is
-      // plainly visible to select by hand, so a failed copy needs no fallback.
-    }
-  }
 </script>
 
 <!-- One row of shortcuts into the catalogue. Two rows use it — the crafts and the
      places — and they differ only in what they list, so they are one shape. -->
 {#snippet chipRow(label: string, chips: Chip[])}
+  <div class="flex flex-col items-center gap-2">
+  <p class="text-xs uppercase tracking-wide text-muted-foreground/80" aria-hidden="true">{label}</p>
   <nav aria-label={label} class="flex flex-wrap justify-center gap-2">
     {#each chips as chip (chip.href)}
       <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- feedHref resolves /jobs and appends the serialized filter -->
@@ -193,6 +183,7 @@
       </a>
     {/each}
   </nav>
+  </div>
 {/snippet}
 
 <!-- The one link shape this page uses twice: an onward link with an arrow that leans
@@ -266,15 +257,15 @@
     </div>
 
     {#if crafts.length > 0}
-      {@render chipRow('Browse by specialization', crafts)}
+      {@render chipRow('Biggest specializations', crafts)}
     {/if}
     {#if places.length > 1}
       <!-- Only with real countries behind it: Remote alone is a row that looks like a
            measurement and is a constant. -->
-      {@render chipRow('Browse by location', places)}
+      {@render chipRow('Locations', places)}
     {/if}
 
-    {@render onward(resolve('/jobs'), 'Browse the whole catalogue')}
+    {@render onward(resolve('/jobs'), 'See every specialization and location in the catalogue')}
   </div>
 </section>
 
@@ -320,47 +311,19 @@
        are `repeat(N, minmax(0, 1fr))` for exactly this, and the `pre` scrolls itself. -->
   <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
     <div class="flex flex-col gap-5 rounded-xl border border-border p-6 sm:p-8">
-      <div class="flex flex-col gap-3">
-        <!-- h3: the section's own label above is its h2. -->
-        <h3 class="text-2xl font-semibold tracking-tight">
-          Search and track from the terminal.
-        </h3>
-        <p class="text-sm leading-relaxed text-muted-foreground">
-          One binary, no Go needed. Ships agent skills too, so Claude Code and any MCP
-          host can run the search, read the facets and move an application along.
-        </p>
-      </div>
+      <h3 class="text-2xl font-semibold tracking-tight">Search and track from your AI assistant.</h3>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        Add freehire to your assistant and ask for jobs in plain words.
+      </p>
+      <div class="[zoom:0.8]"><ChatExample /></div>
+      <McpSetup iconsOnly />
 
-      <figure class="overflow-hidden rounded-lg border border-border bg-secondary/40 font-mono text-xs">
-        <!-- The figure carries `font-mono text-xs`, so nothing inside restates it. -->
-        <figcaption
-          class="flex items-center gap-2 border-b border-border px-3 py-1.5 text-muted-foreground"
-        >
-          install
-          <button
-            type="button"
-            onclick={copyInstall}
-            class="ml-auto rounded-md border border-border px-2 py-0.5 font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {copied ? 'copied ✓' : 'copy'}
-          </button>
-          <!-- The button's own text change is not reliably voiced, so the result is said
-               through a region that is always mounted and only changes its words. -->
-          <span class="sr-only" role="status">{copied ? 'Install command copied' : ''}</span>
-        </figcaption>
-        <pre class="overflow-x-auto p-4 leading-relaxed">{CLI_INSTALL}</pre>
-      </figure>
-
-      <div class="mt-auto flex flex-wrap items-center gap-3">
-        <Button href={resolve('/cli')} variant="outline" size="md">What it does</Button>
-        <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- absolute GitHub URL from #lib/cliLinks (shared with the CLI page's JSON-LD codeRepository), not a SvelteKit route -->
-        <a href={CLI_REPO}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Source
-        </a>
+      <div class="mt-auto flex flex-wrap items-center justify-end gap-3">
+        <Button href={resolve('/mcp')} variant="cta" size="md" class="group">
+          Connect your assistant
+          <ArrowRight class="size-4 transition-transform group-hover:translate-x-1" />
+        </Button>
+        <Button href={resolve('/cli')} variant="ghost" size="md">CLI docs</Button>
       </div>
     </div>
 
@@ -373,23 +336,18 @@
         </p>
       </div>
 
-      <ul class="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-        {#each EXTENSION_CLAIMS as claim (claim)}
-          <li>{claim}</li>
-        {/each}
-      </ul>
+      <!-- The same preview as /features/extension, drawn smaller: `zoom` shrinks the layout box too, unlike a transform. -->
+      <div class="[zoom:0.7]"><ExtensionPanelPreview /></div>
 
-      <div class="mt-auto flex flex-wrap items-center gap-3">
+      <div class="mt-auto flex flex-wrap items-center justify-end gap-3">
         <Button href={EXTENSION_STORE_URL} target="_blank" variant="primary" size="md">
           <ProviderIcon provider="chrome" class="size-4" />
           Add to Chrome
         </Button>
-        <a
-          href={resolve('/features/extension')}
-          class="text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          How it works
-        </a>
+        <Button href={EXTENSION_FIREFOX_URL} target="_blank" variant="outline" size="md">
+          <ProviderIcon provider="firefox" class="size-4" />
+          Add to Firefox
+        </Button>
       </div>
     </div>
   </div>

@@ -6,6 +6,7 @@
   import { bannerVisible } from '#lib/consent.svelte.js';
   import { messagingDock } from '#lib/messagingDock.svelte.js';
   import { dockToastOffsetClass } from '#lib/messagingDock.js';
+  import { ProviderIcon } from '#lib/ui/index.js';
   import { cn } from '#lib/ui/index.js';
   import {
     ownsMobileStickyCta,
@@ -67,6 +68,7 @@
     )}
   >
     <div class="flex items-start gap-3">
+      <ProviderIcon provider="github" class="size-8 shrink-0 text-foreground" />
       <!-- Two lines, not one wrapping paragraph. At phone width the single
            paragraph broke after "find", leaving "it." alone on the second line;
            stacking the sentences makes the break a layout decision instead of a
@@ -94,12 +96,12 @@
       target="_blank"
       rel="noreferrer"
       onclick={dismiss}
-      class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand underline-offset-4 hover:underline"
+      class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
     >
       <Star class="size-4" aria-hidden="true" />
       Star on GitHub
       {#if count != null}
-        <span class="tabular-nums text-muted-foreground">{formatStars(count)}</span>
+        <span class="tabular-nums opacity-70">{formatStars(count)}</span>
       {/if}
     </a>
     <!-- eslint-enable svelte/no-navigation-without-resolve -->

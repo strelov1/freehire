@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import { resolve } from '$app/paths';
   import { siClaude, siCursor } from 'simple-icons';
   import { CHATGPT_APP_URL, OPENAI_MARK } from '#lib/appLinks.js';
   import { sourceLogoUrl } from '#lib/logo.js';
@@ -10,8 +11,11 @@
   // Pick an assistant, then follow its steps — the setup half of /mcp, shared with the
   // onboarding tour. `compact` draws smaller host tiles for a narrow column;
   // `initialMode` lets a signed-in surface open on the account connector.
-  let { compact = false, initialMode = 'anonymous' }: { compact?: boolean; initialMode?: 'anonymous' | 'account' } =
-    $props();
+  let {
+    compact = false,
+    initialMode = 'anonymous',
+    iconsOnly = false,
+  }: { compact?: boolean; initialMode?: 'anonymous' | 'account'; iconsOnly?: boolean } = $props();
 
   // The two hosted MCP servers. They are separate on purpose: a host only offers
   // sign-in when the server answers 401, so the anonymous one can never lead to the
@@ -60,7 +64,7 @@
       domain: 'claude.ai',
       // Our Claude listing is the account connector, so it signs the visitor in.
       directory: {
-        url: 'https://claude.ai/directory/manage/freehire',
+        url: 'https://claude.ai/directory/freehire-account',
         brand: siClaude,
         note: 'One click, signs in with freehire',
       },
@@ -106,6 +110,7 @@
       id: 'claude-code',
       label: 'Claude Code',
       domain: 'claude.ai',
+      logo: '/brands/claude-code.svg',
       steps: ['Run this once in your terminal, then ask Claude Code a job question.'],
       snippet: (u) => `claude mcp add --transport http freehire ${u}`,
     },
@@ -178,6 +183,26 @@
   </button>
 {/snippet}
 
+{#if iconsOnly}
+  <!-- Just the marks, each a way into the full setup on /mcp. -->
+  <nav class="flex gap-5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Assistants">
+    {#each hosts as h (h.id)}
+      <a
+        href={resolve('/mcp')}
+        class="flex shrink-0 items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <EntityLogo
+          name={h.label}
+          src={h.logo ?? sourceLogoUrl(h.label, h.domain) ?? undefined}
+          size="xs"
+          shape="square"
+          class={h.mono ? 'dark:invert' : undefined}
+        />
+        {h.label}
+      </a>
+    {/each}
+  </nav>
+{:else}
 <!-- Setup: which assistant, then which connector. Every host's panel stays in the
      HTML, `hidden` when unselected, so crawlers and agents read all of them. -->
 <section class={compact ? '' : 'rounded-2xl border border-border bg-secondary/20 p-5 sm:p-8'}>
@@ -205,26 +230,31 @@
       </div>
     {/if}
   </div>
-  <div class={['mt-4 grid gap-3', compact ? 'grid-cols-3 gap-2 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5']} role="group" aria-label="Assistant">
+  <div
+    class="mt-4 flex gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    role="group"
+    aria-label="Assistant"
+  >
     {#each hosts as h (h.id)}
       <button
         type="button"
         aria-pressed={host === h.id}
         onclick={() => (host = h.id)}
         class={[
-          'flex flex-col items-center rounded-xl border-2 transition-colors',
-          compact ? 'gap-1.5 px-1 py-2.5' : 'gap-3 px-3 py-5',
-          host === h.id ? 'border-foreground bg-secondary/60' : 'border-border bg-background hover:bg-secondary/40',
+          'flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors',
+          host === h.id
+            ? 'border-border bg-background text-foreground shadow-sm'
+            : 'border-transparent text-muted-foreground hover:text-foreground',
         ]}
       >
         <EntityLogo
           name={h.label}
           src={h.logo ?? sourceLogoUrl(h.label, h.domain) ?? undefined}
-          size={compact ? 'md' : 'lg'}
+          size="xs"
           shape="square"
           class={h.mono ? 'dark:invert' : undefined}
         />
-        <span class={['font-medium text-foreground', compact ? 'whitespace-nowrap text-xs' : 'text-base']}>{h.label}</span>
+        {h.label}
       </button>
     {/each}
   </div>
@@ -279,6 +309,11 @@
         <code class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">{url}</code>
         {@render copyButton(url, 'connector address')}
       </div>
+      <p class="mt-2 text-xs text-muted-foreground">
+        {mode === 'account'
+          ? 'No API key. You approve the connection once and can revoke it any time.'
+          : 'No account and no API key. Read-only.'}
+      </p>
 
       <div class="mt-5">
         <ol class="space-y-3">
@@ -318,4 +353,19 @@
       </div>
     </div>
   {/each}
+
+  {#if !compact}
+    {@const agentPrompt = `Add the freehire MCP server to ${selected?.label ?? 'this assistant'}. Its address is ${url} (streamable HTTP transport).${mode === 'account' ? ' It signs in through a freehire page that I will approve in my browser.' : ''} When it is connected, run one job search to confirm it works, then tell me it is ready.`}
+    <div class="mt-8 max-w-2xl">
+      <h3 class="text-sm font-medium">Or copy this and send it to your agent</h3>
+      <figure class="mt-3 overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">
+        <figcaption class="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs text-muted-foreground">
+          <span>prompt</span>
+          <span class="ml-auto">{@render copyButton(agentPrompt, 'agent prompt')}</span>
+        </figcaption>
+        <p class="p-4 text-sm leading-relaxed">{agentPrompt}</p>
+      </figure>
+    </div>
+  {/if}
 </section>
+{/if}
