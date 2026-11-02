@@ -1373,7 +1373,7 @@ func (q *Queries) UpdateUserLanguage(ctx context.Context, arg UpdateUserLanguage
 
 const updateUserTimezone = `-- name: UpdateUserTimezone :one
 UPDATE users
-SET timezone = $2
+SET timezone = CASE WHEN $2::boolean THEN COALESCE(timezone, $3::text) ELSE $3::text END
 WHERE id = $1
 RETURNING id, email, role, beta_tester, email_verified,
           (password_hash IS NOT NULL)::boolean AS has_password,
@@ -1381,8 +1381,9 @@ RETURNING id, email, role, beta_tester, email_verified,
 `
 
 type UpdateUserTimezoneParams struct {
-	ID       int64       `json:"id"`
-	Timezone pgtype.Text `json:"timezone"`
+	ID          int64       `json:"id"`
+	OnlyIfUnset bool        `json:"only_if_unset"`
+	Timezone    pgtype.Text `json:"timezone"`
 }
 
 type UpdateUserTimezoneRow struct {
@@ -1399,9 +1400,10 @@ type UpdateUserTimezoneRow struct {
 
 // Set (or clear, with NULL) the account's IANA timezone name. The handler validates
 // the name against time.LoadLocation before this runs — the query itself trusts its
-// input, same as every other single-column update in this file.
+// input, same as every other single-column update in this file. Automatic adoption
+// preserves a concurrently saved preference under the row lock.
 func (q *Queries) UpdateUserTimezone(ctx context.Context, arg UpdateUserTimezoneParams) (UpdateUserTimezoneRow, error) {
-	row := q.db.QueryRow(ctx, updateUserTimezone, arg.ID, arg.Timezone)
+	row := q.db.QueryRow(ctx, updateUserTimezone, arg.ID, arg.OnlyIfUnset, arg.Timezone)
 	var i UpdateUserTimezoneRow
 	err := row.Scan(
 		&i.ID,

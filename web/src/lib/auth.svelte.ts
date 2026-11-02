@@ -40,11 +40,9 @@ export async function updateTimezone(timezone: string) {
   await invalidateAll();
 }
 
-/** Stores the browser's zone on a signed-in account that has none. A password
- *  registration sends it with the sign-up (api.ts's register()), but an OAuth sign-up
- *  returns through a full-page redirect carrying nothing, so those accounts read as
- *  UTC for digests and quiet hours until somebody opens the timezone field.
- *  Best-effort: a failure leaves the account as it was, and the next full page load retries. */
+/** Best-effort default for accounts without a timezone, including OAuth sign-ups.
+ * Password registration already captures it. The server preserves any preference
+ * saved since this session snapshot; failures retry on the next full page load. */
 export async function adoptBrowserTimezone(user: User) {
   if (user.timezone) return;
   let zone: string;
@@ -55,7 +53,8 @@ export async function adoptBrowserTimezone(user: User) {
   }
   if (!zone) return;
   try {
-    await updateTimezone(zone);
+    await api.updateTimezone(zone, true);
+    await invalidateAll();
   } catch {
     // ignore
   }

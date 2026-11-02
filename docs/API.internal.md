@@ -1656,6 +1656,7 @@ Set your account’s IANA timezone.
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `timezone` | string | yes | IANA timezone name. (e.g. `Europe/Berlin`) |
+| `only_if_unset` | boolean | no | Automatically adopt the zone only when no timezone is stored. Defaults to false; explicit edits replace the stored zone. |
 
 ```bash
 curl -X PATCH "https://freehire.me/api/v1/me/timezone" \

@@ -1816,9 +1816,10 @@ export function createApi(
   }
 
   /** Sets the account's IANA timezone (e.g. "Europe/Moscow"). 400s on a name Go's
-   *  tzdata does not recognize. Returns the updated user (carries the new value). */
-  async function updateTimezone(timezone: string): Promise<User> {
-    return requestData<User>('/api/v1/me/timezone', jsonBody('PATCH', { timezone }));
+   *  tzdata does not recognize. Automatic adoption uses onlyIfUnset to preserve a
+   *  concurrently saved preference. Returns the current user. */
+  async function updateTimezone(timezone: string, onlyIfUnset = false): Promise<User> {
+    return requestData<User>('/api/v1/me/timezone', jsonBody('PATCH', { timezone, only_if_unset: onlyIfUnset }));
   }
 
   /** Sets the account's preferred interface language (e.g. "ru"). 400s on a code

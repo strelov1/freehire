@@ -10,15 +10,8 @@
   // Names the <select> after the visible heading — it has no <label> of its own.
   const headingId = $props.id();
 
-  // The account's IANA timezone: read from the resolved session (no extra fetch —
-  // it rides GET /me already). Used to interpret a daily search-alert digest time
-  // and a quiet-hours window in the account's own local time
-  // (internal/deliverywindow); unset reads as UTC there. A password registration
-  // already captures the browser's detected zone (api.ts's register()), and the
-  // root layout stores it for any other signed-in account without one
-  // (adoptBrowserTimezone), so this is the fallback: if none is stored yet, the field
-  // pre-fills with — and silently saves — the browser's detection the first time
-  // this section renders, so a user never has to deliberately set it.
+  // The root layout persists the detected zone for accounts without one. This
+  // field displays that default immediately; only an explicit pick saves here.
   // `Intl.supportedValuesOf('timeZone')` omits the bare "UTC" identifier (it only
   // lists Area/Location names) even though it's a real IANA zone Go's
   // time.LoadLocation accepts — prepend it so a stored/detected "UTC" has a
@@ -46,8 +39,7 @@
   // Re-seed from the session on a real identity change (sign-in/out, or this
   // component's own save round-tripping through invalidateAll) — keyed on email
   // rather than running every render, so a value mid-pick is never clobbered by
-  // an unrelated session refresh. Auto-persists the detected zone once for an
-  // account that has never had one stored.
+  // an unrelated session refresh.
   let seededFor: string | null = null;
   $effect(() => {
     const user = currentUser();
@@ -57,7 +49,6 @@
       value = user.timezone;
     } else if (detected) {
       value = detected;
-      void save();
     }
   });
 

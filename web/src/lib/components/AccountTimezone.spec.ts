@@ -153,3 +153,16 @@ describe('AccountTimezone — saving', () => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+it('displays the detected default without independently persisting it', async () => {
+  updateTimezone.mockReset();
+  user.current = { email: 'a@b.co', timezone: undefined };
+  vi.spyOn(Intl, 'DateTimeFormat').mockReturnValue({
+    resolvedOptions: () => ({ timeZone: 'Europe/Paris' }),
+  } as Intl.DateTimeFormat);
+  render(AccountTimezone);
+  await vi.waitFor(() =>
+    expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('Europe/Paris'),
+  );
+  expect(updateTimezone).not.toHaveBeenCalled();
+});

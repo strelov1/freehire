@@ -32,7 +32,7 @@ afterEach(() => {
 describe('adoptBrowserTimezone', () => {
   it('stores the browser zone on an account that has none', async () => {
     await adoptBrowserTimezone(user(null));
-    expect(updateTimezone).toHaveBeenCalledWith('Asia/Karachi');
+    expect(updateTimezone).toHaveBeenCalledWith('Asia/Karachi', true);
     expect(invalidateAll).toHaveBeenCalled();
   });
 
@@ -44,5 +44,20 @@ describe('adoptBrowserTimezone', () => {
   it('swallows a failed write', async () => {
     updateTimezone.mockRejectedValue(new Error('400'));
     await expect(adoptBrowserTimezone(user(null))).resolves.toBeUndefined();
+  });
+
+  it('does not write when timezone detection fails', async () => {
+    vi.mocked(Intl.DateTimeFormat).mockImplementation(() => {
+      throw new Error('unavailable');
+    });
+    await expect(adoptBrowserTimezone(user(null))).resolves.toBeUndefined();
+    expect(updateTimezone).not.toHaveBeenCalled();
+  });
+  it('does not write an empty detected zone', async () => {
+    vi.mocked(Intl.DateTimeFormat).mockReturnValue({
+      resolvedOptions: () => ({ timeZone: '' }),
+    } as Intl.DateTimeFormat);
+    await adoptBrowserTimezone(user(null));
+    expect(updateTimezone).not.toHaveBeenCalled();
   });
 });

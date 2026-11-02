@@ -169,12 +169,12 @@ func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash 
 
 // UpdateTimezone sets the account's IANA timezone name. The caller has already
 // validated it.
-func (r *QueriesRepository) UpdateTimezone(ctx context.Context, userID int64, timezone *string) (User, error) {
+func (r *QueriesRepository) UpdateTimezone(ctx context.Context, userID int64, timezone *string, onlyIfUnset bool) (User, error) {
 	tz := ""
 	if timezone != nil {
 		tz = *timezone
 	}
-	row, err := r.q.UpdateUserTimezone(ctx, db.UpdateUserTimezoneParams{ID: userID, Timezone: pgconv.Text(tz)})
+	row, err := r.q.UpdateUserTimezone(ctx, db.UpdateUserTimezoneParams{ID: userID, Timezone: pgconv.Text(tz), OnlyIfUnset: onlyIfUnset})
 	if err != nil {
 		return User{}, err
 	}

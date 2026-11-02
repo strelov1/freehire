@@ -8226,7 +8226,8 @@ type Querier interface {
 	UpdateUserLanguage(ctx context.Context, arg UpdateUserLanguageParams) (UpdateUserLanguageRow, error)
 	// Set (or clear, with NULL) the account's IANA timezone name. The handler validates
 	// the name against time.LoadLocation before this runs — the query itself trusts its
-	// input, same as every other single-column update in this file.
+	// input, same as every other single-column update in this file. Automatic adoption
+	// preserves a concurrently saved preference under the row lock.
 	UpdateUserTimezone(ctx context.Context, arg UpdateUserTimezoneParams) (UpdateUserTimezoneRow, error)
 	// Record a meeting the sync attached to an application, or move the one already recorded,
 	// and note in the ledger that the scheduling was observed.

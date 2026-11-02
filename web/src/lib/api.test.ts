@@ -215,3 +215,14 @@ describe('buddy mock paths', () => {
     ]);
   });
 });
+
+describe('timezone adoption', () => {
+  it('makes automatic adoption conditional while explicit edits remain unconditional', async () => {
+    const seen: { init?: RequestInit } = {};
+    const client = createApi(okFetch(seen), '', {});
+    await client.updateTimezone('Asia/Karachi', true);
+    expect(JSON.parse(String(seen.init?.body))).toEqual({ timezone: 'Asia/Karachi', only_if_unset: true });
+    await client.updateTimezone('Europe/Berlin');
+    expect(JSON.parse(String(seen.init?.body))).toEqual({ timezone: 'Europe/Berlin', only_if_unset: false });
+  });
+});
