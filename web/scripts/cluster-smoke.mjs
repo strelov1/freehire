@@ -11,6 +11,7 @@ import { test } from 'node:test';
 // has adapter-node's signal contract: stop accepting, drain requests, then exit.
 const fixture = `
 import http from 'node:http';
+const parentPid = process.ppid;
 let stopping = false;
 const server = http.createServer((req, res) => {
   if (req.url === '/crash') process.exit(1);
@@ -27,7 +28,10 @@ function shutdown() {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 // Application shutdown hooks, including telemetry, may finish asynchronously.
-process.on('sveltekit:shutdown', () => setTimeout(() => console.log('cleanup finished'), 50));
+process.on('sveltekit:shutdown', () => setTimeout(() => {
+  process.kill(parentPid, 0);
+  console.log('cleanup finished');
+}, 150));
 `;
 
 async function start(t, workers = 2) {
