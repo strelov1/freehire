@@ -4070,14 +4070,13 @@ const listJobsBySlugCode = `-- name: ListJobsBySlugCode :many
 SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE right(public_slug, 8) = $1::text
-LIMIT 2
 `
 
 // The jobs whose slug ends with a shortcode — the last eight characters of a public_slug,
 // derived from (source, external_id) alone and so the one part of a job URL nothing can
 // move. Resolves a link to a slug that no longer exists (freehire#3284); backed by
-// jobs_public_slug_code_idx. LIMIT 2 is enough to tell one match from an ambiguous code,
-// which the caller refuses rather than guessing between postings.
+// jobs_public_slug_code_idx. The caller distinguishes full-hash collision recovery
+// URLs before refusing ambiguous ordinary shortcodes.
 func (q *Queries) ListJobsBySlugCode(ctx context.Context, code string) ([]Job, error) {
 	rows, err := q.db.Query(ctx, listJobsBySlugCode, code)
 	if err != nil {

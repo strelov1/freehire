@@ -49,7 +49,14 @@ func jobSlugHash(source, externalID string) string {
 func JobSlugWithFullHash(title, company, source, externalID string) string {
 	slug := JobSlug(title, company, source, externalID)
 	hash := jobSlugHash(source, externalID)
-	return strings.TrimSuffix(slug, hash[:shortcodeLen]) + hash[shortcodeLen:] + "-" + hash[:shortcodeLen]
+	suffix := hash[shortcodeLen:] + "-" + hash[:shortcodeLen]
+	prefix := strings.TrimSuffix(slug, hash[:shortcodeLen])
+	// Mobile return intents accept at most 160 characters. Only new fallback URLs
+	// are bounded; the complete identity suffix and all published URLs stay intact.
+	if len(prefix)+len(suffix) > 160 {
+		prefix = strings.TrimRight(prefix[:160-len(suffix)-1], "-") + "-"
+	}
+	return prefix + suffix
 }
 
 // JobSlugCode returns the shortcode a job slug ends with — the part JobSlug derives
@@ -70,4 +77,30 @@ func JobSlugCode(slug string) (code string, ok bool) {
 		}
 	}
 	return code, true
+}
+
+// JobSlugIdentityCode returns the identity suffix used by a stale link: a full
+// hash for collision recovery URLs, or the ordinary eight-character shortcode.
+func JobSlugIdentityCode(slug string) (string, bool) {
+	code, ok := JobSlugCode(slug)
+	if !ok {
+		return "", false
+	}
+	const fullSuffixLen = 53 // 44 remaining base32 hash characters, a hyphen, and 8 shortcode characters.
+	if len(slug) < fullSuffixLen {
+		return code, true
+	}
+	suffix := slug[len(slug)-fullSuffixLen:]
+	if len(slug) > fullSuffixLen && slug[len(slug)-fullSuffixLen-1] != '-' {
+		return code, true
+	}
+	if suffix[44] != '-' {
+		return code, true
+	}
+	for _, r := range suffix[:44] {
+		if (r < 'a' || r > 'z') && (r < '2' || r > '7') {
+			return code, true
+		}
+	}
+	return suffix, true
 }
