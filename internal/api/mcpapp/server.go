@@ -109,7 +109,18 @@ func Handler(r Reader, origin string) http.Handler {
 
 func newServer(r Reader, origin string) *mcp.Server {
 	server := mcp.NewServer(Identity("freehire", Version, origin),
-		&mcp.ServerOptions{Instructions: serverInstructions, CompletionHandler: completePromptArgument})
+		&mcp.ServerOptions{
+			Instructions:      serverInstructions,
+			CompletionHandler: completePromptArgument,
+			// Lists are fixed for this per-request server. The SDK otherwise
+			// advertises listChanged and accepts subscriptions that never update.
+			Capabilities: &mcp.ServerCapabilities{
+				Logging:   &mcp.LoggingCapabilities{}, //nolint:staticcheck // Preserve the SDK default for older MCP clients.
+				Tools:     &mcp.ToolCapabilities{},
+				Prompts:   &mcp.PromptCapabilities{},
+				Resources: &mcp.ResourceCapabilities{},
+			},
+		})
 
 	addPrompts(server)
 	addWidget(server)
