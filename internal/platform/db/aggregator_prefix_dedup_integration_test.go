@@ -96,6 +96,7 @@ func TestSuppressAggregator_HimalayasPrefixGuards(t *testing.T) {
 		{name: "literal punctuation", atsTitle: full, aggTitle: "Distributed Systems Engineer for Pay%ment Infra"},
 		{name: "reversed", atsTitle: prefix, aggTitle: full},
 		{name: "other aggregator", atsTitle: full, aggTitle: prefix, source: "gulftalent"},
+		{name: "private ATS", atsTitle: full, aggTitle: prefix, state: "private"},
 		{name: "closed ATS", atsTitle: full, aggTitle: prefix, state: "closed"},
 		{name: "duplicate ATS", atsTitle: full, aggTitle: prefix, state: "duplicate"},
 		{name: "role owned aggregator", atsTitle: full, aggTitle: prefix, state: "role"},
@@ -121,6 +122,10 @@ func TestSuppressAggregator_HimalayasPrefixGuards(t *testing.T) {
 			want := int64(-1)
 			ctx := context.Background()
 			switch tc.state {
+			case "private":
+				if _, err := pool.Exec(ctx, "UPDATE jobs SET is_private = true WHERE id = $1", atsID); err != nil {
+					t.Fatal(err)
+				}
 			case "closed":
 				if _, err := pool.Exec(ctx, "UPDATE jobs SET closed_at = now() WHERE id = $1", atsID); err != nil {
 					t.Fatal(err)

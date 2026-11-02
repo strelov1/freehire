@@ -6171,7 +6171,8 @@ WITH ats AS (
                  '^(.*?):.+$', '\1'),
                '^(.*)\s[-|—]\s.+$', '\1')
            ), '[^a-z0-9]+', ' ', 'g')) AS ntitle2,
-           jobs.countries
+           jobs.countries,
+           jobs.is_private
     FROM jobs
     WHERE jobs.company_slug_folded = ANY($1::text[])
       AND jobs.closed_at IS NULL AND jobs.duplicate_of IS NULL AND jobs.company_slug <> ''
@@ -6276,6 +6277,7 @@ matches AS (
     SELECT a.id, t.id
     FROM prefix_candidates a JOIN ats t
       ON t.fcompany = a.fcompany
+     AND NOT t.is_private
      AND starts_with(t.ntitle, a.ntitle)
      AND length(t.ntitle) > length(a.ntitle)
      AND substring(t.ntitle FROM length(a.ntitle) + 1 FOR 1) ~ '^[a-z0-9]$'
