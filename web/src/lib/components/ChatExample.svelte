@@ -29,5 +29,6 @@
     <div class="max-w-xs self-end rounded-2xl rounded-br-sm bg-foreground px-3.5 py-2 text-background">
       Save the first one to my board
     </div>
+    <p class="self-end text-xs text-muted-foreground">Saving needs the account connector</p>
   </div>
 </figure>

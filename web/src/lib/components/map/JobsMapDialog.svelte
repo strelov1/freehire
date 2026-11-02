@@ -41,6 +41,7 @@
 
   const countries = $derived(store.value.facets.countries?.include ?? []);
   const cities = $derived(store.value.facets.cities?.include ?? []);
+  const worldwideOn = $derived((store.value.facets.regions?.include ?? []).includes(WORLDWIDE_REGION));
   // A city set elsewhere (the filter modal) must not inherit a country drilled long ago.
   $effect(() => {
     if (cities.length === 0) drilled = null;
@@ -155,8 +156,10 @@
     if (!wasOnlySelection) store.add('countries', value);
   }
 
+  // Also drops a worldwide filter set elsewhere: with no toggle here, this is its way out.
   function worldView() {
     drilled = null;
+    store.remove('regions', WORLDWIDE_REGION);
     store.clearFacet('countries');
     store.clearFacet('cities');
   }
@@ -170,7 +173,7 @@
          the sheet; centring a short map in it left the screen mostly empty. -->
     <div class="flex flex-col gap-4">
       <div class="flex flex-wrap items-center gap-2">
-        {#if countries.length || cities.length}
+        {#if countries.length || cities.length || worldwideOn}
           <Button variant="outline" size="sm" onclick={worldView}>
             <RotateCcw class="size-3.5" />
             {s.worldView}

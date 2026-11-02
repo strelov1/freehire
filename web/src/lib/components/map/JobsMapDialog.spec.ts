@@ -142,6 +142,13 @@ describe('JobsMapDialog — clicks narrow the filters', () => {
     expect(include(store, 'regions')).toEqual([]);
   });
 
+  it('World view is the way out of a worldwide filter set elsewhere', async () => {
+    const store = storeWith(['regions', 'global']);
+    render(JobsMapDialog, { open: true, store });
+    await fireEvent.click(await screen.findByRole('button', { name: 'World view' }));
+    expect(include(store, 'regions')).toEqual([]);
+  });
+
   it('World view clears the country and city filters together', async () => {
     const store = storeWith(['countries', 'br'], ['cities', 'São Paulo']);
     render(JobsMapDialog, { open: true, store });
