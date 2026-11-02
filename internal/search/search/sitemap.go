@@ -58,7 +58,7 @@ const (
 // The attribute is already declared in facetSettings().FilterableAttributes, so this
 // needs no settings patch and no reindex — the "settings must reach the LIVE index
 // before the binary that filters on it" hazard documented there does not apply.
-const jobSitemapFilter = `reality.class != "likely-evergreen"`
+const jobSitemapFilter = `reality.class != "likely-evergreen" AND ` + openJobsFilter
 
 // sitemapPage is the shared body of the two sitemap readers: one offset-addressed
 // page of an index, projected down to a slug and a lastmod, plus the index's total

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/meilisearch/meilisearch-go"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
@@ -55,7 +56,12 @@ func startMeili(t *testing.T) (url, key string) {
 	if err != nil {
 		t.Fatalf("port: %v", err)
 	}
-	return "http://" + host + ":" + port.Port(), key
+	meiliURL := "http://" + host + ":" + port.Port()
+	if _, err := meilisearch.New(meiliURL, meilisearch.WithAPIKey(key)).ExperimentalFeatures().
+		SetEditDocumentsByFunction(true).UpdateWithContext(ctx); err != nil {
+		t.Fatalf("enable document editing: %v", err)
+	}
+	return meiliURL, key
 }
 
 // seedJob inserts a minimal job row directly (bypassing cmd/ingest), so the worker's
@@ -248,9 +254,9 @@ func TestIntegration_SearchDrainWorkerBatchesRoleClusterLookupsWithoutCrossConta
 
 // The end-to-end guarantee this change exists for: a job that closes stops being searchable
 // without waiting for a rebuild. Everything before the close is setup — what is being proven
-// is that closing enqueues a removal and that draining it takes the document out of the live
-// index.
-func TestIntegration_ClosingAJobRemovesItsDocument(t *testing.T) {
+// is that closing enqueues a status update and draining it hides the document from
+// live search without physically deleting its text and vectors.
+func TestIntegration_ClosingAJobHidesItsDocument(t *testing.T) {
 	ctx := context.Background()
 	meiliURL, key := startMeili(t)
 	pool := testdb.Pool(t)
@@ -277,7 +283,7 @@ func TestIntegration_ClosingAJobRemovesItsDocument(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 
-	deletions := searchdrain.DeletionRunner{Store: newDeletionStore(pool), Deleter: facetDeleter{client: client}}
+	deletions := searchdrain.DeletionRunner{Store: newDeletionStore(pool), Deleter: facetDeleter{client: client, q: db.New(pool)}}
 	del, err := deletions.Run(ctx, opt)
 	if err != nil {
 		t.Fatalf("deletion run: %v", err)
@@ -286,8 +292,15 @@ func TestIntegration_ClosingAJobRemovesItsDocument(t *testing.T) {
 		t.Fatalf("deletion stats = %+v, want deleted=1 failed=0", del)
 	}
 
-	if found, _ := meiliDoc(t, meiliURL, key, jobID); found {
-		t.Errorf("job %d is still in the index after being closed and drained", jobID)
+	if found, _ := meiliDoc(t, meiliURL, key, jobID); !found {
+		t.Fatalf("job %d was physically deleted instead of marked closed", jobID)
+	}
+	result, err := client.Search(ctx, search.SearchParams{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Hits) != 0 {
+		t.Fatalf("closed job remains searchable: %+v", result.Hits)
 	}
 
 	var n int
@@ -334,5 +347,109 @@ func TestIntegration_SearchDrainSkipsAPostingItsSourceStoppedShowing(t *testing.
 	}
 	if found, _ := meiliDoc(t, meiliURL, key, staleID); found {
 		t.Errorf("job %d its source stopped showing 15 days ago reached the index", staleID)
+	}
+}
+
+func TestIntegration_DeletionPreservesReopenedDocument(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := testdb.Pool(t)
+	client := search.NewClient(meiliURL, key)
+	if err := client.EnsureIndex(ctx); err != nil {
+		t.Fatal(err)
+	}
+	q := db.New(pool)
+	jobID := seedJob(t, pool, "reopened", "Platform Engineer", "acme", "fp-reopened", []string{"Lisbon"}, nil)
+	enqueue(t, pool, jobID)
+	opt := searchdrain.RunOptions{BatchSize: 500, LeaseSeconds: 180, MaxAttempts: 3}
+	indexing := searchdrain.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: q}}
+	if _, err := indexing.Run(ctx, opt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.CloseJobByID(ctx, jobID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at=NULL,closed_reason='' WHERE id=$1`, jobID); err != nil {
+		t.Fatal(err)
+	}
+	removals := searchdrain.DeletionRunner{Store: newDeletionStore(pool), Deleter: facetDeleter{client: client, q: db.New(pool)}}
+	if _, err := removals.Run(ctx, opt); err != nil {
+		t.Fatal(err)
+	}
+	if found, _ := meiliDoc(t, meiliURL, key, jobID); !found {
+		t.Fatal("stale removal deleted a reopened job")
+	}
+	if _, err := indexing.Run(ctx, opt); err != nil {
+		t.Fatal(err)
+	}
+	var pending int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM search_delete_outbox`).Scan(&pending); err != nil {
+		t.Fatal(err)
+	}
+	if pending != 0 {
+		t.Fatalf("stale removals=%d, want 0", pending)
+	}
+}
+
+func TestIntegration_RecloseAfterSkippedRemovalKeepsNewRemoval(t *testing.T) {
+	ctx := context.Background()
+	pool := testdb.Pool(t)
+	q := db.New(pool)
+	jobID := seedJob(t, pool, "reclosed", "Engineer", "acme", "fp-reclosed", []string{}, nil)
+	if _, err := q.CloseJobByID(ctx, jobID); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := q.ClaimSearchDeleteOutboxBatch(ctx, db.ClaimSearchDeleteOutboxBatchParams{BatchSize: 10, LeaseSeconds: 180})
+	if err != nil || len(claimed) != 1 {
+		t.Fatalf("claim=%v err=%v", claimed, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET closed_at=NULL,closed_reason='' WHERE id=$1`, jobID); err != nil {
+		t.Fatal(err)
+	}
+	// No client is needed: an open canonical job must never reach Meilisearch deletion.
+	if err := (facetDeleter{q: q}).DeleteBatch(ctx, []int64{jobID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.CloseJobByID(ctx, jobID); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.CompleteSearchDeleteOutbox(ctx, []int64{claimed[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	var pending int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM search_delete_outbox WHERE job_id=$1`, jobID).Scan(&pending); err != nil {
+		t.Fatal(err)
+	}
+	if pending != 1 {
+		t.Fatalf("new closure lost its removal: pending=%d, want 1", pending)
+	}
+}
+
+func TestIntegration_HardDeletedJobRemovesItsDocument(t *testing.T) {
+	ctx := context.Background()
+	meiliURL, key := startMeili(t)
+	pool := testdb.Pool(t)
+	q := db.New(pool)
+	client := search.NewClient(meiliURL, key)
+	if err := client.EnsureIndex(ctx); err != nil {
+		t.Fatal(err)
+	}
+	jobID := seedJob(t, pool, "hard-deleted", "Engineer", "acme", "fp-deleted", []string{}, nil)
+	enqueue(t, pool, jobID)
+	opt := searchdrain.RunOptions{BatchSize: 500, LeaseSeconds: 180, MaxAttempts: 3}
+	if _, err := (searchdrain.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client, q: q}}).Run(ctx, opt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.CloseJobByID(ctx, jobID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM jobs WHERE id=$1`, jobID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (searchdrain.DeletionRunner{Store: newDeletionStore(pool), Deleter: facetDeleter{client: client, q: q}}).Run(ctx, opt); err != nil {
+		t.Fatal(err)
+	}
+	if found, _ := meiliDoc(t, meiliURL, key, jobID); found {
+		t.Fatal("hard-deleted posting was retained instead of physically removed")
 	}
 }

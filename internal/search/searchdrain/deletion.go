@@ -2,6 +2,7 @@ package searchdrain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
@@ -33,6 +34,8 @@ type Deleter interface {
 
 // DeletionStats reports what a deletion run did.
 type DeletionStats struct {
+	// Claimed includes waves deferred for lease-expiry retry.
+	Claimed      int
 	Deleted      int
 	Failed       int
 	DeadLettered int
@@ -51,15 +54,28 @@ type DeletionRunner struct {
 // Run drains the removal queue. A failure on a single entry is recorded and never aborts the
 // run.
 func (r DeletionRunner) Run(ctx context.Context, opt RunOptions) (DeletionStats, error) {
+	return r.run(ctx, opt, false)
+}
+
+func (r DeletionRunner) run(ctx context.Context, opt RunOptions, oneWave bool) (DeletionStats, error) {
 	rn := &deletionRun{store: r.Store, deleter: r.Deleter, opt: opt}
 
-	_, err := outbox.RunBatch(ctx, claimFunc(r.Store.Claim), outbox.RunOptions{
+	_, err := outbox.RunBatch(ctx, claimFunc(func(ctx context.Context, batch, lease int) ([]Claimed, error) {
+		if oneWave && rn.stats.Claimed > 0 {
+			return nil, nil
+		}
+		entries, err := r.Store.Claim(ctx, batch, lease)
+		rn.stats.Claimed += len(entries)
+		return entries, err
+	}), outbox.RunOptions{
 		BatchSize:    opt.BatchSize,
 		LeaseSeconds: opt.LeaseSeconds,
 		MaxPerRun:    opt.MaxPerRun,
 		OnWave: func(outbox.Stats) {
-			log.Printf("search-drain: progress deleted=%d failed=%d dead=%d",
-				rn.stats.Deleted, rn.stats.Failed, rn.stats.DeadLettered)
+			if !oneWave {
+				log.Printf("search-drain: progress deleted=%d failed=%d dead=%d",
+					rn.stats.Deleted, rn.stats.Failed, rn.stats.DeadLettered)
+			}
 		},
 	}, rn.processWave, rn.unreachableFallback)
 	if err != nil {
@@ -86,11 +102,13 @@ type deletionRun struct {
 func (rn *deletionRun) processWave(ctx context.Context, batch []Claimed) (outbox.Stats, error) {
 	before := rn.stats
 	rn.processBatch(ctx, batch)
-	return outbox.Stats{
+	delta := outbox.Stats{
 		Succeeded:    rn.stats.Deleted - before.Deleted,
 		Failed:       rn.stats.Failed - before.Failed,
 		DeadLettered: rn.stats.DeadLettered - before.DeadLettered,
-	}, nil
+	}
+	delta.Deferred = len(batch) - delta.Succeeded - delta.Failed - delta.DeadLettered
+	return delta, nil
 }
 
 // unreachableFallback satisfies outbox.RunBatch's Processor parameter. processWave never
@@ -130,6 +148,11 @@ func (rn *deletionRun) processBatch(ctx context.Context, entries []Claimed) {
 		return
 	}
 
+	if errors.Is(err, ErrSkipWave) {
+		log.Printf("search-drain: deletion wave of %d left claimed for lease-expiry retry: %v", len(entries), err)
+		return
+	}
+
 	log.Printf("search-drain: deletion wave of %d failed, falling back per item: %v", len(entries), err)
 	for _, entry := range entries {
 		rn.processOne(ctx, entry)
@@ -146,6 +169,10 @@ func (rn *deletionRun) processOne(ctx context.Context, entry Claimed) {
 		if ctxErr := callCtx.Err(); ctxErr != nil {
 			log.Printf("search-drain: deletion for job %d abandoned (%v), leaving claimed: %v",
 				entry.JobID, ctxErr, err)
+			return
+		}
+		if errors.Is(err, ErrSkipWave) {
+			log.Printf("search-drain: deletion for job %d left claimed for lease-expiry retry: %v", entry.JobID, err)
 			return
 		}
 		dead, failErr := rn.store.Fail(ctx, entry.OutboxID, err.Error(), rn.opt.MaxAttempts)

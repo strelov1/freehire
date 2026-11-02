@@ -15,6 +15,15 @@ reads a precomputed pgvector lookup instead (`internal/search/similarjobs`,
 
 ## Always true
 
+- **Closed index documents carry an internal `is_closed` marker.** Every jobs query
+  path, including keyword/vector/federated search, facet/disjunctive/distinct counts
+  and job sitemaps, must keep `NOT is_closed = true`. This accepts legacy unmarked
+  documents while excluding retained closed text/vectors. Full document replacement
+  clears the marker on reopening. `CloseJobs` uses the engine's experimental
+  edit-documents-by-function API to update existing records only, avoiding skeletal
+  documents for unindexed jobs. Enable that feature and await the live `is_closed`
+  filterable-attribute settings task before deploying readers or the drain.
+
 - **A job whose category is unresolved by both the title dictionary and the LLM never
   enters the index.** `search.CategoryUnresolved` (`document.go`) reports true when
   `jobs.category` is empty (`internal/dict/classify` found nothing in the title) AND the raw

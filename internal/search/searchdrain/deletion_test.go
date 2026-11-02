@@ -243,3 +243,15 @@ func TestDeletionRunnerStopsAtMaxPerRun(t *testing.T) {
 		t.Errorf("completed = %d, want 4", len(store.completed))
 	}
 }
+
+func TestDeletionRunnerLeavesUnpreparedWaveForRetry(t *testing.T) {
+	store := newFakeDeleteStore(1, 2)
+	deleter := &fakeDeleter{err: ErrSkipWave}
+	stats, err := (DeletionRunner{Store: store, Deleter: deleter}).Run(context.Background(), deleteOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleter.calls != 1 || len(store.failed) != 0 || len(store.completed) != 0 || stats.Deleted != 0 {
+		t.Fatalf("unprepared wave was retried per item: calls=%d failures=%v completed=%v stats=%+v", deleter.calls, store.failed, store.completed, stats)
+	}
+}

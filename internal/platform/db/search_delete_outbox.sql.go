@@ -42,12 +42,9 @@ type ClaimSearchDeleteOutboxBatchRow struct {
 
 // Claim a batch of live, unleased removals by stamping claimed_at.
 //
-// Deliberately has NO `EXISTS (SELECT 1 FROM jobs ...)` guard, unlike
-// ClaimSearchOutboxBatch. That query skips entries whose job closed or became a duplicate,
-// because there is nothing left to index. Here the opposite holds: a job that is closed,
-// demoted, or hard-deleted is exactly what this queue exists to act on, and a removal needs
-// only the primary key. Adding the guard would make the queue skip every entry it was
-// created for.
+// Claims retain missing rows: removal needs only the document id. The worker's
+// PrepareSearchDeletions cancels stale removals for open public canonical jobs
+// immediately before sending a wave to Meilisearch.
 //
 // Claim order is insertion order (the id index), not freshest-first. Indexing sorts by
 // job_posted_at because a searcher notices a missing new posting sooner than a missing old
@@ -78,13 +75,21 @@ func (q *Queries) ClaimSearchDeleteOutboxBatch(ctx context.Context, arg ClaimSea
 }
 
 const completeSearchDeleteOutbox = `-- name: CompleteSearchDeleteOutbox :exec
-DELETE FROM search_delete_outbox
-WHERE id = ANY($1::bigint[])
+WITH completed AS (
+    DELETE FROM search_delete_outbox
+    WHERE id = ANY($1::bigint[])
+    RETURNING job_id
+)
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT j.id, COALESCE(j.posted_at, j.created_at)
+FROM completed c JOIN jobs j ON j.id = c.job_id
+WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
+ON CONFLICT (job_id) DO NOTHING
 `
 
-// Drop the entries for removals that landed. Deleting a document that was never indexed is
-// a no-op in Meilisearch, so "landed" includes the common case where the job had no document
-// to begin with — there is nothing to distinguish and nothing to retry.
+// A job may reopen while its Meilisearch removal is in flight. Atomically queue
+// its current content for restoration before forgetting the removal. Missing or
+// closed jobs need no restoration, and private/repost rows must not be published.
 func (q *Queries) CompleteSearchDeleteOutbox(ctx context.Context, ids []int64) error {
 	_, err := q.db.Exec(ctx, completeSearchDeleteOutbox, ids)
 	return err
@@ -127,6 +132,61 @@ func (q *Queries) DeleteDeadSearchDeleteOutbox(ctx context.Context, cutoff pgtyp
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const prepareSearchDeletions = `-- name: PrepareSearchDeletions :many
+WITH reopened AS MATERIALIZED (
+    SELECT j.id, j.posted_at, j.created_at
+    FROM jobs j
+    WHERE j.id = ANY($1::bigint[])
+      AND j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
+    ORDER BY j.id
+    FOR UPDATE OF j
+), cancelled AS (
+    DELETE FROM search_delete_outbox o
+    USING reopened r
+    WHERE o.job_id = r.id
+    RETURNING o.job_id
+), requeued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT r.id, COALESCE(r.posted_at, r.created_at)
+    FROM reopened r JOIN cancelled c ON c.job_id = r.id
+    ON CONFLICT (job_id) DO NOTHING
+)
+SELECT requested.id::bigint AS job_id,
+       (j.id IS NULL OR COALESCE(j.is_private, false) OR j.duplicate_of IS NOT NULL)::boolean AS hard_delete
+FROM unnest($1::bigint[]) AS requested(id)
+LEFT JOIN jobs j ON j.id = requested.id
+WHERE NOT EXISTS (SELECT 1 FROM reopened r WHERE r.id = requested.id)
+`
+
+type PrepareSearchDeletionsRow struct {
+	JobID      int64 `json:"job_id"`
+	HardDelete bool  `json:"hard_delete"`
+}
+
+// Cancel obsolete removals and requeue their current content before acknowledging
+// them. Lock only the reopened job rows for this statement: a concurrent close
+// waits, then inserts a NEW removal whose id an old acknowledgment cannot delete.
+// Missing, closed, private, or noncanonical jobs still need their document removed.
+func (q *Queries) PrepareSearchDeletions(ctx context.Context, jobIds []int64) ([]PrepareSearchDeletionsRow, error) {
+	rows, err := q.db.Query(ctx, prepareSearchDeletions, jobIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PrepareSearchDeletionsRow{}
+	for rows.Next() {
+		var i PrepareSearchDeletionsRow
+		if err := rows.Scan(&i.JobID, &i.HardDelete); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const recordSearchDeleteOutboxFailure = `-- name: RecordSearchDeleteOutboxFailure :one

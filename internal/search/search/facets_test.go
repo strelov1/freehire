@@ -323,7 +323,7 @@ func TestDistinctCount_PagesWithoutLimitOrFacets(t *testing.T) {
 	if got.Limit != 0 || got.Offset != 0 || len(got.Facets) != 0 {
 		t.Errorf("request carries limit %d offset %d facets %v, want none", got.Limit, got.Offset, got.Facets)
 	}
-	if got.Filter != "f" || gotQuery != "golang" || len(got.AttributesToSearchOn) != 1 || got.AttributesToSearchOn[0] != "title" {
+	if got.Filter != "(f) AND NOT is_closed = true" || gotQuery != "golang" || len(got.AttributesToSearchOn) != 1 || got.AttributesToSearchOn[0] != "title" {
 		t.Errorf("filter %v query %q fields %v not carried through", got.Filter, gotQuery, got.AttributesToSearchOn)
 	}
 }
