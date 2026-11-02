@@ -66,7 +66,9 @@ type assistantHandlers struct {
 	search   *searchHandlers
 	resume   *resumeHandlers
 	tracking *trackingHandlers
-	// reports files a job report for report_job. Nil-safe: the tool refuses rather than panics.
+	// reports files a job report for report_job. Set by Register to the SAME handler that
+	// serves POST /jobs/:slug/reports, so the two paths cannot drift. Nil-safe: the tool
+	// refuses rather than panics.
 	reports *reportHandlers
 	cv      *cvHandlers
 	// profile backs the get_profile tool. Reusing the profile handlers rather than the
@@ -154,7 +156,6 @@ func newAssistantHandlers(queries *db.Queries, models assistantModels, store *as
 		search:           search,
 		resume:           resumeH,
 		tracking:         tracking,
-		reports:          newReportHandlers(queries),
 		cv:               cvH,
 		profile:          profileH,
 		browserTools:     browserTools,

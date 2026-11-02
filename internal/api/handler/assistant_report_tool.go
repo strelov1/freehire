@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/engage/report"
 )
@@ -63,8 +65,11 @@ func (h *assistantHandlers) reportMCPTools() []assistant.Tool {
 				return nil, errors.New("job reports are not available")
 			}
 			jobID, err := h.reports.queries.GetJobIDBySlug(ctx, in.Slug)
-			if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
 				return nil, fmt.Errorf("no vacancy with slug %q — use the public_slug from a search result", in.Slug)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("could not look up the vacancy: %w", err)
 			}
 			rep, err := h.reports.report.File(ctx, userID, jobID, report.FileInput{Reason: in.Reason, Details: in.Details})
 			if err != nil {
