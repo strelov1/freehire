@@ -652,6 +652,18 @@ func TestRecognize(t *testing.T) {
 		{"workstream employer slug is not the board", "https://www.workstream.us/j/finecasual", "", "", "", false},
 		{"workstream marketing page has no board", "https://www.workstream.us/pricing", "", "", "", false},
 
+		// keyedsegment: LiveHire's tenant segment after /careers/; the segment is lower-case
+		// alphanumeric with hyphens. All three URL shapes — board listing, /jobs, and posting —
+		// collapse to the board's own listing page.
+		{"livehire posting", "https://www.livehire.com/careers/flybuys/job/6HX8X/MSX0L6VHM4/engineering-manager-loyalty-platform-12-month-contract", "livehire", "flybuys", "https://www.livehire.com/careers/flybuys", true},
+		{"livehire jobs listing", "https://www.livehire.com/careers/flybuys/jobs", "livehire", "flybuys", "https://www.livehire.com/careers/flybuys", true},
+		{"livehire board root", "https://www.livehire.com/careers/flybuys", "livehire", "flybuys", "https://www.livehire.com/careers/flybuys", true},
+		{"livehire segment with hyphen", "https://www.livehire.com/careers/phare-consulting-group/apply/b1a7e00000004c008a00000000000028", "livehire", "phare-consulting-group", "https://www.livehire.com/careers/phare-consulting-group", true},
+		{"livehire careers index is not a board", "https://www.livehire.com/careers", "", "", "", false},
+		{"livehire marketing page is not a board", "https://www.livehire.com/pricing", "", "", "", false},
+		{"livehire api path is not a board", "https://www.livehire.com/careers-api/talent-job-search", "", "", "", false},
+		{"livehire underscore segment is not a board", "https://www.livehire.com/careers/Flybuys_AU", "", "", "", false},
+
 		// Posting-only links: the board these adapters crawl is not in the URL at all.
 		{"gusto posting carries no board", "https://jobs.gusto.com/postings/quality-it-solutions-corp-full-stack-developer-9c8d3a4c-f831-4f68-b552-43124cab8591", "", "", "", false},
 		{"schoolspring posting carries no board", "https://www.schoolspring.com/jobdetail?jobId=5954920", "", "", "", false},
