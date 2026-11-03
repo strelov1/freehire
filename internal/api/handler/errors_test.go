@@ -3,71 +3,85 @@ package handler
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
-	"time"
 
-	"github.com/getsentry/sentry-go"
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	collector "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// recordingTransport captures the events a Sentry hub would deliver, so a test can
-// count them without any network. Guarded by a mutex: SendEvent runs on Fiber's
-// request goroutine while the test reads from its own.
-type recordingTransport struct {
-	mu     sync.Mutex
-	events []*sentry.Event
+// exceptionRecorder stands in for the OTLP collector the server exports exception logs
+// to, so a test can count what was reported without any network beyond loopback. count
+// shuts the exporter down first: the batch processor delivers asynchronously, and only
+// its shutdown guarantees every captured record has arrived. Call it once, at the end.
+type exceptionRecorder struct {
+	mu       sync.Mutex
+	records  int
+	shutdown func()
 }
 
-func (t *recordingTransport) Configure(sentry.ClientOptions) {}
-func (t *recordingTransport) SendEvent(e *sentry.Event) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.events = append(t.events, e)
-}
-func (t *recordingTransport) Flush(time.Duration) bool              { return true }
-func (t *recordingTransport) FlushWithContext(context.Context) bool { return true }
-func (t *recordingTransport) Close()                                {}
-
-func (t *recordingTransport) count() int {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return len(t.events)
-}
-
-// sentryApp mirrors the server's middleware wiring (recover.New marking panics,
-// then the sentryfiber request middleware, RenderError as the ErrorHandler) so a
-// test can assert how many events reach Sentry for a given failure.
-func sentryApp(t *testing.T, errFn fiber.Handler) (*fiber.App, *recordingTransport) {
+func recordExceptions(t *testing.T) *exceptionRecorder {
 	t.Helper()
-	tr := &recordingTransport{}
-	if err := sentry.Init(sentry.ClientOptions{
-		Dsn:       "https://public@o0.ingest.sentry.io/0",
-		Transport: tr,
-	}); err != nil {
-		t.Fatalf("sentry.Init: %v", err)
-	}
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Use(recover.New(recover.Config{
-		EnableStackTrace:  true,
-		StackTraceHandler: func(c *fiber.Ctx, _ any) { c.Locals(LocalPanicReported, true) },
+	r := &exceptionRecorder{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, _ := io.ReadAll(req.Body)
+		export := new(collector.ExportLogsServiceRequest)
+		if err := proto.Unmarshal(body, export); err != nil {
+			t.Error(err)
+		}
+		r.mu.Lock()
+		for _, resource := range export.ResourceLogs {
+			for _, scope := range resource.ScopeLogs {
+				r.records += len(scope.LogRecords)
+			}
+		}
+		r.mu.Unlock()
+		w.Header().Set("Content-Type", "application/x-protobuf")
 	}))
-	app.Use(sentryfiber.New(sentryfiber.Options{Repanic: true, WaitForDelivery: true}))
-	app.Get("/x", errFn)
-	return app, tr
+	t.Cleanup(server.Close)
+	t.Setenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", server.URL+"/v1/logs")
+	shutdown, err := observability.InitLogs("freehire-api")
+	if err != nil {
+		t.Fatalf("InitLogs: %v", err)
+	}
+	r.shutdown = shutdown
+	t.Cleanup(shutdown)
+	return r
 }
 
-// A recovered panic is captured once by the request middleware (with a stack); the
+func (r *exceptionRecorder) count() int {
+	r.shutdown()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.records
+}
+
+// reportingApp mirrors the server's middleware wiring (recover.New reporting panics
+// through ReportPanic, RenderError as the ErrorHandler) so a test can assert how many
+// exceptions are reported for a given failure.
+func reportingApp(t *testing.T, errFn fiber.Handler) (*fiber.App, *exceptionRecorder) {
+	t.Helper()
+	rec := recordExceptions(t)
+	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
+	app.Use(recover.New(recover.Config{EnableStackTrace: true, StackTraceHandler: ReportPanic}))
+	app.Get("/x", errFn)
+	return app, rec
+}
+
+// A recovered panic is captured once by ReportPanic (with a stack); the
 // error Fiber re-delivers to RenderError must NOT be reported again.
 func TestRenderError_PanicReportedExactlyOnce(t *testing.T) {
-	app, tr := sentryApp(t, func(*fiber.Ctx) error { panic("boom") })
+	app, tr := reportingApp(t, func(*fiber.Ctx) error { panic("boom") })
 	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/x", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
@@ -77,14 +91,14 @@ func TestRenderError_PanicReportedExactlyOnce(t *testing.T) {
 		t.Errorf("status = %d, want 500", resp.StatusCode)
 	}
 	if got := tr.count(); got != 1 {
-		t.Errorf("sentry events = %d, want exactly 1", got)
+		t.Errorf("reported exceptions = %d, want exactly 1", got)
 	}
 }
 
 // A genuine (non-panic) 500 returned by a handler must still be reported once, so
 // the dedup guard doesn't suppress real faults.
 func TestRenderError_ReturnedErrorReportedOnce(t *testing.T) {
-	app, tr := sentryApp(t, func(*fiber.Ctx) error { return errString("db exploded") })
+	app, tr := reportingApp(t, func(*fiber.Ctx) error { return errString("db exploded") })
 	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/x", nil))
 	if err != nil {
 		t.Fatalf("Test: %v", err)
@@ -94,17 +108,17 @@ func TestRenderError_ReturnedErrorReportedOnce(t *testing.T) {
 		t.Errorf("status = %d, want 500", resp.StatusCode)
 	}
 	if got := tr.count(); got != 1 {
-		t.Errorf("sentry events = %d, want exactly 1", got)
+		t.Errorf("reported exceptions = %d, want exactly 1", got)
 	}
 }
 
 // A 500 a handler declared for itself — fiber.NewError(500, "…") to give the caller
-// readable words instead of "internal server error" — must reach Sentry like any
+// readable words instead of "internal server error" — must be reported like any
 // other 500. It reached it never, which is how thirteen genuine faults (a failed
 // token mint, an autopilot run, a billing event that could not be recorded) left no
 // trace at all: seven of them do not log either.
 func TestRenderError_DeclaredInternalErrorIsReported(t *testing.T) {
-	app, tr := sentryApp(t, func(*fiber.Ctx) error {
+	app, tr := reportingApp(t, func(*fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "could not record the event")
 	})
 	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/x", nil))
@@ -116,7 +130,7 @@ func TestRenderError_DeclaredInternalErrorIsReported(t *testing.T) {
 		t.Errorf("status = %d, want 500", resp.StatusCode)
 	}
 	if got := tr.count(); got != 1 {
-		t.Errorf("sentry events = %d, want exactly 1", got)
+		t.Errorf("reported exceptions = %d, want exactly 1", got)
 	}
 }
 
@@ -124,7 +138,7 @@ func TestRenderError_DeclaredInternalErrorIsReported(t *testing.T) {
 // request to that route repeats and nobody can act on from an error inbox. Reporting
 // on `code >= 500` would have made ~42 call sites into a permanent alert.
 func TestRenderError_UnconfiguredServiceIsNotReported(t *testing.T) {
-	app, tr := sentryApp(t, func(*fiber.Ctx) error {
+	app, tr := reportingApp(t, func(*fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusServiceUnavailable, "search is not configured")
 	})
 	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/x", nil))
@@ -136,7 +150,7 @@ func TestRenderError_UnconfiguredServiceIsNotReported(t *testing.T) {
 		t.Errorf("status = %d, want 503", resp.StatusCode)
 	}
 	if got := tr.count(); got != 0 {
-		t.Errorf("sentry events = %d, want 0", got)
+		t.Errorf("reported exceptions = %d, want 0", got)
 	}
 }
 
@@ -182,7 +196,7 @@ func TestErrorHandler_DefaultsTo500(t *testing.T) {
 }
 
 // classify decides both the HTTP mapping and whether an error is a fault worth
-// reporting to Sentry. Every 500 must be reported — including one a handler
+// reporting it. Every 500 must be reported — including one a handler
 // DECLARED with fiber.NewError to phrase it for a human, which used to be reported
 // as nothing at all; routine 4xx, mapped 404s and the deployment-shaped 503s must
 // not be, so the error inbox stays signal, not noise.
@@ -201,7 +215,7 @@ func TestClassify_ReportsOnlyUnexpected500(t *testing.T) {
 		{"declared 500 is still a fault", fiber.NewError(fiber.StatusInternalServerError, "could not record the event"), fiber.StatusInternalServerError, true},
 		// The equality, not `>= 500`: ~42 sites answer 503 to say this deployment has no
 		// Meilisearch or LLM configured. That is a statement about the environment,
-		// repeated on every request to the route, and nobody can act on it from Sentry.
+		// repeated on every request to the route, and nobody can act on it from the error reports.
 		{"503 means unconfigured, not broken", fiber.NewError(fiber.StatusServiceUnavailable, "search is not configured"), fiber.StatusServiceUnavailable, false},
 		{"wrapped declared 500 is still a fault", fmt.Errorf("issue session: %w", fiber.NewError(fiber.StatusInternalServerError, "failed to start session")), fiber.StatusInternalServerError, true},
 		{"no rows maps to 404", pgx.ErrNoRows, fiber.StatusNotFound, false},

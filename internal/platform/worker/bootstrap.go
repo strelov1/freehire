@@ -24,25 +24,15 @@ func signalContext(parent context.Context) (context.Context, context.CancelFunc)
 // error reporting, loads config, derives a signal-cancellable root context, and
 // opens the database pool. The returned cleanup releases the reporting owner,
 // stops the signal notification, and closes the pool; call it with defer. On a
-// misconfigured DSN or a connection failure it returns the error with no usable
+// misconfigured exporter or a connection failure it returns the error with no usable
 // pool (releasing anything already acquired), so the caller fails fast.
 func Bootstrap(parent context.Context) (context.Context, config.Settings, *pgxpool.Pool, func(), error) {
 	cfg := config.Load()
 
-	// Sentry remains the fallback when no OTLP endpoint is configured. A malformed
-	// active DSN is fatal rather than booting with broken error reporting.
-	flush, err := observability.Init(cfg.SentryDSN, cfg.SentryEnvironment)
+	flush, err := observability.InitLogs("freehire-" + workerJob())
 	if err != nil {
 		return nil, cfg, nil, nil, err
 	}
-
-	logShutdown, err := observability.InitLogs("freehire-"+workerJob(), cfg.SentryEnvironment)
-	if err != nil {
-		flush()
-		return nil, cfg, nil, nil, err
-	}
-	sentryFlush := flush
-	flush = func() { sentryFlush(); logShutdown() }
 
 	ctx, stop := signalContext(parent)
 

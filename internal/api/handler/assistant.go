@@ -10,8 +10,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/getsentry/sentry-go"
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -768,14 +766,6 @@ func (h *assistantHandlers) streamSSE(
 	// is valid; used inside the writer, which runs after this handler returns).
 	conn := c.Context().Conn()
 
-	// Same reason as conn: the sentryfiber hub is request-scoped and the ctx is released
-	// once this handler returns, so take a clone now — the writer outlives the request
-	// that owns its scope.
-	var hub *sentry.Hub
-	if reqHub := sentryfiber.GetHubFromContext(c); reqHub != nil {
-		hub = reqHub.Clone()
-	}
-
 	// The turn runs on its own cancellable context: the request's own is released the moment
 	// this handler returns, long before the turn ends. It is created HERE rather than inside
 	// the writer so the session's slot is taken while the request can still be answered — a
@@ -807,7 +797,7 @@ func (h *assistantHandlers) streamSSE(
 		// ten seconds, mid-answer, for no reason the user can see. Bounded rather than
 		// cleared because a cleared deadline is forever: a reader that stopped reading
 		// would block the write, and with it this goroutine, for the life of the process.
-		stream := newSSEStream(w, conn, sseWriteTimeout, hub)
+		stream := newSSEStream(w, conn, sseWriteTimeout)
 
 		// Registered first so it unwinds last: the turn's slot, its allowance and the
 		// heartbeat are released by the defers below, and the client must not be told the
@@ -818,7 +808,7 @@ func (h *assistantHandlers) streamSSE(
 		// client's error branch is the one that ends the turn and offers the retry route
 		// (POST /assistant/sessions/:id/retry) rather than leaving the composer queued
 		// behind a turn nothing will finish.
-		defer recoverStream(hub, "assistant: turn", func() {
+		defer recoverStream("assistant: turn", func() {
 			stream.event(string(assistant.EventResult),
 				assistant.Event{Kind: assistant.EventResult, StopReason: assistant.StopError, IsError: true})
 		})
@@ -890,16 +880,16 @@ func (h *assistantHandlers) streamSSE(
 			h.releaseTurn(turnSess, charge)
 
 			// Nothing to continue is a client mistake (empty session), not a turn fault —
-			// surface it as a conflict on the still-open stream rather than Sentry noise.
+			// surface it as a conflict on the still-open stream rather than error-report noise.
 			if errors.Is(err, assistant.ErrNothingToContinue) {
 				return
 			}
 			// The loop has already emitted its terminal error event; this is for us —
-			// and for Sentry, which would otherwise never learn of it: this handler
+			// and for the exception log, which would otherwise never learn of it: this handler
 			// returned nil long before the turn ran, so RenderError never sees the
 			// failure and the access log keeps the 200 the stream opened with.
 			log.Printf("assistant: turn failed session=%s: %v", sess.ID, err)
-			reportStreamFault(hub, err)
+			reportStreamFault(err)
 		}
 	}))
 	return nil

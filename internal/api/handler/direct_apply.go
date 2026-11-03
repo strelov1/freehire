@@ -153,7 +153,7 @@ var directApplyStatus = []struct {
 // directApplyError maps the use case's refusals onto statuses. A delivery failure is logged
 // with its cause and answered with ErrDelivery's own text only: the transport's error can
 // name the employer's address, which is not the candidate's to read, and a 502 never
-// reaches Sentry, so the log line is the only trace the cause leaves.
+// is reported, so the log line is the only trace the cause leaves.
 func directApplyError(err error) error {
 	switch {
 	case errors.Is(err, directapply.ErrInvalid):

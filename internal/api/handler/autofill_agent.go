@@ -81,7 +81,7 @@ func (h *autofillHandlers) RunAgentAutofill(c *fiber.Ctx) error {
 			// a gateway 5xx, our own 90-second llm.DefaultTimeout arriving as
 			// context.DeadlineExceeded, and "the model's plan is not valid JSON" —
 			// faults, every one. Flattening them into a 409 answered a state conflict for
-			// a broken gateway, kept them out of Sentry, and printed the raw error in the
+			// a broken gateway, kept them out of the error reports, and printed the raw error in the
 			// extension's panel. classify already knows a caller who navigated away is a
 			// 499 and not a fault, so nothing here has to guess at that.
 			return err

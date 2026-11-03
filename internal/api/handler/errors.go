@@ -8,7 +8,6 @@ import (
 	"github.com/strelov1/freehire/internal/platform/observability"
 	"go.opentelemetry.io/otel/attribute"
 
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
@@ -26,7 +25,7 @@ const statusClientClosedRequest = 499
 // LocalPanicReported marks a panic captured by the server's recovery callback.
 // Fiber re-delivers the recovered error to the ErrorHandler, so RenderError
 // checks this marker to avoid reporting the same panic a second time.
-const LocalPanicReported = "sentry_panic_reported"
+const LocalPanicReported = "panic_reported"
 
 type codedError struct {
 	status        int
@@ -53,12 +52,11 @@ func authError(status int, code, message string) error {
 //   - anything else is an unexpected failure: 500 with a generic message, never
 //     leaking internals.
 //
-// Anything that ends as a 500 is reported to Sentry (via the request-scoped hub
-// the sentryfiber middleware installs), whether the handler declared it or fell
-// through to one. Routine 4xx, mapped 404s and the deployment-shaped 503s are
+// Anything that ends as a 500 is reported to the exception log
+// (observability.CaptureError), whether the handler declared it or fell through
+// to one. Routine 4xx, mapped 404s and the deployment-shaped 503s are
 // deliberately not reported, so the error inbox reflects genuine faults rather
-// than normal client traffic. When Sentry is disabled the hub is absent and the
-// capture is skipped — panics are handled separately by the middleware itself.
+// than normal client traffic. Panics are reported separately, by ReportPanic.
 func RenderError(c *fiber.Ctx, err error) error {
 	var ce *codedError
 	if errors.As(err, &ce) {
@@ -75,7 +73,7 @@ func RenderError(c *fiber.Ctx, err error) error {
 	return c.Status(status).JSON(fiber.Map{"error": msg})
 }
 
-// reportUnexpected sends err to Sentry as a genuine fault. It exists for call
+// reportUnexpected reports err as a genuine fault. It exists for call
 // sites that build their own response — a redirect, typically — instead of
 // returning through RenderError, but still want the same "only real faults
 // reach the error inbox" gate RenderError applies to everything else.
@@ -84,14 +82,10 @@ func reportUnexpected(c *fiber.Ctx, err error) {
 		return
 	}
 	observability.CaptureError(c.UserContext(), err, requestErrorAttributes(c)...)
-
-	if hub := sentryfiber.GetHubFromContext(c); hub != nil {
-		hub.CaptureException(err)
-	}
 }
 
-// ReportPanic is Fiber's recovery callback. It records the panic with its stack
-// even without Sentry, then marks it so RenderError cannot emit a second event.
+// ReportPanic is Fiber's recovery callback. It records the panic with its stack,
+// then marks it so RenderError cannot emit a second event.
 func ReportPanic(c *fiber.Ctx, value any) {
 	observability.CapturePanic(c.UserContext(), value, requestErrorAttributes(c)...)
 	c.Locals(LocalPanicReported, true)
@@ -106,7 +100,7 @@ func requestErrorAttributes(c *fiber.Ctx) []attribute.KeyValue {
 }
 
 // classify maps an error to its HTTP status and message and reports whether it is
-// a server fault worth sending to Sentry. The 404-mapped DB errors, a client
+// a server fault worth reporting. The 404-mapped DB errors, a client
 // disconnect and a malformed search query are all routine; every 500 is a fault,
 // including one a handler DECLARED with fiber.NewError to give the caller a
 // readable message.
@@ -122,9 +116,9 @@ func requestErrorAttributes(c *fiber.Ctx) []attribute.KeyValue {
 // It is an EQUALITY, not `code >= 500`. Forty-two sites answer 503 to mean "this
 // deployment has no Meilisearch/LLM configured" — a statement about the
 // environment, repeated on every request to that route, and not a fault anyone
-// can act on from Sentry.
+// can act on from the error reports.
 //
-// A *fiber.Error cannot wrap, so a 500 declared this way reaches Sentry as its
+// A *fiber.Error cannot wrap, so a 500 declared this way is reported as its
 // own message with no cause behind it. Call sites that have a cause worth keeping
 // should therefore return `fmt.Errorf("…: %w", err)` and let the fall-through
 // render the generic body, rather than phrasing the message and dropping the
@@ -163,7 +157,7 @@ func classify(err error) (status int, msg string, report bool) {
 	// endpoint and reportStreamFault for the streamed one — ask this function and only this
 	// function whether a failure is worth reporting. Filed as a fault it was 12 Sentry
 	// events for a refusal that had already explained itself to the candidate on the
-	// stream, on a quota measured in thousands (see web/src/lib/sentryNoise.ts).
+	// stream, on a quota measured in thousands (see web/src/lib/transientNoise.ts).
 	case errors.Is(err, fitanalysis.ErrNoAnalysis), errors.Is(err, errNoRequirementList):
 		return fiber.StatusConflict, "run the fit analysis first", false
 	// The client cancelled the request (navigated away, closed the tab). The

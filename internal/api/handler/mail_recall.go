@@ -105,8 +105,8 @@ func (h *inboxHandlers) RecallApplicationMail(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusNotFound, "no application recorded for this job")
 	case errors.Is(err, mailrecall.ErrModel), errors.Is(err, mailrecall.ErrSearch):
 		// Somebody else's outage: the gateway let us down, or Google did. Logged rather
-		// than reported, because classify() marks every *fiber.Error routine and Sentry
-		// would never see it — and a 502 nobody records is how "the model had a bad day"
+		// than reported, because classify() marks every *fiber.Error routine and the
+		// exception log would never see it — and a 502 nobody records is how "the model had a bad day"
 		// and "the model has been down since Tuesday" come to look identical.
 		//
 		// One branch for both because the sentence to the caller is the same one, and it
@@ -116,7 +116,7 @@ func (h *inboxHandlers) RecallApplicationMail(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadGateway, "could not search your mail right now")
 	case err != nil:
 		// Anything else is ours: a dead pool, a lock timeout, a cancelled request. Returned
-		// bare so classify() can do its job — 499 for a closed tab, 500 AND Sentry for a
+		// bare so classify() can do its job — 499 for a closed tab, 500 AND a report for a
 		// fault. Wrapping these in a 502 would blame the model for a database error and
 		// silence the only signal that there was one.
 		return err

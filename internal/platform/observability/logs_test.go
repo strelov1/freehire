@@ -36,12 +36,12 @@ func TestLogsExportExceptionsAndKeepOuterOwnerAlive(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", server.URL+"/v1/logs")
 	t.Setenv("OTEL_SERVICE_NAME", "custom-worker")
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.version=release-42,deployment.environment.name=test")
-	shutdown, err := InitLogs("default-worker", "fallback")
+	shutdown, err := InitLogs("default-worker")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer shutdown()
-	inner, err := InitLogs("inner", "fallback")
+	inner, err := InitLogs("inner")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestLogsRedactsSecretsAndDoesNotSerializePanicObjects(t *testing.T) {
 	}))
 	defer server.Close()
 	t.Setenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", server.URL+"/v1/logs")
-	shutdown, err := InitLogs("test", "test")
+	shutdown, err := InitLogs("test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestLogsRedactsSecretsAndDoesNotSerializePanicObjects(t *testing.T) {
 func TestLogsDisabledWithoutEndpoint(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
-	shutdown, err := InitLogs("test", "test")
+	shutdown, err := InitLogs("test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestLogsCollectorFailureIsBounded(t *testing.T) {
 	defer server.Close()
 	defer close(release)
 	t.Setenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", server.URL+"/v1/logs")
-	shutdown, err := InitLogs("test", "test")
+	shutdown, err := InitLogs("test")
 	if err != nil {
 		t.Fatal(err)
 	}

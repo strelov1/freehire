@@ -222,7 +222,7 @@ func (h *assistantHandlers) PostAutoApplyTailor(c *fiber.Ctx) error {
 		log.Printf("auto-apply: tailoring run for queue entry %d (cv %s): %v", queueID, tailored.ID, err)
 		h.recordTailoringFailure(c, queueID, err)
 		// The CAUSE, not fiber.NewError(500, "the tailoring run failed"): the streamed
-		// autopilot reports this same error to Sentry (reportStreamFault in
+		// autopilot reports this same error (reportStreamFault in
 		// assistant.go), and phrasing it here took the synchronous route's copy out of
 		// the inbox. Returned unwrapped so classify still recognises what it is — an
 		// orchestrator that hung up mid-run arrives as context.Canceled and must stay a
