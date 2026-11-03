@@ -4151,6 +4151,10 @@ type Querier interface {
 	// is normalize.CompanyKey — a repeating legal-form strip no SQL expression should reproduce,
 	// since a second implementation of that rule is the bug this whole change removes.
 	ListCompaniesForMerge(ctx context.Context) ([]ListCompaniesForMergeRow, error)
+	// ListCompaniesForMerge for the slugs a person named (--exact-slugs), read through the
+	// company_slug index. The whole-table read groups 22.8M rows and did not finish in 50 minutes
+	// under prod's load on 2026-11-03, so a merge of three slugs could not be planned at all.
+	ListCompaniesForMergeBySlugs(ctx context.Context, slugs []string) ([]ListCompaniesForMergeBySlugsRow, error)
 	// Keyset page of hiring companies (job_count > 0) for the companies search reindex,
 	// cursored by the slug primary key (first chunk keyed by the empty string, which
 	// sorts before every slug). SELECT * so the row stays db.Company as columns grow and
