@@ -101,6 +101,17 @@ var curatedAliases = map[string]string{
 	// canonical employer identity even if a closed syndicated copy reopens later.
 	"mtr-legal-rechtsanwalte": "mtr-legal",
 
+	// Krka's full register name, "KRKA, tovarna zdravil, d.d., Novo mesto" ("pharmaceutical
+	// factory"), as public-employment feeds copy it. The seat and the form are rules
+	// (normalize.CloseSpacedForms), but the business description in the middle is not. Dropping
+	// it would be a judgement about words, so this one pair is named here. Reported in
+	// freehire#3895 with the same posting under both spellings ("Vodja projekta v službi za
+	// tehnološko-tehnični inženiring"). Measured 2026-11-03 through the public company search:
+	// `krka` has 68 open jobs, this spelling 12, and `krka-d-d-novo-mesto` 13. The last one
+	// needs no entry: the seat rule keys it at `krka`, so it joins this group through the canon's
+	// fold.
+	"krka-tovarna-zdravil-d-d-novo-mesto": "krka",
+
 	// Numeric board artefacts, each confirmed by shared open titles (the count follows).
 	"aecom2":                   "aecom",         // 1063
 	"nagarro1":                 "nagarro",       // 323

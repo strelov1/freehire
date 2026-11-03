@@ -205,3 +205,27 @@ func TestPlanMerges_MTRLegalHimalayasAlias(t *testing.T) {
 		t.Errorf("alias = %+v, want the retiring employer's own folded key and spelling reason", a)
 	}
 }
+
+// TestPlanMerges_KrkaRegisterSpellings is freehire#3895: the employer's own board files under
+// "Krka", while public-employment feeds copy the register name with its seat. The seat rule
+// keys "KRKA, d.d., Novo mesto" at `krka` by itself; the curated entry carries the spelling
+// with the business description in it.
+func TestPlanMerges_KrkaRegisterSpellings(t *testing.T) {
+	companies := []company{
+		{Slug: "krka", Name: "Krka", JobCount: 68},
+		{Slug: "krka-d-d-novo-mesto", Name: "KRKA, d.d., Novo mesto", JobCount: 13},
+		{Slug: "krka-tovarna-zdravil-d-d-novo-mesto", Name: "Krka, tovarna zdravil, d. d., Novo mesto", JobCount: 12},
+		{Slug: "terme-krka", Name: "Terme Krka d.o.o.", JobCount: 2},
+	}
+	got := planMerges(companies, nil, 0, curatedAliases)
+	if len(got) != 1 || got[0].Canonical != "krka" {
+		t.Fatalf("planned %+v, want one merge into krka", got)
+	}
+	retired := map[string]bool{}
+	for _, a := range got[0].Aliases {
+		retired[a.Slug] = true
+	}
+	if !retired["krka-d-d-novo-mesto"] || !retired["krka-tovarna-zdravil-d-d-novo-mesto"] || retired["terme-krka"] {
+		t.Errorf("retired %v, want both register spellings and not Terme Krka", retired)
+	}
+}
