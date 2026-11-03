@@ -356,6 +356,7 @@ func TestRecognize(t *testing.T) {
 		{"personio de host", "https://reflex-aerospace-gmbh.jobs.personio.de/job/2679152?display=en#apply", "personio", "reflex-aerospace-gmbh", "https://reflex-aerospace-gmbh.jobs.personio.de", true},
 		{"selfrecruit posting strips path", "https://dressup.selfrecruit.ge/a7cdcc00-1c9c-464c-8960-945af0c0e0a4", "selfrecruit", "dressup", "https://dressup.selfrecruit.ge", true},
 		{"scalis posting strips path", "https://boldbusiness.scalis.ai/job/5f78d010-b21f-4d22-b037-e86865530f62", "scalis", "boldbusiness", "https://boldbusiness.scalis.ai", true},
+		{"intervieweb tenant host", "https://autogrill.intervieweb.it/jobs/barista-autogrill-altivole-sud-treviso-7395/en/", "intervieweb", "autogrill.intervieweb.it", "https://autogrill.intervieweb.it", true},
 		{"softgarden subdomain", "https://moll.softgarden.io/job/123/apply", "softgarden", "moll", "https://moll.softgarden.io", true},
 		// softgarden also serves tenants under a regional career host, <tenant>.career.softgarden.de.
 		// The tenant label is the same board the adapter fetches at <board>.softgarden.io (verified

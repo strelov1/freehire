@@ -370,6 +370,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	// Gupy: one <subdomain>.gupy.io career page per employer, the subdomain the adapter lists
 	// by (?subdomain=<board>). The vendor's own hosts are in platformLabelsByApex.
 	{"gupy.io", "gupy", modeSubdomain},
+	// Intervieweb (Zucchetti): <tenant>.intervieweb.it. The board is the whole careers host, the
+	// shape the adapter fetches (a customer may also front a tenant with its own domain, which
+	// is not URL-derivable and stays unrecognised).
+	{"intervieweb", "intervieweb", modeHost},
 	// Pandapé (InfoJobs Brasil's ATS): one <tenant>.pandape.infojobs.com.br career site per
 	// employer. The same tenant answers on the Catho and pandape.com.br domains with the same
 	// listing, so all three name one board. The vendor's own hosts are in platformLabelsByApex.

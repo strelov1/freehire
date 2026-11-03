@@ -361,6 +361,10 @@ func All(c HTTPClient) map[string]Source {
 		// White-labelled ATS: the board is the full careers host, because the same tenant is
 		// served under the vendor's domain and under each reseller's.
 		NewHiringThing(c),
+		// Intervieweb (Zucchetti): the board is the careers host. Unpaced: the listing is one
+		// landing page plus one POST per further page (12 for the largest sample board) and
+		// bodies are hydrated for new postings only; no rate limit was observed or documented.
+		NewIntervieweb(c),
 		// HCS Hiring: symplr's US healthcare career centers, <tenant>.hcshiring.com. A keyless
 		// JSON listing ten rows a page; the body is hydrated per new posting. See hcshiring.go.
 		NewHCSHiring(c),
