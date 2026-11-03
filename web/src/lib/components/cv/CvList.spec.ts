@@ -102,4 +102,12 @@ describe('CvList base CVs', () => {
     // A list we could not read is not an empty one.
     expect(screen.queryByText('No base CV yet')).toBeNull();
   });
+
+  it('keeps the base CVs when only the tailored list fails to load', async () => {
+    listBaseCvs.mockResolvedValue([base('a', 'Backend', true)]);
+    listCvs.mockRejectedValue(new Error('boom'));
+    render(CvList);
+    expect(await screen.findByText('Backend')).toBeTruthy();
+    expect(await screen.findByText('Could not load your CVs.')).toBeTruthy();
+  });
 });
