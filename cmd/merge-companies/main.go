@@ -22,7 +22,9 @@ import (
 	"errors"
 	"flag"
 	"log"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/job/companymerge"
@@ -40,7 +42,22 @@ func run() int {
 	reason := flag.String("reason", "", "only merge groups whose every alias retires for this reason ("+
 		reasonLegalForm+" or "+reasonSpelling+"); empty takes both")
 	onlySlugsFile := flag.String("only-slugs", "", "only merge groups holding a slug listed in this file, one per line")
+	exactSlugsFile := flag.String("exact-slugs", "", "plan over exactly the slugs listed in this file, one per line, reading only their rows; "+
+		"the list must name every slug of each group it takes")
 	flag.Parse()
+	if *onlySlugsFile != "" && *exactSlugsFile != "" {
+		log.Printf("merge-companies: --only-slugs and --exact-slugs are alternatives")
+		return 2
+	}
+	var exact []string
+	if *exactSlugsFile != "" {
+		slugs, err := readSlugList(*exactSlugsFile)
+		if err != nil {
+			log.Printf("merge-companies: --exact-slugs: %v", err)
+			return 2
+		}
+		exact = slices.Sorted(maps.Keys(slugs))
+	}
 	if *reason != "" && *reason != reasonLegalForm && *reason != reasonSpelling {
 		log.Printf("merge-companies: unknown --reason %q", *reason)
 		return 2
@@ -54,7 +71,7 @@ func run() int {
 	defer cleanup()
 
 	q := db.New(pool)
-	plan, err := loadPlan(ctx, q, *minJobs)
+	plan, err := loadPlan(ctx, q, *minJobs, exact)
 	if err != nil {
 		log.Printf("merge-companies: plan: %v", err)
 		return 1
@@ -112,14 +129,14 @@ func run() int {
 // The whole company list comes back in one read — ~153k rows on prod, a few megabytes — because
 // the grouping key is normalize.CompanyKey, a repeating legal-form strip. Reproducing that in
 // SQL would be a second implementation of the one rule this change exists to stop duplicating.
-func loadPlan(ctx context.Context, q *db.Queries, minJobs int) ([]merge, error) {
-	rows, err := q.ListCompaniesForMerge(ctx)
+//
+// exact, when set, replaces that read with one over only the named slugs. It is not a filter
+// over the same plan, as --only-slugs is: the election sees only these slugs, so a list that
+// leaves out a member of a group leaves that member unmerged and may elect another canon.
+func loadPlan(ctx context.Context, q *db.Queries, minJobs int, exact []string) ([]merge, error) {
+	companies, err := readCompanies(ctx, q, exact)
 	if err != nil {
 		return nil, err
-	}
-	companies := make([]company, 0, len(rows))
-	for _, r := range rows {
-		companies = append(companies, company{Slug: r.Slug, Name: r.Name, JobCount: int(r.JobCount)})
 	}
 	canonical, err := q.ListCanonicalCompanySlugs(ctx)
 	if err != nil {
@@ -130,6 +147,29 @@ func loadPlan(ctx context.Context, q *db.Queries, minJobs int) ([]merge, error) 
 		frozen[slug] = true
 	}
 	return planMerges(companies, frozen, minJobs, curatedAliases), nil
+}
+
+func readCompanies(ctx context.Context, q *db.Queries, exact []string) ([]company, error) {
+	if len(exact) > 0 {
+		rows, err := q.ListCompaniesForMergeBySlugs(ctx, exact)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]company, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, company{Slug: r.Slug, Name: r.Name, JobCount: int(r.JobCount)})
+		}
+		return out, nil
+	}
+	rows, err := q.ListCompaniesForMerge(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]company, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, company{Slug: r.Slug, Name: r.Name, JobCount: int(r.JobCount)})
+	}
+	return out, nil
 }
 
 // report prints the wave. It prints every group rather than a sample: a wave is bounded by

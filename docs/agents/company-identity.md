@@ -147,6 +147,10 @@ the source renamed the employer, which is a judgement, not a form.
 wave like this one can run without dragging the unreviewed spelling backlog along with it.
 `--only-slugs <file>` narrows a wave to the whole groups holding a listed slug — how a few
 groups already read by a person are taken without the rest of the spelling backlog.
+`--exact-slugs <file>` plans over only the listed slugs and reads only their rows through the
+index. `--only-slugs` still reads the whole table first, which on 22.8M rows did not finish in 50
+minutes under prod's load (2026-11-03). The election sees only what is listed, so name every slug
+of each group; an unlisted member stays where it is until a later wave.
 
 It reports by default; `--apply` writes and `--min-jobs` bounds a wave so the plan
 stays short enough to read. Jobs move in chunks whose statement selects rows still carrying the
