@@ -93,6 +93,14 @@ var curatedAliases = map[string]string{
 	// talks about shares and domains.
 	"micro1-ai": "micro1",
 
+	// MTR Legal names its Personio employer MTR Legal; the Himalayas company is
+	// MTR Legal Rechtsanwälte with website mtrlegal.com, also the domain of employer
+	// assets on its official Personio job/2515502. The same unusual Applied AI role
+	// is truncated at Evalua in Himalayas (#4041). Measured 2026-11-02: 33 Himalayas
+	// postings (all closed), versus 57 Personio postings (54 open). Preserve the
+	// canonical employer identity even if a closed syndicated copy reopens later.
+	"mtr-legal-rechtsanwalte": "mtr-legal",
+
 	// Numeric board artefacts, each confirmed by shared open titles (the count follows).
 	"aecom2":                   "aecom",         // 1063
 	"nagarro1":                 "nagarro",       // 323
