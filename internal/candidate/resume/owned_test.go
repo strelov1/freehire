@@ -251,7 +251,7 @@ func TestFillEmptyDoesNotRefillAnExplicitClear(t *testing.T) {
 }
 
 // Round-tripped through the store exactly as PutResumeContacts does: Sanitize runs on
-// write (SetCandidateOwned) and again on read (decodeOwned via CandidateOwned), and an
+// write (SetCandidateOwned) and again on read (DecodeOwned via CandidateOwned), and an
 // explicit clear must survive both without a non-empty value to re-derive Set from.
 func TestSetCandidateOwned_ExplicitClearSurvivesTheStore(t *testing.T) {
 	repo := newFakeRepo()
@@ -400,5 +400,25 @@ func TestEmpty_TotalYearsCounts(t *testing.T) {
 	}
 	if !(Owned{}).Empty() {
 		t.Error("a blank Owned did not read as Empty")
+	}
+}
+
+func TestApplyTotalYears(t *testing.T) {
+	now := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
+	extract := func() resumeextract.Structured {
+		return resumeextract.Structured{
+			TotalYears: 2,
+			Experience: []resumeextract.Experience{{Start: &perioddate.PeriodDate{Year: 2023, Month: 5}, Current: true}},
+		}
+	}
+	st := extract()
+	Owned{}.ApplyTotalYears(&st, now)
+	if st.TotalYears != 3 {
+		t.Fatalf("unowned years = %d, want 3 (caught up with the dated role)", st.TotalYears)
+	}
+	st = extract()
+	Owned{TotalYears: 1, TotalYearsSet: true}.ApplyTotalYears(&st, now)
+	if st.TotalYears != 1 {
+		t.Fatalf("owned years = %d, want the candidate's own 1", st.TotalYears)
 	}
 }

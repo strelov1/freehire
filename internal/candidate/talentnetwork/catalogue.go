@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -135,6 +136,7 @@ func (c *Catalogue) ByHandle(ctx context.Context, handle string) (CatalogueMembe
 		cities:          row.Cities,
 		specializations: row.Specializations,
 		structured:      row.ResumeStructured,
+		owned:           row.CandidateContacts,
 		updatedAt:       row.ResumeStructuredUploadedAt.Time,
 		hasPhoto:        row.HasPhoto,
 	}), nil
@@ -198,6 +200,7 @@ func (c *Catalogue) current(ctx context.Context) (*snapshot, error) {
 			cities:          r.Cities,
 			specializations: r.Specializations,
 			structured:      r.ResumeStructured,
+			owned:           r.CandidateContacts,
 			updatedAt:       r.ResumeStructuredUploadedAt.Time,
 			hasPhoto:        r.HasPhoto,
 		}))
@@ -219,6 +222,7 @@ type storedMember struct {
 	cities          []string
 	specializations []string
 	structured      []byte
+	owned           []byte // candidate_contacts: only the candidate's own years figure is read
 	updatedAt       time.Time
 	hasPhoto        bool
 }
@@ -233,6 +237,10 @@ func projectMember(row storedMember) CatalogueMember {
 	if len(row.structured) > 0 {
 		_ = json.Unmarshal(row.structured, &s)
 	}
+	// The card shows years the way the candidate's own profile does: their figure if they
+	// gave one, otherwise the extract's caught up with its dated roles. Nothing else they
+	// own is read — the rest of the card stays the dictionary-only projection.
+	resume.DecodeOwned(row.owned).ApplyTotalYears(&s, time.Now())
 	return CatalogueMember{
 		Handle:          row.handle,
 		Card:            ProjectCard(s),

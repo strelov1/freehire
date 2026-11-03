@@ -184,6 +184,7 @@ SELECT u.talent_handle,
        u.timezone,
        COALESCE(u.resume_cities, '{}')::text[] AS cities,
        u.resume_structured,
+       u.candidate_contacts,
        u.resume_structured_uploaded_at,
        COALESCE(p.specializations, '{}')::text[] AS specializations,
        (u.photo_object_key IS NOT NULL AND u.photo_object_key <> '')::boolean AS has_photo
@@ -200,6 +201,7 @@ type GetTalentNetworkMemberByHandleRow struct {
 	Timezone                   pgtype.Text        `json:"timezone"`
 	Cities                     []string           `json:"cities"`
 	ResumeStructured           []byte             `json:"resume_structured"`
+	CandidateContacts          []byte             `json:"candidate_contacts"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
 	Specializations            []string           `json:"specializations"`
 	HasPhoto                   bool               `json:"has_photo"`
@@ -224,6 +226,7 @@ func (q *Queries) GetTalentNetworkMemberByHandle(ctx context.Context, handle str
 		&i.Timezone,
 		&i.Cities,
 		&i.ResumeStructured,
+		&i.CandidateContacts,
 		&i.ResumeStructuredUploadedAt,
 		&i.Specializations,
 		&i.HasPhoto,
@@ -723,6 +726,7 @@ SELECT u.talent_handle,
        u.timezone,
        COALESCE(u.resume_cities, '{}')::text[] AS cities,
        u.resume_structured,
+       u.candidate_contacts,
        u.resume_structured_uploaded_at,
        COALESCE(p.specializations, '{}')::text[] AS specializations,
        -- Whether the member has an uploaded headshot, never the object key itself: the
@@ -744,6 +748,7 @@ type ListTalentNetworkMembersRow struct {
 	Timezone                   pgtype.Text        `json:"timezone"`
 	Cities                     []string           `json:"cities"`
 	ResumeStructured           []byte             `json:"resume_structured"`
+	CandidateContacts          []byte             `json:"candidate_contacts"`
 	ResumeStructuredUploadedAt pgtype.Timestamptz `json:"resume_structured_uploaded_at"`
 	Specializations            []string           `json:"specializations"`
 	HasPhoto                   bool               `json:"has_photo"`
@@ -784,6 +789,7 @@ func (q *Queries) ListTalentNetworkMembers(ctx context.Context) ([]ListTalentNet
 			&i.Timezone,
 			&i.Cities,
 			&i.ResumeStructured,
+			&i.CandidateContacts,
 			&i.ResumeStructuredUploadedAt,
 			&i.Specializations,
 			&i.HasPhoto,
