@@ -27,6 +27,7 @@ type fakeStore struct {
 	refreshed        map[string][]string // source -> external ids passed to RefreshCovered
 	refreshErr       error               // when set, RefreshCovered fails (writes still succeed)
 	refreshCompanies []string            // optional actual stored companies returned by the refresh
+	touchSlug        string              // the stored company slug Touch reports
 	err              error
 	seenIDs          map[string]bool            // stored (namespaced) external_id -> is_tech evidence
 	seenByBrd        map[string]map[string]bool // per-board sets, keyed by the requested board
@@ -99,14 +100,14 @@ func (s *fakeStore) Close(_ context.Context, source, externalID string) error {
 	return nil
 }
 
-func (s *fakeStore) Touch(_ context.Context, source, externalID string) error {
+func (s *fakeStore) Touch(_ context.Context, source, externalID string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil {
-		return s.err
+		return "", s.err
 	}
 	s.touched = append(s.touched, [2]string{source, externalID})
-	return nil
+	return s.touchSlug, nil
 }
 
 // RefreshCovered reports every id as a stored open row.

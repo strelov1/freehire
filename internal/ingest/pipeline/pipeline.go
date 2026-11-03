@@ -70,7 +70,8 @@ type Closer interface {
 // hydrated description/facets. Only the ingest dbStore implements it; the pipeline type-asserts
 // for it and drops the refresh when a Store lacks it (test fakes), like Closer.
 type Toucher interface {
-	Touch(ctx context.Context, source, externalID string) error
+	// Touch reports the refreshed row's stored company slug ("" when there was no row).
+	Touch(ctx context.Context, source, externalID string) (companySlug string, err error)
 }
 
 // CoveredRefresher refreshes the liveness of OPEN stored rows a board listed but did
@@ -909,7 +910,8 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 			t.rej.reject(j.Title)
 			return
 		}
-		if err := r.touch(ctx, e, j); err != nil {
+		slug, err := r.touch(ctx, e, j)
+		if err != nil {
 			t.st.Skipped++
 			if t.firstErr == nil {
 				t.firstErr = err
@@ -918,14 +920,9 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 		}
 		t.st.Ingested++
 		// A re-listed posting still states its employer's website, and the employers whose
-		// postings were all stored before the field existed are only ever reached here.
-		if j.CompanyWebsite != "" {
-			slug := normalize.CompanySlug(j.Company)
-			if canonical := canonicalCompanySlug(canon, j.Company); canonical != "" {
-				slug = canonical
-			}
-			r.recordCompanyWebsite(ctx, e, slug, j.CompanyWebsite)
-		}
+		// postings were all stored before the field existed are only ever reached here. The
+		// stored row's slug, since a slug rule may have moved since it was written.
+		r.recordCompanyWebsite(ctx, e, slug, j.CompanyWebsite)
 		return
 	}
 	r.saveOne(ctx, e, j, covered, canon, t)
@@ -1353,10 +1350,10 @@ func (r Runner) coverageProbe(ctx context.Context, e sources.CompanyEntry) func(
 // touch refreshes an already-ingested posting's liveness (last_seen_at, reopen) by identity,
 // without rewriting its content. It routes through the Store's optional Toucher capability; a
 // Store without it (a test fake) drops the refresh, matching how ingestStream handles Closer.
-func (r Runner) touch(ctx context.Context, e sources.CompanyEntry, j sources.Job) error {
+func (r Runner) touch(ctx context.Context, e sources.CompanyEntry, j sources.Job) (string, error) {
 	t, ok := r.Store.(Toucher)
 	if !ok {
-		return nil
+		return "", nil
 	}
 	source, externalID := jobIdentity(e, j)
 	return t.Touch(ctx, source, externalID)

@@ -59,13 +59,15 @@ SELECT EXISTS (SELECT 1 FROM company_slug_aliases WHERE canonical_slug = @slug);
 
 -- name: RepointCompanyParentsOnMerge :exec
 -- A merge keeps the subsidiaries the retiring slug had. They move under the canonical slug,
--- or under the canon's own parent when it has one, since one level is the rule. A link that
--- would then point a company at itself is left for the delete below.
+-- or under the canon's own parent when it has one, since one level is the rule. A canon that
+-- was the retiring slug's own subsidiary has no other parent, so its siblings move under it.
+-- A link that would then point a company at itself is left for the delete below.
 UPDATE company_parents p
 SET parent_slug = t.slug
 FROM (
     SELECT COALESCE(
-        (SELECT cp.parent_slug FROM company_parents cp WHERE cp.child_slug = @canonical_slug),
+        (SELECT NULLIF(cp.parent_slug, @alias_slug::text)
+         FROM company_parents cp WHERE cp.child_slug = @canonical_slug),
         @canonical_slug::text) AS slug
 ) t
 WHERE p.parent_slug = @alias_slug

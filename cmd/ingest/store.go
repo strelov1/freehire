@@ -476,13 +476,13 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 // its (source, external_id) identity, without rewriting content — the path a HydratingSource
 // (justjoin) uses for an offer it re-listed but did not re-fetch, so its hydrated description
 // and facets are preserved. Implements pipeline.toucher.
-func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
+func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string, error) {
 	companySlug, err := s.q.TouchJob(ctx, db.TouchJobParams{
 		Source:     source,
 		ExternalID: externalID,
 	})
 	if err != nil {
-		return fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
+		return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
 	}
 	// Record the company as crawled, exactly as Save does, so the post-run stale sweep keeps
 	// this company in scope. Otherwise a company whose offers were all touched (none newly
@@ -496,7 +496,7 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 	// worse than a gap — a hydrating provider re-lists through here and only NEW offers reach
 	// save(), so the run would report 0% and read as the very churn the line exists to expose.
 	s.tally.record(source, true)
-	return nil
+	return companySlug, nil
 }
 
 // RecordCompanyWebsite stores a posting's stated employer website on its company row

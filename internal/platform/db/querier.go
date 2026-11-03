@@ -6934,8 +6934,9 @@ type Querier interface {
 	// multi-array form of unnest).
 	ReplaceBuddyMockWeekly(ctx context.Context, arg ReplaceBuddyMockWeeklyParams) error
 	// A merge keeps the subsidiaries the retiring slug had. They move under the canonical slug,
-	// or under the canon's own parent when it has one, since one level is the rule. A link that
-	// would then point a company at itself is left for the delete below.
+	// or under the canon's own parent when it has one, since one level is the rule. A canon that
+	// was the retiring slug's own subsidiary has no other parent, so its siblings move under it.
+	// A link that would then point a company at itself is left for the delete below.
 	RepointCompanyParentsOnMerge(ctx context.Context, arg RepointCompanyParentsOnMergeParams) error
 	// The whole schedule as an operator reads it: every eligible provider, its override if it
 	// has one, and what its runs have actually been doing. Aggregated per provider rather than

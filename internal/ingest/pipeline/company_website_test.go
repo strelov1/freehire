@@ -89,9 +89,10 @@ func (refreshSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job
 }
 
 // An employer whose postings were all stored before websites were collected is only ever
-// re-listed, so the refresh path records the website too.
+// re-listed, so the refresh path records the website too, on the slug the stored row carries
+// (here an older rule's spelling), not on one re-derived from the listing.
 func TestRefreshedPostingRecordsItsCompanyWebsite(t *testing.T) {
-	store := &websiteStore{}
+	store := &websiteStore{fakeStore: fakeStore{touchSlug: "acme-gmbh-old"}}
 	r := Runner{Store: store, Registry: map[string]sources.Source{"eures": refreshSource{}}}
 	if _, err := r.Run(context.Background(), []sources.CompanyEntry{{Company: "EURES", Provider: "eures", Board: "de"}}); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -99,7 +100,7 @@ func TestRefreshedPostingRecordsItsCompanyWebsite(t *testing.T) {
 	if len(store.touched) != 1 {
 		t.Fatalf("touched = %v, want the posting refreshed", store.touched)
 	}
-	if got := store.websites["acme"]; got != "https://acme.de" {
-		t.Errorf("websites = %v, want acme -> https://acme.de", store.websites)
+	if got := store.websites["acme-gmbh-old"]; got != "https://acme.de" || len(store.websites) != 1 {
+		t.Errorf("websites = %v, want only acme-gmbh-old -> https://acme.de", store.websites)
 	}
 }

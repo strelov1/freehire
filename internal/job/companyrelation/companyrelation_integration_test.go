@@ -283,3 +283,40 @@ func TestUnfinishedMergeStaysInTheQueue(t *testing.T) {
 		t.Errorf("after resume: pending = %+v, want empty", rows)
 	}
 }
+
+// Merging a parent into one of its own subsidiaries keeps the other subsidiaries, now under
+// the surviving one, rather than deleting their links with the retiring parent's.
+func TestMergeParentIntoItsSubsidiaryKeepsTheSiblings(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	user := seed(t, pool)
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO company_parents (child_slug, parent_slug) VALUES
+		   ('novartis', 'sandoz'), ('novartis-slovenija', 'sandoz')`); err != nil {
+		t.Fatal(err)
+	}
+	s := New(pool)
+	p, err := s.Propose(ctx, user, Proposal{Kind: KindSame, CompanySlug: "sandoz", TargetSlug: "novartis"})
+	if err != nil {
+		t.Fatalf("propose: %v", err)
+	}
+	if _, err := s.Approve(ctx, p.ID, user); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	var parent string
+	if err := pool.QueryRow(ctx,
+		`SELECT parent_slug FROM company_parents WHERE child_slug = 'novartis-slovenija'`).Scan(&parent); err != nil {
+		t.Fatalf("sibling link lost: %v", err)
+	}
+	if parent != "novartis" {
+		t.Errorf("parent = %q, want novartis", parent)
+	}
+	var selfLinks int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM company_parents WHERE child_slug = 'novartis' OR parent_slug = 'sandoz'`).Scan(&selfLinks); err != nil {
+		t.Fatal(err)
+	}
+	if selfLinks != 0 {
+		t.Errorf("%d links still name the retired slug or point the canon at it", selfLinks)
+	}
+}
