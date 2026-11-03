@@ -152,6 +152,12 @@ export class FilterStore {
     this.#url.setNow({ ...this.#url.value, seniorityIncludeUnspecified: on });
   }
 
+  /** The remote-anywhere modifier. setNow: a discrete toggle that re-filters the
+   *  whole feed, like its sibling modifiers above. */
+  setWorkModeRemoteAnywhere(on: boolean) {
+    this.#url.setNow({ ...this.#url.value, workModeRemoteAnywhere: on });
+  }
+
   /** The summary chip's remove: one chip stands for the whole salary range, so it
    *  clears both ends. The range itself is dragged in the modal, which stages it. */
   clearSalary() {

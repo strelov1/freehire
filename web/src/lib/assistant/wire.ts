@@ -30,6 +30,7 @@ export interface SessionSummary {
   label: string;
   cv_id?: number;
   job_id?: number;
+  search_context?: { query: string; brief: string };
 }
 
 /** One stored transcript message. `content` is role-specific: a prompt, one model

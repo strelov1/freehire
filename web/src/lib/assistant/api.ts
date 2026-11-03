@@ -33,7 +33,10 @@ async function request<T = void>(path: string, init?: RequestInit): Promise<T> {
   });
   if (res.status === 404) throw new SessionNotFound();
   if (!res.ok) {
-    throw new Error(`assistant request failed (${res.status})`);
+    const body: unknown = await res.json().catch(() => null);
+    const detail = typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
+      ? body.error : undefined;
+    throw new Error(detail || `assistant request failed (${res.status})`);
   }
   if (res.status === 204) return undefined as T;
   const body = (await res.json()) as { data: T };
@@ -46,6 +49,14 @@ async function request<T = void>(path: string, init?: RequestInit): Promise<T> {
 export function createSession(preset: ChatPreset = 'chat'): Promise<SessionSummary> {
   const query = preset === 'chat' ? '' : `?preset=${preset}`;
   return request<SessionSummary>(`/sessions${query}`, { method: 'POST', body: '{}' });
+}
+
+/** Start a search-bound conversation; retries reuse the client request id. */
+export function createShortlistSession(query: string, requestId: string): Promise<SessionSummary> {
+  return request<SessionSummary>('/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ search_query: query, request_id: requestId }),
+  });
 }
 
 /** Open the conversation held against one automatic application. The server reuses its
