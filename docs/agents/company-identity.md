@@ -151,6 +151,8 @@ groups already read by a person are taken without the rest of the spelling backl
 index. `--only-slugs` still reads the whole table first, which on 22.8M rows did not finish in 50
 minutes under prod's load (2026-11-03). The election sees only what is listed, so name every slug
 of each group; an unlisted member stays where it is until a later wave.
+A plan the registry contradicts (a retired canon, a slug or folded key already settled on another
+canon) is refused whole, because the election cannot see a frozen canon that was not listed.
 
 It reports by default; `--apply` writes and `--min-jobs` bounds a wave so the plan
 stays short enough to read. Jobs move in chunks whose statement selects rows still carrying the

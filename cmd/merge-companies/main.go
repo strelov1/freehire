@@ -21,11 +21,14 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"maps"
 	"os"
 	"slices"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/job/companymerge"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -146,7 +149,49 @@ func loadPlan(ctx context.Context, q *db.Queries, minJobs int, exact []string) (
 	for _, slug := range canonical {
 		frozen[slug] = true
 	}
-	return planMerges(companies, frozen, minJobs, curatedAliases), nil
+	plan := planMerges(companies, frozen, minJobs, curatedAliases)
+	if len(exact) > 0 {
+		if err := checkExactPlan(ctx, q, plan); err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
+}
+
+// checkExactPlan refuses a wave the registry contradicts. A full read sees every frozen canon
+// and elects it. An exact read sees only what was listed, so it can elect a different canon for
+// a spelling the registry already settled: the alias insert would then do nothing while the jobs
+// still moved. The whole wave is refused, naming the slug to add or remove from the list.
+func checkExactPlan(ctx context.Context, q *db.Queries, plan []merge) error {
+	for _, m := range plan {
+		retiredInto, err := q.GetCompanySlugAlias(ctx, m.Canonical)
+		switch {
+		case err == nil:
+			return fmt.Errorf("canon %q is itself retired into %q", m.Canonical, retiredInto)
+		case !errors.Is(err, pgx.ErrNoRows):
+			return err
+		}
+		for _, a := range m.Aliases {
+			prior, err := q.GetCompanySlugAlias(ctx, a.Slug)
+			if err == nil && prior != m.Canonical {
+				return fmt.Errorf("%q is already merged into %q, not %q", a.Slug, prior, m.Canonical)
+			}
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			rows, err := q.ResolveCompanySlugAliases(ctx, []string{a.FoldedKey})
+			if err != nil {
+				return err
+			}
+			for _, r := range rows {
+				if r.CanonicalSlug != m.Canonical {
+					return fmt.Errorf("the name of %q (key %q) already resolves to %q, not %q",
+						a.Slug, a.FoldedKey, r.CanonicalSlug, m.Canonical)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func readCompanies(ctx context.Context, q *db.Queries, exact []string) ([]company, error) {
