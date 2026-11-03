@@ -53,6 +53,9 @@
 
   const slug = $derived(page.params.slug ?? '');
   const cvParam = $derived(page.url.searchParams.get('cv'));
+  // The base CV chosen before arriving (confirm dialog / intake / a base card). The tailor
+  // request is made on load and again on reload, so the choice rides in the URL.
+  const baseParam = $derived(page.url.searchParams.get('base') ?? undefined);
 
   let status = $state<'loading' | 'ready' | 'error'>('loading');
   let errorMsg = $state('');
@@ -363,7 +366,7 @@
           // places the vacancy on the Tracking board. Re-run bootstrap for that side effect
           // only (idempotent: same CV, no second debit). Fire-and-forget so a slow tracking
           // write cannot block the workspace.
-          void api.tailorCv(slug).catch(() => {});
+          void api.tailorCv(slug, baseParam).catch(() => {});
         } else {
           // A CV created before session binding: the backend mints a tailoring
           // conversation bound to it and stores it on the CV (and places the vacancy
@@ -379,7 +382,7 @@
         // (startTailorSession above) costs nothing and would inflate the count on every
         // revisit.
         track('tailor_run', { slug });
-        const [j, tailor] = await Promise.all([api.getJob(slug), api.tailorCv(slug)]);
+        const [j, tailor] = await Promise.all([api.getJob(slug), api.tailorCv(slug, baseParam)]);
         job = j;
         await applyTailorResult(tailor);
       }

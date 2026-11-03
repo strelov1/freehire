@@ -45,7 +45,7 @@
       </p>
     </div>
     <div class="shrink-0">
-      <Button variant="outline" onclick={openCvIntake}>{s.tailorForJob}</Button>
+      <Button variant="outline" onclick={() => openCvIntake()}>{s.tailorForJob}</Button>
     </div>
   </div>
 
@@ -57,5 +57,5 @@
 </div>
 
 {#if cvIntakeDialog.open}
-  <JdIntakeDialog onClose={closeCvIntake} />
+  <JdIntakeDialog onClose={closeCvIntake} baseCvId={cvIntakeDialog.baseCvId} />
 {/if}

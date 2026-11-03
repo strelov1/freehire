@@ -5,6 +5,7 @@
   import { Button, ConfirmDialog, cn, EntityLogo } from '#lib/ui/index.js';
   import { Trash2, X, ExternalLink, Send, SquarePen, Check } from '@lucide/svelte';
   import { askConfirmTailor, confirmTailorDialog } from '#lib/confirmTailorDialog.svelte.js';
+  import { tailorHref } from '#lib/tailor/tailorHref.js';
   import { groupedStages, humanizeStage } from '#lib/stages.js';
   import { canFollowUp } from '#lib/followup.js';
   import { CLOSED_OUTCOMES, type ClosedOutcome } from '#lib/board.js';
@@ -102,12 +103,13 @@
   async function startTailoring() {
     if (!item.job || tailoring) return;
     tailoring = true;
-    const ok = await askConfirmTailor(item.job.public_slug, `${item.job.title} at ${item.job.company}`);
-    if (!ok) {
+    const choice = await askConfirmTailor(item.job.public_slug, `${item.job.title} at ${item.job.company}`);
+    if (!choice) {
       tailoring = false;
       return;
     }
-    await goto(resolve('/tailor/[slug]', { slug: item.job.public_slug }));
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- tailorHref() wraps resolve('/tailor/[slug]'); the rule can't see through the appended ?base= query
+    await goto(tailorHref(item.job.public_slug, choice.baseCvId));
   }
 
   // Tailoring needs the posting. Absent rather than disabled when

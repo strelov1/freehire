@@ -1,23 +1,47 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { resolve } from '$app/paths';
   import { Search } from '@lucide/svelte';
   import { api, ApiError } from '#lib/api.js';
+  import type { CvBaseItem } from '#lib/cv.js';
   import type { Job } from '#lib/types.js';
+  import { tailorHref } from '#lib/tailor/tailorHref.js';
   import { companyLogoUrl } from '#lib/logo.js';
   import { Button, Dialog, EntityLogo } from '#lib/ui/index.js';
+  import BasePicker from './BasePicker.svelte';
   import { messages } from './JdIntakeDialog.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
-  import { t } from '#lib/i18n/t.js';
+  import { format, t } from '#lib/i18n/t.js';
 
   // Three ways into tailoring: pick one of our own vacancies (a search/select — no backend
   // call, straight to the workspace), paste an external job posting URL, or paste the JD
   // text itself. The URL and text tabs both call the same resolve endpoint and land on the
   // same workspace; it doesn't know or care which tab produced its slug.
 
-  let { onClose }: { onClose: () => void } = $props();
+  // `baseCvId` is the base the dialog was opened for ("Tailor to a job" on a base card): it is
+  // used as is and no picker is shown. Opened without one, a candidate with two or more bases
+  // picks here — otherwise the most obvious entry point would skip the choice. With one base
+  // there is nothing to pick and nothing is asked.
+  let { onClose, baseCvId }: { onClose: () => void; baseCvId?: string } = $props();
 
   const s = $derived(t(messages, locale()));
+
+  let bases = $state.raw<CvBaseItem[]>([]);
+  let picked = $state('');
+
+  onMount(async () => {
+    try {
+      bases = await api.listBaseCvs();
+      picked = bases.find((b) => b.is_default)?.id ?? bases[0]?.id ?? '';
+    } catch {
+      // No picker, and the server's default base: reading the list must not block tailoring.
+      bases = [];
+    }
+  });
+
+  const preselected = $derived(baseCvId ? bases.find((b) => b.id === baseCvId) : undefined);
+  /** The base to send: the preselected one, else the picked one when there was a choice. */
+  const chosenBase = $derived(baseCvId ?? (bases.length >= 2 ? picked : undefined));
 
   let open = $state(true);
   $effect(() => {
@@ -56,7 +80,8 @@
 
   function selectJob(job: Job) {
     open = false;
-    void goto(resolve('/tailor/[slug]', { slug: job.public_slug }));
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- tailorHref() wraps resolve('/tailor/[slug]'); the rule can't see through the appended ?base= query
+    void goto(tailorHref(job.public_slug, chosenBase));
   }
 
   let url = $state('');
@@ -80,7 +105,8 @@
     try {
       const slug = await api.resolveJd(input);
       open = false;
-      await goto(resolve('/tailor/[slug]', { slug }));
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- tailorHref() wraps resolve('/tailor/[slug]'); the rule can't see through the appended ?base= query
+      await goto(tailorHref(slug, chosenBase));
     } catch (e) {
       error = messageFor(e);
     } finally {
@@ -109,6 +135,13 @@
 </script>
 
 <Dialog bind:open title={s.dialogTitle} class="sm:max-w-lg">
+  {#if preselected}
+    <p class="mb-3 text-sm text-muted-foreground">{format(s.fromBase, { title: preselected.title })}</p>
+  {:else if !baseCvId}
+    <div class="mb-4">
+      <BasePicker {bases} bind:value={picked} name="intake-base" />
+    </div>
+  {/if}
   <div class="flex gap-4 border-b border-border text-sm">
     {#each [{ id: 'existing', label: s.tabs.existing }, { id: 'url', label: s.tabs.url }, { id: 'text', label: s.tabs.text }] as tabOption (tabOption.id)}
       <button

@@ -91,7 +91,7 @@
         <div class="mt-6 text-center">
           <button
             type="button"
-            onclick={openCvIntake}
+            onclick={() => openCvIntake()}
             class="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
           >
             {s.empty.cta} <ArrowRight class="size-4" />
