@@ -36,25 +36,34 @@
 
   async function load() {
     status = 'loading';
-    // Independent reads: the base list failing must not hide the tailored CVs (nor the reverse).
-    const [tailored, baseList] = await Promise.allSettled([api.listCvs(), api.listBaseCvs()]);
-    if (baseList.status === 'fulfilled') {
-      bases = baseList.value;
-      basesLoaded = true;
-    } else {
-      basesLoaded = false;
-      baseError = baseList.reason instanceof ApiError ? baseList.reason.message : s.base.loadFailed;
-    }
-    if (tailored.status === 'fulfilled') {
-      items = tailored.value;
+    // Independent reads, each shown as soon as it settles: a slow or failed base list must not
+    // hold back or hide the tailored CVs, nor the reverse.
+    await Promise.all([loadTailored(), loadBases(), loadTemplates()]);
+  }
+
+  async function loadTailored() {
+    try {
+      items = await api.listCvs();
       status = 'ready';
-    } else {
-      error = tailored.reason instanceof ApiError ? tailored.reason.message : s.loadFailed;
+    } catch (e) {
+      error = e instanceof ApiError ? e.message : s.loadFailed;
       announce(error, 'assertive');
       status = 'error';
-      return;
     }
-    // Labels are a nicety: a failed read leaves the template id, not a broken list.
+  }
+
+  async function loadBases() {
+    try {
+      bases = await api.listBaseCvs();
+      basesLoaded = true;
+    } catch (e) {
+      basesLoaded = false;
+      baseError = e instanceof ApiError ? e.message : s.base.loadFailed;
+    }
+  }
+
+  // Labels are a nicety: a failed read leaves the template id, not a broken list.
+  async function loadTemplates() {
     templates = await api.listCvTemplates().catch(() => []);
   }
 
@@ -136,7 +145,7 @@
     </div>
     {#if baseError}
       <p class="text-sm text-destructive">{baseError}</p>
-    {:else if status === 'ready' && basesLoaded && bases.length === 0}
+    {:else if basesLoaded && bases.length === 0}
       <div class="rounded-lg border border-dashed border-border p-6 text-center">
         <FileText class="mx-auto h-8 w-8 text-muted-foreground" />
         <p class="mt-3 font-medium">{s.base.empty.title}</p>
@@ -150,7 +159,7 @@
           {s.base.empty.cta} <ArrowRight class="size-4" />
         </button>
       </div>
-    {:else if status === 'ready' && basesLoaded}
+    {:else if basesLoaded}
       <ul class="flex flex-col gap-3">
         {#each bases as base (base.id)}
           <li

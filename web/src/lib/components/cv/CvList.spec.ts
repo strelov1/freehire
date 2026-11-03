@@ -102,4 +102,27 @@ describe('CvList base CVs', () => {
     // A list we could not read is not an empty one.
     expect(screen.queryByText('No base CV yet')).toBeNull();
   });
+
+  it('keeps the base CVs when only the tailored list fails to load', async () => {
+    listBaseCvs.mockResolvedValue([base('a', 'Backend', true)]);
+    listCvs.mockRejectedValue(new Error('boom'));
+    render(CvList);
+    expect(await screen.findByText('Backend')).toBeTruthy();
+    expect(screen.getByText('Edit')).toBeTruthy();
+    expect(await screen.findByText(/Template: Classic ATS/)).toBeTruthy();
+  });
+
+  it('shows a tailored-list failure while the base list is still loading', async () => {
+    listBaseCvs.mockReturnValue(new Promise(() => {}));
+    listCvs.mockRejectedValue(new Error('boom'));
+    render(CvList);
+    expect(await screen.findByText('Could not load your CVs.')).toBeTruthy();
+  });
+
+  it('offers to create a base when there is none, even if the tailored list fails', async () => {
+    listBaseCvs.mockResolvedValue([]);
+    listCvs.mockRejectedValue(new Error('boom'));
+    render(CvList);
+    expect(await screen.findByText('No base CV yet')).toBeTruthy();
+  });
 });
