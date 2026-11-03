@@ -54,6 +54,7 @@
     plain = false,
     savedSearches = false,
     formerEmployersAvailable = false,
+    hideSeenAvailable = false,
     open = false,
     onClose,
     previewCount,
@@ -73,6 +74,7 @@
     savedSearches?: boolean;
     /** Personal company filter: enabled only by a feed whose search uses the session. */
     formerEmployersAvailable?: boolean;
+    hideSeenAvailable?: boolean;
     title?: string;
     applyLabel?: string;
     onApply?: (staged: StagedFilters) => void | Promise<void>;
@@ -106,6 +108,7 @@
   // Gates the tab itself (visibleRail), its data warm-up, and the footer nudge that jumps
   // to it, so the jump never lands on a missing tab.
   const hasSavedTab = $derived(savedSearches && !railKeys);
+  const showHideSeen = $derived(hideSeenAvailable && !plain && isAuthenticated());
   const showFormerEmployers = $derived(formerEmployersAvailable && !plain && isAuthenticated());
 
   // Warm the Telegram feature flag and the user's profile when the modal opens for a
@@ -197,6 +200,7 @@
       return (
         (f.postedWithinDays != null ? 1 : 0) +
         (f.openWithinDays != null ? 1 : 0) +
+        (showHideSeen && f.hideSeen ? 1 : 0) +
         selCount(f, 'reality')
       );
     // The Minimum skill match threshold lives at the top of the Skills pane, so it
@@ -871,6 +875,20 @@
       Other covers non-US vetting (UK SC/DV, AU NV1, NATO) and clearances stated without a level.
     </p>
   {:else if entry.kind === 'posted'}
+    {#if showHideSeen}
+      <div class="mb-6">
+        <label class="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            class="size-4 rounded border-border"
+            checked={staged.value.hideSeen}
+            onchange={(e) => staged.setHideSeen(e.currentTarget.checked)}
+          />
+          <span>Hide viewed</span>
+        </label>
+        <p class="mt-1 text-xs text-muted-foreground">Skip jobs you have already opened.</p>
+      </div>
+    {/if}
     <!-- Two bounds over one set of stops, each labelled for WHOSE date it reads. They
          agree on most postings, which is exactly why the labels matter: where they
          disagree is where a board has restated its posting date, and that is the case

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import { ArrowRight, ChevronDown, Eye, Layers, Map as MapIcon, Target } from '@lucide/svelte';
+  import { ArrowRight, ChevronDown, Layers, Map as MapIcon, Target } from '@lucide/svelte';
   import { browser } from '$app/env';
   import { afterNavigate, goto, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -805,36 +805,7 @@
   </Button>
 {/snippet}
 
-<!-- Signed in only: "seen" is the server's record of what this account opened, and a
-     signed-out visitor has none, so the control would do nothing. A link carrying
-     hide_seen still loads for them; the server just ignores it and says so.
-
-     Standalone /jobs only: it is the daily feed this exists for, and the only loader
-     that hands the session to its server-rendered search. On a scoped list (a company,
-     a role, a skill, a collection) the first page would render unhidden under a
-     checked box. -->
-{#snippet hideSeenToggle()}
-  {#if standalone && isAuthenticated()}
-    <!-- Below `sm` the toolbar is two rows already: the eye says what the box does, and the
-         words stay for assistive tech and the tooltip rather than costing a third of the row. -->
-    <label
-      title="Hide viewed jobs"
-      class="flex shrink-0 cursor-pointer items-center gap-1.5 text-sm text-muted-foreground"
-    >
-      <input
-        type="checkbox"
-        class="size-4 rounded border-border"
-        checked={filters.value.hideSeen}
-        onchange={(e) => filters.setHideSeen(e.currentTarget.checked)}
-      />
-      <Eye class="size-4 shrink-0" aria-hidden="true" />
-      <span class="sr-only sm:not-sr-only">Hide viewed</span>
-    </label>
-  {/if}
-{/snippet}
-
 {#snippet listControls()}
-  {@render hideSeenToggle()}
   {@render postedSelect()}
   <!-- Unconditional. This used to be guarded against a one-option select - a label
        wearing a control's clothes - which could happen when match was hidden from a
@@ -1043,6 +1014,7 @@
   exclude={excludeFacets}
   savedSearches={standalone}
   formerEmployersAvailable={standalone}
+  hideSeenAvailable={standalone}
   open={modalOpen}
   onClose={() => (modalOpen = false)}
   {stagedCounts}
