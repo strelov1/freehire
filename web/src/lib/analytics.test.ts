@@ -269,10 +269,15 @@ describe('trackSignupIfNew → GA4 sign-up', () => {
     expect(await signUp(reply(false))).toEqual([['event', 'sign_up', { method: 'oauth' }]]);
   });
 
-  it('sends it from the browser when the report itself failed', async () => {
-    const failing = async () => {
-      throw new Error('offline');
+  it('leaves it to the server when the request went out but no answer could be read', async () => {
+    const lost = async () => {
+      throw new Error('connection reset');
     };
-    expect(await signUp(failing)).toEqual([['event', 'sign_up', { method: 'oauth' }]]);
+    expect(await signUp(lost)).toEqual([]);
+  });
+
+  it('sends it from the browser when the server refused the report', async () => {
+    const refused = async () => ({ ok: false, json: async () => ({}) });
+    expect(await signUp(refused)).toEqual([['event', 'sign_up', { method: 'oauth' }]]);
   });
 });

@@ -89,34 +89,41 @@ export function gaSessionId(cookie: string, measurementId: string): string | und
 }
 
 /** Tell the server how this just-created account arrived. Best effort: attribution
- *  must never be able to disturb a sign-up, so every failure is swallowed.
+ *  must never be able to disturb a sign-up, so no failure is thrown.
  *
- *  Resolves true only when the server confirmed it sent the GA4 `sign_up` itself. The
- *  caller sends it from the browser otherwise, so the sign-up is counted exactly once
- *  either way. */
+ *  Resolves true when the browser must NOT send the GA4 `sign_up` itself, false when
+ *  it must. GA4 cannot dedupe, so a doubtful outcome counts as "the server has it":
+ *  the server confirmed it, or the request went out and no answer could be read (it
+ *  may well have been processed). Only a definite failure - the request could not be
+ *  built, or the server refused it - returns false. */
 export async function reportSignupAttribution(
   method: 'oauth' | 'password',
   measurementId: string,
 ): Promise<boolean> {
+  let init: RequestInit;
   try {
     const cookie = document.cookie;
-    const body = {
-      ...readFirstTouch(sessionStorage),
-      method,
-      ga_client_id: gaClientId(cookie),
-      ga_session_id: gaSessionId(cookie, measurementId),
-    };
-    const response = await fetch('/api/v1/me/attribution', {
+    init = {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...readFirstTouch(sessionStorage),
+        method,
+        ga_client_id: gaClientId(cookie),
+        ga_session_id: gaSessionId(cookie, measurementId),
+      }),
       keepalive: true,
-    });
+    };
+  } catch {
+    return false; // nothing was sent
+  }
+  try {
+    const response = await fetch('/api/v1/me/attribution', init);
     if (!response.ok) return false;
     const answer = (await response.json()) as { data?: { ga4_sent?: boolean } };
     return answer.data?.ga4_sent === true;
   } catch {
-    return false;
+    return true; // sent, but no readable answer: the server may own the event
   }
 }
