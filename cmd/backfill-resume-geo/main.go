@@ -4,14 +4,14 @@
 // dictionary reaches existing candidates — the same role cmd/backfill-derive plays for
 // jobs, and the one thing the structured résumé itself still lacks.
 //
-// It needs ONLY DATABASE_URL (plus the optional SENTRY_* every worker shares). Unlike
+// It needs ONLY DATABASE_URL (plus the optional OTEL_* every worker shares). Unlike
 // cmd/backfill-resume-structured — which reads the CV out of object storage, de-identifies
 // it, and spends an LLM call per user — this worker re-reads a structure that is already
 // persisted and runs it through a deterministic dictionary. That is what makes it cheap
 // enough to re-run after ANY dictionary edit.
 //
 // It runs under worker.Main/worker.Bootstrap like every other cron worker, so it reports
-// panics to Sentry and unwinds on SIGTERM rather than being killed mid-write.
+// panics and unwinds on SIGTERM rather than being killed mid-write.
 //
 // Idempotent by construction: it derives through resume.DeriveGeography, the same
 // projection the upload path uses, so a second run over unchanged data and an unchanged

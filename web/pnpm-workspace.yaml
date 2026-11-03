@@ -1,5 +1,4 @@
 allowBuilds:
-  '@sentry/cli': false
   core-js: false
   # Pulled in transitively by @scalar/api-reference (Vue-based). Its postinstall only
   # writes a Vue-2-vs-3 compatibility shim; Scalar's own build already targets Vue 3
@@ -7,9 +6,8 @@ allowBuilds:
   # (verified in a real browser, light and dark).
   vue-demi: false
 # pnpm 11 structural config — not a workspace definition (no packages: list).
-# strictDepBuilds: false lets install proceed when @sentry/cli and core-js
-# build scripts are skipped. @sentry/cli is only needed for source-map upload
-# (gated on SENTRY_AUTH_TOKEN); core-js postinstall is non-critical.
+# strictDepBuilds: false lets install proceed when core-js and vue-demi build
+# scripts are skipped; neither postinstall is needed.
 strictDepBuilds: false
 # @sveltejs/kit pins cookie@^0.6.0 on every 2.x release (GHSA-pxg6-pf52-xh8x /
 # CVE-2024-47764, low: out-of-bounds characters in cookie name/path/domain).
@@ -85,8 +83,3 @@ overrides:
   # in setup ("Cannot define property modal, object is not extensible"). A floor,
   # not a pin: it only lifts the older copy onto the newer one.
   vue@<3.5.44: 3.5.44
-  # CVE-2026-118764: Sentry 11.x still requires glob 13, whose minimatch 10
-  # has no patched release. glob 14 preserves the glob(patterns, options) API
-  # Sentry uses and the same Node engines, and brings patched minimatch 11 itself.
-  # Remove this scoped pin when Sentry accepts glob 14 natively.
-  '@sentry/bundler-plugins>glob': 14.0.3

@@ -277,29 +277,6 @@ func TestLoad_S3EmptyWhenUnset(t *testing.T) {
 	}
 }
 
-func TestLoad_SentryFromEnv(t *testing.T) {
-	t.Setenv("SENTRY_DSN", "https://pub@o1.ingest.sentry.io/42")
-	t.Setenv("SENTRY_ENVIRONMENT", "production")
-
-	s := Load()
-	if s.SentryDSN != "https://pub@o1.ingest.sentry.io/42" || s.SentryEnvironment != "production" {
-		t.Errorf("Sentry settings = %q/%q, want the env values", s.SentryDSN, s.SentryEnvironment)
-	}
-}
-
-func TestLoad_SentryDefaultsWhenUnset(t *testing.T) {
-	t.Setenv("SENTRY_DSN", "")
-	t.Setenv("SENTRY_ENVIRONMENT", "")
-
-	s := Load()
-	if s.SentryDSN != "" {
-		t.Errorf("SentryDSN should be empty when unset, got %q", s.SentryDSN)
-	}
-	if s.SentryEnvironment != "development" {
-		t.Errorf("SentryEnvironment should default to development when unset, got %q", s.SentryEnvironment)
-	}
-}
-
 func TestLoad_JWTSecretFromEnv(t *testing.T) {
 	t.Setenv("JWT_SECRET", "s3cret")
 

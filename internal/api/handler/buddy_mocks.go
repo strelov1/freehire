@@ -50,7 +50,7 @@ func mockError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "mock interview not found")
 	case errors.Is(err, slots.ErrNoOwnerZone):
 		// A stored zone that no longer resolves is a broken row, not a bad request. Wrapped,
-		// not a fiber.Error, so Sentry keeps the host and the zone; the caller gets RenderError's
+		// not a fiber.Error, so the report keeps the host and the zone; the caller gets RenderError's
 		// generic 500.
 		return fmt.Errorf("buddy mock: this member's schedule is misconfigured: %w", err)
 	}

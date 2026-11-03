@@ -6,9 +6,9 @@ match-analysis stream failures, workers using `worker.Main`, SvelteKit errors an
 the extension's own background, content and panel errors. It does not turn every
 returned Go error or every application-level SSE message into telemetry.
 
-This is searchable exception aggregation. It does not provide Sentry's issue
-lifecycle, automatic grouping or automatic source-map resolution. Sentry remains
-an optional fallback while the new path is rolled out.
+This is searchable exception aggregation. It does not provide an issue tracker's
+lifecycle, automatic grouping or automatic source-map resolution. It is the only
+reporter: Sentry, the fallback during rollout, was removed in November 2026.
 
 ## Configuration
 
@@ -32,21 +32,20 @@ public settings contain no credentials. Restart Node after changing its environm
 Changing the extension settings requires a new build; changing a systemd environment
 file cannot alter an installed extension.
 
-Without an OTLP endpoint, collection is disabled and existing Sentry configuration
-can be used. With an endpoint configured, OpenTelemetry takes precedence. Removing
-the OTLP settings and redeploying/restarting the affected components rolls back
-collection. Keep valid Sentry settings during the transition if fallback is needed.
+Without an OTLP endpoint, collection is disabled: nothing is exported, and only
+SSR still writes unexpected errors to its own journal (`console.error`). Removing
+the OTLP settings and restarting the affected components switches collection off;
+there is no fallback reporter behind it.
 
 On the existing host layout, put Go runtime settings in the environment files its
 units already read and Node/SSR settings in `/opt/freehire/env/hire-web.env`.
 The release script also reads the public OTLP endpoint/environment from that web
 file for builds and stamps the actual source SHA into the inactive colour's Node
 environment before starting it. Go builds retain VCS metadata for exception versions.
-When retiring Sentry uploads, remove the entire optional
-`/opt/freehire/env/sentry-build.env` file: leaving org/project settings while
-clearing only its token still trips the existing credential gate. Remove
-inherited Sentry upload variables from the release environment too. Runtime OTLP
-configuration alone does not bypass a deliberately configured Sentry upload gate.
+The build no longer uploads source maps and the repository no longer carries the
+Sentry credential check `release.sh` used to run; with the script absent it warns and
+continues. The leftover `SENTRY_*`/`PUBLIC_SENTRY_*` variables and
+`/opt/freehire/env/sentry-build.env` are read by nothing and can be deleted.
 
 ## Operations files
 
@@ -137,7 +136,7 @@ read-only. MCP is optional; terminal investigation requires no agent plugin.
 
 ## Acceptance and rollout
 
-Before disabling Sentry, verify each instrumented build end to end. Record the
+When changing the pipeline, verify each instrumented build end to end. Record the
 build SHA, environment, service and a unique synthetic error message; then query
 that message from a fresh terminal session. Exercise an unexpected Go handler
 error, recovered request panic, failed match-analysis SSE after headers, a worker

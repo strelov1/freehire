@@ -142,7 +142,7 @@ func errorResult(text string) *mcp.CallToolResult {
 // Authentication lives in that middleware rather than here because a bare
 // net/http.Handler (this one, wrapped via adaptor.HTTPHandler) has no route
 // back into Fiber's error pipeline: an infra failure authenticating the token
-// (a DB error, not an unknown token) must reach Sentry as the 500 it is, and
+// (a DB error, not an unknown token) must be reported as the 500 it is, and
 // only a true Fiber handler returning a Go error gets that for free.
 const AccountUserIDHeader = "X-Freehire-Account-User-Id"
 

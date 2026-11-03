@@ -17,7 +17,6 @@ import (
 	// the binary independent of that.
 	_ "time/tzdata"
 
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	recovermiddleware "github.com/gofiber/fiber/v2/middleware/recover"
@@ -61,7 +60,7 @@ func main() { os.Exit(runMain()) }
 
 func runMain() int {
 	cfg := config.Load()
-	shutdown, err := observability.InitLogs("freehire-api", cfg.SentryEnvironment)
+	shutdown, err := observability.InitLogs("freehire-api")
 	if err != nil {
 		log.Printf("exception reporting: %v", err)
 		return 1
@@ -104,14 +103,6 @@ func runServer(cfg config.Settings) error {
 	if err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
-
-	// Error reporting is optional and env-gated: no DSN ⇒ Init is a no-op. A
-	// malformed DSN is fatal — a misconfigured gateway must not boot silently.
-	sentryFlush, err := observability.Init(cfg.SentryDSN, cfg.SentryEnvironment)
-	if err != nil {
-		return fmt.Errorf("sentry: %w", err)
-	}
-	defer sentryFlush()
 
 	// One signal-bound context drives both startup and shutdown: it cancels the pool
 	// connect if a signal arrives mid-startup, and its Done channel is the shutdown
@@ -183,8 +174,8 @@ func runServer(cfg config.Settings) error {
 	app.Use(observability.RequestIDs())
 
 	// Report the panic while its stack is available and mark it so RenderError
-	// cannot report it a second time. Sentry's fallback middleware captures first
-	// when configured; the callback preserves the no-stderr-stack behavior.
+	// cannot report it a second time. The callback preserves the no-stderr-stack
+	// behavior.
 	app.Use(recovermiddleware.New(recovermiddleware.Config{
 		EnableStackTrace:  true,
 		StackTraceHandler: handler.ReportPanic,
@@ -197,16 +188,6 @@ func runServer(cfg config.Settings) error {
 	app.Use(logger.New(logger.Config{DisableColors: true,
 		Format: "${time} | ${status} | ${latency} | ${ip} | ${method} | ${path} | ${error} | request_id=${locals:diagnostics.request_id}\n",
 	}))
-
-	// Sentry request middleware, wired only when error reporting is configured. It
-	// sits AFTER recover.New so its deferred capture runs first on a panic (reporting
-	// it with request context); Repanic re-raises so recover.New still renders the
-	// standard 500 envelope. Non-panic 500s are reported separately in handler.RenderError
-	// — including the ones a handler declared itself; a 503 means "unconfigured here" and
-	// is deliberately not one of them.
-	if cfg.SentryDSN != "" {
-		app.Use(sentryfiber.New(sentryfiber.Options{Repanic: true}))
-	}
 
 	// Search is optional: without a Meilisearch key the client stays nil and the
 	// search endpoint reports 503, leaving the rest of the API fully functional. No

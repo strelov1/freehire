@@ -17,9 +17,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Missing Sentry hubs must not suppress unexpected errors or stream failures;
+// Unexpected errors, panics and stream failures reach the exception log;
 // expected client cancellation and 4xx must stay out of the exception stream.
-func TestOTelExceptionsWithoutSentry(t *testing.T) {
+func TestOTelExceptions(t *testing.T) {
 	requests := make(chan *collector.ExportLogsServiceRequest, 4)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -32,7 +32,7 @@ func TestOTelExceptionsWithoutSentry(t *testing.T) {
 	}))
 	defer server.Close()
 	t.Setenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", server.URL+"/v1/logs")
-	shutdown, err := observability.InitLogs("freehire-api", "test")
+	shutdown, err := observability.InitLogs("freehire-api")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,9 +49,9 @@ func TestOTelExceptionsWithoutSentry(t *testing.T) {
 		}
 		response.Body.Close()
 	}
-	reportStreamFault(nil, errors.New("unexpected stream failure"))
-	reportStreamFault(nil, context.Canceled)
-	func() { defer recoverStream(nil, "test stream", nil); panic("stream panic") }()
+	reportStreamFault(errors.New("unexpected stream failure"))
+	reportStreamFault(context.Canceled)
+	func() { defer recoverStream("test stream", nil); panic("stream panic") }()
 	shutdown()
 	select {
 	case request := <-requests:

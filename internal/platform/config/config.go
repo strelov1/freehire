@@ -238,13 +238,6 @@ type Settings struct {
 	// anonymous is worse than no count at all.
 	TracerLinkSalt string
 
-	// Sentry backs optional error reporting for the server and every cron worker
-	// (internal/platform/observability). Optional: an empty SentryDSN disables the integration
-	// entirely (no init, no delivery) — enforced at the observability call site, not
-	// here. SentryEnvironment tags every event (defaults to "development" for local runs).
-	SentryDSN         string
-	SentryEnvironment string
-
 	// Telegram bot for outbound notifications (filter subscriptions). Optional:
 	// an empty TelegramBotToken disables the feature — the linking endpoints and
 	// webhook are inert and the notify worker has nothing to deliver through.
@@ -498,9 +491,6 @@ func Load() Settings {
 			MaxSignalQuoteRunes:   envInt("MATCH_ANALYSIS_MAX_SIGNAL_QUOTE_RUNES", 0),
 			MaxSignalInsightRunes: envInt("MATCH_ANALYSIS_MAX_SIGNAL_INSIGHT_RUNES", 0),
 		},
-
-		SentryDSN:         os.Getenv("SENTRY_DSN"),
-		SentryEnvironment: env("SENTRY_ENVIRONMENT", "development"),
 
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),

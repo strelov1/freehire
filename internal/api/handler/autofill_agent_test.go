@@ -144,7 +144,7 @@ func (s extensionSocket) Send(frame []byte) error {
 // two live model calls, so that answer told a candidate whose gateway had 5xx'd, or whose
 // call hit our own 90-second deadline, that they had a state conflict — printed the
 // internals verbatim in the extension's panel, and kept every one of those faults out of
-// Sentry, since RenderError only reports what it classifies as a fault.
+// the exception log, since RenderError only reports what it classifies as a fault.
 func TestRunAgentAutofillAnswersEachFailureAsWhatItIs(t *testing.T) {
 	const userID = int64(7)
 	iss := auth.NewIssuer("test-secret", time.Hour)

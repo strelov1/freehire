@@ -504,7 +504,7 @@ func hybridPage(docs []JobDocument, limit, offset int) SearchResult {
 
 // ErrBadQuery marks a search request Meilisearch rejected as malformed — a 400,
 // e.g. an unparseable filter value passed through from client input. It is a
-// client mistake, not an engine fault, so handlers map it to 400 and skip Sentry
+// client mistake, not an engine fault, so handlers map it to 400 and do not report it
 // (see internal/api/handler.classify). Callers match it with errors.Is.
 var ErrBadQuery = errors.New("bad query")
 
@@ -524,7 +524,7 @@ func isBadRequest(err error) bool {
 // NOT chain to context.Canceled (the SDK's *Error has no Unwrap), so the sentinel has
 // to be re-raised directly or errors.Is stops working upstream and a client disconnect
 // reads as a fault. And a 400 is the engine refusing input that came from the caller,
-// so it is tagged ErrBadQuery for handlers to render as 400 without Sentry.
+// so it is tagged ErrBadQuery for handlers to render as 400 without reporting it.
 //
 // A package-level function rather than a method: disjunctiveFacetCounts is deliberately
 // a free function (it takes its searcher, so it is testable without an engine) and has
@@ -722,6 +722,11 @@ func facetSettings() *meilisearch.Settings {
 			// StringFacets, so the settings-before-binary warning above applies, and a
 			// full rebuild must follow the backfill-derive that fills existing rows.
 			"perks",
+			// engagement is the jobs text[] column beside it (internal/dict/engagement,
+			// the IR35 status today), a multi-value facet enrolled through StringFacets:
+			// the same settings-before-binary order, and the same rebuild after the
+			// backfill-derive that fills existing rows.
+			"engagement",
 			// apply_questions is the captured application form's required-question
 			// count (jobview.Job.ApplyQuestions), attached at index time from apply_forms
 			// and ABSENT when no form was captured, so `apply_questions <= N` never

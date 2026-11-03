@@ -27,7 +27,7 @@ const oauthV2StateCookieName = "hire_oauth_v2_state"
 
 // errOAuthV2StateMismatch and errOAuthV2MissingCode are named so oauthV2Fail
 // can tell an ordinary CSRF-state check or a malformed provider callback (both
-// routine, not worth a Sentry report) apart from a genuine infra failure.
+// routine, not worth an error report) apart from a genuine infra failure.
 var (
 	errOAuthV2StateMismatch = errors.New("oauth v2: state mismatch")
 	errOAuthV2MissingCode   = errors.New("oauth v2: missing code")
@@ -35,7 +35,7 @@ var (
 
 // isExpectedAttemptFailure reports whether err is one of the mobileauth
 // validation sentinels — caller sent a malformed or stale attempt — rather
-// than an unexpected infra failure that should reach Sentry via RenderError.
+// than an unexpected infra failure that should be reported via RenderError.
 func isExpectedAttemptFailure(err error) bool {
 	return errors.Is(err, mobileauth.ErrInvalid) ||
 		errors.Is(err, mobileauth.ErrVerifier) ||
@@ -270,7 +270,7 @@ func (h *authHandlers) oauthV2Fail(c *fiber.Ctx, target string, cause error) err
 		code = "reauth_identity_mismatch"
 	}
 	// This leg always redirects rather than returning through RenderError, so
-	// it has to open its own Sentry gate: a routine cause (bad state, expired
+	// it has to open its own reporting gate: a routine cause (bad state, expired
 	// attempt, provider rejected the code) stays silent, anything else — a DB
 	// error out of the store, the OAuth provider itself being down — is a
 	// genuine fault and must not vanish behind a generic "sign-in failed".
