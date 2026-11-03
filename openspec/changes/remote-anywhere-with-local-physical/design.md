@@ -74,10 +74,11 @@ group swapped, nothing else moved.
 
 ### "Apply my profile" sets the flag; the modal can change it
 
-`filtersFromProfile` sets `workModeRemoteAnywhere` when the profile accepts remote
-with no remote reach, accepts at least one physical mode, and states a base or
-relocation geography (a stated reach keeps the plain flatten: the modifier would
-drop it from the remote arm) —
+`filtersFromProfile` sets `workModeRemoteAnywhere` when the profile accepts remote,
+accepts at least one physical mode, and states a base or relocation geography. The
+profile's remote reach goes to `work_mode_remote_regions`/`work_mode_remote_countries`,
+which bound only the remote arm, and the location facets carry only the base and
+relocation geography —
 the exact shape the location form collects, so the flag is the flattening of what
 the user actually answered rather than a new question. The modal's Work format
 pane gains a checkbox (shown only when remote AND a physical mode are both

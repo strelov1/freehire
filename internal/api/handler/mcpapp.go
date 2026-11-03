@@ -301,7 +301,7 @@ func (h *mcpappHandlers) SimilarJobs(ctx context.Context, slug string, limit int
 		return mcpapp.SimilarJobsResult{}, mcpapp.NotFoundError{What: "posting"}
 	}
 
-	views, err := similarViews(ctx, h.store, row.ID, limit, publishedToAgents)
+	views, err := similarViews(ctx, h.search, h.store, row, limit, h.semantic.threshold, publishedToAgents)
 	if err != nil {
 		return mcpapp.SimilarJobsResult{}, err
 	}

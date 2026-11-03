@@ -336,6 +336,7 @@ func optiusBaseJob(c optiusCard) Job {
 // whose page shows only an image or an embedded third-party page.
 type optiusLD struct {
 	DatePosted             string `json:"datePosted"`
+	ValidThrough           string `json:"validThrough"`
 	Description            string `json:"description"`
 	Responsibilities       string `json:"responsibilities"`
 	JobBenefits            string `json:"jobBenefits"`
@@ -379,6 +380,12 @@ func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 	if hasLD {
 		if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
 			j.PostedAt = NotFuture(&t)
+		}
+		// validThrough is the source's own last application day, a bare UTC date. Unlike a
+		// posted_at it may legitimately sit today or tomorrow, so it is not run through
+		// NotFuture; a stale one past today closes the posting on the write.
+		if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.ValidThrough)); err == nil {
+			j.ApplicationDeadline = &t
 		}
 		j.EmploymentType = optiusEmploymentType(ld.WorkHours)
 		if years, ok := optiusYears(ld.ExperienceRequirements); ok {

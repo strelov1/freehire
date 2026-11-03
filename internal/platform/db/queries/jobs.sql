@@ -240,24 +240,6 @@ SELECT id, description
 FROM jobs
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
--- name: GetSimilarJobIDs :one
--- Narrow read for GET /jobs/:slug/similar (internal/api/handler/similar.go): only the
--- precomputed neighbour-id list (jobs.similar_job_ids, populated by
--- cmd/similar-backfill — see semantic.sql's job_semantic_chunks section), not the
--- whole wide job row. Mirrors GetJobDescriptionsByIDs's "narrow projection for a
--- hot read path" precedent above. The list is nearest-first and, as of writing,
--- capped at cmd/similar-backfill's -similar flag (default 20, matching the API's
--- maxSimilarLimit) — the handler still re-filters it to open jobs at read time,
--- since a neighbour can close after it was computed. A job with no precomputed
--- list yet (never backfilled) comes back with a NULL/nil similar_job_ids, not an
--- error — the handler treats "not backfilled yet" and "computed empty" the same.
--- countries rides along because the handler puts neighbours sharing the source's
--- country first: the precomputed list ignores geography, so it routinely leads with
--- the same role on another continent (freehire#3874).
-SELECT similar_job_ids, countries
-FROM jobs
-WHERE id = sqlc.arg(id)::bigint;
-
 -- name: LatestOpenJobAddedAt :one
 -- created_at of the most recently added open, public job — the "is the pipeline
 -- still writing rows" signal for the public /status endpoint. Same predicate and
@@ -519,14 +501,6 @@ ON CONFLICT (source, external_id) DO UPDATE SET
         WHEN COALESCE(EXCLUDED.application_deadline, jobs.application_deadline) < (now() AT TIME ZONE 'UTC')::date
         THEN 'expired' ELSE '' END,
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
-    -- A company correction (rare, but real — e.g. a slug fix on re-ingest) invalidates
-    -- this job's already-precomputed similar-jobs list: it may have been computed
-    -- excluding the OLD company and so now wrongly includes a same-company match.
-    -- Force cmd/similar-backfill to redo it. Unconditional company_slug writes far
-    -- outnumber actual changes (every re-crawl runs this branch), so this must be
-    -- conditional or every re-ingest would invalidate the list for nothing.
-    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM EXCLUDED.company_slug
-                               THEN NULL ELSE jobs.similar_computed_at END,
     -- The write carried a body, so the row's stored text is as fresh as this crawl. See the
     -- column's migration (0144) for why this is not updated_at, and RefreshUnchangedJob for
     -- the other half: a body that came back byte-identical takes that statement, and stamps
@@ -806,6 +780,20 @@ requeued AS (
     ON CONFLICT (job_id) DO NOTHING
 )
 SELECT count(*)::bigint FROM updated;
+
+-- name: GetJobDuplicateOwner :one
+-- Resolve the source's ultimate owner, including suppressed sources whose parent
+-- is itself suppressed. Match ListJobCopies' depth bound; a cycle/missing chain
+-- yields zero, so related-jobs reads can decline to recommend their own posting.
+WITH RECURSIVE up AS (
+    SELECT a.id, a.duplicate_of, 0 AS depth FROM jobs a WHERE a.id = sqlc.arg(job_id)
+    UNION ALL
+    SELECT p.id, p.duplicate_of, u.depth + 1
+    FROM up u
+    JOIN jobs p ON p.id = u.duplicate_of
+    WHERE u.depth < 8
+)
+SELECT COALESCE((SELECT u.id FROM up u WHERE u.duplicate_of IS NULL LIMIT 1), 0)::bigint AS owner_id;
 
 -- name: ListJobCopies :many
 -- The open postings the anchor's OWNER represents — the "N openings across cities" list for a
@@ -1461,12 +1449,6 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     closed_at    = NULL,
     closed_reason = '',
     liveness_strikes = CASE WHEN jobs.closed_at IS NOT NULL THEN 0 ELSE jobs.liveness_strikes END,
-    -- Same reasoning as UpsertJob: a moderator company correction invalidates this
-    -- job's already-precomputed similar-jobs list (it may have been computed
-    -- excluding the OLD company), so force cmd/similar-backfill to redo it —
-    -- conditionally, since every re-create runs this branch, not just company edits.
-    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM EXCLUDED.company_slug
-                               THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 RETURNING *;
 
@@ -1581,12 +1563,6 @@ SET title        = sqlc.arg(title),
     -- fetch that failed.
     requirements_derived = COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb),
     updated_by   = sqlc.arg(updated_by)::bigint,
-    -- Same reasoning as UpsertJob: a company correction invalidates this job's
-    -- already-precomputed similar-jobs list (it may have been computed excluding the
-    -- OLD company), so force cmd/similar-backfill to redo it — conditionally, since
-    -- most edits leave the company untouched.
-    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM sqlc.arg(company_slug)
-                               THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 WHERE public_slug = sqlc.arg(public_slug) AND created_by IS NOT NULL AND NOT is_private
 RETURNING *;
@@ -1641,8 +1617,6 @@ SET title        = sqlc.arg(title),
     role_fingerprint = sqlc.arg(role_fingerprint),
     requirements_derived = COALESCE(sqlc.arg(requirements_derived)::jsonb, '[]'::jsonb),
     updated_by   = sqlc.arg(updated_by)::bigint,
-    similar_computed_at = CASE WHEN jobs.company_slug IS DISTINCT FROM sqlc.arg(company_slug)
-                               THEN NULL ELSE jobs.similar_computed_at END,
     updated_at   = now()
 WHERE public_slug = sqlc.arg(public_slug)
   AND created_by = sqlc.arg(actor_id)::bigint

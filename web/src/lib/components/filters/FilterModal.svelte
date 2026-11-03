@@ -11,7 +11,7 @@
   import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
-  import { emptyFilters, appliesWorkModeRemoteAnywhere, type FilterStore, type JobFilters } from '#lib/filters.js';
+  import { emptyFilters, appliesWorkModeRemoteAnywhere, workModeRemoteLabel, type FilterStore, type JobFilters } from '#lib/filters.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
   import { SHORT_APPLICATION_MAX } from '#lib/jobFacts.js';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '#lib/filterSections.js';
@@ -771,10 +771,10 @@
           checked={staged.value.workModeRemoteAnywhere}
           onchange={(e) => staged.setWorkModeRemoteAnywhere(e.currentTarget.checked)}
         />
-        <span>Remote from anywhere</span>
+        <span>{workModeRemoteLabel(staged.value)}</span>
       </label>
       <p class="mt-1 text-xs text-muted-foreground">
-        Show remote jobs from anywhere; hybrid and on-site only within the locations above.
+        Hybrid and on-site stay within the locations above; remote work is not bound by them.
       </p>
     {/if}
     <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" counts={c} /></div>

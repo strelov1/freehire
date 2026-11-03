@@ -290,7 +290,7 @@ func TestTheAppOpenCheckFailsRatherThanCallingEverythingMissing(t *testing.T) {
 func TestTheAppSimilarJobsRefusesAnUnpublishedPostingLikeAnAbsentOne(t *testing.T) {
 	// Answering a private slug with its neighbours while an unknown slug answers not found
 	// would tell an anonymous caller the private posting exists.
-	store := fakeOJCPStore{job: db.Job{ID: 1, PublicSlug: "x", IsPrivate: true}, similarIDs: []int64{2}}
+	store := fakeOJCPStore{job: db.Job{ID: 1, PublicSlug: "x", IsPrivate: true}}
 	_, err := mcpappUnder(&fakeSearcher{}, nil, store).SimilarJobs(context.Background(), "x", 6)
 
 	var notFound mcpapp.NotFoundError
@@ -303,8 +303,7 @@ func TestTheAppSimilarJobsShowsOnlyWhatTheAppWouldShowNearestFirst(t *testing.T)
 	// The website drops closed and private neighbours; the app also drops duplicates, as
 	// every one of its tools does.
 	store := fakeOJCPStore{
-		job:        db.Job{ID: 1, PublicSlug: "x", Title: "Go Dev", Company: "Acme"},
-		similarIDs: []int64{5, 4, 3, 2},
+		job: db.Job{ID: 1, PublicSlug: "x", Title: "Go Dev", Company: "Acme", Category: "backend", Countries: []string{"de"}},
 		jobsByID: []db.Job{
 			{ID: 2, PublicSlug: "open-far", Title: "B", Company: "Acme"},
 			{ID: 3, PublicSlug: "dup", Title: "C", Company: "Acme", DuplicateOf: pgtype.Int8{Int64: 2, Valid: true}},
@@ -313,7 +312,7 @@ func TestTheAppSimilarJobsShowsOnlyWhatTheAppWouldShowNearestFirst(t *testing.T)
 		},
 	}
 
-	got, err := mcpappUnder(&fakeSearcher{}, nil, store).SimilarJobs(context.Background(), "x", 6)
+	got, err := mcpappUnder(&fakeSearcher{res: search.SearchResult{Hits: []search.JobDocument{{ID: 5}, {ID: 4}, {ID: 3}, {ID: 2}}}}, nil, store).SimilarJobs(context.Background(), "x", 6)
 	if err != nil {
 		t.Fatalf("SimilarJobs: %v", err)
 	}
