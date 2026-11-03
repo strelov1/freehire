@@ -35,6 +35,9 @@ var (
 	// shortYear is a two-digit year as CVs print it: "Jan '16", "01/16", "Sep 16". A bare
 	// two-digit number is not one ("14 plants"), so it needs an apostrophe, a month before
 	// the separator, or an English month name before it.
+	// shortEnd is the end of an abbreviated range, "2016–24" or "2016 - 24". The trailing group
+	// exists only to reject "2016 - 06/2024", where "06" is the next date's month, not a year.
+	shortEnd  = regexp.MustCompile(`\b(?:19|20)\d{2}\s*[–—-]\s*(\d{2})\b([/.]\d)?`)
 	shortYear = regexp.MustCompile(`['’](\d{2})\b|\b(?:0?[1-9]|1[0-2])[./-](\d{2})\b|(?i:\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+)(\d{2})\b`)
 )
 
@@ -66,6 +69,13 @@ func collectDateEvidence(text string) dateEvidence {
 				ev.years[1900+yy], ev.years[2000+yy] = true, true
 			}
 		}
+	}
+	for _, m := range shortEnd.FindAllStringSubmatch(text, -1) {
+		if m[2] != "" {
+			continue // the digits are a month: "05/2016 - 06/2024"
+		}
+		yy, _ := strconv.Atoi(m[1])
+		ev.years[1900+yy], ev.years[2000+yy] = true, true
 	}
 	for _, m := range monthFirst.FindAllStringSubmatch(text, -1) {
 		month, _ := strconv.Atoi(m[1])
@@ -140,3 +150,17 @@ func dropUnsupportedYears(s *Structured, cvText string) int {
 }
 
 func isDigitByte(b byte) bool { return b >= '0' && b <= '9' }
+
+// retryIsBetter reports whether a second answer should replace the first. Fewer date problems
+// is the aim, but only among answers that say as much: an empty experience list has no date
+// problems at all, and taking it would swap a populated extraction for one that imports no
+// work history. Hard problems are ranked above soft ones for the reason in the file header.
+func retryIsBetter(first, again Structured, cvText string) bool {
+	if len(again.Experience) < len(first.Experience) {
+		return false
+	}
+	hard, soft := dateProblems(first, cvText)
+	h, sf := dateProblems(again, cvText)
+
+	return h < hard || (h == hard && sf < soft)
+}

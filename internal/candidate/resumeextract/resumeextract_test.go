@@ -385,3 +385,34 @@ func TestExtract_RetryWithAHardProblemDoesNotReplaceDoubtfulOnes(t *testing.T) {
 		t.Errorf("Acme start = %v, want 2016 from the first answer: the retry's 2019 is invented", st)
 	}
 }
+
+func TestExtract_EmptyRetryDoesNotReplaceAPopulatedFirstAnswer(t *testing.T) {
+	doubtful := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
+	m := &scriptedModel{resps: []string{doubtful, `{"experience":[]}`}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Fatalf("LLM calls = %d, want 2", m.n)
+	}
+	if len(got.Experience) != 1 {
+		t.Errorf("experience = %d roles, want the first answer's 1: an empty retry has no date problems only because it has no roles", len(got.Experience))
+	}
+}
+
+func TestDateEvidence_AbbreviatedRangeEndCountsAsAYear(t *testing.T) {
+	ev := collectDateEvidence("Engineer, Acme, 2016–24\nAnalyst, Initech, 2010 - 13")
+	for _, y := range []int{2024, 2013} {
+		if !ev.years[y] {
+			t.Errorf("years = %v, want %d from the abbreviated end of the range", ev.years, y)
+		}
+	}
+}
+
+func TestDateEvidence_MonthAfterARangeStartIsNotAnAbbreviatedYear(t *testing.T) {
+	ev := collectDateEvidence("05/2016 - 06/2024")
+	if ev.years[2006] || ev.years[1906] {
+		t.Errorf("years = %v: \"06\" here is a month, not the end of the range", ev.years)
+	}
+}

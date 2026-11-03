@@ -161,7 +161,7 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	if hard, soft := dateProblems(s, modelText); hard+soft > 0 {
 		if retryCtx, cancel, ok := retryContext(ctx); ok {
 			if again, err := e.generate(retryCtx, modelText, schema); err == nil {
-				if h, sf := dateProblems(again, modelText); h < hard || (h == hard && sf < soft) {
+				if retryIsBetter(s, again, modelText) {
 					s = again
 				}
 			}
