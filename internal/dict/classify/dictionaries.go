@@ -1973,6 +1973,10 @@ var coreCategoryTable = []aliasEntry{
 	{"hubspot crm administrator", "solutions_engineering"},
 	{"sap consultant", "solutions_engineering"},
 	{"sap fico", "solutions_engineering"},
+	{"netsuite developer", "software_engineering"},
+	{"netsuite engineer", "software_engineering"},
+	{"netsuite administrator", "software_engineering"},
+	{"netsuite consultant", "solutions_engineering"},
 	{"sap sd consultant", "solutions_engineering"},
 	{"sap mm consultant", "solutions_engineering"},
 	// No bare "crm specialist": an unqualified one is a marketing-operations seat at
