@@ -254,22 +254,24 @@ const defaultAssistantMaxPrompt = 8000
 
 // sessionResponse is the wire shape of one conversation.
 type sessionResponse struct {
-	ID     string  `json:"id"`
-	Preset string  `json:"preset"`
-	Label  string  `json:"label"`
-	CVID   *string `json:"cv_id,omitempty"`
-	JobID  *int64  `json:"job_id,omitempty"`
+	SearchContext *assistant.SearchContext `json:"search_context,omitempty"`
+	ID            string                   `json:"id"`
+	Preset        string                   `json:"preset"`
+	Label         string                   `json:"label"`
+	CVID          *string                  `json:"cv_id,omitempty"`
+	JobID         *int64                   `json:"job_id,omitempty"`
 }
 
 // sessionView renders a session for the client. The id is a string because the
 // client treats session ids as opaque and a CV stores its bound session id as text.
 func sessionView(s assistant.Session) sessionResponse {
 	return sessionResponse{
-		ID:     s.ID.String(),
-		Preset: s.Preset,
-		Label:  s.Label,
-		CVID:   cvIDString(s.CVID),
-		JobID:  s.JobID,
+		ID:            s.ID.String(),
+		SearchContext: s.SearchContext,
+		Preset:        s.Preset,
+		Label:         s.Label,
+		CVID:          cvIDString(s.CVID),
+		JobID:         s.JobID,
 	}
 }
 
@@ -312,6 +314,25 @@ func (h *assistantHandlers) CreateAssistantSession(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	var input struct {
+		SearchQuery *string `json:"search_query"`
+		RequestID   string  `json:"request_id"`
+	}
+	if len(c.Body()) > 0 {
+		if err := json.Unmarshal(c.Body(), &input); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid session request")
+		}
+	}
+	if input.SearchQuery != nil {
+		if preset != assistant.PresetChat {
+			return fiber.NewError(fiber.StatusBadRequest, "only general chat can bind a search")
+		}
+		return h.createShortlistSession(c, userID, *input.SearchQuery, input.RequestID)
+	}
+	if input.RequestID != "" {
+		return fiber.NewError(fiber.StatusBadRequest, "request_id requires search_query")
+	}
+
 	// The creatable presets that bind to something all bind to the same thing: an
 	// application. The client may name the vacancy because that binding is one the caller
 	// already owns, and the server checks it rather than taking their word for it.
@@ -629,6 +650,20 @@ func (h *assistantHandlers) streamTurn(c *fiber.Ctx, sess assistant.Session, pro
 // streamContinue is streamTurn for a retry: same SSE machinery, no new prompt.
 func (h *assistantHandlers) streamContinue(c *fiber.Ctx, sess assistant.Session, turn assistant.TurnConfig) error {
 	return h.streamSSE(c, sess, h.meterRetry, func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, system string, emit func(assistant.Event)) error {
+		if sess.SearchContext != nil {
+			transcript, err := h.store.Transcript(ctx, sess.ID)
+			if err != nil {
+				emit(assistant.Event{Kind: assistant.EventResult, IsError: true, StopReason: assistant.StopError})
+				return err
+			}
+			shown, err := shortlistShown(transcript)
+			if err != nil {
+				emit(assistant.Event{Kind: assistant.EventResult, IsError: true, StopReason: assistant.StopError})
+				return err
+			}
+			reg = assistant.NewRegistry(h.shortlistDiscoveryTools(sess, shown)...)
+			reg.MaxResultBytes = assistantResultCap
+		}
 		return runner.Continue(ctx, sess, reg, system, turn, emit)
 	})
 }
@@ -684,7 +719,25 @@ func (h *assistantHandlers) streamSSE(
 	// the history can group them and "undo the run" is undoing a batch — which is what
 	// retires the single pre-run snapshot and the edge two concurrent runs used to create.
 	registry := h.registry(turnSess, uuid.New())
-	system := assistant.SystemPrompt(turnSess.Preset, h.userLanguage(c.Context(), sess.UserID))
+	language := h.userLanguage(c.Context(), sess.UserID)
+	system := assistant.SystemPrompt(turnSess.Preset, language)
+	if turnSess.SearchContext != nil {
+		run := start
+		// Called after acquiring the session's turn slot: a preceding turn may have
+		// saved new preferences while this request was queued.
+		start = func(ctx context.Context, runner *assistant.Runner, reg *assistant.Registry, _ string, emit func(assistant.Event)) error {
+			fresh, err := h.store.Session(ctx, sess.ID, sess.UserID)
+			if err != nil {
+				emit(assistant.Event{Kind: assistant.EventResult, IsError: true, StopReason: assistant.StopError})
+				return err
+			}
+			if fresh.SearchContext == nil {
+				emit(assistant.Event{Kind: assistant.EventResult, IsError: true, StopReason: assistant.StopError})
+				return errors.New("search context is no longer available")
+			}
+			return run(ctx, runner, reg, assistant.ShortlistPrompt(language, *fresh.SearchContext), emit)
+		}
+	}
 
 	// Tagged from turnSess, not sess: a demoted browse turn spends like a chat turn — no
 	// page tool, the chat prompt — so it must be billed as one. Tagging it "browse" would
