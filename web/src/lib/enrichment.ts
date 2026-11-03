@@ -6,6 +6,7 @@
 
 import type { Enrichment, Job } from './types';
 import type { Card as JobCard } from './generated/contracts';
+import { ENGAGEMENT_LABELS } from './generated/contracts';
 import { countryLabel } from './facets';
 import {
   REGION_LABELS, SENIORITY_LABELS, EMPLOYMENT_LABELS, WORK_MODE_LABELS,
@@ -222,6 +223,9 @@ export function summaryFacets(job: Job): Facet[] {
   plain('Location', job.location);
   links('Region', 'regions', job.regions, (r) => label(REGION_LABELS, r));
   link('Work type', 'employment_type', e.employment_type, EMPLOYMENT_LABELS);
+  // The IR35 status the posting states (internal/dict/engagement) — a UK contractor's
+  // first question, so it sits right after the work type it qualifies.
+  links('Contract terms', 'engagement', job.engagement, (v) => label(ENGAGEMENT_LABELS, v));
   link('Grade', 'seniority', e.seniority, SENIORITY_LABELS);
   plain('Experience', e.experience_years_min != null ? `${e.experience_years_min}+ yrs` : null);
   // english_level carries a 'none' sentinel that must not render as a facet.

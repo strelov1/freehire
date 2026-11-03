@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/dict/classify"
+	"github.com/strelov1/freehire/internal/dict/engagement"
 	"github.com/strelov1/freehire/internal/dict/lang"
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/normalize"
@@ -129,6 +130,10 @@ type Derived struct {
 	// Perks are the benefits the description states it offers, in vocab.PerkValues
 	// order (internal/dict/perks); nil when it names none.
 	Perks []string
+	// Engagement names the legal terms the title or description states the worker is
+	// engaged on, in vocab.EngagementValues order (internal/dict/engagement); nil when
+	// they state none.
+	Engagement []string
 	// Synthetic enrichment facets (category B): deterministic stand-ins for fields
 	// the LLM also emits, served dict-only like the facets above. ExperienceYearsMin
 	// is nil when the description states no figure.
@@ -329,6 +334,7 @@ func Derive(in Input) Derived {
 		Equity:             jobfacts.Equity(in.Title, in.Description),
 		ClearanceLevels:    clearanceLevels,
 		Perks:              perks.FromDescription(in.Description),
+		Engagement:         engagement.FromText(title, in.Description),
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     employmentType,
 		EducationLevel:     educationLevel,

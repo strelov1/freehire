@@ -85,6 +85,12 @@ type Job struct {
 	// Indexed as a filterable Meili facet. Always an array: [] means the description
 	// names none of them, not that the job offers none.
 	Perks []string `json:"perks"`
+	// Engagement names the legal terms the posting states it engages its worker on,
+	// from the closed vocabulary vocab.EngagementValues (internal/dict/engagement, never
+	// the LLM) — today the UK's IR35 status, ir35_outside and ir35_inside, both present
+	// when the posting offers either. Indexed as a filterable Meili facet. Always an
+	// array: [] means the posting does not say, not that neither applies.
+	Engagement []string `json:"engagement"`
 	// AIInterviewReports is how many people have reported that this job's company
 	// screens candidates with an AI interviewer (internal/engage/processreport),
 	// denormalized from the company onto the job. Omitted at zero: the count is what
@@ -274,6 +280,10 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 	if perks == nil {
 		perks = []string{}
 	}
+	engagement := f.Engagement
+	if engagement == nil {
+		engagement = []string{}
+	}
 	cities := cityFacet(f.Cities, e.Cities)
 	// Canonical "Name (CC)" labels: normalizeSet would lowercase them. Non-nil so the
 	// facet serializes as [] rather than null.
@@ -305,6 +315,7 @@ func FromDomain(j job.Job, x job.Extras) (Job, error) {
 		Metros:              metros,
 		Collections:         collections,
 		Perks:               perks,
+		Engagement:          engagement,
 		Equity:              f.Equity,
 		ClearanceLevels:     f.ClearanceLevels,
 		AIInterviewReports:  x.AIInterviewReports,

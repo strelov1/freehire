@@ -259,6 +259,14 @@ export interface Job {
    */
   perks: string[];
   /**
+   * Engagement names the legal terms the posting states it engages its worker on,
+   * from the closed vocabulary vocab.EngagementValues (internal/dict/engagement, never
+   * the LLM) — today the UK's IR35 status, ir35_outside and ir35_inside, both present
+   * when the posting offers either. Indexed as a filterable Meili facet. Always an
+   * array: [] means the posting does not say, not that neither applies.
+   */
+  engagement: string[];
+  /**
    * AIInterviewReports is how many people have reported that this job's company
    * screens candidates with an AI interviewer (internal/engage/processreport),
    * denormalized from the company onto the job. Omitted at zero: the count is what
@@ -1814,6 +1822,13 @@ export const PERK_LABELS = {
   'unlimited_pto': 'Unlimited PTO',
 } as const;
 export type PerkLabels = typeof PERK_LABELS;
+export const ENGAGEMENT_VALUES = ['ir35_outside', 'ir35_inside'] as const;
+export type Engagement = (typeof ENGAGEMENT_VALUES)[number];
+export const ENGAGEMENT_LABELS = {
+  'ir35_inside': 'Inside IR35',
+  'ir35_outside': 'Outside IR35',
+} as const;
+export type EngagementLabels = typeof ENGAGEMENT_LABELS;
 export const GHOST_CRITERION_VALUES = ['evergreen_posting', 'ats_absent', 'silent_applications', 'user_reports'] as const;
 export type GhostCriterion = (typeof GHOST_CRITERION_VALUES)[number];
 export const EMAIL_STATUS_SIGNAL_VALUES = ['acknowledgement', 'screening', 'interview_invitation', 'assessment', 'offer', 'rejection', 'info_request', 'incomplete_application', 'other'] as const;

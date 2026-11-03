@@ -62,6 +62,8 @@ const VALUES_NOTE: Record<string, string> = {
   category: '. The retired value management is still accepted and answered as role_type=people_manager',
   perks: ' — matched from the description; a posting without one does not mention it, which is not the same as not offering it',
   equity: ' — not_stated means none was read, not that the job offers no equity',
+  engagement:
+    ' — the UK IR35 status the title or description states; a posting that offers either carries both, and one that does not say carries neither. Separate from employment_type',
 };
 
 /** Every string facet: the SPA-derived rows plus the API-only ones. */

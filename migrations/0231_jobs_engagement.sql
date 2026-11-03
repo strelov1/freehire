@@ -1,0 +1,15 @@
+-- engagement: the legal terms a posting states it engages its worker on, derived by
+-- internal/dict/engagement into the closed vocabulary vocab.EngagementValues — today the
+-- UK's IR35 status (ir35_outside, ir35_inside). Multi-valued like perks, because a
+-- posting may offer either, and served as the `engagement` search facet.
+--
+-- It sits beside employment_type rather than inside it: employment_type says how long
+-- and how many hours, this says employee or own business and on what tax footing, and a
+-- posting needs both answers at once (a Polish B2B role is full_time).
+--
+-- Empty means "the posting does not say", never "neither".
+--
+-- A constant default is a catalog-only change on Postgres 11+: no table rewrite, no
+-- long lock. Existing rows read '{}' until the next planned backfill-derive + reindex
+-- fills them; new and re-crawled postings carry it from the deploy on.
+ALTER TABLE jobs ADD COLUMN engagement text[] NOT NULL DEFAULT '{}';

@@ -78,6 +78,7 @@
     facetGroup('domains', 'Industry');
     facetGroup('company_type', 'Company type');
     facetGroup('employment_type', 'Employment');
+    facetGroup('engagement', 'Contract terms');
     facetGroup('collections', 'Collection');
     facetGroup('company_slug', 'Company');
     // Signed out the server ignores it, so a chip would claim a narrowing that did not happen.
