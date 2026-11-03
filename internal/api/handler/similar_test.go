@@ -60,7 +60,7 @@ func similarSource() db.Job {
 func visiblePublic(row db.Job) bool { return !row.ClosedAt.Valid && !row.IsPrivate }
 
 func TestSimilarParamsRequiresSpecializationAndGeography(t *testing.T) {
-	for _, missing := range []string{"category", "geography", "other"} {
+	for _, missing := range []string{"category", "geography", "other", "blank geography"} {
 		row := similarSource()
 		switch missing {
 		case "category":
@@ -69,6 +69,9 @@ func TestSimilarParamsRequiresSpecializationAndGeography(t *testing.T) {
 			row.Category = "other"
 		case "geography":
 			row.Countries = nil
+			row.Cities = nil
+		case "blank geography":
+			row.Countries = []string{""}
 			row.Cities = nil
 		}
 		view, err := jobview.FromRow(row)

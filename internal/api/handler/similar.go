@@ -51,8 +51,10 @@ func similarParams(source jobview.Job, id int64, limit int) (search.SearchParams
 	if source.Enrichment.Category == "" || source.Enrichment.Category == "other" {
 		return search.SearchParams{}, false
 	}
-	values := url.Values{"category": {source.Enrichment.Category}}
-	groups := search.FilterFromValues(values).([][]string)
+	groups, ok := facetGroups("category", []string{source.Enrichment.Category})
+	if !ok {
+		return search.SearchParams{}, false
+	}
 	hasLocation := false
 	for _, facet := range []struct {
 		key    string
@@ -62,12 +64,20 @@ func similarParams(source jobview.Job, id int64, limit int) (search.SearchParams
 		{"cities", source.Cities},
 	} {
 		if len(facet.values) > 0 {
-			groups = append(groups, search.FilterFromValues(url.Values{facet.key: facet.values}).([][]string)...)
+			part, ok := facetGroups(facet.key, facet.values)
+			if !ok {
+				return search.SearchParams{}, false
+			}
+			groups = append(groups, part...)
 			hasLocation = true
 		}
 	}
 	if !hasLocation && len(source.Regions) > 0 {
-		groups = append(groups, search.FilterFromValues(url.Values{"regions": source.Regions}).([][]string)...)
+		part, ok := facetGroups("regions", source.Regions)
+		if !ok {
+			return search.SearchParams{}, false
+		}
+		groups = append(groups, part...)
 		hasLocation = true
 	}
 	if !hasLocation {
@@ -75,6 +85,14 @@ func similarParams(source jobview.Job, id int64, limit int) (search.SearchParams
 	}
 	groups = append(groups, []string{fmt.Sprintf("id != %d", id)})
 	return search.SearchParams{Query: source.Title, LiteralQuery: true, Filter: groups, Limit: limit * 3}, true
+}
+
+// facetGroups turns one stored facet into filter groups. A stored value that is blank
+// is dropped by the filter builder, which can leave no group at all; that must read as
+// "unknown", never as a constraint quietly missing.
+func facetGroups(key string, values []string) ([][]string, bool) {
+	groups, ok := search.FilterFromValues(url.Values{key: values}).([][]string)
+	return groups, ok && len(groups) > 0
 }
 
 // similarViews uses the first stored passage (title and opening description) as
