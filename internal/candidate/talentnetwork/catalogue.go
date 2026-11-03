@@ -139,7 +139,7 @@ func (c *Catalogue) ByHandle(ctx context.Context, handle string) (CatalogueMembe
 		owned:           row.CandidateContacts,
 		updatedAt:       row.ResumeStructuredUploadedAt.Time,
 		hasPhoto:        row.HasPhoto,
-	}), nil
+	}, c.now()), nil
 }
 
 // HeadshotOwner resolves a handle straight to its current member's account id, read from
@@ -192,6 +192,7 @@ func (c *Catalogue) current(ctx context.Context) (*snapshot, error) {
 		return nil, err
 	}
 
+	now := c.now()
 	members := make([]CatalogueMember, 0, len(rows))
 	for _, r := range rows {
 		members = append(members, projectMember(storedMember{
@@ -203,10 +204,10 @@ func (c *Catalogue) current(ctx context.Context) (*snapshot, error) {
 			owned:           r.CandidateContacts,
 			updatedAt:       r.ResumeStructuredUploadedAt.Time,
 			hasPhoto:        r.HasPhoto,
-		}))
+		}, now))
 	}
 
-	s := &snapshot{members: members, builtAt: c.now()}
+	s := &snapshot{members: members, builtAt: now}
 	c.snap.Store(s)
 	return s, nil
 }
@@ -232,7 +233,7 @@ type storedMember struct {
 // An unreadable stored structure yields an EMPTY card rather than dropping the member:
 // they joined, and disappearing from the catalogue is indistinguishable from having
 // left. The same treatment resume.Store.Structured gives an unmarshal failure.
-func projectMember(row storedMember) CatalogueMember {
+func projectMember(row storedMember, now time.Time) CatalogueMember {
 	var s resumeextract.Structured
 	if len(row.structured) > 0 {
 		_ = json.Unmarshal(row.structured, &s)
@@ -240,7 +241,7 @@ func projectMember(row storedMember) CatalogueMember {
 	// The card shows years the way the candidate's own profile does: their figure if they
 	// gave one, otherwise the extract's caught up with its dated roles. Nothing else they
 	// own is read — the rest of the card stays the dictionary-only projection.
-	resume.DecodeOwned(row.owned).ApplyTotalYears(&s, time.Now())
+	resume.DecodeOwned(row.owned).ApplyTotalYears(&s, now)
 	return CatalogueMember{
 		Handle:          row.handle,
 		Card:            ProjectCard(s),

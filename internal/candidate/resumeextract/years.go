@@ -12,7 +12,8 @@ import (
 // model can simply misjudge it, so a card showing "2+ years" above a role that began
 // three years ago contradicts itself. The dates are on the card too, so the figure must
 // agree with them. A role with no start year says nothing and is skipped; an ongoing
-// role (marked current, or with no end) runs to now.
+// role (marked current, or with no end) runs to now. A year-only date counts as the
+// least it could mean (see below), so the figure never claims more than the CV shows.
 func datedYears(experience []Experience, now time.Time) int {
 	nowMonth := now.Year()*12 + int(now.Month()) - 1
 	type span struct{ from, to int }
@@ -21,13 +22,19 @@ func datedYears(experience []Experience, now time.Time) int {
 		if e.Start == nil || e.Start.Year <= 0 {
 			continue
 		}
-		from := e.Start.Year*12 + max(e.Start.Month, 1) - 1
+		// A CV that gives only a year does not say which month, and this figure is
+		// compared against a vacancy's minimum, so it takes the shortest span the dates
+		// allow: a role begun in a year-only 2024 starts in December, one ended in a
+		// year-only 2025 ends in January. "2024-2025" may be a single month, and counting
+		// it as a year would mark a one-year requirement as met on no evidence.
+		startMonth := e.Start.Month
+		if startMonth == 0 {
+			startMonth = 12
+		}
+		from := e.Start.Year*12 + startMonth - 1
 		to := nowMonth
 		if !e.Current && e.End != nil && e.End.Year > 0 {
-			endMonth := e.End.Month
-			if endMonth == 0 {
-				endMonth = 12
-			}
+			endMonth := max(e.End.Month, 1)
 			to = min(e.End.Year*12+endMonth-1, nowMonth)
 		}
 		if to > from {
