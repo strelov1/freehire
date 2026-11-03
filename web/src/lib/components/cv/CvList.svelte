@@ -20,6 +20,9 @@
   // triggering the open.
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
+  // `listError` is the tailored list failing to load and stays while it is failed; `error` is the
+  // outcome of an action (duplicate, delete) and is cleared by the next success.
+  let listError = $state<string | null>(null);
   let error = $state<string | null>(null);
   let items = $state<CvTailoredItem[]>([]);
   let bases = $state<CvBaseItem[]>([]);
@@ -46,8 +49,8 @@
       items = await api.listCvs();
       status = 'ready';
     } catch (e) {
-      error = e instanceof ApiError ? e.message : s.loadFailed;
-      announce(error, 'assertive');
+      listError = e instanceof ApiError ? e.message : s.loadFailed;
+      announce(listError, 'assertive');
       status = 'error';
     }
   }
@@ -219,6 +222,8 @@
   </section>
 
   <h2 class="text-base font-semibold">{s.heading}</h2>
+
+  {#if listError}<p class="text-sm text-destructive">{listError}</p>{/if}
 
   {#if status === 'ready' && items.length === 0}
     <div class="rounded-lg border border-dashed border-border p-8 sm:p-10">
