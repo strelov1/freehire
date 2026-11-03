@@ -482,6 +482,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   xing: 'XING',
   jobsch: 'jobs.ch',
   swissdevjobs: 'SwissDevJobs',
+  getinit: 'Get in IT',
+  berlinstartupjobs: 'Berlin Startup Jobs',
   onapply: 'onapply',
   workwise: 'Workwise',
   werkenvoornederland: 'Werken voor Nederland',
