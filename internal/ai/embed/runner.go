@@ -55,7 +55,7 @@ type Store interface {
 	Jobs(ctx context.Context, ids []int64) ([]db.Job, error)
 	// CompleteOpen stamps each entry's job embed provenance (model + its current
 	// content_hash), replaces each job's pgvector-backed chunk rows
-	// (job_semantic_chunks), clears its similar_computed_at staleness stamp, and
+	// (job_semantic_chunks), and
 	// deletes the outbox entries — all atomically. chunks maps job id to its ordered
 	// chunk vectors (see ChunkEmbedding); a job absent from chunks (an empty/very
 	// short description) has its existing chunk rows removed and gets none back —
@@ -68,7 +68,7 @@ type Store interface {
 	// CompleteUnchanged settles entries whose embedded text has not changed (see
 	// Indexer.InputHash): it re-stamps the provenance (model, current content_hash,
 	// inputHashes) so the enqueue predicate stops firing, and deletes the outbox entries,
-	// atomically. It leaves the chunk rows and similar_computed_at alone — the vectors
+	// atomically. It leaves the chunk rows alone — the vectors
 	// are still the vectors of this text.
 	CompleteUnchanged(ctx context.Context, entries []Claimed, model string, inputHashes map[int64]string) error
 	// CompleteClosed clears each entry's job embed provenance (stamp + the legacy

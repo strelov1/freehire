@@ -151,6 +151,10 @@ func TestESSHydratesUnseenVacancies(t *testing.T) {
 	if nurse.PostedAt == nil || !nurse.PostedAt.Equal(want) {
 		t.Errorf("posted = %v, want %v", nurse.PostedAt, want)
 	}
+	wantDeadline := time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
+	if nurse.ApplicationDeadline == nil || !nurse.ApplicationDeadline.Equal(wantDeadline) {
+		t.Errorf("apply by = %v, want the detail's prijavaDo %v", nurse.ApplicationDeadline, wantDeadline)
+	}
 	if !strings.Contains(nurse.Description, "<li>izvajanje zdravstvene nege in oskrbe stanovalcev") {
 		t.Errorf("an inline dash list must render as a list: %q", nurse.Description)
 	}

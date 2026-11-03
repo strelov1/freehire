@@ -1273,9 +1273,6 @@ SET company = $1,
     company_slug = $2,
     -- Kept in step with company_slug by hand; see RenameSlugCompany.
     company_slug_folded = replace($2, '-', ''),
-    -- The same invalidation UpsertJob makes on a company change: the precomputed similar-jobs
-    -- list may have excluded the OLD company.
-    similar_computed_at = NULL,
     updated_at = now()
 FROM moved
 WHERE jobs.id = moved.id

@@ -24,6 +24,11 @@ those preconditions fails, and SHALL be ignored when `work_mode_mode=and` is set
 Location excludes SHALL keep their ordinary AND meaning (excluding a geography
 applies to every arm of the disjunction).
 
+While the modifier is in force, `work_mode_remote_regions` and
+`work_mode_remote_countries` SHALL bound the remote arm, read exactly as `regions`
+and `countries`: `(work_mode = remote AND <reach group>)`. Without them the remote
+arm is unbounded. They SHALL read nothing while the modifier is inert.
+
 #### Scenario: Remote anywhere with local physical work
 
 - **WHEN** a request carries `work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true`
@@ -43,6 +48,16 @@ applies to every arm of the disjunction).
 
 - **WHEN** a request carries `work_mode=remote,hybrid&work_mode_mode=and&countries=de&work_mode_remote_anywhere=true`
 - **THEN** the work mode is two AND groups (a job must be both remote and hybrid — effectively none), and the modifier adds nothing
+
+#### Scenario: A remote reach bounds only the remote arm
+
+- **WHEN** a request carries `work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true&work_mode_remote_regions=eu`
+- **THEN** the filter is `((work_mode = "remote" AND regions IN [eu, uk]) OR (work_mode IN ["hybrid"] AND countries = "de"))`-shaped: a remote posting in Europe matches, a remote posting restricted to the US does not, a hybrid posting in France does not
+
+#### Scenario: The remote reach alone reads nothing
+
+- **WHEN** a request carries `work_mode_remote_regions=eu` without the modifier in force
+- **THEN** the filter is identical to the request without it, and `Narrows` reads it as non-narrowing; an unknown region in it is reported in `meta.ignored_values`
 
 #### Scenario: Location excludes apply to every arm
 

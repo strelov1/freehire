@@ -396,9 +396,9 @@ curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b"
 
 **Auth:** Public
 
-Jobs similar to the given one (semantic; may be empty).
+Similar jobs within the same location and specialization.
 
-Backed by the optional semantic index. Returns an empty list (not an error) when the source job is not indexed.
+Searches the live Meilisearch index with the source job’s known location and specialization as mandatory filters. Uses stored-vector hybrid ranking when available, falling back to keyword search under the same filters. Returns an empty list when location or specialization is unknown or no visible matches remain.
 
 **Path parameters**
 
