@@ -117,7 +117,8 @@ func TestCVsOwnerIsolation(t *testing.T) {
 }
 
 // TestBaseCVAndTailoredCopy covers the two-tier tailoring queries: GetBaseCVByUser picks the
-// user's newest non-tailored CV (and reports no row when there is none), and CreateTailoredCV
+// user's default base — with no tailored copy yet, the OLDEST non-tailored CV (and reports no row
+// when there is none), and CreateTailoredCV
 // binds a copy to a vacancy via job_id without that copy shadowing the base.
 func TestBaseCVAndTailoredCopy(t *testing.T) {
 	pool := startPostgres(t)
@@ -132,20 +133,21 @@ func TestBaseCVAndTailoredCopy(t *testing.T) {
 		t.Fatalf("empty base err = %v, want ErrNoRows", err)
 	}
 
-	// Two non-tailored CVs: the base is the most-recently-created (id-tiebroken) one.
-	if _, err := q.CreateCV(ctx, CreateCVParams{UserID: user, Title: "Older", TemplateID: "classic-ats", Data: []byte(`{"summary":"old"}`)}); err != nil {
+	// Two non-tailored CVs: with no tailored copy pointing at either, the default base is the
+	// oldest-created one — editing or adding a base must not move it (see cvs_default_base_integration_test.go).
+	older, err := q.CreateCV(ctx, CreateCVParams{UserID: user, Title: "Older", TemplateID: "classic-ats", Data: []byte(`{"summary":"old"}`)})
+	if err != nil {
 		t.Fatalf("create older: %v", err)
 	}
-	newer, err := q.CreateCV(ctx, CreateCVParams{UserID: user, Title: "Newer", TemplateID: "classic-ats", Data: []byte(`{"summary":"new"}`)})
-	if err != nil {
+	if _, err := q.CreateCV(ctx, CreateCVParams{UserID: user, Title: "Newer", TemplateID: "classic-ats", Data: []byte(`{"summary":"new"}`)}); err != nil {
 		t.Fatalf("create newer: %v", err)
 	}
 	base, err := q.GetBaseCVByUser(ctx, user)
 	if err != nil {
 		t.Fatalf("base: %v", err)
 	}
-	if base.ID != newer.ID {
-		t.Errorf("base = %d, want newest %d", base.ID, newer.ID)
+	if base.ID != older.ID {
+		t.Errorf("base = %v, want oldest %v", base.ID, older.ID)
 	}
 
 	// A tailored copy bound to a vacancy is created with job_id and must NOT become the base.
@@ -157,8 +159,8 @@ func TestBaseCVAndTailoredCopy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create tailored: %v", err)
 	}
-	if again, err := q.GetBaseCVByUser(ctx, user); err != nil || again.ID != newer.ID {
-		t.Errorf("base after tailoring = %d (err %v), want %d (tailored excluded)", again.ID, err, newer.ID)
+	if again, err := q.GetBaseCVByUser(ctx, user); err != nil || again.ID != older.ID {
+		t.Errorf("base after tailoring = %v (err %v), want %v (tailored excluded)", again.ID, err, older.ID)
 	}
 	if got, err := q.GetCVByID(ctx, GetCVByIDParams{ID: tailored.ID, UserID: user}); err != nil {
 		t.Fatalf("get tailored: %v", err)
