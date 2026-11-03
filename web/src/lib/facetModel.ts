@@ -483,7 +483,7 @@ export function appliesWorkModeRemoteAnywhere(f: JobFilters): boolean {
 /** The modifier's chip and checkbox text: where the remote arm reaches. */
 export function workModeRemoteLabel(f: JobFilters): string {
   const reach = [
-    ...f.workModeRemoteRegions.map((v) => dynamicLabel('regions', v)),
+    ...f.workModeRemoteRegions.map((v) => REGION_LABELS[v.trim().toLowerCase()] ?? v),
     ...f.workModeRemoteCountries.map((v) => dynamicLabel('countries', v)),
   ];
   return reach.length ? `Remote within ${reach.join(', ')}` : 'Remote from anywhere';

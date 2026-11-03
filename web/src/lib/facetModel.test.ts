@@ -845,7 +845,7 @@ describe('workModeRemoteAnywhere', () => {
     expect(p.get('work_mode_remote_countries')).toBe('us');
     const back = filtersFromParams(p);
     expect([back.workModeRemoteRegions, back.workModeRemoteCountries]).toEqual([['eu'], ['us']]);
-    expect(workModeRemoteLabel(back)).toMatch(/^Remote within /);
+    expect(workModeRemoteLabel(back)).toMatch(/^Remote within Europe, /);
     expect(workModeRemoteLabel(emptyFilters())).toBe('Remote from anywhere');
     // Without the modifier the reach means nothing, so it is neither written nor read.
     expect(filtersToParams({ ...on, workModeRemoteAnywhere: false }).has('work_mode_remote_regions')).toBe(false);
