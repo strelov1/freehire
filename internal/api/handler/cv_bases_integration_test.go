@@ -16,8 +16,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/candidate/cv"
+	"github.com/strelov1/freehire/internal/candidate/cvedit"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
@@ -30,6 +32,8 @@ func buildBasesApp(h *cvHandlers, iss *auth.Issuer) *fiber.App {
 	app.Get("/api/v1/me/cvs/bases", saved, h.ListBaseCVs)
 	app.Post("/api/v1/me/cvs/tailor", saved, markPaidAI(plan.FeatureTailor), h.TailorCV)
 	app.Post("/api/v1/me/cvs/:id/duplicate", saved, h.DuplicateCV)
+	// No paidAI middleware, as in Register: opening a base conversation costs nothing.
+	app.Post("/api/v1/me/cvs/:id/base-session", saved, h.StartBaseSession)
 	app.Post("/api/v1/me/cvs/:id/tailor-session", saved, markPaidAI(plan.FeatureTailor), h.StartTailorSession)
 	return app
 }
@@ -256,4 +260,86 @@ func statusOf(t *testing.T, app *fiber.App, method, path, token string) int {
 	resp := doCV(t, app, method, path, token, nil)
 	defer resp.Body.Close()
 	return resp.StatusCode
+}
+
+func TestStartBaseSession(t *testing.T) {
+	f := newBasesFixture(t)
+	ctx := context.Background()
+
+	start := func(id string, tok string) (int, baseSessionResponse) {
+		resp := doCV(t, f.app, fiber.MethodPost, "/api/v1/me/cvs/"+id+"/base-session", tok, nil)
+		defer resp.Body.Close()
+		var out struct {
+			Data baseSessionResponse `json:"data"`
+		}
+		b, _ := io.ReadAll(resp.Body)
+		_ = json.Unmarshal(b, &out)
+		return resp.StatusCode, out.Data
+	}
+
+	code, first := start(f.first.ID.String(), f.tok)
+	if code != fiber.StatusOK || first.SessionID == "" || first.BaseCVID != f.first.ID.String() {
+		t.Fatalf("start = %d %+v", code, first)
+	}
+	sess, err := f.h.assistantSessions.Session(ctx, uuid.MustParse(first.SessionID), f.user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.Preset != assistant.PresetBase || sess.CVID == nil || *sess.CVID != f.first.ID || sess.JobID != nil {
+		t.Fatalf("session = preset %q cv %v job %v, want a base session bound to the CV and no vacancy", sess.Preset, sess.CVID, sess.JobID)
+	}
+	rec, _ := f.h.cvStore.Get(ctx, f.first.ID, f.user)
+	if rec.AgentSessionID != first.SessionID {
+		t.Fatalf("the CV does not remember its conversation: %q", rec.AgentSessionID)
+	}
+
+	// Reopening resumes the same conversation instead of starting another.
+	if _, again := start(f.first.ID.String(), f.tok); again.SessionID != first.SessionID {
+		t.Errorf("second start = %s, want the same session %s", again.SessionID, first.SessionID)
+	}
+	// Each base has its own.
+	if _, other := start(f.other.ID.String(), f.tok); other.SessionID == first.SessionID {
+		t.Error("two bases share one conversation")
+	}
+
+	// A tailored copy has its own route; a foreign base is invisible.
+	_, tailored := f.tailor(t, "bases-job-1", tailorCVRequest{})
+	if code, _ := start(tailored.TailorCVID, f.tok); code != fiber.StatusConflict {
+		t.Errorf("tailored copy = %d, want 409", code)
+	}
+	stranger := seedSubscriber(t, f.pool, "stranger3@example.test", true)
+	sTok, _ := f.iss.Issue(stranger, testTokenVersion)
+	if code, _ := start(f.first.ID.String(), sTok); code != fiber.StatusNotFound {
+		t.Errorf("foreign base = %d, want 404", code)
+	}
+}
+
+// An agent edit on a base counts as the candidate's own work: the automatic refresh after an
+// upload must leave it alone.
+func TestAgentEditMarksTheBaseHandEdited(t *testing.T) {
+	f := newBasesFixture(t)
+	ctx := context.Background()
+	withSkills, err := f.h.cvStore.Create(ctx, f.user, "With skills", cv.DefaultTemplateID, cv.Document{
+		Skills: []cv.SkillGroup{{Items: []string{"Go", "SQL"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := cvedit.ParsePath("skills[0].items[1]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	to := 0
+	// Reordering what is already on the page states nothing about the candidate, so the agent
+	// may do it without an evidence_id.
+	if _, _, err := f.h.editor.Commit(ctx, withSkills.ID, f.user, cvedit.Change{
+		Actor: cvedit.ActorAgent, Origin: cvedit.OriginTailorAgent,
+		Ops: []cvedit.Op{{Kind: cvedit.OpMove, Path: path, To: &to}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rec, _ := f.h.cvStore.Get(ctx, withSkills.ID, f.user)
+	if !rec.HandEdited {
+		t.Fatal("an agent edit did not mark the base hand-edited")
+	}
 }

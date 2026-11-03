@@ -163,8 +163,9 @@ Three things that follow, and are easy to get backwards:
   SET NULL` (a copy outlives its base and falls back to the default), and is read through
   `Store.BaseFor` by the ATS delta and `StartTailorSession`. Migration 0231 backfilled every copy
   that existed with the user's then-default base.
-- **`cvs.hand_edited`** is set by `cvedit` when the candidate changes a CV through the editor or
-  the template picker (not by an import, an agent turn or a seed). The automatic stale-vs-upload
+- **`cvs.hand_edited`** is set by `cvedit` on work the candidate did or directed: their own edits
+  through the editor or the template picker, and the agent's edits (`cv_edit`, `PATCH`) — not by an
+  import (header heal, reseed) or a seed. The automatic stale-vs-upload
   refresh skips such a base; `Duplicate` copies the flag. A column rather than a scan of
   `cv_revisions`, which is trimmed per CV and has no history for a duplicate.
 - **The ATS delta's 409 splits on the flag.** A base CV is refused with "this is a base CV"; a

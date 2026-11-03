@@ -15,7 +15,7 @@ import (
 
 // Presets a session can run under. The preset selects the system prompt and the
 // registered tools, and nothing else — one chat surface serves all of them. The
-// vocabulary is also a CHECK on the column (0044, widened by 0048, 0049, 0062, 0069 and 0199), so
+// vocabulary is also a CHECK on the column (0044, widened by 0048, 0049, 0062, 0069, 0199 and 0232), so
 // a new preset is a migration and not only a constant.
 const (
 	PresetChat   = "chat"
@@ -43,6 +43,12 @@ const (
 	// the attempt's progress and takes the candidate's answers and decisions in free text.
 	// Bound to a vacancy and no CV, like a rehearsal.
 	PresetApply = "apply"
+	// PresetBase is the conversation held against one BASE CV, the general CV tailored copies
+	// start from: bound to a CV and no vacancy. It runs the tailoring workspace's CV tools (read,
+	// edit through the evidence gate, page count) under a prompt that edits the general CV rather
+	// than aiming it at an employer. It registers none of the vacancy tools — no fit analysis,
+	// job match, cover letter or run report — because there is no vacancy to read them against.
+	PresetBase = "base"
 )
 
 // ErrNotFound is returned for a session the caller does not own and for one that

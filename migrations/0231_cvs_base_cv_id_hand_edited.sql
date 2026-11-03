@@ -7,7 +7,8 @@
 -- change which base the next tailoring uses. SET NULL, not CASCADE: deleting a base must not
 -- delete the copies made from it; they keep working and fall back to the default base.
 --
--- hand_edited: the candidate changed this base through the editor. The automatic stale-vs-upload
+-- hand_edited: the candidate changed this base — through the editor, or through the agent they
+-- direct. The automatic stale-vs-upload
 -- refresh skips such a base, so a new CV upload cannot erase hand edits. A column rather than a
 -- scan of cv_revisions because that log is trimmed per CV and a duplicate of an edited base has
 -- no history of its own.

@@ -100,6 +100,20 @@ func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID int64, batchI
 	}
 }
 
+// assistantBaseCVTools is the CV tool set of a BASE CV conversation: the tailoring set without
+// everything that needs a vacancy (cv_context, job_match, the run report, the cover letter). The
+// CV id closes over the session binding, exactly as in a tailoring session, so the model cannot
+// address another CV by guessing an id.
+func (h *assistantHandlers) assistantBaseCVTools(cvID uuid.UUID, batchID uuid.UUID) []assistant.Tool {
+	return []assistant.Tool{
+		h.cvGetTool(cvID),
+		h.cvEditTool(cvID, batchID),
+		h.requestConfirmationTool(),
+		h.cvEvidenceFidelityTool(),
+		h.cvPageCountTool(cvID),
+	}
+}
+
 // requestConfirmationTool puts a confirmation question in front of the candidate as a
 // claim plus a Yes/No choice, instead of the agent writing it as free-text prose. It has
 // no side effect: the client renders the buttons from the call's own arguments, and the

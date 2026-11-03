@@ -313,10 +313,16 @@ func (h *cvHandlers) StartTailorSession(c *fiber.Ctx) error {
 // taking them from the model — so it is created here, where ownership of both is
 // already established.
 func (h *cvHandlers) startTailoringSession(ctx context.Context, userID int64, cvID uuid.UUID, jobID int64) (string, error) {
+	return h.startCVSession(ctx, userID, cvID, assistant.PresetTailor, &jobID)
+}
+
+// startCVSession creates the conversation bound to a CV (and to a vacancy when jobID is set) and
+// stores its id on the CV, so reopening the workspace resumes the same chat.
+func (h *cvHandlers) startCVSession(ctx context.Context, userID int64, cvID uuid.UUID, preset string, jobID *int64) (string, error) {
 	if h.assistantSessions == nil {
 		return "", fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
-	sess, err := h.assistantSessions.CreateSession(ctx, userID, assistant.PresetTailor, &cvID, &jobID)
+	sess, err := h.assistantSessions.CreateSession(ctx, userID, preset, &cvID, jobID)
 	if err != nil {
 		return "", err
 	}

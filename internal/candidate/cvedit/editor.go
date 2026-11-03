@@ -259,10 +259,12 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 	if err != nil {
 		return cv.Meta{}, Revision{}, err
 	}
-	// The candidate's own hand, through the editor or the template picker. An import (header
-	// heal, reseed), an agent turn and the system's seed are not hand edits: the flag exists so
-	// the automatic stale-vs-upload refresh can leave a base the candidate has worked on alone.
-	if ch.Actor == ActorCandidate && (ch.Origin == OriginEditor || ch.Origin == OriginTemplate) {
+	// Work the candidate directed: their own hand through the editor or the template picker, or
+	// the agent they are talking to. An import (header heal, reseed) and the system's seed are not:
+	// the flag exists so the automatic stale-vs-upload refresh can leave a base the candidate has
+	// worked on alone, and an agent edit on a base is candidate-directed work like any other.
+	// (On a tailored copy the flag is set too and never read.)
+	if handEdit(ch) {
 		if err := tx.MarkHandEdited(ctx); err != nil {
 			return cv.Meta{}, Revision{}, err
 		}
@@ -276,6 +278,18 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 		return cv.Meta{}, Revision{}, err
 	}
 	return meta, rev, nil
+}
+
+// handEdit reports whether a change is work the candidate did or directed, as opposed to the
+// system rebuilding the CV from the seed.
+func handEdit(ch Change) bool {
+	switch ch.Actor {
+	case ActorAgent:
+		return true
+	case ActorCandidate:
+		return ch.Origin == OriginEditor || ch.Origin == OriginTemplate
+	}
+	return false
 }
 
 // record files the change, folding it into the newest revision when it continues that one.

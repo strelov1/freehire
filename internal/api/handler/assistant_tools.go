@@ -399,6 +399,11 @@ func (h *assistantHandlers) registry(sess assistant.Session, batchID uuid.UUID) 
 	if preset == assistant.PresetTailor && sess.CVID != nil && sess.JobID != nil {
 		tools = append(tools, h.assistantCVTools(*sess.CVID, *sess.JobID, batchID)...)
 	}
+	// A base CV conversation: the same CV tools, minus the vacancy ones. Unbound it has no CV to
+	// edit and stays a plain chat, like a CV-less tailoring session.
+	if preset == assistant.PresetBase && sess.CVID != nil {
+		tools = append(tools, h.assistantBaseCVTools(*sess.CVID, batchID)...)
+	}
 	// Mail is the general chat session's. A tailoring session is working one CV
 	// against one vacancy, an interview is collecting what the candidate has done,
 	// and a side panel is talking about the page on screen — none of them has a

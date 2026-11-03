@@ -203,6 +203,8 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	api.Delete("/me/cvs/:id", mw.cookie, h.DeleteCV)
 	// Copy a base CV (stored document, template, appearance) as "<title> (copy)".
 	api.Post("/me/cvs/:id/duplicate", mw.cookie, h.DuplicateCV)
+	// The agent conversation for a BASE CV (no vacancy). Not behind paidAI: see StartBaseSession.
+	api.Post("/me/cvs/:id/base-session", mw.cookie, h.StartBaseSession)
 	api.Get("/me/cvs/:id/pdf", mw.key, h.RenderCVPDF)
 	// Tailoring: the bootstrap takes a key as well as a cookie, so a CLI can start the cycle
 	// it was already able to drive (edit + context/get/render all accept a key). It creates a

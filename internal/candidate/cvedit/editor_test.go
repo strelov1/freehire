@@ -564,7 +564,7 @@ func TestCommitRefusesAnAddressParsePathWouldNot(t *testing.T) {
 	})
 }
 
-func TestOnlyTheCandidatesOwnEditorAndTemplateEditsMarkTheCVHandEdited(t *testing.T) {
+func TestCandidateDirectedEditsMarkTheCVHandEdited(t *testing.T) {
 	cases := []struct {
 		name   string
 		actor  Actor
@@ -574,7 +574,7 @@ func TestOnlyTheCandidatesOwnEditorAndTemplateEditsMarkTheCVHandEdited(t *testin
 		{"candidate editor", ActorCandidate, OriginEditor, true},
 		{"candidate template pick", ActorCandidate, OriginTemplate, true},
 		{"candidate import (header heal, reseed)", ActorCandidate, OriginImport, false},
-		{"agent", ActorAgent, OriginTailorAgent, false},
+		{"agent (directed by the candidate)", ActorAgent, OriginTailorAgent, true},
 		{"system seed", ActorSystem, OriginImport, false},
 	}
 	for _, tc := range cases {
