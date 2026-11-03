@@ -2,6 +2,7 @@ package sources
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -33,6 +34,8 @@ func sgDetailHTML(title, encodedDescription, datePosted, locality, country strin
 		`"jobLocation":{"@type":"Place","address":{"addressLocality":"` + locality + `","addressCountry":"` + country + `"}}}` +
 		`</script></head><body></body></html>`
 }
+
+var sgNoFeed = &StatusError{Method: "GET", Code: 404, URL: "https://x.career.softgarden.de/jobs.feed.json"}
 
 func TestSoftgardenProvider(t *testing.T) {
 	if got := NewSoftgarden(nil).Provider(); got != "softgarden" {
@@ -82,7 +85,8 @@ func TestSoftgardenFetchListingThenDetailAndMaps(t *testing.T) {
 		"&lt;p&gt;Build &lt;b&gt;it&lt;/b&gt;.&lt;/p&gt;&lt;script&gt;alert(1)&lt;/script&gt;",
 		"2026-07-21T12:43:08.524+02:00", "Berlin", "Deutschland")
 	fake := (&routedHTTP{}).
-		route("/job/66221618", detail). // detail route first: the listing root has no /job/
+		routeErr("career.softgarden.de", sgNoFeed). // no feed for this tenant → legacy path
+		route("/job/66221618", detail).             // detail route first: the listing root has no /job/
 		route("bundesdruckerei.softgarden.io/", sgListingHTML(
 			"../job/66221618/creative-producer?jobDbPVId=279489843"))
 
@@ -125,6 +129,7 @@ func TestSoftgardenDropsDetailWithoutJobPosting(t *testing.T) {
 	// board still ingests.
 	d := sgDetailHTML("Role", "&lt;p&gt;x&lt;/p&gt;", "2026-07-21T12:43:08.524+02:00", "Oslo", "Norway")
 	fake := (&routedHTTP{}).
+		routeErr("career.softgarden.de", sgNoFeed).
 		route("/job/111", d).                                           // first posting resolves
 		route("/job/222", `<html><body>no ld+json here</body></html>`). // second has no JobPosting → drops
 		route("bundesdruckerei.softgarden.io/", sgListingHTML(
@@ -139,5 +144,95 @@ func TestSoftgardenDropsDetailWithoutJobPosting(t *testing.T) {
 	}
 	if len(jobs) != 1 {
 		t.Fatalf("got %d jobs, want 1 (one detail dropped)", len(jobs))
+	}
+}
+
+const sgFeedJSON = `{"@type":"DataFeed","numberOfItems":2,"dataFeedElement":[
+ {"@type":"DataFeedItem","item":{"@type":"JobPosting","title":"Senior Account Executive",
+  "url":"https://acme.career.softgarden.de/jobs/62349294/Senior-Account-Executive/",
+  "datePosted":"2026-09-23T10:37:06.121+02:00","identifier":{"@type":"PropertyValue","value":62349294},
+  "description":"<b>Your role</b><ul><li>Sell</li></ul><script>alert(1)</script>",
+  "jobLocation":{"@type":"Place","address":{"addressLocality":"Berlin","addressCountry":"Deutschland"}}}},
+ {"@type":"DataFeedItem","item":{"@type":"JobPosting","title":"Engineer",
+  "url":"https://acme.career.softgarden.de/jobs/63710444/Engineer/",
+  "datePosted":"2026-10-01T08:00:00.000+02:00","identifier":{"@type":"PropertyValue","value":63710444},
+  "description":"<p>Build</p>",
+  "jobLocation":[{"address":{"addressLocality":"Hamburg","addressCountry":"Deutschland"}},
+                 {"address":{"addressLocality":"Remote","addressCountry":"Deutschland"}},
+                 {"address":{"addressLocality":"Hamburg","addressCountry":"Deutschland"}}]}}
+]}`
+
+func TestSoftgardenFetchesWholeBoardFromTheFeed(t *testing.T) {
+	fake := (&routedHTTP{}).route("acme.career.softgarden.de/jobs.feed.json", sgFeedJSON)
+
+	jobs, err := NewSoftgarden(fake).Fetch(context.Background(), CompanyEntry{Company: "Acme", Board: "acme"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if fake.calls != 1 {
+		t.Errorf("requests = %d, want 1 (the feed carries the bodies)", fake.calls)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("got %d jobs, want 2", len(jobs))
+	}
+	j := jobs[0]
+	if j.ExternalID != "62349294" || j.Title != "Senior Account Executive" || j.Company != "Acme" {
+		t.Errorf("job = %+v", j)
+	}
+	if j.URL != "https://acme.career.softgarden.de/jobs/62349294/Senior-Account-Executive/" {
+		t.Errorf("URL = %q", j.URL)
+	}
+	if j.Location != "Berlin, Deutschland" {
+		t.Errorf("Location = %q", j.Location)
+	}
+	if strings.Contains(j.Description, "<script>") || !strings.Contains(j.Description, "<li>Sell</li>") {
+		t.Errorf("Description not sanitized: %q", j.Description)
+	}
+	if j.PostedAt == nil || !j.PostedAt.Equal(time.Date(2026, 9, 23, 8, 37, 6, 121_000_000, time.UTC)) {
+		t.Errorf("PostedAt = %v", j.PostedAt)
+	}
+	// An array jobLocation joins its distinct places.
+	if jobs[1].Location != "Hamburg, Deutschland; Remote, Deutschland" {
+		t.Errorf("multi-location = %q", jobs[1].Location)
+	}
+}
+
+func TestSoftgardenFeedErrorOtherThanMissingDoesNotFallBack(t *testing.T) {
+	// A 500 on the feed is a failed crawl, not "this tenant has no feed": falling back would
+	// mask an outage behind a truncated one-page listing.
+	fake := (&routedHTTP{}).routeErr("career.softgarden.de", &StatusError{Method: "GET", Code: 500})
+
+	_, err := NewSoftgarden(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"})
+	var se *StatusError
+	if !errors.As(err, &se) || se.Code != 500 {
+		t.Fatalf("err = %v, want the 500 StatusError", err)
+	}
+}
+
+func TestSoftgardenRejectsBoardThatIsNotAHostLabel(t *testing.T) {
+	if _, err := NewSoftgarden(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{Board: "evil.com/x"}); err == nil {
+		t.Fatal("want an error for a board that cannot be a hostname label")
+	}
+}
+
+func TestSoftgardenFeedPostingWithoutIDFailsTheRead(t *testing.T) {
+	// A partial list returned as a success would let the unseen-sweep close the posting the
+	// id-less item stands for.
+	feed := `{"dataFeedElement":[
+	 {"item":{"title":"Fine","url":"https://acme.career.softgarden.de/jobs/1/","identifier":{"value":1}}},
+	 {"item":{"title":"No id","url":"https://acme.career.softgarden.de/jobs/x/","identifier":{}}}]}`
+	fake := (&routedHTTP{}).route("career.softgarden.de", feed)
+
+	if jobs, err := NewSoftgarden(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatalf("got %d jobs and no error, want the read to fail", len(jobs))
+	}
+}
+
+func TestSoftgardenFeedAcceptsAnUppercaseBoard(t *testing.T) {
+	fake := (&routedHTTP{}).route("acme.career.softgarden.de/jobs.feed.json", sgFeedJSON)
+
+	jobs, err := NewSoftgarden(fake).Fetch(context.Background(), CompanyEntry{Board: "Acme"})
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("jobs=%d err=%v, want 2 jobs: DNS labels are case-insensitive", len(jobs), err)
 	}
 }
