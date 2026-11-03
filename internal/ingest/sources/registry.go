@@ -345,6 +345,10 @@ func All(c HTTPClient) map[string]Source {
 		NewEightfold(c),
 		NewFreshteam(c),
 		NewSoftgarden(c),
+		// TalentBrew (Radancy): white-labelled onto each employer's own host, so the board is the host
+		// (plus locale path). Unpaced: the few requests made while probing four boards drew no limit
+		// and the platform documents none; detail hydration runs under the shared 8-worker bound.
+		NewTalentbrew(c),
 		NewBetterteam(c),
 		// White-labelled ATS: the board is the full careers host, because the same tenant is
 		// served under the vendor's domain and under each reseller's.
