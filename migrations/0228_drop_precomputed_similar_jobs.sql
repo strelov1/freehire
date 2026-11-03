@@ -1,7 +1,5 @@
--- Apply only AFTER the API and embed workers run the Meilisearch similarity code
--- and the retired similar-backfill service/timer has been stopped and removed.
--- Old binaries still select the deleted columns. New sqlc queries name their
--- columns explicitly and run both before and after this contraction.
+-- Drops the offline similar-jobs list and its scheduling stamp: related jobs now come from
+-- live Meilisearch search, and every binary that still selected these columns is retired.
 -- Chunk embeddings stay for hybrid search. Dependent partial indexes drop with
 -- similar_computed_at; this does not rewrite the jobs table.
 ALTER TABLE jobs
