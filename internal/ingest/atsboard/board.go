@@ -432,6 +432,9 @@ var atsBoards = []struct{ host, source, mode string }{
 	// (deloittecm.avature.net). Only tenants on the platform's own domain are derivable; a
 	// vanity host (jobs.ea.com) is not, like every other custom-domain ATS here.
 	{"avature", "avature", modeHost},
+	// Recruiter (Saramin's career-site builder): the adapter sends the whole career host as the
+	// API's tenant header, so the board is the host (cosmax.recruiter.co.kr).
+	{"recruiter.co.kr", "recruiter_co_kr", modeHost},
 	// HiringThing is white-labelled: one application serves a tenant under the vendor's own
 	// domain (<tenant>.hiringthing.com) and under each reseller's, and a slug alone names
 	// nothing — nothing in it says which domain answers for it, and the same slug can exist

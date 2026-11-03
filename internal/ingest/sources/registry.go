@@ -345,6 +345,10 @@ func All(c HTTPClient) map[string]Source {
 		NewEightfold(c),
 		NewFreshteam(c),
 		NewSoftgarden(c),
+		// Recruiter (recruiter.co.kr): Saramin's career-site builder. One listing POST per board
+		// plus one detail GET per open posting against a shared API host; boards are small
+		// (42 postings on the largest measured) and no limit was observed, so it is unpaced.
+		NewRecruiterCoKR(c),
 		NewBetterteam(c),
 		// White-labelled ATS: the board is the full careers host, because the same tenant is
 		// served under the vendor's domain and under each reseller's.
