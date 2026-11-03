@@ -151,15 +151,15 @@ func TestIntervieweb_FetchNewRefreshesSeenWithoutDetail(t *testing.T) {
 	}
 }
 
-func TestIntervieweb_SkipsPostingWithoutJobPosting(t *testing.T) {
+func TestIntervieweb_MarksPostingWithoutJobPostingUnreadable(t *testing.T) {
 	f := &ivFake{pages: map[string]string{
 		"https://" + ivHost + "/en/career": ivLanding(1, "barista-a-1", "cook-b-2"),
 		ivURL("barista-a-1"):               `<html><body>no markup</body></html>`,
 		ivURL("cook-b-2"):                  ivDetail("COOK B", "<p>x</p>", "2026-11-01", ""),
 	}}
 	jobs, err := NewIntervieweb(f).Fetch(context.Background(), CompanyEntry{Board: ivHost})
-	if err != nil || len(jobs) != 1 || jobs[0].ExternalID != "2" {
-		t.Fatalf("jobs = %+v, err = %v", jobs, err)
+	if err != nil || len(jobs) != 2 || jobs[0].ExternalID != "1" || !jobs[0].Unreadable || jobs[1].ExternalID != "2" || jobs[1].Unreadable {
+		t.Fatalf("a page without a JobPosting must be an unreadable marker, not an absence: jobs = %+v, err = %v", jobs, err)
 	}
 }
 

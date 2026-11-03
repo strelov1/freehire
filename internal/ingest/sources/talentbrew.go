@@ -105,7 +105,7 @@ func (s talentbrew) listing(ctx context.Context, base *url.URL) ([]tbPosting, er
 	var out []tbPosting
 	seen := map[string]bool{}
 	totalPages := 1
-	for page := 1; page <= totalPages && page <= tbMaxPages; page++ {
+	for page := 1; page <= totalPages; page++ {
 		var resp struct {
 			Results string `json:"results"`
 		}
@@ -119,6 +119,9 @@ func (s talentbrew) listing(ctx context.Context, base *url.URL) ([]tbPosting, er
 		}
 		if page == 1 {
 			totalPages = tbTotalPages(root)
+			if totalPages > tbMaxPages {
+				return nil, fmt.Errorf("board states %d pages, past the %d-page cap: walk would be truncated", totalPages, tbMaxPages)
+			}
 		}
 		added := 0
 		walk(root, func(n *html.Node) bool {
@@ -144,7 +147,12 @@ func (s talentbrew) listing(ctx context.Context, base *url.URL) ([]tbPosting, er
 			return true
 		})
 		if added == 0 {
-			break // an empty page ends the walk whatever the declared count says
+			// Page 1 of a one-page board may legitimately be empty; any other page the board
+			// declared must carry postings, or the walk is not the whole board.
+			if page > 1 || totalPages > 1 {
+				return nil, fmt.Errorf("page %d of %d carries no new postings: walk truncated", page, totalPages)
+			}
+			break
 		}
 	}
 	return out, nil
@@ -173,16 +181,20 @@ type tbLD struct {
 	JobLocation schemaPlaces `json:"jobLocation"`
 }
 
-// detail fetches one posting page, returning ok=false when the fetch fails or the page carries
-// no JobPosting, so the caller skips just that posting.
+// detail fetches one posting page. A page the platform says is gone (404/410) is dropped
+// (ok=false); one that cannot be read, or carries no JobPosting, is an unreadable marker, so a
+// transient failure is never filed as the posting's absence.
 func (s talentbrew) detail(ctx context.Context, e CompanyEntry, p tbPosting) (Job, bool) {
 	root, err := s.http.GetHTML(ctx, p.url)
 	if err != nil {
-		return Job{}, false
+		if detailUnreadable(err) {
+			return unreadableDetail(p.id, p.url, e.Company), true
+		}
+		return Job{}, false // 404/410: the posting is gone
 	}
 	var ld tbLD
 	if !ldJobPosting(root, &ld) || strings.TrimSpace(ld.Title) == "" {
-		return Job{}, false
+		return unreadableDetail(p.id, p.url, e.Company), true
 	}
 	j := Job{
 		ExternalID:  p.id,

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -98,12 +99,14 @@ func (s recruiterCoKR) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error)
 	if err != nil {
 		return nil, fmt.Errorf("recruiter_co_kr: board %s: %w", host, err)
 	}
-	return fetchDetails(rows, defaultDetailWorkers, func(r rckListing) (Job, bool) {
+	var gone atomic.Int64
+	jobs := fetchDetails(rows, defaultDetailWorkers, func(r rckListing) (Job, bool) {
 		id := strconv.FormatInt(r.PositionSn, 10)
 		jobURL := "https://" + host + "/career/jobs/" + id
 		var d rckDetail
 		if err := s.http.GetJSONWithHeaders(ctx, rckAPI+"/position/v2/jobflex/"+id, headers, &d); err != nil {
 			if rckGone(err) {
+				gone.Add(1)
 				return Job{}, false
 			}
 			return unreadableDetail(id, jobURL, e.Company), true
@@ -127,7 +130,14 @@ func (s recruiterCoKR) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error)
 			}
 		}
 		return j, true
-	}), nil
+	})
+	// The platform answers 400 for an unknown position, but a 400 is also what a bad request
+	// looks like. Every listed posting "gone" at once is that, not a board emptied between two
+	// requests: fail rather than let the sweep close the whole board.
+	if len(rows) > 0 && int(gone.Load()) == len(rows) {
+		return nil, fmt.Errorf("recruiter_co_kr: board %s: all %d listed postings answered gone", host, len(rows))
+	}
+	return jobs, nil
 }
 
 // rckGone reports whether the detail call states the posting no longer exists. The platform

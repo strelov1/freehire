@@ -118,21 +118,28 @@ func (s intervieweb) morePages(ctx context.Context, board string, base *url.URL,
 		if err != nil {
 			return nil, fmt.Errorf("intervieweb: %s page %d: %w", board, page, err)
 		}
-		out = ivMerge(out, ivJobLinks(base, frag))
+		links := ivJobLinks(base, frag)
+		if len(links) == 0 {
+			return nil, fmt.Errorf("intervieweb: %s page %d of %d carries no postings: walk truncated", board, page, pages)
+		}
+		out = ivMerge(out, links)
 	}
 	return out, nil
 }
 
-// detail maps one posting page's JobPosting ld+json to a Job, returning ok=false when the page
-// cannot be read or carries none, so the caller skips just that posting.
+// detail maps one posting page's JobPosting ld+json to a Job. A 404/410 page is dropped
+// (ok=false); an unreadable one, or one with no JobPosting, becomes an unreadable marker.
 func (s intervieweb) detail(ctx context.Context, e CompanyEntry, l ivLink) (Job, bool) {
 	root, err := s.http.GetHTML(ctx, l.url)
 	if err != nil {
-		return Job{}, false
+		if detailUnreadable(err) {
+			return unreadableDetail(l.id, l.url, e.Company), true
+		}
+		return Job{}, false // 404/410: the posting is gone
 	}
 	var p ivPosting
 	if !ldJobPosting(root, &p) || strings.TrimSpace(p.Title) == "" {
-		return Job{}, false
+		return unreadableDetail(l.id, l.url, e.Company), true
 	}
 	j := Job{
 		ExternalID:  l.id,

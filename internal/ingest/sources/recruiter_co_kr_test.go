@@ -121,3 +121,12 @@ func TestRCKGone(t *testing.T) {
 		t.Error("rckGone misclassifies")
 	}
 }
+
+func TestRecruiterCoKRAllDetailsGoneFails(t *testing.T) {
+	f := &rckFake{pages: map[int]string{
+		1: `{"pagination":{"totalPages":1},"list":[{"positionSn":1,"title":"a","submissionStatus":"IN_SUBMISSION"},{"positionSn":2,"title":"b","submissionStatus":"IN_SUBMISSION"}]}`,
+	}}
+	if _, err := NewRecruiterCoKR(f).Fetch(context.Background(), CompanyEntry{Board: "x.recruiter.co.kr"}); err == nil {
+		t.Error("every listed posting answering 400 is a bad request, not an emptied board")
+	}
+}

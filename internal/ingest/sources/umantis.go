@@ -63,10 +63,9 @@ func (s umantis) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 		root, err := s.http.GetHTML(ctx, next)
 		if err != nil {
-			if page == 1 {
-				return nil, fmt.Errorf("umantis: listing %s: %w", e.Board, err)
-			}
-			break // a later page failing ends the walk with the postings gathered so far
+			// Any page failing fails the crawl: a truncated board returned as a success reads as
+			// a shrunken catalogue and the sweep would close the postings it never reached.
+			return nil, fmt.Errorf("umantis: listing %s page %d: %w", e.Board, page, err)
 		}
 		added := 0
 		for _, r := range umRows(base, root) {
@@ -86,16 +85,19 @@ func (s umantis) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	}), nil
 }
 
-// detail fetches one posting page and maps it to a Job, returning ok=false when the page
-// cannot be read or carries no content, so the caller skips just that posting.
+// detail fetches one posting page and maps it to a Job. A 404/410 page is dropped (ok=false);
+// an unreadable or empty one becomes an unreadable marker rather than the posting's absence.
 func (s umantis) detail(ctx context.Context, e CompanyEntry, r umRow) (Job, bool) {
 	root, err := s.http.GetHTML(ctx, r.url)
 	if err != nil {
-		return Job{}, false
+		if detailUnreadable(err) {
+			return unreadableDetail(r.id, r.url, e.Company), true
+		}
+		return Job{}, false // 404/410: the posting is gone
 	}
 	desc := sanitizeHTML(umBody(root))
 	if desc == "" {
-		return Job{}, false
+		return unreadableDetail(r.id, r.url, e.Company), true
 	}
 	remote := isRemote(r.location)
 	return Job{

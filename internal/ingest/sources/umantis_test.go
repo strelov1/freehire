@@ -104,7 +104,7 @@ func TestUmantisFetchPaginatesAndMaps(t *testing.T) {
 	}
 }
 
-func TestUmantisSkipsUnreadableDetail(t *testing.T) {
+func TestUmantisMarksUnreadableDetail(t *testing.T) {
 	const host = "recruitingapp-1.umantis.com"
 	f := &umFake{pages: map[string]string{
 		"https://" + host + "/Jobs/All": umListing("",
@@ -112,7 +112,7 @@ func TestUmantisSkipsUnreadableDetail(t *testing.T) {
 		"https://" + host + "/Vacancies/2/Description/2": umDetail,
 	}}
 	jobs, err := NewUmantis(f).Fetch(context.Background(), CompanyEntry{Board: host})
-	if err != nil || len(jobs) != 1 || jobs[0].ExternalID != "2" {
+	if err != nil || len(jobs) != 2 || !jobs[0].Unreadable || jobs[0].ExternalID != "1" || jobs[1].Unreadable {
 		t.Fatalf("jobs = %+v, err = %v", jobs, err)
 	}
 }
@@ -129,15 +129,14 @@ func TestUmantisRowWithoutVacancyIDIsSkipped(t *testing.T) {
 	}
 }
 
-func TestUmantisLaterPageFailureKeepsGathered(t *testing.T) {
+func TestUmantisLaterPageFailureFailsTheCrawl(t *testing.T) {
 	const host = "recruitingapp-1.umantis.com"
 	f := &umFake{pages: map[string]string{
 		"https://" + host + "/Jobs/All":                  umListing("?tc1=p2", umRowHTML("1", "A", "X", "01.01.2026")),
 		"https://" + host + "/Vacancies/1/Description/2": umDetail,
 	}}
-	jobs, err := NewUmantis(f).Fetch(context.Background(), CompanyEntry{Board: host})
-	if err != nil || len(jobs) != 1 {
-		t.Fatalf("jobs = %+v, err = %v", jobs, err)
+	if jobs, err := NewUmantis(f).Fetch(context.Background(), CompanyEntry{Board: host}); err == nil {
+		t.Fatalf("a truncated board must not read as a success: jobs = %+v", jobs)
 	}
 }
 
