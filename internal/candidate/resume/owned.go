@@ -243,9 +243,19 @@ func (o Owned) ApplyBody(st *resumeextract.Structured) {
 	if o.educationOwned() {
 		st.Education = append([]resumeextract.Education(nil), o.Education...)
 	}
+	o.ApplyTotalYears(st, time.Now())
+}
+
+// ApplyTotalYears settles the years of experience: the candidate's own figure when they
+// gave one — an explicit choice, never second-guessed, even when lower than their dates
+// add up to — and otherwise the extract's figure caught up with its dated roles, since
+// the model's number is frozen at parse time and may simply be wrong.
+func (o Owned) ApplyTotalYears(st *resumeextract.Structured, now time.Time) {
 	if o.totalYearsOwned() {
 		st.TotalYears = o.TotalYears
+		return
 	}
+	st.TotalYears = st.EffectiveYears(now)
 }
 
 // AsStructured projects the identity subset onto the structured contact fields for
@@ -334,7 +344,8 @@ func clipRunes(s string, max int) string {
 	return string(r[:max])
 }
 
-func decodeOwned(blob []byte) Owned {
+// DecodeOwned reads the stored candidate_contacts blob; unreadable or empty is "owns nothing".
+func DecodeOwned(blob []byte) Owned {
 	if len(blob) == 0 {
 		return Owned{}
 	}
@@ -390,7 +401,7 @@ func (s *Store) CandidateOwned(ctx context.Context, userID int64) (Owned, error)
 	if err != nil {
 		return Owned{}, err
 	}
-	return decodeOwned(blob), nil
+	return DecodeOwned(blob), nil
 }
 
 // SetCandidateOwned replaces the candidate's owned overrides after Sanitize.
