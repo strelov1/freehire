@@ -556,6 +556,12 @@ var atsBoards = []struct{ host, source, mode string }{
 
 	// --- keyedsegment: board = the shaped segment after a fixed key segment ---
 	{"workstream.us", "workstream", modeKeyedSegment},
+	// LiveHire career sites: /careers/<segment>[…]. The board is the segment; the /jobs and
+	// /job/<urlCode>/<advertUrlCode>/<slug> pages under it all name the same tenant, so the
+	// canonical collapses to the board's own listing page. www.livehire.com is the vendor's
+	// WHOLE product host (dashboards, marketing, API), so anything beyond the fixed /careers
+	// prefix is declined rather than read as a board.
+	{"livehire.com", "livehire", modeKeyedSegment},
 
 	// --- pathjob: board = the first path segment of a POSTING url, on the apex host only.
 	{"harri.com", "harri", modePathJob},
@@ -789,6 +795,11 @@ var keyedSegmentBoards = map[string]struct {
 	// Workstream's employer id: the eight lower-case hex characters every canonical career-site
 	// URL opens with (internal/ingest/sources/workstream.go).
 	"workstream.us": {key: "j", boardPattern: regexp.MustCompile(`^[0-9a-f]{8}$`)},
+	// LiveHire's tenant segment: the careers path opens with /careers/<segment>, and the segment
+	// is lower-case alphanumeric with hyphens (e.g. "flybuys"). The /jobs and /job/… subpages
+	// under /careers are covered by the same pattern — modeKeyedSegment matches the segment
+	// right after the key wherever it sits, and the canonical collapses to the board listing.
+	"livehire.com": {key: "careers", boardPattern: regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)},
 }
 
 // businessID is the shape of a decoded modeEncodedCareers board: a decimal id with no leading zero.

@@ -432,6 +432,11 @@ func All(c HTTPClient) map[string]Source {
 		NewHabrCareer(c),
 		NewGeekjob(c),
 		NewGetro(c),
+		// LiveHire: talent platform behind employers like Flybuys, board = the career-site
+		// segment (/careers/<segment>). The JSON API under /careers-api answers without the
+		// Cloudflare challenge that fronts the HTML pages. Hydrating: the listing carries the
+		// facets, the detail carries the body. See livehire.go.
+		NewLiveHire(c),
 		// Dover: boarded ATS (board = company slug), public JSON API with no bot protection on
 		// the data endpoints — only the browser apply-submission flow gates behind Turnstile.
 		// Paced (pacedDoverGetter): an unpaced multi-board run drew 22 429s from 31 boards
