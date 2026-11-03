@@ -85,6 +85,10 @@ var checkedScalars = map[string]func(string) bool{
 		_, ok := applyQuestionsMax(val)
 		return ok
 	},
+	// The remote-anywhere modifier is read whole as a boolean; anything but true
+	// (case-insensitively, like every other bool scalar) leaves it unset, which
+	// widens the answer — so a mis-spelled value is named rather than dropped.
+	WorkModeRemoteAnywhereParam: oneOf(boolValues),
 }
 
 // UnknownFacetValue reports whether value falls outside the closed vocabulary of a facet
