@@ -6,6 +6,7 @@ import { defineMessages } from '#lib/i18n/t.js';
 // screen. Translate it here once that page's own change lands.
 export const messages = defineMessages(
   {
+    heading: 'Tailored CVs',
     loadFailed: 'Could not load your CVs.',
     deleteFailed: 'Could not delete this CV.',
     deleted: 'CV deleted',
@@ -33,6 +34,7 @@ export const messages = defineMessages(
   },
   {
     ru: {
+      heading: 'Адаптированные резюме',
       loadFailed: 'Не удалось загрузить ваши резюме.',
       deleteFailed: 'Не удалось удалить это резюме.',
       deleted: 'Резюме удалено',

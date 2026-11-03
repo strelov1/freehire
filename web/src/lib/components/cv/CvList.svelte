@@ -6,6 +6,7 @@
   import { companyLogoUrl } from '#lib/logo.js';
   import { ConfirmDialog, EntityLogo } from '#lib/ui/index.js';
   import { openCvIntake } from '#lib/cvIntakeDialog.svelte.js';
+  import BaseCvCards from './BaseCvCards.svelte';
   import { type CvTailoredItem } from '#lib/cv.js';
   import { messages } from './CvList.messages';
   import { locale } from '#lib/i18n/currentLocale.svelte.js';
@@ -61,7 +62,11 @@
   const fmt = (iso: string) => new Date(iso).toLocaleDateString();
 </script>
 
-<div class="space-y-6">
+<div class="space-y-8">
+  <BaseCvCards />
+
+  <h2 class="text-base font-semibold">{s.heading}</h2>
+
   {#if error}<p class="text-sm text-destructive">{error}</p>{/if}
 
   {#if status === 'loading'}
