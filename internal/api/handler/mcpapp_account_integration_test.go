@@ -115,7 +115,7 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 // gets. Those are different failures with different owners: one is the
 // caller's mistake, the other is ours and belongs in the error inbox. Only a
 // real Fiber handler returning a Go error gets reported through classify/
-// Sentry, which is why authentication now runs as middleware ahead of the
+// the exception log, which is why authentication now runs as middleware ahead of the
 // adapted raw http.Handler rather than inside it.
 func TestMCPAccountAuthenticate_InfraFailureIsA500NotA401(t *testing.T) {
 	pool := startPostgres(t)

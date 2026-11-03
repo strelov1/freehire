@@ -19,6 +19,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/userjob"
 	"github.com/strelov1/freehire/internal/candidate/talentnetwork"
 	"github.com/strelov1/freehire/internal/dict/classify"
+	"github.com/strelov1/freehire/internal/dict/engagement"
 	"github.com/strelov1/freehire/internal/dict/industrytag"
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/dict/perks"
@@ -465,6 +466,10 @@ func genVocab() string {
 	// offer a perk the dictionary never writes.
 	b.WriteString(emitVocab("Perk", "PERK_VALUES", vocab.PerkValues))
 	b.WriteString(emitMap("PerkLabels", "PERK_LABELS", perks.Labels()))
+	// The engagement vocabulary (internal/dict/engagement), so the Engagement chips
+	// cannot offer a value the dictionary never writes.
+	b.WriteString(emitVocab("Engagement", "ENGAGEMENT_VALUES", vocab.EngagementValues))
+	b.WriteString(emitMap("EngagementLabels", "ENGAGEMENT_LABELS", engagement.Labels()))
 	// The ghost criterion vocabulary. Generated for the same reason the mail signals are,
 	// with a sharper edge: the job page draws one gauge segment per criterion the payload
 	// says fired, and the rows accounting for them come from the SPA's own list. A

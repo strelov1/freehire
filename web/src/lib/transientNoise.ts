@@ -1,8 +1,8 @@
-// What must never reach Sentry, because reporting it costs a real error its place.
+// What must never be reported as an error, because reporting it costs a real error its place.
 //
-// The quota is the design constraint, not a nicety. This deployment runs Sentry's free
+// The rule was measured against a quota, when this deployment ran Sentry's free
 // tier — 5 000 errors a month for the whole organisation — and both the browser and the
-// SSR process report into the same project. Measured over 2026-08-29..09-16, 5 044 events
+// SSR process reported into the same project. Measured over 2026-08-29..09-16, 5 044 events
 // were accepted and a further 2 419 were rejected with `error_usage_exceeded`: the month's
 // allowance ran out on the 14th and every fault after it, including a production outage on
 // the 15th, was thrown away at the door. An empty issue list then reads as "nothing broke",
@@ -45,7 +45,7 @@ const TRANSIENT_MESSAGES = [
   // Transport. Chrome says "Failed to fetch", Safari "Load failed", Firefox
   // "NetworkError when attempting to fetch resource", undici (the SSR fetch) "fetch
   // failed". A systemic version of this is an outage, and an outage is not discovered by
-  // reading Sentry.
+  // reading error reports.
   'failed to fetch',
   'load failed',
   'network error',

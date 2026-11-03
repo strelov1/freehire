@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,21 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/strelov1/freehire/internal/platform/observability"
 	collector "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	"google.golang.org/protobuf/proto"
 )
-
-// recordingTransport is a sentry.Transport that captures sent events in memory so
-// a test can assert what would have been delivered without any network.
-type recordingTransport struct{ events []*sentry.Event }
-
-func (t *recordingTransport) Configure(sentry.ClientOptions)        {}
-func (t *recordingTransport) SendEvent(e *sentry.Event)             { t.events = append(t.events, e) }
-func (t *recordingTransport) Flush(time.Duration) bool              { return true }
-func (t *recordingTransport) FlushWithContext(context.Context) bool { return true }
-func (t *recordingTransport) Close()                                {}
 
 // A held switch must stop the work itself, not merely tidy up after it: the run
 // function is the thing that opens pools and crawls boards, so "paused" is only
@@ -87,24 +75,14 @@ func TestRunOrPauseRunsAndReportsWhenClear(t *testing.T) {
 	}
 }
 
-// A panic flowing through the worker guard must be reported to Sentry AND
-// re-raised, so the process still crashes with the original stack and non-zero exit.
-func TestCapturePanicReportsAndRepanics(t *testing.T) {
-	tr := &recordingTransport{}
-	if err := sentry.Init(sentry.ClientOptions{
-		Dsn:       "https://public@o0.ingest.sentry.io/0",
-		Transport: tr,
-	}); err != nil {
-		t.Fatalf("sentry.Init: %v", err)
-	}
-
+// A panic flowing through the worker guard must be re-raised, so the process still
+// crashes with the original stack and non-zero exit. That it is also reported is
+// TestRunReportedFlushesFinalFault's job, against a real OTLP receiver.
+func TestCapturePanicRepanics(t *testing.T) {
 	defer func() {
 		r := recover()
 		if r == nil {
 			t.Fatal("capturePanic swallowed the panic; want it re-raised")
-		}
-		if len(tr.events) != 1 {
-			t.Fatalf("captured %d events, want exactly 1", len(tr.events))
 		}
 	}()
 
@@ -139,7 +117,7 @@ func TestRunReportedFlushesFinalFault(t *testing.T) {
 					}
 				}()
 				code := runReported(func() int {
-					cleanup, err := observability.InitLogs("inner-bootstrap", "test")
+					cleanup, err := observability.InitLogs("inner-bootstrap")
 					if err != nil {
 						t.Fatal(err)
 					}

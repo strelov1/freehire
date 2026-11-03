@@ -2,21 +2,21 @@
 
 ## Scope
 The shared bootstrap and run-outcome plumbing for the run-once-and-exit cron workers under
-`cmd/` (~40+ binaries): config + pool + signal-bound context setup, Sentry panic capture,
+`cmd/` (~40+ binaries): config + pool + signal-bound context setup, exception reporting,
 the exit-code convention, a progress heartbeat, and a corruption-tolerant keyset scanner.
 
 ## Always true
 - **`Main(run func() int)` wraps every worker's run, and Bootstrap's cleanup is deferred
-  INSIDE run** (main.go:14-26). On the normal path Main exits with run's status after the
-  deferred cleanup has flushed Sentry. On a panic, the deferred `capturePanic` reports it,
-  flushes (bounded at 2s), and re-panics so the process still crashes with the original
+  INSIDE run** (main.go:14-26). On the normal path Main reports a non-zero status, flushes the
+  exception exporter, and exits with run's status. On a panic, the deferred `capturePanic`
+  reports it and re-panics so the process still crashes with the original
   stack and a non-zero exit. A panic BEFORE Bootstrap (e.g. bad config) is not captured —
   those paths already log and exit non-zero.
-- **`Bootstrap(parent)` is the one setup path** (bootstrap.go:29): Sentry init (a malformed
-  DSN is fatal — broken observability must not boot silently), `config.Load()`, a
+- **`Bootstrap(parent)` is the one setup path** (bootstrap.go:29): `config.Load()`, the exception
+  exporter (a second owner of Main's; a malformed OTLP setup is fatal), a
   SIGINT/SIGTERM-cancellable root context (a cron timeout or redeploy delivers SIGTERM), and
   the pgx pool. The returned cleanup stops the signal notification, closes the pool, and
-  flushes Sentry; a failed step releases anything already acquired.
+  releases its exporter owner; a failed step releases anything already acquired.
 - **`ExitCode(failed, deadLettered)` is the convention** (exit.go:11): 0 on a clean run, 1
   when the run finished with ANY per-item failure or dead-lettered item, so cron alerts on
   a partially-failed run that would otherwise look successful. Deliberate divergence:

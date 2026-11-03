@@ -16,7 +16,7 @@ import (
 // scrape between runs — so this is the pull-model equivalent for it, reusing the
 // node_exporter already deployed on host-2 rather than standing up a
 // Pushgateway. Unset disables it, matching this repo's other optional,
-// env-gated integrations (Sentry, S3, search).
+// env-gated integrations (OTLP, S3, search).
 const PromTextfileDirEnv = "PROM_TEXTFILE_DIR"
 
 // writeRunMetrics records the outcome of one worker run as a

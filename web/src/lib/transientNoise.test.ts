@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isTransientNoise } from './sentryNoise';
+import { isTransientNoise } from './transientNoise';
 
 /** The shape `#lib/api`'s `call()` throws, without importing it — see the module's own
  *  note on why the filter duck-types instead. */

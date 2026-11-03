@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"time"
 
-	"github.com/getsentry/sentry-go"
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 
@@ -69,15 +67,10 @@ func (h *embedProgressHandlers) Stream(c *fiber.Ctx) error {
 	// fasthttp closes Done when the server shuts down, not when a client leaves.
 	serverDone := c.Context().Done()
 
-	var hub *sentry.Hub
-	if reqHub := sentryfiber.GetHubFromContext(c); reqHub != nil {
-		hub = reqHub.Clone()
-	}
-
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
 		defer cancel()
-		stream := newSSEStream(w, conn, sseWriteTimeout, hub)
-		defer recoverStream(hub, "embedprogress: stream", nil)
+		stream := newSSEStream(w, conn, sseWriteTimeout)
+		defer recoverStream("embedprogress: stream", nil)
 
 		// Before the sampler's first reading every figure is null; sending that would
 		// replace what the page already rendered with "measuring…". The first real

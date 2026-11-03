@@ -41,7 +41,7 @@ type llmBinding struct {
 // errUnpaidModelCall is what the binding answers for a context the paid-AI gate did not
 // mark. It is OUR fault, never the caller's — a route that makes a model call was mounted
 // without mw.paidAI, or a goroutine dropped the request's context on the way — so it renders
-// as a 500 and reaches Sentry rather than reading as an upgrade prompt. A paying caller who
+// as a 500 and is reported rather than reading as an upgrade prompt. A paying caller who
 // hits it has found a bug.
 var errUnpaidModelCall = errors.New("handler: model call without a verified paid entitlement")
 

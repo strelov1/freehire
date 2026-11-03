@@ -142,6 +142,7 @@ Every facet below supports repeat-OR, `_mode=and`, and `_exclude` as described a
 | `metros` | Metro area | Open vocabulary — call /jobs/facets for live values |
 | `relocation` | Relocation | not_supported, supported, required |
 | `employment_type` | Employment | full_time, part_time, contract, internship, fellowship |
+| `engagement` | Contract terms | ir35_outside, ir35_inside — the UK IR35 status the title or description states; a posting that offers either carries both, and one that does not say carries neither. Separate from employment_type |
 | `english_level` | English | none, a1, a2, b1, b2, c1, c2, native |
 | `posting_language` | Job language | Open vocabulary — call /jobs/facets for live values |
 | `reality` | Posting reality | fresh, stale, likely-evergreen |

@@ -71,6 +71,14 @@ var (
 		"unlimited_pto", "health_insurance", "mental_health",
 		"learning_budget", "home_office_stipend", "sabbatical", "sign_on_bonus",
 	}
+	// EngagementValues are the legal terms a posting states it engages its worker on —
+	// the `engagement` facet, matched by internal/dict/engagement from explicit text
+	// only. It answers "employee or own business, and on what tax footing", which
+	// employment_type (how long and how many hours) does not: a Polish B2B role is
+	// full_time, a UK Inside IR35 role is a contract taxed like a salary. Multi-valued,
+	// because a posting may offer either ("Inside or Outside IR35"). Starts with the UK's
+	// IR35 status; the other markets' terms (B2B, W-2/1099/C2C, PJ/CLT, ИП) join here.
+	EngagementValues   = []string{"ir35_outside", "ir35_inside"}
 	EnglishLevelValues = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
 	// EquityValues answer "does this job pay in equity?" — derived from the posting's
 	// text by internal/job/jobfacts.Equity. There is no "no equity" value: a posting the

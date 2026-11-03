@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/getsentry/sentry-go"
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/valyala/fasthttp"
@@ -126,19 +124,11 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 	// while the ctx is valid; used inside the writer, which runs after this handler returns.
 	conn := c.Context().Conn()
 
-	// Same reason as conn: the sentryfiber hub is request-scoped and the ctx is released
-	// once this handler returns, so take a clone now. A clone rather than the hub itself
-	// because the writer outlives the request that owns its scope.
-	var hub *sentry.Hub
-	if reqHub := sentryfiber.GetHubFromContext(c); reqHub != nil {
-		hub = reqHub.Clone()
-	}
-
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
-		stream := newSSEStream(w, conn, sseWriteTimeout, hub)
+		stream := newSSEStream(w, conn, sseWriteTimeout)
 		// Registered first so it unwinds last: the claim release and the heartbeat stop
 		// are deferred below and must run before the reader is told the analysis failed.
-		defer recoverStream(hub, "matchanalysis: stream", func() {
+		defer recoverStream("matchanalysis: stream", func() {
 			stream.event("stream_error", map[string]string{"message": "analysis failed"})
 		})
 		start := time.Now()
@@ -189,7 +179,7 @@ func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
 		})
 		if err != nil {
 			log.Printf("matchanalysis: stream FAILED user=%d job=%d dur=%s events=%d: %v", userID, job.ID, time.Since(start).Round(time.Millisecond), events, err)
-			reportStreamFault(hub, err)
+			reportStreamFault(err)
 			stream.event("stream_error", map[string]string{"message": "analysis failed"})
 			return
 		}
@@ -282,27 +272,21 @@ func capFinalEvent(e matchanalysis.Event, blockers []hardconstraint.Blocker) mat
 }
 
 // reportStreamFault sends a fault that surfaced AFTER the response body began streaming
-// to Sentry. It exists because RenderError — the single reporting point for the whole API
+// to the exception log. It exists because RenderError — the single reporting point for the whole API
 // — only ever sees errors a handler RETURNS, and this handler returns nil before the body
 // writer runs. Without this seam every failed analysis is invisible: the reader gets a
 // `stream_error` event, the access log records the 200 the stream opened with, and the
 // error inbox stays empty.
 //
-// hub is a clone captured while the request context was still alive; it is nil when Sentry
-// is unconfigured, which must report nothing rather than panic on the SSE goroutine.
-//
 // What counts as a fault is classify's decision, not a second policy invented here: the
 // streaming path must not disagree with the returned-error path about whether a reader
 // who walked away is an error. Only classify's status mapping is dropped — the response
 // status was fixed when the stream opened, long before this failure existed.
-func reportStreamFault(hub *sentry.Hub, err error) {
+func reportStreamFault(err error) {
 	if _, _, report := classify(err); !report {
 		return
 	}
 	observability.CaptureError(context.Background(), err)
-	if hub != nil {
-		hub.CaptureException(err)
-	}
 }
 
 // recoverStream catches a panic on a goroutine this package hands to fasthttp, reports
@@ -311,7 +295,7 @@ func reportStreamFault(hub *sentry.Hub, err error) {
 // It is needed because none of those goroutines is covered by the server's recover
 // middleware: SetBodyStreamWriter runs the closure in a bare `go sw(bw)` (fasthttp's
 // stream.go) at a point where the handler chain has already returned nil. A panic there
-// is therefore not a 500 with a Sentry event — it is the process, and every other
+// is therefore not a reported 500 — it is the process, and every other
 // request in flight with it. Everything else the server serves turns a panic into a 500,
 // and a test pins that; this is the same promise for the streams.
 //
@@ -319,16 +303,13 @@ func reportStreamFault(hub *sentry.Hub, err error) {
 // none (the heartbeat: its body writer is still there to close the stream). It runs
 // last, after the deferred work that gives a charge back or releases a claim, because
 // those defers are what make the terminal frame true.
-func recoverStream(hub *sentry.Hub, what string, terminal func()) {
+func recoverStream(what string, terminal func()) {
 	r := recover()
 	if r == nil {
 		return
 	}
 	observability.CapturePanic(context.Background(), r)
 	log.Printf("%s: panic: %v\n%s", what, r, debug.Stack())
-	if hub != nil {
-		hub.Recover(r)
-	}
 	if terminal != nil {
 		terminal()
 	}
@@ -355,14 +336,10 @@ type sseStream struct {
 	w       *bufio.Writer
 	conn    net.Conn
 	timeout time.Duration
-	// hub is where a panic on the heartbeat goroutine is reported. The stream carries
-	// it rather than keepalive taking it, because keepalive is also started from
-	// followMatchAnalysis, which is handed the stream and nothing else.
-	hub *sentry.Hub
 }
 
-func newSSEStream(w *bufio.Writer, conn net.Conn, timeout time.Duration, hub *sentry.Hub) *sseStream {
-	return &sseStream{w: w, conn: conn, timeout: timeout, hub: hub}
+func newSSEStream(w *bufio.Writer, conn net.Conn, timeout time.Duration) *sseStream {
+	return &sseStream{w: w, conn: conn, timeout: timeout}
 }
 
 // event writes one named SSE event with a JSON data payload and flushes it, reporting
@@ -406,7 +383,7 @@ func (s *sseStream) keepalive(every time.Duration) (stop func()) {
 		// Its own goroutine, so its own recover: a panic here is not the body writer's
 		// to catch, and it owes no terminal frame — the writer that started it is still
 		// there to close the stream.
-		defer recoverStream(s.hub, "sse keepalive", nil)
+		defer recoverStream("sse keepalive", nil)
 		t := time.NewTicker(every)
 		defer t.Stop()
 		for {

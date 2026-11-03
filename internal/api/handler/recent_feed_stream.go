@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"time"
 
-	"github.com/getsentry/sentry-go"
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 
@@ -85,15 +83,10 @@ func (h *recentFeedHandlers) StreamRecentJobs(c *fiber.Ctx) error {
 	// fasthttp closes Done when the server shuts down, not when a client leaves.
 	serverDone := c.Context().Done()
 
-	var hub *sentry.Hub
-	if reqHub := sentryfiber.GetHubFromContext(c); reqHub != nil {
-		hub = reqHub.Clone()
-	}
-
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
 		defer cancel()
-		stream := newSSEStream(w, conn, sseWriteTimeout, hub)
-		defer recoverStream(hub, "recentfeed: stream", nil)
+		stream := newSSEStream(w, conn, sseWriteTimeout)
+		defer recoverStream("recentfeed: stream", nil)
 
 		for _, e := range backlog {
 			if !stream.event("job", e) {

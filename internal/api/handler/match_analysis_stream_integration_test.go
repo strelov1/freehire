@@ -15,8 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getsentry/sentry-go"
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/tmc/langchaingo/llms"
 
@@ -89,9 +87,7 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 		return s
 	}
 
-	// mws are mounted before the route so a test can install the sentryfiber middleware
-	// the server runs in production; the existing subtests pass none and are unaffected.
-	appFor := func(store *resume.Store, an *matchanalysis.Analyzer, mws ...fiber.Handler) *fiber.App {
+	appFor := func(store *resume.Store, an *matchanalysis.Analyzer) *fiber.App {
 		h := &matchHandlers{
 			queries:     queries,
 			userProfile: userprofile.New(ownedProfile()),
@@ -103,9 +99,6 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 				plan.NewStore(queries, pool, plan.DefaultConfig().Enforcing().WithProCeiling(plan.FeatureFit, fitProDailyForTests)), an),
 		}
 		app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-		for _, mw := range mws {
-			app.Use(mw)
-		}
 		app.Get("/api/v1/jobs/:slug/fit/stream", auth.RequireAuth(iss, testVersions), markPaidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 		return app
 	}
@@ -166,20 +159,13 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 
 	// The regression this whole change exists for. The handler returns nil long before the
 	// chain runs, so a chain failure never reaches RenderError — the only place the API
-	// reports to Sentry. The reader sees `stream_error` and the access log records the 200
+	// reports a returned error. The reader sees `stream_error` and the access log records the 200
 	// the stream opened with, which is why the outage looked like an empty error inbox.
-	t.Run("a failed chain reaches Sentry", func(t *testing.T) {
-		tr := &recordingTransport{}
-		if err := sentry.Init(sentry.ClientOptions{
-			Dsn:       "https://public@o0.ingest.sentry.io/0",
-			Transport: tr,
-		}); err != nil {
-			t.Fatalf("sentry.Init: %v", err)
-		}
+	t.Run("a failed chain is reported", func(t *testing.T) {
+		tr := recordExceptions(t)
 		app := appFor(
 			storeWithCV(),
 			matchanalysis.NewAnalyzer(llm.NewWithModel(&failingFitModel{})),
-			sentryfiber.New(sentryfiber.Options{Repanic: true, WaitForDelivery: true}),
 		)
 		status, body := get(t, app, token)
 		if status != fiber.StatusOK {
@@ -189,7 +175,7 @@ func TestMatchAnalysisStreamEndpoint(t *testing.T) {
 			t.Fatalf("last event = %v, want stream_error", names)
 		}
 		if got := tr.count(); got != 1 {
-			t.Errorf("sentry events = %d, want exactly 1 for a failed chain", got)
+			t.Errorf("reported exceptions = %d, want exactly 1 for a failed chain", got)
 		}
 	})
 

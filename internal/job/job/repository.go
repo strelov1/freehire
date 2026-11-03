@@ -84,6 +84,7 @@ func jobFromRow(r db.Job) (Job, error) {
 		Equity:            pgconv.TextString(r.Equity),
 		ClearanceLevels:   r.ClearanceLevels,
 		Perks:             r.Perks,
+		Engagement:        r.Engagement,
 
 		PostingLanguage:    r.PostingLanguage,
 		EmploymentType:     r.EmploymentType,

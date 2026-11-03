@@ -1,7 +1,7 @@
 // Non-essential trackers — a thin, guarded wrapper (PostHog + Google Analytics) so
 // call sites never touch the SDKs directly and every entry point is a safe no-op
-// when nothing is initialized (no key in dev, or SSR). Mirrors the Sentry env-gating
-// posture: without PUBLIC_POSTHOG_KEY PostHog stays inert. Both trackers start only
+// when nothing is initialized (no key in dev, or SSR). Env-gated:
+// without PUBLIC_POSTHOG_KEY PostHog stays inert. Both trackers start only
 // through initTrackers, which the caller gates on cookie consent.
 //
 // Only the pure/guarded surface (isPrivateRoute, track no-op, isFeatureEnabled

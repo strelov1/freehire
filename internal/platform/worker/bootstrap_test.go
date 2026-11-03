@@ -47,23 +47,3 @@ func TestBootstrapFailsFastWhenDatabaseUnreachable(t *testing.T) {
 		t.Fatal("expected a nil context on bootstrap failure")
 	}
 }
-
-func TestBootstrapFailsFastOnMalformedSentryDSN(t *testing.T) {
-	// A misconfigured error-reporting DSN must abort bootstrap before any DB work,
-	// so a broken observability config surfaces immediately rather than silently.
-	t.Setenv("SENTRY_DSN", "not-a-valid-dsn")
-
-	ctx, _, pool, cleanup, err := Bootstrap(context.Background())
-	if cleanup != nil {
-		cleanup()
-	}
-	if err == nil {
-		t.Fatal("expected an error for a malformed SENTRY_DSN, got nil")
-	}
-	if pool != nil {
-		t.Fatal("expected a nil pool on bootstrap failure")
-	}
-	if ctx != nil {
-		t.Fatal("expected a nil context on bootstrap failure")
-	}
-}

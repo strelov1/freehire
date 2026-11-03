@@ -61,7 +61,7 @@ func (h *authHandlers) mintAPIKey(ctx context.Context, userID int64, name string
 	token, hash, prefix, err := auth.GenerateAPIKey()
 	if err != nil {
 		// Returned rather than phrased as fiber.NewError(500, …): the reader we need
-		// here is Sentry, and a *fiber.Error carries no cause for it to show. The
+		// here is the exception log, and a *fiber.Error carries no cause for it to show. The
 		// caller sees the generic 500 body instead — see classify.
 		return "", db.CreateAPIKeyRow{}, fmt.Errorf("generate api key for user %d: %w", userID, err)
 	}

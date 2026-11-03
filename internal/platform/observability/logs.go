@@ -27,9 +27,10 @@ var logs struct {
 }
 
 // InitLogs enables exception logs only when a standard OTLP endpoint is set.
-// Resource environment variables override the supplied defaults. Its idempotent
+// The deployment environment comes from OTEL_RESOURCE_ATTRIBUTES
+// (deployment.environment.name=production), which also overrides serviceName. Its idempotent
 // cleanup must run after the process's final error or panic has been reported.
-func InitLogs(serviceName, environment string) (func(), error) {
+func InitLogs(serviceName string) (func(), error) {
 	logs.Lock()
 	defer logs.Unlock()
 	if logs.provider == nil {
@@ -37,9 +38,6 @@ func InitLogs(serviceName, environment string) (func(), error) {
 			return func() {}, nil
 		}
 		attrs := []attribute.KeyValue{attribute.String("service.name", serviceName)}
-		if environment != "" {
-			attrs = append(attrs, attribute.String("deployment.environment.name", environment))
-		}
 		if info, ok := debug.ReadBuildInfo(); ok {
 			version := info.Main.Version
 			for _, setting := range info.Settings {
@@ -66,6 +64,11 @@ func InitLogs(serviceName, environment string) (func(), error) {
 	var once sync.Once
 	return func() { once.Do(shutdownLogs) }, nil
 }
+
+// flushTimeout bounds how long the last owner's shutdown waits for buffered
+// exception logs to be exported. Short-lived cron workers run it on exit, so it
+// stays small enough not to stall shutdown yet large enough for one delivery.
+const flushTimeout = 2 * time.Second
 
 func shutdownLogs() {
 	logs.Lock()

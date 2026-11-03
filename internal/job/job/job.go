@@ -112,6 +112,10 @@ type Fields struct {
 	// served as the multi-value `perks` facet. Empty means none mentioned — see
 	// internal/dict/perks.
 	Perks []string
+	// Engagement names the legal terms the posting states it engages on (vocab.
+	// EngagementValues — today the UK's IR35 status), served as the multi-value
+	// `engagement` facet. Empty means not stated — see internal/dict/engagement.
+	Engagement []string
 
 	// synthetic enrichment facets (deterministic stand-ins)
 	PostingLanguage    string
@@ -220,6 +224,7 @@ func New(d Draft) (Job, error) {
 		Equity:            der.Equity,
 		ClearanceLevels:   der.ClearanceLevels,
 		Perks:             der.Perks,
+		Engagement:        der.Engagement,
 
 		PostingLanguage:    der.PostingLanguage,
 		EmploymentType:     der.EmploymentType,
@@ -284,6 +289,7 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		Equity:            pgconv.Text(f.Equity),
 		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
+		Engagement:        f.Engagement,
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -380,6 +386,7 @@ func (f Fields) UpsertManualParams(actorID int64) db.UpsertManualJobParams {
 		Equity:            pgconv.Text(f.Equity),
 		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
+		Engagement:        f.Engagement,
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -448,6 +455,7 @@ func (f Fields) UpdateManualParams(slug string, actorID int64) db.UpdateManualJo
 		Equity:            pgconv.Text(f.Equity),
 		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
+		Engagement:        f.Engagement,
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -497,6 +505,7 @@ func (f Fields) UpdateEmployerParams(slug string, actorID int64) db.UpdateEmploy
 		Equity:            pgconv.Text(f.Equity),
 		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
+		Engagement:        f.Engagement,
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
@@ -547,6 +556,7 @@ func (f Fields) InsertPrivateParams(createdBy int64) db.InsertPrivateJobParams {
 		Equity:            pgconv.Text(f.Equity),
 		ClearanceLevels:   f.ClearanceLevels,
 		Perks:             f.Perks,
+		Engagement:        f.Engagement,
 
 		PostingLanguage:    f.PostingLanguage,
 		EmploymentType:     f.EmploymentType,
