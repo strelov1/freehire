@@ -5,7 +5,8 @@
 // match what the search API (GET /api/v1/jobs/search) expects, including the
 // `<param>_exclude` and `<param>_mode=and` conventions.
 
-import { CLEARANCE_UNSPECIFIED, FACETS, type FacetSelection } from './facets';
+import { CLEARANCE_UNSPECIFIED, FACETS, REGION_UNSPECIFIED, type FacetSelection } from './facets';
+import { REGION_LABELS } from './labels';
 import { SENIORITY_VALUES } from './generated/contracts';
 import type { UserProfile } from './types';
 
@@ -133,6 +134,19 @@ export interface JobFilters {
    *  active filter. A signed-out caller gets the unhidden feed (the server says so in
    *  `meta.ignored_params`), which is why the control is only offered signed in. */
   hideSeen: boolean;
+  /** Change how work_mode composes with the location facets: instead of ANDing
+   *  them (which narrows remote work to the home country), the server builds
+   *  "remote anywhere, OR a selected physical mode within the location group"
+   *  — remote from anywhere plus hybrid/on-site at home. Serialized as
+   *  `work_mode_remote_anywhere=true`. The server applies it only when remote AND
+   *  a physical mode are both selected AND a location facet carries a value
+   *  (mirrors `remoteAnywhereActive`, see `appliesWorkModeRemoteAnywhere`), so
+   *  every read here gates on the same condition: the checkbox only shows when
+   *  it changes the answer, and only then it counts as an active filter. A saved
+   *  search KEEPS it — the digest matcher replays the stored query through the
+   *  same server builder, so the alert mails the set the subscriber saw. Mirrors
+   *  `WorkModeRemoteAnywhereParam` in internal/search/search/query_filter.go. */
+  workModeRemoteAnywhere: boolean;
 }
 
 /** Strips a title suggestion's Meilisearch quoting wrapper (see `apiSuggestions.ts`'s
@@ -286,6 +300,7 @@ export function emptyFilters(): JobFilters {
     sort: null,
     qFields: null,
     hideSeen: false,
+    workModeRemoteAnywhere: false,
   };
 }
 
@@ -329,6 +344,7 @@ export function filtersToParams(f: JobFilters): URLSearchParams {
   const sortParam = SORT_PARAM[sort];
   if (sortParam && sort !== defaultSortFor(f.q)) p.set('sort', sortParam);
   if (f.hideSeen) p.set('hide_seen', 'true');
+  if (f.workModeRemoteAnywhere) p.set('work_mode_remote_anywhere', 'true');
   return p;
 }
 
@@ -426,7 +442,37 @@ export function filtersFromParams(p: URLSearchParams): JobFilters {
   // that sets it.
   f.sort = SORT_FROM_PARAM[p.get('sort') ?? ''] ?? null;
   f.hideSeen = p.get('hide_seen') === 'true';
+  // Read like the server reads it (trimmed, case-insensitive), so a hand-written TRUE
+  // does not silently drop a modifier the server would apply.
+  f.workModeRemoteAnywhere = p.get('work_mode_remote_anywhere')?.trim().toLowerCase() === 'true';
   return f;
+}
+
+/** Whether the remote-anywhere modifier actually changes the answer for this filter
+ *  set — the server's precondition (`remoteAnywhereActive` in
+ *  internal/search/search/query_filter.go), mirrored so the checkbox shows only when
+ *  it has something to do and the count only rises when it does. */
+export function appliesWorkModeRemoteAnywhere(f: JobFilters): boolean {
+  const wm = f.facets.work_mode;
+  if (!wm || wm.matchAll) return false; // the server ignores it under work_mode_mode=and
+  // Folded like the server's workModeValues, so `Remote` from a hand-written link
+  // shows the checkbox and chip whenever the server applies the modifier.
+  const modes = wm.include.map((m) => m.trim().toLowerCase());
+  const hasLocation = LOCATION_FACET_PARAMS.some((p) => (f.facets[p]?.include ?? []).some((v) => knownLocation(p, v)));
+  return modes.includes('remote') && modes.some(isPhysicalMode) && hasLocation;
+}
+
+/** The location facets that share one ORed group on the server (`locationFacets`). */
+const LOCATION_FACET_PARAMS = ['regions', 'countries', 'cities', 'metros'];
+
+const isPhysicalMode = (m: string) => m === 'hybrid' || m === 'onsite';
+
+/** `regions` is the one closed location facet: like the server's
+ *  `hasLocationInclude`, an unknown region (a hand-edited link) is not a location. */
+function knownLocation(param: string, value: string): boolean {
+  if (param !== 'regions') return true;
+  const v = value.trim().toLowerCase();
+  return v === REGION_UNSPECIFIED || v in REGION_LABELS;
 }
 
 /** The security-clearance control used to be a three-state toggle serialized as
@@ -468,6 +514,9 @@ export function activeFilterCount(f: JobFilters): number {
   if (f.postedWithinDays != null) n += 1;
   if (f.openWithinDays != null) n += 1;
   if (f.experienceYearsMax != null) n += 1;
+  // The modifier counts only when it changes the answer — off or inert, it narrows
+  // nothing and a badge for it would lie.
+  if (f.workModeRemoteAnywhere && appliesWorkModeRemoteAnywhere(f)) n += 1;
   return n;
 }
 
@@ -714,7 +763,7 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
     // This gate used to be implicit: the profile form collected `base` from on-site and
     // hybrid users only, and dropped it on save for everyone else. Now that the form asks
     // every user where they are, the gate has to be stated here instead.
-    const wantsPhysical = (loc.work_modes ?? []).some((m) => m === 'onsite' || m === 'hybrid');
+    const wantsPhysical = (loc.work_modes ?? []).some(isPhysicalMode);
     const base = wantsPhysical ? loc.base : {};
     f.facets.work_mode = seed(loc.work_modes ?? []);
     f.facets.regions = seed([...(loc.remote.regions ?? []), ...(reloc.regions ?? [])]);
@@ -728,6 +777,24 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
       ...(reloc.cities ?? []),
     ]);
     if (loc.relocation.open) f.facets.relocation = seed(['supported', 'required']);
+    // The profile's most common shape — remote anywhere, physical work near home —
+    // cannot survive the plain flatten: ANDing the location facets over the remote
+    // modes would narrow remote work to the home geography. When the user accepted
+    // remote from ANYWHERE (no remote reach) AND a physical format AND stated a base
+    // or relocation geography, stage the server's remote-anywhere modifier instead:
+    // remote postings from anywhere, physical ones within the location facets above.
+    // A stated remote reach keeps the plain flatten: the modifier would drop the
+    // reach from the remote arm, while the plain AND keeps remote work inside it and
+    // bounds physical work no wider. Every other shape flattens exactly as before.
+    const remoteAnywhere = !(loc.remote.regions?.length || loc.remote.countries?.length);
+    if (remoteAnywhere && appliesWorkModeRemoteAnywhere(f)) {
+      f.workModeRemoteAnywhere = true;
+      // The relocation facet is not a location facet: the server ANDs it around the
+      // whole disjunction, so remote postings would have to offer relocation too —
+      // few do, and "remote from anywhere" would collapse to almost nothing. The
+      // relocation targets stay in the physical arm's geography.
+      f.facets.relocation = emptyFacet();
+    }
   }
   return f;
 }

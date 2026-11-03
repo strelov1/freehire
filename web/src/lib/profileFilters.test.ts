@@ -376,3 +376,63 @@ describe('filtersFromProfile', () => {
     });
   });
 });
+
+// The profile's most common shape — remote anywhere, hybrid/on-site at home — must
+// survive the flatten: the plain AND of work_mode with the location facets narrows
+// remote work to the home country, exactly the complaint that motivated the
+// work_mode_remote_anywhere modifier.
+describe('filtersFromProfile remote-anywhere flattening', () => {
+  const loc = (workModes: string[], extra: Partial<LocationPreferences> = {}): LocationPreferences => ({
+    work_modes: workModes,
+    remote: {},
+    base: { country: 'de', city: 'Berlin' },
+    relocation: { open: false },
+    ...extra,
+  });
+
+  it('stages the modifier for remote plus physical with a base geography', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid']))));
+    expect(p.get('work_mode')).toBe('remote,hybrid');
+    expect(p.getAll('countries')).toContain('de');
+    expect(p.get('work_mode_remote_anywhere')).toBe('true');
+  });
+
+  it('stages the modifier when the geography comes from relocation instead', () => {
+    const p = filtersToParams(
+      filtersFromProfile(mkProfile([], [], loc(['remote', 'onsite'], { relocation: { open: true, countries: ['pl'] } }))),
+    );
+    expect(p.get('work_mode_remote_anywhere')).toBe('true');
+    expect(p.get('countries')?.split(',')).toContain('pl');
+    // ANDed around the whole disjunction, the relocation facet would demand that
+    // remote postings offer relocation too.
+    expect(p.has('relocation')).toBe(false);
+  });
+
+  // The modifier would drop the reach from the remote arm; the plain flatten keeps
+  // remote work inside it and bounds physical work no wider.
+  it('keeps the plain flatten when the profile states a remote reach', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['eu'] } }))));
+    expect(p.getAll('regions')).toContain('eu');
+    expect(p.getAll('countries')).toContain('de');
+    expect(p.has('work_mode_remote_anywhere')).toBe(false);
+  });
+
+  it('leaves a remote-only profile global — no base-country narrowing, no modifier', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote']))));
+    expect(p.get('work_mode')).toBe('remote');
+    expect(p.has('countries')).toBe(false);
+    expect(p.has('work_mode_remote_anywhere')).toBe(false);
+  });
+
+  it('leaves a physical-only profile unchanged', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['hybrid', 'onsite']))));
+    expect(p.get('work_mode')).toBe('hybrid,onsite');
+    expect(p.getAll('countries')).toContain('de');
+    expect(p.has('work_mode_remote_anywhere')).toBe(false);
+  });
+
+  it('leaves remote plus physical without any stated geography unchanged', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { base: {} }))));
+    expect(p.has('work_mode_remote_anywhere')).toBe(false);
+  });
+});

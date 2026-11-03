@@ -185,3 +185,23 @@ func TestPlanMerges_WithoutCuratedListNothingChanges(t *testing.T) {
 		t.Errorf("aliases = %+v, want one carrying folded_key dollartree", got[0].Aliases)
 	}
 }
+
+// The example in #4041 also needs the employer names reconciled. Retain the alias's
+// own name fold so a later Himalayas crawl resolves through the persistent registry.
+func TestPlanMerges_MTRLegalHimalayasAlias(t *testing.T) {
+	got := onlySlugs(planMerges([]company{
+		{Slug: "mtr-legal", Name: "MTR Legal", JobCount: 11},
+		{Slug: "mtr-legal-rechtsanwalte", Name: "MTR Legal Rechtsanwälte", JobCount: 0},
+		{Slug: "unrelated", Name: "Unrelated", JobCount: 3},
+	}, nil, 0, curatedAliases), map[string]bool{"mtr-legal-rechtsanwalte": true})
+	if len(got) != 1 {
+		t.Fatalf("planned %d merges, want one MTR Legal group", len(got))
+	}
+	if got[0].Canonical != "mtr-legal" || len(got[0].Aliases) != 1 {
+		t.Fatalf("plan = %+v, want one alias into mtr-legal", got[0])
+	}
+	a := got[0].Aliases[0]
+	if a.Slug != "mtr-legal-rechtsanwalte" || a.FoldedKey != normalize.CompanyKey("MTR Legal Rechtsanwälte") || a.Reason != reasonSpelling {
+		t.Errorf("alias = %+v, want the retiring employer's own folded key and spelling reason", a)
+	}
+}

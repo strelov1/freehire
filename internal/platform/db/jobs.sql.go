@@ -6174,10 +6174,13 @@ WITH ats AS (
     FROM jobs
     WHERE jobs.company_slug_folded = ANY($1::text[])
       AND jobs.closed_at IS NULL AND jobs.duplicate_of IS NULL AND jobs.company_slug <> ''
+      AND NOT jobs.is_private
       AND NOT (jobs.source = ANY($2::text[]))
 ),
 agg AS (
     SELECT a.id,
+           a.source,
+           char_length(a.title) AS title_chars,
            a.company_slug_folded AS fcompany,
            btrim(regexp_replace(lower(a.title), '[^a-z0-9]+', ' ', 'g')) AS ntitle,
            btrim(regexp_replace(lower(
@@ -6201,7 +6204,7 @@ agg AS (
           )
       )
 ),
-matches AS (
+existing_matches AS (
     -- Two match paths: the exact key (ntitle) and the entity-decoded, suffix-stripped key
     -- (ntitle2), which catches a title that only appends a trailing " - <suffix>" or
     -- ": <suffix>" clause, or carries an undecoded HTML entity. The colon clause is stripped
@@ -6229,8 +6232,8 @@ matches AS (
      AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
     UNION ALL
     -- Third path: word-subset containment — the aggregator dropped words the ATS keeps (a
-    -- mid-title drop the two equality keys miss). This arm is a nested loop (no hash on <@),
-    -- but runs only on the residual after the equality arms and is bounded per company via
+    -- mid-title drop the two equality keys miss). This arm has no hash on <@,
+    -- but is bounded per company via
     -- the fcompany equality (planned as a hash/merge join on fcompany, nested-looping only
     -- within each matching group — the same cost shape the old single-company call had).
     -- Guards against over-merge: the aggregator title needs >= 2 words, and the words the ATS
@@ -6250,6 +6253,38 @@ matches AS (
                                'midlevel','entry','chief','intern','trainee','graduate',
                                'apprentice','ii','iii','iv']::text[])
      )
+),
+prefix_candidates AS MATERIALIZED (
+    -- Resolve the residual before expanding prefix pairs. Without this boundary the
+    -- planner can place the anti-join after expansion and repeat it for every ATS pair.
+    SELECT a.id, a.source, a.title_chars, a.fcompany, a.ntitle, a.ntitle2, a.countries FROM agg a
+    WHERE a.source = 'himalayas'
+      -- Measured feed ceiling: 260 live API titles and 8,820 open stored titles
+      -- never exceed 80 characters. Only that raw boundary is evidence of a cut;
+      -- a shorter complete role like Engineer must not match Engineering Manager.
+      AND a.title_chars = 80
+      AND length(a.ntitle) >= 40
+      AND array_length(string_to_array(a.ntitle, ' '), 1) >= 5
+      AND a.ntitle ~ '[a-z0-9]{4,}$'
+      AND NOT EXISTS (SELECT 1 FROM existing_matches m WHERE m.agg_id = a.id)
+),
+matches AS (
+    SELECT agg_id, ats_id FROM existing_matches
+    UNION ALL
+    -- Himalayas-only fallback for titles cut INSIDE the last token. Keep the full key:
+    -- stripping decoration could erase the specialty that distinguishes two roles.
+    -- Literal starts_with avoids LIKE wildcards. At least 40 normalized characters,
+    -- four complete preceding tokens and a four-character final fragment supply evidence
+    -- beyond a short role prefix, in addition to the observed raw feed ceiling above.
+    -- Only residual rows reach this arm, and fcompany bounds comparisons to one employer
+    -- while the existing equality arms retain their separate hash joins.
+    SELECT a.id, t.id
+    FROM prefix_candidates a JOIN ats t
+      ON t.fcompany = a.fcompany
+     AND starts_with(t.ntitle, a.ntitle)
+     AND length(t.ntitle) > length(a.ntitle)
+     AND substring(t.ntitle FROM length(a.ntitle) + 1 FOR 1) ~ '^[a-z0-9]$'
+     AND (t.countries && a.countries OR cardinality(t.countries) = 0 OR cardinality(a.countries) = 0)
 ),
 target AS (
     -- Every candidate aggregator row, with its MIN matching ATS id or NULL. LEFT JOIN so an
@@ -6327,7 +6362,7 @@ type SuppressAggregatorDuplicatesForCompaniesParams struct {
 // does not match, so the pass suppresses less until it completes — never wrongly.
 //
 // An open aggregator posting is marked duplicate_of an open CANONICAL ATS
-// (non-aggregator) posting of the same (folded) company, equal normalized title, and
+// (non-aggregator) posting of the same (folded) company, matching normalized title, and
 // compatible country (countries overlap, or either side empty — the geography
 // dictionary is sparse, so an unresolved side must not veto). The ATS row is never
 // touched, so it stays canonical. Candidate aggregator rows are those that are
@@ -6337,6 +6372,8 @@ type SuppressAggregatorDuplicatesForCompaniesParams struct {
 // copy back into search/embedding/enrichment. min(id) picks a stable target; the IS
 // DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
 // RecomputeRoleDuplicatesForCompanies so ATS reposts have already collapsed to their canon.
+// Himalayas can truncate a title inside a word; a separate residual prefix arm below
+// handles substantial fragments without broadening the other aggregators' matches.
 func (q *Queries) SuppressAggregatorDuplicatesForCompanies(ctx context.Context, arg SuppressAggregatorDuplicatesForCompaniesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, suppressAggregatorDuplicatesForCompanies, arg.FoldedCompanies, arg.Aggregators)
 	var column_1 int64
