@@ -25,6 +25,7 @@ export const messages = defineMessages(
     base: {
       heading: 'Base CVs',
       description: 'The CVs your tailored copies start from. Open one to edit it with the assistant, or tailor it to a job.',
+      loadFailed: 'Could not load your base CVs.',
       defaultBadge: 'Default',
       templateLine: 'Template: {template}',
       edit: 'Edit',
@@ -73,6 +74,7 @@ export const messages = defineMessages(
       base: {
         heading: 'Базовые резюме',
         description: 'Резюме, с которых начинаются адаптированные копии. Откройте любое, чтобы править его с ассистентом, или адаптируйте под вакансию.',
+        loadFailed: 'Не удалось загрузить базовые резюме.',
         defaultBadge: 'По умолчанию',
         templateLine: 'Шаблон: {template}',
         edit: 'Редактировать',

@@ -368,7 +368,6 @@
         const [rec, base] = await Promise.all([api.getCv(baseCvId), api.startBaseSession(baseCvId)]);
         hydrate(rec);
         sessionId = base.session_id;
-        finishReady();
       } else if (cvParam) {
         // Resume an existing tailored CV. If it already has a bound session, re-attach it with
         // no kickoff. If it has none (a CV created before session binding), mint a fresh

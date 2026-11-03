@@ -90,4 +90,16 @@ describe('CvList base CVs', () => {
     expect(screen.getByText('Tailored CVs')).toBeTruthy();
     expect(screen.getAllByLabelText('Delete')).toHaveLength(2);
   });
+
+  it('keeps the tailored CVs when only the base list fails to load', async () => {
+    listBaseCvs.mockRejectedValue(new Error('boom'));
+    listCvs.mockResolvedValue([
+      { id: 't1', title: 'T', template_id: 'classic-ats', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-02T10:00:00Z', job_slug: 'sre-acme', job_title: 'SRE', job_company: 'Acme', agent_session_id: '' },
+    ]);
+    render(CvList);
+    expect(await screen.findByText('SRE')).toBeTruthy();
+    expect(await screen.findByText('Could not load your base CVs.')).toBeTruthy();
+    // A list we could not read is not an empty one.
+    expect(screen.queryByText('No base CV yet')).toBeNull();
+  });
 });
