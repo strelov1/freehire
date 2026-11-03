@@ -11,7 +11,7 @@ import (
 
 // A 400 from Meilisearch is the engine rejecting a malformed query or filter —
 // the request's fault. isBadRequest must single it out so Search can tag it with
-// ErrBadQuery (which handlers map to 400 and keep out of Sentry), while transport
+// ErrBadQuery (which handlers map to 400 and do not report), while transport
 // failures and other status codes stay unexpected faults.
 func TestIsBadRequest(t *testing.T) {
 	tests := []struct {

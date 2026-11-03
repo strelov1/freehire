@@ -1,33 +1,49 @@
-# internal/platform/observability — Sentry Error Tracking
+# internal/platform/observability — exception logs and metrics
 
-Opt-in Sentry across all three surfaces, env-gated.
+Exceptions leave every surface as OpenTelemetry logs (OTLP over HTTP) into the Vector →
+VictoriaLogs pipeline that `freehire-ops` runs; [docs/error-telemetry.md](../../../docs/error-telemetry.md)
+is the operator's guide (configuration, receivers, querying from a terminal, alerts). Opt-in:
+without an OTLP endpoint nothing is exported and the process runs unchanged. Sentry was the
+reporter until 2026-11 and is gone from the code — there is no fallback.
 
-## Backend Server (`cmd/server`)
+## Backend server (`cmd/server`)
 
-- `observability.Init(dsn, environment)` wraps `sentry.Init` with defaults (`SendDefaultPII:false`, tracing off — **errors-only**), returns a `flush`.
-- Empty DSN = **no-op** (app runs unchanged). Malformed DSN = **fatal** (fail-fast).
-- `sentryfiber` middleware registered **after** `recover.New` so deferred capture reports panic *with a stack* before `recover.New` renders standard 500 (`Repanic:true`).
-- `handler.RenderError` reports **only** fall-through unexpected 500 to request hub — routine 4xx / `pgx.ErrNoRows`→404 / FK-violation→404 are never reported. Recovered panic is **not** double-reported (recover middleware marks it via `handler.LocalPanicReported`).
-- **Streamed responses need their own reporting.** `RenderError` only ever sees errors a handler *returns*, and an SSE handler returns `nil` before its body writer runs — so a failure inside the stream reports nothing, while the access log records the `200` the stream opened with. `handler.reportStreamFault` closes that gap: it takes a **clone** of the request hub captured before the ctx is released, and defers to the same `classify` policy so a reader who walked away is not filed as a fault. Both SSE surfaces call it — the fit stream (`match_analysis_stream.go`) and the assistant turn (`assistant.go`). Any new streaming endpoint has this blind spot until it does the same.
+- `observability.InitLogs(service)` starts the exporter when `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`
+  (or the base `OTEL_EXPORTER_OTLP_ENDPOINT`) is set, and returns an idempotent shutdown that
+  flushes. The environment label comes from `OTEL_RESOURCE_ATTRIBUTES`
+  (`deployment.environment.name=production`) — **an env file that sets the endpoint without it
+  exports events with no environment**.
+- `handler.RenderError` reports **only** unexpected 500s, declared or fall-through, through
+  `observability.CaptureError` — routine 4xx / `pgx.ErrNoRows`→404 / FK-violation→404 / the
+  "unconfigured here" 503s are never reported. `recover.New`'s `StackTraceHandler` is
+  `handler.ReportPanic`, which reports the panic with its stack and marks it
+  (`handler.LocalPanicReported`) so the error Fiber re-delivers to `RenderError` is not
+  reported a second time.
+- **Streamed responses need their own reporting.** `RenderError` only ever sees errors a handler
+  *returns*, and an SSE handler returns `nil` before its body writer runs — so a failure inside
+  the stream reports nothing, while the access log records the `200` the stream opened with.
+  `handler.reportStreamFault` closes that gap, deferring to the same `classify` policy so a reader
+  who walked away is not filed as a fault, and `handler.recoverStream` does the same for a panic
+  on a stream goroutine (fasthttp runs it outside the recover middleware). Every SSE surface calls
+  them. Any new streaming endpoint has this blind spot until it does the same.
 - **Bound every SSE write** (`sseWriteTimeout`). Both streams set a write deadline before *each* write rather than clearing it: fasthttp runs the stream writer on its own goroutine while the serving goroutine arms the server's `WriteTimeout`, so setting once races and loses about half the time — and a *cleared* deadline is forever, letting a reader that stopped reading pin the goroutine for the life of the process.
 
 ## Workers
 
-- `observability.Init` lives in `worker.Bootstrap` (flush folded into `cleanup`).
-- Every cron worker's `main` uses `worker.Main(run)` — deferred `capturePanic` captures + flushes + re-panics so short-lived run-once process still delivers fatal panic before crashing non-zero.
+- `worker.Main(run)` owns one exporter for the whole process and reports a non-zero exit and a
+  panic (`capturePanic` reports, then re-panics so the process still crashes non-zero).
+  `worker.Bootstrap` takes a second owner; the last owner to shut down flushes, so Bootstrap's
+  deferred cleanup cannot lose Main's final fault.
 - `harvest-*`/`gen-contracts` **dev tools are out of scope** (no Bootstrap).
 
 ## Frontend (`web/`)
 
-- `@sentry/sveltekit` in `hooks.client.ts`/`hooks.server.ts`, gated on `PUBLIC_SENTRY_DSN` (+ `PUBLIC_SENTRY_ENVIRONMENT`).
-- `sentrySvelteKit()` Vite plugin uploads source maps only when `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` are set (build succeeds without them). **A build that exits 0 is not evidence any of it worked** — two layers swallow a failed upload, so a rejected token warns and the build succeeds. It did exactly that from 2026-09-14 until 2026-09-16, every deploy green, and the token had been revoked or expired under us rather than changed by anyone. What asks instead is `web/scripts/sentry-credential-check.mjs`, run before the build by `release.sh` (which lives in the private `freehire-ops` repository, not in this one): a rejected or half-written credential refuses the release, an unreachable Sentry or a check that cannot run does not. That script's header is the canonical account of the mechanism — **and of why a release's `fileCount` cannot tell you whether maps were uploaded**, which is the measurement an earlier version of this line quoted as if it could.
-- No CSP change needed — no `default-src`/`connect-src`, browser delivery to ingest host is unrestricted.
-
-## Config
-
-`SENTRY_DSN`/`SENTRY_ENVIRONMENT` (backend + workers) and `PUBLIC_SENTRY_DSN`/`PUBLIC_SENTRY_ENVIRONMENT` (frontend), all optional, injected by `freehire-ops` (never committed). Two Sentry projects (frontend + backend); `SENTRY_ENVIRONMENT` tags events for shared project filtering.
-
-Source-map upload is configured separately, at BUILD time only, from `/opt/freehire/env/sentry-build.env` (0600 root, read by `freehire-ops' scripts/host2/release.sh` and never exported into a running unit): `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`, and optionally `SENTRY_URL` when the organisation is region-pinned — set it there rather than relying on the `https://sentry.io` default, since a cross-region redirect drops the `Authorization` header and surfaces as a 401. All four are passed to the credential check and to the build, so the two cannot disagree about which Sentry they mean. All-or-nothing: a partial set refuses the release rather than reading as an opt-out.
+- `#lib/errorTelemetry` in `hooks.client.ts` (`PUBLIC_OTEL_LOGS_ENDPOINT`, the same-origin
+  `/telemetry/v1/logs`) and `hooks.server.ts` (the private `OTEL_EXPORTER_OTLP_*` endpoint).
+  Both drop transient conditions — timeouts, cancellations, a tab holding a deleted chunk —
+  through `#lib/transientNoise`, whose header records why.
+- Builds keep **hidden** source maps; nothing uploads or resolves them, so a browser stack is a
+  minified stack until it is resolved by hand against the matching build.
 
 ## HTTP response metrics
 
@@ -154,7 +170,7 @@ the traffic. The scrape job, the firewall rules and the alert rules live in `fre
 
 ## In-process request window
 
-`requestwindow.go` is NOT part of the Prometheus/Sentry surface above — it is plain in-process
+`requestwindow.go` is NOT part of the Prometheus surface above — it is plain in-process
 state (`RecordRequest`/`ErrorRate`), unrelated to `/metrics`, external scraping, or cardinality.
 It exists only so `internal/api/handler`'s public `/api/v1/status` can answer "what fraction of
 this process's own recent responses were 5xx" without a round-trip to Prometheus (which would

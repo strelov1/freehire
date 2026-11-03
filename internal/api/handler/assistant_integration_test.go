@@ -20,8 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getsentry/sentry-go"
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -55,9 +53,7 @@ func (m *turnModel) Chat(_ context.Context, _ []llms.MessageContent, _ []llms.To
 
 // newAssistantApp wires the assistant routes over a real database, with the given
 // scripted model behind the turn endpoint.
-// mws are mounted before the routes so a test can install the sentryfiber middleware the
-// server runs in production; existing callers pass none and are unaffected.
-func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model, mws ...fiber.Handler) (*fiber.App, *assistantHandlers) {
+func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model) (*fiber.App, *assistantHandlers) {
 	queries := db.New(pool)
 	bank := experience.NewStore(experience.NewQueriesRepository(queries))
 	h := &assistantHandlers{
@@ -89,9 +85,6 @@ func newAssistantApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model
 		h.runner = assistant.NewRunner(model, h.store, assistant.RunnerConfig{MaxSteps: 3})
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	for _, mw := range mws {
-		app.Use(mw)
-	}
 	api := app.Group("/api/v1")
 	// Both gates are supplied so the test exercises whichever one `register`
 	// mounts: the extension reaches the assistant with a Bearer credential, which
@@ -570,18 +563,11 @@ func (failingTurnModel) Chat(context.Context, []llms.MessageContent, []llms.Tool
 // writer runs, so a turn that dies never reaches RenderError and the access log keeps the
 // 200 the stream opened with. Logging it is not enough — nothing watches the journal, and
 // it keeps ~12 hours.
-func TestAssistantTurnFailureReachesSentry(t *testing.T) {
+func TestAssistantTurnFailureIsReported(t *testing.T) {
 	pool := startPostgres(t)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	tr := &recordingTransport{}
-	if err := sentry.Init(sentry.ClientOptions{
-		Dsn:       "https://public@o0.ingest.sentry.io/0",
-		Transport: tr,
-	}); err != nil {
-		t.Fatalf("sentry.Init: %v", err)
-	}
-	app, _ := newAssistantApp(pool, iss, failingTurnModel{},
-		sentryfiber.New(sentryfiber.Options{Repanic: true, WaitForDelivery: true}))
+	tr := recordExceptions(t)
+	app, _ := newAssistantApp(pool, iss, failingTurnModel{})
 	_, cookie := assistantUser(t, pool, iss, "turnfail@example.test", true)
 
 	id := createSession(t, app, cookie)
@@ -595,6 +581,6 @@ func TestAssistantTurnFailureReachesSentry(t *testing.T) {
 	}
 
 	if got := tr.count(); got != 1 {
-		t.Errorf("sentry events = %d, want exactly 1 for a failed turn", got)
+		t.Errorf("reported exceptions = %d, want exactly 1 for a failed turn", got)
 	}
 }

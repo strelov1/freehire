@@ -85,7 +85,7 @@ func TestNewAccountServer_ToolErrorBecomesAnErrorResult(t *testing.T) {
 
 // AccountHandler no longer authenticates — that moved to a Fiber middleware in
 // mountMCPAccount (internal/api/handler/mcpapp_account.go), which can report an
-// infra failure through the normal Sentry/classify pipeline; a bare
+// infra failure through the normal classify/report pipeline; a bare
 // net/http.Handler has no such pipeline to report through. These two tests
 // cover AccountHandler's own remaining contract: trust the resolved user id the
 // middleware already validated and stamped onto the request.

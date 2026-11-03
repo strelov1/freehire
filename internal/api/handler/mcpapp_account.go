@@ -32,7 +32,7 @@ func mountMCPAccount(api fiber.Router, mw middleware, assistants *assistantHandl
 	// the catalogue and the tracking board. Authentication runs as a real
 	// Fiber middleware, ahead of the adapted raw http.Handler, so an
 	// unexpected failure authenticating the token (not merely an unknown one)
-	// reaches Sentry the normal way — see mcpAccountAuthenticate.
+	// is reported the normal way — see mcpAccountAuthenticate.
 	api.All("/mcp/account", chatAgentLimiter(mw.public), mcpAccountAuthenticate(assistants, frontendOrigin),
 		agentViews(sink, agentview.SurfaceMCPAccount),
 		func(c *fiber.Ctx) error {

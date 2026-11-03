@@ -7,8 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/getsentry/sentry-go"
-	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 
@@ -57,8 +55,7 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 
 	// Everything the writer needs is captured here: the fiber ctx is released the moment this
 	// handler returns, so reading it inside the stream would race a recycled request. conn
-	// carries the write deadline sseStream needs; the hub is cloned because the writer
-	// outlives the request that owns its scope.
+	// carries the write deadline sseStream needs.
 	band := coverLetterBand(c)
 	caller, err := h.llm.caller(c.UserContext(), userID, llm.Feature(tagCoverLetter))
 	if err != nil {
@@ -67,18 +64,13 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 		return err
 	}
 	conn := c.Context().Conn()
-	var hub *sentry.Hub
-	if reqHub := sentryfiber.GetHubFromContext(c); reqHub != nil {
-		hub = reqHub.Clone()
-	}
-
 	sseHeaders(c)
 	c.Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
-		stream := newSSEStream(w, conn, sseWriteTimeout, hub)
+		stream := newSSEStream(w, conn, sseWriteTimeout)
 		// Registered first so it unwinds last: the charge release and the heartbeat stop
 		// are deferred below, and the candidate must have their allowance back before
 		// they are told the draft failed.
-		defer recoverStream(hub, "coverletter: stream", func() {
+		defer recoverStream("coverletter: stream", func() {
 			stream.event("stream_error", letterErrorEvent{Error: letterFailureMessage(errStreamPanic)})
 		})
 
@@ -127,7 +119,7 @@ func (h *cvHandlers) StreamCVCoverLetter(c *fiber.Ctx) error {
 			log.Printf("coverletter: streaming for user %d job %d: %v", userID, jobID, err)
 			// RenderError never sees a fault raised inside the writer, so without this the
 			// only trace of a streamed failure is that log line.
-			reportStreamFault(hub, err)
+			reportStreamFault(err)
 		}
 		stream.event("stream_error", letterErrorEvent{Error: letterFailureMessage(err)})
 	}))

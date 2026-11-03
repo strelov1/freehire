@@ -128,7 +128,7 @@ func TestDisjunctiveFacetCounts_CancelledContextReRaisesSentinel(t *testing.T) {
 }
 
 // A Meili 400 (malformed filter) must map to ErrBadQuery so the handler can render
-// it as a client mistake and skip Sentry.
+// it as a client mistake and skip reporting.
 func TestDisjunctiveFacetCounts_BadRequestMapsToErrBadQuery(t *testing.T) {
 	searcher := func(context.Context, string, any, []string) (*meilisearch.SearchResponse, error) {
 		return nil, &meilisearch.Error{StatusCode: http.StatusBadRequest}
@@ -156,7 +156,7 @@ func TestFacetCounts_CancelledContextReRaisesSentinel(t *testing.T) {
 }
 
 // A Meili 400 (malformed filter) must map to ErrBadQuery so the handler can render
-// it as a client mistake and skip Sentry.
+// it as a client mistake and skip reporting.
 func TestFacetCounts_BadRequestMapsToErrBadQuery(t *testing.T) {
 	c := &Client{facet: fakeSearchIndex{searchFn: func(context.Context, string, *meilisearch.SearchRequest) (*meilisearch.SearchResponse, error) {
 		return nil, &meilisearch.Error{StatusCode: http.StatusBadRequest}

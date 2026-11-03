@@ -6,7 +6,7 @@ import {
   type LogRecordExporter,
 } from "@opentelemetry/sdk-logs";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
-import { isTransientNoise } from "./sentryNoise.js";
+import { isTransientNoise } from "./transientNoise.js";
 
 interface ErrorTelemetryOptions {
   endpoint?: string;

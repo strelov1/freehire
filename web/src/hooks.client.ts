@@ -1,44 +1,6 @@
-import { PUBLIC_OTEL_LOGS_ENDPOINT, PUBLIC_OTEL_ENVIRONMENT, PUBLIC_OTEL_SERVICE_VERSION, PUBLIC_SENTRY_DSN, PUBLIC_SENTRY_ENVIRONMENT } from '$app/env/public';
+import { PUBLIC_OTEL_LOGS_ENDPOINT, PUBLIC_OTEL_ENVIRONMENT, PUBLIC_OTEL_SERVICE_VERSION } from '$app/env/public';
 import { createErrorTelemetry, installErrorListeners } from '#lib/errorTelemetry.js';
-import * as Sentry from '@sentry/sveltekit';
-import { isTransientNoise } from '#lib/sentryNoise.js';
 import { startTrackersIfAllowed } from '#lib/trackers.js';
-
-// Error tracking is opt-in and env-gated: without PUBLIC_SENTRY_DSN Sentry stays
-// uninitialized and the app runs unchanged (mirrors the backend integration).
-// Errors-only — no performance tracing, no session replay; sendDefaultPii is off
-// so URLs/inputs/headers are not shipped.
-if (!PUBLIC_OTEL_LOGS_ENDPOINT && PUBLIC_SENTRY_DSN) {
-  Sentry.init({
-    dsn: PUBLIC_SENTRY_DSN,
-    environment: PUBLIC_SENTRY_ENVIRONMENT || 'development',
-    tracesSampleRate: 0,
-    // v11 replaced the single `sendDefaultPii: false` switch with per-category
-    // defaults that collect by default (cookies, headers, query params, user info
-    // all `true` out of the box) — denying each by name is what `sendDefaultPii:
-    // false` used to do in one flag. `stackFrameVariables` is denied too: a local
-    // variable can hold exactly the kind of value (a token, an email) PII-off was
-    // for, and v11 added it as its own always-on category.
-    dataCollection: {
-      userInfo: false,
-      cookies: false,
-      httpHeaders: false,
-      urlQueryParams: false,
-      stackFrameVariables: false,
-    },
-    // A Safari extension reads our JSON-LD and throws on a block that carries no
-    // "@context" — inline, so the frame points at our own document and neither
-    // denyUrls nor the third-party filter sees it as foreign. Nothing on the
-    // client reads "@context" (seo.ts only serializes it server-side), so the
-    // key alone identifies the injected script. Errors-only on a 5k/month quota
-    // means noise like this is paid for in dropped real errors.
-    ignoreErrors: [/\[['"]@context['"]\]\.toLowerCase/],
-    // A condition is not a defect — see #lib/sentryNoise for the rule and what ignoring it
-    // cost. `ignoreErrors` above cannot serve: it matches the message only, and two of the
-    // conditions (an ApiError's status, an AbortError's name) are not in one.
-    beforeSend: (event, hint) => (isTransientNoise(hint?.originalException) ? null : event),
-  });
-}
 
 // Non-essential trackers (PostHog + Google Analytics) are gated on cookie consent:
 // this starts them at boot only for visitors who are not consent-required or who
@@ -47,13 +9,11 @@ if (!PUBLIC_OTEL_LOGS_ENDPOINT && PUBLIC_SENTRY_DSN) {
 // Still env-gated end to end — inert when PUBLIC_POSTHOG_KEY is absent.
 startTrackersIfAllowed();
 
-// Reports uncaught client-side errors to Sentry; inert when init was skipped above.
+// Reports uncaught client-side errors to the OTLP endpoint; inert without one.
 const telemetry = createErrorTelemetry({ endpoint: PUBLIC_OTEL_LOGS_ENDPOINT, service: 'freehire-web', environment: PUBLIC_OTEL_ENVIRONMENT, version: PUBLIC_OTEL_SERVICE_VERSION });
 if (telemetry) {
   installErrorListeners(window, telemetry);
   // The SDK flushes on document hide too; pagehide covers navigation/bfcache.
   window.addEventListener('pagehide', () => { void telemetry.flush(); });
 }
-export const handleError = PUBLIC_OTEL_LOGS_ENDPOINT
-  ? ({ error }: { error: unknown }) => { telemetry?.capture(error); }
-  : Sentry.handleErrorWithSentry();
+export const handleError = ({ error }: { error: unknown }) => { telemetry?.capture(error); };

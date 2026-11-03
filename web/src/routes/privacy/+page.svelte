@@ -13,7 +13,7 @@
 
   // Static effective date — freehire has no Date.now-driven content, and a hard
   // date is what a privacy policy needs. Bump this whenever the policy changes.
-  const lastUpdated = 'October 21, 2026';
+  const lastUpdated = 'November 3, 2026';
 </script>
 
 <Seo
@@ -154,10 +154,6 @@
           <span class="font-medium text-foreground">Product analytics (Google Analytics, PostHog)</span>
           — measure aggregate usage to improve the product; loaded only with your consent where
           required (see “Cookies”). PostHog runs on its EU instance.
-        </li>
-        <li>
-          <span class="font-medium text-foreground">Error monitoring (Sentry)</span> — captures
-          application errors to keep the service reliable; configured without personal-data capture.
         </li>
         <li>
           <span class="font-medium text-foreground">OAuth providers (Google, GitHub, LinkedIn)</span>

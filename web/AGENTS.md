@@ -43,12 +43,10 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 - The public origin (`page.url.origin`, behind every canonical URL) is baked in at BUILD
   time from `ORIGIN` — `paths.origin` in `vite.config.ts`. adapter-node no longer reads
   `ORIGIN` at runtime, so setting it only on the running server does nothing.
-- Sentry is gated on `PUBLIC_SENTRY_DSN` (+ `PUBLIC_SENTRY_ENVIRONMENT`); source-map upload
-  only when `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` are set (build succeeds
-  without them — and, because an upload failure is swallowed, it succeeds with them and a
-  dead token too). `scripts/sentry-credential-check.mjs` is what actually asks, and its
-  header is the canonical account of why the build cannot; `freehire-ops' scripts/host2/release.sh` runs it
-  before the build and refuses the release on a rejected or half-written credential.
+- Error telemetry is gated on `PUBLIC_OTEL_LOGS_ENDPOINT` (browser) and the private
+  `OTEL_EXPORTER_OTLP_*` endpoint (SSR); without them nothing is exported, and SSR only
+  logs unexpected errors to its journal. See
+  [internal/platform/observability/AGENTS.md](../internal/platform/observability/AGENTS.md).
 - PostHog is gated on `PUBLIC_POSTHOG_KEY` (inert without it — no init, no events);
   ingestion goes through the same-origin `/ingest` reverse proxy (nginx → `eu.i.posthog.com`),
   overridable via `PUBLIC_POSTHOG_HOST`. Injected by `freehire-ops`, never committed, unset

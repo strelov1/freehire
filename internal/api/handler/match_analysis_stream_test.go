@@ -3,17 +3,14 @@ package handler
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/getsentry/sentry-go"
 
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
@@ -119,7 +116,7 @@ func (c *stalledConn) deadlinesSet() int {
 // carry its own deadline, refreshed per write so a slow-but-alive reader is never cut off.
 func TestSSEStream_BoundsEveryWriteSoADeadReaderCannotStrandTheStream(t *testing.T) {
 	conn := &stalledConn{}
-	s := newSSEStream(bufio.NewWriter(conn), conn, 50*time.Millisecond, nil)
+	s := newSSEStream(bufio.NewWriter(conn), conn, 50*time.Millisecond)
 
 	done := make(chan struct{})
 	go func() {
@@ -142,7 +139,7 @@ func TestSSEStream_BoundsEveryWriteSoADeadReaderCannotStrandTheStream(t *testing
 // the deadline is simply not settable, exactly as before.
 func TestSSEStream_NilConnStillWrites(t *testing.T) {
 	var buf bytes.Buffer
-	s := newSSEStream(bufio.NewWriter(&buf), nil, time.Second, nil)
+	s := newSSEStream(bufio.NewWriter(&buf), nil, time.Second)
 
 	s.event("meta", map[string]bool{"has_cv": false})
 	s.comment("keepalive")
@@ -150,55 +147,6 @@ func TestSSEStream_NilConnStillWrites(t *testing.T) {
 	if !strings.Contains(buf.String(), "event: meta") {
 		t.Errorf("body = %q, want the meta event written", buf.String())
 	}
-}
-
-// streamFaultHub builds an isolated hub over a recording transport. It deliberately
-// avoids the global sentry.Init that sentryApp uses: these tests assert what one hub
-// delivered, and a package-global client would couple them to test execution order.
-func streamFaultHub(t *testing.T) (*sentry.Hub, *recordingTransport) {
-	t.Helper()
-	tr := &recordingTransport{}
-	client, err := sentry.NewClient(sentry.ClientOptions{
-		Dsn:       "https://public@o0.ingest.sentry.io/0",
-		Transport: tr,
-	})
-	if err != nil {
-		t.Fatalf("sentry.NewClient: %v", err)
-	}
-	return sentry.NewHub(client, sentry.NewScope()), tr
-}
-
-// The whole point of the seam: a fault raised after the body began streaming is never
-// returned to Fiber, so RenderError never sees it. Without this call such a failure is
-// invisible in Sentry — which is exactly how the fit-stream outage went unreported.
-func TestReportStreamFault_ReportsUnexpectedFault(t *testing.T) {
-	hub, tr := streamFaultHub(t)
-
-	reportStreamFault(hub, errString("llm chain exploded"))
-
-	if got := tr.count(); got != 1 {
-		t.Errorf("sentry events = %d, want exactly 1", got)
-	}
-}
-
-// A reader that walked away is not an application fault. classify() already encodes
-// that rule for the returned-error path; the streaming path must not disagree with it,
-// or every closed tab becomes an error-inbox entry.
-func TestReportStreamFault_IgnoresClientDisconnect(t *testing.T) {
-	hub, tr := streamFaultHub(t)
-
-	reportStreamFault(hub, fmt.Errorf("stage 1: %w", context.Canceled))
-
-	if got := tr.count(); got != 0 {
-		t.Errorf("sentry events = %d, want 0 for a client disconnect", got)
-	}
-}
-
-// Sentry is opt-in and env-gated: with no DSN the middleware installs no hub, so the
-// writer holds a nil one. Reporting must degrade to nothing rather than panic inside
-// the SSE goroutine, where a panic would take the whole stream down.
-func TestReportStreamFault_NilHubIsNoop(t *testing.T) {
-	reportStreamFault(nil, errString("llm chain exploded"))
 }
 
 // failingWriter fails every write, standing in for a reader that went away.
@@ -231,7 +179,7 @@ func (c *countingWriter) count() int {
 // and stopping the turn over it would abort a live client's work for our mistake.
 func TestSSEStream_EventDistinguishesADeadReaderFromOurOwnBug(t *testing.T) {
 	var sb strings.Builder
-	live := newSSEStream(bufio.NewWriter(&sb), nil, time.Second, nil)
+	live := newSSEStream(bufio.NewWriter(&sb), nil, time.Second)
 
 	if !live.event("token", map[string]string{"text": "hi"}) {
 		t.Error("event over a live writer reported the client gone")
@@ -246,7 +194,7 @@ func TestSSEStream_EventDistinguishesADeadReaderFromOurOwnBug(t *testing.T) {
 		t.Error("an unencodable payload reported the client gone; the caller would cancel a live turn")
 	}
 
-	dead := newSSEStream(bufio.NewWriter(failingWriter{}), nil, time.Second, nil)
+	dead := newSSEStream(bufio.NewWriter(failingWriter{}), nil, time.Second)
 	if dead.event("token", map[string]string{"text": "hi"}) {
 		t.Error("event over a failing writer reported success; the turn would run on for nobody")
 	}
@@ -257,7 +205,7 @@ func TestSSEStream_EventDistinguishesADeadReaderFromOurOwnBug(t *testing.T) {
 // ticker-plus-WaitGroup pairing before it moved onto the type.
 func TestSSEStream_KeepaliveStopsSynchronously(t *testing.T) {
 	var w countingWriter
-	stream := newSSEStream(bufio.NewWriter(&w), nil, time.Second, nil)
+	stream := newSSEStream(bufio.NewWriter(&w), nil, time.Second)
 
 	stop := stream.keepalive(time.Millisecond)
 	// Let it beat a few times so the goroutine is genuinely in flight, not merely started.
@@ -280,7 +228,7 @@ func TestSSEStream_KeepaliveStopsSynchronously(t *testing.T) {
 // comment swallows its failure: the heartbeat has nobody to report to, and the next event
 // is what tells the caller the reader is gone.
 func TestSSEStream_CommentIsBestEffort(t *testing.T) {
-	stream := newSSEStream(bufio.NewWriter(failingWriter{}), nil, time.Second, nil)
+	stream := newSSEStream(bufio.NewWriter(failingWriter{}), nil, time.Second)
 	stream.comment("keepalive") // must not panic
 	if stream.event("token", "x") {
 		t.Error("event over the same failing writer reported success")
@@ -290,78 +238,72 @@ func TestSSEStream_CommentIsBestEffort(t *testing.T) {
 // fasthttp runs a body-stream writer in a bare `go sw(bw)`, after the handler chain has
 // already returned nil — so the server's recover middleware is not above it, and a panic
 // there is not a 500 but the process, with every other request in flight. Everything else
-// this server answers turns a panic into a 500 and a Sentry event, and a test pins that
+// this server answers turns a panic into a reported 500, and a test pins that
 // (internal/platform/observability/httpmetrics_test.go); recoverStream is the same promise
 // for the four goroutines this package starts outside the chain.
 func TestRecoverStream_ContainsAPanicAndClosesTheStream(t *testing.T) {
-	hub, tr := streamFaultHub(t)
 	closed := false
 
 	func() {
-		defer recoverStream(hub, "test stream", func() { closed = true })
+		defer recoverStream("test stream", func() { closed = true })
 		panic("a tool dereferenced a nil service")
 	}()
 
 	if !closed {
 		t.Error("no terminal frame was written; the client waits forever on a stream that stopped")
 	}
-	if got := tr.count(); got != 1 {
-		t.Errorf("sentry events = %d, want exactly 1 — a panic nobody hears is the worst kind", got)
-	}
 }
 
-// Sentry is opt-in, so a deployment without a DSN holds a nil hub. Containing the panic
-// must not depend on being able to report it, and a goroutine that owes no terminal frame
+// Containing the panic must not depend on a terminal frame: a goroutine that owes no terminal frame
 // (the heartbeat: its body writer is still there to close the stream) passes nil.
-func TestRecoverStream_WorksWithoutAHubOrATerminalFrame(t *testing.T) {
+func TestRecoverStream_WorksWithoutATerminalFrame(t *testing.T) {
 	func() {
-		defer recoverStream(nil, "test stream", nil)
+		defer recoverStream("test stream", nil)
 		panic("boom")
 	}()
 }
 
-// A clean return must not be mistaken for a panic: recover() returns nil, so nothing is
-// reported and no terminal frame is forced onto a stream that already closed itself.
+// A clean return must not be mistaken for a panic: recover() returns nil, so no terminal frame is forced onto a stream that already closed itself.
 func TestRecoverStream_LeavesACleanReturnAlone(t *testing.T) {
-	hub, tr := streamFaultHub(t)
 	closed := false
 
-	func() { defer recoverStream(hub, "test stream", func() { closed = true }) }()
+	func() { defer recoverStream("test stream", func() { closed = true }) }()
 
 	if closed {
 		t.Error("a terminal frame was written for a turn that ended normally; the client would see two")
 	}
-	if got := tr.count(); got != 0 {
-		t.Errorf("sentry events = %d, want 0 for a clean return", got)
-	}
 }
 
 // panickingWriter panics instead of returning an error, standing in for whatever bug
-// could reach the heartbeat's own goroutine.
-type panickingWriter struct{}
+// could reach the heartbeat's own goroutine. It counts its calls so a test can tell the
+// panic happened, rather than waiting on the clock.
+type panickingWriter struct{ calls atomic.Int32 }
 
-func (panickingWriter) Write([]byte) (int, error) { panic("write on a recycled buffer") }
+func (p *panickingWriter) Write([]byte) (int, error) {
+	p.calls.Add(1)
+	panic("write on a recycled buffer")
+}
 
 // The heartbeat is its own goroutine, so the body writer's recover cannot reach it: a
 // panic there is as fatal as one in the writer, and the stop below would never return
 // because the process is already going down.
 func TestSSEStream_KeepalivePanicDoesNotTakeTheProcessDown(t *testing.T) {
-	hub, tr := streamFaultHub(t)
-	stream := newSSEStream(bufio.NewWriter(panickingWriter{}), nil, time.Second, hub)
+	w := &panickingWriter{}
+	stream := newSSEStream(bufio.NewWriter(w), nil, time.Second)
 
 	stop := stream.keepalive(time.Millisecond)
 	// Wait for the panic to have HAPPENED and been contained, rather than for the clock:
 	// stopping before the first beat would pass without the recover ever being reached.
 	deadline := time.Now().Add(2 * time.Second)
-	for tr.count() == 0 && time.Now().Before(deadline) {
+	for w.calls.Load() == 0 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	if tr.count() == 0 {
+	if w.calls.Load() == 0 {
 		t.Fatal("the heartbeat never reached its panicking write")
 	}
 	stop() // must return rather than the process having died on that beat
 
-	if got := tr.count(); got != 1 {
-		t.Errorf("sentry events = %d, want exactly one — the goroutine stops at its first panic", got)
+	if got := w.calls.Load(); got != 1 {
+		t.Errorf("panicking writes = %d, want exactly one — the goroutine stops at its first panic", got)
 	}
 }

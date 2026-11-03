@@ -7,16 +7,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/strelov1/freehire/internal/platform/observability"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/strelov1/freehire/internal/platform/config"
 )
-
-// panicFlushTimeout bounds how long capturePanic waits to deliver a fatal panic
-// to Sentry before re-raising. It runs on the crash path, so it stays short.
-const panicFlushTimeout = 2 * time.Second
 
 // Main runs a worker and exits only after its final outcome has been reported.
 // Reporting lives outside run so Bootstrap's deferred cleanup cannot shut it
@@ -26,7 +21,7 @@ func Main(run func() int) {
 }
 
 func runReported(run func() int) int {
-	shutdown, err := observability.InitLogs("freehire-"+workerJob(), config.Load().SentryEnvironment)
+	shutdown, err := observability.InitLogs("freehire-" + workerJob())
 	if err != nil {
 		log.Printf("exception reporting: %v", err)
 		return 1
@@ -46,8 +41,7 @@ func runReported(run func() int) int {
 // The gate sits here rather than in Bootstrap because Bootstrap reports failure
 // by returning an error and every worker answers an error with a non-zero exit —
 // a pause is an operator's decision, not a failure, and must not page anyone.
-// Refusing here also means a held run costs one Redis GET: Sentry is never
-// initialized and the database pool is never opened.
+// Refusing here also means a held run costs one Redis GET: the database pool is never opened.
 func runOrPause(run func() int) int {
 	if Paused(context.Background(), config.Load().RedisURL, workerJob()) {
 		log.Printf("worker: %s is paused, skipping this run", workerJob())
@@ -60,14 +54,11 @@ func runOrPause(run func() int) int {
 	return code
 }
 
-// capturePanic, deferred by Main, reports an in-flight panic to Sentry, flushes,
-// then re-panics to preserve the crash. It is a no-op when nothing panicked, and
-// harmless when Sentry is unconfigured (the global hub's capture is a no-op).
+// capturePanic, deferred by Main, reports an in-flight panic, then re-panics to
+// preserve the crash. It is a no-op when nothing panicked.
 func capturePanic() {
 	if r := recover(); r != nil {
 		observability.CapturePanic(context.Background(), r, attribute.String("worker.name", workerJob()))
-		sentry.CurrentHub().Recover(r)
-		sentry.Flush(panicFlushTimeout)
 		panic(r)
 	}
 }
