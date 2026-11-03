@@ -122,22 +122,17 @@ func TestReseedCV_HappyPath(t *testing.T) {
 		t.Fatalf("session = %q, want sess-keep", out.Data.AgentSessionID)
 	}
 
+	// Refreshing a tailored copy never writes a base: hand edits there are the candidate's.
 	base, ok, err := f.store.BaseCV(context.Background(), f.userID)
 	if err != nil || !ok {
 		t.Fatalf("BaseCV: ok=%v err=%v", ok, err)
 	}
-	if base.ID != f.base.ID {
-		t.Fatalf("base id changed: %s → %s", f.base.ID, base.ID)
-	}
-	if base.Document.Header.FullName != "Ada Lovelace" || base.Document.Summary != "Résumé seed summary" {
-		t.Fatalf("base content = %+v / %q", base.Document.Header, base.Document.Summary)
-	}
-	if base.Document.Margins.Top != 0.75 || base.Document.Style.FontSize != 11 {
-		t.Fatalf("base presentation clobbered: margins=%+v style=%+v", base.Document.Margins, base.Document.Style)
+	if base.ID != f.base.ID || base.Document.Header.FullName != "Old Base" || base.Document.Summary != "old base summary" {
+		t.Fatalf("base was touched by a tailored reseed: %+v / %q", base.Document.Header, base.Document.Summary)
 	}
 }
 
-func TestReseedCV_CreatesBaseWhenAbsent(t *testing.T) {
+func TestReseedBaseCV_CreatesBaseWhenAbsent(t *testing.T) {
 	h, iss, pool := newTailorAPI(t)
 	userID := seedAccount(t, pool, "nobase@example.com", false)
 	tok, _ := iss.Issue(userID, 1)
@@ -149,15 +144,8 @@ func TestReseedCV_CreatesBaseWhenAbsent(t *testing.T) {
 		userID, blob); err != nil {
 		t.Fatalf("seed structured: %v", err)
 	}
-	jobID := seedJobSlug(t, pool, "nobase-"+uuid.NewString()[:8])
-	tailored, err := h.cvStore.CreateTailored(ctx, userID, jobID, "Only Tailored", cv.DefaultTemplateID, cv.Document{
-		Summary: "stale",
-	})
-	if err != nil {
-		t.Fatalf("create tailored: %v", err)
-	}
 	app := buildResetApp(h, iss)
-	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reseed", tok, nil)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/base/reseed", tok, nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -183,7 +171,7 @@ func TestReseedCV_CreatesBaseWhenAbsent(t *testing.T) {
 // When the user has no base CV yet, reseedBaseFromSeed's create branch (cv_reseed.go) must
 // start the new base from the user's saved appearance defaults — see the
 // add-cv-appearance-defaults change.
-func TestReseedCV_CreatesBaseFromSavedAppearanceDefaults(t *testing.T) {
+func TestReseedBaseCV_CreatesBaseFromSavedAppearanceDefaults(t *testing.T) {
 	h, iss, pool := newTailorAPI(t)
 	userID := seedAccount(t, pool, "nobase-defaults@example.com", false)
 	tok, _ := iss.Issue(userID, 1)
@@ -203,15 +191,8 @@ func TestReseedCV_CreatesBaseFromSavedAppearanceDefaults(t *testing.T) {
 	if _, err := h.cvStore.SetAppearanceDefaults(ctx, userID, saved); err != nil {
 		t.Fatalf("set appearance defaults: %v", err)
 	}
-	jobID := seedJobSlug(t, pool, "nobase-defaults-"+uuid.NewString()[:8])
-	tailored, err := h.cvStore.CreateTailored(ctx, userID, jobID, "Only Tailored", cv.DefaultTemplateID, cv.Document{
-		Summary: "stale",
-	})
-	if err != nil {
-		t.Fatalf("create tailored: %v", err)
-	}
 	app := buildResetApp(h, iss)
-	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/"+tailored.ID.String()+"/reseed", tok, nil)
+	resp := doCV(t, app, fiber.MethodPost, "/api/v1/me/cvs/base/reseed", tok, nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -232,12 +213,34 @@ func TestReseedCV_CreatesBaseFromSavedAppearanceDefaults(t *testing.T) {
 	}
 }
 
-func TestReseedCV_BaseTarget409(t *testing.T) {
+// Pointed at a base, the reseed is the candidate's explicit "update from my CV": it replaces
+// THAT base (even one they edited by hand) and nothing else.
+func TestReseedCV_BaseTargetReplacesOnlyThatBase(t *testing.T) {
 	f := newResetFixture(t)
-	path := "/api/v1/me/cvs/" + f.base.ID.String() + "/reseed"
+	other, err := f.store.Create(context.Background(), f.userID, "Second", cv.DefaultTemplateID, cv.Document{Summary: "second base"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/v1/me/cvs/" + other.ID.String() + "/reseed"
 	resp := doCV(t, f.app, fiber.MethodPost, path, f.token, nil)
-	if resp.StatusCode != fiber.StatusConflict {
-		t.Fatalf("status = %d, want 409", resp.StatusCode)
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d, want 200: %s", resp.StatusCode, body)
+	}
+	var out struct {
+		Data cvResponse `json:"data"`
+	}
+	decodeJSON(t, resp, &out)
+	if out.Data.ID != other.ID.String() || out.Data.Document.Summary != "Résumé seed summary" {
+		t.Fatalf("reseeded base = %s / %q, want the named base refreshed from the seed", out.Data.ID, out.Data.Document.Summary)
+	}
+	first, err := f.store.Get(context.Background(), f.base.ID, f.userID)
+	if err != nil || first.Document.Summary != "old base summary" {
+		t.Fatalf("the other base was touched: %+v err=%v", first.Document.Summary, err)
+	}
+	tailored, err := f.store.Get(context.Background(), f.tailored.ID, f.userID)
+	if err != nil || tailored.Document.Summary != "old tailored summary" {
+		t.Fatalf("a tailored copy was touched: %q err=%v", tailored.Document.Summary, err)
 	}
 }
 
@@ -579,20 +582,13 @@ func TestReseedCV_CapsAnOvercapBankBucketInsteadOfRefusing(t *testing.T) {
 		t.Errorf("last surviving bullet = %q, want %q — the most recently banked", got, last)
 	}
 
-	// ReseedCV refreshes the base from the same seed after the tailored target commits —
-	// it must carry the same capped, most-recent bullets, not the pre-reseed "Old Base".
+	// A tailored reseed never writes the base.
 	gotBase, ok, err := store.BaseCV(ctx, userID)
 	if err != nil || !ok {
 		t.Fatalf("BaseCV: ok=%v err=%v", ok, err)
 	}
-	if gotBase.ID != base.ID {
-		t.Fatalf("base id = %s, want %s (refreshed in place, not replaced)", gotBase.ID, base.ID)
-	}
-	if len(gotBase.Document.Experience) != 1 || len(gotBase.Document.Experience[0].Bullets) != cv.MaxBullets {
-		t.Fatalf("base experience = %+v, want one row capped at %d", gotBase.Document.Experience, cv.MaxBullets)
-	}
-	if got := gotBase.Document.Experience[0].Bullets[0]; got != "Banked achievement 2" {
-		t.Errorf("base's first surviving bullet = %q, want the oldest one dropped", got)
+	if gotBase.ID != base.ID || gotBase.Document.Summary != "old base summary" || len(gotBase.Document.Experience) != 0 {
+		t.Fatalf("base was touched: %+v", gotBase.Document)
 	}
 }
 
@@ -658,11 +654,8 @@ func TestReseedCV_AlignsSkillSurfaces(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("BaseCV: ok=%v err=%v", ok, err)
 	}
-	if base.Document.Summary != "Platform engineer" {
-		t.Fatalf("base summary = %q, want current extract summary", base.Document.Summary)
-	}
-	if len(base.Document.Skills) == 0 || base.Document.Skills[0].Items[0] != "IaC" {
-		t.Fatalf("base skills = %+v, want IaC (résumé form, not JD)", base.Document.Skills)
+	if base.Document.Summary != "" || len(base.Document.Skills) != 1 || base.Document.Skills[0].Items[0] != "Go" {
+		t.Fatalf("base = %q / %+v, want it left alone by a tailored reseed", base.Document.Summary, base.Document.Skills)
 	}
 }
 
@@ -727,11 +720,8 @@ func TestReseedCV_CurrentExtractAppliesSkillsAndSummary(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("BaseCV: ok=%v err=%v", ok, err)
 	}
-	if base.Document.Summary != "Staff platform engineer" {
-		t.Fatalf("base summary = %q, want extract", base.Document.Summary)
-	}
-	if len(base.Document.Skills) == 0 || base.Document.Skills[0].Items[0] != "Go" {
-		t.Fatalf("base skills = %+v, want extract", base.Document.Skills)
+	if base.Document.Summary != "old base summary" || base.Document.Skills[0].Items[0] != "OldBase" {
+		t.Fatalf("base = %q / %+v, want it left alone by a tailored reseed", base.Document.Summary, base.Document.Skills)
 	}
 }
 

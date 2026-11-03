@@ -62,7 +62,13 @@ func (r *cvRepo) Delete(context.Context, uuid.UUID, int64) (int64, error)    { r
 func (r *cvRepo) GetBase(context.Context, int64) (db.GetBaseCVByUserRow, error) {
 	return db.GetBaseCVByUserRow{}, cv.ErrNotFound
 }
-func (r *cvRepo) CreateTailored(context.Context, int64, int64, string, string, []byte) (db.CreateTailoredCVRow, error) {
+func (r *cvRepo) ListBases(context.Context, int64) ([]db.ListBaseCVsByUserRow, error) {
+	return nil, nil
+}
+func (r *cvRepo) Duplicate(context.Context, uuid.UUID, int64, string) (db.DuplicateBaseCVRow, error) {
+	return db.DuplicateBaseCVRow{}, nil
+}
+func (r *cvRepo) CreateTailored(context.Context, int64, int64, uuid.UUID, string, string, []byte) (db.CreateTailoredCVRow, error) {
 	return db.CreateTailoredCVRow{}, nil
 }
 func (r *cvRepo) SetSession(context.Context, uuid.UUID, int64, string) (int64, error)  { return 1, nil }
@@ -211,6 +217,8 @@ func (m *memRevisions) State(context.Context) (cvedit.State, time.Time, error) {
 	}
 	return cvedit.State{Title: "CV", TemplateID: "classic-ats", Document: doc}, time.Time{}, nil
 }
+
+func (m *memRevisions) MarkHandEdited(context.Context) error { return nil }
 
 func (m *memRevisions) Save(_ context.Context, s cvedit.State) (cv.Meta, error) {
 	blob, err := json.Marshal(s.Document)

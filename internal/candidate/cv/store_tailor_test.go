@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -37,7 +38,7 @@ func TestStoreTailorSeedsBaseFromResumeWhenAbsent(t *testing.T) {
 		Skills:   []string{"Go", "PostgreSQL"},
 	}}
 
-	base, tailored, created, err := s.Tailor(ctx, 7, 100, "Tailored: X", seeder, nil)
+	base, tailored, created, err := s.Tailor(ctx, 7, 100, uuid.Nil, "Tailored: X", seeder, nil)
 	if err != nil {
 		t.Fatalf("tailor: %v", err)
 	}
@@ -89,7 +90,7 @@ func TestStoreTailorSeedsBaseFromSavedAppearanceDefaults(t *testing.T) {
 	}
 
 	seeder := fakeSeeder{ok: true, st: resumeextract.Structured{FullName: "Ada Lovelace"}}
-	base, _, _, err := s.Tailor(ctx, 7, 100, "Tailored: X", seeder, nil)
+	base, _, _, err := s.Tailor(ctx, 7, 100, uuid.Nil, "Tailored: X", seeder, nil)
 	if err != nil {
 		t.Fatalf("tailor: %v", err)
 	}
@@ -115,7 +116,7 @@ func TestStoreTailorSeedsBaseFromSystemDefaultsWhenNoneSaved(t *testing.T) {
 	ctx := context.Background()
 
 	seeder := fakeSeeder{ok: true, st: resumeextract.Structured{FullName: "Ada Lovelace"}}
-	base, _, _, err := s.Tailor(ctx, 7, 100, "Tailored: X", seeder, nil)
+	base, _, _, err := s.Tailor(ctx, 7, 100, uuid.Nil, "Tailored: X", seeder, nil)
 	if err != nil {
 		t.Fatalf("tailor: %v", err)
 	}
@@ -135,7 +136,7 @@ func TestStoreTailorRefusesWithoutResume(t *testing.T) {
 	repo := newFakeRepo()
 	s := NewStore(repo)
 	ctx := context.Background()
-	if _, _, _, err := s.Tailor(ctx, 7, 100, "T", fakeSeeder{ok: false}, nil); !errors.Is(err, ErrNoResume) {
+	if _, _, _, err := s.Tailor(ctx, 7, 100, uuid.Nil, "T", fakeSeeder{ok: false}, nil); !errors.Is(err, ErrNoResume) {
 		t.Errorf("err = %v, want ErrNoResume", err)
 	}
 	if len(repo.rows) != 0 {
@@ -152,7 +153,7 @@ func TestStoreTailorUsesExistingBaseUntouched(t *testing.T) {
 	})
 	before, _ := s.Get(ctx, base.ID, 7)
 
-	rbase, tailored, _, err := s.Tailor(ctx, 7, 100, "Tailored", fakeSeeder{ok: false}, nil)
+	rbase, tailored, _, err := s.Tailor(ctx, 7, 100, uuid.Nil, "Tailored", fakeSeeder{ok: false}, nil)
 	if err != nil {
 		t.Fatalf("tailor: %v", err)
 	}
@@ -185,11 +186,11 @@ func TestStoreTailorReturnsTheExistingCopyForTheSameVacancy(t *testing.T) {
 		t.Fatalf("seed base: %v", err)
 	}
 
-	_, first, _, err := s.Tailor(ctx, 7, 100, "Tailored", fakeSeeder{ok: false}, nil)
+	_, first, _, err := s.Tailor(ctx, 7, 100, uuid.Nil, "Tailored", fakeSeeder{ok: false}, nil)
 	if err != nil {
 		t.Fatalf("first tailor: %v", err)
 	}
-	_, second, _, err := s.Tailor(ctx, 7, 100, "Tailored", fakeSeeder{ok: false}, nil)
+	_, second, _, err := s.Tailor(ctx, 7, 100, uuid.Nil, "Tailored", fakeSeeder{ok: false}, nil)
 	if err != nil {
 		t.Fatalf("second tailor: %v", err)
 	}
@@ -198,7 +199,7 @@ func TestStoreTailorReturnsTheExistingCopyForTheSameVacancy(t *testing.T) {
 	}
 
 	// A DIFFERENT vacancy still gets its own copy.
-	_, other, _, err := s.Tailor(ctx, 7, 200, "Tailored", fakeSeeder{ok: false}, nil)
+	_, other, _, err := s.Tailor(ctx, 7, 200, uuid.Nil, "Tailored", fakeSeeder{ok: false}, nil)
 	if err != nil {
 		t.Fatalf("other tailor: %v", err)
 	}
@@ -250,7 +251,7 @@ func TestStoreTailorRacesToOneTailoredCopy(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, tailored, _, err := s.Tailor(ctx, 7, 100, "Tailored", fakeSeeder{ok: false}, nil)
+			_, tailored, _, err := s.Tailor(ctx, 7, 100, uuid.Nil, "Tailored", fakeSeeder{ok: false}, nil)
 			results[i], errs[i] = tailored, err
 		}(i)
 	}
@@ -291,7 +292,7 @@ func TestStoreTailorReportsWhetherItCreated(t *testing.T) {
 		t.Fatalf("seed base: %v", err)
 	}
 
-	_, _, created, err := s.Tailor(ctx, 7, 100, "Tailored", fakeSeeder{ok: false}, nil)
+	_, _, created, err := s.Tailor(ctx, 7, 100, uuid.Nil, "Tailored", fakeSeeder{ok: false}, nil)
 	if err != nil {
 		t.Fatalf("first tailor: %v", err)
 	}
@@ -299,7 +300,7 @@ func TestStoreTailorReportsWhetherItCreated(t *testing.T) {
 		t.Error("first bootstrap: created = false, want true — it just inserted the row")
 	}
 
-	_, _, created, err = s.Tailor(ctx, 7, 100, "Tailored", fakeSeeder{ok: false}, nil)
+	_, _, created, err = s.Tailor(ctx, 7, 100, uuid.Nil, "Tailored", fakeSeeder{ok: false}, nil)
 	if err != nil {
 		t.Fatalf("second tailor: %v", err)
 	}

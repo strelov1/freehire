@@ -185,6 +185,9 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	// a CLI learns the CV id every other keyed route here is addressed by. Creating a blank
 	// CV stays cookie-only — authoring a whole document is the browser's.
 	api.Get("/me/cvs", mw.key, h.ListCVs)
+	// The base (non-tailored) CVs, with the default flagged. Literal segment, registered before
+	// `/me/cvs/:id` so Fiber does not read "bases" as a CV uuid.
+	api.Get("/me/cvs/bases", mw.key, h.ListBaseCVs)
 	api.Post("/me/cvs", mw.cookie, h.CreateCV)
 	// Read + render accept a key too (keyAuth), so the tailoring agent's CLI can fetch a CV
 	// and its PDF; mutations stay cookie-only (POST/PUT/DELETE — the browser owns authoring).
@@ -198,6 +201,8 @@ func (h *cvHandlers) register(api fiber.Router, mw middleware) {
 	api.Put("/me/cvs/:id/tracer-links", mw.cookie, h.SetCVTracerLinks)
 	api.Get("/me/cvs/:id/tracer-links", mw.cookie, h.ListCVTracerLinks)
 	api.Delete("/me/cvs/:id", mw.cookie, h.DeleteCV)
+	// Copy a base CV (stored document, template, appearance) as "<title> (copy)".
+	api.Post("/me/cvs/:id/duplicate", mw.cookie, h.DuplicateCV)
 	api.Get("/me/cvs/:id/pdf", mw.key, h.RenderCVPDF)
 	// Tailoring: the bootstrap takes a key as well as a cookie, so a CLI can start the cycle
 	// it was already able to drive (edit + context/get/render all accept a key). It creates a
@@ -701,6 +706,8 @@ func mapCVError(err error) error {
 	switch {
 	case errors.Is(err, cv.ErrNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "not found")
+	case errors.Is(err, cv.ErrNotBase):
+		return fiber.NewError(fiber.StatusConflict, "this is a tailored CV, not a base CV")
 	case errors.Is(err, cv.ErrUnknownTemplate):
 		return fiber.NewError(fiber.StatusBadRequest, "unknown template")
 	case errors.Is(err, cvedit.ErrInvalidOp):

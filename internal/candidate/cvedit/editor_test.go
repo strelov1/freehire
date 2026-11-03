@@ -22,6 +22,8 @@ type fakeRepo struct {
 	updatedAt time.Time
 	revisions []Revision
 	saves     int
+	// handEdited mirrors cvs.hand_edited.
+	handEdited bool
 }
 
 func newFakeRepo() *fakeRepo {
@@ -58,6 +60,11 @@ func (r *fakeRepo) Save(_ context.Context, s State) (cv.Meta, error) {
 	r.saves++
 	r.updatedAt = r.updatedAt.Add(time.Second)
 	return cv.Meta{Title: s.Title, TemplateID: s.TemplateID, UpdatedAt: r.updatedAt}, nil
+}
+
+func (r *fakeRepo) MarkHandEdited(context.Context) error {
+	r.handEdited = true
+	return nil
 }
 
 func (r *fakeRepo) Newest(context.Context) (Revision, bool, error) {
@@ -555,4 +562,40 @@ func TestCommitRefusesAnAddressParsePathWouldNot(t *testing.T) {
 			t.Fatalf("a refused address wrote the document or the feed (saves=%d revisions=%d)", repo.saves, len(repo.revisions))
 		}
 	})
+}
+
+func TestOnlyTheCandidatesOwnEditorAndTemplateEditsMarkTheCVHandEdited(t *testing.T) {
+	cases := []struct {
+		name   string
+		actor  Actor
+		origin Origin
+		want   bool
+	}{
+		{"candidate editor", ActorCandidate, OriginEditor, true},
+		{"candidate template pick", ActorCandidate, OriginTemplate, true},
+		{"candidate import (header heal, reseed)", ActorCandidate, OriginImport, false},
+		{"agent", ActorAgent, OriginTailorAgent, false},
+		{"system seed", ActorSystem, OriginImport, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := newFakeRepo()
+			e, _ := newEditor(repo, nil)
+			commitSet(t, e, repo, tc.actor, tc.origin, "summary", "Something new")
+			if repo.handEdited != tc.want {
+				t.Errorf("handEdited = %v, want %v", repo.handEdited, tc.want)
+			}
+		})
+	}
+}
+
+func TestAnUnchangedSaveDoesNotMarkTheCVHandEdited(t *testing.T) {
+	repo := newFakeRepo()
+	e, _ := newEditor(repo, nil)
+	if _, _, err := e.CommitDocument(context.Background(), uuid.New(), 1, ActorCandidate, OriginEditor, sample()); err != nil {
+		t.Fatal(err)
+	}
+	if repo.handEdited {
+		t.Fatal("a save that changed nothing marked the CV hand-edited")
+	}
 }

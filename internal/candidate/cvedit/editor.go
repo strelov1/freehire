@@ -81,6 +81,8 @@ type Repository interface {
 type Tx interface {
 	State(ctx context.Context) (State, time.Time, error)
 	Save(ctx context.Context, state State) (cv.Meta, error)
+	// MarkHandEdited records on the CV that the candidate changed it through the editor.
+	MarkHandEdited(ctx context.Context) error
 	Newest(ctx context.Context) (Revision, bool, error)
 	Revision(ctx context.Context, id uuid.UUID) (Revision, bool, error)
 	Insert(ctx context.Context, rev Revision) (Revision, error)
@@ -256,6 +258,14 @@ func (e *Editor) commit(ctx context.Context, tx Tx, cvID uuid.UUID, userID int64
 	meta, err := tx.Save(ctx, after)
 	if err != nil {
 		return cv.Meta{}, Revision{}, err
+	}
+	// The candidate's own hand, through the editor or the template picker. An import (header
+	// heal, reseed), an agent turn and the system's seed are not hand edits: the flag exists so
+	// the automatic stale-vs-upload refresh can leave a base the candidate has worked on alone.
+	if ch.Actor == ActorCandidate && (ch.Origin == OriginEditor || ch.Origin == OriginTemplate) {
+		if err := tx.MarkHandEdited(ctx); err != nil {
+			return cv.Meta{}, Revision{}, err
+		}
 	}
 
 	rev, err := e.record(ctx, tx, cvID, userID, ch, inverse, baseVersion, before, after)
