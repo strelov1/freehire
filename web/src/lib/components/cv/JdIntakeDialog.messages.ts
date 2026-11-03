@@ -3,6 +3,7 @@ import { defineMessages } from '#lib/i18n/t.js';
 export const messages = defineMessages(
   {
     dialogTitle: 'Tailor a CV for a job',
+    fromBase: 'From your base CV: {title}',
     tabs: {
       existing: 'Our vacancy',
       url: 'Link',
@@ -31,6 +32,7 @@ export const messages = defineMessages(
   {
     ru: {
       dialogTitle: 'Адаптировать резюме под вакансию',
+      fromBase: 'Из вашего базового резюме: {title}',
       tabs: {
         existing: 'Наша вакансия',
         url: 'Ссылка',

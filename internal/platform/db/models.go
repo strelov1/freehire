@@ -571,6 +571,8 @@ type Cv struct {
 	IsTailored         bool               `json:"is_tailored"`
 	TracerLinksEnabled bool               `json:"tracer_links_enabled"`
 	LastClickAt        pgtype.Timestamptz `json:"last_click_at"`
+	BaseCvID           pgtype.UUID        `json:"base_cv_id"`
+	HandEdited         bool               `json:"hand_edited"`
 }
 
 type CvAppearanceDefault struct {

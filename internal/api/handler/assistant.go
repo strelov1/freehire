@@ -1007,10 +1007,10 @@ const autopilotMaxSteps = 30
 const tailorMaxSteps = 16
 
 // turnBounds picks the step ceiling for a session. Chat and the other presets keep the
-// runner default; interactive tailor and a resumed autopilot raise theirs server-side so
-// a client cannot.
+// runner default; interactive tailor and base-CV editing (the same evidence-then-edit rounds)
+// and a resumed autopilot raise theirs server-side so a client cannot.
 func turnBounds(sess assistant.Session, lastUser string) assistant.TurnConfig {
-	if sess.Preset != assistant.PresetTailor {
+	if sess.Preset != assistant.PresetTailor && sess.Preset != assistant.PresetBase {
 		return assistant.TurnConfig{}
 	}
 	if lastUser == autopilotBrief {

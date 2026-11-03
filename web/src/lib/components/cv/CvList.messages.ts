@@ -6,6 +6,7 @@ import { defineMessages } from '#lib/i18n/t.js';
 // screen. Translate it here once that page's own change lands.
 export const messages = defineMessages(
   {
+    heading: 'Tailored CVs',
     loadFailed: 'Could not load your CVs.',
     deleteFailed: 'Could not delete this CV.',
     deleted: 'CV deleted',
@@ -21,6 +22,27 @@ export const messages = defineMessages(
       tailorMyCv: 'Tailor my CV',
       cta: 'Tailor for a job',
     },
+    base: {
+      heading: 'Base CVs',
+      description: 'The CVs your tailored copies start from. Open one to edit it with the assistant, or tailor it to a job.',
+      loadFailed: 'Could not load your base CVs.',
+      defaultBadge: 'Default',
+      templateLine: 'Template: {template}',
+      edit: 'Edit',
+      tailor: 'Tailor to a job',
+      duplicate: 'Duplicate',
+      duplicateFailed: 'Could not duplicate this CV.',
+      deleteDialog: {
+        title: 'Delete the base CV “{title}”?',
+        description: 'CVs already tailored from it keep working. This cannot be undone.',
+      },
+      empty: {
+        title: 'No base CV yet',
+        body: 'A base CV is built from your uploaded CV and work history. Create one to edit it and tailor from it.',
+        cta: 'Create from my CV',
+        failed: 'Could not create a base CV. Upload your CV first.',
+      },
+    },
     updated: 'Updated {date}',
     openPdf: 'Open PDF',
     deleteTitle: 'Delete',
@@ -33,6 +55,7 @@ export const messages = defineMessages(
   },
   {
     ru: {
+      heading: 'Адаптированные резюме',
       loadFailed: 'Не удалось загрузить ваши резюме.',
       deleteFailed: 'Не удалось удалить это резюме.',
       deleted: 'Резюме удалено',
@@ -47,6 +70,27 @@ export const messages = defineMessages(
         step3Tail: '— ваша адаптированная копия появится здесь.',
         tailorMyCv: 'Tailor my CV',
         cta: 'Адаптировать под вакансию',
+      },
+      base: {
+        heading: 'Базовые резюме',
+        description: 'Резюме, с которых начинаются адаптированные копии. Откройте любое, чтобы править его с ассистентом, или адаптируйте под вакансию.',
+        loadFailed: 'Не удалось загрузить базовые резюме.',
+        defaultBadge: 'По умолчанию',
+        templateLine: 'Шаблон: {template}',
+        edit: 'Редактировать',
+        tailor: 'Адаптировать под вакансию',
+        duplicate: 'Дублировать',
+        duplicateFailed: 'Не удалось дублировать это резюме.',
+        deleteDialog: {
+          title: 'Удалить базовое резюме «{title}»?',
+          description: 'Адаптированные из него копии продолжат работать. Это действие нельзя отменить.',
+        },
+        empty: {
+          title: 'Базового резюме пока нет',
+          body: 'Базовое резюме собирается из вашего загруженного резюме и истории работы. Создайте его, чтобы править и адаптировать из него.',
+          cta: 'Создать из моего резюме',
+          failed: 'Не удалось создать базовое резюме. Сначала загрузите резюме.',
+        },
       },
       updated: 'Обновлено {date}',
       openPdf: 'Открыть PDF',

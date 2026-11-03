@@ -56,8 +56,8 @@ func (q *Queries) CreateCV(ctx context.Context, arg CreateCVParams) (CreateCVRow
 }
 
 const createTailoredCV = `-- name: CreateTailoredCV :one
-INSERT INTO cvs (user_id, title, template_id, data, job_id, is_tailored)
-VALUES ($1, $2, $3, $4, $5, true)
+INSERT INTO cvs (user_id, title, template_id, data, job_id, is_tailored, base_cv_id)
+VALUES ($1, $2, $3, $4, $5, true, $6)
 RETURNING id, title, template_id, created_at, updated_at
 `
 
@@ -67,6 +67,7 @@ type CreateTailoredCVParams struct {
 	TemplateID string      `json:"template_id"`
 	Data       []byte      `json:"data"`
 	JobID      pgtype.Int8 `json:"job_id"`
+	BaseCvID   pgtype.UUID `json:"base_cv_id"`
 }
 
 type CreateTailoredCVRow struct {
@@ -88,6 +89,7 @@ func (q *Queries) CreateTailoredCV(ctx context.Context, arg CreateTailoredCVPara
 		arg.TemplateID,
 		arg.Data,
 		arg.JobID,
+		arg.BaseCvID,
 	)
 	var i CreateTailoredCVRow
 	err := row.Scan(
@@ -120,11 +122,56 @@ func (q *Queries) DeleteCV(ctx context.Context, arg DeleteCVParams) (int64, erro
 	return result.RowsAffected(), nil
 }
 
+const duplicateBaseCV = `-- name: DuplicateBaseCV :one
+INSERT INTO cvs (user_id, title, template_id, data, is_tailored, hand_edited)
+SELECT src.user_id, $3, src.template_id, src.data, false, src.hand_edited
+FROM cvs src
+WHERE src.id = $1 AND src.user_id = $2 AND NOT src.is_tailored
+RETURNING id, title, template_id, created_at, updated_at
+`
+
+type DuplicateBaseCVParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
+	Title  string    `json:"title"`
+}
+
+type DuplicateBaseCVRow struct {
+	ID         uuid.UUID          `json:"id"`
+	Title      string             `json:"title"`
+	TemplateID string             `json:"template_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+// Copy an owned BASE CV: same stored document, template and hand_edited flag, a new title.
+// Copies the stored (already sanitized) document server-side so it never round-trips through a
+// client. Owner-scoped and base-only: a foreign, missing or tailored id returns no row (the
+// caller tells those apart with a prior read).
+func (q *Queries) DuplicateBaseCV(ctx context.Context, arg DuplicateBaseCVParams) (DuplicateBaseCVRow, error) {
+	row := q.db.QueryRow(ctx, duplicateBaseCV, arg.ID, arg.UserID, arg.Title)
+	var i DuplicateBaseCVRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.TemplateID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getBaseCVByUser = `-- name: GetBaseCVByUser :one
-SELECT id, title, template_id, data, created_at, updated_at
-FROM cvs
-WHERE user_id = $1 AND NOT is_tailored
-ORDER BY updated_at DESC, id DESC
+SELECT b.id, b.title, b.template_id, b.data, b.hand_edited, b.created_at, b.updated_at
+FROM cvs b
+WHERE b.user_id = $1 AND NOT b.is_tailored
+ORDER BY (b.id = (
+            SELECT t.base_cv_id FROM cvs t
+            WHERE t.user_id = $1 AND t.is_tailored
+            ORDER BY t.created_at DESC, t.id DESC
+            LIMIT 1
+          )) DESC NULLS LAST,
+         b.created_at ASC, b.id ASC
 LIMIT 1
 `
 
@@ -133,19 +180,26 @@ type GetBaseCVByUserRow struct {
 	Title      string             `json:"title"`
 	TemplateID string             `json:"template_id"`
 	Data       []byte             `json:"data"`
+	HandEdited bool               `json:"hand_edited"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
-// The user's base CV — their non-tailored résumé. Used as the seed source when tailoring;
-// returns no row when the user has only tailored CVs or none at all (the caller then seeds a base
-// from the extracted résumé), INCLUDING when their only vacancy-less CV is a tailored copy whose
-// vacancy was deleted. Excluding on is_tailored rather than requiring `job_id IS NULL` is the whole
-// point: the absence of a vacancy link is something deleting a vacancy creates, so it cannot mean "not
-// tailored".
+// The user's DEFAULT base CV — the one used wherever a single base is needed without asking
+// (a tailor request that names none, auto-apply, reseed, the profile and header readers). Used
+// as the seed source when tailoring; returns no row when the user has only tailored CVs or none
+// at all (the caller then seeds a base from the extracted résumé), INCLUDING when their only
+// vacancy-less CV is a tailored copy whose vacancy was deleted. Excluding on is_tailored rather
+// than requiring `job_id IS NULL` is the whole point: the absence of a vacancy link is something
+// deleting a vacancy creates, so it cannot mean "not tailored".
 //
-// "The base" stays a derived notion — the most recently edited non-tailored CV. Users may own
-// several (cv-builder), so there is no uniqueness constraint and the ORDER BY does the choosing.
+// The rule: (1) the base the user's most recently created tailored CV was made from, while that
+// base still exists; else (2) the OLDEST created base. The newest copy counts even when its
+// base_cv_id has gone NULL (its base was deleted): that is "no live base", which falls to (2), not
+// a reason to look at an older copy. Not "most recently edited": bases are
+// edited by hand now, and a default that flipped with every typo fix would make "which base does
+// tailoring use" unanswerable. ListBaseCVsByUser computes the same expression for its is_default
+// flag — change both together.
 func (q *Queries) GetBaseCVByUser(ctx context.Context, userID int64) (GetBaseCVByUserRow, error) {
 	row := q.db.QueryRow(ctx, getBaseCVByUser, userID)
 	var i GetBaseCVByUserRow
@@ -154,6 +208,7 @@ func (q *Queries) GetBaseCVByUser(ctx context.Context, userID int64) (GetBaseCVB
 		&i.Title,
 		&i.TemplateID,
 		&i.Data,
+		&i.HandEdited,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -162,7 +217,7 @@ func (q *Queries) GetBaseCVByUser(ctx context.Context, userID int64) (GetBaseCVB
 
 const getCVByID = `-- name: GetCVByID :one
 SELECT c.id, c.title, c.template_id, c.data, c.job_id, c.is_tailored, c.agent_session_id,
-       c.autopilot_report, c.tracer_links_enabled,
+       c.autopilot_report, c.tracer_links_enabled, c.base_cv_id, c.hand_edited,
        -- The company this copy was tailored for, which is what a tracer token is prefixed with:
        -- the recruiter reads it on hover, and their own company's name alarms less than an
        -- opaque string. Empty for a base CV, and for a tailored copy whose vacancy was deleted.
@@ -188,6 +243,8 @@ type GetCVByIDRow struct {
 	AgentSessionID     pgtype.Text        `json:"agent_session_id"`
 	AutopilotReport    []byte             `json:"autopilot_report"`
 	TracerLinksEnabled bool               `json:"tracer_links_enabled"`
+	BaseCvID           pgtype.UUID        `json:"base_cv_id"`
+	HandEdited         bool               `json:"hand_edited"`
 	CompanySlug        string             `json:"company_slug"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
@@ -211,6 +268,8 @@ func (q *Queries) GetCVByID(ctx context.Context, arg GetCVByIDParams) (GetCVByID
 		&i.AgentSessionID,
 		&i.AutopilotReport,
 		&i.TracerLinksEnabled,
+		&i.BaseCvID,
+		&i.HandEdited,
 		&i.CompanySlug,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -258,6 +317,66 @@ func (q *Queries) GetTailoredCVForJob(ctx context.Context, arg GetTailoredCVForJ
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listBaseCVsByUser = `-- name: ListBaseCVsByUser :many
+SELECT b.id, b.title, b.template_id, b.hand_edited, b.created_at, b.updated_at,
+       (b.id = (
+          SELECT d.id FROM cvs d
+          WHERE d.user_id = $1 AND NOT d.is_tailored
+          ORDER BY (d.id = (
+                      SELECT t.base_cv_id FROM cvs t
+                      WHERE t.user_id = $1 AND t.is_tailored
+                      ORDER BY t.created_at DESC, t.id DESC
+                      LIMIT 1
+                    )) DESC NULLS LAST,
+                   d.created_at ASC, d.id ASC
+          LIMIT 1
+        ))::boolean AS is_default
+FROM cvs b
+WHERE b.user_id = $1 AND NOT b.is_tailored
+ORDER BY b.created_at ASC, b.id ASC
+`
+
+type ListBaseCVsByUserRow struct {
+	ID         uuid.UUID          `json:"id"`
+	Title      string             `json:"title"`
+	TemplateID string             `json:"template_id"`
+	HandEdited bool               `json:"hand_edited"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	IsDefault  bool               `json:"is_default"`
+}
+
+// Every base (non-tailored) CV of a user as metadata, with is_default marking the one
+// GetBaseCVByUser would return. Oldest created first, so the list does not reorder when a base
+// is edited.
+func (q *Queries) ListBaseCVsByUser(ctx context.Context, userID int64) ([]ListBaseCVsByUserRow, error) {
+	rows, err := q.db.Query(ctx, listBaseCVsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBaseCVsByUserRow{}
+	for rows.Next() {
+		var i ListBaseCVsByUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.TemplateID,
+			&i.HandEdited,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.IsDefault,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCVsByUser = `-- name: ListCVsByUser :many
@@ -354,6 +473,26 @@ func (q *Queries) ListTailoredCVsByUser(ctx context.Context, userID int64) ([]Li
 		return nil, err
 	}
 	return items, nil
+}
+
+const markCVHandEdited = `-- name: MarkCVHandEdited :execrows
+UPDATE cvs
+SET hand_edited = true
+WHERE id = $1 AND user_id = $2 AND NOT hand_edited
+`
+
+type MarkCVHandEditedParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID int64     `json:"user_id"`
+}
+
+// Record that the candidate changed this CV through the editor. Only ever sets the flag.
+func (q *Queries) MarkCVHandEdited(ctx context.Context, arg MarkCVHandEditedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markCVHandEdited, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const mergeCVAutopilotEntry = `-- name: MergeCVAutopilotEntry :execrows

@@ -6,6 +6,7 @@
 // CvRefreshDialog.
 
 import { api } from './api';
+import type { CvBaseItem } from './cv';
 import type { Allowance, JobMatchResult } from './types';
 
 let open = $state(false);
@@ -13,7 +14,15 @@ let jobLabel = $state('');
 let match = $state.raw<JobMatchResult | null>(null);
 let allowance = $state.raw<Allowance | null>(null);
 let loading = $state(false);
-let resolver: ((value: boolean) => void) | null = null;
+let bases = $state.raw<CvBaseItem[]>([]);
+let baseCvId = $state('');
+let resolver: ((value: TailorChoice | null) => void) | null = null;
+
+/** What the candidate confirmed. `baseCvId` is set only when they had a choice to make (two or
+ *  more bases); with one base the server's default is the only answer and nothing is sent. */
+export interface TailorChoice {
+  baseCvId?: string;
+}
 
 export const confirmTailorDialog = {
   get open() {
@@ -34,16 +43,27 @@ export const confirmTailorDialog = {
   get loading() {
     return loading;
   },
+  /** The candidate's base CVs. The picker shows only for two or more. */
+  get bases() {
+    return bases;
+  },
+  /** The base picked to tailor from, preselected to the default. */
+  get baseCvId() {
+    return baseCvId;
+  },
 };
 
 /** Ask the candidate to confirm tailoring their CV for `slug`, after showing the
- *  deterministic (no-LLM) skill/requirement check for that job. Resolves true/false
- *  with their choice. `label` is an optional "Title at Company" string for a nicer
+ *  deterministic (no-LLM) skill/requirement check for that job. Resolves the confirmed
+ *  choice (with the base to tailor from when they had more than one), or null when they
+ *  cancel. `label` is an optional "Title at Company" string for a nicer
  *  title where the caller already has it cheaply — omitted, the dialog falls back to
  *  generic copy rather than forcing every call site to fetch the job just for a
  *  heading. */
-export function askConfirmTailor(slug: string, label?: string): Promise<boolean> {
+export function askConfirmTailor(slug: string, label?: string): Promise<TailorChoice | null> {
   jobLabel = label ?? '';
+  bases = [];
+  baseCvId = '';
   match = null;
   allowance = null;
   loading = true;
@@ -59,6 +79,17 @@ export function askConfirmTailor(slug: string, label?: string): Promise<boolean>
     })
     .finally(() => {
       loading = false;
+    });
+  // Which bases there are to pick from. Its own request and failure again: when it cannot be
+  // read the candidate still proceeds, on the default base, rather than losing the dialog.
+  api
+    .listBaseCvs()
+    .then((items) => {
+      bases = items;
+      baseCvId = items.find((b) => b.is_default)?.id ?? items[0]?.id ?? '';
+    })
+    .catch(() => {
+      bases = [];
     });
   // Its own request and its own failure: what the plan allows is a separate question from
   // how well the candidate fits, and a plan read that fails must not take the fit check
@@ -88,6 +119,11 @@ export function refreshConfirmTailorAllowance() {
  *  is what resolves the promise. */
 export function settleConfirmTailorDialog(value: boolean) {
   open = false;
-  resolver?.(value);
+  resolver?.(value ? (bases.length >= 2 && baseCvId ? { baseCvId } : {}) : null);
   resolver = null;
+}
+
+/** The picker's selection. */
+export function chooseConfirmTailorBase(id: string) {
+  baseCvId = id;
 }

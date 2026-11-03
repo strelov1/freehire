@@ -21,6 +21,7 @@
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
   import { autoApplyButtonState, jobCtaPlan, type JobCtaPlan } from '#lib/autoApplyButton.js';
   import { askConfirmTailor } from '#lib/confirmTailorDialog.svelte.js';
+  import { tailorHref } from '#lib/tailor/tailorHref.js';
   import { onboardingUrl } from '#lib/onboardingGate.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
   import { formatSalary, summaryFacets } from '#lib/enrichment.js';
@@ -539,8 +540,9 @@
     if (tailoring) return;
     tailoring = true;
     try {
-      const ok = await askConfirmTailor(job.public_slug, `${job.title} at ${job.company}`);
-      if (ok) await goto(resolve('/tailor/[slug]', { slug: job.public_slug }));
+      const choice = await askConfirmTailor(job.public_slug, `${job.title} at ${job.company}`);
+      // eslint-disable-next-line svelte/no-navigation-without-resolve -- tailorHref() wraps resolve('/tailor/[slug]'); the rule can't see through the appended ?base= query
+      if (choice) await goto(tailorHref(job.public_slug, choice.baseCvId));
     } finally {
       // Released even on the happy path, where the navigation has already left this page:
       // a rejected `goto` would otherwise leave all THREE copies of the page's primary CTA

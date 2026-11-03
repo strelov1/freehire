@@ -3421,6 +3421,114 @@
         ]
       }
     },
+    "/me/cvs/bases": {
+      "get": {
+        "operationId": "get_me_cvs_bases",
+        "summary": "List your base CVs, without their documents.",
+        "description": "The non-tailored CVs you can edit, duplicate and tailor from, oldest created first. `is_default` marks the one used when a tailor request names no base; `hand_edited` marks a base you changed in the editor, which a new CV upload will not overwrite. GET /me/cvs lists tailored copies and is unchanged.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{ \"data\": [ { \"id\": \"0f2c…\", \"title\": \"Backend engineer\", \"template_id\": \"classic-ats\", \"is_default\": true, \"hand_edited\": false, \"created_at\": \"2026-07-01T10:00:00Z\", \"updated_at\": \"2026-07-20T18:30:00Z\" } ] }"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "tags": [
+          "CV builder & tailoring"
+        ]
+      }
+    },
+    "/me/cvs/{id}/base-session": {
+      "post": {
+        "operationId": "post_me_cvs_id_base_session",
+        "summary": "Open the agent conversation for a base CV.",
+        "description": "Returns the assistant conversation bound to one of your base CVs, creating it on first use. It is the tailoring workspace's agent without a vacancy: it edits this general CV through the same evidence-gated tools. Opening it is free and needs no paid plan; each message still passes the assistant's paid gate. 409 for a tailored copy (use the tailor session), 404 when the id is not yours.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The base CV id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{ \"data\": { \"base_cv_id\": \"0f2c…\", \"session_id\": \"s_9f…\" } }"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "tags": [
+          "CV builder & tailoring"
+        ]
+      }
+    },
+    "/me/cvs/{id}/duplicate": {
+      "post": {
+        "operationId": "post_me_cvs_id_duplicate",
+        "summary": "Copy a base CV.",
+        "description": "Creates a new base CV with the same document, template and appearance, titled \"<title> (copy)\". Only a base can be duplicated: 409 for a tailored copy, 404 when the id is not yours.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The base CV id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{ \"data\": { \"id\": \"9a41…\", \"title\": \"Backend engineer (copy)\", \"template_id\": \"classic-ats\", \"document\": { … } } }"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "tags": [
+          "CV builder & tailoring"
+        ]
+      }
+    },
     "/me/cvs/{id}": {
       "put": {
         "operationId": "put_me_cvs_id",
@@ -3644,6 +3752,11 @@
                   "job_slug": {
                     "type": "string",
                     "description": "The vacancy to tailor toward."
+                  },
+                  "base_cv_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Which of your base CVs to copy. Optional: omitted means your default base (the one your most recent tailored CV was made from, else your oldest). 404 when it is not yours, 409 when it is a tailored copy. A vacancy you already tailored reopens its existing copy whatever base is named."
                   }
                 },
                 "required": [
@@ -3747,14 +3860,14 @@
     "/me/cvs/{id}/reseed": {
       "post": {
         "operationId": "post_me_cvs_id_reseed",
-        "summary": "Rebuild this tailored CV from your current seed.",
-        "description": "Replaces the tailored document's content from the current seed (experience bank first, your résumé's own extract for what the bank doesn't track) and refreshes your base CV from the same seed. Keeps the same tailored id and agent session; preserves template and typography on each row. 409 when the CV is not tailored or there is no usable seed. Upload alone does not do this — this is the explicit apply.",
+        "summary": "Rebuild one CV from your current seed.",
+        "description": "Replaces this CV's content from the current seed (experience bank first, your résumé's own extract for what the bank doesn't track). Works on a tailored copy or on a base, and touches only that CV: refreshing a tailored copy no longer rewrites any base, and refreshing a base — the editor's \"Update from my CV\", which replaces hand edits — leaves its copies alone. Keeps the same id and agent session; preserves template and typography. 409 when there is no usable seed. Upload alone does not do this — this is the explicit apply.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "The tailored CV id.",
+            "description": "The CV id (tailored or base).",
             "schema": {
               "type": "string",
               "format": "uuid"

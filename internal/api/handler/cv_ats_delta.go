@@ -53,7 +53,7 @@ func (h *cvHandlers) GetCVATSDelta(c *fiber.Ctx) error {
 	if tailored.JobID == 0 {
 		return fiber.NewError(fiber.StatusConflict, "the vacancy this CV was tailored for no longer exists")
 	}
-	base, ok, err := h.cvStore.BaseCV(c.Context(), userID)
+	base, ok, err := h.cvStore.BaseFor(c.Context(), userID, tailored)
 	if err != nil {
 		return err
 	}

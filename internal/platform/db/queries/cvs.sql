@@ -32,7 +32,7 @@ ORDER BY c.updated_at DESC;
 -- The autopilot columns are reported as the report itself plus a boolean: the pre-run snapshot
 -- is a whole second document, and no caller needs its bytes — only whether one exists.
 SELECT c.id, c.title, c.template_id, c.data, c.job_id, c.is_tailored, c.agent_session_id,
-       c.autopilot_report, c.tracer_links_enabled,
+       c.autopilot_report, c.tracer_links_enabled, c.base_cv_id, c.hand_edited,
        -- The company this copy was tailored for, which is what a tracer token is prefixed with:
        -- the recruiter reads it on hover, and their own company's name alarms less than an
        -- opaque string. Empty for a base CV, and for a tailored copy whose vacancy was deleted.
@@ -64,28 +64,78 @@ DELETE FROM cvs
 WHERE id = $1 AND user_id = $2;
 
 -- name: GetBaseCVByUser :one
--- The user's base CV — their non-tailored résumé. Used as the seed source when tailoring;
--- returns no row when the user has only tailored CVs or none at all (the caller then seeds a base
--- from the extracted résumé), INCLUDING when their only vacancy-less CV is a tailored copy whose
--- vacancy was deleted. Excluding on is_tailored rather than requiring `job_id IS NULL` is the whole
--- point: the absence of a vacancy link is something deleting a vacancy creates, so it cannot mean "not
--- tailored".
+-- The user's DEFAULT base CV — the one used wherever a single base is needed without asking
+-- (a tailor request that names none, auto-apply, reseed, the profile and header readers). Used
+-- as the seed source when tailoring; returns no row when the user has only tailored CVs or none
+-- at all (the caller then seeds a base from the extracted résumé), INCLUDING when their only
+-- vacancy-less CV is a tailored copy whose vacancy was deleted. Excluding on is_tailored rather
+-- than requiring `job_id IS NULL` is the whole point: the absence of a vacancy link is something
+-- deleting a vacancy creates, so it cannot mean "not tailored".
 --
--- "The base" stays a derived notion — the most recently edited non-tailored CV. Users may own
--- several (cv-builder), so there is no uniqueness constraint and the ORDER BY does the choosing.
-SELECT id, title, template_id, data, created_at, updated_at
-FROM cvs
-WHERE user_id = $1 AND NOT is_tailored
-ORDER BY updated_at DESC, id DESC
+-- The rule: (1) the base the user's most recently created tailored CV was made from, while that
+-- base still exists; else (2) the OLDEST created base. The newest copy counts even when its
+-- base_cv_id has gone NULL (its base was deleted): that is "no live base", which falls to (2), not
+-- a reason to look at an older copy. Not "most recently edited": bases are
+-- edited by hand now, and a default that flipped with every typo fix would make "which base does
+-- tailoring use" unanswerable. ListBaseCVsByUser computes the same expression for its is_default
+-- flag — change both together.
+SELECT b.id, b.title, b.template_id, b.data, b.hand_edited, b.created_at, b.updated_at
+FROM cvs b
+WHERE b.user_id = $1 AND NOT b.is_tailored
+ORDER BY (b.id = (
+            SELECT t.base_cv_id FROM cvs t
+            WHERE t.user_id = $1 AND t.is_tailored
+            ORDER BY t.created_at DESC, t.id DESC
+            LIMIT 1
+          )) DESC NULLS LAST,
+         b.created_at ASC, b.id ASC
 LIMIT 1;
+
+-- name: ListBaseCVsByUser :many
+-- Every base (non-tailored) CV of a user as metadata, with is_default marking the one
+-- GetBaseCVByUser would return. Oldest created first, so the list does not reorder when a base
+-- is edited.
+SELECT b.id, b.title, b.template_id, b.hand_edited, b.created_at, b.updated_at,
+       (b.id = (
+          SELECT d.id FROM cvs d
+          WHERE d.user_id = $1 AND NOT d.is_tailored
+          ORDER BY (d.id = (
+                      SELECT t.base_cv_id FROM cvs t
+                      WHERE t.user_id = $1 AND t.is_tailored
+                      ORDER BY t.created_at DESC, t.id DESC
+                      LIMIT 1
+                    )) DESC NULLS LAST,
+                   d.created_at ASC, d.id ASC
+          LIMIT 1
+        ))::boolean AS is_default
+FROM cvs b
+WHERE b.user_id = $1 AND NOT b.is_tailored
+ORDER BY b.created_at ASC, b.id ASC;
+
+-- name: DuplicateBaseCV :one
+-- Copy an owned BASE CV: same stored document, template and hand_edited flag, a new title.
+-- Copies the stored (already sanitized) document server-side so it never round-trips through a
+-- client. Owner-scoped and base-only: a foreign, missing or tailored id returns no row (the
+-- caller tells those apart with a prior read).
+INSERT INTO cvs (user_id, title, template_id, data, is_tailored, hand_edited)
+SELECT src.user_id, $3, src.template_id, src.data, false, src.hand_edited
+FROM cvs src
+WHERE src.id = $1 AND src.user_id = $2 AND NOT src.is_tailored
+RETURNING id, title, template_id, created_at, updated_at;
+
+-- name: MarkCVHandEdited :execrows
+-- Record that the candidate changed this CV through the editor. Only ever sets the flag.
+UPDATE cvs
+SET hand_edited = true
+WHERE id = $1 AND user_id = $2 AND NOT hand_edited;
 
 -- name: CreateTailoredCV :one
 -- Insert a CV bound to a vacancy (job_id set) — the per-vacancy tailored copy. data is the
 -- sanitized document copied from the base CV. is_tailored is stated, not inferred: if this vacancy
 -- is ever deleted the row loses its job_id, and the flag is what keeps it a tailored copy instead of
 -- joining the pool the base is chosen from. Returns the metadata the detail response needs.
-INSERT INTO cvs (user_id, title, template_id, data, job_id, is_tailored)
-VALUES ($1, $2, $3, $4, $5, true)
+INSERT INTO cvs (user_id, title, template_id, data, job_id, is_tailored, base_cv_id)
+VALUES ($1, $2, $3, $4, $5, true, sqlc.narg(base_cv_id))
 RETURNING id, title, template_id, created_at, updated_at;
 
 -- name: SetCVAutopilotReport :execrows

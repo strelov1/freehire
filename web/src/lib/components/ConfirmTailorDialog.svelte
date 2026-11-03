@@ -9,12 +9,14 @@
   import { Check, TriangleAlert } from '@lucide/svelte';
   import { notInPlan, refuses, remaining, resetsAtLabel } from '#lib/allowance.js';
   import {
+    chooseConfirmTailorBase,
     confirmTailorDialog,
     refreshConfirmTailorAllowance,
     settleConfirmTailorDialog,
   } from '#lib/confirmTailorDialog.svelte.js';
   import { partitionBlockers, toneText, haveChipClass, missingChipClass } from '#lib/jobMatch.js';
   import { ConfirmDialog } from '#lib/ui/index.js';
+  import BasePicker from './cv/BasePicker.svelte';
   import SkillIcon from './SkillIcon.svelte';
   import PlanLimitLink from './PlanLimitLink.svelte';
   import { skillLabel } from '#lib/facets.js';
@@ -129,6 +131,17 @@
       We couldn't check your fit for this role — add a CV to your profile to see it next time.
     </p>
   {/if}
+
+  <!-- Only with two or more bases: with one there is nothing to choose and the picker renders
+       nothing. Preselected to the default, so confirming without touching it is the old flow. -->
+  <div class="mt-4">
+    <BasePicker
+      bases={confirmTailorDialog.bases}
+      bind:value={() => confirmTailorDialog.baseCvId, (v) => chooseConfirmTailorBase(v)}
+      name="confirm-tailor-base"
+      copyHint
+    />
+  </div>
 
   {#if refused && notInPlan(allowance)}
     <!-- A plan that includes no editing sessions is not one the candidate spent: nothing was

@@ -2008,6 +2008,11 @@ type Querier interface {
 	// independent of a prior view: it inserts the row (viewed_at defaults) or
 	// refreshes dismissed_at in place.
 	DismissJob(ctx context.Context, arg DismissJobParams) (DismissJobRow, error)
+	// Copy an owned BASE CV: same stored document, template and hand_edited flag, a new title.
+	// Copies the stored (already sanitized) document server-side so it never round-trips through a
+	// client. Owner-scoped and base-only: a foreign, missing or tailored id returns no row (the
+	// caller tells those apart with a prior read).
+	DuplicateBaseCV(ctx context.Context, arg DuplicateBaseCVParams) (DuplicateBaseCVRow, error)
 	// The whole-catalogue geography union in one pass, keyed by the id of the row that OWNS each
 	// union — the searchable canonical row, widened with the geography of every OPEN row it
 	// represents. What a row represents is its DUPLICATE CLOSURE: the rows whose duplicate_of
@@ -2538,15 +2543,21 @@ type Querier interface {
 	// the row exists, so this never returns no-rows on the debit path; the lock serializes
 	// concurrent debits for the same user so the balance can never be oversold.
 	GetBalanceForUpdate(ctx context.Context, userID int64) (GetBalanceForUpdateRow, error)
-	// The user's base CV — their non-tailored résumé. Used as the seed source when tailoring;
-	// returns no row when the user has only tailored CVs or none at all (the caller then seeds a base
-	// from the extracted résumé), INCLUDING when their only vacancy-less CV is a tailored copy whose
-	// vacancy was deleted. Excluding on is_tailored rather than requiring `job_id IS NULL` is the whole
-	// point: the absence of a vacancy link is something deleting a vacancy creates, so it cannot mean "not
-	// tailored".
+	// The user's DEFAULT base CV — the one used wherever a single base is needed without asking
+	// (a tailor request that names none, auto-apply, reseed, the profile and header readers). Used
+	// as the seed source when tailoring; returns no row when the user has only tailored CVs or none
+	// at all (the caller then seeds a base from the extracted résumé), INCLUDING when their only
+	// vacancy-less CV is a tailored copy whose vacancy was deleted. Excluding on is_tailored rather
+	// than requiring `job_id IS NULL` is the whole point: the absence of a vacancy link is something
+	// deleting a vacancy creates, so it cannot mean "not tailored".
 	//
-	// "The base" stays a derived notion — the most recently edited non-tailored CV. Users may own
-	// several (cv-builder), so there is no uniqueness constraint and the ORDER BY does the choosing.
+	// The rule: (1) the base the user's most recently created tailored CV was made from, while that
+	// base still exists; else (2) the OLDEST created base. The newest copy counts even when its
+	// base_cv_id has gone NULL (its base was deleted): that is "no live base", which falls to (2), not
+	// a reason to look at an older copy. Not "most recently edited": bases are
+	// edited by hand now, and a default that flipped with every typo fix would make "which base does
+	// tailoring use" unanswerable. ListBaseCVsByUser computes the same expression for its is_default
+	// flag — change both together.
 	GetBaseCVByUser(ctx context.Context, userID int64) (GetBaseCVByUserRow, error)
 	// The board's current cooldown_until (NULL = eligible). Absent row → pgx.ErrNoRows,
 	// which the caller treats as "never seen, eligible". region disambiguates a board id that
@@ -3869,6 +3880,10 @@ type Querier interface {
 	// to a recency window on occurred_at for the same first-deploy reason as the
 	// other candidate scans.
 	ListAutoApplySubmittedCandidates(ctx context.Context, windowDays int32) ([]ListAutoApplySubmittedCandidatesRow, error)
+	// Every base (non-tailored) CV of a user as metadata, with is_default marking the one
+	// GetBaseCVByUser would return. Oldest created first, so the list does not reorder when a base
+	// is edited.
+	ListBaseCVsByUser(ctx context.Context, userID int64) ([]ListBaseCVsByUserRow, error)
 	// Every stored posting of ONE board (open or closed), with the URL it was crawled at — what
 	// cmd/rekey-gupy-boards reads to learn which career page each posting of a retired
 	// companyId-keyed board lives on. Rides jobs_source_extid_pattern_idx through the same
@@ -5595,6 +5610,8 @@ type Querier interface {
 	// Stamp an event as applied. Idempotent by shape: re-stamping a processed row writes the
 	// same fact, and the reconciler's own query no longer returns it.
 	MarkBillingEventProcessed(ctx context.Context, id int64) error
+	// Record that the candidate changed this CV through the editor. Only ever sets the flag.
+	MarkCVHandEdited(ctx context.Context, arg MarkCVHandEditedParams) (int64, error)
 	// Stamp a revision as undone. Guarded on reverted_at IS NULL so undoing twice affects no row
 	// and the caller can tell the difference without a second read.
 	MarkCVRevisionReverted(ctx context.Context, arg MarkCVRevisionRevertedParams) (int64, error)

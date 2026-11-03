@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -41,6 +42,8 @@ type fakeRow struct {
 	templateID string
 	data       []byte
 	jobID      int64 // 0 = base CV (job_id NULL); >0 = tailored copy bound to a vacancy
+	baseID     uuid.UUID
+	handEdited bool
 	sessionID  string
 	// tracerLinks is the candidate's consent for this CV's links to be traced.
 	tracerLinks bool
@@ -82,7 +85,7 @@ func (f *fakeRepo) Get(_ context.Context, id uuid.UUID, userID int64) (db.GetCVB
 	if !ok || r.userID != userID {
 		return db.GetCVByIDRow{}, pgx.ErrNoRows
 	}
-	return db.GetCVByIDRow{ID: id, Title: r.title, TemplateID: r.templateID, Data: r.data, JobID: pgtype.Int8{Int64: r.jobID, Valid: r.jobID != 0}, AgentSessionID: pgtype.Text{String: r.sessionID, Valid: r.sessionID != ""}, AutopilotReport: r.report, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
+	return db.GetCVByIDRow{ID: id, Title: r.title, TemplateID: r.templateID, Data: r.data, JobID: pgtype.Int8{Int64: r.jobID, Valid: r.jobID != 0}, IsTailored: r.jobID != 0, BaseCvID: pgtype.UUID{Bytes: r.baseID, Valid: r.baseID != uuid.Nil}, HandEdited: r.handEdited, AgentSessionID: pgtype.Text{String: r.sessionID, Valid: r.sessionID != ""}, AutopilotReport: r.report, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
 func (f *fakeRepo) SetSession(_ context.Context, id uuid.UUID, userID int64, sessionID string) (int64, error) {
@@ -132,7 +135,7 @@ func (f *fakeRepo) Update(_ context.Context, id uuid.UUID, userID int64, title, 
 	if !ok || r.userID != userID {
 		return db.UpdateCVRow{}, pgx.ErrNoRows
 	}
-	f.rows[id] = fakeRow{seq: r.seq, userID: userID, title: title, templateID: templateID, data: data, jobID: r.jobID, sessionID: r.sessionID, report: r.report, undo: r.undo}
+	f.rows[id] = fakeRow{seq: r.seq, userID: userID, title: title, templateID: templateID, data: data, jobID: r.jobID, baseID: r.baseID, handEdited: r.handEdited, sessionID: r.sessionID, report: r.report, undo: r.undo}
 	return db.UpdateCVRow{ID: id, Title: title, TemplateID: templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
@@ -146,28 +149,71 @@ func (f *fakeRepo) Delete(_ context.Context, id uuid.UUID, userID int64) (int64,
 	return 1, nil
 }
 
+// GetBase models GetBaseCVByUser: the base the newest tailored copy was made from while it
+// still exists, else the oldest-created base.
 func (f *fakeRepo) GetBase(_ context.Context, userID int64) (db.GetBaseCVByUserRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	// Newest base CV = the most recently written of the user's non-tailored rows.
-	var bestID uuid.UUID
-	best := 0
-	for id, r := range f.rows {
-		if r.userID == userID && r.jobID == 0 && r.seq > best {
-			best, bestID = r.seq, id
-		}
-	}
-	if best == 0 {
+	id, ok := f.defaultBaseLocked(userID)
+	if !ok {
 		return db.GetBaseCVByUserRow{}, pgx.ErrNoRows
 	}
-	r := f.rows[bestID]
-	return db.GetBaseCVByUserRow{ID: bestID, Title: r.title, TemplateID: r.templateID, Data: r.data, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
+	r := f.rows[id]
+	return db.GetBaseCVByUserRow{ID: id, Title: r.title, TemplateID: r.templateID, Data: r.data, HandEdited: r.handEdited, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
+}
+
+func (f *fakeRepo) defaultBaseLocked(userID int64) (uuid.UUID, bool) {
+	var pointed uuid.UUID
+	newest := 0
+	for _, r := range f.rows {
+		if r.userID == userID && r.jobID != 0 && r.seq > newest {
+			newest, pointed = r.seq, r.baseID
+		}
+	}
+	if b, ok := f.rows[pointed]; ok && b.userID == userID && b.jobID == 0 {
+		return pointed, true
+	}
+	var oldestID uuid.UUID
+	oldest := 0
+	for id, r := range f.rows {
+		if r.userID == userID && r.jobID == 0 && (oldest == 0 || r.seq < oldest) {
+			oldest, oldestID = r.seq, id
+		}
+	}
+	return oldestID, oldest != 0
+}
+
+func (f *fakeRepo) ListBases(_ context.Context, userID int64) ([]db.ListBaseCVsByUserRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	def, _ := f.defaultBaseLocked(userID)
+	var out []db.ListBaseCVsByUserRow
+	for id, r := range f.rows {
+		if r.userID == userID && r.jobID == 0 {
+			out = append(out, db.ListBaseCVsByUserRow{ID: id, Title: r.title, TemplateID: r.templateID, HandEdited: r.handEdited, IsDefault: id == def, CreatedAt: stamp(), UpdatedAt: stamp()})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return f.rows[out[i].ID].seq < f.rows[out[j].ID].seq })
+	return out, nil
+}
+
+func (f *fakeRepo) Duplicate(_ context.Context, id uuid.UUID, userID int64, title string) (db.DuplicateBaseCVRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.rows[id]
+	if !ok || r.userID != userID || r.jobID != 0 {
+		return db.DuplicateBaseCVRow{}, pgx.ErrNoRows
+	}
+	nid := uuid.New()
+	f.writes++
+	f.rows[nid] = fakeRow{seq: f.writes, userID: userID, title: title, templateID: r.templateID, data: r.data, handEdited: r.handEdited}
+	return db.DuplicateBaseCVRow{ID: nid, Title: title, TemplateID: r.templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 
 // CreateTailored mimics cvs_user_id_job_id_tailored_uniq_idx (migrations/0091): a second
 // insert for a (userID, jobID) that already has a tailored row fails exactly as Postgres
 // would, with a 23505 pgconn.PgError, instead of silently minting a duplicate.
-func (f *fakeRepo) CreateTailored(_ context.Context, userID, jobID int64, title, templateID string, data []byte) (db.CreateTailoredCVRow, error) {
+func (f *fakeRepo) CreateTailored(_ context.Context, userID, jobID int64, baseID uuid.UUID, title, templateID string, data []byte) (db.CreateTailoredCVRow, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, r := range f.rows {
@@ -177,7 +223,7 @@ func (f *fakeRepo) CreateTailored(_ context.Context, userID, jobID int64, title,
 	}
 	id := uuid.New()
 	f.writes++
-	f.rows[id] = fakeRow{seq: f.writes, userID: userID, title: title, templateID: templateID, data: data, jobID: jobID}
+	f.rows[id] = fakeRow{seq: f.writes, userID: userID, title: title, templateID: templateID, data: data, jobID: jobID, baseID: baseID}
 	return db.CreateTailoredCVRow{ID: id, Title: title, TemplateID: templateID, CreatedAt: stamp(), UpdatedAt: stamp()}, nil
 }
 

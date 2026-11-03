@@ -140,7 +140,7 @@ A CV is a tailored copy because it was **created** as one, not because it still 
 `cvs_job_id_fkey` is `ON DELETE SET NULL`, and the since-retired `cmd/prune` deleted vacancies by
 design, nulling those references. Inferring tailored-ness from `job_id IS NOT NULL` therefore meant
 that deleting one junk vacancy turned its copy into a plain
-CV, and since the base lookup takes the **newest** plain CV, the freshly-edited orphan beat the real
+CV, and a base lookup that ranked by recent edits let the freshly-edited orphan beat the real
 one. It would then seed the next tailored copy and back the ATS delta's baseline.
 
 Three things that follow, and are easy to get backwards:
@@ -149,26 +149,43 @@ Three things that follow, and are easy to get backwards:
   Any new reader that wants "is this a tailored copy" must ask the flag; `job_id` answers a different
   question ("which vacancy", and only while the vacancy exists).
 - **There is no `is_base`, and no uniqueness.** A user may own several plain CVs (`cv-builder`:
-  create/list/update/delete multiple CVs), so "the base" is derived — the most recently edited
-  non-tailored CV — and `GetBaseCVByUser` does that choosing. An earlier draft added
+  create/list/update/delete multiple CVs), so "the base" is derived. An earlier draft added
   `UNIQUE (user_id) WHERE is_base` and broke creating a second CV; `TestBaseCVAndTailoredCopy` caught
   it.
+- **The default base** (`GetBaseCVByUser` / `Store.BaseCV` — the one rule, used wherever a single
+  base is needed without asking: a tailor request naming none, auto-apply, the profile and header
+  readers) is (1) the base the user's newest tailored copy was made from (`cvs.base_cv_id`), while
+  it still exists, else (2) the **oldest-created** base. Deliberately not "last edited": bases are
+  edited by hand now (`/my/cvs/[id]`), and a default that moved with every typo fix would make
+  "which base does tailoring use" unanswerable. `ListBaseCVsByUser` repeats the expression for its
+  `is_default` flag, so change both together.
+- **`cvs.base_cv_id`** is written when a tailored copy is created (`Store.Tailor`), is `ON DELETE
+  SET NULL` (a copy outlives its base and falls back to the default), and is read through
+  `Store.BaseFor` by the ATS delta and `StartTailorSession`. Migration 0231 backfilled every copy
+  that existed with the user's then-default base.
+- **`cvs.hand_edited`** is set by `cvedit` on work the candidate did or directed: their own edits
+  through the editor or the template picker, and the agent's edits (`cv_edit`, `PATCH`) — not by an
+  import (header heal, reseed) or a seed. The automatic stale-vs-upload
+  refresh skips such a base; `Duplicate` copies the flag. A column rather than a scan of
+  `cv_revisions`, which is trimmed per CV and has no history for a duplicate.
 - **The ATS delta's 409 splits on the flag.** A base CV is refused with "this is a base CV"; a
   tailored copy whose vacancy is gone is refused with "the vacancy … no longer exists". They are
   different situations, and `job_id == 0` alone cannot tell them apart.
 
 ### Reseed (formerly "reset from résumé")
 
-`POST /me/cvs/:id/reseed` (cookie-only, handler `ReseedCV`) rebuilds a **tailored** CV's content
-from the current seed (`bankedSeeder`: experience bank first, `resume_structured` only for what
-the bank does not track — see `internal/candidate/experience/AGENTS.md`) and refreshes the base
-CV from the same seed via `reseedBaseFromSeed` (`POST /me/cvs/base/reseed`, handler `ReseedBaseCV`,
-is the base-only variant). Same tailored id and agent session; template/margins/style on each row
+`POST /me/cvs/:id/reseed` (cookie-only, handler `ReseedCV`) rebuilds ONE CV's content from the
+current seed (`bankedSeeder`: experience bank first, `resume_structured` only for what the bank
+does not track — see `internal/candidate/experience/AGENTS.md`). It writes only the CV it was
+given: a tailored copy is refreshed without touching any base, and a **base** is refreshed (even
+a hand-edited one — it is the candidate's explicit "update from my CV") without touching its
+copies. `POST /me/cvs/base/reseed` (`ReseedBaseCV`) does the same for the default base, or
+creates one. Same id and agent session; template/margins/style on each row
 are preserved. Upload alone does **not** write `cvs` — it only refreshes the seed source; this
 endpoint is the explicit apply. Renamed from `reset-from-resume`: that name described what the
 route once did (rebuild purely from the uploaded résumé's own extraction) before the seeder was
 changed to prefer the bank — "reseed" says what happens now without implying a single source.
-409 when the target is not tailored or the seed is unusable; a bank bucket over the bullet
+409 when the seed is unusable; a bank bucket over the bullet
 ceiling no longer refuses — `Seed` (`seed.go`) caps every `Bullets` list at `MaxBullets`
 before a `Document` is ever built, keeping the most recently banked evidence, so what reaches
 `CommitDocument` is never over cap in the first place (see `internal/candidate/cvedit/AGENTS.md`
@@ -177,16 +194,10 @@ in `internal/candidate/experience` itself: `WorkHistory`/`Professional` — fit-
 and `/me/profile` — read the same bank and must see every highlight, not a printable page's
 worth of the most recent ones.
 
-The tailored copy commits **before** the base refresh, not after: these are two separate
-`CommitDocument` calls, not one transaction, so ordering decides which one a mid-request
-failure leaves stale. Committing the caller's actual target first means a refused/failed
-write touches nothing at all; a failure in the base refresh after that leaves only the base
-stale (self-heals on the next bootstrap freshness check or Reset) rather than a request that
-reports failure while having silently rewritten a CV nobody asked to touch.
-
-**Bootstrap freshness:** `POST /me/cvs/tailor` refreshes a base whose `updated_at` is strictly
-before `resume_uploaded_at` (when the seed is usable) before copying into a **new** tailored
-row. Reloading an existing tailored-for-job stays idempotent and does not rewrite that copy.
+**Bootstrap freshness:** `POST /me/cvs/tailor` refreshes the base it is about to copy (the
+named `base_cv_id`, else the default) when its `updated_at` is strictly before
+`resume_uploaded_at` (when the seed is usable) before copying into a **new** tailored row —
+**unless the base is `hand_edited`**: an upload must never silently erase the candidate's work. Reloading an existing tailored-for-job stays idempotent and does not rewrite that copy.
 Does not write the profile.
 
 Backfill caveat: `0058` reads `job_id` to set the flag, so it is right about every row only because

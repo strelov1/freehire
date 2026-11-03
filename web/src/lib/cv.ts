@@ -93,6 +93,14 @@ export interface CvTailoredItem extends CvMeta {
   agent_session_id: string;
 }
 
+/** A base (non-tailored) CV in the bases list and the tailoring picker. `is_default` marks the
+ *  base used when a tailor request names none; `hand_edited` that the candidate changed it in the
+ *  editor (a new CV upload will not overwrite it). */
+export interface CvBaseItem extends CvMeta {
+  is_default: boolean;
+  hand_edited: boolean;
+}
+
 /**
  * Result of bootstrapping a tailoring session: the ids of the new vacancy-bound CV and the
  * base it was copied from, the cached match analysis, and the id of the tailoring conversation

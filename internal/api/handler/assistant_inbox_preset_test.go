@@ -88,6 +88,7 @@ func TestPromptOnlyNamesToolsThePresetHas(t *testing.T) {
 		{UserID: 3, Preset: assistant.PresetProfile},
 		{UserID: 3, Preset: assistant.PresetBrowse},
 		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
+		{UserID: 3, Preset: assistant.PresetBase, CVID: &cvID},
 		{UserID: 3, Preset: assistant.PresetInterview, JobID: &jobID},
 	} {
 		registered := presetAPI().registry(sess, uuid.New()).Names()
@@ -114,6 +115,7 @@ func allRegisteredToolNames(t *testing.T) []string {
 		{UserID: 3, Preset: assistant.PresetChat},
 		{UserID: 3, Preset: assistant.PresetBrowse},
 		{UserID: 3, Preset: assistant.PresetTailor, CVID: &cvID, JobID: &jobID},
+		{UserID: 3, Preset: assistant.PresetBase, CVID: &cvID},
 		// Every preset that registers a tool of its own belongs here, or the guard above
 		// cannot see that tool at all: a name no session offers is not in `everywhere`,
 		// so a prompt naming it passes unchallenged.
@@ -122,4 +124,27 @@ func allRegisteredToolNames(t *testing.T) []string {
 		all = append(all, presetAPI().registry(sess, uuid.New()).Names()...)
 	}
 	return all
+}
+
+// A base CV conversation edits the CV and nothing that needs a vacancy: the tailoring tools stay
+// with the tailor preset, and a session with no CV bound degrades to a plain chat.
+func TestBasePresetRegistersCVEditingToolsButNoVacancyTools(t *testing.T) {
+	cvID := uuid.MustParse("66666666-6666-4666-8666-666666666666")
+	got := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetBase, CVID: &cvID}, uuid.New()).Names()
+
+	for _, want := range []string{"cv_get", "cv_edit", "request_confirmation", "check_evidence_fidelity", "cv_page_count", "experience_add"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("base preset is missing %q", want)
+		}
+	}
+	for _, banned := range []string{"cv_context", "job_match", "tailor_report", "cover_letter_draft"} {
+		if slices.Contains(got, banned) {
+			t.Errorf("base preset registers %q, which needs a vacancy", banned)
+		}
+	}
+
+	unbound := presetAPI().registry(assistant.Session{UserID: 3, Preset: assistant.PresetBase}, uuid.New()).Names()
+	if slices.Contains(unbound, "cv_edit") {
+		t.Error("a base session bound to no CV registered cv_edit")
+	}
 }

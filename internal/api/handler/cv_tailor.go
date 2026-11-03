@@ -27,6 +27,9 @@ import (
 
 type tailorCVRequest struct {
 	JobSlug string `json:"job_slug"`
+	// BaseCVID names the base CV to copy. Optional: absent means the default base (see
+	// GetBaseCVByUser). It must be one of the caller's own non-tailored CVs.
+	BaseCVID string `json:"base_cv_id,omitempty"`
 }
 
 // tailorCVResponse is what the fit-page CTA gets back: the ids of the new tailored CV and the
@@ -63,6 +66,10 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	if slug == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "job_slug is required")
 	}
+	baseID, err := h.requestedTailorBase(c.Context(), userID, in.BaseCVID)
+	if err != nil {
+		return err
+	}
 	job, err := h.queries.GetJobBySlug(c.Context(), slug)
 	if err != nil {
 		return err // unknown slug → pgx.ErrNoRows → 404 via RenderError
@@ -91,10 +98,10 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 	// base in sync, not to gate opening the tailor workspace — a role over the bullet cap (or
 	// any other refresh failure) must not block bootstrap. Tailor below falls back to the base
 	// as it currently stands.
-	if err := h.reseedBaseIfStaleVsUpload(c, userID); err != nil {
+	if err := h.reseedBaseIfStaleVsUpload(c, userID, baseID); err != nil {
 		log.Printf("cv: base refresh before tailor bootstrap user=%d: %v", userID, err)
 	}
-	base, tailored, justCreated, err := h.cvStore.Tailor(c.Context(), userID, job.ID, tailoredCVTitle(job.Title), h.seedSource(), skilltag.PreferredFromText(job.Description))
+	base, tailored, justCreated, err := h.cvStore.Tailor(c.Context(), userID, job.ID, baseID, tailoredCVTitle(job.Title), h.seedSource(), skilltag.PreferredFromText(job.Description))
 	if errors.Is(err, cv.ErrNoResume) {
 		return fiber.NewError(fiber.StatusConflict, "add a résumé before tailoring")
 	}
@@ -164,6 +171,24 @@ func (h *cvHandlers) TailorCV(c *fiber.Ctx) error {
 		TailorCVID: tailored.ID.String(), BaseCVID: base.ID.String(), Analysis: analysis, SessionID: sessionID,
 		ColdStartRunning: justCreated,
 	}})
+}
+
+// requestedTailorBase validates the optional base_cv_id of a tailor request: empty is the
+// default base (uuid.Nil), a malformed id is a 400, a foreign or missing one a 404 and a
+// tailored copy a 409.
+func (h *cvHandlers) requestedTailorBase(ctx context.Context, userID int64, raw string) (uuid.UUID, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return uuid.Nil, nil
+	}
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil, fiber.NewError(fiber.StatusBadRequest, "invalid base_cv_id")
+	}
+	if _, err := h.cvStore.BaseByID(ctx, id, userID); err != nil {
+		return uuid.Nil, mapCVError(err)
+	}
+	return id, nil
 }
 
 // refuseNewTailoring answers the 402 when the caller's tailoring allowance would actually
@@ -258,7 +283,7 @@ func (h *cvHandlers) StartTailorSession(c *fiber.Ctx) error {
 	if rec.JobID == 0 {
 		return fiber.NewError(fiber.StatusConflict, "not a tailored CV")
 	}
-	base, ok, err := h.cvStore.BaseCV(c.Context(), userID)
+	base, ok, err := h.cvStore.BaseFor(c.Context(), userID, rec)
 	if err != nil {
 		return err
 	}
@@ -288,10 +313,16 @@ func (h *cvHandlers) StartTailorSession(c *fiber.Ctx) error {
 // taking them from the model — so it is created here, where ownership of both is
 // already established.
 func (h *cvHandlers) startTailoringSession(ctx context.Context, userID int64, cvID uuid.UUID, jobID int64) (string, error) {
+	return h.startCVSession(ctx, userID, cvID, assistant.PresetTailor, &jobID)
+}
+
+// startCVSession creates the conversation bound to a CV (and to a vacancy when jobID is set) and
+// stores its id on the CV, so reopening the workspace resumes the same chat.
+func (h *cvHandlers) startCVSession(ctx context.Context, userID int64, cvID uuid.UUID, preset string, jobID *int64) (string, error) {
 	if h.assistantSessions == nil {
 		return "", fiber.NewError(fiber.StatusServiceUnavailable, "the assistant is not available")
 	}
-	sess, err := h.assistantSessions.CreateSession(ctx, userID, assistant.PresetTailor, &cvID, &jobID)
+	sess, err := h.assistantSessions.CreateSession(ctx, userID, preset, &cvID, jobID)
 	if err != nil {
 		return "", err
 	}

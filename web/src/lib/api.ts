@@ -30,6 +30,7 @@ import type {
   CoverLetterView,
   CvRecord,
   CvTailoredItem,
+  CvBaseItem,
   CvTemplate,
   CvFont,
   CvTracerLink,
@@ -3065,6 +3066,25 @@ export function createApi(
     return requestData<CvTailoredItem[]>('/api/v1/me/cvs');
   }
 
+  /** The caller's BASE (non-tailored) CVs, oldest created first, with the default flagged. */
+  async function listBaseCvs(): Promise<CvBaseItem[]> {
+    return requestData<CvBaseItem[]>('/api/v1/me/cvs/bases');
+  }
+
+  /** The agent conversation for a BASE CV (no vacancy): the one already bound to it, or a new one.
+   *  Costs nothing, so a free account can open the workspace; the paid gate guards each message. */
+  async function startBaseSession(id: string): Promise<{ base_cv_id: string; session_id: string }> {
+    return requestData<{ base_cv_id: string; session_id: string }>(
+      `/api/v1/me/cvs/${encodeURIComponent(id)}/base-session`,
+      jsonBody('POST', {}),
+    );
+  }
+
+  /** Copy a base CV as "<title> (copy)"; returns the new record. 409 for a tailored copy. */
+  async function duplicateCv(id: string): Promise<CvRecord> {
+    return requestData<CvRecord>(`/api/v1/me/cvs/${encodeURIComponent(id)}/duplicate`, jsonBody('POST', {}));
+  }
+
   /** Bind a roy agent session to a CV so its workspace can re-open that exact session. */
   async function setCvSession(id: string, sessionId: string): Promise<void> {
     await call(`/api/v1/me/cvs/${id}/session`, jsonBody('PUT', { session_id: sessionId }));
@@ -3181,8 +3201,11 @@ export function createApi(
    * vacancy-bound tailored copy, and returns its id plus the cached analysis. Requires a
    * cached match analysis and a stored résumé (409 otherwise); beta-gated.
    */
-  async function tailorCv(jobSlug: string): Promise<TailorResult> {
-    return requestData<TailorResult>('/api/v1/me/cvs/tailor', jsonBody('POST', { job_slug: jobSlug }));
+  async function tailorCv(jobSlug: string, baseCvId?: string): Promise<TailorResult> {
+    return requestData<TailorResult>(
+      '/api/v1/me/cvs/tailor',
+      jsonBody('POST', baseCvId ? { job_slug: jobSlug, base_cv_id: baseCvId } : { job_slug: jobSlug }),
+    );
   }
 
   /**
@@ -3686,6 +3709,9 @@ export function createApi(
     linkEmail,
     unlinkEmail,
     listCvs,
+    listBaseCvs,
+    duplicateCv,
+    startBaseSession,
     getPhoto,
     putPhoto,
     deletePhoto,
