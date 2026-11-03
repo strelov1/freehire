@@ -147,7 +147,7 @@ func TestSoftgardenDropsDetailWithoutJobPosting(t *testing.T) {
 	}
 }
 
-const sgFeedJSON = `{"@type":"DataFeed","numberOfItems":3,"dataFeedElement":[
+const sgFeedJSON = `{"@type":"DataFeed","numberOfItems":2,"dataFeedElement":[
  {"@type":"DataFeedItem","item":{"@type":"JobPosting","title":"Senior Account Executive",
   "url":"https://acme.career.softgarden.de/jobs/62349294/Senior-Account-Executive/",
   "datePosted":"2026-09-23T10:37:06.121+02:00","identifier":{"@type":"PropertyValue","value":62349294},
@@ -159,9 +159,7 @@ const sgFeedJSON = `{"@type":"DataFeed","numberOfItems":3,"dataFeedElement":[
   "description":"<p>Build</p>",
   "jobLocation":[{"address":{"addressLocality":"Hamburg","addressCountry":"Deutschland"}},
                  {"address":{"addressLocality":"Remote","addressCountry":"Deutschland"}},
-                 {"address":{"addressLocality":"Hamburg","addressCountry":"Deutschland"}}]}},
- {"@type":"DataFeedItem","item":{"@type":"JobPosting","title":"No id","url":"https://acme.career.softgarden.de/jobs/x/",
-  "description":"<p>skipped</p>","identifier":{"@type":"PropertyValue"}}}
+                 {"address":{"addressLocality":"Hamburg","addressCountry":"Deutschland"}}]}}
 ]}`
 
 func TestSoftgardenFetchesWholeBoardFromTheFeed(t *testing.T) {
@@ -175,7 +173,7 @@ func TestSoftgardenFetchesWholeBoardFromTheFeed(t *testing.T) {
 		t.Errorf("requests = %d, want 1 (the feed carries the bodies)", fake.calls)
 	}
 	if len(jobs) != 2 {
-		t.Fatalf("got %d jobs, want 2 (the posting without an id is skipped)", len(jobs))
+		t.Fatalf("got %d jobs, want 2", len(jobs))
 	}
 	j := jobs[0]
 	if j.ExternalID != "62349294" || j.Title != "Senior Account Executive" || j.Company != "Acme" {
@@ -214,5 +212,27 @@ func TestSoftgardenFeedErrorOtherThanMissingDoesNotFallBack(t *testing.T) {
 func TestSoftgardenRejectsBoardThatIsNotAHostLabel(t *testing.T) {
 	if _, err := NewSoftgarden(&routedHTTP{}).Fetch(context.Background(), CompanyEntry{Board: "evil.com/x"}); err == nil {
 		t.Fatal("want an error for a board that cannot be a hostname label")
+	}
+}
+
+func TestSoftgardenFeedPostingWithoutIDFailsTheRead(t *testing.T) {
+	// A partial list returned as a success would let the unseen-sweep close the posting the
+	// id-less item stands for.
+	feed := `{"dataFeedElement":[
+	 {"item":{"title":"Fine","url":"https://acme.career.softgarden.de/jobs/1/","identifier":{"value":1}}},
+	 {"item":{"title":"No id","url":"https://acme.career.softgarden.de/jobs/x/","identifier":{}}}]}`
+	fake := (&routedHTTP{}).route("career.softgarden.de", feed)
+
+	if jobs, err := NewSoftgarden(fake).Fetch(context.Background(), CompanyEntry{Board: "acme"}); err == nil {
+		t.Fatalf("got %d jobs and no error, want the read to fail", len(jobs))
+	}
+}
+
+func TestSoftgardenFeedAcceptsAnUppercaseBoard(t *testing.T) {
+	fake := (&routedHTTP{}).route("acme.career.softgarden.de/jobs.feed.json", sgFeedJSON)
+
+	jobs, err := NewSoftgarden(fake).Fetch(context.Background(), CompanyEntry{Board: "Acme"})
+	if err != nil || len(jobs) != 2 {
+		t.Fatalf("jobs=%d err=%v, want 2 jobs: DNS labels are case-insensitive", len(jobs), err)
 	}
 }

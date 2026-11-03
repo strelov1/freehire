@@ -152,13 +152,15 @@ type sgFeedPosting struct {
 }
 
 // fetchFeed reads the tenant's whole board from its jobs.feed.json. A posting without a
-// native id is skipped — it would collide on the dedup key.
+// native id fails the read: it cannot be stored, and returning the rest as a successful crawl
+// would let the unseen-sweep close the posting it stands for.
 func (s softgarden) fetchFeed(ctx context.Context, e CompanyEntry) ([]Job, error) {
-	if !sgTenant.MatchString(e.Board) {
+	board := strings.ToLower(e.Board) // DNS labels are case-insensitive
+	if !sgTenant.MatchString(board) {
 		return nil, fmt.Errorf("softgarden: invalid board %q", e.Board)
 	}
 	var feed sgFeed
-	if err := s.http.GetJSON(ctx, fmt.Sprintf("https://%s.career.softgarden.de/jobs.feed.json", e.Board), &feed); err != nil {
+	if err := s.http.GetJSON(ctx, fmt.Sprintf("https://%s.career.softgarden.de/jobs.feed.json", board), &feed); err != nil {
 		return nil, fmt.Errorf("softgarden: feed %s: %w", e.Board, err)
 	}
 
@@ -167,7 +169,7 @@ func (s softgarden) fetchFeed(ctx context.Context, e CompanyEntry) ([]Job, error
 		p := it.Item
 		id := p.Identifier.Value.String()
 		if id == "" {
-			continue
+			return nil, fmt.Errorf("softgarden: feed %s: posting %q has no native id", e.Board, p.Title)
 		}
 		var locations []string
 		for _, pl := range p.JobLocation {
