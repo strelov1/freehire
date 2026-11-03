@@ -31,7 +31,7 @@ describe('captureFirstTouch', () => {
     captureFirstTouch({ href: 'https://freehire.me/?utm_source=ph', referrer: '' }, store, 'freehire.me', never);
     captureFirstTouch(
       { href: 'https://freehire.me/auth/callback', referrer: 'https://accounts.google.com/' },
-      store, 'freehire.me', (r) => r.includes('accounts.google.com'),
+      store, 'freehire.me', (r) => new URL(r).hostname === 'accounts.google.com',
     );
     expect(readFirstTouch(store).utm_source).toBe('ph');
   });
