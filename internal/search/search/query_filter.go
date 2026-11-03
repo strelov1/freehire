@@ -395,7 +395,7 @@ func filterFromValues(v url.Values, now time.Time) any {
 	// disjunction's physical arm: appending it standalone as well would AND it over
 	// the remote arm too, narrowing remote work back to the home geography.
 	if remoteAnywhere {
-		groups = append(groups, remoteAnywhereGroup(workModeValues(v), locationGroup))
+		groups = append(groups, remoteAnywhereGroup(workModeValues(v), remoteReachGroup(v), locationGroup))
 	} else if len(locationGroup) > 0 {
 		groups = append(groups, locationGroup)
 	}
@@ -522,11 +522,24 @@ func workModeValues(v url.Values) []string {
 
 func isPhysicalMode(m string) bool { return m == "hybrid" || m == "onsite" }
 
+// remoteReachGroup builds the remote arm's geography from the remote-reach params,
+// each value read exactly as the location facet it names. Empty: remote from anywhere.
+func remoteReachGroup(v url.Values) []string {
+	var group []string
+	for param, facet := range remoteReachFacets {
+		for _, val := range splitFacetValues(v[param]) {
+			group = append(group, facetEq(facet, StringFacets[facet], facetValue(facet, val)))
+		}
+	}
+	return group
+}
+
 // remoteAnywhereGroup builds the disjunction that replaces the work-mode and
-// location groups: remote from anywhere, OR one of the selected physical modes
-// within the location group. Neither arm may carry a bare physical mode — that
-// would admit a hybrid posting from any country and undo the geography.
-func remoteAnywhereGroup(modes, locationGroup []string) []string {
+// location groups: remote (within the reach, when one is given), OR one of the
+// selected physical modes within the location group. Neither arm may carry a bare
+// physical mode — that would admit a hybrid posting from any country and undo the
+// geography.
+func remoteAnywhereGroup(modes, reach, locationGroup []string) []string {
 	var physical []string
 	for _, m := range modes {
 		if isPhysicalMode(m) {
@@ -539,7 +552,12 @@ func remoteAnywhereGroup(modes, locationGroup []string) []string {
 	// on must not depend on that order. locationGroup is not read again.
 	sort.Strings(locationGroup)
 	physicalArm := "(" + InStrings("work_mode", physical) + " AND (" + strings.Join(locationGroup, " OR ") + "))"
-	return []string{Eq("work_mode", "remote"), physicalArm}
+	remoteArm := Eq("work_mode", "remote")
+	if len(reach) > 0 {
+		sort.Strings(reach)
+		remoteArm = "(" + remoteArm + " AND (" + strings.Join(reach, " OR ") + "))"
+	}
+	return []string{remoteArm, physicalArm}
 }
 
 // splitFacetValues splits each raw query value on comma and flattens the

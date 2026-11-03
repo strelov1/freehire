@@ -206,6 +206,8 @@ paths:
         - $ref: "#/components/parameters/Q"
         - $ref: "#/components/parameters/QFields"
         - $ref: "#/components/parameters/WorkModeRemoteAnywhere"
+        - $ref: "#/components/parameters/WorkModeRemoteRegions"
+        - $ref: "#/components/parameters/WorkModeRemoteCountries"
         - $ref: "#/components/parameters/HideSeen"
         - $ref: "#/components/parameters/HideAppliedCompanies"
         - $ref: "#/components/parameters/Limit"
@@ -306,6 +308,8 @@ paths:
         - $ref: "#/components/parameters/Q"
         - $ref: "#/components/parameters/QFields"
         - $ref: "#/components/parameters/WorkModeRemoteAnywhere"
+        - $ref: "#/components/parameters/WorkModeRemoteRegions"
+        - $ref: "#/components/parameters/WorkModeRemoteCountries"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
         - $ref: "#/components/parameters/Sort"
@@ -1112,7 +1116,8 @@ components:
       description: |
         Changes how `work_mode` composes with the location facets: instead of
         ANDing them (which narrows remote work to the home geography), the
-        work-mode and location groups become "remote anywhere, OR a selected
+        work-mode and location groups become "remote anywhere (or within
+        `work_mode_remote_regions`/`work_mode_remote_countries`), OR a selected
         physical mode (hybrid, onsite) within the location facets" — remote from anywhere plus
         hybrid/on-site at home, the profile preference no AND of facets can
         state. Applied only when `remote` and a physical mode are both selected
@@ -1121,6 +1126,46 @@ components:
         `work_mode_mode=and` is set. Location excludes (`countries_exclude`)
         hold in every arm of the disjunction. `false` leaves it off; a value
         other than `true` or `false` is reported in `meta.ignored_values`.
+    WorkModeRemoteRegions:
+      name: work_mode_remote_regions
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - global
+            - north_america
+            - latam
+            - eu
+            - uk
+            - mena
+            - africa
+            - apac
+            - cis
+            - none
+      description: |
+        Bounds the remote arm of `work_mode_remote_anywhere`: remote postings
+        within these regions (expanded exactly as `regions`), while the location
+        facets keep bounding the physical arm. Read only while that modifier is
+        in force; alone it reads nothing. Unknown values are reported in
+        `meta.ignored_values`.
+    WorkModeRemoteCountries:
+      name: work_mode_remote_countries
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+      description: |
+        Bounds the remote arm of `work_mode_remote_anywhere` by country (ISO
+        3166-1 alpha-2, read as `countries`). ORs with
+        `work_mode_remote_regions`. Read only while that modifier is in force;
+        alone it reads nothing.
     HideAppliedCompanies:
       name: hide_applied_companies
       in: query

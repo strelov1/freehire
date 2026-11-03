@@ -50,6 +50,22 @@ const ExperienceOnlySeniorityUnspecifiedParam = "experience_only_seniority_unspe
 // where the swap happens. Alone it reads nothing.
 const WorkModeRemoteAnywhereParam = "work_mode_remote_anywhere"
 
+// WorkModeRemoteRegionsParam and WorkModeRemoteCountriesParam bound the remote arm of
+// the remote-anywhere disjunction: "remote within this reach, OR a selected physical
+// mode within the location group" — the profile's remote reach and its home geography
+// kept apart. They read like `regions`/`countries` (regions expand the same way) and
+// only while the modifier is in force; alone, or with it inert, they read nothing.
+const (
+	WorkModeRemoteRegionsParam   = "work_mode_remote_regions"
+	WorkModeRemoteCountriesParam = "work_mode_remote_countries"
+)
+
+// remoteReachFacets maps each remote-reach param to the location facet it reads as.
+var remoteReachFacets = map[string]string{
+	WorkModeRemoteRegionsParam:   "regions",
+	WorkModeRemoteCountriesParam: "countries",
+}
+
 // scalarModifiers are params filterFromValues reads only to change how a filter
 // applies. Known to UnknownParams, never a filter on their own.
 var scalarModifiers = []string{
@@ -57,6 +73,8 @@ var scalarModifiers = []string{
 	SeniorityIncludeUnspecifiedParam,
 	ExperienceOnlySeniorityUnspecifiedParam,
 	WorkModeRemoteAnywhereParam,
+	WorkModeRemoteRegionsParam,
+	WorkModeRemoteCountriesParam,
 }
 
 // qSearchableFields are the fields `q` matches against, in the same order as the

@@ -145,6 +145,13 @@ func IgnoredValues(v url.Values) map[string][]string {
 			report(param, splitFacetValues(v[param]), known)
 		}
 	}
+	// The remote reach reads each value as the location facet it names, so a closed
+	// one (regions) is checked against that facet's vocabulary.
+	for param, facet := range remoteReachFacets {
+		if known, closed := closedFacets[facet]; closed {
+			report(param, splitFacetValues(v[param]), known)
+		}
+	}
 	// A scalar is read whole (v.Get), so its value is checked whole rather than split.
 	for param, valid := range checkedScalars {
 		if raw, ok := v[param]; ok && len(raw) > 0 {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { dynamicLabel, FACETS } from '#lib/facets.js';
-  import { type FilterStore, savedSearchQuery, displayQuery, appliesWorkModeRemoteAnywhere } from '#lib/filters.js';
+  import { type FilterStore, savedSearchQuery, displayQuery, appliesWorkModeRemoteAnywhere, workModeRemoteLabel } from '#lib/filters.js';
   import { experienceLabel, freshnessLabel, salaryLabel } from '#lib/filterControls.js';
   import { unsummarized } from '#lib/filterSummary.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
@@ -72,7 +72,7 @@
     // A chip for the modifier whenever it is actually in force, so a filter set that
     // arrived from a shared link or a saved search reads its effect and can drop it.
     if (f.workModeRemoteAnywhere && appliesWorkModeRemoteAnywhere(f))
-      workFormat.push({ key: 'work_mode_remote_anywhere', text: 'Remote from anywhere', exclude: false, remove: () => store.setWorkModeRemoteAnywhere(false) });
+      workFormat.push({ key: 'work_mode_remote_anywhere', text: workModeRemoteLabel(f), exclude: false, remove: () => store.setWorkModeRemoteAnywhere(false) });
     push('Work format', workFormat);
     facetGroup('skills', 'Skills', true);
     facetGroup('domains', 'Industry');
