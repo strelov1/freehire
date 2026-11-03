@@ -55,6 +55,7 @@ func TestFromText(t *testing.T) {
 		{"bare mention", "FullStack Infrastructure Engineer", "London - UK Contract - IR35 The Role We are seeking", nil},
 		{"denied", "", "Please note this role is not inside IR35.", nil},
 		{"denied with an article", "", "This is not an Inside IR35 role.", nil},
+		{"denied with to be", "", "This is not to be inside IR35.", nil},
 		{"word inside another", "", "Outside IR350 is a part number; inside ir3500 too.", nil},
 		{"empty", "", "", nil},
 	}

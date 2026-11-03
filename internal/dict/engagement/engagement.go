@@ -82,8 +82,8 @@ var rules = []rule{
 }
 
 // negated rejects a status a negation governs: "this role is not inside IR35", "this
-// is not an Inside IR35 role".
-var negated = re(`\b(?:not|isn'?t|never)\s+(?:be\s+)?(?:an?\s+)?$`)
+// is not an Inside IR35 role", "not to be inside IR35".
+var negated = re(`\b(?:not|isn'?t|never)\s+(?:to\s+)?(?:be\s+)?(?:an?\s+)?$`)
 
 // beforeWindow is how far back a negation is looked for.
 const beforeWindow = 12
