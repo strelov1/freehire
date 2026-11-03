@@ -1114,4 +1114,7 @@ var registry = []string{
 	"mastra",
 	"odoo",
 	"sglang",
+	"hr-operations",
+	"sla-management",
+	"ux-design",
 }

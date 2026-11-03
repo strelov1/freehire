@@ -1482,6 +1482,7 @@ var engineeringPhraseAliases = []phraseAlias{
 	{"user research", "user-research"}, {"ux research", "user-research"},
 	{"usability testing", "usability-testing"},
 	{"interaction design", "interaction-design"},
+	{"ux design", "ux-design"}, {"user experience design", "ux-design"},
 	// No "visual design" either: "visual design of the store" is retail prose, and a
 	// phrase always matches strong, so it would corroborate the gated words beside it.
 	{"motion design", "motion-design"},
@@ -2090,6 +2091,7 @@ var professionalPhraseAliases = []phraseAlias{
 	{"smartrecruiters", "smartrecruiters"},
 	// hr / people
 	{"employee relations", "employee-relations"},
+	{"hr operations", "hr-operations"}, {"people operations", "hr-operations"},
 	{"performance management", "performance-management"},
 	{"talent management", "talent-management"},
 	{"succession planning", "succession-planning"},
@@ -2116,6 +2118,7 @@ var professionalPhraseAliases = []phraseAlias{
 	// operations
 	{"process improvement", "process-improvement"},
 	{"vendor management", "vendor-management"},
+	{"sla management", "sla-management"},
 	{"program management", "program-management"},
 	{"strategic planning", "strategic-planning"},
 	{"stakeholder management", "stakeholder-management"},
