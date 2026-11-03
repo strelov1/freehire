@@ -881,6 +881,10 @@ func All(c HTTPClient) map[string]Source {
 	// peoplesoft's result list grows by a form postback PeopleTools accepts only inside the
 	// session the search page's GET opened. See peoplesoft.go.
 	registry["peoplesoft"] = cookieSessionSource[peoplesoftHTTP](c, NewPeopleSoft)
+	// brassring's JSON API answers only inside the session its home page opens: a cookie plus an
+	// anti-forgery token and an encrypted session value embedded in that page. See brassring.go.
+	// Unpaced: the platform documents no request limit and the detail fan-out is already narrow.
+	registry["brassring"] = cookieSessionSource[brassringHTTP](c, NewBrassring)
 	// Lesta's listing answers with a 307 to itself that sets a session cookie; without a jar
 	// the redirect loops until the client gives up.
 	registry["lesta"] = cookieSessionSource[lestaHTTP](c, NewLesta)
