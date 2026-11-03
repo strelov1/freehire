@@ -441,3 +441,19 @@ func TestExtract_RetryThatErasesTheDatesDoesNotWin(t *testing.T) {
 		t.Errorf("dates = %v..%v, want the first answer's: a retry with no dates has no date problems only because it has no dates", e.Start, e.End)
 	}
 }
+
+// An abbreviated range written with an ASCII hyphen is a range, not an ISO year-month: the
+// month in yearFirst ends at a word boundary, so "24" is not read as the month "2".
+func TestDateEvidence_AsciiHyphenAbbreviatedRangeCountsAsAYear(t *testing.T) {
+	for cv, year := range map[string]int{
+		"Engineer, Acme, 2016-24":   2024,
+		"Engineer, Acme, 2016-19":   2019,
+		"Engineer, Acme, 2010-13":   2013,
+		"Engineer, Acme, 2016 - 24": 2024,
+		"Engineer, Acme, 2016–24":   2024,
+	} {
+		if ev := collectDateEvidence(cv); !ev.years[year] {
+			t.Errorf("%q: years = %v, want %d", cv, ev.years, year)
+		}
+	}
+}
