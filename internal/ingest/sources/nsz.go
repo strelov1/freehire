@@ -331,8 +331,27 @@ var nszEmploymentTypes = map[string]string{
 	"Рад на пројекту":                "contract",
 }
 
-// nszPeriod reads the "Временско трајање огласа за посао" value: "29.10.2026. - 28.11.2026.".
-var nszPeriod = regexp.MustCompile(`^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?\s*-`)
+// nszPeriod reads a vacancy's period: its two day-month-year dates, opening and closing
+// ("29.10.2026. - 28.11.2026."). The first is the posting date, the second the application
+// deadline.
+var nszPeriod = regexp.MustCompile(`^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?\s*-\s*(\d{1,2})\.(\d{1,2})\.(\d{4})\.?`)
+
+// nszDate reads the period's day-month-year date named by i (3 for the posting date, 6 for
+// the application deadline), midnight in Belgrade.
+func nszDate(s string, i int) *time.Time {
+	m := nszPeriod.FindStringSubmatch(s)
+	if m == nil {
+		return nil
+	}
+	day, _ := strconv.Atoi(m[i-2])
+	month, _ := strconv.Atoi(m[i-1])
+	year, _ := strconv.Atoi(m[i])
+	if month < 1 || month > 12 || day < 1 || day > 31 {
+		return nil
+	}
+	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, nszBelgrade)
+	return &t
+}
 
 // nszGenderNotice is the opening of the paragraph every body ends with: a statement that the
 // masculine forms used in the ad apply to women too. It says nothing about the vacancy.
@@ -392,7 +411,11 @@ func nszJob(root *xhtml.Node, c nszCard) (Job, error) {
 	for _, f := range facts {
 		switch f.label {
 		case "Временско трајање огласа за посао":
-			j.PostedAt = NotFuture(nszDate(f.value))
+			j.PostedAt = NotFuture(nszDate(f.value, 3))
+			// The period's closing date is the last application day. Unlike a posted_at it may
+			// legitimately sit today or tomorrow, so it is not run through NotFuture; a stale
+			// one past today closes the vacancy on the write.
+			j.ApplicationDeadline = nszDate(f.value, 6)
 		case "Место рада":
 			if place := nszPlace(f.value); place != "" {
 				j.Location = place
@@ -460,22 +483,6 @@ func nszFacts(root *xhtml.Node) []nszFact {
 		return false
 	})
 	return out
-}
-
-// nszDate reads the first date of a vacancy's period, midnight in Belgrade.
-func nszDate(s string) *time.Time {
-	m := nszPeriod.FindStringSubmatch(s)
-	if m == nil {
-		return nil
-	}
-	day, _ := strconv.Atoi(m[1])
-	month, _ := strconv.Atoi(m[2])
-	year, _ := strconv.Atoi(m[3])
-	if month < 1 || month > 12 || day < 1 || day > 31 {
-		return nil
-	}
-	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, nszBelgrade)
-	return &t
 }
 
 // nszPlace reads "Место рада", one or more municipalities each closed by a semicolon

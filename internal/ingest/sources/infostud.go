@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -85,6 +86,7 @@ type infostudCard struct {
 	Company         string `json:"companyName"`
 	Location        string `json:"location"`
 	OnlineViewDate  string `json:"onlineViewDate"`
+	ExpirationDate  string `json:"expirationDate"`
 	WorkFromHome    bool   `json:"workFromHome"`
 	HybridWork      bool   `json:"hybridWork"`
 	URL             string `json:"url"`
@@ -117,8 +119,11 @@ type infostudPosting struct {
 	Status     string `json:"status"`
 	TextAd     string `json:"textAd"`
 	DatePosted string `json:"datePosted"`
-	Location   string `json:"location"`
-	Salary     *struct {
+	// ExpirationDate is the last application day, "15.11.2026." — with the trailing dot here
+	// (the posting page) and without it on the search card.
+	ExpirationDate string `json:"expirationDate"`
+	Location       string `json:"location"`
+	Salary         *struct {
 		From     *string `json:"from"`
 		To       *string `json:"to"`
 		Period   string  `json:"additional"`
@@ -403,6 +408,27 @@ var infostudBelgrade = func() *time.Location {
 	return time.FixedZone("CET", 60*60)
 }()
 
+// infostudDMY matches the site's "15.11.2026" / "15.11.2026." application date.
+var infostudDMY = regexp.MustCompile(`^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?$`)
+
+// infostudDeadline reads the posting's expiration date at midnight in Belgrade. ok is false
+// for a value that is not one. Unlike a posted_at the date may legitimately sit today or
+// tomorrow, so it is not run through NotFuture; a stale one past today closes the posting on
+// the write.
+func infostudDeadline(s string) (time.Time, bool) {
+	m := infostudDMY.FindStringSubmatch(strings.TrimSpace(s))
+	if m == nil {
+		return time.Time{}, false
+	}
+	day, _ := strconv.Atoi(m[1])
+	month, _ := strconv.Atoi(m[2])
+	year, _ := strconv.Atoi(m[3])
+	if month < 1 || month > 12 || day < 1 || day > 31 {
+		return time.Time{}, false
+	}
+	return time.Date(year, time.Month(month), day, 0, 0, 0, 0, infostudBelgrade), true
+}
+
 // infostudJob maps a posting page and its search result to a Job. ok is false for one with no
 // title, employer or body — an ad published only as an image carries no text.
 func infostudJob(p infostudPosting, c infostudCard) (Job, bool) {
@@ -445,6 +471,12 @@ func infostudJob(p infostudPosting, c infostudCard) (Job, bool) {
 	}
 	if p.WorkingHours != nil && strings.EqualFold(infostudClean(p.WorkingHours.Name), "nepuno radno vreme") {
 		j.EmploymentType = "part_time"
+	}
+	// The posting page's own date wins; the card's is the same day when both are present.
+	if t, ok := infostudDeadline(p.ExpirationDate); ok {
+		j.ApplicationDeadline = &t
+	} else if t, ok := infostudDeadline(c.ExpirationDate); ok {
+		j.ApplicationDeadline = &t
 	}
 	return j, true
 }
