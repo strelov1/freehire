@@ -44,7 +44,8 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
   time from `ORIGIN` — `paths.origin` in `vite.config.ts`. adapter-node no longer reads
   `ORIGIN` at runtime, so setting it only on the running server does nothing.
 - Error telemetry is gated on `PUBLIC_OTEL_LOGS_ENDPOINT` (browser) and the private
-  `OTEL_EXPORTER_OTLP_*` endpoint (SSR); without them nothing is reported. See
+  `OTEL_EXPORTER_OTLP_*` endpoint (SSR); without them nothing is exported, and SSR only
+  logs unexpected errors to its journal. See
   [internal/platform/observability/AGENTS.md](../internal/platform/observability/AGENTS.md).
 - PostHog is gated on `PUBLIC_POSTHOG_KEY` (inert without it — no init, no events);
   ingestion goes through the same-origin `/ingest` reverse proxy (nginx → `eu.i.posthog.com`),

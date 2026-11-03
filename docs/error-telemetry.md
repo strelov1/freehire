@@ -32,7 +32,8 @@ public settings contain no credentials. Restart Node after changing its environm
 Changing the extension settings requires a new build; changing a systemd environment
 file cannot alter an installed extension.
 
-Without an OTLP endpoint, collection is disabled and nothing is reported. Removing
+Without an OTLP endpoint, collection is disabled: nothing is exported, and only
+SSR still writes unexpected errors to its own journal (`console.error`). Removing
 the OTLP settings and restarting the affected components switches collection off;
 there is no fallback reporter behind it.
 
