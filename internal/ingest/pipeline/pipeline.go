@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -102,6 +103,15 @@ type CoveredRefresher interface {
 // posting as done.
 type SeenLookup interface {
 	ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error)
+}
+
+// CompanyWebsiteRecorder is the optional Store capability behind sources.Job.CompanyWebsite:
+// record the employer's own website on its company row when none is known yet. It is a
+// capability for the same reason CompanyDescriptionFiller is: only the ingest dbStore has a
+// companies table, and a Store without it still ingests the posting. The website is then
+// not recorded, which is the right degradation for a field no write depends on.
+type CompanyWebsiteRecorder interface {
+	RecordCompanyWebsite(ctx context.Context, companySlug, website string) error
 }
 
 // CompanyDescriptionFiller is the optional Store capability a sources.CompanyDescriber
@@ -945,6 +955,37 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 		return
 	}
 	t.st.Ingested++
+	r.recordCompanyWebsite(ctx, e, dj.Fields().CompanySlug, j.CompanyWebsite)
+}
+
+// recordCompanyWebsite writes a posting's stated employer website onto the company it was
+// filed under, which after alias resolution is the canonical slug. It is best-effort: the
+// posting is already saved, and a missed website costs a merge signal, not a posting.
+func (r Runner) recordCompanyWebsite(ctx context.Context, e sources.CompanyEntry, companySlug, raw string) {
+	website := companyWebsite(raw)
+	if website == "" || companySlug == "" {
+		return
+	}
+	rec, ok := r.Store.(CompanyWebsiteRecorder)
+	if !ok {
+		return
+	}
+	if err := rec.RecordCompanyWebsite(ctx, companySlug, website); err != nil {
+		log.Printf("ingest: %s board %q: record website of %q: %v", e.Provider, e.Board, companySlug, err)
+	}
+}
+
+// companyWebsite accepts a stated website only as an absolute http(s) URL with a dotted
+// host, and returns "" for anything else. A feed's free-text field holds "n/a", a bare
+// e-mail address or a relative path often enough that storing it as given would put junk
+// where logo resolution and the duplicate report read a domain.
+func companyWebsite(raw string) string {
+	raw = strings.TrimSpace(raw)
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || !strings.Contains(u.Hostname(), ".") {
+		return ""
+	}
+	return raw
 }
 
 // refreshCovered refreshes the liveness of whichever listed, unwritten postings the

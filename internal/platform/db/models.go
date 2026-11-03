@@ -445,6 +445,12 @@ type CompanyFeedbackReport struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type CompanyParent struct {
+	ChildSlug  string             `json:"child_slug"`
+	ParentSlug string             `json:"parent_slug"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type CompanyProcessReport struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
@@ -452,6 +458,19 @@ type CompanyProcessReport struct {
 	Kind        string             `json:"kind"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	RetractedAt pgtype.Timestamptz `json:"retracted_at"`
+}
+
+type CompanyRelationProposal struct {
+	ID          int64              `json:"id"`
+	Kind        string             `json:"kind"`
+	CompanySlug string             `json:"company_slug"`
+	TargetSlug  string             `json:"target_slug"`
+	Note        string             `json:"note"`
+	ProposedBy  pgtype.Int8        `json:"proposed_by"`
+	Status      string             `json:"status"`
+	DecidedBy   pgtype.Int8        `json:"decided_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	DecidedAt   pgtype.Timestamptz `json:"decided_at"`
 }
 
 type CompanySearchPing struct {

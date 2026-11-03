@@ -82,7 +82,10 @@ import type {
   Submission,
   SubmissionInput,
   PrefillResult,
+  CompanyRef,
+  CompanyRelationKind,
   EmployerAccount,
+  PendingCompanyRelation,
   EmployerCompany,
   EmployerCompanyProfileInput,
   EmployerVacancyInput,
@@ -172,6 +175,17 @@ export interface Slice<T> {
   items: T[];
   total?: number;
   hasMore: boolean;
+}
+
+/** GET /companies/:slug: the company, a page of its jobs, and its relations. `parent` and
+ *  `subsidiaries` are absent when there are none. */
+interface CompanyDetail {
+  company: Company;
+  jobs: Job[];
+  referral_available: boolean;
+  response?: CompanyResponse;
+  parent?: CompanyRef;
+  subsidiaries?: CompanyRef[];
 }
 
 interface Page<T> {
@@ -927,14 +941,43 @@ export function createApi(
     );
   }
 
+  /** Propose a correction about the company at `slug`: that it is the same employer as
+   *  `target_slug` (and retires into it), or a subsidiary of it. A moderator decides; a
+   *  duplicate or a relation the registry cannot take is a 409 whose message says why. */
+  async function proposeCompanyRelation(
+    slug: string,
+    input: { kind: CompanyRelationKind; target_slug: string; note: string },
+  ): Promise<void> {
+    await call(`/api/v1/companies/${encodeURIComponent(slug)}/relations`, jsonBody('POST', input));
+  }
+
+  /** The moderator queue of proposed company relations, oldest first. Moderator-only. */
+  async function listPendingCompanyRelations(): Promise<PendingCompanyRelation[]> {
+    return requestData<PendingCompanyRelation[]>('/api/v1/company-relations');
+  }
+
+  /** Apply a proposed relation. A `same` approval moves the retiring company's jobs and
+   *  reports how many; approving it again resumes a move that stopped part-way. */
+  async function approveCompanyRelation(id: number): Promise<{ kind: CompanyRelationKind; moved_jobs: number }> {
+    return requestData<{ kind: CompanyRelationKind; moved_jobs: number }>(
+      `/api/v1/company-relations/${id}/approve`,
+      { method: 'POST' },
+    );
+  }
+
+  /** Close a proposed relation without applying it. Moderator-only. */
+  async function rejectCompanyRelation(id: number): Promise<void> {
+    await call(`/api/v1/company-relations/${id}/reject`, { method: 'POST' });
+  }
+
   async function getCompany(
     slug: string,
     limit: number,
     offset: number,
-  ): Promise<{ company: Company; jobs: Job[]; referral_available: boolean; response?: CompanyResponse }> {
+  ): Promise<CompanyDetail> {
     // `redirect: 'manual'` so a slug a merge retired surfaces as MovedError rather than
     // silently rendering the canonical company under the old url.
-    return requestData<{ company: Company; jobs: Job[]; referral_available: boolean; response?: CompanyResponse }>(
+    return requestData<CompanyDetail>(
       `/api/v1/companies/${slug}${query(limit, offset)}`,
       { redirect: 'manual' },
     );
@@ -3377,6 +3420,10 @@ export function createApi(
     listSources,
     listCompanies,
     getCompany,
+    proposeCompanyRelation,
+    listPendingCompanyRelations,
+    approveCompanyRelation,
+    rejectCompanyRelation,
     companyClosedJobs,
     companyHiring,
     listMentors,

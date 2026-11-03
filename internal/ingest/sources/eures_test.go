@@ -313,7 +313,7 @@ func TestEuresMapsFieldsHappyPath(t *testing.T) {
 	  "id":"MTAwMDEtMTAwMTEzOTMxMS1TIDE",
 	  "title":"Software Engineer",
 	  "description":"<p>We build things.</p>",
-	  "employer":{"name":"SUSS MicroTec Solutions GmbH & Co. KG"},
+	  "employer":{"name":"SUSS MicroTec Solutions GmbH & Co. KG","website":" http://www.suss.com ","legalID":null},
 	  "creationDate":1739403609768,
 	  "locationMap":{"DE":["DE12B"],"EL":["EL30"]},
 	  "positionOfferingCode":"directhire",
@@ -343,6 +343,9 @@ func TestEuresMapsFieldsHappyPath(t *testing.T) {
 	if j.Title != "Software Engineer" || j.Company != "SUSS MicroTec Solutions GmbH & Co. KG" {
 		t.Errorf("title/company = %q / %q", j.Title, j.Company)
 	}
+	if j.CompanyWebsite != "http://www.suss.com" {
+		t.Errorf("CompanyWebsite = %q, want the employer block's website, trimmed", j.CompanyWebsite)
+	}
 	if j.Description != "<p>We build things.</p>" {
 		t.Errorf("Description = %q", j.Description)
 	}
@@ -360,6 +363,19 @@ func TestEuresMapsFieldsHappyPath(t *testing.T) {
 	}
 	if j.Location != "Karlsruhe, Baden, Germany" {
 		t.Errorf("Location = %q, want city + country from the detail fetch", j.Location)
+	}
+}
+
+// A website in a block that names no employer is attributed to nobody, so it is dropped.
+func TestEuresWebsiteNeedsANamedEmployer(t *testing.T) {
+	const page1 = `{"numberRecords":1,"jvs":[{"id":"X1","title":"T","employer":{"name":"","website":"http://www.joof.nl"}}]}`
+	fake := &euresFake{searchByPage: map[int]string{1: page1}}
+	jobs, err := NewEures(fake).Fetch(context.Background(), CompanyEntry{Board: "nl"})
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].CompanyWebsite != "" {
+		t.Errorf("jobs = %+v, want one posting with no CompanyWebsite", jobs)
 	}
 }
 

@@ -71,6 +71,7 @@ var (
 	_ pipeline.Toucher                  = (*dbStore)(nil)
 	_ pipeline.SeenLookup               = (*dbStore)(nil)
 	_ pipeline.CompanyDescriptionFiller = (*dbStore)(nil)
+	_ pipeline.CompanyWebsiteRecorder   = (*dbStore)(nil)
 )
 
 func newDBStore(pool *pgxpool.Pool, targetVersion int, crawled *crawledSet, tally *writeTally, seen seenPolicy) *dbStore {
@@ -492,6 +493,17 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 	// save(), so the run would report 0% and read as the very churn the line exists to expose.
 	s.tally.record(source, true)
 	return nil
+}
+
+// RecordCompanyWebsite stores a posting's stated employer website on its company row when
+// the row has none yet. The guard in the query makes a repeat a read, so a crawl that
+// re-saves the employer's postings writes the row once. Implements
+// pipeline.CompanyWebsiteRecorder.
+func (s *dbStore) RecordCompanyWebsite(ctx context.Context, companySlug, website string) error {
+	return s.q.SetCompanyWebsiteIfAbsent(ctx, db.SetCompanyWebsiteIfAbsentParams{
+		Slug:    companySlug,
+		Website: website,
+	})
 }
 
 // refreshCoveredChunk bounds one RefreshCoveredJobs statement. A board's covered postings are

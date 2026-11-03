@@ -66,6 +66,39 @@ type companyDetailResponse struct {
 	// answered. Absent below the sample gate — which is nearly every company today,
 	// and the correct answer rather than an unfinished one.
 	Response *companyResponse `json:"response,omitempty"`
+	// Parent is the company that owns this one, and Subsidiaries the companies it owns
+	// (company_parents, freehire#3895). They stay separate companies with their own jobs:
+	// Novartis Slovenija is not Novartis. Both are omitted when there are none.
+	Parent       *companyRef  `json:"parent,omitempty"`
+	Subsidiaries []companyRef `json:"subsidiaries,omitempty"`
+}
+
+// companyRef names a related company for a link: enough to render it, nothing more.
+type companyRef struct {
+	Slug     string `json:"slug"`
+	Name     string `json:"name"`
+	JobCount int32  `json:"job_count"`
+}
+
+// companyRelatives reads a company's parent and subsidiaries. It is best-effort like the
+// referral flag: a failed read leaves the links out and never fails the company page.
+func companyRelatives(ctx context.Context, q *db.Queries, slug string) (*companyRef, []companyRef) {
+	var parent *companyRef
+	if p, err := q.GetCompanyParent(ctx, slug); err == nil {
+		parent = &companyRef{Slug: p.Slug, Name: p.Name, JobCount: p.JobCount}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		log.Printf("companies: parent of %q: %v", slug, err)
+	}
+	rows, err := q.ListCompanySubsidiaries(ctx, slug)
+	if err != nil {
+		log.Printf("companies: subsidiaries of %q: %v", slug, err)
+		return parent, nil
+	}
+	var subs []companyRef
+	for _, r := range rows {
+		subs = append(subs, companyRef{Slug: r.Slug, Name: r.Name, JobCount: r.JobCount})
+	}
+	return parent, subs
 }
 
 // companyView is the public projection of a company for the detail endpoint. It
@@ -412,11 +445,15 @@ func (h *companiesHandlers) GetCompany(c *fiber.Ctx) error {
 		}
 	}
 
+	parent, subsidiaries := companyRelatives(c.Context(), h.queries, slug)
+
 	return c.JSON(fiber.Map{"data": companyDetailResponse{
 		Company:           view,
 		Jobs:              views,
 		ReferralAvailable: referralAvailable,
 		Response:          companyResponseRate(c.Context(), h.queries, slug),
+		Parent:            parent,
+		Subsidiaries:      subsidiaries,
 	}})
 }
 

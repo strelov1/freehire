@@ -122,6 +122,14 @@ type Job struct {
 	SalaryMax      *int
 	SalaryCurrency string
 	SalaryPeriod   string
+	// CompanyWebsite is the EMPLOYER's own website, set only when the platform states it in
+	// a structured employer field (EURES's employer.website). It is never a posting URL and
+	// never the job board's own host. It is a fact about the company rather than the
+	// posting, so the pipeline writes it to the company row (company_info.website, only
+	// where none is known yet) and keeps it out of the job aggregate and its content hash.
+	// A shared website is the strongest evidence that two spellings are one employer
+	// (docs/agents/company-identity.md), which is why it is collected (freehire#3895).
+	CompanyWebsite string
 	// Removed marks a posting the source reports as taken down (e.g. an item flagged
 	// removed in JobStream's incremental feed). A streaming, self-closing source emits
 	// these so the pipeline closes the job by identity instead of upserting it; all other

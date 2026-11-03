@@ -226,8 +226,16 @@ type euresVacancy struct {
 // What the Dutch detail does carry is a contact person whose familyName is sometimes an agency
 // ("Spilberg"), plus an email and a webProfiles link that mostly point at a recruiter or a job
 // board (joof.nl, actiever.nl); none of them names the employer, so none is read as one.
+//
+// When the employer IS named, the block often states its website too. Measured 2026-11-03 over
+// 50 recent postings each: 32 in Austria, 33 in Belgium, 18 in Germany, 6 in France, none in
+// Slovenia, Poland or Sweden. Sampled, it is the named employer's own site (Tesla's
+// tesla.com, Hays' hays.de, each Forum Jobs branch's forumjobs.be), so it is carried as
+// Job.CompanyWebsite. The block also has a legalID field, which was empty in every posting
+// sampled across eight countries, so it is not read.
 type euresEmployer struct {
-	Name string `json:"name"`
+	Name    string `json:"name"`
+	Website string `json:"website"`
 }
 
 // euresDetailResponse carries location and application deadline. requestLang does NOT select
@@ -395,6 +403,11 @@ func (v euresVacancy) job() Job {
 
 func (e eures) toJob(ctx context.Context, board string, v euresVacancy) Job {
 	j := v.job()
+	if j.Company != "" {
+		// Only beside a named employer: a website with no employer would be attributed to
+		// nobody, and the pipeline writes it to the company row.
+		j.CompanyWebsite = strings.TrimSpace(v.Employer.Website)
+	}
 	j.Description = sanitizeHTML(v.Description)
 	j.Location = euresCountryNames[strings.ToLower(board)]
 	var detail euresDetailResponse

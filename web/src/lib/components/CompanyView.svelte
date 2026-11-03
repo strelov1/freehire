@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Slice } from '#lib/api.js';
-  import type { Company, Job } from '#lib/types.js';
+  import type { Company, CompanyRef, Job } from '#lib/types.js';
   import JobsView from './JobsView.svelte';
   import States from './States.svelte';
   import CompanyHeader from './CompanyHeader.svelte';
@@ -9,6 +9,7 @@
   import CompanyFacts from './CompanyFacts.svelte';
   import ReferralBlock from './ReferralBlock.svelte';
   import MentorBlock from './MentorBlock.svelte';
+  import CompanyRelations from './CompanyRelations.svelte';
 
   // Both the company entity and its first page of jobs are server-rendered (route
   // `load`), so the header AND the job rows — with their /jobs/<slug> links — are in
@@ -23,6 +24,8 @@
     slug,
     currentPage,
     referralAvailable = false,
+    parent = null,
+    subsidiaries = [],
   }: {
     company: Company;
     initial: Slice<Job> | null;
@@ -31,10 +34,14 @@
     // results — so it is required here too rather than defaulting to page one.
     currentPage: number;
     referralAvailable?: boolean;
+    // The company that owns this one and the ones it owns: separate employers, linked.
+    parent?: CompanyRef | null;
+    subsidiaries?: CompanyRef[];
   } = $props();
 </script>
 
 <CompanyHeader {company} {slug} />
+<CompanyRelations {company} {slug} {parent} {subsidiaries} />
 
 <CompanyTabs {slug} active="jobs">
   <!-- Two independent conditions, not one. A company can have a mentor and no referral

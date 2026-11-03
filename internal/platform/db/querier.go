@@ -1200,6 +1200,8 @@ type Querier interface {
 	// The posting itself is excluded by its dedup identity because it is written before this
 	// runs. Callers skip the question for an empty company_slug, which names nobody.
 	CompanyHasOtherJobs(ctx context.Context, arg CompanyHasOtherJobsParams) (bool, error)
+	CompanyHasParent(ctx context.Context, slug string) (bool, error)
+	CompanyHasSubsidiaries(ctx context.Context, slug string) (bool, error)
 	// The denormalized open-job count for a slug (pgx.ErrNoRows if the company is
 	// absent). cmd/import-yc uses it to guard against homonym collisions: it skips
 	// enriching an existing company whose job_count dwarfs a matched YC entry's team.
@@ -1562,6 +1564,7 @@ type Querier interface {
 	// Whether the caller already spent points on this (feature, ref). True means the action
 	// is a recompute/resume and must not be charged again (idempotency by ref).
 	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)
+	DecideCompanyRelationProposal(ctx context.Context, arg DecideCompanyRelationProposalParams) error
 	// Approve or reject a pending profile, recording the moderator and the time. The
 	// status='pending' guard makes a second decision match no row, which the repository
 	// maps to "not pending" — the same shape DecideReferralOffer uses.
@@ -1710,6 +1713,10 @@ type Querier interface {
 	DeleteCompanyAccount(ctx context.Context, userID int64) (int64, error)
 	// Remove the caller's own feedback in one category on a company (no-op when absent).
 	DeleteCompanyFeedback(ctx context.Context, arg DeleteCompanyFeedbackParams) error
+	// Whatever links still name the retiring slug: its own parent (the canon may have another,
+	// or be a parent itself, and one level is the rule), and a link to the canon it has just
+	// become.
+	DeleteCompanyParentLinksOf(ctx context.Context, slug string) error
 	// Remove a user's company vote (toggle-clear or the DELETE endpoint). No-op when
 	// absent.
 	DeleteCompanyVote(ctx context.Context, arg DeleteCompanyVoteParams) error
@@ -2622,6 +2629,12 @@ type Querier interface {
 	// One company's posting lifetime. No row means no qualifying closure; the caller
 	// applies its own sample gate on `closed`.
 	GetCompanyLifetime(ctx context.Context, companySlug string) (GetCompanyLifetimeRow, error)
+	// The parent a company page names. The join through companies hides a parent that has no
+	// row any more.
+	GetCompanyParent(ctx context.Context, slug string) (GetCompanyParentRow, error)
+	// The row a decision is about, locked for the decision's transaction so two moderators
+	// cannot approve and reject it at once.
+	GetCompanyRelationProposalForUpdate(ctx context.Context, id int64) (CompanyRelationProposal, error)
 	// The observable application counts for one company. A company with no row has no
 	// observable applications at all, which the caller must treat as "not enough data"
 	// rather than as a zero response rate.
@@ -3337,6 +3350,10 @@ type Querier interface {
 	// moderator to act on, not a per-report ticket with its own state machine (see
 	// internal/engage/report for that fuller shape, built for job postings).
 	InsertCompanyFeedbackReport(ctx context.Context, arg InsertCompanyFeedbackReportParams) error
+	// A signed-in user's proposal that two companies are one employer (`same`) or that one owns
+	// the other (`subsidiary`). The partial unique index on pending rows makes a duplicate a
+	// unique violation, which the service reports as "already proposed".
+	InsertCompanyRelationProposal(ctx context.Context, arg InsertCompanyRelationProposalParams) (CompanyRelationProposal, error)
 	// Record a merge. DO NOTHING on conflict because the canon is frozen at first merge: a later
 	// run that re-elects a different winner for the same folded group must not silently move a
 	// URL that has already been 301-ing and indexed.
@@ -3523,6 +3540,9 @@ type Querier interface {
 	// carries nine other columns a gate has no use for — and a gate that reads a whole user
 	// row invites somebody to branch on a second field from it later.
 	IsBetaTester(ctx context.Context, id int64) (bool, error)
+	// Whether some retired slug already redirects here. Such a slug cannot itself retire: the
+	// registry resolves one hop, so its aliases would land on a slug with no jobs.
+	IsCanonicalCompanySlug(ctx context.Context, slug string) (bool, error)
 	// Whether a normalized host (see submission.normalizeHost) is on the submission blocklist.
 	IsHostBlocked(ctx context.Context, host string) (bool, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
@@ -4200,6 +4220,13 @@ type Querier interface {
 	// former-name slug candidates, instead of one CompanyExists round trip per
 	// candidate per entry (the dataset runs several thousand entries deep).
 	ListCompanySlugs(ctx context.Context) ([]string, error)
+	// The subsidiaries a parent's page lists, the ones hiring first.
+	ListCompanySubsidiaries(ctx context.Context, slug string) ([]ListCompanySubsidiariesRow, error)
+	// Companies with open jobs that state the same website host but sit under different slugs.
+	// These are merge candidates for cmd/report-company-website-twins, not decisions: a staffing
+	// agency's branches share a host and are one employer, while a job board's host can stand
+	// behind many employers. A person reads the list and proposes the merges.
+	ListCompanyWebsiteTwins(ctx context.Context) ([]ListCompanyWebsiteTwinsRow, error)
 	// ListCompanyWebsites returns the companies whose curated record holds a website, which
 	// is the only population cmd/publish-logo-domains can publish a domain for. ~17,900 rows
 	// of ~480,000 companies as of 2026-09-16.
@@ -4950,6 +4977,11 @@ type Querier interface {
 	// whose code was never entered is not reviewable — nobody has shown they can read that
 	// address — so it stays out of the queue (migration 0181).
 	ListPendingCompanyAccounts(ctx context.Context) ([]CompanyAccount, error)
+	// The moderator queue, oldest first, with both companies' current names and open-job counts
+	// so the decision can be made without opening two pages. LEFT JOIN because a company may have
+	// lost its last posting since the proposal. The approval then refuses it, and the queue
+	// still has to show it to be rejected.
+	ListPendingCompanyRelationProposals(ctx context.Context) ([]ListPendingCompanyRelationProposalsRow, error)
 	// The moderation queue, oldest first. Carries whether the account also holds an APPROVED
 	// referral offer for the same company — corroborating evidence for the human deciding,
 	// never a gate: nothing in this change approves a profile automatically.
@@ -6891,6 +6923,9 @@ type Querier interface {
 	// row each, zipped back by position (WITH ORDINALITY: sqlc's analyzer does not resolve the
 	// multi-array form of unnest).
 	ReplaceBuddyMockWeekly(ctx context.Context, arg ReplaceBuddyMockWeeklyParams) error
+	// A merge keeps the subsidiaries the retiring slug had, under the canonical slug. The one
+	// link that would point the canon at itself is left for the delete below.
+	RepointCompanyParentsOnMerge(ctx context.Context, arg RepointCompanyParentsOnMergeParams) error
 	// The whole schedule as an operator reads it: every eligible provider, its override if it
 	// has one, and what its runs have actually been doing. Aggregated per provider rather than
 	// per shard, because the question this answers is "is anything not running?" and 24
@@ -7339,6 +7374,12 @@ type Querier interface {
 	// only widens reach, never produces a false match, so it can stay eventually
 	// consistent.
 	SetCompanyIndustries(ctx context.Context, arg SetCompanyIndustriesParams) (int64, error)
+	// The employer's own website, as a source states it in a structured field (EURES's
+	// employer.website). It is written only where company_info has no website yet, the same
+	// fill-only-if-blank rule SeedCompanyAccountWebsite follows: a curated source or the
+	// employer's own edit outranks a job feed. The guard also turns the crawl's repeat
+	// into a read.
+	SetCompanyWebsiteIfAbsent(ctx context.Context, arg SetCompanyWebsiteIfAbsentParams) error
 	// Record the outcome of examining one binding: whether the role is now held, and that it was
 	// examined just now.
 	//
@@ -8225,6 +8266,8 @@ type Querier interface {
 	// CONFLICT names the target partial index directly since the unique index
 	// excludes NULL user_id.
 	UpsertCompanyFeedback(ctx context.Context, arg UpsertCompanyFeedbackParams) (CompanyFeedback, error)
+	// A subsidiary has one parent, so a newer approved decision replaces the older one.
+	UpsertCompanyParent(ctx context.Context, arg UpsertCompanyParentParams) error
 	// Set a user's company vote to $3 (-1 or 1), inserting or overwriting in place.
 	// Toggle-to-clear is handled by DeleteCompanyVote, chosen by the domain layer.
 	UpsertCompanyVote(ctx context.Context, arg UpsertCompanyVoteParams) error
