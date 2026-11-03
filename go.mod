@@ -13,7 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.5
 	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.79.3
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.52.6
-	github.com/bogdanfinn/fhttp v0.7.1
+	github.com/bogdanfinn/fhttp v0.7.2
 	github.com/bogdanfinn/tls-client v1.17.1
 	github.com/chromedp/chromedp v0.21.0
 	github.com/disintegration/imaging v1.6.2

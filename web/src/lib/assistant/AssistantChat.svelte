@@ -149,6 +149,8 @@
   ]);
 
   let phase = $state<Phase>('loading');
+  // Startup requests may finish after the host has replaced this conversation.
+  let disposed = false;
   // planLimitReached distinguishes a spent daily allowance (which offers a link to the
   // plan) from every other failure this component reports through the same banner — one
   // object so the two facts can never fall out of step with each other the way two
@@ -332,6 +334,7 @@
       } catch {
         setError(s.loadChatsFailed);
       }
+      if (disposed) return;
       sessions = summaries.map((summary) => fromSummary(summary, NEW_CHAT_LABEL));
 
       // Open the requested session (the host prop), else the newest, else a fresh
@@ -358,6 +361,7 @@
       } else if (!(await openNewestOpenable())) {
         await createAndOpen();
       }
+      if (disposed) return;
       phase = 'ready';
 
       // Autostart: the host can pass a kickoff prompt so the agent begins immediately
@@ -504,6 +508,7 @@
       // effect has already reopened the conversation we just left.
       navigatingTo = fromAddress ? null : id;
       const { session: meta, messages: transcriptMessages } = await getSession(id);
+      if (disposed) return;
       // A tailoring conversation is reachable by id but belongs to a CV and only makes
       // sense beside it. Opening one here would show a conversation the rail cannot list
       // and the user cannot get back to. The unbound presets — chat and the experience
@@ -711,7 +716,7 @@
 
   async function dispatch(start: TurnStart) {
     const id = activeId;
-    if (!id) return;
+    if (!id || disposed) return;
     error = null;
     turnActive = true;
     onTurnStateChange?.(true);
@@ -724,6 +729,7 @@
         /* the host reports its own save failures; a turn is still worth starting */
       }
     }
+    if (disposed) return;
     // Whether the turn ever began. A message can queue behind the session's running turn and
     // then never start — the wait runs out, or it is stopped — and the composer cleared the
     // draft the moment it was sent. Without this the user's words would simply vanish.
@@ -924,6 +930,7 @@
       });
     document.addEventListener('visibilitychange', catchUpOnReturn);
     return () => {
+      disposed = true;
       document.removeEventListener('visibilitychange', catchUpOnReturn);
       cancelTurn();
     };
