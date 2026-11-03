@@ -36,6 +36,8 @@ type cvRepo struct {
 	autopilotErr error
 }
 
+var testJobID = int64(9)
+
 func (r *cvRepo) Get(_ context.Context, id uuid.UUID, userID int64) (db.GetCVByIDRow, error) {
 	if id != r.id || userID != r.userID {
 		return db.GetCVByIDRow{}, cv.ErrNotFound
@@ -300,7 +302,7 @@ const oneExperienceCV = `{"header":{"full_name":"Ada Lovelace","email":"ada@exam
 func TestCVGetToolReadsTheBoundDocument(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_get")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_get")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_get: %v", err)
@@ -326,7 +328,7 @@ const contactfulCV = `{"header":{"full_name":"Ada Lovelace","email":"ada@example
 func TestCVGetToolOmitsTheContactBlock(t *testing.T) {
 	a, _ := cvToolsAPI(t, contactfulCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_get")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_get")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_get: %v", err)
@@ -351,7 +353,7 @@ func TestCVEditToolAppliesAPatch(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}]}`))
 	if err != nil {
@@ -370,7 +372,7 @@ func TestCVEditToolAcceptsOpsAsAJSONString(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	args, err := json.Marshal(map[string]any{
 		"ops": `[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"` + atom.ID.String() + `"}]`,
 	})
@@ -391,7 +393,7 @@ func TestCVEditToolAcceptsOpsAsAJSONString(t *testing.T) {
 func TestCVEditToolStillRefusesAnUnknownField(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":"[{\"kind\":\"set\",\"path\":\"summary\",\"value\":\"x\",\"skill\":0}]"}`))
 	if err == nil {
@@ -410,7 +412,7 @@ func TestCVEditToolRemovesTwoPositionsOfOneList(t *testing.T) {
 		`"experience":[{"company":"Acme","title":"Engineer","bullets":["A","B","C","D"]}]}`
 	a, repo := cvToolsAPI(t, fourBullets)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	// Non-adjacent, and named against the document the model read.
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"remove","path":"experience[0].bullets[1]"},{"kind":"remove","path":"experience[0].bullets[3]"}]}`))
@@ -435,7 +437,7 @@ func TestCVEditToolRemovesTwoPositionsOfOneList(t *testing.T) {
 func TestCVEditToolRefusesToRewriteContactDetails(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"header.email","value":"someone@else.test"}]}`))
 	if err == nil {
@@ -451,7 +453,7 @@ func TestCVEditToolRefusesToRewriteContactDetails(t *testing.T) {
 func TestCVEditToolRejectsAMisaddressedPatch(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"insert","path":"experience[42].bullets[0]","value":"Did a thing"}]}`))
 	if err == nil {
@@ -464,7 +466,7 @@ func TestCVEditToolRejectsAMisaddressedPatch(t *testing.T) {
 func cvEditOpSchema(t *testing.T) map[string]any {
 	t.Helper()
 	a, _ := cvToolsAPI(t, oneExperienceCV)
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	props, _ := tool.Schema["properties"].(map[string]any)
 	ops, _ := props["ops"].(map[string]any)
 	item, _ := ops["items"].(map[string]any)
@@ -533,7 +535,7 @@ func TestCVEditWithoutAnyEvidenceIdNamesWhereItGoes(t *testing.T) {
 	bank := newStubBank()
 	a, _ := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"insert","path":"experience[0].bullets[0]","value":"Led the migration."}]}`))
 	if err == nil {
@@ -552,7 +554,7 @@ func TestCVEditWritesACitedBullet(t *testing.T) {
 	})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"insert","path":"experience[0].bullets[0]","value":"Ran the payments Kafka cluster.",`+
 			`"evidence_id":"`+atom.ID.String()+`"}]}`))
@@ -586,7 +588,7 @@ func TestCVEditToolRefusesAnOverCapInsert(t *testing.T) {
 	a, repo := cvToolsAPIWithBank(t, string(doc), bank)
 	before := append([]byte(nil), repo.data...)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err = tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"insert","path":"experience[0].bullets[0]","value":"extra claim",`+
 			`"evidence_id":"`+atom.ID.String()+`"}]}`))
@@ -605,7 +607,7 @@ func TestCVEditToolRefusesAnOverCapInsert(t *testing.T) {
 }
 
 func TestCVEditToolDescriptionNamesTheBulletCeiling(t *testing.T) {
-	tool := toolByName(t, (&assistantHandlers{}).assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, (&assistantHandlers{}).assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	want := fmt.Sprintf("%d", cv.MaxBullets)
 	if !strings.Contains(tool.Description, want) {
 		t.Fatalf("cv_edit description missing live MaxBullets %s: %s", want, tool.Description)
@@ -616,7 +618,7 @@ func TestCVEditToolDescriptionNamesTheBulletCeiling(t *testing.T) {
 }
 
 func TestCVEditToolDescriptionRoutesProjectsAndTemplateHeading(t *testing.T) {
-	tool := toolByName(t, (&assistantHandlers{}).assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, (&assistantHandlers{}).assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	d := tool.Description
 	if !strings.Contains(d, "projects[i]") {
 		t.Fatalf("cv_edit description must mention projects[i] for portfolio work: %s", d)
@@ -639,7 +641,7 @@ func TestCVEditToolMergesTheClosedRequirementIntoTheReport(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
 			`"requirement":"PostgreSQL experience","requirement_status":"closed_bank"}`))
@@ -673,7 +675,7 @@ func TestCVEditToolReplacesAnExistingOpenReportEntry(t *testing.T) {
 	}
 	repo.report = seed
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err = tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
 			`"requirement":"PostgreSQL experience","requirement_status":"closed_bank"}`))
@@ -707,7 +709,7 @@ func TestCVEditToolSucceedsWhenTheReportMergeFailsAfterTheEditLands(t *testing.T
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 	repo.autopilotErr = errors.New("connection reset")
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
 			`"requirement":"PostgreSQL experience","requirement_status":"closed_bank"}`))
@@ -727,7 +729,7 @@ func TestCVEditToolRejectsAnExplicitOpenRequirementStatus(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
 			`"requirement":"PostgreSQL experience","requirement_status":"open"}`))
@@ -750,7 +752,7 @@ func TestCVEditToolWithNoRequirementLeavesTheReportUntouched(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}]}`))
 	if err != nil {
@@ -767,7 +769,7 @@ func TestCVEditToolWithNoRequirementLeavesTheReportUntouched(t *testing.T) {
 // requirement tailor_report already closed, through a call that carries no report review.
 func TestCVEditToolRequirementStatusOffersOnlyClosingOutcomes(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	props, _ := tool.Schema["properties"].(map[string]any)
 	status, _ := props["requirement_status"].(map[string]any)
 	got, _ := status["enum"].([]string)
@@ -794,7 +796,7 @@ func TestCVEditToolRequirementWithoutStatusIsRefused(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
 			`"requirement":"PostgreSQL experience"}`))
@@ -816,7 +818,7 @@ func TestCVEditAppliesAWholeBatchAtOnce(t *testing.T) {
 	id := atom.ID.String()
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Platform engineer","evidence_id":"`+id+`"},`+
 			`{"kind":"insert","path":"experience[0].bullets[1]","value":"Ran the cluster","evidence_id":"`+id+`"},`+
@@ -838,7 +840,7 @@ func TestCVEditAppliesAWholeBatchAtOnce(t *testing.T) {
 func TestRequestConfirmationToolIsRegisteredForTailoring(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "request_confirmation")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"claim":"Built Reelmente.app with React and Next.js","question":"Is that right?"}`))
 	if err != nil {
@@ -856,7 +858,7 @@ func TestRequestConfirmationToolTouchesNoStore(t *testing.T) {
 	a, repo := cvToolsAPI(t, oneExperienceCV)
 	before := string(repo.written)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "request_confirmation")
 	if _, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"claim":"Anything","question":"Confirm?"}`)); err != nil {
 		t.Fatalf("request_confirmation: %v", err)
@@ -877,7 +879,7 @@ func TestRequestConfirmationToolTouchesNoStore(t *testing.T) {
 // "{}", so an empty call arrives whatever the provider did.
 func TestRequestConfirmationToolRefusesAnEmptyClaim(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "request_confirmation")
 
 	for _, args := range []string{
 		`{}`,                                 // what healToolArguments makes of a mangled call
@@ -896,7 +898,7 @@ func TestRequestConfirmationToolRefusesAnEmptyClaim(t *testing.T) {
 // card that renders perfectly well.
 func TestRequestConfirmationToolAllowsAnEmptyQuestion(t *testing.T) {
 	a, _ := cvToolsAPI(t, oneExperienceCV)
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "request_confirmation")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "request_confirmation")
 
 	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"claim":"Ran the cluster"}`)); err != nil {
 		t.Errorf("err = %v, want a claim with no question accepted", err)
@@ -919,7 +921,7 @@ func TestCVEditToolReadsACallLevelEvidenceIDOntoItsOnlyOp(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, repo := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer"}],`+
 			`"note":"n","evidence_id":"`+atom.ID.String()+`"}`))
@@ -940,7 +942,7 @@ func TestCVEditToolRefusesACallLevelEvidenceIDAcrossSeveralOps(t *testing.T) {
 	atom := bank.add(3, experience.Atom{Claim: "Senior backend engineer", Provenance: experience.ProvenanceStatedInChat})
 	a, _ := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer"},`+
 			`{"kind":"set","path":"experience[0].role","value":"Staff Engineer"}],`+
@@ -961,7 +963,7 @@ func TestCVEditToolRefusesACallLevelEvidenceIDWhenTheOpAlreadyNamesOne(t *testin
 	other := bank.add(3, experience.Atom{Claim: "Ran the payments cluster", Provenance: experience.ProvenanceStatedInChat})
 	a, _ := cvToolsAPIWithBank(t, oneExperienceCV, bank)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_edit")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_edit")
 	_, err := tool.Run(context.Background(), 3, json.RawMessage(
 		`{"ops":[{"kind":"set","path":"summary","value":"Senior backend engineer","evidence_id":"`+atom.ID.String()+`"}],`+
 			`"evidence_id":"`+other.ID.String()+`"}`))

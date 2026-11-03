@@ -21,7 +21,7 @@ func TestEvidenceFidelityToolReturnsTheCitedAtomsOwnText(t *testing.T) {
 	})
 	h := &assistantHandlers{experience: bank}
 
-	tool := toolByName(t, h.assistantCVTools(testCVID, 9, uuid.New()), "check_evidence_fidelity")
+	tool := toolByName(t, h.assistantCVTools(testCVID, &testJobID, uuid.New()), "check_evidence_fidelity")
 	out, err := tool.Run(context.Background(), 1,
 		json.RawMessage(`{"evidence_id":"`+atom.ID.String()+`"}`))
 	if err != nil {
@@ -54,7 +54,7 @@ func TestEvidenceFidelityToolRefusesAnUnknownOrForeignId(t *testing.T) {
 	bank := newStubBank()
 	foreign := bank.add(2, experience.Atom{Claim: "Someone else's achievement"})
 	h := &assistantHandlers{experience: bank}
-	tool := toolByName(t, h.assistantCVTools(testCVID, 9, uuid.New()), "check_evidence_fidelity")
+	tool := toolByName(t, h.assistantCVTools(testCVID, &testJobID, uuid.New()), "check_evidence_fidelity")
 	ctx := context.Background()
 
 	if _, err := tool.Run(ctx, 1, json.RawMessage(`{"evidence_id":"`+uuid.New().String()+`"}`)); err == nil {

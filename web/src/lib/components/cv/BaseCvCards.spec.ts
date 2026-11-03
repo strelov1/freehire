@@ -65,7 +65,7 @@ describe('BaseCvCards', () => {
     duplicateCv.mockResolvedValue({ id: 'copy-1' });
     render(BaseCvCards);
     await fireEvent.click(await screen.findByLabelText('Duplicate'));
-    await waitFor(() => expect(goto).toHaveBeenCalledWith('/my/cvs/copy-1'));
+    await waitFor(() => expect(goto).toHaveBeenCalledWith('/tailor/base/copy-1'));
     expect(duplicateCv).toHaveBeenCalledWith('a');
   });
 
@@ -74,6 +74,6 @@ describe('BaseCvCards', () => {
     reseedBaseCv.mockResolvedValue({ id: 'new-1' });
     render(BaseCvCards);
     await fireEvent.click(await screen.findByText('Create from my CV'));
-    await waitFor(() => expect(goto).toHaveBeenCalledWith('/my/cvs/new-1'));
+    await waitFor(() => expect(goto).toHaveBeenCalledWith('/tailor/base/new-1'));
   });
 });

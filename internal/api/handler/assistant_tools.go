@@ -396,13 +396,11 @@ func (h *assistantHandlers) registry(sess assistant.Session, batchID uuid.UUID) 
 	tools := append(h.assistantDiscoveryTools(), h.assistantTrackingTools()...)
 	tools = append(tools, h.assistantExperienceTools(sess.ID)...)
 	tools = append(tools, h.assistantScreeningTools()...)
-	if preset == assistant.PresetTailor && sess.CVID != nil && sess.JobID != nil {
-		tools = append(tools, h.assistantCVTools(*sess.CVID, *sess.JobID, batchID)...)
-	}
-	// A base CV conversation: the same CV tools, minus the vacancy ones. Unbound it has no CV to
-	// edit and stays a plain chat, like a CV-less tailoring session.
-	if preset == assistant.PresetBase && sess.CVID != nil {
-		tools = append(tools, h.assistantBaseCVTools(*sess.CVID, batchID)...)
+	// A tailoring session needs its CV and its vacancy; a BASE CV session (the general CV, no
+	// vacancy) needs only the CV and gets the CV tools without the vacancy ones. Missing its
+	// binding either degrades to a plain chat rather than registering a tool pointed at nothing.
+	if sess.CVID != nil && (preset == assistant.PresetBase || (preset == assistant.PresetTailor && sess.JobID != nil)) {
+		tools = append(tools, h.assistantCVTools(*sess.CVID, sess.JobID, batchID)...)
 	}
 	// Mail is the general chat session's. A tailoring session is working one CV
 	// against one vacancy, an interview is collecting what the candidate has done,

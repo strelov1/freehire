@@ -3071,6 +3071,15 @@ export function createApi(
     return requestData<CvBaseItem[]>('/api/v1/me/cvs/bases');
   }
 
+  /** The agent conversation for a BASE CV (no vacancy): the one already bound to it, or a new one.
+   *  Costs nothing, so a free account can open the workspace; the paid gate guards each message. */
+  async function startBaseSession(id: string): Promise<{ base_cv_id: string; session_id: string }> {
+    return requestData<{ base_cv_id: string; session_id: string }>(
+      `/api/v1/me/cvs/${encodeURIComponent(id)}/base-session`,
+      jsonBody('POST', {}),
+    );
+  }
+
   /** Copy a base CV as "<title> (copy)"; returns the new record. 409 for a tailored copy. */
   async function duplicateCv(id: string): Promise<CvRecord> {
     return requestData<CvRecord>(`/api/v1/me/cvs/${encodeURIComponent(id)}/duplicate`, jsonBody('POST', {}));
@@ -3702,6 +3711,7 @@ export function createApi(
     listCvs,
     listBaseCvs,
     duplicateCv,
+    startBaseSession,
     getPhoto,
     putPhoto,
     deletePhoto,

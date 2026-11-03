@@ -35,8 +35,9 @@
   type Tab = 'jd' | 'jobmatch' | 'score' | 'letter' | 'history';
 
   let {
-    job,
-    analysis,
+    job = null,
+    baseTitle = '',
+    analysis = null,
     // Which tab is active — bindable so the page's mobile tab bar can drive it (on desktop the
     // panel's own tab bar sets it). mobileVisible is the page's per-breakpoint show/hide on mobile;
     // at lg the aside is always shown regardless (lg:flex overrides the mobile hidden).
@@ -57,8 +58,12 @@
     resetBusy = false,
     resetError = '',
   }: {
-    job: Job;
-    analysis: Analysis | null;
+    /** The vacancy being tailored for. Absent in BASE mode (the candidate's general CV): there is
+     *  then nothing to match, compare or write a letter for, and the panel is the history alone. */
+    job?: Job | null;
+    /** The base CV's own title, shown where a vacancy would be. */
+    baseTitle?: string;
+    analysis?: Analysis | null;
     tab?: Tab;
     mobileVisible?: boolean;
     /** The last unattended run's log, shown in the Score tab. The match analysis (Job Match
@@ -76,7 +81,7 @@
     atsDelta?: CvAtsDelta | null;
     /** How well the current document matches this vacancy. Same absence rule as the delta. */
     jobMatch?: CvJobMatch | null;
-    onRerunAutopilot: () => void;
+    onRerunAutopilot?: () => void;
     /** The CV's history, newest first. */
     revisions?: RevisionView[];
     /** Which entry's edits the preview should underline. The highlight belongs to the
@@ -97,13 +102,14 @@
     cvId: string;
   } = $props();
 
-  const tabs: [Tab, string][] = [
+  const vacancyTabs: [Tab, string][] = [
     ['jobmatch', 'Job Match'],
     ['score', 'ATS'],
     ['letter', 'Letter'],
     ['history', 'History'],
     ['jd', 'Job'],
   ];
+  const tabs = $derived<[Tab, string][]>(job ? vacancyTabs : [['history', 'History']]);
   // 400 rather than the 340 floor: at the floor the tab strip wraps "Job Match" onto two lines
   // and the vacancy title truncates after a couple of words, so the panel opened looking cramped.
   // Each measuring tab carries its current number, so the score is readable from whichever tab
@@ -241,6 +247,7 @@
        the posting is worth reaching from every tab, and a candidate reading a score should not
        have to change tabs to see what they are being scored against. -->
   <div class="flex items-start gap-2.5 border-b border-border px-3 py-2.5">
+    {#if job}
     <EntityLogo
       name={job.company || 'Unknown company'}
       src={companyLogoUrl(job.company) ?? undefined}
@@ -253,7 +260,15 @@
       </h2>
       <p class="truncate text-xs text-muted-foreground">{job.company}</p>
     </div>
-    {#if job.public_slug}
+    {:else}
+    <div class="min-w-0 flex-1">
+      <h2 class="truncate text-sm font-semibold leading-snug text-foreground" title={baseTitle}>
+        {baseTitle || 'Base CV'}
+      </h2>
+      <p class="truncate text-xs text-muted-foreground">Base CV · not tied to a job</p>
+    </div>
+    {/if}
+    {#if job?.public_slug}
       <a
         href={resolve('/jobs/[slug]', { slug: job.public_slug })}
         target="_blank"
@@ -271,10 +286,15 @@
         {#if onReseed}
           <div class="border-b border-border px-4 py-3">
             <p class="text-xs leading-snug text-muted-foreground">
-              Replace this CV’s content from your current seed (experience bank and résumé,
-              and refresh your base CV too). Template and typography stay; this is not “undo
-              last agent edit” alone — History undo covers that. Edits are undoable from the
-              history below.
+              {#if job}
+                Replace this CV’s content from your current seed (experience bank and résumé,
+                and refresh your base CV too). Template and typography stay; this is not “undo
+                last agent edit” alone — History undo covers that. Edits are undoable from the
+                history below.
+              {:else}
+                Replace this CV’s content from your current CV (experience bank and résumé).
+                Template and typography stay, and the edits are undoable from the history below.
+              {/if}
             </p>
             <button
               type="button"
@@ -295,6 +315,8 @@
       <!-- An artefact, not a measurement: this tab carries no score and no delta, because there
            is no baseline a letter could be read against. -->
       <CoverLetter {cvId} />
+    {:else if !job}
+      <!-- Base mode renders only the history above; nothing here can be reached without a vacancy. -->
     {:else if tab === 'jd'}
       <div class="p-4">
         {#if job.description}
@@ -309,7 +331,7 @@
              tab: the two answer different questions against different baselines, and stacking
              them under one heading is what made the previous Verdict tab unreadable. -->
         <AtsDelta data={atsDelta} />
-        <AutopilotReport report={autopilotReport} busy={autopilotBusy} onRerun={onRerunAutopilot} />
+        <AutopilotReport report={autopilotReport} busy={autopilotBusy} onRerun={() => onRerunAutopilot?.()} />
       </div>
     {:else}
       <div class="p-4">

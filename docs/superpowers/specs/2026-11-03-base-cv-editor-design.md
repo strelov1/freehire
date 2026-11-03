@@ -1,7 +1,7 @@
 # Base CVs you can see, edit, duplicate and tailor from
 
 Date: 2026-11-03
-Status: design, awaiting approval
+Status: approved; revised 2026-11-03 after review (owner: reuse the tailoring workspace, do not build a new editor)
 
 ## Why
 
@@ -31,15 +31,36 @@ tailors a vacancy from the right one without thinking about which CV was edited 
    per base CV (non-tailored, `is_tailored = false`): title, template, last edited, a small
    preview if cheap, and actions **Edit**, **Tailor to a job**, **PDF**, **Duplicate**,
    **Delete**.
-2. **A base CV editor without a vacancy.** Opening a base shows the same editing pieces the
-   tailoring workspace already uses — `CvSectionForm` for sections, `CvHtmlPreview` for the
-   live preview, `TemplateGallery`, `StyleSettings`, `MarginSettings` — plus renaming the
-   CV's title. No chat, no vacancy, no match analysis. It lives at `/my/cvs/[id]`: a base id
-   opens the editor; a tailored id keeps today's redirect into `/tailor/<slug>?cv=<id>`.
+2. **The existing tailoring workspace, in a BASE mode, edits the base CV — with the agent.** The
+   owner's decision: no new editor UI. "Edit" on a base card opens the same workspace component
+   (`web/src/lib/tailor/TailorWorkspace.svelte`, rendered by `/tailor/[slug]` for a vacancy and by
+   `/tailor/base/[id]` for a base) bound to that CV with **no vacancy**. In base mode the
+   vacancy-only parts are absent — the job, the match analysis and Job Match score, the ATS delta
+   against the base, the cover letter and the autopilot run — and what stays is the CV preview, the
+   section editor, template / typography / margins, the experience bank, the revision history with
+   undo, and the agent chat. `/my/cvs/[id]` remains the address-of-a-CV redirect: a base goes to
+   `/tailor/base/<id>`, a tailored copy to `/tailor/<slug>?cv=<id>` as before.
+   - **The agent runs under a new `base` assistant preset** (migration 0232 widens the
+     `assistant_sessions.preset` CHECK): a session bound to the CV and no vacancy. It registers the
+     tailoring CV tools minus the vacancy ones — `cv_get`, `cv_edit` (same path policy, same
+     evidence gate, same experience-bank provenance), `request_confirmation`,
+     `check_evidence_fidelity`, `cv_page_count`, plus the usual bank tools — under a prompt that
+     says it is editing the candidate's general CV, not aiming it at an employer. It is a preset of
+     its own rather than `tailor` with a NULL job because the tailor prompt and tool set are all
+     about a vacancy and `tailor` sessions are metered as tailoring sessions.
+   - **The conversation is opened by `POST /me/cvs/:id/base-session`** (cookie; reuses the one
+     already bound to the CV). It is deliberately not behind the paid-AI gate and spends no
+     tailoring session: a free account still opens the workspace and edits by hand. The gate
+     guards each turn — every assistant message already passes `mw.paidAI(FeatureAssistant)` — so a
+     free account's first message meets the same upgrade state the tailoring workspace shows. Turns
+     of a base session are metered per turn under the assistant allowance, like a chat; the
+     tailoring session allowance is not spent.
+   - **Agent edits are candidate-directed**, so they set `hand_edited` like the candidate's own
+     edits (see "Hand edits are never overwritten automatically").
 3. **Duplicate.** The owner's chosen way to create a second base (decided over a Huntr-style
    "create new from profile / PDF / LinkedIn" flow, which is deferred). Duplicating a base
    makes a new base with the same document, template and appearance, titled
-   "<title> (copy)", and opens it in the editor.
+   "<title> (copy)", and opens it in the workspace's base mode.
 4. **Choose the base when tailoring — only when there is a choice.**
    - One base (or none): nothing changes, no extra step. None still seeds a base from the
      extracted résumé, as today.
@@ -99,7 +120,7 @@ automatically.**
   by hand" is recorded is the builder's call — `cv_revisions` already records who made each
   change (the candidate's editor vs the system seed), which may be enough without a column.
 - `ReseedCV` refreshes the tailored copy only; it no longer touches any base.
-- The base editor offers **"Update from my CV"**, which calls the explicit reseed for THE
+- The workspace's History tab offers **"Reset changes"** in base mode ("Update from my CV"), which calls the explicit reseed for THE
   OPEN base (the explicit action may overwrite; the candidate asked). `ReseedBaseCV` keeps
   working for its existing caller (the profile experience page) and targets the default
   base. A confirm step says the hand edits on this base will be replaced.
@@ -122,7 +143,9 @@ automatically.**
 - Duplicate is a server operation (copy the stored, sanitized document; never round-trip
   it through the client). Only a base may be duplicated; duplicating a tailored CV is out
   of scope.
-- Editing and deleting use the existing `PUT /me/cvs/:id` and `DELETE /me/cvs/:id`.
+- Editing and deleting use the existing `PUT /me/cvs/:id` and `DELETE /me/cvs/:id`; the agent's
+  edits go through the same `cvedit` path. `POST /me/cvs/:id/base-session` opens a base's agent
+  conversation (see goal 2).
 
 ## Non-goals
 
@@ -132,8 +155,8 @@ automatically.**
   job) rule (migration 0091) stays: a repeat tailor of a vacancy reopens its existing copy,
   whatever base is picked. The dialog should not pretend otherwise.
 - A base picker for auto-apply. It uses the default base.
-- AI help inside the base editor (suggested rewrites, review). Every model call for a user
-  needs the paid gate; the base editor makes none.
+- A vacancy-less autopilot run or an ATS/score view for a base: there is nothing to measure it
+  against. The base mode's agent is conversational only.
 
 ## Anti-goals (would make this a failure even if it works)
 

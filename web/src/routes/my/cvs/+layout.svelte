@@ -36,12 +36,6 @@
   const tabs = $derived(SECTIONS.map((sec) => ({ ...sec, href: resolve(sec.href) })));
 </script>
 
-<!-- /my/cvs/<id> is the base CV editor: wider than this section's narrow column and with its own
-     header, so it renders bare instead of under the section's title and tabs. The section's other
-     routes (list, template, typography) have no id. -->
-{#if page.params.id}
-  {@render children()}
-{:else}
 <div class="flex max-w-3xl flex-col gap-6">
   <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
     <div class="flex flex-col gap-1 max-lg:sr-only">
@@ -64,5 +58,4 @@
 
 {#if cvIntakeDialog.open}
   <JdIntakeDialog onClose={closeCvIntake} baseCvId={cvIntakeDialog.baseCvId} />
-{/if}
 {/if}

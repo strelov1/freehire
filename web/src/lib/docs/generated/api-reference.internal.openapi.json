@@ -3449,6 +3449,46 @@
         ]
       }
     },
+    "/me/cvs/{id}/base-session": {
+      "post": {
+        "operationId": "post_me_cvs_id_base_session",
+        "summary": "Open the agent conversation for a base CV.",
+        "description": "Returns the assistant conversation bound to one of your base CVs, creating it on first use. It is the tailoring workspace's agent without a vacancy: it edits this general CV through the same evidence-gated tools. Opening it is free and needs no paid plan; each message still passes the assistant's paid gate. 409 for a tailored copy (use the tailor session), 404 when the id is not yours.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The base CV id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "{ \"data\": { \"base_cv_id\": \"0f2c…\", \"session_id\": \"s_9f…\" } }"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "tags": [
+          "CV builder & tailoring"
+        ]
+      }
+    },
     "/me/cvs/{id}/duplicate": {
       "post": {
         "operationId": "post_me_cvs_id_duplicate",

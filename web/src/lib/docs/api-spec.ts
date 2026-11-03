@@ -3666,6 +3666,21 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
       },
       {
         method: 'POST',
+        path: '/me/cvs/{id}/base-session',
+        auth: 'cookie',
+        summary: 'Open the agent conversation for a base CV.',
+        description:
+          'Returns the assistant conversation bound to one of your base CVs, creating it on first use. ' +
+          'It is the tailoring workspace\'s agent without a vacancy: it edits this general CV through the ' +
+          'same evidence-gated tools. Opening it is free and needs no paid plan; each message still ' +
+          'passes the assistant\'s paid gate. 409 for a tailored copy (use the tailor session), 404 when ' +
+          'the id is not yours.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The base CV id.' }],
+        curl: `curl -X POST "${BASE_URL}/me/cvs/0f2c…/base-session" -b cookies.txt`,
+        responseExample: `{ "data": { "base_cv_id": "0f2c…", "session_id": "s_9f…" } }`,
+      },
+      {
+        method: 'POST',
         path: '/me/cvs/{id}/duplicate',
         auth: 'cookie',
         summary: 'Copy a base CV.',

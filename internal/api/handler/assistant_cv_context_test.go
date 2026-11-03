@@ -109,7 +109,7 @@ const htmlDescription = `<div><p>We need <strong>Kafka</strong> in production.</
 func TestCVContextRendersTheDescriptionWithoutMarkup(t *testing.T) {
 	a, _ := contextToolAPI(t, htmlDescription, nil)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_context")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_context")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_context: %v", err)
@@ -127,7 +127,7 @@ func TestCVContextBoundsALongDescription(t *testing.T) {
 	long := "<p>" + strings.Repeat("word ", 20000) + "</p>"
 	a, _ := contextToolAPI(t, long, nil)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_context")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_context")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_context: %v", err)
@@ -150,7 +150,7 @@ func TestCVContextCarriesTheBanksAnswerPerRequirement(t *testing.T) {
 		Provenance: experience.ProvenanceStatedInChat,
 	}})
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_context")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_context")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_context: %v", err)
@@ -191,7 +191,7 @@ func TestCVContextSurvivesAnUnavailableBank(t *testing.T) {
 	a, _ := contextToolAPI(t, htmlDescription, nil)
 	a.experience = nil
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_context")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_context")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_context with no bank: %v", err)
@@ -216,7 +216,7 @@ func mustJSON(t *testing.T, v any) []byte {
 func TestCVContextLeavesTheNarrativeToThePanel(t *testing.T) {
 	a, _ := contextToolAPI(t, htmlDescription, nil)
 
-	tool := toolByName(t, a.assistantCVTools(testCVID, 9, uuid.New()), "cv_context")
+	tool := toolByName(t, a.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_context")
 	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("cv_context: %v", err)
@@ -242,7 +242,7 @@ func TestCVContextLeavesTheNarrativeToThePanel(t *testing.T) {
 func TestCVContextReportsAnUnwiredDeployment(t *testing.T) {
 	bare := &assistantHandlers{}
 
-	_, err := toolByName(t, bare.assistantCVTools(testCVID, 9, uuid.New()), "cv_context").
+	_, err := toolByName(t, bare.assistantCVTools(testCVID, &testJobID, uuid.New()), "cv_context").
 		Run(context.Background(), 3, json.RawMessage(`{}`))
 	if err == nil {
 		t.Fatal("cv_context answered from a handler wired to nothing")

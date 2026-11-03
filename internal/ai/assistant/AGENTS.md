@@ -106,7 +106,7 @@ refuses a bullet with no `evidence_id`. The run accounts for itself through
 `tailor_report`, which replaces the whole report on the CV and returns a receipt
 rather than an echo (a tool result is replayed into context on every later turn).
 
-**Presets.** A session records `chat`, `tailor`, `profile`, `browse`, `interview`, `debrief` or `apply`. The vocabulary
+**Presets.** A session records `chat`, `tailor`, `base`, `profile`, `browse`, `interview`, `debrief` or `apply`. The vocabulary
 is pinned by a CHECK constraint on `assistant_sessions.preset`, so adding one is a
 schema change and not just a Go constant. The preset selects the system prompt and the
 registered tools and nothing else, which is why one chat component serves
@@ -114,6 +114,22 @@ registered tools and nothing else, which is why one chat component serves
 extension's side panel. A tailoring session's CV tools close over the CV and vacancy
 ids from the session binding, so the model cannot address another CV even by guessing
 an id.
+
+**`base`** is the conversation held against one BASE CV — the candidate's general CV that tailored
+copies start from — bound to the CV and to no vacancy (migration 0232 admits the value; it is
+minted by `POST /me/cvs/:id/base-session`, which reuses the conversation already bound to the CV).
+It is the tailoring workspace's CV tool set without the vacancy tools: `cv_get`, `cv_edit` (same
+path policy and evidence gate, so a bullet still needs a banked `evidence_id`),
+`request_confirmation`, `check_evidence_fidelity`, `cv_page_count`, plus the shared bank tools. No
+`cv_context`, `job_match`, `tailor_report` or cover letter — there is no vacancy to read them
+against. Its prompt (`baseCVPrompt`) frames the CV as the candidate's own, kept and reused, and
+sends "aim it at this job" to a tailored copy. It is a preset of its own rather than `tailor` with a
+NULL job because the tailor prompt and tool set are about a vacancy and `tailor` sessions are
+metered as tailoring sessions: a base turn is metered per turn under the assistant allowance, like
+a chat, and its messages pass `mw.paidAI(FeatureAssistant)`. Opening the conversation is free — a
+free account still opens the workspace and edits by hand. Agent edits on a base set
+`cvs.hand_edited` (see `internal/candidate/cv/AGENTS.md`). `turnBounds` gives it the tailoring step
+ceiling.
 
 The preset is answered TWICE — once for the prompt, once for the tool set — and both
 switches read `NormalizePreset`, never the constants directly. They used to disagree on

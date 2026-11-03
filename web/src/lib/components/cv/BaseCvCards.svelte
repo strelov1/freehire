@@ -14,7 +14,7 @@
 
   // The "Base CVs" block above the tailored list: one card per CV the candidate can edit by hand,
   // duplicate and tailor from. A tailored copy is made from one of these; this is where they
-  // become visible. The card itself opens the editor; the actions sit on it without opening it.
+  // become visible. The card itself opens the workspace in base mode; the actions sit on it without opening it.
 
   let status = $state<'loading' | 'error' | 'ready'>('loading');
   let error = $state<string | null>(null);
@@ -45,7 +45,7 @@
     busy = true;
     try {
       const copy = await api.duplicateCv(base.id);
-      await goto(resolve('/my/cvs/[id]', { id: copy.id }));
+      await goto(resolve('/tailor/base/[id]', { id: copy.id }));
     } catch (e) {
       error = e instanceof ApiError ? e.message : s.duplicateFailed;
       announce(error, 'assertive');
@@ -59,7 +59,7 @@
     busy = true;
     try {
       const created = await api.reseedBaseCv();
-      await goto(resolve('/my/cvs/[id]', { id: created.id }));
+      await goto(resolve('/tailor/base/[id]', { id: created.id }));
     } catch (e) {
       error = e instanceof ApiError ? e.message : s.empty.failed;
       announce(error, 'assertive');
@@ -126,7 +126,7 @@
           class="group relative flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/30"
         >
           <!-- The whole card opens the editor; the actions below sit above it. -->
-          <a href={resolve('/my/cvs/[id]', { id: base.id })} class="absolute inset-0" aria-label={format(s.openAria, { title: base.title })}></a>
+          <a href={resolve('/tailor/base/[id]', { id: base.id })} class="absolute inset-0" aria-label={format(s.openAria, { title: base.title })}></a>
           <img
             src={`/cv-previews/${base.template_id}.svg`}
             alt=""
@@ -144,7 +144,7 @@
             <p class="mt-0.5 text-xs text-muted-foreground/80">{format(s.updated, { date: fmt(base.updated_at) })}</p>
           </div>
           <div class="relative z-10 flex flex-wrap items-center justify-end gap-1">
-            <a href={resolve('/my/cvs/[id]', { id: base.id })} class="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <a href={resolve('/tailor/base/[id]', { id: base.id })} class="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
               <Pencil class="size-4" aria-hidden="true" />{s.edit}
             </a>
             <button

@@ -1987,6 +1987,28 @@ curl "https://freehire.me/api/v1/me/cvs/bases" -b cookies.txt
 { "data": [ { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic-ats", "is_default": true, "hand_edited": false, "created_at": "2026-07-01T10:00:00Z", "updated_at": "2026-07-20T18:30:00Z" } ] }
 ```
 
+### `POST /me/cvs/{id}/base-session`
+
+**Auth:** Session only
+
+Open the agent conversation for a base CV.
+
+Returns the assistant conversation bound to one of your base CVs, creating it on first use. It is the tailoring workspace's agent without a vacancy: it edits this general CV through the same evidence-gated tools. Opening it is free and needs no paid plan; each message still passes the assistant's paid gate. 409 for a tailored copy (use the tailor session), 404 when the id is not yours.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The base CV id. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/cvs/0f2c…/base-session" -b cookies.txt
+```
+
+```json
+{ "data": { "base_cv_id": "0f2c…", "session_id": "s_9f…" } }
+```
+
 ### `POST /me/cvs/{id}/duplicate`
 
 **Auth:** Session only

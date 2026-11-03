@@ -31,6 +31,23 @@ export function openingActions(): OpeningAction[] {
   ];
 }
 
+/** What the BASE CV conversation offers while it is empty. Both are plain messages: with no
+ *  vacancy there is no unattended "tailor it for me" run, and nothing is sent until one is chosen. */
+export function baseOpeningActions(): OpeningAction[] {
+  return [
+    {
+      label: 'Tighten my summary',
+      kind: 'message',
+      text: 'Read my CV and make my summary shorter and sharper, without adding anything I have not said.',
+    },
+    {
+      label: 'Review my CV',
+      kind: 'message',
+      text: 'Read my CV and tell me what you would improve first — wording, structure, length — then ask before changing anything.',
+    },
+  ];
+}
+
 /** What a run achieved, counted. `total` is what it considered, not what the vacancy asks. */
 export interface RunSummary {
   closed: number;

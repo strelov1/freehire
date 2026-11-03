@@ -82,36 +82,29 @@ func (b *opBatch) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// assistantCVTools are the tools a CV-tailoring session gets on top of the shared
-// ones. They are bound to the session's own CV and vacancy: the ids are closed
-// over here rather than taken as arguments, so the model has no way to address a
-// different CV — not even by guessing an id.
-func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID int64, batchID uuid.UUID) []assistant.Tool {
-	return []assistant.Tool{
-		h.cvContextTool(jobID),
+// assistantCVTools is the CV tool set of a conversation bound to a CV. Bound to a vacancy too (a
+// tailoring session) it adds the tools that read the CV against that vacancy: cv_context, the
+// run report, job_match and the cover letter. With no vacancy (jobID nil — a BASE CV
+// conversation) those have nothing to read against and are not registered; the CV tools
+// themselves are the same either way, under the same evidence gate. The CV id closes over the
+// session binding, so the model cannot address another CV by guessing an id.
+func (h *assistantHandlers) assistantCVTools(cvID uuid.UUID, jobID *int64, batchID uuid.UUID) []assistant.Tool {
+	tools := []assistant.Tool{
 		h.cvGetTool(cvID),
 		h.cvEditTool(cvID, batchID),
+		h.requestConfirmationTool(),
+		h.cvEvidenceFidelityTool(),
+		h.cvPageCountTool(cvID),
+	}
+	if jobID == nil {
+		return tools
+	}
+	return append(tools,
+		h.cvContextTool(*jobID),
 		h.tailorReportTool(cvID),
-		h.requestConfirmationTool(),
-		h.cvJobMatchTool(cvID, jobID),
-		h.cvEvidenceFidelityTool(),
-		h.cvPageCountTool(cvID),
-		h.coverLetterDraftTool(jobID),
-	}
-}
-
-// assistantBaseCVTools is the CV tool set of a BASE CV conversation: the tailoring set without
-// everything that needs a vacancy (cv_context, job_match, the run report, the cover letter). The
-// CV id closes over the session binding, exactly as in a tailoring session, so the model cannot
-// address another CV by guessing an id.
-func (h *assistantHandlers) assistantBaseCVTools(cvID uuid.UUID, batchID uuid.UUID) []assistant.Tool {
-	return []assistant.Tool{
-		h.cvGetTool(cvID),
-		h.cvEditTool(cvID, batchID),
-		h.requestConfirmationTool(),
-		h.cvEvidenceFidelityTool(),
-		h.cvPageCountTool(cvID),
-	}
+		h.cvJobMatchTool(cvID, *jobID),
+		h.coverLetterDraftTool(*jobID),
+	)
 }
 
 // requestConfirmationTool puts a confirmation question in front of the candidate as a
