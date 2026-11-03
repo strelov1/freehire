@@ -356,6 +356,7 @@ func TestRecognize(t *testing.T) {
 		{"personio de host", "https://reflex-aerospace-gmbh.jobs.personio.de/job/2679152?display=en#apply", "personio", "reflex-aerospace-gmbh", "https://reflex-aerospace-gmbh.jobs.personio.de", true},
 		{"selfrecruit posting strips path", "https://dressup.selfrecruit.ge/a7cdcc00-1c9c-464c-8960-945af0c0e0a4", "selfrecruit", "dressup", "https://dressup.selfrecruit.ge", true},
 		{"scalis posting strips path", "https://boldbusiness.scalis.ai/job/5f78d010-b21f-4d22-b037-e86865530f62", "scalis", "boldbusiness", "https://boldbusiness.scalis.ai", true},
+		{"intervieweb tenant host", "https://autogrill.intervieweb.it/jobs/barista-autogrill-altivole-sud-treviso-7395/en/", "intervieweb", "autogrill.intervieweb.it", "https://autogrill.intervieweb.it", true},
 		{"softgarden subdomain", "https://moll.softgarden.io/job/123/apply", "softgarden", "moll", "https://moll.softgarden.io", true},
 		// softgarden also serves tenants under a regional career host, <tenant>.career.softgarden.de.
 		// The tenant label is the same board the adapter fetches at <board>.softgarden.io (verified
@@ -492,10 +493,18 @@ func TestRecognize(t *testing.T) {
 		{"avature vacancy", "https://koch.avature.net/en_us/careers/jobdetail/sr-engineer/186706", "avature", "koch.avature.net", "https://koch.avature.net", true},
 		{"avature board listing", "https://deloittecm.avature.net/careers", "avature", "deloittecm.avature.net", "https://deloittecm.avature.net", true},
 
+		// Umantis: the board is the whole careers host. The vendor-domain tenant is derivable from
+		// a URL; a customer vanity host is not, and neither is the vendor's bare apex.
+		{"umantis vendor tenant", "https://recruitingapp-2840.umantis.com/Vacancies/2939/Description/1", "umantis", "recruitingapp-2840.umantis.com", "https://recruitingapp-2840.umantis.com", true},
+		{"umantis listing", "https://recruitingapp-3031.umantis.com/Jobs/All", "umantis", "recruitingapp-3031.umantis.com", "https://recruitingapp-3031.umantis.com", true},
+		{"umantis vanity host unrecognised", "https://jobs.bobst.com/Jobs/All", "", "", "", false},
+
 		// HiringThing is white-labelled across ~25 reseller domains, so the board is the whole
 		// careers host: a slug alone does not say which domain answers for it, and the same slug
 		// can exist under two resellers. Only the domains hiringthing.yml is actually on are
 		// listed; an unlisted one is unrecognised, never a false board.
+		{"recruiter.co.kr tenant host", "https://cosmax.recruiter.co.kr/career/jobs/131793", "recruiter_co_kr", "cosmax.recruiter.co.kr", "https://cosmax.recruiter.co.kr", true},
+		{"recruiter.co.kr API host is not a tenant", "https://api-recruiter.recruiter.co.kr/position/v1/jobflex", "", "", "", false},
 		{"hiringthing vendor domain", "https://4mindsai.hiringthing.com/job/12345/senior-engineer", "hiringthing", "4mindsai.hiringthing.com", "https://4mindsai.hiringthing.com", true},
 		{"hiringthing reseller domain", "https://10federal-partners-inc.prismhr-hire.com/job/98765/technician", "hiringthing", "10federal-partners-inc.prismhr-hire.com", "https://10federal-partners-inc.prismhr-hire.com", true},
 		{"hiringthing second reseller domain", "https://1440-by-the-bay.oasisrecruit.com/", "hiringthing", "1440-by-the-bay.oasisrecruit.com", "https://1440-by-the-bay.oasisrecruit.com", true},

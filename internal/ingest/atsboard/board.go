@@ -370,6 +370,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	// Gupy: one <subdomain>.gupy.io career page per employer, the subdomain the adapter lists
 	// by (?subdomain=<board>). The vendor's own hosts are in platformLabelsByApex.
 	{"gupy.io", "gupy", modeSubdomain},
+	// Intervieweb (Zucchetti): <tenant>.intervieweb.it. The board is the whole careers host, the
+	// shape the adapter fetches (a customer may also front a tenant with its own domain, which
+	// is not URL-derivable and stays unrecognised).
+	{"intervieweb", "intervieweb", modeHost},
 	// Pandapé (InfoJobs Brasil's ATS): one <tenant>.pandape.infojobs.com.br career site per
 	// employer. The same tenant answers on the Catho and pandape.com.br domains with the same
 	// listing, so all three name one board. The vendor's own hosts are in platformLabelsByApex.
@@ -432,6 +436,13 @@ var atsBoards = []struct{ host, source, mode string }{
 	// (deloittecm.avature.net). Only tenants on the platform's own domain are derivable; a
 	// vanity host (jobs.ea.com) is not, like every other custom-domain ATS here.
 	{"avature", "avature", modeHost},
+	// Recruiter (Saramin's career-site builder): the adapter sends the whole career host as the
+	// API's tenant header, so the board is the host (cosmax.recruiter.co.kr).
+	{"recruiter.co.kr", "recruiter_co_kr", modeHost},
+	// Abacus Umantis: the adapter lists https://<board>/Jobs/All, so the board is the whole host
+	// (recruitingapp-2840.umantis.com). A customer vanity host (jobs.bobst.com) is not derivable
+	// from a URL, like every other custom-domain ATS here.
+	{"umantis.com", "umantis", modeHost},
 	// HiringThing is white-labelled: one application serves a tenant under the vendor's own
 	// domain (<tenant>.hiringthing.com) and under each reseller's, and a slug alone names
 	// nothing — nothing in it says which domain answers for it, and the same slug can exist
@@ -1587,13 +1598,14 @@ var platformLabels = map[string]bool{
 // which a bare subdomain rule reads as a company called "apply", while apply.recruitee.com is a
 // board recruitee.yml actually tracks. Declining it everywhere would drop a board we crawl.
 var platformLabelsByApex = map[string][]string{
-	"hrmdirect.com": {"apply"},
-	"potok.io":      {"www", "stages", "qa", "sentry"},
-	"jobs2web.com":  {"www", "stage", "feeds"},
-	"eploy":         {"www"}, // www.eploy.com is the vendor's marketing site
-	"dvinci-hr":     {"www"},
-	"dvinci-easy":   {"www"},
-	"dvinci":        {"www"}, // www.dvinci.de is the vendor\'s marketing site
+	"hrmdirect.com":   {"apply"},
+	"recruiter.co.kr": {"api-recruiter", "www"}, // api-recruiter is the host the adapter reads, not a tenant
+	"potok.io":        {"www", "stages", "qa", "sentry"},
+	"jobs2web.com":    {"www", "stage", "feeds"},
+	"eploy":           {"www"}, // www.eploy.com is the vendor's marketing site
+	"dvinci-hr":       {"www"},
+	"dvinci-easy":     {"www"},
+	"dvinci":          {"www"}, // www.dvinci.de is the vendor\'s marketing site
 	// www is the vendor's marketing site; cdn serves every portal's shared assets.
 	"rexx-systems":     {"www", "cdn"},
 	"rexx-recruitment": {"www", "cdn"},
