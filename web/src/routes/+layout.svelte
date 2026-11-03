@@ -20,7 +20,9 @@
     identifyUser,
     resetIdentity,
     trackSignupIfNew,
+    isHandoffReferrer,
   } from '#lib/analytics.js';
+  import { captureFirstTouch } from '#lib/attribution.js';
   import TopBar from '#lib/components/TopBar.svelte';
   import CliBanner from '#lib/components/CliBanner.svelte';
   import EmailVerificationBanner from '#lib/components/EmailVerificationBanner.svelte';
@@ -145,6 +147,14 @@
   // in app.html already set the class before paint.
   onMount(() => {
     initTheme();
+    // First-touch source of this tab, kept so a later sign-up can say where it came
+    // from. Independent of analytics consent: it records the visit, not the visitor.
+    captureFirstTouch(
+      { href: location.href, referrer: document.referrer },
+      sessionStorage,
+      location.hostname,
+      isHandoffReferrer,
+    );
   });
 
   // hooks.server.ts sets `<html lang>` on the initial SSR response, but a live

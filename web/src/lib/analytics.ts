@@ -13,6 +13,7 @@
 // chunk for visitors where analytics is inert (no key, or SSR). Same lazy posture
 // as easymde elsewhere.
 import type { PostHog } from 'posthog-js';
+import { reportSignupAttribution } from './attribution';
 import { isBuddiesSpace } from './shellLayout.js';
 
 export interface AnalyticsConfig {
@@ -262,7 +263,14 @@ export function trackSignupIfNew(user: {
   if (!isFreshAccount(user.created_at, Date.now(), SIGNUP_WINDOW_MS)) return;
   if (typeof localStorage === 'undefined') return;
   if (!claimSignupOnce(user.id, localStorage)) return;
-  track('signup', { method: user.has_password ? 'password' : 'oauth' });
+  const method = user.has_password ? 'password' : 'oauth';
+  // PostHog hears of it now. GA4 is told by the server, which also records where the
+  // account came from; only if the server could not (no secret configured, the call
+  // failed) does the browser send it, so GA never counts one sign-up twice.
+  withPostHog((sdk) => sdk.capture('signup', { method }));
+  void reportSignupAttribution(method, GA_MEASUREMENT_ID).then((serverSent) => {
+    if (!serverSent && gaLoaded) gtag('event', 'sign_up', { method });
+  });
 }
 
 // The funnel steps GA4 has built-in reports for go out under GA4's recommended names

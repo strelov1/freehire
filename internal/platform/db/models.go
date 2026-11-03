@@ -1773,6 +1773,19 @@ type UserPushToken struct {
 	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
 }
 
+// First-touch source of an account, reported by the browser right after sign-up. One row per account; the first report wins. Independent of analytics consent.
+type UserSignupAttribution struct {
+	UserID       int64              `json:"user_id"`
+	UtmSource    pgtype.Text        `json:"utm_source"`
+	UtmMedium    pgtype.Text        `json:"utm_medium"`
+	UtmCampaign  pgtype.Text        `json:"utm_campaign"`
+	UtmContent   pgtype.Text        `json:"utm_content"`
+	UtmTerm      pgtype.Text        `json:"utm_term"`
+	ReferrerHost pgtype.Text        `json:"referrer_host"`
+	LandingPath  pgtype.Text        `json:"landing_path"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type ViewLogCursor struct {
 	Signature int64              `json:"signature"`
 	Filename  string             `json:"filename"`

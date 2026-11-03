@@ -3478,6 +3478,10 @@ type Querier interface {
 	// partial unique index on (user_id, ref) WHERE kind='reward' guards against a double
 	// grant for the same ref even under a race.
 	InsertReward(ctx context.Context, arg InsertRewardParams) error
+	// First report wins, and only for an account created in the last ten minutes: the
+	// table records how an account ARRIVED, so a report from a years-old session would
+	// be a made-up answer rather than an observation.
+	InsertSignupAttribution(ctx context.Context, arg InsertSignupAttributionParams) (int64, error)
 	// Second half of the atomic rebuild: one row per source in the UNION of the adapter
 	// registry and what the scan above found — see sourcestats.Rows, which is where that
 	// union is decided.

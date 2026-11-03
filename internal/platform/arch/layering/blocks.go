@@ -243,6 +243,10 @@ var blocks = map[string][]string{
 		// calendar-write consent, so it is listed rather than left implicit.
 		"mentorship/busysync",
 		"notify", "nudge", "onboarding",
+		// ga4mp sends one sign-up event to Google Analytics from the server. It imports
+		// nothing but the standard library and is called by the auth handlers; it sits in
+		// engage because the event is a growth measurement, like prowelcome and referral.
+		"ga4mp",
 		// processreport holds candidate-reported facts about how a company hires (today:
 		// that it screens with an AI interviewer). It sits beside companyfeedback and not
 		// in job, because what it stores is what a PERSON reported, not a property the
