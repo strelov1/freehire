@@ -432,6 +432,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	// (deloittecm.avature.net). Only tenants on the platform's own domain are derivable; a
 	// vanity host (jobs.ea.com) is not, like every other custom-domain ATS here.
 	{"avature", "avature", modeHost},
+	// Abacus Umantis: the adapter lists https://<board>/Jobs/All, so the board is the whole host
+	// (recruitingapp-2840.umantis.com). A customer vanity host (jobs.bobst.com) is not derivable
+	// from a URL, like every other custom-domain ATS here.
+	{"umantis.com", "umantis", modeHost},
 	// HiringThing is white-labelled: one application serves a tenant under the vendor's own
 	// domain (<tenant>.hiringthing.com) and under each reseller's, and a slug alone names
 	// nothing — nothing in it says which domain answers for it, and the same slug can exist

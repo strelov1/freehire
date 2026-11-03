@@ -492,6 +492,12 @@ func TestRecognize(t *testing.T) {
 		{"avature vacancy", "https://koch.avature.net/en_us/careers/jobdetail/sr-engineer/186706", "avature", "koch.avature.net", "https://koch.avature.net", true},
 		{"avature board listing", "https://deloittecm.avature.net/careers", "avature", "deloittecm.avature.net", "https://deloittecm.avature.net", true},
 
+		// Umantis: the board is the whole careers host. The vendor-domain tenant is derivable from
+		// a URL; a customer vanity host is not, and neither is the vendor's bare apex.
+		{"umantis vendor tenant", "https://recruitingapp-2840.umantis.com/Vacancies/2939/Description/1", "umantis", "recruitingapp-2840.umantis.com", "https://recruitingapp-2840.umantis.com", true},
+		{"umantis listing", "https://recruitingapp-3031.umantis.com/Jobs/All", "umantis", "recruitingapp-3031.umantis.com", "https://recruitingapp-3031.umantis.com", true},
+		{"umantis vanity host unrecognised", "https://jobs.bobst.com/Jobs/All", "", "", "", false},
+
 		// HiringThing is white-labelled across ~25 reseller domains, so the board is the whole
 		// careers host: a slug alone does not say which domain answers for it, and the same slug
 		// can exist under two resellers. Only the domains hiringthing.yml is actually on are
