@@ -170,6 +170,8 @@ type AssistantSession struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	CvID            *uuid.UUID         `json:"cv_id"`
 	NarratedEventID pgtype.Int8        `json:"narrated_event_id"`
+	SearchQuery     pgtype.Text        `json:"search_query"`
+	SelectionBrief  string             `json:"selection_brief"`
 }
 
 type AutoApplyEvent struct {
