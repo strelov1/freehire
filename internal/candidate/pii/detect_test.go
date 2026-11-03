@@ -110,6 +110,8 @@ func TestRegexSpans_IsoAndStackedRangesAreNotPhones(t *testing.T) {
 		"2016-05-01 - 2024-06-30",
 		"2013 - 2015\n2015 - 2016",
 		"2013 - 2015\n2015 - 2016\n2016 - 2019",
+		"03-2021 - 05-2023",
+		"2021-03 - 2023-05",
 	} {
 		if got := collect(text, regexSpans(text), KindPhone); len(got) != 0 {
 			t.Errorf("%q: masked %q as a phone", text, got)

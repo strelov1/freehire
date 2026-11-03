@@ -156,11 +156,12 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	// A date the CV does not support is a claim about the candidate's history that nothing
 	// downstream can re-check. Ask once more before settling for it; a second call costs
 	// little next to a CV that reads wrong to the person it belongs to. The retry is not
-	// trusted either — it replaces the first answer only if it is better.
+	// trusted either — it replaces the first answer only if it is better, and a certain error outranks any number
+	// of doubtful ones: trading three doubtful months for one invented year would cost a date.
 	if hard, soft := dateProblems(s, modelText); hard+soft > 0 {
 		if retryCtx, cancel, ok := retryContext(ctx); ok {
 			if again, err := e.generate(retryCtx, modelText, schema); err == nil {
-				if h, sf := dateProblems(again, modelText); h+sf < hard+soft {
+				if h, sf := dateProblems(again, modelText); h < hard || (h == hard && sf < soft) {
 					s = again
 				}
 			}

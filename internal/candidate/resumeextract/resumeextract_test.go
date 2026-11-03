@@ -363,3 +363,25 @@ func TestExtract_SkipsTheRetryWhenTheDeadlineCannotAffordIt(t *testing.T) {
 		t.Error("the first answer must still be returned and stored")
 	}
 }
+
+// A certain error outranks any number of doubtful ones: the retry below has fewer problems in
+// total but one of them is an invented year, which would cost the role its date.
+func TestExtract_RetryWithAHardProblemDoesNotReplaceDoubtfulOnes(t *testing.T) {
+	twoDoubtful := `{"experience":[` +
+		`{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":2}},` +
+		`{"company":"Initech","start":{"year":2013,"month":2},"end":{"year":2016,"month":4}}]}`
+	oneInvented := `{"experience":[` +
+		`{"company":"Acme","start":{"year":2019,"month":5},"end":{"year":2024,"month":6}},` +
+		`{"company":"Initech","start":{"year":2013,"month":12},"end":{"year":2016,"month":4}}]}`
+	m := &scriptedModel{resps: []string{twoDoubtful, oneInvented}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Fatalf("LLM calls = %d, want 2", m.n)
+	}
+	if st := got.Experience[0].Start; st == nil || st.Year != 2016 {
+		t.Errorf("Acme start = %v, want 2016 from the first answer: the retry's 2019 is invented", st)
+	}
+}
