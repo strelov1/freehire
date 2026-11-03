@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tmc/langchaingo/llms"
 
@@ -294,5 +295,71 @@ func TestExtract_ModelSeesEveryYearOfAMonthPrecisionHistory(t *testing.T) {
 		if !strings.Contains(seen, want) {
 			t.Errorf("model text lost %q:\n%s", want, seen)
 		}
+	}
+}
+
+// A CV that abbreviates years prints no four-digit year at all. The model's reading of it is
+// still right, and deleting it for lacking a four-digit match would undate the whole history.
+func TestExtract_TwoDigitYearCVKeepsItsDates(t *testing.T) {
+	cv := "Engineer - Acme\n01/16 - 06/24 | Berlin\nAnalyst - Initech\nJan '12 - Mar '15 | Berlin\nIntern - Hooli\nSep 10 to Dec 11"
+	resp := `{"experience":[` +
+		`{"company":"Acme","start":{"year":2016,"month":1},"end":{"year":2024,"month":6}},` +
+		`{"company":"Initech","start":{"year":2012,"month":1},"end":{"year":2015,"month":3}},` +
+		`{"company":"Hooli","start":{"year":2010,"month":9},"end":{"year":2011,"month":12}}]}`
+	m := &scriptedModel{resps: []string{resp}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cv)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 1 {
+		t.Errorf("LLM calls = %d, want 1", m.n)
+	}
+	for _, e := range got.Experience {
+		if e.Start == nil || e.End == nil {
+			t.Errorf("%s: dates dropped: start=%v end=%v", e.Company, e.Start, e.End)
+		}
+	}
+}
+
+func TestDateEvidence_BareTwoDigitNumberIsNotAYear(t *testing.T) {
+	ev := collectDateEvidence("Automated reporting for 14 cement plants, 10-20 managers")
+	if ev.years[2014] || ev.years[2010] {
+		t.Errorf("years = %v: a bare number must not count as a year", ev.years)
+	}
+}
+
+func TestDateEvidence_YearsGluedToLettersCount(t *testing.T) {
+	ev := collectDateEvidence("FY2016 plan; Aug2019 launch; ref 120161 is not a year")
+	if !ev.years[2016] || !ev.years[2019] {
+		t.Errorf("years = %v, want 2016 and 2019", ev.years)
+	}
+	if ev.years[2016] && ev.years[2012] {
+		t.Errorf("years = %v: digits inside a longer number are not a year", ev.years)
+	}
+}
+
+func TestDateEvidence_RangeSeamIsNotAPair(t *testing.T) {
+	ev := collectDateEvidence("05/2016 - 06/2024\n12/2013 - 04/2016")
+	if ev.pairs[perioddate.PeriodDate{Year: 2016, Month: 6}] {
+		t.Error("pair (2016, 06) comes from the seam between two dates, not from any date")
+	}
+	if !ev.pairs[perioddate.PeriodDate{Year: 2016, Month: 5}] {
+		t.Error("pair (2016, 05) is printed and must be evidence")
+	}
+}
+
+func TestExtract_SkipsTheRetryWhenTheDeadlineCannotAffordIt(t *testing.T) {
+	m := &scriptedModel{resps: []string{shiftedDates, rightDates}}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(ctx, cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 1 {
+		t.Errorf("LLM calls = %d, want 1: 20s left is not enough for a second call", m.n)
+	}
+	if got.Experience[0].End == nil {
+		t.Error("the first answer must still be returned and stored")
 	}
 }

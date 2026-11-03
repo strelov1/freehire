@@ -103,3 +103,16 @@ func TestRegexSpans_PhonesNextToDatesStillMasked(t *testing.T) {
 		}
 	}
 }
+
+func TestRegexSpans_IsoAndStackedRangesAreNotPhones(t *testing.T) {
+	for _, text := range []string{
+		"2016-05 - 2024-06",
+		"2016-05-01 - 2024-06-30",
+		"2013 - 2015\n2015 - 2016",
+		"2013 - 2015\n2015 - 2016\n2016 - 2019",
+	} {
+		if got := collect(text, regexSpans(text), KindPhone); len(got) != 0 {
+			t.Errorf("%q: masked %q as a phone", text, got)
+		}
+	}
+}

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -64,6 +65,34 @@ func (e *Extractor) Enabled() bool { return e != nil && e.client != nil && e.det
 // ModelID returns the underlying model id, so a caller can stamp the produced structure
 // with the model that generated it.
 func (e *Extractor) ModelID() string { return e.client.ModelID() }
+
+const (
+	// retryMinBudget is the least time a second model call is worth starting with. The caller's
+	// deadline was sized for ONE call (healthy ones take 45-83s), so after a slow first call
+	// there may be too little left for another.
+	retryMinBudget = 45 * time.Second
+	// retryReserve is held back from the caller's deadline so the retry can never run it down
+	// to zero: the caller still has to persist the answer, and a valid first extraction lost to
+	// an expired context is worse than the date problem the retry was meant to fix.
+	retryReserve = 10 * time.Second
+)
+
+// retryContext bounds a second model call so it cannot consume the time the caller needs to
+// store the result. It reports false when too little time is left to be worth trying; a
+// context without a deadline is passed through.
+func retryContext(ctx context.Context) (context.Context, context.CancelFunc, bool) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		c, cancel := context.WithCancel(ctx)
+		return c, cancel, ctx.Err() == nil
+	}
+	if time.Until(deadline) < retryMinBudget+retryReserve {
+		return ctx, func() {}, false
+	}
+	c, cancel := context.WithDeadline(ctx, deadline.Add(-retryReserve))
+
+	return c, cancel, true
+}
 
 // generate is one model call and its decode, up to and including the placeholder scrub —
 // everything Extract may repeat. Contacts and Sanitize are not here: they are applied once,
@@ -129,10 +158,13 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	// little next to a CV that reads wrong to the person it belongs to. The retry is not
 	// trusted either — it replaces the first answer only if it is better.
 	if hard, soft := dateProblems(s, modelText); hard+soft > 0 {
-		if again, err := e.generate(ctx, modelText, schema); err == nil {
-			if h, sf := dateProblems(again, modelText); h+sf < hard+soft {
-				s = again
+		if retryCtx, cancel, ok := retryContext(ctx); ok {
+			if again, err := e.generate(retryCtx, modelText, schema); err == nil {
+				if h, sf := dateProblems(again, modelText); h+sf < hard+soft {
+					s = again
+				}
 			}
+			cancel()
 		}
 	}
 	// Whatever is still certainly wrong is removed rather than stored: an undated role is

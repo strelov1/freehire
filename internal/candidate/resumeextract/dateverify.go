@@ -23,10 +23,19 @@ import (
 //     never for deleting what it said.
 
 var (
-	yearToken = regexp.MustCompile(`\b(?:19|20)\d{2}\b`)
-	// monthFirst is "08/2023", "8.2023", "08-2023"; yearFirst is "2023-08", "2023/8".
-	monthFirst = regexp.MustCompile(`\b(0?[1-9]|1[0-2])\s?[./-]\s?((?:19|20)\d{2})\b`)
-	yearFirst  = regexp.MustCompile(`\b((?:19|20)\d{2})\s?[./-]\s?(0?[1-9]|1[0-2])\b`)
+	// yearCandidate finds four digits that look like a year; yearsIn then checks the digits on
+	// either side. Go's \b is no boundary between a letter and a digit, so "FY2016" and
+	// "Aug2016" would be invisible to a \b-anchored pattern.
+	yearCandidate = regexp.MustCompile(`(?:19|20)\d{2}`)
+	// monthFirst is "08/2023", "8.2023", "08-2023"; yearFirst is "2023-08", "2023/8". Neither
+	// allows a space around the separator: with one, yearFirst reads the seam of
+	// "05/2016 - 06/2024" as a pair (2016, 06) and vouches for a month the CV never gave.
+	monthFirst = regexp.MustCompile(`\b(0?[1-9]|1[0-2])[./-]((?:19|20)\d{2})\b`)
+	yearFirst  = regexp.MustCompile(`\b((?:19|20)\d{2})[./-](0?[1-9]|1[0-2])\b`)
+	// shortYear is a two-digit year as CVs print it: "Jan '16", "01/16", "Sep 16". A bare
+	// two-digit number is not one ("14 plants"), so it needs an apostrophe, a month before
+	// the separator, or an English month name before it.
+	shortYear = regexp.MustCompile(`['’](\d{2})\b|\b(?:0?[1-9]|1[0-2])[./-](\d{2})\b|(?i:\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+)(\d{2})\b`)
 )
 
 // minNumericPairs is how many numeric month/year pairs a CV must print before a pair the
@@ -42,9 +51,21 @@ type dateEvidence struct {
 func collectDateEvidence(text string) dateEvidence {
 	ev := dateEvidence{years: map[int]bool{}, pairs: map[perioddate.PeriodDate]bool{}}
 
-	for _, m := range yearToken.FindAllString(text, -1) {
-		y, _ := strconv.Atoi(m)
+	for _, loc := range yearCandidate.FindAllStringIndex(text, -1) {
+		if loc[0] > 0 && isDigitByte(text[loc[0]-1]) || loc[1] < len(text) && isDigitByte(text[loc[1]]) {
+			continue // part of a longer number
+		}
+		y, _ := strconv.Atoi(text[loc[0]:loc[1]])
 		ev.years[y] = true
+	}
+	// A two-digit year supports both centuries: the CV does not say which, and a date the
+	// model read correctly must not be deleted for the way the CV abbreviates it.
+	for _, m := range shortYear.FindAllStringSubmatch(text, -1) {
+		for _, g := range m[1:] {
+			if yy, err := strconv.Atoi(g); g != "" && err == nil {
+				ev.years[1900+yy], ev.years[2000+yy] = true, true
+			}
+		}
 	}
 	for _, m := range monthFirst.FindAllStringSubmatch(text, -1) {
 		month, _ := strconv.Atoi(m[1])
@@ -117,3 +138,5 @@ func dropUnsupportedYears(s *Structured, cvText string) int {
 
 	return dropped
 }
+
+func isDigitByte(b byte) bool { return b >= '0' && b <= '9' }
