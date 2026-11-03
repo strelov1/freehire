@@ -36,8 +36,8 @@ var (
 	// two-digit number is not one ("14 plants"), so it needs an apostrophe, a month before
 	// the separator, or an English month name before it.
 	// shortEnd is the end of an abbreviated range, "2016–24" or "2016 - 24". The trailing group
-	// exists only to reject "2016 - 06/2024", where "06" is the next date's month, not a year.
-	shortEnd  = regexp.MustCompile(`\b(?:19|20)\d{2}\s*[–—-]\s*(\d{2})\b([/.]\d)?`)
+	// exists only to reject "2016 - 06/2024" and "2016 - 06-2024", where "06" is the next date's month, not a year.
+	shortEnd  = regexp.MustCompile(`\b(?:19|20)\d{2}\s*[–—-]\s*(\d{2})\b([./-]\d)?`)
 	shortYear = regexp.MustCompile(`['’](\d{2})\b|\b(?:0?[1-9]|1[0-2])[./-](\d{2})\b|(?i:\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+)(\d{2})\b`)
 )
 
@@ -71,8 +71,8 @@ func collectDateEvidence(text string) dateEvidence {
 		}
 	}
 	for _, m := range shortEnd.FindAllStringSubmatch(text, -1) {
-		if m[2] != "" {
-			continue // the digits are a month: "05/2016 - 06/2024"
+		if m[2] != "" || yearFirst.MatchString(m[0]) {
+			continue // the digits are a month: "05/2016 - 06/2024", or ISO "2016-08"
 		}
 		yy, _ := strconv.Atoi(m[1])
 		ev.years[1900+yy], ev.years[2000+yy] = true, true
@@ -151,12 +151,35 @@ func dropUnsupportedYears(s *Structured, cvText string) int {
 
 func isDigitByte(b byte) bool { return b >= '0' && b <= '9' }
 
+// supportedDates counts the dates an answer carries that the CV does not contradict. A date
+// with an unsupported year is about to be dropped, so it is not coverage; a nil date is
+// missing, and "no date problem" must not be won by having no dates.
+func supportedDates(s Structured, cvText string) int {
+	ev := collectDateEvidence(cvText)
+	n := 0
+	count := func(d *perioddate.PeriodDate) {
+		if d != nil && !ev.unsupportedYear(d) {
+			n++
+		}
+	}
+	for _, e := range s.Experience {
+		count(e.Start)
+		count(e.End)
+	}
+	for _, e := range s.Education {
+		count(e.Year)
+	}
+
+	return n
+}
+
 // retryIsBetter reports whether a second answer should replace the first. Fewer date problems
-// is the aim, but only among answers that say as much: an empty experience list has no date
+// is the aim, but only among answers that say as much (as many roles and as many supported dates): an empty experience list has no date
 // problems at all, and taking it would swap a populated extraction for one that imports no
 // work history. Hard problems are ranked above soft ones for the reason in the file header.
 func retryIsBetter(first, again Structured, cvText string) bool {
-	if len(again.Experience) < len(first.Experience) {
+	if len(again.Experience) < len(first.Experience) ||
+		supportedDates(again, cvText) < supportedDates(first, cvText) {
 		return false
 	}
 	hard, soft := dateProblems(first, cvText)

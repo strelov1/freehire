@@ -33,17 +33,19 @@ var (
 	// A bare YYYY-YYYY year range (with optional spaces around the dash) that the phone
 	// regex would otherwise capture — a common CV employment range, not a phone number.
 	yearRangeRe = regexp.MustCompile(`^\d{4}\s*-\s*\d{4}$`)
+	// The years are 19xx/20xx on purpose: a 4-2-4 phone number such as 0166-23-3355 has the same
+	// shape and must stay masked.
 	// The same range written with hyphens, "2016-05 - 2024-06" or "2016-05-01 - 2024-06-30",
 	// which phoneRe takes whole.
-	isoRangeRe = regexp.MustCompile(`^\d{4}(?:-\d{1,2}){1,2}\s*-\s*\d{4}(?:-\d{1,2}){0,2}$` +
+	isoRangeRe = regexp.MustCompile(`^(?:19|20)\d{2}(?:-\d{1,2}){1,2}\s*-\s*(?:19|20)\d{2}(?:-\d{1,2}){0,2}$` +
 		// and the month-first form, "03-2021 - 05-2023"
-		`|^(?:0?[1-9]|1[0-2])-\d{4}\s*-\s*(?:0?[1-9]|1[0-2])-\d{4}$`)
+		`|^(?:0?[1-9]|1[0-2])-(?:19|20)\d{2}\s*-\s*(?:0?[1-9]|1[0-2])-(?:19|20)\d{2}$`)
 	// The middle of a month-precision range, as phoneRe cuts it out of "05/2016 - 06/2024":
 	// the match is "2016 - 06", the "05/" before it and the "/2024" after it are not digits-
 	// and-dashes, so they are left outside. dateTailRe is the "year - month" shape and
 	// dateHeadRe the "month - year" one ("2016.05 - 2024.06" cuts as "05 - 2024").
-	dateTailRe = regexp.MustCompile(`^\d{4}\s*-\s*\d{1,2}$`)
-	dateHeadRe = regexp.MustCompile(`^\d{1,2}\s*-\s*\d{4}$`)
+	dateTailRe = regexp.MustCompile(`^(?:19|20)\d{2}\s*-\s*\d{1,2}$`)
+	dateHeadRe = regexp.MustCompile(`^\d{1,2}\s*-\s*(?:19|20)\d{2}$`)
 )
 
 // isDateRangeFragment reports whether the phone-shaped match text[start:end] is really the

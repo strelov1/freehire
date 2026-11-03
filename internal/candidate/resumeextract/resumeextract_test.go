@@ -416,3 +416,28 @@ func TestDateEvidence_MonthAfterARangeStartIsNotAnAbbreviatedYear(t *testing.T) 
 		t.Errorf("years = %v: \"06\" here is a month, not the end of the range", ev.years)
 	}
 }
+
+func TestDateEvidence_IsoMonthAndHyphenSeamAreNotAbbreviatedYears(t *testing.T) {
+	ev := collectDateEvidence("Analyst 2016-08 to 2019-02\nEngineer 05-2016 - 06-2024")
+	for _, y := range []int{2008, 2006, 2002, 1906} {
+		if ev.years[y] {
+			t.Errorf("years = %v: %d comes from a month, not a year", ev.years, y)
+		}
+	}
+}
+
+func TestExtract_RetryThatErasesTheDatesDoesNotWin(t *testing.T) {
+	doubtful := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
+	undated := `{"experience":[{"company":"Acme"}]}`
+	m := &scriptedModel{resps: []string{doubtful, undated}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Fatalf("LLM calls = %d, want 2", m.n)
+	}
+	if e := got.Experience[0]; e.Start == nil || e.End == nil {
+		t.Errorf("dates = %v..%v, want the first answer's: a retry with no dates has no date problems only because it has no dates", e.Start, e.End)
+	}
+}

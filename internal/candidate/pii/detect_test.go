@@ -118,3 +118,13 @@ func TestRegexSpans_IsoAndStackedRangesAreNotPhones(t *testing.T) {
 		}
 	}
 }
+
+// 0166-23-3355 has the 4-2-4 shape of an ISO range but its "years" are not 19xx/20xx, so it
+// is a phone and must still be masked.
+func TestRegexSpans_HyphenatedPhoneIsNotARange(t *testing.T) {
+	text := "Tel 0166-23-3355"
+	got := collect(text, regexSpans(text), KindPhone)
+	if len(got) != 1 || got[0] != "0166-23-3355" {
+		t.Errorf("%q: phones = %q, want [0166-23-3355]", text, got)
+	}
+}
