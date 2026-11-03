@@ -350,6 +350,9 @@ func nszDate(s string, i int) *time.Time {
 		return nil
 	}
 	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, nszBelgrade)
+	if t.Day() != day { // time.Date rolls 31.02 over to March rather than rejecting it
+		return nil
+	}
 	return &t
 }
 

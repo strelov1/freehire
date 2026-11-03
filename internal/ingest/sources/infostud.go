@@ -426,7 +426,11 @@ func infostudDeadline(s string) (time.Time, bool) {
 	if month < 1 || month > 12 || day < 1 || day > 31 {
 		return time.Time{}, false
 	}
-	return time.Date(year, time.Month(month), day, 0, 0, 0, 0, infostudBelgrade), true
+	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, infostudBelgrade)
+	if t.Day() != day { // time.Date rolls 31.02 over to March rather than rejecting it
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 // infostudJob maps a posting page and its search result to a Job. ok is false for one with no
