@@ -655,6 +655,9 @@ func All(c HTTPClient) map[string]Source {
 		// to a fixed depth). Region is an optional URL glob. Pages with no JobPosting
 		// are skipped. Hydrating, with a per-run cap on new detail fetches.
 		NewSitemapLDJSON(c),
+		// Get in IT: German entry-level IT board. The public sitemap names the whole catalogue;
+		// posting pages carry a schema.org JobPosting. Paced, see getinit.go.
+		NewGetInIT(c),
 		// ITviec: Vietnam's IT-only board. One server-rendered listing names the whole
 		// catalogue; posting pages carry a schema.org JobPosting. Paced, see itviecRequestInterval.
 		NewITviec(pacedHTMLGetter(c, itviecRequestInterval, itviecRequestBurst)),
