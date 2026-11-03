@@ -26,7 +26,12 @@ ALTER TABLE public.company_slug_aliases
 
 -- The approval refuses to retire a slug that others already redirect to, and so asks
 -- "is this anyone's canon" on every proposal and approval. Without an index that is a scan of
--- the registry (11k+ rows) each time. InsertMissingCanonicalCompanies reads the same column.
--- CONCURRENTLY because the table is live, which this no-transaction file permits.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS company_slug_aliases_canonical_slug_idx
+-- the registry each time. InsertMissingCanonicalCompanies reads the same column.
+--
+-- A plain build, not CONCURRENTLY. The table holds ~56k rows, so the build takes well under
+-- a second, and its SHARE lock conflicts only with writes to this table. CONCURRENTLY also
+-- waits for every older transaction in the whole database. On prod (2026-11-03) that wait
+-- ran into migrate's lock_timeout and left the index INVALID, which failed the release.
+-- squawk-ignore require-concurrent-index-creation -- a ~56k-row table; see above
+CREATE INDEX IF NOT EXISTS company_slug_aliases_canonical_slug_idx
     ON company_slug_aliases (canonical_slug);
