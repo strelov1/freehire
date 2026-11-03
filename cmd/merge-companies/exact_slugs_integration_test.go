@@ -61,3 +61,16 @@ func TestExactSlugsRefusesAPlanTheRegistryContradicts(t *testing.T) {
 		t.Fatal("loadPlan accepted a wave whose key already resolves to another canon")
 	}
 }
+
+// Two groups of one wave can chain: one retires the slug the other elects. The registry is
+// still empty at planning time, so only the plan itself shows it.
+func TestExactSlugsRefusesAChainInsideTheWave(t *testing.T) {
+	pool := testdb.Pool(t)
+	plan := []merge{
+		{Canonical: "b", Aliases: []alias{{Slug: "a", FoldedKey: "a"}}},
+		{Canonical: "c", Aliases: []alias{{Slug: "b", FoldedKey: "b"}}},
+	}
+	if err := checkExactPlan(context.Background(), db.New(pool), plan); err == nil {
+		t.Fatal("checkExactPlan accepted a -> b beside b -> c")
+	}
+}
