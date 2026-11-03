@@ -1018,6 +1018,7 @@ type Job struct {
 	Perks                     []string           `json:"perks"`
 	// Source-stated last application day, inclusive; NULL when unstated.
 	ApplicationDeadline pgtype.Date `json:"application_deadline"`
+	Engagement          []string    `json:"engagement"`
 }
 
 type JobDailyStat struct {

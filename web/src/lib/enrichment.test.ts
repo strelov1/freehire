@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardTags, formatSalary } from './enrichment';
+import { cardTags, formatSalary, summaryFacets } from './enrichment';
 import type { Enrichment, Job } from './types';
 
 describe('formatSalary', () => {
@@ -89,5 +89,27 @@ describe('cardTags', () => {
     expect(
       cardTags({ work_mode: 'remote', regions: ['remote'] } as unknown as Job),
     ).toEqual(['Remote']);
+  });
+});
+
+describe('summaryFacets', () => {
+  // The IR35 status rides right after the work type it qualifies, one linked value per
+  // stated status, so a posting that offers either shows both.
+  it('shows the stated IR35 status after the work type, each value a filter link', () => {
+    const facets = summaryFacets({
+      engagement: ['ir35_outside', 'ir35_inside'],
+      enrichment: { employment_type: 'contract' },
+    } as unknown as Job);
+    const labels = facets.map((f) => f.label);
+    expect(labels.indexOf('Contract terms')).toBe(labels.indexOf('Work type') + 1);
+    expect(facets.find((f) => f.label === 'Contract terms')?.values).toEqual([
+      { text: 'Outside IR35', href: '/jobs?engagement=ir35_outside' },
+      { text: 'Inside IR35', href: '/jobs?engagement=ir35_inside' },
+    ]);
+  });
+
+  it('omits the row when the posting does not say', () => {
+    const facets = summaryFacets({ engagement: [], enrichment: {} } as unknown as Job);
+    expect(facets.some((f) => f.label === 'Contract terms')).toBe(false);
   });
 });

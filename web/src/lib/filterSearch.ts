@@ -120,6 +120,7 @@ function buildJobCatalog(): FilterSearchHit[] {
   hits.push(jumpHit('location', 'City', 'City'));
   pushFacet(hits, 'work', 'work_mode');
   pushFacet(hits, 'work', 'employment_type');
+  pushFacet(hits, 'work', 'engagement');
   for (const [value, label] of Object.entries(SKILL_LABELS)) {
     hits.push(optionHit('skills', 'skills', 'Skills', { value, label }));
   }

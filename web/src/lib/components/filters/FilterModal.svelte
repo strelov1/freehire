@@ -179,7 +179,7 @@
         (f.salaryMin != null || f.salaryMax != null ? 1 : 0) +
         selCount(f, 'equity')
       );
-    if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type');
+    if (e.kind === 'work') return selCount(f, 'work_mode') + selCount(f, 'employment_type') + selCount(f, 'engagement');
     if (e.kind === 'industry')
       return selCount(f, 'domains') + selCount(f, 'company_type') + selCount(f, 'collections', jobCollectionValues);
     if (e.kind === 'language') return selCount(f, 'english_level') + selCount(f, 'posting_language');
@@ -778,6 +778,15 @@
       </p>
     {/if}
     <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" counts={c} /></div>
+    <!-- The legal terms a posting states (internal/dict/engagement) — today only the UK's
+         IR35 status, so the chips stand for themselves; once another market's terms join,
+         they are worth showing by the country selected. -->
+    <div class="mt-6">
+      <ChipFacet store={staged} param="engagement" label="Contract terms" counts={c} />
+      <p class="mt-2 text-xs text-muted-foreground">
+        UK contracts: the IR35 status, as the posting states it.
+      </p>
+    </div>
   {:else if entry.kind === 'industry'}
     <ChipFacet store={staged} param="domains" label="Industry" counts={c} />
     <div class="mt-6"><ChipFacet store={staged} param="company_type" label="Company type" counts={c} /></div>

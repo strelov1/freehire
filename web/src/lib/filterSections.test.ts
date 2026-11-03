@@ -21,6 +21,7 @@ const HOSTED_ELSEWHERE: Record<string, string> = {
   metros: 'location pane',
   work_mode: 'work pane',
   employment_type: 'work pane',
+  engagement: 'work pane',
   domains: 'industry pane',
   company_type: 'industry pane',
   collections: 'industry pane, and the employer-credential subset in relocation',

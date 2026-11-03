@@ -722,6 +722,11 @@ func facetSettings() *meilisearch.Settings {
 			// StringFacets, so the settings-before-binary warning above applies, and a
 			// full rebuild must follow the backfill-derive that fills existing rows.
 			"perks",
+			// engagement is the jobs text[] column beside it (internal/dict/engagement,
+			// the IR35 status today), a multi-value facet enrolled through StringFacets:
+			// the same settings-before-binary order, and the same rebuild after the
+			// backfill-derive that fills existing rows.
+			"engagement",
 			// apply_questions is the captured application form's required-question
 			// count (jobview.Job.ApplyQuestions), attached at index time from apply_forms
 			// and ABSENT when no form was captured, so `apply_questions <= N` never

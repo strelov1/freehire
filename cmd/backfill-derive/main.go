@@ -390,6 +390,7 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		equity != j.Equity ||
 		!slices.Equal(d.ClearanceLevels, j.ClearanceLevels) ||
 		!slices.Equal(d.Perks, j.Perks) ||
+		!slices.Equal(d.Engagement, j.Engagement) ||
 		d.PostingLanguage != j.PostingLanguage ||
 		d.EmploymentType != j.EmploymentType ||
 		d.EducationLevel != j.EducationLevel ||
@@ -414,6 +415,7 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		Equity:             equity,
 		ClearanceLevels:    d.ClearanceLevels,
 		Perks:              d.Perks,
+		Engagement:         d.Engagement,
 		PostingLanguage:    d.PostingLanguage,
 		EmploymentType:     d.EmploymentType,
 		EducationLevel:     d.EducationLevel,

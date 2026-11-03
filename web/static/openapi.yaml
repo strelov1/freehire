@@ -156,7 +156,7 @@ info:
     Facets with a fixed vocabulary (`work_mode`, `regions`, `seniority`,
     `category`, `employment_type`, `education_level`, `company_type`,
     `company_size`, `salary_period`, `relocation`, `english_level`, `role_type`,
-    `source_type`, `ai_archetype`, `domains`, `reality`, `perks`, `skills` and the boolean facets) still
+    `source_type`, `ai_archetype`, `domains`, `reality`, `perks`, `engagement`, `skills` and the boolean facets) still
     apply a value outside it — so `?work_mode=foo` answers `total: 0`, which reads
     exactly like an empty market. `meta.ignored_values` names such values per
     parameter (the `_exclude` form under its own name):
@@ -231,6 +231,8 @@ paths:
         - $ref: "#/components/parameters/Perks"
         - $ref: "#/components/parameters/PerksExclude"
         - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/Engagement"
+        - $ref: "#/components/parameters/EngagementExclude"
         - $ref: "#/components/parameters/ClearanceLevelsExclude"
         - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
@@ -333,6 +335,8 @@ paths:
         - $ref: "#/components/parameters/Perks"
         - $ref: "#/components/parameters/PerksExclude"
         - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/Engagement"
+        - $ref: "#/components/parameters/EngagementExclude"
         - $ref: "#/components/parameters/ClearanceLevelsExclude"
         - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
@@ -605,6 +609,8 @@ paths:
         - $ref: "#/components/parameters/Perks"
         - $ref: "#/components/parameters/PerksExclude"
         - $ref: "#/components/parameters/PerksMode"
+        - $ref: "#/components/parameters/Engagement"
+        - $ref: "#/components/parameters/EngagementExclude"
         - $ref: "#/components/parameters/ClearanceLevelsExclude"
         - $ref: "#/components/parameters/EquityExclude"
         - $ref: "#/components/parameters/AutoApplyAvailable"
@@ -1534,6 +1540,41 @@ components:
         exactly the postings `requires_clearance=false` returns — and ORs with
         real levels like any other value. `clearance_levels_exclude=none` keeps
         only the postings that state a clearance.
+    Engagement:
+      name: engagement
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - ir35_outside
+            - ir35_inside
+      description: |
+        The legal terms the posting states it engages its worker on, matched
+        deterministically from the title and description (never inferred).
+        Today the UK's IR35 status: `ir35_outside` (the contractor's own
+        limited company) and `ir35_inside` (taxed like employment, usually
+        through an umbrella). A posting that offers either carries both; one
+        that does not say carries none. Separate from `employment_type`, which
+        says how long and how many hours. Values OR.
+    EngagementExclude:
+      name: engagement_exclude
+      in: query
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - ir35_outside
+            - ir35_inside
+      description: |
+        Exclude postings that state any of the selected terms. A posting that
+        does not say is kept.
     PerksExclude:
       name: perks_exclude
       in: query
@@ -2309,6 +2350,14 @@ components:
             Benefits the description states it offers (see the `perks` filter
             for the vocabulary). Empty when it names none of them — not a claim
             that the job offers none.
+        engagement:
+          type: array
+          items:
+            type: string
+          description: |
+            The legal terms the posting states it engages its worker on (see
+            the `engagement` filter for the vocabulary). Empty when it does not
+            say.
         auto_apply_available:
           type: boolean
           description: |
