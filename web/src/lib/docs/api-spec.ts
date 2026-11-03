@@ -3652,6 +3652,32 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         responseExample: `{ "data": [ { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic", "created_at": "2026-07-01T10:00:00Z", "updated_at": "2026-07-20T18:30:00Z" } ] }`,
       },
       {
+        method: 'GET',
+        path: '/me/cvs/bases',
+        auth: 'cookie',
+        summary: 'List your base CVs, without their documents.',
+        description:
+          'The non-tailored CVs you can edit, duplicate and tailor from, oldest created first. ' +
+          '`is_default` marks the one used when a tailor request names no base; `hand_edited` ' +
+          'marks a base you changed in the editor, which a new CV upload will not overwrite. ' +
+          'GET /me/cvs lists tailored copies and is unchanged.',
+        curl: `curl "${BASE_URL}/me/cvs/bases" -b cookies.txt`,
+        responseExample: `{ "data": [ { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic-ats", "is_default": true, "hand_edited": false, "created_at": "2026-07-01T10:00:00Z", "updated_at": "2026-07-20T18:30:00Z" } ] }`,
+      },
+      {
+        method: 'POST',
+        path: '/me/cvs/{id}/duplicate',
+        auth: 'cookie',
+        summary: 'Copy a base CV.',
+        description:
+          'Creates a new base CV with the same document, template and appearance, titled ' +
+          '"<title> (copy)". Only a base can be duplicated: 409 for a tailored copy, 404 when ' +
+          'the id is not yours.',
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The base CV id.' }],
+        curl: `curl -X POST "${BASE_URL}/me/cvs/0f2c…/duplicate" -b cookies.txt`,
+        responseExample: `{ "data": { "id": "9a41…", "title": "Backend engineer (copy)", "template_id": "classic-ats", "document": { … } } }`,
+      },
+      {
         method: 'POST',
         path: '/me/cvs',
         auth: 'cookie',
@@ -3775,7 +3801,18 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
           'analysis for the job (409 otherwise) and a base CV — one is seeded from ' +
           'your stored history when you have none, and it is a 409 when there is ' +
           'nothing to seed from. Calls no LLM itself.',
-        body: [{ name: 'job_slug', type: 'string', required: true, description: 'The vacancy to tailor toward.' }],
+        body: [
+          { name: 'job_slug', type: 'string', required: true, description: 'The vacancy to tailor toward.' },
+          {
+            name: 'base_cv_id',
+            type: 'string (uuid)',
+            description:
+              'Which of your base CVs to copy. Optional: omitted means your default base (the one ' +
+              'your most recent tailored CV was made from, else your oldest). 404 when it is not ' +
+              'yours, 409 when it is a tailored copy. A vacancy you already tailored reopens its ' +
+              'existing copy whatever base is named.',
+          },
+        ],
         curl: `curl -X POST "${BASE_URL}/me/cvs/tailor" -b cookies.txt \\
   -H 'Content-Type: application/json' -d '{"job_slug":"senior-backend-engineer-acme-1a2b"}'`,
         responseExample: `{ "data": { "tailor_cv_id": "7d1a…", "base_cv_id": "0f2c…", "session_id": "s_9f…", "analysis": { "overall_score": 72, "verdict": "worth_applying" } } }`,
@@ -3807,15 +3844,17 @@ data: {"eligible":1903114,"covered":1897020,"snapshot_covered":1889512,"queued":
         method: 'POST',
         path: '/me/cvs/{id}/reseed',
         auth: 'cookie',
-        summary: 'Rebuild this tailored CV from your current seed.',
+        summary: 'Rebuild one CV from your current seed.',
         description:
-          'Replaces the tailored document\'s content from the current seed ' +
+          'Replaces this CV\'s content from the current seed ' +
           '(experience bank first, your résumé\'s own extract for what the bank doesn\'t ' +
-          'track) and refreshes your base CV from the same seed. Keeps the same tailored ' +
-          'id and agent session; preserves template and typography on each row. 409 when ' +
-          'the CV is not tailored or there is no usable seed. Upload alone does not do ' +
+          'track). Works on a tailored copy or on a base, and touches only that CV: refreshing a ' +
+          'tailored copy no longer rewrites any base, and refreshing a base — the editor\'s ' +
+          '"Update from my CV", which replaces hand edits — leaves its copies alone. Keeps the same ' +
+          'id and agent session; preserves template and typography. 409 when ' +
+          'there is no usable seed. Upload alone does not do ' +
           'this — this is the explicit apply.',
-        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The tailored CV id.' }],
+        pathParams: [{ name: 'id', type: 'string (uuid)', required: true, description: 'The CV id (tailored or base).' }],
         curl: `curl -X POST "${BASE_URL}/me/cvs/7d1a…/reseed" -b cookies.txt`,
         responseExample: `{ "data": { "id": "7d1a…", "title": "Tailored for …", "template_id": "classic-ats", "document": { … } } }`,
       },

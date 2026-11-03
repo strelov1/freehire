@@ -1971,6 +1971,44 @@ curl "https://freehire.me/api/v1/me/cvs" -b cookies.txt
 { "data": [ { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic", "created_at": "2026-07-01T10:00:00Z", "updated_at": "2026-07-20T18:30:00Z" } ] }
 ```
 
+### `GET /me/cvs/bases`
+
+**Auth:** Session only
+
+List your base CVs, without their documents.
+
+The non-tailored CVs you can edit, duplicate and tailor from, oldest created first. `is_default` marks the one used when a tailor request names no base; `hand_edited` marks a base you changed in the editor, which a new CV upload will not overwrite. GET /me/cvs lists tailored copies and is unchanged.
+
+```bash
+curl "https://freehire.me/api/v1/me/cvs/bases" -b cookies.txt
+```
+
+```json
+{ "data": [ { "id": "0f2c…", "title": "Backend engineer", "template_id": "classic-ats", "is_default": true, "hand_edited": false, "created_at": "2026-07-01T10:00:00Z", "updated_at": "2026-07-20T18:30:00Z" } ] }
+```
+
+### `POST /me/cvs/{id}/duplicate`
+
+**Auth:** Session only
+
+Copy a base CV.
+
+Creates a new base CV with the same document, template and appearance, titled "<title> (copy)". Only a base can be duplicated: 409 for a tailored copy, 404 when the id is not yours.
+
+**Path parameters**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | string (uuid) | yes | The base CV id. |
+
+```bash
+curl -X POST "https://freehire.me/api/v1/me/cvs/0f2c…/duplicate" -b cookies.txt
+```
+
+```json
+{ "data": { "id": "9a41…", "title": "Backend engineer (copy)", "template_id": "classic-ats", "document": { … } } }
+```
+
 ### `POST /me/cvs`
 
 **Auth:** Session only
@@ -2109,6 +2147,7 @@ Copies your base CV into a vacancy-bound tailored one and mints the short-lived 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `job_slug` | string | yes | The vacancy to tailor toward. |
+| `base_cv_id` | string (uuid) | no | Which of your base CVs to copy. Optional: omitted means your default base (the one your most recent tailored CV was made from, else your oldest). 404 when it is not yours, 409 when it is a tailored copy. A vacancy you already tailored reopens its existing copy whatever base is named. |
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/cvs/tailor" -b cookies.txt \
@@ -2161,15 +2200,15 @@ curl -X POST "https://freehire.me/api/v1/me/cvs/base/reseed" -b cookies.txt
 
 **Auth:** Session only
 
-Rebuild this tailored CV from your current seed.
+Rebuild one CV from your current seed.
 
-Replaces the tailored document's content from the current seed (experience bank first, your résumé's own extract for what the bank doesn't track) and refreshes your base CV from the same seed. Keeps the same tailored id and agent session; preserves template and typography on each row. 409 when the CV is not tailored or there is no usable seed. Upload alone does not do this — this is the explicit apply.
+Replaces this CV's content from the current seed (experience bank first, your résumé's own extract for what the bank doesn't track). Works on a tailored copy or on a base, and touches only that CV: refreshing a tailored copy no longer rewrites any base, and refreshing a base — the editor's "Update from my CV", which replaces hand edits — leaves its copies alone. Keeps the same id and agent session; preserves template and typography. 409 when there is no usable seed. Upload alone does not do this — this is the explicit apply.
 
 **Path parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
-| `id` | string (uuid) | yes | The tailored CV id. |
+| `id` | string (uuid) | yes | The CV id (tailored or base). |
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/cvs/7d1a…/reseed" -b cookies.txt
