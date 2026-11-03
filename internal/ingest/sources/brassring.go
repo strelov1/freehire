@@ -57,9 +57,6 @@ type brassringHTTP interface {
 }
 
 const (
-	// brassringPageSize is the listing's fixed page size; the request carries a page number
-	// only.
-	brassringPageSize = 50
 	// brassringMaxPages bounds the walk; reaching it before the stated total fails the crawl.
 	// It covers 10,000 postings — the largest sampled board holds 131.
 	brassringMaxPages = 200
