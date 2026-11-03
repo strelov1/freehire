@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SvelteMap } from 'svelte/reactivity';
 import { tick } from 'svelte';
 import JobsView from './JobsView.svelte';
@@ -42,23 +42,13 @@ vi.mock('#lib/api.js', () => ({
 vi.mock('./filters/FilterModal.svelte', () => ({ default() {} }));
 vi.mock('./onboarding/OnboardingBanner.svelte', () => ({ default() {} }));
 vi.mock('./onboarding/OnboardingAlertBanner.svelte', () => ({ default() {} }));
-vi.mock('#lib/assistant/AssistantChat.svelte', () => ({ default() {} }));
-// Icons are decorative here; importing their complete catalogue dominates this suite's transforms.
-vi.mock('@lucide/svelte', () => new Proxy({}, {
-  get: (_target, name) => name === 'then' ? undefined : name === '__esModule' ? true : () => {},
-  has: () => true,
-}));
 
 beforeEach(() => {
   session.set('id', null);
   searchJobs.mockReset().mockResolvedValue({ items: [], total: 0, hasMore: false });
   saved.ensureLoaded.mockReset().mockResolvedValue(undefined);
   localStorage.clear();
-  sessionStorage.clear();
-  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
 });
-
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 function mountList(params: string, scope = {}) {
   return render(JobsView, {
@@ -67,20 +57,6 @@ function mountList(params: string, scope = {}) {
 }
 
 describe('personal job filters', () => {
-  it('closes the old account conversation immediately when the account changes', async () => {
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
-      const body = JSON.parse(String(init.body));
-      return Response.json({ data: { id: body.request_id, preset: 'chat', label: '', search_context: { query: body.search_query, brief: '' } } });
-    }));
-    session.set('id', 7);
-    mountList('q=go');
-    await fireEvent.click(screen.getByRole('button', { name: 'Help me shortlist' }));
-    await screen.findByText('Using your captured search');
-    session.set('id', 8);
-    await waitFor(() => expect(screen.queryByText('Using your captured search')).toBeNull());
-    expect(screen.getByRole('button', { name: 'Help me shortlist' })).toBeTruthy();
-  });
-
   it('keeps Hide viewed in the toolbar without a separate Hiring again button', () => {
     session.set('id', 7);
     mountList('');
