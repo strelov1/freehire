@@ -328,6 +328,17 @@ func (s *Store) BaseByID(ctx context.Context, id uuid.UUID, userID int64) (Recor
 	return rec, nil
 }
 
+// BaseOrDefault returns the base named by id, or the default base when id is uuid.Nil. A named
+// base is validated like BaseByID (ErrNotFound, ErrNotBase); ok is false only when no id was
+// given and the user has no base at all.
+func (s *Store) BaseOrDefault(ctx context.Context, userID int64, id uuid.UUID) (Record, bool, error) {
+	if id == uuid.Nil {
+		return s.BaseCV(ctx, userID)
+	}
+	rec, err := s.BaseByID(ctx, id, userID)
+	return rec, err == nil, err
+}
+
 // BaseFor returns the base a tailored copy was made from, falling back to the default base when
 // the copy predates the column or its base was deleted. ok is false only when the user has no
 // base at all.
@@ -405,15 +416,7 @@ func (s *Store) createTailored(ctx context.Context, userID, jobID int64, baseID 
 // existing one was reused instead). It returns ErrNoResume when there is nothing to seed a base
 // from. The base CV is never modified: tailoring only ever writes the new tailored row.
 func (s *Store) Tailor(ctx context.Context, userID, jobID int64, baseID uuid.UUID, tailoredTitle string, seeder Seeder, preferred map[string]string) (Meta, Meta, bool, error) {
-	var base Record
-	var ok bool
-	var err error
-	if baseID != uuid.Nil {
-		base, err = s.BaseByID(ctx, baseID, userID)
-		ok = err == nil
-	} else {
-		base, ok, err = s.BaseCV(ctx, userID)
-	}
+	base, ok, err := s.BaseOrDefault(ctx, userID, baseID)
 	if err != nil {
 		return Meta{}, Meta{}, false, err
 	}

@@ -180,14 +180,7 @@ func (h *cvHandlers) reseedBaseIfStaleVsUpload(c *fiber.Ctx, userID int64, baseI
 	if err != nil || uploadedAt == nil {
 		return err
 	}
-	var base cv.Record
-	var ok bool
-	if baseID != uuid.Nil {
-		base, err = h.cvStore.BaseByID(c.Context(), baseID, userID)
-		ok = err == nil
-	} else {
-		base, ok, err = h.cvStore.BaseCV(c.Context(), userID)
-	}
+	base, ok, err := h.cvStore.BaseOrDefault(c.Context(), userID, baseID)
 	if err != nil || !ok {
 		return err
 	}
