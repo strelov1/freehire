@@ -1444,6 +1444,9 @@ type Querier interface {
 	// the statement means no call site can mint around it. Inserting nothing yields no row,
 	// which the caller reads as "not allowed" (403).
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (CreateAPIKeyRow, error)
+	// A client-generated request id makes retrying session creation idempotent. A conflict
+	// never overwrites the owner or initial search; the caller reads and compares instead.
+	CreateAssistantSearchSession(ctx context.Context, arg CreateAssistantSearchSessionParams) (CreateAssistantSearchSessionRow, error)
 	// Start a conversation for a user. preset selects the prompt and tool set ('chat' or
 	// 'tailor'); cv_id/job_id bind a tailoring session to its CV and vacancy and are NULL
 	// for a chat. The label is set later, from the first user message.
@@ -7923,7 +7926,7 @@ type Querier interface {
 	// does not match, so the pass suppresses less until it completes — never wrongly.
 	//
 	// An open aggregator posting is marked duplicate_of an open CANONICAL ATS
-	// (non-aggregator) posting of the same (folded) company, equal normalized title, and
+	// (non-aggregator) posting of the same (folded) company, matching normalized title, and
 	// compatible country (countries overlap, or either side empty — the geography
 	// dictionary is sparse, so an unresolved side must not veto). The ATS row is never
 	// touched, so it stays canonical. Candidate aggregator rows are those that are
@@ -7933,6 +7936,8 @@ type Querier interface {
 	// copy back into search/embedding/enrichment. min(id) picks a stable target; the IS
 	// DISTINCT FROM guard makes re-runs cheap and idempotent. Run AFTER
 	// RecomputeRoleDuplicatesForCompanies so ATS reposts have already collapsed to their canon.
+	// Himalayas can truncate a title inside a word; a separate residual prefix arm below
+	// handles substantial fragments without broadening the other aggregators' matches.
 	SuppressAggregatorDuplicatesForCompanies(ctx context.Context, arg SuppressAggregatorDuplicatesForCompaniesParams) (int64, error)
 	// SyncCompaniesFromJobs narrowed to the given slugs: gives each a companies row and the
 	// name its jobs now carry. cmd/backfill-company-names passes the slugs it renamed jobs onto,
@@ -8118,6 +8123,8 @@ type Querier interface {
 	// record and theirs alone to make. A catalogue clean-up has no such standing, which is the
 	// whole distinction this change draws.
 	UntrackJob(ctx context.Context, arg UntrackJobParams) (UntrackJobRow, error)
+	// Only the owner can update preferences, and never the immutable initial search.
+	UpdateAssistantSelectionBrief(ctx context.Context, arg UpdateAssistantSelectionBriefParams) (int64, error)
 	// Persist the post-transaction balance: the current period and remaining points. Called at
 	// the end of the debit transaction to write back any lazy reset and/or decrement. The row is
 	// guaranteed to exist (EnsureBalance ran first).

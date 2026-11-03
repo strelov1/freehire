@@ -128,6 +128,10 @@ export class StagedFilters implements FacetStore {
     this.#f = { ...this.#f, seniorityIncludeUnspecified: on };
   }
 
+  setWorkModeRemoteAnywhere(on: boolean): void {
+    this.#f = { ...this.#f, workModeRemoteAnywhere: on };
+  }
+
   /** Reset every staged filter. */
   clear(): void {
     this.#f = emptyFilters();
