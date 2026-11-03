@@ -112,6 +112,14 @@ describe('CvList base CVs', () => {
     expect(await screen.findByText(/Template: Classic ATS/)).toBeTruthy();
   });
 
+  it('shows the base CVs while the tailored list is still loading', async () => {
+    listBaseCvs.mockResolvedValue([base('a', 'Backend', true)]);
+    listCvs.mockReturnValue(new Promise(() => {}));
+    render(CvList);
+    expect(await screen.findByText('Backend')).toBeTruthy();
+    expect(screen.getByText('Edit')).toBeTruthy();
+  });
+
   it('shows a tailored-list failure while the base list is still loading', async () => {
     listBaseCvs.mockReturnValue(new Promise(() => {}));
     listCvs.mockRejectedValue(new Error('boom'));
