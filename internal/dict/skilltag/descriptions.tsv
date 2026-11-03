@@ -1116,3 +1116,6 @@ litellm	LiteLLM is an open-source proxy and SDK that provides a unified OpenAI-c
 mastra	Mastra is an open-source TypeScript agent framework for building autonomous AI workflows, tool integrations, and evals.
 odoo	Odoo is an open-source suite of enterprise management applications covering ERP, CRM, accounting, inventory, and point of sale.
 sglang	SGLang is an open-source inference engine and structured generation runtime for serving large language models at high throughput.
+ux-design	UX design is the practice of shaping how a product works and feels for its users, covering flows, wireframes and usability.
+hr-operations	HR operations is the administrative side of human resources: employee records, onboarding paperwork, HR systems and process upkeep.
+sla-management	SLA management is the practice of defining, tracking and meeting service level agreements, the response and resolution times promised to customers.
