@@ -5,13 +5,19 @@ Meilisearch-backed keyword/faceted search over jobs and companies. The package d
 This package also owns the TEI embedding calls (`embed.go`) that feed the pgvector-backed
 `job_semantic_chunks` table — see `internal/ai/embed/AGENTS.md` — and copies those vectors
 into the jobs index's `desc` embedder for an agent's opt-in semantic search (see
-"Description vectors and the agent's semantic search" below). There is no SEPARATE semantic
-search index anymore: the
-`jobs_semantic` Meilisearch index (and `reindex --semantic`/`--from-pg`/`--posted-within`,
-`SearchParams.SemanticRatio`, `Client.SimilarJobs`/`RecommendByVector`/`EmbedText`) were
-removed in openspec/changes/drop-hybrid-search-pgvector-similar — `/jobs/:slug/similar`
-reads a precomputed pgvector lookup instead (`internal/search/similarjobs`,
-`cmd/similar-backfill`), and `/me/recommendations` was dropped outright.
+"Description vectors and the agent's semantic search" below).
+
+Similar jobs use the same live index: the stored source's first description chunk
+is the hybrid query vector, with its title as the text query. Missing vectors, a failed
+hybrid or no visible hybrid results fall back to keyword search under the same filters.
+Country, city (when known) and specialization are mandatory constraints; when only a
+country is known it remains the location constraint, and region is used only without
+country/city. Unknown location or specialization yields no related postings. Results
+are re-read from Postgres to exclude currently closed, private, duplicate and unseen jobs.
+There is no precomputed similarity list or similarity backfill worker. The contraction
+SQL is staged in
+`migrations/pending-similarity-cleanup/` for sqlc only; promote it to the top-level
+migrations in a second release after all old binaries and the old timer are retired.
 
 ## Always true
 
@@ -272,9 +278,10 @@ Moving `sort` later breaks that, and `TestSearchOperatorsOnRealEngine` catches i
 
 The jobs index carries a SECOND `userProvided` embedder, `desc` (768 dims, `descDimensions`),
 holding each posting's `job_semantic_chunks` vectors — one per chunk, so a document is
-multi-vector and Meilisearch scores it by its nearest chunk. Only OJCP's `search_jobs` queries
-it, and only when the agent sends `semantic: true`
-(openspec/changes/agent-semantic-search).
+multi-vector and Meilisearch scores it by its nearest chunk. The agent search surfaces
+query it when asked for semantic search (openspec/changes/agent-semantic-search).
+Similar-job reads also query it, reusing the source posting's first stored chunk vector
+without calling the query embedder.
 
 - **Every document writer must pass the chunks to `FromJob`.** `desc` follows the same two
   states as `skills`: vectors, or an explicit `null` that CLEARS what the index holds — and

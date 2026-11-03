@@ -2,7 +2,8 @@ package handler
 
 import (
 	"context"
-	"slices"
+	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -13,147 +14,178 @@ import (
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
-// unseenWindows is search's unseen-posting rule, resolved once from the adapter taxonomy:
-// a recommendation must not send anyone to a posting search itself withholds because its
-// source stopped listing it.
 var unseenWindows = search.UnseenWindows(sources.UnseenWindows(sources.Taxonomy(), search.UnseenWindow))
 
-// defaultSimilarLimit / maxSimilarLimit bound how many neighbours the similar-jobs
-// endpoint returns: a small default sized for a "Similar jobs" row on the detail
-// page, capped so a client cannot ask for an unbounded fan-out. maxSimilarLimit also
-// matches cmd/similar-backfill's default -similar count, so a limit=maxSimilarLimit
-// request is never starved by the precomputed list itself being shorter.
 const (
 	defaultSimilarLimit = 6
 	maxSimilarLimit     = 20
 )
 
-// SimilarJobs returns jobs nearest to the one addressed by :slug, read from the
-// precomputed jobs.similar_job_ids list (populated offline by cmd/similar-backfill
-// from pgvector nearest-neighbour-over-chunks — see
-// openspec/changes/drop-hybrid-search-pgvector-similar/design.md Decision 5).
-// Public (unauthenticated) like the other job reads. Response: {"data": [job
-// view...]} — neighbours carry public_slug and never the internal id.
-//
-// similar_job_ids is nearest-first but was computed at backfill time: a listed
-// neighbour may have closed since, or (rarely) been hard-deleted,
-// leaving a dangling id the FK reference no longer covers because the id sits in
-// another job's array column, not in a row the delete itself touches. Both cases
-// are tolerated silently — the id is just dropped, not treated as an error — and
-// the nearest-first order is preserved across the drop by re-sorting the fetched
-// rows to the original id order rather than trusting GetJobsByIDs' own order,
-// which is undefined for a WHERE id = ANY($1) fetch.
-//
-// A private posting is dropped the same way. NearestJobsToJob now refuses to name
-// one (semantic.sql), but that only governs lists computed from here on: a
-// user-pasted job description from the JD-tailor intake is a technical, open,
-// embedded row, so it was a legitimate neighbour of public postings and the
-// stored lists still hold it. This endpoint is unauthenticated and answers with
-// the whole jobview, so publishing one would publish the unguessable slug its
-// privacy rests on.
+// SimilarJobs searches the live index within the source's location and specialization.
 func (h *searchHandlers) SimilarJobs(c *fiber.Ctx) error {
-	id, err := h.queries.GetJobIDBySlug(c.Context(), c.Params("slug"))
+	row, err := h.queries.GetJobBySlug(c.Context(), c.Params("slug"))
 	if err != nil {
-		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
 		return err
 	}
-
 	limit := min(max(c.QueryInt("limit", defaultSimilarLimit), 1), maxSimilarLimit)
-
-	ordered, err := similarViews(c.Context(), h.queries, id, limit, func(row db.Job) bool {
+	views, err := similarViews(c.Context(), h.search, h.queries, row, limit, h.semantic.threshold, func(row db.Job) bool {
 		return !row.ClosedAt.Valid && !row.IsPrivate
 	})
 	if err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": ordered})
+	return c.JSON(fiber.Map{"data": views})
 }
 
-// similarReader is the two reads a similar-jobs answer needs. *db.Queries satisfies it.
 type similarReader interface {
-	GetSimilarJobIDs(ctx context.Context, id int64) (db.GetSimilarJobIDsRow, error)
+	search.ChunkLister
+	GetJobDuplicateOwner(ctx context.Context, jobID int64) (int64, error)
 	GetJobsByIDs(ctx context.Context, ids []int64) ([]db.Job, error)
 }
 
-// similarViews returns up to limit of the job's precomputed neighbours that show admits,
-// nearest first. It is shared by GET /jobs/:slug/similar and the ChatGPT app's
-// similar_jobs; each passes its own visibility rule, and the app's is stricter (it also
-// drops duplicates, as every one of its tools does).
-//
-// Whatever show admits, a neighbour its source has stopped listing is dropped too
-// (search.UnseenWindows): it is withheld from search, and a recommendation is a search
-// result by another name. The posting's own page still serves it.
-//
-// It fetches the whole stored (nearest-first, capped at cmd/similar-backfill's -similar
-// count) list, not just the first `limit` ids: some may turn out closed or dangling, and
-// truncating before the filter would silently starve a limit=maxSimilarLimit request even
-// though enough open neighbours exist further down the stored list. The nearest-first order
-// is restored from the stored ids rather than trusted from GetJobsByIDs, whose order is
-// undefined for a WHERE id = ANY($1) fetch.
-//
-// Neighbours sharing a country with the source come first, each group keeping that
-// nearest-first order (freehire#3874). The stored list is computed by meaning alone, and
-// measured on prod 2026-10-30 only 2.9 of the 6 shown shared the source's country while
-// 46% of postings had six such neighbours further down their own list. Reordering here
-// rather than filtering in NearestJobsToJob is deliberate: that query runs ~8s per job on
-// a disk-bound host, so a geographic predicate there means re-computing ~1.2M lists.
-// A source with no country orders as before.
-func similarViews(ctx context.Context, q similarReader, id int64, limit int, show func(db.Job) bool) ([]jobview.Job, error) {
-	source, err := q.GetSimilarJobIDs(ctx, id)
+// similarParams keeps geography AND specialization mandatory. Country and city must
+// be separate groups: the general search filter ORs geography facets together.
+// Use the most precise known location, without inventing a city for remote jobs.
+// Unknown specialization or geography cannot safely yield a related-jobs list.
+func similarParams(source jobview.Job, id int64, limit int) (search.SearchParams, bool) {
+	if source.Enrichment.Category == "" || source.Enrichment.Category == "other" {
+		return search.SearchParams{}, false
+	}
+	groups, ok := facetGroups("category", []string{source.Enrichment.Category})
+	if !ok {
+		return search.SearchParams{}, false
+	}
+	hasLocation := false
+	for _, facet := range []struct {
+		key    string
+		values []string
+	}{
+		{"countries", source.Countries},
+		{"cities", source.Cities},
+	} {
+		if len(facet.values) > 0 {
+			part, ok := facetGroups(facet.key, facet.values)
+			if !ok {
+				return search.SearchParams{}, false
+			}
+			groups = append(groups, part...)
+			hasLocation = true
+		}
+	}
+	if !hasLocation && len(source.Regions) > 0 {
+		part, ok := facetGroups("regions", source.Regions)
+		if !ok {
+			return search.SearchParams{}, false
+		}
+		groups = append(groups, part...)
+		hasLocation = true
+	}
+	if !hasLocation {
+		return search.SearchParams{}, false
+	}
+	groups = append(groups, []string{fmt.Sprintf("id != %d", id)})
+	return search.SearchParams{Query: source.Title, LiteralQuery: true, Filter: groups, Limit: limit * 3}, true
+}
+
+// facetGroups turns one stored facet into filter groups. A stored value that is blank
+// is dropped by the filter builder, which can leave no group at all; that must read as
+// "unknown", never as a constraint quietly missing.
+func facetGroups(key string, values []string) ([][]string, bool) {
+	groups, ok := search.FilterFromValues(url.Values{key: values}).([][]string)
+	return groups, ok && len(groups) > 0
+}
+
+// similarViews uses the first stored passage (title and opening description) as
+// the hybrid query vector. No request-time model call or offline similarity list
+// is needed. Missing vectors, a failed hybrid, or no visible hybrid hits fall back
+// to keywords under the SAME filters. Re-read hits to enforce current visibility.
+func similarViews(ctx context.Context, idx searcher, q similarReader, source db.Job, limit int, threshold float64, show func(db.Job) bool) ([]jobview.Job, error) {
+	if idx == nil {
+		return nil, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
+	}
+	view, err := jobview.FromRow(source)
 	if err != nil {
 		return nil, err
 	}
-	similarIDs := source.SimilarJobIds
-	if len(similarIDs) == 0 {
+	limit = min(max(limit, 1), maxSimilarLimit)
+	params, ok := similarParams(view, source.ID, limit)
+	if !ok {
 		return []jobview.Job{}, nil
 	}
-
-	rows, err := q.GetJobsByIDs(ctx, similarIDs)
+	excludedID := source.ID
+	if source.DuplicateOf.Valid {
+		excludedID, err = q.GetJobDuplicateOwner(ctx, source.ID)
+		if err != nil {
+			return nil, err
+		}
+		if excludedID == 0 {
+			return []jobview.Job{}, nil
+		}
+		params.Filter = append(params.Filter.([][]string), []string{fmt.Sprintf("id != %d", excludedID)})
+	}
+	chunks, err := search.ChunkVectorsForJobs(ctx, q, []int64{source.ID})
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err == nil && len(chunks[source.ID]) > 0 {
+		hybrid := params
+		hybrid.SemanticVector = chunks[source.ID][0]
+		hybrid.ScoreThreshold = threshold
+		res, err := idx.Search(ctx, hybrid)
+		if err == nil {
+			views, err := visibleSimilar(ctx, q, excludedID, res.Hits, limit, show)
+			if err != nil {
+				return nil, err
+			}
+			if len(views) > 0 {
+				return views, nil
+			}
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+	}
+	res, err := idx.Search(ctx, params)
 	if err != nil {
 		return nil, err
 	}
+	return visibleSimilar(ctx, q, excludedID, res.Hits, limit, show)
+}
 
+func visibleSimilar(ctx context.Context, q similarReader, sourceID int64, hits []search.JobDocument, limit int, show func(db.Job) bool) ([]jobview.Job, error) {
+	views := make([]jobview.Job, 0, limit)
+	if len(hits) == 0 {
+		return views, nil
+	}
+	ids := make([]int64, 0, len(hits))
+	for _, hit := range hits {
+		ids = append(ids, hit.ID)
+	}
+	rows, err := q.GetJobsByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[int64]db.Job, len(rows))
 	now := time.Now()
-	byID := make(map[int64]int, len(rows))
-	for i, row := range rows {
-		if show(row) && !unseenWindows.Unseen(row, now) {
-			byID[row.ID] = i
+	for _, row := range rows {
+		if row.ID != sourceID && !row.DuplicateOf.Valid && show(row) && !unseenWindows.Unseen(row, now) {
+			byID[row.ID] = row
 		}
 	}
-
-	local := make([]db.Job, 0, len(byID))
-	var elsewhere []db.Job
-	for _, sid := range similarIDs {
-		i, ok := byID[sid]
+	for _, hit := range hits {
+		row, ok := byID[hit.ID]
 		if !ok {
-			continue // not shown, or a dangling id (hard-deleted, stale backfill entry).
+			continue
 		}
-		if sharesCountry(rows[i].Countries, source.Countries) {
-			local = append(local, rows[i])
-		} else {
-			elsewhere = append(elsewhere, rows[i])
-		}
-	}
-
-	picked := append(local, elsewhere...)
-	picked = picked[:min(len(picked), limit)]
-	ordered := make([]jobview.Job, 0, len(picked))
-	for _, row := range picked {
+		delete(byID, hit.ID)
 		view, err := jobview.FromRow(row)
 		if err != nil {
 			return nil, err
 		}
-		ordered = append(ordered, view)
-	}
-	return ordered, nil
-}
-
-// sharesCountry reports whether two country-code lists overlap.
-func sharesCountry(a, b []string) bool {
-	for _, x := range a {
-		if slices.Contains(b, x) {
-			return true
+		views = append(views, view)
+		if len(views) == limit {
+			break
 		}
 	}
-	return false
+	return views, nil
 }

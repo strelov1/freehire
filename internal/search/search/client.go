@@ -1,14 +1,9 @@
 // Package search provides Meilisearch-backed full-text and faceted keyword search
 // over jobs. It owns the document shape and the single facet/keyword index
-// configuration — the always-fresh production index, carrying one `userProvided`
-// embedder for the skill vectors behind the match sort and no model-backed one — plus the
-// read/write helpers, so callers (the search handler and the reindex command) never
-// touch the meilisearch-go SDK directly. It also owns the TEI embedding calls (see
-// embed.go) that feed the pgvector-backed job_semantic_chunks table
-// (internal/ai/embed's open-job path) — not a Meilisearch document; the semantic (jobs_semantic) index
-// this package used to also build and query was removed in
-// openspec/changes/drop-hybrid-search-pgvector-similar in favor of a precomputed
-// pgvector lookup (cmd/similar-backfill, internal/search/similarjobs).
+// configuration and read/write helpers. The jobs index carries userProvided skill
+// vectors for the match sort and description chunk vectors for hybrid search,
+// including similar jobs. TEI embedding calls (embed.go) feed job_semantic_chunks
+// in Postgres; index writers copy those stored vectors into Meilisearch.
 package search
 
 import (
@@ -97,7 +92,7 @@ const (
 var rawClient = &http.Client{Timeout: 30 * time.Second}
 
 // Client is a thin wrapper over the Meilisearch service scoped to the facet
-// (keyword + facets, no embedder) job index. url/key are kept for the one raw call
+// (keyword, facets and userProvided vectors) job index. url/key are kept for the one raw call
 // (swap-indexes) the SDK cannot make against our engine version — see swapIndexes.
 type Client struct {
 	manager meilisearch.ServiceManager
@@ -447,11 +442,14 @@ func (c *Client) submitDelete(ctx context.Context, idx meilisearch.IndexManager,
 // SearchParams is a backend-agnostic search request. Filter is the value built
 // by Filter (nil for none).
 type SearchParams struct {
-	Query  string
-	Filter any
-	Sort   []string
-	Limit  int
-	Offset int
+	// LiteralQuery treats stored text as words, without the user-query DSL or
+	// Meilisearch's phrase/exclusion syntax. Similar jobs pass an employer's title.
+	LiteralQuery bool
+	Query        string
+	Filter       any
+	Sort         []string
+	Limit        int
+	Offset       int
 	// Vector, when set, ranks results by cosine against it using SkillEmbedder rather
 	// than by text relevance — the match sort. It composes with Filter: the engine
 	// applies both in one query, so the facets need no separate pass and pagination
@@ -577,9 +575,13 @@ const semanticRatio = 0.7
 // Search runs a query against the jobs (facet/keyword) index and decodes the hits.
 func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, error) {
 	p.Filter = withOpenJobs(p.Filter)
-	alts, err := ParseQuery(p.Query)
-	if err != nil {
-		return SearchResult{}, err
+	alts := []Alternative{{Text: literalSearchText(p.Query)}}
+	if !p.LiteralQuery {
+		var err error
+		alts, err = ParseQuery(p.Query)
+		if err != nil {
+			return SearchResult{}, err
+		}
 	}
 	// The match sort wins over a semantic vector (see buildSearchRequest), so only a
 	// request without one is a hybrid.
