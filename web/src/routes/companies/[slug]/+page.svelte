@@ -75,6 +75,8 @@
       slug={data.slug}
       currentPage={data.pageNumber}
       referralAvailable={data.referralAvailable}
+      parent={data.parent}
+      subsidiaries={data.subsidiaries}
     />
   {/key}
 </div>

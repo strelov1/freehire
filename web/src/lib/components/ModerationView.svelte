@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { replaceState } from '$app/navigation';
-  import { Briefcase, FileText, Flag, GraduationCap, Handshake, Star, UsersRound } from '@lucide/svelte';
+  import { Briefcase, Building2, FileText, Flag, GraduationCap, Handshake, Star, UsersRound } from '@lucide/svelte';
   import type { LucideIcon } from '@lucide/svelte';
   import { announce } from '#lib/announce.svelte.js';
   import { api } from '#lib/api.js';
@@ -17,11 +17,12 @@
   import MentorReviewView from './MentorReviewView.svelte';
   import EmployerClaimsQueue from './EmployerClaimsQueue.svelte';
   import ConversationReportsQueue from './ConversationReportsQueue.svelte';
+  import CompanyRelationsQueue from './CompanyRelationsQueue.svelte';
   import States from './States.svelte';
 
   const isModerator = $derived(currentUser()?.role === 'moderator');
 
-  type View = 'queue' | 'reports' | 'feedback' | 'referrals' | 'mentors' | 'employer' | 'conversations';
+  type View = 'queue' | 'reports' | 'feedback' | 'referrals' | 'mentors' | 'employer' | 'conversations' | 'companies';
   const sections: { value: View; label: string; icon: LucideIcon }[] = [
     { value: 'queue', label: 'Moderation queue', icon: FileText },
     { value: 'reports', label: 'Reported jobs', icon: Flag },
@@ -35,6 +36,8 @@
     // purpose (rare, one-off; done directly via the API) — this tab is approve/reject only.
     { value: 'employer', label: 'Employer claims', icon: Briefcase },
     { value: 'conversations', label: 'Conversation reports', icon: UsersRound },
+    // Company merges and parent links people proposed from a company page (freehire#3895).
+    { value: 'companies', label: 'Company corrections', icon: Building2 },
   ];
 
   // The active section is mirrored in `?tab=` so moderator deep-links (the
@@ -258,6 +261,8 @@
       </div>
     {:else if view === 'conversations'}
       <ConversationReportsQueue />
+    {:else if view === 'companies'}
+      <CompanyRelationsQueue />
     {:else}
       <div class="flex flex-col gap-6">
         <p class="text-sm text-muted-foreground">

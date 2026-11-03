@@ -224,16 +224,28 @@ func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark
 // Two Latin d's are matched, never the Cyrillic "Д", so the Russian initials "ИП КИМ А. Д."
 // keep their letters.
 //
+// It also drops the registered SEAT that a Slovenian or Croatian name puts after its form:
+// "KRKA, d.d., Novo mesto" or "TERME KRKA, d.o.o., Novo mesto". The register name carries the
+// seat as part of the name, so a source that copies it verbatim ends the name with a town. The
+// form is then no longer the last word, and the walk never reaches it. That kept
+// "Krka, tovarna zdravil, d. d., Novo mesto" and "KRKA, d.d., Novo mesto" apart from the Krka
+// the employer's own board files under (freehire#3895). The cut needs the dotted d.d. or
+// d.o.o. (spaced or not) and a comma after it, and it takes only a LAST segment made of letters,
+// so "Acme d. d. Ljubljana" stays as it is. With no comma there, nothing says the town is a seat
+// and not part of the name.
+//
 // Every walk over a name's tail calls it before splitting the name into words, for the same
 // reason each asks [IsLegalFormBefore]: a walk that skipped it would count "o." "o." as two
 // name words where the company key drops them.
 func CloseSpacedForms(name string) string {
+	name = balkanSeatTail.ReplaceAllString(name, "${1}")
 	name = spacedPolishTail.ReplaceAllString(name, "${1}o.o.")
 	name = spacedBalkanTail.ReplaceAllString(name, "${1}.o.o.${2}")
 	return spacedJointStockTail.ReplaceAllString(name, "${1}.d.${2}")
 }
 
 var (
+	balkanSeatTail       = regexp.MustCompile(`(?i)((?:^|[^\p{L}\p{N}])d\.[\s\p{Zs}]*(?:o\.[\s\p{Zs}]*o\.?|d\.?))[\s\p{Zs}]*,[\s\p{Zs}]*\p{L}[\p{L}\s\p{Zs}.\-]*$`)
 	spacedPolishTail     = regexp.MustCompile(`(?i)([\s\p{Zs}.]z[\s\p{Zs}]+)o\.[\s\p{Zs}]+o\.?[\s\p{Zs})\]]*$`)
 	spacedBalkanTail     = regexp.MustCompile(`(?i)((?:^|[^\p{L}\p{N}])d)\.[\s\p{Zs}]+o\.[\s\p{Zs}]+o\.?((?:[\s\p{Zs},]+k\.d\.?)?[\s\p{Zs})\]]*)$`)
 	spacedJointStockTail = regexp.MustCompile(`(?i)((?:^|[^\p{L}\p{N}])d)\.[\s\p{Zs}]+d\.?([\s\p{Zs})\]]*)$`)

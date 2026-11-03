@@ -230,6 +230,7 @@ extension/*.zip
 /recount-companies
 /reindex
 /reindex-companies
+/report-company-website-twins
 /report-classify-drift
 /report-geo-gaps
 /report-skill-gaps

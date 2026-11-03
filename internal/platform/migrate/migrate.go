@@ -58,6 +58,10 @@ const noTxMarker = "migrate: no-transaction"
 //	                                   rather than a suggestion. A count read in one
 //	                                   statement and acted on in another is not atomic under
 //	                                   READ COMMITTED, whichever statement holds it
+//	0x66686372  internal/job/companyrelation — "fhcr", a blocking pg_advisory_xact_lock; one
+//	                                   company-relation approval at a time, so two decisions
+//	                                   checked against the same registry cannot both pass and
+//	                                   together make the chain neither would alone
 //
 // The comment here used to say "the project has none", which stopped being true when those two
 // arrived and left the only place anyone would look asserting there was nothing to collide with.

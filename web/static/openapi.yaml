@@ -995,6 +995,15 @@ paths:
                       referral_available:
                         type: boolean
                         description: Whether an employee referral offer exists for this company.
+                      parent:
+                        $ref: "#/components/schemas/CompanyRef"
+                      subsidiaries:
+                        type: array
+                        description: |
+                          Companies this one owns. Each is a separate employer with its own
+                          jobs. Omitted when there are none.
+                        items:
+                          $ref: "#/components/schemas/CompanyRef"
         default:
           $ref: "#/components/responses/Error"
   /geo/cities:
@@ -2643,6 +2652,23 @@ components:
         feedback_rating_avg:
           type: number
           nullable: true
+    CompanyRef:
+      type: object
+      description: |
+        A related company: the parent that owns this one, or a subsidiary it owns. It is a
+        separate company with its own page and jobs, not another name for this one.
+      required:
+        - slug
+        - name
+        - job_count
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        job_count:
+          type: integer
+          description: Open jobs the related company has.
     CompanyDetail:
       type: object
       additionalProperties: true

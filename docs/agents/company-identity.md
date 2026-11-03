@@ -194,6 +194,47 @@ rows stay in the table. Filtering on it made the leftovers of a merge invisible 
 stranded on `jpmorganchase` after the first wave, permanently, because the better the merge
 worked the more reliably the remainder hid.
 
+## Corrections people propose (freehire#3895)
+
+The fold and the curated list cannot reach every duplicate, and nothing in them knows that two
+DIFFERENT employers belong together. A signed-in visitor can propose either from a company page
+(`POST /companies/:slug/relations`), and a moderator decides it in `/moderation?tab=companies`.
+`internal/job/companyrelation` holds the rules.
+
+- **`same`: one employer under two slugs.** Approval writes the alias with reason `moderator`
+  (migration 0230, its own class so it can be reversed alone) and its folded key from the
+  retiring company's NAME, then moves the jobs and reconciles the companies rows. Both writers
+  go through `internal/job/companymerge` (record and repoint, re-key, reconcile), so a merge
+  wave and a moderator's approval run the same procedure. The difference is that this one
+  runs inside the request. It refuses
+  what would break the registry silently: a retiring slug that is already someone's canon, a
+  canon that is itself retired, a slug already merged elsewhere, and a folded key that already
+  has a different canon. Approvals take an advisory lock (`fhcr`), so two checked against the
+  same registry cannot together make a chain. The registry row commits before the move; a move
+  that fails part-way leaves the proposal in the queue as approved, and approving it again
+  resumes it. The folded key comes from the retiring slug's newest POSTING's spelling, as the
+  merge worker reads it, not from `companies.name`, which can be a curated display name.
+- **`subsidiary`: two employers, one owned by the other.** Novartis Slovenija is not Novartis,
+  and merging the two would show one company's jobs under another's name. So nothing moves.
+  `company_parents` links them, and each company page names the other (`parent`,
+  `subsidiaries` on `GET /companies/:slug`). It is one level deep: a parent never has a parent,
+  so no page walks a chain. A merge carries the retiring slug's subsidiaries to the canon, or to
+  the canon's own parent when it has one.
+- Neither table has a foreign key to `companies`, for the reason `company_slug_aliases` has none:
+  a decision has to outlive the company row it was made about.
+
+**The website is the merge signal sources can give us.** `sources.Job.CompanyWebsite` carries
+an employer's own site where a source states it in a structured field. EURES does for about a
+third of named employers in AT/BE/DE; its `legalID` was empty in every posting sampled. The
+pipeline writes it to `company_info.feed_website`, never to `website`: the curated fillers
+(Wikipedia, YC, an employer's claim) only fill a blank `website`, so a feed value there would
+block them forever, and the logo map and the company header trust `website` as curated.
+`cmd/report-company-website-twins` reads either key through `logodomain.Domain` (the logo map's
+own reader) and lists the companies that share a website host while their
+names fold apart: Forum Jobs' branches (all `forumjobs.be`), or a posting whose employer name
+is really a job title. It is a report and never a merge, because a job board's or a group's
+host can stand behind several employers. A person reads it and proposes the merges.
+
 ## Gotchas
 
 - **The canonical slug must be a fixed point of the rule, and job count alone does not give

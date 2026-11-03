@@ -148,6 +148,10 @@ var blocks = map[string][]string{
 	},
 	"job": {
 		"applydate", "collections",
+		// companymerge is the write side of retiring one company slug into another, shared by
+		// cmd/merge-companies and companyrelation, which decides the merges and parent links
+		// people propose. Company identity, beside formeremployer and logodomain.
+		"companymerge", "companyrelation",
 		// dictgap turns LLM enrichment facts already in the catalogue into ranked
 		// candidate gaps for the deterministic dict/skilltag and dict/classify
 		// dictionaries — a fact about postings' recorded facets, not an AI/enrichment
