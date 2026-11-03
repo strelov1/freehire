@@ -288,10 +288,14 @@ func hydrateLiveHire(job *Job, d livehireDetail) {
 	if et := livehireEmploymentType(d.WorkType); et != "" {
 		job.EmploymentType = et
 	}
-	if d.MinSalary != nil && d.MaxSalary != nil && *d.MinSalary > 0 && *d.MaxSalary >= *d.MinSalary {
+	// Bounds without a unit would read as annual downstream, so a salary whose type is not
+	// recognised is left unset rather than emitted bare.
+	if period := livehireSalaryPeriod(d.SalaryType); period != "" &&
+		d.MinSalary != nil && d.MaxSalary != nil && *d.MinSalary > 0 && *d.MaxSalary >= *d.MinSalary {
 		job.SalaryMin = d.MinSalary
 		job.SalaryMax = d.MaxSalary
 		job.SalaryCurrency = d.CurrencyISOCode
+		job.SalaryPeriod = period
 	}
 	if d.ApplicationsCloseAt != nil && !d.ApplicationsCloseAt.IsZero() {
 		t := d.ApplicationsCloseAt.UTC()
@@ -303,6 +307,23 @@ func hydrateLiveHire(job *Job, d livehireDetail) {
 // freehire's work-mode vocabulary via the shared normalizer; unknown values map to "".
 func livehireWorkMode(o string) string {
 	return workplaceTypeMode(o)
+}
+
+// livehireSalaryPeriod maps LiveHire's salaryType onto the period vocabulary the pipeline reads.
+// The platform's exact spellings are unverified, so match on the unit word; anything else is "".
+func livehireSalaryPeriod(t string) string {
+	t = strings.ToLower(t)
+	switch {
+	case strings.Contains(t, "hour"):
+		return "hour"
+	case strings.Contains(t, "day"), strings.Contains(t, "daily"):
+		return "day"
+	case strings.Contains(t, "month"):
+		return "month"
+	case strings.Contains(t, "annual"), strings.Contains(t, "year"), strings.Contains(t, "annum"), strings.Contains(t, "package"):
+		return "year"
+	}
+	return ""
 }
 
 // livehireEmploymentType maps LiveHire's workType enum onto vocab.EmploymentTypeValues. Only

@@ -212,7 +212,7 @@ func TestLiveHireSalaryMapping(t *testing.T) {
 		pages: map[int]string{1: livehireListingJSON(false, [2]string{"PAY", "7"})},
 		detail: map[string]string{
 			"PAY/7": `{"roleName":"Paid role","descriptionHtml":"<p>x</p>","minSalary":100000,
-				"maxSalary":130000,"currencyIsoCode":"AUD","applicationsClosed":false}`,
+				"maxSalary":130000,"salaryType":"Annual","currencyIsoCode":"AUD","applicationsClosed":false}`,
 		},
 	}
 	jobs, err := NewLiveHire(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "flybuys"}, func(string) bool { return false })
@@ -225,6 +225,19 @@ func TestLiveHireSalaryMapping(t *testing.T) {
 	}
 	if j.SalaryCurrency != "AUD" {
 		t.Errorf("SalaryCurrency = %q", j.SalaryCurrency)
+	}
+	if j.SalaryPeriod != "year" {
+		t.Errorf("SalaryPeriod = %q, want year", j.SalaryPeriod)
+	}
+}
+
+func TestLiveHireSalaryPeriodVocabulary(t *testing.T) {
+	for raw, want := range map[string]string{
+		"Annual": "year", "Hourly": "hour", "Daily": "day", "Monthly": "month", "": "", "Mystery": "",
+	} {
+		if got := livehireSalaryPeriod(raw); got != want {
+			t.Errorf("livehireSalaryPeriod(%q) = %q, want %q", raw, got, want)
+		}
 	}
 }
 
