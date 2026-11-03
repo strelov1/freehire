@@ -73,7 +73,9 @@ WHERE id = $1 AND user_id = $2;
 -- deleting a vacancy creates, so it cannot mean "not tailored".
 --
 -- The rule: (1) the base the user's most recently created tailored CV was made from, while that
--- base still exists; else (2) the OLDEST created base. Not "most recently edited": bases are
+-- base still exists; else (2) the OLDEST created base. The newest copy counts even when its
+-- base_cv_id has gone NULL (its base was deleted): that is "no live base", which falls to (2), not
+-- a reason to look at an older copy. Not "most recently edited": bases are
 -- edited by hand now, and a default that flipped with every typo fix would make "which base does
 -- tailoring use" unanswerable. ListBaseCVsByUser computes the same expression for its is_default
 -- flag — change both together.
@@ -82,7 +84,7 @@ FROM cvs b
 WHERE b.user_id = $1 AND NOT b.is_tailored
 ORDER BY (b.id = (
             SELECT t.base_cv_id FROM cvs t
-            WHERE t.user_id = $1 AND t.is_tailored AND t.base_cv_id IS NOT NULL
+            WHERE t.user_id = $1 AND t.is_tailored
             ORDER BY t.created_at DESC, t.id DESC
             LIMIT 1
           )) DESC NULLS LAST,
@@ -99,7 +101,7 @@ SELECT b.id, b.title, b.template_id, b.hand_edited, b.created_at, b.updated_at,
           WHERE d.user_id = $1 AND NOT d.is_tailored
           ORDER BY (d.id = (
                       SELECT t.base_cv_id FROM cvs t
-                      WHERE t.user_id = $1 AND t.is_tailored AND t.base_cv_id IS NOT NULL
+                      WHERE t.user_id = $1 AND t.is_tailored
                       ORDER BY t.created_at DESC, t.id DESC
                       LIMIT 1
                     )) DESC NULLS LAST,

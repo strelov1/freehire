@@ -153,3 +153,31 @@ func TestDuplicateBaseCVCopiesDocumentAndFlagAndRefusesTailored(t *testing.T) {
 		t.Fatal("duplicating a foreign CV must return no row")
 	}
 }
+
+// The newest tailored copy decides even once its base is gone: a deleted base means "no live
+// base", which falls to the oldest base — not to the base an OLDER copy happened to come from.
+func TestDefaultBaseFallsToOldestWhenTheNewestCopysBaseWasDeleted(t *testing.T) {
+	pool := startPostgres(t)
+	q := New(pool)
+	ctx := context.Background()
+	u := cvUser(t, pool, "e@example.test")
+
+	a := newBase(t, q, u, "A")
+	b := newBase(t, q, u, "B")
+	c := newBase(t, q, u, "C")
+	tailorFrom(t, pool, q, u, b, "k1")
+	tailorFrom(t, pool, q, u, c, "k2")
+	if _, err := q.DeleteCV(ctx, DeleteCVParams{ID: c, UserID: u}); err != nil {
+		t.Fatal(err)
+	}
+	if got := defaultBaseID(t, q, u); got != a {
+		t.Fatalf("default = %s, want the oldest base %s (not B, the older copy's base)", got, a)
+	}
+	items, err := q.ListBaseCVsByUser(ctx, u)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 || !items[0].IsDefault || items[1].IsDefault {
+		t.Fatalf("is_default flags = %+v, want only the oldest", items)
+	}
+}

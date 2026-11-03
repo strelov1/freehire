@@ -166,7 +166,7 @@ func (f *fakeRepo) defaultBaseLocked(userID int64) (uuid.UUID, bool) {
 	var pointed uuid.UUID
 	newest := 0
 	for _, r := range f.rows {
-		if r.userID == userID && r.jobID != 0 && r.baseID != uuid.Nil && r.seq > newest {
+		if r.userID == userID && r.jobID != 0 && r.seq > newest {
 			newest, pointed = r.seq, r.baseID
 		}
 	}

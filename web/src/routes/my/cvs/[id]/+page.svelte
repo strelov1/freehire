@@ -79,18 +79,29 @@
   let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   let pdfVersion = $state(0);
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  // The PUT in flight, if any. A debounce that already fired leaves no timer to look at, so the
+  // reseed below waits on this instead — otherwise a late PUT would restore the pre-refresh text.
+  let saving: Promise<void> | null = null;
 
-  async function persist() {
-    const snap = snapshot(); // edits during the round-trip re-trigger the effect
-    saveState = 'saving';
-    try {
-      await api.updateCv(id, { title, template_id: templateId, document: doc });
-      lastSnapshot = snap;
-      saveState = 'saved';
-      pdfVersion += 1;
-    } catch {
-      saveState = 'error';
-    }
+  function persist(): Promise<void> {
+    const run = (async () => {
+      const snap = snapshot(); // edits during the round-trip re-trigger the effect
+      saveState = 'saving';
+      try {
+        await api.updateCv(id, { title, template_id: templateId, document: doc });
+        lastSnapshot = snap;
+        saveState = 'saved';
+        pdfVersion += 1;
+      } catch {
+        saveState = 'error';
+      }
+    })();
+    saving = run;
+    // `run` never rejects: its own catch records the failure.
+    void run.then(() => {
+      if (saving === run) saving = null;
+    });
+    return run;
   }
 
   $effect(() => {
@@ -130,12 +141,14 @@
 
   async function refreshFromCv() {
     refreshError = null;
-    // Anything typed a moment ago must land first, or the debounce overwrites the reseed.
+    // Anything typed a moment ago must land first, or a pending or in-flight save overwrites the
+    // reseed: finish the one on the wire, then flush a debounce that has not fired yet.
+    await saving;
     if (saveTimer) {
       clearTimeout(saveTimer);
       saveTimer = null;
-      if (snapshot() !== lastSnapshot) await persist();
     }
+    if (snapshot() !== lastSnapshot) await persist();
     try {
       hydrate(await api.reseedCv(id));
       pdfVersion += 1;

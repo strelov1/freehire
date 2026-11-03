@@ -2552,7 +2552,9 @@ type Querier interface {
 	// deleting a vacancy creates, so it cannot mean "not tailored".
 	//
 	// The rule: (1) the base the user's most recently created tailored CV was made from, while that
-	// base still exists; else (2) the OLDEST created base. Not "most recently edited": bases are
+	// base still exists; else (2) the OLDEST created base. The newest copy counts even when its
+	// base_cv_id has gone NULL (its base was deleted): that is "no live base", which falls to (2), not
+	// a reason to look at an older copy. Not "most recently edited": bases are
 	// edited by hand now, and a default that flipped with every typo fix would make "which base does
 	// tailoring use" unanswerable. ListBaseCVsByUser computes the same expression for its is_default
 	// flag — change both together.

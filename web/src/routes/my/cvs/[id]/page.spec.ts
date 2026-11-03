@@ -95,4 +95,28 @@ describe('/my/cvs/[id]', () => {
     await fireEvent.click(screen.getByText('Replace content'));
     await waitFor(() => expect(reseedCv).toHaveBeenCalledWith('cv-1'));
   });
+
+  it('waits for an autosave already in flight before reseeding, so a late PUT cannot undo the refresh', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    listBaseCvs.mockResolvedValue([{ id: 'cv-1', title: 'Backend', is_default: true, hand_edited: true }]);
+    getCv.mockResolvedValue(record());
+    let finishSave: () => void = () => {};
+    updateCv.mockReturnValue(new Promise<void>((resolve) => (finishSave = resolve)));
+    reseedCv.mockResolvedValue(record({ document: { header: {}, summary: 'from seed' } }));
+    render(Page);
+
+    const input = (await screen.findByLabelText('CV title')) as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: 'Edited' } });
+    await vi.advanceTimersByTimeAsync(900); // the debounce fires; the PUT is now on the wire
+    await waitFor(() => expect(updateCv).toHaveBeenCalledTimes(1));
+
+    await fireEvent.click(screen.getByText('Update from my CV'));
+    await fireEvent.click(await screen.findByText('Replace content'));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(reseedCv).not.toHaveBeenCalled(); // still waiting on the save
+
+    finishSave();
+    await waitFor(() => expect(reseedCv).toHaveBeenCalledWith('cv-1'));
+    vi.useRealTimers();
+  });
 });
