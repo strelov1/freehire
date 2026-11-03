@@ -917,6 +917,15 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 			return
 		}
 		t.st.Ingested++
+		// A re-listed posting still states its employer's website, and the employers whose
+		// postings were all stored before the field existed are only ever reached here.
+		if j.CompanyWebsite != "" {
+			slug := normalize.CompanySlug(j.Company)
+			if canonical := canonicalCompanySlug(canon, j.Company); canonical != "" {
+				slug = canonical
+			}
+			r.recordCompanyWebsite(ctx, e, slug, j.CompanyWebsite)
+		}
 		return
 	}
 	r.saveOne(ctx, e, j, covered, canon, t)

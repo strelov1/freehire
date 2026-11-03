@@ -398,12 +398,14 @@ func (v euresVacancy) job() Job {
 		URL:        euresPortalURL + v.ID + "?lang=en",
 		Title:      strings.TrimSpace(v.Title),
 		Company:    strings.TrimSpace(v.Employer.Name),
+		// Carried on the identity too, so a re-listed posting's SeenRefresh records the
+		// website of an employer whose postings were all stored before the field existed.
+		CompanyWebsite: v.Employer.Website,
 	}
 }
 
 func (e eures) toJob(ctx context.Context, board string, v euresVacancy) Job {
 	j := v.job()
-	j.CompanyWebsite = v.Employer.Website
 	j.Description = sanitizeHTML(v.Description)
 	j.Location = euresCountryNames[strings.ToLower(board)]
 	var detail euresDetailResponse

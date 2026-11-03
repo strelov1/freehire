@@ -72,3 +72,34 @@ func TestCompanyWebsiteRefusesWhatIsNotAURL(t *testing.T) {
 		}
 	}
 }
+
+type refreshSource struct{}
+
+func (refreshSource) Provider() string { return "eures" }
+
+func (refreshSource) Fetch(context.Context, sources.CompanyEntry) ([]sources.Job, error) {
+	return []sources.Job{{
+		ExternalID:     "1",
+		Title:          "Backend Engineer",
+		Company:        "Acme GmbH",
+		URL:            "https://europa.eu/eures/portal/jv-se/jv-details/1",
+		SeenRefresh:    true,
+		CompanyWebsite: "https://acme.de",
+	}}, nil
+}
+
+// An employer whose postings were all stored before websites were collected is only ever
+// re-listed, so the refresh path records the website too.
+func TestRefreshedPostingRecordsItsCompanyWebsite(t *testing.T) {
+	store := &websiteStore{}
+	r := Runner{Store: store, Registry: map[string]sources.Source{"eures": refreshSource{}}}
+	if _, err := r.Run(context.Background(), []sources.CompanyEntry{{Company: "EURES", Provider: "eures", Board: "de"}}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(store.touched) != 1 {
+		t.Fatalf("touched = %v, want the posting refreshed", store.touched)
+	}
+	if got := store.websites["acme"]; got != "https://acme.de" {
+		t.Errorf("websites = %v, want acme -> https://acme.de", store.websites)
+	}
+}

@@ -111,6 +111,9 @@ var curatedAliases = map[string]string{
 	// needs no entry: the seat rule keys it at `krka`, so it joins this group through the canon's
 	// fold.
 	"krka-tovarna-zdravil-d-d-novo-mesto": "krka",
+	// The same spelling as the seat rule now keys it. A posting ingested before the alias
+	// row exists lands here, so the wave retires it too.
+	"krka-tovarna-zdravil": "krka",
 
 	// Numeric board artefacts, each confirmed by shared open titles (the count follows).
 	"aecom2":                   "aecom",         // 1063

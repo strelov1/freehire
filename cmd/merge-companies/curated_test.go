@@ -215,6 +215,7 @@ func TestPlanMerges_KrkaRegisterSpellings(t *testing.T) {
 		{Slug: "krka", Name: "Krka", JobCount: 68},
 		{Slug: "krka-d-d-novo-mesto", Name: "KRKA, d.d., Novo mesto", JobCount: 13},
 		{Slug: "krka-tovarna-zdravil-d-d-novo-mesto", Name: "Krka, tovarna zdravil, d. d., Novo mesto", JobCount: 12},
+		{Slug: "krka-tovarna-zdravil", Name: "KRKA, tovarna zdravil, d.d., Novo mesto", JobCount: 1},
 		{Slug: "terme-krka", Name: "Terme Krka d.o.o.", JobCount: 2},
 	}
 	got := planMerges(companies, nil, 0, curatedAliases)
@@ -225,7 +226,8 @@ func TestPlanMerges_KrkaRegisterSpellings(t *testing.T) {
 	for _, a := range got[0].Aliases {
 		retired[a.Slug] = true
 	}
-	if !retired["krka-d-d-novo-mesto"] || !retired["krka-tovarna-zdravil-d-d-novo-mesto"] || retired["terme-krka"] {
+	if !retired["krka-d-d-novo-mesto"] || !retired["krka-tovarna-zdravil-d-d-novo-mesto"] ||
+		!retired["krka-tovarna-zdravil"] || retired["terme-krka"] {
 		t.Errorf("retired %v, want both register spellings and not Terme Krka", retired)
 	}
 }
