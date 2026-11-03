@@ -194,3 +194,92 @@ func TestProposeRefusesUnknownCompanyAndBadKind(t *testing.T) {
 		t.Errorf("bad kind: err = %v, want ErrInvalid", err)
 	}
 }
+
+// A canon that is itself a subsidiary takes the retiring slug's subsidiaries up to its own
+// parent, so the merge never makes a two-level chain.
+func TestMergeIntoASubsidiaryKeepsOneLevel(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	user := seed(t, pool)
+	s := New(pool)
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO company_parents (child_slug, parent_slug) VALUES
+		   ('novartis-slovenija', 'sandoz'), ('krka', 'novartis')`); err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.Propose(ctx, user, Proposal{Kind: KindSame, CompanySlug: "sandoz", TargetSlug: "krka"})
+	if err != nil {
+		t.Fatalf("propose: %v", err)
+	}
+	if _, err := s.Approve(ctx, p.ID, user); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	var parent string
+	if err := pool.QueryRow(ctx,
+		`SELECT parent_slug FROM company_parents WHERE child_slug = 'novartis-slovenija'`).Scan(&parent); err != nil {
+		t.Fatalf("read link: %v", err)
+	}
+	if parent != "novartis" {
+		t.Errorf("parent = %q, want novartis (krka's own parent), not a chain through krka", parent)
+	}
+}
+
+// The folded key comes from the spelling the postings carry, not from a display name.
+func TestMergeKeysTheAliasByThePostingsSpelling(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	user := seed(t, pool)
+	if _, err := pool.Exec(ctx,
+		`UPDATE companies SET name = 'Krka Pharma' WHERE slug = 'krka-tovarna-zdravil-d-d-novo-mesto'`); err != nil {
+		t.Fatal(err)
+	}
+	s := New(pool)
+	p, err := s.Propose(ctx, user, Proposal{Kind: KindSame, CompanySlug: "krka-tovarna-zdravil-d-d-novo-mesto", TargetSlug: "krka"})
+	if err != nil {
+		t.Fatalf("propose: %v", err)
+	}
+	if _, err := s.Approve(ctx, p.ID, user); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	var folded string
+	if err := pool.QueryRow(ctx,
+		`SELECT folded_key FROM company_slug_aliases WHERE alias_slug = 'krka-tovarna-zdravil-d-d-novo-mesto'`).Scan(&folded); err != nil {
+		t.Fatal(err)
+	}
+	if folded != "krkatovarnazdravil" {
+		t.Errorf("folded_key = %q, want krkatovarnazdravil, the fold of the postings' own spelling", folded)
+	}
+}
+
+// A merge whose move stopped part-way stays in the queue, so it can be resumed.
+func TestUnfinishedMergeStaysInTheQueue(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	user := seed(t, pool)
+	s := New(pool)
+	p, err := s.Propose(ctx, user, Proposal{Kind: KindSame, CompanySlug: "krka-tovarna-zdravil-d-d-novo-mesto", TargetSlug: "krka"})
+	if err != nil {
+		t.Fatalf("propose: %v", err)
+	}
+	if _, err := s.Approve(ctx, p.ID, user); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if rows, err := s.Pending(ctx); err != nil || len(rows) != 0 {
+		t.Fatalf("finished merge: pending = %v, %v; want empty", rows, err)
+	}
+	// What a move killed before its reconcile leaves: the retired slug's row still there.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO companies (slug, name) VALUES ('krka-tovarna-zdravil-d-d-novo-mesto', 'x')`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := s.Pending(ctx)
+	if err != nil || len(rows) != 1 || rows[0].Status != "approved" {
+		t.Fatalf("pending = %+v, %v; want the approved merge listed for resuming", rows, err)
+	}
+	if _, err := s.Approve(ctx, p.ID, user); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if rows, _ := s.Pending(ctx); len(rows) != 0 {
+		t.Errorf("after resume: pending = %+v, want empty", rows)
+	}
+}

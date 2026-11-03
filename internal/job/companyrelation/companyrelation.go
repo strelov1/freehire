@@ -174,6 +174,9 @@ func (s *Service) decide(ctx context.Context, id, moderatorID int64, approve boo
 	defer func() { _ = tx.Rollback(ctx) }()
 	qtx := s.q.WithTx(tx)
 
+	if err := qtx.LockCompanyRelationDecisions(ctx); err != nil {
+		return db.CompanyRelationProposal{}, err
+	}
 	p, err := qtx.GetCompanyRelationProposalForUpdate(ctx, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrNotFound
@@ -209,9 +212,9 @@ func (s *Service) decide(ctx context.Context, id, moderatorID int64, approve boo
 	return p, tx.Commit(ctx)
 }
 
-// check refuses a relation the registry as it stands cannot take, and returns the name of
-// the company at slug, which a merge's folded key is built from. Each refusal is something
-// that would otherwise go wrong silently.
+// check refuses a relation the registry as it stands cannot take, and returns the name a
+// merge's folded key is built from. Each refusal is something that would otherwise go wrong
+// silently.
 func check(ctx context.Context, q *db.Queries, kind Kind, slug, target string) (string, error) {
 	c, err := company(ctx, q, slug)
 	if err != nil {
@@ -223,7 +226,23 @@ func check(ctx context.Context, q *db.Queries, kind Kind, slug, target string) (
 	if kind == KindSubsidiary {
 		return c.Name, checkSubsidiary(ctx, q, slug, target)
 	}
-	return c.Name, checkSame(ctx, q, slug, c.Name, target)
+	name, err := spelling(ctx, q, slug, c.Name)
+	if err != nil {
+		return "", err
+	}
+	return name, checkSame(ctx, q, slug, name, target)
+}
+
+// spelling is the name the retiring slug's newest posting carries, the one the next crawl
+// sends and ingest folds to look the alias up, as cmd/merge-companies reads it from jobs.
+// companies.name can be a curated display name that folds elsewhere. A company with no
+// posting falls back to it.
+func spelling(ctx context.Context, q *db.Queries, slug, fallback string) (string, error) {
+	name, err := q.LatestCompanySpelling(ctx, slug)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fallback, nil
+	}
+	return name, err
 }
 
 func checkSame(ctx context.Context, q *db.Queries, alias, aliasName, canon string) error {

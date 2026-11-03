@@ -115,6 +115,9 @@ type pendingCompanyRelation struct {
 	TargetJobCount  int32     `json:"target_job_count"`
 	Note            string    `json:"note"`
 	CreatedAt       time.Time `json:"created_at"`
+	// Status is "pending", or "approved" for a merge whose job move stopped part-way and
+	// is listed so a moderator can resume it.
+	Status string `json:"status"`
 }
 
 // ListPending serves the moderator queue, oldest first.
@@ -136,6 +139,7 @@ func (h *companyRelationHandlers) ListPending(c *fiber.Ctx) error {
 			TargetJobCount:  r.TargetJobCount,
 			Note:            r.Note,
 			CreatedAt:       r.CreatedAt.Time,
+			Status:          r.Status,
 		}
 	}
 	return c.JSON(fiber.Map{"data": out})

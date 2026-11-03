@@ -52,7 +52,7 @@
   let confirmMergeOpen = $state(false);
 
   function approve(p: PendingCompanyRelation) {
-    if (p.kind === 'same') {
+    if (p.kind === 'same' && p.status === 'pending') {
       mergeTarget = p;
       confirmMergeOpen = true;
       return;
@@ -94,12 +94,17 @@
             <span class="whitespace-pre-line text-muted-foreground">{p.note}</span>
           {/if}
           <span class="text-xs text-muted-foreground">proposed {timeAgo(p.created_at, locale())}</span>
+          {#if p.status === 'approved'}
+            <span class="text-xs text-destructive">Approved, but its jobs did not all move. Resume to finish the merge.</span>
+          {/if}
         </div>
         <div class="flex shrink-0 gap-2">
           <Button variant="primary" size="sm" disabled={busy !== null} onclick={() => approve(p)}>
-            {p.kind === 'same' ? 'Merge' : 'Link'}
+            {p.status === 'approved' ? 'Resume' : p.kind === 'same' ? 'Merge' : 'Link'}
           </Button>
-          <Button variant="ghost" size="sm" disabled={busy !== null} onclick={() => act(p, false)}>Reject</Button>
+          {#if p.status === 'pending'}
+            <Button variant="ghost" size="sm" disabled={busy !== null} onclick={() => act(p, false)}>Reject</Button>
+          {/if}
         </div>
       </li>
     {/each}

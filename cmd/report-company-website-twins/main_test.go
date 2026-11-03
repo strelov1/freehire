@@ -9,7 +9,7 @@ import (
 )
 
 func TestTwinGroupsKeepsOnlyWhatTheFoldCannotReach(t *testing.T) {
-	rows := []db.ListCompanyWebsitesRow{
+	rows := []db.ListCompanyWebsitesForTwinsRow{
 		// The fold already collapses these two, so merge-companies handles them.
 		{Website: "https://acme.de", Slug: "acme", Name: "Acme", JobCount: 5},
 		{Website: "acme.de/jobs", Slug: "acme-gmbh", Name: "Acme GmbH", JobCount: 1},

@@ -499,16 +499,20 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 	return nil
 }
 
-// RecordCompanyWebsite stores a posting's stated employer website on its company row when
-// the row has none yet, once per company per run. Implements pipeline.CompanyWebsiteRecorder.
+// RecordCompanyWebsite stores a posting's stated employer website on its company row
+// (company_info.feed_website) when the row has none yet, once per company per run. Implements pipeline.CompanyWebsiteRecorder.
 func (s *dbStore) RecordCompanyWebsite(ctx context.Context, companySlug, website string) error {
 	if _, done := s.websites.LoadOrStore(companySlug, struct{}{}); done {
 		return nil
 	}
-	return s.q.SetCompanyWebsiteIfAbsent(ctx, db.SetCompanyWebsiteIfAbsentParams{
+	err := s.q.SetCompanyFeedWebsiteIfAbsent(ctx, db.SetCompanyFeedWebsiteIfAbsentParams{
 		Slug:    companySlug,
 		Website: website,
 	})
+	if err != nil {
+		s.websites.Delete(companySlug) // the next posting of this company tries again
+	}
+	return err
 }
 
 // refreshCoveredChunk bounds one RefreshCoveredJobs statement. A board's covered postings are

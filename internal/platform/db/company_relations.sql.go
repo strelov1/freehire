@@ -140,6 +140,23 @@ func (q *Queries) IsCanonicalCompanySlug(ctx context.Context, slug string) (bool
 	return exists, err
 }
 
+const latestCompanySpelling = `-- name: LatestCompanySpelling :one
+SELECT company FROM jobs
+WHERE company_slug = $1 AND company <> ''
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+`
+
+// The company name a slug's most recent posting carries: the spelling the next crawl will
+// send, and so the one whose fold ingest will look up. companies.name can be a curated
+// display name that folds differently.
+func (q *Queries) LatestCompanySpelling(ctx context.Context, slug string) (string, error) {
+	row := q.db.QueryRow(ctx, latestCompanySpelling, slug)
+	var company string
+	err := row.Scan(&company)
+	return company, err
+}
+
 const listCompanyRelatives = `-- name: ListCompanyRelatives :many
 (SELECT 'parent'::text AS role, c.slug, c.name, c.job_count
  FROM company_parents p
@@ -190,8 +207,51 @@ func (q *Queries) ListCompanyRelatives(ctx context.Context, slug string) ([]List
 	return items, nil
 }
 
+const listCompanyWebsitesForTwins = `-- name: ListCompanyWebsitesForTwins :many
+SELECT slug, name, job_count,
+       COALESCE(NULLIF(company_info ->> 'website', ''), company_info ->> 'feed_website')::text AS website
+FROM companies
+WHERE job_count > 0
+  AND (company_info ->> 'website' <> '' OR company_info ->> 'feed_website' <> '')
+`
+
+type ListCompanyWebsitesForTwinsRow struct {
+	Slug     string `json:"slug"`
+	Name     string `json:"name"`
+	JobCount int32  `json:"job_count"`
+	Website  string `json:"website"`
+}
+
+// Companies with open jobs and a website, curated or from a feed, for
+// cmd/report-company-website-twins. Grouping happens in Go through logodomain.Domain, the
+// reader the logo map uses, so the two agree on what a shared site is.
+func (q *Queries) ListCompanyWebsitesForTwins(ctx context.Context) ([]ListCompanyWebsitesForTwinsRow, error) {
+	rows, err := q.db.Query(ctx, listCompanyWebsitesForTwins)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCompanyWebsitesForTwinsRow{}
+	for rows.Next() {
+		var i ListCompanyWebsitesForTwinsRow
+		if err := rows.Scan(
+			&i.Slug,
+			&i.Name,
+			&i.JobCount,
+			&i.Website,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPendingCompanyRelationProposals = `-- name: ListPendingCompanyRelationProposals :many
-SELECT p.id, p.kind, p.company_slug, p.target_slug, p.note, p.created_at,
+SELECT p.id, p.kind, p.company_slug, p.target_slug, p.note, p.created_at, p.status,
        COALESCE(c.name, '')::text      AS company_name,
        COALESCE(c.job_count, 0)::int   AS company_job_count,
        COALESCE(t.name, '')::text      AS target_name,
@@ -200,6 +260,7 @@ FROM company_relation_proposals p
 LEFT JOIN companies c ON c.slug = p.company_slug
 LEFT JOIN companies t ON t.slug = p.target_slug
 WHERE p.status = 'pending'
+   OR (p.status = 'approved' AND p.kind = 'same' AND c.slug IS NOT NULL)
 ORDER BY p.created_at, p.id
 LIMIT 200
 `
@@ -211,6 +272,7 @@ type ListPendingCompanyRelationProposalsRow struct {
 	TargetSlug      string             `json:"target_slug"`
 	Note            string             `json:"note"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	Status          string             `json:"status"`
 	CompanyName     string             `json:"company_name"`
 	CompanyJobCount int32              `json:"company_job_count"`
 	TargetName      string             `json:"target_name"`
@@ -221,6 +283,9 @@ type ListPendingCompanyRelationProposalsRow struct {
 // so the decision can be made without opening two pages. LEFT JOIN because a company may have
 // lost its last posting since the proposal. The approval then refuses it, and the queue
 // still has to show it to be rejected.
+//
+// An approved merge whose retiring company still has a row is listed too: its job move
+// stopped part-way (the reconcile deletes that row last), and approving it again resumes it.
 func (q *Queries) ListPendingCompanyRelationProposals(ctx context.Context) ([]ListPendingCompanyRelationProposalsRow, error) {
 	rows, err := q.db.Query(ctx, listPendingCompanyRelationProposals)
 	if err != nil {
@@ -237,6 +302,7 @@ func (q *Queries) ListPendingCompanyRelationProposals(ctx context.Context) ([]Li
 			&i.TargetSlug,
 			&i.Note,
 			&i.CreatedAt,
+			&i.Status,
 			&i.CompanyName,
 			&i.CompanyJobCount,
 			&i.TargetName,
@@ -252,45 +318,64 @@ func (q *Queries) ListPendingCompanyRelationProposals(ctx context.Context) ([]Li
 	return items, nil
 }
 
-const repointCompanyParentsOnMerge = `-- name: RepointCompanyParentsOnMerge :exec
-UPDATE company_parents
-SET parent_slug = $1
-WHERE parent_slug = $2 AND child_slug <> $1
+const lockCompanyRelationDecisions = `-- name: LockCompanyRelationDecisions :exec
+SELECT pg_advisory_xact_lock(1718117234)
 `
 
-type RepointCompanyParentsOnMergeParams struct {
-	CanonicalSlug string `json:"canonical_slug"`
-	AliasSlug     string `json:"alias_slug"`
-}
-
-// A merge keeps the subsidiaries the retiring slug had, under the canonical slug. The one
-// link that would point the canon at itself is left for the delete below.
-func (q *Queries) RepointCompanyParentsOnMerge(ctx context.Context, arg RepointCompanyParentsOnMergeParams) error {
-	_, err := q.db.Exec(ctx, repointCompanyParentsOnMerge, arg.CanonicalSlug, arg.AliasSlug)
+// Serializes approvals for the transaction (key "fhcr", listed in internal/platform/migrate).
+// Each approval checks the registry and company_parents and then writes them, and two
+// approvals checked against the same state could each pass while together making a chain.
+func (q *Queries) LockCompanyRelationDecisions(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockCompanyRelationDecisions)
 	return err
 }
 
-const setCompanyWebsiteIfAbsent = `-- name: SetCompanyWebsiteIfAbsent :exec
-UPDATE companies
-SET company_info    = company_info || jsonb_build_object('website', $1::text),
-    company_info_at = now(),
-    updated_at      = now()
-WHERE slug = $2
-  AND COALESCE(company_info ->> 'website', '') = ''
+const repointCompanyParentsOnMerge = `-- name: RepointCompanyParentsOnMerge :exec
+UPDATE company_parents p
+SET parent_slug = t.slug
+FROM (
+    SELECT COALESCE(
+        (SELECT cp.parent_slug FROM company_parents cp WHERE cp.child_slug = $2),
+        $2::text) AS slug
+) t
+WHERE p.parent_slug = $1
+  AND p.child_slug <> t.slug
 `
 
-type SetCompanyWebsiteIfAbsentParams struct {
+type RepointCompanyParentsOnMergeParams struct {
+	AliasSlug     string `json:"alias_slug"`
+	CanonicalSlug string `json:"canonical_slug"`
+}
+
+// A merge keeps the subsidiaries the retiring slug had. They move under the canonical slug,
+// or under the canon's own parent when it has one, since one level is the rule. A link that
+// would then point a company at itself is left for the delete below.
+func (q *Queries) RepointCompanyParentsOnMerge(ctx context.Context, arg RepointCompanyParentsOnMergeParams) error {
+	_, err := q.db.Exec(ctx, repointCompanyParentsOnMerge, arg.AliasSlug, arg.CanonicalSlug)
+	return err
+}
+
+const setCompanyFeedWebsiteIfAbsent = `-- name: SetCompanyFeedWebsiteIfAbsent :exec
+UPDATE companies
+SET company_info = company_info || jsonb_build_object('feed_website', $1::text),
+    updated_at   = now()
+WHERE slug = $2
+  AND COALESCE(company_info ->> 'feed_website', '') = ''
+`
+
+type SetCompanyFeedWebsiteIfAbsentParams struct {
 	Website string `json:"website"`
 	Slug    string `json:"slug"`
 }
 
-// The employer's own website, as a source states it in a structured field (EURES's
-// employer.website). It is written only where company_info has no website yet, the same
-// fill-only-if-blank rule SeedCompanyAccountWebsite follows: a curated source or the
-// employer's own edit outranks a job feed. The guard also turns the crawl's repeat
-// into a read.
-func (q *Queries) SetCompanyWebsiteIfAbsent(ctx context.Context, arg SetCompanyWebsiteIfAbsentParams) error {
-	_, err := q.db.Exec(ctx, setCompanyWebsiteIfAbsent, arg.Website, arg.Slug)
+// The employer's own website as a job feed states it in a structured field (EURES's
+// employer.website). It goes under its own key, feed_website, never `website`. The curated
+// fillers (Wikipedia, YC, the employer's claim) only fill a blank `website` and would keep a
+// feed value there forever, and publish-logo-domains and the company header trust `website`
+// as curated. Only the duplicate report reads this key. Written once: the first feed value
+// stays.
+func (q *Queries) SetCompanyFeedWebsiteIfAbsent(ctx context.Context, arg SetCompanyFeedWebsiteIfAbsentParams) error {
+	_, err := q.db.Exec(ctx, setCompanyFeedWebsiteIfAbsent, arg.Website, arg.Slug)
 	return err
 }
 

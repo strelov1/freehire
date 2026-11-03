@@ -3609,6 +3609,10 @@ type Querier interface {
 	// reading of a message. The caller passes appevent's own vocabulary, so the exclusion
 	// cannot drift from the sources the writers use.
 	LastStageSetAt(ctx context.Context, arg LastStageSetAtParams) (pgtype.Timestamptz, error)
+	// The company name a slug's most recent posting carries: the spelling the next crawl will
+	// send, and so the one whose fold ingest will look up. companies.name can be a curated
+	// display name that folds differently.
+	LatestCompanySpelling(ctx context.Context, slug string) (string, error)
 	// Queries behind the daily social digest (internal/engage/socialdigest, cmd/social-digest).
 	//
 	// The division of labour here is deliberate: SQL answers what is CHEAP and
@@ -4230,10 +4234,11 @@ type Querier interface {
 	// company header, the company picker) ask the logo proxy with companies.name rather than
 	// with any posting's spelling of it, and that value is not guaranteed to appear in jobs.
 	//
-	// cmd/report-company-website-twins reads it too, grouping by the same logodomain.Domain, so
-	// the two cannot disagree about which companies share a site. job_count is for that report.
-	//
 	ListCompanyWebsites(ctx context.Context) ([]ListCompanyWebsitesRow, error)
+	// Companies with open jobs and a website, curated or from a feed, for
+	// cmd/report-company-website-twins. Grouping happens in Go through logodomain.Domain, the
+	// reader the logo map uses, so the two agree on what a shared site is.
+	ListCompanyWebsitesForTwins(ctx context.Context) ([]ListCompanyWebsitesForTwinsRow, error)
 	// Drives the sync worker: every connection still authorized AND holding a mailbox.
 	//
 	// The address is the test, and it is not decoration. Since the calendar consent exists,
@@ -4979,6 +4984,9 @@ type Querier interface {
 	// so the decision can be made without opening two pages. LEFT JOIN because a company may have
 	// lost its last posting since the proposal. The approval then refuses it, and the queue
 	// still has to show it to be rejected.
+	//
+	// An approved merge whose retiring company still has a row is listed too: its job move
+	// stopped part-way (the reconcile deletes that row last), and approving it again resumes it.
 	ListPendingCompanyRelationProposals(ctx context.Context) ([]ListPendingCompanyRelationProposalsRow, error)
 	// The moderation queue, oldest first. Carries whether the account also holds an APPROVED
 	// referral offer for the same company — corroborating evidence for the human deciding,
@@ -5513,6 +5521,10 @@ type Querier interface {
 	// (see LockJobForVote for the drift this prevents). Called first in the vote
 	// transaction.
 	LockCompanyForVote(ctx context.Context, slug string) error
+	// Serializes approvals for the transaction (key "fhcr", listed in internal/platform/migrate).
+	// Each approval checks the registry and company_parents and then writes them, and two
+	// approvals checked against the same state could each pass while together making a chain.
+	LockCompanyRelationDecisions(ctx context.Context) error
 	// Take the job row's lock so concurrent applies on the same job serialize. Without
 	// it, two applies in the same window under READ COMMITTED each read a snapshot
 	// missing the other's user_jobs row and both bump applied_count. Called first in
@@ -6921,8 +6933,9 @@ type Querier interface {
 	// row each, zipped back by position (WITH ORDINALITY: sqlc's analyzer does not resolve the
 	// multi-array form of unnest).
 	ReplaceBuddyMockWeekly(ctx context.Context, arg ReplaceBuddyMockWeeklyParams) error
-	// A merge keeps the subsidiaries the retiring slug had, under the canonical slug. The one
-	// link that would point the canon at itself is left for the delete below.
+	// A merge keeps the subsidiaries the retiring slug had. They move under the canonical slug,
+	// or under the canon's own parent when it has one, since one level is the rule. A link that
+	// would then point a company at itself is left for the delete below.
 	RepointCompanyParentsOnMerge(ctx context.Context, arg RepointCompanyParentsOnMergeParams) error
 	// The whole schedule as an operator reads it: every eligible provider, its override if it
 	// has one, and what its runs have actually been doing. Aggregated per provider rather than
@@ -7358,6 +7371,13 @@ type Querier interface {
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.
 	SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error
+	// The employer's own website as a job feed states it in a structured field (EURES's
+	// employer.website). It goes under its own key, feed_website, never `website`. The curated
+	// fillers (Wikipedia, YC, the employer's claim) only fill a blank `website` and would keep a
+	// feed value there forever, and publish-logo-domains and the company header trust `website`
+	// as curated. Only the duplicate report reads this key. Written once: the first feed value
+	// stays.
+	SetCompanyFeedWebsiteIfAbsent(ctx context.Context, arg SetCompanyFeedWebsiteIfAbsentParams) error
 	// Replace one company's industries. The IS DISTINCT FROM guard keeps updated_at
 	// honest — a row already holding the wanted value is not rewritten — and makes the
 	// affected-row count real churn, so a second run reports zero.
@@ -7372,12 +7392,6 @@ type Querier interface {
 	// only widens reach, never produces a false match, so it can stay eventually
 	// consistent.
 	SetCompanyIndustries(ctx context.Context, arg SetCompanyIndustriesParams) (int64, error)
-	// The employer's own website, as a source states it in a structured field (EURES's
-	// employer.website). It is written only where company_info has no website yet, the same
-	// fill-only-if-blank rule SeedCompanyAccountWebsite follows: a curated source or the
-	// employer's own edit outranks a job feed. The guard also turns the crawl's repeat
-	// into a read.
-	SetCompanyWebsiteIfAbsent(ctx context.Context, arg SetCompanyWebsiteIfAbsentParams) error
 	// Record the outcome of examining one binding: whether the role is now held, and that it was
 	// examined just now.
 	//

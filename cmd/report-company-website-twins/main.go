@@ -10,8 +10,8 @@
 // not a merge pass.
 //
 // Groups whose names already fold to one key are left out: cmd/merge-companies reaches those
-// by itself. The websites come from company_info.website, filled by curated sources and, since
-// freehire#3895, by adapters that state the employer's site (EURES).
+// by itself. The website is company_info.website (curated) or, failing that,
+// company_info.feed_website, which adapters that state the employer's site (EURES) fill.
 //
 // Needs only DATABASE_URL.
 package main
@@ -41,7 +41,7 @@ func run() int {
 	}
 	defer cleanup()
 
-	rows, err := db.New(pool).ListCompanyWebsites(ctx)
+	rows, err := db.New(pool).ListCompanyWebsitesForTwins(ctx)
 	if err != nil {
 		log.Printf("report-company-website-twins: %v", err)
 		return 1
@@ -57,15 +57,15 @@ func run() int {
 
 type group struct {
 	Host    string
-	Members []db.ListCompanyWebsitesRow
+	Members []db.ListCompanyWebsitesForTwinsRow
 }
 
 // twinGroups groups the companies by the domain their website names, through the same
 // logodomain.Domain the logo map uses, so the two never disagree about a shared site. It
 // keeps the groups of two or more that the name fold keeps apart, which are what a person
 // has to judge, biggest employer first within a group.
-func twinGroups(rows []db.ListCompanyWebsitesRow) []group {
-	byHost := make(map[string][]db.ListCompanyWebsitesRow)
+func twinGroups(rows []db.ListCompanyWebsitesForTwinsRow) []group {
+	byHost := make(map[string][]db.ListCompanyWebsitesForTwinsRow)
 	for _, r := range rows {
 		if host := logodomain.Domain(r.Website); host != "" {
 			byHost[host] = append(byHost[host], r)
@@ -76,7 +76,7 @@ func twinGroups(rows []db.ListCompanyWebsitesRow) []group {
 		if len(members) < 2 || oneFold(members) {
 			continue
 		}
-		slices.SortFunc(members, func(a, b db.ListCompanyWebsitesRow) int {
+		slices.SortFunc(members, func(a, b db.ListCompanyWebsitesForTwinsRow) int {
 			if d := cmp.Compare(b.JobCount, a.JobCount); d != 0 {
 				return d
 			}
@@ -88,7 +88,7 @@ func twinGroups(rows []db.ListCompanyWebsitesRow) []group {
 	return out
 }
 
-func oneFold(ms []db.ListCompanyWebsitesRow) bool {
+func oneFold(ms []db.ListCompanyWebsitesForTwinsRow) bool {
 	key := normalize.CompanyKey(ms[0].Name)
 	for _, m := range ms[1:] {
 		if normalize.CompanyKey(m.Name) != key {

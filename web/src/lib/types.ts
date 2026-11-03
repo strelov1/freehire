@@ -708,6 +708,8 @@ export interface PendingCompanyRelation {
   target_job_count: number;
   note: string;
   created_at: string;
+  /** `approved` marks a merge whose job move stopped part-way; approving again resumes it. */
+  status: 'pending' | 'approved';
 }
 /** A verified-employer account: the claim on one company. `status` drives which view the
  *  employer dashboard shows — the claim form (no account), a status page (pending/revoked),
