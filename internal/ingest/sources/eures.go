@@ -403,11 +403,7 @@ func (v euresVacancy) job() Job {
 
 func (e eures) toJob(ctx context.Context, board string, v euresVacancy) Job {
 	j := v.job()
-	if j.Company != "" {
-		// Only beside a named employer: a website with no employer would be attributed to
-		// nobody, and the pipeline writes it to the company row.
-		j.CompanyWebsite = strings.TrimSpace(v.Employer.Website)
-	}
+	j.CompanyWebsite = v.Employer.Website
 	j.Description = sanitizeHTML(v.Description)
 	j.Location = euresCountryNames[strings.ToLower(board)]
 	var detail euresDetailResponse

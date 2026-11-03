@@ -10,7 +10,7 @@ import (
 )
 
 const listCompanyWebsites = `-- name: ListCompanyWebsites :many
-SELECT slug, name, (company_info ->> 'website')::text AS website
+SELECT slug, name, (company_info ->> 'website')::text AS website, job_count
 FROM companies
 WHERE company_info ? 'website'
   AND company_info ->> 'website' <> ''
@@ -18,9 +18,10 @@ WHERE company_info ? 'website'
 `
 
 type ListCompanyWebsitesRow struct {
-	Slug    string `json:"slug"`
-	Name    string `json:"name"`
-	Website string `json:"website"`
+	Slug     string `json:"slug"`
+	Name     string `json:"name"`
+	Website  string `json:"website"`
+	JobCount int32  `json:"job_count"`
 }
 
 // ListCompanyWebsites returns the companies whose curated record holds a website, which
@@ -30,6 +31,9 @@ type ListCompanyWebsitesRow struct {
 // name is selected beside the website because the company surfaces (/companies, the
 // company header, the company picker) ask the logo proxy with companies.name rather than
 // with any posting's spelling of it, and that value is not guaranteed to appear in jobs.
+//
+// cmd/report-company-website-twins reads it too, grouping by the same logodomain.Domain, so
+// the two cannot disagree about which companies share a site. job_count is for that report.
 func (q *Queries) ListCompanyWebsites(ctx context.Context) ([]ListCompanyWebsitesRow, error) {
 	rows, err := q.db.Query(ctx, listCompanyWebsites)
 	if err != nil {
@@ -39,7 +43,12 @@ func (q *Queries) ListCompanyWebsites(ctx context.Context) ([]ListCompanyWebsite
 	items := []ListCompanyWebsitesRow{}
 	for rows.Next() {
 		var i ListCompanyWebsitesRow
-		if err := rows.Scan(&i.Slug, &i.Name, &i.Website); err != nil {
+		if err := rows.Scan(
+			&i.Slug,
+			&i.Name,
+			&i.Website,
+			&i.JobCount,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -49,6 +49,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS company_relation_proposals_pending_uniq
 CREATE INDEX IF NOT EXISTS company_relation_proposals_status_idx
     ON company_relation_proposals (status, created_at);
 
+-- Deleting an account sets these to NULL, which without an index scans the whole table.
+CREATE INDEX IF NOT EXISTS company_relation_proposals_proposed_by_idx
+    ON company_relation_proposals (proposed_by);
+CREATE INDEX IF NOT EXISTS company_relation_proposals_decided_by_idx
+    ON company_relation_proposals (decided_by);
+
 -- One level only: a parent never has a parent of its own, and a subsidiary has exactly one
 -- parent (the primary key). The approval enforces the first rule. A chain would need a
 -- recursive read on every company page, and no case the issue raised needs one.

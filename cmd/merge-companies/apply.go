@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+
+	"github.com/strelov1/freehire/internal/job/companymerge"
 )
 
 // writer is the write side of a merge, narrowed to the two statements an apply run makes so
@@ -36,20 +38,12 @@ func applyMerges(ctx context.Context, w writer, plan []merge, chunk int) (int64,
 			if err := w.InsertAlias(ctx, a, m.Canonical); err != nil {
 				return moved, fmt.Errorf("record alias %s -> %s: %w", a.Slug, m.Canonical, err)
 			}
-			for {
-				n, err := w.RekeyChunk(ctx, a.Slug, m.Canonical, chunk)
-				if err != nil {
-					return moved, fmt.Errorf("re-key %s -> %s: %w", a.Slug, m.Canonical, err)
-				}
-				if n == 0 {
-					break
-				}
-				moved += n
-				if err := ctx.Err(); err != nil {
-					// A cron timeout or redeploy: stop where we are rather than fighting
-					// the signal. What moved is committed, and the next run resumes.
-					return moved, err
-				}
+			// A cron timeout or redeploy stops this between chunks. What moved is
+			// committed, and the next run resumes.
+			n, err := companymerge.MoveJobs(ctx, w.RekeyChunk, a.Slug, m.Canonical, chunk)
+			moved += n
+			if err != nil {
+				return moved, err
 			}
 		}
 	}

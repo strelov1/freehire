@@ -80,23 +80,22 @@ type companyRef struct {
 	JobCount int32  `json:"job_count"`
 }
 
-// companyRelatives reads a company's parent and subsidiaries. It is best-effort like the
-// referral flag: a failed read leaves the links out and never fails the company page.
-func companyRelatives(ctx context.Context, q *db.Queries, slug string) (*companyRef, []companyRef) {
-	var parent *companyRef
-	if p, err := q.GetCompanyParent(ctx, slug); err == nil {
-		parent = &companyRef{Slug: p.Slug, Name: p.Name, JobCount: p.JobCount}
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("companies: parent of %q: %v", slug, err)
-	}
-	rows, err := q.ListCompanySubsidiaries(ctx, slug)
+// companyRelatives reads a company's parent and subsidiaries in one query. It is
+// best-effort like the referral flag: a failed read leaves the links out and never fails the
+// company page.
+func companyRelatives(ctx context.Context, q *db.Queries, slug string) (parent *companyRef, subs []companyRef) {
+	rows, err := q.ListCompanyRelatives(ctx, slug)
 	if err != nil {
-		log.Printf("companies: subsidiaries of %q: %v", slug, err)
-		return parent, nil
+		log.Printf("companies: relatives of %q: %v", slug, err)
+		return nil, nil
 	}
-	var subs []companyRef
 	for _, r := range rows {
-		subs = append(subs, companyRef{Slug: r.Slug, Name: r.Name, JobCount: r.JobCount})
+		ref := companyRef{Slug: r.Slug, Name: r.Name, JobCount: r.JobCount}
+		if r.Role == "parent" {
+			parent = &ref
+			continue
+		}
+		subs = append(subs, ref)
 	}
 	return parent, subs
 }

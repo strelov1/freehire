@@ -2629,9 +2629,6 @@ type Querier interface {
 	// One company's posting lifetime. No row means no qualifying closure; the caller
 	// applies its own sample gate on `closed`.
 	GetCompanyLifetime(ctx context.Context, companySlug string) (GetCompanyLifetimeRow, error)
-	// The parent a company page names. The join through companies hides a parent that has no
-	// row any more.
-	GetCompanyParent(ctx context.Context, slug string) (GetCompanyParentRow, error)
 	// The row a decision is about, locked for the decision's transaction so two moderators
 	// cannot approve and reject it at once.
 	GetCompanyRelationProposalForUpdate(ctx context.Context, id int64) (CompanyRelationProposal, error)
@@ -4206,6 +4203,11 @@ type Querier interface {
 	// rows that already hold industries, but the merge pass must also reach companies
 	// with none, and one query serving both keeps the two walks identical.
 	ListCompanyIndustriesPage(ctx context.Context, arg ListCompanyIndustriesPageParams) ([]ListCompanyIndustriesPageRow, error)
+	// A company page's parent (role 'parent') and subsidiaries (role 'subsidiary') in one round
+	// trip, since every company read pays for it and almost every company has neither. The join
+	// through companies hides a relative that has no row any more. Subsidiaries come hiring
+	// first, and are bounded because a group can own many.
+	ListCompanyRelatives(ctx context.Context, slug string) ([]ListCompanyRelativesRow, error)
 	// The whole registry, folded key to canonical slug. cmd/backfill-derive loads it once per run
 	// and resolves in memory: it re-derives every job in the table, and jobderive is pure, so
 	// without this a backfill would silently move every merged posting back to the spelling its
@@ -4220,13 +4222,6 @@ type Querier interface {
 	// former-name slug candidates, instead of one CompanyExists round trip per
 	// candidate per entry (the dataset runs several thousand entries deep).
 	ListCompanySlugs(ctx context.Context) ([]string, error)
-	// The subsidiaries a parent's page lists, the ones hiring first.
-	ListCompanySubsidiaries(ctx context.Context, slug string) ([]ListCompanySubsidiariesRow, error)
-	// Companies with open jobs that state the same website host but sit under different slugs.
-	// These are merge candidates for cmd/report-company-website-twins, not decisions: a staffing
-	// agency's branches share a host and are one employer, while a job board's host can stand
-	// behind many employers. A person reads the list and proposes the merges.
-	ListCompanyWebsiteTwins(ctx context.Context) ([]ListCompanyWebsiteTwinsRow, error)
 	// ListCompanyWebsites returns the companies whose curated record holds a website, which
 	// is the only population cmd/publish-logo-domains can publish a domain for. ~17,900 rows
 	// of ~480,000 companies as of 2026-09-16.
@@ -4234,6 +4229,9 @@ type Querier interface {
 	// name is selected beside the website because the company surfaces (/companies, the
 	// company header, the company picker) ask the logo proxy with companies.name rather than
 	// with any posting's spelling of it, and that value is not guaranteed to appear in jobs.
+	//
+	// cmd/report-company-website-twins reads it too, grouping by the same logodomain.Domain, so
+	// the two cannot disagree about which companies share a site. job_count is for that report.
 	//
 	ListCompanyWebsites(ctx context.Context) ([]ListCompanyWebsitesRow, error)
 	// Drives the sync worker: every connection still authorized AND holding a mailbox.

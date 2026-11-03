@@ -29,6 +29,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/job/companymerge"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
@@ -46,11 +47,6 @@ const (
 // aliasReason labels the registry rows an approval writes (migration 0230). It is a class of
 // its own because reversing a human judgement must not touch the rule-made rows.
 const aliasReason = "moderator"
-
-// rekeyChunk is how many job rows one re-key statement moves. It is the merge worker's
-// figure, for the merge worker's reason: one employer can carry thousands of open jobs, and
-// each statement is a transaction against the hottest table in the schema.
-const rekeyChunk = 500
 
 // maxNote bounds a proposal's free-text note. The table's CHECK holds the same figure.
 const maxNote = 1000
@@ -97,7 +93,7 @@ func (s *Service) Propose(ctx context.Context, userID int64, p Proposal) (db.Com
 	if err := p.validate(); err != nil {
 		return db.CompanyRelationProposal{}, err
 	}
-	if err := check(ctx, s.q, p.Kind, p.CompanySlug, p.TargetSlug); err != nil {
+	if _, err := check(ctx, s.q, p.Kind, p.CompanySlug, p.TargetSlug); err != nil {
 		return db.CompanyRelationProposal{}, err
 	}
 	row, err := s.q.InsertCompanyRelationProposal(ctx, db.InsertCompanyRelationProposalParams{
@@ -195,10 +191,11 @@ func (s *Service) decide(ctx context.Context, id, moderatorID int64, approve boo
 	status := "rejected"
 	if approve {
 		status = "approved"
-		if err := check(ctx, qtx, Kind(p.Kind), p.CompanySlug, p.TargetSlug); err != nil {
+		name, err := check(ctx, qtx, Kind(p.Kind), p.CompanySlug, p.TargetSlug)
+		if err != nil {
 			return p, err
 		}
-		if err := apply(ctx, qtx, Kind(p.Kind), p.CompanySlug, p.TargetSlug); err != nil {
+		if err := apply(ctx, qtx, Kind(p.Kind), p.CompanySlug, name, p.TargetSlug); err != nil {
 			return p, err
 		}
 	}
@@ -212,20 +209,21 @@ func (s *Service) decide(ctx context.Context, id, moderatorID int64, approve boo
 	return p, tx.Commit(ctx)
 }
 
-// check refuses a relation the registry as it stands cannot take. Each refusal is something
+// check refuses a relation the registry as it stands cannot take, and returns the name of
+// the company at slug, which a merge's folded key is built from. Each refusal is something
 // that would otherwise go wrong silently.
-func check(ctx context.Context, q *db.Queries, kind Kind, slug, target string) error {
+func check(ctx context.Context, q *db.Queries, kind Kind, slug, target string) (string, error) {
 	c, err := company(ctx, q, slug)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if _, err := company(ctx, q, target); err != nil {
-		return err
+		return "", err
 	}
 	if kind == KindSubsidiary {
-		return checkSubsidiary(ctx, q, slug, target)
+		return c.Name, checkSubsidiary(ctx, q, slug, target)
 	}
-	return checkSame(ctx, q, slug, c.Name, target)
+	return c.Name, checkSame(ctx, q, slug, c.Name, target)
 }
 
 func checkSame(ctx context.Context, q *db.Queries, alias, aliasName, canon string) error {
@@ -286,60 +284,23 @@ func checkSubsidiary(ctx context.Context, q *db.Queries, child, parent string) e
 }
 
 // apply writes the registry half of an approval.
-func apply(ctx context.Context, q *db.Queries, kind Kind, slug, target string) error {
+func apply(ctx context.Context, q *db.Queries, kind Kind, slug, name, target string) error {
 	if kind == KindSubsidiary {
 		return q.UpsertCompanyParent(ctx, db.UpsertCompanyParentParams{ChildSlug: slug, ParentSlug: target})
 	}
-	c, err := company(ctx, q, slug)
-	if err != nil {
-		return err
-	}
-	if _, err := q.InsertCompanySlugAlias(ctx, db.InsertCompanySlugAliasParams{
-		AliasSlug:     slug,
-		CanonicalSlug: target,
-		FoldedKey:     foldedKey(slug, c.Name),
-		Reason:        aliasReason,
-	}); err != nil {
-		return err
-	}
-	// The retiring slug's subsidiaries move to the canon. Its own parent link, and any link
-	// that would now point the canon at itself, go.
-	if err := q.RepointCompanyParentsOnMerge(ctx, db.RepointCompanyParentsOnMergeParams{
-		CanonicalSlug: target,
-		AliasSlug:     slug,
-	}); err != nil {
-		return err
-	}
-	return q.DeleteCompanyParentLinksOf(ctx, slug)
+	return companymerge.Retire(ctx, q, slug, target, foldedKey(slug, name), aliasReason)
 }
 
-// move re-keys the retiring slug's jobs onto the canon, then reconciles the companies rows
-// the way cmd/merge-companies does. Until the retired slug's row is gone,
-// GET /companies/<retired> still finds a company with no jobs and answers 200 instead of the
-// 301. The search index catches up on the scheduled reindex, as it does after a merge wave.
+// move re-keys the retiring slug's jobs onto the canon and reconciles the companies rows,
+// the same procedure cmd/merge-companies runs. The search index catches up on the scheduled
+// reindex, as it does after a merge wave.
 func (s *Service) move(ctx context.Context, alias, canon string) (int64, error) {
-	var moved int64
-	for {
-		n, err := s.q.RekeyCompanySlugChunk(ctx, db.RekeyCompanySlugChunkParams{
-			CanonicalSlug: canon,
-			AliasSlug:     alias,
-			ChunkSize:     rekeyChunk,
-		})
-		if err != nil {
-			return moved, fmt.Errorf("move jobs of %q onto %q: %w", alias, canon, err)
-		}
-		moved += n
-		if n < rekeyChunk {
-			break
-		}
+	moved, err := companymerge.MoveJobs(ctx, companymerge.Rekey(s.q), alias, canon, companymerge.Chunk)
+	if err != nil {
+		return moved, err
 	}
-	if _, err := s.q.InsertMissingCanonicalCompanies(ctx); err != nil {
-		return moved, fmt.Errorf("insert canonical companies: %w", err)
-	}
-	if _, err := s.q.DeleteOrphanAliasCompanies(ctx); err != nil {
-		return moved, fmt.Errorf("delete retired companies: %w", err)
-	}
-	return moved, nil
+	_, _, err = companymerge.Reconcile(ctx, s.q)
+	return moved, err
 }
 
 func company(ctx context.Context, q *db.Queries, slug string) (db.Company, error) {

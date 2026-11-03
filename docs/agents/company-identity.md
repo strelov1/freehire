@@ -203,8 +203,10 @@ DIFFERENT employers belong together. A signed-in visitor can propose either from
 
 - **`same`: one employer under two slugs.** Approval writes the alias with reason `moderator`
   (migration 0230, its own class so it can be reversed alone) and its folded key from the
-  retiring company's NAME, then moves the jobs and reconciles the companies rows the way
-  `cmd/merge-companies` does. The difference is that it happens inside the request. It refuses
+  retiring company's NAME, then moves the jobs and reconciles the companies rows. Both writers
+  go through `internal/job/companymerge` (record and repoint, re-key, reconcile), so a merge
+  wave and a moderator's approval run the same procedure. The difference is that this one
+  runs inside the request. It refuses
   what would break the registry silently: a retiring slug that is already someone's canon, a
   canon that is itself retired, a slug already merged elsewhere, and a folded key that already
   has a different canon. The registry row commits before the move. If the move fails part-way,

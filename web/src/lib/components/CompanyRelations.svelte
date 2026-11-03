@@ -4,7 +4,7 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { communityFormError } from '#lib/community.js';
   import { promptSignIn } from '#lib/signin.js';
-  import type { Company, CompanyRef, CompanyRelationKind } from '#lib/types.js';
+  import type { CompanyRef, CompanyRelationKind } from '#lib/types.js';
   import { Button, Dialog } from '#lib/ui/index.js';
   import CompanyPicker from './CompanyPicker.svelte';
 
@@ -16,11 +16,11 @@
   // company then redirects to the one it joined. Either is only PROPOSED here; nothing
   // changes until a moderator approves it.
   let {
-    company,
+    name,
     slug,
     parent,
     subsidiaries,
-  }: { company: Company; slug: string; parent: CompanyRef | null; subsidiaries: CompanyRef[] } = $props();
+  }: { name: string; slug: string; parent: CompanyRef | null; subsidiaries: CompanyRef[] } = $props();
 
   let open = $state(false);
   let kind = $state<CompanyRelationKind>('same');
@@ -31,7 +31,8 @@
   let error = $state<string | null>(null);
   let sent = $state(false);
 
-  const canSubmit = $derived(!submitting && target !== null && target.slug !== slug);
+  const pickedSelf = $derived(target?.slug === slug);
+  const canSubmit = $derived(!submitting && target !== null && !pickedSelf);
 
   function openForm() {
     if (!isAuthenticated()) {
@@ -49,7 +50,7 @@
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
-    if (!canSubmit || !target) return;
+    if (!canSubmit || !target) return; // `target` is narrowed for the call below
     submitting = true;
     error = null;
     try {
@@ -95,7 +96,7 @@
   </div>
 </div>
 
-<Dialog bind:open title={`Correct ${company.name}`} class="sm:max-w-md">
+<Dialog bind:open title={`Correct ${name}`} class="sm:max-w-md">
   {#if sent}
     <div class="flex flex-col gap-4">
       <p class="text-sm">Thanks. A moderator will review it before anything changes.</p>
@@ -106,7 +107,7 @@
   {:else}
     <form class="flex flex-col gap-4" onsubmit={submit}>
       <fieldset class="flex flex-col gap-2 text-sm">
-        <legend class="mb-1 font-medium">{company.name} is…</legend>
+        <legend class="mb-1 font-medium">{name} is…</legend>
         <label class="flex items-start gap-2">
           <input type="radio" class="mt-0.5" name="kind" value="same" bind:group={kind} />
           <span>
@@ -131,7 +132,7 @@
         <span class="font-medium">{kind === 'same' ? 'The company it is' : 'Its parent company'}</span>
         <CompanyPicker id="relation-target" bind:value={targetText} onSelect={(c) => (target = c)} />
       </label>
-      {#if target && target.slug === slug}
+      {#if pickedSelf}
         <p class="text-sm text-destructive">Pick a different company than this one.</p>
       {/if}
 

@@ -17,13 +17,16 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"slices"
 
 	"github.com/strelov1/freehire/internal/dict/normalize"
+	"github.com/strelov1/freehire/internal/job/logodomain"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -38,7 +41,7 @@ func run() int {
 	}
 	defer cleanup()
 
-	rows, err := db.New(pool).ListCompanyWebsiteTwins(ctx)
+	rows, err := db.New(pool).ListCompanyWebsites(ctx)
 	if err != nil {
 		log.Printf("report-company-website-twins: %v", err)
 		return 1
@@ -52,34 +55,40 @@ func run() int {
 	return 0
 }
 
-type member struct {
-	Slug     string
-	Name     string
-	JobCount int32
-}
-
 type group struct {
 	Host    string
-	Members []member
+	Members []db.ListCompanyWebsitesRow
 }
 
-// twinGroups groups the rows (already ordered by host) and drops each group the name fold
-// already collapses, keeping only what a person has to judge.
-func twinGroups(rows []db.ListCompanyWebsiteTwinsRow) []group {
-	var out []group
-	for i := 0; i < len(rows); {
-		g := group{Host: rows[i].Host}
-		for ; i < len(rows) && rows[i].Host == g.Host; i++ {
-			g.Members = append(g.Members, member{Slug: rows[i].Slug, Name: rows[i].Name, JobCount: rows[i].JobCount})
-		}
-		if len(g.Members) > 1 && !oneFold(g.Members) {
-			out = append(out, g)
+// twinGroups groups the companies by the domain their website names, through the same
+// logodomain.Domain the logo map uses, so the two never disagree about a shared site. It
+// keeps the groups of two or more that the name fold keeps apart, which are what a person
+// has to judge, biggest employer first within a group.
+func twinGroups(rows []db.ListCompanyWebsitesRow) []group {
+	byHost := make(map[string][]db.ListCompanyWebsitesRow)
+	for _, r := range rows {
+		if host := logodomain.Domain(r.Website); host != "" {
+			byHost[host] = append(byHost[host], r)
 		}
 	}
+	var out []group
+	for host, members := range byHost {
+		if len(members) < 2 || oneFold(members) {
+			continue
+		}
+		slices.SortFunc(members, func(a, b db.ListCompanyWebsitesRow) int {
+			if d := cmp.Compare(b.JobCount, a.JobCount); d != 0 {
+				return d
+			}
+			return cmp.Compare(a.Slug, b.Slug)
+		})
+		out = append(out, group{Host: host, Members: members})
+	}
+	slices.SortFunc(out, func(a, b group) int { return cmp.Compare(a.Host, b.Host) })
 	return out
 }
 
-func oneFold(ms []member) bool {
+func oneFold(ms []db.ListCompanyWebsitesRow) bool {
 	key := normalize.CompanyKey(ms[0].Name)
 	for _, m := range ms[1:] {
 		if normalize.CompanyKey(m.Name) != key {

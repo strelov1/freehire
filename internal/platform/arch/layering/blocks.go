@@ -148,11 +148,10 @@ var blocks = map[string][]string{
 	},
 	"job": {
 		"applydate", "collections",
-		// companyrelation decides the company relations a person proposes and a moderator
-		// approves: two slugs that are one employer (an alias and a re-key, the merge
-		// worker's write done by hand) and a subsidiary under its parent. Company identity,
-		// beside formeremployer and logodomain.
-		"companyrelation",
+		// companymerge is the write side of retiring one company slug into another, shared by
+		// cmd/merge-companies and companyrelation, which decides the merges and parent links
+		// people propose. Company identity, beside formeremployer and logodomain.
+		"companymerge", "companyrelation",
 		// dictgap turns LLM enrichment facts already in the catalogue into ranked
 		// candidate gaps for the deterministic dict/skilltag and dict/classify
 		// dictionaries — a fact about postings' recorded facets, not an AI/enrichment

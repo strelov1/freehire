@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -20,6 +19,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobderive"
+	"github.com/strelov1/freehire/internal/job/logodomain"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -975,14 +975,14 @@ func (r Runner) recordCompanyWebsite(ctx context.Context, e sources.CompanyEntry
 	}
 }
 
-// companyWebsite accepts a stated website only as an absolute http(s) URL with a dotted
-// host, and returns "" for anything else. A feed's free-text field holds "n/a", a bare
-// e-mail address or a relative path often enough that storing it as given would put junk
-// where logo resolution and the duplicate report read a domain.
+// companyWebsite keeps a stated website only when logodomain.Domain reads a domain from it,
+// the same reader the logo map and the duplicate report apply to the stored value. A feed's
+// free-text field holds "n/a" or a relative path often enough that storing it as given
+// would put junk where those read a domain. An e-mail address is refused as well: its
+// domain is often a mail provider's.
 func companyWebsite(raw string) string {
 	raw = strings.TrimSpace(raw)
-	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || !strings.Contains(u.Hostname(), ".") {
+	if strings.Contains(raw, "@") || logodomain.Domain(raw) == "" {
 		return ""
 	}
 	return raw

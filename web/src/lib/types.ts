@@ -683,7 +683,6 @@ export interface PrefillResult {
   existing_job_slug?: string;
 }
 
-
 /** A related company on a company page: the parent that owns it, or a subsidiary it owns.
  *  A separate employer with its own page and jobs (freehire#3895). */
 export interface CompanyRef {

@@ -8,7 +8,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/job/companyrelation"
-	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // companyRelationsPerHour bounds how many relations one account may propose in an hour.
@@ -126,39 +125,27 @@ func (h *companyRelationHandlers) ListPending(c *fiber.Ctx) error {
 	}
 	out := make([]pendingCompanyRelation, len(rows))
 	for i, r := range rows {
-		out[i] = pendingFrom(r)
+		out[i] = pendingCompanyRelation{
+			ID:              r.ID,
+			Kind:            r.Kind,
+			CompanySlug:     r.CompanySlug,
+			CompanyName:     r.CompanyName,
+			CompanyJobCount: r.CompanyJobCount,
+			TargetSlug:      r.TargetSlug,
+			TargetName:      r.TargetName,
+			TargetJobCount:  r.TargetJobCount,
+			Note:            r.Note,
+			CreatedAt:       r.CreatedAt.Time,
+		}
 	}
 	return c.JSON(fiber.Map{"data": out})
-}
-
-func pendingFrom(r db.ListPendingCompanyRelationProposalsRow) pendingCompanyRelation {
-	return pendingCompanyRelation{
-		ID:              r.ID,
-		Kind:            r.Kind,
-		CompanySlug:     r.CompanySlug,
-		CompanyName:     r.CompanyName,
-		CompanyJobCount: r.CompanyJobCount,
-		TargetSlug:      r.TargetSlug,
-		TargetName:      r.TargetName,
-		TargetJobCount:  r.TargetJobCount,
-		Note:            r.Note,
-		CreatedAt:       r.CreatedAt.Time,
-	}
-}
-
-func relationID(c *fiber.Ctx) (int64, error) {
-	id, err := c.ParamsInt("id")
-	if err != nil || id <= 0 {
-		return 0, fiber.NewError(fiber.StatusBadRequest, "invalid id")
-	}
-	return int64(id), nil
 }
 
 // Approve applies a proposal. A `same` approval moves the retiring slug's jobs within the
 // request and answers with how many moved. Approving it again resumes a move that failed
 // part-way.
 func (h *companyRelationHandlers) Approve(c *fiber.Ctx) error {
-	id, err := relationID(c)
+	id, err := pathID(c)
 	if err != nil {
 		return err
 	}
@@ -175,7 +162,7 @@ func (h *companyRelationHandlers) Approve(c *fiber.Ctx) error {
 
 // Reject closes a pending proposal without applying it.
 func (h *companyRelationHandlers) Reject(c *fiber.Ctx) error {
-	id, err := relationID(c)
+	id, err := pathID(c)
 	if err != nil {
 		return err
 	}

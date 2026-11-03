@@ -62,28 +62,6 @@ func (q *Queries) DeleteCompanyParentLinksOf(ctx context.Context, slug string) e
 	return err
 }
 
-const getCompanyParent = `-- name: GetCompanyParent :one
-SELECT c.slug, c.name, c.job_count
-FROM company_parents p
-JOIN companies c ON c.slug = p.parent_slug
-WHERE p.child_slug = $1
-`
-
-type GetCompanyParentRow struct {
-	Slug     string `json:"slug"`
-	Name     string `json:"name"`
-	JobCount int32  `json:"job_count"`
-}
-
-// The parent a company page names. The join through companies hides a parent that has no
-// row any more.
-func (q *Queries) GetCompanyParent(ctx context.Context, slug string) (GetCompanyParentRow, error) {
-	row := q.db.QueryRow(ctx, getCompanyParent, slug)
-	var i GetCompanyParentRow
-	err := row.Scan(&i.Slug, &i.Name, &i.JobCount)
-	return i, err
-}
-
 const getCompanyRelationProposalForUpdate = `-- name: GetCompanyRelationProposalForUpdate :one
 SELECT id, kind, company_slug, target_slug, note, proposed_by, status, decided_by, created_at, decided_at FROM company_relation_proposals WHERE id = $1 FOR UPDATE
 `
@@ -162,82 +140,42 @@ func (q *Queries) IsCanonicalCompanySlug(ctx context.Context, slug string) (bool
 	return exists, err
 }
 
-const listCompanySubsidiaries = `-- name: ListCompanySubsidiaries :many
-SELECT c.slug, c.name, c.job_count
-FROM company_parents p
-JOIN companies c ON c.slug = p.child_slug
-WHERE p.parent_slug = $1
-ORDER BY c.job_count DESC, c.slug
-LIMIT 100
+const listCompanyRelatives = `-- name: ListCompanyRelatives :many
+(SELECT 'parent'::text AS role, c.slug, c.name, c.job_count
+ FROM company_parents p
+ JOIN companies c ON c.slug = p.parent_slug
+ WHERE p.child_slug = $1)
+UNION ALL
+(SELECT 'subsidiary'::text AS role, c.slug, c.name, c.job_count
+ FROM company_parents p
+ JOIN companies c ON c.slug = p.child_slug
+ WHERE p.parent_slug = $1
+ ORDER BY c.job_count DESC, c.slug
+ LIMIT 100)
 `
 
-type ListCompanySubsidiariesRow struct {
+type ListCompanyRelativesRow struct {
+	Role     string `json:"role"`
 	Slug     string `json:"slug"`
 	Name     string `json:"name"`
 	JobCount int32  `json:"job_count"`
 }
 
-// The subsidiaries a parent's page lists, the ones hiring first.
-func (q *Queries) ListCompanySubsidiaries(ctx context.Context, slug string) ([]ListCompanySubsidiariesRow, error) {
-	rows, err := q.db.Query(ctx, listCompanySubsidiaries, slug)
+// A company page's parent (role 'parent') and subsidiaries (role 'subsidiary') in one round
+// trip, since every company read pays for it and almost every company has neither. The join
+// through companies hides a relative that has no row any more. Subsidiaries come hiring
+// first, and are bounded because a group can own many.
+func (q *Queries) ListCompanyRelatives(ctx context.Context, slug string) ([]ListCompanyRelativesRow, error) {
+	rows, err := q.db.Query(ctx, listCompanyRelatives, slug)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListCompanySubsidiariesRow{}
+	items := []ListCompanyRelativesRow{}
 	for rows.Next() {
-		var i ListCompanySubsidiariesRow
-		if err := rows.Scan(&i.Slug, &i.Name, &i.JobCount); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listCompanyWebsiteTwins = `-- name: ListCompanyWebsiteTwins :many
-WITH hosts AS (
-    SELECT slug, name, job_count,
-           lower(regexp_replace(
-               regexp_replace(company_info ->> 'website', '^[a-zA-Z]+://', ''),
-               '^www\.|[:/?#].*$', '', 'g')) AS host
-    FROM companies
-    WHERE job_count > 0
-      AND company_info ? 'website'
-      AND company_info ->> 'website' <> ''
-)
-SELECT host::text AS host, slug, name, job_count
-FROM hosts
-WHERE host <> ''
-  AND host IN (SELECT host FROM hosts GROUP BY host HAVING count(*) > 1)
-ORDER BY host, job_count DESC, slug
-`
-
-type ListCompanyWebsiteTwinsRow struct {
-	Host     string `json:"host"`
-	Slug     string `json:"slug"`
-	Name     string `json:"name"`
-	JobCount int32  `json:"job_count"`
-}
-
-// Companies with open jobs that state the same website host but sit under different slugs.
-// These are merge candidates for cmd/report-company-website-twins, not decisions: a staffing
-// agency's branches share a host and are one employer, while a job board's host can stand
-// behind many employers. A person reads the list and proposes the merges.
-func (q *Queries) ListCompanyWebsiteTwins(ctx context.Context) ([]ListCompanyWebsiteTwinsRow, error) {
-	rows, err := q.db.Query(ctx, listCompanyWebsiteTwins)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListCompanyWebsiteTwinsRow{}
-	for rows.Next() {
-		var i ListCompanyWebsiteTwinsRow
+		var i ListCompanyRelativesRow
 		if err := rows.Scan(
-			&i.Host,
+			&i.Role,
 			&i.Slug,
 			&i.Name,
 			&i.JobCount,
@@ -338,7 +276,7 @@ SET company_info    = company_info || jsonb_build_object('website', $1::text),
     company_info_at = now(),
     updated_at      = now()
 WHERE slug = $2
-  AND (NOT (company_info ? 'website') OR company_info ->> 'website' = '')
+  AND COALESCE(company_info ->> 'website', '') = ''
 `
 
 type SetCompanyWebsiteIfAbsentParams struct {

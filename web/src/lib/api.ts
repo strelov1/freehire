@@ -958,7 +958,7 @@ export function createApi(
 
   /** Apply a proposed relation. A `same` approval moves the retiring company's jobs and
    *  reports how many; approving it again resumes a move that stopped part-way. */
-  async function approveCompanyRelation(id: number): Promise<{ kind: CompanyRelationKind; moved_jobs: number }> {
+  async function approveCompanyRelation(id: number) {
     return requestData<{ kind: CompanyRelationKind; moved_jobs: number }>(
       `/api/v1/company-relations/${id}/approve`,
       { method: 'POST' },

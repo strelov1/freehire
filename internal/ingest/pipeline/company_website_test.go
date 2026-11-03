@@ -58,7 +58,7 @@ func TestSavedPostingRecordsItsCompanyWebsite(t *testing.T) {
 }
 
 func TestCompanyWebsiteRefusesWhatIsNotAURL(t *testing.T) {
-	for _, raw := range []string{"", "n/a", "info@acme.de", "www.acme.de", "/about", "ftp://acme.de", "http://localhost"} {
+	for _, raw := range []string{"", "n/a", "info@acme.de", "/about", "http://localhost"} {
 		if got := companyWebsite(raw); got != "" {
 			t.Errorf("companyWebsite(%q) = %q, want empty", raw, got)
 		}
@@ -66,7 +66,9 @@ func TestCompanyWebsiteRefusesWhatIsNotAURL(t *testing.T) {
 			t.Errorf("%q recorded %v, want nothing", raw, store.websites)
 		}
 	}
-	if got := companyWebsite("http://www.forumjobs.be"); got != "http://www.forumjobs.be" {
-		t.Errorf("a plain http site was refused: %q", got)
+	for _, ok := range []string{"http://www.forumjobs.be", "www.acme.de"} {
+		if got := companyWebsite(ok); got != ok {
+			t.Errorf("companyWebsite(%q) = %q, want it kept", ok, got)
+		}
 	}
 }

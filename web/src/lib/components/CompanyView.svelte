@@ -24,8 +24,8 @@
     slug,
     currentPage,
     referralAvailable = false,
-    parent = null,
-    subsidiaries = [],
+    parent,
+    subsidiaries,
   }: {
     company: Company;
     initial: Slice<Job> | null;
@@ -35,13 +35,13 @@
     currentPage: number;
     referralAvailable?: boolean;
     // The company that owns this one and the ones it owns: separate employers, linked.
-    parent?: CompanyRef | null;
-    subsidiaries?: CompanyRef[];
+    parent: CompanyRef | null;
+    subsidiaries: CompanyRef[];
   } = $props();
 </script>
 
 <CompanyHeader {company} {slug} />
-<CompanyRelations {company} {slug} {parent} {subsidiaries} />
+<CompanyRelations name={company.name} {slug} {parent} {subsidiaries} />
 
 <CompanyTabs {slug} active="jobs">
   <!-- Two independent conditions, not one. A company can have a mentor and no referral

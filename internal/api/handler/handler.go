@@ -1100,8 +1100,6 @@ func Register(app *fiber.App, cfg Config) {
 	mountMCPAccount(api, mw, assistantH, cfg.FrontendOrigin, cfg.AgentViews)
 	jobsH.register(api, mw)
 	companiesH.register(api, mw)
-	// Corrections people propose about companies (one employer under two slugs, a
-	// subsidiary under its parent) and the moderator queue deciding them.
 	(&companyRelationHandlers{
 		relations: companyrelation.New(cfg.Pool),
 		throttler: cfg.Throttler,

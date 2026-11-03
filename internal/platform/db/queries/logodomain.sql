@@ -6,8 +6,11 @@
 -- company header, the company picker) ask the logo proxy with companies.name rather than
 -- with any posting's spelling of it, and that value is not guaranteed to appear in jobs.
 --
+-- cmd/report-company-website-twins reads it too, grouping by the same logodomain.Domain, so
+-- the two cannot disagree about which companies share a site. job_count is for that report.
+--
 -- name: ListCompanyWebsites :many
-SELECT slug, name, (company_info ->> 'website')::text AS website
+SELECT slug, name, (company_info ->> 'website')::text AS website, job_count
 FROM companies
 WHERE company_info ? 'website'
   AND company_info ->> 'website' <> ''

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -38,6 +39,9 @@ type dbStore struct {
 	tally         *writeTally
 	// seen decides what the seen-set withholds, and so what a hydrating adapter re-fetches.
 	seen seenPolicy
+	// websites holds the company slugs whose website this run has already offered, so one
+	// employer's many postings cost one statement rather than one each.
+	websites sync.Map
 }
 
 // seenPolicy gathers the three independent reasons a stored posting is offered to a hydrating
@@ -496,10 +500,11 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) error {
 }
 
 // RecordCompanyWebsite stores a posting's stated employer website on its company row when
-// the row has none yet. The guard in the query makes a repeat a read, so a crawl that
-// re-saves the employer's postings writes the row once. Implements
-// pipeline.CompanyWebsiteRecorder.
+// the row has none yet, once per company per run. Implements pipeline.CompanyWebsiteRecorder.
 func (s *dbStore) RecordCompanyWebsite(ctx context.Context, companySlug, website string) error {
+	if _, done := s.websites.LoadOrStore(companySlug, struct{}{}); done {
+		return nil
+	}
 	return s.q.SetCompanyWebsiteIfAbsent(ctx, db.SetCompanyWebsiteIfAbsentParams{
 		Slug:    companySlug,
 		Website: website,

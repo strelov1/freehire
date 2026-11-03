@@ -63,22 +63,22 @@ SELECT EXISTS (SELECT 1 FROM company_parents WHERE child_slug = @slug);
 -- name: CompanyHasSubsidiaries :one
 SELECT EXISTS (SELECT 1 FROM company_parents WHERE parent_slug = @slug);
 
--- name: GetCompanyParent :one
--- The parent a company page names. The join through companies hides a parent that has no
--- row any more.
-SELECT c.slug, c.name, c.job_count
-FROM company_parents p
-JOIN companies c ON c.slug = p.parent_slug
-WHERE p.child_slug = @slug;
-
--- name: ListCompanySubsidiaries :many
--- The subsidiaries a parent's page lists, the ones hiring first.
-SELECT c.slug, c.name, c.job_count
-FROM company_parents p
-JOIN companies c ON c.slug = p.child_slug
-WHERE p.parent_slug = @slug
-ORDER BY c.job_count DESC, c.slug
-LIMIT 100;
+-- name: ListCompanyRelatives :many
+-- A company page's parent (role 'parent') and subsidiaries (role 'subsidiary') in one round
+-- trip, since every company read pays for it and almost every company has neither. The join
+-- through companies hides a relative that has no row any more. Subsidiaries come hiring
+-- first, and are bounded because a group can own many.
+(SELECT 'parent'::text AS role, c.slug, c.name, c.job_count
+ FROM company_parents p
+ JOIN companies c ON c.slug = p.parent_slug
+ WHERE p.child_slug = @slug)
+UNION ALL
+(SELECT 'subsidiary'::text AS role, c.slug, c.name, c.job_count
+ FROM company_parents p
+ JOIN companies c ON c.slug = p.child_slug
+ WHERE p.parent_slug = @slug
+ ORDER BY c.job_count DESC, c.slug
+ LIMIT 100);
 
 -- name: SetCompanyWebsiteIfAbsent :exec
 -- The employer's own website, as a source states it in a structured field (EURES's
@@ -91,25 +91,4 @@ SET company_info    = company_info || jsonb_build_object('website', @website::te
     company_info_at = now(),
     updated_at      = now()
 WHERE slug = @slug
-  AND (NOT (company_info ? 'website') OR company_info ->> 'website' = '');
-
--- name: ListCompanyWebsiteTwins :many
--- Companies with open jobs that state the same website host but sit under different slugs.
--- These are merge candidates for cmd/report-company-website-twins, not decisions: a staffing
--- agency's branches share a host and are one employer, while a job board's host can stand
--- behind many employers. A person reads the list and proposes the merges.
-WITH hosts AS (
-    SELECT slug, name, job_count,
-           lower(regexp_replace(
-               regexp_replace(company_info ->> 'website', '^[a-zA-Z]+://', ''),
-               '^www\.|[:/?#].*$', '', 'g')) AS host
-    FROM companies
-    WHERE job_count > 0
-      AND company_info ? 'website'
-      AND company_info ->> 'website' <> ''
-)
-SELECT host::text AS host, slug, name, job_count
-FROM hosts
-WHERE host <> ''
-  AND host IN (SELECT host FROM hosts GROUP BY host HAVING count(*) > 1)
-ORDER BY host, job_count DESC, slug;
+  AND COALESCE(company_info ->> 'website', '') = '';
