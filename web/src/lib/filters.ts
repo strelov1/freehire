@@ -155,7 +155,12 @@ export class FilterStore {
   /** The remote-anywhere modifier. setNow: a discrete toggle that re-filters the
    *  whole feed, like its sibling modifiers above. */
   setWorkModeRemoteAnywhere(on: boolean) {
-    this.#url.setNow({ ...this.#url.value, workModeRemoteAnywhere: on });
+    // The reach is part of the modifier: turning it off clears it too.
+    this.#url.setNow({
+      ...this.#url.value,
+      workModeRemoteAnywhere: on,
+      ...(on ? {} : { workModeRemoteRegions: [], workModeRemoteCountries: [] }),
+    });
   }
 
   /** The summary chip's remove: one chip stands for the whole salary range, so it

@@ -149,14 +149,18 @@ describe('filtersFromProfile', () => {
     };
     const p = filtersToParams(filtersFromProfile(mkProfile(['backend'], ['go'], location)));
     expect(p.getAll('work_mode')).toEqual(['remote,onsite']);
-    // regions = remote ∪ relocation targets.
-    expect(p.getAll('regions')).toEqual(['latam,eu']);
-    // countries = remote ∪ base ∪ relocation; base 'br' dedupes against remote 'br'.
+    // Remote and on-site with a home stated: the remote-anywhere modifier, with the
+    // remote reach on the remote arm…
+    expect(p.get('work_mode_remote_anywhere')).toBe('true');
+    expect(p.get('work_mode_remote_regions')).toBe('latam');
+    expect(p.get('work_mode_remote_countries')).toBe('br');
+    // …and the physical arm bounded by home ∪ relocation targets.
+    expect(p.getAll('regions')).toEqual(['eu']);
     expect(p.getAll('countries')).toEqual(['br']);
-    // cities = base ∪ relocation targets.
     expect(p.getAll('cities')).toEqual(['Florianópolis,Berlin']);
-    // open to relocation → both relocation-supporting values.
-    expect(p.getAll('relocation')).toEqual(['supported,required']);
+    // The relocation facet would AND over the remote arm too; the targets bound the
+    // physical arm instead.
+    expect(p.getAll('relocation')).toEqual([]);
   });
 
   it('seeds no relocation facet when the user is not open to relocating', () => {
@@ -408,12 +412,23 @@ describe('filtersFromProfile remote-anywhere flattening', () => {
     expect(p.has('relocation')).toBe(false);
   });
 
-  // The modifier would drop the reach from the remote arm; the plain flatten keeps
-  // remote work inside it and bounds physical work no wider.
-  it('keeps the plain flatten when the profile states a remote reach', () => {
-    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['eu'] } }))));
-    expect(p.getAll('regions')).toContain('eu');
-    expect(p.getAll('countries')).toContain('de');
+  // The reach bounds the remote arm only; the location facets carry just the home
+  // geography, so hybrid work is not widened to the whole reach.
+  it('stages the remote reach on the remote arm, not on the location facets', () => {
+    const p = filtersToParams(
+      filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['eu'], countries: ['us'] } }))),
+    );
+    expect(p.get('work_mode_remote_anywhere')).toBe('true');
+    expect(p.get('work_mode_remote_regions')).toBe('eu');
+    expect(p.get('work_mode_remote_countries')).toBe('us');
+    expect(p.get('countries')).toBe('de');
+    expect(p.has('regions')).toBe(false);
+  });
+
+  // Remote only: no physical arm, so the reach stays an ordinary location filter.
+  it('keeps the plain flatten for a remote-only profile with a reach', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote'], { remote: { regions: ['eu'] } }))));
+    expect(p.get('regions')).toBe('eu');
     expect(p.has('work_mode_remote_anywhere')).toBe(false);
   });
 

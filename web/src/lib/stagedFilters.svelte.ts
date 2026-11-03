@@ -129,7 +129,7 @@ export class StagedFilters implements FacetStore {
   }
 
   setWorkModeRemoteAnywhere(on: boolean): void {
-    this.#f = { ...this.#f, workModeRemoteAnywhere: on };
+    this.#f = { ...this.#f, workModeRemoteAnywhere: on, ...(on ? {} : { workModeRemoteRegions: [], workModeRemoteCountries: [] }) };
   }
 
   /** Reset every staged filter. */
