@@ -11,7 +11,7 @@
   import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
-  import { emptyFilters, type FilterStore, type JobFilters } from '#lib/filters.js';
+  import { emptyFilters, appliesWorkModeRemoteAnywhere, type FilterStore, type JobFilters } from '#lib/filters.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
   import { SHORT_APPLICATION_MAX } from '#lib/jobFacts.js';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '#lib/filterSections.js';
@@ -761,6 +761,22 @@
     </div>
   {:else if entry.kind === 'work'}
     <ChipFacet store={staged} param="work_mode" label="Work format" counts={c} />
+    {#if appliesWorkModeRemoteAnywhere(staged.value)}
+      <!-- Only shown when it changes the answer (remote + a physical format + a
+           location facet): a toggle that does nothing reads as broken. -->
+      <label class="mt-3 flex cursor-pointer items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          class="size-4 rounded border-border"
+          checked={staged.value.workModeRemoteAnywhere}
+          onchange={(e) => staged.setWorkModeRemoteAnywhere(e.currentTarget.checked)}
+        />
+        <span>Remote from anywhere</span>
+      </label>
+      <p class="mt-1 text-xs text-muted-foreground">
+        Show remote jobs from anywhere; hybrid and on-site only within the locations above.
+      </p>
+    {/if}
     <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" counts={c} /></div>
   {:else if entry.kind === 'industry'}
     <ChipFacet store={staged} param="domains" label="Industry" counts={c} />
