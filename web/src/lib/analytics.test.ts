@@ -276,6 +276,16 @@ describe('trackSignupIfNew → GA4 sign-up', () => {
     expect(await signUp(lost)).toEqual([]);
   });
 
+  it('leaves it to the server when a 2xx answer cannot be parsed', async () => {
+    const unreadable = async () => ({
+      ok: true,
+      json: async () => {
+        throw new SyntaxError('Unexpected end of JSON input');
+      },
+    });
+    expect(await signUp(unreadable)).toEqual([]);
+  });
+
   it('sends it from the browser when the server refused the report', async () => {
     const refused = async () => ({ ok: false, json: async () => ({}) });
     expect(await signUp(refused)).toEqual([['event', 'sign_up', { method: 'oauth' }]]);
