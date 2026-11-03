@@ -43,6 +43,8 @@ func TestFromText(t *testing.T) {
 		{"b2b outside", "", "Assignment; B2B contract (outside IR35)", []string{"ir35_outside"}},
 		// Both stated.
 		{"either", "", "The roles can be engaged Inside or Outside IR35 and will suit engineers", []string{"ir35_outside", "ir35_inside"}},
+		{"field offers either", "", "Rate: £600/day IR35: Inside or Outside", []string{"ir35_outside", "ir35_inside"}},
+		{"field offers either, reversed", "", "IR35 status: Outside / Inside, by agreement", []string{"ir35_outside", "ir35_inside"}},
 		{"title and body disagree", "Data Engineer - Outside IR35", "Rate £500 inside IR35 via umbrella", []string{"ir35_outside", "ir35_inside"}},
 		// Not stated.
 		{"pending", "", "Contract Rate: £350 - £400 per day (LTD - IR35 Determination Pending)", nil},
@@ -52,6 +54,7 @@ func TestFromText(t *testing.T) {
 		{"tax adviser", "Senior Manager (Employment Tax)", "matters (including PAYE, NICs, benefits-in-kind, IR35, global mobility)", nil},
 		{"bare mention", "FullStack Infrastructure Engineer", "London - UK Contract - IR35 The Role We are seeking", nil},
 		{"denied", "", "Please note this role is not inside IR35.", nil},
+		{"denied with an article", "", "This is not an Inside IR35 role.", nil},
 		{"word inside another", "", "Outside IR350 is a part number; inside ir3500 too.", nil},
 		{"empty", "", "", nil},
 	}

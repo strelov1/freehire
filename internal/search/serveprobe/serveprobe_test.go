@@ -46,6 +46,22 @@ func TestCheck_SeparatesAStaleIndexFromTheProjection(t *testing.T) {
 	}
 }
 
+// The IR35 status rolls out the same way: the column fills on a backfill-derive, the
+// document only on the reindex after it, and the gap between them is the index layer's.
+func TestCheck_EngagementOnAStaleIndex(t *testing.T) {
+	r := row(1)
+	r.Engagement = []string{"ir35_outside"}
+
+	rep := serveprobe.Check([]db.Job{r}, map[int64]jobview.Job{1: {}}, shown)
+
+	if got := rep.Counts[serveprobe.LayerProjection]["engagement"]; got != (serveprobe.Count{Stored: 1, Gaps: 0}) {
+		t.Errorf("projection engagement = %+v, want stored 1 / gaps 0", got)
+	}
+	if got := rep.Counts[serveprobe.LayerIndex]["engagement"]; got != (serveprobe.Count{Stored: 1, Gaps: 1}) {
+		t.Errorf("index engagement = %+v, want stored 1 / gaps 1", got)
+	}
+}
+
 // A row with no document is not a field gap: it is counted apart, by why it has none,
 // and checked in the projection only.
 func TestCheck_AMissingDocumentIsUnindexedNotAGap(t *testing.T) {

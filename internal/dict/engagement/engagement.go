@@ -67,6 +67,8 @@ var rules = []rule{
 		re(`#outsideir35\b`),
 		// "Outside or Inside IR35": the name follows the second status only.
 		re(`\boutside` + either + `inside` + scope + ir35),
+		// "IR35: Inside or Outside": the field's second value.
+		re(field + `(?:inside|in[- ]scope)` + either + `(?:outside|out[- ]of[- ]scope)\b`),
 	}},
 	{slug: "ir35_inside", label: "Inside IR35", patterns: []*regexp.Regexp{
 		// "Umbrellainside IR35" is a template that glued the two words; it is the
@@ -75,11 +77,13 @@ var rules = []rule{
 		re(field + `(?:inside|in[- ]scope)\b`),
 		re(`#insideir35\b`),
 		re(`\binside` + either + `outside` + scope + ir35),
+		re(field + `(?:outside|out[- ]of[- ]scope)` + either + `(?:inside|in[- ]scope)\b`),
 	}},
 }
 
-// negated rejects a status a negation governs: "this role is not inside IR35".
-var negated = re(`\b(?:not|isn'?t|never)\s+(?:be\s+)?$`)
+// negated rejects a status a negation governs: "this role is not inside IR35", "this
+// is not an Inside IR35 role".
+var negated = re(`\b(?:not|isn'?t|never)\s+(?:be\s+)?(?:an?\s+)?$`)
 
 // beforeWindow is how far back a negation is looked for.
 const beforeWindow = 12
