@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html"
 	"log"
+	"math/rand/v2"
 	"slices"
 	"strings"
 	"time"
@@ -73,25 +74,27 @@ func (b sitemapBoard) FetchNew(ctx context.Context, _ CompanyEntry, seen func(ex
 	}
 	var unseen []string
 	var jobs []Job
-	deferred := 0
 	for _, loc := range locs {
 		id := b.id(loc)
 		if seen(id) {
 			jobs = append(jobs, Job{ExternalID: id, URL: loc, SeenRefresh: true})
 			continue
 		}
-		if len(unseen) >= b.maxNew {
-			deferred++
-			continue
-		}
 		unseen = append(unseen, loc)
 	}
-	if deferred > 0 {
+	// A random slice, not the sitemap's first: a page that stays unreadable or is rejected stays
+	// unseen, and a fixed prefix would hand it the same slot every run while later pages starve.
+	rand.Shuffle(len(unseen), func(i, j int) { unseen[i], unseen[j] = unseen[j], unseen[i] })
+	if deferred := len(unseen) - b.maxNew; deferred > 0 {
 		log.Printf("%s: %d new postings past this run's bound of %d, deferred to later runs", b.provider, deferred, b.maxNew)
+		unseen = unseen[:b.maxNew]
 	}
 	read := fetchDetails(unseen, sitemapBoardDetailWorkers, func(loc string) (Job, bool) {
 		return b.detail(ctx, loc)
 	})
+	if len(unseen) > 0 && len(read) == 0 && len(jobs) == 0 {
+		return nil, fmt.Errorf("%s: requested %d posting pages and none yielded a posting", b.provider, len(unseen))
+	}
 	return append(jobs, read...), nil
 }
 
@@ -150,34 +153,38 @@ type sitemapBoardPosting struct {
 type sitemapBoardPlaces []schemaAddress
 
 func (p *sitemapBoardPlaces) UnmarshalJSON(b []byte) error {
-	var places schemaPlaces
-	if json.Unmarshal(b, &places) == nil {
-		for _, pl := range places {
-			*p = append(*p, pl.Address)
-		}
-		return nil
-	}
-	var raw []struct {
-		Address json.RawMessage `json:"address"`
-	}
-	if bytes.HasPrefix(bytes.TrimSpace(b), []byte("{")) {
+	for _, place := range jsonObjects(b) {
 		var one struct {
 			Address json.RawMessage `json:"address"`
 		}
-		if json.Unmarshal(b, &one) != nil {
-			return nil
+		if json.Unmarshal(place, &one) != nil {
+			continue
 		}
-		raw = append(raw, one)
-	} else if json.Unmarshal(b, &raw) != nil {
-		return nil
-	}
-	for _, r := range raw {
-		var addrs []schemaAddress
-		if json.Unmarshal(r.Address, &addrs) == nil {
-			*p = append(*p, addrs...)
+		for _, addr := range jsonObjects(one.Address) {
+			var a schemaAddress
+			if json.Unmarshal(addr, &a) == nil {
+				*p = append(*p, a)
+			}
 		}
 	}
 	return nil
+}
+
+// jsonObjects splits a value that is one JSON object or an array of them; anything else yields
+// nothing.
+func jsonObjects(b []byte) []json.RawMessage {
+	b = bytes.TrimSpace(b)
+	if len(b) == 0 {
+		return nil
+	}
+	if b[0] == '{' {
+		return []json.RawMessage{b}
+	}
+	var all []json.RawMessage
+	if b[0] != '[' || json.Unmarshal(b, &all) != nil {
+		return nil
+	}
+	return all
 }
 
 // localities lists the distinct cities, in the order the page states them.

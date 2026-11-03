@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -16,11 +17,14 @@ type sitemapBoardFake struct {
 	t     *testing.T
 	dir   string
 	files map[string]string // URL → fixture name
+	mu    sync.Mutex
 	got   []string
 }
 
 func (f *sitemapBoardFake) read(url string) ([]byte, error) {
+	f.mu.Lock()
 	f.got = append(f.got, url)
+	f.mu.Unlock()
 	name, ok := f.files[url]
 	if !ok {
 		return nil, &StatusError{Method: "GET", Code: 404, URL: url}
@@ -49,10 +53,37 @@ func (f *sitemapBoardFake) GetHTML(_ context.Context, url string) (*html.Node, e
 }
 
 func (f *sitemapBoardFake) fetched(url string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for _, g := range f.got {
 		if g == url {
 			return true
 		}
 	}
 	return false
+}
+
+func TestSitemapBoardFailsWhenNoRequestedPageYieldsAPosting(t *testing.T) {
+	// The sitemap reads but every posting page answers 404: an outage, not an empty catalogue.
+	f := &sitemapBoardFake{t: t, dir: "getinit", files: map[string]string{getinitSitemapURL: "sitemap.xml"}}
+	if _, err := fastGetInIT(f).Fetch(context.Background(), CompanyEntry{}); err == nil {
+		t.Fatal("a crawl whose every page failed must not report success to board health")
+	}
+}
+
+func TestSitemapBoardPlacesReadsEachPlacesAddressShapeOnItsOwn(t *testing.T) {
+	var p sitemapBoardPlaces
+	raw := `[{"address":{"addressLocality":"Berlin","addressCountry":"DE"}},
+	         {"address":[{"addressLocality":"Hamburg","addressCountry":"DE"},{"addressLocality":"Wien","addressCountry":"AT"}]},
+	         {"address":"nowhere"}]`
+	if err := p.UnmarshalJSON([]byte(raw)); err != nil {
+		t.Fatal(err)
+	}
+	post := sitemapBoardPosting{JobLocation: p}
+	if got := strings.Join(post.localities(), ","); got != "Berlin,Hamburg,Wien" {
+		t.Errorf("localities = %q", got)
+	}
+	if got := strings.Join(countriesFromCodes(post.countryCodes()), ","); got != "de,at" {
+		t.Errorf("countries = %q", got)
+	}
 }
