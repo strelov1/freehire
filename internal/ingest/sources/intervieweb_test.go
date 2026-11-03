@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/net/html"
@@ -41,12 +42,15 @@ func ivDetail(title, desc, posted, until string) string {
 type ivFake struct {
 	pages map[string]string // GET url -> body
 	posts map[string]string // page number -> JSON body
+	mu    sync.Mutex
 	gets  []string
 	forms []url.Values
 }
 
 func (f *ivFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
+	f.mu.Lock()
 	f.gets = append(f.gets, u)
+	f.mu.Unlock()
 	body, ok := f.pages[u]
 	if !ok {
 		return nil, &StatusError{Method: "GET", Code: 404, URL: u}

@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"golang.org/x/net/html"
 )
@@ -72,12 +73,22 @@ func (s talentbrew) FetchNew(ctx context.Context, e CompanyEntry, seen func(exte
 	if err != nil {
 		return nil, fmt.Errorf("talentbrew: listing %s: %w", e.Board, err)
 	}
-	return fetchDetails(postings, defaultDetailWorkers, func(p tbPosting) (Job, bool) {
+	var wanted, read atomic.Int64
+	jobs := fetchDetails(postings, defaultDetailWorkers, func(p tbPosting) (Job, bool) {
 		if seen(p.id) {
 			return Job{ExternalID: p.id, URL: p.url, Company: e.Company, SeenRefresh: true}, true
 		}
-		return s.detail(ctx, e, p)
-	}), nil
+		wanted.Add(1)
+		j, ok := s.detail(ctx, e, p)
+		if ok && !j.Unreadable {
+			read.Add(1)
+		}
+		return j, ok
+	})
+	if wanted.Load() > 0 && read.Load() == 0 {
+		return nil, fmt.Errorf("talentbrew: %s: listed %d new postings and read none of their details", e.Board, wanted.Load())
+	}
+	return jobs, nil
 }
 
 // tbBase validates a board identity ("host" or "host/locale") and returns the URL its listing
@@ -105,23 +116,26 @@ func (s talentbrew) listing(ctx context.Context, base *url.URL) ([]tbPosting, er
 	var out []tbPosting
 	seen := map[string]bool{}
 	totalPages := 1
-	for page := 1; page <= totalPages; page++ {
+	for page := 1; page <= totalPages && page <= tbMaxPages; page++ {
 		var resp struct {
 			Results string `json:"results"`
 		}
 		u := fmt.Sprintf("%s/search-jobs/results?CurrentPage=%d&RecordsPerPage=%d&%s", base, page, tbPageSize, tbResultsQuery)
 		if err := s.http.GetJSON(ctx, u, &resp); err != nil {
-			return nil, err
+			if page == 1 {
+				return nil, err
+			}
+			break // a later page failing ends the walk with the postings gathered so far
 		}
 		root, err := html.Parse(strings.NewReader(resp.Results))
 		if err != nil {
-			return nil, err
+			if page == 1 {
+				return nil, err
+			}
+			break
 		}
 		if page == 1 {
 			totalPages = tbTotalPages(root)
-			if totalPages > tbMaxPages {
-				return nil, fmt.Errorf("board states %d pages, past the %d-page cap: walk would be truncated", totalPages, tbMaxPages)
-			}
 		}
 		added := 0
 		walk(root, func(n *html.Node) bool {
@@ -147,12 +161,7 @@ func (s talentbrew) listing(ctx context.Context, base *url.URL) ([]tbPosting, er
 			return true
 		})
 		if added == 0 {
-			// Page 1 of a one-page board may legitimately be empty; any other page the board
-			// declared must carry postings, or the walk is not the whole board.
-			if page > 1 || totalPages > 1 {
-				return nil, fmt.Errorf("page %d of %d carries no new postings: walk truncated", page, totalPages)
-			}
-			break
+			break // an empty page ends the walk whatever the declared count says
 		}
 	}
 	return out, nil

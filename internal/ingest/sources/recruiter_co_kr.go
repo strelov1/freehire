@@ -111,6 +111,9 @@ func (s recruiterCoKR) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error)
 			}
 			return unreadableDetail(id, jobURL, e.Company), true
 		}
+		if strings.TrimSpace(d.JobDescription) == "" {
+			return unreadableDetail(id, jobURL, e.Company), true // a 200 without a body states nothing
+		}
 		j := Job{
 			ExternalID:  id,
 			URL:         jobURL,

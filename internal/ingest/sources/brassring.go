@@ -260,6 +260,8 @@ func (s brassring) list(ctx context.Context, b brassringBoard, sess brassringSes
 			rows = append(rows, resp.Jobs.Job...)
 		}
 		switch {
+		case resp.JobsCount <= 0 && len(rows) > 0:
+			return nil, fmt.Errorf("brassring: %s page %d: %d rows but no stated JobsCount", b, page, len(rows))
 		case len(rows) >= resp.JobsCount:
 			return rows, nil
 		case resp.Jobs == nil || len(resp.Jobs.Job) == 0:

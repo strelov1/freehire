@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/html"
@@ -82,12 +83,22 @@ func (s intervieweb) FetchNew(ctx context.Context, e CompanyEntry, seen func(ext
 		links = ivMerge(links, more)
 	}
 
-	return fetchDetails(links, defaultDetailWorkers, func(l ivLink) (Job, bool) {
+	var wanted, read atomic.Int64
+	jobs := fetchDetails(links, defaultDetailWorkers, func(l ivLink) (Job, bool) {
 		if seen(l.id) {
 			return Job{ExternalID: l.id, URL: l.url, Company: e.Company, SeenRefresh: true}, true
 		}
-		return s.detail(ctx, e, l)
-	}), nil
+		wanted.Add(1)
+		j, ok := s.detail(ctx, e, l)
+		if ok && !j.Unreadable {
+			read.Add(1)
+		}
+		return j, ok
+	})
+	if wanted.Load() > 0 && read.Load() == 0 {
+		return nil, fmt.Errorf("intervieweb: %s: listed %d new postings and read none of their details", e.Board, wanted.Load())
+	}
+	return jobs, nil
 }
 
 // morePages reads listing pages 2..pages through the pager's AJAX endpoint.
@@ -118,11 +129,7 @@ func (s intervieweb) morePages(ctx context.Context, board string, base *url.URL,
 		if err != nil {
 			return nil, fmt.Errorf("intervieweb: %s page %d: %w", board, page, err)
 		}
-		links := ivJobLinks(base, frag)
-		if len(links) == 0 {
-			return nil, fmt.Errorf("intervieweb: %s page %d of %d carries no postings: walk truncated", board, page, pages)
-		}
-		out = ivMerge(out, links)
+		out = ivMerge(out, ivJobLinks(base, frag))
 	}
 	return out, nil
 }

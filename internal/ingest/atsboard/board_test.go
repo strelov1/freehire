@@ -504,6 +504,7 @@ func TestRecognize(t *testing.T) {
 		// can exist under two resellers. Only the domains hiringthing.yml is actually on are
 		// listed; an unlisted one is unrecognised, never a false board.
 		{"recruiter.co.kr tenant host", "https://cosmax.recruiter.co.kr/career/jobs/131793", "recruiter_co_kr", "cosmax.recruiter.co.kr", "https://cosmax.recruiter.co.kr", true},
+		{"recruiter.co.kr API host is not a tenant", "https://api-recruiter.recruiter.co.kr/position/v1/jobflex", "", "", "", false},
 		{"hiringthing vendor domain", "https://4mindsai.hiringthing.com/job/12345/senior-engineer", "hiringthing", "4mindsai.hiringthing.com", "https://4mindsai.hiringthing.com", true},
 		{"hiringthing reseller domain", "https://10federal-partners-inc.prismhr-hire.com/job/98765/technician", "hiringthing", "10federal-partners-inc.prismhr-hire.com", "https://10federal-partners-inc.prismhr-hire.com", true},
 		{"hiringthing second reseller domain", "https://1440-by-the-bay.oasisrecruit.com/", "hiringthing", "1440-by-the-bay.oasisrecruit.com", "https://1440-by-the-bay.oasisrecruit.com", true},

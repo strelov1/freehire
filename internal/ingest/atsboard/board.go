@@ -1598,13 +1598,14 @@ var platformLabels = map[string]bool{
 // which a bare subdomain rule reads as a company called "apply", while apply.recruitee.com is a
 // board recruitee.yml actually tracks. Declining it everywhere would drop a board we crawl.
 var platformLabelsByApex = map[string][]string{
-	"hrmdirect.com": {"apply"},
-	"potok.io":      {"www", "stages", "qa", "sentry"},
-	"jobs2web.com":  {"www", "stage", "feeds"},
-	"eploy":         {"www"}, // www.eploy.com is the vendor's marketing site
-	"dvinci-hr":     {"www"},
-	"dvinci-easy":   {"www"},
-	"dvinci":        {"www"}, // www.dvinci.de is the vendor\'s marketing site
+	"hrmdirect.com":   {"apply"},
+	"recruiter.co.kr": {"api-recruiter", "www"}, // api-recruiter is the host the adapter reads, not a tenant
+	"potok.io":        {"www", "stages", "qa", "sentry"},
+	"jobs2web.com":    {"www", "stage", "feeds"},
+	"eploy":           {"www"}, // www.eploy.com is the vendor's marketing site
+	"dvinci-hr":       {"www"},
+	"dvinci-easy":     {"www"},
+	"dvinci":          {"www"}, // www.dvinci.de is the vendor\'s marketing site
 	// www is the vendor's marketing site; cdn serves every portal's shared assets.
 	"rexx-systems":     {"www", "cdn"},
 	"rexx-recruitment": {"www", "cdn"},

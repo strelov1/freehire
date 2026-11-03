@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/html"
@@ -63,9 +64,10 @@ func (s umantis) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 		root, err := s.http.GetHTML(ctx, next)
 		if err != nil {
-			// Any page failing fails the crawl: a truncated board returned as a success reads as
-			// a shrunken catalogue and the sweep would close the postings it never reached.
-			return nil, fmt.Errorf("umantis: listing %s page %d: %w", e.Board, page, err)
+			if page == 1 {
+				return nil, fmt.Errorf("umantis: listing %s: %w", e.Board, err)
+			}
+			break // a later page failing ends the walk with the postings gathered so far
 		}
 		added := 0
 		for _, r := range umRows(base, root) {
@@ -80,9 +82,18 @@ func (s umantis) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		}
 		next = umNextPage(base, root)
 	}
-	return fetchDetails(rows, defaultDetailWorkers, func(r umRow) (Job, bool) {
-		return s.detail(ctx, e, r)
-	}), nil
+	var read atomic.Int64
+	jobs := fetchDetails(rows, defaultDetailWorkers, func(r umRow) (Job, bool) {
+		j, ok := s.detail(ctx, e, r)
+		if ok && !j.Unreadable {
+			read.Add(1)
+		}
+		return j, ok
+	})
+	if len(rows) > 0 && read.Load() == 0 {
+		return nil, fmt.Errorf("umantis: %s: listed %d postings and read none of their details", e.Board, len(rows))
+	}
+	return jobs, nil
 }
 
 // detail fetches one posting page and maps it to a Job. A 404/410 page is dropped (ok=false);

@@ -14,11 +14,9 @@ import (
 // umFake serves canned pages by URL and records the requests.
 type umFake struct {
 	pages map[string]string
-	got   []string
 }
 
 func (f *umFake) GetHTML(_ context.Context, u string) (*html.Node, error) {
-	f.got = append(f.got, u)
 	p, ok := f.pages[u]
 	if !ok {
 		return nil, errors.New("404")
@@ -129,14 +127,25 @@ func TestUmantisRowWithoutVacancyIDIsSkipped(t *testing.T) {
 	}
 }
 
-func TestUmantisLaterPageFailureFailsTheCrawl(t *testing.T) {
+func TestUmantisLaterPageFailureKeepsGathered(t *testing.T) {
 	const host = "recruitingapp-1.umantis.com"
 	f := &umFake{pages: map[string]string{
 		"https://" + host + "/Jobs/All":                  umListing("?tc1=p2", umRowHTML("1", "A", "X", "01.01.2026")),
 		"https://" + host + "/Vacancies/1/Description/2": umDetail,
 	}}
-	if jobs, err := NewUmantis(f).Fetch(context.Background(), CompanyEntry{Board: host}); err == nil {
-		t.Fatalf("a truncated board must not read as a success: jobs = %+v", jobs)
+	jobs, err := NewUmantis(f).Fetch(context.Background(), CompanyEntry{Board: host})
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("jobs = %+v, err = %v", jobs, err)
+	}
+}
+
+func TestUmantisAllDetailsUnreadableFails(t *testing.T) {
+	const host = "recruitingapp-1.umantis.com"
+	f := &umFake{pages: map[string]string{
+		"https://" + host + "/Jobs/All": umListing("", umRowHTML("1", "A", "X", "01.01.2026")),
+	}}
+	if _, err := NewUmantis(f).Fetch(context.Background(), CompanyEntry{Board: host}); err == nil {
+		t.Error("a crawl that read none of its listed postings must fail")
 	}
 }
 

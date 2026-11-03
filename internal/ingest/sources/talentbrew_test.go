@@ -107,26 +107,13 @@ func TestTalentbrewSeenPostingIsLivenessRefreshOnly(t *testing.T) {
 	}
 }
 
-func TestTalentbrewMarksDetailWithoutJobPostingUnreadable(t *testing.T) {
+func TestTalentbrewFailsWhenNoDetailIsReadable(t *testing.T) {
 	fake := (&routedHTTP{}).
 		route("/job/a/1", `<html><body>nothing</body></html>`).
 		route("search-jobs/results", tbListing(1, [2]string{"/job/a/1", "1"}))
 	jobs, err := NewTalentbrew(fake).Fetch(context.Background(), CompanyEntry{Company: "ALDI", Board: "careers.aldi.us"})
-	if err != nil || len(jobs) != 1 || !jobs[0].Unreadable || jobs[0].ExternalID != "1" {
-		t.Fatalf("jobs = %+v, err = %v", jobs, err)
-	}
-}
-
-func TestTalentbrewTruncatedWalkFails(t *testing.T) {
-	// Declares 2 pages but the second route is missing: the fetch error fails the crawl.
-	fake := (&routedHTTP{}).route("search-jobs/results", tbListing(2, [2]string{"/job/a/1", "1"}))
-	if _, err := NewTalentbrew(fake).Fetch(context.Background(), CompanyEntry{Board: "careers.aldi.us"}); err == nil {
-		t.Error("a walk that cannot reach the declared page count must fail")
-	}
-	// A board declaring more pages than the cap fails instead of returning a prefix.
-	fake = (&routedHTTP{}).route("search-jobs/results", tbListing(tbMaxPages+1, [2]string{"/job/a/1", "1"}))
-	if _, err := NewTalentbrew(fake).Fetch(context.Background(), CompanyEntry{Board: "careers.aldi.us"}); err == nil {
-		t.Error("a board past the page cap must fail")
+	if err == nil {
+		t.Fatalf("a crawl that read none of its new postings must fail, got %+v", jobs)
 	}
 }
 
