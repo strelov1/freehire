@@ -72,3 +72,34 @@ func TestRegexSpans(t *testing.T) {
 		})
 	}
 }
+
+// A month-precision employment range is not a phone number. phoneRe cuts "2016 - 06" out of
+// "05/2016 - 06/2024"; masking it hid the year from the model, which then invented one.
+func TestRegexSpans_MonthPrecisionRangesAreNotPhones(t *testing.T) {
+	for _, text := range []string{
+		"08/2023 - 07/2024 | Stockholm",
+		"05/2016 - 06/2024",
+		"12/2015 - 04/2016",
+		"10.2019 - 05.2021",
+		"2016.05 - 2024.06",
+		"01.01.2020 - 31.12.2022",
+	} {
+		if got := collect(text, regexSpans(text), KindPhone); len(got) != 0 {
+			t.Errorf("%q: masked %q as a phone", text, got)
+		}
+	}
+}
+
+// The fix must not teach the detector that anything near a slash is a date: a number that
+// is not flanked by a date separator and a digit is still a phone.
+func TestRegexSpans_PhonesNextToDatesStillMasked(t *testing.T) {
+	for text, want := range map[string]string{
+		"Updated 05/2016. Call +44 20 7946 0958": "+44 20 7946 0958",
+		"tel 2016 - 06 4521 7788":                "2016 - 06 4521 7788",
+	} {
+		got := collect(text, regexSpans(text), KindPhone)
+		if len(got) != 1 || got[0] != want {
+			t.Errorf("%q: phones = %q, want [%q]", text, got, want)
+		}
+	}
+}

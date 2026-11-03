@@ -33,7 +33,35 @@ var (
 	// A bare YYYY-YYYY year range (with optional spaces around the dash) that the phone
 	// regex would otherwise capture — a common CV employment range, not a phone number.
 	yearRangeRe = regexp.MustCompile(`^\d{4}\s*-\s*\d{4}$`)
+	// The middle of a month-precision range, as phoneRe cuts it out of "05/2016 - 06/2024":
+	// the match is "2016 - 06", the "05/" before it and the "/2024" after it are not digits-
+	// and-dashes, so they are left outside. dateTailRe is the "year - month" shape and
+	// dateHeadRe the "month - year" one ("2016.05 - 2024.06" cuts as "05 - 2024").
+	dateTailRe = regexp.MustCompile(`^\d{4}\s*-\s*\d{1,2}$`)
+	dateHeadRe = regexp.MustCompile(`^\d{1,2}\s*-\s*\d{4}$`)
 )
+
+// isDateRangeFragment reports whether the phone-shaped match text[start:end] is really the
+// seam of a "MM/YYYY - MM/YYYY" (or dotted) employment range. A real number is not flanked by
+// a date separator and a digit, so the flanking is what tells them apart; the match alone
+// ("2016 - 06") is indistinguishable from the tail of a phone number.
+//
+// Missing this is not a cosmetic leak: the masked year never reaches the model, which then
+// has to invent it, and does — every role of one CV came back with the wrong years.
+func isDateRangeFragment(text string, start, end int) bool {
+	match := text[start:end]
+	if dateTailRe.MatchString(match) && end+1 < len(text) &&
+		(text[end] == '/' || text[end] == '.') && isDigit(text[end+1]) {
+		return true
+	}
+	if dateHeadRe.MatchString(match) && start >= 2 &&
+		(text[start-1] == '/' || text[start-1] == '.') && isDigit(text[start-2]) {
+		return true
+	}
+	return false
+}
+
+func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
 // regexSpans returns the high-precision regex-detectable PII spans (email, URL, @handle,
 // phone). Phone spans that are a bare year range, or that overlap an already-detected
@@ -50,7 +78,7 @@ func regexSpans(text string) []Span {
 		spans = append(spans, Span{m[4], m[5], KindLink}) // group 2 = the @handle itself
 	}
 	for _, m := range phoneRe.FindAllStringIndex(text, -1) {
-		if yearRangeRe.MatchString(text[m[0]:m[1]]) || overlapsAny(spans, m[0], m[1]) {
+		if yearRangeRe.MatchString(text[m[0]:m[1]]) || isDateRangeFragment(text, m[0], m[1]) || overlapsAny(spans, m[0], m[1]) {
 			continue
 		}
 		spans = append(spans, Span{m[0], m[1], KindPhone})

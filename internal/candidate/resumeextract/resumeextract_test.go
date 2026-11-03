@@ -8,6 +8,8 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
+	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -111,7 +113,7 @@ func TestExtract_ParsesAndSanitizes(t *testing.T) {
 		`"experience":[{"title":"Senior Go Engineer","company":"Acme","start":"2020","end":"Present"}],` +
 		`"languages":["English",""]}`
 	m := &queuedModel{resp: raw}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), "some cv text")
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), "Senior Go Engineer, Acme, 2020 - Present")
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -157,5 +159,140 @@ func TestExtractor_EnabledReflectsClient(t *testing.T) {
 	}
 	if !NewExtractor(llm.NewWithModel(&queuedModel{}), noopDetector{}).Enabled() {
 		t.Error("configured extractor should be enabled")
+	}
+}
+
+// cvWithDates is a CV whose dates the tests below hold the model's answer against.
+const cvWithDates = `Senior Go Engineer - Acme
+05/2016 - 06/2024 | Berlin
+Go Engineer - Initech
+12/2013 - 04/2016 | Berlin`
+
+// scriptedModel answers each call in turn, repeating the last answer when it runs out.
+type scriptedModel struct {
+	resps []string
+	n     int
+}
+
+func (m *scriptedModel) GenerateContent(context.Context, []llms.MessageContent, ...llms.CallOption) (*llms.ContentResponse, error) {
+	i := min(m.n, len(m.resps)-1)
+	m.n++
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: m.resps[i]}}}, nil
+}
+func (*scriptedModel) Call(context.Context, string, ...llms.CallOption) (string, error) {
+	return "", nil
+}
+
+const (
+	rightDates = `{"experience":[` +
+		`{"company":"Acme","start":{"year":2016,"month":5},"end":{"year":2024,"month":6}},` +
+		`{"company":"Initech","start":{"year":2013,"month":12},"end":{"year":2016,"month":4}}]}`
+	// the shape seen in production: months right, years pulled from the neighbouring role
+	shiftedDates = `{"experience":[` +
+		`{"company":"Acme","start":{"year":2023,"month":5},"end":{"year":2024,"month":6}},` +
+		`{"company":"Initech","start":{"year":2016,"month":12},"end":{"year":2016,"month":4}}]}`
+	// a year the CV never prints
+	inventedYear = `{"experience":[` +
+		`{"company":"Acme","start":{"year":2019,"month":5},"end":{"year":2024,"month":6}}]}`
+)
+
+func TestExtract_CorrectDatesCostOneCall(t *testing.T) {
+	m := &scriptedModel{resps: []string{rightDates}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 1 {
+		t.Errorf("LLM calls = %d, want 1: supported dates must not trigger a retry", m.n)
+	}
+	if got.Experience[0].Start == nil || got.Experience[0].Start.Year != 2016 {
+		t.Errorf("start = %v, want 2016", got.Experience[0].Start)
+	}
+}
+
+func TestExtract_ShiftedDatesAreRetriedAndTheBetterAnswerKept(t *testing.T) {
+	m := &scriptedModel{resps: []string{shiftedDates, rightDates}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Fatalf("LLM calls = %d, want 2", m.n)
+	}
+	if st := got.Experience[0].Start; st == nil || st.Year != 2016 || st.Month != 5 {
+		t.Errorf("Acme start = %v, want 05/2016 from the retry", st)
+	}
+}
+
+func TestExtract_RetryNeverReplacesABetterAnswerWithAWorseOne(t *testing.T) {
+	// First answer: one doubtful month. Retry: a year the CV never prints, which is worse.
+	doubtful := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
+	m := &scriptedModel{resps: []string{doubtful, inventedYear}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Fatalf("LLM calls = %d, want 2", m.n)
+	}
+	if st := got.Experience[0].Start; st == nil || st.Year != 2016 {
+		t.Errorf("start = %v, want the first answer's 2016 kept", st)
+	}
+}
+
+func TestExtract_YearTheCVNeverPrintsIsDroppedNotStored(t *testing.T) {
+	m := &scriptedModel{resps: []string{inventedYear}} // the retry repeats it
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	e := got.Experience[0]
+	if e.Start != nil {
+		t.Errorf("start = %v, want nil: 2019 is not in the CV", e.Start)
+	}
+	if e.End == nil || e.End.Year != 2024 {
+		t.Errorf("end = %v, want 2024 kept: it is in the CV", e.End)
+	}
+}
+
+func TestExtract_PairMissingFromNumericCVIsRetriedButNotDeleted(t *testing.T) {
+	// Both answers use only years the CV prints, so nothing is certainly wrong: the doubtful
+	// pair buys a retry, and when the retry is no better the model's answer stands.
+	wrongMonth := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
+	m := &scriptedModel{resps: []string{wrongMonth}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Errorf("LLM calls = %d, want 2", m.n)
+	}
+	if st := got.Experience[0].Start; st == nil || st.Year != 2016 {
+		t.Errorf("start = %v, want the model's 2016 kept", st)
+	}
+}
+
+func TestDateProblems_NonNumericCVOnlyChecksYears(t *testing.T) {
+	cv := "Engineer, Acme, August 2019 to March 2021"
+	s := Structured{Experience: []Experience{{Start: &perioddate.PeriodDate{Year: 2019, Month: 8}}}}
+	if hard, soft := dateProblems(s, cv); hard != 0 || soft != 0 {
+		t.Errorf("problems = %d/%d, want 0/0: month names are not numeric evidence", hard, soft)
+	}
+}
+
+// The model only ever sees the redacted text, so a year the redactor eats is a year the model
+// must invent. This is the production report end to end: five consecutive "MM/YYYY - MM/YYYY"
+// roles, every year present in the text the model is given.
+func TestExtract_ModelSeesEveryYearOfAMonthPrecisionHistory(t *testing.T) {
+	cv := "A\n08/2023 - 07/2024 | X\nB\n05/2016 - 06/2024 | X\nC\n12/2015 - 04/2016 | X\nD\n07/2013 - 02/2015 | X\nE\n06/2010 - 04/2013 | X\n"
+	red, err := pii.Build(context.Background(), cv, noopDetector{})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	seen := red.Redact(cv)
+	for _, want := range []string{"08/2023 - 07/2024", "05/2016 - 06/2024", "12/2015 - 04/2016", "07/2013 - 02/2015", "06/2010 - 04/2013"} {
+		if !strings.Contains(seen, want) {
+			t.Errorf("model text lost %q:\n%s", want, seen)
+		}
 	}
 }
