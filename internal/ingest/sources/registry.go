@@ -353,6 +353,10 @@ func All(c HTTPClient) map[string]Source {
 		// plus one detail GET per open posting against a shared API host; boards are small
 		// (42 postings on the largest measured) and no limit was observed, so it is unpaced.
 		NewRecruiterCoKR(c),
+		// Abacus Umantis: board is the careers host (recruitingapp-<n>.umantis.com or a customer's
+		// vanity domain). Unpaced: tenants are separate hosts, each small (tens of postings), so the
+		// run's load never concentrates on one origin the way a shared-host ATS does. See umantis.go.
+		NewUmantis(c),
 		NewBetterteam(c),
 		// White-labelled ATS: the board is the full careers host, because the same tenant is
 		// served under the vendor's domain and under each reseller's.

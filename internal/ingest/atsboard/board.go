@@ -435,6 +435,10 @@ var atsBoards = []struct{ host, source, mode string }{
 	// Recruiter (Saramin's career-site builder): the adapter sends the whole career host as the
 	// API's tenant header, so the board is the host (cosmax.recruiter.co.kr).
 	{"recruiter.co.kr", "recruiter_co_kr", modeHost},
+	// Abacus Umantis: the adapter lists https://<board>/Jobs/All, so the board is the whole host
+	// (recruitingapp-2840.umantis.com). A customer vanity host (jobs.bobst.com) is not derivable
+	// from a URL, like every other custom-domain ATS here.
+	{"umantis.com", "umantis", modeHost},
 	// HiringThing is white-labelled: one application serves a tenant under the vendor's own
 	// domain (<tenant>.hiringthing.com) and under each reseller's, and a slug alone names
 	// nothing — nothing in it says which domain answers for it, and the same slug can exist
