@@ -658,6 +658,9 @@ func All(c HTTPClient) map[string]Source {
 		// Get in IT: German entry-level IT board. The public sitemap names the whole catalogue;
 		// posting pages carry a schema.org JobPosting. Paced, see getinit.go.
 		NewGetInIT(c),
+		// Berlin Startup Jobs: Berlin startup board. post-sitemap.xml names the whole catalogue;
+		// posting pages carry a schema.org JobPosting. Paced, see berlinstartupjobs.go.
+		NewBerlinStartupJobs(c),
 		// ITviec: Vietnam's IT-only board. One server-rendered listing names the whole
 		// catalogue; posting pages carry a schema.org JobPosting. Paced, see itviecRequestInterval.
 		NewITviec(pacedHTMLGetter(c, itviecRequestInterval, itviecRequestBurst)),
