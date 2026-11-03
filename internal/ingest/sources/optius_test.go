@@ -145,6 +145,9 @@ func TestOptiusHydratesNewPostingsAndRefreshesSeenOnes(t *testing.T) {
 	if p.PostedAt == nil || p.PostedAt.Format("2006-01-02") != "2026-10-29" {
 		t.Errorf("posted = %v", p.PostedAt)
 	}
+	if p.ApplicationDeadline == nil || p.ApplicationDeadline.Format("2006-01-02") != "2026-11-13" {
+		t.Errorf("apply by = %v, want the JobPosting's validThrough 2026-11-13", p.ApplicationDeadline)
+	}
 	if len(p.FallbackCountries) != 1 || p.FallbackCountries[0] != "si" || p.Countries != nil {
 		t.Errorf("countries / fallback = %v / %v, want the Slovenian fallback only", p.Countries, p.FallbackCountries)
 	}

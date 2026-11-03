@@ -175,6 +175,7 @@ type mojposaoDetail struct {
 	WorkTypes              []string    `json:"workTypes"`
 	EmploymentTypes        []string    `json:"employmentTypes"`
 	RequiredWorkExperience string      `json:"requiredWorkExperience"`
+	EndsAt                 string      `json:"endsAt"`
 	RootPosition           *struct {
 		ID int `json:"id"`
 	} `json:"rootPosition"`
@@ -405,6 +406,14 @@ func mojposaoJob(d mojposaoDetail, c mojposaoCard, m mojposaoMarket) (Job, bool)
 		j.ExperienceYearsMin = &years
 	}
 	j.IsTechHint = d.RootPosition != nil && d.RootPosition.ID == mojposaoITPosition
+	// endDate is the last day's end in the source's local time (22:59:59Z in winter, 21:59:59Z
+	// in summer), so its UTC date is that last day either way. Unlike a posted_at it may
+	// legitimately sit today or tomorrow, so it is not run through NotFuture; a stale one past
+	// today closes the posting on the write.
+	if t, ok := mojposaoTime(d.EndsAt); ok {
+		t = t.UTC()
+		j.ApplicationDeadline = &t
+	}
 	return j, true
 }
 

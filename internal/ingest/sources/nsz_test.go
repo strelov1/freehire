@@ -125,6 +125,10 @@ func TestNSZHydratesUnseenVacancies(t *testing.T) {
 	if teacher.PostedAt == nil || !teacher.PostedAt.Equal(want) {
 		t.Errorf("posted = %v, want the period's first day %v", teacher.PostedAt, want)
 	}
+	wantBy := time.Date(2026, 11, 28, 0, 0, 0, 0, nszBelgrade)
+	if teacher.ApplicationDeadline == nil || !teacher.ApplicationDeadline.Equal(wantBy) {
+		t.Errorf("apply by = %v, want the period's closing day %v", teacher.ApplicationDeadline, wantBy)
+	}
 	if teacher.EmploymentType != "" || teacher.IsTechHint {
 		t.Errorf("employment/tech = %q / %v, want neither for a fixed-term teacher", teacher.EmploymentType, teacher.IsTechHint)
 	}

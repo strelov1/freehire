@@ -396,9 +396,9 @@ curl "https://freehire.me/api/v1/jobs/senior-go-engineer-acme-1a2b"
 
 **Auth:** Public
 
-Jobs similar to the given one (semantic; may be empty).
+Similar jobs within the same location and specialization.
 
-Backed by the optional semantic index. Returns an empty list (not an error) when the source job is not indexed.
+Searches the live Meilisearch index with the source job’s known location and specialization as mandatory filters. Uses stored-vector hybrid ranking when available, falling back to keyword search under the same filters. Returns an empty list when location or specialization is unknown or no visible matches remain.
 
 **Path parameters**
 
@@ -1745,12 +1745,21 @@ The same agent the web app and browser extension chat with, over HTTP: create a 
 
 Start a new conversation.
 
+For shortlisting the current jobs list, pass search_query (the complete serialized query; an empty string is valid) and a client-generated request_id UUID. Only chat sessions accept this binding. Reusing the UUID with the same owner and canonical query returns the same session; changing its query returns 409. Unknown search parameters return 400 at creation. A condition that cannot be enforced when a search runs (for example hide_seen without a readable history) fails that search instead, and the assistant reports it rather than widening the search. Search-bound responses include search_context: { query, brief }; the original query is immutable and the selection brief is local to the conversation.
+
 **Query parameters**
 
 | Name | Type | Required | Description |
 | --- | --- | --- | --- |
 | `preset` | string | no | One of `chat` (default), `profile`, `browse`, `interview`, `debrief`, `apply`. (e.g. `chat`) |
 | `job` | string | no | Public slug of an application you hold. Required for `interview`/`debrief`/`apply`, ignored otherwise. (e.g. `senior-go-engineer-acme-1a2b`) |
+
+**Body**
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `search_query` | string | no | Optional complete job-search query, at most 8000 bytes. Pagination and tracking parameters are removed. (e.g. `skills=go&salary_min=80000&work_mode=remote`) |
+| `request_id` | string (UUID) | no | Required with search_query. Reuse the same UUID when retrying creation. (e.g. `b2f1c2b0-6e2a-4c9e-9c2e-0a1b2c3d4e5f`) |
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/assistant/sessions?preset=chat" -H "Authorization: Bearer $FREEHIRE_API_KEY"

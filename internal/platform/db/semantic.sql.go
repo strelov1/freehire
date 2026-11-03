@@ -144,25 +144,6 @@ func (q *Queries) ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) e
 	return err
 }
 
-const clearSimilarComputedAtBatch = `-- name: ClearSimilarComputedAtBatch :exec
-UPDATE jobs
-SET similar_computed_at = NULL
-WHERE id = ANY($1::bigint[])
-`
-
-// Null a batch of jobs' precomputed-similarity staleness stamp. Run in the SAME
-// transaction as the open-job embed stamp / chunk replace (cmd/embed) — a job whose
-// chunks were just replaced has a stale (or absent) jobs.similar_job_ids, so this
-// clears similar_computed_at unconditionally for the whole open batch, letting
-// cmd/similar-backfill's incremental predicate ("similar_computed_at IS NULL, or a job
-// with no chunk rows at all is simply never selected") pick the job back up. Cheap and
-// idempotent — nulling an already-NULL column is a no-op write, not worth a
-// conditional guard.
-func (q *Queries) ClearSimilarComputedAtBatch(ctx context.Context, ids []int64) error {
-	_, err := q.db.Exec(ctx, clearSimilarComputedAtBatch, ids)
-	return err
-}
-
 const deleteJobSemanticChunks = `-- name: DeleteJobSemanticChunks :exec
 
 DELETE FROM job_semantic_chunks
@@ -176,14 +157,13 @@ WHERE job_id = ANY($1::bigint[])
 // its own vector(768) row here — replacing the single, doubly-truncated
 // jobs.semantic_embedding vector as the queryable representation. Consumers:
 // cmd/embed (writes, via DeleteJobSemanticChunks + InsertJobSemanticChunks or
-// DeleteJobSemanticChunks alone for a closed job) and cmd/similar-backfill (reads,
-// via NearestJobsToJob). GET /me/recommendations was removed rather than migrated
+// DeleteJobSemanticChunks alone for a closed job) and the Meilisearch index writers. GET /me/recommendations was removed rather than migrated
 // to pgvector (see drop-hybrid-search-pgvector-similar's Context: "Mid-implementation
 // reversal"); it never got a caller.
 // ---------------------------------------------------------------------------
 // Remove every chunk row for a BATCH of jobs in one round trip — mirrors every other
 // batch mutation in this file (StampSemanticEmbeddedBatch, ClearSemanticEmbeddedBatch,
-// ClearSimilarComputedAtBatch, DeleteSemanticEntriesBatch), all one `WHERE id = ANY($1)`
+// DeleteSemanticEntriesBatch), all one `WHERE id = ANY($1)`
 // call rather than one call per job: this pipeline was historically bottlenecked by
 // per-row Postgres round trips during a bulk backfill, not by GPU/TEI throughput, and
 // the upcoming full-catalogue re-embed (openspec/changes/
@@ -259,32 +239,8 @@ func (q *Queries) EnqueuePendingSemanticJobs(ctx context.Context, targetModel st
 	return result.RowsAffected(), nil
 }
 
-const getJobSemanticGeneration = `-- name: GetJobSemanticGeneration :one
-SELECT semantic_embedded_hash
-FROM jobs
-WHERE id = $1::bigint
-`
-
-// The source job's chunk-generation marker (design.md's NearestJobsToJob rollup has no
-// row to carry this on when a job's every candidate gets excluded, so it is its own
-// query, read in the same round trip as NearestJobsToJob rather than folded into it).
-// semantic_embedded_hash is stamped from content_hash by StampSemanticEmbeddedBatch in
-// the same transaction that writes a job's current job_semantic_chunks rows, so it
-// changes exactly when cmd/embed replaces those rows. cmd/similar-backfill passes the
-// value read here back to SetSimilarJobIDs as a conditional-write guard: if cmd/embed
-// re-embeds this job between this read and that write, the source's chunks (and the
-// NearestJobsToJob result computed from them) are already stale, and the guard drops
-// the write instead of stamping similar_computed_at over data the concurrent re-embed
-// already invalidated.
-func (q *Queries) GetJobSemanticGeneration(ctx context.Context, jobID int64) (pgtype.Text, error) {
-	row := q.db.QueryRow(ctx, getJobSemanticGeneration, jobID)
-	var semantic_embedded_hash pgtype.Text
-	err := row.Scan(&semantic_embedded_hash)
-	return semantic_embedded_hash, err
-}
-
 const getJobsByIDs = `-- name: GetJobsByIDs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, similar_job_ids, similar_computed_at, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline
 FROM jobs
 WHERE id = ANY($1::bigint[])
 `
@@ -356,8 +312,6 @@ func (q *Queries) GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error) 
 			&i.AtsAbsentAt,
 			&i.ClosedReason,
 			&i.IsPrivate,
-			&i.SimilarJobIds,
-			&i.SimilarComputedAt,
 			&i.SalaryMinSource,
 			&i.SalaryMaxSource,
 			&i.SalaryCurrencySource,
@@ -457,101 +411,6 @@ func (q *Queries) ListSemanticChunksForJobs(ctx context.Context, jobIds []int64)
 	return items, nil
 }
 
-const nearestJobsToJob = `-- name: NearestJobsToJob :many
-WITH source_chunks AS (
-    SELECT embedding
-    FROM job_semantic_chunks
-    WHERE job_id = $2::bigint
-),
-source_job AS (
-    SELECT company_slug FROM jobs WHERE id = $2::bigint
-),
-nearest AS (
-    SELECT n.job_id, n.distance
-    FROM source_chunks sc
-    CROSS JOIN LATERAL (
-        SELECT c2.job_id, (c2.embedding <=> sc.embedding)::float8 AS distance
-        FROM job_semantic_chunks c2
-        WHERE c2.job_id <> $2::bigint
-        ORDER BY c2.embedding <=> sc.embedding
-        LIMIT $3::int
-    ) n
-)
-SELECT j2.id AS job_id, MIN(nearest.distance)::float8 AS distance
-FROM nearest
-JOIN jobs j2 ON j2.id = nearest.job_id AND j2.closed_at IS NULL AND NOT j2.is_private
-CROSS JOIN source_job sj
-WHERE (sj.company_slug = '' OR j2.company_slug IS DISTINCT FROM sj.company_slug)
-GROUP BY j2.id
-ORDER BY distance
-LIMIT $1::int
-`
-
-type NearestJobsToJobParams struct {
-	LimitCount int32 `json:"limit_count"`
-	JobID      int64 `json:"job_id"`
-	OverFetch  int32 `json:"over_fetch"`
-}
-
-type NearestJobsToJobRow struct {
-	JobID    int64   `json:"job_id"`
-	Distance float64 `json:"distance"`
-}
-
-// The similar-jobs rollup for one source job (design.md Decision 5), consumed by
-// cmd/similar-backfill to populate jobs.similar_job_ids. A candidate job's distance to
-// the source is the MINIMUM cosine distance across every (source chunk, candidate
-// chunk) pair — the single nearest passage wins, not an average — so a long job with
-// one perfectly-matching paragraph outranks a job that is merely "somewhat close"
-// everywhere; this mirrors the chunking branch's own Meili-side scoring rule ("nearest
-// of a multi-vector document's vectors"), kept intentionally the same across the
-// storage-engine change.
-//
-// Rewritten from a plain GROUP BY over the full (source chunk × every other chunk)
-// cross join to a LATERAL join, one ANN probe per source chunk — measured live on prod
-// at 730k total chunk rows (a fraction of the eventual target): the cross-join form
-// took 152.7s for a SINGLE job (confirmed via EXPLAIN ANALYZE), because pgvector's
-// HNSW index only accelerates `ORDER BY embedding <=> const LIMIT k`, a shape the
-// cross-join's `MIN(...) ... GROUP BY` never produces — Postgres has no choice but to
-// compute every pairwise distance before it can take a minimum. Each source chunk's
-// LATERAL subquery is exactly that index-servable shape (see migration 0110's HNSW
-// index): it asks for the `over_fetch` nearest chunks to ONE source chunk, over-fetching
-// past `limit_count` to absorb whatever the closed/same-company filters below discard.
-// over_fetch too small under-fills the final top-N; too large gives back the cross-join
-// query's own cost — cmd/similar-backfill picks it as a multiple of limit_count.
-//
-// The company/closed exclusion moves to the outer SELECT (against jobs, not repeated per
-// LATERAL probe) — unless the source job has no resolved company (company_slug = ”,
-// this repo's "unknown company" sentinel, see jobs.company_slug NOT NULL DEFAULT ”),
-// any candidate sharing the source's exact company_slug is excluded, so two different
-// companies that both merely lack a resolved slug don't spuriously exclude each other.
-//
-// Private candidates are excluded there too. A user-pasted job description (InsertPrivateJob,
-// for the JD-tailor intake) is open, carries the derived is_tech, and is therefore embedded
-// and eligible like any other row — so without this predicate it becomes a legitimate
-// neighbour of a public posting, and GET /jobs/:slug/similar (unauthenticated, whole
-// jobview) publishes the unguessable slug its privacy rests on. The SOURCE job may still be
-// private: asking what a pasted JD resembles is the feature.
-func (q *Queries) NearestJobsToJob(ctx context.Context, arg NearestJobsToJobParams) ([]NearestJobsToJobRow, error) {
-	rows, err := q.db.Query(ctx, nearestJobsToJob, arg.LimitCount, arg.JobID, arg.OverFetch)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []NearestJobsToJobRow{}
-	for rows.Next() {
-		var i NearestJobsToJobRow
-		if err := rows.Scan(&i.JobID, &i.Distance); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const recordSemanticFailure = `-- name: RecordSemanticFailure :one
 UPDATE semantic_outbox
 SET attempts   = attempts + 1,
@@ -585,74 +444,6 @@ func (q *Queries) RecordSemanticFailure(ctx context.Context, arg RecordSemanticF
 	var i RecordSemanticFailureRow
 	err := row.Scan(&i.Attempts, &i.FailedAt)
 	return i, err
-}
-
-const selectJobsNeedingSimilarBackfill = `-- name: SelectJobsNeedingSimilarBackfill :many
-
-SELECT j.id AS job_id
-FROM jobs j
-WHERE j.similar_computed_at IS NULL
-  AND j.semantic_embedded_model IS NOT NULL
-  AND EXISTS (SELECT 1 FROM job_semantic_chunks c WHERE c.job_id = j.id)
-ORDER BY COALESCE(j.posted_at, j.created_at) DESC, j.id DESC
-LIMIT $1::int
-`
-
-// ---------------------------------------------------------------------------
-// cmd/similar-backfill: the run-once-and-exit worker that populates
-// jobs.similar_job_ids/similar_computed_at from NearestJobsToJob above. Finds
-// outstanding work by direct query, not a claimed/leased outbox table (design.md
-// Decision 4 — telagon's cmd/similar-backfill, the original inspiration, has no
-// outbox table either: the predicate below is idempotent and re-orderable, so a
-// batched full-table scan needs no lease/dead-letter machinery to stay safe under a
-// re-run or an overlapping manual invocation).
-// ---------------------------------------------------------------------------
-// Jobs needing a (re)computed precomputed similar-jobs list: at least one
-// job_semantic_chunks row (so NearestJobsToJob has something to search from) but no
-// current list (similar_computed_at IS NULL). A plain IS NULL check, not "IS NULL OR
-// older than the newest chunk" — cmd/embed's CompleteOpen already nulls
-// similar_computed_at on EVERY chunk replace (ClearSimilarComputedAtBatch, called
-// unconditionally for the whole re-embedded batch, even when the new chunk count
-// happens to match the old one), so "missing" and "stale" already collapse to the same
-// NULL check; there is no case where a job's chunks changed but its
-// similar_computed_at stayed non-NULL. A job with zero chunk rows (never embedded, or
-// its description was too short/empty to chunk) is simply never selected — the EXISTS
-// clause already requires at least one row, no separate guard needed. A closed source
-// job is NOT excluded here (only closed CANDIDATES are, inside NearestJobsToJob) —
-// cmd/embed's own closed-job path deletes a job's chunk rows once its outbox entry
-// drains, which removes it from this predicate on its own; excluding closed_at here
-// too would just duplicate that cleanup with a narrower race window, not add safety.
-// Ordered freshest-job-first (mirrors ClaimSemanticBatch's ordering) so newly-posted
-// jobs get a similar-jobs list before older backlog on a still-draining catalogue.
-//
-// semantic_embedded_model IS NOT NULL is what makes the freshest-first scan stop.
-// jobs_similar_backfill_idx is partial only on similar_computed_at IS NULL, which on
-// prod is most of the table (2026-10-25: null_frac 0.92, and one LIMIT 50 read ~1.5M
-// index entries, nearly all of them jobs with no chunks). The model is stamped in the
-// same transaction as the chunk replace (cmd/embed CompleteOpen). semantic_embedded_hash
-// is the wrong stand-in: StampSemanticEmbeddedBatch copies content_hash, so a job can
-// have chunks and a model while the hash stays NULL. EXISTS stays, because a short
-// description is stamped and then stored with zero chunk rows. The index that matches
-// this predicate is jobs_similar_backfill_embedded_idx (0196); the older index stays
-// until the previous binary is gone, since that binary's query cannot use the new one.
-func (q *Queries) SelectJobsNeedingSimilarBackfill(ctx context.Context, limitCount int32) ([]int64, error) {
-	rows, err := q.db.Query(ctx, selectJobsNeedingSimilarBackfill, limitCount)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var job_id int64
-		if err := rows.Scan(&job_id); err != nil {
-			return nil, err
-		}
-		items = append(items, job_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const semanticCoverageCounts = `-- name: SemanticCoverageCounts :one
@@ -728,46 +519,6 @@ func (q *Queries) SemanticOutboxClaimableDepth(ctx context.Context) (int64, erro
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
-}
-
-const setSimilarJobIDs = `-- name: SetSimilarJobIDs :execrows
-UPDATE jobs
-SET similar_job_ids = $1::bigint[],
-    similar_computed_at = now()
-WHERE id = $2::bigint
-  AND semantic_embedded_hash IS NOT DISTINCT FROM $3
-`
-
-type SetSimilarJobIDsParams struct {
-	SimilarJobIds      []int64     `json:"similar_job_ids"`
-	ID                 int64       `json:"id"`
-	ExpectedGeneration pgtype.Text `json:"expected_generation"`
-}
-
-// Write one job's precomputed similar-jobs list and stamp similar_computed_at
-// together, so a job is never marked computed without its list landing. A nil/empty
-// similar_job_ids is a valid, intentional write (a job whose only close matches were
-// excluded by NearestJobsToJob's same-company rule ends up with a short or empty
-// list, not an error) — it still stamps the job so
-// SelectJobsNeedingSimilarBackfill's incremental predicate does not pick it up again
-// every run. One row at a time, not batched like cmd/embed's writes: each job's array
-// value is unique per row, so there is no shared payload to amortize across a wave the
-// way a single Meili task amortizes cmd/embed's batch upsert.
-//
-// The generation guard (IS NOT DISTINCT FROM, since a job with zero chunk rows would
-// never reach here but the comparison stays NULL-safe) makes this write a no-op — zero
-// rows affected, reported to the caller via :execrows — if cmd/embed replaced this
-// job's chunks (and cleared similar_computed_at itself, ClearSimilarComputedAtBatch)
-// after GetJobSemanticGeneration/NearestJobsToJob read it but before this write lands.
-// Without the guard this UPDATE would stamp similar_computed_at over a list computed
-// from chunks that no longer exist, and the job's now-current chunks would never be
-// backfilled until their NEXT content change.
-func (q *Queries) SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setSimilarJobIDs, arg.SimilarJobIds, arg.ID, arg.ExpectedGeneration)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const stampSemanticEmbeddedBatch = `-- name: StampSemanticEmbeddedBatch :exec

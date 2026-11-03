@@ -13,9 +13,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/platform/llm"
+	"github.com/strelov1/freehire/internal/platform/llmschema"
 )
 
 // ErrDisabled is returned by Extract when the LLM is not configured (nil client), so a
@@ -64,6 +66,56 @@ func (e *Extractor) Enabled() bool { return e != nil && e.client != nil && e.det
 // with the model that generated it.
 func (e *Extractor) ModelID() string { return e.client.ModelID() }
 
+const (
+	// retryMinBudget is the least time a second model call is worth starting with. The caller's
+	// deadline was sized for ONE call (healthy ones take 45-83s), so after a slow first call
+	// there may be too little left for another.
+	retryMinBudget = 45 * time.Second
+	// retryReserve is held back from the caller's deadline so the retry can never run it down
+	// to zero: the caller still has to persist the answer, and a valid first extraction lost to
+	// an expired context is worse than the date problem the retry was meant to fix.
+	retryReserve = 10 * time.Second
+)
+
+// retryContext bounds a second model call so it cannot consume the time the caller needs to
+// store the result. It reports false when too little time is left to be worth trying; a
+// context without a deadline is passed through.
+func retryContext(ctx context.Context) (context.Context, context.CancelFunc, bool) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		c, cancel := context.WithCancel(ctx)
+		return c, cancel, ctx.Err() == nil
+	}
+	if time.Until(deadline) < retryMinBudget+retryReserve {
+		return ctx, func() {}, false
+	}
+	c, cancel := context.WithDeadline(ctx, deadline.Add(-retryReserve))
+
+	return c, cancel, true
+}
+
+// generate is one model call and its decode, up to and including the placeholder scrub —
+// everything Extract may repeat. Contacts and Sanitize are not here: they are applied once,
+// to the answer that is kept.
+func (e *Extractor) generate(ctx context.Context, modelText string, schema llmschema.Schema) (Structured, error) {
+	raw, err := e.client.GenerateJSON(ctx, systemPrompt, userPrompt(modelText),
+		llm.WithSchema(schemaName, schema), llm.WithReasoning(llm.ReasoningNone))
+	if err != nil {
+		return Structured{}, fmt.Errorf("resumeextract: generate: %w", err)
+	}
+	var s Structured
+	if err := json.Unmarshal([]byte(raw), &s); err != nil {
+		return Structured{}, fmt.Errorf("resumeextract: parse: %w", err)
+	}
+	// Drop anything the model copied out of the MASK rather than out of the CV. The
+	// system prompt asks it not to, and one line further down asks it to copy highlights
+	// verbatim — a prompt is the wrong place for a rule about what gets persisted, so the
+	// rule is enforced here, before the contact fields are filled and before Sanitize.
+	scrubRedactionPlaceholders(&s)
+
+	return s, nil
+}
+
 // Extract sends the (bounded) CV text to the model in JSON mode and returns the parsed,
 // sanitized structure. Returns ErrDisabled when unconfigured; a transport or parse
 // failure is returned as an error (the caller degrades best-effort).
@@ -92,20 +144,33 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	// education, with nothing invented — while reasoning costs half the wall clock and
 	// answers unpredictably enough to cross this call's timeout. See llm.ReasoningEffort
 	// for the numbers and for which providers honour it.
-	raw, err := e.client.GenerateJSON(ctx, systemPrompt, userPrompt(red.Redact(cvText)),
-		llm.WithSchema(schemaName, schema), llm.WithReasoning(llm.ReasoningNone))
+	//
+	// That measurement was taken on one model. It does not make the dates safe on another:
+	// glm-4.6 shifted every role's start year onto its neighbour with this very call, which
+	// is why the dates are checked against the text below instead of trusted.
+	modelText := red.Redact(cvText)
+	s, err := e.generate(ctx, modelText, schema)
 	if err != nil {
-		return Structured{}, fmt.Errorf("resumeextract: generate: %w", err)
+		return Structured{}, err
 	}
-	var s Structured
-	if err := json.Unmarshal([]byte(raw), &s); err != nil {
-		return Structured{}, fmt.Errorf("resumeextract: parse: %w", err)
+	// A date the CV does not support is a claim about the candidate's history that nothing
+	// downstream can re-check. Ask once more before settling for it; a second call costs
+	// little next to a CV that reads wrong to the person it belongs to. The retry is not
+	// trusted either — it replaces the first answer only if it is better, and a certain error outranks any number
+	// of doubtful ones: trading three doubtful months for one invented year would cost a date.
+	if hard, soft := dateProblems(s, modelText); hard+soft > 0 {
+		if retryCtx, cancel, ok := retryContext(ctx); ok {
+			if again, err := e.generate(retryCtx, modelText, schema); err == nil {
+				if retryIsBetter(s, again, modelText) {
+					s = again
+				}
+			}
+			cancel()
+		}
 	}
-	// Drop anything the model copied out of the MASK rather than out of the CV. The
-	// system prompt asks it not to, and one line further down asks it to copy highlights
-	// verbatim — a prompt is the wrong place for a rule about what gets persisted, so the
-	// rule is enforced here, before the contact fields are filled and before Sanitize.
-	scrubRedactionPlaceholders(&s)
+	// Whatever is still certainly wrong is removed rather than stored: an undated role is
+	// incomplete, a wrongly dated one is false.
+	dropUnsupportedYears(&s, modelText)
 	// Contact fields come from deterministic detection, NOT the model — it only ever saw the
 	// redacted CV, so it cannot (and must not) supply them. Location is included: the
 	// candidate's residence is typically an ADDRESS span masked before the model runs.
@@ -136,6 +201,12 @@ Rules:
     interpret whatever the CV prints ("2021-03" -> {"year":2021,"month":3}, "2021" -> {"year":2021},
     "March 2021" -> {"year":2021,"month":3}); for a role that has not ended ("Present", "Current", or no
     end stated), set current to true and end to null — never invent an end year for an ongoing role;
+    DATES ARE COPIED, NOT WORKED OUT. Read each role's start and end from the period printed with THAT
+    role — on the line under its title, beside its company, or in a column next to it — and from nowhere
+    else. Do not carry a year over from the role above or below it: neighbouring roles often chain
+    ("2013 - 2015" then "2015 - 2016") and often overlap, and both are normal. In "MM/YYYY" the first
+    number is the month and the second the year; a period is "start - end" with the earlier date first.
+    A year or month that is not printed in the CV must not appear in your answer;
     summary is the one-line company/role context; highlights is the
     array of achievement bullet points for that role, each a full sentence copied faithfully from the CV;
     stack is the array of technologies listed for that role, e.g. from a "Stack:" line;

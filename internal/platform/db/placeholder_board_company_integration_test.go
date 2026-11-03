@@ -81,9 +81,6 @@ func TestRenamePlaceholderBoardJobs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("seed %s: %v", externalID, err)
 		}
-		if _, err := pool.Exec(ctx, "UPDATE jobs SET similar_computed_at = now() WHERE id = $1", job.ID); err != nil {
-			t.Fatalf("stamp %s: %v", externalID, err)
-		}
 		return job.ID
 	}
 	target := seed("ukgready", board+":1", board)
@@ -104,14 +101,14 @@ func TestRenamePlaceholderBoardJobs(t *testing.T) {
 	}
 
 	for id, want := range map[int64]string{
-		target:      "Oceanside Museum Of Art|oceanside-museum-of-art|oceansidemuseumofart|true",
-		otherBoard:  board + "|secure-saashr-com-oma|securesaashrcomoma|false",
-		otherSource: board + "|secure-saashr-com-oma|securesaashrcomoma|false",
-		renamed:     "Someone Else|secure-saashr-com-oma|securesaashrcomoma|false",
+		target:      "Oceanside Museum Of Art|oceanside-museum-of-art|oceansidemuseumofart",
+		otherBoard:  board + "|secure-saashr-com-oma|securesaashrcomoma",
+		otherSource: board + "|secure-saashr-com-oma|securesaashrcomoma",
+		renamed:     "Someone Else|secure-saashr-com-oma|securesaashrcomoma",
 	} {
 		var got string
 		if err := pool.QueryRow(ctx,
-			"SELECT company || '|' || company_slug || '|' || company_slug_folded || '|' || (similar_computed_at IS NULL)::text FROM jobs WHERE id = $1",
+			"SELECT company || '|' || company_slug || '|' || company_slug_folded FROM jobs WHERE id = $1",
 			id).Scan(&got); err != nil {
 			t.Fatalf("read job %d: %v", id, err)
 		}

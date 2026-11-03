@@ -266,7 +266,6 @@ Each is self-contained and can be read independently.
 | **Auto-apply queue** (queue-drain domain logic for unattended submission) | [internal/application/autoapply/AGENTS.md](internal/application/autoapply/AGENTS.md) |
 | **`internal/search`** — the block itself: what it is, what it may import | [internal/search/AGENTS.md](internal/search/AGENTS.md) |
 | **Search** (Meili index topology, rebuild swap, reindex hazards) | [internal/search/AGENTS.md](internal/search/AGENTS.md) |
-| **Similar-jobs backfill** (precomputes `/similar`'s data via pgvector, no outbox) | [internal/search/similarjobs/AGENTS.md](internal/search/similarjobs/AGENTS.md) |
 | **Facet-search drain** (search_outbox, incremental facet-index pushes, reconciler) | [internal/search/searchdrain/AGENTS.md](internal/search/searchdrain/AGENTS.md) |
 | **`internal/ingest`** — the block itself: what it is, what it may import | [internal/ingest/AGENTS.md](internal/ingest/AGENTS.md) |
 | **Source ingest** (adapters, provider registry, validation) | [internal/ingest/sources/AGENTS.md](internal/ingest/sources/AGENTS.md) |

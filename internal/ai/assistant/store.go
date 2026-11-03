@@ -50,18 +50,25 @@ const (
 // would let a caller probe for other users' session ids.
 var ErrNotFound = errors.New("assistant: session not found")
 
+// SearchContext keeps a fixed search and its local selection preferences outside model history.
+type SearchContext struct {
+	Query string `json:"query"`
+	Brief string `json:"brief"`
+}
+
 // Session is one conversation, owner-scoped. Its id is a random UUID rather than a
 // sequence: ownership already confines every read, but a countable id would still
 // publish how many conversations exist and would make one forgotten owner check
 // enumerable. CVID and JobID are set only for a tailoring session; nil pointers
 // say "unbound" without leaking pgtype into callers.
 type Session struct {
-	ID     uuid.UUID
-	UserID int64
-	Preset string
-	Label  string
-	CVID   *uuid.UUID
-	JobID  *int64
+	SearchContext *SearchContext
+	ID            uuid.UUID
+	UserID        int64
+	Preset        string
+	Label         string
+	CVID          *uuid.UUID
+	JobID         *int64
 }
 
 // Queries is the slice of the generated query surface the store needs.
@@ -98,7 +105,7 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, preset string, 
 	if err != nil {
 		return Session{}, fmt.Errorf("assistant: create session: %w", err)
 	}
-	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID), nil
+	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID, row.SearchQuery, row.SelectionBrief), nil
 }
 
 // ChatSessions lists the caller's general chats, most recently active first.
@@ -111,7 +118,7 @@ func (s *Store) ChatSessions(ctx context.Context, userID int64) ([]Session, erro
 	}
 	out := make([]Session, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, session(r.ID, r.UserID, r.Preset, r.Label, r.CvID, r.JobID))
+		out = append(out, session(r.ID, r.UserID, r.Preset, r.Label, r.CvID, r.JobID, r.SearchQuery, r.SelectionBrief))
 	}
 	return out, nil
 }
@@ -125,7 +132,7 @@ func (s *Store) Session(ctx context.Context, id uuid.UUID, userID int64) (Sessio
 	if err != nil {
 		return Session{}, fmt.Errorf("assistant: get session: %w", err)
 	}
-	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID), nil
+	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID, row.SearchQuery, row.SelectionBrief), nil
 }
 
 // SessionForJob returns the caller's most recent session of preset bound to jobID, and
@@ -139,7 +146,7 @@ func (s *Store) SessionForJob(ctx context.Context, userID int64, preset string, 
 	if err != nil {
 		return Session{}, false, fmt.Errorf("assistant: get session for job: %w", err)
 	}
-	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID), true, nil
+	return session(row.ID, row.UserID, row.Preset, row.Label, row.CvID, row.JobID, row.SearchQuery, row.SelectionBrief), true, nil
 }
 
 // DeleteSession removes an owned conversation and its transcript.
@@ -249,6 +256,10 @@ func (s *Store) RecentTranscript(ctx context.Context, sessionID uuid.UUID, limit
 // session builds the domain shape from the columns every session query selects.
 // sqlc emits a distinct row type per query — same columns, three names — so the
 // mapping lives here once and each caller adapts its row into it.
-func session(id uuid.UUID, userID int64, preset string, label pgtype.Text, cvID *uuid.UUID, jobID *int64) Session {
-	return Session{ID: id, UserID: userID, Preset: preset, Label: label.String, CVID: cvID, JobID: jobID}
+func session(id uuid.UUID, userID int64, preset string, label pgtype.Text, cvID *uuid.UUID, jobID *int64, query pgtype.Text, brief string) Session {
+	result := Session{ID: id, UserID: userID, Preset: preset, Label: label.String, CVID: cvID, JobID: jobID}
+	if query.Valid {
+		result.SearchContext = &SearchContext{Query: query.String, Brief: brief}
+	}
+	return result
 }
