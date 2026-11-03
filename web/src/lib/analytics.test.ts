@@ -235,3 +235,59 @@ describe('isHandoffReferrer', () => {
     expect(isHandoffReferrer('not a url')).toBe(false);
   });
 });
+
+describe('trackSignupIfNew → GA4 sign-up', () => {
+  // The server sends the GA4 sign_up and the browser must not as well (GA4 has no
+  // event-level dedup). The browser only steps in when the server says it did not.
+  async function signUp(answer: () => Promise<unknown>) {
+    vi.resetModules();
+    const store = new Map<string, string>();
+    Object.assign(globalThis, {
+      window: globalThis,
+      location: { hostname: 'freehire.me' },
+      document: { createElement: () => ({}), head: { appendChild: () => {} }, cookie: '' },
+      dataLayer: [],
+      localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) },
+      sessionStorage: { getItem: () => null, setItem: () => {} },
+      fetch: vi.fn(answer),
+    });
+    const analytics = await import('./analytics');
+    analytics.initTrackers({ key: '', apiHost: '/ingest' });
+    Object.assign(globalThis, { dataLayer: [] });
+    analytics.trackSignupIfNew({ id: 1, created_at: new Date().toISOString(), has_password: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const layer = (globalThis as unknown as { dataLayer: unknown[] }).dataLayer;
+    return layer.map((e) => Array.from(e as ArrayLike<unknown>));
+  }
+  const reply = (ga4_sent: boolean) => async () => ({ ok: true, json: async () => ({ data: { ga4_sent } }) });
+
+  it('leaves GA to the server when the server sent the sign-up', async () => {
+    expect(await signUp(reply(true))).toEqual([]);
+  });
+
+  it('sends it from the browser when the server did not', async () => {
+    expect(await signUp(reply(false))).toEqual([['event', 'sign_up', { method: 'oauth' }]]);
+  });
+
+  it('leaves it to the server when the request went out but no answer could be read', async () => {
+    const lost = async () => {
+      throw new Error('connection reset');
+    };
+    expect(await signUp(lost)).toEqual([]);
+  });
+
+  it('leaves it to the server when a 2xx answer cannot be parsed', async () => {
+    const unreadable = async () => ({
+      ok: true,
+      json: async () => {
+        throw new SyntaxError('Unexpected end of JSON input');
+      },
+    });
+    expect(await signUp(unreadable)).toEqual([]);
+  });
+
+  it('sends it from the browser when the server refused the report', async () => {
+    const refused = async () => ({ ok: false, json: async () => ({}) });
+    expect(await signUp(refused)).toEqual([['event', 'sign_up', { method: 'oauth' }]]);
+  });
+});

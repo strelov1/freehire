@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/api/ratelimit"
+	"github.com/strelov1/freehire/internal/engage/ga4mp"
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -80,6 +82,9 @@ type authHandlers struct {
 	// pushNotifier sends test/device push notifications (see me_push_tokens.go).
 	// pushnotify.Notifier in production; a fake in tests.
 	pushNotifier pushnotify.Notifier
+	// ga4 sends the GA4 sign_up from the server (me_attribution.go). Nil — and so
+	// inert — when GA4_API_SECRET is not configured.
+	ga4 ga4mp.Reporter
 	// accountDelete erases an account for good — rows, objects, and the Gmail grant.
 	// accountEmails resolves the caller's own email for the typed confirmation. Both
 	// are nil until withAccountDeletion wires them.
@@ -109,7 +114,18 @@ func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, throttler ratelimi
 		accounts:                   accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
 		throttler:                  throttler,
 		pushNotifier:               pushnotify.NewExpoNotifier(pushStore, pushStore, pushStore),
+		ga4:                        ga4Reporter(),
 	}
+}
+
+// ga4Reporter is the env-configured GA4 sender, or nil. It returns the interface
+// type explicitly: a nil *ga4mp.Client stored in a Reporter would not compare equal
+// to nil, and the handler's "is it configured" check relies on that comparison.
+func ga4Reporter() ga4mp.Reporter {
+	if c := ga4mp.FromEnv(os.Getenv); c != nil {
+		return c
+	}
+	return nil
 }
 
 func (h *authHandlers) register(api fiber.Router, mw middleware) {
@@ -151,6 +167,10 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// ListAPIKeys); revoke is recent-auth-gated, same reasoning as RevokeAPIKey.
 	meGroup.Get("/oauth-grants", mw.cookie, h.ListOAuthGrants)
 	meGroup.Delete("/oauth-grants/:id", mw.cookie, recent, h.RevokeOAuthGrant)
+
+	// How a just-created account arrived (campaign tags, referring host, landing path),
+	// reported once by the browser. Cookie-only; says whether GA4 was sent.
+	meGroup.Post("/attribution", mw.cookie, h.ReportSignupAttribution)
 
 	// Push-token registration is cookie-only for the same reason key management
 	// is: a leaked API key must not be able to redirect another device's push

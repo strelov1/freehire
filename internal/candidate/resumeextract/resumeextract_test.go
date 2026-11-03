@@ -5,9 +5,12 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tmc/langchaingo/llms"
 
+	"github.com/strelov1/freehire/internal/candidate/perioddate"
+	"github.com/strelov1/freehire/internal/candidate/pii"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
@@ -111,7 +114,7 @@ func TestExtract_ParsesAndSanitizes(t *testing.T) {
 		`"experience":[{"title":"Senior Go Engineer","company":"Acme","start":"2020","end":"Present"}],` +
 		`"languages":["English",""]}`
 	m := &queuedModel{resp: raw}
-	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), "some cv text")
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), "Senior Go Engineer, Acme, 2020 - Present")
 	if err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
@@ -157,5 +160,300 @@ func TestExtractor_EnabledReflectsClient(t *testing.T) {
 	}
 	if !NewExtractor(llm.NewWithModel(&queuedModel{}), noopDetector{}).Enabled() {
 		t.Error("configured extractor should be enabled")
+	}
+}
+
+// cvWithDates is a CV whose dates the tests below hold the model's answer against.
+const cvWithDates = `Senior Go Engineer - Acme
+05/2016 - 06/2024 | Berlin
+Go Engineer - Initech
+12/2013 - 04/2016 | Berlin`
+
+// scriptedModel answers each call in turn, repeating the last answer when it runs out.
+type scriptedModel struct {
+	resps []string
+	n     int
+}
+
+func (m *scriptedModel) GenerateContent(context.Context, []llms.MessageContent, ...llms.CallOption) (*llms.ContentResponse, error) {
+	i := min(m.n, len(m.resps)-1)
+	m.n++
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: m.resps[i]}}}, nil
+}
+func (*scriptedModel) Call(context.Context, string, ...llms.CallOption) (string, error) {
+	return "", nil
+}
+
+const (
+	rightDates = `{"experience":[` +
+		`{"company":"Acme","start":{"year":2016,"month":5},"end":{"year":2024,"month":6}},` +
+		`{"company":"Initech","start":{"year":2013,"month":12},"end":{"year":2016,"month":4}}]}`
+	// the shape seen in production: months right, years pulled from the neighbouring role
+	shiftedDates = `{"experience":[` +
+		`{"company":"Acme","start":{"year":2023,"month":5},"end":{"year":2024,"month":6}},` +
+		`{"company":"Initech","start":{"year":2016,"month":12},"end":{"year":2016,"month":4}}]}`
+	// a year the CV never prints
+	inventedYear = `{"experience":[` +
+		`{"company":"Acme","start":{"year":2019,"month":5},"end":{"year":2024,"month":6}}]}`
+)
+
+func TestExtract_CorrectDatesCostOneCall(t *testing.T) {
+	m := &scriptedModel{resps: []string{rightDates}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 1 {
+		t.Errorf("LLM calls = %d, want 1: supported dates must not trigger a retry", m.n)
+	}
+	if got.Experience[0].Start == nil || got.Experience[0].Start.Year != 2016 {
+		t.Errorf("start = %v, want 2016", got.Experience[0].Start)
+	}
+}
+
+func TestExtract_ShiftedDatesAreRetriedAndTheBetterAnswerKept(t *testing.T) {
+	m := &scriptedModel{resps: []string{shiftedDates, rightDates}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Fatalf("LLM calls = %d, want 2", m.n)
+	}
+	if st := got.Experience[0].Start; st == nil || st.Year != 2016 || st.Month != 5 {
+		t.Errorf("Acme start = %v, want 05/2016 from the retry", st)
+	}
+}
+
+func TestExtract_RetryNeverReplacesABetterAnswerWithAWorseOne(t *testing.T) {
+	// First answer: one doubtful month. Retry: a year the CV never prints, which is worse.
+	doubtful := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
+	m := &scriptedModel{resps: []string{doubtful, inventedYear}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Fatalf("LLM calls = %d, want 2", m.n)
+	}
+	if st := got.Experience[0].Start; st == nil || st.Year != 2016 {
+		t.Errorf("start = %v, want the first answer's 2016 kept", st)
+	}
+}
+
+func TestExtract_YearTheCVNeverPrintsIsDroppedNotStored(t *testing.T) {
+	m := &scriptedModel{resps: []string{inventedYear}} // the retry repeats it
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	e := got.Experience[0]
+	if e.Start != nil {
+		t.Errorf("start = %v, want nil: 2019 is not in the CV", e.Start)
+	}
+	if e.End == nil || e.End.Year != 2024 {
+		t.Errorf("end = %v, want 2024 kept: it is in the CV", e.End)
+	}
+}
+
+func TestExtract_PairMissingFromNumericCVIsRetriedButNotDeleted(t *testing.T) {
+	// Both answers use only years the CV prints, so nothing is certainly wrong: the doubtful
+	// pair buys a retry, and when the retry is no better the model's answer stands.
+	wrongMonth := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
+	m := &scriptedModel{resps: []string{wrongMonth}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Errorf("LLM calls = %d, want 2", m.n)
+	}
+	if st := got.Experience[0].Start; st == nil || st.Year != 2016 {
+		t.Errorf("start = %v, want the model's 2016 kept", st)
+	}
+}
+
+func TestDateProblems_NonNumericCVOnlyChecksYears(t *testing.T) {
+	cv := "Engineer, Acme, August 2019 to March 2021"
+	s := Structured{Experience: []Experience{{Start: &perioddate.PeriodDate{Year: 2019, Month: 8}}}}
+	if hard, soft := dateProblems(s, cv); hard != 0 || soft != 0 {
+		t.Errorf("problems = %d/%d, want 0/0: month names are not numeric evidence", hard, soft)
+	}
+}
+
+// The model only ever sees the redacted text, so a year the redactor eats is a year the model
+// must invent. This is the production report end to end: five consecutive "MM/YYYY - MM/YYYY"
+// roles, every year present in the text the model is given.
+func TestExtract_ModelSeesEveryYearOfAMonthPrecisionHistory(t *testing.T) {
+	cv := "A\n08/2023 - 07/2024 | X\nB\n05/2016 - 06/2024 | X\nC\n12/2015 - 04/2016 | X\nD\n07/2013 - 02/2015 | X\nE\n06/2010 - 04/2013 | X\n"
+	red, err := pii.Build(context.Background(), cv, noopDetector{})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	seen := red.Redact(cv)
+	for _, want := range []string{"08/2023 - 07/2024", "05/2016 - 06/2024", "12/2015 - 04/2016", "07/2013 - 02/2015", "06/2010 - 04/2013"} {
+		if !strings.Contains(seen, want) {
+			t.Errorf("model text lost %q:\n%s", want, seen)
+		}
+	}
+}
+
+// A CV that abbreviates years prints no four-digit year at all. The model's reading of it is
+// still right, and deleting it for lacking a four-digit match would undate the whole history.
+func TestExtract_TwoDigitYearCVKeepsItsDates(t *testing.T) {
+	cv := "Engineer - Acme\n01/16 - 06/24 | Berlin\nAnalyst - Initech\nJan '12 - Mar '15 | Berlin\nIntern - Hooli\nSep 10 to Dec 11"
+	resp := `{"experience":[` +
+		`{"company":"Acme","start":{"year":2016,"month":1},"end":{"year":2024,"month":6}},` +
+		`{"company":"Initech","start":{"year":2012,"month":1},"end":{"year":2015,"month":3}},` +
+		`{"company":"Hooli","start":{"year":2010,"month":9},"end":{"year":2011,"month":12}}]}`
+	m := &scriptedModel{resps: []string{resp}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cv)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 1 {
+		t.Errorf("LLM calls = %d, want 1", m.n)
+	}
+	for _, e := range got.Experience {
+		if e.Start == nil || e.End == nil {
+			t.Errorf("%s: dates dropped: start=%v end=%v", e.Company, e.Start, e.End)
+		}
+	}
+}
+
+func TestDateEvidence_BareTwoDigitNumberIsNotAYear(t *testing.T) {
+	ev := collectDateEvidence("Automated reporting for 14 cement plants, 10-20 managers")
+	if ev.years[2014] || ev.years[2010] {
+		t.Errorf("years = %v: a bare number must not count as a year", ev.years)
+	}
+}
+
+func TestDateEvidence_YearsGluedToLettersCount(t *testing.T) {
+	ev := collectDateEvidence("FY2016 plan; Aug2019 launch; ref 120161 is not a year")
+	if !ev.years[2016] || !ev.years[2019] {
+		t.Errorf("years = %v, want 2016 and 2019", ev.years)
+	}
+	if ev.years[2016] && ev.years[2012] {
+		t.Errorf("years = %v: digits inside a longer number are not a year", ev.years)
+	}
+}
+
+func TestDateEvidence_RangeSeamIsNotAPair(t *testing.T) {
+	ev := collectDateEvidence("05/2016 - 06/2024\n12/2013 - 04/2016")
+	if ev.pairs[perioddate.PeriodDate{Year: 2016, Month: 6}] {
+		t.Error("pair (2016, 06) comes from the seam between two dates, not from any date")
+	}
+	if !ev.pairs[perioddate.PeriodDate{Year: 2016, Month: 5}] {
+		t.Error("pair (2016, 05) is printed and must be evidence")
+	}
+}
+
+func TestExtract_SkipsTheRetryWhenTheDeadlineCannotAffordIt(t *testing.T) {
+	m := &scriptedModel{resps: []string{shiftedDates, rightDates}}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(ctx, cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 1 {
+		t.Errorf("LLM calls = %d, want 1: 20s left is not enough for a second call", m.n)
+	}
+	if got.Experience[0].End == nil {
+		t.Error("the first answer must still be returned and stored")
+	}
+}
+
+// A certain error outranks any number of doubtful ones: the retry below has fewer problems in
+// total but one of them is an invented year, which would cost the role its date.
+func TestExtract_RetryWithAHardProblemDoesNotReplaceDoubtfulOnes(t *testing.T) {
+	twoDoubtful := `{"experience":[` +
+		`{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":2}},` +
+		`{"company":"Initech","start":{"year":2013,"month":2},"end":{"year":2016,"month":4}}]}`
+	oneInvented := `{"experience":[` +
+		`{"company":"Acme","start":{"year":2019,"month":5},"end":{"year":2024,"month":6}},` +
+		`{"company":"Initech","start":{"year":2013,"month":12},"end":{"year":2016,"month":4}}]}`
+	m := &scriptedModel{resps: []string{twoDoubtful, oneInvented}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Fatalf("LLM calls = %d, want 2", m.n)
+	}
+	if st := got.Experience[0].Start; st == nil || st.Year != 2016 {
+		t.Errorf("Acme start = %v, want 2016 from the first answer: the retry's 2019 is invented", st)
+	}
+}
+
+func TestExtract_EmptyRetryDoesNotReplaceAPopulatedFirstAnswer(t *testing.T) {
+	doubtful := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
+	m := &scriptedModel{resps: []string{doubtful, `{"experience":[]}`}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Fatalf("LLM calls = %d, want 2", m.n)
+	}
+	if len(got.Experience) != 1 {
+		t.Errorf("experience = %d roles, want the first answer's 1: an empty retry has no date problems only because it has no roles", len(got.Experience))
+	}
+}
+
+func TestDateEvidence_AbbreviatedRangeEndCountsAsAYear(t *testing.T) {
+	ev := collectDateEvidence("Engineer, Acme, 2016–24\nAnalyst, Initech, 2010 - 13")
+	for _, y := range []int{2024, 2013} {
+		if !ev.years[y] {
+			t.Errorf("years = %v, want %d from the abbreviated end of the range", ev.years, y)
+		}
+	}
+}
+
+func TestDateEvidence_MonthAfterARangeStartIsNotAnAbbreviatedYear(t *testing.T) {
+	ev := collectDateEvidence("05/2016 - 06/2024")
+	if ev.years[2006] || ev.years[1906] {
+		t.Errorf("years = %v: \"06\" here is a month, not the end of the range", ev.years)
+	}
+}
+
+func TestDateEvidence_IsoMonthAndHyphenSeamAreNotAbbreviatedYears(t *testing.T) {
+	ev := collectDateEvidence("Analyst 2016-08 to 2019-02\nEngineer 05-2016 - 06-2024")
+	for _, y := range []int{2008, 2006, 2002, 1906} {
+		if ev.years[y] {
+			t.Errorf("years = %v: %d comes from a month, not a year", ev.years, y)
+		}
+	}
+}
+
+func TestExtract_RetryThatErasesTheDatesDoesNotWin(t *testing.T) {
+	doubtful := `{"experience":[{"company":"Acme","start":{"year":2016,"month":9},"end":{"year":2024,"month":6}}]}`
+	undated := `{"experience":[{"company":"Acme"}]}`
+	m := &scriptedModel{resps: []string{doubtful, undated}}
+	got, err := NewExtractor(llm.NewWithModel(m), noopDetector{}).Extract(context.Background(), cvWithDates)
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+	if m.n != 2 {
+		t.Fatalf("LLM calls = %d, want 2", m.n)
+	}
+	if e := got.Experience[0]; e.Start == nil || e.End == nil {
+		t.Errorf("dates = %v..%v, want the first answer's: a retry with no dates has no date problems only because it has no dates", e.Start, e.End)
+	}
+}
+
+// An abbreviated range written with an ASCII hyphen is a range, not an ISO year-month: the
+// month in yearFirst ends at a word boundary, so "24" is not read as the month "2".
+func TestDateEvidence_AsciiHyphenAbbreviatedRangeCountsAsAYear(t *testing.T) {
+	for cv, year := range map[string]int{
+		"Engineer, Acme, 2016-24":   2024,
+		"Engineer, Acme, 2016-19":   2019,
+		"Engineer, Acme, 2010-13":   2013,
+		"Engineer, Acme, 2016 - 24": 2024,
+		"Engineer, Acme, 2016–24":   2024,
+	} {
+		if ev := collectDateEvidence(cv); !ev.years[year] {
+			t.Errorf("%q: years = %v, want %d", cv, ev.years, year)
+		}
 	}
 }

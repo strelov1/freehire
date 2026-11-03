@@ -35,6 +35,8 @@ var boardIdentity = map[string]func(board string) string{
 	// GoHire addresses a site by the 8-character code its segment ends with (see gohire.go).
 	"gohire": gohireSiteCode,
 	"emply":  emplyHost,
+	// BrassRing addresses a site by host plus partnerid+siteid, in any key order and case.
+	"brassring": brassringBoardIdentity,
 }
 
 // BoardDedupeKey is the identity two catalog rows are the same crawl target under:

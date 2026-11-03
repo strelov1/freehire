@@ -68,6 +68,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/moderation"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	"github.com/strelov1/freehire/internal/job/companyrelation"
 	"github.com/strelov1/freehire/internal/job/privatejob"
 	"github.com/strelov1/freehire/internal/job/recentfeed"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
@@ -1099,6 +1100,10 @@ func Register(app *fiber.App, cfg Config) {
 	mountMCPAccount(api, mw, assistantH, cfg.FrontendOrigin, cfg.AgentViews)
 	jobsH.register(api, mw)
 	companiesH.register(api, mw)
+	(&companyRelationHandlers{
+		relations: companyrelation.New(cfg.Pool),
+		throttler: cfg.Throttler,
+	}).register(api, mw)
 	geoH.register(api, mw)
 
 	// Saved searches + the public shared-board read (see savedSearchHandlers).

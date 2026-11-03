@@ -181,6 +181,28 @@ func TestFilterFromValues_RemoteAnywhereIgnoresUnknownRegion(t *testing.T) {
 	}
 }
 
+// The remote reach bounds the remote arm only; the location group stays the
+// physical arm's. Regions expand exactly as the `regions` facet does.
+func TestFilterFromValues_RemoteAnywhereWithReach(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&work_mode_remote_anywhere=true&work_mode_remote_regions=eu&work_mode_remote_countries=us")))
+	want := [][]string{{
+		`(work_mode = "remote" AND (countries = "us" OR regions IN ["eu", "uk"]))`,
+		`(work_mode IN ["hybrid"] AND (countries = "de"))`,
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// The reach is part of the modifier: with the modifier inert it reads nothing.
+func TestFilterFromValues_RemoteReachAloneReadsNothing(t *testing.T) {
+	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de&work_mode_remote_regions=eu")))
+	want := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&countries=de")))
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 func TestFilterFromValues_RemoteAnywhereNeedsALocation(t *testing.T) {
 	got := normalizeGroups(t, FilterFromValues(vals("work_mode=remote,hybrid&work_mode_remote_anywhere=true")))
 	want := [][]string{{`work_mode = "hybrid"`, `work_mode = "remote"`}}
@@ -727,6 +749,7 @@ func TestNarrows(t *testing.T) {
 		{"countries=de&sort=created_at", true},
 		// A modifier alone reads nothing, like every other modifier.
 		{"work_mode_remote_anywhere=true", false},
+		{"work_mode_remote_regions=eu&work_mode_remote_countries=us", false},
 	}
 	for _, c := range cases {
 		if got := Narrows(vals(c.query)); got != c.want {

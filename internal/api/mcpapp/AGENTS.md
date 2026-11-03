@@ -136,11 +136,10 @@ OJCP surface uses). A search result carries only `first_seen_at`.
 All three read what the website already computes, through functions the website's own
 handlers now share, so the two cannot quote different figures:
 
-- **`similar_jobs`** — `similarViews` (handler/similar.go) over the precomputed
-  `similar_job_ids`. The SOURCE posting is checked against `publishedToAgents` first, or a
-  private slug would answer with neighbours while an unknown one answers not found. Neighbours
-  pass the same predicate (the website's rule plus duplicates). Empty for postings whose
-  neighbours `cmd/similar-backfill` has not computed yet.
+- **`similar_jobs`** — the website's Meilisearch related-jobs search with mandatory
+  location and specialization filters, stored-vector hybrid ranking and keyword fallback.
+  The source and rehydrated results must pass `publishedToAgents`; private and absent
+  source slugs answer identically. No offline similarity backfill is needed.
 - **`salary_stats`** — `salaryBands` (handler/insights.go), the `/insights/salary` read,
   including its per-seniority breakdown for a category alone. Unknown scope values are dropped
   and named, as on `search_jobs`.

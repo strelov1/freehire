@@ -683,6 +683,34 @@ export interface PrefillResult {
   existing_job_slug?: string;
 }
 
+/** A related company on a company page: the parent that owns it, or a subsidiary it owns.
+ *  A separate employer with its own page and jobs (freehire#3895). */
+export interface CompanyRef {
+  slug: string;
+  name: string;
+  job_count: number;
+}
+
+/** What a person can claim about two companies: `same` (one employer under two names, the
+ *  page's company retires into the target) or `subsidiary` (the page's company is owned by
+ *  the target, both stay). */
+export type CompanyRelationKind = 'same' | 'subsidiary';
+
+/** One row of the moderator queue of proposed company relations. */
+export interface PendingCompanyRelation {
+  id: number;
+  kind: CompanyRelationKind;
+  company_slug: string;
+  company_name: string;
+  company_job_count: number;
+  target_slug: string;
+  target_name: string;
+  target_job_count: number;
+  note: string;
+  created_at: string;
+  /** `approved` marks a merge whose job move stopped part-way; approving again resumes it. */
+  status: 'pending' | 'approved';
+}
 /** A verified-employer account: the claim on one company. `status` drives which view the
  *  employer dashboard shows — the claim form (no account), a status page (pending/revoked),
  *  or the dashboard (active). Reading it (GET /employer/company) never requires the account

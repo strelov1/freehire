@@ -20,6 +20,7 @@ import {
   effectiveSort,
   matchSortNeedsSkills,
   appliesWorkModeRemoteAnywhere,
+  workModeRemoteLabel,
   sortOptionsFor,
   selectedSortFor,
   type FacetState,
@@ -835,6 +836,20 @@ describe('workModeRemoteAnywhere', () => {
     expect(filtersFromParams(p).workModeRemoteAnywhere).toBe(true);
     expect(filtersFromParams(new URLSearchParams('work_mode_remote_anywhere=false')).workModeRemoteAnywhere).toBe(false);
     expect(filtersFromParams(new URLSearchParams('work_mode_remote_anywhere=%20TRUE')).workModeRemoteAnywhere).toBe(true);
+  });
+
+  it('carries the remote reach only with the modifier, and labels it', () => {
+    const on = { ...emptyFilters(), workModeRemoteAnywhere: true, workModeRemoteRegions: ['eu'], workModeRemoteCountries: ['us'] };
+    const p = filtersToParams(on);
+    expect(p.get('work_mode_remote_regions')).toBe('eu');
+    expect(p.get('work_mode_remote_countries')).toBe('us');
+    const back = filtersFromParams(p);
+    expect([back.workModeRemoteRegions, back.workModeRemoteCountries]).toEqual([['eu'], ['us']]);
+    expect(workModeRemoteLabel(back)).toMatch(/^Remote within Europe, /);
+    expect(workModeRemoteLabel(emptyFilters())).toBe('Remote from anywhere');
+    // Without the modifier the reach means nothing, so it is neither written nor read.
+    expect(filtersToParams({ ...on, workModeRemoteAnywhere: false }).has('work_mode_remote_regions')).toBe(false);
+    expect(filtersFromParams(new URLSearchParams('work_mode_remote_regions=eu')).workModeRemoteRegions).toEqual([]);
   });
 
   // A saved search keeps it: the digest matcher replays the stored query through the

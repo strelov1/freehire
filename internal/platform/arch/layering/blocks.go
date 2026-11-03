@@ -148,6 +148,10 @@ var blocks = map[string][]string{
 	},
 	"job": {
 		"applydate", "collections",
+		// companymerge is the write side of retiring one company slug into another, shared by
+		// cmd/merge-companies and companyrelation, which decides the merges and parent links
+		// people propose. Company identity, beside formeremployer and logodomain.
+		"companymerge", "companyrelation",
 		// dictgap turns LLM enrichment facts already in the catalogue into ranked
 		// candidate gaps for the deterministic dict/skilltag and dict/classify
 		// dictionaries — a fact about postings' recorded facets, not an AI/enrichment
@@ -207,7 +211,7 @@ var blocks = map[string][]string{
 	},
 	"search": {
 		"embedprogress", "facetsnapshot", "savedsearch", "search", "searchdrain", "searchintent",
-		"serveprobe", "similarjobs", "suggest",
+		"serveprobe", "suggest",
 	},
 	// catalogstats is here, not in job, because it imports nothing from job at all: it
 	// takes cache, db and testdb from platform, sources from here, and reaches the
@@ -243,6 +247,10 @@ var blocks = map[string][]string{
 		// calendar-write consent, so it is listed rather than left implicit.
 		"mentorship/busysync",
 		"notify", "nudge", "onboarding",
+		// ga4mp sends one sign-up event to Google Analytics from the server. It imports
+		// nothing but the standard library and is called by the auth handlers; it sits in
+		// engage because the event is a growth measurement, like prowelcome and referral.
+		"ga4mp",
 		// processreport holds candidate-reported facts about how a company hires (today:
 		// that it screens with an AI interviewer). It sits beside companyfeedback and not
 		// in job, because what it stores is what a PERSON reported, not a property the

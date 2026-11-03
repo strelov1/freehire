@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
@@ -57,6 +58,13 @@ func (h *matchHandlers) jobBlockers(ctx context.Context, userID int64, job db.Jo
 	cv, ok, err := h.resume.Structured(ctx, userID)
 	if err != nil || !ok {
 		return nil
+	}
+	// The years the candidate sees on their profile, not the raw extract's: their own
+	// figure if they gave one, otherwise caught up with the dated roles.
+	if owned, err := h.resume.CandidateOwned(ctx, userID); err == nil {
+		owned.ApplyTotalYears(&cv, time.Now())
+	} else {
+		cv.TotalYears = cv.EffectiveYears(time.Now())
 	}
 	var loc userprofile.LocationPreferences
 	if len(profile.LocationPreferences) > 0 {

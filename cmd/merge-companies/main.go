@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/strelov1/freehire/internal/job/companymerge"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -32,12 +33,6 @@ import (
 func main() {
 	worker.Main(run)
 }
-
-// rekeyChunk is how many job rows one UPDATE moves. Small because one company can carry
-// twenty thousand open jobs (dollar-tree does), and each statement is a transaction against
-// the hottest table in the schema — a wave should be interruptible at any moment, not held
-// open while it rewrites a large employer whole.
-const rekeyChunk = 500
 
 func run() int {
 	apply := flag.Bool("apply", false, "actually merge; without it the run only reports the plan")
@@ -79,7 +74,7 @@ func run() int {
 		return 0
 	}
 
-	moved, err := applyMerges(ctx, &store{q: q}, plan, rekeyChunk)
+	moved, err := applyMerges(ctx, &store{q: q}, plan, companymerge.Chunk)
 	log.Printf("merge-companies: moved %d job rows across %d groups", moved, len(plan))
 	if err != nil {
 		log.Printf("merge-companies: %v", err)
@@ -99,14 +94,9 @@ func run() int {
 	// 2026-10-28 a 20-group run held its transaction for 56 minutes while every ingest
 	// UpsertJob queued behind it. The registry scope also heals a run killed before this step:
 	// its drained slugs are no longer in any plan, but they are in the registry.
-	created, err := q.InsertMissingCanonicalCompanies(ctx)
+	created, orphans, err := companymerge.Reconcile(ctx, q)
 	if err != nil {
-		log.Printf("merge-companies: insert canonical companies: %v", err)
-		return 1
-	}
-	orphans, err := q.DeleteOrphanAliasCompanies(ctx)
-	if err != nil {
-		log.Printf("merge-companies: delete orphan alias companies: %v", err)
+		log.Printf("merge-companies: %v", err)
 		return 1
 	}
 	log.Printf("merge-companies: reconciled the catalogue, %d canonical rows created, %d retired rows removed",
@@ -166,21 +156,11 @@ func report(plan []merge) {
 type store struct{ q *db.Queries }
 
 func (s *store) InsertAlias(ctx context.Context, a alias, canonical string) error {
-	_, err := s.q.InsertCompanySlugAlias(ctx, db.InsertCompanySlugAliasParams{
-		AliasSlug:     a.Slug,
-		CanonicalSlug: canonical,
-		FoldedKey:     a.FoldedKey,
-		Reason:        a.Reason,
-	})
-	return err
+	return companymerge.Retire(ctx, s.q, a.Slug, canonical, a.FoldedKey, a.Reason)
 }
 
 func (s *store) RekeyChunk(ctx context.Context, aliasSlug, canonical string, chunk int) (int64, error) {
-	return s.q.RekeyCompanySlugChunk(ctx, db.RekeyCompanySlugChunkParams{
-		CanonicalSlug: canonical,
-		AliasSlug:     aliasSlug,
-		ChunkSize:     int32(chunk),
-	})
+	return companymerge.Rekey(s.q)(ctx, aliasSlug, canonical, chunk)
 }
 
 // readSlugList reads one slug per line, skipping blank lines. An empty list is refused: a

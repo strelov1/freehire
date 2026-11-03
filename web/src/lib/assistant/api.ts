@@ -51,14 +51,6 @@ export function createSession(preset: ChatPreset = 'chat'): Promise<SessionSumma
   return request<SessionSummary>(`/sessions${query}`, { method: 'POST', body: '{}' });
 }
 
-/** Start a search-bound conversation; retries reuse the client request id. */
-export function createShortlistSession(query: string, requestId: string): Promise<SessionSummary> {
-  return request<SessionSummary>('/sessions', {
-    method: 'POST',
-    body: JSON.stringify({ search_query: query, request_id: requestId }),
-  });
-}
-
 /** Open the conversation held against one automatic application. The server reuses its
  *  session, so the numbered questions and answers remain in one transcript. */
 export function openApplyChat(slug: string): Promise<SessionSummary> {

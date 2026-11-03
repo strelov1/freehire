@@ -345,10 +345,26 @@ func All(c HTTPClient) map[string]Source {
 		NewEightfold(c),
 		NewFreshteam(c),
 		NewSoftgarden(c),
+		// TalentBrew (Radancy): white-labelled onto each employer's own host, so the board is the host
+		// (plus locale path). Unpaced: the few requests made while probing four boards drew no limit
+		// and the platform documents none; detail hydration runs under the shared 8-worker bound.
+		NewTalentbrew(c),
+		// Recruiter (recruiter.co.kr): Saramin's career-site builder. One listing POST per board
+		// plus one detail GET per open posting against a shared API host; boards are small
+		// (42 postings on the largest measured) and no limit was observed, so it is unpaced.
+		NewRecruiterCoKR(c),
+		// Abacus Umantis: board is the careers host (recruitingapp-<n>.umantis.com or a customer's
+		// vanity domain). Unpaced: tenants are separate hosts, each small (tens of postings), so the
+		// run's load never concentrates on one origin the way a shared-host ATS does. See umantis.go.
+		NewUmantis(c),
 		NewBetterteam(c),
 		// White-labelled ATS: the board is the full careers host, because the same tenant is
 		// served under the vendor's domain and under each reseller's.
 		NewHiringThing(c),
+		// Intervieweb (Zucchetti): the board is the careers host. Unpaced: the listing is one
+		// landing page plus one POST per further page (12 for the largest sample board) and
+		// bodies are hydrated for new postings only; no rate limit was observed or documented.
+		NewIntervieweb(c),
 		// HCS Hiring: symplr's US healthcare career centers, <tenant>.hcshiring.com. A keyless
 		// JSON listing ten rows a page; the body is hydrated per new posting. See hcshiring.go.
 		NewHCSHiring(c),
@@ -886,6 +902,10 @@ func All(c HTTPClient) map[string]Source {
 	// peoplesoft's result list grows by a form postback PeopleTools accepts only inside the
 	// session the search page's GET opened. See peoplesoft.go.
 	registry["peoplesoft"] = cookieSessionSource[peoplesoftHTTP](c, NewPeopleSoft)
+	// brassring's JSON API answers only inside the session its home page opens: a cookie plus an
+	// anti-forgery token and an encrypted session value embedded in that page. See brassring.go.
+	// Unpaced: the platform documents no request limit and the detail fan-out is already narrow.
+	registry["brassring"] = cookieSessionSource[brassringHTTP](c, NewBrassring)
 	// Lesta's listing answers with a 307 to itself that sets a session cookie; without a jar
 	// the redirect loops until the client gives up.
 	registry["lesta"] = cookieSessionSource[lestaHTTP](c, NewLesta)

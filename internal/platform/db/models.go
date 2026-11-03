@@ -445,6 +445,12 @@ type CompanyFeedbackReport struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type CompanyParent struct {
+	ChildSlug  string             `json:"child_slug"`
+	ParentSlug string             `json:"parent_slug"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type CompanyProcessReport struct {
 	ID          int64              `json:"id"`
 	UserID      int64              `json:"user_id"`
@@ -452,6 +458,19 @@ type CompanyProcessReport struct {
 	Kind        string             `json:"kind"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	RetractedAt pgtype.Timestamptz `json:"retracted_at"`
+}
+
+type CompanyRelationProposal struct {
+	ID          int64              `json:"id"`
+	Kind        string             `json:"kind"`
+	CompanySlug string             `json:"company_slug"`
+	TargetSlug  string             `json:"target_slug"`
+	Note        string             `json:"note"`
+	ProposedBy  pgtype.Int8        `json:"proposed_by"`
+	Status      string             `json:"status"`
+	DecidedBy   pgtype.Int8        `json:"decided_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	DecidedAt   pgtype.Timestamptz `json:"decided_at"`
 }
 
 type CompanySearchPing struct {
@@ -978,8 +997,6 @@ type Job struct {
 	AtsAbsentAt           pgtype.Timestamptz `json:"ats_absent_at"`
 	ClosedReason          string             `json:"closed_reason"`
 	IsPrivate             bool               `json:"is_private"`
-	SimilarJobIds         []int64            `json:"similar_job_ids"`
-	SimilarComputedAt     pgtype.Timestamptz `json:"similar_computed_at"`
 	SalaryMinSource       pgtype.Int4        `json:"salary_min_source"`
 	SalaryMaxSource       pgtype.Int4        `json:"salary_max_source"`
 	SalaryCurrencySource  string             `json:"salary_currency_source"`
@@ -1773,6 +1790,19 @@ type UserPushToken struct {
 	Platform   string             `json:"platform"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+}
+
+// First-touch source of an account, reported by the browser right after sign-up. One row per account; the first report wins. Independent of analytics consent.
+type UserSignupAttribution struct {
+	UserID       int64              `json:"user_id"`
+	UtmSource    pgtype.Text        `json:"utm_source"`
+	UtmMedium    pgtype.Text        `json:"utm_medium"`
+	UtmCampaign  pgtype.Text        `json:"utm_campaign"`
+	UtmContent   pgtype.Text        `json:"utm_content"`
+	UtmTerm      pgtype.Text        `json:"utm_term"`
+	ReferrerHost pgtype.Text        `json:"referrer_host"`
+	LandingPath  pgtype.Text        `json:"landing_path"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type ViewLogCursor struct {

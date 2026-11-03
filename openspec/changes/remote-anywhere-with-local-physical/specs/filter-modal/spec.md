@@ -31,25 +31,31 @@ NOT appear outside the condition: a toggle that changes nothing reads as broken.
 ### Requirement: Apply my profile flattens the location block without losing the remote reach
 
 "Apply my profile" SHALL flatten the profile's location block so that a user who
-accepts remote from anywhere (no remote reach) AND at least one physical format
-AND states a base or relocation geography gets remote postings from anywhere plus physical postings within the
-stated geography — by staging the `work_mode_remote_anywhere` modifier rather than
-narrowing the remote reach to the home geography. A profile without that shape
-(remote only; physical only; no geography; a stated remote reach) SHALL flatten
-exactly as before — the modifier would drop a stated reach from the remote arm.
-When it stages the modifier it SHALL NOT stage the relocation facet: that facet
-ANDs around the whole disjunction and would demand relocation from remote
-postings; the relocation targets remain in the physical arm's geography.
+accepts remote AND at least one physical format AND states a base or relocation
+geography gets remote postings within their remote reach (anywhere, when none is
+stated) plus physical postings within the base and relocation geography — by
+staging the `work_mode_remote_anywhere` modifier, the reach as
+`work_mode_remote_regions`/`work_mode_remote_countries`, and only the base and
+relocation geography as the location facets. A profile without that shape (remote
+only; physical only; no physical geography) SHALL flatten exactly as before. When
+it stages the modifier it SHALL NOT stage the relocation facet: that facet ANDs
+around the whole disjunction and would demand relocation from remote postings; the
+relocation targets remain in the physical arm's geography.
 
 #### Scenario: Hybrid at home plus remote anywhere from the profile
 
 - **WHEN** a user whose profile lists work_modes remote+hybrid, a base country DE, and no remote reach applies their profile
-- **THEN** the staged filters carry work_mode remote+hybrid, the location facets from the block, and `work_mode_remote_anywhere=true`
+- **THEN** the staged filters carry work_mode remote+hybrid, countries DE, and `work_mode_remote_anywhere=true` with no remote reach
 
-#### Scenario: A stated remote reach keeps the plain flatten
+#### Scenario: A stated remote reach bounds only the remote arm
 
 - **WHEN** a user whose profile lists work_modes remote+hybrid, a base country DE, and remote reach Europe applies their profile
-- **THEN** the staged filters carry the location facets from the block and no modifier — remote work stays within the reach
+- **THEN** the staged filters carry the modifier, `work_mode_remote_regions=eu` and countries DE — remote work within Europe, hybrid only in Germany
+
+#### Scenario: The chip names the reach
+
+- **WHEN** the modifier is in force with `work_mode_remote_regions=eu`
+- **THEN** the summary chip and the modal checkbox read "Remote within Europe", and removing the chip clears the modifier and the reach together
 
 #### Scenario: Remote-only profile stays global
 

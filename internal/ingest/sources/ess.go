@@ -413,7 +413,36 @@ func essJob(d essDetail, p essPosting) (Job, bool) {
 		j.SalaryCurrency = "EUR"
 		j.SalaryPeriod = "month"
 	}
+	// prijavaDo is the vacancy's own application deadline, a Slovenian d. m. y date. Unlike a
+	// posted_at it may legitimately sit today or tomorrow, so it is not run through NotFuture;
+	// a stale one past today closes the vacancy on the write.
+	if t, ok := essDayMonthYear(d.ApplicationsTill); ok {
+		j.ApplicationDeadline = &t
+	}
 	return j, true
+}
+
+// essDMY matches a Slovenian day-month-year date: "10. 11. 2026" (prijavaDo) and the like.
+var essDMY = regexp.MustCompile(`^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\.?$`)
+
+// essDayMonthYear reads one of those dates at midnight UTC. ok is false for a value that is
+// not one.
+func essDayMonthYear(s string) (time.Time, bool) {
+	m := essDMY.FindStringSubmatch(strings.TrimSpace(essText(s)))
+	if m == nil {
+		return time.Time{}, false
+	}
+	day, _ := strconv.Atoi(m[1])
+	month, _ := strconv.Atoi(m[2])
+	year, _ := strconv.Atoi(m[3])
+	if month < 1 || month > 12 || day < 1 || day > 31 {
+		return time.Time{}, false
+	}
+	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	if t.Day() != day { // time.Date rolls 31.02 over to March rather than rejecting it
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 // essBodyFields are the record's facts rendered under the duties, labelled as the site labels

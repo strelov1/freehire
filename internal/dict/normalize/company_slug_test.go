@@ -142,6 +142,15 @@ func TestCompanySlug(t *testing.T) {
 		{"spaced d. d., capitals, no final dot", "PLODINE D. D", "plodine"},
 		{"spaced d. d. after initials", "Actual I.T. d. d.", "actual-i-t"},
 		{"spaced d. d. mid-name is left to the slug", "Acme d. d. Ljubljana", "acme-d-d-ljubljana"},
+		// The registered seat a Slovenian or Croatian name carries after its form (freehire#3895).
+		{"d.d. before the seat", "KRKA, d.d., Novo mesto", "krka"},
+		{"spaced d. d. before the seat", "Krka, tovarna zdravil, d. d., Novo mesto", "krka-tovarna-zdravil"},
+		{"d.o.o. before the seat", "TERME KRKA, d.o.o., Novo mesto", "terme-krka"},
+		{"spaced d. o. o. before the seat", "Adria Mobil, d. o. o., Novo mesto", "adria-mobil"},
+		{"d.o.o. before a hyphenated seat", "Acme d.o.o., Ljubljana-Črnuče", "acme"},
+		{"a seat with a digit is not a seat", "Acme d.o.o., Cesta 24", "acme-d-o-o-cesta-24"},
+		{"a seat needs a form before it", "Acme, Novo mesto", "acme-novo-mesto"},
+		{"a seat needs the dotted form", "Acme dd, Novo mesto", "acme-dd-novo-mesto"},
 		// The Colombian public-utility form, after the S.A.S. or S.A. it qualifies.
 		{"colombian s.a.s e.s.p.", "INTERASEO S.A.S E.S.P.", "interaseo"},
 		{"colombian s.a e.s.p", "Conhydra S.A E.S.P", "conhydra"},

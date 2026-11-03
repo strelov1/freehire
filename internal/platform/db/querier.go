@@ -772,15 +772,6 @@ type Querier interface {
 	// that write was removed, without needing a one-off backfill to clean up the column.
 	// The column itself stays (dropping it is a separate, later change).
 	ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error
-	// Null a batch of jobs' precomputed-similarity staleness stamp. Run in the SAME
-	// transaction as the open-job embed stamp / chunk replace (cmd/embed) — a job whose
-	// chunks were just replaced has a stale (or absent) jobs.similar_job_ids, so this
-	// clears similar_computed_at unconditionally for the whole open batch, letting
-	// cmd/similar-backfill's incremental predicate ("similar_computed_at IS NULL, or a job
-	// with no chunk rows at all is simply never selected") pick the job back up. Cheap and
-	// idempotent — nulling an already-NULL column is a no-op write, not worth a
-	// conditional guard.
-	ClearSimilarComputedAtBatch(ctx context.Context, ids []int64) error
 	// Forget a credential the gateway no longer recognises, so the next call mints a
 	// replacement. Conditional on the value we believe is stored: a concurrent call may have
 	// already re-minted, and clearing unconditionally would throw away that good credential
@@ -1209,6 +1200,8 @@ type Querier interface {
 	// The posting itself is excluded by its dedup identity because it is written before this
 	// runs. Callers skip the question for an empty company_slug, which names nobody.
 	CompanyHasOtherJobs(ctx context.Context, arg CompanyHasOtherJobsParams) (bool, error)
+	CompanyHasParent(ctx context.Context, slug string) (bool, error)
+	CompanyHasSubsidiaries(ctx context.Context, slug string) (bool, error)
 	// The denormalized open-job count for a slug (pgx.ErrNoRows if the company is
 	// absent). cmd/import-yc uses it to guard against homonym collisions: it skips
 	// enriching an existing company whose job_count dwarfs a matched YC entry's team.
@@ -1571,6 +1564,7 @@ type Querier interface {
 	// Whether the caller already spent points on this (feature, ref). True means the action
 	// is a recompute/resume and must not be charged again (idempotency by ref).
 	DebitExists(ctx context.Context, arg DebitExistsParams) (bool, error)
+	DecideCompanyRelationProposal(ctx context.Context, arg DecideCompanyRelationProposalParams) error
 	// Approve or reject a pending profile, recording the moderator and the time. The
 	// status='pending' guard makes a second decision match no row, which the repository
 	// maps to "not pending" — the same shape DecideReferralOffer uses.
@@ -1719,6 +1713,10 @@ type Querier interface {
 	DeleteCompanyAccount(ctx context.Context, userID int64) (int64, error)
 	// Remove the caller's own feedback in one category on a company (no-op when absent).
 	DeleteCompanyFeedback(ctx context.Context, arg DeleteCompanyFeedbackParams) error
+	// Whatever links still name the retiring slug: its own parent (the canon may have another,
+	// or be a parent itself, and one level is the rule), and a link to the canon it has just
+	// become.
+	DeleteCompanyParentLinksOf(ctx context.Context, slug string) error
 	// Remove a user's company vote (toggle-clear or the DELETE endpoint). No-op when
 	// absent.
 	DeleteCompanyVote(ctx context.Context, arg DeleteCompanyVoteParams) error
@@ -1843,14 +1841,13 @@ type Querier interface {
 	// its own vector(768) row here — replacing the single, doubly-truncated
 	// jobs.semantic_embedding vector as the queryable representation. Consumers:
 	// cmd/embed (writes, via DeleteJobSemanticChunks + InsertJobSemanticChunks or
-	// DeleteJobSemanticChunks alone for a closed job) and cmd/similar-backfill (reads,
-	// via NearestJobsToJob). GET /me/recommendations was removed rather than migrated
+	// DeleteJobSemanticChunks alone for a closed job) and the Meilisearch index writers. GET /me/recommendations was removed rather than migrated
 	// to pgvector (see drop-hybrid-search-pgvector-similar's Context: "Mid-implementation
 	// reversal"); it never got a caller.
 	// ---------------------------------------------------------------------------
 	// Remove every chunk row for a BATCH of jobs in one round trip — mirrors every other
 	// batch mutation in this file (StampSemanticEmbeddedBatch, ClearSemanticEmbeddedBatch,
-	// ClearSimilarComputedAtBatch, DeleteSemanticEntriesBatch), all one `WHERE id = ANY($1)`
+	// DeleteSemanticEntriesBatch), all one `WHERE id = ANY($1)`
 	// call rather than one call per job: this pipeline was historically bottlenecked by
 	// per-row Postgres round trips during a bulk backfill, not by GPU/TEI throughput, and
 	// the upcoming full-catalogue re-embed (openspec/changes/
@@ -2632,6 +2629,9 @@ type Querier interface {
 	// One company's posting lifetime. No row means no qualifying closure; the caller
 	// applies its own sample gate on `closed`.
 	GetCompanyLifetime(ctx context.Context, companySlug string) (GetCompanyLifetimeRow, error)
+	// The row a decision is about, locked for the decision's transaction so two moderators
+	// cannot approve and reject it at once.
+	GetCompanyRelationProposalForUpdate(ctx context.Context, id int64) (CompanyRelationProposal, error)
 	// The observable application counts for one company. A company with no row has no
 	// observable applications at all, which the caller must treat as "not enough data"
 	// rather than as a zero response rate.
@@ -2841,23 +2841,15 @@ type Querier interface {
 	// preview. Narrow projection (no SELECT *) so it drags only the one field it
 	// patches, not the whole wide row, for a page of at most maxLimit ids.
 	GetJobDescriptionsByIDs(ctx context.Context, ids []int64) ([]GetJobDescriptionsByIDsRow, error)
+	// Resolve the source's ultimate owner, including suppressed sources whose parent
+	// is itself suppressed. Match ListJobCopies' depth bound; a cycle/missing chain
+	// yields zero, so related-jobs reads can decline to recommend their own posting.
+	GetJobDuplicateOwner(ctx context.Context, jobID int64) (int64, error)
 	// Slim slug->id lookup for the view/apply interaction path, which needs only the
 	// internal id (the user_jobs FK) and must not drag the wide description/enrichment
 	// columns over the wire on every silent view. GetJobBySlug (SELECT *) stays for the
 	// public detail handler that renders the whole row.
 	GetJobIDBySlug(ctx context.Context, publicSlug string) (int64, error)
-	// The source job's chunk-generation marker (design.md's NearestJobsToJob rollup has no
-	// row to carry this on when a job's every candidate gets excluded, so it is its own
-	// query, read in the same round trip as NearestJobsToJob rather than folded into it).
-	// semantic_embedded_hash is stamped from content_hash by StampSemanticEmbeddedBatch in
-	// the same transaction that writes a job's current job_semantic_chunks rows, so it
-	// changes exactly when cmd/embed replaces those rows. cmd/similar-backfill passes the
-	// value read here back to SetSimilarJobIDs as a conditional-write guard: if cmd/embed
-	// re-embeds this job between this read and that write, the source's chunks (and the
-	// NearestJobsToJob result computed from them) are already stale, and the guard drops
-	// the write instead of stamping similar_computed_at over data the concurrent re-embed
-	// already invalidated.
-	GetJobSemanticGeneration(ctx context.Context, jobID int64) (pgtype.Text, error)
 	// The caller's current vote for a job (0 when none), for my_vote on auth-aware
 	// detail reads. Always returns one row via the COALESCE'd scalar subquery.
 	GetJobVote(ctx context.Context, arg GetJobVoteParams) (int16, error)
@@ -3004,20 +2996,6 @@ type Querier interface {
 	// row: the caller runs EnsureScreeningAnswersRow first in the same transaction, so there is
 	// never a "no row to lock" case here.
 	GetScreeningAnswersForUpdate(ctx context.Context, userID int64) (ScreeningAnswer, error)
-	// Narrow read for GET /jobs/:slug/similar (internal/api/handler/similar.go): only the
-	// precomputed neighbour-id list (jobs.similar_job_ids, populated by
-	// cmd/similar-backfill — see semantic.sql's job_semantic_chunks section), not the
-	// whole wide job row. Mirrors GetJobDescriptionsByIDs's "narrow projection for a
-	// hot read path" precedent above. The list is nearest-first and, as of writing,
-	// capped at cmd/similar-backfill's -similar flag (default 20, matching the API's
-	// maxSimilarLimit) — the handler still re-filters it to open jobs at read time,
-	// since a neighbour can close after it was computed. A job with no precomputed
-	// list yet (never backfilled) comes back with a NULL/nil similar_job_ids, not an
-	// error — the handler treats "not backfilled yet" and "computed empty" the same.
-	// countries rides along because the handler puts neighbours sharing the source's
-	// country first: the precomputed list ignores geography, so it routinely leads with
-	// the same role on another continent (freehire#3874).
-	GetSimilarJobIDs(ctx context.Context, id int64) (GetSimilarJobIDsRow, error)
 	// The credential one channel publishes with. No rows means the channel has never been signed
 	// in, which every caller reports as "not configured" rather than as an error — the same
 	// degradation as an unset webhook URL.
@@ -3369,6 +3347,10 @@ type Querier interface {
 	// moderator to act on, not a per-report ticket with its own state machine (see
 	// internal/engage/report for that fuller shape, built for job postings).
 	InsertCompanyFeedbackReport(ctx context.Context, arg InsertCompanyFeedbackReportParams) error
+	// A signed-in user's proposal that two companies are one employer (`same`) or that one owns
+	// the other (`subsidiary`). The partial unique index on pending rows makes a duplicate a
+	// unique violation, which the service reports as "already proposed".
+	InsertCompanyRelationProposal(ctx context.Context, arg InsertCompanyRelationProposalParams) (CompanyRelationProposal, error)
 	// Record a merge. DO NOTHING on conflict because the canon is frozen at first merge: a later
 	// run that re-elects a different winner for the same folded group must not silently move a
 	// URL that has already been 301-ing and indexed.
@@ -3510,6 +3492,10 @@ type Querier interface {
 	// partial unique index on (user_id, ref) WHERE kind='reward' guards against a double
 	// grant for the same ref even under a race.
 	InsertReward(ctx context.Context, arg InsertRewardParams) error
+	// First report wins, and only for an account created in the last ten minutes: the
+	// table records how an account ARRIVED, so a report from a years-old session would
+	// be a made-up answer rather than an observation.
+	InsertSignupAttribution(ctx context.Context, arg InsertSignupAttributionParams) (int64, error)
 	// Second half of the atomic rebuild: one row per source in the UNION of the adapter
 	// registry and what the scan above found — see sourcestats.Rows, which is where that
 	// union is decided.
@@ -3551,6 +3537,9 @@ type Querier interface {
 	// carries nine other columns a gate has no use for — and a gate that reads a whole user
 	// row invites somebody to branch on a second field from it later.
 	IsBetaTester(ctx context.Context, id int64) (bool, error)
+	// Whether some retired slug already redirects here. Such a slug cannot itself retire: the
+	// registry resolves one hop, so its aliases would land on a slug with no jobs.
+	IsCanonicalCompanySlug(ctx context.Context, slug string) (bool, error)
 	// Whether a normalized host (see submission.normalizeHost) is on the submission blocklist.
 	IsHostBlocked(ctx context.Context, host string) (bool, error)
 	// Cursor read: has this rotated file (by content signature) been applied? The
@@ -3620,6 +3609,10 @@ type Querier interface {
 	// reading of a message. The caller passes appevent's own vocabulary, so the exclusion
 	// cannot drift from the sources the writers use.
 	LastStageSetAt(ctx context.Context, arg LastStageSetAtParams) (pgtype.Timestamptz, error)
+	// The company name a slug's most recent posting carries: the spelling the next crawl will
+	// send, and so the one whose fold ingest will look up. companies.name can be a curated
+	// display name that folds differently.
+	LatestCompanySpelling(ctx context.Context, slug string) (string, error)
 	// Queries behind the daily social digest (internal/engage/socialdigest, cmd/social-digest).
 	//
 	// The division of labour here is deliberate: SQL answers what is CHEAP and
@@ -4214,6 +4207,11 @@ type Querier interface {
 	// rows that already hold industries, but the merge pass must also reach companies
 	// with none, and one query serving both keeps the two walks identical.
 	ListCompanyIndustriesPage(ctx context.Context, arg ListCompanyIndustriesPageParams) ([]ListCompanyIndustriesPageRow, error)
+	// A company page's parent (role 'parent') and subsidiaries (role 'subsidiary') in one round
+	// trip, since every company read pays for it and almost every company has neither. The join
+	// through companies hides a relative that has no row any more. Subsidiaries come hiring
+	// first, and are bounded because a group can own many.
+	ListCompanyRelatives(ctx context.Context, slug string) ([]ListCompanyRelativesRow, error)
 	// The whole registry, folded key to canonical slug. cmd/backfill-derive loads it once per run
 	// and resolves in memory: it re-derives every job in the table, and jobderive is pure, so
 	// without this a backfill would silently move every merged posting back to the spelling its
@@ -4237,6 +4235,10 @@ type Querier interface {
 	// with any posting's spelling of it, and that value is not guaranteed to appear in jobs.
 	//
 	ListCompanyWebsites(ctx context.Context) ([]ListCompanyWebsitesRow, error)
+	// Companies with open jobs and a website, curated or from a feed, for
+	// cmd/report-company-website-twins. Grouping happens in Go through logodomain.Domain, the
+	// reader the logo map uses, so the two agree on what a shared site is.
+	ListCompanyWebsitesForTwins(ctx context.Context) ([]ListCompanyWebsitesForTwinsRow, error)
 	// Drives the sync worker: every connection still authorized AND holding a mailbox.
 	//
 	// The address is the test, and it is not decoration. Since the calendar consent exists,
@@ -4978,6 +4980,14 @@ type Querier interface {
 	// whose code was never entered is not reviewable — nobody has shown they can read that
 	// address — so it stays out of the queue (migration 0181).
 	ListPendingCompanyAccounts(ctx context.Context) ([]CompanyAccount, error)
+	// The moderator queue, oldest first, with both companies' current names and open-job counts
+	// so the decision can be made without opening two pages. LEFT JOIN because a company may have
+	// lost its last posting since the proposal. The approval then refuses it, and the queue
+	// still has to show it to be rejected.
+	//
+	// An approved merge whose retiring company still has a row is listed too: its job move
+	// stopped part-way (the reconcile deletes that row last), and approving it again resumes it.
+	ListPendingCompanyRelationProposals(ctx context.Context) ([]ListPendingCompanyRelationProposalsRow, error)
 	// The moderation queue, oldest first. Carries whether the account also holds an APPROVED
 	// referral offer for the same company — corroborating evidence for the human deciding,
 	// never a gate: nothing in this change approves a profile automatically.
@@ -5511,6 +5521,10 @@ type Querier interface {
 	// (see LockJobForVote for the drift this prevents). Called first in the vote
 	// transaction.
 	LockCompanyForVote(ctx context.Context, slug string) error
+	// Serializes approvals for the transaction (key "fhcr", listed in internal/platform/migrate).
+	// Each approval checks the registry and company_parents and then writes them, and two
+	// approvals checked against the same state could each pass while together making a chain.
+	LockCompanyRelationDecisions(ctx context.Context) error
 	// Take the job row's lock so concurrent applies on the same job serialize. Without
 	// it, two applies in the same window under READ COMMITTED each read a snapshot
 	// missing the other's user_jobs row and both bump applied_count. Called first in
@@ -5820,41 +5834,6 @@ type Querier interface {
 	// it to open in the right state: without it a returning reader cannot be shown that
 	// they already reported, and the only way to find out would be to try and be refused.
 	MyLiveCompanyProcessReportKinds(ctx context.Context, arg MyLiveCompanyProcessReportKindsParams) ([]string, error)
-	// The similar-jobs rollup for one source job (design.md Decision 5), consumed by
-	// cmd/similar-backfill to populate jobs.similar_job_ids. A candidate job's distance to
-	// the source is the MINIMUM cosine distance across every (source chunk, candidate
-	// chunk) pair — the single nearest passage wins, not an average — so a long job with
-	// one perfectly-matching paragraph outranks a job that is merely "somewhat close"
-	// everywhere; this mirrors the chunking branch's own Meili-side scoring rule ("nearest
-	// of a multi-vector document's vectors"), kept intentionally the same across the
-	// storage-engine change.
-	//
-	// Rewritten from a plain GROUP BY over the full (source chunk × every other chunk)
-	// cross join to a LATERAL join, one ANN probe per source chunk — measured live on prod
-	// at 730k total chunk rows (a fraction of the eventual target): the cross-join form
-	// took 152.7s for a SINGLE job (confirmed via EXPLAIN ANALYZE), because pgvector's
-	// HNSW index only accelerates `ORDER BY embedding <=> const LIMIT k`, a shape the
-	// cross-join's `MIN(...) ... GROUP BY` never produces — Postgres has no choice but to
-	// compute every pairwise distance before it can take a minimum. Each source chunk's
-	// LATERAL subquery is exactly that index-servable shape (see migration 0110's HNSW
-	// index): it asks for the `over_fetch` nearest chunks to ONE source chunk, over-fetching
-	// past `limit_count` to absorb whatever the closed/same-company filters below discard.
-	// over_fetch too small under-fills the final top-N; too large gives back the cross-join
-	// query's own cost — cmd/similar-backfill picks it as a multiple of limit_count.
-	//
-	// The company/closed exclusion moves to the outer SELECT (against jobs, not repeated per
-	// LATERAL probe) — unless the source job has no resolved company (company_slug = '',
-	// this repo's "unknown company" sentinel, see jobs.company_slug NOT NULL DEFAULT ''),
-	// any candidate sharing the source's exact company_slug is excluded, so two different
-	// companies that both merely lack a resolved slug don't spuriously exclude each other.
-	//
-	// Private candidates are excluded there too. A user-pasted job description (InsertPrivateJob,
-	// for the JD-tailor intake) is open, carries the derived is_tech, and is therefore embedded
-	// and eligible like any other row — so without this predicate it becomes a legitimate
-	// neighbour of a public posting, and GET /jobs/:slug/similar (unauthenticated, whole
-	// jobview) publishes the unguessable slug its privacy rests on. The SOURCE job may still be
-	// private: asking what a pasted JD resembles is the feature.
-	NearestJobsToJob(ctx context.Context, arg NearestJobsToJobParams) ([]NearestJobsToJobRow, error)
 	// The revision a follow-on edit might be folded into. Only the newest is a candidate:
 	// coalescing into anything older would reorder the log.
 	NewestCVRevision(ctx context.Context, arg NewestCVRevisionParams) (CvRevision, error)
@@ -6954,6 +6933,11 @@ type Querier interface {
 	// row each, zipped back by position (WITH ORDINALITY: sqlc's analyzer does not resolve the
 	// multi-array form of unnest).
 	ReplaceBuddyMockWeekly(ctx context.Context, arg ReplaceBuddyMockWeeklyParams) error
+	// A merge keeps the subsidiaries the retiring slug had. They move under the canonical slug,
+	// or under the canon's own parent when it has one, since one level is the rule. A canon that
+	// was the retiring slug's own subsidiary has no other parent, so its siblings move under it.
+	// A link that would then point a company at itself is left for the delete below.
+	RepointCompanyParentsOnMerge(ctx context.Context, arg RepointCompanyParentsOnMergeParams) error
 	// The whole schedule as an operator reads it: every eligible provider, its override if it
 	// has one, and what its runs have actually been doing. Aggregated per provider rather than
 	// per shard, because the question this answers is "is anything not running?" and 24
@@ -7229,44 +7213,6 @@ type Querier interface {
 	// ResetUserPassword — the revocation cannot be separated from the seizure.
 	// Returns the new generation for the session the sign-in is about to mint.
 	SeizeUnverifiedAccount(ctx context.Context, id int64) (int32, error)
-	// ---------------------------------------------------------------------------
-	// cmd/similar-backfill: the run-once-and-exit worker that populates
-	// jobs.similar_job_ids/similar_computed_at from NearestJobsToJob above. Finds
-	// outstanding work by direct query, not a claimed/leased outbox table (design.md
-	// Decision 4 — telagon's cmd/similar-backfill, the original inspiration, has no
-	// outbox table either: the predicate below is idempotent and re-orderable, so a
-	// batched full-table scan needs no lease/dead-letter machinery to stay safe under a
-	// re-run or an overlapping manual invocation).
-	// ---------------------------------------------------------------------------
-	// Jobs needing a (re)computed precomputed similar-jobs list: at least one
-	// job_semantic_chunks row (so NearestJobsToJob has something to search from) but no
-	// current list (similar_computed_at IS NULL). A plain IS NULL check, not "IS NULL OR
-	// older than the newest chunk" — cmd/embed's CompleteOpen already nulls
-	// similar_computed_at on EVERY chunk replace (ClearSimilarComputedAtBatch, called
-	// unconditionally for the whole re-embedded batch, even when the new chunk count
-	// happens to match the old one), so "missing" and "stale" already collapse to the same
-	// NULL check; there is no case where a job's chunks changed but its
-	// similar_computed_at stayed non-NULL. A job with zero chunk rows (never embedded, or
-	// its description was too short/empty to chunk) is simply never selected — the EXISTS
-	// clause already requires at least one row, no separate guard needed. A closed source
-	// job is NOT excluded here (only closed CANDIDATES are, inside NearestJobsToJob) —
-	// cmd/embed's own closed-job path deletes a job's chunk rows once its outbox entry
-	// drains, which removes it from this predicate on its own; excluding closed_at here
-	// too would just duplicate that cleanup with a narrower race window, not add safety.
-	// Ordered freshest-job-first (mirrors ClaimSemanticBatch's ordering) so newly-posted
-	// jobs get a similar-jobs list before older backlog on a still-draining catalogue.
-	//
-	// semantic_embedded_model IS NOT NULL is what makes the freshest-first scan stop.
-	// jobs_similar_backfill_idx is partial only on similar_computed_at IS NULL, which on
-	// prod is most of the table (2026-10-25: null_frac 0.92, and one LIMIT 50 read ~1.5M
-	// index entries, nearly all of them jobs with no chunks). The model is stamped in the
-	// same transaction as the chunk replace (cmd/embed CompleteOpen). semantic_embedded_hash
-	// is the wrong stand-in: StampSemanticEmbeddedBatch copies content_hash, so a job can
-	// have chunks and a model while the hash stays NULL. EXISTS stays, because a short
-	// description is stamped and then stored with zero chunk rows. The index that matches
-	// this predicate is jobs_similar_backfill_embedded_idx (0196); the older index stays
-	// until the previous binary is gone, since that binary's query cannot use the new one.
-	SelectJobsNeedingSimilarBackfill(ctx context.Context, limitCount int32) ([]int64, error)
 	// Orphan-job liveness (probe-orphan-job-liveness): open jobs whose source is NOT a
 	// registered ATS board provider — the sources no ingest run re-crawls and the sweep
 	// therefore never closes (telegram, habr_career, geekjob, …). The caller passes the
@@ -7426,6 +7372,13 @@ type Querier interface {
 	// (preserving unmanaged tags) and writes it here; updated_at is bumped for parity
 	// with the other write paths.
 	SetCompanyCollections(ctx context.Context, arg SetCompanyCollectionsParams) error
+	// The employer's own website as a job feed states it in a structured field (EURES's
+	// employer.website). It goes under its own key, feed_website, never `website`. The curated
+	// fillers (Wikipedia, YC, the employer's claim) only fill a blank `website` and would keep a
+	// feed value there forever, and publish-logo-domains and the company header trust `website`
+	// as curated. Only the duplicate report reads this key. Written once: the first feed value
+	// stays.
+	SetCompanyFeedWebsiteIfAbsent(ctx context.Context, arg SetCompanyFeedWebsiteIfAbsentParams) error
 	// Replace one company's industries. The IS DISTINCT FROM guard keeps updated_at
 	// honest — a row already holding the wanted value is not rewritten — and makes the
 	// affected-row count real churn, so a second run reports zero.
@@ -7616,25 +7569,6 @@ type Querier interface {
 	// every pass. Deliberately: a provider that only wrote the columns it had something to say
 	// about could never take back what it once said, which is the cancellation path.
 	SetRevenueCatEntitlement(ctx context.Context, arg SetRevenueCatEntitlementParams) error
-	// Write one job's precomputed similar-jobs list and stamp similar_computed_at
-	// together, so a job is never marked computed without its list landing. A nil/empty
-	// similar_job_ids is a valid, intentional write (a job whose only close matches were
-	// excluded by NearestJobsToJob's same-company rule ends up with a short or empty
-	// list, not an error) — it still stamps the job so
-	// SelectJobsNeedingSimilarBackfill's incremental predicate does not pick it up again
-	// every run. One row at a time, not batched like cmd/embed's writes: each job's array
-	// value is unique per row, so there is no shared payload to amortize across a wave the
-	// way a single Meili task amortizes cmd/embed's batch upsert.
-	//
-	// The generation guard (IS NOT DISTINCT FROM, since a job with zero chunk rows would
-	// never reach here but the comparison stays NULL-safe) makes this write a no-op — zero
-	// rows affected, reported to the caller via :execrows — if cmd/embed replaced this
-	// job's chunks (and cleared similar_computed_at itself, ClearSimilarComputedAtBatch)
-	// after GetJobSemanticGeneration/NearestJobsToJob read it but before this write lands.
-	// Without the guard this UPDATE would stamp similar_computed_at over a list computed
-	// from chunks that no longer exist, and the job's now-current chunks would never be
-	// backfilled until their NEXT content change.
-	SetSimilarJobIDs(ctx context.Context, arg SetSimilarJobIDsParams) (int64, error)
 	// Bind an account to the payment provider's customer, ONCE, when it first transacts.
 	//
 	// IS NULL, so this writes a binding and never REPLACES one. That is a security property,
@@ -8345,6 +8279,8 @@ type Querier interface {
 	// CONFLICT names the target partial index directly since the unique index
 	// excludes NULL user_id.
 	UpsertCompanyFeedback(ctx context.Context, arg UpsertCompanyFeedbackParams) (CompanyFeedback, error)
+	// A subsidiary has one parent, so a newer approved decision replaces the older one.
+	UpsertCompanyParent(ctx context.Context, arg UpsertCompanyParentParams) error
 	// Set a user's company vote to $3 (-1 or 1), inserting or overwriting in place.
 	// Toggle-to-clear is handled by DeleteCompanyVote, chosen by the domain layer.
 	UpsertCompanyVote(ctx context.Context, arg UpsertCompanyVoteParams) error

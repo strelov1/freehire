@@ -20,7 +20,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 	"unicode"
 
 	"github.com/strelov1/freehire/internal/platform/testdb"
@@ -95,13 +94,6 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 	closedID := seedJob(t, pool, "closed", "Junior Frontend Developer", true, true)
 	seedPreviouslyEmbedded(t, ctx, pool, closedID)
 
-	// Simulate a stale precomputed similar-jobs list on the open job (as if a prior
-	// cmd/similar-backfill pass had run) — the embed worker must null it out alongside
-	// the rest of its stamp, since a re-embed's chunk set makes the old list stale.
-	if _, err := pool.Exec(ctx, "UPDATE jobs SET similar_computed_at = now() WHERE id = $1", openID); err != nil {
-		t.Fatalf("seed similar_computed_at: %v", err)
-	}
-
 	runner := embed.Runner{Store: newDBStore(pool), Indexer: searchIndexer{client: client}}
 	stats, err := runner.Run(ctx, embed.RunOptions{
 		TargetModel: search.CurrentEmbedderModel(), BatchSize: 500, LeaseSeconds: 300, MaxAttempts: 3,
@@ -157,10 +149,7 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 	if got := jobChunkCount(t, pool, closedID); got != 0 {
 		t.Errorf("closed job chunk rows = %d, want 0", got)
 	}
-	// The precomputed similar-jobs staleness stamp is cleared by the re-embed.
-	if !jobSimilarComputedAtIsNull(t, pool, openID) {
-		t.Errorf("open job similar_computed_at not cleared by embed")
-	}
+
 }
 
 // jobChunkCount returns how many job_semantic_chunks rows a job has.
@@ -195,17 +184,6 @@ func jobChunkIndices(t *testing.T, pool *pgxpool.Pool, id int64) []int16 {
 		t.Fatalf("iterate chunk indices: %v", err)
 	}
 	return out
-}
-
-// jobSimilarComputedAtIsNull reports whether a job's similar_computed_at column is NULL.
-func jobSimilarComputedAtIsNull(t *testing.T, pool *pgxpool.Pool, id int64) bool {
-	t.Helper()
-	var ts *time.Time
-	if err := pool.QueryRow(context.Background(),
-		"SELECT similar_computed_at FROM jobs WHERE id = $1", id).Scan(&ts); err != nil {
-		t.Fatalf("read similar_computed_at: %v", err)
-	}
-	return ts == nil
 }
 
 // TestIntegration_EmbedWorkerChunksLongDescriptionIntoMultipleRows proves the whole,
@@ -377,8 +355,7 @@ func TestIntegration_EmbedWorkerRestampsWhenOnlyFacetsMoved(t *testing.T) {
 	chunksBefore := jobChunkCount(t, pool, id)
 
 	if _, err := pool.Exec(ctx,
-		`UPDATE jobs SET content_hash = 'h-facets-v2', skills = '{go,kubernetes}', countries = '{DE}',
-		                 similar_computed_at = now()
+		`UPDATE jobs SET content_hash = 'h-facets-v2', skills = '{go,kubernetes}', countries = '{DE}'
 		 WHERE id = $1`, id); err != nil {
 		t.Fatalf("move facets: %v", err)
 	}
@@ -395,9 +372,6 @@ func TestIntegration_EmbedWorkerRestampsWhenOnlyFacetsMoved(t *testing.T) {
 	}
 	if got := jobChunkCount(t, pool, id); got != chunksBefore {
 		t.Errorf("chunk rows = %d, want the %d already there", got, chunksBefore)
-	}
-	if jobSimilarComputedAtIsNull(t, pool, id) {
-		t.Error("similar_computed_at was cleared, but the vectors did not change")
 	}
 	var n int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM semantic_outbox").Scan(&n); err != nil {

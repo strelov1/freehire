@@ -19,6 +19,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobderive"
+	"github.com/strelov1/freehire/internal/job/logodomain"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -69,7 +70,8 @@ type Closer interface {
 // hydrated description/facets. Only the ingest dbStore implements it; the pipeline type-asserts
 // for it and drops the refresh when a Store lacks it (test fakes), like Closer.
 type Toucher interface {
-	Touch(ctx context.Context, source, externalID string) error
+	// Touch reports the refreshed row's stored company slug ("" when there was no row).
+	Touch(ctx context.Context, source, externalID string) (companySlug string, err error)
 }
 
 // CoveredRefresher refreshes the liveness of OPEN stored rows a board listed but did
@@ -102,6 +104,15 @@ type CoveredRefresher interface {
 // posting as done.
 type SeenLookup interface {
 	ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error)
+}
+
+// CompanyWebsiteRecorder is the optional Store capability behind sources.Job.CompanyWebsite:
+// record the employer's own website on its company row when none is known yet. It is a
+// capability for the same reason CompanyDescriptionFiller is: only the ingest dbStore has a
+// companies table, and a Store without it still ingests the posting. The website is then
+// not recorded, which is the right degradation for a field no write depends on.
+type CompanyWebsiteRecorder interface {
+	RecordCompanyWebsite(ctx context.Context, companySlug, website string) error
 }
 
 // CompanyDescriptionFiller is the optional Store capability a sources.CompanyDescriber
@@ -899,7 +910,8 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 			t.rej.reject(j.Title)
 			return
 		}
-		if err := r.touch(ctx, e, j); err != nil {
+		slug, err := r.touch(ctx, e, j)
+		if err != nil {
 			t.st.Skipped++
 			if t.firstErr == nil {
 				t.firstErr = err
@@ -907,6 +919,10 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 			return
 		}
 		t.st.Ingested++
+		// A re-listed posting still states its employer's website, and the employers whose
+		// postings were all stored before the field existed are only ever reached here. The
+		// stored row's slug, since a slug rule may have moved since it was written.
+		r.recordCompanyWebsite(ctx, e, slug, j.CompanyWebsite)
 		return
 	}
 	r.saveOne(ctx, e, j, covered, canon, t)
@@ -945,6 +961,37 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 		return
 	}
 	t.st.Ingested++
+	r.recordCompanyWebsite(ctx, e, dj.Fields().CompanySlug, j.CompanyWebsite)
+}
+
+// recordCompanyWebsite writes a posting's stated employer website onto the company it was
+// filed under, which after alias resolution is the canonical slug. It is best-effort: the
+// posting is already saved, and a missed website costs a merge signal, not a posting.
+func (r Runner) recordCompanyWebsite(ctx context.Context, e sources.CompanyEntry, companySlug, raw string) {
+	website := companyWebsite(raw)
+	if website == "" || companySlug == "" {
+		return
+	}
+	rec, ok := r.Store.(CompanyWebsiteRecorder)
+	if !ok {
+		return
+	}
+	if err := rec.RecordCompanyWebsite(ctx, companySlug, website); err != nil {
+		log.Printf("ingest: %s board %q: record website of %q: %v", e.Provider, e.Board, companySlug, err)
+	}
+}
+
+// companyWebsite keeps a stated website only when logodomain.Domain reads a domain from it,
+// the same reader the logo map and the duplicate report apply to the stored value. A feed's
+// free-text field holds "n/a" or a relative path often enough that storing it as given
+// would put junk where those read a domain. An e-mail address is refused as well: its
+// domain is often a mail provider's.
+func companyWebsite(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if strings.Contains(raw, "@") || logodomain.Domain(raw) == "" {
+		return ""
+	}
+	return raw
 }
 
 // refreshCovered refreshes the liveness of whichever listed, unwritten postings the
@@ -1303,10 +1350,10 @@ func (r Runner) coverageProbe(ctx context.Context, e sources.CompanyEntry) func(
 // touch refreshes an already-ingested posting's liveness (last_seen_at, reopen) by identity,
 // without rewriting its content. It routes through the Store's optional Toucher capability; a
 // Store without it (a test fake) drops the refresh, matching how ingestStream handles Closer.
-func (r Runner) touch(ctx context.Context, e sources.CompanyEntry, j sources.Job) error {
+func (r Runner) touch(ctx context.Context, e sources.CompanyEntry, j sources.Job) (string, error) {
 	t, ok := r.Store.(Toucher)
 	if !ok {
-		return nil
+		return "", nil
 	}
 	source, externalID := jobIdentity(e, j)
 	return t.Touch(ctx, source, externalID)

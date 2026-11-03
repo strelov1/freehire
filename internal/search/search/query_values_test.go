@@ -29,6 +29,7 @@ func TestIgnoredValues(t *testing.T) {
 		{"repeated value reported once", "work_mode=foo&work_mode=foo", map[string][]string{"work_mode": {"foo"}}},
 		{"stray comma is not a value", "work_mode=remote,", nil},
 		{"unknown perk", "perks=401k_match,free_beer", map[string][]string{"perks": {"free_beer"}}},
+		{"remote reach region checked like regions", "work_mode_remote_regions=eu,mars&work_mode_remote_countries=zz", map[string][]string{"work_mode_remote_regions": {"mars"}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
