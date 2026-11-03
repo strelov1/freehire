@@ -50,7 +50,12 @@ relocation targets remain in the physical arm's geography.
 #### Scenario: A stated remote reach bounds only the remote arm
 
 - **WHEN** a user whose profile lists work_modes remote+hybrid, a base country DE, and remote reach Europe applies their profile
-- **THEN** the staged filters carry the modifier, `work_mode_remote_regions=eu` and countries DE — remote work within Europe, hybrid only in Germany
+- **THEN** the staged filters carry the modifier, `work_mode_remote_regions=eu`, `work_mode_remote_countries=de` and countries DE — remote work within Europe or Germany, hybrid only in Germany
+
+#### Scenario: Home stays on a bounded remote arm
+
+- **WHEN** a user based in DE states the remote reach Worldwide (`global`, which matches only postings labelled worldwide)
+- **THEN** the staged filters also carry `work_mode_remote_countries=de`, so a remote posting restricted to Germany still matches
 
 #### Scenario: The chip names the reach
 

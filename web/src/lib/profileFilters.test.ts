@@ -420,9 +420,24 @@ describe('filtersFromProfile remote-anywhere flattening', () => {
     );
     expect(p.get('work_mode_remote_anywhere')).toBe('true');
     expect(p.get('work_mode_remote_regions')).toBe('eu');
-    expect(p.get('work_mode_remote_countries')).toBe('us');
+    // Home stays reachable: a remote job restricted to Germany is one this user can take.
+    expect(p.get('work_mode_remote_countries')).toBe('us,de');
     expect(p.get('countries')).toBe('de');
     expect(p.has('regions')).toBe(false);
+  });
+
+  // `regions=global` matches only postings labelled worldwide, so it does not cover home.
+  it('keeps home on the remote arm when the reach is worldwide', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid'], { remote: { regions: ['global'] } }))));
+    expect(p.get('work_mode_remote_regions')).toBe('global');
+    expect(p.get('work_mode_remote_countries')).toBe('de');
+  });
+
+  // No reach is unbounded: home needs no entry, and adding one would bound the arm to it.
+  it('leaves the remote arm unbounded when no reach is stated', () => {
+    const p = filtersToParams(filtersFromProfile(mkProfile([], [], loc(['remote', 'hybrid']))));
+    expect(p.has('work_mode_remote_regions')).toBe(false);
+    expect(p.has('work_mode_remote_countries')).toBe(false);
   });
 
   // Remote only: no physical arm, so the reach stays an ordinary location filter.

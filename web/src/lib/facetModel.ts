@@ -807,7 +807,15 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
     if ((loc.work_modes ?? []).includes('remote') && appliesWorkModeRemoteAnywhere(f)) {
       f.workModeRemoteAnywhere = true;
       f.workModeRemoteRegions = reachRegions;
-      f.workModeRemoteCountries = reachCountries;
+      // A stated reach says how far remote work may come from, not that home is excluded:
+      // `regions=global` matches only postings labelled worldwide, so without this a
+      // remote job restricted to the user's own country would disappear. No reach stays
+      // unbounded, which covers home already.
+      const reaches = reachRegions.length > 0 || reachCountries.length > 0;
+      f.workModeRemoteCountries =
+        reaches && base.country && !reachCountries.includes(base.country)
+          ? [...reachCountries, base.country]
+          : reachCountries;
       // The relocation facet is not a location facet: the server ANDs it around the
       // whole disjunction, so remote postings would have to offer relocation too.
       // The relocation targets already bound the physical arm's geography.
