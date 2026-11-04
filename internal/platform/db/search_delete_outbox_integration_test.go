@@ -662,7 +662,7 @@ func TestTouchJobQueuesOnlyReopeningForSearch(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if _, err = q.TouchJob(ctx, TouchJobParams{Source: "greenhouse", ExternalID: "acme:touched-reopen"}); err != nil {
+			if _, err = q.TouchJob(ctx, TouchJobParams{Source: "greenhouse", ExternalID: "acme:touched-reopen", AllowReopen: true}); err != nil {
 				t.Fatal(err)
 			}
 			var queued bool
@@ -700,7 +700,7 @@ func TestTouchJobQueuesReopeningAfterConcurrentClose(t *testing.T) {
 	defer touching.Release()
 	touched := make(chan error, 1)
 	go func() {
-		_, err := New(touching).TouchJob(ctx, TouchJobParams{Source: "greenhouse", ExternalID: "acme:concurrent-reopen"})
+		_, err := New(touching).TouchJob(ctx, TouchJobParams{Source: "greenhouse", ExternalID: "acme:concurrent-reopen", AllowReopen: true})
 		touched <- err
 	}()
 	// Wait until TouchJob has taken its snapshot and is waiting for the uncommitted close.

@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/adzunadesc"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
+	"github.com/strelov1/freehire/internal/ingest/rederive"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobdedup"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -478,12 +479,18 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 // (justjoin) uses for an offer it re-listed but did not re-fetch, so its hydrated description
 // and facets are preserved. Implements pipeline.toucher.
 func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string, error) {
-	companySlug, err := s.q.TouchJob(ctx, db.TouchJobParams{
+	touched, err := s.q.TouchJob(ctx, db.TouchJobParams{
 		Source:     source,
 		ExternalID: externalID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
+	}
+	companySlug := touched.CompanySlug
+	if touched.Deferred {
+		if companySlug, err = s.reopenAndRederive(ctx, source, externalID); err != nil {
+			return "", fmt.Errorf("reopen job %s/%s: %w", source, externalID, err)
+		}
 	}
 	// Record the company as crawled, exactly as Save does, so the post-run stale sweep keeps
 	// this company in scope. Otherwise a company whose offers were all touched (none newly
@@ -498,6 +505,46 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string,
 	// save(), so the run would report 0% and read as the very churn the line exists to expose.
 	s.tally.record(source, true)
 	return companySlug, nil
+}
+
+// reopenAndRederive reopens a posting the plain touch deferred and re-derives it in the same
+// transaction. A touch writes no content, so a posting closed under an older dictionary would
+// otherwise come back with that dictionary's facets, and backfill-derive reaches closed rows
+// only within its closed-within window. One transaction because the reopen is a one-shot
+// signal: a re-derive that failed after a committed reopen would never be retried. The row is
+// locked by the touch, so the derive reads the version it writes over. The company slug and
+// fingerprint stay as stored: moving them needs the companies reconcile only backfill-derive
+// runs. The row is requeued with a re-stamp, superseding the touch's own entry.
+func (s *dbStore) reopenAndRederive(ctx context.Context, source, externalID string) (string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	qtx := s.q.WithTx(tx)
+	touched, err := qtx.TouchJob(ctx, db.TouchJobParams{Source: source, ExternalID: externalID, AllowReopen: true})
+	if err != nil {
+		return "", err
+	}
+	if touched.Reopened {
+		j, err := qtx.GetJob(ctx, touched.ID)
+		if err != nil {
+			return "", err
+		}
+		params, _, _ := rederive.Row(j, nil)
+		params.CompanySlug, params.RoleFingerprint = j.CompanySlug, j.RoleFingerprint
+		if rederive.FacetsDiffer(params, j) {
+			if err := qtx.UpdateJobDerived(ctx, params); err != nil {
+				return "", err
+			}
+		}
+		// Unconditionally: the touch's own enqueue is DO NOTHING, which leaves a dead-lettered
+		// entry dead and the reopened posting out of search.
+		if err := qtx.RequeueSearchOutbox(ctx, touched.ID); err != nil {
+			return "", err
+		}
+	}
+	return touched.CompanySlug, tx.Commit(ctx)
 }
 
 // RecordCompanyWebsite stores a posting's stated employer website on its company row
