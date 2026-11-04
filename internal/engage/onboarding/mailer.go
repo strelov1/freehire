@@ -29,13 +29,6 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// Sender delivers one rendered message. The Reply-To this sequence needs used to
-// justify its own transport method; it is now a field on the one Message, so this is
-// the ordinary seam and not a narrower one. *emailnotify.Client satisfies it.
-type Sender interface {
-	Send(ctx context.Context, m emailnotify.Message) error
-}
-
 // Step names one mail in the sequence. The values are the ledger's `step` column
 // and are checked by a constraint there, so they are not free-form.
 type Step string
@@ -67,7 +60,7 @@ const (
 
 // Mailer renders and sends the sequence.
 type Mailer struct {
-	sender  Sender
+	sender  emailnotify.Sender
 	from    string
 	replyTo string
 	baseURL string
@@ -79,7 +72,7 @@ type Mailer struct {
 // the human inbox that answers — without it these mails ask for a reply that would
 // land in an unattended mailbox, so a blank value is a configuration error the
 // caller is expected to catch, not something this type papers over.
-func NewMailer(sender Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
+func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
 		sender:  sender,

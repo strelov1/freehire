@@ -3,11 +3,9 @@ package reminder
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"html"
 	"html/template"
-	"strconv"
 	"strings"
 
 	"github.com/strelov1/freehire/internal/application/mailtpl"
@@ -52,15 +50,7 @@ func (n *TelegramNotifier) Send(ctx context.Context, _ string, dest string, ms [
 	if len(ms) == 0 {
 		return nil
 	}
-	chatID, err := strconv.ParseInt(dest, 10, 64)
-	if err != nil {
-		return fmt.Errorf("reminder: invalid telegram chat id %q: %w", dest, err)
-	}
-	err = n.client.SendMessage(ctx, chatID, n.render(ms))
-	if errors.Is(err, telegramnotify.ErrChatUnreachable) {
-		return fmt.Errorf("%w: %w", ErrRecipientGone, err)
-	}
-	return err
+	return n.client.SendToChat(ctx, dest, n.render(ms))
 }
 
 // render builds the HTML body. Titles and companies are user/source data and are

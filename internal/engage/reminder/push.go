@@ -3,33 +3,25 @@ package reminder
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
-	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // Compile-time proof PushNotifier satisfies the engine's Notifier seam.
 var _ Notifier = (*PushNotifier)(nil)
 
-// PushTokenLister lists a user's registered push devices. *db.Queries satisfies it.
-type PushTokenLister interface {
-	ListPushTokensForUser(ctx context.Context, userID int64) ([]db.UserPushToken, error)
-}
+// PushTokenLister lists a user's registered push devices.
+type PushTokenLister = pushnotify.TokenLister
 
 // PushNotifier delivers a reminder as a mobile push, fanning out to every device
 // the user has registered — unlike Telegram/email, push has zero-to-many
-// destinations per recipient (see design decision #1 and #3 of
-// add-push-notification-channel).
-type PushNotifier struct {
-	tokens    PushTokenLister
-	transport pushnotify.Notifier
-}
+// destinations per recipient.
+type PushNotifier struct{ push *pushnotify.UserSender }
 
 // NewPushNotifier builds a PushNotifier resolving devices through tokens and
 // sending through transport.
 func NewPushNotifier(tokens PushTokenLister, transport pushnotify.Notifier) *PushNotifier {
-	return &PushNotifier{tokens: tokens, transport: transport}
+	return &PushNotifier{push: pushnotify.NewUserSender(tokens, transport)}
 }
 
 // Send renders the account's batch as ONE notification and fans it out to every
@@ -40,19 +32,6 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, ms []Rem
 	if len(ms) == 0 {
 		return nil
 	}
-	userID, err := strconv.ParseInt(dest, 10, 64)
-	if err != nil {
-		return fmt.Errorf("reminder: invalid push user id %q: %w", dest, err)
-	}
-	rows, err := n.tokens.ListPushTokensForUser(ctx, userID)
-	if err != nil {
-		return fmt.Errorf("reminder: list push tokens for user %d: %w", userID, err)
-	}
-	tokens := make([]string, len(rows))
-	for i, row := range rows {
-		tokens[i] = row.Token
-	}
-
 	title, body := renderReminderBatch(ms)
 	// The deep link needs one destination, so it is carried only when the batch
 	// names one job — the same rule a subscription digest follows.
@@ -60,7 +39,7 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, ms []Rem
 	if len(ms) == 1 {
 		data = map[string]string{"slug": ms[0].Slug}
 	}
-	return pushnotify.SendToDevices(ctx, n.transport, tokens, title, body, data)
+	return n.push.Send(ctx, dest, title, body, data)
 }
 
 // renderReminderBatch produces the short, human-readable title/body for one

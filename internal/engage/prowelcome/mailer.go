@@ -24,14 +24,6 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// Sender delivers one rendered message. *emailnotify.Client satisfies it in production;
-// tests inject a fake. Same seam onboarding.Sender uses, for the same reason: the
-// Reply-To this letter needs is a field on emailnotify.Message, not a second transport
-// method.
-type Sender interface {
-	Send(ctx context.Context, m emailnotify.Message) error
-}
-
 // ErrNotPaying is returned by render/Send when asked to welcome a free tier. There is
 // nothing to welcome an account to on the plan everyone starts on, and a caller reaching
 // this with TierFree has already made the mistake the candidate query is built to avoid.
@@ -44,7 +36,7 @@ const senderName = "Ilya from freehire"
 
 // Mailer renders and sends the welcome letter.
 type Mailer struct {
-	sender  Sender
+	sender  emailnotify.Sender
 	from    string
 	replyTo string
 	baseURL string
@@ -56,7 +48,7 @@ type Mailer struct {
 // human inbox that answers — see onboarding.NewMailer's own comment on why a blank value
 // is a configuration error the caller must catch rather than something this type papers
 // over.
-func NewMailer(sender Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
+func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	return &Mailer{
 		sender:  sender,
 		from:    emailnotify.From(senderName, from),

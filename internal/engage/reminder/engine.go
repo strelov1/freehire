@@ -55,9 +55,8 @@ var ErrChannelNotConfigured = errors.New("reminder: channel not configured")
 // that this recipient is permanently closed to us — the Telegram bot was blocked
 // or removed. Like ErrChannelNotConfigured it is a soft-skip, and additionally the
 // runner forgets the link, so no later reminder, digest or nudge tries that chat
-// again. Mirrors notify.ErrRecipientGone; see the note there on why each engine
-// declares its own rather than sharing the transport's.
-var ErrRecipientGone = errors.New("reminder: recipient will not accept messages")
+// again. The same sentinel as notify.ErrRecipientGone, so one errors.Is covers every engine.
+var ErrRecipientGone = notify.ErrRecipientGone
 
 // Router dispatches a reminder to the notifier registered for its channel, so the
 // engine stays channel-agnostic.

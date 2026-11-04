@@ -20,12 +20,6 @@ var requestHTML = template.Must(mailtpl.Partials().New("referralRequest").Parse(
 {{template "p" "A job seeker asked you for a referral. The details are in your inbox."}}
 {{template "button" (mailLink . "View the request")}}`))
 
-// EmailSender is the slice of the SES transport the pinger needs; *emailnotify.Client
-// satisfies it. Kept local so the referral package does not depend on the email package.
-type EmailSender interface {
-	Send(ctx context.Context, m emailnotify.Message) error
-}
-
 // TelegramSender is the slice of the Telegram client the pinger needs;
 // *telegramnotify.Client satisfies it.
 type TelegramSender interface {
@@ -52,7 +46,7 @@ type Silencer interface {
 }
 
 type ChannelPinger struct {
-	email    EmailSender
+	email    emailnotify.Sender
 	from     string
 	tg       TelegramSender
 	layout   *mailtpl.Layout
@@ -65,7 +59,7 @@ type ChannelPinger struct {
 // enabled channel still sees the request in-cabinet. baseURL is the site origin the mail's
 // branded shell links back to — the cabinet link itself arrives per-call, because it points
 // at one specific request.
-func NewChannelPinger(email EmailSender, from string, tg TelegramSender, baseURL string, links *emailprefs.Links, silenced Silencer) *ChannelPinger {
+func NewChannelPinger(email emailnotify.Sender, from string, tg TelegramSender, baseURL string, links *emailprefs.Links, silenced Silencer) *ChannelPinger {
 	return &ChannelPinger{
 		email:    email,
 		from:     from,

@@ -26,9 +26,8 @@ var ErrChannelNotConfigured = errors.New("notify: channel not configured")
 // stops being deliverable at all rather than failing once per digest forever.
 //
 // A channel-level sentinel rather than the transport's own: internal/engage/telegramnotify
-// imports this package for Digest, so it cannot be imported back. Each engine
-// declares its own and its Telegram notifier translates, exactly as they already do
-// for ErrChannelNotConfigured.
+// imports this package for Digest, so it cannot be imported back. telegramnotify.SendToChat
+// translates a 403 into it, and the nudge and reminder engines alias it.
 var ErrRecipientGone = errors.New("notify: recipient will not accept messages")
 
 // Router is a Notifier that dispatches a digest to the per-channel notifier
