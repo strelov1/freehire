@@ -335,32 +335,6 @@ SELECT resume_countries, resume_regions, resume_cities,
 FROM users
 WHERE id = $1;
 
--- name: ListUsersForResumeGeoBackfill :many
--- Users whose stored structured résumé currently describes their stored CV, for the
--- geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:
--- deriving geography from one would route around the staleness rule that governs the
--- structure itself. Returns the location line the derivation reads plus the stamp to
--- write under, so the worker needs no second round-trip per user.
--- The location line is coalesced to '' and cast so sqlc types it as a string rather than
--- interface{}. An absent key and an empty string are the same case — the CV stated no
--- location — and both must derive to an ABSENT geography, not to an empty resolved one.
-SELECT id, coalesce(resume_structured ->> 'location', '')::text AS location, resume_uploaded_at
-FROM users
-WHERE resume_structured IS NOT NULL
-  AND resume_uploaded_at IS NOT NULL
-  AND resume_structured_uploaded_at IS NOT DISTINCT FROM resume_uploaded_at
-  AND (sqlc.arg(user_id)::bigint = 0 OR id = sqlc.arg(user_id)::bigint)
-ORDER BY id;
-
--- name: SetUserResumeGeography :exec
--- Persist only the derived geography for a user, under the same monotonic guard the
--- structure write uses. This is the reconciler's write path: it re-derives from an
--- already-stored structure, so it must not touch the structure or its model stamp, and
--- must still refuse to write against a CV that has been replaced since the row was read.
-UPDATE users
-SET resume_countries = $2, resume_regions = $3, resume_cities = $4
-WHERE id = $1 AND resume_uploaded_at = $5;
-
 -- name: GetUserRole :one
 -- Slim role lookup for the RequireRole authorization middleware: it runs on every
 -- request to a role-gated endpoint and needs only the role, so it does not drag the
@@ -473,23 +447,6 @@ SELECT talent_network_visibility,
         AND resume_structured_uploaded_at = resume_uploaded_at), false)::boolean AS listed
 FROM users
 WHERE id = $1;
-
--- name: ListMembersMissingTalentHandle :many
--- The members who joined before handles existed, and so have no public address.
---
--- Migration 0148 rewrote every 'public' row to 'anonymous' but could not mint a handle —
--- minting reads a job title through a Go dictionary, which SQL cannot do — so those
--- accounts, and any that were already 'anonymous', are members the catalogue cannot list
--- and whose card 404s. cmd/backfill-talent-handle walks this list once and closes it.
---
--- No stamp gate here, unlike the catalogue's own read: a member whose CV extract is stale
--- still needs an address for when it catches up, and withholding one would make the
--- backfill's own result depend on when it happened to run.
-SELECT id
-FROM users
-WHERE talent_network_visibility <> 'off'
-  AND talent_handle IS NULL
-ORDER BY id;
 
 -- name: IsBetaTester :one
 -- Whether the account is in the beta group, on its own. GetUserByID answers it too, but

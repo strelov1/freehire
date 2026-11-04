@@ -16,7 +16,6 @@ import (
 	"log"
 
 	"github.com/strelov1/freehire/internal/ingest/adzunadesc"
-	"github.com/strelov1/freehire/internal/platform/backfillpage"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
@@ -49,20 +48,42 @@ func run() int {
 	return 0
 }
 
-// seedAll enqueues every source='adzuna' row adzunadesc.Eligible accepts. The keyset walk
-// itself (id > last seen, so concurrent writes cannot skip or repeat rows) is shared with
-// the sibling per-source passes via backfillpage.Rows.
+// batchSize bounds how many rows are read per keyset page.
+const batchSize = 500
+
+// seedAll enqueues every source='adzuna' row adzunadesc.Eligible accepts. It walks the
+// source by keyset (id > last seen, so concurrent writes cannot skip or repeat rows),
+// stopping once a page comes back short of the batch size.
 func seedAll(ctx context.Context, store jobStore) (scanned, queued int, err error) {
-	err = backfillpage.Rows(ctx, store.ListJobsBySourceAfter, "adzuna", func(j db.Job) error {
-		scanned++
-		if !adzunadesc.Eligible(j.Source, j.URL) {
-			return nil
+	var afterID int64
+	for {
+		jobs, err := store.ListJobsBySourceAfter(ctx, db.ListJobsBySourceAfterParams{
+			Source:    "adzuna",
+			AfterID:   afterID,
+			BatchSize: batchSize,
+		})
+		if err != nil {
+			return scanned, queued, err
 		}
-		if _, err := store.EnqueueAdzunaDescriptionCapture(ctx, j.ID); err != nil {
-			return err
+		if len(jobs) == 0 {
+			break
 		}
-		queued++
-		return nil
-	})
-	return scanned, queued, err
+		afterID = jobs[len(jobs)-1].ID
+
+		for _, j := range jobs {
+			scanned++
+			if !adzunadesc.Eligible(j.Source, j.URL) {
+				continue
+			}
+			if _, err := store.EnqueueAdzunaDescriptionCapture(ctx, j.ID); err != nil {
+				return scanned, queued, err
+			}
+			queued++
+		}
+
+		if len(jobs) < batchSize {
+			break
+		}
+	}
+	return scanned, queued, nil
 }

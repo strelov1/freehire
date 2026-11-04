@@ -172,33 +172,6 @@ SET collections = $2,
     updated_at  = now()
 WHERE slug = $1;
 
--- name: SyncCompaniesFromJobs :exec
--- Rebuild the companies catalogue from jobs. The companies table is derivable
--- from jobs (slug = company_slug, name = company), so after a slug-builder change
--- re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
--- name variants; ON CONFLICT folds collisions and refreshes existing rows.
---
--- Only a slug that is missing or whose name differs reaches the INSERT. This statement
--- runs for about an hour on prod in one transaction and holds a lock on every row it
--- writes until it commits, while ingest's UpsertJob upserts into companies on every
--- posting — rewriting the ~750k unchanged rows stalled the crawl fleet behind it
--- (2026-10-28). The filter must sit HERE, not in an ON CONFLICT ... WHERE: Postgres
--- locks the conflicting row before it evaluates that WHERE, so the lock would remain.
-INSERT INTO companies (slug, name)
-SELECT j.company_slug, j.company
-FROM (
-    SELECT DISTINCT ON (company_slug) company_slug, company
-    FROM jobs
-    WHERE company_slug <> ''
-    ORDER BY company_slug
-) j
-WHERE NOT EXISTS (
-    SELECT 1 FROM companies c WHERE c.slug = j.company_slug AND c.name = j.company
-)
-ON CONFLICT (slug) DO UPDATE SET
-    name       = EXCLUDED.name,
-    updated_at = now();
-
 -- name: ListSlugLikeCompaniesForBackfill :many
 -- Companies whose ingested name is still a squished slug (lowercase, no
 -- whitespace or uppercase) and that have at least one open job, with a
@@ -282,15 +255,6 @@ WHERE source = sqlc.arg(source)
   AND description <> ''
 ORDER BY (closed_at IS NULL) DESC, id DESC
 LIMIT sqlc.arg(max_rows);
-
--- name: DeleteOrphanCompanies :execrows
--- Drop companies no longer referenced by any job — the stale rows left behind
--- when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
--- by the company-info backfill are preserved: they intentionally have no job, so
--- the NOT is_reference guard keeps the backfill directory from being swept away.
-DELETE FROM companies c
-WHERE NOT c.is_reference
-  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_slug = c.slug);
 
 -- name: CompanyNamesBySlugs :many
 -- Display names for a bounded set of slugs, in one read. GET /jobs/facets names

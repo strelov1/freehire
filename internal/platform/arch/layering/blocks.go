@@ -44,7 +44,7 @@ var blocks = map[string][]string{
 		// sit in different blocks (ai/speech and api/realtime), so anywhere else it would be
 		// an upward edge for one of them.
 		"aigateway",
-		"arch", "arch/layering", "backfillpage", "blobstore",
+		"arch", "arch/layering", "blobstore",
 		// browser is the same "transport, not domain" category one step lower down: how this
 		// repository LAUNCHES a local headless Chrome. It is not browseruse below, which is
 		// an HTTP client for somebody else's hosted browser — this one is a process on our

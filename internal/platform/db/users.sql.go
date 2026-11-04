@@ -683,44 +683,6 @@ func (q *Queries) IsBetaTester(ctx context.Context, id int64) (bool, error) {
 	return beta_tester, err
 }
 
-const listMembersMissingTalentHandle = `-- name: ListMembersMissingTalentHandle :many
-SELECT id
-FROM users
-WHERE talent_network_visibility <> 'off'
-  AND talent_handle IS NULL
-ORDER BY id
-`
-
-// The members who joined before handles existed, and so have no public address.
-//
-// Migration 0148 rewrote every 'public' row to 'anonymous' but could not mint a handle —
-// minting reads a job title through a Go dictionary, which SQL cannot do — so those
-// accounts, and any that were already 'anonymous', are members the catalogue cannot list
-// and whose card 404s. cmd/backfill-talent-handle walks this list once and closes it.
-//
-// No stamp gate here, unlike the catalogue's own read: a member whose CV extract is stale
-// still needs an address for when it catches up, and withholding one would make the
-// backfill's own result depend on when it happened to run.
-func (q *Queries) ListMembersMissingTalentHandle(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listMembersMissingTalentHandle)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listTalentNetworkMembers = `-- name: ListTalentNetworkMembers :many
 SELECT u.talent_handle,
        u.timezone,
@@ -837,50 +799,6 @@ func (q *Queries) ListUserBlobKeys(ctx context.Context, id int64) ([]pgtype.Text
 			return nil, err
 		}
 		items = append(items, key)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listUsersForResumeGeoBackfill = `-- name: ListUsersForResumeGeoBackfill :many
-SELECT id, coalesce(resume_structured ->> 'location', '')::text AS location, resume_uploaded_at
-FROM users
-WHERE resume_structured IS NOT NULL
-  AND resume_uploaded_at IS NOT NULL
-  AND resume_structured_uploaded_at IS NOT DISTINCT FROM resume_uploaded_at
-  AND ($1::bigint = 0 OR id = $1::bigint)
-ORDER BY id
-`
-
-type ListUsersForResumeGeoBackfillRow struct {
-	ID               int64              `json:"id"`
-	Location         string             `json:"location"`
-	ResumeUploadedAt pgtype.Timestamptz `json:"resume_uploaded_at"`
-}
-
-// Users whose stored structured résumé currently describes their stored CV, for the
-// geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:
-// deriving geography from one would route around the staleness rule that governs the
-// structure itself. Returns the location line the derivation reads plus the stamp to
-// write under, so the worker needs no second round-trip per user.
-// The location line is coalesced to ” and cast so sqlc types it as a string rather than
-// interface{}. An absent key and an empty string are the same case — the CV stated no
-// location — and both must derive to an ABSENT geography, not to an empty resolved one.
-func (q *Queries) ListUsersForResumeGeoBackfill(ctx context.Context, userID int64) ([]ListUsersForResumeGeoBackfillRow, error) {
-	rows, err := q.db.Query(ctx, listUsersForResumeGeoBackfill, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListUsersForResumeGeoBackfillRow{}
-	for rows.Next() {
-		var i ListUsersForResumeGeoBackfillRow
-		if err := rows.Scan(&i.ID, &i.Location, &i.ResumeUploadedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -1203,35 +1121,6 @@ type SetUserResumeExtractPendingParams struct {
 // for-stamp guard drops the write when a newer upload already superseded this retry.
 func (q *Queries) SetUserResumeExtractPending(ctx context.Context, arg SetUserResumeExtractPendingParams) error {
 	_, err := q.db.Exec(ctx, setUserResumeExtractPending, arg.ID, arg.ResumeExtractFor)
-	return err
-}
-
-const setUserResumeGeography = `-- name: SetUserResumeGeography :exec
-UPDATE users
-SET resume_countries = $2, resume_regions = $3, resume_cities = $4
-WHERE id = $1 AND resume_uploaded_at = $5
-`
-
-type SetUserResumeGeographyParams struct {
-	ID               int64              `json:"id"`
-	ResumeCountries  []string           `json:"resume_countries"`
-	ResumeRegions    []string           `json:"resume_regions"`
-	ResumeCities     []string           `json:"resume_cities"`
-	ResumeUploadedAt pgtype.Timestamptz `json:"resume_uploaded_at"`
-}
-
-// Persist only the derived geography for a user, under the same monotonic guard the
-// structure write uses. This is the reconciler's write path: it re-derives from an
-// already-stored structure, so it must not touch the structure or its model stamp, and
-// must still refuse to write against a CV that has been replaced since the row was read.
-func (q *Queries) SetUserResumeGeography(ctx context.Context, arg SetUserResumeGeographyParams) error {
-	_, err := q.db.Exec(ctx, setUserResumeGeography,
-		arg.ID,
-		arg.ResumeCountries,
-		arg.ResumeRegions,
-		arg.ResumeCities,
-		arg.ResumeUploadedAt,
-	)
 	return err
 }
 

@@ -54,10 +54,9 @@ var privatePredicateExemptions = map[string]string{
 	"SelectOrphanLivenessCandidates":   "the liveness probe's candidate set; a strike or a close changes what the creator sees, not what anyone else does",
 	"SelectStaleRegisteredCandidates":  "the same probe's registered-source candidate set",
 	"MarkLivenessExpired":              "the strike write for one probed row",
-	"ListJobsForRequirementsBackfill":  "a one-off backfill reading a description to fill that row's own requirements_derived",
 	// cmd/backfill-derive's narrowed scan. The pass re-derives a row's facets,
 	// role_fingerprint and slugs and writes them back to THAT row, so the effect stays
-	// inside it — the same shape as the requirements backfill above.
+	// inside it.
 	//
 	// Filtering private rows out here would be actively wrong, not merely unnecessary: a
 	// pasted JD is shown to its creator, and skipping it would leave it on whichever

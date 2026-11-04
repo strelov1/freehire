@@ -69,37 +69,6 @@ SET company            = coalesce(nullif(company, ''), @company),
 WHERE id = @id AND user_id = @user_id
 RETURNING id, user_id, kind, company, role, location, period_start_year, period_start_month, period_end_year, period_end_month, is_current, summary, stack, created_at, updated_at, link;
 
--- name: ListExperienceEmploymentDatesForBackfill :many
--- cmd/backfill-experience-dates' input: every employment still missing at least one of the
--- structured boundaries migration 0135 added, alongside the legacy free-text labels to
--- parse, the row's own created_at (the approved fallback for a label that fails to
--- parse), and is_current — the pre-migration sort key (period_sort.go, since deleted)
--- read a present-reading period_end as "ongoing" independently of is_current, so a row
--- where the two disagree needs is_current corrected in the same pass (see
--- SetExperienceEmploymentBackfilledDates), or that row silently loses its "ongoing" sort
--- position once the free-text column backing the old check is gone. OR, not AND: a row
--- where an ordinary write path (deployed ahead of this pass) already filled one boundary
--- but not the other must still be visited, or the other boundary's only surviving copy —
--- the free-text column — is never migrated.
-SELECT id, user_id, period_start, period_end, is_current, created_at
-FROM experience_employments
-WHERE period_start_year IS NULL OR period_end_year IS NULL
-ORDER BY id;
-
--- name: SetExperienceEmploymentBackfilledDates :execrows
--- cmd/backfill-experience-dates' write: the four structured columns, each filled only
--- when still NULL — the same per-boundary independence FillExperienceEmploymentBlanks
--- uses, so a boundary an ordinary write path already populated is never clobbered by a
--- backfill pass racing behind it — plus is_current, which this only ever turns TRUE, never
--- back to false, when the caller found a present-reading label is_current disagreed with.
-UPDATE experience_employments
-SET period_start_year  = CASE WHEN period_start_year IS NULL THEN @period_start_year ELSE period_start_year END,
-    period_start_month = CASE WHEN period_start_year IS NULL THEN @period_start_month ELSE period_start_month END,
-    period_end_year    = CASE WHEN period_end_year IS NULL THEN @period_end_year ELSE period_end_year END,
-    period_end_month   = CASE WHEN period_end_year IS NULL THEN @period_end_month ELSE period_end_month END,
-    is_current         = is_current OR @set_current::boolean
-WHERE id = @id AND (period_start_year IS NULL OR period_end_year IS NULL);
-
 -- name: DeleteExperienceEmployment :execrows
 -- Remove an owned employment; its atoms go with it (ON DELETE CASCADE) because they are
 -- evidence OF that role. Returns 0 affected rows for a foreign or missing id.
@@ -211,23 +180,6 @@ deleted AS (
     RETURNING experience_atoms.id
 )
 SELECT * FROM updated;
-
--- name: ListExperienceBackfillTargets :many
--- Every user with a stored CV, carrying their structured résumé ONLY when its stamp still
--- matches the upload time. That CASE is what makes the backfill cheap: a user whose
--- structure is current costs no model call, and one whose structure is stale or missing
--- falls through to extraction. The freshness test is the same one resume.Store.Structured
--- applies, so the worker never reuses a structure the app itself treats as absent.
-SELECT id,
-       resume_uploaded_at,
-       CASE WHEN resume_structured_uploaded_at IS NOT DISTINCT FROM resume_uploaded_at
-            THEN resume_structured
-       END::jsonb AS current_structured
-FROM users
-WHERE resume_object_key IS NOT NULL
-  AND resume_uploaded_at IS NOT NULL
-  AND (@user_id::bigint = 0 OR id = @user_id::bigint)
-ORDER BY id;
 
 -- name: ListPastEmployerNames :many
 -- The places the caller has worked at and LEFT, for the "Hiring again" search filter: the

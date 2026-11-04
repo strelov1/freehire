@@ -51,5 +51,5 @@ Pure functions over `db.UpsertJobParams` / `db.Job`; no I/O.
   with an optional trailing clause, matches aggregator postings against the employer's own
   board titles. RoleKey itself stayed as it was for `cmd/reindex`'s fuzzy pass.
 - `cmd/reindex` (fuzzy.go) — description-signature similarity for fuzzy role matching.
-- `cmd/hydrate-adzuna-description`, `cmd/backfill-descriptions`, `cmd/backfill-echojobs` —
+- `cmd/hydrate-adzuna-description`, `cmd/backfill-descriptions` —
   `OfRow`/`RoleKey` for rewriting stored rows without breaking the change signal.

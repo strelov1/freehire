@@ -11,183 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const backfillBoardCompany = `-- name: BackfillBoardCompany :one
-WITH updated AS (
-    UPDATE jobs
-    SET company             = $1,
-        company_slug        = $2,
-        company_slug_folded = replace($2, '-', ''),
-        updated_at          = now()
-    WHERE source = $3
-      AND company = ''
-      AND external_id LIKE $4
-    RETURNING id, closed_at, COALESCE(posted_at, created_at) AS eff_posted_at
-),
-enqueued AS (
-    INSERT INTO search_outbox (job_id, job_posted_at)
-    SELECT id, eff_posted_at FROM updated WHERE closed_at IS NULL
-    ON CONFLICT (job_id) DO NOTHING
-    RETURNING job_id
-)
-SELECT (SELECT count(*) FROM updated)::bigint AS updated_count,
-       (SELECT count(*) FROM enqueued)::bigint AS enqueued_count
-`
-
-type BackfillBoardCompanyParams struct {
-	Company      string `json:"company"`
-	CompanySlug  string `json:"company_slug"`
-	Source       string `json:"source"`
-	BoardPattern string `json:"board_pattern"`
-}
-
-type BackfillBoardCompanyRow struct {
-	UpdatedCount  int64 `json:"updated_count"`
-	EnqueuedCount int64 `json:"enqueued_count"`
-}
-
-// Fills company/company_slug/company_slug_folded for rows still blank under one board of a
-// provider whose adapter sets Company statically per board (see cmd/backfill-blank-company for
-// which providers qualify and why). board_pattern is externalid.BoardPattern(board) — the
-// board's external_id namespace, so only this board's rows move. Also enqueues every touched
-// OPEN job into search_outbox, mirroring UpsertJob/EnqueueSearchOutbox's denormalized
-// job_posted_at, since this write bypasses the normal ingest path that would do it inline.
-func (q *Queries) BackfillBoardCompany(ctx context.Context, arg BackfillBoardCompanyParams) (BackfillBoardCompanyRow, error) {
-	row := q.db.QueryRow(ctx, backfillBoardCompany,
-		arg.Company,
-		arg.CompanySlug,
-		arg.Source,
-		arg.BoardPattern,
-	)
-	var i BackfillBoardCompanyRow
-	err := row.Scan(&i.UpdatedCount, &i.EnqueuedCount)
-	return i, err
-}
-
-const backfillCompanySlugFoldedChunk = `-- name: BackfillCompanySlugFoldedChunk :execrows
-UPDATE jobs
-SET company_slug_folded = replace(company_slug, '-', '')
-WHERE id >= $1 AND id < $2
-  AND company_slug_folded IS DISTINCT FROM replace(company_slug, '-', '')
-`
-
-type BackfillCompanySlugFoldedChunkParams struct {
-	FromID int64 `json:"from_id"`
-	ToID   int64 `json:"to_id"`
-}
-
-// Fill jobs.company_slug_folded for one id range. The column is maintained by every
-// write path (see migrations/0109), but the rows that predate it need this pass.
-//
-// Ranged by id rather than keyset-cursored on the column itself: the whole point is
-// that the column is not yet indexed while this runs, so a WHERE on it would be a seq
-// scan per chunk. The primary key is what makes each chunk a bounded, cheap slice, and
-// it lets a resumed run pick up at a known number instead of a NULL frontier.
-//
-// The IS DISTINCT FROM guard makes re-runs free: a chunk whose rows are already correct
-// writes nothing, so no dead tuples and no bloat for repeating the pass. That matters
-// on a 7.4M-row table where an unguarded UPDATE would rewrite every row it touches.
-func (q *Queries) BackfillCompanySlugFoldedChunk(ctx context.Context, arg BackfillCompanySlugFoldedChunkParams) (int64, error) {
-	result, err := q.db.Exec(ctx, backfillCompanySlugFoldedChunk, arg.FromID, arg.ToID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const backfillDuplicateMarkerOwnerChunk = `-- name: BackfillDuplicateMarkerOwnerChunk :execrows
-UPDATE jobs j
-SET duplicate_of_aggregator = CASE
-        WHEN j.source = ANY($1::text[])
-         AND NOT (c.source = ANY($1::text[]))
-        THEN j.duplicate_of
-    END,
-    duplicate_of_role = CASE
-        WHEN j.source = ANY($1::text[])
-         AND NOT (c.source = ANY($1::text[]))
-        THEN NULL
-        ELSE j.duplicate_of
-    END
-FROM jobs c
-WHERE c.id = j.duplicate_of
-  AND j.id >= $2 AND j.id < $3
-  AND j.duplicate_of IS NOT NULL
-  AND j.duplicate_of_aggregator IS NULL
-  AND j.duplicate_of_role IS NULL
-  AND j.duplicate_of_fuzzy IS NULL
-`
-
-type BackfillDuplicateMarkerOwnerChunkParams struct {
-	Aggregators []string `json:"aggregators"`
-	FromID      int64    `json:"from_id"`
-	ToID        int64    `json:"to_id"`
-}
-
-// Seed the owned marker columns (0114) from the single duplicate_of that predates them, for one
-// id range.
-//
-// Provenance cannot be recovered: a marked row records WHERE it points, never which pass decided
-// it. So the seed goes by shape — a marked row whose own source is an aggregator and whose canon's
-// is not is the aggregator pass's; everything else is seeded as the role pass's.
-//
-// Fuzzy markers are indistinguishable from role markers that way and land in the role column. That
-// is self-correcting and cheap to reason about: the first role recompute clears the ones that are
-// not role clusters, and the fuzzy pass re-sets them in its own column during the same run. One
-// extra cycle of the churn this change removes, once.
-//
-// Closed rows are seeded too, deliberately. The passes only consider open rows, so nothing would
-// ever seed a closed row's columns — and then the first statement to touch any marker column on it
-// would fire the derivation and silently clear its duplicate_of.
-//
-// The "no owned column set yet" predicate is what makes re-runs free, and it is also the reconcile
-// sweep: a row written between this chunk passing its range and the trigger existing still matches,
-// so running the pass again after the trigger lands finishes the job. No separate mode needed.
-func (q *Queries) BackfillDuplicateMarkerOwnerChunk(ctx context.Context, arg BackfillDuplicateMarkerOwnerChunkParams) (int64, error) {
-	result, err := q.db.Exec(ctx, backfillDuplicateMarkerOwnerChunk, arg.Aggregators, arg.FromID, arg.ToID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const backfillProfessionITBoardTech = `-- name: BackfillProfessionITBoardTech :execrows
-UPDATE jobs
-SET is_tech = true
-WHERE source = 'profession'
-  AND external_id ILIKE ANY($1::text[])
-  AND is_tech IS DISTINCT FROM true
-`
-
-// One-off: sets is_tech = true on the Profession itdev/itops rows stored before that
-// source began asserting the signal at ingest (issue #2601). See
-// internal/ingest/sources/profession.go's professionITBoards/ProfessionCrawlsCategory
-// for why: the platform crawls only these two dedicated IT category boards, so every
-// row this predicate matches is confirmed technical by the source's own filing, not a
-// guess.
-//
-// board_patterns is the caller's []externalid.BoardPattern(board) for every name
-// sources.ProfessionITBoardNames() reports — the same helper ExistingExternalIDsByBoard
-// and BackfillBoardCompany already use for a board-scoped external_id match, so a third
-// Profession IT board added there is picked up here with no SQL change, and the
-// escaping stays the one canonical definition rather than a hand-copied literal.
-// ILIKE (not LIKE): externalid.Namespace stores the board AS THE CRAWL PASSED IT, not
-// normalized, while ProfessionCrawlsCategory itself lowercases before comparing — so a
-// board catalogued with different casing would still crawl and still be confirmed
-// technical, and this predicate must recognize its stored rows the same way.
-//
-// Direct column set rather than a jobderive re-derivation: the board is fully
-// recoverable from stored columns, so there is nothing else to re-derive (see
-// design.md's Decision 3 in openspec/changes/fix-profession-it-board-visibility). The
-// IS DISTINCT FROM guard makes it idempotent and safe to re-run — a row already true is
-// not rewritten — and the affected set is bounded to two boards, so unlike the
-// multi-million-row backfills this needs no chunking.
-func (q *Queries) BackfillProfessionITBoardTech(ctx context.Context, boardPatterns []string) (int64, error) {
-	result, err := q.db.Exec(ctx, backfillProfessionITBoardTech, boardPatterns)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const canonicalJobForRole = `-- name: CanonicalJobForRole :one
 SELECT id, public_slug
 FROM jobs
@@ -258,44 +81,6 @@ func (q *Queries) ClassifyDriftReportBounds(ctx context.Context) (ClassifyDriftR
 	var i ClassifyDriftReportBoundsRow
 	err := row.Scan(&i.MinID, &i.MaxID)
 	return i, err
-}
-
-const closeBoardJobsWithReason = `-- name: CloseBoardJobsWithReason :one
-WITH closed AS (
-    UPDATE jobs
-    SET closed_at     = now(),
-        closed_reason = $1::text,
-        updated_at    = now()
-    WHERE closed_at IS NULL
-      AND source = $2
-      AND external_id LIKE $3
-    RETURNING id
-), queued AS (
-    INSERT INTO search_delete_outbox (job_id)
-    SELECT id FROM closed
-    ON CONFLICT (job_id) DO NOTHING
-)
-SELECT count(*) FROM closed
-`
-
-type CloseBoardJobsWithReasonParams struct {
-	ClosedReason string `json:"closed_reason"`
-	Source       string `json:"source"`
-	BoardPattern string `json:"board_pattern"`
-}
-
-// Close every open posting of ONE board on the source's own answer about the board, given by
-// the caller as closed_reason — cmd/rekey-gupy-boards' close for a Gupy career page that
-// answers an empty listing ('feed_empty': reachable, and the feed carried nothing) or 404
-// "Career Page not Found" ('board_unreachable'). The ordinary paths cannot reach either: a
-// zero-yield crawl licenses no sweep, the empty-feed pass refuses a board with no recorded
-// yield, and the chronic pass waits 60 days. jobs_closed_reason_check bounds the values. The
-// search_delete_outbox CTE rides the statement as in CloseEmptyFeedBoardJobs.
-func (q *Queries) CloseBoardJobsWithReason(ctx context.Context, arg CloseBoardJobsWithReasonParams) (int64, error) {
-	row := q.db.QueryRow(ctx, closeBoardJobsWithReason, arg.ClosedReason, arg.Source, arg.BoardPattern)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
 }
 
 const closeChronicBoardJobs = `-- name: CloseChronicBoardJobs :one
@@ -650,54 +435,6 @@ SELECT count(*) FROM closed
 // crawl success/quiet periods, and atomically queued for removal from the live search index.
 func (q *Queries) CloseJobsPastApplicationDeadline(ctx context.Context, source string) (int64, error) {
 	row := q.db.QueryRow(ctx, closeJobsPastApplicationDeadline, source)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const closeMisattributedSourceJobs = `-- name: CloseMisattributedSourceJobs :one
-WITH closed AS (
-    UPDATE jobs
-    SET closed_at     = now(),
-        closed_reason = 'source_misattributed',
-        updated_at    = now()
-    WHERE closed_at IS NULL
-      AND source = $1
-      AND id >= $2
-      AND id < $3
-    RETURNING id
-)
-SELECT count(*) FROM closed
-`
-
-type CloseMisattributedSourceJobsParams struct {
-	Source string `json:"source"`
-	FromID int64  `json:"from_id"`
-	ToID   int64  `json:"to_id"`
-}
-
-// Closes one id-range chunk of a source whose stored rows carry an employer we now know is
-// wrong and cannot repair in place (see migration 0165 for the case that forced the label).
-//
-// Chunked over an id RANGE rather than a keyset over matching rows: the affected set is the
-// whole of one source, the id sequence runs far ahead of the live row count, and a range walk
-// lets the caller resume at a printed cursor after an interruption. Idempotent — `closed_at IS
-// NULL` means a re-run over a chunk already done writes nothing, so stopping mid-way is free.
-//
-// NO search_delete_outbox CTE, unlike every other Close* query in this file, and that is the
-// one thing to think twice about before copying this. The others close tens to thousands of
-// rows, where riding the enqueue on the UPDATE is both correct and cheap. This closes a source
-// whole — 1.47M rows for apploi against a deletion queue whose ordinary depth is ~7k — and
-// Meilisearch runs ONE serial task queue, so a wave that size would sit in front of the
-// scheduled rebuild and the incremental pushes for as long as it took to drain. cmd/merge-
-// companies already made this trade and documents it ("Do NOT reindex afterwards... the
-// scheduled freehire-reindexw picks it up"): the rebuild reads open rows from Postgres, so a
-// closed row simply is not in the next index. The cost is that the postings stay searchable
-// until that rebuild — hours, not days — which is the right price for not blocking it.
-//
-// :one rather than :execrows because the CTE moves the row count out of the command tag.
-func (q *Queries) CloseMisattributedSourceJobs(ctx context.Context, arg CloseMisattributedSourceJobsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, closeMisattributedSourceJobs, arg.Source, arg.FromID, arg.ToID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -1378,48 +1115,6 @@ func (q *Queries) CompanyHasOtherJobs(ctx context.Context, arg CompanyHasOtherJo
 	return carried, err
 }
 
-const companySlugFoldedBackfillBounds = `-- name: CompanySlugFoldedBackfillBounds :one
-SELECT COALESCE(min(id), 0)::bigint AS min_id,
-       COALESCE(max(id), 0)::bigint AS max_id,
-       count(*) FILTER (WHERE company_slug_folded IS DISTINCT FROM replace(company_slug, '-', ''))::bigint AS remaining
-FROM jobs
-`
-
-type CompanySlugFoldedBackfillBoundsRow struct {
-	MinID     int64 `json:"min_id"`
-	MaxID     int64 `json:"max_id"`
-	Remaining int64 `json:"remaining"`
-}
-
-// The id range the backfill walks, plus how many rows still need it. The remaining
-// count is what makes a run's progress legible; it is an exact count on purpose (the
-// pass is run by hand, rarely, and a wrong "0 remaining" would end it early).
-func (q *Queries) CompanySlugFoldedBackfillBounds(ctx context.Context) (CompanySlugFoldedBackfillBoundsRow, error) {
-	row := q.db.QueryRow(ctx, companySlugFoldedBackfillBounds)
-	var i CompanySlugFoldedBackfillBoundsRow
-	err := row.Scan(&i.MinID, &i.MaxID, &i.Remaining)
-	return i, err
-}
-
-const countBlankCompanyByBoard = `-- name: CountBlankCompanyByBoard :one
-SELECT count(*)::bigint FROM jobs
-WHERE source = $1 AND company = '' AND external_id LIKE $2
-`
-
-type CountBlankCompanyByBoardParams struct {
-	Source       string `json:"source"`
-	BoardPattern string `json:"board_pattern"`
-}
-
-// Read-only companion to BackfillBoardCompany, for --dry-run: how many rows a board's backfill
-// would touch without writing anything.
-func (q *Queries) CountBlankCompanyByBoard(ctx context.Context, arg CountBlankCompanyByBoardParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countBlankCompanyByBoard, arg.Source, arg.BoardPattern)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const countCatalogueScale = `-- name: CountCatalogueScale :one
 SELECT
     COUNT(*)::bigint AS open_jobs,
@@ -1769,34 +1464,6 @@ func (q *Queries) DuplicateClosureGeoFor(ctx context.Context, ownerIds []int64) 
 		return nil, err
 	}
 	return items, nil
-}
-
-const duplicateMarkerOwnerBackfillBounds = `-- name: DuplicateMarkerOwnerBackfillBounds :one
-SELECT COALESCE(min(id), 0)::bigint AS min_id,
-       COALESCE(max(id), 0)::bigint AS max_id,
-       count(*) FILTER (
-           WHERE duplicate_of IS NOT NULL
-             AND duplicate_of_aggregator IS NULL
-             AND duplicate_of_role IS NULL
-             AND duplicate_of_fuzzy IS NULL
-       )::bigint AS remaining
-FROM jobs
-`
-
-type DuplicateMarkerOwnerBackfillBoundsRow struct {
-	MinID     int64 `json:"min_id"`
-	MaxID     int64 `json:"max_id"`
-	Remaining int64 `json:"remaining"`
-}
-
-// The id range the owned-marker backfill walks, plus how many rows still need it. Exact count on
-// purpose, like the folded-slug bounds beside it: the pass is run by hand and rarely, and a wrong
-// "0 remaining" would end it early.
-func (q *Queries) DuplicateMarkerOwnerBackfillBounds(ctx context.Context) (DuplicateMarkerOwnerBackfillBoundsRow, error) {
-	row := q.db.QueryRow(ctx, duplicateMarkerOwnerBackfillBounds)
-	var i DuplicateMarkerOwnerBackfillBoundsRow
-	err := row.Scan(&i.MinID, &i.MaxID, &i.Remaining)
-	return i, err
 }
 
 const enqueueJobEnrichment = `-- name: EnqueueJobEnrichment :execrows
@@ -2662,229 +2329,6 @@ func (q *Queries) InsertPrivateJob(ctx context.Context, arg InsertPrivateJobPara
 	return i, err
 }
 
-const jobDescriptionsByIDs = `-- name: JobDescriptionsByIDs :many
-SELECT id, description FROM jobs
-WHERE id = ANY($1::bigint[])
-`
-
-type JobDescriptionsByIDsRow struct {
-	ID          int64  `json:"id"`
-	Description string `json:"description"`
-}
-
-// Descriptions for a named set of ids, for cmd/backfill-clearance.
-//
-// Ids come from a Meilisearch query rather than from a SQL predicate on the text, and
-// that is the point: any WHERE over `description` de-TOASTs the column for every row it
-// examines, which on this table means 8M out-of-line reads to find ~38k matches. The
-// search index already holds the text, so it can name the candidates in seconds and
-// this query reads only their bodies.
-//
-// Closed rows are included. A closed posting still carries a clearance requirement, the
-// detail endpoint still serves it, and leaving it unmarked would make the facet's
-// meaning depend on lifecycle state.
-func (q *Queries) JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobDescriptionsByIDsRow, error) {
-	rows, err := q.db.Query(ctx, jobDescriptionsByIDs, ids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []JobDescriptionsByIDsRow{}
-	for rows.Next() {
-		var i JobDescriptionsByIDsRow
-		if err := rows.Scan(&i.ID, &i.Description); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const jobsForEngagementByIDs = `-- name: JobsForEngagementByIDs :many
-SELECT id, title, description, engagement FROM jobs
-WHERE id = ANY($1::bigint[])
-`
-
-type JobsForEngagementByIDsRow struct {
-	ID          int64    `json:"id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Engagement  []string `json:"engagement"`
-}
-
-// Title, description and the stored engagement terms for a named set of ids, for
-// cmd/backfill-engagement. By primary key: the candidates come from the search index,
-// so the pass reads only the bodies that mention a term instead of de-TOASTing the table.
-func (q *Queries) JobsForEngagementByIDs(ctx context.Context, ids []int64) ([]JobsForEngagementByIDsRow, error) {
-	rows, err := q.db.Query(ctx, jobsForEngagementByIDs, ids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []JobsForEngagementByIDsRow{}
-	for rows.Next() {
-		var i JobsForEngagementByIDsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Description,
-			&i.Engagement,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const jobsForGeographyRecheckByIDs = `-- name: JobsForGeographyRecheckByIDs :many
-SELECT id, title, location, description, countries, regions FROM jobs
-WHERE id = ANY($1::bigint[])
-`
-
-type JobsForGeographyRecheckByIDsRow struct {
-	ID          int64    `json:"id"`
-	Title       string   `json:"title"`
-	Location    string   `json:"location"`
-	Description string   `json:"description"`
-	Countries   []string `json:"countries"`
-	Regions     []string `json:"regions"`
-}
-
-// Title, location, description and the currently-stored countries/regions for a named set
-// of ids, for cmd/backfill-remote-region-restriction.
-//
-// Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a WHERE
-// over `description` de-TOASTs the column for every row it examines, and the search index
-// already holds the text.
-func (q *Queries) JobsForGeographyRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForGeographyRecheckByIDsRow, error) {
-	rows, err := q.db.Query(ctx, jobsForGeographyRecheckByIDs, ids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []JobsForGeographyRecheckByIDsRow{}
-	for rows.Next() {
-		var i JobsForGeographyRecheckByIDsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Location,
-			&i.Description,
-			&i.Countries,
-			&i.Regions,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const jobsForPlaceRecheckByIDs = `-- name: JobsForPlaceRecheckByIDs :many
-SELECT id, source, title, location, description, work_mode, countries, regions, cities, metros
-FROM jobs
-WHERE id = ANY($1::bigint[])
-`
-
-type JobsForPlaceRecheckByIDsRow struct {
-	ID          int64    `json:"id"`
-	Source      string   `json:"source"`
-	Title       string   `json:"title"`
-	Location    string   `json:"location"`
-	Description string   `json:"description"`
-	WorkMode    string   `json:"work_mode"`
-	Countries   []string `json:"countries"`
-	Regions     []string `json:"regions"`
-	Cities      []string `json:"cities"`
-	Metros      []string `json:"metros"`
-}
-
-// What cmd/backfill-brazil-state-codes re-derives a row's places from, and the places it
-// currently stores, for a named set of ids.
-func (q *Queries) JobsForPlaceRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForPlaceRecheckByIDsRow, error) {
-	rows, err := q.db.Query(ctx, jobsForPlaceRecheckByIDs, ids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []JobsForPlaceRecheckByIDsRow{}
-	for rows.Next() {
-		var i JobsForPlaceRecheckByIDsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Source,
-			&i.Title,
-			&i.Location,
-			&i.Description,
-			&i.WorkMode,
-			&i.Countries,
-			&i.Regions,
-			&i.Cities,
-			&i.Metros,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const jobsForWorkModeRecheckByIDs = `-- name: JobsForWorkModeRecheckByIDs :many
-SELECT id, location, description, work_mode FROM jobs
-WHERE id = ANY($1::bigint[])
-`
-
-type JobsForWorkModeRecheckByIDsRow struct {
-	ID          int64  `json:"id"`
-	Location    string `json:"location"`
-	Description string `json:"description"`
-	WorkMode    string `json:"work_mode"`
-}
-
-// Location, description and the currently-stored work_mode for a named set of ids, for
-// cmd/backfill-remote-perk-false-positive.
-//
-// Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a
-// WHERE over `description` de-TOASTs the column for every row it examines, and the
-// search index already holds the text.
-func (q *Queries) JobsForWorkModeRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForWorkModeRecheckByIDsRow, error) {
-	rows, err := q.db.Query(ctx, jobsForWorkModeRecheckByIDs, ids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []JobsForWorkModeRecheckByIDsRow{}
-	for rows.Next() {
-		var i JobsForWorkModeRecheckByIDsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Location,
-			&i.Description,
-			&i.WorkMode,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const latestOpenJobAddedAt = `-- name: LatestOpenJobAddedAt :one
 SELECT (
     SELECT created_at
@@ -2907,48 +2351,6 @@ func (q *Queries) LatestOpenJobAddedAt(ctx context.Context) (pgtype.Timestamptz,
 	var last_job_added_at pgtype.Timestamptz
 	err := row.Scan(&last_job_added_at)
 	return last_job_added_at, err
-}
-
-const listBoardJobURLs = `-- name: ListBoardJobURLs :many
-SELECT id, external_id, url
-FROM jobs
-WHERE source = $1 AND external_id LIKE $2
-ORDER BY id
-`
-
-type ListBoardJobURLsParams struct {
-	Source       string `json:"source"`
-	BoardPattern string `json:"board_pattern"`
-}
-
-type ListBoardJobURLsRow struct {
-	ID         int64  `json:"id"`
-	ExternalID string `json:"external_id"`
-	URL        string `json:"url"`
-}
-
-// Every stored posting of ONE board (open or closed), with the URL it was crawled at — what
-// cmd/rekey-gupy-boards reads to learn which career page each posting of a retired
-// companyId-keyed board lives on. Rides jobs_source_extid_pattern_idx through the same
-// escaped LIKE prefix as ExistingExternalIDsByBoard (externalid.BoardPattern).
-func (q *Queries) ListBoardJobURLs(ctx context.Context, arg ListBoardJobURLsParams) ([]ListBoardJobURLsRow, error) {
-	rows, err := q.db.Query(ctx, listBoardJobURLs, arg.Source, arg.BoardPattern)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListBoardJobURLsRow{}
-	for rows.Next() {
-		var i ListBoardJobURLsRow
-		if err := rows.Scan(&i.ID, &i.ExternalID, &i.URL); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listClosedJobsByCompany = `-- name: ListClosedJobsByCompany :many
@@ -3512,85 +2914,6 @@ func (q *Queries) ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpda
 	return items, nil
 }
 
-const listJobIDsWithBrazilianStateCollision = `-- name: ListJobIDsWithBrazilianStateCollision :many
-SELECT id
-FROM jobs
-WHERE source = ANY($1::text[])
-  AND countries && ARRAY['al', 'am', 'ba', 'ca', 'es', 'lk', 'ma', 'me', 'mg', 'mt', 'mx',
-                         'pa', 'pe', 'pr', 'ro', 'rs', 'se', 'to', 'us']::text[]
-ORDER BY id
-`
-
-// Candidates for cmd/backfill-brazil-state-codes: postings of the named Brazilian sources
-// whose stored countries carry a code a Brazilian state code spells (RS Serbia, BA Bosnia,
-// PR Puerto Rico, SC/MS/MA/AL/PA a US state, PE Peru or Prince Edward Island, DF Mexico),
-// or the namesake a state code used to leave behind ("Colombo, PR" Sri Lanka, Montenegro).
-//
-// Broad on purpose, as ListJobIDsWithUSSubdivisionCollision is: it also matches genuine
-// Peruvian or US postings of the same sources, and the recompute in the caller decides. Open
-// and closed alike, since a closed posting reopens when the crawl lists it again. Rides
-// jobs_source_idx and reads no description.
-func (q *Queries) ListJobIDsWithBrazilianStateCollision(ctx context.Context, sources []string) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listJobIDsWithBrazilianStateCollision, sources)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listJobIDsWithUSSubdivisionCollision = `-- name: ListJobIDsWithUSSubdivisionCollision :many
-SELECT id
-FROM jobs
-WHERE countries && ARRAY['in', 'de', 'id']::text[]
-  AND location ~* ',\s*(in|de|id)\s*(,|$|[0-9])'
-ORDER BY id
-`
-
-// Candidates for cmd/backfill-us-subdivision-collision (freehire#3113): a location whose
-// trailing comma-field is a bare two-letter code that collides between a US/Canada
-// subdivision and a curated country (in/de/id — the exact three freehire#3113 added to
-// subdivisionToCountry; a later addition needs the same codes added here too), where the
-// CURRENTLY STORED countries facet still carries that country reading.
-//
-// Deliberately broad rather than exact: the regex also matches genuine India/Germany/
-// Indonesia postings written the same "City, CC" way, and the countries filter alone
-// would also match every *correctly* tagged India/Germany/Indonesia job. Over-fetching
-// is free here — cmd/backfill-remote-perk-false-positive's same reasoning applies — the
-// recompute in the caller decides, and a row whose derived value is unchanged costs one
-// skipped write. One sequential scan of (location, countries) only, no description
-// detoast, so this is cheap even without a supporting index.
-func (q *Queries) ListJobIDsWithUSSubdivisionCollision(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listJobIDsWithUSSubdivisionCollision)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listJobLivenessBySlugs = `-- name: ListJobLivenessBySlugs :many
 SELECT public_slug, is_private, duplicate_of, closed_at, last_seen_at
 FROM jobs
@@ -3625,44 +2948,6 @@ func (q *Queries) ListJobLivenessBySlugs(ctx context.Context, slugs []string) ([
 			&i.ClosedAt,
 			&i.LastSeenAt,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listJobNamespacesForSource = `-- name: ListJobNamespacesForSource :many
-SELECT split_part(external_id, ':', 1)::text AS namespace,
-       (mode() WITHIN GROUP (ORDER BY company))::text AS company
-FROM jobs
-WHERE source = $1
-GROUP BY 1
-ORDER BY 1
-`
-
-type ListJobNamespacesForSourceRow struct {
-	Namespace string `json:"namespace"`
-	Company   string `json:"company"`
-}
-
-// Every board namespace (the part of external_id before ':') one source's stored postings
-// carry, with the company most of them name. cmd/rekey-gupy-boards reads it AFTER moving
-// postings to their new namespaces, so the boards it then adds are derived from the data
-// itself rather than from a plan an interrupted run could lose.
-func (q *Queries) ListJobNamespacesForSource(ctx context.Context, source string) ([]ListJobNamespacesForSourceRow, error) {
-	rows, err := q.db.Query(ctx, listJobNamespacesForSource, source)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListJobNamespacesForSourceRow{}
-	for rows.Next() {
-		var i ListJobNamespacesForSourceRow
-		if err := rows.Scan(&i.Namespace, &i.Company); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -4296,61 +3581,6 @@ func (q *Queries) ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourc
 			&i.ApplicationDeadline,
 			&i.Engagement,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listJobsForRequirementsBackfill = `-- name: ListJobsForRequirementsBackfill :many
-SELECT id, description FROM jobs
-WHERE id >= $1 AND id < $2
-  AND closed_at IS NULL
-ORDER BY id
-LIMIT $3
-`
-
-type ListJobsForRequirementsBackfillParams struct {
-	FromID   int64 `json:"from_id"`
-	ToID     int64 `json:"to_id"`
-	RowLimit int32 `json:"row_limit"`
-}
-
-type ListJobsForRequirementsBackfillRow struct {
-	ID          int64  `json:"id"`
-	Description string `json:"description"`
-}
-
-// One chunk of the requirements backfill: the open postings in an id range, with the
-// description the derivation reads.
-//
-// Open rows only, unlike SetJobRequiresClearance's companion: a closed posting is not
-// served on a job page and cannot be applied to, so deriving for it would pay the
-// de-TOAST of its description for a list nothing reads.
-//
-// There is deliberately NO predicate on `description` (not even `<> ”`): a WHERE over
-// that column de-TOASTs it for every row examined, which is the trap cmd/backfill-clearance
-// documents. The rows are already bounded by id here, and an empty description simply
-// derives nothing, so the filter would cost the same read it is trying to avoid.
-// The LIMIT is what bounds MEMORY, and the id range is what bounds the number of
-// statements. Both are needed: pgx buffers a :many result whole, descriptions run to
-// ~1 MB on some sources, and an id RANGE puts no ceiling at all on how many rows fall
-// inside it. The caller resumes from the last id it saw when a chunk comes back full,
-// so a dense stretch is walked in bounded steps rather than materialised at once.
-func (q *Queries) ListJobsForRequirementsBackfill(ctx context.Context, arg ListJobsForRequirementsBackfillParams) ([]ListJobsForRequirementsBackfillRow, error) {
-	rows, err := q.db.Query(ctx, listJobsForRequirementsBackfill, arg.FromID, arg.ToID, arg.RowLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListJobsForRequirementsBackfillRow{}
-	for rows.Next() {
-		var i ListJobsForRequirementsBackfillRow
-		if err := rows.Scan(&i.ID, &i.Description); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -5122,20 +4352,6 @@ func (q *Queries) MaxJobID(ctx context.Context) (int64, error) {
 	return column_1, err
 }
 
-const maxJobIDForSource = `-- name: MaxJobIDForSource :one
-SELECT COALESCE(MAX(id), 0)::bigint FROM jobs WHERE source = $1
-`
-
-// The upper bound of the id-range walk above. MAX over a source is an index scan on
-// (source, external_id)'s table, not a count of matching rows, so it is cheap even when the
-// source holds millions.
-func (q *Queries) MaxJobIDForSource(ctx context.Context, source string) (int64, error) {
-	row := q.db.QueryRow(ctx, maxJobIDForSource, source)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const orphanAggregatorCompanies = `-- name: OrphanAggregatorCompanies :many
 SELECT j.company_slug,
        (mode() WITHIN GROUP (ORDER BY j.company))::text AS company
@@ -5512,42 +4728,6 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 	return i, err
 }
 
-const rekeyJobExternalIDs = `-- name: RekeyJobExternalIDs :execrows
-WITH v AS (
-    SELECT i.id, e.external_id
-    FROM unnest($2::bigint[]) WITH ORDINALITY AS i(id, ord)
-    JOIN unnest($3::text[]) WITH ORDINALITY AS e(external_id, ord)
-      ON e.ord = i.ord
-)
-UPDATE jobs AS j
-SET external_id = v.external_id
-FROM v
-WHERE j.id = v.id
-  AND j.source = $1
-  AND j.external_id IS DISTINCT FROM v.external_id
-`
-
-type RekeyJobExternalIDsParams struct {
-	Source      string   `json:"source"`
-	Ids         []int64  `json:"ids"`
-	ExternalIds []string `json:"external_ids"`
-}
-
-// Move postings to a new board namespace in one statement: ids[i] gets external_ids[i]. The
-// row keeps its id, so everything keyed by it (saves, tracking, enrichment, views) follows.
-// IS DISTINCT FROM-guarded, so a re-run writes nothing. A target key another row of the
-// source already holds fails the whole statement on (source, external_id) rather than
-// silently skipping the row.
-// The two parallel arrays are zipped WITH ORDINALITY because sqlc's analyzer does not resolve
-// the two-array form of unnest (see companies.sql's domain_industry_map).
-func (q *Queries) RekeyJobExternalIDs(ctx context.Context, arg RekeyJobExternalIDsParams) (int64, error) {
-	result, err := q.db.Exec(ctx, rekeyJobExternalIDs, arg.Source, arg.Ids, arg.ExternalIds)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const reopenEmployerJob = `-- name: ReopenEmployerJob :one
 WITH reopened AS (
     UPDATE jobs
@@ -5589,27 +4769,6 @@ func (q *Queries) ReopenEmployerJob(ctx context.Context, arg ReopenEmployerJobPa
 	var count int64
 	err := row.Scan(&count)
 	return count, err
-}
-
-const requirementsDerivedBackfillBounds = `-- name: RequirementsDerivedBackfillBounds :one
-SELECT COALESCE(MIN(id), 0)::bigint AS min_id,
-       COALESCE(MAX(id), 0)::bigint AS max_id
-FROM jobs
-`
-
-type RequirementsDerivedBackfillBoundsRow struct {
-	MinID int64 `json:"min_id"`
-	MaxID int64 `json:"max_id"`
-}
-
-// The id span cmd/backfill-requirements walks. MIN/MAX over the primary key are two
-// index probes, so this stays cheap on an 11M-row table — deliberately unfiltered,
-// because counting the open rows would be a scan and the chunk query filters anyway.
-func (q *Queries) RequirementsDerivedBackfillBounds(ctx context.Context) (RequirementsDerivedBackfillBoundsRow, error) {
-	row := q.db.QueryRow(ctx, requirementsDerivedBackfillBounds)
-	var i RequirementsDerivedBackfillBoundsRow
-	err := row.Scan(&i.MinID, &i.MaxID)
-	return i, err
 }
 
 const resetLivenessStrikes = `-- name: ResetLivenessStrikes :exec
@@ -5936,55 +5095,6 @@ func (q *Queries) SelectStaleRegisteredCandidates(ctx context.Context, arg Selec
 	return items, nil
 }
 
-const setJobEngagement = `-- name: SetJobEngagement :one
-WITH updated AS (
-    UPDATE jobs j
-    SET engagement = COALESCE($1::text[], '{}'),
-        updated_at = now()
-    WHERE j.id = $2
-      AND j.engagement IS DISTINCT FROM COALESCE($1::text[], '{}')
-    RETURNING j.id, j.closed_at, COALESCE(j.posted_at, j.created_at) AS eff_posted_at
-),
-enqueued AS (
-    INSERT INTO search_outbox (job_id, job_posted_at)
-    SELECT u.id, u.eff_posted_at FROM updated u WHERE u.closed_at IS NULL
-    ON CONFLICT (job_id) DO UPDATE
-    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
-    RETURNING job_id
-)
-SELECT (SELECT count(*) FROM updated)::bigint AS updated_count,
-       (SELECT count(*) FROM enqueued)::bigint AS enqueued_count
-`
-
-type SetJobEngagementParams struct {
-	Engagement []string `json:"engagement"`
-	JobID      int64    `json:"job_id"`
-}
-
-type SetJobEngagementRow struct {
-	UpdatedCount  int64 `json:"updated_count"`
-	EnqueuedCount int64 `json:"enqueued_count"`
-}
-
-// Write one row's engagement terms, for cmd/backfill-engagement, and queue an open row
-// for the search drain in the same statement: the column is not in content_hash, so
-// nothing else would carry the new value to the index short of a full rebuild.
-//
-// The IS DISTINCT FROM guard makes the pass idempotent: a row already carrying the
-// derived terms is neither rewritten nor queued, so a re-run writes nothing — which is
-// also why the write must not lose its queue entry. updated_at moves, so cmd/reindex's
-// post-swap purge keeps an entry for a row it read before this write; and an entry already
-// pending is RE-STAMPED (a new id and created_at, its lease kept) rather than left alone,
-// the UpsertApplyForm rule: a drain that already claimed the old id finishes only that old
-// generation, and the new one stays pending. A dead-lettered entry comes back to life:
-// its failures belonged to the old document, and the claim skips any row with failed_at.
-func (q *Queries) SetJobEngagement(ctx context.Context, arg SetJobEngagementParams) (SetJobEngagementRow, error) {
-	row := q.db.QueryRow(ctx, setJobEngagement, arg.Engagement, arg.JobID)
-	var i SetJobEngagementRow
-	err := row.Scan(&i.UpdatedCount, &i.EnqueuedCount)
-	return i, err
-}
-
 const setJobEnrichment = `-- name: SetJobEnrichment :exec
 UPDATE jobs
 SET enrichment         =
@@ -6053,167 +5163,6 @@ func (q *Queries) SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentPara
 		arg.ID,
 	)
 	return err
-}
-
-const setJobGeography = `-- name: SetJobGeography :execrows
-UPDATE jobs
-SET countries = COALESCE($1::text[], '{}'),
-    regions   = COALESCE($2::text[], '{}')
-WHERE id = $3
-  AND (countries IS DISTINCT FROM COALESCE($1::text[], '{}')
-       OR regions IS DISTINCT FROM COALESCE($2::text[], '{}'))
-`
-
-type SetJobGeographyParams struct {
-	Countries []string `json:"countries"`
-	Regions   []string `json:"regions"`
-	ID        int64    `json:"id"`
-}
-
-// Write one row's countries and regions, for cmd/backfill-remote-region-restriction.
-//
-// A nil slice (Derive resolving nothing) encodes as NULL, which the NOT NULL columns
-// refuse; COALESCE writes it as the empty array the ingest upserts write.
-//
-// The IS DISTINCT FROM guard makes the pass idempotent, the same way SetJobWorkMode's
-// does: a row already carrying the recomputed values is not rewritten, so a re-run writes
-// nothing and stopping mid-way costs nothing to resume.
-func (q *Queries) SetJobGeography(ctx context.Context, arg SetJobGeographyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setJobGeography, arg.Countries, arg.Regions, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const setJobPlaces = `-- name: SetJobPlaces :execrows
-UPDATE jobs
-SET countries = COALESCE($1::text[], '{}'),
-    regions   = COALESCE($2::text[], '{}'),
-    cities    = COALESCE($3::text[], '{}'),
-    metros    = COALESCE($4::text[], '{}')
-WHERE id = $5
-  AND (countries IS DISTINCT FROM COALESCE($1::text[], '{}')
-       OR regions IS DISTINCT FROM COALESCE($2::text[], '{}')
-       OR cities IS DISTINCT FROM COALESCE($3::text[], '{}')
-       OR metros IS DISTINCT FROM COALESCE($4::text[], '{}'))
-`
-
-type SetJobPlacesParams struct {
-	Countries []string `json:"countries"`
-	Regions   []string `json:"regions"`
-	Cities    []string `json:"cities"`
-	Metros    []string `json:"metros"`
-	ID        int64    `json:"id"`
-}
-
-// Write one row's countries, regions, cities and metros, for cmd/backfill-brazil-state-codes.
-// A nil slice encodes as NULL, which the NOT NULL columns refuse; COALESCE writes the empty
-// array the ingest upserts write. IS DISTINCT FROM-guarded, so a re-run writes nothing.
-func (q *Queries) SetJobPlaces(ctx context.Context, arg SetJobPlacesParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setJobPlaces,
-		arg.Countries,
-		arg.Regions,
-		arg.Cities,
-		arg.Metros,
-		arg.ID,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const setJobRequiresClearance = `-- name: SetJobRequiresClearance :execrows
-UPDATE jobs
-SET requires_clearance = $1,
-    clearance_levels   = COALESCE($2::text[], '{}')
-WHERE id = $3
-  AND (requires_clearance IS DISTINCT FROM $1
-       OR clearance_levels IS DISTINCT FROM COALESCE($2::text[], '{}'))
-`
-
-type SetJobRequiresClearanceParams struct {
-	RequiresClearance pgtype.Bool `json:"requires_clearance"`
-	ClearanceLevels   []string    `json:"clearance_levels"`
-	ID                int64       `json:"id"`
-}
-
-// Write one row's requires_clearance and clearance_levels, for cmd/backfill-clearance.
-// Both together, because they come from one reading of the description and a row whose
-// levels are empty beside a TRUE requires_clearance would fall under the levels
-// filter's "no explicit reference" while the boolean filter says it needs a clearance.
-//
-// The IS DISTINCT FROM guard is what makes the pass idempotent: a row already carrying
-// the derived value is not rewritten, so a re-run writes nothing, produces no dead
-// tuples, and stopping the pass mid-way costs nothing to resume.
-//
-// It also means the backfill never needs to know which rows it has already visited —
-// the guard answers that per row, which is cheaper and more honest than a cursor that
-// would go stale the moment ingest writes a new posting behind it.
-func (q *Queries) SetJobRequiresClearance(ctx context.Context, arg SetJobRequiresClearanceParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setJobRequiresClearance, arg.RequiresClearance, arg.ClearanceLevels, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const setJobWorkMode = `-- name: SetJobWorkMode :execrows
-UPDATE jobs
-SET work_mode = $1
-WHERE id = $2
-  AND work_mode IS DISTINCT FROM $1
-`
-
-type SetJobWorkModeParams struct {
-	WorkMode string `json:"work_mode"`
-	ID       int64  `json:"id"`
-}
-
-// Write one row's work_mode, for cmd/backfill-remote-perk-false-positive.
-//
-// The IS DISTINCT FROM guard makes the pass idempotent, the same way
-// SetJobRequiresClearance's does: a row already carrying the recomputed value is not
-// rewritten, so a re-run writes nothing and stopping mid-way costs nothing to resume.
-func (q *Queries) SetJobWorkMode(ctx context.Context, arg SetJobWorkModeParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setJobWorkMode, arg.WorkMode, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const setJobsRequirementsDerived = `-- name: SetJobsRequirementsDerived :execrows
-UPDATE jobs AS j
-SET requirements_derived = v.payload
-FROM (
-    SELECT unnest($1::bigint[]) AS id,
-           unnest($2::jsonb[]) AS payload
-) AS v
-WHERE j.id = v.id
-  AND j.requirements_derived IS DISTINCT FROM v.payload
-`
-
-type SetJobsRequirementsDerivedParams struct {
-	Ids      []int64  `json:"ids"`
-	Payloads [][]byte `json:"payloads"`
-}
-
-// Write one chunk's derived requirements, for cmd/backfill-requirements. Batched
-// through unnest rather than a statement per row: the pass covers millions of rows and
-// a round trip each would dominate its runtime.
-//
-// The IS DISTINCT FROM guard is what makes the pass idempotent, for the same reason
-// SetJobRequiresClearance's does: a row already carrying the derived value is not
-// rewritten, so a re-run writes nothing and produces no dead tuples. It also means the
-// backfill needs no record of which rows it has visited.
-func (q *Queries) SetJobsRequirementsDerived(ctx context.Context, arg SetJobsRequirementsDerivedParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setJobsRequirementsDerived, arg.Ids, arg.Payloads)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }
 
 const skillGapReportBounds = `-- name: SkillGapReportBounds :one
@@ -6899,51 +5848,53 @@ SET countries = COALESCE($1::text[], '{}'),
     equity = $13,
     perks        = COALESCE($14::text[], '{}'),
     engagement   = COALESCE($15::text[], '{}'),
-    posting_language     = $16,
-    employment_type      = $17,
-    education_level      = $18,
-    english_level        = $19,
-    experience_years_min = $20,
-    role_fingerprint = $21,
-    company_slug     = $22,
-    company_slug_folded = replace($22, '-', ''),
+    requirements_derived = COALESCE($16::jsonb, '[]'::jsonb),
+    posting_language     = $17,
+    employment_type      = $18,
+    education_level      = $19,
+    english_level        = $20,
+    experience_years_min = $21,
+    role_fingerprint = $22,
+    company_slug     = $23,
+    company_slug_folded = replace($23, '-', ''),
     updated_at = CASE
-        WHEN role_fingerprint IS DISTINCT FROM $21 THEN now()
+        WHEN role_fingerprint IS DISTINCT FROM $22 THEN now()
         ELSE updated_at
     END
-WHERE id = $23
+WHERE id = $24
 `
 
 type UpdateJobDerivedParams struct {
-	Countries          []string    `json:"countries"`
-	Regions            []string    `json:"regions"`
-	Cities             []string    `json:"cities"`
-	Metros             []string    `json:"metros"`
-	WorkMode           string      `json:"work_mode"`
-	Skills             []string    `json:"skills"`
-	Seniority          string      `json:"seniority"`
-	Category           string      `json:"category"`
-	IsTech             pgtype.Bool `json:"is_tech"`
-	RequiresClearance  pgtype.Bool `json:"requires_clearance"`
-	ClearanceLevels    []string    `json:"clearance_levels"`
-	ViaRecruiter       pgtype.Bool `json:"via_recruiter"`
-	Equity             pgtype.Text `json:"equity"`
-	Perks              []string    `json:"perks"`
-	Engagement         []string    `json:"engagement"`
-	PostingLanguage    string      `json:"posting_language"`
-	EmploymentType     string      `json:"employment_type"`
-	EducationLevel     string      `json:"education_level"`
-	EnglishLevel       string      `json:"english_level"`
-	ExperienceYearsMin pgtype.Int4 `json:"experience_years_min"`
-	RoleFingerprint    pgtype.Text `json:"role_fingerprint"`
-	CompanySlug        string      `json:"company_slug"`
-	ID                 int64       `json:"id"`
+	Countries           []string    `json:"countries"`
+	Regions             []string    `json:"regions"`
+	Cities              []string    `json:"cities"`
+	Metros              []string    `json:"metros"`
+	WorkMode            string      `json:"work_mode"`
+	Skills              []string    `json:"skills"`
+	Seniority           string      `json:"seniority"`
+	Category            string      `json:"category"`
+	IsTech              pgtype.Bool `json:"is_tech"`
+	RequiresClearance   pgtype.Bool `json:"requires_clearance"`
+	ClearanceLevels     []string    `json:"clearance_levels"`
+	ViaRecruiter        pgtype.Bool `json:"via_recruiter"`
+	Equity              pgtype.Text `json:"equity"`
+	Perks               []string    `json:"perks"`
+	Engagement          []string    `json:"engagement"`
+	RequirementsDerived []byte      `json:"requirements_derived"`
+	PostingLanguage     string      `json:"posting_language"`
+	EmploymentType      string      `json:"employment_type"`
+	EducationLevel      string      `json:"education_level"`
+	EnglishLevel        string      `json:"english_level"`
+	ExperienceYearsMin  pgtype.Int4 `json:"experience_years_min"`
+	RoleFingerprint     pgtype.Text `json:"role_fingerprint"`
+	CompanySlug         string      `json:"company_slug"`
+	ID                  int64       `json:"id"`
 }
 
 // One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 // ingest computes as a pure function of a row's own raw/immutable fields — the
 // deterministic dictionary facets (countries, regions, cities, work_mode, skills,
-// seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, engagement, plus the synthetic enrichment
+// seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, engagement, requirements_derived (reqextract), plus the synthetic enrichment
 // facets posting_language,
 // employment_type, education_level, english_level, experience_years_min, all from
 // jobderive.Derive), the repost-identity role_fingerprint (internal/job/jobhash), and the
@@ -6980,6 +5931,7 @@ func (q *Queries) UpdateJobDerived(ctx context.Context, arg UpdateJobDerivedPara
 		arg.Equity,
 		arg.Perks,
 		arg.Engagement,
+		arg.RequirementsDerived,
 		arg.PostingLanguage,
 		arg.EmploymentType,
 		arg.EducationLevel,
