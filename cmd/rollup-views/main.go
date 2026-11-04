@@ -82,7 +82,7 @@ func run() int {
 		done := worker.Stage("nginx logs")
 		nFiles, nViews, err := process(ctx, pool, files)
 		done()
-		worker.ReportWork(int64(nFiles), int64(nViews))
+		reportFiles(nFiles, nViews)
 		if err != nil {
 			log.Printf("process: %v", err)
 			exit = 1
@@ -97,7 +97,7 @@ func run() int {
 		done := worker.Stage("agent logs")
 		nFiles, nViews, err := processAgent(ctx, pool, agentDir, time.Now())
 		done()
-		worker.ReportWork(int64(nFiles), int64(nViews))
+		reportFiles(nFiles, nViews)
 		if err != nil {
 			log.Printf("agent views: %v", err)
 			return 1
