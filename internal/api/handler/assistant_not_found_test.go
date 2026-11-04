@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -18,9 +19,13 @@ func TestLookupMissIsNotFoundAndAFaultStaysAFault(t *testing.T) {
 	if code := observability.ErrorCode(miss); code != "not_found" || miss.Error() != `no vacancy with slug "x"` {
 		t.Errorf("miss: code %q, text %q", code, miss.Error())
 	}
-	fault := errors.New("connection reset")
-	if got := lookupMiss(fault, "no vacancy"); !errors.Is(got, fault) {
-		t.Errorf("a database fault became %q", got)
+	fault := errors.New("connection reset by 10.0.0.5")
+	got := lookupMiss(fault, "no vacancy")
+	if !errors.Is(got, fault) {
+		t.Errorf("a database fault lost its cause: %q", got)
+	}
+	if strings.Contains(got.Error(), "10.0.0.5") || strings.Contains(got.Error(), "no vacancy") {
+		t.Errorf("a database fault reads %q to the agent", got)
 	}
 	if code := observability.ErrorCode(trackingToolError("x", jobtracking.ErrJobNotFound)); code != "not_found" {
 		t.Errorf("tracking miss: code %q", code)

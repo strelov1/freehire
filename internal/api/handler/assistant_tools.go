@@ -196,14 +196,21 @@ func (h *assistantHandlers) searchJobsTool() assistant.Tool {
 }
 
 // lookupMiss answers a slug lookup that failed: a row that does not exist is the sentence the
-// agent acts on, as a 404 so the MCP metrics count it as not_found; any other failure is
-// returned as it is, rather than dressed up as "no such row".
+// agent acts on, as a 404 so the MCP metrics count it as not_found. Any other failure keeps
+// its cause for the metrics and logs (errors.Is/As see through it) but reads as a plain retry
+// to the agent: the account server sends a tool error's text verbatim, and a driver's message
+// is ours, not the caller's.
 func lookupMiss(err error, missing string) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fiber.NewError(fiber.StatusNotFound, missing)
 	}
-	return err
+	return lookupFault{err}
 }
+
+type lookupFault struct{ err error }
+
+func (f lookupFault) Error() string { return "could not look this up right now; try again" }
+func (f lookupFault) Unwrap() error { return f.err }
 
 // getJobTool reads one vacancy by its public slug.
 func (h *assistantHandlers) getJobTool() assistant.Tool {
