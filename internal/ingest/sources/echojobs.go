@@ -382,21 +382,3 @@ func echojobsSplitSkills(s string) []string {
 	}
 	return out
 }
-
-// EchoJobsDescription fetches the sanitized description for a stored echojobs job by its slug
-// (ExternalID, minus the boardless namespace prefix — see cmd/backfill-echojobs) — for a
-// backfill worker filling the description of rows whose original ingest failed to hydrate one.
-// Returns ok=false when the page fetch fails, carries no JobPosting, or the posting has no body.
-func EchoJobsDescription(ctx context.Context, c HTMLGetter, slug string) (string, bool) {
-	root, err := c.GetHTML(ctx, echojobsJobURL(slug))
-	if err != nil {
-		return "", false
-	}
-	var p struct {
-		Description string `json:"description"`
-	}
-	if !ldJobPosting(root, &p) || p.Description == "" {
-		return "", false
-	}
-	return sanitizeHTML(html.UnescapeString(p.Description)), true
-}

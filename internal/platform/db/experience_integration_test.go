@@ -428,10 +428,3 @@ func TestMergeExperienceAtomsLeavesLoserWhenKeepIsGone(t *testing.T) {
 		t.Fatalf("atoms = %+v, want the loser still present — a failed merge must delete nothing", atoms)
 	}
 }
-
-func mustExec(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) {
-	t.Helper()
-	if _, err := pool.Exec(context.Background(), sql, args...); err != nil {
-		t.Fatalf("exec: %v", err)
-	}
-}
