@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -81,7 +82,8 @@ func TestToolCallIsReportedToPostHog(t *testing.T) {
 }
 
 // A failed account call is reported with the server's own metadata only: the personal data
-// a caller can put in its User-Agent, its client name or a tool's error text never leaves,
+// a caller can put in its User-Agent, its client name, its Mcp-Session-Id or a tool's error
+// text never leaves,
 // and no $exception event is sent.
 func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 	sent := recordPostHog(t)
@@ -100,6 +102,7 @@ func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 	header := http.Header{}
 	header.Set(AccountUserIDHeader, "42")
 	header.Set("User-Agent", "agent for "+email)
+	header.Set("Mcp-Session-Id", email)
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "client of " + email, Version: "0"}, nil).
 		Connect(context.Background(), &mcp.StreamableClientTransport{
 			Endpoint:   server.URL,
@@ -123,6 +126,15 @@ func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("PostHog payload lacks %s; got %s", want, got)
 		}
+	}
+	// The server is stateless, so go-sdk ignores a caller-sent Mcp-Session-Id and the SDK
+	// generates ses_<UUIDv7>. Were the header honoured (MCPGODEBUG=allowsessionsinstateless=1),
+	// the session and distinct id would be a non-cryptographic hash of it: ses_ + 32 hex digits.
+	minted := regexp.MustCompile(`"\$session_id":"(ses_[0-9a-f-]{36})"`).FindStringSubmatch(got)
+	if minted == nil {
+		t.Errorf("want a generated $session_id, not one derived from the caller; got %s", got)
+	} else if !strings.Contains(got, `"distinct_id":"`+minted[1]+`"`) {
+		t.Errorf("distinct_id is not the generated session %s; got %s", minted[1], got)
 	}
 	for _, leak := range []string{email, "H1B", `"$exception"`, `"$mcp_error_message"`, `"$mcp_client_user_agent"`, `"$mcp_client_name"`} {
 		if strings.Contains(got, leak) {
