@@ -163,7 +163,16 @@ func loadPlan(ctx context.Context, q *db.Queries, minJobs int, exact []string) (
 // a spelling the registry already settled: the alias insert would then do nothing while the jobs
 // still moved. The whole wave is refused, naming the slug to add or remove from the list.
 func checkExactPlan(ctx context.Context, q *db.Queries, plan []merge) error {
+	retiring := make(map[string]string)
 	for _, m := range plan {
+		for _, a := range m.Aliases {
+			retiring[a.Slug] = m.Canonical
+		}
+	}
+	for _, m := range plan {
+		if into, ok := retiring[m.Canonical]; ok {
+			return fmt.Errorf("canon %q is retired into %q by the same wave", m.Canonical, into)
+		}
 		retiredInto, err := q.GetCompanySlugAlias(ctx, m.Canonical)
 		switch {
 		case err == nil:
