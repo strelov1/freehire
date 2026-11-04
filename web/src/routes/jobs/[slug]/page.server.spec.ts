@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError } from '#lib/api.js';
 
 const api = {
   getJob: vi.fn(),
@@ -56,5 +57,12 @@ describe('job page load: application form', () => {
     const data = await run('a-1');
 
     expect(data).toMatchObject({ applyForm: null });
+  });
+
+  it('does not ask for a form when the slug is dead', async () => {
+    api.getJob.mockRejectedValue(new ApiError(404, 'not found'));
+
+    await expect(run('gone')).rejects.toMatchObject({ status: 404 });
+    expect(api.getApplyForm).not.toHaveBeenCalled();
   });
 });
