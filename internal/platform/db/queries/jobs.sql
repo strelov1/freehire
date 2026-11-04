@@ -182,6 +182,11 @@ SELECT public_slug, is_private, duplicate_of, closed_at, last_seen_at
 FROM jobs
 WHERE public_slug = ANY(sqlc.arg('slugs')::text[]);
 
+-- name: StoredJobDescription :one
+-- The body a stored posting keeps. Ingest reads it for a posting whose detail fetch came back
+-- empty, so the facets it derives are those of the body UpsertJob preserves, not of nothing.
+SELECT description FROM jobs WHERE source = sqlc.arg(source) AND external_id = sqlc.arg(external_id);
+
 -- name: GetJobBySourceExternalID :one
 -- Load a job by its dedup identity (source, external_id) — the key the Job
 -- aggregate's repository loads by, mirroring the CloseJobBySourceExternalID key.

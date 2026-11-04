@@ -7859,6 +7859,9 @@ type Querier interface {
 	// refresh token's 365-day life is measured from the sign-in and is not extended by a renewal,
 	// so a stale obtained_at would make the warning arrive after the deadline it is warning about.
 	StoreSocialToken(ctx context.Context, arg StoreSocialTokenParams) error
+	// The body a stored posting keeps. Ingest reads it for a posting whose detail fetch came back
+	// empty, so the facets it derives are those of the body UpsertJob preserves, not of nothing.
+	StoredJobDescription(ctx context.Context, arg StoredJobDescriptionParams) (string, error)
 	// Record one message as belonging to a job the caller named, as a SUGGESTION they still
 	// confirm. It is the only write the recall path makes.
 	//

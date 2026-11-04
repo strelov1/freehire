@@ -547,6 +547,18 @@ func (s *dbStore) reopenAndRederive(ctx context.Context, source, externalID stri
 	return touched.CompanySlug, tx.Commit(ctx)
 }
 
+var _ pipeline.StoredBodyLookup = (*dbStore)(nil)
+
+// StoredDescription returns the body stored for a posting, "" when there is no row. Implements
+// pipeline.StoredBodyLookup.
+func (s *dbStore) StoredDescription(ctx context.Context, source, externalID string) (string, error) {
+	body, err := s.q.StoredJobDescription(ctx, db.StoredJobDescriptionParams{Source: source, ExternalID: externalID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return body, err
+}
+
 // RecordCompanyWebsite stores a posting's stated employer website on its company row
 // (company_info.feed_website) when the row has none yet, once per company per run. Implements pipeline.CompanyWebsiteRecorder.
 func (s *dbStore) RecordCompanyWebsite(ctx context.Context, companySlug, website string) error {

@@ -6232,6 +6232,24 @@ func (q *Queries) SkillGapReportBounds(ctx context.Context) (SkillGapReportBound
 	return i, err
 }
 
+const storedJobDescription = `-- name: StoredJobDescription :one
+SELECT description FROM jobs WHERE source = $1 AND external_id = $2
+`
+
+type StoredJobDescriptionParams struct {
+	Source     string `json:"source"`
+	ExternalID string `json:"external_id"`
+}
+
+// The body a stored posting keeps. Ingest reads it for a posting whose detail fetch came back
+// empty, so the facets it derives are those of the body UpsertJob preserves, not of nothing.
+func (q *Queries) StoredJobDescription(ctx context.Context, arg StoredJobDescriptionParams) (string, error) {
+	row := q.db.QueryRow(ctx, storedJobDescription, arg.Source, arg.ExternalID)
+	var description string
+	err := row.Scan(&description)
+	return description, err
+}
+
 const suppressAggregatorDuplicatesForCompanies = `-- name: SuppressAggregatorDuplicatesForCompanies :one
 WITH ats AS (
     SELECT jobs.id,
