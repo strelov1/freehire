@@ -94,8 +94,7 @@ WHERE id = ANY($1::bigint[])
 
 // Clear a batch of jobs' embed provenance (closed-job path). Run in the same transaction
 // as DeleteSemanticEntriesBatch and DeleteJobSemanticChunks (see that query).
-// job_semantic_chunks is the only stored vector; the legacy jobs.semantic_embedding column
-// is being dropped (migrations/pending-semantic-embedding-drop).
+// job_semantic_chunks is the only stored vector (jobs.semantic_embedding was dropped in 0235).
 func (q *Queries) ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error {
 	_, err := q.db.Exec(ctx, clearSemanticEmbeddedBatch, ids)
 	return err

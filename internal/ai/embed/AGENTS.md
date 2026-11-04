@@ -4,7 +4,7 @@
 Incremental semantic embedding via the `semantic_outbox` queue, mirroring the enrichment pipeline.
 The worker stores description vectors in `job_semantic_chunks`; Meilisearch index writers
 copy them into the jobs index for semantic and similar-job search. It does not precompute
-similarity lists. The legacy `jobs.semantic_embedding` column is no longer read or written; its drop is staged in `migrations/pending-semantic-embedding-drop/`.
+similarity lists. The legacy `jobs.semantic_embedding` column was dropped in migration 0235.
 
 
 ## Always true
@@ -18,7 +18,6 @@ similarity lists. The legacy `jobs.semantic_embedding` column is no longer read 
 - Closed → `Store.CompleteClosed` alone: clear the stamp (`ClearSemanticEmbeddedBatch`) + delete the job's `job_semantic_chunks` rows + delete the outbox row, in one txn. There is no `Indexer` call on this path — a closed job has nothing left to compute or embed, unlike when this also meant removing a Meilisearch document.
 - The stamp copies each job's CURRENT `content_hash` at stamp time (the store passes only model + job ids, not the embedded hash); nullable-safe — a NULL `content_hash` stamps NULL so `IS DISTINCT FROM` doesn't re-enqueue forever.
 - At-least-once like enrich (a crash between the TEI call and the PG txn re-embeds, idempotent by primary key).
-- **The legacy `jobs.semantic_embedding` (`real[]`) column is dead.** Nothing reads or writes it; generated queries no longer name it, and its `DROP COLUMN` waits in `migrations/pending-semantic-embedding-drop/` until every older binary is retired.
 
 ## How it works
 `cmd/embed` fills the semantic_outbox queue the same way `cmd/enrich` fills enrichment. `ClaimSemanticBatch` is the enrichment claim with one deliberate divergence — it does not filter unindexable jobs out, returning a `closed` flag so the worker branches between embedding open jobs and clearing closed ones' state. The runner lives in `internal/ai/embed` behind `Store` + `Indexer` ports (unit-tested with fakes); `cmd/embed` wires the concrete adapters (`dbStore`, `searchIndexer`). `Indexer` has exactly one method, `IndexOpen` — there is no "remove closed" counterpart, since `Store.CompleteClosed` alone is the whole closed-job side effect now that there is no search index to remove a document from. A change concurrent with the embed is stamped current with the NEW `content_hash` while the vector/chunks still reflect the old content — the enqueue predicate sees a match and does NOT re-enqueue, so the job carries one-revision-stale embeddings until its content changes AGAIN (accepted: the window is one embed-duration and the drift self-corrects on the next real change). Tuning via `EMBED_BATCH_SIZE`/`EMBED_LEASE_SECONDS`/`EMBED_MAX_ATTEMPTS`/`EMBED_CALL_TIMEOUT_SECONDS`/`EMBED_MAX_RUN_SECONDS` (`config.LoadEmbed`; `EMBED_CONCURRENCY` chunks the embed calls inside a batch and belongs to `config.LoadEmbedClient`). For the one-time catalogue backfill (bumping `search.CurrentEmbedderModel()` re-enqueues the whole open catalogue), point `EMBED_URL` at a fast GPU endpoint to shorten the drain — there is no separate PG-only mode anymore (`EMBED_PG_ONLY` was removed alongside the Meili write it used to skip; every run was always Postgres-only in effect once that write was the only one left).

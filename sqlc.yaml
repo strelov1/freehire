@@ -1,11 +1,7 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    # Stage the contraction outside migrate's top-level glob for the code-first
-    # rollout. Promote it to migrations/ after every old sqlc binary is retired.
-    schema:
-      - "migrations/*.sql"
-      - "migrations/pending-semantic-embedding-drop/*.sql"
+    schema: "migrations"
     queries: "internal/platform/db/queries"
     gen:
       go:
