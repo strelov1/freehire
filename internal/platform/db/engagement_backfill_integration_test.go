@@ -42,10 +42,11 @@ func TestSetJobEngagement(t *testing.T) {
 		t.Fatalf("second write = %+v, want nothing — the guard did not hold", res)
 	}
 
-	// An entry already pending is re-stamped, not left alone: a reindex purge or a drain
+	// An entry already pending — even a dead-lettered one — is re-stamped, not left alone: a reindex purge or a drain
 	// holding the old generation must not swallow the new terms.
 	if _, err := pool.Exec(ctx,
-		"UPDATE search_outbox SET created_at = now() - interval '1 day' WHERE job_id = $1", job.ID); err != nil {
+		"UPDATE search_outbox SET created_at = now() - interval '1 day', attempts = 5, last_error = 'boom', failed_at = now() WHERE job_id = $1",
+		job.ID); err != nil {
 		t.Fatalf("age the entry: %v", err)
 	}
 	var oldID int64
@@ -67,6 +68,16 @@ func TestSetJobEngagement(t *testing.T) {
 	}
 	if newID == oldID || !fresh {
 		t.Fatalf("entry id %d -> %d, fresh=%v; want a new generation", oldID, newID, fresh)
+	}
+	// A dead-lettered entry is revived: the claim skips any row with failed_at, so a
+	// re-stamp that kept it would report a queued change the drain never pushes.
+	var live bool
+	if err := pool.QueryRow(ctx,
+		"SELECT failed_at IS NULL AND attempts = 0 AND last_error = '' FROM search_outbox WHERE job_id = $1", job.ID).Scan(&live); err != nil {
+		t.Fatalf("read entry state: %v", err)
+	}
+	if !live {
+		t.Fatal("re-stamped entry kept its dead-letter state; the drain would never claim it")
 	}
 
 	stored, err := q.GetJob(ctx, job.ID)

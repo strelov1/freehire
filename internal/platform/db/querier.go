@@ -7508,7 +7508,8 @@ type Querier interface {
 	// post-swap purge keeps an entry for a row it read before this write; and an entry already
 	// pending is RE-STAMPED (a new id and created_at, its lease kept) rather than left alone,
 	// the UpsertApplyForm rule: a drain that already claimed the old id finishes only that old
-	// generation, and the new one stays pending.
+	// generation, and the new one stays pending. A dead-lettered entry comes back to life:
+	// its failures belonged to the old document, and the claim skips any row with failed_at.
 	SetJobEngagement(ctx context.Context, arg SetJobEngagementParams) (SetJobEngagementRow, error)
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from

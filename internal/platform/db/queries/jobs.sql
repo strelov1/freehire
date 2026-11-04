@@ -3537,7 +3537,8 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- post-swap purge keeps an entry for a row it read before this write; and an entry already
 -- pending is RE-STAMPED (a new id and created_at, its lease kept) rather than left alone,
 -- the UpsertApplyForm rule: a drain that already claimed the old id finishes only that old
--- generation, and the new one stays pending.
+-- generation, and the new one stays pending. A dead-lettered entry comes back to life:
+-- its failures belonged to the old document, and the claim skips any row with failed_at.
 WITH updated AS (
     UPDATE jobs j
     SET engagement = COALESCE(sqlc.arg(engagement)::text[], '{}'),
@@ -3549,7 +3550,8 @@ WITH updated AS (
 enqueued AS (
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT u.id, u.eff_posted_at FROM updated u WHERE u.closed_at IS NULL
-    ON CONFLICT (job_id) DO UPDATE SET id = DEFAULT, created_at = now()
+    ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
     RETURNING job_id
 )
 SELECT (SELECT count(*) FROM updated)::bigint AS updated_count,
