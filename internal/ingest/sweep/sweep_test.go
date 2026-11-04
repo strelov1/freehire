@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // In a multi-provider run only the providers that ingested at least one job are swept,
@@ -373,4 +374,47 @@ func refs(boards ...string) []pipeline.BoardRef {
 		out[i] = pipeline.BoardRef{Board: b}
 	}
 	return out
+}
+
+func TestWithDetailReread(t *testing.T) {
+	// 2026-11-04 is day 308 of the year; 308 % 7 = 0.
+	now := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
+	off, err := BodyRefreshFor("", "", now)
+	if err != nil {
+		t.Fatalf("BodyRefreshFor: %v", err)
+	}
+
+	got := off.WithDetailReread("ess", now)
+	want := BodyRefresh{Cutoff: detailFieldAdded["ess"], Slices: detailRereadSlices, Slot: 0}
+	if got != want {
+		t.Errorf("listed provider = %+v, want %+v", got, want)
+	}
+
+	if got := off.WithDetailReread("greenhouse", now); got.Enabled() {
+		t.Errorf("unlisted provider = %+v, want disabled", got)
+	}
+
+	// An operator's BODY_REFRESH_DAYS is not overridden.
+	set, err := BodyRefreshFor("45", "", now)
+	if err != nil {
+		t.Fatalf("BodyRefreshFor: %v", err)
+	}
+	if got := set.WithDetailReread("ess", now); got != set {
+		t.Errorf("provider with its own refresh = %+v, want %+v", got, set)
+	}
+}
+
+// An entry naming a provider that does not exist would re-read nothing and look finished.
+func TestDetailFieldAddedNamesRealHydratingProviders(t *testing.T) {
+	registry := sources.All(sources.NewClient())
+	for provider := range detailFieldAdded {
+		src, ok := registry[provider]
+		if !ok {
+			t.Errorf("%q is not a registered provider", provider)
+			continue
+		}
+		if _, ok := src.(sources.HydratingSource); !ok {
+			t.Errorf("%q is not a HydratingSource, so withholding its rows changes nothing", provider)
+		}
+	}
 }
