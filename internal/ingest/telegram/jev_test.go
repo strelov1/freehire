@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/platform/jev"
 )
 
 // jevAnswering stands in for the Jev API, recording the request and answering one score.
@@ -25,7 +27,7 @@ func jevAnswering(t *testing.T, status int, body string, got *map[string]any) *J
 		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(srv.Close)
-	return NewJevJudge("jev-key", WithJevBaseURL(srv.URL))
+	return NewJevJudge("jev-key", jev.WithBaseURL(srv.URL))
 }
 
 func TestJevJudgeAsksOneYesNoQuestionAboutThePost(t *testing.T) {

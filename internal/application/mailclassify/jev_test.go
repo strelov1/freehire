@@ -8,7 +8,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/platform/jev"
 )
+
+// jevRequest is the wire body as the test server reads it.
+type jevRequest struct {
+	Model     string                  `json:"model"`
+	State     jevState                `json:"state"`
+	Questions map[string]jev.Question `json:"questions"`
+}
 
 func TestJevRubricDescribesEveryValidSignal(t *testing.T) {
 	for signal := range validSignals {
@@ -45,7 +54,7 @@ func TestJevClientUsesChosenSignalProbability(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := newJevClient("test-key", withJevBaseURL(srv.URL))
+	client := newJevClient("test-key", jev.WithBaseURL(srv.URL))
 	out, err := client.Classify(context.Background(), Input{
 		FromName: "Workable",
 		Subject:  "Thanks for applying to Derq",
@@ -87,7 +96,7 @@ func TestJevClientPicksOfferedApplication(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := newJevClient("test-key", withJevBaseURL(srv.URL))
+	client := newJevClient("test-key", jev.WithBaseURL(srv.URL))
 	out, err := client.Classify(context.Background(), Input{
 		Subject:    "Thanks for applying",
 		Body:       "We received your application.",
@@ -118,7 +127,7 @@ func TestJevClientRejectsApplicationWithoutProbability(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := newJevClient("test-key", withJevBaseURL(srv.URL))
+	client := newJevClient("test-key", jev.WithBaseURL(srv.URL))
 	if _, err := client.Classify(context.Background(), Input{
 		Subject:    "Thanks for applying",
 		Candidates: []Candidate{{JobID: 7, Company: "Globex"}},
@@ -141,7 +150,7 @@ func TestJevClientNoneApplicationStaysUnlinked(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := newJevClient("test-key", withJevBaseURL(srv.URL))
+	client := newJevClient("test-key", jev.WithBaseURL(srv.URL))
 	out, err := client.Classify(context.Background(), Input{
 		Subject:    "Code",
 		Candidates: []Candidate{{JobID: 7, Company: "Globex"}},
@@ -168,7 +177,7 @@ func TestJevClientRejectsUnknownApplication(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := newJevClient("test-key", withJevBaseURL(srv.URL))
+	client := newJevClient("test-key", jev.WithBaseURL(srv.URL))
 	_, err := client.Classify(context.Background(), Input{
 		Subject:    "No",
 		Candidates: []Candidate{{JobID: 1, Company: "Acme"}},
@@ -198,7 +207,7 @@ func TestJevClientBoundsSenderFields(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	huge := strings.Repeat("s", 50_000)
-	client := newJevClient("test-key", withJevBaseURL(srv.URL))
+	client := newJevClient("test-key", jev.WithBaseURL(srv.URL))
 	if _, err := client.Classify(context.Background(), Input{FromName: huge, Subject: huge, Body: huge}); err != nil {
 		t.Fatalf("Classify: %v", err)
 	}
@@ -224,7 +233,7 @@ func TestJevClientErrorsOnNon200(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := newJevClient("bad-key", withJevBaseURL(srv.URL))
+	client := newJevClient("bad-key", jev.WithBaseURL(srv.URL))
 	if _, err := client.Classify(context.Background(), Input{Subject: "Hi"}); err == nil {
 		t.Fatal("Classify against a 401 returned no error")
 	}

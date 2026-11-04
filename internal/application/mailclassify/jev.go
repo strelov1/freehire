@@ -1,24 +1,18 @@
 package mailclassify
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"math"
-	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/strelov1/freehire/internal/platform/jev"
 	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 const (
-	jevBaseURL             = "https://api.typesafe.ai"
-	jevTimeout             = 15 * time.Second
-	jevModel               = "jev-latest"
+	jevModel               = jev.Model
 	jevSignalQuestion      = "signal"
 	jevApplicationQuestion = "application"
 	jevNoneApplication     = "0"
@@ -71,98 +65,33 @@ type jevGen interface {
 	Classify(ctx context.Context, in Input) (Classification, error)
 }
 
-type jevClient struct {
-	httpClient *http.Client
-	baseURL    string
-	apiKey     string
+type jevClient struct{ client *jev.Client }
+
+// newJevClient takes jev.WithBaseURL to point at a test server instead of the live API.
+func newJevClient(apiKey string, opts ...jev.Option) *jevClient {
+	return &jevClient{client: jev.New(apiKey, opts...)}
 }
 
-type jevClientOption func(*jevClient)
-
-func withJevBaseURL(url string) jevClientOption {
-	return func(c *jevClient) { c.baseURL = url }
-}
-
-func newJevClient(apiKey string, opts ...jevClientOption) *jevClient {
-	c := &jevClient{
-		httpClient: &http.Client{Timeout: jevTimeout},
-		baseURL:    jevBaseURL,
-		apiKey:     apiKey,
-	}
-	for _, opt := range opts {
-		opt(c)
-	}
-	return c
-}
-
-type jevRequest struct {
-	State     jevState               `json:"state"`
-	Model     string                 `json:"model"`
-	Questions map[string]jevQuestion `json:"questions"`
-}
-
+// jevState is what the classifier tells Jev about the email.
 type jevState struct {
 	From    string `json:"from"`
 	Subject string `json:"subject"`
 	Body    string `json:"body"`
 }
 
-type jevQuestion struct {
-	Type         string            `json:"type"`
-	Instructions string            `json:"instructions"`
-	Criteria     map[string]string `json:"criteria"`
-}
-
-type jevResponse struct {
-	Answers map[string]jevAnswer `json:"answers"`
-}
-
-type jevAnswer struct {
-	Choice        string             `json:"choice"`
-	Probabilities map[string]float64 `json:"probabilities"`
-}
-
 func (j *jevClient) Classify(ctx context.Context, in Input) (Classification, error) {
 	if err := candidatesAskable(in.Candidates); err != nil {
 		return Classification{}, err
 	}
-	body, err := json.Marshal(jevRequest{
-		State: jevState{
-			From:    llm.TruncateRunes(in.FromName, maxHeaderRunes),
-			Subject: llm.TruncateRunes(in.Subject, maxHeaderRunes),
-			Body:    llm.TruncateRunes(in.Body, maxBodyRunes),
-		},
-		Model:     jevModel,
-		Questions: jevQuestions(in),
-	})
-	if err != nil {
-		return Classification{}, fmt.Errorf("mailclassify: jev: encode request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, j.baseURL+"/v1/systemone", bytes.NewReader(body))
-	if err != nil {
-		return Classification{}, fmt.Errorf("mailclassify: jev: build request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+j.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := j.httpClient.Do(req)
+	answers, err := j.client.Ask(ctx, jevState{
+		From:    llm.TruncateRunes(in.FromName, maxHeaderRunes),
+		Subject: llm.TruncateRunes(in.Subject, maxHeaderRunes),
+		Body:    llm.TruncateRunes(in.Body, maxBodyRunes),
+	}, jevQuestions(in))
 	if err != nil {
 		return Classification{}, fmt.Errorf("mailclassify: jev: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		return Classification{}, fmt.Errorf("mailclassify: jev: unexpected status %d", resp.StatusCode)
-	}
-
-	var parsed jevResponse
-	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return Classification{}, fmt.Errorf("mailclassify: jev: decode response: %w", err)
-	}
-	return classificationFrom(parsed.Answers, in)
+	return classificationFrom(answers, in)
 }
 
 func candidatesAskable(candidates []Candidate) error {
@@ -185,8 +114,8 @@ func candidatesAskable(candidates []Candidate) error {
 	return nil
 }
 
-func jevQuestions(in Input) map[string]jevQuestion {
-	questions := map[string]jevQuestion{
+func jevQuestions(in Input) map[string]jev.Question {
+	questions := map[string]jev.Question{
 		jevSignalQuestion: {
 			Type:         "choice",
 			Instructions: jevSignalInstructions,
@@ -205,7 +134,7 @@ func jevQuestions(in Input) map[string]jevQuestion {
 		}
 		apps[strconv.FormatInt(c.JobID, 10)] = llm.TruncateRunes(company, maxHeaderRunes)
 	}
-	questions[jevApplicationQuestion] = jevQuestion{
+	questions[jevApplicationQuestion] = jev.Question{
 		Type:         "choice",
 		Instructions: jevApplicationInstructions,
 		Criteria:     apps,
@@ -213,7 +142,7 @@ func jevQuestions(in Input) map[string]jevQuestion {
 	return questions
 }
 
-func classificationFrom(answers map[string]jevAnswer, in Input) (Classification, error) {
+func classificationFrom(answers map[string]jev.Answer, in Input) (Classification, error) {
 	signal, ok := answers[jevSignalQuestion]
 	if !ok {
 		return Classification{}, fmt.Errorf("mailclassify: jev: response carried no %q answer", jevSignalQuestion)
@@ -250,7 +179,7 @@ func classificationFrom(answers map[string]jevAnswer, in Input) (Classification,
 }
 
 // chosenProbability is the probability Jev gave its own choice, if it is a usable one.
-func chosenProbability(a jevAnswer) (float64, bool) {
+func chosenProbability(a jev.Answer) (float64, bool) {
 	p, ok := a.Probabilities[a.Choice]
 	if !ok || math.IsNaN(p) || math.IsInf(p, 0) || p < 0 || p > 1 {
 		return 0, false
