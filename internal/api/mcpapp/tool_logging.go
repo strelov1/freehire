@@ -92,6 +92,9 @@ func addLoggedTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.
 	// Capture the registered name so a caller cannot inject a name into the log.
 	name := tool.Name
 	registerTool(name)
+	if tool.InputSchema == nil {
+		tool.InputSchema = inputSchema[In]()
+	}
 	mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
 		finish := observeTool(ctx, "public", name)
 		// A panic deliberately leaves the start unmatched; do not recover it or log
