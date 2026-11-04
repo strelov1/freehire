@@ -183,20 +183,27 @@
             }
           });
       }, 200);
-    } else if (previewCount) {
-      const pc = previewCount;
-      t = setTimeout(() => {
-        pc(params)
-          .then((n) => {
-            if (gen === countGen) {
-              showCount = n;
-              countFailed = false;
-            }
-          })
-          .catch(() => {
-            if (gen === countGen) countFailed = true;
-          });
-      }, 200);
+    } else {
+      // No distribution to fetch (a personal filter is staged): a request that was in
+      // flight is now outdated by `gen`, so nothing would ever clear its spinner or its
+      // figure — leave neither behind.
+      loading = false;
+      liveCounts = null;
+      if (previewCount) {
+        const pc = previewCount;
+        t = setTimeout(() => {
+          pc(params)
+            .then((n) => {
+              if (gen === countGen) {
+                showCount = n;
+                countFailed = false;
+              }
+            })
+            .catch(() => {
+              if (gen === countGen) countFailed = true;
+            });
+        }, 200);
+      }
     }
     return () => clearTimeout(t);
   });
