@@ -77,3 +77,21 @@ func TestAskErrors(t *testing.T) {
 		})
 	}
 }
+
+// A 307 would make net/http replay the POST body to Location; the client must stop at it.
+func TestAskDoesNotFollowRedirect(t *testing.T) {
+	var followed bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/elsewhere" {
+			followed = true
+			_, _ = w.Write([]byte(`{"answers":{}}`))
+			return
+		}
+		http.Redirect(w, r, "/elsewhere", http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(srv.Close)
+	_, err := New("k", WithBaseURL(srv.URL)).Ask(context.Background(), nil, nil)
+	if followed || err == nil || !strings.Contains(err.Error(), "unexpected status 307") {
+		t.Fatalf("followed=%v err=%v, want the 307 refused without a second request", followed, err)
+	}
+}

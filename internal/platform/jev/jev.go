@@ -66,7 +66,11 @@ func WithBaseURL(url string) Option {
 
 // New builds a client authenticated with apiKey.
 func New(apiKey string, opts ...Option) *Client {
-	c := &Client{httpClient: &http.Client{Timeout: timeout}, baseURL: BaseURL, apiKey: apiKey}
+	c := &Client{httpClient: &http.Client{
+		Timeout: timeout,
+		// Never follow: a 307/308 replays the POST body (profiles, emails) to the Location.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}, baseURL: BaseURL, apiKey: apiKey}
 	for _, opt := range opts {
 		opt(c)
 	}
