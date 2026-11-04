@@ -98,7 +98,9 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		"unsave_job":  assistant.EffectOverwrites,
 		"track_job":   assistant.EffectOverwrites,
 		// Files a moderation report; changes nothing the person already had.
-		"report_job": assistant.EffectAdds,
+		"report_job":              assistant.EffectAdds,
+		"suggest_dictionary_term": assistant.EffectAdds,
+		"report_problem":          assistant.EffectAdds,
 
 		"auto_apply_list":       assistant.EffectReads,
 		"auto_apply_get":        assistant.EffectReads,

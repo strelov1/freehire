@@ -18,9 +18,17 @@ Authentication for it is a Fiber middleware in
 It also admits a **full-scope API key** (`fhk_…`), the mirror of REST admitting an OAuth
 grant wherever a key goes. That is how the local npm server (`freehire-mcp`), which holds a
 key and no grant, manages job alerts through these same tools instead of a second
-implementation. A key is served everything a grant is EXCEPT the auto-apply tools
-(`mcpKeyTools`): those send applications in the person's name and have never been open to a
-key over REST. A narrow (`cv`) key is a 403.
+implementation. `mcpKeyTools` omits OAuth-only actions: auto-apply, dictionary
+suggestions and problem reports. Dictionary suggestions preserve the cookie-only REST
+gate; problem reports use the signed-in agent's reporting workflow. A narrow (`cv`) key is a 403.
+
+OAuth clients use `suggest_dictionary_term` when a user-requested specialization, skill
+or company industry cannot be resolved; zero search hits alone do not prove a gap.
+`report_problem` records a brief redacted account-bound report for failed operations or
+missing capabilities, without a separate reporting request. Reports stay private to
+operators. Report once per issue, never recursively report a reporting failure, and
+continue the original task where possible. These directions are in account initialization
+only when the corresponding tools are served; the plugin skill carries examples.
 
 The account server's job-alert tools (`subscribe`, `list_subscriptions`,
 `update_subscription`, `unsubscribe`, `subscription_updates`, in

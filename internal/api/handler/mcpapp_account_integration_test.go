@@ -20,6 +20,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/application/jobtracking"
+	"github.com/strelov1/freehire/internal/engage/problemreport"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -53,8 +54,10 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 	}
 
 	assistants := &assistantHandlers{
-		queries:  queries,
-		tracking: &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
+		queries:    queries,
+		dictionary: &dictionaryHandlers{pool: pool, queries: queries},
+		problems:   problemreport.New(pool, queries),
+		tracking:   &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
@@ -102,8 +105,38 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 		}
 		defer func() { _ = session.Close() }()
 		assertAccountCatalogue(t, session)
+		res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+			Name:      suggestDictionaryTermToolName,
+			Arguments: map[string]any{"kind": "specialization", "term": "Unlisted Quasar Specialist"},
+		})
+		if err != nil || res.IsError {
+			t.Fatalf("dictionary call: %+v %v", res, err)
+		}
+		var submittedBy int64
+		if err := pool.QueryRow(t.Context(), `SELECT submitted_by FROM dictionary_gaps WHERE kind='specialization'`).Scan(&submittedBy); err != nil {
+			t.Fatal(err)
+		}
+		if submittedBy != userID {
+			t.Fatalf("dictionary suggestion owner=%d want%d", submittedBy, userID)
+		}
+		res, err = session.CallTool(t.Context(), &mcp.CallToolParams{
+			Name: "report_problem",
+			Arguments: map[string]any{
+				"category": "missing_capability", "goal": "Compare a requested unsupported field",
+				"expected": "A matching filter", "actual": "No such filter is available",
+			},
+		})
+		if err != nil || res.IsError {
+			t.Fatalf("problem report call: %+v %v", res, err)
+		}
+		if err := pool.QueryRow(t.Context(), `SELECT user_id FROM problem_reports`).Scan(&submittedBy); err != nil {
+			t.Fatal(err)
+		}
+		if submittedBy != userID {
+			t.Fatalf("problem report owner=%d want%d", submittedBy, userID)
+		}
 
-		res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		res, err = session.CallTool(context.Background(), &mcp.CallToolParams{
 			Name: "my_jobs", Arguments: map[string]any{},
 		})
 		if err != nil {

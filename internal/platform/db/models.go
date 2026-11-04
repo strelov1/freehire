@@ -1343,6 +1343,30 @@ type PlanLimitHit struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type ProblemReport struct {
+	ID              int64              `json:"id"`
+	UserID          int64              `json:"user_id"`
+	Category        string             `json:"category"`
+	Goal            string             `json:"goal"`
+	Expected        string             `json:"expected"`
+	Actual          string             `json:"actual"`
+	ToolName        string             `json:"tool_name"`
+	ErrorCode       string             `json:"error_code"`
+	Fingerprint     string             `json:"fingerprint"`
+	RequestID       string             `json:"request_id"`
+	Status          string             `json:"status"`
+	RequestCount    int32              `json:"request_count"`
+	FirstReportedAt pgtype.Timestamptz `json:"first_reported_at"`
+	LastReportedAt  pgtype.Timestamptz `json:"last_reported_at"`
+	ResolutionNote  string             `json:"resolution_note"`
+}
+
+type ProblemReportDaily struct {
+	UserID int64       `json:"user_id"`
+	Day    pgtype.Date `json:"day"`
+	Writes int32       `json:"writes"`
+}
+
 type ProcessedViewLog struct {
 	Signature   int64              `json:"signature"`
 	Filename    string             `json:"filename"`

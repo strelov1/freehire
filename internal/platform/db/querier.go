@@ -500,6 +500,7 @@ type Querier interface {
 	// lease predicate reclaims entries whose worker died (stale claimed_at), so no
 	// separate reaper process is needed.
 	ClaimEnrichmentBatch(ctx context.Context, arg ClaimEnrichmentBatchParams) ([]ClaimEnrichmentBatchRow, error)
+	ClaimProblemReportWrite(ctx context.Context, arg ClaimProblemReportWriteParams) (int32, error)
 	// Claim-and-delete a bounded batch, oldest first, joined to jobs for the fields the
 	// feed displays. company_slug rides along beside company: recentfeed.Group buckets a
 	// same-company burst by the slug (the canonical company key — see AGENTS.md, "Company
@@ -6281,6 +6282,7 @@ type Querier interface {
 	// plan.Store.Consume on every real refusal (not FairUse, not Shadowed); see that
 	// file for the distinction.
 	RecordPlanLimitHit(ctx context.Context, arg RecordPlanLimitHitParams) error
+	RecordProblemReport(ctx context.Context, arg RecordProblemReportParams) (RecordProblemReportRow, error)
 	// Count a failed send: bump attempts, record the error, and dead-letter (failed_at)
 	// once attempts reach the max. claimed_at is left in place — its expiry gates the
 	// retry to a later pass and doubles as the crash reaper, mirroring subscription_matches.
