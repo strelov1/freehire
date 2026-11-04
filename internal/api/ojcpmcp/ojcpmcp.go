@@ -101,6 +101,7 @@ func readOnly() *mcp.ToolAnnotations {
 
 func newServer(r Reader, origin string) *mcp.Server {
 	server := mcp.NewServer(mcpapp.Identity("freehire-ojcp", ojcp.Version, origin), nil)
+	mcpapp.Instrument(server, "freehire-ojcp", ojcp.Version)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         toolSearchJobs,

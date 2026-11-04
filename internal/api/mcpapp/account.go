@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/posthog/posthog-go/posthogmcpsdk"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/platform/observability"
@@ -62,6 +63,11 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.
 				Tools:   &mcp.ToolCapabilities{},
 			},
 		})
+	// A signed-in call's arguments and results are the account's own data (applications,
+	// screening answers), so only the tool name, outcome and timing reach PostHog.
+	Instrument(server, "freehire-account", Version,
+		posthogmcpsdk.WithCaptureParameters(false),
+		posthogmcpsdk.WithCaptureResponses(false))
 
 	for _, t := range tools {
 		server.AddTool(&mcp.Tool{
