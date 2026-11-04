@@ -109,6 +109,10 @@
   // to it, so the jump never lands on a missing tab.
   const hasSavedTab = $derived(savedSearches && !railKeys);
   const showHideSeen = $derived(hideSeenAvailable && !plain && isAuthenticated());
+  // Both personal filters are applied by the search only: /jobs/facets ignores them, so a
+  // count or a facet distribution fetched with either staged would describe a wider set
+  // than "Show results" returns.
+  const personalStaged = $derived(staged.value.formerEmployers || (showHideSeen && staged.value.hideSeen));
   const showFormerEmployers = $derived(formerEmployersAvailable && !plain && isAuthenticated());
 
   // Warm the Telegram feature flag and the user's profile when the modal opens for a
@@ -268,7 +272,7 @@
           },
         ]
       : []),
-    ...jobFilterSearchItems({ exclude, railKeys, openWithin: openWithinAvailable, formerEmployers: showFormerEmployers }),
+    ...jobFilterSearchItems({ exclude, railKeys, openWithin: openWithinAvailable, formerEmployers: showFormerEmployers, hideSeen: showHideSeen }),
     ...remoteHits,
   ]);
 
@@ -322,7 +326,7 @@
     if (!action) return null;
     const colon = action.indexOf(':');
     if (colon < 0) {
-      if (action === 'visa' || action === 'hide-ai' || action === 'auto-apply' || action === 'short-apply' || action === 'former-employers')
+      if (action === 'visa' || action === 'hide-ai' || action === 'auto-apply' || action === 'short-apply' || action === 'former-employers' || action === 'hide-seen')
         return { kind: action, rest: '' };
       return null;
     }
@@ -339,6 +343,8 @@
     switch (action?.kind) {
       case 'former-employers':
         return { ...off, included: staged.value.formerEmployers };
+      case 'hide-seen':
+        return { ...off, included: staged.value.hideSeen };
       case 'visa':
         return { ...off, included: staged.value.visa };
       case 'hide-ai':
@@ -368,6 +374,9 @@
     switch (action?.kind) {
       case 'former-employers':
         if (showFormerEmployers) staged.setFormerEmployers(!staged.value.formerEmployers);
+        return;
+      case 'hide-seen':
+        if (showHideSeen) staged.setHideSeen(!staged.value.hideSeen);
         return;
       case 'visa':
         staged.setVisa(!staged.value.visa);
@@ -457,7 +466,7 @@
   {applyDisabled}
   {applyLabel}
   {previewCount}
-  countsFetch={staged.value.formerEmployers ? undefined : stagedCounts}
+  countsFetch={personalStaged ? undefined : stagedCounts}
   {pane}
   headerAction={showProfileAction ? profileAction : undefined}
   {titleHint}
@@ -574,7 +583,7 @@
 {/snippet}
 
 {#snippet pane(entry: RailEntry, live: FacetCounts | null)}
-  {@const c = staged.value.formerEmployers ? null : live ?? counts}
+  {@const c = personalStaged ? null : live ?? counts}
   {#if entry.kind === 'saved'}
     <SavedSearches store={staged} />
   {:else if entry.kind === 'category'}

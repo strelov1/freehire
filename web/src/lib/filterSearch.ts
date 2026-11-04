@@ -132,6 +132,10 @@ function buildJobCatalog(): FilterSearchHit[] {
     param: 'company_slug',
     aliases: ['former employers', 'past employers', 'previous employers'],
   });
+  hits.push({
+    ...actionHit('posted', 'Posted', 'Hide viewed', 'hide-seen'),
+    aliases: ['viewed', 'seen', 'opened', 'already viewed'],
+  });
   pushFacet(hits, 'source', 'source_type');
   for (const [value, label] of Object.entries(SOURCE_LABELS)) {
     hits.push(optionHit('source', 'source', 'Source', { value, label }));
@@ -158,6 +162,7 @@ export function jobFilterSearchItems(opts?: {
   railKeys?: readonly string[];
   openWithin?: boolean;
   formerEmployers?: boolean;
+  hideSeen?: boolean;
 }): FilterSearchHit[] {
   jobCatalog ??= buildJobCatalog();
   const exclude = new Set(opts?.exclude ?? []);
@@ -167,6 +172,7 @@ export function jobFilterSearchItems(opts?: {
     if (hit.param && exclude.has(hit.param)) return false;
     if (!opts?.openWithin && hit.action?.startsWith('open:')) return false;
     if (!opts?.formerEmployers && hit.action === 'former-employers') return false;
+    if (!opts?.hideSeen && hit.action === 'hide-seen') return false;
     return true;
   });
 }
