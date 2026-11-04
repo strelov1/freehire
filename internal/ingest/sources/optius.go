@@ -247,7 +247,7 @@ func optiusTotal(root *html.Node) (int, bool) {
 	if span == nil {
 		return 0, false
 	}
-	n, err := strconv.Atoi(strings.ReplaceAll(optiusClean(textContent(span)), ".", ""))
+	n, err := strconv.Atoi(strings.ReplaceAll(collapseSpace(textContent(span)), ".", ""))
 	return n, err == nil
 }
 
@@ -278,10 +278,10 @@ func optiusCardFrom(n *html.Node) (optiusCard, bool) {
 	}
 	c := optiusCard{id: m[2], url: optiusBaseURL + path}
 	if h := firstByTag(n, "h3"); h != nil {
-		c.title = optiusClean(textContent(h))
+		c.title = collapseSpace(textContent(h))
 	}
 	if name := firstByClass(n, "company-name"); name != nil {
-		c.company = optiusClean(textContent(name))
+		c.company = collapseSpace(textContent(name))
 	}
 	if infos := firstByClass(n, "job-infos"); infos != nil {
 		walk(infos, func(x *html.Node) bool {
@@ -289,7 +289,7 @@ func optiusCardFrom(n *html.Node) (optiusCard, bool) {
 				return true
 			}
 			left, right := firstByClass(x, "left"), firstByClass(x, "right")
-			if left != nil && right != nil && optiusClean(textContent(left)) == "Kraj dela" {
+			if left != nil && right != nil && collapseSpace(textContent(left)) == "Kraj dela" {
 				c.place = optiusPlace(textContent(right))
 			}
 			return false
@@ -301,8 +301,6 @@ func optiusCardFrom(n *html.Node) (optiusCard, bool) {
 	return c, true
 }
 
-func optiusClean(s string) string { return strings.Join(strings.Fields(s), " ") }
-
 // optiusPlateCode is the vehicle-registration code the site's region names carry ("Podravska -
 // MB"). Read as a geography token it is a foreign state or country (MB is Manitoba, KR Korea).
 var optiusPlateCode = regexp.MustCompile(`\s+-\s+[A-Z]{2}\s*(,|$)`)
@@ -310,7 +308,7 @@ var optiusPlateCode = regexp.MustCompile(`\s+-\s+[A-Z]{2}\s*(,|$)`)
 // optiusPlace cleans a card's "Kraj dela" (place of work): the region's plate code is dropped,
 // and the space the site leaves before a comma with it.
 func optiusPlace(s string) string {
-	s = optiusPlateCode.ReplaceAllString(optiusClean(s), "$1")
+	s = optiusPlateCode.ReplaceAllString(collapseSpace(s), "$1")
 	return strings.ReplaceAll(s, " ,", ",")
 }
 
@@ -378,9 +376,7 @@ func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
 		return Job{}, false, fmt.Errorf("posting page carries no body")
 	}
 	if hasLD {
-		if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
-			j.PostedAt = NotFuture(&t)
-		}
+		j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
 		// validThrough is the source's own last application day, a bare UTC date. Unlike a
 		// posted_at it may legitimately sit today or tomorrow, so it is not run through
 		// NotFuture; a stale one past today closes the posting on the write.
@@ -404,7 +400,7 @@ func optiusBody(section *html.Node) string {
 	var b strings.Builder
 	heading := ""
 	writeHeading := func(n *html.Node) {
-		heading = optiusClean(textContent(n))
+		heading = collapseSpace(textContent(n))
 		if heading != "" {
 			b.WriteString("<h3>" + html.EscapeString(heading) + "</h3>")
 		}
@@ -431,7 +427,7 @@ func optiusBody(section *html.Node) string {
 			}
 			if h := firstByClass(left, "section-title"); h != nil {
 				writeHeading(h)
-			} else if label := strings.TrimSuffix(optiusClean(textContent(left)), ":"); label != "" && label != heading {
+			} else if label := strings.TrimSuffix(collapseSpace(textContent(left)), ":"); label != "" && label != heading {
 				b.WriteString("<p><strong>" + html.EscapeString(label) + "</strong></p>")
 			}
 			b.WriteString("<div>" + innerHTML(right) + "</div>")

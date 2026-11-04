@@ -310,9 +310,7 @@ func shineJob(ld shineLD, p shinePosting) (Job, bool) {
 		places = append(places, city)
 	}
 	j.Location = strings.Join(places, "; ")
-	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseRFC3339(strings.TrimSpace(ld.DatePosted))
 	switch strings.ToUpper(strings.TrimSpace(ld.EmploymentType)) {
 	case "FULL_TIME":
 		j.EmploymentType = "full_time"

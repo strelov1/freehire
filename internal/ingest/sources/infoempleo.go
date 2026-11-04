@@ -266,7 +266,7 @@ func infoempleoCardFrom(n *html.Node) (infoempleoCard, bool) {
 	fact := func(class string) string {
 		if f := firstByClass(n, class); f != nil {
 			if span := firstByTag(f, "span"); span != nil {
-				return infoempleoClean(textContent(span))
+				return collapseSpace(textContent(span))
 			}
 		}
 		return ""
@@ -274,22 +274,20 @@ func infoempleoCardFrom(n *html.Node) (infoempleoCard, bool) {
 	c := infoempleoCard{
 		id:         id,
 		url:        infoempleoBaseURL + href,
-		title:      infoempleoClean(textContent(a)),
+		title:      collapseSpace(textContent(a)),
 		place:      fact("offer-location"),
 		contract:   fact("offer-contract-fact"),
 		remote:     fact("offer-remote-fact"),
 		experience: fact("offer-experience-fact"),
 	}
 	if co := firstByClass(n, "company-name"); co != nil {
-		c.company = infoempleoClean(textContent(co))
+		c.company = collapseSpace(textContent(co))
 	}
 	if c.title == "" {
 		return infoempleoCard{}, false
 	}
 	return c, true
 }
-
-func infoempleoClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // infoempleoBaseJob is the body-less Job a card alone supports: the identity, and the facts the
 // gate judges on.
@@ -380,7 +378,7 @@ var infoempleoYears = regexp.MustCompile(`(\d+)\s+años?`)
 // title, employer or body.
 func infoempleoJob(ld infoempleoLD, c infoempleoCard) (Job, bool) {
 	j := infoempleoBaseJob(c)
-	if t := infoempleoClean(ld.Title); t != "" {
+	if t := collapseSpace(ld.Title); t != "" {
 		j.Title = t
 	}
 	if co := strings.TrimSpace(ld.HiringOrganization.Name); co != "" {
@@ -408,9 +406,7 @@ func infoempleoJob(ld infoempleoLD, c infoempleoCard) (Job, bool) {
 	if len(places) > 0 {
 		j.Location = strings.Join(places, "; ")
 	}
-	if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
 	j.WorkMode = infoempleoWorkMode(ld.JobLocationType, c.remote)
 	j.Remote = j.WorkMode == "remote"
 	j.EmploymentType = infoempleoEmploymentType(ld.EmploymentType, c.contract)

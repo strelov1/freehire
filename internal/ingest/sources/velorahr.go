@@ -181,9 +181,7 @@ func (o velorahrOffer) job(company string) (Job, bool) {
 		EmploymentType: velorahrEmploymentType(o.ContractType, o.WorkSchedule),
 	}
 	j.Remote = j.WorkMode == "remote"
-	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(o.CreatedAt)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseRFC3339(strings.TrimSpace(o.CreatedAt))
 	if o.OptionalFields != nil {
 		if period := velorahrSalaryPeriod(o.OptionalFields.SalaryType); o.ShowSalary && period != "" &&
 			o.SalaryFrom > 0 && o.SalaryTo >= o.SalaryFrom && len(o.SalaryCurrency) == 3 {

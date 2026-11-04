@@ -120,7 +120,7 @@ func (s foxconn) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 	}
 	jobs := fetchDetails(list, defaultDetailWorkers, func(v foxconnVacancy) (Job, bool) {
 		if seen(v.ID) {
-			return Job{ExternalID: v.ID, URL: foxconnJobURL + v.ID, Title: foxconnTitle(v.Title), Company: e.Company, SeenRefresh: true}, true
+			return Job{ExternalID: v.ID, URL: foxconnJobURL + v.ID, Title: collapseSpace(v.Title), Company: e.Company, SeenRefresh: true}, true
 		}
 		return s.detail(ctx, e, v)
 	})
@@ -144,7 +144,7 @@ func (s foxconn) detail(ctx context.Context, e CompanyEntry, listed foxconnVacan
 		log.Printf("foxconn: vacancy %s answered as %q; deferring", listed.ID, v.ID)
 		return Job{}, false
 	}
-	title := foxconnTitle(firstNonEmpty(v.Title, listed.Title))
+	title := collapseSpace(firstNonEmpty(v.Title, listed.Title))
 	body := v.body()
 	if title == "" || body == "" {
 		return Job{}, false
@@ -172,5 +172,3 @@ func (s foxconn) detail(ctx context.Context, e CompanyEntry, listed foxconnVacan
 	}
 	return job, true
 }
-
-func foxconnTitle(s string) string { return strings.Join(strings.Fields(s), " ") }

@@ -193,8 +193,8 @@ func (s feinaactiva) walk(ctx context.Context, batches chan<- feinaactivaBatch, 
 func feinaactivaJob(o feinaactivaOffer) (Job, bool) {
 	d := o.Detail
 	ref := strings.TrimSpace(o.Reference)
-	title := strings.TrimSuffix(feinaactivaClean(d.Title), " CIDO")
-	company := feinaactivaClean(d.Business.Name)
+	title := strings.TrimSuffix(collapseSpace(d.Title), " CIDO")
+	company := collapseSpace(d.Business.Name)
 	if ref == "" || title == "" || company == "" || !d.Business.HasName || feinaactivaHiddenEmployer(company) {
 		return Job{}, false
 	}
@@ -214,9 +214,7 @@ func feinaactivaJob(o feinaactivaOffer) (Job, bool) {
 		j.Location = place
 		j.Countries = []string{"es"}
 	}
-	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(d.PublishedAt)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseRFC3339(strings.TrimSpace(d.PublishedAt))
 	for _, c := range d.Conditions {
 		lc := strings.ToLower(c)
 		switch {
@@ -249,8 +247,6 @@ func feinaactivaHiddenEmployer(name string) bool {
 	}
 	return strings.HasPrefix(name, "Empresa ") && !feinaactivaLegalForm.MatchString(name)
 }
-
-func feinaactivaClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // feinaactivaBody renders the offer's sections as HTML: the summary, the duties ("Veure
 // convocatòria" — "see the call" — on a relayed public-sector call says nothing and is dropped),

@@ -337,11 +337,7 @@ func cathoDate(s string) *time.Time {
 	if len(s) < 10 {
 		return nil
 	}
-	t, err := time.Parse("2006-01-02", s[:10])
-	if err != nil {
-		return nil
-	}
-	return &t
+	return parseDate(s[:10])
 }
 
 // cathoEmploymentType maps Catho's contract regime. Only values with a lossless counterpart are

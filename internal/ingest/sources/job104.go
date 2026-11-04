@@ -335,9 +335,7 @@ func job104Job(r job104Row, areas map[string]string) (Job, bool) {
 		years := r.Period - 1
 		j.ExperienceYearsMin = &years
 	}
-	if t, err := time.Parse("20060102", r.AppearDate); err == nil {
-		j.PostedAt = &t
-	}
+	j.PostedAt = parseLayout("20060102", r.AppearDate)
 	job104Salary(&j, r)
 	return j, true
 }

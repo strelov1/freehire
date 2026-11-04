@@ -438,9 +438,7 @@ func (s servicepublic) detail(ctx context.Context, c servicepublicCard) (Job, bo
 	if code := location.NormalizeCountry(strings.TrimSpace(ld.JobLocation.Address.Country)); code != "" {
 		j.Countries = []string{code}
 	}
-	if t, err := time.Parse("02/01/2006", strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseLayout("02/01/2006", strings.TrimSpace(ld.DatePosted))
 	j.WorkMode = servicepublicWorkMode(servicepublicFact(root, "Télétravail possible"))
 	return j, true, nil
 }

@@ -164,7 +164,7 @@ func (s bumeran) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ex
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(cards))
 		for _, c := range cards {
-			companies = append(companies, bumeranClean(c.Company))
+			companies = append(companies, collapseSpace(c.Company))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -270,7 +270,7 @@ func (s bumeran) list(ctx context.Context) ([]bumeranCard, error) {
 // ("Importante empresa de retail", "Empresa Alimenticia", a bare "Consultora"). Filing those under
 // the label would invent one employer collecting every anonymous posting of its kind.
 func bumeranHiddenEmployer(name string, confidential bool) bool {
-	n := strings.ToLower(bumeranClean(name))
+	n := strings.ToLower(collapseSpace(name))
 	switch {
 	case confidential, n == "", n == "confidencial", n == "consultora", n == "empresa":
 		return true
@@ -293,8 +293,6 @@ func bumeranLegalForm(n string) bool {
 	return false
 }
 
-func bumeranClean(s string) string { return strings.Join(strings.Fields(s), " ") }
-
 // bumeranPostingURL is the posting's public page. The page is a single-page app that reads only
 // the trailing id, so the slug is cosmetic; it is built the site's way, title then employer.
 func bumeranPostingURL(id int64, title, company string) string {
@@ -308,13 +306,13 @@ func bumeranPostingURL(id int64, title, company string) string {
 // bumeranBaseJob is the body-less Job a search result alone supports: the identity, and the
 // facts the gate judges on.
 func bumeranBaseJob(c bumeranCard) Job {
-	title, company := bumeranClean(c.Title), bumeranClean(c.Company)
+	title, company := collapseSpace(c.Title), collapseSpace(c.Company)
 	return Job{
 		ExternalID:        strconv.FormatInt(c.ID, 10),
 		URL:               bumeranPostingURL(c.ID, title, company),
 		Title:             title,
 		Company:           company,
-		Location:          bumeranClean(c.Place),
+		Location:          collapseSpace(c.Place),
 		WorkMode:          bumeranWorkMode(c.WorkMode),
 		Remote:            bumeranWorkMode(c.WorkMode) == "remote",
 		EmploymentType:    bumeranEmploymentType(c.Schedule),
@@ -350,10 +348,10 @@ func (s bumeran) detail(ctx context.Context, c bumeranCard) (Job, bool, error) {
 func bumeranJob(d bumeranDetail, c bumeranCard) (Job, bool) {
 	a := d.Aviso
 	j := bumeranBaseJob(c)
-	if t := bumeranClean(a.Title); t != "" {
+	if t := collapseSpace(a.Title); t != "" {
 		j.Title = t
 	}
-	if co := bumeranClean(a.Company.Name); co != "" {
+	if co := collapseSpace(a.Company.Name); co != "" {
 		j.Company = co
 	}
 	if bumeranHiddenEmployer(j.Company, a.Company.Confidential) {
@@ -364,7 +362,7 @@ func bumeranJob(d bumeranDetail, c bumeranCard) (Job, bool) {
 		return Job{}, false
 	}
 	j.URL = bumeranPostingURL(c.ID, j.Title, j.Company)
-	if place := bumeranClean(a.Location.Detail); place != "" {
+	if place := collapseSpace(a.Location.Detail); place != "" {
 		j.Location = place
 	}
 	if code := location.NormalizeCountry(strings.TrimSpace(a.Location.Country)); code != "" && !slices.Contains(j.Countries, code) {

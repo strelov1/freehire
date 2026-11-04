@@ -193,10 +193,5 @@ func dassaultLocation(city, country string) string {
 // dassaultDate reads content_start_datetime ("2026/10/14 03:10:27"), the date the posting page
 // shows as "Posted on".
 func dassaultDate(s string) *time.Time {
-	t, err := time.Parse("2006/01/02 15:04:05", strings.TrimSpace(s))
-	if err != nil {
-		return nil
-	}
-	t = t.UTC()
-	return &t
+	return parseLayout("2006/01/02 15:04:05", strings.TrimSpace(s))
 }

@@ -148,14 +148,14 @@ func bizneoCards(base *url.URL, root *html.Node) []bizneoCard {
 		ref.RawQuery, ref.Fragment = "", ""
 		c := bizneoCard{slug: slug, url: ref.String()}
 		if t := firstByClass(n, "title"); t != nil {
-			c.title = bizneoText(textContent(t))
+			c.title = collapseSpace(textContent(t))
 		}
 		if d := firstByClass(n, "details"); d != nil {
 			for sp := d.FirstChild; sp != nil; sp = sp.NextSibling {
 				if sp.Type != html.ElementNode || sp.Data != "span" || HasClass(sp, "aggregation") {
 					continue
 				}
-				v := bizneoText(textContent(sp))
+				v := collapseSpace(textContent(sp))
 				if m := bizneoWorkMode(v); m != "" {
 					c.mode = m
 				} else if c.city == "" {
@@ -201,7 +201,7 @@ func (s bizneo) detail(ctx context.Context, e CompanyEntry, c bizneoCard) (Job, 
 	fields := bizneoFields(root)
 	title := c.title
 	if h := firstByTag(root, "h1"); h != nil {
-		title = firstNonEmpty(bizneoText(textContent(h)), title)
+		title = firstNonEmpty(collapseSpace(textContent(h)), title)
 	}
 	mode := firstNonEmpty(bizneoWorkMode(fields["Modalidad de trabajo"]), bizneoWorkMode(fields["Modalidade de trabalho"]),
 		bizneoWorkMode(fields["Modalità di lavoro"]), bizneoWorkMode(fields["Work modality"]), c.mode)
@@ -246,7 +246,7 @@ func bizneoFields(root *html.Node) map[string]string {
 		var vals []string
 		walk(n, func(m *html.Node) bool {
 			if m.Type == html.ElementNode && m.Data == "span" {
-				if v := bizneoText(textContent(m)); v != "" {
+				if v := collapseSpace(textContent(m)); v != "" {
 					vals = append(vals, v)
 				}
 				return false
@@ -286,6 +286,3 @@ func bizneoEmploymentType(v string) string {
 	}
 	return ""
 }
-
-// bizneoText collapses the whitespace the templates indent their text with.
-func bizneoText(s string) string { return strings.Join(strings.Fields(s), " ") }

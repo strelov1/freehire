@@ -229,20 +229,8 @@ func apponeEmploymentType(jobType string) string {
 // getJSON is GetJSON with the 403 retry apponeAttempts explains. Every other outcome is the
 // shared client's, returned as is.
 func (a appone) getJSON(ctx context.Context, u string, out any) error {
-	var err error
-	for attempt := 1; attempt <= apponeAttempts; attempt++ {
-		if err = a.http.GetJSON(ctx, u, out); err == nil {
-			return nil
-		}
+	return retryWhile(ctx, apponeAttempts-1, a.retryDelay, func(err error) bool {
 		var se *StatusError
-		if !errors.As(err, &se) || se.Code != http.StatusForbidden || attempt == apponeAttempts {
-			return err
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(a.retryDelay << (attempt - 1)):
-		}
-	}
-	return err
+		return errors.As(err, &se) && se.Code == http.StatusForbidden
+	}, func() error { return a.http.GetJSON(ctx, u, out) })
 }
