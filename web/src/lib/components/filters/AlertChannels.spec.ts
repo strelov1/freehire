@@ -50,4 +50,19 @@ describe('AlertChannels — push', () => {
     render(AlertChannels, { savedSearchId: 1 });
     expect(screen.getByText('Push').closest('button')?.getAttribute('aria-pressed')).toBe('true');
   });
+
+  // A push subscription made before the backend began refusing one without a
+  // device still exists, and delivery skips it silently — so the chip says so.
+  it('says a push subscription reaches nobody while no device is registered', () => {
+    state.subs = [{ id: 9, saved_search_id: 1, channel: 'push' }];
+    render(AlertChannels, { savedSearchId: 1 });
+    expect(screen.getByText(/push alerts reach nobody/)).toBeTruthy();
+  });
+
+  it('says nothing once a device is registered', () => {
+    state.hasPushDevice = true;
+    state.subs = [{ id: 9, saved_search_id: 1, channel: 'push' }];
+    render(AlertChannels, { savedSearchId: 1 });
+    expect(screen.queryByText(/push alerts reach nobody/)).toBeNull();
+  });
 });

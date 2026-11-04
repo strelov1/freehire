@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { ApiError } from '#lib/api.js';
   import { notifications } from '#lib/notifications.svelte.js';
+  import PushNoDeviceNote from '#lib/components/PushNoDeviceNote.svelte';
   import { ProviderIcon } from '#lib/ui/index.js';
 
   // The unified per-search alert control: one toggle chip per delivery channel
@@ -177,6 +178,10 @@
       </a>
     {/if}
   </div>
+
+  {#if pushSub && !notifications.hasPushDevice}
+    <PushNoDeviceNote />
+  {/if}
 
   {#if error}
     <p class="text-xs text-destructive">{error}</p>

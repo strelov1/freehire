@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { api, ApiError } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import PushNoDeviceNote from '#lib/components/PushNoDeviceNote.svelte';
   import ToggleSwitch from '#lib/components/ToggleSwitch.svelte';
   import { cn } from '#lib/ui/index.js';
   import { ProviderIcon } from '#lib/ui/index.js';
@@ -210,6 +211,9 @@
             </button>
           {/if}
         </div>
+        {#if channels.includes('push') && !pushAvailable}
+          <PushNoDeviceNote />
+        {/if}
         {#if channels.includes('telegram')}
           <p class="text-xs text-muted-foreground">Telegram notifications need the bot connected on the <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/integrations')}>Integrations</a> tab.</p>
         {/if}
