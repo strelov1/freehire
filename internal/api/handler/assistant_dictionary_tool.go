@@ -20,7 +20,10 @@ func (h *assistantHandlers) dictionaryMCPTools() []assistant.Tool {
 			"or a vacancy. Existing terms and aliases are refused. Repeated requests share the " +
 			"existing queue entry and increase request_count; status is the entry's review state. " +
 			"The account shares a limit of 20 requests per UTC day with the website. " +
-			"Submit only when the user asks for this suggestion or agrees to its kind and term.",
+			"Use for a specialization, skill or industry the user wanted to filter by but the " +
+			"dictionary cannot resolve; an empty job search alone is not evidence of a missing term. " +
+			"Send the user's original term once per missing term, without requiring a separate " +
+			"request to suggest it. Tell the user it was requested for review, not added to the filters.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

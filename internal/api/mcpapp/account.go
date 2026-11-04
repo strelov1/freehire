@@ -15,15 +15,18 @@ import (
 
 // Account initialization describes identity, capabilities and result states. The
 // optional workflow lives in the packaged skill; permissions remain enforced by tools.
-const accountServerInstructions = "This server acts as the signed-in freehire account that approved the connection. " +
-	"Catalogue tools read public postings; personal tools read and change that account's " +
-	"saved jobs, applications and alerts. Geography filters form a union. "
+const accountServerInstructions = "This is the signed-in freehire account. " +
+	"Catalogue reads are public; personal tools change this account. Geography filters form a union. "
 
-const accountAutoApplyInstructions = "auto_apply_start, auto_apply_get, auto_apply_retry and auto_apply_review " +
-	"manage attempts, questions and pending_review. Saved answers may be sent to employers. "
+const accountAutoApplyInstructions = "Auto-apply prepares applications for review; saved answers may be sent to employers. "
 
-const accountAlertInstructions = "list_subscriptions and subscription_updates read alerts and matches. " +
-	"Alerts go to the account's configured channels."
+const accountAlertInstructions = "Alerts use configured channels. "
+
+const accountDictionaryInstructions = "Use suggest_dictionary_term for an unknown skill, specialization or industry; " +
+	"zero search hits alone is not a gap. "
+
+const accountProblemInstructions = "Use report_problem for failed operations or missing capabilities; " +
+	"omit secrets and personal documents. Do not report report failures."
 
 // NewAccountServer builds the per-request signed-in MCP server for one resolved
 // user. tools is the caller's assistantDiscoveryTools() + assistantTrackingTools()
@@ -70,6 +73,12 @@ func accountInstructions(tools []assistant.Tool) string {
 	}
 	if served("subscribe") {
 		out += accountAlertInstructions
+	}
+	if served("suggest_dictionary_term") {
+		out += accountDictionaryInstructions
+	}
+	if served("report_problem") {
+		out += accountProblemInstructions
 	}
 	return out
 }

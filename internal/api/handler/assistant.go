@@ -23,6 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resume"
+	"github.com/strelov1/freehire/internal/engage/problemreport"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -69,6 +70,7 @@ type assistantHandlers struct {
 	// refuses rather than panics.
 	reports    *reportHandlers
 	dictionary *dictionaryHandlers
+	problems   *problemreport.Service
 	cv         *cvHandlers
 	// profile backs the get_profile tool. Reusing the profile handlers rather than the
 	// services underneath keeps the tool and GET /me/profile on one assembly, so the
@@ -151,6 +153,7 @@ func newAssistantHandlers(
 	cvH *cvHandlers,
 	profileH *profileHandlers,
 	dictionary *dictionaryHandlers,
+	problems *problemreport.Service,
 	browserTools *browsertools.Hub,
 	mail *inboxHandlers,
 	bank experienceBankTools,
@@ -171,6 +174,7 @@ func newAssistantHandlers(
 		cv:               cvH,
 		profile:          profileH,
 		dictionary:       dictionary,
+		problems:         problems,
 		browserTools:     browserTools,
 		mail:             mail,
 		stages:           queries,

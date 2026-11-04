@@ -157,7 +157,9 @@ It is the **harness** surface, not "the agent surface": there are two agents on 
 The OAuth account MCP also exposes `suggest_dictionary_term`. It reuses
 `dictionaryHandlers.recordTerm`, including dictionary alias checks and the website's
 transactional per-user UTC-day budget. It only records a request for review, never
-installs a filter. Like the cookie-only dictionary endpoint, it is unavailable to
+installs a filter. Agents submit a term the user wanted but the dictionary cannot
+resolve, without a separate suggestion request; zero search results alone do not
+prove a dictionary gap. Like the cookie-only dictionary endpoint, it is unavailable to
 full-scope API keys. `handler.go` constructs one dictionary handler for both surfaces.
 
 

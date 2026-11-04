@@ -65,11 +65,12 @@ func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.T
 	all := append(mcpKeyTools(assistants, origin), assistants.autoApplyMCPTools()...)
 	// Dictionary suggestions are cookie-only over REST; keep the corresponding
 	// account tool with OAuth grants rather than widening full-scope API keys.
-	return append(all, assistants.dictionaryMCPTools()...)
+	all = append(all, assistants.dictionaryMCPTools()...)
+	return append(all, assistants.problemMCPTools()...)
 }
 
 // mcpKeyTools is what the same server offers a full-scope API key: everything an
-// OAuth grant gets except cookie-only actions (auto-apply and dictionary suggestions).
+// OAuth grant gets except cookie-only actions (auto-apply, dictionary suggestions and problem reports).
 //
 // A key reaches this server so the local MCP package (freehire-mcp), which holds a
 // key and no grant, can manage job alerts through these tools rather than through

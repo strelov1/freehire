@@ -44,6 +44,7 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 	"github.com/strelov1/freehire/internal/engage/mentorship"
 	"github.com/strelov1/freehire/internal/engage/messaging"
+	"github.com/strelov1/freehire/internal/engage/problemreport"
 	"github.com/strelov1/freehire/internal/engage/processreport"
 	"github.com/strelov1/freehire/internal/engage/referral"
 	"github.com/strelov1/freehire/internal/engage/reminder"
@@ -860,6 +861,7 @@ func Register(app *fiber.App, cfg Config) {
 		cvH,
 		profileH,
 		dictionaryH,
+		problemreport.New(cfg.Pool, queries),
 		a.browserTools,
 		inboxH,
 		bank,

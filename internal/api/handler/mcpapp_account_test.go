@@ -100,6 +100,7 @@ func TestMCPAccountTools_DeclareTheirEffect(t *testing.T) {
 		// Files a moderation report; changes nothing the person already had.
 		"report_job":              assistant.EffectAdds,
 		"suggest_dictionary_term": assistant.EffectAdds,
+		"report_problem":          assistant.EffectAdds,
 
 		"auto_apply_list":       assistant.EffectReads,
 		"auto_apply_get":        assistant.EffectReads,
