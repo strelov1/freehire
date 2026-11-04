@@ -114,12 +114,12 @@ func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, throttler ratelimi
 		oauthCodes:                 oauth.NewCodeStore(60 * time.Second),
 		frontendOrigin:             frontendOrigin,
 		extensionRedirectAllowlist: extensionRedirectAllowlist,
-		servedHosts:                servedHosts,
+		servedHosts:                servedHostsOrDefault(servedHosts, frontendOrigin),
 		accounts:                   accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
 		throttler:                  throttler,
 		pushNotifier:               pushnotify.NewExpoNotifier(pushStore, pushStore, pushStore),
 		ga4:                        ga4Reporter(),
-		browserOrigins:             auth.BrowserOrigins(frontendOrigin, cookieDomains),
+		browserOrigins:             auth.BrowserOrigins(frontendOrigin, cookieDomains, servedHosts...),
 	}
 }
 

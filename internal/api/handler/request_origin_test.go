@@ -32,7 +32,7 @@ const testFrontendOrigin = "https://freehire.me"
 // sameOriginApp mounts the login route behind h.requireSameOrigin over a repo whose
 // Login succeeds (the credentials themselves are correct — the point is what the gate
 // does with an otherwise-valid request).
-func sameOriginApp(t *testing.T) *fiber.App {
+func sameOriginApp(t *testing.T, servedHosts ...string) *fiber.App {
 	t.Helper()
 	queries := db.New(fakeDBTX{ScanAnswer: func(dest ...any) error {
 		// GetUserTokenVersion scans one int32: the account's session generation.
@@ -52,7 +52,7 @@ func sameOriginApp(t *testing.T) *fiber.App {
 			HasPassword:     true,
 		}, authHasher{}),
 		queries:        queries,
-		browserOrigins: []string{testFrontendOrigin},
+		browserOrigins: auth.BrowserOrigins(testFrontendOrigin, nil, servedHosts...),
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Post("/api/v1/auth/login", h.requireSameOrigin(), h.Login)
@@ -396,5 +396,38 @@ func TestBrowserOrigins_FrontendPlusCookieDomainApexes(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("BrowserOrigins[%d] = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestLoginServedHostOrigin(t *testing.T) {
+	for _, tc := range []struct {
+		name, origin string
+		status       int
+	}{
+		{"configured subdomain", "https://apply.freehire.me", fiber.StatusOK},
+		{"foreign lookalike", "https://apply.freehire.me.evil.example", fiber.StatusForbidden},
+		{"unconfigured subdomain", "https://other.freehire.me", fiber.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := doLogin(t, sameOriginApp(t, "apply.freehire.me"), map[string]string{fiber.HeaderOrigin: tc.origin})
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.status {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tc.status)
+			}
+			if tc.status == fiber.StatusForbidden && len(resp.Cookies()) != 0 {
+				t.Fatal("refused login set a cookie")
+			}
+		})
+	}
+}
+
+func TestAuthHandlerIncludesConfiguredServedOrigins(t *testing.T) {
+	h := newAuthHandlers(nil, nil, nil, auth.NewIssuer("test-secret", time.Hour), false,
+		[]string{".freehire.me"}, nil, testFrontendOrigin, nil, []string{"apply.freehire.me"})
+	if !originAllowed("https://apply.freehire.me", h.browserOrigins) {
+		t.Fatal("configured served origin omitted from handler")
+	}
+	if originAllowed("https://other.freehire.me", h.browserOrigins) {
+		t.Fatal("unconfigured subdomain accepted")
 	}
 }

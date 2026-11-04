@@ -546,7 +546,7 @@ func Register(app *fiber.App, cfg Config) {
 		browserTools: browsertools.New(),
 	}
 	authH := newAuthHandlers(queries, cfg.Pool, cfg.Throttler, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
-		servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
+		cfg.ServedHosts)
 	authH.authV2Enabled = cfg.AuthV2Enabled
 	authH.rateTiers = cfg.RateTiers
 	authH.mobileCallbacks = cfg.MobileAuthCallbacks
@@ -1011,7 +1011,7 @@ func Register(app *fiber.App, cfg Config) {
 	// request-origin gate on session routes (requireSameOrigin) accepts a browser
 	// request's Origin/Referer only when it names a member of the same list, so the
 	// two policies cannot drift apart.
-	allowOrigins := strings.Join(auth.BrowserOrigins(cfg.FrontendOrigin, cfg.CookieDomains), ",")
+	allowOrigins := strings.Join(auth.BrowserOrigins(cfg.FrontendOrigin, cfg.CookieDomains, cfg.ServedHosts...), ",")
 	app.Use(cors.New(cors.Config{AllowOrigins: allowOrigins}))
 
 	app.Get("/health", a.Health)

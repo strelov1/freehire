@@ -13,20 +13,10 @@ import (
 // requests, and RequireAuth reads it server-side.
 const CookieName = "hire_token"
 
-// BrowserOrigins returns the origins of the sites that serve the browser app and
-// therefore the origins a same-origin request from it can name: the canonical
-// frontend origin plus, for every configured cookie domain, its https apex. It is
-// the ONE place that pair is turned into origins — the CORS middleware's allowlist
-// (handler.go) and the request-origin gate on session-issuing routes
-// (handler.requireSameOrigin) both consume this list, so the two policies cannot
-// drift apart. Values are normalized the way cookie domains are written in config:
-// a leading "." on a domain is dropped, a trailing "/" on the frontend origin is
-// dropped, empty entries are skipped.
-//
-// It lives here rather than in the handler package because it is the cookie-domain
-// configuration — the exact set of sites the session cookie is scoped to — read as
-// origins.
-func BrowserOrigins(frontendOrigin string, cookieDomains []string) []string {
+// BrowserOrigins returns the canonical frontend origin, cookie-domain HTTPS apexes
+// and explicitly served HTTPS hosts. CORS and session writers share this policy.
+// Served hosts are exact hostnames; wildcard and scheme/path entries are ignored.
+func BrowserOrigins(frontendOrigin string, cookieDomains []string, servedHosts ...string) []string {
 	var origins []string
 	if o := strings.TrimSuffix(strings.TrimSpace(frontendOrigin), "/"); o != "" {
 		origins = append(origins, o)
@@ -37,6 +27,13 @@ func BrowserOrigins(frontendOrigin string, cookieDomains []string) []string {
 			continue
 		}
 		origins = append(origins, "https://"+d)
+	}
+	for _, host := range servedHosts {
+		host = strings.TrimSpace(host)
+		if host == "" || strings.ContainsAny(host, "/*") {
+			continue
+		}
+		origins = append(origins, "https://"+strings.ToLower(host))
 	}
 	return origins
 }

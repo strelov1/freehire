@@ -124,7 +124,7 @@
       // credentials (login-CSRF defence). A person can only hit this from a stale tab
       // on a foreign origin or a blocked privacy extension, so say where to sign in
       // from instead of apologizing for a fault.
-      if (isCrossSiteRefusal(e)) return 'For safety, sign-ins from other sites are refused. Open freehire in its own tab and sign in there.';
+      if (isCrossSiteRefusal(e)) return 'For safety, authentication requests from other sites are refused. Open freehire in its own tab and try again.';
     }
     return credentialErrorMessage(e) ?? 'Something went wrong. Please try again.';
   }
