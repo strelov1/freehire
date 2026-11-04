@@ -91,6 +91,9 @@ func TestFromText(t *testing.T) {
 		{"clt efetivo", "", "Assistente de SDR. Efetivo (CLT) Assistente SDR", []string{"clt"}},
 		{"pj in title", "Desenvolvedor(a) Python - Remoto - PJ", "", []string{"pj"}},
 		{"pj seller", "Vendedor PJ - Fixo de R$ 2.000 + Comissão", "", []string{"pj"}},
+		{"no is a preposition", "", "Vaga no regime CLT, com benefícios.", []string{"clt"}},
+		{"no before both", "", "Contratação no regime CLT ou PJ.", []string{"clt", "pj"}},
+		{"portuguese refusal", "", "Não contratamos no regime CLT.", nil},
 		{"corporate clients", "Gerente de Negócios PJ - Sicredi", "Atender a carteira de associados PJ do segmento PJ.", nil},
 
 		// Russia and the CIS.
@@ -109,6 +112,7 @@ func TestFromText(t *testing.T) {
 		{"agency contract field", "", "Vertragsart: Festanstellung (Arbeitnehmerüberlassung) Befristung: unbefristet", []string{"arbeitnehmerueberlassung"}},
 		{"agency portfolio", "", "Unser Portfolio umfasst die Arbeitnehmerüberlassung, Personalvermittlung und Outsourcing.", nil},
 		{"zzp", "", "Deze rol is in te vullen in vast dienstverband of als ZZP’er.", []string{"zzp"}},
+		{"zzp refused in the title", "Java Developer (geen ZZP)", "", nil},
 		{"zzp clients", "", "Wij werken met uiteenlopende klanten van zzp’ers tot grote organisaties.", nil},
 		{"auto-entrepreneur status", "", "Votre profil : Statut auto-entrepreneur obligatoire", []string{"auto_entrepreneur"}},
 		{"entrepreneurship", "GTM Manager – Micro Entrepreneurship", "", nil},

@@ -1576,7 +1576,9 @@ components:
       description: |
         The legal terms the posting states it engages its worker on —
         employee or own business, and on what tax footing — matched
-        deterministically from the title and description (never inferred),
+        deterministically from the title and description, and from a source's
+        own contract-type field where it has one (Brazilian boards' CLT/PJ
+        picklist); never inferred,
         each in its market's own term: UK `ir35_outside` / `ir35_inside`; US
         `w2`, `1099`, `c2c`; `contract_to_hire`; Poland and Central Europe
         `b2b`, `uop`, `umowa_zlecenie`, `umowa_o_dzielo`; Brazil `clt`, `pj`;

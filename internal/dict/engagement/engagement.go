@@ -69,6 +69,9 @@ type rule struct {
 	rejectBefore, rejectAfter *regexp.Regexp
 	// context, when set, must match somewhere within contextWindow of the match.
 	context *regexp.Regexp
+	// negation, when set, replaces the shared refusal guards before a match, for a
+	// language whose negation words collide with its prepositions.
+	negation *regexp.Regexp
 }
 
 // The windows are in bytes and sized for Cyrillic, two bytes a letter: 120 bytes is 60
@@ -221,6 +224,8 @@ var rules = []rule{
 	},
 
 	// ---- Brazil ----
+	// Both Brazilian rules take negatedPT: "no" is "em + o" in Portuguese ("Vaga no regime
+	// CLT"), never a refusal.
 	// CLT, the labour code's employment: pandapé, empregos, sólides and catho carry it,
 	// as "contratação CLT", "regime CLT", "CLT (Efetivo)", or a title tag.
 	{slug: "clt", label: "CLT", market: "Brazil",
@@ -231,6 +236,7 @@ var rules = []rule{
 			re(B + `pj` + either + `clt` + E),
 		},
 		titlePatterns: []*regexp.Regexp{re(`^\s*clt\s*[-–|:]`), re(`[-–(|]\s*clt\s*\)?\s*$`)},
+		negation:      negatedPT,
 	},
 	// PJ, a contractor's own company. The corporate-client segment is rejected.
 	{slug: "pj", label: "PJ", market: "Brazil",
@@ -248,6 +254,7 @@ var rules = []rule{
 			re(`(?:vendedor|representante|consultor|recrutador|remoto|home office|freelancer)\pL*(?:\(a\))?\s+pj` + E),
 		},
 		rejectBefore: re(`(?:segmento|carteira|clientes?|associados|empresas|contas?|cr[ée]dito|neg[óo]cios|relacionamento|atendimento|varejo)\s*$`),
+		negation:     negatedPT,
 	},
 
 	// ---- Russia and the CIS ----
@@ -366,6 +373,9 @@ var (
 	// negatedList rejects one governing the list the term closes: "no 1099 or C2C", "no
 	// visa support or C2C".
 	negatedList = re(`(?:^|[^\pL])(?:no|not|without|non|hors|sauf|nie|bez|sem|não|sin|ohne|kein\pL*|geen|не|без)\s+[^.;:!?|\n]{0,40}(?:\s(?:or|and|nor|et|ou|ni|lub|albo|или|oder|of)\s+(?:[\pL\pN-]+\s*)?|\s*/\s*)$`)
+	// negatedPT is the Portuguese refusal: "não", "sem", "nem", up to three words before
+	// the term ("Não contratamos no regime CLT").
+	negatedPT = re(`(?:^|[^\pL])(?:não|nao|sem|nem|never|not|without)\s+(?:\pL+\s+){0,3}$`)
 	// negatedAfter rejects a term the text goes on to refuse: "C2C not accepted", "C2C
 	// and C2H will not be considered".
 	// negatedListEN is the English refusal of a comma list: "cannot accept H-1B, F-1/STEM
@@ -420,9 +430,12 @@ func clean(s string) string {
 }
 
 func (r rule) asserted(text, title string) bool {
+	// A title tag passes the same guards as the body: "Java Developer (geen ZZP)".
 	for _, p := range r.titlePatterns {
-		if p.MatchString(title) {
-			return true
+		for _, loc := range p.FindAllStringIndex(title, -1) {
+			if r.accepts(title, loc[0], loc[1]) == accepted {
+				return true
+			}
 		}
 	}
 	for _, p := range r.patterns {
@@ -463,7 +476,14 @@ func (r rule) accepts(text string, start, end int) verdict {
 	start, end = trimBoundary(text, start, end)
 	before := text[runeStart(text, start-beforeWindow):start]
 	after := text[end:runeEnd(text, end+afterWindow)]
-	if negatedBefore.MatchString(before) || negatedList.MatchString(before) || negatedListEN.MatchString(before) || negatedAfter.MatchString(after) {
+	if r.negation != nil {
+		if r.negation.MatchString(before) {
+			return refused
+		}
+	} else if negatedBefore.MatchString(before) || negatedList.MatchString(before) || negatedListEN.MatchString(before) {
+		return refused
+	}
+	if negatedAfter.MatchString(after) {
 		return refused
 	}
 	if r.rejectBefore != nil && r.rejectBefore.MatchString(before) {

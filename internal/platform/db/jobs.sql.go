@@ -5387,7 +5387,8 @@ WHERE source = $1
   AND salary_period_source = $8
   AND english_level = $9
   AND is_tech IS NOT DISTINCT FROM $10
-  AND application_deadline IS NOT DISTINCT FROM COALESCE($11::date, application_deadline)
+  AND engagement = COALESCE($11::text[], '{}')
+  AND application_deadline IS NOT DISTINCT FROM COALESCE($12::date, application_deadline)
   AND (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
   AND closed_at IS NULL
 RETURNING id, source, company_slug, duplicate_of
@@ -5404,6 +5405,7 @@ type RefreshUnchangedJobParams struct {
 	SalaryPeriodSource   string      `json:"salary_period_source"`
 	EnglishLevel         string      `json:"english_level"`
 	IsTech               pgtype.Bool `json:"is_tech"`
+	Engagement           []string    `json:"engagement"`
 	ApplicationDeadline  pgtype.Date `json:"application_deadline"`
 }
 
@@ -5445,7 +5447,10 @@ type RefreshUnchangedJobRow struct {
 // to true while title/category/every hashed field stay put. Folding them into the hash instead
 // would change every stored content_hash at once and make the first crawl after deploy rewrite
 // and re-index the whole catalogue — 6.6M rows through a queue that drains at ~9 documents a
-// second. Note the asymmetry with education_level, which IS hashed: it was hashed before either
+// second. engagement is in the key for the same reason as english_level: a Brazilian board's
+// CLT/PJ picklist (sources.Job.Engagement) can move it while every hashed field stands still,
+// and a dictionary extension moves it for the postings whose text gains a term — both reach
+// the full upsert, and its search enqueue, on the next crawl. Note the asymmetry with education_level, which IS hashed: it was hashed before either
 // had a structured tier, and moving it out now would cost exactly the storm this key exists to
 // avoid. IS NOT DISTINCT FROM (not =) on the nullable salary bounds and on is_tech so a NULL
 // (unset/unknown) still matches its own kind — a plain = would push every sourceless/unknown job
@@ -5490,6 +5495,7 @@ func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJ
 		arg.SalaryPeriodSource,
 		arg.EnglishLevel,
 		arg.IsTech,
+		arg.Engagement,
 		arg.ApplicationDeadline,
 	)
 	var i RefreshUnchangedJobRow

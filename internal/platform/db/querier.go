@@ -6800,7 +6800,10 @@ type Querier interface {
 	// to true while title/category/every hashed field stay put. Folding them into the hash instead
 	// would change every stored content_hash at once and make the first crawl after deploy rewrite
 	// and re-index the whole catalogue — 6.6M rows through a queue that drains at ~9 documents a
-	// second. Note the asymmetry with education_level, which IS hashed: it was hashed before either
+	// second. engagement is in the key for the same reason as english_level: a Brazilian board's
+	// CLT/PJ picklist (sources.Job.Engagement) can move it while every hashed field stands still,
+	// and a dictionary extension moves it for the postings whose text gains a term — both reach
+	// the full upsert, and its search enqueue, on the next crawl. Note the asymmetry with education_level, which IS hashed: it was hashed before either
 	// had a structured tier, and moving it out now would cost exactly the storm this key exists to
 	// avoid. IS NOT DISTINCT FROM (not =) on the nullable salary bounds and on is_tech so a NULL
 	// (unset/unknown) still matches its own kind — a plain = would push every sourceless/unknown job

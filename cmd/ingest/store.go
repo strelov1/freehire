@@ -143,6 +143,7 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 		SalaryPeriodSource:   p.SalaryPeriodSource,
 		EnglishLevel:         p.EnglishLevel,
 		IsTech:               p.IsTech,
+		Engagement:           p.Engagement,
 		ApplicationDeadline:  p.ApplicationDeadline,
 	})
 	if err == nil {

@@ -17,7 +17,8 @@
 // The stored terms are kept and unioned with the new reading (jobderive.DeriveEngagement),
 // because some came from a source's picklist the text cannot recover. Idempotent: the
 // write is IS DISTINCT FROM-guarded, so a re-run writes nothing and stopping it is free.
-// BACKFILL_ENGAGEMENT_MAX caps one run — unset for unbounded, never 0.
+// There is no per-run cap: a cap over a search-ranked candidate list would hand every run
+// the same first ids, and the whole list is a few minutes of primary-key reads.
 //
 // Needs DATABASE_URL, MEILI_URL, MEILI_MASTER_KEY.
 package main
@@ -39,8 +40,11 @@ import (
 var candidatePhrases = []string{
 	"IR35", "IR 35",
 	"W2", "W-2", "1099", "C2C", "corp to corp", "corp2corp",
-	"contract to hire", "C2H", "temp to hire", "temp to perm", "contract to perm",
-	"B2B", "UoP", "umowa o pracę", "umowa zlecenie", "umowy zlecenia", "umowa o dzieło",
+	"contract to hire", "right to hire", "C2H", "temp to hire", "temp to perm", "contract to perm",
+	"B2B", "UoP",
+	"umowa o pracę", "umowy o pracę", "umowę o pracę",
+	"umowa zlecenie", "umowy zlecenia", "umowa zlecenia", "umowę zlecenia", "umowę zlecenie",
+	"umowa o dzieło", "umowy o dzieło", "umowę o dzieło",
 	"CLT", "PJ", "pessoa jurídica",
 	"ТК", "трудовой договор", "трудовому договору", "ГПХ", "гражданско-правового",
 	"самозанятый", "самозанятость", "самозанятости", "самозанятым", "ИП",
@@ -66,12 +70,6 @@ func run() int {
 	}
 	defer cleanup()
 
-	maxPerRun, err := worker.EnvInt64("BACKFILL_ENGAGEMENT_MAX", 0)
-	if err != nil {
-		log.Printf("backfill-engagement: %v", err)
-		return 1
-	}
-
 	ids, err := candidateIDs(ctx, search.NewClient(cfg.MeiliURL, cfg.MeiliKey))
 	if err != nil {
 		log.Printf("backfill-engagement: gather candidates: %v", err)
@@ -80,10 +78,6 @@ func run() int {
 	if len(ids) == 0 {
 		log.Print("backfill-engagement: no candidates")
 		return 0
-	}
-	if maxPerRun > 0 && int64(len(ids)) > maxPerRun {
-		log.Printf("backfill-engagement: capping this run at %d of %d candidates", maxPerRun, len(ids))
-		ids = ids[:maxPerRun]
 	}
 	log.Printf("backfill-engagement: %d candidates", len(ids))
 
