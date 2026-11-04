@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { api, ApiError } from '#lib/api.js';
   import { currentUser, isAuthenticated } from '#lib/auth.svelte.js';
+  import PushNoDeviceNote from '#lib/components/PushNoDeviceNote.svelte';
   import ToggleSwitch from '#lib/components/ToggleSwitch.svelte';
   import { cn } from '#lib/ui/index.js';
   import { ProviderIcon } from '#lib/ui/index.js';
@@ -54,6 +55,18 @@
 
   $effect(() => {
     if (isAuthenticated()) void load();
+  });
+
+  // The no-device note sends the user to the phone; when they come back to this tab,
+  // re-read so the note goes away without a reload.
+  $effect(() => {
+    if (!channels.includes('push') || pushAvailable) return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      api.hasPushDevice().then((v) => (pushAvailable = v), () => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   });
 
   async function load() {
@@ -216,6 +229,9 @@
             </button>
           {/if}
         </div>
+        {#if channels.includes('push') && !pushAvailable}
+          <PushNoDeviceNote />
+        {/if}
         {#if channels.includes('telegram')}
           <p class="text-xs text-muted-foreground">Telegram notifications need the bot connected on the <a class="font-medium text-foreground underline underline-offset-2 hover:opacity-80" href={resolve('/my/integrations')}>Integrations</a> tab.</p>
         {/if}

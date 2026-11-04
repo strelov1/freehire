@@ -3,6 +3,7 @@
   import { resolve } from '$app/paths';
   import { ApiError } from '#lib/api.js';
   import { notifications } from '#lib/notifications.svelte.js';
+  import PushNoDeviceNote from '#lib/components/PushNoDeviceNote.svelte';
   import { ProviderIcon } from '#lib/ui/index.js';
 
   // The unified per-search alert control: one toggle chip per delivery channel
@@ -35,6 +36,17 @@
   const pushSub = $derived(notifications.forSavedSearch(savedSearchId, 'push'));
   const webhook = $derived(notifications.webhook);
   const webhookSub = $derived(notifications.forSavedSearch(savedSearchId, 'webhook'));
+
+  // The no-device note sends the user to the phone; when they come back to this tab,
+  // re-read so the note goes away without a reload.
+  $effect(() => {
+    if (!pushSub || notifications.hasPushDevice) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') notifications.refreshPushDevice().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  });
 
   // Telegram: unsubscribe if on; else subscribe. Only ever called while linked — the
   // chip renders as a link to Integrations instead of this button while it isn't.
@@ -177,6 +189,10 @@
       </a>
     {/if}
   </div>
+
+  {#if pushSub && !notifications.hasPushDevice}
+    <PushNoDeviceNote />
+  {/if}
 
   {#if error}
     <p class="text-xs text-destructive">{error}</p>
