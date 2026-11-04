@@ -38,6 +38,8 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/mozillazg/go-unidecode v0.2.0
 	github.com/pgvector/pgvector-go v0.4.1
+	github.com/posthog/posthog-go v1.39.0
+	github.com/posthog/posthog-go/posthogmcpsdk v1.39.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
 	github.com/prometheus/common v0.72.1
@@ -168,8 +170,6 @@ require (
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkoukk/tiktoken-go v0.1.6 // indirect
-	github.com/posthog/posthog-go v1.39.0 // indirect
-	github.com/posthog/posthog-go/posthogmcpsdk v1.39.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect

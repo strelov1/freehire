@@ -21,7 +21,6 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	recovermiddleware "github.com/gofiber/fiber/v2/middleware/recover"
 	posthog "github.com/posthog/posthog-go"
-	"github.com/posthog/posthog-go/posthogmcp"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -115,7 +114,7 @@ func runServer(cfg config.Settings) error {
 			return fmt.Errorf("posthog: %w", err)
 		}
 		defer func() { _ = ph.Close() }()
-		mcpapp.EnableAnalytics(posthogmcp.New(ph))
+		mcpapp.EnableAnalytics(ph)
 	}
 
 	// One signal-bound context drives both startup and shutdown: it cancels the pool
