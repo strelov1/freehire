@@ -18,10 +18,10 @@
   // notifications are on (an enabled rule requires at least one channel).
   //
   // Two more controls ride the same settings row but govern different things:
-  // digest frequency (instant/daily) affects ONLY saved-search alerts
+  // digest frequency (interval/instant/daily) affects ONLY saved-search alerts
   // (internal/notify), not the reminder/nudge kinds above; quiet hours defers
-  // ALL of them (plus instant-frequency search alerts) except a `daily` digest,
-  // which fires at its own chosen time regardless.
+  // ALL of them (plus interval and instant search alerts) except a `daily`
+  // digest, which fires at its own chosen time regardless.
 
   let enabled = $state(false);
   let channels = $state<string[]>([]);
@@ -30,8 +30,12 @@
   // once there is one — or while push is already chosen, so it can be removed.
   let pushAvailable = $state(false);
 
-  let digestFrequency = $state('instant');
+  // The server's default is an hourly interval digest (migration 0233).
+  let digestFrequency = $state('interval');
   let digestTime = $state('09:00');
+  let digestIntervalHours = $state(1);
+  // 1-23: a full day is the Daily option, which also picks the hour.
+  const intervalHourOptions = Array.from({ length: 23 }, (_, i) => i + 1);
   let quietHoursOn = $state(false);
   let quietHoursStart = $state('22:00');
   let quietHoursEnd = $state('08:00');
@@ -64,8 +68,9 @@
       channels = settings.channels;
       telegramAvailable = tg.enabled;
       pushAvailable = pushDevice;
-      digestFrequency = settings.digest_frequency || 'instant';
+      digestFrequency = settings.digest_frequency || 'interval';
       digestTime = settings.digest_time ?? '09:00';
+      digestIntervalHours = settings.digest_interval_hours || 1;
       quietHoursOn = Boolean(settings.quiet_hours_start && settings.quiet_hours_end);
       quietHoursStart = settings.quiet_hours_start ?? '22:00';
       quietHoursEnd = settings.quiet_hours_end ?? '08:00';
@@ -91,6 +96,7 @@
         channels,
         digest_frequency: digestFrequency,
         digest_time: digestFrequency === 'daily' ? digestTime : null,
+        digest_interval_hours: digestIntervalHours,
         quiet_hours_start: quietHoursOn ? quietHoursStart : null,
         quiet_hours_end: quietHoursOn ? quietHoursEnd : null,
       });
@@ -240,7 +246,7 @@
   {/if}
 </section>
 
-<!-- Delivery timing: digest frequency governs only saved-search alerts
+<!-- Delivery timing: digest frequency (interval/instant/daily) governs only saved-search alerts
      (internal/notify), independent of the Notifications toggle above — a
      search-alert subscriber with reminders/nudges off still picks a frequency.
      Quiet hours defers everything except a `daily` digest, which is exempt by
@@ -262,6 +268,27 @@
         </button>
         <button
           type="button"
+          onclick={() => setDigestFrequency('interval')}
+          aria-pressed={digestFrequency === 'interval'}
+          class={pill(digestFrequency === 'interval')}
+        >
+          {#if digestFrequency === 'interval'}<Check class="size-3.5" aria-hidden="true" />{/if}
+          Batched
+        </button>
+        {#if digestFrequency === 'interval'}
+          <select
+            bind:value={digestIntervalHours}
+            onchange={persist}
+            aria-label="How often to send batched alerts"
+            class="rounded-md border border-border bg-background px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {#each intervalHourOptions as hours (hours)}
+              <option value={hours}>{hours === 1 ? 'every hour' : `every ${hours} hours`}</option>
+            {/each}
+          </select>
+        {/if}
+        <button
+          type="button"
           onclick={() => setDigestFrequency('daily')}
           aria-pressed={digestFrequency === 'daily'}
           class={pill(digestFrequency === 'daily')}
@@ -280,6 +307,7 @@
         {/if}
       </div>
       <p class="text-xs text-muted-foreground">
+        Instant sends new matches as soon as we find them; Batched collects them into one message per alert at most that often.
         Applies only to saved-search alerts — reminders and application nudges above always deliver as they happen.
       </p>
       {#if digestFrequency === 'daily' && !hasTimezone}

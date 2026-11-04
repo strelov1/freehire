@@ -135,7 +135,7 @@ func TestSubscriptionMCP_SubscribeListUpdateUnsubscribe(t *testing.T) {
 	if s := item["search"].(map[string]any); s["salary_min"] != float64(80000) || s["filters"].(map[string]any)["skills"].([]any)[0] != "go" {
 		t.Fatalf("structured search = %v", s)
 	}
-	if sched := list["delivery_schedule"].(map[string]any); sched["digest_frequency"] != "instant" {
+	if sched := list["delivery_schedule"].(map[string]any); sched["digest_frequency"] != "interval" || sched["digest_interval_hours"] != float64(1) {
 		t.Fatalf("delivery_schedule = %v", sched)
 	}
 

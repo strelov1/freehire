@@ -74,6 +74,23 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   the send still walks the first member's own slice. `internal/engage/nudge` has no such
   split: `GetNudgeForDelivery` reads `notification_settings.channels` live, which IS an
   account property.
+- **A saved-search digest has three frequencies, and the default is an hourly batch.**
+  `notification_settings.digest_frequency` is `interval` (at most one digest per
+  subscription every `digest_interval_hours`, 1-23), `instant` (every pass that finds
+  something) or `daily` (once a local day at `digest_time`). `interval` at one hour is the
+  column default, what an account with NO settings row reads as, and since migration 0233
+  what every stored `instant` was moved to — measured 2026-11-04, `instant` meant a p90 of
+  ~32 digests a day and 141 for the busiest account, on 96% of subscribers, most of whom
+  never opened the setting. **The interval gate is in `ClaimSubscriptionMatches`, not in
+  `deliverOne`**: a subscription that is not due is not claimed at all, because claiming
+  and releasing ~23k matches an hour on every five-minute pass is write churn for
+  nothing. That SQL predicate is the only definition of "interval elapsed"; its defaults
+  (`'interval'`, `1`) must agree with `GetSubscriptionForDelivery`'s `COALESCE`, the
+  column defaults and `notify.DefaultIntervalHours`. `interval` defers to quiet hours like
+  `instant` (it names no hour the person chose; `daily` does and is exempt), and both
+  `interval` and `daily` stamp `subscriptions.last_digest_sent_at` after a send. The
+  interval is measured from that stamp, so on a five-minute timer an hourly digest lands
+  every 60-65 minutes rather than on the hour.
 - **A reminder's `fire_at` is rounded forward to the account's notification hour**
   (`notification_settings.digest_time` in the account's timezone; 09:00 and UTC when
   unset). Grouping alone would have bought the reminder engine almost nothing: `fire_at`

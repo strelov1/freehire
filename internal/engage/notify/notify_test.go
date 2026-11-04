@@ -1560,3 +1560,84 @@ func TestDeliver_RecipientGoneSoftSkipsEvenIfUnlinkFails(t *testing.T) {
 		t.Errorf("SoftSkips = %d, Failed = %d, want 1 and 0", stats.SoftSkips, stats.Failed)
 	}
 }
+
+// An interval subscription reaching deliverOne has already passed the claim's
+// elapsed-interval gate, so it sends and stamps last_digest_sent_at — the stamp is
+// what the NEXT claim measures the interval from.
+func TestDeliverOne_IntervalDeliversAndStampsLastSent(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {
+				ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 1, Valid: true},
+				DigestFrequency: FrequencyInterval, Timezone: pgtype.Text{String: "UTC", Valid: true},
+			},
+		},
+		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
+	}
+	notifier := &fakeNotifier{}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.sent) != 1 {
+		t.Fatalf("sent = %d, want 1", len(notifier.sent))
+	}
+	if len(store.digestSent) != 1 || store.digestSent[0] != 1 {
+		t.Errorf("digestSent = %v, want [1] (the next interval is measured from this stamp)", store.digestSent)
+	}
+}
+
+// Unlike daily, an interval digest names no hour the person chose, so quiet hours
+// hold it like an instant one.
+func TestDeliverOne_IntervalDeferredDuringQuietHours(t *testing.T) {
+	fixedNow := time.Date(2026, 8, 14, 23, 0, 0, 0, time.UTC) // inside 22:00-08:00
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {
+				ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 1, Valid: true},
+				DigestFrequency: FrequencyInterval, Timezone: pgtype.Text{String: "UTC", Valid: true},
+				QuietHoursStart: pgTime(22, 0), QuietHoursEnd: pgTime(8, 0),
+			},
+		},
+		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
+	}
+	notifier := &fakeNotifier{}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+	r.now = func() time.Time { return fixedNow }
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.sent) != 0 || len(store.released) != 1 {
+		t.Errorf("sent=%d released=%d, want 0/1 (held through quiet hours)", len(notifier.sent), len(store.released))
+	}
+	if len(store.digestSent) != 0 {
+		t.Errorf("digestSent = %v, want none (nothing was sent)", store.digestSent)
+	}
+}
+
+// Instant never touches last_digest_sent_at: nothing reads it for that mode.
+func TestDeliverOne_InstantDoesNotStampLastSent(t *testing.T) {
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{{SubscriptionID: 1, JobID: 10}},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			1: {
+				ID: 1, Channel: ChannelTelegram, TelegramChatID: pgtype.Int8{Int64: 1, Valid: true},
+				DigestFrequency: FrequencyInstant,
+			},
+		},
+		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
+	}
+	notifier := &fakeNotifier{}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.sent) != 1 || len(store.digestSent) != 0 {
+		t.Errorf("sent=%d digestSent=%v, want 1/none", len(notifier.sent), store.digestSent)
+	}
+}

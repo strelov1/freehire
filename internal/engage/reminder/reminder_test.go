@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/strelov1/freehire/internal/engage/notify"
 )
 
 // fakeRepo records scheduling calls and serves canned settings.
@@ -319,5 +321,92 @@ func TestUpdateSettings_AddingPushNeedsADevice(t *testing.T) {
 	repo = &fakeRepo{settings: Settings{Enabled: true, Channels: []string{"push"}}}
 	if _, err := New(repo).UpdateSettings(context.Background(), 1, rule); err != nil {
 		t.Fatalf("keeping an already-chosen push without a device: err = %v, want nil", err)
+	}
+}
+
+func TestUpdateSettings_EmptyFrequencyStoresTheHourlyInterval(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	got, err := svc.UpdateSettings(context.Background(), 1, Settings{})
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if got.DigestFrequency != notify.FrequencyInterval || got.DigestIntervalHours != notify.DefaultIntervalHours {
+		t.Errorf("stored %q/%d, want %q/%d", got.DigestFrequency, got.DigestIntervalHours,
+			notify.FrequencyInterval, notify.DefaultIntervalHours)
+	}
+}
+
+func TestUpdateSettings_IntervalBounds(t *testing.T) {
+	for _, tc := range []struct {
+		hours   int
+		wantErr bool
+		stored  int
+	}{
+		{hours: 0, stored: notify.DefaultIntervalHours}, // omitted by an older client
+		{hours: 1, stored: 1},
+		{hours: 23, stored: 23},
+		{hours: 24, wantErr: true}, // a full day is "daily", which also picks the hour
+		{hours: -1, wantErr: true},
+	} {
+		svc := newService(&fakeRepo{})
+		got, err := svc.UpdateSettings(context.Background(), 1,
+			Settings{DigestFrequency: notify.FrequencyInterval, DigestIntervalHours: tc.hours})
+		if tc.wantErr {
+			if !errors.Is(err, ErrInvalidInterval) {
+				t.Errorf("hours=%d: want ErrInvalidInterval, got %v", tc.hours, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("hours=%d: want no error, got %v", tc.hours, err)
+			continue
+		}
+		if got.DigestIntervalHours != tc.stored {
+			t.Errorf("hours=%d: stored %d, want %d", tc.hours, got.DigestIntervalHours, tc.stored)
+		}
+	}
+}
+
+// PUT is a full replacement, so a client that predates digest_interval_hours sends
+// zero; that must not reset an interval the person chose.
+func TestUpdateSettings_OmittedIntervalKeepsTheStoredOne(t *testing.T) {
+	repo := &fakeRepo{settings: Settings{DigestFrequency: notify.FrequencyInterval, DigestIntervalHours: 6}}
+	got, err := newService(repo).UpdateSettings(context.Background(), 1,
+		Settings{DigestFrequency: notify.FrequencyInterval})
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if got.DigestIntervalHours != 6 {
+		t.Errorf("stored %d, want the existing 6", got.DigestIntervalHours)
+	}
+}
+
+// The interval is not read beside another frequency, so a stray value there is not
+// a reason to refuse the save; the stored interval is kept.
+func TestUpdateSettings_StrayIntervalBesideDailyKeepsTheStoredOne(t *testing.T) {
+	repo := &fakeRepo{settings: Settings{DigestIntervalHours: 4}}
+	digestTime := 9 * time.Hour
+	got, err := newService(repo).UpdateSettings(context.Background(), 1,
+		Settings{DigestFrequency: notify.FrequencyDaily, DigestTime: &digestTime, DigestIntervalHours: 24})
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if got.DigestIntervalHours != 4 {
+		t.Errorf("stored %d, want the existing 4", got.DigestIntervalHours)
+	}
+}
+
+// An in-range value beside another frequency is not read either: switching to daily
+// and back must find the interval the person chose, not whatever the save carried.
+func TestUpdateSettings_InRangeIntervalBesideDailyKeepsTheStoredOne(t *testing.T) {
+	repo := &fakeRepo{settings: Settings{DigestIntervalHours: 6}}
+	digestTime := 9 * time.Hour
+	got, err := newService(repo).UpdateSettings(context.Background(), 1,
+		Settings{DigestFrequency: notify.FrequencyDaily, DigestTime: &digestTime, DigestIntervalHours: 1})
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if got.DigestIntervalHours != 6 {
+		t.Errorf("stored %d, want the existing 6", got.DigestIntervalHours)
 	}
 }

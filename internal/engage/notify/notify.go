@@ -55,6 +55,30 @@ func ValidChannel(c string) bool {
 	return slices.Contains(Channels, c)
 }
 
+// The saved-search digest frequencies (notification_settings.digest_frequency).
+//
+//   - FrequencyInstant sends on every pass that finds something new.
+//   - FrequencyDaily sends once a local day, at the account's digest time.
+//   - FrequencyInterval sends at most once every digest_interval_hours hours.
+//
+// FrequencyInterval at DefaultIntervalHours is the default — an account with no
+// settings row reads as it, and so does any unknown stored value — because instant
+// was too many messages for most people (migration 0233 has the measurement).
+const (
+	FrequencyInstant  = "instant"
+	FrequencyDaily    = "daily"
+	FrequencyInterval = "interval"
+)
+
+// The bounds of an interval digest, in hours. A full day is FrequencyDaily, which
+// also picks the hour, so the interval stops one short of it. The column's CHECK
+// (migration 0233) holds the same numbers.
+const (
+	MinIntervalHours     = 1
+	MaxIntervalHours     = 23
+	DefaultIntervalHours = 1
+)
+
 // ListLimit is how many jobs a channel message itemizes. It is a constant rather
 // than a Config field because the channel notifiers take only a base URL and a
 // transport — reaching Config into them would buy nothing, and a shared constant
@@ -274,9 +298,9 @@ func DefaultConfig() Config {
 		// same destination refusing everything in a row (this).
 		WebhookMaxConsecutiveFailures: 5,
 		// One query cannot match more than MatchLimit jobs in a pass, so an
-		// `instant` digest is carried whole. A `daily` one, or one held through
-		// quiet hours, accumulates across passes and can exceed it; that digest
-		// carries the newest 200 and counts the rest.
+		// `instant` digest is carried whole. An `interval` or `daily` one, or one
+		// held through quiet hours, accumulates across passes and can exceed it;
+		// that digest carries the newest 200 and counts the rest.
 		SnapshotCap: 200,
 		// Three days: long enough to outlast quiet hours, a daily digest's wait
 		// and a weekend away from the phone, short enough that nothing announced

@@ -5643,10 +5643,11 @@ type Querier interface {
 	// linked to the saved search that lists them. Re-queuing them instead is what kept a
 	// busy `daily` subscription mailing the same backlog, oldest first, day after day.
 	MarkCoveredMatchesNotified(ctx context.Context, arg MarkCoveredMatchesNotifiedParams) (int64, error)
-	// Stamp the subscription's last daily-digest send instant, so
-	// internal/application/deliverywindow.DigestDue reads "already sent today" on any later pass
-	// within the same local calendar day. Only called after a successful `daily`-mode
-	// delivery — `instant`-mode subscriptions never touch this column.
+	// Stamp the subscription's last digest send instant. A `daily` subscription reads it
+	// through internal/application/deliverywindow.DigestDue ("already sent today"); an
+	// `interval` one through ClaimSubscriptionMatches' elapsed-interval gate. Called after
+	// every successful delivery in either mode — `instant`-mode subscriptions never touch
+	// this column.
 	MarkDigestSent(ctx context.Context, id int64) error
 	// Stamps an application delivered. Only ever after the email succeeded.
 	MarkDirectApplicationSent(ctx context.Context, id int64) error
@@ -5884,8 +5885,8 @@ type Querier interface {
 	// undelivered match is, per value of `deliverable`.
 	//
 	// The age is the signal that matters. A pass runs every five minutes, so in steady state
-	// the oldest pending match of a deliverable instant subscription is minutes old (a daily
-	// digest's, up to a day). An age that climbs without bound means some subscription is never
+	// the oldest pending match of a deliverable instant subscription is minutes old (an
+	// interval digest's, up to its interval; a daily digest's, up to a day). An age that climbs without bound means some subscription is never
 	// being served — which is not visible in the worker's own log, because a starved
 	// subscription produces no failure: `notify` reported `delivered=1 failed=0` for weeks while
 	// 1.14M matches sat undelivered and one subscription's had never been claimed at all

@@ -41,8 +41,11 @@ var (
 	// carries push keeps it, so a pruned device never locks the rest of the
 	// settings behind un-ticking it first.
 	ErrNoPushDevice = errors.New("reminder: no registered push device")
-	// ErrInvalidFrequency is a DigestFrequency outside {instant, daily} (mapped to 400).
-	ErrInvalidFrequency = errors.New("reminder: digest frequency must be instant or daily")
+	// ErrInvalidFrequency is a DigestFrequency outside {instant, daily, interval} (mapped to 400).
+	ErrInvalidFrequency = errors.New("reminder: digest frequency must be instant, daily or interval")
+	// ErrInvalidInterval is interval frequency with DigestIntervalHours outside
+	// [notify.MinIntervalHours, notify.MaxIntervalHours] (mapped to 400).
+	ErrInvalidInterval = errors.New("reminder: digest interval must be between 1 and 23 hours")
 	// ErrMissingDigestTime is daily frequency without a DigestTime (mapped to 400).
 	ErrMissingDigestTime = errors.New("reminder: daily frequency requires a digest time")
 	// ErrIncompleteQuietHours is exactly one of QuietHoursStart/QuietHoursEnd set
@@ -52,16 +55,21 @@ var (
 
 // Settings is the account-level notification rule, shared with the internal/engage/nudge
 // engine (see notification_settings). An absent stored row reads as the
-// opt-out-by-default default: enabled, channel email. DigestFrequency/DigestTime
-// govern only internal/engage/notify's saved-search digests; QuietHoursStart/End defer
+// opt-out-by-default default: enabled, channel email, an hourly interval digest.
+// DigestFrequency/DigestTime/DigestIntervalHours govern only internal/engage/notify's
+// saved-search digests; QuietHoursStart/End defer
 // delivery across all three notification engines — see internal/application/deliverywindow.
 type Settings struct {
-	Enabled         bool
-	Channels        []string
-	DigestFrequency string // "instant" (default/zero value reads as instant) or "daily"
+	Enabled  bool
+	Channels []string
+	// DigestFrequency is one of notify.Frequency*; empty reads as notify.FrequencyInterval.
+	DigestFrequency string
 	DigestTime      *time.Duration
-	QuietHoursStart *time.Duration
-	QuietHoursEnd   *time.Duration
+	// DigestIntervalHours is read only in interval mode; zero reads as
+	// notify.DefaultIntervalHours.
+	DigestIntervalHours int
+	QuietHoursStart     *time.Duration
+	QuietHoursEnd       *time.Duration
 }
 
 // ScheduleContext is when an account wants to hear from us: the daily notification
@@ -120,8 +128,9 @@ func (s *Service) GetSettings(ctx context.Context, userID int64) (Settings, erro
 }
 
 // UpdateSettings validates and stores the caller's rule. An enabled rule must have
-// at least one valid channel. DigestFrequency (empty reads as "instant") must be
-// "instant" or "daily"; "daily" requires a DigestTime. QuietHoursStart/End must be
+// at least one valid channel. DigestFrequency (empty reads as "interval") must be
+// one of notify.Frequency*; "daily" requires a DigestTime, and "interval" an
+// interval within notify's bounds (zero reads as the default). QuietHoursStart/End must be
 // set together or not at all — a one-sided window has no meaning.
 func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings) (Settings, error) {
 	for _, c := range in.Channels {
@@ -132,12 +141,21 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 	if in.Enabled && len(in.Channels) == 0 {
 		return Settings{}, ErrNoChannels
 	}
-	if in.DigestFrequency != "" && in.DigestFrequency != "instant" && in.DigestFrequency != "daily" {
+	switch in.DigestFrequency {
+	case "":
+		in.DigestFrequency = notify.FrequencyInterval
+	case notify.FrequencyInstant, notify.FrequencyDaily, notify.FrequencyInterval:
+	default:
 		return Settings{}, ErrInvalidFrequency
 	}
-	if in.DigestFrequency == "daily" && in.DigestTime == nil {
+	if in.DigestFrequency == notify.FrequencyDaily && in.DigestTime == nil {
 		return Settings{}, ErrMissingDigestTime
 	}
+	hours, err := s.resolveIntervalHours(ctx, userID, in)
+	if err != nil {
+		return Settings{}, err
+	}
+	in.DigestIntervalHours = hours
 	if (in.QuietHoursStart == nil) != (in.QuietHoursEnd == nil) {
 		return Settings{}, ErrIncompleteQuietHours
 	}
@@ -145,6 +163,30 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 		return Settings{}, err
 	}
 	return s.repo.UpsertSettings(ctx, userID, in)
+}
+
+// resolveIntervalHours decides the interval to store. The value sent is read only
+// when the rule uses the interval: there it is stored, or refused when out of
+// range. Otherwise — another frequency, or the field omitted (zero, from a client
+// that predates it, on what is a full-replacement write) — the account's stored
+// interval is kept, so a save that is not about the interval cannot reset a
+// chosen six hours to one.
+func (s *Service) resolveIntervalHours(ctx context.Context, userID int64, in Settings) (int, error) {
+	h := in.DigestIntervalHours
+	if in.DigestFrequency == notify.FrequencyInterval && h != 0 {
+		if h < notify.MinIntervalHours || h > notify.MaxIntervalHours {
+			return 0, ErrInvalidInterval
+		}
+		return h, nil
+	}
+	current, err := s.repo.GetSettings(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	if current.DigestIntervalHours < notify.MinIntervalHours || current.DigestIntervalHours > notify.MaxIntervalHours {
+		return notify.DefaultIntervalHours, nil
+	}
+	return current.DigestIntervalHours, nil
 }
 
 // checkPushDevice refuses push when it is being added and the account has no
