@@ -43,11 +43,20 @@ func NewNotifier(client *Client, jobBaseURL string) *Notifier {
 // "this recipient is permanently closed to us" — the engine unlinks the chat and
 // soft-skips instead of counting a delivery failure it would retry to no purpose.
 func (n *Notifier) Send(ctx context.Context, _ string, dest string, d notify.Digest) error {
+	return n.client.SendToChat(ctx, dest, n.render(d))
+}
+
+// SendToChat posts html to the chat encoded in dest. A 403 is translated to
+// notify.ErrRecipientGone, the engine-side vocabulary for "this recipient is
+// permanently closed to us" — the engine unlinks the chat and soft-skips instead
+// of counting a delivery failure it would retry to no purpose. Shared by the
+// digest, reminder and nudge Telegram notifiers.
+func (c *Client) SendToChat(ctx context.Context, dest, html string) error {
 	chatID, err := strconv.ParseInt(dest, 10, 64)
 	if err != nil {
 		return fmt.Errorf("telegramnotify: invalid chat id %q: %w", dest, err)
 	}
-	err = n.client.SendMessage(ctx, chatID, n.render(d))
+	err = c.SendMessage(ctx, chatID, html)
 	if errors.Is(err, ErrChatUnreachable) {
 		return fmt.Errorf("%w: %w", notify.ErrRecipientGone, err)
 	}

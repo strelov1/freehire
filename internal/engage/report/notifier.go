@@ -14,18 +14,6 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// EmailSender is the slice of the SES transport the notifier needs; *emailnotify.Client
-// satisfies it. The interface stays declared here — a consumer owns its own seam — but it
-// now names emailnotify.Message, so the import this package used to avoid is back.
-//
-// That is the price of one message type. Every mail in the product now goes out through
-// one Send so that one check can refuse a silenceable mail carrying no way out of it, and
-// a private copy of the message shape per sender would put that check back to being per
-// sender, which is where it was missing in the first place.
-type EmailSender interface {
-	Send(ctx context.Context, m emailnotify.Message) error
-}
-
 // Compile-time proof that MailNotifier satisfies the seam the use cases depend on.
 var _ ReporterNotifier = (*MailNotifier)(nil)
 
@@ -46,7 +34,7 @@ type Silencer interface {
 }
 
 type MailNotifier struct {
-	sender   EmailSender
+	sender   emailnotify.Sender
 	from     string
 	baseURL  string
 	layout   *mailtpl.Layout
@@ -56,7 +44,7 @@ type MailNotifier struct {
 
 // NewMailNotifier builds a MailNotifier sending from `from` through sender. baseURL is the
 // site origin the reported job is linked under; links signs the unsubscribe URL.
-func NewMailNotifier(sender EmailSender, from, baseURL string, links *emailprefs.Links, silenced Silencer) *MailNotifier {
+func NewMailNotifier(sender emailnotify.Sender, from, baseURL string, links *emailprefs.Links, silenced Silencer) *MailNotifier {
 	base := strings.TrimRight(baseURL, "/")
 	return &MailNotifier{
 		sender:   sender,

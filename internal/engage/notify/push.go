@@ -3,32 +3,22 @@ package notify
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"strconv"
 
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
-	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-// PushTokenLister lists a user's registered push devices. *db.Queries
-// satisfies it.
-type PushTokenLister interface {
-	ListPushTokensForUser(ctx context.Context, userID int64) ([]db.UserPushToken, error)
-}
+// PushTokenLister lists a user's registered push devices.
+type PushTokenLister = pushnotify.TokenLister
 
 // PushNotifier delivers a digest as a mobile push, fanned out to every device
-// the user has registered. dest is the user id — recipient() resolves it
-// live from HasPushDevice rather than a stored per-subscription destination
-// (see design decision #1); this notifier is the one that expands that single
-// id into N device sends via pushnotify.SendToDevices.
-type PushNotifier struct {
-	tokens    PushTokenLister
-	transport pushnotify.Notifier
-}
+// the user has registered. dest is the user id — recipient() resolves it live
+// from HasPushDevice rather than a stored per-subscription destination.
+type PushNotifier struct{ push *pushnotify.UserSender }
 
-// NewPushNotifier builds a PushNotifier.
+// NewPushNotifier builds a PushNotifier resolving devices through tokens and
+// sending through transport.
 func NewPushNotifier(tokens PushTokenLister, transport pushnotify.Notifier) *PushNotifier {
-	return &PushNotifier{tokens: tokens, transport: transport}
+	return &PushNotifier{push: pushnotify.NewUserSender(tokens, transport)}
 }
 
 // Send renders the digest as a short title/body (a full itemized listing, as
@@ -38,20 +28,6 @@ func NewPushNotifier(tokens PushTokenLister, transport pushnotify.Notifier) *Pus
 // more than one job carries no deep-link data, matching the "Push digest
 // content and deep link" requirement.
 func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, d Digest) error {
-	userID, err := strconv.ParseInt(dest, 10, 64)
-	if err != nil {
-		return fmt.Errorf("notify: push dest %q is not a user id: %w", dest, err)
-	}
-
-	rows, err := n.tokens.ListPushTokensForUser(ctx, userID)
-	if err != nil {
-		return fmt.Errorf("notify: list push tokens for user %d: %w", userID, err)
-	}
-	tokens := make([]string, len(rows))
-	for i, r := range rows {
-		tokens[i] = r.Token
-	}
-
 	title, body, _ := renderDigest(d)
 
 	var data map[string]string
@@ -59,7 +35,7 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, d Digest
 		data = map[string]string{"slug": d.Jobs[0].Slug}
 	}
 
-	return pushnotify.SendToDevices(ctx, n.transport, tokens, title, body, data)
+	return n.push.Send(ctx, dest, title, body, data)
 }
 
 // renderDigest renders a digest into its short, human-readable copy: a title,

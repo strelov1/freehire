@@ -871,7 +871,7 @@ func Register(app *fiber.App, cfg Config) {
 	// the Telegram bot when linked. Each channel is wrapped only when configured so a nil
 	// concrete pointer never hides behind a non-nil interface (see the search note above);
 	// a referrer with no reachable channel still sees the request in-cabinet.
-	var referralEmail referral.EmailSender
+	var referralEmail emailnotify.Sender
 	// mailLinks signs the unsubscribe URL every non-essential mail carries. One
 	// instance for every sender the API composes, so the token in a footer is the
 	// same shape wherever it was minted.

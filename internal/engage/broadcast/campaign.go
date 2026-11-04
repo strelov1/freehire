@@ -22,12 +22,6 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// Sender delivers one rendered message with a Reply-To, as internal/engage/onboarding does:
-// a campaign is signed by a person and invites an answer.
-type Sender interface {
-	Send(ctx context.Context, m emailnotify.Message) error
-}
-
 // senderName is the display name in the recipient's message list.
 const senderName = "Ilya from freehire"
 
@@ -49,7 +43,7 @@ type Campaign struct {
 
 // Mailer renders and sends campaigns.
 type Mailer struct {
-	sender  Sender
+	sender  emailnotify.Sender
 	from    string
 	replyTo string
 	baseURL string
@@ -60,7 +54,7 @@ type Mailer struct {
 // NewMailer builds a Mailer. replyTo is the human inbox that answers; as with the
 // onboarding sequence, a campaign signed by a person and answerable by nobody is
 // worse than no campaign, so the caller is expected to require it.
-func NewMailer(sender Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
+func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
 		sender:  sender,

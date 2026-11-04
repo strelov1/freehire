@@ -12,12 +12,6 @@ import (
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
 
-// Sender delivers one rendered message. *emailnotify.Client satisfies it in
-// production; tests inject a fake — the same seam prowelcome.Sender uses.
-type Sender interface {
-	Send(ctx context.Context, m emailnotify.Message) error
-}
-
 // senderName is what the recipient's message list shows — see
 // prowelcome.senderName's own comment: "freehire" would set up a reply to a company
 // no one intends to answer.
@@ -25,7 +19,7 @@ const senderName = "Ilya from freehire"
 
 // Mailer renders and sends the limit-nudge letter.
 type Mailer struct {
-	sender  Sender
+	sender  emailnotify.Sender
 	from    string
 	replyTo string
 	baseURL string
@@ -37,7 +31,7 @@ type Mailer struct {
 // human inbox that answers — see prowelcome.NewMailer's own comment on why a blank
 // value is a configuration error the caller must catch rather than something this
 // type papers over.
-func NewMailer(sender Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
+func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *emailprefs.Links) *Mailer {
 	base := strings.TrimRight(baseURL, "/")
 	return &Mailer{
 		sender:  sender,

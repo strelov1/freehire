@@ -24,7 +24,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // ErrTokenPruned is returned by Send when the token turned out to be dead
@@ -127,6 +130,43 @@ func SendToDevices(ctx context.Context, notifier Notifier, tokens []string, titl
 		return fmt.Errorf("pushnotify: no device received the message: %w", lastErr)
 	}
 	return errors.New("pushnotify: no device to send to")
+}
+
+// TokenLister lists a user's registered push devices. *db.Queries satisfies it.
+type TokenLister interface {
+	ListPushTokensForUser(ctx context.Context, userID int64) ([]db.UserPushToken, error)
+}
+
+// UserSender resolves a user id to the user's registered devices and fans one
+// message out to all of them. It is the push half shared by every engine's
+// PushNotifier; the engines differ only in how they render title/body/data.
+type UserSender struct {
+	tokens    TokenLister
+	transport Notifier
+}
+
+// NewUserSender builds a UserSender listing devices through tokens and sending
+// through transport.
+func NewUserSender(tokens TokenLister, transport Notifier) *UserSender {
+	return &UserSender{tokens: tokens, transport: transport}
+}
+
+// Send parses dest as a user id, lists that user's devices and delivers the
+// message to them via SendToDevices.
+func (s *UserSender) Send(ctx context.Context, dest, title, body string, data map[string]string) error {
+	userID, err := strconv.ParseInt(dest, 10, 64)
+	if err != nil {
+		return fmt.Errorf("pushnotify: invalid push user id %q: %w", dest, err)
+	}
+	rows, err := s.tokens.ListPushTokensForUser(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("pushnotify: list push tokens for user %d: %w", userID, err)
+	}
+	tokens := make([]string, len(rows))
+	for i, row := range rows {
+		tokens[i] = row.Token
+	}
+	return SendToDevices(ctx, s.transport, tokens, title, body, data)
 }
 
 // ExpoNotifier implements Notifier over the Expo Push API.
