@@ -92,6 +92,7 @@ func run() int {
 
 	q := db.New(pool).WithTx(tx)
 
+	done := worker.Stage("daily stats")
 	if err := q.DeleteAllJobDailyStats(ctx); err != nil {
 		log.Printf("clear rollup: %v", err)
 		return 1
@@ -102,15 +103,21 @@ func run() int {
 		return 1
 	}
 
+	done()
+
+	done = worker.Stage("insights")
 	if err := rebuildInsights(ctx, q); err != nil {
 		log.Printf("rebuild insights: %v", err)
 		return 1
 	}
+	done()
 
+	done = worker.Stage("commit")
 	if err := tx.Commit(ctx); err != nil {
 		log.Printf("commit: %v", err)
 		return 1
 	}
+	done()
 
 	log.Printf("rollup-stats: rebuilt job_daily_stats (%d active day rows) and insights_* rollups", days)
 
@@ -118,15 +125,21 @@ func run() int {
 	// a separate concern with its own failure mode, so it neither joins their
 	// transaction nor changes this run's exit code: the rollups are the worker's job,
 	// and they are already done.
+	done = worker.Stage("catalogue snapshot")
 	publish(ctx, cfg.RedisURL, cfg.MeiliURL, cfg.MeiliKey, db.New(pool))
+	done()
 
 	// So does the per-source snapshot behind the public /sources page, for the same
 	// reason and on the same terms.
+	done = worker.Stage("source stats")
 	rebuildSourceStats(ctx, pool, cfg.MeiliURL, cfg.MeiliKey)
+	done()
 
 	// And the embedding-coverage snapshot behind /embeddings: a scan over every open
 	// posting, which is why it is here and never on a request path.
+	done = worker.Stage("embed progress")
 	rebuildEmbedProgress(ctx, pool, cfg.RedisURL)
+	done()
 
 	return 0
 }

@@ -79,7 +79,10 @@ func run() int {
 	case len(files) == 0:
 		log.Printf("rollup-views: no rotated logs to process in %s", dir)
 	default:
+		done := worker.Stage("nginx logs")
 		nFiles, nViews, err := process(ctx, pool, files)
+		done()
+		worker.ReportWork(int64(nFiles), int64(nViews))
 		if err != nil {
 			log.Printf("process: %v", err)
 			exit = 1
@@ -91,7 +94,10 @@ func run() int {
 	// The agent pass is independent of nginx: no rotated access log is not a reason to
 	// skip the agent days. Unset, the log is not configured and there is nothing to read.
 	if agentDir := os.Getenv("AGENT_VIEW_LOG_DIR"); agentDir != "" {
+		done := worker.Stage("agent logs")
 		nFiles, nViews, err := processAgent(ctx, pool, agentDir, time.Now())
+		done()
+		worker.ReportWork(int64(nFiles), int64(nViews))
 		if err != nil {
 			log.Printf("agent views: %v", err)
 			return 1

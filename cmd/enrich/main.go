@@ -70,6 +70,14 @@ func run() int {
 		MaxAttempts:       ecfg.MaxAttempts,
 		UpstreamGraceDays: ecfg.UpstreamGraceDays,
 	})
+	worker.ReportWork(int64(stats.Enriched+stats.Failed+stats.DeadLettered), int64(stats.Enriched))
+	// A stop is not a failure: this drain runs for days, so every deploy ends it with a
+	// SIGTERM, and reading that as an error marked a healthy run as failed. Whatever it
+	// left claimed goes back to the queue when its lease expires.
+	if ctx.Err() != nil {
+		log.Printf("enrich: stopped: enriched=%d failed=%d: %v", stats.Enriched, stats.Failed, ctx.Err())
+		return 0
+	}
 	if err != nil {
 		log.Printf("enrich: %v", err)
 		return 1

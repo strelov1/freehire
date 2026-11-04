@@ -48,7 +48,7 @@ freehire_worker_last_run_duration_seconds{%[1]s} %[3]f
 # HELP freehire_worker_last_run_success Whether the worker's last run exited zero (1) or not (0).
 # TYPE freehire_worker_last_run_success gauge
 freehire_worker_last_run_success{%[1]s} %[4]d
-`, labels, time.Now().Unix(), runDuration.Seconds(), success) + pausedGauge(labels, 0)
+`, labels, time.Now().Unix(), runDuration.Seconds(), success) + pausedGauge(labels, 0) + workMetrics(labels)
 
 	publishRunFile(dir, content)
 }

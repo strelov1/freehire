@@ -244,3 +244,7 @@ func run() int {
     return worker.ExitCode(failed, deadLettered)
 }
 ```
+
+## Saying what a run did
+
+A worker's duration and exit status say that it ran, not whether it was worth running or where the time went. `worker.ReportWork(processed, changed)` and `worker.Stage(name)` publish that into the same per-run metrics file (`freehire_worker_last_run_items_{processed,changed}`, `freehire_worker_stage_seconds`). Both are optional: a worker that calls neither publishes none of these series. The freehire-ops **Freehire Scheduled Jobs** dashboard reads them, beside what each run cost the host. Use them in any long or heavy worker.

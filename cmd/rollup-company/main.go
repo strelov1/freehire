@@ -67,6 +67,7 @@ func run() int {
 
 	q := db.New(pool).WithTx(tx)
 
+	done := worker.Stage("company stats")
 	if err := q.DeleteAllInsightsCompanyStats(ctx); err != nil {
 		log.Printf("clear rollup: %v", err)
 		return 1
@@ -79,6 +80,8 @@ func run() int {
 
 	// The scalar growth table (backs the ranked leaderboard) is rebuilt in the SAME
 	// transaction so it never diverges from the per-day rollup.
+	done()
+	done = worker.Stage("company growth")
 	prevTs := pgtype.Timestamptz{Time: time.Now().UTC().AddDate(0, 0, -growthWindowDays), Valid: true}
 	if err := q.DeleteAllInsightsCompanyGrowth(ctx); err != nil {
 		log.Printf("clear growth: %v", err)
@@ -92,6 +95,8 @@ func run() int {
 
 	// The response-rate scalars ride the same transaction for the same reason: a
 	// reader must never see one table rebuilt and the other mid-flight.
+	done()
+	done = worker.Stage("company response")
 	if err := q.DeleteAllInsightsCompanyResponse(ctx); err != nil {
 		log.Printf("clear response: %v", err)
 		return 1
@@ -102,6 +107,8 @@ func run() int {
 		return 1
 	}
 
+	done()
+	done = worker.Stage("company lifetime")
 	// Posting lifetime, same transaction again: the Hiring tab shows it beside the
 	// growth figure, and the two must describe the same rebuild.
 	if err := q.DeleteAllInsightsCompanyLifetime(ctx); err != nil {
@@ -114,6 +121,8 @@ func run() int {
 		return 1
 	}
 
+	done()
+	done = worker.Stage("company views")
 	// Posting views, likewise shown on the Hiring tab beside the figures above.
 	if err := q.DeleteAllInsightsCompanyViews(ctx); err != nil {
 		log.Printf("clear views: %v", err)
@@ -125,10 +134,13 @@ func run() int {
 		return 1
 	}
 
+	done()
+	done = worker.Stage("commit")
 	if err := tx.Commit(ctx); err != nil {
 		log.Printf("commit: %v", err)
 		return 1
 	}
+	done()
 
 	log.Printf("rollup-company: rebuilt insights_company_stats (%d company-day rows) + insights_company_growth (%d companies) + insights_company_response (%d companies with an observable application) + insights_company_lifetime (%d companies with an employer-side closure) + insights_company_views (%d companies with a posting view in 60 days)", rows, companies, responders, measured, viewed)
 	return 0
