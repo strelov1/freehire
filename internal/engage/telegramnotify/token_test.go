@@ -52,3 +52,14 @@ func TestLinkTokens_GarbageRejected(t *testing.T) {
 		}
 	}
 }
+
+// TestLinkTokens_PurposeIsolated guards domain separation: a token minted for one
+// purpose must not verify under another, even with the same secret.
+func TestLinkTokens_PurposeIsolated(t *testing.T) {
+	tok := NewLinkTokens("secret", time.Minute).Issue(1)
+	other := NewLinkTokens("secret", time.Minute)
+	other.purpose = "other-purpose"
+	if _, err := other.Parse(tok); !errors.Is(err, ErrInvalidToken) {
+		t.Errorf("Parse under a different purpose err = %v, want ErrInvalidToken", err)
+	}
+}
