@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 
@@ -70,6 +71,19 @@ func run() int {
 		MaxAttempts:       ecfg.MaxAttempts,
 		UpstreamGraceDays: ecfg.UpstreamGraceDays,
 	})
+	worker.ReportWork(int64(stats.Enriched+stats.Failed+stats.DeadLettered), int64(stats.Enriched))
+	// A stop is not a failure: this drain runs for days, so every deploy ends it with a
+	// SIGTERM, and reading that as an error marked a healthy run as failed. Whatever it
+	// left claimed goes back to the queue when its lease expires.
+	//
+	// The tallies cannot decide this. The stop itself fails every entry in flight, and
+	// over days a drain always collects some real failures too, so ExitCode would call
+	// every stopped run a failure, which is the false alarm this avoids. They are logged
+	// instead. A different error surfacing during the stop still fails the run.
+	if ctx.Err() != nil && (err == nil || errors.Is(err, context.Canceled)) {
+		log.Printf("enrich: stopped: enriched=%d failed=%d dead_lettered=%d: %v", stats.Enriched, stats.Failed, stats.DeadLettered, ctx.Err())
+		return 0
+	}
 	if err != nil {
 		log.Printf("enrich: %v", err)
 		return 1

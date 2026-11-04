@@ -136,31 +136,40 @@ func run() int {
 	// them the rebuild still collapses reposts; it just uses the markers the last
 	// dedup invocation left, which is what "eventually consistent" already meant.
 	if rcfg.Dedup {
+		done := worker.Stage("duplicate markers")
 		refreshDuplicateMarkers(ctx, q, int(fuzzyWorkers))
+		done()
 	}
 
 	// Only the open, canonical, public rows: splitJobs would drop every other row anyway,
 	// and reading them was most of the rebuild's cost (see ListIndexableJobsByIDAfter).
 	reader := worker.NewIndexableScanReader(q)
+	done := worker.Stage("reality lookup")
 	lookup, err := buildRealityLookup(ctx, q)
 	if err != nil {
 		log.Printf("reindex: build reality lookup: %v", err)
 		return 1
 	}
+	done()
+	done = worker.Stage("closure geo lookup")
 	geo, err := buildClosureGeoLookup(ctx, q)
 	if err != nil {
 		log.Printf("reindex: build closure geo lookup: %v", err)
 		return 1
 	}
+	done()
 
 	// Builds a fresh index and atomically swaps it in — transiently a second full copy
 	// of the index (disk already guarded up front, before the recompute).
 	log.Print("reindex: target=facet scope=full mode=swap")
+	done = worker.Stage("index and swap")
 	indexed, skipped, err := reindexFull(ctx, reader, client.NewFacetRebuild(), lookup, geo, q, q, time.Now())
 	if err != nil {
 		log.Printf("reindex: %v", err)
 		return 1
 	}
+	done()
+	worker.ReportWork(int64(indexed+skipped), int64(indexed))
 	log.Printf("reindex done: target=facet scope=full indexed=%d skipped=%d", indexed, skipped)
 
 	// Best-effort: the reindex itself already succeeded, so a purge failure just leaves

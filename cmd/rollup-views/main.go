@@ -79,7 +79,10 @@ func run() int {
 	case len(files) == 0:
 		log.Printf("rollup-views: no rotated logs to process in %s", dir)
 	default:
+		done := worker.Stage("nginx logs")
 		nFiles, nViews, err := process(ctx, pool, files)
+		done()
+		reportFiles(nFiles, nViews)
 		if err != nil {
 			log.Printf("process: %v", err)
 			exit = 1
@@ -91,7 +94,10 @@ func run() int {
 	// The agent pass is independent of nginx: no rotated access log is not a reason to
 	// skip the agent days. Unset, the log is not configured and there is nothing to read.
 	if agentDir := os.Getenv("AGENT_VIEW_LOG_DIR"); agentDir != "" {
+		done := worker.Stage("agent logs")
 		nFiles, nViews, err := processAgent(ctx, pool, agentDir, time.Now())
+		done()
+		reportFiles(nFiles, nViews)
 		if err != nil {
 			log.Printf("agent views: %v", err)
 			return 1
@@ -99,6 +105,17 @@ func run() int {
 		log.Printf("rollup-views: agent views: processed %d file(s), applied %d view(s)", nFiles, nViews)
 	}
 	return exit
+}
+
+// reportFiles reports this pass in files, the unit both figures can share: every file
+// read, and all of them as changed only if the pass applied any view. Reading logs and
+// applying nothing is the case worth seeing; the view count itself is in the log line.
+func reportFiles(nFiles, nViews int) {
+	changed := 0
+	if nViews > 0 {
+		changed = nFiles
+	}
+	worker.ReportWork(int64(nFiles), int64(changed))
 }
 
 // process applies every not-yet-processed file, skipping those already in the
