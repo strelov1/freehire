@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"context"
 	"encoding/json"
@@ -193,6 +195,16 @@ func (h *assistantHandlers) searchJobsTool() assistant.Tool {
 	}
 }
 
+// lookupMiss answers a slug lookup that failed: a row that does not exist is the sentence the
+// agent acts on, as a 404 so the MCP metrics count it as not_found; any other failure is
+// returned as it is, rather than dressed up as "no such row".
+func lookupMiss(err error, missing string) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fiber.NewError(fiber.StatusNotFound, missing)
+	}
+	return err
+}
+
 // getJobTool reads one vacancy by its public slug.
 func (h *assistantHandlers) getJobTool() assistant.Tool {
 	return assistant.Tool{
@@ -217,7 +229,7 @@ func (h *assistantHandlers) getJobTool() assistant.Tool {
 			}
 			job, err := publishedJobBySlug(ctx, h.queries, in.Slug)
 			if err != nil {
-				return nil, fmt.Errorf("no vacancy with slug %q", in.Slug)
+				return nil, lookupMiss(err, fmt.Sprintf("no vacancy with slug %q", in.Slug))
 			}
 			agentview.Record(ctx, agentview.KindDetail, []int64{job.ID})
 			view, err := jobview.FromRow(job)
@@ -257,7 +269,7 @@ func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 				company, err = h.queries.GetCompany(ctx, canonical)
 			}
 			if err != nil {
-				return nil, fmt.Errorf("no company with slug %q", in.Slug)
+				return nil, lookupMiss(err, fmt.Sprintf("no company with slug %q", in.Slug))
 			}
 			jobs, err := h.queries.ListJobsByCompany(ctx, db.ListJobsByCompanyParams{
 				CompanySlug: company.Slug,

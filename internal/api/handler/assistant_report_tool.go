@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
@@ -66,7 +67,7 @@ func (h *assistantHandlers) reportMCPTools() []assistant.Tool {
 			}
 			jobID, err := h.reports.queries.GetJobIDBySlug(ctx, in.Slug)
 			if errors.Is(err, pgx.ErrNoRows) {
-				return nil, fmt.Errorf("no vacancy with slug %q — use the public_slug from a search result", in.Slug)
+				return nil, fiber.NewError(fiber.StatusNotFound, fmt.Sprintf("no vacancy with slug %q — use the public_slug from a search result", in.Slug))
 			}
 			if err != nil {
 				return nil, fmt.Errorf("could not look up the vacancy: %w", err)
