@@ -1,0 +1,56 @@
+{
+  "code": "C001",
+  "message": "조회에 성공하셨습니다.",
+  "status": 200,
+  "result": {
+    "id": 55366649,
+    "title": "[일본] FDE(SW) - Solutions Architect",
+    "companyName": "올거나이즈코리아",
+    "jobCategories": [
+      {
+        "id": 9,
+        "name": "devops/시스템 엔지니어"
+      }
+    ],
+    "techStacks": [
+      {
+        "stack": "Linux"
+      },
+      {
+        "stack": "Python"
+      },
+      {
+        "stack": "AI/인공지능"
+      },
+      {
+        "stack": "K8S"
+      },
+      {
+        "stack": "Infra"
+      }
+    ],
+    "workingPlaces": [
+      {
+        "address": "서울 강남구 테헤란로20길5, 4층, 5층",
+        "domestic": false
+      }
+    ],
+    "location": "서울 강남구 테헤란로20길5, 4층, 5층",
+    "minCareer": 1,
+    "maxCareer": 20,
+    "newcomer": false,
+    "alwaysOpen": false,
+    "closedAt": "2026-11-20 23:59:59",
+    "publishedAt": "2026-10-22 00:00:00",
+    "status": 0,
+    "positionStatus": "CHECKED",
+    "hiddenPosition": false,
+    "invisible": false,
+    "serviceInfo": "【会社概要】\r\nAllganize（オルガナイズ）は、産業特化型オンプレミスLLMモデルから、Agent RAG、ノーコードLLMアプリビルダー、アプリマーケットまで、LLM（大規模言語モデル）に関するすべてを提供する ​「LLMオールインワンソリューション企業」 ​です。\r",
+    "responsibility": "【職務概要】\r\nAllganizeのFDE(Solutions Architect)は、顧客現場で課題を把握し、テクノロジーを通じて実質的な変化を生み出すエンジニアです。現場で得られたインサイトをプロダクトチームと共有し、AIソリューションの性能と方向性を共に進化させながら、実際の課題解決が製品改善へとつながるプロセスを直接経験します。\r\n\r\nこの経験を通じて、FDEはテクノロジーとビジネスを結ぶ専門家として成長し、急速に進化するAI分野で独自のキャリアを築くことができます。\r\n\r\n【主な業務内容】\r\n顧客と連携し、ビジネス課題を定義した上でAI技術を基盤とした最適な解決策を設計\r\n現場で得られた知見をプロダクトチームと共有し、製品機能および性能改善に貢献\r\nプロジェクト全体を主体的に管理し、顧客要件を技術的成果物として具体化",
+    "qualifications": "【応募資格】\nAIを活用した課題解決に関心と情熱をお持ちの方\nPython、またはそれに準ずるプログラミング経験をお持ちの方\n*NIX環境（LinuxなどのUNIX系OS）における高い習熟度をお持ちの方\nAIを活用したコード作成や、大規模なコードベースの分析経験をお持ちの方\nAI ​Agent（LLM ​Agent）を自ら設計・開発した経験をお持ちの方\nClaude ​Code、Codex、OpenCodeなどを活用し、業務効率化の仕組みやアプリケーションを開発した経験をお持ちの方\nTCP/IP、DNS、HTTP、VPN、ファイアウォールなど、ネットワークに関する基礎知識をお持ちの方\n自律的に問題を解決し、独立して判断・行動できる方\n技術チームおよび非技術チームの双方と円滑に協働できる、高いコミュニケーション能力をお持ちの方\n顧客先での勤務に対応可能な方",
+    "preferredRequirements": "【福利厚生】\n社会保険完備（健康・雇用・労災・厚生年金）\n時間外手当\n自宅〜会社間の交通費支給（実費精算）\n年1回の総合健康診断費用を会社負担で実施\nAllganize Japan所属として、VISAサポートあり",
+    "welfares": "【休日休暇】\r\n年間120日\r\n完全週休2日制（土・日・祝日）\r\n有給休暇\r",
+    "recruitProcess": "【選考プロセス】\r\n書類選考 → ​コーディングテストおよび事前質問 → 一次オンライン面接 ​→ 二次オンライン面接 ​→ ​内定および入社\r\n\r"
+  }
+}

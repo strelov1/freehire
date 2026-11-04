@@ -1,0 +1,56 @@
+{
+  "code": "C001",
+  "message": "조회에 성공하셨습니다.",
+  "status": 200,
+  "result": {
+    "id": 55482651,
+    "title": "Robot Controls Engineer",
+    "companyName": "셀틱스테크놀로지",
+    "jobCategories": [
+      {
+        "id": 13,
+        "name": "HW/임베디드"
+      }
+    ],
+    "techStacks": [
+      {
+        "stack": "C#"
+      },
+      {
+        "stack": "C++"
+      },
+      {
+        "stack": "Python"
+      },
+      {
+        "stack": "Embedded"
+      },
+      {
+        "stack": "RTOS"
+      }
+    ],
+    "workingPlaces": [
+      {
+        "address": "경기 용인시 처인구 경안천로364 (주)로봇앤드디자인",
+        "domestic": false
+      }
+    ],
+    "location": "경기 용인시 처인구 경안천로364 (주)로봇앤드디자인",
+    "minCareer": 7,
+    "maxCareer": 15,
+    "newcomer": false,
+    "alwaysOpen": false,
+    "closedAt": "2026-12-03 23:59:59",
+    "publishedAt": "2026-11-04 00:00:00",
+    "status": 0,
+    "positionStatus": "CHECKED",
+    "hiddenPosition": false,
+    "invisible": false,
+    "serviceInfo": "셀트리오 & 셀틱스테크놀로지는 바이오 및 제약 연구를 더욱 자세하고 과학적이게 분석을 할 수 있는 서비스를 제공해 연구자들이 더 효율적이며 스마트한 결정을 내릴 수 있도록 돕습니다.\r\n로봇 자동화 플랫폼과, 그 위에 올라가는 소프트웨어 솔루션을 통해, 기존 방식보다 체계적이고 효율적인 연구 방법을 제공합니다.\r",
+    "responsibility": "• 바이오 장비용 제어 보드 펌웨어 개발\r\n• STM32 MCU 기반 임베디드 제어 SW 개발\r\n• UART , SPI, I2C, CAN 등 주변장치 드라이버 제어\r\n• Modbus RTU/TCP/UDP 통신 구현\r\n• PC 제어 소프트웨어 개발 및 보드 테스트 자동화",
+    "qualifications": "• 관련 경력 5년 이상\n• 관련 전공 필수 - 전자, 전기, 컴퓨터 \n• UART, SPI, I2C, CAN 주변 장치 기본 이해\n• C/C++ 및 임베디드 FW 개발 가능\n• 문제 해결 및 협업 능력 우수",
+    "preferredRequirements": "• 바이오/의료/산업용 장비 개발 경험자\n• 로봇 Kinematics 에 대한 이해\n• FreeRTOS 등 RTOS 기반 프로젝트 경험자\n• 회로도/하드웨어 기본 이해 보유자\n• 통신 패킷 설계 및 디버깅 경험자\n• 로봇 및 자동화 솔루션에 대한 관심이 있으신 분\n• 영어 가능하신 분",
+    "welfares": "• 자기 계발을 위한 업무 관련 도서 구입비 지원\r\n• 간식/점심/저녁 제공해요(구내식당)\r\n• 생일 축하 선물 / 입사1주년 축하선물\r\n",
+    "recruitProcess": "• 서류전형 ＞ coffee chat ＞ 대면면접 ＞ 최종합격\r\n• 입사지원 서류에 허위사실이 발견될 경우, 채용확정 이후라도 채용이 취소될 수 있습니다.\r\n• 모집분야별로 마감일이 상이할 수 있으니 유의하시길 바랍니다."
+  }
+}
