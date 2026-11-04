@@ -234,14 +234,41 @@ func trimTail(name string, isTail func(word, next string) bool, keepJapaneseMark
 // so "Acme d. d. Ljubljana" stays as it is. With no comma there, nothing says the town is a seat
 // and not part of the name.
 //
+// The cut also needs at least two name words before the form, because a short name freed of
+// its seat lands on whoever else holds that word. Measured 2026-11-04 over the 97 catalogue
+// companies the cut re-keys: of the 7 one-word names that met an existing company, 3 met a
+// different employer ("SCAN, d.o.o., Preddvor" on the US health plan SCAN, "Bass d.o.o., Celje"
+// on the German BASS GmbH, "FIDATO d.o.o., ..." on a Dutch Fidato), and none of the 22 longer
+// names did. Those three names are safe only through the seat that tells them apart. The
+// price is that one employer's short spellings stay apart until someone merges them.
+//
 // Every walk over a name's tail calls it before splitting the name into words, for the same
 // reason each asks [IsLegalFormBefore]: a walk that skipped it would count "o." "o." as two
 // name words where the company key drops them.
 func CloseSpacedForms(name string) string {
-	name = balkanSeatTail.ReplaceAllString(name, "${1}")
+	name = dropSeat(name)
 	name = spacedPolishTail.ReplaceAllString(name, "${1}o.o.")
 	name = spacedBalkanTail.ReplaceAllString(name, "${1}.o.o.${2}")
 	return spacedJointStockTail.ReplaceAllString(name, "${1}.d.${2}")
+}
+
+// dropSeat cuts the registered seat after a Balkan form, when at least two name words stand
+// before the form. See [CloseSpacedForms].
+func dropSeat(name string) string {
+	loc := balkanSeatTail.FindStringSubmatchIndex(name)
+	if loc == nil {
+		return name
+	}
+	words := strings.FieldsFunc(dropApostrophes(name[:loc[0]]), isWordBreak)
+	next := ""
+	for len(words) > 0 && IsLegalFormBefore(words[len(words)-1], next) {
+		next = words[len(words)-1]
+		words = words[:len(words)-1]
+	}
+	if len(words) < 2 {
+		return name
+	}
+	return name[:loc[3]]
 }
 
 var (

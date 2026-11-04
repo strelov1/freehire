@@ -200,6 +200,15 @@ rows stay in the table. Filtering on it made the leftovers of a merge invisible 
 stranded on `jpmorganchase` after the first wave, permanently, because the better the merge
 worked the more reliably the remainder hid.
 
+## The registered seat
+
+`normalize.CloseSpacedForms` drops the town a Slovenian or Croatian register name carries after
+its form ("TERME KRKA, d.o.o., Novo mesto"), but only with two or more name words before the
+form. A one-word name keeps its seat because the seat is what separates it from a namesake:
+measured 2026-11-04, 3 of the 7 one-word names that met an existing company met a different
+employer (`SCAN, d.o.o., Preddvor` on the US SCAN), against 0 of 22 longer names. Merge a
+one-word employer's spellings by a curated entry or a moderator's approval.
+
 ## Corrections people propose (freehire#3895)
 
 The fold and the curated list cannot reach every duplicate, and nothing in them knows that two
