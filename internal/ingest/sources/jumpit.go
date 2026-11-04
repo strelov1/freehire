@@ -47,10 +47,6 @@ const (
 	jumpitRequestBurst    = 2
 )
 
-// jumpitBrokenRunMinWanted is how many new postings, all unread, make a run broken rather than
-// merely unlucky.
-const jumpitBrokenRunMinWanted = 5
-
 // jumpitZone is the zone the platform's naive timestamps are written in (KST, no DST).
 var jumpitZone = time.FixedZone("KST", 9*60*60)
 
@@ -208,9 +204,9 @@ func (s jumpit) hydrate(ctx context.Context, list []jumpitListing, seen func(str
 		read.Add(1)
 		return job, true
 	})
-	// A crawl that listed several new postings and read none of them is broken, not quiet. One
-	// unreadable posting is not: it must not discard the liveness refresh of the rest.
-	if wanted.Load() >= jumpitBrokenRunMinWanted && read.Load() == 0 {
+	// A crawl that listed new postings and read none of them is broken, not quiet; there is
+	// deliberately no threshold (see "A crawl that reads nothing of what it listed must fail").
+	if wanted.Load() > 0 && read.Load() == 0 {
 		return nil, fmt.Errorf("jumpit: listed %d new postings and read none of their details", wanted.Load())
 	}
 	return jobs, nil
