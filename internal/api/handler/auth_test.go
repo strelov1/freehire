@@ -186,6 +186,21 @@ func (f fakeRepoWithErr) UserByEmail(context.Context, string) (accounts.User, st
 	return accounts.User{}, "", false, f.err
 }
 
+// fakeRepoWithUser answers Login with a stored user and a bcrypt hash, so a handler
+// test can walk the SUCCESS path (valid credentials, session issued) without a
+// database. The hash below is bcrypt of "password".
+type fakeRepoWithUser struct {
+	fakeRepo
+	UserByEmailUser accounts.User
+	StoredHash      string
+	HasPassword     bool
+	LoginErr        error
+}
+
+func (f fakeRepoWithUser) UserByEmail(context.Context, string) (accounts.User, string, bool, error) {
+	return f.UserByEmailUser, f.StoredHash, f.HasPassword, f.LoginErr
+}
+
 func TestRegister_DuplicateEmail(t *testing.T) {
 	app := fiber.New()
 	h := &authHandlers{

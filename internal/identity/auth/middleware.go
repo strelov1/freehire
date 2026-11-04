@@ -16,6 +16,12 @@ import (
 // the inherited local by key.
 const LocalsUserID = "auth.userID"
 
+// localsSessionVersion holds the generation the authenticated session's token
+// was minted under — the tv claim resolveSession validated against the account.
+// Read through SessionVersion; never set outside resolveSession so every reader
+// sees exactly what the middleware proved.
+const localsSessionVersion = "auth.sessionVersion"
+
 // localsViaAPIKey is set true by RequireAuthOrKey when the request authenticated with an
 // API key rather than the session cookie. Handlers read it via ViaAPIKey to give
 // programmatic callers (e.g. the CV-tailoring agent) a narrower view than the owner's own
@@ -160,7 +166,26 @@ func resolveSession(c *fiber.Ctx, iss *Issuer, versions TokenVersionLoader, toke
 	if current != version {
 		return 0, sessionRevoked, nil
 	}
+	c.Locals(localsSessionVersion, version)
 	return id, sessionOK, nil
+}
+
+// SessionVersion returns the generation (users.token_version value) the
+// authenticated SESSION was minted under — the tv claim validated against the
+// account by the auth middleware on the way in. A handler that records
+// session-scoped authority (an OAuth authorization code binding its consent to
+// a generation) must bind THIS value, not a fresh read of users.token_version:
+// a revocation landing between the middleware's check and the handler's write
+// would otherwise capture the new generation into a credential the revocation
+// meant to kill. Falsifies the same conditions as UserID: no session, no
+// version. The value is set by resolveSession, which every cookie and bearer
+// session path goes through.
+func SessionVersion(c *fiber.Ctx) (int32, error) {
+	v, ok := c.Locals(localsSessionVersion).(int32)
+	if !ok {
+		return 0, ErrNoSession
+	}
+	return v, nil
 }
 
 // UserID returns the authenticated user id stored by RequireAuth or

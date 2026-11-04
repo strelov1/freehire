@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,6 +12,31 @@ import (
 // it (it can't — HTTPOnly); the browser attaches it automatically on same-site
 // requests, and RequireAuth reads it server-side.
 const CookieName = "hire_token"
+
+// BrowserOrigins returns the canonical frontend origin, cookie-domain HTTPS apexes
+// and explicitly served HTTPS hosts. CORS and session writers share this policy.
+// Served hosts are exact hostnames; wildcard and scheme/path entries are ignored.
+func BrowserOrigins(frontendOrigin string, cookieDomains []string, servedHosts ...string) []string {
+	var origins []string
+	if o := strings.TrimSuffix(strings.TrimSpace(frontendOrigin), "/"); o != "" {
+		origins = append(origins, o)
+	}
+	for _, d := range cookieDomains {
+		d = strings.TrimPrefix(strings.TrimSpace(d), ".")
+		if d == "" {
+			continue
+		}
+		origins = append(origins, "https://"+d)
+	}
+	for _, host := range servedHosts {
+		host = strings.TrimSpace(host)
+		if host == "" || strings.ContainsAny(host, "/*") {
+			continue
+		}
+		origins = append(origins, "https://"+strings.ToLower(host))
+	}
+	return origins
+}
 
 // SetTokenCookie writes the auth cookie. SameSite=Lax (with a same-origin
 // deployment) sends it on the app's own requests while blocking it on

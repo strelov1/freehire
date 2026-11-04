@@ -85,6 +85,10 @@ type authHandlers struct {
 	// ga4 sends the GA4 sign_up from the server (me_attribution.go). Nil — and so
 	// inert — when GA4_API_SECRET is not configured.
 	ga4 ga4mp.Reporter
+	// browserOrigins are the origins a same-origin browser request may name in
+	// Origin/Referer, consumed by requireSameOrigin (auth.BrowserOrigins over the
+	// same frontendOrigin/cookieDomains pair the CORS allowlist is built from).
+	browserOrigins []string
 	// accountDelete erases an account for good — rows, objects, and the Gmail grant.
 	// accountEmails resolves the caller's own email for the typed confirmation. Both
 	// are nil until withAccountDeletion wires them.
@@ -110,11 +114,12 @@ func newAuthHandlers(queries *db.Queries, pool *pgxpool.Pool, throttler ratelimi
 		oauthCodes:                 oauth.NewCodeStore(60 * time.Second),
 		frontendOrigin:             frontendOrigin,
 		extensionRedirectAllowlist: extensionRedirectAllowlist,
-		servedHosts:                servedHosts,
+		servedHosts:                servedHostsOrDefault(servedHosts, frontendOrigin),
 		accounts:                   accounts.New(accounts.NewQueriesRepository(queries, pool), authHasher{}),
 		throttler:                  throttler,
 		pushNotifier:               pushnotify.NewExpoNotifier(pushStore, pushStore, pushStore),
 		ga4:                        ga4Reporter(),
+		browserOrigins:             auth.BrowserOrigins(frontendOrigin, cookieDomains, servedHosts...),
 	}
 }
 
@@ -214,9 +219,20 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	resetLimiter := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("reset"), 10, 15*time.Minute)
 
 	authGroup := api.Group("/auth", noCache)
-	authGroup.Post("/register", registerLimiter, h.Register)
-	authGroup.Post("/login", loginLimiter, h.Login)
-	authGroup.Post("/logout", h.Logout)
+	// sameOrigin binds session-issuing routes to the browser origins this deployment
+	// serves (auth.BrowserOrigins, the same list the CORS allowlist is built from):
+	// a present Origin or Referer must name one of them, and a Sec-Fetch-Site:
+	// cross-site statement refuses even when both were stripped. Only the genuinely
+	// headerless shape — curl, the CLI, a mobile SDK, any programmatic caller of the
+	// documented JSON API — passes with no browser metadata at all. Mounted on the
+	// session-COOKIE writers and nothing else: a cross-site form post to the
+	// account-data routes arrives WITHOUT the session cookie (Lax transmits cookies
+	// only on top-level navigations), so those routes need no origin gate; and
+	// API-key callers of /auth/me send no Origin at all.
+	sameOrigin := h.requireSameOrigin()
+	authGroup.Post("/register", sameOrigin, registerLimiter, h.Register)
+	authGroup.Post("/login", sameOrigin, loginLimiter, h.Login)
+	authGroup.Post("/logout", sameOrigin, h.Logout)
 	// Email verification. Cookie-only and identified by the session, never by a body
 	// field, so neither endpoint can be pointed at someone else's address. Both ride the
 	// credential limiter: confirm is a code-guessing surface, request is a mail-sending one.
@@ -227,8 +243,9 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	authGroup.Post("/password/forgot", forgotLimiter, h.ForgotPassword)
 	authGroup.Post("/password/reset", resetLimiter, h.ResetPassword)
 	// Sign out everywhere. Cookie-only (like key management): revoking a human's sessions
-	// is not something a programmatic credential should be able to do.
-	authGroup.Post("/logout-all", mw.cookie, h.LogoutAll)
+	// is not something a programmatic credential should be able to do, and sameOrigin
+	// keeps a cross-site form from revoking the browser's sessions either.
+	authGroup.Post("/logout-all", sameOrigin, mw.cookie, h.LogoutAll)
 	// The agent needs to resolve who its key belongs to, so the identity read admits the
 	// narrow scope too; it exposes nothing the key holder cannot already infer.
 	authGroup.Get("/me", mw.cvKey, h.Me)

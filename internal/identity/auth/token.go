@@ -37,6 +37,11 @@ type sessionClaims struct {
 // "revoked by the release" apart from "forged".
 var ErrNoTokenVersion = errors.New("auth: token carries no version claim")
 
+// ErrNoSession reports a request that reached a handler through no session
+// middleware at all (the same condition an empty UserID read reports). Exported
+// because SessionVersion is a handler-facing accessor like UserID.
+var ErrNoSession = errors.New("auth: no session")
+
 // ErrNoSessionID reports a valid legacy session minted before per-session JTIs
 // were introduced. Such a token may remain usable for ordinary requests during
 // rollout, but it cannot safely bind a recent-auth proof until it is rotated.

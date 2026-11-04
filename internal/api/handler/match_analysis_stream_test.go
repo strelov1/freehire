@@ -3,8 +3,10 @@ package handler
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"net"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
@@ -12,9 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
 )
@@ -58,6 +63,59 @@ func TestCapFinalEvent_CapsTheStreamedFinalEventByUnmetHardConstraint(t *testing
 	}
 	if len(uncapped.Blockers) != 0 {
 		t.Errorf("the analysis fed to the cache carries blockers = %v, want none (uncapped, cache-side copy)", uncapped.Blockers)
+	}
+}
+
+// secFetchSiteAllows decides which Sec-Fetch-Site stamps state the request is the site's
+// own doing: same-origin, same-site (between the site's own origins — trusting every
+// origin under the site's control is part of the policy), or the browser's own address
+// bar (none). The hostile one, any unknown future value, and the ABSENT header refuse.
+// The refusal of "" is the policy's load-bearing half: a cookie request without the
+// header carries no site-intent signal at all, and proving nothing must not spend a
+// credit.
+func TestSecFetchSiteAllows(t *testing.T) {
+	for _, value := range []string{"same-origin", "none", "same-site"} {
+		if !secFetchSiteAllows(value) {
+			t.Errorf("secFetchSiteAllows(%q) = false, want true", value)
+		}
+	}
+	for _, value := range []string{"cross-site", "", "sneaky", "SAME-ORIGIN"} {
+		if secFetchSiteAllows(value) {
+			t.Errorf("secFetchSiteAllows(%q) = true, want false", value)
+		}
+	}
+}
+
+// cookieOnlyStreamAllowed must gate the COOKIE callers alone. A Bearer credential (API key
+// or session JWT) cannot ride a navigation — the attacker page cannot attach it — so a
+// request that authenticated without the session cookie is outside this gate by
+// construction, including one that somehow stamps itself cross-site.
+func TestCookieOnlyStreamAllowed_GatesCookieCallersOnly(t *testing.T) {
+	ask := func(authed bool) bool {
+		allowed := false
+		app := fiber.New()
+		app.Get("/", func(c *fiber.Ctx) error {
+			if authed {
+				c.Locals(auth.LocalsUserID, int64(1))
+				c.Locals("auth.viaCookie", true)
+			}
+			allowed = cookieOnlyStreamAllowed(c)
+			return nil
+		})
+		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/", nil)
+		req.Header.Set(headerSecFetchSite, secFetchSiteCrossSite)
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("app.Test: %v", err)
+		}
+		defer resp.Body.Close()
+		return allowed
+	}
+	if ask(true) {
+		t.Error("a cross-site cookie-authenticated request was allowed")
+	}
+	if !ask(false) {
+		t.Error("a cross-site request that did not authenticate by cookie was refused — the gate leaked past its scope")
 	}
 }
 

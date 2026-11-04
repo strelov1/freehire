@@ -20,7 +20,7 @@
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { X } from '@lucide/svelte';
-  import { api, ApiError } from '#lib/api.js';
+  import { api, ApiError, isCrossSiteRefusal } from '#lib/api.js';
   import { credentialErrorMessage } from '#lib/credentialErrorMessage.js';
   import { login, register } from '#lib/auth.svelte.js';
   import { loadOAuthProviders, PROVIDER_LABELS } from '#lib/oauthProviders.js';
@@ -119,6 +119,12 @@
       if (e.status === 429) return 'A code was just sent — check your inbox.';
       if (e.status === 503) return 'Email delivery is unavailable right now.';
       if (isRecovery && e.status === 400) return 'That code is not valid or has expired, or the password is too short.';
+      // The server refuses any sign-in that names another site in Origin/Referer — or
+      // whose own Sec-Fetch-Site header says cross-site — before it reads the
+      // credentials (login-CSRF defence). A person can only hit this from a stale tab
+      // on a foreign origin or a blocked privacy extension, so say where to sign in
+      // from instead of apologizing for a fault.
+      if (isCrossSiteRefusal(e)) return 'For safety, authentication requests from other sites are refused. Open freehire in its own tab and try again.';
     }
     return credentialErrorMessage(e) ?? 'Something went wrong. Please try again.';
   }

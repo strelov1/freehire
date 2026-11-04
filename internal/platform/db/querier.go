@@ -1237,6 +1237,15 @@ type Querier interface {
 	// reported exactly like an unknown one. expires_at is enforced here rather than
 	// left to the caller, for the same reason AuthenticateAPIKey enforces its own
 	// expiry: no call site can forget the check.
+	//
+	// The generation latch is part of the redemption, not a check beside it: the
+	// code's issued_token_version must equal the account's CURRENT
+	// users.token_version (the same comparison AuthenticateOAuthGrant applies to
+	// grants), and the row is deleted ONLY when it holds. A code left pending over
+	// a revocation is therefore refused AND left standing dead — no retry revives
+	// it, and it never upgrades into a grant of the new generation. 0 (the legacy
+	// sentinel) and NULL (old-binary rollout writes) never match a live account,
+	// so those codes are dead for the same reason.
 	ConsumeOAuthAuthorizationCode(ctx context.Context, codeHash string) (ConsumeOAuthAuthorizationCodeRow, error)
 	// Whether this (feature, ref) was already charged. True means the caller is retrying,
 	// reconnecting, or recomputing work already paid for, and must not be charged again.
@@ -1505,6 +1514,14 @@ type Querier interface {
 	// Record a freshly minted authorization code after the user approves consent.
 	// code_challenge is stored verbatim (S256 of the client's verifier); the token
 	// exchange recomputes and compares it, never trusting the client's say-so twice.
+	// issued_token_version is the generation the approving SESSION was minted under
+	// (the tv claim, already validated against the account at request entry) — never
+	// a fresh read of users.token_version, so a revocation landing between the
+	// session check and this insert cannot capture its new generation. 0 is the
+	// unknown-generation sentinel (generations start at 1): dead on arrival, the
+	// fail-closed shape legacy rows take after 0233. NULL — what the old binary
+	// writes during rollout — never satisfies the exchange's equality latch either.
+	// squawk-ignore prefer-bigint-over-int -- mirrors users.token_version (int, 0041_account_security.sql), which this column is compared against
 	CreateOAuthAuthorizationCode(ctx context.Context, arg CreateOAuthAuthorizationCodeParams) error
 	// Issue the long-lived access token for an approved client. issued_token_version
 	// is the caller's users.token_version at this moment — see the table comment in

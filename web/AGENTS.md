@@ -8,6 +8,14 @@ production; in dev the Vite proxy (`web/vite.config.ts`) forwards `/api` to the 
 - Auth is cookie-based via `HttpOnly; SameSite=Lax` — never a Bearer header or
   `localStorage`. The SPA cannot read the token (XSS-safe); the browser attaches it
   automatically. `SameSite=Lax` + same-origin **is** the CSRF defence — no CSRF token.
+  Lax governs only whether an EXISTING cookie rides along; a NEW session cookie a
+  login response issues is bound to request origin server-side instead
+  (`requireSameOrigin`, `internal/api/handler/request_origin.go`): a present Origin
+  or Referer must name a served origin, and `Sec-Fetch-Site: cross-site` refuses
+  even when both were stripped; only the genuinely headerless shape (curl, the CLI)
+  passes with no metadata. Refusals are 403 with code `cross_site_refused`;
+  classify with `isCrossSiteRefusal` (`#lib/api.js`), which reads the code, not the
+  bare status.
 - OAuth buttons render from `GET /api/v1/auth/oauth/providers`. Callbacks 302 back to the
   SPA; failures 302 with `?auth_error=oauth`, never JSON.
 - Four actions need a *second* proof on top of the session — creating and revoking an API

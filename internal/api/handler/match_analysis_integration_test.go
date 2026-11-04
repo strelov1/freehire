@@ -434,6 +434,9 @@ func TestMatchAnalysisAllowance(t *testing.T) {
 
 		req := httptest.NewRequest(fiber.MethodGet, "/api/v1/jobs/sb-new/fit/stream", nil)
 		req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		// The SPA's EventSource shape: a same-origin cookie request stamps Fetch Metadata,
+		// and the route refuses a cookie request without it.
+		req.Header.Set(headerSecFetchSite, secFetchSiteSameOrigin)
 		resp, err := app.Test(req, 5000)
 		if err != nil {
 			t.Fatalf("stream: %v", err)

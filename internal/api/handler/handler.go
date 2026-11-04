@@ -546,7 +546,7 @@ func Register(app *fiber.App, cfg Config) {
 		browserTools: browsertools.New(),
 	}
 	authH := newAuthHandlers(queries, cfg.Pool, cfg.Throttler, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
-		servedHostsOrDefault(cfg.ServedHosts, cfg.FrontendOrigin))
+		cfg.ServedHosts)
 	authH.authV2Enabled = cfg.AuthV2Enabled
 	authH.rateTiers = cfg.RateTiers
 	authH.mobileCallbacks = cfg.MobileAuthCallbacks
@@ -1007,10 +1007,11 @@ func Register(app *fiber.App, cfg Config) {
 	// so a cross-origin (non-credentialed) read works from either domain during a
 	// migration. Same-origin app traffic never triggers CORS; this only covers the
 	// dev Vite origin and genuine cross-origin callers.
-	allowOrigins := cfg.FrontendOrigin
-	for _, d := range cfg.CookieDomains {
-		allowOrigins += ",https://" + d
-	}
+	// auth.BrowserOrigins is the ONE place this pair is turned into origins — the
+	// request-origin gate on session routes (requireSameOrigin) accepts a browser
+	// request's Origin/Referer only when it names a member of the same list, so the
+	// two policies cannot drift apart.
+	allowOrigins := strings.Join(auth.BrowserOrigins(cfg.FrontendOrigin, cfg.CookieDomains, cfg.ServedHosts...), ",")
 	app.Use(cors.New(cors.Config{AllowOrigins: allowOrigins}))
 
 	app.Get("/health", a.Health)

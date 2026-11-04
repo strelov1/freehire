@@ -416,6 +416,21 @@ export function isPlanRefusal(e: unknown): boolean {
   return e instanceof ApiError && e.status === 402;
 }
 
+/** Whether a failure is the server's same-origin refusal — HTTP 403 with code
+ *  "cross_site_refused" — rather than a fault. The server refuses any sign-in that
+ *  names another site in Origin/Referer (or whose own Sec-Fetch-Site says
+ *  cross-site) BEFORE it reads the credentials, and the session cookie is NOT
+ *  written. That is a condition to communicate ("open freehire and sign in there"),
+ *  not an outage to apologize for. The check is on the error CODE, not the status:
+ *  a future 403 from an unrelated rule is not an origin refusal. */
+export function isCrossSiteRefusal(e: unknown): boolean {
+  return (
+    e instanceof ApiError &&
+    e.status === 403 &&
+    e.body?.code === 'cross_site_refused'
+  );
+}
+
 /** A resource that has permanently moved, carrying the slug it moved TO.
  *
  *  Only raised for a request that opted into `redirect: 'manual'`. Left to the default,

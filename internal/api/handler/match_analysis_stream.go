@@ -18,7 +18,65 @@ import (
 	"github.com/strelov1/freehire/internal/candidate/fitanalysis"
 	"github.com/strelov1/freehire/internal/candidate/hardconstraint"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
+	"github.com/strelov1/freehire/internal/identity/auth"
 )
+
+// headerSecFetchSite is the Fetch Metadata request header naming the relationship between
+// the origin that started a request and the origin it is sent to. fasthttp defines no
+// constant for it (v1.76.0), so the canonical casing is spelled out here.
+const headerSecFetchSite = "Sec-Fetch-Site"
+
+// The Sec-Fetch-Site values Fetch Metadata defines.
+const (
+	secFetchSiteCrossSite  = "cross-site"
+	secFetchSiteSameSite   = "same-site"
+	secFetchSiteSameOrigin = "same-origin"
+	secFetchSiteNone       = "none"
+)
+
+// secFetchSiteAllows reports whether a request's Sec-Fetch-Site value states the request
+// is the site's own doing: same-origin (the site's own pages), same-site (between two of
+// the site's own origins — trusting every origin under the site's control is part of the
+// policy, stated rather than assumed silently), or none (the browser's own address bar).
+// cross-site and every unknown or empty value refuse — an empty header carries no signal
+// at all, and an unknown future value is not one we have agreed to trust.
+func secFetchSiteAllows(value string) bool {
+	switch value {
+	case secFetchSiteSameOrigin, secFetchSiteNone, secFetchSiteSameSite:
+		return true
+	default:
+		return false
+	}
+}
+
+// cookieOnlyStreamAllowed is the gate a cookie-authenticated entry into a route that
+// MUTATES state on GET (a credit reservation, an LLM run) must pass. The session cookie
+// is SameSite=Lax, whose spec carve-out attaches it to cross-site top-level GET
+// navigations — so an anchor, a window.open or an address-bar redirect from any page can
+// carry a signed-in victim's ambient credential onto a GET that spends something.
+//
+// The check is Fetch Metadata: Sec-Fetch-Site must name a request the site itself
+// initiated (same-origin), or one between two of the site's own origins (same-site) — an
+// ASSUMPTION that every origin under the site's control is trustworthy, and a
+// user-initiated address-bar navigation (none). cross-site, unknown and ABSENT values
+// refuse: the header is the only site-intent signal a cookie request carries, its
+// absence proves nothing, and proving nothing must not spend a credit. A scripted caller
+// has a first-class path beside this one: a Bearer API key, which cannot ride a
+// navigation and is never gated by it.
+//
+// It must be mounted only on routes behind an authentication gate that leaves the
+// caller's credential in locals (RequireAuthOrKey): ViaCookie is how the request proved
+// who it was, and a request that never presented the session cookie reads as not-cookie
+// to this gate. The check runs at the top of the handler, after the route's mounted
+// middleware — so a denied request has already paid the limiter's bookkeeping and the
+// paid-AI gate's entitlement read, but never reaches the job read, the reservation or
+// the model chain.
+func cookieOnlyStreamAllowed(c *fiber.Ctx) bool {
+	if !auth.ViaCookie(c) {
+		return true
+	}
+	return secFetchSiteAllows(c.Get(headerSecFetchSite))
+}
 
 // StreamMatchAnalysis runs the three-stage fit chain over Server-Sent Events, emitting stage
 // progress, best-effort thinking tokens, and each section as it resolves, then caching
@@ -33,6 +91,15 @@ import (
 // leadership runs the chain for real; the other becomes a follower and replays the result via
 // followMatchAnalysis instead of paying for a second chain.
 func (h *matchHandlers) StreamMatchAnalysis(c *fiber.Ctx) error {
+	if !cookieOnlyStreamAllowed(c) {
+		// A cross-site top-level navigation is a browser top-level traversal, not an SSE
+		// client: EventSource can never produce one, so a 403 never reaches the legitimate
+		// stream reader. The route's mounted middleware has already run by this point —
+		// limiter bookkeeping and the paid-AI entitlement read included — so what this
+		// refusal saves is everything from here down: the job read, the credit
+		// reservation, the credential mint and the model chain.
+		return fiber.NewError(fiber.StatusForbidden, "cross-site initiation is not allowed")
+	}
 	userID, err := requireUserID(c)
 	if err != nil {
 		return err

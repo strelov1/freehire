@@ -196,6 +196,18 @@ heartbeat goroutine against the event callback and re-arms the write deadline be
 write. `event` reports whether the frame reached the client, and a marshal failure reports
 **true** — an unencodable frame is our bug, not a dead reader.
 
+**The fit stream refuses a cookie request it cannot attribute to the site**
+(`cookieOnlyStreamAllowed`, checked at the top of `StreamMatchAnalysis`, after the route's
+mounted gates). The session cookie is SameSite=Lax, and a cross-site TOP-LEVEL GET
+navigation (anchor, `window.open`, address-bar redirect) carries it by spec — onto a route
+that reserves an AI credit and runs the model. A cookie-authenticated request stamped
+`Sec-Fetch-Site: cross-site` — or carrying no Fetch Metadata at all, which proves nothing
+and must not spend a credit — is a 403. `same-site` is admitted beside `same-origin`, an
+explicit assumption that every origin under the site's control is trustworthy. A scripted
+caller has a first-class path beside this gate: a Bearer API key, which cannot ride a
+navigation and is never gated by it. If a second route ever mutates state on GET behind
+the session cookie, it takes this gate; do not re-derive the policy per route.
+
 **Every goroutine a stream starts recovers its own panic** (`recoverStream`), because the
 server's recover middleware cannot reach any of them: `SetBodyStreamWriter` runs its
 closure in a bare `go sw(bw)` after the handler chain has already returned nil, so a panic
