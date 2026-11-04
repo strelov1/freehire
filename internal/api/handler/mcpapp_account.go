@@ -53,7 +53,7 @@ func mountMCPAccount(
 }
 
 // mcpAccountTools is the in-app assistant's discovery and tracking tools, less
-// the one that only works inside our own client, plus job alerts and auto-apply.
+// the one that only works inside our own client, plus job alerts, dictionary suggestions and auto-apply.
 //
 // present_jobs draws vacancy cards in freehire's chat UI and returns a bare
 // receipt of slugs; its description tells the model that it is the ONLY way a
@@ -62,11 +62,14 @@ func mountMCPAccount(
 // person nothing at all. Without the tool, the model writes the links
 // search_jobs already hands it.
 func mcpAccountTools(assistants *assistantHandlers, origin string) []assistant.Tool {
-	return append(mcpKeyTools(assistants, origin), assistants.autoApplyMCPTools()...)
+	all := append(mcpKeyTools(assistants, origin), assistants.autoApplyMCPTools()...)
+	// Dictionary suggestions are cookie-only over REST; keep the corresponding
+	// account tool with OAuth grants rather than widening full-scope API keys.
+	return append(all, assistants.dictionaryMCPTools()...)
 }
 
 // mcpKeyTools is what the same server offers a full-scope API key: everything an
-// OAuth grant gets except auto-apply.
+// OAuth grant gets except cookie-only actions (auto-apply and dictionary suggestions).
 //
 // A key reaches this server so the local MCP package (freehire-mcp), which holds a
 // key and no grant, can manage job alerts through these tools rather than through

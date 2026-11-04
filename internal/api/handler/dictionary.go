@@ -68,25 +68,43 @@ func (h *dictionaryHandlers) Record(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
-	raw, normalized, ok := dictclassify.GapTerm(req.Term)
-	if !ok {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid term")
-	}
-	known, err := dictionaryKnown(req.Kind, raw)
-	if errors.Is(err, errUnknownDictionaryKind) {
-		return fiber.NewError(fiber.StatusBadRequest, "unknown kind")
-	}
-	if known {
-		return fiber.NewError(fiber.StatusConflict, "term is already in the dictionary")
-	}
-	count, status, err := h.writeGap(c.Context(), userID, req.Kind, raw, normalized)
-	if errors.Is(err, errGapCap) {
-		return fiber.NewError(fiber.StatusTooManyRequests, "daily dictionary gap cap")
-	}
+	result, err := h.recordTerm(c.Context(), userID, req)
 	if err != nil {
 		return err
 	}
-	return c.JSON(fiber.Map{"data": dictionaryRecordBody{RequestCount: count, Status: status}})
+	return c.JSON(fiber.Map{"data": result})
+}
+
+func (h *dictionaryHandlers) recordTerm(
+	ctx context.Context,
+	userID int64,
+	req dictionaryRecordRequest,
+) (dictionaryRecordBody, error) {
+	raw, normalized, ok := dictclassify.GapTerm(req.Term)
+	if !ok {
+		return dictionaryRecordBody{}, fiber.NewError(fiber.StatusBadRequest, "invalid term")
+	}
+	known, err := dictionaryKnown(req.Kind, raw)
+	if errors.Is(err, errUnknownDictionaryKind) {
+		return dictionaryRecordBody{}, fiber.NewError(fiber.StatusBadRequest, "unknown kind")
+	}
+	if known {
+		return dictionaryRecordBody{}, fiber.NewError(fiber.StatusConflict, "term is already in the dictionary")
+	}
+	count, status, err := h.writeGap(
+		ctx,
+		userID,
+		req.Kind,
+		raw,
+		normalized,
+	)
+	if errors.Is(err, errGapCap) {
+		return dictionaryRecordBody{}, fiber.NewError(fiber.StatusTooManyRequests, "daily dictionary gap cap")
+	}
+	if err != nil {
+		return dictionaryRecordBody{}, err
+	}
+	return dictionaryRecordBody{RequestCount: count, Status: status}, nil
 }
 
 // writeGap spends one of the user's daily writes and records the term in the same

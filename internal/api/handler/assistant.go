@@ -67,8 +67,9 @@ type assistantHandlers struct {
 	// reports files a job report for report_job. Set by Register to the SAME handler that
 	// serves POST /jobs/:slug/reports, so the two paths cannot drift. Nil-safe: the tool
 	// refuses rather than panics.
-	reports *reportHandlers
-	cv      *cvHandlers
+	reports    *reportHandlers
+	dictionary *dictionaryHandlers
+	cv         *cvHandlers
 	// profile backs the get_profile tool. Reusing the profile handlers rather than the
 	// services underneath keeps the tool and GET /me/profile on one assembly, so the
 	// agent cannot drift from what the profile page shows.
@@ -140,10 +141,23 @@ type assistantModels struct {
 }
 
 // newAssistantHandlers wires the agent.
-func newAssistantHandlers(queries *db.Queries, models assistantModels, store *assistant.Store,
-	search *searchHandlers, resumeH *resumeHandlers, tracking *trackingHandlers, cvH *cvHandlers,
-	profileH *profileHandlers, browserTools *browsertools.Hub, mail *inboxHandlers,
-	bank experienceBankTools, screeningAnswers *screeninganswers.Store, plans *plan.Store, letter coverLetterDeps) *assistantHandlers {
+func newAssistantHandlers(
+	queries *db.Queries,
+	models assistantModels,
+	store *assistant.Store,
+	search *searchHandlers,
+	resumeH *resumeHandlers,
+	tracking *trackingHandlers,
+	cvH *cvHandlers,
+	profileH *profileHandlers,
+	dictionary *dictionaryHandlers,
+	browserTools *browsertools.Hub,
+	mail *inboxHandlers,
+	bank experienceBankTools,
+	screeningAnswers *screeninganswers.Store,
+	plans *plan.Store,
+	letter coverLetterDeps,
+) *assistantHandlers {
 	h := &assistantHandlers{
 		experience:       bank,
 		letter:           letter,
@@ -156,6 +170,7 @@ func newAssistantHandlers(queries *db.Queries, models assistantModels, store *as
 		tracking:         tracking,
 		cv:               cvH,
 		profile:          profileH,
+		dictionary:       dictionary,
 		browserTools:     browserTools,
 		mail:             mail,
 		stages:           queries,

@@ -843,7 +843,9 @@ func Register(app *fiber.App, cfg Config) {
 	// disagree. The tailoring bootstrap mints its conversations through the same
 	// store, which is why the CV handlers get it back. It also takes the browser-tool
 	// hub, which a browsing session reads the caller's open page through.
-	assistantH := newAssistantHandlers(queries,
+	dictionaryH := &dictionaryHandlers{pool: cfg.Pool, queries: queries}
+	assistantH := newAssistantHandlers(
+		queries,
 		assistantModels{
 			// Its own per-call timeout for the same reason the fit analysis has one, and
 			// nil-safe the same way: a turn's rounds are slower than a one-shot extraction,
@@ -851,7 +853,20 @@ func Register(app *fiber.App, cfg Config) {
 			Agent: cfg.AssistantLLM.WithTimeout(assistantLLMTimeout), Keys: llmKeys,
 			MaxSteps: cfg.AssistantMaxSteps, MaxPrompt: cfg.AssistantMaxPrompt,
 		},
-		assistantStore, searchH, resumeH, trackingH, cvH, profileH, a.browserTools, inboxH, bank, screeningAnswersSvc, plans, letterDeps)
+		assistantStore,
+		searchH,
+		resumeH,
+		trackingH,
+		cvH,
+		profileH,
+		dictionaryH,
+		a.browserTools,
+		inboxH,
+		bank,
+		screeningAnswersSvc,
+		plans,
+		letterDeps,
+	)
 	// Same nil-interface trap as stt above: only assign when cfg.Realtime is
 	// genuinely non-nil, or "no voice mode here" becomes a panic on the first mint.
 	if cfg.Realtime != nil {
@@ -1090,7 +1105,7 @@ func Register(app *fiber.App, cfg Config) {
 	// /jobs/:slug param route so they are not read as slugs (see searchHandlers).
 	searchH.register(api, mw)
 	suggestH.register(api, mw)
-	(&dictionaryHandlers{pool: cfg.Pool, queries: queries}).register(api, mw)
+	dictionaryH.register(api, mw)
 	// Beside the search it builds a filter for, though it shares none of its
 	// dependencies: interpretation needs a model and the caller's profile, not the
 	// index.

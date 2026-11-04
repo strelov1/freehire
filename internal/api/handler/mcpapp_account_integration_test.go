@@ -53,8 +53,9 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 	}
 
 	assistants := &assistantHandlers{
-		queries:  queries,
-		tracking: &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
+		queries:    queries,
+		dictionary: &dictionaryHandlers{pool: pool, queries: queries},
+		tracking:   &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
@@ -102,8 +103,22 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 		}
 		defer func() { _ = session.Close() }()
 		assertAccountCatalogue(t, session)
+		res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+			Name:      suggestDictionaryTermToolName,
+			Arguments: map[string]any{"kind": "specialization", "term": "Unlisted Quasar Specialist"},
+		})
+		if err != nil || res.IsError {
+			t.Fatalf("dictionary call: %+v %v", res, err)
+		}
+		var submittedBy int64
+		if err := pool.QueryRow(t.Context(), `SELECT submitted_by FROM dictionary_gaps WHERE kind='specialization'`).Scan(&submittedBy); err != nil {
+			t.Fatal(err)
+		}
+		if submittedBy != userID {
+			t.Fatalf("dictionary suggestion owner=%d want%d", submittedBy, userID)
+		}
 
-		res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		res, err = session.CallTool(context.Background(), &mcp.CallToolParams{
 			Name: "my_jobs", Arguments: map[string]any{},
 		})
 		if err != nil {
