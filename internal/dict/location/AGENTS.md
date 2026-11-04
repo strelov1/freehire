@@ -372,7 +372,7 @@ Curated dictionary deriving ISO 3166-1 alpha-2 country codes, region codes, and 
   town before it is the state only when the next place is the WORD "Brasil"/"Brazil" ("RS,
   Brasil", what gupy and solides write for a posting with no city); two bare codes ("PE,
   BR") stay a list of countries. Rows stored before the fix keep the wrong country, since
-  backfill-derive keeps a stored one: `cmd/backfill-brazil-state-codes` re-derives them. Lines with a
+  backfill-derive keeps a stored one (the one-off that re-derived them has been removed). Lines with a
   wrong country 20.1% → 1.1%; exactly Brazil 76.6% → 97.9%. The state names that have no
   second reading state Brazil and no city (`foreignSubdivisionNames` + `regionNotCity`:
   "Rio Grande do Sul" named Rio Grande, "Ceará" Fortaleza, "Bahia" Salvador); Paraná,

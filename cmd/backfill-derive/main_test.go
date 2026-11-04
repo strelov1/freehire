@@ -15,6 +15,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/rederive"
 	"github.com/strelov1/freehire/internal/job/jobderive"
 	"github.com/strelov1/freehire/internal/job/jobhash"
+	"github.com/strelov1/freehire/internal/job/reqextract"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
@@ -160,14 +161,15 @@ func expectedDerived(j db.Job) db.UpdateJobDerivedParams {
 	return db.UpdateJobDerivedParams{
 		ID: j.ID, Countries: d.Countries, Regions: d.Regions, Cities: d.Cities, Metros: d.Metros, WorkMode: d.WorkMode,
 		Skills: d.Skills, Seniority: d.Seniority, Category: d.Category,
-		IsTech:             pgconv.Bool(d.IsTech),
-		PostingLanguage:    d.PostingLanguage,
-		EmploymentType:     d.EmploymentType,
-		EducationLevel:     d.EducationLevel,
-		EnglishLevel:       d.EnglishLevel,
-		ExperienceYearsMin: pgconv.Int4(d.ExperienceYearsMin),
-		RoleFingerprint:    pgtype.Text{String: fingerprint, Valid: true},
-		CompanySlug:        d.CompanySlug,
+		IsTech:              pgconv.Bool(d.IsTech),
+		PostingLanguage:     d.PostingLanguage,
+		EmploymentType:      d.EmploymentType,
+		EducationLevel:      d.EducationLevel,
+		EnglishLevel:        d.EnglishLevel,
+		ExperienceYearsMin:  pgconv.Int4(d.ExperienceYearsMin),
+		RoleFingerprint:     pgtype.Text{String: fingerprint, Valid: true},
+		CompanySlug:         d.CompanySlug,
+		RequirementsDerived: reqextract.DeriveJSON(j.Description),
 	}
 }
 
@@ -180,6 +182,7 @@ func seedDerived(j db.Job) db.Job {
 	j.PostingLanguage, j.EmploymentType = d.PostingLanguage, d.EmploymentType
 	j.EducationLevel, j.EnglishLevel, j.ExperienceYearsMin = d.EducationLevel, d.EnglishLevel, d.ExperienceYearsMin
 	j.RoleFingerprint, j.CompanySlug = d.RoleFingerprint, d.CompanySlug
+	j.RequirementsDerived = d.RequirementsDerived
 	return j
 }
 

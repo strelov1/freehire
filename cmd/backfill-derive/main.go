@@ -4,7 +4,8 @@
 // skills, seniority, category, is_tech, requires_clearance, clearance_levels, via_recruiter,
 // equity, perks, and the synthetic enrichment facets posting_language, employment_type,
 // education_level, english_level,
-// experience_years_min — all from jobderive.Derive), the repost-identity
+// experience_years_min — all from jobderive.Derive, plus engagement), the requirements_derived list
+// (internal/job/reqextract), the repost-identity
 // role_fingerprint (internal/job/jobhash), and the company_slug
 // (internal/dict/normalize, via jobderive). It replaces the three former one-shots
 // backfill-derive (facets), backfill-role-fingerprint, and reslug with one scan.
@@ -339,10 +340,7 @@ func runOutcome(pass backfillRun, orphaned int64, err error) (string, int) {
 // which outlasts any timeout it is sensible to give a unit — so a run has to be able to
 // stop and be continued. See AGENTS.md for the nightly arrangement that could not.
 type scanWindow struct {
-	// fromID is the first id a run must DO, inclusive — the same sense as the sibling
-	// pass's BACKFILL_REQUIREMENTS_FROM_ID. Two knobs sharing a name and a shape while
-	// disagreeing about whether the id is done or to-do lose exactly one row per hop for
-	// an operator who chains them.
+	// fromID is the first id a run must DO, inclusive.
 	fromID int64
 	// maxRows bounds how many rows one run scans. Zero is unbounded — never a literal
 	// 0 from an operator, since worker.EnvInt64 refuses anything but a positive value,

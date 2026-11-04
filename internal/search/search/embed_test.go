@@ -57,8 +57,7 @@ func TestEmbedInputHashTracksOnlyTheEmbeddedText(t *testing.T) {
 }
 
 // The fields are separated, so text cannot slide across a boundary and collide, and the
-// exact form is pinned: BackfillSemanticInputHashChunk recomputes it in SQL, and the two
-// must agree byte for byte.
+// exact form is pinned: a changed form re-embeds every job.
 func TestEmbedInputHashForm(t *testing.T) {
 	if EmbedInputHash(db.Job{Title: "ab", Company: "c"}) == EmbedInputHash(db.Job{Title: "a", Company: "bc"}) {
 		t.Fatal("title/company boundary collides")

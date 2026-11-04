@@ -7,6 +7,7 @@
 package rederive
 
 import (
+	"encoding/json"
 	"slices"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -15,11 +16,12 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/job/jobderive"
 	"github.com/strelov1/freehire/internal/job/jobhash"
+	"github.com/strelov1/freehire/internal/job/reqextract"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 )
 
-// Row re-derives a job's facets, role_fingerprint, and company slug, and reports
+// Row re-derives a job's facets, requirements_derived, role_fingerprint, and company slug, and reports
 // whether the derived values differ from what is stored (changed → a write is needed)
 // and whether specifically the company slug moved (slugMoved → the companies catalogue needs
 // re-keying). The fingerprint is computed from the freshly derived company_slug, so
@@ -67,29 +69,30 @@ func Row(j db.Job, canon map[string]string) (params db.UpdateJobDerivedParams, c
 	slugMoved = d.CompanySlug != j.CompanySlug
 
 	params = db.UpdateJobDerivedParams{
-		ID:                 j.ID,
-		Countries:          d.Countries,
-		Regions:            d.Regions,
-		Cities:             d.Cities,
-		Metros:             d.Metros,
-		WorkMode:           d.WorkMode,
-		Skills:             d.Skills,
-		Seniority:          d.Seniority,
-		Category:           d.Category,
-		IsTech:             isTech,
-		RequiresClearance:  requiresClearance,
-		ViaRecruiter:       viaRecruiter,
-		Equity:             equity,
-		ClearanceLevels:    d.ClearanceLevels,
-		Perks:              d.Perks,
-		Engagement:         d.Engagement,
-		PostingLanguage:    d.PostingLanguage,
-		EmploymentType:     d.EmploymentType,
-		EducationLevel:     d.EducationLevel,
-		EnglishLevel:       d.EnglishLevel,
-		ExperienceYearsMin: experience,
-		RoleFingerprint:    pgtype.Text{String: fingerprint, Valid: true},
-		CompanySlug:        d.CompanySlug,
+		ID:                  j.ID,
+		Countries:           d.Countries,
+		Regions:             d.Regions,
+		Cities:              d.Cities,
+		Metros:              d.Metros,
+		WorkMode:            d.WorkMode,
+		Skills:              d.Skills,
+		Seniority:           d.Seniority,
+		Category:            d.Category,
+		IsTech:              isTech,
+		RequiresClearance:   requiresClearance,
+		ViaRecruiter:        viaRecruiter,
+		Equity:              equity,
+		ClearanceLevels:     d.ClearanceLevels,
+		Perks:               d.Perks,
+		Engagement:          d.Engagement,
+		RequirementsDerived: reqextract.DeriveJSON(j.Description),
+		PostingLanguage:     d.PostingLanguage,
+		EmploymentType:      d.EmploymentType,
+		EducationLevel:      d.EducationLevel,
+		EnglishLevel:        d.EnglishLevel,
+		ExperienceYearsMin:  experience,
+		RoleFingerprint:     pgtype.Text{String: fingerprint, Valid: true},
+		CompanySlug:         d.CompanySlug,
 	}
 	return params, FacetsDiffer(params, j) || fingerprintMoved || slugMoved, slugMoved
 }
@@ -114,7 +117,22 @@ func FacetsDiffer(p db.UpdateJobDerivedParams, j db.Job) bool {
 		p.EmploymentType != j.EmploymentType ||
 		p.EducationLevel != j.EducationLevel ||
 		p.EnglishLevel != j.EnglishLevel ||
-		p.ExperienceYearsMin != j.ExperienceYearsMin
+		p.ExperienceYearsMin != j.ExperienceYearsMin ||
+		requirementsMoved(p.RequirementsDerived, j.RequirementsDerived)
+}
+
+// requirementsMoved compares the derived and stored requirements lists as decoded JSON: Postgres
+// re-spaces jsonb on read, so a byte compare would flag every stored list as changed.
+func requirementsMoved(derived, stored []byte) bool {
+	type req struct {
+		Text     string `json:"text"`
+		Priority string `json:"priority"`
+	}
+	var d, st []req
+	if json.Unmarshal(derived, &d) != nil || json.Unmarshal(stored, &st) != nil {
+		return true
+	}
+	return !slices.Equal(d, st)
 }
 
 // StoredGeography is the stored country and region a row carries, fed back in as the

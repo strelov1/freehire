@@ -11,44 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const backfillSemanticInputHashChunk = `-- name: BackfillSemanticInputHashChunk :execrows
-UPDATE jobs
-SET semantic_embedded_input_hash = encode(sha256(convert_to(
-        title || chr(31) || company || chr(31) || description, 'UTF8')), 'hex')
-WHERE id >= $1 AND id < $2
-  AND semantic_embedded_input_hash IS NULL
-  AND semantic_embedded_model = $3::text
-  AND semantic_embedded_hash IS NOT DISTINCT FROM content_hash
-`
-
-type BackfillSemanticInputHashChunkParams struct {
-	FromID      int64  `json:"from_id"`
-	ToID        int64  `json:"to_id"`
-	TargetModel string `json:"target_model"`
-}
-
-// Fill semantic_embedded_input_hash (migrations/0192) for one id range, for the jobs whose
-// embedding is CURRENT — stamped under the target model with the content_hash they still
-// carry. For those, and only those, the stored text is the text that was embedded, so
-// hashing it now records what the vectors were computed from. A job whose stamp is
-// already stale is left NULL: its text may have changed since the embed, and claiming
-// otherwise would freeze its vectors on the old text. It is re-embedded, and stamped,
-// the ordinary way.
-//
-// The expression MUST stay byte-identical to search.EmbedInputHash (sha256 over title,
-// company and description separated by U+001F, hex-encoded); an integration test holds
-// the two together. A drift would not fail loudly — it would make every backfilled job
-// look changed and re-embed it, the waste this column exists to remove.
-//
-// Guarded on IS NULL, so a re-run writes nothing and stopping mid-way is free.
-func (q *Queries) BackfillSemanticInputHashChunk(ctx context.Context, arg BackfillSemanticInputHashChunkParams) (int64, error) {
-	result, err := q.db.Exec(ctx, backfillSemanticInputHashChunk, arg.FromID, arg.ToID, arg.TargetModel)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const claimSemanticBatch = `-- name: ClaimSemanticBatch :many
 WITH claimable AS (
     SELECT o.id, o.job_id
@@ -482,27 +444,6 @@ func (q *Queries) SemanticCoverageCounts(ctx context.Context, targetModel string
 	row := q.db.QueryRow(ctx, semanticCoverageCounts, targetModel)
 	var i SemanticCoverageCountsRow
 	err := row.Scan(&i.Eligible, &i.Covered)
-	return i, err
-}
-
-const semanticInputHashBackfillBounds = `-- name: SemanticInputHashBackfillBounds :one
-SELECT COALESCE(min(id), 0)::bigint AS min_id,
-       COALESCE(max(id), 0)::bigint AS max_id
-FROM jobs
-`
-
-type SemanticInputHashBackfillBoundsRow struct {
-	MinID int64 `json:"min_id"`
-	MaxID int64 `json:"max_id"`
-}
-
-// The id range cmd/backfill-semantic-input-hash walks. min/max over the primary key, not
-// a count of what is left: the predicate that would count it reads every embedded row's
-// description, which is the whole cost of the pass.
-func (q *Queries) SemanticInputHashBackfillBounds(ctx context.Context) (SemanticInputHashBackfillBoundsRow, error) {
-	row := q.db.QueryRow(ctx, semanticInputHashBackfillBounds)
-	var i SemanticInputHashBackfillBoundsRow
-	err := row.Scan(&i.MinID, &i.MaxID)
 	return i, err
 }
 

@@ -5,8 +5,7 @@ Fail-closed masking of personally-identifiable information in CV text before it 
 LLM: a regex floor (email, URL, @handle, phone) unioned with name/address spans from the
 co-located privacy-filter model (`services/pii-filter`, reached over HTTP), producing a
 reversible `Redactor` of numbered placeholders. Used on the CV→LLM path that survives: the
-structured-CV parse in `internal/candidate/resumeextract`, entered via `cmd/server`,
-`cmd/backfill-experience`, `cmd/backfill-resume-structured`.
+structured-CV parse in `internal/candidate/resumeextract`, entered via `cmd/server`.
 
 ## Always true
 - **Fail-closed, twice.** `Build(ctx, text, detector)` (redactor.go:50) returns an
@@ -67,5 +66,3 @@ structured-CV parse in `internal/candidate/resumeextract`, entered via `cmd/serv
 - `internal/candidate/resumeextract` — redacts the stored CV before the structured-parse
   prompt, fills contact fields from `Contacts()`.
 - `internal/api/handler/handler.go`, `cmd/server` — wire the detector from config.
-- `cmd/backfill-experience`, `cmd/backfill-resume-structured` — same detector for batch
-  re-parses; both log and exit early when `PII_FILTER_URL` is unset.

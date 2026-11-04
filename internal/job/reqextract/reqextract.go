@@ -16,6 +16,7 @@
 package reqextract
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/mozillazg/go-unidecode"
@@ -524,4 +525,20 @@ func breaksLine(a atom.Atom) bool {
 	default:
 		return false
 	}
+}
+
+// DeriveJSON is Derive encoded for the jsonb requirements_derived column. An empty list
+// encodes as `[]` rather than nil so the NOT NULL column takes the same value whether the
+// posting yielded nothing or the encoding fell over (impossible for this shape, two
+// strings) — "no requirements found" either way, never a null the column would reject.
+func DeriveJSON(descriptionHTML string) []byte {
+	reqs := Derive(descriptionHTML)
+	if len(reqs) == 0 {
+		return []byte("[]")
+	}
+	encoded, err := json.Marshal(reqs)
+	if err != nil {
+		return []byte("[]")
+	}
+	return encoded
 }

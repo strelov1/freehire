@@ -84,11 +84,10 @@ func jobChunkPassages(job db.Job) []string {
 // (skills, geography, posted_at, every derived facet). Stored as
 // jobs.semantic_embedded_input_hash when the chunks are written (migrations/0192).
 //
-// The raw description rather than the stripped passages, so the hash is reproducible in
-// SQL: BackfillSemanticInputHashChunk computes the same sha256 over the same three
-// fields joined by U+001F, and a test pins the form. The cost is that a markup-only edit
-// still re-embeds, which is rare and errs the safe way. A field jobChunkPassages starts
-// reading must be added here AND to that query, or its changes stop reaching the vectors.
+// The raw description rather than the stripped passages: three fields joined by U+001F,
+// pinned by a test. The cost is that a markup-only edit still re-embeds, which is rare and
+// errs the safe way. A field jobChunkPassages starts reading must be added here, or its
+// changes stop reaching the vectors.
 func EmbedInputHash(job db.Job) string {
 	h := sha256.New()
 	h.Write([]byte(job.Title))

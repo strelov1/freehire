@@ -7,7 +7,6 @@
 package job
 
 import (
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -331,24 +330,8 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 func withDerived(p db.UpsertJobParams) db.UpsertJobParams {
 	p.ContentHash = pgtype.Text{String: jobhash.Of(p), Valid: true}
 	p.RoleFingerprint = pgtype.Text{String: jobhash.RoleFingerprint(p), Valid: true}
-	p.RequirementsDerived = marshalRequirements(reqextract.Derive(p.Description))
+	p.RequirementsDerived = reqextract.DeriveJSON(p.Description)
 	return p
-}
-
-// marshalRequirements encodes a derived requirements list for the jsonb column. A
-// marshal error is impossible for this shape (two strings), and an empty list encodes
-// as `[]` rather than nil so the NOT NULL column takes the same value whether the
-// posting yielded nothing or the encoding fell over — "no requirements found" either
-// way, and never a null the column would reject.
-func marshalRequirements(reqs []enrich.Requirement) []byte {
-	if len(reqs) == 0 {
-		return []byte("[]")
-	}
-	encoded, err := json.Marshal(reqs)
-	if err != nil {
-		return []byte("[]")
-	}
-	return encoded
 }
 
 // UpsertManualParams is the moderator-write analogue of UpsertParams: it maps the

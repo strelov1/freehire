@@ -22,7 +22,7 @@ import (
 // 404 to every query on 2026-09-30, and nothing public lists by companyId any more (the
 // portal's own /api/job-search/jobs ignores a companyId parameter). One company may own
 // several career pages — an internal-mobility page, a confidential one — and each is its own
-// board. cmd/rekey-gupy-boards moved the catalog and the stored postings over.
+// board. A one-time rekey moved the catalog and the stored postings over.
 const gupyJobsURL = "https://private-api.gupy.io/job-publication/public/jobs"
 
 // gupy adapts Gupy career pages. The listing carries title, address and workplace type but

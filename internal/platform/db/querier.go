@@ -247,108 +247,6 @@ type Querier interface {
 	// The dead-letter markers win over blocked_at where a row carries both, so the three
 	// counts stay mutually exclusive and a stacked graph reads correctly.
 	AutoApplyQueueMetrics(ctx context.Context) (AutoApplyQueueMetricsRow, error)
-	// Queries over the application record — the durable half of what used to live in
-	// user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
-	// Point one batch of pre-existing ledger events at the application they belong to.
-	// Every event recorded before this change names a posting and no application, and left
-	// that way it stays correlated through job_id — the reference deleting a posting clears.
-	//
-	// Matched on (user_id, job_id) because that is the only identity those rows have. It is
-	// exactly the correlation being retired, and it is sound here and nowhere else: this pass
-	// runs before any posting has been cleared out from under the events it is repairing, and
-	// a row whose job_id is already NULL is skipped rather than guessed at.
-	BackfillApplicationEventLinks(ctx context.Context, batchSize int32) (int64, error)
-	// Fills company/company_slug/company_slug_folded for rows still blank under one board of a
-	// provider whose adapter sets Company statically per board (see cmd/backfill-blank-company for
-	// which providers qualify and why). board_pattern is externalid.BoardPattern(board) — the
-	// board's external_id namespace, so only this board's rows move. Also enqueues every touched
-	// OPEN job into search_outbox, mirroring UpsertJob/EnqueueSearchOutbox's denormalized
-	// job_posted_at, since this write bypasses the normal ingest path that would do it inline.
-	BackfillBoardCompany(ctx context.Context, arg BackfillBoardCompanyParams) (BackfillBoardCompanyRow, error)
-	// Fill jobs.company_slug_folded for one id range. The column is maintained by every
-	// write path (see migrations/0109), but the rows that predate it need this pass.
-	//
-	// Ranged by id rather than keyset-cursored on the column itself: the whole point is
-	// that the column is not yet indexed while this runs, so a WHERE on it would be a seq
-	// scan per chunk. The primary key is what makes each chunk a bounded, cheap slice, and
-	// it lets a resumed run pick up at a known number instead of a NULL frontier.
-	//
-	// The IS DISTINCT FROM guard makes re-runs free: a chunk whose rows are already correct
-	// writes nothing, so no dead tuples and no bloat for repeating the pass. That matters
-	// on a 7.4M-row table where an unguarded UPDATE would rewrite every row it touches.
-	BackfillCompanySlugFoldedChunk(ctx context.Context, arg BackfillCompanySlugFoldedChunkParams) (int64, error)
-	// Seed the owned marker columns (0114) from the single duplicate_of that predates them, for one
-	// id range.
-	//
-	// Provenance cannot be recovered: a marked row records WHERE it points, never which pass decided
-	// it. So the seed goes by shape — a marked row whose own source is an aggregator and whose canon's
-	// is not is the aggregator pass's; everything else is seeded as the role pass's.
-	//
-	// Fuzzy markers are indistinguishable from role markers that way and land in the role column. That
-	// is self-correcting and cheap to reason about: the first role recompute clears the ones that are
-	// not role clusters, and the fuzzy pass re-sets them in its own column during the same run. One
-	// extra cycle of the churn this change removes, once.
-	//
-	// Closed rows are seeded too, deliberately. The passes only consider open rows, so nothing would
-	// ever seed a closed row's columns — and then the first statement to touch any marker column on it
-	// would fire the derivation and silently clear its duplicate_of.
-	//
-	// The "no owned column set yet" predicate is what makes re-runs free, and it is also the reconcile
-	// sweep: a row written between this chunk passing its range and the trigger existing still matches,
-	// so running the pass again after the trigger lands finishes the job. No separate mode needed.
-	BackfillDuplicateMarkerOwnerChunk(ctx context.Context, arg BackfillDuplicateMarkerOwnerChunkParams) (int64, error)
-	// The same for mail. A thread linked to a posting must end up linked to the application,
-	// or the first deletion detaches it from a record that is still standing.
-	BackfillEmailApplicationLinks(ctx context.Context, batchSize int32) (int64, error)
-	// Replay one keyset batch of already-linked mail into the ledger.
-	//
-	// Deleted mail is included deliberately. Deletion hides content; it does not un-happen the
-	// reply, and excluding it here would bake the very inbox-hygiene dependence this ledger
-	// exists to remove into its starting contents.
-	//
-	// The three appevent source names arrive as parameters rather than being written here, so
-	// the vocabulary stays in Go where a pin test guards it. Mail from an unrecognised store
-	// is skipped rather than defaulted: an unknown provenance must not read as observed.
-	BackfillEmployerReplyEvents(ctx context.Context, arg BackfillEmployerReplyEventsParams) (BackfillEmployerReplyEventsRow, error)
-	// One-off: sets is_tech = true on the Profession itdev/itops rows stored before that
-	// source began asserting the signal at ingest (issue #2601). See
-	// internal/ingest/sources/profession.go's professionITBoards/ProfessionCrawlsCategory
-	// for why: the platform crawls only these two dedicated IT category boards, so every
-	// row this predicate matches is confirmed technical by the source's own filing, not a
-	// guess.
-	//
-	// board_patterns is the caller's []externalid.BoardPattern(board) for every name
-	// sources.ProfessionITBoardNames() reports — the same helper ExistingExternalIDsByBoard
-	// and BackfillBoardCompany already use for a board-scoped external_id match, so a third
-	// Profession IT board added there is picked up here with no SQL change, and the
-	// escaping stays the one canonical definition rather than a hand-copied literal.
-	// ILIKE (not LIKE): externalid.Namespace stores the board AS THE CRAWL PASSED IT, not
-	// normalized, while ProfessionCrawlsCategory itself lowercases before comparing — so a
-	// board catalogued with different casing would still crawl and still be confirmed
-	// technical, and this predicate must recognize its stored rows the same way.
-	//
-	// Direct column set rather than a jobderive re-derivation: the board is fully
-	// recoverable from stored columns, so there is nothing else to re-derive (see
-	// design.md's Decision 3 in openspec/changes/fix-profession-it-board-visibility). The
-	// IS DISTINCT FROM guard makes it idempotent and safe to re-run — a row already true is
-	// not rewritten — and the affected set is bounded to two boards, so unlike the
-	// multi-million-row backfills this needs no chunking.
-	BackfillProfessionITBoardTech(ctx context.Context, boardPatterns []string) (int64, error)
-	// Fill semantic_embedded_input_hash (migrations/0192) for one id range, for the jobs whose
-	// embedding is CURRENT — stamped under the target model with the content_hash they still
-	// carry. For those, and only those, the stored text is the text that was embedded, so
-	// hashing it now records what the vectors were computed from. A job whose stamp is
-	// already stale is left NULL: its text may have changed since the embed, and claiming
-	// otherwise would freeze its vectors on the old text. It is re-embedded, and stamped,
-	// the ordinary way.
-	//
-	// The expression MUST stay byte-identical to search.EmbedInputHash (sha256 over title,
-	// company and description separated by U+001F, hex-encoded); an integration test holds
-	// the two together. A drift would not fail loudly — it would make every backfilled job
-	// look changed and re-embed it, the waste this column exists to remove.
-	//
-	// Guarded on IS NULL, so a re-run writes nothing and stopping mid-way is free.
-	BackfillSemanticInputHashChunk(ctx context.Context, arg BackfillSemanticInputHashChunkParams) (int64, error)
 	// Block the other participant of a conversation and close EVERY conversation between the
 	// two, of any kind, in one statement so no half can land alone. Only a participant
 	// matches; no row means the caller must say the conversation is not theirs. Closing is
@@ -791,14 +689,6 @@ type Querier interface {
 	// that no longer exists). Candidate contacts are intentionally kept: they are
 	// owner-edited identity, not an extract artifact.
 	ClearUserResume(ctx context.Context, id int64) error
-	// Close every open posting of ONE board on the source's own answer about the board, given by
-	// the caller as closed_reason — cmd/rekey-gupy-boards' close for a Gupy career page that
-	// answers an empty listing ('feed_empty': reachable, and the feed carried nothing) or 404
-	// "Career Page not Found" ('board_unreachable'). The ordinary paths cannot reach either: a
-	// zero-yield crawl licenses no sweep, the empty-feed pass refuses a board with no recorded
-	// yield, and the chronic pass waits 60 days. jobs_closed_reason_check bounds the values. The
-	// search_delete_outbox CTE rides the statement as in CloseEmptyFeedBoardJobs.
-	CloseBoardJobsWithReason(ctx context.Context, arg CloseBoardJobsWithReasonParams) (int64, error)
 	// A leave's first statement: close every pending or open buddy conversation the member is
 	// in. The conversations are the messaging core's (kind 'buddy'); closing them in the
 	// leave's own transaction rather than through the core is what keeps the leave atomic.
@@ -904,27 +794,6 @@ type Querier interface {
 	// The source's deadline is inclusive: it expires on the following UTC date. Independent of
 	// crawl success/quiet periods, and atomically queued for removal from the live search index.
 	CloseJobsPastApplicationDeadline(ctx context.Context, source string) (int64, error)
-	// Closes one id-range chunk of a source whose stored rows carry an employer we now know is
-	// wrong and cannot repair in place (see migration 0165 for the case that forced the label).
-	//
-	// Chunked over an id RANGE rather than a keyset over matching rows: the affected set is the
-	// whole of one source, the id sequence runs far ahead of the live row count, and a range walk
-	// lets the caller resume at a printed cursor after an interruption. Idempotent — `closed_at IS
-	// NULL` means a re-run over a chunk already done writes nothing, so stopping mid-way is free.
-	//
-	// NO search_delete_outbox CTE, unlike every other Close* query in this file, and that is the
-	// one thing to think twice about before copying this. The others close tens to thousands of
-	// rows, where riding the enqueue on the UPDATE is both correct and cheap. This closes a source
-	// whole — 1.47M rows for apploi against a deletion queue whose ordinary depth is ~7k — and
-	// Meilisearch runs ONE serial task queue, so a wave that size would sit in front of the
-	// scheduled rebuild and the incremental pushes for as long as it took to drain. cmd/merge-
-	// companies already made this trade and documents it ("Do NOT reindex afterwards... the
-	// scheduled freehire-reindexw picks it up"): the rebuild reads open rows from Postgres, so a
-	// closed row simply is not in the next index. The cost is that the postings stay searchable
-	// until that rebuild — hours, not days — which is the right price for not blocking it.
-	//
-	// :one rather than :execrows because the CTE moves the row count out of the command tag.
-	CloseMisattributedSourceJobs(ctx context.Context, arg CloseMisattributedSourceJobsParams) (int64, error)
 	// Closes the open postings of a board a curator retired (boardcatalog.Retire). Nothing else
 	// ever would: a retired board is never crawled again, so no sweep runs for it; Retire
 	// deletes its board_health row, which is the only evidence the chronic-board safety net
@@ -1214,10 +1083,6 @@ type Querier interface {
 	// path uses to return 404 before touching company_votes (whose FK would otherwise
 	// surface a bad slug as an opaque error on insert, or a silent no-op on clear).
 	CompanySlugExists(ctx context.Context, slug string) (bool, error)
-	// The id range the backfill walks, plus how many rows still need it. The remaining
-	// count is what makes a run's progress legible; it is an exact count on purpose (the
-	// pass is run by hand, rarely, and a wrong "0 remaining" would end it early).
-	CompanySlugFoldedBackfillBounds(ctx context.Context) (CompanySlugFoldedBackfillBoundsRow, error)
 	// Distinct non-NULL subindustry values with their company counts, most common first
 	// (ties broken by value), serving the searchable option list for the subindustry facet.
 	// Counts are unconditional — they do not reflect other active list filters.
@@ -1257,9 +1122,6 @@ type Querier interface {
 	// counts user rows only — an answer, a tool call and its result are all one turn's work,
 	// and counting them would make a turn's price depend on how the model chose to do it.
 	CountAssistantUserTurns(ctx context.Context, sessionID uuid.UUID) (int64, error)
-	// Read-only companion to BackfillBoardCompany, for --dry-run: how many rows a board's backfill
-	// would touch without writing anything.
-	CountBlankCompanyByBoard(ctx context.Context, arg CountBlankCompanyByBoardParams) (int64, error)
 	// How many board_health rows exist for one (provider, board) name across every region it has
 	// ever been seen under. More than one means the name is REGION-AMBIGUOUS — the `boards`
 	// catalog allows one board name to repeat under a provider, distinguished only by region (e.g.
@@ -1917,11 +1779,6 @@ type Querier interface {
 	// registry for the same reason as above; reference rows are kept, as DeleteOrphanCompanies
 	// keeps them.
 	DeleteOrphanAliasCompanies(ctx context.Context) (int64, error)
-	// Drop companies no longer referenced by any job — the stale rows left behind
-	// when a slug-builder change re-keys jobs onto new slugs. Reference rows imported
-	// by the company-info backfill are preserved: they intentionally have no job, so
-	// the NOT is_reference guard keeps the backfill directory from being swept away.
-	DeleteOrphanCompanies(ctx context.Context) (int64, error)
 	// DeleteOrphanCompanies narrowed to the given slugs: the other half of cmd/backfill-derive's
 	// scoped reconcile, for the slugs its re-key moved jobs AWAY from. Reference rows stay.
 	DeleteOrphanCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
@@ -2086,10 +1943,6 @@ type Querier interface {
 	// An id matching no open canonical row simply yields no row for that id, which the caller
 	// reads as "no widening".
 	DuplicateClosureGeoFor(ctx context.Context, ownerIds []int64) ([]DuplicateClosureGeoForRow, error)
-	// The id range the owned-marker backfill walks, plus how many rows still need it. Exact count on
-	// purpose, like the folded-slug bounds beside it: the pass is run by hand and rarely, and a wrong
-	// "0 remaining" would end it early.
-	DuplicateMarkerOwnerBackfillBounds(ctx context.Context) (DuplicateMarkerOwnerBackfillBoundsRow, error)
 	// Newest open postings written in the last ten minutes, capped, so cmd/queue-metrics
 	// can ask jobfacts whether a stored employment_type is carried only by boilerplate.
 	//
@@ -3573,18 +3426,6 @@ type Querier interface {
 	// Cursor read: has this rotated file (by content signature) been applied? The
 	// signature is stable across rename and gzip, so a re-run recognizes the same file.
 	IsViewLogFileProcessed(ctx context.Context, signature int64) (bool, error)
-	// Descriptions for a named set of ids, for cmd/backfill-clearance.
-	//
-	// Ids come from a Meilisearch query rather than from a SQL predicate on the text, and
-	// that is the point: any WHERE over `description` de-TOASTs the column for every row it
-	// examines, which on this table means 8M out-of-line reads to find ~38k matches. The
-	// search index already holds the text, so it can name the candidates in seconds and
-	// this query reads only their bodies.
-	//
-	// Closed rows are included. A closed posting still carries a clearance requirement, the
-	// detail endpoint still serves it, and leaving it unmarked would make the facet's
-	// meaning depend on lifecycle state.
-	JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobDescriptionsByIDsRow, error)
 	// Board lookups behind the "contribute a board" flow: does the catalogue already crawl
 	// this board, and which board does a pasted job id belong to. Named after
 	// link_contributions for historical reasons — that table is gone (migration 0131), and
@@ -3594,27 +3435,6 @@ type Querier interface {
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
 	// over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
 	JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error)
-	// Title, description and the stored engagement terms for a named set of ids, for
-	// cmd/backfill-engagement. By primary key: the candidates come from the search index,
-	// so the pass reads only the bodies that mention a term instead of de-TOASTing the table.
-	JobsForEngagementByIDs(ctx context.Context, ids []int64) ([]JobsForEngagementByIDsRow, error)
-	// Title, location, description and the currently-stored countries/regions for a named set
-	// of ids, for cmd/backfill-remote-region-restriction.
-	//
-	// Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a WHERE
-	// over `description` de-TOASTs the column for every row it examines, and the search index
-	// already holds the text.
-	JobsForGeographyRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForGeographyRecheckByIDsRow, error)
-	// What cmd/backfill-brazil-state-codes re-derives a row's places from, and the places it
-	// currently stores, for a named set of ids.
-	JobsForPlaceRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForPlaceRecheckByIDsRow, error)
-	// Location, description and the currently-stored work_mode for a named set of ids, for
-	// cmd/backfill-remote-perk-false-positive.
-	//
-	// Ids come from a Meilisearch query for the same reason JobDescriptionsByIDs's do: a
-	// WHERE over `description` de-TOASTs the column for every row it examines, and the
-	// search index already holds the text.
-	JobsForWorkModeRecheckByIDs(ctx context.Context, ids []int64) ([]JobsForWorkModeRecheckByIDsRow, error)
 	// Opt a member in to the interview-buddies network, or bring a returning one back. A first
 	// join stores the handle the caller minted; a rejoin (the user_id conflict) clears left_at
 	// and refreshes the ranking keys but leaves the stored handle alone, so the argument is
@@ -3905,11 +3725,6 @@ type Querier interface {
 	// GetBaseCVByUser would return. Oldest created first, so the list does not reorder when a base
 	// is edited.
 	ListBaseCVsByUser(ctx context.Context, userID int64) ([]ListBaseCVsByUserRow, error)
-	// Every stored posting of ONE board (open or closed), with the URL it was crawled at — what
-	// cmd/rekey-gupy-boards reads to learn which career page each posting of a retired
-	// companyId-keyed board lives on. Rides jobs_source_extid_pattern_idx through the same
-	// escaped LIKE prefix as ExistingExternalIDsByBoard (externalid.BoardPattern).
-	ListBoardJobURLs(ctx context.Context, arg ListBoardJobURLsParams) ([]ListBoardJobURLsRow, error)
 	// When each of a provider's boards was last crawled, for cmd/ingest to start the boards it has
 	// waited longest on (see orderOldestRunFirst). A board absent here has never been crawled at all.
 	// Only the three columns the ordering reads: this runs once per ingest run over a provider that
@@ -4437,24 +4252,6 @@ type Querier interface {
 	// requirement can match on skills OR on text alone, so there is no prefilter that would not
 	// drop real evidence. Ordered by employment so a consumer can group without a second pass.
 	ListExperienceAtoms(ctx context.Context, userID int64) ([]ExperienceAtom, error)
-	// Every user with a stored CV, carrying their structured résumé ONLY when its stamp still
-	// matches the upload time. That CASE is what makes the backfill cheap: a user whose
-	// structure is current costs no model call, and one whose structure is stale or missing
-	// falls through to extraction. The freshness test is the same one resume.Store.Structured
-	// applies, so the worker never reuses a structure the app itself treats as absent.
-	ListExperienceBackfillTargets(ctx context.Context, userID int64) ([]ListExperienceBackfillTargetsRow, error)
-	// cmd/backfill-experience-dates' input: every employment still missing at least one of the
-	// structured boundaries migration 0135 added, alongside the legacy free-text labels to
-	// parse, the row's own created_at (the approved fallback for a label that fails to
-	// parse), and is_current — the pre-migration sort key (period_sort.go, since deleted)
-	// read a present-reading period_end as "ongoing" independently of is_current, so a row
-	// where the two disagree needs is_current corrected in the same pass (see
-	// SetExperienceEmploymentBackfilledDates), or that row silently loses its "ongoing" sort
-	// position once the free-text column backing the old check is gone. OR, not AND: a row
-	// where an ordinary write path (deployed ahead of this pass) already filled one boundary
-	// but not the other must still be visited, or the other boundary's only surviving copy —
-	// the free-text column — is never migrated.
-	ListExperienceEmploymentDatesForBackfill(ctx context.Context) ([]ListExperienceEmploymentDatesForBackfillRow, error)
 	// The caller's places of work, current roles first and most recent within that. Owner-scoped
 	// by construction — another user's employments can never appear. Ordered natively on the
 	// structured columns (see migration 0135) rather than the lexicographic free-text column
@@ -4665,30 +4462,6 @@ type Querier interface {
 	// Id-only projection of ListJobsUpdatedAfter — the corruption-degrade path for the
 	// incremental (`reindex --since`) scan, mirroring ListJobIDsAfter.
 	ListJobIDsUpdatedAfter(ctx context.Context, arg ListJobIDsUpdatedAfterParams) ([]int64, error)
-	// Candidates for cmd/backfill-brazil-state-codes: postings of the named Brazilian sources
-	// whose stored countries carry a code a Brazilian state code spells (RS Serbia, BA Bosnia,
-	// PR Puerto Rico, SC/MS/MA/AL/PA a US state, PE Peru or Prince Edward Island, DF Mexico),
-	// or the namesake a state code used to leave behind ("Colombo, PR" Sri Lanka, Montenegro).
-	//
-	// Broad on purpose, as ListJobIDsWithUSSubdivisionCollision is: it also matches genuine
-	// Peruvian or US postings of the same sources, and the recompute in the caller decides. Open
-	// and closed alike, since a closed posting reopens when the crawl lists it again. Rides
-	// jobs_source_idx and reads no description.
-	ListJobIDsWithBrazilianStateCollision(ctx context.Context, sources []string) ([]int64, error)
-	// Candidates for cmd/backfill-us-subdivision-collision (freehire#3113): a location whose
-	// trailing comma-field is a bare two-letter code that collides between a US/Canada
-	// subdivision and a curated country (in/de/id — the exact three freehire#3113 added to
-	// subdivisionToCountry; a later addition needs the same codes added here too), where the
-	// CURRENTLY STORED countries facet still carries that country reading.
-	//
-	// Deliberately broad rather than exact: the regex also matches genuine India/Germany/
-	// Indonesia postings written the same "City, CC" way, and the countries filter alone
-	// would also match every *correctly* tagged India/Germany/Indonesia job. Over-fetching
-	// is free here — cmd/backfill-remote-perk-false-positive's same reasoning applies — the
-	// recompute in the caller decides, and a row whose derived value is unchanged costs one
-	// skipped write. One sequential scan of (location, countries) only, no description
-	// detoast, so this is cheap even without a supporting index.
-	ListJobIDsWithUSSubdivisionCollision(ctx context.Context) ([]int64, error)
 	// Resolve job ids to display labels for the credit-history page (match debits). Missing ids
 	// simply do not come back; the handler falls back to a generic label for a deleted job.
 	ListJobLabelsByIDs(ctx context.Context, ids []int64) ([]ListJobLabelsByIDsRow, error)
@@ -4697,11 +4470,6 @@ type Querier interface {
 	// nothing else. One round trip for the whole list; an unknown slug is simply absent, which the
 	// caller reports as not found.
 	ListJobLivenessBySlugs(ctx context.Context, slugs []string) ([]ListJobLivenessBySlugsRow, error)
-	// Every board namespace (the part of external_id before ':') one source's stored postings
-	// carry, with the company most of them name. cmd/rekey-gupy-boards reads it AFTER moving
-	// postings to their new namespaces, so the boards it then adds are derived from the data
-	// itself rather than from a plan an interrupted run could lose.
-	ListJobNamespacesForSource(ctx context.Context, source string) ([]ListJobNamespacesForSourceRow, error)
 	// One chunk of the skill-gap report: every (job id, raw skill phrase) pair LLM
 	// enrichment recorded, for jobs in an id range.
 	//
@@ -4765,23 +4533,6 @@ type Querier interface {
 	// (concurrent writes can't skip or repeat rows) filtered to a single source. Returns
 	// closed rows too — a one-time backfill of a missing description fills open and closed alike.
 	ListJobsBySourceAfter(ctx context.Context, arg ListJobsBySourceAfterParams) ([]Job, error)
-	// One chunk of the requirements backfill: the open postings in an id range, with the
-	// description the derivation reads.
-	//
-	// Open rows only, unlike SetJobRequiresClearance's companion: a closed posting is not
-	// served on a job page and cannot be applied to, so deriving for it would pay the
-	// de-TOAST of its description for a list nothing reads.
-	//
-	// There is deliberately NO predicate on `description` (not even `<> ''`): a WHERE over
-	// that column de-TOASTs it for every row examined, which is the trap cmd/backfill-clearance
-	// documents. The rows are already bounded by id here, and an empty description simply
-	// derives nothing, so the filter would cost the same read it is trying to avoid.
-	// The LIMIT is what bounds MEMORY, and the id range is what bounds the number of
-	// statements. Both are needed: pgx buffers a :many result whole, descriptions run to
-	// ~1 MB on some sources, and an id RANGE puts no ceiling at all on how many rows fall
-	// inside it. The caller resumes from the last id it saw when a chunk comes back full,
-	// so a dense stretch is walked in bounded steps rather than materialised at once.
-	ListJobsForRequirementsBackfill(ctx context.Context, arg ListJobsForRequirementsBackfillParams) ([]ListJobsForRequirementsBackfillRow, error)
 	// The newest eligible postings of ONE tier this engine has not been told about yet, for
 	// cmd/search-ping. The gate is what the search index admits (cmd/reindex's splitJobs):
 	// open, canonical, public, carrying a body (search.DescriptionMissing), and with a
@@ -4888,22 +4639,6 @@ type Querier interface {
 	// ListTitlesForClassifyDrift states: the GROUP BY caps the output, and the caller sums
 	// a location that spans more than one chunk.
 	ListLocationsForGeoGap(ctx context.Context, arg ListLocationsForGeoGapParams) ([]ListLocationsForGeoGapRow, error)
-	// Candidates for cmd/backfill-username-from-mailbox: every hosted mailbox whose
-	// owner has not yet been backfilled onto users.username. Small by construction —
-	// mailboxes is an opt-in feature, nowhere near the row counts the repo's chunked
-	// cmd/backfill-* workers exist for — so one unpaged query is enough.
-	ListMailboxesWithoutBackfilledUsername(ctx context.Context) ([]ListMailboxesWithoutBackfilledUsernameRow, error)
-	// The members who joined before handles existed, and so have no public address.
-	//
-	// Migration 0148 rewrote every 'public' row to 'anonymous' but could not mint a handle —
-	// minting reads a job title through a Go dictionary, which SQL cannot do — so those
-	// accounts, and any that were already 'anonymous', are members the catalogue cannot list
-	// and whose card 404s. cmd/backfill-talent-handle walks this list once and closes it.
-	//
-	// No stamp gate here, unlike the catalogue's own read: a member whose CV extract is stale
-	// still needs an address for when it catches up, and withholding one would make the
-	// backfill's own result depend on when it happened to run.
-	ListMembersMissingTalentHandle(ctx context.Context) ([]int64, error)
 	// Every availability row for a mentor, both shapes. The slot engine wants all of them at
 	// once — an override only means anything beside the weekly rules it replaces — so this
 	// deliberately does not filter by window.
@@ -4992,6 +4727,8 @@ type Querier interface {
 	// First page of a subject's open threads, newest first. Served by the partial index
 	// threads_subject_open_created_idx.
 	ListOpenThreadsFirst(ctx context.Context, arg ListOpenThreadsFirstParams) ([]ListOpenThreadsFirstRow, error)
+	// Queries over the application record — the durable half of what used to live in
+	// user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
 	// The caller's applications whose posting the catalogue no longer holds.
 	//
 	// Deliberately joins nothing: the posting's deletion cleared job_id, so there is no posting to reach
@@ -5502,15 +5239,6 @@ type Querier interface {
 	// with no profile row simply produces no row here; the caller treats absence as an empty
 	// exclude set.
 	ListUserProfilesExcludedSkills(ctx context.Context, userIds []int64) ([]ListUserProfilesExcludedSkillsRow, error)
-	// Users whose stored structured résumé currently describes their stored CV, for the
-	// geography reconciler (cmd/backfill-resume-geo). Superseded structures are excluded:
-	// deriving geography from one would route around the staleness rule that governs the
-	// structure itself. Returns the location line the derivation reads plus the stamp to
-	// write under, so the worker needs no second round-trip per user.
-	// The location line is coalesced to '' and cast so sqlc types it as a string rather than
-	// interface{}. An absent key and an empty string are the same case — the CV stated no
-	// location — and both must derive to an ABSENT geography, not to an empty resolved one.
-	ListUsersForResumeGeoBackfill(ctx context.Context, userID int64) ([]ListUsersForResumeGeoBackfillRow, error)
 	// Every public_slug the user has interacted with (viewed_at is always set, so
 	// any interaction row counts as viewed). Used by the SPA to dim already-seen
 	// cards in the browse list without authenticating the public job-read path.
@@ -5822,10 +5550,6 @@ type Querier interface {
 	// The top of the id space cmd/serve-probe draws its random sample windows from. One
 	// backward probe of the primary key, so it stays cheap on the whole table.
 	MaxJobID(ctx context.Context) (int64, error)
-	// The upper bound of the id-range walk above. MAX over a source is an index scan on
-	// (source, external_id)'s table, not a count of matching rows, so it is cheap even when the
-	// source holds millions.
-	MaxJobIDForSource(ctx context.Context, source string) (int64, error)
 	// Fold ONE requirement's outcome into the run report: replace the entry whose requirement
 	// matches case- and whitespace-insensitively, or append when none does. Done as one UPDATE
 	// expression rather than a read-modify-write from Go, because a read-modify-write has no lock
@@ -6871,14 +6595,6 @@ type Querier interface {
 	// carrying the OLD slug, so an updated row leaves the set. A re-run updates zero, and
 	// stopping mid-way costs nothing — the next run resumes with what is left.
 	RekeyCompanySlugChunk(ctx context.Context, arg RekeyCompanySlugChunkParams) (int64, error)
-	// Move postings to a new board namespace in one statement: ids[i] gets external_ids[i]. The
-	// row keeps its id, so everything keyed by it (saves, tracking, enrichment, views) follows.
-	// IS DISTINCT FROM-guarded, so a re-run writes nothing. A target key another row of the
-	// source already holds fails the whole statement on (source, external_id) rather than
-	// silently skipping the row.
-	// The two parallel arrays are zipped WITH ORDINALITY because sqlc's analyzer does not resolve
-	// the two-array form of unnest (see companies.sql's domain_industry_map).
-	RekeyJobExternalIDs(ctx context.Context, arg RekeyJobExternalIDsParams) (int64, error)
 	// Void a consumption taken as a RESERVATION for work that then produced nothing.
 	//
 	// It RESTAMPS the row rather than deleting it or adding a compensating entry, and the
@@ -6970,10 +6686,6 @@ type Querier interface {
 	// place, the drain would remove the reopened row after re-adding it) and the row is queued
 	// for the facet index. Returns the rows reopened, 0 when there was nothing to undo.
 	ReopenEmployerJob(ctx context.Context, arg ReopenEmployerJobParams) (int64, error)
-	// One-off repair for ESS's legacy query-only vacancy links. Compare the URL and
-	// hash read by the worker so a concurrent ingest cannot receive a stale hash.
-	// Closed rows are repaired too because a later liveness refresh can reopen them.
-	RepairESSJobURL(ctx context.Context, arg RepairESSJobURLParams) (RepairESSJobURLRow, error)
 	// Swap the recurring week in one statement, leaving dated overrides alone: half of the
 	// edit applied is a member bookable at hours they just removed. The three arrays are one
 	// row each, zipped back by position (WITH ORDINALITY: sqlc's analyzer does not resolve the
@@ -7008,10 +6720,6 @@ type Querier interface {
 	// the statement reports zero rows. Nothing here resets attempts or last_error — the post
 	// has neither, by the predicate above.
 	RequeueTelegramPost(ctx context.Context, arg RequeueTelegramPostParams) (int64, error)
-	// The id span cmd/backfill-requirements walks. MIN/MAX over the primary key are two
-	// index probes, so this stays cheap on an 11M-row table — deliberately unfiltered,
-	// because counting the open rows would be a scan and the chunk query filters anyway.
-	RequirementsDerivedBackfillBounds(ctx context.Context) (RequirementsDerivedBackfillBoundsRow, error)
 	// A healthy (not-expired) probe clears any accumulated strikes, so only CONSECUTIVE
 	// expired probes can close a job. Guarded to the non-zero case so probing an
 	// already-clean job does not churn the row.
@@ -7110,17 +6818,6 @@ type Querier interface {
 	RestoreEmail(ctx context.Context, arg RestoreEmailParams) (int64, error)
 	// Retire a live (pending or active) board without deleting its row.
 	RetireBoard(ctx context.Context, arg RetireBoardParams) (int64, error)
-	// Retire EVERY live board of one provider in one statement.
-	//
-	// Separate from RetireBoard rather than looping it: this is used when the provider itself is
-	// withdrawn, not when a board is found dead, and the populations differ by three orders of
-	// magnitude — apploi alone carries 5833 boards (migration 0165). A loop would be 5833 round
-	// trips to say one thing.
-	//
-	// Deliberately does NOT touch 'rejected': a rejected board failed insert-time validation and
-	// never became live, so calling it retired would erase why it is there. Idempotent — the
-	// status predicate means a re-run matches nothing.
-	RetireProviderBoards(ctx context.Context, provider string) (int64, error)
 	// Withdraw the caller's own live report. Guarded on retracted_at IS NULL so a second
 	// withdrawal returns no row (404) rather than silently restamping the timestamp, and
 	// so the row is never deleted.
@@ -7309,10 +7006,6 @@ type Querier interface {
 	// A scan over every open posting: measured on production 2026-10-19 it did not finish
 	// inside 60s on a loaded host. It runs in cmd/rollup-stats, never on a request path.
 	SemanticCoverageCounts(ctx context.Context, targetModel string) (SemanticCoverageCountsRow, error)
-	// The id range cmd/backfill-semantic-input-hash walks. min/max over the primary key, not
-	// a count of what is left: the predicate that would count it reads every embedded row's
-	// description, which is the whole cost of the pass.
-	SemanticInputHashBackfillBounds(ctx context.Context) (SemanticInputHashBackfillBoundsRow, error)
 	// The work left in semantic_outbox: rows a worker can still claim. A dead letter is
 	// not work left, it is work given up on. Reads semantic_outbox_claimable_idx (partial
 	// on failed_at IS NULL), 4.5ms on production — cheap enough for cmd/server to sample
@@ -7504,12 +7197,6 @@ type Querier interface {
 	// So the insert writes the never-configured default explicitly. A row created by
 	// this statement leaves the account receiving precisely what it received before.
 	SetEmailGroupSwitches(ctx context.Context, arg SetEmailGroupSwitchesParams) error
-	// cmd/backfill-experience-dates' write: the four structured columns, each filled only
-	// when still NULL — the same per-boundary independence FillExperienceEmploymentBlanks
-	// uses, so a boundary an ordinary write path already populated is never clobbered by a
-	// backfill pass racing behind it — plus is_current, which this only ever turns TRUE, never
-	// back to false, when the caller found a present-reading label is_current disagreed with.
-	SetExperienceEmploymentBackfilledDates(ctx context.Context, arg SetExperienceEmploymentBackfilledDatesParams) (int64, error)
 	// A move to 'needs_reconsent' also clears mentor_busy_sync_opted_in — every caller
 	// (gmail-sync, cal-sync, mentor-calendar-write, mentor-busy-sync) marks that status only
 	// when this account's ONE shared refresh token has failed, and the flag exists solely to
@@ -7521,19 +7208,6 @@ type Querier interface {
 	// clear in only one of them is precisely the gap a code review found.
 	SetGmailStatus(ctx context.Context, arg SetGmailStatusParams) error
 	SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error
-	// Write one row's engagement terms, for cmd/backfill-engagement, and queue an open row
-	// for the search drain in the same statement: the column is not in content_hash, so
-	// nothing else would carry the new value to the index short of a full rebuild.
-	//
-	// The IS DISTINCT FROM guard makes the pass idempotent: a row already carrying the
-	// derived terms is neither rewritten nor queued, so a re-run writes nothing — which is
-	// also why the write must not lose its queue entry. updated_at moves, so cmd/reindex's
-	// post-swap purge keeps an entry for a row it read before this write; and an entry already
-	// pending is RE-STAMPED (a new id and created_at, its lease kept) rather than left alone,
-	// the UpsertApplyForm rule: a drain that already claimed the old id finishes only that old
-	// generation, and the new one stays pending. A dead-lettered entry comes back to life:
-	// its failures belonged to the old document, and the claim skips any row with failed_at.
-	SetJobEngagement(ctx context.Context, arg SetJobEngagementParams) (SetJobEngagementRow, error)
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.
@@ -7557,47 +7231,6 @@ type Querier interface {
 	// (jobview.FromDomain). The column stays the single source; the blob holds only what
 	// the model itself said.
 	SetJobEnrichment(ctx context.Context, arg SetJobEnrichmentParams) error
-	// Write one row's countries and regions, for cmd/backfill-remote-region-restriction.
-	//
-	// A nil slice (Derive resolving nothing) encodes as NULL, which the NOT NULL columns
-	// refuse; COALESCE writes it as the empty array the ingest upserts write.
-	//
-	// The IS DISTINCT FROM guard makes the pass idempotent, the same way SetJobWorkMode's
-	// does: a row already carrying the recomputed values is not rewritten, so a re-run writes
-	// nothing and stopping mid-way costs nothing to resume.
-	SetJobGeography(ctx context.Context, arg SetJobGeographyParams) (int64, error)
-	// Write one row's countries, regions, cities and metros, for cmd/backfill-brazil-state-codes.
-	// A nil slice encodes as NULL, which the NOT NULL columns refuse; COALESCE writes the empty
-	// array the ingest upserts write. IS DISTINCT FROM-guarded, so a re-run writes nothing.
-	SetJobPlaces(ctx context.Context, arg SetJobPlacesParams) (int64, error)
-	// Write one row's requires_clearance and clearance_levels, for cmd/backfill-clearance.
-	// Both together, because they come from one reading of the description and a row whose
-	// levels are empty beside a TRUE requires_clearance would fall under the levels
-	// filter's "no explicit reference" while the boolean filter says it needs a clearance.
-	//
-	// The IS DISTINCT FROM guard is what makes the pass idempotent: a row already carrying
-	// the derived value is not rewritten, so a re-run writes nothing, produces no dead
-	// tuples, and stopping the pass mid-way costs nothing to resume.
-	//
-	// It also means the backfill never needs to know which rows it has already visited —
-	// the guard answers that per row, which is cheaper and more honest than a cursor that
-	// would go stale the moment ingest writes a new posting behind it.
-	SetJobRequiresClearance(ctx context.Context, arg SetJobRequiresClearanceParams) (int64, error)
-	// Write one row's work_mode, for cmd/backfill-remote-perk-false-positive.
-	//
-	// The IS DISTINCT FROM guard makes the pass idempotent, the same way
-	// SetJobRequiresClearance's does: a row already carrying the recomputed value is not
-	// rewritten, so a re-run writes nothing and stopping mid-way costs nothing to resume.
-	SetJobWorkMode(ctx context.Context, arg SetJobWorkModeParams) (int64, error)
-	// Write one chunk's derived requirements, for cmd/backfill-requirements. Batched
-	// through unnest rather than a statement per row: the pass covers millions of rows and
-	// a round trip each would dominate its runtime.
-	//
-	// The IS DISTINCT FROM guard is what makes the pass idempotent, for the same reason
-	// SetJobRequiresClearance's does: a row already carrying the derived value is not
-	// rewritten, so a re-run writes nothing and produces no dead tuples. It also means the
-	// backfill needs no record of which rows it has visited.
-	SetJobsRequirementsDerived(ctx context.Context, arg SetJobsRequirementsDerivedParams) (int64, error)
 	// Claims the nudge send for one account. Guarded by IS NULL so a concurrent or
 	// repeated run never re-sends; 0 rows affected means somebody already claimed it.
 	SetLimitNudgeSent(ctx context.Context, id int64) (int64, error)
@@ -7734,11 +7367,6 @@ type Querier interface {
 	// time, since a retry re-reads the SAME stored résumé rather than replacing it. The
 	// for-stamp guard drops the write when a newer upload already superseded this retry.
 	SetUserResumeExtractPending(ctx context.Context, arg SetUserResumeExtractPendingParams) error
-	// Persist only the derived geography for a user, under the same monotonic guard the
-	// structure write uses. This is the reconciler's write path: it re-derives from an
-	// already-stored structure, so it must not touch the structure or its model stamp, and
-	// must still refuse to write against a CV that has been replaced since the row was read.
-	SetUserResumeGeography(ctx context.Context, arg SetUserResumeGeographyParams) error
 	// Persist the user's derived structured résumé, stamped with the producing LLM model
 	// and the résumé upload time it was derived from (passed in, not now(), so the stamp
 	// matches the CV the background extraction actually read). Never the raw CV text.
@@ -7953,18 +7581,6 @@ type Querier interface {
 	// outside the ON CONFLICT for the reason SyncCompaniesFromJobs gives. The name is the most
 	// recent public one; a JD one user pasted in (is_private) must not name a public company.
 	SyncCompaniesForSlugs(ctx context.Context, slugs []string) (int64, error)
-	// Rebuild the companies catalogue from jobs. The companies table is derivable
-	// from jobs (slug = company_slug, name = company), so after a slug-builder change
-	// re-keys jobs, this re-keys companies to match. DISTINCT ON collapses a slug's
-	// name variants; ON CONFLICT folds collisions and refreshes existing rows.
-	//
-	// Only a slug that is missing or whose name differs reaches the INSERT. This statement
-	// runs for about an hour on prod in one transaction and holds a lock on every row it
-	// writes until it commits, while ingest's UpsertJob upserts into companies on every
-	// posting — rewriting the ~750k unchanged rows stalled the crawl fleet behind it
-	// (2026-10-28). The filter must sit HERE, not in an ON CONFLICT ... WHERE: Postgres
-	// locks the conflicting row before it evaluates that WHERE, so the lock would remain.
-	SyncCompaniesFromJobs(ctx context.Context) error
 	// Copy the company's counter onto its postings, so a job card carries the label
 	// without the read path joining companies, and QUEUE the changed ones for the search
 	// index. Run in the SAME transaction as the report, not on a schedule: a report is
@@ -8172,7 +7788,7 @@ type Querier interface {
 	// One-off re-derive (cmd/backfill-derive): rewrite in a single pass every column that
 	// ingest computes as a pure function of a row's own raw/immutable fields — the
 	// deterministic dictionary facets (countries, regions, cities, work_mode, skills,
-	// seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, engagement, plus the synthetic enrichment
+	// seniority, category, is_tech, requires_clearance, via_recruiter, equity, clearance_levels, perks, engagement, requirements_derived (reqextract), plus the synthetic enrichment
 	// facets posting_language,
 	// employment_type, education_level, english_level, experience_years_min, all from
 	// jobderive.Derive), the repost-identity role_fingerprint (internal/job/jobhash), and the

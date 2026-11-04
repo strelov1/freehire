@@ -11,67 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const backfillApplicationEventLinks = `-- name: BackfillApplicationEventLinks :execrows
-
-WITH page AS (
-    SELECT ae.id, a.id AS application_id
-      FROM application_events ae
-      JOIN applications a ON a.user_id = ae.user_id AND a.job_id = ae.job_id
-     WHERE ae.application_id IS NULL
-       AND ae.job_id IS NOT NULL
-     ORDER BY ae.id
-     LIMIT $1
-)
-UPDATE application_events ae
-   SET application_id = p.application_id
-  FROM page p
- WHERE ae.id = p.id
-`
-
-// Queries over the application record — the durable half of what used to live in
-// user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
-// Point one batch of pre-existing ledger events at the application they belong to.
-// Every event recorded before this change names a posting and no application, and left
-// that way it stays correlated through job_id — the reference deleting a posting clears.
-//
-// Matched on (user_id, job_id) because that is the only identity those rows have. It is
-// exactly the correlation being retired, and it is sound here and nowhere else: this pass
-// runs before any posting has been cleared out from under the events it is repairing, and
-// a row whose job_id is already NULL is skipped rather than guessed at.
-func (q *Queries) BackfillApplicationEventLinks(ctx context.Context, batchSize int32) (int64, error) {
-	result, err := q.db.Exec(ctx, backfillApplicationEventLinks, batchSize)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const backfillEmailApplicationLinks = `-- name: BackfillEmailApplicationLinks :execrows
-WITH page AS (
-    SELECT e.id, a.id AS application_id
-      FROM emails e
-      JOIN applications a ON a.user_id = e.user_id AND a.job_id = e.job_id
-     WHERE e.application_id IS NULL
-       AND e.job_id IS NOT NULL
-     ORDER BY e.id
-     LIMIT $1
-)
-UPDATE emails e
-   SET application_id = p.application_id
-  FROM page p
- WHERE e.id = p.id
-`
-
-// The same for mail. A thread linked to a posting must end up linked to the application,
-// or the first deletion detaches it from a record that is still standing.
-func (q *Queries) BackfillEmailApplicationLinks(ctx context.Context, batchSize int32) (int64, error) {
-	result, err := q.db.Exec(ctx, backfillEmailApplicationLinks, batchSize)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const clearApplicationProgressByID = `-- name: ClearApplicationProgressByID :one
 UPDATE applications
    SET stage = NULL, applied_at = NULL
@@ -187,6 +126,7 @@ func (q *Queries) ListAppliedCompanySlugs(ctx context.Context, arg ListAppliedCo
 }
 
 const listOrphanedApplications = `-- name: ListOrphanedApplications :many
+
 SELECT a.id, a.company_slug, a.role_title, a.applied_at, a.stage, a.notes, a.followed_up_at,
        a.created_at AS added_to_board_at,
        (SELECT count(*)
@@ -229,6 +169,8 @@ type ListOrphanedApplicationsRow struct {
 	LastActivityAt pgtype.Timestamptz `json:"last_activity_at"`
 }
 
+// Queries over the application record — the durable half of what used to live in
+// user_jobs. See migrations/0064_applications.sql for why it is a table of its own.
 // The caller's applications whose posting the catalogue no longer holds.
 //
 // Deliberately joins nothing: the posting's deletion cleared job_id, so there is no posting to reach
