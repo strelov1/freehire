@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/application/agentview"
-	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/cache"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -104,6 +102,7 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 	params := search.SearchParams{
 		Query:  values.Get("q"),
 		Filter: search.FilterFromValues(values),
+		Sort:   defaultSort(values.Get("q")),
 		Limit:  limit,
 		Offset: offset,
 	}
@@ -141,19 +140,13 @@ func (h *mcpappHandlers) SearchJobs(ctx context.Context, in mcpapp.SearchInput) 
 
 // JobDetail answers `get_job`.
 func (h *mcpappHandlers) JobDetail(ctx context.Context, slug string) (mcpapp.JobResult, error) {
-	row, err := h.store.GetJobBySlug(ctx, slug)
+	// A refused posting answers NOT FOUND rather than forbidden (see publishedToAgents).
+	row, err := publishedJobBySlug(ctx, h.store, slug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return mcpapp.JobResult{}, mcpapp.NotFoundError{What: "posting"}
 		}
 		return mcpapp.JobResult{}, err
-	}
-	// The same predicate the OJCP surface applies, and for the same reason: GetJobBySlug
-	// carries none of its own, and a refused posting must answer NOT FOUND rather than
-	// forbidden — whether a private posting exists under some slug is not an anonymous
-	// caller's business.
-	if !publishedToAgents(row) {
-		return mcpapp.JobResult{}, mcpapp.NotFoundError{What: "posting"}
 	}
 
 	view, err := jobview.FromRow(row)
@@ -166,28 +159,7 @@ func (h *mcpappHandlers) JobDetail(ctx context.Context, slug string) (mcpapp.Job
 		h.attachReality(ctx, row, &view)
 	}
 	agentview.Record(ctx, agentview.KindDetail, []int64{row.ID})
-	return h.projector.JobDetail(view, h.applyFormFor(ctx, row.ID)), nil
-}
-
-// applyFormFor reads the posting's captured application form, or nil where there is none.
-//
-// Best-effort, exactly as on the OJCP surface: most of the catalogue has no captured form,
-// and a store that cannot answer must not turn a job read into a failure — the posting
-// simply says nothing about what applying will ask for, which is the honest answer when we
-// do not know.
-func (h *mcpappHandlers) applyFormFor(ctx context.Context, jobID int64) *applyform.Form {
-	row, err := h.store.GetApplyFormByJobID(ctx, jobID)
-	if err != nil {
-		return nil
-	}
-	var form applyform.Form
-	if err := json.Unmarshal(row.Payload, &form); err != nil {
-		return nil
-	}
-	if form.Provider == "" {
-		form.Provider = row.Provider
-	}
-	return &form
+	return h.projector.JobDetail(view, applyFormFor(ctx, h.store, row.ID)), nil
 }
 
 // SearchCompanies answers `search_companies`.
@@ -290,15 +262,12 @@ func utcRFC3339(ts pgtype.Timestamptz) string {
 // the private posting exists. The neighbours pass the same predicate — the website's rule
 // plus duplicates, which no tool on this surface publishes.
 func (h *mcpappHandlers) SimilarJobs(ctx context.Context, slug string, limit int) (mcpapp.SimilarJobsResult, error) {
-	row, err := h.store.GetJobBySlug(ctx, slug)
+	row, err := publishedJobBySlug(ctx, h.store, slug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return mcpapp.SimilarJobsResult{}, mcpapp.NotFoundError{What: "posting"}
 		}
 		return mcpapp.SimilarJobsResult{}, err
-	}
-	if !publishedToAgents(row) {
-		return mcpapp.SimilarJobsResult{}, mcpapp.NotFoundError{What: "posting"}
 	}
 
 	views, err := similarViews(ctx, h.search, h.store, row, limit, h.semantic.threshold, publishedToAgents)

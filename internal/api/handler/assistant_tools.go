@@ -169,17 +169,10 @@ func (h *assistantHandlers) searchJobsTool() assistant.Tool {
 			limit = min(limit, assistantMaxSearchLimit)
 			offset := max(in.Offset, 0)
 
-			// An empty query has no relevance to rank by, so browse the freshest first —
-			// the same rule the HTTP search applies.
-			var order []string
-			if in.Query == "" {
-				order = []string{"posted_at:desc"}
-			}
-
 			res, err := h.search.search.Search(ctx, search.SearchParams{
 				Query:  in.Query,
 				Filter: search.FilterFromValues(vals),
-				Sort:   order,
+				Sort:   defaultSort(in.Query),
 				Limit:  limit,
 				Offset: offset,
 			})
@@ -222,7 +215,7 @@ func (h *assistantHandlers) getJobTool() assistant.Tool {
 			if in.Slug == "" {
 				return nil, errors.New("slug is required")
 			}
-			job, err := h.queries.GetJobBySlug(ctx, in.Slug)
+			job, err := publishedJobBySlug(ctx, h.queries, in.Slug)
 			if err != nil {
 				return nil, fmt.Errorf("no vacancy with slug %q", in.Slug)
 			}
@@ -259,12 +252,15 @@ func (h *assistantHandlers) getCompanyTool() assistant.Tool {
 			if in.Slug == "" {
 				return nil, errors.New("slug is required")
 			}
-			company, err := h.queries.GetCompany(ctx, in.Slug)
+			company, canonical, err := companyBySlugOrAlias(ctx, h.queries, in.Slug)
+			if canonical != "" {
+				company, err = h.queries.GetCompany(ctx, canonical)
+			}
 			if err != nil {
 				return nil, fmt.Errorf("no company with slug %q", in.Slug)
 			}
 			jobs, err := h.queries.ListJobsByCompany(ctx, db.ListJobsByCompanyParams{
-				CompanySlug: in.Slug,
+				CompanySlug: company.Slug,
 				Limit:       assistantDefaultSearchLimit,
 				Offset:      0,
 			})

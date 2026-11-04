@@ -29,7 +29,7 @@ import (
 
 // ojcpStore is the data this transport reads. *db.Queries satisfies it; tests inject a fake.
 type ojcpStore interface {
-	GetJobBySlug(ctx context.Context, publicSlug string) (db.Job, error)
+	jobSlugReader
 	GetApplyFormByJobID(ctx context.Context, jobID int64) (db.GetApplyFormByJobIDRow, error)
 	GetCompany(ctx context.Context, slug string) (db.Company, error)
 }
@@ -188,8 +188,9 @@ func (h *ojcpHandlers) OJCPSearchJobs(c *fiber.Ctx) error {
 // the same question cannot be answered differently over REST and over MCP.
 //
 // It runs the query the public search runs, built from the same values. OJCP has no sort
-// directive and no match vector, so neither is read — the index's own relevance ordering is
-// what an agent gets, unless it opts into semantic search (see semanticSearch).
+// directive and no match vector, so neither is read — a text query gets the index's own
+// relevance ordering (unless it opts into semantic search, see semanticSearch), an empty one
+// the freshest first (defaultSort).
 func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (ojcp.SearchJobsResponse, error) {
 	if h.search == nil {
 		return ojcp.SearchJobsResponse{}, fiber.NewError(fiber.StatusServiceUnavailable, "search is not available")
@@ -201,6 +202,7 @@ func (h *ojcpHandlers) SearchJobs(ctx context.Context, input ojcp.SearchInput) (
 	params := search.SearchParams{
 		Query:  values.Get("q"),
 		Filter: search.FilterFromValues(values),
+		Sort:   defaultSort(values.Get("q")),
 		Limit:  limit,
 		Offset: offset,
 	}
@@ -247,15 +249,12 @@ func (h *ojcpHandlers) OJCPJobDetail(c *fiber.Ctx) error {
 
 // JobDetail answers `get_job_detail` with no transport around it.
 func (h *ojcpHandlers) JobDetail(ctx context.Context, ojcpID string) (ojcp.JobDetailResponse, error) {
-	row, err := h.store.GetJobBySlug(ctx, ojcpID)
+	row, err := publishedJobBySlug(ctx, h.store, ojcpID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ojcp.JobDetailResponse{}, ojcpmcp.NotFoundError{What: "posting"}
 		}
 		return ojcp.JobDetailResponse{}, err
-	}
-	if !publishedToAgents(row) {
-		return ojcp.JobDetailResponse{}, ojcpmcp.NotFoundError{What: "posting"}
 	}
 
 	view, err := jobview.FromRow(row)
@@ -268,7 +267,7 @@ func (h *ojcpHandlers) JobDetail(ctx context.Context, ojcpID string) (ojcp.JobDe
 
 	agentview.Record(ctx, agentview.KindDetail, []int64{row.ID})
 	return ojcp.JobDetailResponse{
-		Job: h.projector.JobPosting(view, h.applyFormFor(ctx, row.ID)),
+		Job: h.projector.JobPosting(view, applyFormFor(ctx, h.store, row.ID)),
 	}.Finalize(), nil
 }
 
@@ -329,13 +328,27 @@ func publishedToAgents(row db.Job) bool {
 	return !row.IsPrivate && !row.ClosedAt.Valid && !row.DuplicateOf.Valid
 }
 
+// publishedJobBySlug is the one loader the agent surfaces and the assistant's get_job share:
+// slug-or-shortcode resolution, then publishedToAgents. A refused posting answers
+// pgx.ErrNoRows, indistinguishable from an unknown slug.
+func publishedJobBySlug(ctx context.Context, q jobSlugReader, slug string) (db.Job, error) {
+	row, err := jobBySlugOrCode(ctx, q, slug)
+	if err != nil {
+		return db.Job{}, err
+	}
+	if !publishedToAgents(row) {
+		return db.Job{}, pgx.ErrNoRows
+	}
+	return row, nil
+}
+
 // applyFormFor reads the posting's captured application form, or nil where there is none.
 //
 // Best-effort by design: most of the catalogue has no captured form, and a store that
 // cannot answer must not turn a job read into a failure. The posting simply falls back to
 // the external-redirect apply path.
-func (h *ojcpHandlers) applyFormFor(ctx context.Context, jobID int64) *applyform.Form {
-	row, err := h.store.GetApplyFormByJobID(ctx, jobID)
+func applyFormFor(ctx context.Context, store ojcpStore, jobID int64) *applyform.Form {
+	row, err := store.GetApplyFormByJobID(ctx, jobID)
 	if err != nil {
 		return nil
 	}

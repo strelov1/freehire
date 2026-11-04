@@ -380,20 +380,37 @@ func facetValues(vals url.Values, key string) []string {
 // row that once retired it. An unknown slug returns pgx.ErrNoRows, which RenderError
 // maps to 404.
 func (h *companiesHandlers) lookupCompany(c *fiber.Ctx, slug string) (company db.Company, redirected bool, err error) {
-	company, err = h.queries.GetCompany(c.Context(), slug)
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return company, false, err
+	company, canonical, err := companyBySlugOrAlias(c.Context(), h.queries, slug)
+	if canonical != "" {
+		return company, true, c.Redirect(companyPath(c, canonical), fiber.StatusMovedPermanently)
 	}
-	canonical, aliasErr := h.queries.GetCompanySlugAlias(c.Context(), slug)
+	return company, false, err
+}
+
+// companySlugReader is what resolving a company slug reads. *db.Queries satisfies it.
+type companySlugReader interface {
+	GetCompany(ctx context.Context, slug string) (db.Company, error)
+	GetCompanySlugAlias(ctx context.Context, aliasSlug string) (string, error)
+}
+
+// companyBySlugOrAlias reads a company by slug, falling back to the alias a merge left
+// behind: then canonical is the live slug and the company is zero. The alias lookup runs only
+// after the miss, so a live company always wins. An unknown slug returns pgx.ErrNoRows.
+func companyBySlugOrAlias(ctx context.Context, q companySlugReader, slug string) (company db.Company, canonical string, err error) {
+	company, err = q.GetCompany(ctx, slug)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return company, "", err
+	}
+	canonical, aliasErr := q.GetCompanySlugAlias(ctx, slug)
 	switch {
 	case aliasErr == nil:
-		return company, true, c.Redirect(companyPath(c, canonical), fiber.StatusMovedPermanently)
+		return company, canonical, err
 	case !errors.Is(aliasErr, pgx.ErrNoRows):
 		// A database failure is not "no such company". Reporting it as 404 would tell a
 		// crawler to drop a page that exists, and hide the outage from the error rate.
-		return company, false, aliasErr
+		return company, "", aliasErr
 	}
-	return company, false, err
+	return company, "", err
 }
 
 // GetCompany returns a single company together with a page of its jobs. The

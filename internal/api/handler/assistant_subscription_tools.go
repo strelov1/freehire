@@ -1,18 +1,17 @@
 package handler
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"net/url"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -62,8 +61,6 @@ const (
 	subscriptionUpdatesMaxDays     = 30
 	subscriptionUpdatesDefaultMax  = 20
 	subscriptionUpdatesMax         = 50
-	// alertNameMaxRunes is savedsearch's own bound on a name.
-	alertNameMaxRunes = 100
 )
 
 // alertExample is the one worked example every alert tool's description shares, so the
@@ -213,69 +210,6 @@ func applyAlertSearch(base url.Values, a alertSearchArgs) (url.Values, []string,
 	return out, ignored, nil
 }
 
-// encodeSavedQuery writes the values the way the website's serializer does (facetModel's
-// filtersToParams): one param per facet, its values comma-joined. The matcher reads
-// either form; this one is what the website's own dedupe compares against, so a search
-// saved here is recognised there as the same set.
-func encodeSavedQuery(vals url.Values) string {
-	flat := url.Values{}
-	for k, vs := range vals {
-		flat.Set(k, strings.Join(vs, ","))
-	}
-	return flat.Encode()
-}
-
-// parseSavedQuery reads a stored query into one value per list element, whichever list
-// form it was written in.
-func parseSavedQuery(query string) url.Values {
-	vals, _ := url.ParseQuery(query)
-	out := url.Values{}
-	for k, vs := range vals {
-		for _, v := range vs {
-			for _, p := range strings.Split(v, ",") {
-				if p = strings.TrimSpace(p); p != "" && !slices.Contains(out[k], p) {
-					out[k] = append(out[k], p)
-				}
-			}
-		}
-	}
-	return out
-}
-
-// sameSelection reports whether two stored queries select the same postings: the same
-// params with the same value sets, in any order and either list form. The ordering
-// param is ignored, as the website's canonicalQuery ignores it.
-func sameSelection(a, b string) bool {
-	return maps.Equal(selectionOf(a), selectionOf(b))
-}
-
-func selectionOf(query string) map[string]string {
-	out := map[string]string{}
-	for k, vs := range parseSavedQuery(query) {
-		if k == "sort" {
-			continue
-		}
-		sorted := slices.Sorted(slices.Values(vs))
-		out[k] = strings.Join(sorted, ",")
-	}
-	return out
-}
-
-// filterSummary renders a stored query for a person: `"rust" · salary_min: 80000 ·
-// skills: go, rust`. Params are sorted so the same search always reads the same.
-func filterSummary(query string) string {
-	sel := selectionOf(query)
-	var parts []string
-	if q, ok := sel["q"]; ok {
-		parts = append(parts, fmt.Sprintf("%q", q))
-		delete(sel, "q")
-	}
-	for _, k := range slices.Sorted(maps.Keys(sel)) {
-		parts = append(parts, k+": "+strings.ReplaceAll(sel[k], ",", ", "))
-	}
-	return strings.Join(parts, " · ")
-}
-
 // alertSearch is a stored query in the shape the tools take, so an agent can edit an
 // alert precisely: read it here, change one field, pass it to update_subscription.
 type alertSearch struct {
@@ -290,7 +224,7 @@ type alertSearch struct {
 
 func alertSearchOf(query string) alertSearch {
 	var out alertSearch
-	for k, vs := range parseSavedQuery(query) {
+	for k, vs := range savedsearch.ParseQuery(query) {
 		switch _, facet := search.StringFacets[k]; {
 		case k == "sort":
 		case k == "q":
@@ -325,19 +259,6 @@ func (a *alertSearch) addOther(k string, vs []string) {
 	a.Other[k] = strings.Join(vs, ",")
 }
 
-// alertName names a saved search the person did not name, from its summary — the
-// website names one from its filters the same way (saveSearchAlert's alertName).
-func alertName(query string) string {
-	name := filterSummary(query)
-	if utf8.RuneCountInString(name) > alertNameMaxRunes {
-		name = string([]rune(name)[:alertNameMaxRunes-1]) + "…"
-	}
-	if name == "" {
-		return "Job alert"
-	}
-	return name
-}
-
 // alertSavedSearchError words savedsearch's sentinels for an agent.
 func alertSavedSearchError(err error, name string) error {
 	switch {
@@ -352,39 +273,6 @@ func alertSavedSearchError(err error, name string) error {
 		return errors.New("this search has too many filters to save — narrow it to fewer values")
 	}
 	return err
-}
-
-// ensureSavedSearch reuses the person's saved search selecting the same postings, or
-// creates one — the website's ensureSaved, server-side. An auto-generated name that
-// collides gets a numbered suffix; a name the person chose is theirs to change.
-func (h *assistantHandlers) ensureSavedSearch(ctx context.Context, userID int64, name, query string) (savedsearch.SavedSearch, error) {
-	saved := h.savedSearches()
-	existing, err := saved.List(ctx, userID)
-	if err != nil {
-		return savedsearch.SavedSearch{}, err
-	}
-	for _, s := range existing {
-		if sameSelection(s.Query, query) {
-			return s, nil
-		}
-	}
-	chosen := strings.TrimSpace(name) != ""
-	if !chosen {
-		name = alertName(query)
-	}
-	created, err := saved.Create(ctx, userID, name, query, false)
-	if errors.Is(err, savedsearch.ErrDuplicateName) && !chosen {
-		suffix := fmt.Sprintf(" (%d)", len(existing)+1)
-		base := []rune(name)
-		if len(base) > alertNameMaxRunes-len(suffix) {
-			base = base[:alertNameMaxRunes-len(suffix)]
-		}
-		created, err = saved.Create(ctx, userID, string(base)+suffix, query, false)
-	}
-	if err != nil {
-		return savedsearch.SavedSearch{}, alertSavedSearchError(err, name)
-	}
-	return created, nil
 }
 
 // alertChannel is one channel an alert is delivered on — one subscriptions row.
@@ -438,7 +326,7 @@ func (h *assistantHandlers) alerts(ctx context.Context, userID int64) ([]alert, 
 			i = len(out)
 			index[r.SavedSearchID] = i
 			out = append(out, alert{
-				ID: r.SavedSearchID, Name: r.SavedSearchName, Filter: filterSummary(r.SavedSearchQuery),
+				ID: r.SavedSearchID, Name: r.SavedSearchName, Filter: savedsearch.FilterSummary(r.SavedSearchQuery),
 				Search: alertSearchOf(r.SavedSearchQuery), CreatedAt: r.CreatedAt, query: r.SavedSearchQuery,
 			})
 		}
@@ -535,9 +423,10 @@ func (h *assistantHandlers) subscribeTool(origin string) assistant.Tool {
 				channels = available[:1]
 			}
 
-			saved, err := h.ensureSavedSearch(ctx, userID, in.Name, encodeSavedQuery(vals))
+			query := savedsearch.EncodeQuery(vals)
+			saved, err := h.savedSearches().EnsureForQuery(ctx, userID, in.Name, query)
 			if err != nil {
-				return nil, err
+				return nil, alertSavedSearchError(err, cmp.Or(strings.TrimSpace(in.Name), savedsearch.DefaultName(query)))
 			}
 			out := subscribeResult{IgnoredParams: ignored, ManageURL: origin + "/my/notifications/searches"}
 			subs := h.subscriptions()
@@ -699,7 +588,7 @@ func (h *assistantHandlers) updateSubscriptionTool(origin string) assistant.Tool
 			var newQuery *string
 			var ignored []string
 			if in.given() {
-				vals, dropped, err := applyAlertSearch(parseSavedQuery(current.query), in.alertSearchArgs)
+				vals, dropped, err := applyAlertSearch(savedsearch.ParseQuery(current.query), in.alertSearchArgs)
 				if err != nil {
 					return nil, err
 				}
@@ -707,7 +596,7 @@ func (h *assistantHandlers) updateSubscriptionTool(origin string) assistant.Tool
 				if !search.Narrows(vals) {
 					return nil, errors.New(withIgnored("nothing was changed: "+unfilteredRefusal, ignored))
 				}
-				if q := encodeSavedQuery(vals); !sameSelection(q, current.query) {
+				if q := savedsearch.EncodeQuery(vals); !savedsearch.SameSelection(q, current.query) {
 					newQuery = &q
 				}
 			}

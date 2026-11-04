@@ -668,16 +668,22 @@ func searchSort(c *fiber.Ctx, ranked bool) []string {
 	return searchSortValues(queryValues(c), ranked)
 }
 
+// defaultSort is the order when the caller names none: an empty query has no relevance to
+// rank by, so the freshest first; a text query keeps relevance order (nil).
+func defaultSort(query string) []string {
+	if query == "" {
+		return []string{"posted_at:desc"}
+	}
+	return nil
+}
+
 func searchSortValues(vals url.Values, ranked bool) []string {
 	if ranked {
 		return nil
 	}
 	attr, ok := searchSortable[vals.Get("sort")]
 	if !ok {
-		if vals.Get("q") == "" {
-			return []string{"posted_at:desc"}
-		}
-		return nil
+		return defaultSort(vals.Get("q"))
 	}
 	order := vals.Get("order")
 	if order != "asc" && order != "desc" {
