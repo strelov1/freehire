@@ -11,18 +11,20 @@ SELECT * FROM notification_settings WHERE user_id = $1;
 -- enable/channels gate — one account-level settings row, one write path. Returns
 -- the stored row.
 INSERT INTO notification_settings (
-    user_id, enabled, channels, digest_frequency, digest_time,
+    user_id, enabled, channels, digest_frequency, digest_time, digest_interval_hours,
     quiet_hours_start, quiet_hours_end, updated_at
 )
 VALUES (
     sqlc.arg(user_id), sqlc.arg(enabled), sqlc.arg(channels), sqlc.arg(digest_frequency),
-    sqlc.arg(digest_time), sqlc.arg(quiet_hours_start), sqlc.arg(quiet_hours_end), now()
+    sqlc.arg(digest_time), sqlc.arg(digest_interval_hours), sqlc.arg(quiet_hours_start),
+    sqlc.arg(quiet_hours_end), now()
 )
 ON CONFLICT (user_id) DO UPDATE
   SET enabled            = EXCLUDED.enabled,
       channels           = EXCLUDED.channels,
       digest_frequency   = EXCLUDED.digest_frequency,
       digest_time        = EXCLUDED.digest_time,
+      digest_interval_hours = EXCLUDED.digest_interval_hours,
       quiet_hours_start  = EXCLUDED.quiet_hours_start,
       quiet_hours_end    = EXCLUDED.quiet_hours_end,
       updated_at         = now()

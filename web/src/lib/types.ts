@@ -1040,11 +1040,14 @@ export interface BankedAnswer {
 export interface NotificationSettings {
   enabled: boolean;
   channels: string[];
-  /** 'instant' (default) or 'daily' — governs only saved-search digests, not
-   *  reminders/nudges. */
+  /** 'interval' (default), 'instant' or 'daily' — governs only saved-search
+   *  digests, not reminders/nudges. */
   digest_frequency: string;
   /** "HH:MM" local time, meaningful only when digest_frequency is 'daily'. */
   digest_time: string | null;
+  /** 1-23: at most one digest per alert every this many hours, meaningful only
+   *  when digest_frequency is 'interval'. Omitted on a write reads as 1. */
+  digest_interval_hours?: number;
   /** "HH:MM" local time; both null means quiet hours are off (the default). */
   quiet_hours_start: string | null;
   quiet_hours_end: string | null;

@@ -92,11 +92,14 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, claim *subscriptio
 		return
 	}
 
-	// Delivery timing: an `instant` subscription (the default — anything other
-	// than exactly "daily" reads as instant) defers to quiet hours; a `daily`
-	// one waits for its own configured time instead and is exempt from quiet
-	// hours — a chosen digest time is itself the user's preference.
-	daily := info.DigestFrequency == "daily"
+	// Delivery timing: a `daily` subscription waits for its own configured time and
+	// is exempt from quiet hours — a chosen digest time is itself the user's
+	// preference. Everything else defers to quiet hours: `instant`, and `interval`
+	// (the default), whose elapsed-interval gate already ran in the claim — a
+	// subscription that is not due yet never reaches this point
+	// (ClaimSubscriptionMatches).
+	daily := info.DigestFrequency == FrequencyDaily
+	stamped := info.DigestFrequency != FrequencyInstant
 	tz := info.Timezone.String
 	if daily {
 		if !deliverywindow.DigestDue(r.now(), tz, pgconv.DurationPtr(info.DigestTime), pgconv.TimePtr(info.LastDigestSentAt)) {
@@ -271,10 +274,10 @@ func (r *Runner) deliverOne(ctx context.Context, subID int64, claim *subscriptio
 		}
 	}
 
-	if daily {
+	if stamped {
 		if err := r.store.MarkDigestSent(ctx, subID); err != nil {
-			// Delivered but not stamped: DigestDue would deliver again on the next
-			// pass today (a rare duplicate), preferable to skipping tomorrow's digest.
+			// Delivered but not stamped: the next pass delivers again (a rare
+			// duplicate), preferable to skipping the next digest.
 			log.Printf("notify: mark digest sent for subscription %d: %v", subID, err)
 		}
 	}

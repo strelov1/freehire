@@ -30,18 +30,24 @@ func NewQueriesRepository(q *db.Queries) *QueriesRepository {
 func (r *QueriesRepository) GetSettings(ctx context.Context, userID int64) (Settings, error) {
 	row, err := r.q.GetNotificationSettings(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Settings{Enabled: true, Channels: []string{notify.ChannelEmail}, DigestFrequency: "instant"}, nil
+		return Settings{
+			Enabled:             true,
+			Channels:            []string{notify.ChannelEmail},
+			DigestFrequency:     notify.FrequencyInterval,
+			DigestIntervalHours: notify.DefaultIntervalHours,
+		}, nil
 	}
 	if err != nil {
 		return Settings{}, err
 	}
 	return Settings{
-		Enabled:         row.Enabled,
-		Channels:        row.Channels,
-		DigestFrequency: row.DigestFrequency,
-		DigestTime:      pgconv.DurationPtr(row.DigestTime),
-		QuietHoursStart: pgconv.DurationPtr(row.QuietHoursStart),
-		QuietHoursEnd:   pgconv.DurationPtr(row.QuietHoursEnd),
+		Enabled:             row.Enabled,
+		Channels:            row.Channels,
+		DigestFrequency:     row.DigestFrequency,
+		DigestTime:          pgconv.DurationPtr(row.DigestTime),
+		DigestIntervalHours: int(row.DigestIntervalHours),
+		QuietHoursStart:     pgconv.DurationPtr(row.QuietHoursStart),
+		QuietHoursEnd:       pgconv.DurationPtr(row.QuietHoursEnd),
 	}, nil
 }
 
@@ -51,30 +57,39 @@ func (r *QueriesRepository) HasPushDevice(ctx context.Context, userID int64) (bo
 	return r.q.UserHasPushToken(ctx, userID)
 }
 
+// The digest defaults are applied here as well as in Service.UpdateSettings, since
+// this is the last stop before the column CHECKs: a zero interval must store as the
+// default, not violate digest_interval_hours' bounds.
 func (r *QueriesRepository) UpsertSettings(ctx context.Context, userID int64, s Settings) (Settings, error) {
 	freq := s.DigestFrequency
 	if freq == "" {
-		freq = "instant"
+		freq = notify.FrequencyInterval
+	}
+	hours := s.DigestIntervalHours
+	if hours == 0 {
+		hours = notify.DefaultIntervalHours
 	}
 	row, err := r.q.UpsertNotificationSettings(ctx, db.UpsertNotificationSettingsParams{
-		UserID:          userID,
-		Enabled:         s.Enabled,
-		Channels:        s.Channels,
-		DigestFrequency: freq,
-		DigestTime:      pgconv.Duration(s.DigestTime),
-		QuietHoursStart: pgconv.Duration(s.QuietHoursStart),
-		QuietHoursEnd:   pgconv.Duration(s.QuietHoursEnd),
+		UserID:              userID,
+		Enabled:             s.Enabled,
+		Channels:            s.Channels,
+		DigestFrequency:     freq,
+		DigestTime:          pgconv.Duration(s.DigestTime),
+		DigestIntervalHours: int16(hours),
+		QuietHoursStart:     pgconv.Duration(s.QuietHoursStart),
+		QuietHoursEnd:       pgconv.Duration(s.QuietHoursEnd),
 	})
 	if err != nil {
 		return Settings{}, err
 	}
 	return Settings{
-		Enabled:         row.Enabled,
-		Channels:        row.Channels,
-		DigestFrequency: row.DigestFrequency,
-		DigestTime:      pgconv.DurationPtr(row.DigestTime),
-		QuietHoursStart: pgconv.DurationPtr(row.QuietHoursStart),
-		QuietHoursEnd:   pgconv.DurationPtr(row.QuietHoursEnd),
+		Enabled:             row.Enabled,
+		Channels:            row.Channels,
+		DigestFrequency:     row.DigestFrequency,
+		DigestTime:          pgconv.DurationPtr(row.DigestTime),
+		DigestIntervalHours: int(row.DigestIntervalHours),
+		QuietHoursStart:     pgconv.DurationPtr(row.QuietHoursStart),
+		QuietHoursEnd:       pgconv.DurationPtr(row.QuietHoursEnd),
 	}, nil
 }
 

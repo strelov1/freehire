@@ -28,7 +28,21 @@ WITH claimable AS (
         LIMIT $2
         FOR UPDATE SKIP LOCKED
     ) m
+    LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
     WHERE s.active
+      -- An 'interval' subscription (the default: no settings row reads as one, at one
+      -- hour) is claimed only once its interval has elapsed since the last digest. The
+      -- gate lives HERE rather than beside the quiet-hours check in deliverOne because a
+      -- subscription that is not due would otherwise be claimed and released on every
+      -- five-minute pass: measured on prod 2026-11-04 at ~23k matches an hour, that is
+      -- ~12 lease-and-release writes per pending match for nothing. This predicate is the
+      -- only definition of "interval elapsed" — the Go side does not repeat it. The
+      -- defaults must agree with GetSubscriptionForDelivery's COALESCE and the column
+      -- defaults (migration 0233).
+      AND (COALESCE(ns.digest_frequency, 'interval') <> 'interval'
+           OR s.last_digest_sent_at IS NULL
+           OR s.last_digest_sent_at
+              <= now() - make_interval(hours => COALESCE(ns.digest_interval_hours, 1)::int))
     -- A backstop, not the working bound: per_subscription x active subscriptions is what
     -- a pass normally claims. This only caps a pathological subscription count.
     LIMIT $3
@@ -379,7 +393,7 @@ SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.last_dige
        EXISTS(SELECT 1 FROM user_push_tokens upt WHERE upt.user_id = s.user_id) AS has_push_device,
        wc.url AS webhook_url,
        COALESCE(wc.enabled, false) AS webhook_enabled,
-       COALESCE(ns.digest_frequency, 'instant')::text AS digest_frequency,
+       COALESCE(ns.digest_frequency, 'interval')::text AS digest_frequency,
        ns.digest_time AS digest_time,
        ns.quiet_hours_start AS quiet_hours_start,
        ns.quiet_hours_end AS quiet_hours_end
@@ -763,10 +777,11 @@ SET last_digest_sent_at = now()
 WHERE id = $1
 `
 
-// Stamp the subscription's last daily-digest send instant, so
-// internal/application/deliverywindow.DigestDue reads "already sent today" on any later pass
-// within the same local calendar day. Only called after a successful `daily`-mode
-// delivery — `instant`-mode subscriptions never touch this column.
+// Stamp the subscription's last digest send instant. A `daily` subscription reads it
+// through internal/application/deliverywindow.DigestDue ("already sent today"); an
+// `interval` one through ClaimSubscriptionMatches' elapsed-interval gate. Called after
+// every successful delivery in either mode — `instant`-mode subscriptions never touch
+// this column.
 func (q *Queries) MarkDigestSent(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, markDigestSent, id)
 	return err

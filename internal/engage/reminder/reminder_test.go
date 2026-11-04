@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/strelov1/freehire/internal/engage/notify"
 )
 
 // fakeRepo records scheduling calls and serves canned settings.
@@ -319,5 +321,48 @@ func TestUpdateSettings_AddingPushNeedsADevice(t *testing.T) {
 	repo = &fakeRepo{settings: Settings{Enabled: true, Channels: []string{"push"}}}
 	if _, err := New(repo).UpdateSettings(context.Background(), 1, rule); err != nil {
 		t.Fatalf("keeping an already-chosen push without a device: err = %v, want nil", err)
+	}
+}
+
+func TestUpdateSettings_EmptyFrequencyStoresTheHourlyInterval(t *testing.T) {
+	svc := newService(&fakeRepo{})
+	got, err := svc.UpdateSettings(context.Background(), 1, Settings{})
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if got.DigestFrequency != notify.FrequencyInterval || got.DigestIntervalHours != notify.DefaultIntervalHours {
+		t.Errorf("stored %q/%d, want %q/%d", got.DigestFrequency, got.DigestIntervalHours,
+			notify.FrequencyInterval, notify.DefaultIntervalHours)
+	}
+}
+
+func TestUpdateSettings_IntervalBounds(t *testing.T) {
+	for _, tc := range []struct {
+		hours   int
+		wantErr bool
+		stored  int
+	}{
+		{hours: 0, stored: notify.DefaultIntervalHours}, // omitted by an older client
+		{hours: 1, stored: 1},
+		{hours: 23, stored: 23},
+		{hours: 24, wantErr: true}, // a full day is "daily", which also picks the hour
+		{hours: -1, wantErr: true},
+	} {
+		svc := newService(&fakeRepo{})
+		got, err := svc.UpdateSettings(context.Background(), 1,
+			Settings{DigestFrequency: notify.FrequencyInterval, DigestIntervalHours: tc.hours})
+		if tc.wantErr {
+			if !errors.Is(err, ErrInvalidInterval) {
+				t.Errorf("hours=%d: want ErrInvalidInterval, got %v", tc.hours, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("hours=%d: want no error, got %v", tc.hours, err)
+			continue
+		}
+		if got.DigestIntervalHours != tc.stored {
+			t.Errorf("hours=%d: stored %d, want %d", tc.hours, got.DigestIntervalHours, tc.stored)
+		}
 	}
 }

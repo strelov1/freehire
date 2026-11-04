@@ -576,17 +576,21 @@ func withIgnored(msg string, ignored []string) string {
 type deliverySchedule struct {
 	DigestFrequency string `json:"digest_frequency"`
 	DigestTime      string `json:"digest_time,omitempty"`
-	QuietHours      string `json:"quiet_hours,omitempty"`
-	Note            string `json:"note"`
+	// DigestIntervalHours is set only for the interval frequency: at most one digest
+	// per alert every that many hours.
+	DigestIntervalHours int    `json:"digest_interval_hours,omitempty"`
+	QuietHours          string `json:"quiet_hours,omitempty"`
+	Note                string `json:"note"`
 }
 
 func (h *assistantHandlers) deliverySchedule(ctx context.Context, userID int64, origin string) (deliverySchedule, error) {
 	out := deliverySchedule{
-		DigestFrequency: "instant",
+		DigestFrequency: notify.FrequencyInterval,
 		Note:            "account-wide, for every alert; the person changes it at " + origin + "/my/notifications/settings",
 	}
 	row, err := h.queries.GetNotificationSettings(ctx, userID)
 	if errors.Is(err, pgx.ErrNoRows) {
+		out.DigestIntervalHours = notify.DefaultIntervalHours
 		return out, nil
 	}
 	if err != nil {
@@ -595,8 +599,13 @@ func (h *assistantHandlers) deliverySchedule(ctx context.Context, userID int64, 
 	if row.DigestFrequency != "" {
 		out.DigestFrequency = row.DigestFrequency
 	}
-	if row.DigestTime.Valid && out.DigestFrequency != "instant" {
-		out.DigestTime = clockOf(row.DigestTime)
+	switch out.DigestFrequency {
+	case notify.FrequencyDaily:
+		if row.DigestTime.Valid {
+			out.DigestTime = clockOf(row.DigestTime)
+		}
+	case notify.FrequencyInterval:
+		out.DigestIntervalHours = int(row.DigestIntervalHours)
 	}
 	if row.QuietHoursStart.Valid && row.QuietHoursEnd.Valid {
 		out.QuietHours = clockOf(row.QuietHoursStart) + "-" + clockOf(row.QuietHoursEnd)
