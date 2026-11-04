@@ -59,9 +59,7 @@ type Store interface {
 	// deletes the outbox entries — all atomically. chunks maps job id to its ordered
 	// chunk vectors (see ChunkEmbedding); a job absent from chunks (an empty/very
 	// short description) has its existing chunk rows removed and gets none back —
-	// "replace", not "append". This no longer touches jobs.semantic_embedding (the
-	// legacy real[] column) — nothing reads it, so cmd/embed stopped computing and
-	// writing it; the column itself stays, per design.md's deferred-drop decision.
+	// "replace", not "append".
 	// inputHashes maps job id to Indexer.InputHash of the row that was embedded, stamped
 	// as jobs.semantic_embedded_input_hash so the next run can tell whether the text moved.
 	CompleteOpen(ctx context.Context, entries []Claimed, model string, chunks map[int64][]ChunkEmbedding, inputHashes map[int64]string) error
@@ -71,9 +69,7 @@ type Store interface {
 	// atomically. It leaves the chunk rows alone — the vectors
 	// are still the vectors of this text.
 	CompleteUnchanged(ctx context.Context, entries []Claimed, model string, inputHashes map[int64]string) error
-	// CompleteClosed clears each entry's job embed provenance (stamp + the legacy
-	// jobs.semantic_embedding column, still nulled here even though nothing writes it
-	// on the open path anymore — see ClearSemanticEmbeddedBatch) and deletes each
+	// CompleteClosed clears each entry's job embed provenance stamp and deletes each
 	// job's pgvector-backed chunk rows (job_semantic_chunks), and deletes the outbox
 	// entries, atomically — the whole closed-job side effect (there is no search
 	// index left to remove a document from).
