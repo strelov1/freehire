@@ -5376,25 +5376,28 @@ func (q *Queries) RefreshCoveredJobs(ctx context.Context, arg RefreshCoveredJobs
 const refreshUnchangedJob = `-- name: RefreshUnchangedJob :one
 UPDATE jobs
 SET last_seen_at = now(),
-    hydrated_at  = now()
-WHERE source = $1
-  AND external_id = $2
-  AND content_hash = $3
-  AND cities = COALESCE($4::text[], '{}')
-  AND salary_min_source IS NOT DISTINCT FROM $5
-  AND salary_max_source IS NOT DISTINCT FROM $6
-  AND salary_currency_source = $7
-  AND salary_period_source = $8
-  AND english_level = $9
-  AND is_tech IS NOT DISTINCT FROM $10
-  AND engagement = COALESCE($11::text[], '{}')
-  AND application_deadline IS NOT DISTINCT FROM COALESCE($12::date, application_deadline)
+    -- Not when the "identical" body is the stored one the pipeline substituted for a failed
+    -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
+    hydrated_at  = CASE WHEN $1::boolean THEN hydrated_at ELSE now() END
+WHERE source = $2
+  AND external_id = $3
+  AND content_hash = $4
+  AND cities = COALESCE($5::text[], '{}')
+  AND salary_min_source IS NOT DISTINCT FROM $6
+  AND salary_max_source IS NOT DISTINCT FROM $7
+  AND salary_currency_source = $8
+  AND salary_period_source = $9
+  AND english_level = $10
+  AND is_tech IS NOT DISTINCT FROM $11
+  AND engagement = COALESCE($12::text[], '{}')
+  AND application_deadline IS NOT DISTINCT FROM COALESCE($13::date, application_deadline)
   AND (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
   AND closed_at IS NULL
 RETURNING id, source, company_slug, duplicate_of
 `
 
 type RefreshUnchangedJobParams struct {
+	BodyFromCatalogue    bool        `json:"body_from_catalogue"`
 	Source               string      `json:"source"`
 	ExternalID           string      `json:"external_id"`
 	ContentHash          pgtype.Text `json:"content_hash"`
@@ -5485,6 +5488,7 @@ type RefreshUnchangedJobRow struct {
 // Like last_seen_at it is in no index, so the update stays heap-only.
 func (q *Queries) RefreshUnchangedJob(ctx context.Context, arg RefreshUnchangedJobParams) (RefreshUnchangedJobRow, error) {
 	row := q.db.QueryRow(ctx, refreshUnchangedJob,
+		arg.BodyFromCatalogue,
 		arg.Source,
 		arg.ExternalID,
 		arg.ContentHash,
@@ -7410,8 +7414,9 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- The write carried a body, so the row's stored text is as fresh as this crawl. See the
     -- column's migration (0144) for why this is not updated_at, and RefreshUnchangedJob for
     -- the other half: a body that came back byte-identical takes that statement, and stamps
-    -- it there.
-    hydrated_at  = now(),
+    -- it there. body_from_catalogue is true when the pipeline filled an empty fetch with the stored
+    -- body (job.Draft.BodyFromCatalogue): nothing was read, so the stamp stays.
+    hydrated_at  = CASE WHEN $40::boolean THEN jobs.hydrated_at ELSE now() END,
     updated_at   = now()
 RETURNING jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, jobs.salary_min_manual, jobs.salary_max_manual, jobs.salary_currency_manual, jobs.salary_period_manual, jobs.upvote_count, jobs.downvote_count, jobs.ats_absent_at, jobs.closed_reason, jobs.is_private, jobs.salary_min_source, jobs.salary_max_source, jobs.salary_currency_source, jobs.salary_period_source, jobs.company_slug_folded, jobs.duplicate_of_aggregator, jobs.duplicate_of_role, jobs.duplicate_of_fuzzy, jobs.requires_clearance, jobs.requirements_derived, jobs.hydrated_at, jobs.ai_interview_reports, jobs.metros, jobs.semantic_embedded_input_hash, jobs.via_recruiter, jobs.clearance_levels, jobs.equity, jobs.perks, jobs.application_deadline, jobs.engagement,
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
@@ -7464,6 +7469,7 @@ type UpsertJobParams struct {
 	RoleFingerprint      pgtype.Text        `json:"role_fingerprint"`
 	RequirementsDerived  []byte             `json:"requirements_derived"`
 	ApplicationDeadline  pgtype.Date        `json:"application_deadline"`
+	BodyFromCatalogue    bool               `json:"body_from_catalogue"`
 }
 
 type UpsertJobRow struct {
@@ -7536,6 +7542,7 @@ func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJob
 		arg.RoleFingerprint,
 		arg.RequirementsDerived,
 		arg.ApplicationDeadline,
+		arg.BodyFromCatalogue,
 	)
 	var i UpsertJobRow
 	err := row.Scan(

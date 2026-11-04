@@ -364,9 +364,9 @@ func TestListingRejectedAgreesWithTheHydratedPosting(t *testing.T) {
 		for _, body := range bodies {
 			hydrated := listing
 			hydrated.Description = body
-			dj, err := normalizeJob(e, hydrated, nil)
+			dj, err := normalizeJob(e, hydrated, nil, false)
 			if err != nil {
-				t.Fatalf("normalizeJob(%q): %v", title, err)
+				t.Fatalf("normalizeJob(%q, false): %v", title, err)
 			}
 			if got := outOfCatalogue(dj); got != want {
 				t.Errorf("%q: listing rejected=%v, hydrated rejected=%v with body %q", title, want, got, body)

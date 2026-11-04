@@ -515,8 +515,9 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- The write carried a body, so the row's stored text is as fresh as this crawl. See the
     -- column's migration (0144) for why this is not updated_at, and RefreshUnchangedJob for
     -- the other half: a body that came back byte-identical takes that statement, and stamps
-    -- it there.
-    hydrated_at  = now(),
+    -- it there. body_from_catalogue is true when the pipeline filled an empty fetch with the stored
+    -- body (job.Draft.BodyFromCatalogue): nothing was read, so the stamp stays.
+    hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN jobs.hydrated_at ELSE now() END,
     updated_at   = now()
 RETURNING sqlc.embed(jobs),
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
@@ -631,7 +632,9 @@ WHERE source = sqlc.arg(source) AND company = '' AND external_id LIKE sqlc.arg(b
 -- Like last_seen_at it is in no index, so the update stays heap-only.
 UPDATE jobs
 SET last_seen_at = now(),
-    hydrated_at  = now()
+    -- Not when the "identical" body is the stored one the pipeline substituted for a failed
+    -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
+    hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN hydrated_at ELSE now() END
 WHERE source = sqlc.arg(source)
   AND external_id = sqlc.arg(external_id)
   AND content_hash = sqlc.arg(content_hash)

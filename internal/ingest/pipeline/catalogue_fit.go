@@ -67,7 +67,7 @@ func outOfCatalogueTitle(title string, hasTechEvidence bool) bool {
 // path decides as it always has.
 func listingRejected(e sources.CompanyEntry) func(sources.Job) bool {
 	return func(j sources.Job) bool {
-		dj, err := normalizeJob(e, j, nil)
+		dj, err := normalizeJob(e, j, nil, false)
 		if err != nil {
 			return false
 		}

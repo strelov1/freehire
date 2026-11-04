@@ -50,6 +50,14 @@ func TestSaveDerivesAnEmptyBodyFromTheStoredOne(t *testing.T) {
 	if !slices.Contains(got.Skills, "python") || !slices.Contains(got.Skills, "postgresql") {
 		t.Errorf("skills = %v, want those of the stored body", got.Skills)
 	}
+	// The body was not read, so the write must not count it as freshly hydrated.
+	if !got.UpsertParams().BodyFromCatalogue {
+		t.Error("a substituted body must reach the write as not fetched")
+	}
+	other := store.saved[1-i].Fields()
+	if other.UpsertParams().BodyFromCatalogue {
+		t.Error("a body the crawl brought must reach the write as fetched")
+	}
 	// A posting that brought its own body costs no lookup.
 	if !slices.Equal(store.asked, []string{"greenhouse/acme:1"}) {
 		t.Errorf("lookups = %v, want only the empty-body posting", store.asked)

@@ -146,6 +146,7 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 		IsTech:               p.IsTech,
 		Engagement:           p.Engagement,
 		ApplicationDeadline:  p.ApplicationDeadline,
+		BodyFromCatalogue:    p.BodyFromCatalogue,
 	})
 	if err == nil {
 		return cheapWrite(cheap), nil
