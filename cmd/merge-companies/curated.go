@@ -107,10 +107,10 @@ var curatedAliases = map[string]string{
 	// it would be a judgement about words, so this one pair is named here. Reported in
 	// freehire#3895 with the same posting under both spellings ("Vodja projekta v službi za
 	// tehnološko-tehnični inženiring"). Measured 2026-11-03 through the public company search:
-	// `krka` has 68 open jobs, this spelling 12, and `krka-d-d-novo-mesto` 13. The last one
-	// needs no entry: the seat rule keys it at `krka`, so it joins this group through the canon's
-	// fold.
+	// `krka` has 68 open jobs, this spelling 12, and `krka-d-d-novo-mesto` 13. The last one is
+	// named too, because the seat rule leaves a one-word name its seat.
 	"krka-tovarna-zdravil-d-d-novo-mesto": "krka",
+	"krka-d-d-novo-mesto":                 "krka",
 	// The same spelling as the seat rule now keys it. A posting ingested before the alias
 	// row exists lands here, so the wave retires it too.
 	"krka-tovarna-zdravil": "krka",

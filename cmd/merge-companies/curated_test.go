@@ -208,8 +208,7 @@ func TestPlanMerges_MTRLegalHimalayasAlias(t *testing.T) {
 
 // TestPlanMerges_KrkaRegisterSpellings is freehire#3895: the employer's own board files under
 // "Krka", while public-employment feeds copy the register name with its seat. The seat rule
-// keys "KRKA, d.d., Novo mesto" at `krka` by itself; the curated entry carries the spelling
-// with the business description in it.
+// leaves a one-word name its seat, so the curated list names both register spellings.
 func TestPlanMerges_KrkaRegisterSpellings(t *testing.T) {
 	companies := []company{
 		{Slug: "krka", Name: "Krka", JobCount: 68},
@@ -225,6 +224,11 @@ func TestPlanMerges_KrkaRegisterSpellings(t *testing.T) {
 	retired := map[string]bool{}
 	for _, a := range got[0].Aliases {
 		retired[a.Slug] = true
+	}
+	for _, a := range got[0].Aliases {
+		if a.Slug == "krka-d-d-novo-mesto" && a.FoldedKey != "krkaddnovomesto" {
+			t.Errorf("folded key = %q, want the fold ingest now asks for", a.FoldedKey)
+		}
 	}
 	if !retired["krka-d-d-novo-mesto"] || !retired["krka-tovarna-zdravil-d-d-novo-mesto"] ||
 		!retired["krka-tovarna-zdravil"] || retired["terme-krka"] {

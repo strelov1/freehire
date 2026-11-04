@@ -20,7 +20,7 @@ func TestSlugPredatesRule(t *testing.T) {
 		{"adria-mobil-d-o-o", "Adria Mobil, d. o. o.", true},
 		{"banca-intesa-a-d", "Banca Intesa a.d.", true},
 		{"telekom-slovenije-d-d", "Telekom Slovenije, d. d.", true},
-		{"krka-d-d-novo-mesto", "KRKA, d.d., Novo mesto", true},
+		{"krka-d-d-novo-mesto", "KRKA, d.d., Novo mesto", false},
 		{"krka-tovarna-zdravil-d-d-novo-mesto", "Krka, tovarna zdravil, d. d., Novo mesto", true},
 		{"interaseo-s-a-s-e-s-p", "INTERASEO S.A.S E.S.P.", true},
 		{"conhydra-s-a-e-s-p", "Conhydra S.A E.S.P", true},
