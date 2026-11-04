@@ -18,7 +18,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  backend:
+  backend-jobs:
+    name: backend-${{ matrix.task }}
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [checks, unit, integration]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -32,7 +37,31 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
+        id: go
+
+      - name: Go cache paths
+        id: go-cache
+        run: |
+          echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Go modules
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ steps.go-cache.outputs.modules }}
+          key: go-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}
+
+      # setup-go's dependency key is immutable between dependency updates. Keep
+      # each task's compiled packages across source changes, without a short Go
+      # tooling job winning the shared cache key before the tests finish.
+      - name: Cache Go build
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ steps.go-cache.outputs.build }}
+          key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ matrix.task }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ matrix.task }}-${{ hashFiles('go.mod', 'go.sum') }}-
 
       # Résumé PDF text extraction shells out to poppler's pdftotext (prod ships it in
       # the image / on the host); install it so the extraction tests run instead of skip.
@@ -42,6 +71,7 @@ jobs:
       # branches installed fine — so it is a per-runner stall, and a fresh
       # attempt is the fix. `timeout` bounds each command; the loop retries.
       - name: Install poppler-utils
+        if: matrix.task != 'checks'
         timeout-minutes: 6
         run: |
           for attempt in 1 2 3; do
@@ -61,6 +91,7 @@ jobs:
       # different typst here would break the local == CI == prod output the ATS extraction
       # test relies on.
       - name: Install typst
+        if: matrix.task != 'checks'
         env:
           TYPST_VERSION: 0.15.0
         run: |
@@ -72,9 +103,11 @@ jobs:
       # No separate `go build ./...`: vet type-checks every package and the test
       # steps compile them, including the test-less cmd/* binaries.
       - name: Vet
+        if: matrix.task == 'checks'
         run: go vet ./...
 
       - name: Format check
+        if: matrix.task == 'checks'
         run: |
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
@@ -86,28 +119,42 @@ jobs:
       # Ratchet mode: only fails on issues in lines this PR touches, not the
       # pre-existing backlog. Mirrors the design-system token ratchet.
       - name: Lint
+        if: matrix.task == 'checks'
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.15.0
           args: --new-from-merge-base=origin/main
 
       - name: Unit tests
+        if: matrix.task == 'unit'
         run: |
           mkdir -p coverage
           go test ./... -coverprofile=coverage/unit.out -covermode=atomic
 
       - name: Integration tests
+        if: matrix.task == 'integration'
         run: |
           mkdir -p coverage
           go test -tags=integration ./... -coverprofile=coverage/integration.out -covermode=atomic
 
       - name: Upload Go coverage
-        if: always()
+        if: always() && matrix.task != 'checks'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: go-coverage
+          name: go-coverage-${{ matrix.task }}
           path: coverage/*.out
           if-no-files-found: ignore
+
+  # Preserve the required check name while the work runs on separate runners.
+  backend:
+    needs: backend-jobs
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every backend task to pass
+        env:
+          RESULT: ${{ needs.backend-jobs.result }}
+        run: test "$RESULT" = success
 
   # The three artefacts this repository hands to someone else, none of which any other job
   # reads: a shell script the site serves to be piped into sh, the images that get deployed,
