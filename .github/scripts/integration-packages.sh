@@ -5,7 +5,7 @@ set -euo pipefail
 
 shard=${1:?An integration shard is required}
 case "$shard" in
-  integration-handler | integration-db | integration-cmd | integration-rest) ;;
+  integration-handler | integration-db | integration-cmd | integration-engage-identity | integration-rest) ;;
   *) echo "Unknown integration shard: $shard" >&2; exit 1 ;;
 esac
 
@@ -15,6 +15,7 @@ go list -tags=integration ./... | while IFS= read -r package; do
     "$module/internal/api/handler") group=integration-handler ;;
     "$module/internal/platform/db") group=integration-db ;;
     "$module/cmd/"*) group=integration-cmd ;;
+    "$module/internal/engage/"* | "$module/internal/identity/"*) group=integration-engage-identity ;;
     *) group=integration-rest ;;
   esac
   if [[ "$group" == "$shard" ]]; then

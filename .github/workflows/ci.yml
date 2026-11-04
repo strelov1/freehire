@@ -23,7 +23,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [checks, unit, integration-handler, integration-db, integration-cmd, integration-rest]
+        task:
+          - checks
+          - unit
+          - integration-handler
+          - integration-db
+          - integration-cmd
+          - integration-engage-identity
+          - integration-rest
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -131,7 +138,7 @@ jobs:
           mkdir -p coverage
           go test ./... -coverprofile=coverage/unit.out -covermode=atomic
 
-      # Separate the two largest packages and the command workers from the rest.
+      # Separate the largest packages, command workers and user-facing services.
       # The selector sends every new package to rest unless it matches a named group.
       - name: Select integration packages
         if: startsWith(matrix.task, 'integration-')
