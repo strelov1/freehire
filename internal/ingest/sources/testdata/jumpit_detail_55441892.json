@@ -1,0 +1,50 @@
+{
+  "code": "C001",
+  "message": "조회에 성공하셨습니다.",
+  "status": 200,
+  "result": {
+    "id": 55441892,
+    "title": "SAP ABAP 개발 및 운영 담당자",
+    "companyName": "지에스아이티엠",
+    "jobCategories": [
+      {
+        "id": 15,
+        "name": "SW/솔루션"
+      }
+    ],
+    "techStacks": [
+      {
+        "stack": "ABAP"
+      },
+      {
+        "stack": "ERP"
+      },
+      {
+        "stack": "SAP"
+      }
+    ],
+    "workingPlaces": [
+      {
+        "address": "서울 종로구 계동길31",
+        "domestic": false
+      }
+    ],
+    "location": "서울 종로구 계동길31",
+    "minCareer": 1,
+    "maxCareer": 10,
+    "newcomer": false,
+    "alwaysOpen": false,
+    "closedAt": "2026-11-29 23:59:59",
+    "publishedAt": "2026-10-31 00:00:00",
+    "status": 0,
+    "positionStatus": "CHECKED",
+    "hiddenPosition": false,
+    "invisible": false,
+    "serviceInfo": "• 2006년 첫발을 내디딘 GS ITM은 전 산업 영역에 걸쳐 IT서비스를 제공하며 기술과 전문성을 촘촘히 쌓아왔습니다.\r\n• GS ITM은 SAP 골드 파트너로서 오랜 시간 동안 축적해온 SAP 전문성을 바탕으로 SAP의 컨설팅, 구축, 운영을 아우르며 기업의 디지털 트랜스포메이션을 지원하고 있습니다.\r",
+    "responsibility": "SAP ABAP 프로그램 개발 및 기능 개선\r\n사용자 요구사항 분석 및 프로그램 설계·개발\r\nSAP ERP 시스템 운영 및 유지보수",
+    "qualifications": "• SAP ABAP 개발 경력 1년 이상\n• ABAP Programming 개발 경험\n• SAP ERP 운영 및 유지보수 경험\n• 사용자 요구사항 분석 및 개발 문서 작성 경험",
+    "preferredRequirements": "• SAP S/4HANA 프로젝트 경험 보유자\n• SAP FI, CO, MM, SD, PP 등 모듈 관련 경험 보유자\n• Interface 개발 경험 보유자\n• SAP 관련 자격증 보유자",
+    "welfares": "[조직문화]\r\n개발자들의 기술역량을 발휘할 수 있는 다양한 근무환경을 제공합니다.\r\n• 수평적 조직문화 확산과 역할 중심의 문화\r\n• 직급없이 “매니저”로 호칭 일원화\r",
+    "recruitProcess": "[채용절차]\r\n• 서류전형 → 실무면접 → 임원면접 → 처우협의 → 최종합격\r\n※ 필요 시 전형 절차가 추가되거나, 변경될 수 있습니다.\r"
+  }
+}

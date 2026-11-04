@@ -452,6 +452,16 @@ func pacedDoverGetter(c JSONGetter) JSONGetter {
 	}
 }
 
+// pacedJumpitGetter holds every request of a Jumpit run — the listing and the detail fan-out —
+// to one limiter, so the runner's detail workers cannot fire at the API host at once (see
+// jumpitRequestInterval).
+func pacedJumpitGetter(c JSONGetter) JSONGetter {
+	return rateLimitedJSONGetter{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(jumpitRequestInterval), jumpitRequestBurst),
+	}
+}
+
 // pacedADPGetter wraps a getter with a fresh limiter shared across one registry build, so every
 // board's listing pages and detail fan-out in a run compete for the same token bucket.
 func pacedADPGetter(c JSONGetter) JSONGetter {

@@ -1,0 +1,56 @@
+{
+  "code": "C001",
+  "message": "조회에 성공하셨습니다.",
+  "status": 200,
+  "result": {
+    "id": 55451145,
+    "title": "IT/AI부문(전문연구요원 포함)신입",
+    "companyName": "연합인포맥스",
+    "jobCategories": [
+      {
+        "id": 8,
+        "name": "인공지능/머신러닝"
+      }
+    ],
+    "techStacks": [
+      {
+        "stack": "Azure DevOps"
+      },
+      {
+        "stack": "Python"
+      },
+      {
+        "stack": "AWS"
+      },
+      {
+        "stack": "GCP"
+      },
+      {
+        "stack": "AZURE"
+      }
+    ],
+    "workingPlaces": [
+      {
+        "address": "서울 종로구 율곡로2길25, 10층",
+        "domestic": false
+      }
+    ],
+    "location": "서울 종로구 율곡로2길25, 10층",
+    "minCareer": 0,
+    "maxCareer": 0,
+    "newcomer": true,
+    "alwaysOpen": false,
+    "closedAt": "2026-12-01 23:59:59",
+    "publishedAt": "2026-11-02 00:00:00",
+    "status": 0,
+    "positionStatus": "CHECKED",
+    "hiddenPosition": false,
+    "invisible": false,
+    "serviceInfo": "국내 최고의 경제ㆍ금융정보 미디어인 연합인포맥스가 창의적이고 패기 넘치는 인재를 찾습니다. \r\n경제ㆍ금융 전문 매체를 지향하고 독보적인 금융정보를 기반으로 미디어 융합시대를 선도하는 연합인포맥스에 열정과 패기로 꿈을 펼칠 인재들의 많은 지원을 바랍니다.",
+    "responsibility": "• LLM·에이전트 서비스 개발·운영\r\n•  생성형 AI 기반 신상품 기획·프로토타이핑\r\n• 금융정보 서비스 차세대화 (에이전트 인터페이스)\r\n•  방송 콘텐츠 자동화 (AI 음성·영상)",
+    "qualifications": "• AI 네이티브 빌더 역량 (Claude Code·Cursor 등 활용)\n• 에이전트·LLM 시스템 감각 (MCP·Function Calling·RAG)\n• 문제 정의 능력 및 결과물 판단력(Taste)\n• 생성형 미디어 서비스 통합 경험\n• 기술 베이스(Python·TypeScript·클라우드)는 전제\n\n\n* 신입 : 수습기간 6개월, 수습기간 근무성적 우수자 정규직으로 채용\n※신입의 경우, 실무 경험은 사이드 프로젝트 및 포트폴리오 경험으로 대체하여 평가할 수 있습니다.\n※공통요건) 해외 여행에 결격사유가 없는 자, 남성의 경우 군필 또는 군면제자(전문연구요원 제외)\n",
+    "preferredRequirements": "• 자체 에이전트·MCP 서버 설계·운영 경험\n• 금융·경제 도메인 이해 또는 관련 프로젝트\n• 신규 인터페이스(대화형·CLI 등) 실험 경험\n• 데이터 시각화/BI\n",
+    "welfares": "■지원금/보험\r\n- 건강검진\r\n- 의료비지원(본인,가족)\r\n- 직원대출제도\r",
+    "recruitProcess": "근무조건\r\n- 고용형태 : 정규직\r\n- 근무시간 : 08:00 ~ 17:00 (주 5일 근무)\r"
+  }
+}

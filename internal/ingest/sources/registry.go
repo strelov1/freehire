@@ -664,6 +664,9 @@ func All(c HTTPClient) map[string]Source {
 		// ITviec: Vietnam's IT-only board. One server-rendered listing names the whole
 		// catalogue; posting pages carry a schema.org JobPosting. Paced, see itviecRequestInterval.
 		NewITviec(pacedHTMLGetter(c, itviecRequestInterval, itviecRequestBurst)),
+		// Jumpit: Saramin's IT-only board for South Korea. One JSON listing request names the whole
+		// catalogue; a per-posting detail carries the body. Paced, see jumpitRequestInterval.
+		NewJumpit(pacedJumpitGetter(c)),
 		// WORK180: board of women-endorsed employers, enumerated by regional site (board =
 		// au/uk/us) through each region's jobs sitemap; posting pages carry a schema.org
 		// JobPosting. Pages are paced to robots.txt's Crawl-delay, see work180RequestInterval.

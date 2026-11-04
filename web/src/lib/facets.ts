@@ -465,6 +465,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   hcshiring: 'HCS Hiring',
   talentbrew: 'TalentBrew',
   recruiter_co_kr: 'Recruiter',
+  jumpit: 'Jumpit',
   umantis: 'Umantis',
   intervieweb: 'Intervieweb',
   brassring: 'BrassRing',
