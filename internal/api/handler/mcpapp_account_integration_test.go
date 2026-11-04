@@ -8,6 +8,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -57,7 +58,12 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	mountMCPAccount(api, middleware{}, assistants, testMCPOrigin, nil)
+	mountMCPAccount(
+		api,
+		middleware{},
+		assistants,
+		newMCPAppHandlers(nil, nil, queries, testMCPOrigin),
+	)
 
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	defer server.Close()
@@ -95,6 +101,7 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 			t.Fatalf("Connect: %v", err)
 		}
 		defer func() { _ = session.Close() }()
+		assertAccountCatalogue(t, session)
 
 		res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
 			Name: "my_jobs", Arguments: map[string]any{},
@@ -126,7 +133,12 @@ func TestMCPAccountAuthenticate_InfraFailureIsA500NotA401(t *testing.T) {
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	mountMCPAccount(api, middleware{}, assistants, testMCPOrigin, nil)
+	mountMCPAccount(
+		api,
+		middleware{},
+		assistants,
+		newMCPAppHandlers(nil, nil, queries, testMCPOrigin),
+	)
 
 	pool.Close() // simulate the database going away, not an unknown token
 
@@ -166,7 +178,12 @@ func TestMCPAccountByAPIKey(t *testing.T) {
 		tracking: &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	mountMCPAccount(app.Group("/api/v1"), middleware{}, assistants, testMCPOrigin, nil)
+	mountMCPAccount(
+		app.Group("/api/v1"),
+		middleware{},
+		assistants,
+		newMCPAppHandlers(nil, nil, queries, testMCPOrigin),
+	)
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	defer server.Close()
 
@@ -199,6 +216,7 @@ func TestMCPAccountByAPIKey(t *testing.T) {
 		t.Fatalf("Connect: %v", err)
 	}
 	defer func() { _ = session.Close() }()
+	assertAccountCatalogue(t, session)
 
 	listed, err := session.ListTools(ctx, nil)
 	if err != nil {
@@ -221,5 +239,47 @@ func TestMCPAccountByAPIKey(t *testing.T) {
 	}
 	if res.IsError {
 		t.Fatalf("list_subscriptions failed: %+v", res.Content)
+	}
+}
+
+func assertAccountCatalogue(t *testing.T, session *mcp.ClientSession) {
+	t.Helper()
+	listed, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	served := map[string]bool{}
+	for _, tool := range listed.Tools {
+		served[tool.Name] = true
+	}
+	for _, name := range []string{
+		"search_jobs", "get_job", "get_company", "search_companies", "check_jobs_open",
+		"similar_jobs", "salary_stats", "job_market_stats", "list_filter_values", "search", "fetch",
+	} {
+		if !served[name] {
+			t.Errorf("authenticated endpoint is missing public tool %s", name)
+		}
+	}
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "check_jobs_open", Arguments: map[string]any{"slugs": []string{"account-catalogue-missing-posting"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError || len(result.Content) != 1 {
+		t.Fatalf("catalogue call through authenticated mount failed: %+v", result)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("catalogue content is %T, want JSON text", result.Content[0])
+	}
+	var states struct {
+		Jobs []struct{ Status string }
+	}
+	if err := json.Unmarshal([]byte(text.Text), &states); err != nil {
+		t.Fatal(err)
+	}
+	if len(states.Jobs) != 1 || states.Jobs[0].Status != "not_found" {
+		t.Fatalf("catalogue state = %+v, want missing posting", states)
 	}
 }

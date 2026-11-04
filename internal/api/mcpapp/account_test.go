@@ -25,7 +25,12 @@ func TestNewAccountServer_RunsToolAsTheResolvedUser(t *testing.T) {
 			return map[string]any{"user_id": userID}, nil
 		},
 	}
-	server := mcpapp.NewAccountServer([]assistant.Tool{tool}, 42, "")
+	server := mcpapp.NewAccountServer(
+		[]assistant.Tool{tool},
+		42,
+		"",
+		nil,
+	)
 	if server == nil {
 		t.Fatal("NewAccountServer returned nil")
 	}
@@ -62,7 +67,12 @@ func TestNewAccountServer_ToolErrorBecomesAnErrorResult(t *testing.T) {
 			return nil, errors.New("boom")
 		},
 	}
-	server := mcpapp.NewAccountServer([]assistant.Tool{tool}, 1, "")
+	server := mcpapp.NewAccountServer(
+		[]assistant.Tool{tool},
+		1,
+		"",
+		nil,
+	)
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	go func() { _ = server.Run(context.Background(), serverTransport) }()
@@ -99,7 +109,7 @@ func TestAccountHandler_ReadsUserIDFromTrustedHeader(t *testing.T) {
 			return map[string]any{"user_id": userID}, nil
 		},
 	}
-	handler := mcpapp.AccountHandler([]assistant.Tool{tool}, "")
+	handler := mcpapp.AccountHandler([]assistant.Tool{tool}, "", nil)
 
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -133,7 +143,7 @@ func TestAccountHandler_MissingTrustedHeaderIsAnInternalError(t *testing.T) {
 	// Reaching AccountHandler with no resolved user id means the auth
 	// middleware was skipped or misconfigured — a wiring bug, not a caller
 	// mistake, so it must read as 500, not as the caller's fault.
-	handler := mcpapp.AccountHandler(nil, "")
+	handler := mcpapp.AccountHandler(nil, "", nil)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
@@ -158,11 +168,16 @@ func (rt headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 // turns every search into a confirmation prompt — and a wrong one skips the prompt on a write.
 func TestNewAccountServer_AnnotatesReadsAndWrites(t *testing.T) {
 	noop := func(context.Context, int64, json.RawMessage) (any, error) { return nil, nil }
-	server := mcpapp.NewAccountServer([]assistant.Tool{
-		{Name: "reader", Description: "reads", Schema: map[string]any{"type": "object"}, Effect: assistant.EffectReads, Run: noop},
-		{Name: "adder", Description: "adds", Schema: map[string]any{"type": "object"}, Effect: assistant.EffectAdds, Run: noop},
-		{Name: "undeclared", Description: "declares nothing", Schema: map[string]any{"type": "object"}, Run: noop},
-	}, 1, "")
+	server := mcpapp.NewAccountServer(
+		[]assistant.Tool{
+			{Name: "reader", Description: "reads", Schema: map[string]any{"type": "object"}, Effect: assistant.EffectReads, Run: noop},
+			{Name: "adder", Description: "adds", Schema: map[string]any{"type": "object"}, Effect: assistant.EffectAdds, Run: noop},
+			{Name: "undeclared", Description: "declares nothing", Schema: map[string]any{"type": "object"}, Run: noop},
+		},
+		1,
+		"",
+		nil,
+	)
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	go func() { _ = server.Run(context.Background(), serverTransport) }()

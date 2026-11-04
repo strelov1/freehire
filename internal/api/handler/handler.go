@@ -791,7 +791,12 @@ func Register(app *fiber.App, cfg Config) {
 	// search backend and the same store: that one renders a foreign schema for agents which
 	// branch on error codes, this one renders ours for a language model reading prose. They
 	// share everything below the projection, so they cannot disagree about the catalogue.
-	mcpappH := newMCPAppHandlers(jobSearch, companySearch, queries, cfg.FrontendOrigin)
+	mcpappH := newMCPAppHandlers(
+		jobSearch,
+		companySearch,
+		queries,
+		cfg.FrontendOrigin,
+	)
 	mcpappH.facets = facets
 	mcpappH.cache = cfg.Cache
 	mcpappH.semantic = semantic
@@ -1098,7 +1103,12 @@ func Register(app *fiber.App, cfg Config) {
 	// The signed-in MCP server (freehire#3114): bearer-gated by an MCP OAuth
 	// grant, reusing assistantH's own tool set so this surface and the in-app
 	// assistant can never disagree about what a tool does.
-	mountMCPAccount(api, mw, assistantH, cfg.FrontendOrigin, cfg.AgentViews)
+	mountMCPAccount(
+		api,
+		mw,
+		assistantH,
+		mcpappH,
+	)
 	jobsH.register(api, mw)
 	companiesH.register(api, mw)
 	(&companyRelationHandlers{

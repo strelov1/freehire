@@ -89,6 +89,20 @@ func resultErrorCode(result *mcp.CallToolResult) string {
 }
 
 func addLoggedTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, Out]) {
+	addLoggedToolForSurface(
+		server,
+		"public",
+		tool,
+		handler,
+	)
+}
+
+func addLoggedToolForSurface[In, Out any](
+	server *mcp.Server,
+	surface string,
+	tool *mcp.Tool,
+	handler mcp.ToolHandlerFor[In, Out],
+) {
 	// Capture the registered name so a caller cannot inject a name into the log.
 	name := tool.Name
 	registerTool(name)
@@ -96,7 +110,7 @@ func addLoggedTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.
 		tool.InputSchema = inputSchema[In]()
 	}
 	mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
-		finish := observeTool(ctx, "public", name)
+		finish := observeTool(ctx, surface, name)
 		// A panic deliberately leaves the start unmatched; do not recover it or log
 		// its value, which can contain input or other sensitive data.
 		result, output, err := handler(ctx, req, in)

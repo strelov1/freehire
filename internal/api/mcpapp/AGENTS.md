@@ -6,10 +6,12 @@ The MCP server freehire's ChatGPT app is built on. Read-only, anonymous, mounted
 A second, authenticated server (`account.go`) lives in this package too, mounted at
 `/api/v1/mcp/account` (freehire#3114): it acts as the signed-in account that approved an
 OAuth grant, reusing the in-app assistant's own tools — including writes (save, mark
-applied, set a stage/note) — rather than reimplementing them. It has no `Reader` of its own
-and shares nothing below the tool registration with the anonymous server beside it; the two
-are grouped in one package because both speak MCP over the same SDK, not because they share
-a catalogue view. Authentication for it is a Fiber middleware in
+applied, set a stage/note) — rather than reimplementing them. It also receives the anonymous
+server's `Reader` for the catalogue tools the assistant does not own: company search,
+posting liveness, similar jobs, salary and market statistics, filter values, and research
+`search`/`fetch`. Their registrations live in `catalogue.go`; account `search_jobs`,
+`get_job` and `get_company` retain their existing schemas and user context.
+Authentication for it is a Fiber middleware in
 `internal/api/handler/mcpapp_account.go`, ahead of this package's own code — see
 `AccountUserIDHeader`'s doc comment in `account.go` for why.
 
@@ -228,8 +230,10 @@ start, list, get, review, retry and cancel an attempt, plus the answer bank and 
 screening facts. The four that ACT on an attempt refuse unless the account turned on
 `users.agents_may_apply`, which only a browser session can write — reading never needs it.
 An answer saved here is the CANDIDATE's (`answerbank.AuthorCandidate`, so it is sent): this
-server only ever acts for the person who approved the connection. `accountServerInstructions`
-spells out the order the tools only work in.
+server only ever acts for the person who approved the connection. `accountInstructions`
+describes the account boundary and the tool groups actually served. Search and application
+workflows belong to the packaged skill; initialization describes capabilities and result
+states without prescribing a call sequence or presentation.
 
 `present_jobs` is NOT served there (`mcpAccountTools`). It draws cards in our own chat UI and
 its description tells the model never to write a job link; in a client with no card renderer
