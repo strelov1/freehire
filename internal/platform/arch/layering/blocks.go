@@ -222,7 +222,7 @@ var blocks = map[string][]string{
 	"ingest": {
 		"adzunadesc", "applyform", "atsboard", "atsdetect", "boardcatalog", "boardresolve",
 		"catalogstats", "contribution", "directapply", "employer", "ingestsched", "jdresolve", "linkimport",
-		"linksource", "moderation", "pipeline", "screeninganswers", "sources", "sourcestats",
+		"linksource", "moderation", "pipeline", "rederive", "screeninganswers", "sources", "sourcestats",
 		"submission", "telegram",
 	},
 	// socialdigest is here and not in ingest because it is outbound engagement — the

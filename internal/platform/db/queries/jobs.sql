@@ -2346,7 +2346,10 @@ WITH existing AS MATERIALIZED (
     WHERE t.closed_at IS NULL AND e.closed_at IS NOT NULL AND NOT e.is_private
     ON CONFLICT (job_id) DO NOTHING
 )
-SELECT company_slug FROM touched;
+-- reopened tells the caller to re-derive the row (internal/ingest/rederive): a touch writes no
+-- content, so a posting closed under an older dictionary would otherwise reopen carrying it.
+SELECT t.id, t.company_slug, (t.closed_at IS NULL AND e.closed_at IS NOT NULL)::boolean AS reopened
+FROM touched t JOIN existing e ON e.id = t.id;
 
 -- name: CloseJobsPastApplicationDeadline :one
 -- The source's deadline is inclusive: it expires on the following UTC date. Independent of

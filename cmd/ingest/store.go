@@ -18,6 +18,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/adzunadesc"
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
+	"github.com/strelov1/freehire/internal/ingest/rederive"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobdedup"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -478,12 +479,18 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 // (justjoin) uses for an offer it re-listed but did not re-fetch, so its hydrated description
 // and facets are preserved. Implements pipeline.toucher.
 func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string, error) {
-	companySlug, err := s.q.TouchJob(ctx, db.TouchJobParams{
+	touched, err := s.q.TouchJob(ctx, db.TouchJobParams{
 		Source:     source,
 		ExternalID: externalID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
+	}
+	companySlug := touched.CompanySlug
+	if touched.Reopened {
+		if err := s.rederiveReopened(ctx, touched.ID); err != nil {
+			return "", fmt.Errorf("re-derive reopened job %s/%s: %w", source, externalID, err)
+		}
 	}
 	// Record the company as crawled, exactly as Save does, so the post-run stale sweep keeps
 	// this company in scope. Otherwise a company whose offers were all touched (none newly
@@ -498,6 +505,39 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string,
 	// save(), so the run would report 0% and read as the very churn the line exists to expose.
 	s.tally.record(source, true)
 	return companySlug, nil
+}
+
+// rederiveReopened re-derives a posting a touch has just reopened. A touch writes no content,
+// so a posting closed under an older dictionary would otherwise come back with the facets of
+// that dictionary, and backfill-derive reaches closed rows only within its closed-within
+// window. The company slug and fingerprint stay as stored: moving them needs the companies
+// reconcile only backfill-derive runs. The row is requeued after the write, because the
+// touch's own queue entry may already have been pushed from the stale row.
+func (s *dbStore) rederiveReopened(ctx context.Context, id int64) error {
+	j, err := s.q.GetJob(ctx, id)
+	if err != nil {
+		return err
+	}
+	params, changed, slugMoved := rederive.Row(j, nil)
+	if slugMoved {
+		params.CompanySlug, params.RoleFingerprint = j.CompanySlug, j.RoleFingerprint
+	}
+	if !changed {
+		return nil
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	qtx := s.q.WithTx(tx)
+	if err := qtx.UpdateJobDerived(ctx, params); err != nil {
+		return err
+	}
+	if err := qtx.RequeueSearchOutbox(ctx, id); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // RecordCompanyWebsite stores a posting's stated employer website on its company row

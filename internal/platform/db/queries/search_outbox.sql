@@ -138,3 +138,15 @@ SET attempts   = attempts + 1,
                  END
 WHERE id = sqlc.arg(id)
 RETURNING attempts, failed_at;
+
+-- name: RequeueSearchOutbox :exec
+-- Queue a job whose row was rewritten after an entry may already have been claimed. Unlike
+-- EnqueueSearchOutbox it re-stamps a live entry (a new id, so the drain's completion of the
+-- claimed one does not delete it) and clears its dead-letter state, so the document is pushed
+-- again from the row as it stands now — the shape SetJobEngagement uses for the same reason.
+INSERT INTO search_outbox (job_id, job_posted_at)
+SELECT j.id, COALESCE(j.posted_at, j.created_at)
+FROM jobs j
+WHERE j.id = sqlc.arg(job_id) AND j.closed_at IS NULL AND NOT j.is_private
+ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;

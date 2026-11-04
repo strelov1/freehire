@@ -34,13 +34,17 @@ func TestTouchJobRefreshesLivenessAndPreservesContent(t *testing.T) {
 		t.Fatalf("stale/close setup: %v", err)
 	}
 
-	companySlug, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:1"})
+	touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:1"})
 	if err != nil {
 		t.Fatalf("TouchJob: %v", err)
 	}
 	// The touched row's company is returned so the caller can keep it in the sweep scope.
-	if companySlug != "acme" {
-		t.Errorf("TouchJob company_slug = %q, want acme", companySlug)
+	if touched.CompanySlug != "acme" {
+		t.Errorf("TouchJob company_slug = %q, want acme", touched.CompanySlug)
+	}
+	// A closed row coming back is reported, so ingest re-derives what the touch did not write.
+	if !touched.Reopened {
+		t.Error("TouchJob reopened = false for a closed row, want true")
 	}
 
 	got, err := q.GetJobBySourceExternalID(ctx, GetJobBySourceExternalIDParams{Source: "justjoin", ExternalID: "justjoin:1"})
@@ -99,8 +103,12 @@ func TestTouchJobStampsUpdatedAtOnlyWhenItReopens(t *testing.T) {
 
 	t.Run("open row keeps its change stamp", func(t *testing.T) {
 		before := seed(t, "justjoin:open", false)
-		if _, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:open"}); err != nil {
+		touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:open"})
+		if err != nil {
 			t.Fatalf("TouchJob: %v", err)
+		}
+		if touched.Reopened {
+			t.Error("TouchJob reopened = true for an open row, want false")
 		}
 		after, err := q.GetJobBySourceExternalID(ctx, GetJobBySourceExternalIDParams{Source: "justjoin", ExternalID: "justjoin:open"})
 		if err != nil {

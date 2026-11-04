@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/strelov1/freehire/internal/ingest/rederive"
 	"github.com/strelov1/freehire/internal/job/jobderive"
 	"github.com/strelov1/freehire/internal/job/jobhash"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -146,7 +147,7 @@ func backfillProgress(ctx context.Context, store deriveStore, concurrency, every
 }
 
 func expectedDerived(j db.Job) db.UpdateJobDerivedParams {
-	countries, regions := storedGeography(j)
+	countries, regions := rederive.StoredGeography(j)
 	d := jobderive.Derive(jobderive.Input{
 		Title: j.Title, Company: j.Company, Source: j.Source, ExternalID: j.ExternalID,
 		Location: j.Location, Description: j.Description, WorkMode: j.WorkMode,
@@ -234,12 +235,12 @@ func TestDeriveRow_EmploymentTypeSignal(t *testing.T) {
 		}
 	}
 	fullTime := base("full_time")
-	got, _, _ := deriveRow(fullTime, nil)
+	got, _, _ := rederive.Row(fullTime, nil)
 	if got.EmploymentType != "full_time" {
 		t.Errorf("ATS full_time = %q, want full_time", got.EmploymentType)
 	}
 	poisoned := base("part_time")
-	got, changed, _ := deriveRow(poisoned, nil)
+	got, changed, _ := rederive.Row(poisoned, nil)
 	if got.EmploymentType != "" {
 		t.Errorf("disclaimer-only part_time = %q, want empty", got.EmploymentType)
 	}
@@ -248,7 +249,7 @@ func TestDeriveRow_EmploymentTypeSignal(t *testing.T) {
 	}
 	atsOnly := base("part_time")
 	atsOnly.Description = "Build the risk platform."
-	got, _, _ = deriveRow(atsOnly, nil)
+	got, _, _ = rederive.Row(atsOnly, nil)
 	if got.EmploymentType != "part_time" {
 		t.Errorf("ATS part_time with no phrase = %q, want part_time", got.EmploymentType)
 	}

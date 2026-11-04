@@ -6977,6 +6977,11 @@ type Querier interface {
 	// and a report that read the intended number instead would show a healthy 24 while 12 rows
 	// existed.
 	ReportIngestSchedule(ctx context.Context) ([]ReportIngestScheduleRow, error)
+	// Queue a job whose row was rewritten after an entry may already have been claimed. Unlike
+	// EnqueueSearchOutbox it re-stamps a live entry (a new id, so the drain's completion of the
+	// claimed one does not delete it) and clears its dead-letter state, so the document is pushed
+	// again from the row as it stands now — the shape SetJobEngagement uses for the same reason.
+	RequeueSearchOutbox(ctx context.Context, jobID int64) error
 	// Re-filter backfill write path: hand a prefilter-declined post back to the extraction
 	// queue by clearing the extracted_at that InsertTelegramPost stamped on it.
 	//
@@ -8013,7 +8018,9 @@ type Querier interface {
 	// (not newly saved) would drop out of the sweep and its removed offers would never close.
 	// Lock the prior state before updating: after waiting for a concurrent close,
 	// transition detection must observe the committed closed row, not an older snapshot.
-	TouchJob(ctx context.Context, arg TouchJobParams) (string, error)
+	// reopened tells the caller to re-derive the row (internal/ingest/rederive): a touch writes no
+	// content, so a posting closed under an older dictionary would otherwise reopen carrying it.
+	TouchJob(ctx context.Context, arg TouchJobParams) (TouchJobRow, error)
 	// Resolve a token to where the visitor must be sent, plus what the click needs to be attributed:
 	// the link's own id and the id of the user whose CV it belongs to (so a click by that user can be
 	// marked as the owner's own). Unauthenticated read — the token IS the credential, and it grants

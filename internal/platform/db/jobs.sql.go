@@ -6489,12 +6489,19 @@ WITH existing AS MATERIALIZED (
     WHERE t.closed_at IS NULL AND e.closed_at IS NOT NULL AND NOT e.is_private
     ON CONFLICT (job_id) DO NOTHING
 )
-SELECT company_slug FROM touched
+SELECT t.id, t.company_slug, (t.closed_at IS NULL AND e.closed_at IS NOT NULL)::boolean AS reopened
+FROM touched t JOIN existing e ON e.id = t.id
 `
 
 type TouchJobParams struct {
 	Source     string `json:"source"`
 	ExternalID string `json:"external_id"`
+}
+
+type TouchJobRow struct {
+	ID          int64  `json:"id"`
+	CompanySlug string `json:"company_slug"`
+	Reopened    bool   `json:"reopened"`
 }
 
 // Liveness refresh for a hydrating source's already-ingested posting (see source-ingest): the
@@ -6511,11 +6518,13 @@ type TouchJobParams struct {
 // (not newly saved) would drop out of the sweep and its removed offers would never close.
 // Lock the prior state before updating: after waiting for a concurrent close,
 // transition detection must observe the committed closed row, not an older snapshot.
-func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (string, error) {
+// reopened tells the caller to re-derive the row (internal/ingest/rederive): a touch writes no
+// content, so a posting closed under an older dictionary would otherwise reopen carrying it.
+func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (TouchJobRow, error) {
 	row := q.db.QueryRow(ctx, touchJob, arg.Source, arg.ExternalID)
-	var company_slug string
-	err := row.Scan(&company_slug)
-	return company_slug, err
+	var i TouchJobRow
+	err := row.Scan(&i.ID, &i.CompanySlug, &i.Reopened)
+	return i, err
 }
 
 const unclassifiedTitleReportBounds = `-- name: UnclassifiedTitleReportBounds :one
