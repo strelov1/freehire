@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/inbox"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // applicationReader resolves the application a rehearsal is about: the vacancy behind a
@@ -132,7 +133,7 @@ func (h *assistantHandlers) rehearsalContext(ctx context.Context, userID, jobID 
 			Company: job.Company,
 			Slug:    job.PublicSlug,
 			// Words, not markup — the same treatment get_job and cv_context give a posting.
-			Description: clipRunes(formatDescription(job.Description, "markdown"), tailorDescriptionLimit),
+			Description: llm.ClipRunesEllipsis(formatDescription(job.Description, "markdown"), tailorDescriptionLimit),
 		},
 		Stage: stage,
 		// Always a list: "the analysis found nothing to ask about" and "there is no
@@ -159,7 +160,7 @@ func (h *assistantHandlers) rehearsalContext(ctx context.Context, userID, jobID 
 			// does, which is the same reason the body falls back from text to HTML.
 			From:    invitationSender(msg),
 			Subject: msg.Subject,
-			Body:    clipRunes(msg.BodyText, interviewInvitationLimit),
+			Body:    llm.ClipRunesEllipsis(msg.BodyText, interviewInvitationLimit),
 		}
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		// A mailbox that cannot be read costs the rehearsal its opening line about the

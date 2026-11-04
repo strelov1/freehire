@@ -31,6 +31,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/skilltag"
 	"github.com/strelov1/freehire/internal/dict/vocab"
 	"github.com/strelov1/freehire/internal/job/collections"
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -271,15 +272,6 @@ const (
 	maxSummaryRunes = 400
 )
 
-// clip truncates on a rune boundary, so a bound never cuts a character in half.
-func clip(s string, max int) string {
-	r := []rune(s)
-	if len(r) <= max {
-		return s
-	}
-	return string(r[:max])
-}
-
 // bound accepts a proposed scalar inside [low, high] and reports anything else as a
 // drop, appended to unresolved — a bound that vanished without a word is the same lie
 // as a hallucinated facet.
@@ -313,8 +305,8 @@ func (in intent) resolve() (Result, error) {
 		// The free text is a few words for a niche no facet names. Bounding it here
 		// bounds it for BOTH producers: a model that ran away, and a caller echoing a
 		// result back into the next prompt.
-		Query:   clip(strings.TrimSpace(in.Query), maxQueryRunes),
-		Summary: clip(strings.TrimSpace(in.Summary), maxSummaryRunes),
+		Query:   llm.TruncateRunes(strings.TrimSpace(in.Query), maxQueryRunes),
+		Summary: llm.TruncateRunes(strings.TrimSpace(in.Summary), maxSummaryRunes),
 	}
 	// One place threads the drop report, so each bound reads as the range it accepts.
 	keep := func(name string, v *int, low, high int) *int {

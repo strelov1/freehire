@@ -136,12 +136,12 @@ type Education struct {
 // value is persisted or served, so untrusted CV text cannot inject unbounded or
 // malformed content (the same invariant as enrich/matchanalysis).
 func (s *Structured) Sanitize() {
-	s.FullName = clip(s.FullName, maxNameRunes)
-	s.Headline = clip(s.Headline, maxHeadlineRunes)
-	s.Location = clip(s.Location, maxLocationRunes)
-	s.Email = clip(s.Email, maxEmailRunes)
-	s.Phone = clip(s.Phone, maxPhoneRunes)
-	s.Summary = clip(s.Summary, maxSummaryRunes)
+	s.FullName = llm.TrimTruncateRunes(s.FullName, maxNameRunes)
+	s.Headline = llm.TrimTruncateRunes(s.Headline, maxHeadlineRunes)
+	s.Location = llm.TrimTruncateRunes(s.Location, maxLocationRunes)
+	s.Email = llm.TrimTruncateRunes(s.Email, maxEmailRunes)
+	s.Phone = llm.TrimTruncateRunes(s.Phone, maxPhoneRunes)
+	s.Summary = llm.TrimTruncateRunes(s.Summary, maxSummaryRunes)
 
 	if s.TotalYears < 0 {
 		s.TotalYears = 0
@@ -150,59 +150,45 @@ func (s *Structured) Sanitize() {
 		s.TotalYears = maxYears
 	}
 
-	s.Experience = limit(mapEntries(s.Experience, sanitizeExperience), maxExperience)
-	s.Education = limit(mapEntries(s.Education, sanitizeEducation), maxEducation)
-	s.Languages = limit(nonEmpty(mapStrings(s.Languages, maxShortRunes)), maxLanguages)
-	s.Links = limit(nonEmpty(mapStrings(s.Links, maxShortRunes)), maxLinks)
-	s.Skills = limit(nonEmpty(mapStrings(s.Skills, maxShortRunes)), maxSkills)
-	s.Certifications = limit(nonEmpty(mapStrings(s.Certifications, maxShortRunes)), maxCertifications)
-	s.Projects = limit(mapEntries(s.Projects, sanitizeProject), maxProjects)
+	s.Experience = llm.Limit(mapEntries(s.Experience, sanitizeExperience), maxExperience)
+	s.Education = llm.Limit(mapEntries(s.Education, sanitizeEducation), maxEducation)
+	s.Languages = llm.Limit(llm.NonEmpty(mapStrings(s.Languages, maxShortRunes)), maxLanguages)
+	s.Links = llm.Limit(llm.NonEmpty(mapStrings(s.Links, maxShortRunes)), maxLinks)
+	s.Skills = llm.Limit(llm.NonEmpty(mapStrings(s.Skills, maxShortRunes)), maxSkills)
+	s.Certifications = llm.Limit(llm.NonEmpty(mapStrings(s.Certifications, maxShortRunes)), maxCertifications)
+	s.Projects = llm.Limit(mapEntries(s.Projects, sanitizeProject), maxProjects)
 }
 
 func sanitizeExperience(e Experience) (Experience, bool) {
-	e.Title = clip(e.Title, maxShortRunes)
-	e.Company = clip(e.Company, maxShortRunes)
-	e.Location = clip(e.Location, maxShortRunes)
+	e.Title = llm.TrimTruncateRunes(e.Title, maxShortRunes)
+	e.Company = llm.TrimTruncateRunes(e.Company, maxShortRunes)
+	e.Location = llm.TrimTruncateRunes(e.Location, maxShortRunes)
 	e.Start = perioddate.Sanitize(e.Start)
 	e.End = perioddate.Sanitize(e.End)
-	e.Summary = clip(e.Summary, maxEntrySummaryRunes)
-	e.Highlights = limit(nonEmpty(mapStrings(e.Highlights, maxEntrySummaryRunes)), maxHighlights)
-	e.Stack = limit(nonEmpty(mapStrings(e.Stack, maxShortRunes)), maxSkills)
+	e.Summary = llm.TrimTruncateRunes(e.Summary, maxEntrySummaryRunes)
+	e.Highlights = llm.Limit(llm.NonEmpty(mapStrings(e.Highlights, maxEntrySummaryRunes)), maxHighlights)
+	e.Stack = llm.Limit(llm.NonEmpty(mapStrings(e.Stack, maxShortRunes)), maxSkills)
 	keep := e.Title != "" || e.Company != "" || e.Location != "" ||
 		e.Start != nil || e.End != nil || e.Summary != "" || len(e.Highlights) > 0
 	return e, keep
 }
 
 func sanitizeProject(p Project) (Project, bool) {
-	p.Name = clip(p.Name, maxShortRunes)
-	p.Link = clip(p.Link, maxShortRunes)
-	p.Highlights = limit(nonEmpty(mapStrings(p.Highlights, maxEntrySummaryRunes)), maxHighlights)
+	p.Name = llm.TrimTruncateRunes(p.Name, maxShortRunes)
+	p.Link = llm.TrimTruncateRunes(p.Link, maxShortRunes)
+	p.Highlights = llm.Limit(llm.NonEmpty(mapStrings(p.Highlights, maxEntrySummaryRunes)), maxHighlights)
 	return p, p.Name != "" || p.Link != "" || len(p.Highlights) > 0
 }
 
 func sanitizeEducation(e Education) (Education, bool) {
-	e.Degree = clip(e.Degree, maxShortRunes)
-	e.Institution = clip(e.Institution, maxShortRunes)
+	e.Degree = llm.TrimTruncateRunes(e.Degree, maxShortRunes)
+	e.Institution = llm.TrimTruncateRunes(e.Institution, maxShortRunes)
 	e.Year = perioddate.Sanitize(e.Year)
 	keep := e.Degree != "" || e.Institution != "" || e.Year != nil
 	return e, keep
 }
 
 // --- small helpers ---
-
-// clip trims s and truncates to at most max runes, reusing the shared trim + rune-cut
-// (llm.TrimTruncateRunes) so a mid-word cut never leaves trailing whitespace.
-func clip(s string, max int) string {
-	return llm.TrimTruncateRunes(s, max)
-}
-
-// limit returns at most n elements of s (nil-safe, preserves order).
-func limit[T any](s []T, n int) []T {
-	if len(s) > n {
-		return s[:n]
-	}
-	return s
-}
 
 // mapEntries applies fn to each entry, keeping only those fn marks as non-empty.
 func mapEntries[T any](in []T, fn func(T) (T, bool)) []T {
@@ -219,18 +205,7 @@ func mapEntries[T any](in []T, fn func(T) (T, bool)) []T {
 func mapStrings(in []string, max int) []string {
 	out := make([]string, len(in))
 	for i, v := range in {
-		out[i] = clip(v, max)
-	}
-	return out
-}
-
-// nonEmpty drops blank strings, preserving order; returns nil when nothing remains.
-func nonEmpty(in []string) []string {
-	var out []string
-	for _, v := range in {
-		if v != "" {
-			out = append(out, v)
-		}
+		out[i] = llm.TrimTruncateRunes(v, max)
 	}
 	return out
 }

@@ -41,27 +41,6 @@ func TestToText_BoundsVeryLargeInput(t *testing.T) {
 	}
 }
 
-func TestTruncateRunes(t *testing.T) {
-	cases := []struct {
-		name  string
-		in    string
-		limit int
-		want  string
-	}{
-		{"under limit", "hello", 10, "hello"},
-		{"exact limit", "hello", 5, "hello"},
-		{"over limit", "hello world", 5, "hello"},
-		{"does not split a multi-byte rune", "h→llo", 2, "h→"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := truncateRunes(tc.in, tc.limit); got != tc.want {
-				t.Errorf("truncateRunes(%q, %d) = %q, want %q", tc.in, tc.limit, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestResultCache_EvictsLeastRecentlyUsedOverCapacity(t *testing.T) {
 	c := newCache(2)
 	c.put("a", "1")

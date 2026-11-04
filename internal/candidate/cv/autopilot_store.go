@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 const (
@@ -65,9 +67,9 @@ func sanitizeAutopilotEntry(e AutopilotEntry) (AutopilotEntry, error) {
 			e.Status, strings.Join(AutopilotStatuses, ", "))
 	}
 	return AutopilotEntry{
-		Requirement: clip(requirement, maxAutopilotRequirement),
+		Requirement: llm.TrimTruncateRunes(requirement, maxAutopilotRequirement),
 		Status:      e.Status,
-		Note:        clip(e.Note, maxAutopilotNote),
+		Note:        llm.TrimTruncateRunes(e.Note, maxAutopilotNote),
 	}, nil
 }
 

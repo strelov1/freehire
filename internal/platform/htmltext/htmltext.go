@@ -12,6 +12,8 @@ import (
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/jaytaylor/html2text"
+
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // maxInputRunes bounds the HTML a single call converts. The only caller today
@@ -53,7 +55,7 @@ func ToMarkdown(html string) string {
 // convert bounds html to maxInputRunes, serves a cached result for identical input when
 // one exists, and otherwise runs fn and caches a successful result.
 func convert(html string, cache *resultCache, fn func(string) (string, error)) string {
-	html = truncateRunes(html, maxInputRunes)
+	html = llm.TruncateRunes(html, maxInputRunes)
 	key := hashOf(html)
 	if out, ok := cache.get(key); ok {
 		return out
@@ -64,15 +66,6 @@ func convert(html string, cache *resultCache, fn func(string) (string, error)) s
 	}
 	cache.put(key, out)
 	return out
-}
-
-// truncateRunes clamps s to at most limit runes without splitting one.
-func truncateRunes(s string, limit int) string {
-	r := []rune(s)
-	if len(r) <= limit {
-		return s
-	}
-	return string(r[:limit])
 }
 
 func hashOf(s string) string {

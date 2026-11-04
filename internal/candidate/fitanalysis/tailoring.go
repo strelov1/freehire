@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"log"
-	"strings"
 
 	"github.com/strelov1/freehire/internal/ai/enrich"
 	"github.com/strelov1/freehire/internal/candidate/matchanalysis"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/htmltext"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // ErrNoAnalysis reports that the candidate has not run the fit analysis for this job yet, or
@@ -147,7 +147,7 @@ func ProjectTailoring(a *matchanalysis.Analysis, job db.Job, requirements []enri
 			// The posting reaches the model as words, bounded, the same way get_job already
 			// serves it. Sending markup spends the context window on tags and widens what
 			// there is to misread.
-			Description: clipRunes(htmltext.ToMarkdown(job.Description), descriptionLimit),
+			Description: llm.ClipRunesEllipsis(htmltext.ToMarkdown(job.Description), descriptionLimit),
 		},
 		Verdict:        a.Verdict,
 		OverallScore:   a.OverallScore,
@@ -158,13 +158,4 @@ func ProjectTailoring(a *matchanalysis.Analysis, job db.Job, requirements []enri
 		Strengths:      a.Strengths,
 		Gaps:           a.Gaps,
 	}
-}
-
-// clipRunes truncates on a rune boundary so a clip never splits a multi-byte character.
-func clipRunes(s string, max int) string {
-	r := []rune(s)
-	if len(r) <= max {
-		return s
-	}
-	return strings.TrimSpace(string(r[:max])) + "…"
 }

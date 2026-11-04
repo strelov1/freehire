@@ -127,7 +127,7 @@ func (e *Extractor) Extract(ctx context.Context, cvText string) (Structured, err
 	// pii.Build calls out to the PII-filter service and its cost scales with input size, and
 	// nothing beyond maxCVRunes will ever reach the prompt anyway (userPrompt clips again,
 	// belt-and-suspenders, since redaction can slightly lengthen text via its placeholders).
-	cvText = clip(cvText, maxCVRunes)
+	cvText = llm.TrimTruncateRunes(cvText, maxCVRunes)
 	// De-identify the CV before it reaches the LLM. Fail-closed: a detector error means no
 	// CV is sent (the caller degrades best-effort, persisting no structured résumé).
 	red, err := pii.Build(ctx, cvText, e.detector)
@@ -220,5 +220,5 @@ Rules:
 - Return null for any field you cannot fill from the CV, and null for every field if the text is not a résumé.`
 
 func userPrompt(cvText string) string {
-	return "CV text:\n" + clip(cvText, maxCVRunes)
+	return "CV text:\n" + llm.TrimTruncateRunes(cvText, maxCVRunes)
 }

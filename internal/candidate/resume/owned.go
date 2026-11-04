@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/candidate/resumeextract"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 )
 
 // Parse status values persisted on users.resume_extract_status.
@@ -102,13 +102,13 @@ func (o *Owned) Sanitize() {
 	if o == nil {
 		return
 	}
-	o.FullName = clipRunes(strings.TrimSpace(o.FullName), maxContactName)
-	o.Email = clipRunes(strings.TrimSpace(o.Email), maxContactEmail)
-	o.Phone = clipRunes(strings.TrimSpace(o.Phone), maxContactPhone)
-	o.Location = clipRunes(strings.TrimSpace(o.Location), maxContactLocation)
+	o.FullName = llm.TruncateRunes(strings.TrimSpace(o.FullName), maxContactName)
+	o.Email = llm.TruncateRunes(strings.TrimSpace(o.Email), maxContactEmail)
+	o.Phone = llm.TruncateRunes(strings.TrimSpace(o.Phone), maxContactPhone)
+	o.Location = llm.TruncateRunes(strings.TrimSpace(o.Location), maxContactLocation)
 	o.Links = clipList(o.Links, maxContactLink, maxContactLinks, false)
-	o.Headline = clipRunes(strings.TrimSpace(o.Headline), maxOwnedHeadline)
-	o.Summary = clipRunes(strings.TrimSpace(o.Summary), maxOwnedSummary)
+	o.Headline = llm.TruncateRunes(strings.TrimSpace(o.Headline), maxOwnedHeadline)
+	o.Summary = llm.TruncateRunes(strings.TrimSpace(o.Summary), maxOwnedSummary)
 	o.Languages = clipList(o.Languages, maxOwnedShort, maxOwnedLanguages, true)
 	o.Certifications = clipList(o.Certifications, maxOwnedShort, maxOwnedCertifCount, true)
 	o.Education = clipEducation(o.Education, maxOwnedEducation)
@@ -145,8 +145,8 @@ func (o *Owned) Sanitize() {
 func clipEducation(items []resumeextract.Education, maxCount int) []resumeextract.Education {
 	out := make([]resumeextract.Education, 0, len(items))
 	for _, e := range items {
-		e.Degree = clipRunes(strings.TrimSpace(e.Degree), maxOwnedShort)
-		e.Institution = clipRunes(strings.TrimSpace(e.Institution), maxOwnedShort)
+		e.Degree = llm.TruncateRunes(strings.TrimSpace(e.Degree), maxOwnedShort)
+		e.Institution = llm.TruncateRunes(strings.TrimSpace(e.Institution), maxOwnedShort)
 		e.Year = perioddate.Sanitize(e.Year)
 		if e.Degree == "" && e.Institution == "" && e.Year == nil {
 			continue
@@ -169,7 +169,7 @@ func clipList(items []string, maxRunes, maxCount int, dedupe bool) []string {
 	}
 	out := make([]string, 0, len(items))
 	for _, it := range items {
-		it = clipRunes(strings.TrimSpace(it), maxRunes)
+		it = llm.TruncateRunes(strings.TrimSpace(it), maxRunes)
 		if it == "" {
 			continue
 		}
@@ -336,14 +336,6 @@ func FillEmpty(dst *Owned, src Owned) {
 	dst.Sanitize()
 }
 
-func clipRunes(s string, max int) string {
-	if max <= 0 || utf8.RuneCountInString(s) <= max {
-		return s
-	}
-	r := []rune(s)
-	return string(r[:max])
-}
-
 // DecodeOwned reads the stored candidate_contacts blob; unreadable or empty is "owns nothing".
 func DecodeOwned(blob []byte) Owned {
 	if len(blob) == 0 {
@@ -491,7 +483,7 @@ func (s *Store) ReplaceOwnedFromStructured(ctx context.Context, userID int64, st
 
 // MarkExtractFailed records a failed extract for the given upload stamp.
 func (s *Store) MarkExtractFailed(ctx context.Context, userID int64, detail string, uploadedAt time.Time) error {
-	detail = clipRunes(strings.TrimSpace(detail), 200)
+	detail = llm.TruncateRunes(strings.TrimSpace(detail), 200)
 	return s.repo.SetExtractFailed(ctx, userID, detail, uploadedAt)
 }
 

@@ -513,10 +513,40 @@ func TruncateRunes(s string, limit int) string {
 	return string(r[:limit])
 }
 
+// ClipRunesEllipsis clamps s to at most limit runes and, when it cut anything, trims the
+// cut end and appends "…" so a reader can see the text was shortened. Text that fits is
+// returned untouched.
+func ClipRunesEllipsis(s string, limit int) string {
+	r := []rune(s)
+	if len(r) <= limit {
+		return s
+	}
+	return strings.TrimSpace(string(r[:limit])) + "…"
+}
+
 // TrimTruncateRunes trims surrounding whitespace, clamps s to at most limit runes,
 // and trims again so a mid-word cut never leaves trailing whitespace. It is the one
 // "trim + truncate by runes" helper for bounding untrusted/model text before it is
 // served or sent to a model.
 func TrimTruncateRunes(s string, limit int) string {
 	return strings.TrimSpace(TruncateRunes(strings.TrimSpace(s), limit))
+}
+
+// Limit returns at most n elements of s (nil-safe, preserves order).
+func Limit[T any](s []T, n int) []T {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
+}
+
+// NonEmpty drops blank strings, preserving order; returns nil when nothing remains.
+func NonEmpty(in []string) []string {
+	var out []string
+	for _, v := range in {
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

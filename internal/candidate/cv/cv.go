@@ -4,7 +4,6 @@ package cv
 
 import (
 	"math"
-	"strings"
 
 	"github.com/strelov1/freehire/internal/candidate/perioddate"
 	"github.com/strelov1/freehire/internal/platform/llm"
@@ -279,40 +278,40 @@ func (d *Document) Sanitize() {
 	d.Margins = d.Margins.sanitized()
 	d.Style = d.Style.sanitized()
 
-	d.Header.FullName = clip(d.Header.FullName, maxNameRunes)
-	d.Header.Email = clip(d.Header.Email, maxEmailRunes)
-	d.Header.Phone = clip(d.Header.Phone, maxPhoneRunes)
-	d.Header.Location = clip(d.Header.Location, maxLocationRunes)
-	d.Header.Links = limit(nonEmpty(mapStrings(d.Header.Links, maxShortRunes)), maxLinks)
+	d.Header.FullName = llm.TrimTruncateRunes(d.Header.FullName, maxNameRunes)
+	d.Header.Email = llm.TrimTruncateRunes(d.Header.Email, maxEmailRunes)
+	d.Header.Phone = llm.TrimTruncateRunes(d.Header.Phone, maxPhoneRunes)
+	d.Header.Location = llm.TrimTruncateRunes(d.Header.Location, maxLocationRunes)
+	d.Header.Links = llm.Limit(llm.NonEmpty(mapStrings(d.Header.Links, maxShortRunes)), maxLinks)
 
-	d.Summary = clip(d.Summary, maxSummaryRunes)
+	d.Summary = llm.TrimTruncateRunes(d.Summary, maxSummaryRunes)
 
-	d.Experience = limit(mapEntries(d.Experience, sanitizeExperience), MaxExperience)
-	d.Education = limit(mapEntries(d.Education, sanitizeEducation), MaxEducation)
-	d.Skills = limit(mapEntries(d.Skills, sanitizeSkillGroup), MaxSkillGroups)
-	d.Languages = limit(mapEntries(d.Languages, sanitizeLanguage), MaxLanguages)
-	d.Projects = limit(mapEntries(d.Projects, sanitizeProject), MaxProjects)
-	d.Certifications = limit(mapEntries(d.Certifications, sanitizeCertification), MaxCertifications)
+	d.Experience = llm.Limit(mapEntries(d.Experience, sanitizeExperience), MaxExperience)
+	d.Education = llm.Limit(mapEntries(d.Education, sanitizeEducation), MaxEducation)
+	d.Skills = llm.Limit(mapEntries(d.Skills, sanitizeSkillGroup), MaxSkillGroups)
+	d.Languages = llm.Limit(mapEntries(d.Languages, sanitizeLanguage), MaxLanguages)
+	d.Projects = llm.Limit(mapEntries(d.Projects, sanitizeProject), MaxProjects)
+	d.Certifications = llm.Limit(mapEntries(d.Certifications, sanitizeCertification), MaxCertifications)
 }
 
 func sanitizeExperience(e ExperienceItem) (ExperienceItem, bool) {
-	e.Role = clip(e.Role, maxShortRunes)
-	e.Company = clip(e.Company, maxShortRunes)
-	e.Location = clip(e.Location, maxShortRunes)
+	e.Role = llm.TrimTruncateRunes(e.Role, maxShortRunes)
+	e.Company = llm.TrimTruncateRunes(e.Company, maxShortRunes)
+	e.Location = llm.TrimTruncateRunes(e.Location, maxShortRunes)
 	e.Start = perioddate.Sanitize(e.Start)
 	e.End = perioddate.Sanitize(e.End)
-	e.Summary = clip(e.Summary, maxBulletRunes)
-	e.Bullets = limit(nonEmpty(mapStrings(e.Bullets, maxBulletRunes)), MaxBullets)
-	e.Stack = limit(nonEmpty(mapStrings(e.Stack, maxShortRunes)), maxSkillItems)
+	e.Summary = llm.TrimTruncateRunes(e.Summary, maxBulletRunes)
+	e.Bullets = llm.Limit(llm.NonEmpty(mapStrings(e.Bullets, maxBulletRunes)), MaxBullets)
+	e.Stack = llm.Limit(llm.NonEmpty(mapStrings(e.Stack, maxShortRunes)), maxSkillItems)
 	keep := e.Role != "" || e.Company != "" || e.Location != "" ||
 		e.Start != nil || e.End != nil || e.Summary != "" || len(e.Bullets) > 0
 	return e, keep
 }
 
 func sanitizeEducation(e EducationItem) (EducationItem, bool) {
-	e.Institution = clip(e.Institution, maxShortRunes)
-	e.Degree = clip(e.Degree, maxShortRunes)
-	e.Field = clip(e.Field, maxShortRunes)
+	e.Institution = llm.TrimTruncateRunes(e.Institution, maxShortRunes)
+	e.Degree = llm.TrimTruncateRunes(e.Degree, maxShortRunes)
+	e.Field = llm.TrimTruncateRunes(e.Field, maxShortRunes)
 	e.Start = perioddate.Sanitize(e.Start)
 	e.End = perioddate.Sanitize(e.End)
 	keep := e.Institution != "" || e.Degree != "" || e.Field != "" || e.Start != nil || e.End != nil
@@ -320,47 +319,33 @@ func sanitizeEducation(e EducationItem) (EducationItem, bool) {
 }
 
 func sanitizeSkillGroup(g SkillGroup) (SkillGroup, bool) {
-	g.Group = clip(g.Group, maxShortRunes)
-	g.Items = limit(nonEmpty(mapStrings(g.Items, maxShortRunes)), maxSkillItems)
+	g.Group = llm.TrimTruncateRunes(g.Group, maxShortRunes)
+	g.Items = llm.Limit(llm.NonEmpty(mapStrings(g.Items, maxShortRunes)), maxSkillItems)
 	keep := g.Group != "" || len(g.Items) > 0
 	return g, keep
 }
 
 func sanitizeLanguage(l Language) (Language, bool) {
-	l.Name = clip(l.Name, maxShortRunes)
-	l.Level = clip(l.Level, maxShortRunes)
+	l.Name = llm.TrimTruncateRunes(l.Name, maxShortRunes)
+	l.Level = llm.TrimTruncateRunes(l.Level, maxShortRunes)
 	return l, l.Name != "" || l.Level != ""
 }
 
 func sanitizeProject(p Project) (Project, bool) {
-	p.Name = clip(p.Name, maxShortRunes)
-	p.Link = clip(p.Link, maxShortRunes)
-	p.Bullets = limit(nonEmpty(mapStrings(p.Bullets, maxBulletRunes)), MaxBullets)
+	p.Name = llm.TrimTruncateRunes(p.Name, maxShortRunes)
+	p.Link = llm.TrimTruncateRunes(p.Link, maxShortRunes)
+	p.Bullets = llm.Limit(llm.NonEmpty(mapStrings(p.Bullets, maxBulletRunes)), MaxBullets)
 	return p, p.Name != "" || p.Link != "" || len(p.Bullets) > 0
 }
 
 func sanitizeCertification(c Certification) (Certification, bool) {
-	c.Name = clip(c.Name, maxShortRunes)
-	c.Issuer = clip(c.Issuer, maxShortRunes)
+	c.Name = llm.TrimTruncateRunes(c.Name, maxShortRunes)
+	c.Issuer = llm.TrimTruncateRunes(c.Issuer, maxShortRunes)
 	c.Year = perioddate.Sanitize(c.Year)
 	return c, c.Name != "" || c.Issuer != "" || c.Year != nil
 }
 
 // --- small helpers (mirror internal/candidate/resumeextract) ---
-
-// clip trims s and truncates to at most max runes on a rune boundary, trimming again so
-// a mid-word cut never leaves a trailing space.
-func clip(s string, max int) string {
-	return strings.TrimSpace(llm.TruncateRunes(strings.TrimSpace(s), max))
-}
-
-// limit returns at most n elements of s (nil-safe, preserves order).
-func limit[T any](s []T, n int) []T {
-	if len(s) > n {
-		return s[:n]
-	}
-	return s
-}
 
 // mostRecent returns at most n elements of s, keeping the LAST n rather than the first
 // — see Seed's own use for why a seeded bullet list is capped this way.
@@ -386,18 +371,7 @@ func mapEntries[T any](in []T, fn func(T) (T, bool)) []T {
 func mapStrings(in []string, max int) []string {
 	out := make([]string, len(in))
 	for i, v := range in {
-		out[i] = clip(v, max)
-	}
-	return out
-}
-
-// nonEmpty drops blank strings, preserving order; returns nil when nothing remains.
-func nonEmpty(in []string) []string {
-	var out []string
-	for _, v := range in {
-		if v != "" {
-			out = append(out, v)
-		}
+		out[i] = llm.TrimTruncateRunes(v, max)
 	}
 	return out
 }
