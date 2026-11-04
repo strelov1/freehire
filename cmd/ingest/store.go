@@ -531,12 +531,9 @@ func (s *dbStore) reopenAndRederive(ctx context.Context, source, externalID stri
 		if err != nil {
 			return "", err
 		}
-		params, changed, slugMoved := rederive.Row(j, nil)
-		if slugMoved {
-			params.CompanySlug, params.RoleFingerprint = j.CompanySlug, j.RoleFingerprint
-			changed = rederive.FacetsDiffer(params, j)
-		}
-		if changed {
+		params, _, _ := rederive.Row(j, nil)
+		params.CompanySlug, params.RoleFingerprint = j.CompanySlug, j.RoleFingerprint
+		if rederive.FacetsDiffer(params, j) {
 			if err := qtx.UpdateJobDerived(ctx, params); err != nil {
 				return "", err
 			}
