@@ -34,7 +34,7 @@ func TestTouchJobRefreshesLivenessAndPreservesContent(t *testing.T) {
 		t.Fatalf("stale/close setup: %v", err)
 	}
 
-	touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:1"})
+	touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:1", AllowReopen: true})
 	if err != nil {
 		t.Fatalf("TouchJob: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestTouchJobStampsUpdatedAtOnlyWhenItReopens(t *testing.T) {
 
 	t.Run("open row keeps its change stamp", func(t *testing.T) {
 		before := seed(t, "justjoin:open", false)
-		touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:open"})
+		touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:open", AllowReopen: true})
 		if err != nil {
 			t.Fatalf("TouchJob: %v", err)
 		}
@@ -123,9 +123,29 @@ func TestTouchJobStampsUpdatedAtOnlyWhenItReopens(t *testing.T) {
 		}
 	})
 
+	t.Run("a reopen it may not make is deferred untouched", func(t *testing.T) {
+		before := seed(t, "justjoin:deferred", true)
+		touched, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:deferred"})
+		if err != nil {
+			t.Fatalf("TouchJob: %v", err)
+		}
+		if !touched.Deferred || touched.Reopened {
+			t.Errorf("deferred = %v, reopened = %v; want the reopen deferred to the caller", touched.Deferred, touched.Reopened)
+		}
+		after, err := q.GetJobBySourceExternalID(ctx, GetJobBySourceExternalIDParams{Source: "justjoin", ExternalID: "justjoin:deferred"})
+		if err != nil {
+			t.Fatalf("readback: %v", err)
+		}
+		// Still closed and unstamped: a caller whose re-derive then fails leaves it for the next crawl.
+		if !after.ClosedAt.Valid || !after.LastSeenAt.Time.Equal(before.LastSeenAt.Time) {
+			t.Errorf("closed_at valid = %v, last_seen_at = %v; want the row left exactly as it was",
+				after.ClosedAt.Valid, after.LastSeenAt.Time)
+		}
+	})
+
 	t.Run("reopen stamps it", func(t *testing.T) {
 		before := seed(t, "justjoin:closed", true)
-		if _, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:closed"}); err != nil {
+		if _, err := q.TouchJob(ctx, TouchJobParams{Source: "justjoin", ExternalID: "justjoin:closed", AllowReopen: true}); err != nil {
 			t.Fatalf("TouchJob: %v", err)
 		}
 		after, err := q.GetJobBySourceExternalID(ctx, GetJobBySourceExternalIDParams{Source: "justjoin", ExternalID: "justjoin:closed"})

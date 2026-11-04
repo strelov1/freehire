@@ -259,7 +259,7 @@ func TestTouchJobClearsItsCloseReason(t *testing.T) {
 
 	// A hydrating source re-lists the offer without re-fetching its content: TouchJob is
 	// the reopen half of UpsertJob's ON CONFLICT, so it owes the same clearing.
-	if _, err := q.TouchJob(ctx, TouchJobParams{Source: "greenhouse", ExternalID: "acme:7"}); err != nil {
+	if _, err := q.TouchJob(ctx, TouchJobParams{Source: "greenhouse", ExternalID: "acme:7", AllowReopen: true}); err != nil {
 		t.Fatalf("touch: %v", err)
 	}
 	if isClosed(t, pool, job.ID) {

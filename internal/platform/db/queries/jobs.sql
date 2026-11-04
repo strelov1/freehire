@@ -2314,7 +2314,11 @@ WHERE source = sqlc.arg(source)
 -- Lock the prior state before updating: after waiting for a concurrent close,
 -- transition detection must observe the committed closed row, not an older snapshot.
 WITH existing AS MATERIALIZED (
-    SELECT id, closed_at, is_private FROM jobs
+    SELECT id, closed_at, is_private,
+           -- The touch would reopen this row: closed, and its deadline (if any) not passed.
+           (closed_at IS NOT NULL AND (application_deadline IS NULL
+                                       OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
+    FROM jobs
     WHERE jobs.source = sqlc.arg(source) AND jobs.external_id = sqlc.arg(external_id)
     FOR UPDATE
 ), touched AS (
@@ -2331,7 +2335,7 @@ WITH existing AS MATERIALIZED (
                  (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
             THEN now() ELSE updated_at END
     FROM existing e
-    WHERE jobs.id = e.id
+    WHERE jobs.id = e.id AND (sqlc.arg(allow_reopen)::boolean OR NOT e.would_reopen)
     RETURNING jobs.id, jobs.company_slug, jobs.closed_at,
               COALESCE(jobs.posted_at, jobs.created_at) AS job_posted_at
 ), queued AS (
@@ -2346,10 +2350,15 @@ WITH existing AS MATERIALIZED (
     WHERE t.closed_at IS NULL AND e.closed_at IS NOT NULL AND NOT e.is_private
     ON CONFLICT (job_id) DO NOTHING
 )
--- reopened tells the caller to re-derive the row (internal/ingest/rederive): a touch writes no
--- content, so a posting closed under an older dictionary would otherwise reopen carrying it.
-SELECT t.id, t.company_slug, (t.closed_at IS NULL AND e.closed_at IS NOT NULL)::boolean AS reopened
-FROM touched t JOIN existing e ON e.id = t.id;
+-- A touch writes no content, so a posting closed under an older dictionary would reopen
+-- carrying it. With allow_reopen false a touch that WOULD reopen writes nothing and reports
+-- deferred; the caller repeats it with allow_reopen true inside the transaction that re-derives
+-- the row (internal/ingest/rederive), so a failed re-derive leaves the row closed for the next
+-- crawl to retry instead of open on stale facets. reopened is the transition this call made.
+SELECT e.id, COALESCE(t.company_slug, '')::text AS company_slug,
+       (t.id IS NULL)::boolean AS deferred,
+       (t.id IS NOT NULL AND t.closed_at IS NULL AND e.closed_at IS NOT NULL)::boolean AS reopened
+FROM existing e LEFT JOIN touched t ON t.id = e.id;
 
 -- name: CloseJobsPastApplicationDeadline :one
 -- The source's deadline is inclusive: it expires on the following UTC date. Independent of

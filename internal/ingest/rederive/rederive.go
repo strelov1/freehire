@@ -63,26 +63,10 @@ func Row(j db.Job, canon map[string]string) (params db.UpdateJobDerivedParams, c
 	viaRecruiter := pgconv.Bool(d.ViaRecruiter)
 	equity := pgconv.Text(d.Equity)
 
-	facetsMoved := !slices.Equal(d.Countries, j.Countries) || !slices.Equal(d.Regions, j.Regions) || !slices.Equal(d.Cities, j.Cities) || !slices.Equal(d.Metros, j.Metros) ||
-		d.WorkMode != j.WorkMode || !slices.Equal(d.Skills, j.Skills) ||
-		d.Seniority != j.Seniority ||
-		d.Category != j.Category ||
-		isTech != j.IsTech ||
-		requiresClearance != j.RequiresClearance ||
-		viaRecruiter != j.ViaRecruiter ||
-		equity != j.Equity ||
-		!slices.Equal(d.ClearanceLevels, j.ClearanceLevels) ||
-		!slices.Equal(d.Perks, j.Perks) ||
-		!slices.Equal(d.Engagement, j.Engagement) ||
-		d.PostingLanguage != j.PostingLanguage ||
-		d.EmploymentType != j.EmploymentType ||
-		d.EducationLevel != j.EducationLevel ||
-		d.EnglishLevel != j.EnglishLevel ||
-		experience != j.ExperienceYearsMin
 	fingerprintMoved := fingerprint != j.RoleFingerprint.String
 	slugMoved = d.CompanySlug != j.CompanySlug
 
-	return db.UpdateJobDerivedParams{
+	params = db.UpdateJobDerivedParams{
 		ID:                 j.ID,
 		Countries:          d.Countries,
 		Regions:            d.Regions,
@@ -106,7 +90,31 @@ func Row(j db.Job, canon map[string]string) (params db.UpdateJobDerivedParams, c
 		ExperienceYearsMin: experience,
 		RoleFingerprint:    pgtype.Text{String: fingerprint, Valid: true},
 		CompanySlug:        d.CompanySlug,
-	}, facetsMoved || fingerprintMoved || slugMoved, slugMoved
+	}
+	return params, FacetsDiffer(params, j) || fingerprintMoved || slugMoved, slugMoved
+}
+
+// FacetsDiffer reports whether any derived facet in params differs from the stored row,
+// leaving aside the company slug and fingerprint — a caller that keeps those as stored asks
+// this to learn whether a write is still owed.
+func FacetsDiffer(p db.UpdateJobDerivedParams, j db.Job) bool {
+	return !slices.Equal(p.Countries, j.Countries) || !slices.Equal(p.Regions, j.Regions) ||
+		!slices.Equal(p.Cities, j.Cities) || !slices.Equal(p.Metros, j.Metros) ||
+		p.WorkMode != j.WorkMode || !slices.Equal(p.Skills, j.Skills) ||
+		p.Seniority != j.Seniority ||
+		p.Category != j.Category ||
+		p.IsTech != j.IsTech ||
+		p.RequiresClearance != j.RequiresClearance ||
+		p.ViaRecruiter != j.ViaRecruiter ||
+		p.Equity != j.Equity ||
+		!slices.Equal(p.ClearanceLevels, j.ClearanceLevels) ||
+		!slices.Equal(p.Perks, j.Perks) ||
+		!slices.Equal(p.Engagement, j.Engagement) ||
+		p.PostingLanguage != j.PostingLanguage ||
+		p.EmploymentType != j.EmploymentType ||
+		p.EducationLevel != j.EducationLevel ||
+		p.EnglishLevel != j.EnglishLevel ||
+		p.ExperienceYearsMin != j.ExperienceYearsMin
 }
 
 // StoredGeography is the stored country and region a row carries, fed back in as the

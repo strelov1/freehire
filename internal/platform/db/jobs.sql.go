@@ -6457,7 +6457,11 @@ func (q *Queries) SuppressAggregatorDuplicatesForCompanies(ctx context.Context, 
 
 const touchJob = `-- name: TouchJob :one
 WITH existing AS MATERIALIZED (
-    SELECT id, closed_at, is_private FROM jobs
+    SELECT id, closed_at, is_private,
+           -- The touch would reopen this row: closed, and its deadline (if any) not passed.
+           (closed_at IS NOT NULL AND (application_deadline IS NULL
+                                       OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)) AS would_reopen
+    FROM jobs
     WHERE jobs.source = $1 AND jobs.external_id = $2
     FOR UPDATE
 ), touched AS (
@@ -6474,7 +6478,7 @@ WITH existing AS MATERIALIZED (
                  (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
             THEN now() ELSE updated_at END
     FROM existing e
-    WHERE jobs.id = e.id
+    WHERE jobs.id = e.id AND ($3::boolean OR NOT e.would_reopen)
     RETURNING jobs.id, jobs.company_slug, jobs.closed_at,
               COALESCE(jobs.posted_at, jobs.created_at) AS job_posted_at
 ), queued AS (
@@ -6489,18 +6493,22 @@ WITH existing AS MATERIALIZED (
     WHERE t.closed_at IS NULL AND e.closed_at IS NOT NULL AND NOT e.is_private
     ON CONFLICT (job_id) DO NOTHING
 )
-SELECT t.id, t.company_slug, (t.closed_at IS NULL AND e.closed_at IS NOT NULL)::boolean AS reopened
-FROM touched t JOIN existing e ON e.id = t.id
+SELECT e.id, COALESCE(t.company_slug, '')::text AS company_slug,
+       (t.id IS NULL)::boolean AS deferred,
+       (t.id IS NOT NULL AND t.closed_at IS NULL AND e.closed_at IS NOT NULL)::boolean AS reopened
+FROM existing e LEFT JOIN touched t ON t.id = e.id
 `
 
 type TouchJobParams struct {
-	Source     string `json:"source"`
-	ExternalID string `json:"external_id"`
+	Source      string `json:"source"`
+	ExternalID  string `json:"external_id"`
+	AllowReopen bool   `json:"allow_reopen"`
 }
 
 type TouchJobRow struct {
 	ID          int64  `json:"id"`
 	CompanySlug string `json:"company_slug"`
+	Deferred    bool   `json:"deferred"`
 	Reopened    bool   `json:"reopened"`
 }
 
@@ -6518,12 +6526,20 @@ type TouchJobRow struct {
 // (not newly saved) would drop out of the sweep and its removed offers would never close.
 // Lock the prior state before updating: after waiting for a concurrent close,
 // transition detection must observe the committed closed row, not an older snapshot.
-// reopened tells the caller to re-derive the row (internal/ingest/rederive): a touch writes no
-// content, so a posting closed under an older dictionary would otherwise reopen carrying it.
+// A touch writes no content, so a posting closed under an older dictionary would reopen
+// carrying it. With allow_reopen false a touch that WOULD reopen writes nothing and reports
+// deferred; the caller repeats it with allow_reopen true inside the transaction that re-derives
+// the row (internal/ingest/rederive), so a failed re-derive leaves the row closed for the next
+// crawl to retry instead of open on stale facets. reopened is the transition this call made.
 func (q *Queries) TouchJob(ctx context.Context, arg TouchJobParams) (TouchJobRow, error) {
-	row := q.db.QueryRow(ctx, touchJob, arg.Source, arg.ExternalID)
+	row := q.db.QueryRow(ctx, touchJob, arg.Source, arg.ExternalID, arg.AllowReopen)
 	var i TouchJobRow
-	err := row.Scan(&i.ID, &i.CompanySlug, &i.Reopened)
+	err := row.Scan(
+		&i.ID,
+		&i.CompanySlug,
+		&i.Deferred,
+		&i.Reopened,
+	)
 	return i, err
 }
 

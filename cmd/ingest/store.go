@@ -487,9 +487,9 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string,
 		return "", fmt.Errorf("touch job %s/%s: %w", source, externalID, err)
 	}
 	companySlug := touched.CompanySlug
-	if touched.Reopened {
-		if err := s.rederiveReopened(ctx, touched.ID); err != nil {
-			return "", fmt.Errorf("re-derive reopened job %s/%s: %w", source, externalID, err)
+	if touched.Deferred {
+		if companySlug, err = s.reopenAndRederive(ctx, source, externalID); err != nil {
+			return "", fmt.Errorf("reopen job %s/%s: %w", source, externalID, err)
 		}
 	}
 	// Record the company as crawled, exactly as Save does, so the post-run stale sweep keeps
@@ -507,37 +507,45 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string,
 	return companySlug, nil
 }
 
-// rederiveReopened re-derives a posting a touch has just reopened. A touch writes no content,
-// so a posting closed under an older dictionary would otherwise come back with the facets of
-// that dictionary, and backfill-derive reaches closed rows only within its closed-within
-// window. The company slug and fingerprint stay as stored: moving them needs the companies
-// reconcile only backfill-derive runs. The row is requeued after the write, because the
-// touch's own queue entry may already have been pushed from the stale row.
-func (s *dbStore) rederiveReopened(ctx context.Context, id int64) error {
-	j, err := s.q.GetJob(ctx, id)
-	if err != nil {
-		return err
-	}
-	params, changed, slugMoved := rederive.Row(j, nil)
-	if slugMoved {
-		params.CompanySlug, params.RoleFingerprint = j.CompanySlug, j.RoleFingerprint
-	}
-	if !changed {
-		return nil
-	}
+// reopenAndRederive reopens a posting the plain touch deferred and re-derives it in the same
+// transaction. A touch writes no content, so a posting closed under an older dictionary would
+// otherwise come back with that dictionary's facets, and backfill-derive reaches closed rows
+// only within its closed-within window. One transaction because the reopen is a one-shot
+// signal: a re-derive that failed after a committed reopen would never be retried. The row is
+// locked by the touch, so the derive reads the version it writes over. The company slug and
+// fingerprint stay as stored: moving them needs the companies reconcile only backfill-derive
+// runs. The row is requeued after the write with a re-stamp, superseding the touch's own entry.
+func (s *dbStore) reopenAndRederive(ctx context.Context, source, externalID string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	qtx := s.q.WithTx(tx)
-	if err := qtx.UpdateJobDerived(ctx, params); err != nil {
-		return err
+	touched, err := qtx.TouchJob(ctx, db.TouchJobParams{Source: source, ExternalID: externalID, AllowReopen: true})
+	if err != nil {
+		return "", err
 	}
-	if err := qtx.RequeueSearchOutbox(ctx, id); err != nil {
-		return err
+	if touched.Reopened {
+		j, err := qtx.GetJob(ctx, touched.ID)
+		if err != nil {
+			return "", err
+		}
+		params, changed, slugMoved := rederive.Row(j, nil)
+		if slugMoved {
+			params.CompanySlug, params.RoleFingerprint = j.CompanySlug, j.RoleFingerprint
+			changed = rederive.FacetsDiffer(params, j)
+		}
+		if changed {
+			if err := qtx.UpdateJobDerived(ctx, params); err != nil {
+				return "", err
+			}
+			if err := qtx.RequeueSearchOutbox(ctx, touched.ID); err != nil {
+				return "", err
+			}
+		}
 	}
-	return tx.Commit(ctx)
+	return touched.CompanySlug, tx.Commit(ctx)
 }
 
 // RecordCompanyWebsite stores a posting's stated employer website on its company row

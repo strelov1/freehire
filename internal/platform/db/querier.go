@@ -8018,8 +8018,11 @@ type Querier interface {
 	// (not newly saved) would drop out of the sweep and its removed offers would never close.
 	// Lock the prior state before updating: after waiting for a concurrent close,
 	// transition detection must observe the committed closed row, not an older snapshot.
-	// reopened tells the caller to re-derive the row (internal/ingest/rederive): a touch writes no
-	// content, so a posting closed under an older dictionary would otherwise reopen carrying it.
+	// A touch writes no content, so a posting closed under an older dictionary would reopen
+	// carrying it. With allow_reopen false a touch that WOULD reopen writes nothing and reports
+	// deferred; the caller repeats it with allow_reopen true inside the transaction that re-derives
+	// the row (internal/ingest/rederive), so a failed re-derive leaves the row closed for the next
+	// crawl to retry instead of open on stale facets. reopened is the transition this call made.
 	TouchJob(ctx context.Context, arg TouchJobParams) (TouchJobRow, error)
 	// Resolve a token to where the visitor must be sent, plus what the click needs to be attributed:
 	// the link's own id and the id of the user whose CV it belongs to (so a click by that user can be

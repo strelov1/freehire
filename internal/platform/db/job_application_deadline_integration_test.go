@@ -28,7 +28,7 @@ func TestApplicationDeadlinePreventsReopening(t *testing.T) {
 				t.Fatal(err)
 			}
 			if write == "touch" {
-				_, err = q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID})
+				_, err = q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID, AllowReopen: true})
 			} else {
 				_, err = ingestUpsert(ctx, q, p)
 			}
@@ -63,7 +63,7 @@ func TestApplicationDeadlineExpiresOnTouch(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID}); err != nil {
+			if _, err := q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID, AllowReopen: true}); err != nil {
 				t.Fatal(err)
 			}
 			if got := isClosed(t, pool, row.ID); got != tc.closed {
@@ -264,7 +264,7 @@ func TestApplicationDeadlineExpiryDoesNotQueuePrivatePosting(t *testing.T) {
 				t.Fatal(err)
 			}
 			if write == "touch" {
-				_, err = q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID})
+				_, err = q.TouchJob(ctx, TouchJobParams{Source: p.Source, ExternalID: p.ExternalID, AllowReopen: true})
 			} else {
 				p.Title = "Updated private posting"
 				row, err = ingestUpsert(ctx, q, p)
