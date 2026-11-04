@@ -385,6 +385,7 @@ func (d pandapeDomain) job(root *xhtml.Node, c pandapeCard, link string, e Compa
 		}
 	} else {
 		job.EmploymentType = pandapeEmploymentType(c.Contract, ld.EmploymentType)
+		job.Engagement = brazilRegimeEngagement(c.Contract)
 		if len(ld.JobLocation) > 0 {
 			a := ld.JobLocation[0].Address
 			// "Todo Brasil" (nationwide) postings state the country and no city; the card's own

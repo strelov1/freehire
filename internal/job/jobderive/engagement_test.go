@@ -21,3 +21,16 @@ func TestDerive_Engagement(t *testing.T) {
 		t.Errorf("Engagement with none stated = %v, want nil", got)
 	}
 }
+
+// A structured signal (a picklist an adapter read, or the stored value backfill-derive
+// passes back) is unioned with the text's reading, in vocabulary order, never replaced.
+func TestDerive_EngagementUnionsTheStructuredSignal(t *testing.T) {
+	got := Derive(Input{
+		Title:       "Analista de Dados",
+		Description: "<p>Regime de contratação: CLT.</p>",
+		Engagement:  []string{"pj", "not_a_term"},
+	}).Engagement
+	if want := []string{"clt", "pj"}; !slices.Equal(got, want) {
+		t.Errorf("Engagement = %v, want %v", got, want)
+	}
+}

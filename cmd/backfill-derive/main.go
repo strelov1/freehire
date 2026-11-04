@@ -355,8 +355,10 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		Description:    j.Description,
 		WorkMode:       j.WorkMode, // preserves a set work_mode (jobderive precedence)
 		EmploymentType: jobderive.RetainEmploymentType(j.EmploymentType, j.Title, j.Description),
-		Countries:      storedCountries,
-		Regions:        storedRegions,
+		// The stored terms carry what a picklist said at ingest; the text cannot recover it.
+		Engagement: j.Engagement,
+		Countries:  storedCountries,
+		Regions:    storedRegions,
 		// Recovers the ingest-time IsTechHint from the stored row, which never re-crawls
 		// to learn it fresh: without this, a Profession itdev/itops row whose title the
 		// dictionary cannot resolve would have is_tech silently rederived back to

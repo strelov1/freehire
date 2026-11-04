@@ -63,7 +63,7 @@ const VALUES_NOTE: Record<string, string> = {
   perks: ' — matched from the description; a posting without one does not mention it, which is not the same as not offering it',
   equity: ' — not_stated means none was read, not that the job offers no equity',
   engagement:
-    ' — the UK IR35 status the title or description states; a posting that offers either carries both, and one that does not say carries neither. Separate from employment_type',
+    ' — employee or own business, in each market\'s own term (UK IR35, US W-2/1099/C2C, Polish B2B and umowy, Brazilian CLT/PJ, Russian ТК/ГПХ/самозанятость/ИП, German, Dutch, French, Spanish and Argentine freelance statuses), as the title, the description or a source\'s own contract-type field states it; a posting offering several carries each, one that does not say carries none. Separate from employment_type',
 };
 
 /** Every string facet: the SPA-derived rows plus the API-only ones. */

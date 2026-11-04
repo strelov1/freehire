@@ -239,6 +239,7 @@ func cathoDetail(root *xhtml.Node, p cathoPosting) (Job, bool) {
 		Description:    cathoDescription(root, ld.Description),
 		PostedAt:       cathoDate(ld.DatePosted),
 		EmploymentType: cathoEmploymentType(ld.EmploymentType),
+		Engagement:     brazilRegimeEngagement(ld.EmploymentType),
 	}
 	if j.Countries = countryFromCode(country); j.Countries == nil {
 		j.FallbackCountries = []string{"br"}

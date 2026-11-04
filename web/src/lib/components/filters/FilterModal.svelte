@@ -5,7 +5,14 @@
   import { openWithinEnabled } from '#lib/features.js';
   import { Bell, Info, UserRound } from '@lucide/svelte';
   import { Tooltip } from '#lib/ui/index.js';
-  import { companySearch, EMPLOYER_CREDENTIALS, FACETS, JOB_COLLECTION, searchCities } from '#lib/facets.js';
+  import {
+    companySearch,
+    EMPLOYER_CREDENTIALS,
+    FACETS,
+    JOB_COLLECTION,
+    searchCities,
+    visibleEngagementGroups,
+  } from '#lib/facets.js';
   import { FILTER_SEARCH_MIN_QUERY, jobFilterSearchItems, type FilterSearchHit } from '#lib/filterSearch.js';
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { promptSignIn } from '#lib/signin.js';
@@ -791,15 +798,26 @@
       </p>
     {/if}
     <div class="mt-6"><ChipFacet store={staged} param="employment_type" label="Employment type" counts={c} /></div>
-    <!-- The legal terms a posting states (internal/dict/engagement) — today only the UK's
-         IR35 status, so the chips stand for themselves; once another market's terms join,
-         they are worth showing by the country selected. -->
-    <div class="mt-6">
-      <ChipFacet store={staged} param="engagement" label="Contract terms" counts={c} />
-      <p class="mt-2 text-xs text-muted-foreground">
-        UK contracts: the IR35 status, as the posting states it.
-      </p>
-    </div>
+    <!-- The legal terms a posting states (internal/dict/engagement), one block per market
+         whose term it is, and only the markets the current scope reaches. -->
+    {@const engagementSel = staged.facet('engagement')}
+    {@const engagementGroups = visibleEngagementGroups(c?.facets?.engagement, [
+      ...engagementSel.include,
+      ...engagementSel.exclude,
+    ])}
+    {#if engagementGroups.length > 0}
+      <div class="mt-6">
+        <h3 class="text-sm font-medium">Contract terms</h3>
+        <p class="mt-1 text-xs text-muted-foreground">
+          Employee or own business, in each market's own terms — as the posting states it.
+        </p>
+        {#each engagementGroups as g (g.market)}
+          <div class="mt-4">
+            <ChipFacet store={staged} param="engagement" label={g.market} options={g.options} counts={c} />
+          </div>
+        {/each}
+      </div>
+    {/if}
   {:else if entry.kind === 'industry'}
     <ChipFacet store={staged} param="domains" label="Industry" counts={c} />
     <div class="mt-6"><ChipFacet store={staged} param="company_type" label="Company type" counts={c} /></div>

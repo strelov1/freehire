@@ -57,10 +57,15 @@ type Input struct {
 	// Unlike Countries it never overrides anything — it is the last step of the geography
 	// chain, consulted only when the location, the title marker and both description
 	// rescues all stated nothing at all, and it pulls its region along like Countries.
-	FallbackCountries  []string
-	Seniority          string
-	Category           string
-	EmploymentType     string
+	FallbackCountries []string
+	Seniority         string
+	Category          string
+	EmploymentType    string
+	// Engagement is the caller's structured signal for the legal terms
+	// (vocab.EngagementValues): a picklist an adapter read, or — for backfill-derive —
+	// the row's stored value, which holds whatever a picklist once said and the text
+	// alone cannot recover. It is unioned with the text's reading, never replaced by it.
+	Engagement         []string
 	Skills             []string
 	ExperienceYearsMin *int
 	// EducationLevel and EnglishLevel are the caller's structured signal for the two
@@ -334,7 +339,7 @@ func Derive(in Input) Derived {
 		Equity:             jobfacts.Equity(in.Title, in.Description),
 		ClearanceLevels:    clearanceLevels,
 		Perks:              perks.FromDescription(in.Description),
-		Engagement:         engagement.FromText(title, in.Description),
+		Engagement:         DeriveEngagement(in.Engagement, title, in.Description),
 		PostingLanguage:    lang.Detect(in.Description),
 		EmploymentType:     employmentType,
 		EducationLevel:     educationLevel,
@@ -352,6 +357,21 @@ func RetainEmploymentType(stored, title, description string) string {
 		return ""
 	}
 	return stored
+}
+
+// DeriveEngagement is the engagement column for a posting: the structured signal unioned
+// with what the title and description state, in vocab order, anything outside the
+// vocabulary dropped; nil when neither names a term. Exported for cmd/backfill-engagement,
+// which rewrites this one column without the rest of Derive.
+func DeriveEngagement(signal []string, title, description string) []string {
+	text := engagement.FromText(normalize.CleanTitle(title), description)
+	var out []string
+	for _, v := range vocab.EngagementValues {
+		if slices.Contains(signal, v) || slices.Contains(text, v) {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // trueOrNil lifts a dictionary's boolean into a true-or-absent column: a positive is

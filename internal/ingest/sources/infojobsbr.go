@@ -503,7 +503,9 @@ func infojobsBRJob(root *xhtml.Node, c infojobsBRCard, link string) (Job, bool) 
 	case "Home office":
 		j.WorkMode, j.Remote = "remote", true
 	}
-	j.EmploymentType = infojobsBREmploymentType(infojobsBRField(root, "Tipo de contrato e Jornada:"))
+	regime := infojobsBRField(root, "Tipo de contrato e Jornada:")
+	j.EmploymentType = infojobsBREmploymentType(regime)
+	j.Engagement = brazilRegimeEngagement(regime)
 	if lo, hi, ok := infojobsBRSalary(c.Salary); ok {
 		j.SalaryMin, j.SalaryMax, j.SalaryCurrency, j.SalaryPeriod = &lo, &hi, "BRL", "month"
 	}

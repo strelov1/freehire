@@ -76,9 +76,19 @@ var (
 	// only. It answers "employee or own business, and on what tax footing", which
 	// employment_type (how long and how many hours) does not: a Polish B2B role is
 	// full_time, a UK Inside IR35 role is a contract taxed like a salary. Multi-valued,
-	// because a posting may offer either ("Inside or Outside IR35"). Starts with the UK's
-	// IR35 status; the other markets' terms (B2B, W-2/1099/C2C, PJ/CLT, ИП) join here.
-	EngagementValues   = []string{"ir35_outside", "ir35_inside"}
+	// because a posting may offer more than one ("Inside or Outside IR35", "CLT ou PJ").
+	// Each value is one market's own term, grouped by market in the order below.
+	EngagementValues = []string{
+		"ir35_outside", "ir35_inside",
+		"w2", "1099", "c2c", "contract_to_hire",
+		"b2b", "uop", "umowa_zlecenie", "umowa_o_dzielo",
+		"clt", "pj",
+		"tk", "gph", "samozanyaty", "ip",
+		"freiberuflich", "arbeitnehmerueberlassung",
+		"zzp",
+		"auto_entrepreneur", "portage_salarial",
+		"autonomo", "monotributo",
+	}
 	EnglishLevelValues = []string{"none", "a1", "a2", "b1", "b2", "c1", "c2", "native"}
 	// EquityValues answer "does this job pay in equity?" — derived from the posting's
 	// text by internal/job/jobfacts.Equity. There is no "no equity" value: a posting the

@@ -19,7 +19,7 @@ import {
   EMPLOYMENT_TYPE_VALUES, RELOCATION_VALUES, ENGLISH_LEVEL_VALUES,
   COMPANY_TYPE_VALUES, DOMAIN_VALUES, INDUSTRY_VALUES, FACET_ALIASES,
   AI_ARCHETYPE_VALUES, SKILL_LABELS, INDUSTRY_LABELS, ROLE_TYPE_VALUES, SOURCE_TYPE_VALUES,
-  CLEARANCE_LEVEL_VALUES, PERK_VALUES, PERK_LABELS, EQUITY_VALUES, ENGAGEMENT_VALUES, ENGAGEMENT_LABELS,
+  CLEARANCE_LEVEL_VALUES, PERK_VALUES, PERK_LABELS, EQUITY_VALUES, ENGAGEMENT_VALUES, ENGAGEMENT_LABELS, ENGAGEMENT_MARKETS,
 } from './generated/contracts';
 import { fuzzyMatch } from './fuzzy';
 import {
@@ -624,9 +624,35 @@ const INDUSTRIES: FacetOption[] = options(INDUSTRY_VALUES, INDUSTRY_LABELS);
 // The perks the description states (internal/dict/perks); values and labels are both
 // generated from the dictionary, so a chip cannot offer a perk it never writes.
 const PERKS: FacetOption[] = options(PERK_VALUES, PERK_LABELS);
-// The legal terms a posting states it engages on (internal/dict/engagement) — the IR35
-// status today. Generated like PERKS, so a chip cannot offer a value never written.
+// The legal terms a posting states it engages on (internal/dict/engagement), each in its
+// market's own term. Generated like PERKS, so a chip cannot offer a value never written.
 const ENGAGEMENT: FacetOption[] = options(ENGAGEMENT_VALUES, ENGAGEMENT_LABELS);
+// The same options grouped by the market whose term each is ("United Kingdom": the two
+// IR35 chips), in vocabulary order — the filter pane draws one chip block per market.
+export const ENGAGEMENT_GROUPS: { market: string; options: FacetOption[] }[] = ENGAGEMENT.reduce(
+  (groups, o) => {
+    const market = ENGAGEMENT_MARKETS[o.value as keyof typeof ENGAGEMENT_MARKETS];
+    const last = groups.at(-1);
+    if (last?.market === market) last.options.push(o);
+    else groups.push({ market, options: [o] });
+    return groups;
+  },
+  [] as { market: string; options: FacetOption[] }[],
+);
+
+// The market blocks worth drawing under the current scope: one that matches postings or
+// holds a selection. Without counts (still loading, or none returned) every block shows.
+// A search narrowed to the UK therefore offers the IR35 chips and not twenty others,
+// which is the country scoping the filter needs, read off the counts it already has.
+export function visibleEngagementGroups(
+  counts: Record<string, number> | undefined,
+  selected: readonly string[],
+): typeof ENGAGEMENT_GROUPS {
+  if (!counts) return ENGAGEMENT_GROUPS;
+  return ENGAGEMENT_GROUPS.filter((g) =>
+    g.options.some((o) => (counts[o.value] ?? 0) > 0 || selected.includes(o.value)),
+  );
+}
 // The words people type for a perk that its label does not contain, so the filter search
 // finds "pension" under Retirement Plan and "pto" under Generous Paid Time Off.
 const PERK_ALIASES: Record<string, readonly string[]> = {

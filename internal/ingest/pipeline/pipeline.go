@@ -1591,6 +1591,7 @@ func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical)
 			Seniority:          j.Seniority,
 			Category:           j.Category,
 			EmploymentType:     j.EmploymentType,
+			Engagement:         j.Engagement,
 			Skills:             j.Skills,
 			ExperienceYearsMin: j.ExperienceYearsMin,
 			EducationLevel:     j.EducationLevel,

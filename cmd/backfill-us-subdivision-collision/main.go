@@ -148,7 +148,9 @@ func deriveRow(j db.Job, canon map[string]string) (params db.UpdateJobDerivedPar
 		Description:    j.Description,
 		WorkMode:       j.WorkMode,
 		EmploymentType: jobderive.RetainEmploymentType(j.EmploymentType, j.Title, j.Description),
-		IsTechHint:     sources.ProfessionConfirmsTech(j.Source, j.ExternalID),
+		// The stored terms carry what a picklist said at ingest; the text cannot recover it.
+		Engagement: j.Engagement,
+		IsTechHint: sources.ProfessionConfirmsTech(j.Source, j.ExternalID),
 	})
 	if canonical, ok := canon[normalize.FoldSlug(d.CompanySlug)]; ok {
 		d.CompanySlug = canonical

@@ -261,8 +261,8 @@ export interface Job {
   /**
    * Engagement names the legal terms the posting states it engages its worker on,
    * from the closed vocabulary vocab.EngagementValues (internal/dict/engagement, never
-   * the LLM) — today the UK's IR35 status, ir35_outside and ir35_inside, both present
-   * when the posting offers either. Indexed as a filterable Meili facet. Always an
+   * the LLM), each in its market's own term (ir35_outside, w2, b2b, clt, gph...), every
+   * one the posting offers. Indexed as a filterable Meili facet. Always an
    * array: [] means the posting does not say, not that neither applies.
    */
   engagement: string[];
@@ -1822,13 +1822,60 @@ export const PERK_LABELS = {
   'unlimited_pto': 'Unlimited PTO',
 } as const;
 export type PerkLabels = typeof PERK_LABELS;
-export const ENGAGEMENT_VALUES = ['ir35_outside', 'ir35_inside'] as const;
+export const ENGAGEMENT_VALUES = ['ir35_outside', 'ir35_inside', 'w2', '1099', 'c2c', 'contract_to_hire', 'b2b', 'uop', 'umowa_zlecenie', 'umowa_o_dzielo', 'clt', 'pj', 'tk', 'gph', 'samozanyaty', 'ip', 'freiberuflich', 'arbeitnehmerueberlassung', 'zzp', 'auto_entrepreneur', 'portage_salarial', 'autonomo', 'monotributo'] as const;
 export type Engagement = (typeof ENGAGEMENT_VALUES)[number];
 export const ENGAGEMENT_LABELS = {
+  '1099': '1099',
+  'arbeitnehmerueberlassung': 'Arbeitnehmerüberlassung',
+  'auto_entrepreneur': 'Auto-entrepreneur',
+  'autonomo': 'Autónomo',
+  'b2b': 'B2B contract',
+  'c2c': 'Corp-to-Corp (C2C)',
+  'clt': 'CLT',
+  'contract_to_hire': 'Contract-to-hire',
+  'freiberuflich': 'Freiberuflich',
+  'gph': 'ГПХ',
+  'ip': 'ИП',
   'ir35_inside': 'Inside IR35',
   'ir35_outside': 'Outside IR35',
+  'monotributo': 'Monotributo',
+  'pj': 'PJ',
+  'portage_salarial': 'Portage salarial',
+  'samozanyaty': 'Самозанятый',
+  'tk': 'Трудовой договор (ТК)',
+  'umowa_o_dzielo': 'Umowa o dzieło',
+  'umowa_zlecenie': 'Umowa zlecenie',
+  'uop': 'Umowa o pracę',
+  'w2': 'W-2',
+  'zzp': 'ZZP',
 } as const;
 export type EngagementLabels = typeof ENGAGEMENT_LABELS;
+export const ENGAGEMENT_MARKETS = {
+  '1099': 'United States',
+  'arbeitnehmerueberlassung': 'Germany',
+  'auto_entrepreneur': 'France',
+  'autonomo': 'Spain',
+  'b2b': 'Poland & Central Europe',
+  'c2c': 'United States',
+  'clt': 'Brazil',
+  'contract_to_hire': 'International',
+  'freiberuflich': 'Germany',
+  'gph': 'Russia & CIS',
+  'ip': 'Russia & CIS',
+  'ir35_inside': 'United Kingdom',
+  'ir35_outside': 'United Kingdom',
+  'monotributo': 'Argentina',
+  'pj': 'Brazil',
+  'portage_salarial': 'France',
+  'samozanyaty': 'Russia & CIS',
+  'tk': 'Russia & CIS',
+  'umowa_o_dzielo': 'Poland',
+  'umowa_zlecenie': 'Poland',
+  'uop': 'Poland',
+  'w2': 'United States',
+  'zzp': 'Netherlands',
+} as const;
+export type EngagementMarkets = typeof ENGAGEMENT_MARKETS;
 export const GHOST_CRITERION_VALUES = ['evergreen_posting', 'ats_absent', 'silent_applications', 'user_reports'] as const;
 export type GhostCriterion = (typeof GHOST_CRITERION_VALUES)[number];
 export const EMAIL_STATUS_SIGNAL_VALUES = ['acknowledgement', 'screening', 'interview_invitation', 'assessment', 'offer', 'rejection', 'info_request', 'incomplete_application', 'other'] as const;

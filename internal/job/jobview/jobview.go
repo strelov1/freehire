@@ -87,8 +87,8 @@ type Job struct {
 	Perks []string `json:"perks"`
 	// Engagement names the legal terms the posting states it engages its worker on,
 	// from the closed vocabulary vocab.EngagementValues (internal/dict/engagement, never
-	// the LLM) — today the UK's IR35 status, ir35_outside and ir35_inside, both present
-	// when the posting offers either. Indexed as a filterable Meili facet. Always an
+	// the LLM), each in its market's own term (ir35_outside, w2, b2b, clt, gph...), every
+	// one the posting offers. Indexed as a filterable Meili facet. Always an
 	// array: [] means the posting does not say, not that neither applies.
 	Engagement []string `json:"engagement"`
 	// AIInterviewReports is how many people have reported that this job's company

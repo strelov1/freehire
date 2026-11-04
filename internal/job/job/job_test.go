@@ -529,11 +529,31 @@ func TestUpsertParams_CheapWriteMatchKeyCoversEveryColumnItWrites(t *testing.T) 
 			}
 			if matchKeyHeld(baseParams, got) {
 				t.Errorf("Input.%s moved %v but left RefreshUnchangedJob's match key "+
-					"(content_hash, cities, salary_*_source, english_level, is_tech) unchanged: an "+
+					"(content_hash, cities, salary_*_source, english_level, is_tech, engagement) unchanged: an "+
 					"unchanged re-ingest would skip the row and leave those columns stale",
 					field.Name, moved)
 			}
 		})
+	}
+}
+
+// A source's structured engagement signal (a Brazilian board's CLT/PJ picklist) moves the
+// engagement column while every hashed field stands still — the generic walk above cannot
+// show it, because its slice mutation appends a value outside the vocabulary, which Derive
+// drops. The cheap write's key must therefore see the column, or a re-crawl would keep the
+// stored terms forever.
+func TestUpsertParams_EngagementSignalMovesTheKeyNotTheHash(t *testing.T) {
+	without, with := fullDraft(), fullDraft()
+	with.Engagement = []string{"pj"}
+	a, b := mustParams(t, without), mustParams(t, with)
+	if a.ContentHash != b.ContentHash {
+		t.Fatalf("content_hash moved; the test needs a signal the hash does not read")
+	}
+	if slices.Equal(a.Engagement, b.Engagement) {
+		t.Fatalf("engagement did not move: %v", b.Engagement)
+	}
+	if matchKeyHeld(a, b) {
+		t.Errorf("the match key held while engagement moved %v -> %v", a.Engagement, b.Engagement)
 	}
 }
 
@@ -582,7 +602,8 @@ func matchKeyHeld(a, b db.UpsertJobParams) bool {
 		a.SalaryCurrencySource == b.SalaryCurrencySource &&
 		a.SalaryPeriodSource == b.SalaryPeriodSource &&
 		a.EnglishLevel == b.EnglishLevel &&
-		a.IsTech == b.IsTech
+		a.IsTech == b.IsTech &&
+		slices.Equal(a.Engagement, b.Engagement)
 }
 
 // fullDraft populates every jobderive.Input field, including the optional structured signals,

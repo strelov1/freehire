@@ -588,7 +588,10 @@ WHERE source = sqlc.arg(source) AND company = '' AND external_id LIKE sqlc.arg(b
 -- to true while title/category/every hashed field stay put. Folding them into the hash instead
 -- would change every stored content_hash at once and make the first crawl after deploy rewrite
 -- and re-index the whole catalogue — 6.6M rows through a queue that drains at ~9 documents a
--- second. Note the asymmetry with education_level, which IS hashed: it was hashed before either
+-- second. engagement is in the key for the same reason as english_level: a Brazilian board's
+-- CLT/PJ picklist (sources.Job.Engagement) can move it while every hashed field stands still,
+-- and a dictionary extension moves it for the postings whose text gains a term — both reach
+-- the full upsert, and its search enqueue, on the next crawl. Note the asymmetry with education_level, which IS hashed: it was hashed before either
 -- had a structured tier, and moving it out now would cost exactly the storm this key exists to
 -- avoid. IS NOT DISTINCT FROM (not =) on the nullable salary bounds and on is_tech so a NULL
 -- (unset/unknown) still matches its own kind — a plain = would push every sourceless/unknown job
@@ -634,6 +637,7 @@ WHERE source = sqlc.arg(source)
   AND salary_period_source = sqlc.arg(salary_period_source)
   AND english_level = sqlc.arg(english_level)
   AND is_tech IS NOT DISTINCT FROM sqlc.arg(is_tech)
+  AND engagement = COALESCE(sqlc.arg(engagement)::text[], '{}')
   AND application_deadline IS NOT DISTINCT FROM COALESCE(sqlc.narg(application_deadline)::date, application_deadline)
   AND (application_deadline IS NULL OR application_deadline >= (now() AT TIME ZONE 'UTC')::date)
   AND closed_at IS NULL
@@ -3514,3 +3518,41 @@ SELECT d.job_id FROM search_delete_outbox d
 LEFT JOIN jobs j ON j.id = d.job_id
 WHERE d.job_id = ANY(sqlc.arg(job_ids)::bigint[])
   AND (j.id IS NULL OR j.closed_at IS NOT NULL);
+
+-- name: JobsForEngagementByIDs :many
+-- Title, description and the stored engagement terms for a named set of ids, for
+-- cmd/backfill-engagement. By primary key: the candidates come from the search index,
+-- so the pass reads only the bodies that mention a term instead of de-TOASTing the table.
+SELECT id, title, description, engagement FROM jobs
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- name: SetJobEngagement :one
+-- Write one row's engagement terms, for cmd/backfill-engagement, and queue an open row
+-- for the search drain in the same statement: the column is not in content_hash, so
+-- nothing else would carry the new value to the index short of a full rebuild.
+--
+-- The IS DISTINCT FROM guard makes the pass idempotent: a row already carrying the
+-- derived terms is neither rewritten nor queued, so a re-run writes nothing — which is
+-- also why the write must not lose its queue entry. updated_at moves, so cmd/reindex's
+-- post-swap purge keeps an entry for a row it read before this write; and an entry already
+-- pending is RE-STAMPED (a new id and created_at, its lease kept) rather than left alone,
+-- the UpsertApplyForm rule: a drain that already claimed the old id finishes only that old
+-- generation, and the new one stays pending. A dead-lettered entry comes back to life:
+-- its failures belonged to the old document, and the claim skips any row with failed_at.
+WITH updated AS (
+    UPDATE jobs j
+    SET engagement = COALESCE(sqlc.arg(engagement)::text[], '{}'),
+        updated_at = now()
+    WHERE j.id = sqlc.arg(job_id)
+      AND j.engagement IS DISTINCT FROM COALESCE(sqlc.arg(engagement)::text[], '{}')
+    RETURNING j.id, j.closed_at, COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+enqueued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT u.id, u.eff_posted_at FROM updated u WHERE u.closed_at IS NULL
+    ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
+    RETURNING job_id
+)
+SELECT (SELECT count(*) FROM updated)::bigint AS updated_count,
+       (SELECT count(*) FROM enqueued)::bigint AS enqueued_count;

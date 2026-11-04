@@ -3577,6 +3577,10 @@ type Querier interface {
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
 	// over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
 	JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error)
+	// Title, description and the stored engagement terms for a named set of ids, for
+	// cmd/backfill-engagement. By primary key: the candidates come from the search index,
+	// so the pass reads only the bodies that mention a term instead of de-TOASTing the table.
+	JobsForEngagementByIDs(ctx context.Context, ids []int64) ([]JobsForEngagementByIDsRow, error)
 	// Title, location, description and the currently-stored countries/regions for a named set
 	// of ids, for cmd/backfill-remote-region-restriction.
 	//
@@ -6796,7 +6800,10 @@ type Querier interface {
 	// to true while title/category/every hashed field stay put. Folding them into the hash instead
 	// would change every stored content_hash at once and make the first crawl after deploy rewrite
 	// and re-index the whole catalogue — 6.6M rows through a queue that drains at ~9 documents a
-	// second. Note the asymmetry with education_level, which IS hashed: it was hashed before either
+	// second. engagement is in the key for the same reason as english_level: a Brazilian board's
+	// CLT/PJ picklist (sources.Job.Engagement) can move it while every hashed field stands still,
+	// and a dictionary extension moves it for the postings whose text gains a term — both reach
+	// the full upsert, and its search enqueue, on the next crawl. Note the asymmetry with education_level, which IS hashed: it was hashed before either
 	// had a structured tier, and moving it out now would cost exactly the storm this key exists to
 	// avoid. IS NOT DISTINCT FROM (not =) on the nullable salary bounds and on is_tech so a NULL
 	// (unset/unknown) still matches its own kind — a plain = would push every sourceless/unknown job
@@ -7491,6 +7498,19 @@ type Querier interface {
 	// clear in only one of them is precisely the gap a code review found.
 	SetGmailStatus(ctx context.Context, arg SetGmailStatusParams) error
 	SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error
+	// Write one row's engagement terms, for cmd/backfill-engagement, and queue an open row
+	// for the search drain in the same statement: the column is not in content_hash, so
+	// nothing else would carry the new value to the index short of a full rebuild.
+	//
+	// The IS DISTINCT FROM guard makes the pass idempotent: a row already carrying the
+	// derived terms is neither rewritten nor queued, so a re-run writes nothing — which is
+	// also why the write must not lose its queue entry. updated_at moves, so cmd/reindex's
+	// post-swap purge keeps an entry for a row it read before this write; and an entry already
+	// pending is RE-STAMPED (a new id and created_at, its lease kept) rather than left alone,
+	// the UpsertApplyForm rule: a drain that already claimed the old id finishes only that old
+	// generation, and the new one stays pending. A dead-lettered entry comes back to life:
+	// its failures belonged to the old document, and the claim skips any row with failed_at.
+	SetJobEngagement(ctx context.Context, arg SetJobEngagementParams) (SetJobEngagementRow, error)
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.

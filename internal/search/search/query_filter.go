@@ -86,8 +86,8 @@ var StringFacets = map[string]string{
 	// column served top-level. Enrolled in /jobs/facets like requires_clearance, with
 	// the same settings-before-binary hazard.
 	"perks": "perks",
-	// engagement is the legal terms the posting states (internal/dict/engagement, the
-	// IR35 status today), a jobs column served top-level with the same hazard.
+	// engagement is the legal terms the posting states (internal/dict/engagement: IR35,
+	// W-2, B2B, CLT...), a jobs column served top-level with the same hazard.
 	"engagement": "engagement",
 }
 

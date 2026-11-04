@@ -40,7 +40,7 @@ func TestFromText(t *testing.T) {
 		{"value before the name outside", "", "ensure stable releases. IR35 Outside.", []string{"ir35_outside"}},
 		{"hashtag", "", "#sourcetopay #architecture #outsideir35 #contractjobs", []string{"ir35_outside"}},
 		{"next line glued on", "", "Clojure | React | £550/day Outside IR35We are looking for an engineer", []string{"ir35_outside"}},
-		{"b2b outside", "", "Assignment; B2B contract (outside IR35)", []string{"ir35_outside"}},
+		{"b2b outside", "", "Assignment; B2B contract (outside IR35)", []string{"ir35_outside", "b2b"}},
 		// Both stated.
 		{"either", "", "The roles can be engaged Inside or Outside IR35 and will suit engineers", []string{"ir35_outside", "ir35_inside"}},
 		{"field offers either", "", "Rate: £600/day IR35: Inside or Outside", []string{"ir35_outside", "ir35_inside"}},
@@ -58,6 +58,72 @@ func TestFromText(t *testing.T) {
 		{"denied with to be", "", "This is not to be inside IR35.", nil},
 		{"word inside another", "", "Outside IR350 is a part number; inside ir3500 too.", nil},
 		{"empty", "", "", nil},
+
+		// United States.
+		{"w2 only, c2c refused", "", "Hybrid onsite model On W2 only No C2C Need someone strong", []string{"w2"}},
+		{"w2 label in title", "Business Intelligence Developer (W2 Only)", "", []string{"w2"}},
+		{"w2 and 1099 offered", "", "What We Offer! 1099 and W-2 options to fit your preferred schedule", []string{"w2", "1099"}},
+		{"payroll forms are a duty", "Payroll Specialist", "Prepare and distribute W-2 and 1099 forms at year end.", nil},
+		{"german pay grade", "Professur", "Besoldung nach W2 der Bundesbesoldungsordnung", nil},
+		{"1099 contractor", "", "Mental Health Therapist — 1099 Contractor. Position Summary", []string{"1099"}},
+		{"1099 is a price", "", "Our premium plan costs $1099 per year for a family of four.", nil},
+		{"c2c rate", "", "Pay rate: $85 – $95/hr on C2C Location: 100% Remote", []string{"c2c"}},
+		{"c2c refused in a list", "", "US Citizenship Required NO VISA SUPPORT or C2C Primary Function", nil},
+		{"c2c not open", "", "This role is NOT open to corp2corp (C2C) or corp2hire (C2H).", nil},
+		{"c2c third party refused", "", "No sponsorship needed. No third-party/C2C candidates.", nil},
+		{"refused in a comma list", "", "We cannot accept H-1B, F-1/STEM OPT, 1099, C2C, or C2H arrangements.", nil},
+		{"c2c marketplace", "", "Mercari is Japan's biggest C2C marketplace founded in 2013", nil},
+		{"contract to hire", "Web Developer (Contract to Hire)", "", []string{"contract_to_hire"}},
+		{"c2h duration", "", "Contract Duration: 12 Months (C2H) Budget: Up to 24 LPA", []string{"contract_to_hire"}},
+		{"recruiter skill", "IT Recruiter", "Strong experience in IT recruitment (C2C/C2H/FTE).", nil},
+
+		// Poland and Central Europe.
+		{"justjoin pay paragraph", "", "<p><strong>Wynagrodzenie</strong><br>umowa o pracę: 16000 – 18000 PLN / mies. brutto<br>B2B: 20000 – 24000 PLN / mies. netto</p>", []string{"b2b", "uop"}},
+		{"forma zatrudnienia", "", "Forma zatrudnienia: umowa o pracę/ B2B Tryb pracy: hybrydowy", []string{"b2b", "uop"}},
+		{"b2b tag in title", "Senior PAM Business Analyst (B2B)", "", []string{"b2b"}},
+		{"b2b sales", "B2B Sales Representative", "Grow our B2B sales pipeline across DACH.", nil},
+		{"cbop field", "", "Rodzaj umowy: Umowa zlecenie / Umowa o świadczenie usług Wynagrodzenie brutto", []string{"umowa_zlecenie"}},
+		{"either of two", "", "Rodzaj umowy: umowa zlecenie lub umowa o dzieło.", []string{"umowa_zlecenie", "umowa_o_dzielo"}},
+		{"payroll duty", "Specjalista ds. płac", "Rozliczanie umów cywilnoprawnych (np. umowy zlecenia, umowy o dzieło).", nil},
+
+		// Brazil.
+		{"clt and pj", "", "Regime de contratação: CLT ou PJ, a combinar.", []string{"clt", "pj"}},
+		{"clt efetivo", "", "Assistente de SDR. Efetivo (CLT) Assistente SDR", []string{"clt"}},
+		{"pj in title", "Desenvolvedor(a) Python - Remoto - PJ", "", []string{"pj"}},
+		{"pj seller", "Vendedor PJ - Fixo de R$ 2.000 + Comissão", "", []string{"pj"}},
+		{"no is a preposition", "", "Vaga no regime CLT, com benefícios.", []string{"clt"}},
+		{"no before both", "", "Contratação no regime CLT ou PJ.", []string{"clt", "pj"}},
+		{"portuguese refusal", "", "Não contratamos no regime CLT.", nil},
+		{"corporate clients", "Gerente de Negócios PJ - Sicredi", "Atender a carteira de associados PJ do segmento PJ.", nil},
+
+		// Russia and the CIS.
+		{"tk", "", "Условия: Оформление по ТК РФ, официальная зарплата", []string{"tk"}},
+		{"tk or gph", "", "Официальное трудоустройство (трудовой договор или ГПХ по договоренности)", []string{"tk", "gph"}},
+		{"ip and self-employed", "", "Наши условия: Оформление по ИП/Самозанятости, удаленный формат", []string{"samozanyaty", "ip"}},
+		{"employer name", "", "Вакансия компании: ИП Комаров А. С. В команду требуется", nil},
+		{"accountant for entrepreneurs", "Бухгалтер по сопровождению ИП", "Ведение бухгалтерии ИП.", nil},
+		{"bank's clients", "", "Анализ деятельности заемщиков (ЮЛ, ИП, самозанятых), расчет показателей", nil},
+		{"a product's clients", "", "Для предпринимательского статуса (ИП, самозанятый или обычное физическое лицо)", nil},
+		{"hr knows the code", "", "Требования: знание ТК РФ, кадровое делопроизводство", nil},
+
+		// Germany, the Netherlands, France.
+		{"freelance lecturer", "Meister / Techniker (m/w/d) als Dozent (freiberuflich)", "", []string{"freiberuflich"}},
+		{"freelancers as clients", "", "Wir beraten Handwerker, Freiberufler und vermögende Privatpersonen.", nil},
+		{"agency contract field", "", "Vertragsart: Festanstellung (Arbeitnehmerüberlassung) Befristung: unbefristet", []string{"arbeitnehmerueberlassung"}},
+		{"agency portfolio", "", "Unser Portfolio umfasst die Arbeitnehmerüberlassung, Personalvermittlung und Outsourcing.", nil},
+		{"zzp", "", "Deze rol is in te vullen in vast dienstverband of als ZZP’er.", []string{"zzp"}},
+		{"zzp refused in the title", "Java Developer (geen ZZP)", "", nil},
+		{"zzp clients", "", "Wij werken met uiteenlopende klanten van zzp’ers tot grote organisaties.", nil},
+		{"auto-entrepreneur status", "", "Votre profil : Statut auto-entrepreneur obligatoire", []string{"auto_entrepreneur"}},
+		{"entrepreneurship", "GTM Manager – Micro Entrepreneurship", "", nil},
+		{"portage offered", "", "Un(e) Développeur(euse) Java en freelance ou portage salarial.", []string{"portage_salarial"}},
+		{"portage refused", "", "Poste proposé exclusivement en CDI (hors prestation, freelance et portage salarial).", nil},
+
+		// Spain and Argentina.
+		{"autonomo driver", "Conductor autónomo en Bilbao", "", []string{"autonomo"}},
+		{"working autonomously", "", "Capacidad de trabajo autónomo y en equipo.", nil},
+		{"tax work on monotributo", "Contador/a", "Liquidación de Ganancias Sociedades, Bienes Personales y Monotributo.", nil},
+		{"monotributo", "", "Requisitos: Contar con monotributo activo o la posibilidad de activarlo.", []string{"monotributo"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
