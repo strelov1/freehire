@@ -37,6 +37,17 @@
   const webhook = $derived(notifications.webhook);
   const webhookSub = $derived(notifications.forSavedSearch(savedSearchId, 'webhook'));
 
+  // The no-device note sends the user to the phone; when they come back to this tab,
+  // re-read so the note goes away without a reload.
+  $effect(() => {
+    if (!pushSub || notifications.hasPushDevice) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') notifications.refreshPushDevice().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  });
+
   // Telegram: unsubscribe if on; else subscribe. Only ever called while linked — the
   // chip renders as a link to Integrations instead of this button while it isn't.
   async function toggleTelegram() {

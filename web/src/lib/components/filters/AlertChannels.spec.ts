@@ -6,6 +6,7 @@ import AlertChannels from './AlertChannels.svelte';
 // for it, so each case sets exactly the state it is about.
 const state = vi.hoisted(() => ({
   hasPushDevice: false,
+  refreshPushDevice: vi.fn(() => Promise.resolve()),
   subs: [] as { id: number; saved_search_id: number; channel: string }[],
 }));
 
@@ -24,10 +25,12 @@ vi.mock('#lib/notifications.svelte.js', () => ({
       state.subs.find((s) => s.saved_search_id === id && s.channel === channel),
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
+    refreshPushDevice: state.refreshPushDevice,
   },
 }));
 
 beforeEach(() => {
+  state.refreshPushDevice.mockClear();
   state.hasPushDevice = false;
   state.subs = [];
 });
@@ -64,5 +67,13 @@ describe('AlertChannels — push', () => {
     state.subs = [{ id: 9, saved_search_id: 1, channel: 'push' }];
     render(AlertChannels, { savedSearchId: 1 });
     expect(screen.queryByText(/push alerts reach nobody/)).toBeNull();
+  });
+
+  // The note sends the user to their phone; coming back to the tab re-reads.
+  it('re-reads the device list when the tab becomes visible again', () => {
+    state.subs = [{ id: 9, saved_search_id: 1, channel: 'push' }];
+    render(AlertChannels, { savedSearchId: 1 });
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(state.refreshPushDevice).toHaveBeenCalledTimes(1);
   });
 });

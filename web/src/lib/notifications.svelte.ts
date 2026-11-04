@@ -111,6 +111,23 @@ class Notifications extends UserResource<Loaded> {
     return api.telegramLink();
   }
 
+  #pushRefresh: Promise<void> | null = null;
+
+  /** Re-read whether a device is registered — after the user may have turned push
+   *  on in the mobile app. Every alert control on a page asks at once, so one read
+   *  serves them all. */
+  refreshPushDevice(): Promise<void> {
+    this.#pushRefresh ??= api
+      .hasPushDevice()
+      .then((v) => {
+        this.#pushDevice = v;
+      })
+      .finally(() => {
+        this.#pushRefresh = null;
+      });
+    return this.#pushRefresh;
+  }
+
   /** Re-read the link status (after the user reports they connected the bot). */
   async refreshTelegram(): Promise<void> {
     this.#telegram = await api.telegramStatus();

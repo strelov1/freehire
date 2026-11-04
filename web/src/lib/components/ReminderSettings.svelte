@@ -53,6 +53,18 @@
     if (isAuthenticated()) void load();
   });
 
+  // The no-device note sends the user to the phone; when they come back to this tab,
+  // re-read so the note goes away without a reload.
+  $effect(() => {
+    if (!channels.includes('push') || pushAvailable) return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      api.hasPushDevice().then((v) => (pushAvailable = v), () => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  });
+
   async function load() {
     status = 'loading';
     try {
