@@ -18,13 +18,10 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"log"
 	"os"
-	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -35,18 +32,14 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/sources"
+	sweeppolicy "github.com/strelov1/freehire/internal/ingest/sweep"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 	"github.com/strelov1/freehire/internal/platform/worker"
 )
 
-// staleAfter is the DEFAULT grace window before an unseen job is closed. An adapter declares
-// its own window instead — wider for one that crawls only a slice of its catalogue, narrower
-// for one whose full-board crawl makes an unseen reading positive evidence — see sweepWindowFor.
-// Shared with cmd/liveness's staleCutoff via sources.DefaultSweepGrace, since liveness's
-// probeDespiteRegistered backstop only picks up what this sweep has already had a chance
-// to close and must not drift out of sync with it.
-const staleAfter = sources.DefaultSweepGrace
+// staleAfter is the DEFAULT grace window; see sweeppolicy.StaleAfter.
+const staleAfter = sweeppolicy.StaleAfter
 
 func main() {
 	worker.Main(run)
@@ -134,14 +127,14 @@ func run() int {
 	if refetchAll {
 		log.Printf("ingest: INGEST_REFETCH_ALL — every listed posting is treated as new, so stored rows are re-written, not just refreshed")
 	}
-	bodies, err := bodyRefreshFor(os.Getenv("BODY_REFRESH_DAYS"), os.Getenv("BODY_REFRESH_SLICE"), time.Now())
+	bodies, err := sweeppolicy.BodyRefreshFor(os.Getenv("BODY_REFRESH_DAYS"), os.Getenv("BODY_REFRESH_SLICE"), time.Now())
 	if err != nil {
 		log.Printf("config: %v", err)
 		return 1
 	}
-	if bodies.enabled() {
+	if bodies.Enabled() {
 		log.Printf("ingest: re-reading stored bodies older than %s, slice %d of %d",
-			bodies.cutoff.Format(time.DateOnly), bodies.slot, bodies.slices)
+			bodies.Cutoff.Format(time.DateOnly), bodies.Slot, bodies.Slices)
 	}
 	seen := seenPolicy{hydrationWindow: hydrationWindow, refetchAll: refetchAll, bodies: bodies}
 	budget, err := runBudgetFor(os.Getenv("INGEST_RUN_TIMEOUT_SECONDS"), os.Getenv("INGEST_SWEEP_RESERVE_SECONDS"))
@@ -328,7 +321,7 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 	}
 	// A fullBoardListing provider's adapter is registered as structurally proving it lists a
 	// board to completion (freehire#2328), so the sweep may close within its boards — see
-	// sweepableBoards for the full gate, including why a sweepGrace or fullCatalog provider is
+	// sweeppolicy.SweepableBoards for the full gate, including why a sweepGrace or fullCatalog provider is
 	// excluded even when registered.
 	fullBoardListing := sources.FullBoardListingProviders(registry)
 	// A sliceBoardListing provider (e.g. whatjobs) reads each board only to a page budget, so it
@@ -338,16 +331,16 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 	// An emptyBoardListing provider's adapter answers an emptied board distinguishably from a
 	// failed fetch, so a finished board that listed nothing joins its board scope too.
 	emptyBoardListing := sources.EmptyBoardListingProviders(registry)
-	for _, provider := range sweepableProviders(runStats) {
+	for _, provider := range sweeppolicy.SweepableProviders(runStats) {
 		if selfClosing[provider] {
 			continue
 		}
 		_, hasGrace := grace[provider]
-		window := sweepWindowFor(grace, provider)
+		window := sweeppolicy.SweepWindowFor(grace, provider)
 		cutoff := pgtype.Timestamptz{Time: now.Add(-window), Valid: true}
 		if !truncated {
-			bySource := sweepBySource(runStats[provider], fullCatalog[provider])
-			companySlugs := sweepableCompanies(crawled.slugs(provider), runStats[provider])
+			bySource := sweeppolicy.SweepBySource(runStats[provider], fullCatalog[provider])
+			companySlugs := sweeppolicy.SweepableCompanies(crawled.slugs(provider), runStats[provider])
 			closed, skipped, err := sweepProvider(ctx, queries, provider, cutoff, companySlugs, runStats[provider].SkippedBoards, bySource)
 			if err != nil {
 				// Count and continue: one provider's sweep failure must not skip the rest,
@@ -369,15 +362,15 @@ func sweep(ctx context.Context, queries *db.Queries, registry map[string]sources
 		// scope so far. This closes it directly, per board the run structurally proved it
 		// covered (runStats[provider].QualifyingBoards) on a provider whose adapter is
 		// registered as listing a board to completion, or as a bounded slice whose grace window
-		// stands in for that proof — see sweepableBoards for the full gate. Reuses this
+		// stands in for that proof — see sweeppolicy.SweepableBoards for the full gate. Reuses this
 		// provider's own cutoff: the default for a complete listing, the grace window for a slice.
-		boards := sweepableBoards(runStats[provider], boardScope{
-			hasGrace:          hasGrace,
-			fullCatalog:       fullCatalog[provider],
-			fullBoardListing:  fullBoardListing[provider],
-			sliceBoardListing: sliceBoardListing[provider],
-			emptyBoardListing: emptyBoardListing[provider],
-			regionScoped:      sources.ScopesBoardsByRegion(registry[provider]),
+		boards := sweeppolicy.SweepableBoards(runStats[provider], sweeppolicy.BoardScope{
+			HasGrace:          hasGrace,
+			FullCatalog:       fullCatalog[provider],
+			FullBoardListing:  fullBoardListing[provider],
+			SliceBoardListing: sliceBoardListing[provider],
+			EmptyBoardListing: emptyBoardListing[provider],
+			RegionScoped:      sources.ScopesBoardsByRegion(registry[provider]),
 		}, crossShardAmbiguousBoards)
 		if len(boards) > 0 {
 			boardClosed, boardFailed := sweepBoards(ctx, queries, provider, cutoff, boards, registry[provider])
@@ -475,7 +468,7 @@ func (b runBudget) sweepContext(parent context.Context, started time.Time) (cont
 // scan of the provider's open rows rather than one round trip per board (see
 // CloseUnseenJobsForBoards for the measurement). Every provider but a region-scoped one has a
 // single scope, ”; a region-scoped one (jobstreet) gets one statement per region, narrowed to
-// the url prefix its postings live on (sources.BoardURLPrefix). sweepableBoards has already
+// the url prefix its postings live on (sources.BoardURLPrefix). sweeppolicy.SweepableBoards has already
 // cleared the region of every board of an unscoped provider.
 func sweepBoards(ctx context.Context, queries *db.Queries, provider string, cutoff pgtype.Timestamptz, boards []pipeline.BoardRef, src sources.Source) (closed int64, failed int) {
 	byScope := make(map[string][]string)
@@ -547,181 +540,6 @@ func sweepBoardScope(ctx context.Context, queries *db.Queries, provider string, 
 	return closed, failed
 }
 
-// boardScope is the per-provider registry facts sweepableBoards gates on, resolved by the caller
-// — the same convention sweepBySource uses, rather than re-deriving them from the raw registry
-// maps.
-type boardScope struct {
-	hasGrace, fullCatalog, fullBoardListing, sliceBoardListing, emptyBoardListing, regionScoped bool
-}
-
-// sweepableBoards returns, sorted and de-duplicated, the boards of one provider the
-// board-scoped close may retire this run: those the run structurally proved it covered
-// (stats.QualifyingBoards, see pipeline.boardQualifies), gated on the provider's markers.
-//
-// fullBoardListing must be true: a provider whose adapter is not registered as listing a
-// board to completion never contributes to the board scope, however its crawl went — see
-// sources.fullBoardListing for the bar an adapter must clear to earn it. hasGrace and
-// fullCatalog exclude a provider even when registered, for the same reasons sweepBySource
-// excludes them from the source-scoped close: a sweepGrace provider's crawl deliberately
-// reaches only a slice of the catalogue, so a board-scoped close on the default window would
-// close postings that merely drifted past the crawl's depth; a fullCatalog provider already
-// closes by source alone on a clean run, strictly broader than board scope (and today's
-// fullCatalog adapters are boardless besides, so this exclusion is belt-and-braces). Callers
-// gate on shouldSweep first, same as sweepBySource.
-//
-// sliceBoardListing is the other way in, and it requires hasGrace instead of excluding it: such
-// an adapter (whatjobs) reads a board only to a page budget, so it never proves a full listing,
-// and the grace window is what stands in for the proof — the board-scoped close then runs on
-// that window, not the default, so a posting that merely sat past the budget is back before it
-// ends. Without it a whatjobs posting closed only through the company scope, which leaked every
-// posting whose company had drifted out of all the keyword slices (sources.sliceBoardListing).
-//
-// crossShardAmbiguous excludes a board name this run's own Stats saw as unambiguous but that
-// is region-ambiguous across the FULL, unsharded catalog (pipeline.AmbiguousBoardNames,
-// computed by the caller before sharding): sources.Config.Shard groups boards by company
-// slug, not by board name, so a board's two region-variant rows can land in separate shard
-// processes — each running its own Runner.Run and seeing only one region, concluding on its
-// own that the board is unambiguous. Refusing here is what catches what a single Run() call
-// structurally cannot.
-//
-// emptyBoardListing adds the boards the run finished whose listing named nothing
-// (stats.EmptyBoards, see pipeline.boardListedEmpty) — an employer that took every posting down.
-// boardQualifies refuses them, because on most adapters an empty answer cannot be told from a
-// broken crawl, and their last postings then waited 30 days for the empty-feed net; an adapter
-// carrying sources.emptyBoardListing has proven that it can tell them apart. Only on a complete
-// listing: a slice that came back empty says nothing about the rest of the board.
-//
-// regionScoped keeps each board's region, for an adapter whose board ids repeat across regions
-// and whose close narrows each to its region by posting URL (sources.RegionScopedBoards). Every
-// other provider's region is cleared, so its board scope stays keyed on the board id alone.
-//
-// De-duplication guards against a board legitimately appearing twice in one run (a repeated
-// board-file entry, or one board id recurring across independent regional slices) double-
-// counting the close and its log line.
-func sweepableBoards(stats pipeline.Stats, scope boardScope, crossShardAmbiguous map[string]bool) []pipeline.BoardRef {
-	complete := scope.fullBoardListing && !scope.hasGrace
-	slice := scope.sliceBoardListing && scope.hasGrace
-	if scope.fullCatalog || (!complete && !slice) {
-		return nil
-	}
-	boards := slices.Clone(stats.QualifyingBoards)
-	if complete && scope.emptyBoardListing {
-		boards = append(boards, stats.EmptyBoards...)
-	}
-	if !scope.regionScoped {
-		for i := range boards {
-			boards[i].Region = ""
-		}
-	}
-	slices.SortFunc(boards, func(a, b pipeline.BoardRef) int {
-		return cmp.Or(strings.Compare(a.Board, b.Board), strings.Compare(a.Region, b.Region))
-	})
-	boards = slices.Compact(boards)
-	boards = slices.DeleteFunc(boards, func(b pipeline.BoardRef) bool { return crossShardAmbiguous[b.Board] })
-	if len(boards) == 0 {
-		return nil
-	}
-	return boards
-}
-
-// sweepableCompanies narrows the crawled-company scope to the companies this run may actually
-// close within: those it wrote a job for (crawled), minus the ones a board withheld because its
-// crawl did not read what it listed (pipeline.Stats.UnprovenCompanies).
-//
-// The subtraction is what keeps the two halves of the fix honest. A board whose detail requests
-// died still WRITES everything it did manage to read — those rows' last_seen_at moves, their
-// content is refreshed, their company enters the crawled set exactly as before — and only the
-// permission to retire that company's unseen rows is withheld. Recording and closing are
-// separate decisions, and only the second one lacks the evidence.
-//
-// It withholds by COMPANY rather than by board because the crawled scope is the only handle the
-// provider-wide CloseUnseenJobs has; a company under two boards, one of which read cleanly, is
-// still withheld, which is the conservative reading and the correct one — the other board's
-// unread postings belong to that same company.
-//
-// Returns nil rather than an empty slice when nothing is left, which the close reads as an
-// empty text[] and matches no row (`company_slug = ANY('{}')`), i.e. it closes nothing.
-//
-// A failed covered refresh (Stats.RefreshFailed) withholds the whole scope. Those rows keep their
-// old last_seen_at while the listing named them, their company can still be in the crawled set
-// through another board's refresh, and a covered row is never written again to reopen it.
-func sweepableCompanies(crawled []string, stats pipeline.Stats) []string {
-	if stats.RefreshFailed > 0 {
-		return nil
-	}
-	if len(stats.UnprovenCompanies) == 0 {
-		return crawled
-	}
-	unproven := make(map[string]bool, len(stats.UnprovenCompanies))
-	for _, slug := range stats.UnprovenCompanies {
-		unproven[slug] = true
-	}
-	kept := slices.DeleteFunc(slices.Clone(crawled), func(slug string) bool { return unproven[slug] })
-	if len(kept) == 0 {
-		return nil
-	}
-	return kept
-}
-
-// sweepableProviders returns, sorted, the providers in a run that ingested at least one
-// job — the only ones safe to sweep (a zero-ingest provider proves only that its crawl
-// failed). Sorting gives a deterministic sweep order across runs and tests.
-func sweepableProviders(rs pipeline.RunStats) []string {
-	providers := make([]string, 0, len(rs))
-	for provider, s := range rs {
-		if shouldSweep(s) {
-			providers = append(providers, provider)
-		}
-	}
-	sort.Strings(providers)
-	return providers
-}
-
-// shouldSweep reports whether the run saw enough of the world to justify closing
-// jobs: a run that ingested nothing proves only that the crawl failed. A stored row the
-// coverage gate refreshed counts too: on an aggregator whose every employer is crawled
-// first-hand nothing is ingested, yet the crawl plainly worked, and those rows' companies are
-// already in the crawled scope waiting for this sweep.
-func shouldSweep(stats pipeline.Stats) bool {
-	return stats.Ingested > 0 || stats.Refreshed > 0
-}
-
-// sweepBySource reports whether a provider's run may close its unseen jobs by source alone,
-// dropping the crawled-company scope. Only a fullCatalog source qualifies (it lists the whole
-// catalogue each run, so an unseen job is truly gone), and only when the run had zero board
-// failures: a fullCatalog adapter errors a truncated crawl, so Failed>0 means the listing was
-// incomplete and a source-scoped close would mass-close the postings it never reached. Such a run
-// falls back to the safe company-scoped CloseUnseenJobs. Callers gate on shouldSweep first.
-//
-// A posting the crawl could not READ disqualifies it too, and here with no tolerance at all
-// (unlike the board scope's maxUnreadablePercent): this is the broadest close in the system, it
-// drops the company scope that sweepableCompanies uses to withhold anything, and no fullCatalog
-// adapter emits the marker today — so the strict reading costs nothing now and is the one that
-// stays right if one ever does.
-//
-// So does a board crawled without the catalogue's seen-set (Stats.SeenUnknown): every stored
-// posting then reads as new, and a hydrating adapter with a detail budget refreshes none of
-// those past it, so the source scope would close live postings the listing named.
-//
-// And so does a covered posting whose refresh failed (Stats.RefreshFailed): the listing named
-// it, but its stored row keeps its old last_seen_at, and a covered row is never written again,
-// so a wrong close would never be undone by a later crawl.
-func sweepBySource(stats pipeline.Stats, fullCatalog bool) bool {
-	return fullCatalog && stats.Failed == 0 && stats.Unreadable == 0 && stats.SeenUnknown == 0 &&
-		stats.RefreshFailed == 0
-}
-
-// sweepWindowFor reports how long a provider's unseen jobs are spared before the sweep closes
-// them: the window its adapter declared (sources.SweepGraceWindows), wider or narrower than
-// staleAfter, else staleAfter itself. The override is per-provider so one feed's drift tolerance
-// (or one full-board crawl's tighter cadence) never changes the sweep for every other provider.
-func sweepWindowFor(grace map[string]time.Duration, provider string) time.Duration {
-	if w, ok := grace[provider]; ok {
-		return w
-	}
-	return staleAfter
-}
-
 // hydrationRetryWindowFor resolves how long a stored row with no description keeps being
 // re-offered to a hydrating adapter for another detail fetch (see pipeline.SeenLookup). An
 // empty value means the default, pipeline.HydrationRetryWindow.
@@ -746,76 +564,6 @@ func hydrationRetryWindowFor(env string) (time.Duration, error) {
 		return 0, fmt.Errorf("HYDRATION_RETRY_DAYS must be a positive number of days, got %q", env)
 	}
 	return time.Duration(days) * 24 * time.Hour, nil
-}
-
-// bodyRefresh is the resolved "re-read a stale body" policy: how old a stored body may be
-// before a hydrating crawl fetches it again, and which slice of the catalogue this run takes.
-// See dbStore.ExistingExternalIDs and migration 0144.
-type bodyRefresh struct {
-	// cutoff is the age boundary: a row hydrated before it is stale. Meaningless while
-	// disabled, since slot then matches nothing.
-	cutoff time.Time
-	// slices is how many runs a full sweep of the catalogue takes; always positive, because
-	// it is a modulus.
-	slices int64
-	// slot is the slice this run takes, or bodyRefreshDisabledSlot.
-	slot int64
-}
-
-// bodyRefreshDisabledSlot is a slot no row can hash to: the predicate computes
-// abs(hashtext(external_id)) % slices, which is never negative. Disabling the feature is
-// therefore a parameter value rather than a second query, so there is one predicate to reason
-// about and no branch that could disagree with the other.
-const bodyRefreshDisabledSlot = -1
-
-// bodyRefreshDefaultSlices is how many runs a full sweep takes when BODY_REFRESH_SLICE is unset.
-const bodyRefreshDefaultSlices = 30
-
-func (b bodyRefresh) enabled() bool { return b.slot != bodyRefreshDisabledSlot }
-
-// bodyRefreshFor resolves BODY_REFRESH_DAYS and BODY_REFRESH_SLICE.
-//
-// It exists because a hydrating adapter fetches a posting's detail only while the catalogue
-// does not already hold it: once stored, a posting's body is never read again, so an employer
-// editing their own posting — adding "this position is 100% on-site", moving the location,
-// stating a salary — reaches us never (freehire#2555). BODY_REFRESH_DAYS is how old a stored
-// body may get before the next crawl re-reads it.
-//
-// Unset means disabled, and that is the shipped default: turning this on costs one detail
-// request per re-read posting against a host whose crawl fleet is already its own bottleneck,
-// so it is enabled deliberately, one provider at a time, with the cost watched. A set value
-// must be a positive number of days — an unparseable one fails the run rather than quietly
-// crawling as before, which is the same contract every other hand-set knob here has.
-//
-// BODY_REFRESH_SLICE bounds one run: a posting belongs to one slice for its whole life, and a
-// run takes the slice named by the day of the year, so a full sweep takes SLICE days and no
-// single run faces a provider's entire catalogue (1.27M postings on workday). Setting it
-// without BODY_REFRESH_DAYS is an error rather than a no-op: a knob that silently does nothing
-// reads exactly like a refresh that found nothing to refresh.
-func bodyRefreshFor(days, slice string, now time.Time) (bodyRefresh, error) {
-	if days == "" {
-		if slice != "" {
-			return bodyRefresh{}, fmt.Errorf("BODY_REFRESH_SLICE=%q has no effect without BODY_REFRESH_DAYS", slice)
-		}
-		return bodyRefresh{slices: 1, slot: bodyRefreshDisabledSlot}, nil
-	}
-	n, err := strconv.Atoi(days)
-	if err != nil || n <= 0 {
-		return bodyRefresh{}, fmt.Errorf("BODY_REFRESH_DAYS must be a positive number of days, got %q", days)
-	}
-	slices := int64(bodyRefreshDefaultSlices)
-	if slice != "" {
-		s, err := strconv.Atoi(slice)
-		if err != nil || s <= 0 {
-			return bodyRefresh{}, fmt.Errorf("BODY_REFRESH_SLICE must be a positive number of runs, got %q", slice)
-		}
-		slices = int64(s)
-	}
-	return bodyRefresh{
-		cutoff: now.AddDate(0, 0, -n),
-		slices: slices,
-		slot:   int64(now.YearDay()) % slices,
-	}, nil
 }
 
 // refetchAllFor resolves INGEST_REFETCH_ALL, the repair switch that empties the seen-set so a

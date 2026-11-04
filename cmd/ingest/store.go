@@ -19,6 +19,7 @@ import (
 	"github.com/strelov1/freehire/internal/ingest/applyform"
 	"github.com/strelov1/freehire/internal/ingest/pipeline"
 	"github.com/strelov1/freehire/internal/ingest/rederive"
+	sweeppolicy "github.com/strelov1/freehire/internal/ingest/sweep"
 	"github.com/strelov1/freehire/internal/job/job"
 	"github.com/strelov1/freehire/internal/job/jobdedup"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -59,8 +60,8 @@ type seenPolicy struct {
 	// repair path for an adapter fix that changes what the listing yields.
 	refetchAll bool
 	// bodies withholds a row whose stored BODY has gone stale, so an employer's later edit is
-	// re-read. Disabled unless BODY_REFRESH_DAYS is set — see bodyRefreshFor.
-	bodies bodyRefresh
+	// re-read. Disabled unless BODY_REFRESH_DAYS is set — see sweeppolicy.BodyRefreshFor.
+	bodies sweeppolicy.BodyRefresh
 }
 
 // dbStore is the only non-test implementation of pipeline.Store, and it is expected to carry
@@ -421,7 +422,7 @@ func (s *dbStore) Close(ctx context.Context, source, externalID string) error {
 // the catalogue at all: without it, being stored is what stops a posting from ever being fetched
 // again, and a posting that gains a "this position is 100% on-site" paragraph keeps whatever we
 // read the day we first saw it (freehire#2555). Disabled unless BODY_REFRESH_DAYS is set, and
-// bounded by a slice even then — see bodyRefreshFor for both, and note that the disabled form
+// bounded by a slice even then — see sweeppolicy.BodyRefreshFor for both, and note that the disabled form
 // travels through these same parameters rather than a second query.
 //
 // refetchAll withholds EVERY row, which is the repair path for an adapter fix that changes what
@@ -436,15 +437,15 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 		return set, nil
 	}
 	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-s.seen.hydrationWindow), Valid: true}
-	bodyCutoff := pgtype.Timestamptz{Time: s.seen.bodies.cutoff, Valid: true}
+	bodyCutoff := pgtype.Timestamptz{Time: s.seen.bodies.Cutoff, Valid: true}
 	deadlineFrom := pgtype.Date{Time: time.Now().UTC().Add(-pipeline.DeadlineRecheckWindow), Valid: true}
 	if board == "" {
 		rows, err := s.q.ExistingExternalIDs(ctx, db.ExistingExternalIDsParams{
 			Source:              source,
 			HydrationCutoff:     cutoff,
 			BodyRefreshCutoff:   bodyCutoff,
-			BodyRefreshSlices:   s.seen.bodies.slices,
-			BodyRefreshSlot:     s.seen.bodies.slot,
+			BodyRefreshSlices:   s.seen.bodies.Slices,
+			BodyRefreshSlot:     s.seen.bodies.Slot,
 			DeadlineRecheckFrom: deadlineFrom,
 		})
 		if err != nil {
@@ -462,8 +463,8 @@ func (s *dbStore) ExistingExternalIDs(ctx context.Context, source, board string)
 		Pattern:             externalid.BoardPattern(board),
 		HydrationCutoff:     cutoff,
 		BodyRefreshCutoff:   bodyCutoff,
-		BodyRefreshSlices:   s.seen.bodies.slices,
-		BodyRefreshSlot:     s.seen.bodies.slot,
+		BodyRefreshSlices:   s.seen.bodies.Slices,
+		BodyRefreshSlot:     s.seen.bodies.Slot,
 		DeadlineRecheckFrom: deadlineFrom,
 	})
 	if err != nil {
