@@ -111,20 +111,26 @@ export const load: PageServerLoad = async ({ params, fetch, url }) => {
   });
   const seeAlsoPromise = jobPromise.then((job) => buildSeeAlso(job, api));
 
+  // The application form is known for a minority of postings — only a few ATS platforms
+  // publish one we can read — so its absence is the ordinary case, not a failure. The
+  // detail response already says whether one was captured: `apply_questions` is present
+  // (0 included) exactly when a form exists. So the form is fetched only then — asking for
+  // it on every page view made this the busiest API route, nearly all of it 404s, and a
+  // dead slug fired it too. It degrades to null for the same reason the two below degrade
+  // to empty: nothing on this page may be able to break the page.
+  const applyFormPromise = jobPromise.then((job) =>
+    job.apply_questions != null ? api.getApplyForm(params.slug).catch(() => null) : null,
+  );
+
   // Similar jobs are a non-essential discovery aid: a failure (search disabled,
   // no neighbours yet) must not break the page, so it degrades to an empty list.
-  //
-  // The application form is known for a minority of postings — only a few ATS platforms
-  // publish one we can read — so its absence is the ordinary case, not a failure. It
-  // degrades to null for the same reason the two below degrade to empty: nothing on this
-  // page may be able to break the page.
   const [job, similar, copiesResult, applyForm, seeAlso] = await Promise.all([
     jobPromise,
     api.getSimilarJobs(params.slug).catch(() => []),
     // A small preview of the other-locations tab (the full list is /jobs/:slug/copies).
     // Non-essential and only meaningful for a mass-posted role, so it degrades to empty.
     api.getJobCopies(params.slug, 10).catch(() => ({ copies: [], total: 0 })),
-    api.getApplyForm(params.slug).catch(() => null),
+    applyFormPromise,
     seeAlsoPromise,
   ]);
 
