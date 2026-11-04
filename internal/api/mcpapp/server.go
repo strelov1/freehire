@@ -207,7 +207,7 @@ func toolResult[T any](out T, err error) (*mcp.CallToolResult, T, error) {
 		message = notFound.Error() + "; search for it instead"
 	}
 	if errors.Is(err, search.ErrTooManyAlternatives) {
-		message = "the query has more than 5 OR alternatives; keep the two or three likeliest names and search again"
+		message = "the query has more than 5 OR alternatives; split them into several searches of at most 5 each and combine the results"
 	}
 	return &mcp.CallToolResult{
 		Meta:    mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": publicErrorCode(err)}},

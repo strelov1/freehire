@@ -386,7 +386,7 @@ func TestTooManyAlternativesTellsTheAgentWhatToChange(t *testing.T) {
 		t.Fatalf("call: %v", err)
 	}
 	text := res.Content[0].(*mcp.TextContent).Text
-	if !res.IsError || !strings.Contains(text, "5 OR alternatives") {
+	if !res.IsError || !strings.Contains(text, "5 OR alternatives") || !strings.Contains(text, "combine the results") {
 		t.Errorf("result = %v %q", res.IsError, text)
 	}
 	if code := resultErrorCode(res); code != "invalid_request" {
