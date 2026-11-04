@@ -1,7 +1,6 @@
 package mcpapp
 
 import (
-	"maps"
 	"sync/atomic"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -25,10 +24,9 @@ type analyticsSinks struct {
 func EnableAnalytics(client posthog.EnqueueClient) {
 	serverAnalytics.Store(&analyticsSinks{
 		public: posthogmcp.New(client),
-		// A failed call's text reaches PostHog twice: as $mcp_error_message and as a
-		// $exception event. The SDK sends both even with responses off, so the exception
-		// is switched off here and the message is cut before the event is queued.
-		account: posthogmcp.New(withoutErrorText{client}, posthogmcp.WithExceptionAutocapture(false)),
+		// A failed call's text would also go out as a $exception event, which the account
+		// sink never sends; accountMetadataOnly drops every other non-allowlisted field.
+		account: posthogmcp.New(accountMetadataOnly{client}, posthogmcp.WithExceptionAutocapture(false)),
 	})
 }
 
@@ -60,14 +58,39 @@ func instrument(server *mcp.Server, a *posthogmcp.Analytics, name, version strin
 	}, opts...)...)
 }
 
-// withoutErrorText drops a failed call's error text from every event before it is queued.
-type withoutErrorText struct{ posthog.EnqueueClient }
+// accountEventProperties are the only properties an account event may carry: what the
+// server itself sets (tool, outcome, timing, session). Anything the caller authors — its
+// User-Agent, client name, arguments, results, error text — and any field a later SDK adds
+// is dropped, so the boundary holds by construction rather than by a list of known leaks.
+var accountEventProperties = map[string]bool{
+	"$mcp_tool_name":          true,
+	"$mcp_resource_name":      true,
+	"$mcp_server_name":        true,
+	"$mcp_server_version":     true,
+	"$mcp_protocol_version":   true,
+	"$mcp_is_error":           true,
+	"$mcp_error_type":         true,
+	"$mcp_duration_ms":        true,
+	"$mcp_source":             true,
+	"$session_id":             true,
+	"$process_person_profile": true,
+}
 
-func (c withoutErrorText) Enqueue(msg posthog.Message) error {
-	if capture, ok := msg.(posthog.Capture); ok {
-		capture.Properties = maps.Clone(capture.Properties)
-		delete(capture.Properties, "$mcp_error_message")
-		msg = capture
+// accountMetadataOnly forwards an account $mcp_tool_call with its properties cut down to
+// accountEventProperties, and nothing else.
+type accountMetadataOnly struct{ posthog.EnqueueClient }
+
+func (c accountMetadataOnly) Enqueue(msg posthog.Message) error {
+	capture, ok := msg.(posthog.Capture)
+	if !ok {
+		return nil
 	}
-	return c.EnqueueClient.Enqueue(msg)
+	kept := posthog.NewProperties()
+	for key, value := range capture.Properties {
+		if accountEventProperties[key] {
+			kept[key] = value
+		}
+	}
+	capture.Properties = kept
+	return c.EnqueueClient.Enqueue(capture)
 }

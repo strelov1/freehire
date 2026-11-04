@@ -80,29 +80,33 @@ func TestToolCallIsReportedToPostHog(t *testing.T) {
 	}
 }
 
-// A failed account call is reported, but its error text — the account's own data — is not:
-// neither in the tool-call event nor as a $exception event.
-func TestFailedAccountCallSendsNoErrorText(t *testing.T) {
+// A failed account call is reported with the server's own metadata only: the personal data
+// a caller can put in its User-Agent, its client name or a tool's error text never leaves,
+// and no $exception event is sent.
+func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 	sent := recordPostHog(t)
-	const secret = "applicant jane@example.com answered 'visa: H1B'"
+	const email = "jane@example.com"
 
 	tool := assistant.Tool{
 		Name:   "failing",
 		Schema: map[string]any{"type": "object"},
 		Run: func(context.Context, int64, json.RawMessage) (any, error) {
-			return nil, errors.New(secret)
+			return nil, errors.New("applicant " + email + " answered 'visa: H1B'")
 		},
 	}
-	clientTransport, serverTransport := mcp.NewInMemoryTransports()
-	server, err := NewAccountServer([]assistant.Tool{tool}, 42, "").Connect(context.Background(), serverTransport, nil)
+	server := httptest.NewServer(AccountHandler([]assistant.Tool{tool}, ""))
+	t.Cleanup(server.Close)
+
+	header := http.Header{}
+	header.Set(AccountUserIDHeader, "42")
+	header.Set("User-Agent", "agent for "+email)
+	session, err := mcp.NewClient(&mcp.Implementation{Name: "client of " + email, Version: "0"}, nil).
+		Connect(context.Background(), &mcp.StreamableClientTransport{
+			Endpoint:   server.URL,
+			HTTPClient: &http.Client{Transport: withHeaders{header}},
+		}, nil)
 	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	t.Cleanup(func() { _ = server.Close() })
-	session, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil).
-		Connect(context.Background(), clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
 	t.Cleanup(func() { _ = session.Close() })
 
@@ -115,14 +119,27 @@ func TestFailedAccountCallSendsNoErrorText(t *testing.T) {
 	}
 
 	got := sent()
-	if !strings.Contains(got, `"$mcp_tool_call"`) || !strings.Contains(got, `"$mcp_server_name":"freehire-account"`) {
-		t.Errorf("the failed account call was not reported; got %s", got)
+	for _, want := range []string{`"$mcp_tool_call"`, `"$mcp_server_name":"freehire-account"`, `"$mcp_tool_name":"failing"`, `"$mcp_is_error":true`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("PostHog payload lacks %s; got %s", want, got)
+		}
 	}
-	for _, leak := range []string{"jane@example.com", "H1B", `"$exception"`, `"$mcp_error_message"`} {
+	for _, leak := range []string{email, "H1B", `"$exception"`, `"$mcp_error_message"`, `"$mcp_client_user_agent"`, `"$mcp_client_name"`} {
 		if strings.Contains(got, leak) {
 			t.Errorf("PostHog payload carries %s; got %s", leak, got)
 		}
 	}
+}
+
+// withHeaders adds fixed headers to every request the MCP client sends.
+type withHeaders struct{ header http.Header }
+
+func (w withHeaders) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	for key, values := range w.header {
+		r.Header[key] = values
+	}
+	return http.DefaultTransport.RoundTrip(r)
 }
 
 // Without EnableAnalytics the server sends nothing and still answers.
