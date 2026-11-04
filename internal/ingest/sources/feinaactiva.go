@@ -27,7 +27,6 @@ import (
 // keeps what it read, and reads ahead while the pipeline writes (see feinaactivaPrefetch).
 type feinaactiva struct {
 	http     JSONGetter
-	limiter  waiter
 	maxPages int
 }
 
@@ -50,8 +49,7 @@ const (
 // NewFeinaActiva builds the adapter over the given client.
 func NewFeinaActiva(c JSONGetter) Source {
 	return feinaactiva{
-		http:     c,
-		limiter:  rate.NewLimiter(rate.Every(feinaactivaRequestInterval), 1),
+		http:     rateLimitedJSONGetter{inner: c, limiter: rate.NewLimiter(rate.Every(feinaactivaRequestInterval), 1)},
 		maxPages: feinaactivaMaxPages,
 	}
 }
@@ -162,10 +160,6 @@ func (s feinaactiva) walk(ctx context.Context, batches chan<- feinaactivaBatch, 
 	}
 	read := 0
 	for page := 1; page <= s.maxPages; page++ {
-		if err := s.limiter.Wait(ctx); err != nil {
-			send(feinaactivaBatch{page: page, err: err})
-			return
-		}
 		var p feinaactivaPage
 		if err := s.http.GetJSON(ctx, fmt.Sprintf(feinaactivaListURL, page), &p); err != nil {
 			send(feinaactivaBatch{page: page, err: err})

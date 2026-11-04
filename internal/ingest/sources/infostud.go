@@ -32,7 +32,6 @@ import (
 // host's robots.txt, so it is not used.
 type infostud struct {
 	http           TextGetter
-	limiter        waiter
 	maxNewPerRun   int
 	maxPages       int
 	deadlineMargin time.Duration
@@ -63,8 +62,7 @@ const (
 // NewInfostud builds the adapter over the given client.
 func NewInfostud(c TextGetter) Source {
 	return infostud{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(infostudRequestInterval), 1),
+		http:           rateLimitedTextGetter{inner: c, limiter: rate.NewLimiter(rate.Every(infostudRequestInterval), 1)},
 		maxNewPerRun:   infostudMaxNewPerRun,
 		maxPages:       infostudMaxPages,
 		deadlineMargin: infostudDeadlineMargin,
@@ -244,9 +242,6 @@ func (s infostud) list(ctx context.Context) ([]infostudCard, error) {
 		if page > s.maxPages {
 			return nil, fmt.Errorf("infostud: listing still not exhausted after %d pages", s.maxPages)
 		}
-		if err := s.limiter.Wait(ctx); err != nil {
-			return nil, err
-		}
 		body, err := s.http.GetText(ctx, fmt.Sprintf(infostudListURL, page))
 		if err != nil {
 			return nil, fmt.Errorf("infostud: listing page %d: %w", page, err)
@@ -372,9 +367,6 @@ func sortInfostudFreshestFirst(cards []infostudCard) {
 // is gone (404, or a status other than "live") or carries no body; an error is the absence of an
 // answer.
 func (s infostud) detail(ctx context.Context, c infostudCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	body, err := s.http.GetText(ctx, infostudPostingURL(c))
 	if err != nil {
 		var se *StatusError

@@ -83,7 +83,7 @@ func (f *computrabajoFake) postingRequests() int {
 
 func newTestComputrabajo(f *computrabajoFake) computrabajo {
 	s := NewComputrabajo(f).(computrabajo)
-	s.limiter = noWait{}
+	s.http = f
 	return s
 }
 

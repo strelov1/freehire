@@ -35,7 +35,6 @@ import (
 // identity while they stay in the window.
 type netempregos struct {
 	http         TextGetter
-	limiter      waiter
 	maxNewPerRun int
 	// deadlineMargin is how much of the run's deadline hydration leaves to the pipeline: a
 	// hydrating crawl writes nothing until FetchNew returns, so one that runs into its deadline
@@ -82,8 +81,7 @@ const netempregosTechIndustry = "informática"
 // NewNetEmpregos builds the adapter over the given client.
 func NewNetEmpregos(c TextGetter) Source {
 	return netempregos{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(netempregosRequestInterval), 1),
+		http:           rateLimitedTextGetter{inner: c, limiter: rate.NewLimiter(rate.Every(netempregosRequestInterval), 1)},
 		maxNewPerRun:   netempregosMaxNewPerRun,
 		deadlineMargin: netempregosDeadlineMargin,
 	}
@@ -261,9 +259,6 @@ func (s netempregos) list(ctx context.Context) ([]netempregosPosting, error) {
 // accented letter into U+FFFD. Windows-1252 is the superset that also maps the curly quotes and
 // dashes such sites emit in the 0x80-0x9F range.
 func (s netempregos) get(ctx context.Context, u string) (string, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return "", err
-	}
 	raw, err := s.http.GetText(ctx, u)
 	if err != nil {
 		return "", err

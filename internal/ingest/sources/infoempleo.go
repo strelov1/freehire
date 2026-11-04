@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"golang.org/x/time/rate"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )
@@ -33,7 +32,6 @@ import (
 // catalogue lacks, newest id first, within a per-run budget; the rest are refreshed by identity.
 type infoempleo struct {
 	http         HTMLGetter
-	limiter      waiter
 	maxNewPerRun int
 	maxPages     int
 	// deadlineMargin is how much of the run's deadline hydration leaves to the pipeline: a
@@ -67,8 +65,7 @@ const (
 // NewInfoempleo builds the adapter over the given client.
 func NewInfoempleo(c HTMLGetter) Source {
 	return infoempleo{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(infoempleoRequestInterval), 1),
+		http:           pacedHTMLGetter(c, infoempleoRequestInterval, 1),
 		maxNewPerRun:   infoempleoMaxNewPerRun,
 		maxPages:       infoempleoMaxPages,
 		deadlineMargin: infoempleoDeadlineMargin,
@@ -191,12 +188,6 @@ func (s infoempleo) list(ctx context.Context) ([]infoempleoCard, error) {
 	seen := make(map[int64]bool)
 	var out []infoempleoCard
 	for page := 1; page <= s.maxPages; page++ {
-		if err := s.limiter.Wait(ctx); err != nil {
-			if page == 1 {
-				return nil, err
-			}
-			break
-		}
 		u := infoempleoListURL
 		if page > 1 {
 			u = fmt.Sprintf("%spagina_%d/", infoempleoListURL, page)
@@ -346,9 +337,6 @@ func (ld infoempleoLD) places() []infoempleoPlace {
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410) or a page carrying no usable posting; an error is the absence of an answer.
 func (s infoempleo) detail(ctx context.Context, c infoempleoCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
 		var se *StatusError

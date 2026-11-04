@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"golang.org/x/time/rate"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )
@@ -33,7 +32,6 @@ import (
 // bought from the posting page for postings the catalogue lacks, within a per-run budget.
 type computrabajo struct {
 	http           HTMLGetter
-	limiter        waiter
 	maxNewPerRun   int
 	deadlineMargin time.Duration
 }
@@ -58,8 +56,7 @@ const (
 // User-Agent, so the registry hands it the browser-compatible form (compatibleUASource).
 func NewComputrabajo(c HTMLGetter) Source {
 	return computrabajo{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(computrabajoRequestInterval), 1),
+		http:           pacedHTMLGetter(c, computrabajoRequestInterval, 1),
 		maxNewPerRun:   computrabajoMaxNewPerRun,
 		deadlineMargin: computrabajoDeadlineMargin,
 	}
@@ -191,9 +188,6 @@ func (s computrabajo) nearDeadline(ctx context.Context) bool {
 // it did not.
 func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoCard, error) {
 	base := computrabajoBase(country)
-	if err := s.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
 	// Page 1 of the national listing redirects home; page 2 carries the same filter.
 	root, err := s.http.GetHTML(ctx, base+"/ofertas-de-trabajo/?p=2")
 	if err != nil {
@@ -213,9 +207,6 @@ func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoC
 		}
 		rank := 0
 		for page := 1; page <= pages; page++ {
-			if err := s.limiter.Wait(ctx); err != nil {
-				return nil, err
-			}
 			u := base + p.path
 			if page > 1 {
 				u += "?p=" + strconv.Itoa(page)
@@ -476,9 +467,6 @@ type computrabajoLD struct {
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410) or a page carrying no posting body; an error is the absence of an answer.
 func (s computrabajo) detail(ctx context.Context, c computrabajoCard, country string) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
 		var se *StatusError

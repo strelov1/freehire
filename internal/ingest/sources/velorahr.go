@@ -36,13 +36,12 @@ import (
 // robots.txt allows everything; the requests of every board still share one limiter, since
 // one API host serves every customer.
 type velorahr struct {
-	http    JSONGetter
-	limiter waiter
+	http JSONGetter
 }
 
 // NewVelorahr builds the Velora HR adapter over the given JSON client.
 func NewVelorahr(c JSONGetter) Source {
-	return velorahr{http: c, limiter: rate.NewLimiter(rate.Every(velorahrRequestInterval), 1)}
+	return velorahr{http: rateLimitedJSONGetter{inner: c, limiter: rate.NewLimiter(rate.Every(velorahrRequestInterval), 1)}}
 }
 
 func (velorahr) Provider() string { return "velorahr" }
@@ -117,7 +116,7 @@ func (s velorahr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 	siteID, _ := strconv.ParseInt(board, 10, 64)
 
 	var site velorahrSite
-	if err := s.get(ctx, velorahrAPIBase+board, &site); err != nil {
+	if err := s.http.GetJSON(ctx, velorahrAPIBase+board, &site); err != nil {
 		var se *StatusError
 		if errors.As(err, &se) && se.Code == http.StatusNotFound {
 			return nil, fmt.Errorf("velorahr: board %s: %w", board, ErrBoardGone)
@@ -125,7 +124,7 @@ func (s velorahr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		return nil, fmt.Errorf("velorahr: board %s: %w", board, err)
 	}
 	var listing velorahrListing
-	if err := s.get(ctx, velorahrAPIBase+board+"/offers?"+velorahrListingQuery, &listing); err != nil {
+	if err := s.http.GetJSON(ctx, velorahrAPIBase+board+"/offers?"+velorahrListingQuery, &listing); err != nil {
 		return nil, fmt.Errorf("velorahr: board %s: offers: %w", board, err)
 	}
 	if len(listing.Data) >= velorahrWindow {
@@ -151,14 +150,6 @@ func (s velorahr) Fetch(ctx context.Context, e CompanyEntry) ([]Job, error) {
 		log.Printf("velorahr: board %s: %d offers without an id or a career-site link dropped", board, dropped)
 	}
 	return jobs, nil
-}
-
-// get spaces the request behind the provider's limiter and decodes the JSON answer.
-func (s velorahr) get(ctx context.Context, u string, v any) error {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return err
-	}
-	return s.http.GetJSON(ctx, u, v)
 }
 
 // job maps an offer. An offer without an id, a title, or a link onto a Velora career site is

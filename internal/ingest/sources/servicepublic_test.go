@@ -70,7 +70,6 @@ func (f *servicepublicFake) GetHTML(_ context.Context, u string) (*html.Node, er
 func newTestServicePublic(f *servicepublicFake) servicepublic {
 	return servicepublic{
 		http:           f,
-		limiter:        noWait{},
 		headPages:      servicepublicHeadPages,
 		windowPages:    servicepublicWindowPages,
 		maxNewPerRun:   servicepublicMaxNewPerRun,

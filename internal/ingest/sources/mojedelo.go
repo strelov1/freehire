@@ -29,7 +29,6 @@ import (
 // budget.
 type mojedelo struct {
 	http           HeaderJSONGetter
-	limiter        waiter
 	maxNewPerRun   int
 	deadlineMargin time.Duration
 }
@@ -71,8 +70,7 @@ var mojedeloHeaders = map[string]string{
 // NewMojeDelo builds the adapter over the given client.
 func NewMojeDelo(c HeaderJSONGetter) Source {
 	return mojedelo{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(mojedeloRequestInterval), 1),
+		http:           rateLimitedHeaderJSONGetter{inner: c, limiter: rate.NewLimiter(rate.Every(mojedeloRequestInterval), 1)},
 		maxNewPerRun:   mojedeloMaxNewPerRun,
 		deadlineMargin: mojedeloDeadlineMargin,
 	}
@@ -230,9 +228,6 @@ func (s mojedelo) list(ctx context.Context) ([]mojedeloItem, error) {
 		if page == mojedeloMaxPages {
 			return nil, fmt.Errorf("mojedelo: search runs past %d pages", mojedeloMaxPages)
 		}
-		if err := s.limiter.Wait(ctx); err != nil {
-			return nil, err
-		}
 		var res mojedeloSearch
 		if err := s.http.GetJSONWithHeaders(ctx, fmt.Sprintf(mojedeloSearchURL, mojedeloPageSize, page*mojedeloPageSize), mojedeloHeaders, &res); err != nil {
 			return nil, fmt.Errorf("mojedelo: search page %d: %w", page+1, err)
@@ -318,9 +313,6 @@ func mojedeloWorkMode(modes []mojedeloNamed) string {
 // detail reads one posting's resource. ok=false with a nil error is the site's answer that the
 // posting is gone (404/410, or no longer published); an error is the absence of an answer.
 func (s mojedelo) detail(ctx context.Context, it mojedeloItem) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	var res mojedeloJob
 	if err := s.http.GetJSONWithHeaders(ctx, fmt.Sprintf(mojedeloJobURL, strings.TrimSpace(it.ID)), mojedeloHeaders, &res); err != nil {
 		var se *StatusError

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"golang.org/x/time/rate"
 )
 
 // optius adapts Optius (www.optius.com), a Slovenian general job board: ~1.3k open postings
@@ -29,7 +28,6 @@ import (
 // attached to a posting in Austria whose place the location dictionary cannot read.
 type optius struct {
 	http           HTMLGetter
-	limiter        waiter
 	maxNewPerRun   int
 	maxPages       int
 	deadlineMargin time.Duration
@@ -59,8 +57,7 @@ const (
 // NewOptius builds the adapter over the given client.
 func NewOptius(c HTMLGetter) Source {
 	return optius{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(optiusRequestInterval), 1),
+		http:           pacedHTMLGetter(c, optiusRequestInterval, 1),
 		maxNewPerRun:   optiusMaxNewPerRun,
 		maxPages:       optiusMaxPages,
 		deadlineMargin: optiusDeadlineMargin,
@@ -208,9 +205,6 @@ func (s optius) walk(ctx context.Context, path string) ([]optiusCard, error) {
 		if page == s.maxPages {
 			return nil, fmt.Errorf("optius: %s runs past %d pages", path, s.maxPages)
 		}
-		if err := s.limiter.Wait(ctx); err != nil {
-			return nil, err
-		}
 		root, err := s.http.GetHTML(ctx, optiusBaseURL+path+"?s="+strconv.Itoa(page*optiusPageSize))
 		if err != nil {
 			return nil, fmt.Errorf("optius: %s page %d: %w", path, page+1, err)
@@ -345,9 +339,6 @@ type optiusLD struct {
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410, or a listing in place of the posting); an error is the absence of an answer.
 func (s optius) detail(ctx context.Context, c optiusCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
 		var se *StatusError

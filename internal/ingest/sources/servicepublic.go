@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"golang.org/x/time/rate"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )
@@ -32,8 +31,7 @@ import (
 // reads the head of the list until it is all known, plus a window of the rest that moves on every
 // run, and the unseen sweep waits long enough for the window to come round.
 type servicepublic struct {
-	http    HTMLGetter
-	limiter waiter
+	http HTMLGetter
 	// headPages bounds the newest-first walk; windowPages is how many further pages a run reads
 	// to refresh what it already stores.
 	headPages   int
@@ -83,8 +81,7 @@ const (
 // NewServicePublic builds the adapter over the given client.
 func NewServicePublic(c HTMLGetter) Source {
 	return servicepublic{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(servicepublicRequestInterval), 1),
+		http:           pacedHTMLGetter(c, servicepublicRequestInterval, 1),
 		headPages:      servicepublicHeadPages,
 		windowPages:    servicepublicWindowPages,
 		maxNewPerRun:   servicepublicMaxNewPerRun,
@@ -282,9 +279,6 @@ func servicepublicWindow(head, pages, windowPages int, now time.Time) []int {
 
 // page reads one listing page: its cards, and the list's page count.
 func (s servicepublic) page(ctx context.Context, n int) ([]servicepublicCard, int, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return nil, 0, err
-	}
 	u := servicepublicListURL
 	if n > 1 {
 		u = fmt.Sprintf(servicepublicPageURL, n)
@@ -404,9 +398,6 @@ const servicepublicUnpublished = "Offre dépubliée"
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410, or the "Offre dépubliée" page); an error is the absence of an answer.
 func (s servicepublic) detail(ctx context.Context, c servicepublicCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
 		var se *StatusError

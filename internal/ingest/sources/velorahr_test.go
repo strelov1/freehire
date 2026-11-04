@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"github.com/strelov1/freehire/internal/dict/location"
 )
 
@@ -58,7 +56,7 @@ func newVelorahrFake(t *testing.T, site string, listing string) *velorahrFake {
 // newTestVelorahr is the adapter without its request pacing.
 func newTestVelorahr(c JSONGetter) velorahr {
 	s := NewVelorahr(c).(velorahr)
-	s.limiter = rate.NewLimiter(rate.Inf, 1)
+	s.http = c
 	return s
 }
 

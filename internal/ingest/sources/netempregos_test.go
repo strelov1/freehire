@@ -77,7 +77,7 @@ func (f *netempregosFake) GetText(_ context.Context, u string) (string, error) {
 
 func newTestNetEmpregos(f *netempregosFake) netempregos {
 	s := NewNetEmpregos(f).(netempregos)
-	s.limiter = noWait{}
+	s.http = f
 	return s
 }
 

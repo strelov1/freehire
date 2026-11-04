@@ -22,8 +22,7 @@ import (
 // requirements, contract, pay as text), so a crawl buys no detail page. The portal's HTML sits
 // behind an F5 JavaScript challenge; its API does not.
 type cbop struct {
-	http    JSONPoster
-	limiter waiter
+	http JSONPoster
 }
 
 const (
@@ -48,7 +47,7 @@ const (
 
 // NewCBOP builds the adapter over the given client.
 func NewCBOP(c JSONPoster) Source {
-	return cbop{http: c, limiter: rate.NewLimiter(rate.Every(cbopRequestInterval), 1)}
+	return cbop{http: rateLimitedJSONPoster{inner: c, limiter: rate.NewLimiter(rate.Every(cbopRequestInterval), 1)}}
 }
 
 func (cbop) Provider() string { return "cbop" }
@@ -193,9 +192,6 @@ func (s cbop) readSplit(ctx context.Context, p, size int) (rows []cbopOffer, los
 
 // page reads one search page; nil with a nil error is the service refusing it.
 func (s cbop) page(ctx context.Context, p, size int) (*cbopResponse, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
 	var resp cbopResponse
 	if err := s.http.PostJSON(ctx, fmt.Sprintf(cbopSearchURL, p, size), struct{}{}, &resp); err != nil {
 		return nil, err

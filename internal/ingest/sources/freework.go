@@ -27,7 +27,6 @@ import (
 // budget; the rest are refreshed by identity.
 type freework struct {
 	get            JSONGetter
-	limiter        waiter
 	maxNewPerRun   int
 	maxPages       int
 	deadlineMargin time.Duration
@@ -65,8 +64,7 @@ const (
 // NewFreeWork builds the adapter over the given client.
 func NewFreeWork(c HTTPClient) Source {
 	return freework{
-		get:            c,
-		limiter:        rate.NewLimiter(rate.Every(freeworkRequestInterval), 1),
+		get:            rateLimitedJSONGetter{inner: c, limiter: rate.NewLimiter(rate.Every(freeworkRequestInterval), 1)},
 		maxNewPerRun:   freeworkMaxNewPerRun,
 		maxPages:       freeworkMaxPages,
 		deadlineMargin: freeworkDeadlineMargin,
@@ -213,9 +211,6 @@ func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
 	kept := make(map[int64]bool)   // the ids yielded, each once
 	var out []freeworkCard
 	for page := 1; page <= s.maxPages; page++ {
-		if err := s.limiter.Wait(ctx); err != nil {
-			return nil, err
-		}
 		var cards []freeworkCard
 		if err := s.get.GetJSON(ctx, fmt.Sprintf(freeworkListURL, page, freeworkPageSize), &cards); err != nil {
 			return nil, fmt.Errorf("freework: listing page %d: %w", page, err)
@@ -280,9 +275,6 @@ func freeworkBaseJob(c freeworkCard) Job {
 // gone (404/410, or a status other than "published") or carries no usable body; an error is the
 // absence of an answer.
 func (s freework) detail(ctx context.Context, c freeworkCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	var d freeworkDetail
 	if err := s.get.GetJSON(ctx, fmt.Sprintf(freeworkDetailURL, c.Slug), &d); err != nil {
 		var se *StatusError
