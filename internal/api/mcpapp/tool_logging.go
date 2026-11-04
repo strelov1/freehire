@@ -7,10 +7,28 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 var toolCallSequence atomic.Uint64
+
+// mcpToolCalls and mcpToolDuration put MCP traffic in Grafana on our own Prometheus: the
+// PostHog product-analytics quota can drop $mcp_tool_call for weeks. Every label is bounded:
+// surface and tool come from registrations, outcome from the switch below, error_code from
+// resultErrorCode's closed list or observability.ErrorCode — never from request data.
+var mcpToolCalls = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "freehire_mcp_tool_calls_total",
+	Help: "MCP tool calls by surface (public, account), tool, outcome and error code.",
+}, []string{"surface", "tool", "outcome", "error_code"})
+
+// The buckets reach 60s because an account tool can drive a model or a browser.
+var mcpToolDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    "freehire_mcp_tool_duration_seconds",
+	Help:    "How long each MCP tool call took, by surface and tool.",
+	Buckets: []float64{0.025, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
+}, []string{"surface", "tool"})
 
 // observeTool measures execution, rather than the Fiber adaptor's return after
 // opening an SSE stream. Names come from registrations, never from request data.
@@ -45,7 +63,10 @@ func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolRe
 			}
 			result.Meta[diagnosticsMetaKey] = map[string]any{"request_id": observability.RequestID(ctx), "error_code": code}
 		}
-		logger.InfoContext(ctx, "mcp tool finished", "outcome", outcome, "error_code", code, "duration_ms", time.Since(started).Milliseconds())
+		elapsed := time.Since(started)
+		mcpToolCalls.WithLabelValues(surface, name, outcome, code).Inc()
+		mcpToolDuration.WithLabelValues(surface, name).Observe(elapsed.Seconds())
+		logger.InfoContext(ctx, "mcp tool finished", "outcome", outcome, "error_code", code, "duration_ms", elapsed.Milliseconds())
 	}
 }
 
