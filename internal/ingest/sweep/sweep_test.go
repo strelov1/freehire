@@ -394,6 +394,12 @@ func TestWithDetailReread(t *testing.T) {
 		t.Errorf("unlisted provider = %+v, want disabled", got)
 	}
 
+	// A row that can never be stamped must not come back for as long as the source lists it.
+	over := detailFieldAdded["ess"].Add(detailRereadWindow + time.Hour)
+	if got := off.WithDetailReread("ess", over); got.Enabled() {
+		t.Errorf("past the window = %+v, want disabled", got)
+	}
+
 	// An operator's BODY_REFRESH_DAYS is not overridden.
 	set, err := BodyRefreshFor("45", "", now)
 	if err != nil {
