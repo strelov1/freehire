@@ -83,8 +83,8 @@ func TestToolCallIsReportedToPostHog(t *testing.T) {
 
 // A failed account call is reported with the server's own metadata only: the personal data
 // a caller can put in its User-Agent, its client name, its Mcp-Session-Id or a tool's error
-// text never leaves,
-// and no $exception event is sent.
+// text never leaves, nor does the tool name of a call to a tool that does not exist,
+// and no $exception or $mcp_unknown_tool event is sent.
 func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 	sent := recordPostHog(t)
 	const email = "jane@example.com"
@@ -120,6 +120,8 @@ func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 	if !res.IsError {
 		t.Fatal("want an error result")
 	}
+	// A tool that does not exist is named by the caller, so its event must not leave either.
+	_, _ = session.CallTool(context.Background(), &mcp.CallToolParams{Name: "visa_H1B", Arguments: map[string]any{}})
 
 	got := sent()
 	for _, want := range []string{`"$mcp_tool_call"`, `"$mcp_server_name":"freehire-account"`, `"$mcp_tool_name":"failing"`, `"$mcp_is_error":true`} {
@@ -136,7 +138,7 @@ func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 	} else if !strings.Contains(got, `"distinct_id":"`+minted[1]+`"`) {
 		t.Errorf("distinct_id is not the generated session %s; got %s", minted[1], got)
 	}
-	for _, leak := range []string{email, "H1B", `"$exception"`, `"$mcp_error_message"`, `"$mcp_client_user_agent"`, `"$mcp_client_name"`} {
+	for _, leak := range []string{email, "H1B", `"$exception"`, `"$mcp_error_message"`, `"$mcp_client_user_agent"`, `"$mcp_client_name"`, `"$mcp_unknown_tool"`} {
 		if strings.Contains(got, leak) {
 			t.Errorf("PostHog payload carries %s; got %s", leak, got)
 		}

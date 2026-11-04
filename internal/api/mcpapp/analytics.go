@@ -77,12 +77,13 @@ var accountEventProperties = map[string]bool{
 }
 
 // accountMetadataOnly forwards an account $mcp_tool_call with its properties cut down to
-// accountEventProperties, and nothing else.
+// accountEventProperties, and nothing else: every other event (an unknown tool, named by
+// the caller) is dropped.
 type accountMetadataOnly struct{ posthog.EnqueueClient }
 
 func (c accountMetadataOnly) Enqueue(msg posthog.Message) error {
 	capture, ok := msg.(posthog.Capture)
-	if !ok {
+	if !ok || capture.Event != "$mcp_tool_call" {
 		return nil
 	}
 	kept := posthog.NewProperties()
