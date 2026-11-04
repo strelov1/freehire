@@ -18,19 +18,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend_tasks: ${{ steps.scope.outputs.backend_tasks }}
+      web: ${{ steps.scope.outputs.web }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test CI change selection
+        run: python3 -m unittest discover -s .github/scripts -p test_ci_changes.py
+
+      - name: Select required checks
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python3 .github/scripts/ci_changes.py --base "$BASE_SHA" --head "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
   backend-jobs:
     name: backend-${{ matrix.task }}
+    needs: changes
     strategy:
       fail-fast: false
       matrix:
-        task:
-          - checks
-          - unit
-          - integration-handler
-          - integration-db
-          - integration-cmd
-          - integration-engage-identity
-          - integration-rest
+        task: ${{ fromJSON(needs.changes.outputs.backend_tasks) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -169,14 +185,15 @@ jobs:
 
   # Preserve the required check name while the work runs on separate runners.
   backend:
-    needs: backend-jobs
+    needs: [changes, backend-jobs]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Require every backend task to pass
         env:
+          CHANGES: ${{ needs.changes.result }}
           RESULT: ${{ needs.backend-jobs.result }}
-        run: test "$RESULT" = success
+        run: test "$CHANGES" = success && test "$RESULT" = success
 
   # The three artefacts this repository hands to someone else, none of which any other job
   # reads: a shell script the site serves to be piped into sh, the images that get deployed,
@@ -697,7 +714,9 @@ jobs:
             exit 1
           fi
 
-  web:
+  web-work:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     # Not gated on design-system: web consumes the package's *source* (its
     # "svelte" export is ./src/index.ts) plus the two committed dist/tokens-*.css,
@@ -813,3 +832,20 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+  # Always report the required check, including an intentional skip of web work.
+  web:
+    needs: [changes, web-work]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require selected web checks to pass
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          WEB_REQUIRED: ${{ needs.changes.outputs.web }}
+          RESULT: ${{ needs.web-work.result }}
+        run: |
+          case "$CHANGES:$WEB_REQUIRED:$RESULT" in
+            success:true:success | success:false:skipped) ;;
+            *) echo "Web checks did not complete as selected"; exit 1 ;;
+          esac
