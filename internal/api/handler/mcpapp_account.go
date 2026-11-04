@@ -24,17 +24,26 @@ import (
 // verbatim — the same capabilities the in-app assistant exposes, not a second
 // implementation of them. Which of them are served is mcpAccountTools' answer for
 // an OAuth grant and mcpKeyTools' for a full-scope API key.
-func mountMCPAccount(api fiber.Router, mw middleware, assistants *assistantHandlers, frontendOrigin string, sink agentview.Sink) {
-	granted := adaptor.HTTPHandler(mcpapp.AccountHandler(mcpAccountTools(assistants, frontendOrigin), frontendOrigin))
-	keyed := adaptor.HTTPHandler(mcpapp.AccountHandler(mcpKeyTools(assistants, frontendOrigin), frontendOrigin))
+func mountMCPAccount(
+	api fiber.Router,
+	mw middleware,
+	assistants *assistantHandlers,
+	catalogue *mcpappHandlers,
+) {
+	granted := adaptor.HTTPHandler(mcpapp.AccountHandler(
+		mcpAccountTools(assistants, catalogue.origin), catalogue.origin, catalogue,
+	))
+	keyed := adaptor.HTTPHandler(mcpapp.AccountHandler(
+		mcpKeyTools(assistants, catalogue.origin), catalogue.origin, catalogue,
+	))
 	// Same reasoning as the public /mcp mount: agentSearchLimiter bounds how
 	// hard a machine may ask, applied here too since every tool still reaches
 	// the catalogue and the tracking board. Authentication runs as a real
 	// Fiber middleware, ahead of the adapted raw http.Handler, so an
 	// unexpected failure authenticating the token (not merely an unknown one)
 	// is reported the normal way — see mcpAccountAuthenticate.
-	api.All("/mcp/account", chatAgentLimiter(mw.public), mcpAccountAuthenticate(assistants, frontendOrigin),
-		agentViews(sink, agentview.SurfaceMCPAccount),
+	api.All("/mcp/account", chatAgentLimiter(mw.public), mcpAccountAuthenticate(assistants, catalogue.origin),
+		agentViews(catalogue.agentViews, agentview.SurfaceMCPAccount),
 		func(c *fiber.Ctx) error {
 			if viaKey, _ := c.Locals(localsMCPAccountViaKey).(bool); viaKey {
 				return keyed(c)

@@ -14,34 +14,15 @@ import (
 // catalogue's and not OJCP's.
 const Version = "1.0"
 
-// serverInstructions is what the model is told before it picks a tool.
-//
-// Four things belong here and nowhere else. The first is that this is an aggregator, so a
-// posting is attributed rather than offered as ours. The second is which tool answers which
-// question, and in what ORDER: tool descriptions may not point at other tools (Anthropic's
-// directory policy), so this is the one place the model learns that, and
-// TestTheInstructionsIntroduceEveryTool keeps it complete. The order is the search strategy
-// adapted from openings-mcp's job-search skill (MIT): shortlist from previews and read only
-// the final few in full, recheck liveness before presenting, and fix a value the search did
-// not understand from the vocabulary instead of telling the person nothing exists. The third
-// is the OR: geography filters union, so asking for Germany and Lisbon returns both rather
-// than their intersection — a model that assumes AND will describe the results wrongly and
-// confidently, and nothing in a result would reveal it.
-//
-// Everything a single tool can say about itself lives in its description instead, where the
-// model reads it at the moment of the call: the synonym OR, filters-not-query, loosening one
-// constraint at a time and the result table are search_jobs', and when to send `semantic`
-// (measured 2026-10-21 over 34 queries: a need described in words went from 3.3 to 7.4
-// relevant hits of 10, a non-tech query fell from 9.2 to 7.0) is search_jobs' and its field's.
-//
-// Kept under 512 characters, which the Apps SDK guidance asks for and a test enforces.
-const serverInstructions = "freehire aggregates job postings and attributes each to the board it " +
-	"came from: name the source and link the employer's posting. search_jobs finds postings: " +
-	"shortlist from its previews, call get_job only for the final 5-10, and check_jobs_open " +
-	"before presenting them. similar_jobs finds more like one; " +
-	"salary_stats/job_market_stats: pay and market; search_companies/get_company: employers. " +
-	"Geography filters union. A value in ignored_params was not understood: take one from " +
-	"list_filter_values and retry."
+// serverInstructions describes capabilities and result semantics shared across tools.
+// The packaged find-tech-jobs skill carries the optional search workflow; initialization
+// does not prescribe a call sequence, shortlist size or how the client presents results.
+// Keep this introduction within the 512-character budget enforced by the tests.
+const serverInstructions = "freehire provides anonymous, read-only access to aggregated job postings. " +
+	"search_jobs/get_job: postings; check_jobs_open: open status; similar_jobs: related postings; " +
+	"search_companies/get_company: employers; salary_stats/job_market_stats: pay and demand; " +
+	"list_filter_values: supported filters. Results include source boards and employer links " +
+	"where available. Geography filters form a union. ignored_params identifies unrecognized filter values."
 
 // Tool names. Unlike the OJCP transport's, they feed no manifest — there is nothing here
 // that ADVERTISES a tool separately from registering it, so they are constants only because
@@ -161,17 +142,6 @@ func newServer(r Reader, origin string) *mcp.Server {
 	})
 
 	addLoggedTool(server, &mcp.Tool{
-		Name:  toolSearchCompanies,
-		Title: "Search employers",
-		Description: "Find employers in freehire's catalogue by name or by where they hire, " +
-			"with how many postings each has open. Use when the question is about a company " +
-			"rather than about a role.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in CompanySearchInput) (*mcp.CallToolResult, SearchCompaniesResult, error) {
-		return toolResult(r.SearchCompanies(ctx, in))
-	})
-
-	addLoggedTool(server, &mcp.Tool{
 		Name:  toolGetCompany,
 		Title: "Read one employer",
 		Description: "Read what freehire holds about one employer by the slug a result " +
@@ -182,89 +152,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.CompanyDetail(ctx, in.Slug))
 	})
 
-	addLoggedTool(server, &mcp.Tool{
-		Name:  toolCheckJobsOpen,
-		Title: "Check whether postings are still open",
-		Description: "Check whether postings are still open, by the slugs search results carry — " +
-			"up to 50 per call. Use before acting on a saved shortlist: each posting answers " +
-			"open, closed or not_found, with when it closed or was last seen live.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in CheckJobsOpenInput) (*mcp.CallToolResult, JobsOpenResult, error) {
-		check, unchecked := openCheckSlugs(in.Slugs)
-		states, err := r.CheckJobsOpen(ctx, check)
-		return toolResult(JobsOpenResult{Jobs: states, Unchecked: unchecked}, err)
-	})
-
-	addLoggedTool(server, &mcp.Tool{
-		Name:  toolSearch,
-		Title: "Search jobs (research)",
-		Description: "Search freehire's IT job postings by free text. Returns matching postings " +
-			"as {id, title, url}.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ResearchQuery) (*mcp.CallToolResult, ResearchResults, error) {
-		found, err := r.SearchJobs(ctx, SearchInput{Query: in.Query})
-		return toolResult(researchResults(found), err)
-	})
-
-	addLoggedTool(server, &mcp.Tool{
-		Name:  toolFetch,
-		Title: "Read one job posting (research)",
-		Description: "Read one posting in full by an id search returned: its full text, " +
-			"the employer, the board it came from and whether it still looks live.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ResearchID) (*mcp.CallToolResult, ResearchDocument, error) {
-		job, err := r.JobDetail(ctx, in.ID)
-		return toolResult(researchDocument(job), err)
-	})
-
-	addLoggedTool(server, &mcp.Tool{
-		Name:  toolSimilarJobs,
-		Title: "Find similar postings",
-		Description: "Postings most similar to one posting, by its slug, nearest first — for " +
-			"\"show me more like this\". Empty for the newest postings, whose neighbours are " +
-			"not computed yet.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SimilarJobsInput) (*mcp.CallToolResult, SimilarJobsResult, error) {
-		return toolResult(r.SimilarJobs(ctx, in.Slug, similarLimit(in.Limit)))
-	})
-
-	addLoggedTool(server, &mcp.Tool{
-		Name:  toolSalaryStats,
-		Title: "Salary ranges",
-		Description: "Salary percentiles (25th, median, 75th) from open postings that state " +
-			"pay, scoped by role family, seniority and country, with the sample size behind " +
-			"each figure. Currencies and pay periods are reported separately, never converted.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SalaryInput) (*mcp.CallToolResult, SalaryStatsResult, error) {
-		return toolResult(r.SalaryStats(ctx, in))
-	})
-
-	addLoggedTool(server, &mcp.Tool{
-		Name:  toolMarketStats,
-		Title: "Job market breakdown",
-		Description: "How many open postings match a set of filters, and their most common " +
-			"role families, seniorities, skills, work modes, countries and regions. Takes the " +
-			"same filters as a job search.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in SearchInput) (*mcp.CallToolResult, MarketStatsResult, error) {
-		return toolResult(r.MarketStats(ctx, in))
-	})
-
-	addLoggedTool(server, &mcp.Tool{
-		Name:  toolFilterValues,
-		Title: "List filter values",
-		Description: "The values one job-search filter accepts — skills, categories, " +
-			"seniorities, sources, countries and the rest — each with how many open " +
-			"postings carry it, most common first. A value not listed matches no posting. " +
-			"Use it before filtering on a value you are not sure of.",
-		Annotations: readOnly(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in FilterValuesInput) (*mcp.CallToolResult, FilterValuesResult, error) {
-		counts, err := r.FacetCounts(ctx)
-		if err != nil {
-			return toolResult(FilterValuesResult{}, err)
-		}
-		return toolResult(FilterValues(in, counts), nil)
-	})
+	registerCatalogueTools(server, r, "public")
 
 	return server
 }

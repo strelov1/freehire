@@ -73,14 +73,19 @@ func TestToolLogsSpanActualExecutionAndExcludePayloads(t *testing.T) {
 				}
 				server = newServer(reader, "")
 			} else {
-				server = NewAccountServer([]assistant.Tool{{Name: toolSearchJobs, Schema: map[string]any{"type": "object"}, Run: func(ctx context.Context, _ int64, _ json.RawMessage) (any, error) {
-					select {
-					case <-release:
-					case <-ctx.Done():
-						return nil, ctx.Err()
-					}
-					return map[string]string{"private": private}, nil
-				}}}, 987654321, "")
+				server = NewAccountServer(
+					[]assistant.Tool{{Name: toolSearchJobs, Schema: map[string]any{"type": "object"}, Run: func(ctx context.Context, _ int64, _ json.RawMessage) (any, error) {
+						select {
+						case <-release:
+						case <-ctx.Done():
+							return nil, ctx.Err()
+						}
+						return map[string]string{"private": private}, nil
+					}}},
+					987654321,
+					"",
+					nil,
+				)
 			}
 			clientTransport, serverTransport := mcp.NewInMemoryTransports()
 			serverSession, err := server.Connect(t.Context(), serverTransport, nil)

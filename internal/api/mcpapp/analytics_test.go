@@ -96,7 +96,7 @@ func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 			return nil, errors.New("applicant " + email + " answered 'visa: H1B'")
 		},
 	}
-	server := httptest.NewServer(AccountHandler([]assistant.Tool{tool}, ""))
+	server := httptest.NewServer(AccountHandler([]assistant.Tool{tool}, "", nil))
 	t.Cleanup(server.Close)
 
 	header := http.Header{}

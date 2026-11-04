@@ -13,46 +13,23 @@ import (
 	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
-// accountServerInstructions tells the model this surface acts as a specific,
-// already-authenticated person — the opposite framing from serverInstructions
-// above, which warns an anonymous aggregator view apart from the catalogue.
-//
-// The searching sentence is the subset of the anonymous server's search strategy that this
-// server's search_jobs description, shared with the in-app assistant, does not already carry.
-//
-// The auto-apply paragraph is the order the tools only work in: an agent that starts an
-// attempt and stops there leaves it waiting for a review nobody gives, and one that answers a
-// question without retrying leaves it parked. It is told only to a session that is served
-// those tools (accountInstructions): an API key is not, and instructions naming tools a
-// session lacks walk the person through a workflow nothing can run.
-const accountServerInstructions = "This server acts as the signed-in freehire account that " +
-	"approved this connection. Tools read and change that account's own saved jobs, " +
-	"applications, and tracking board — never another account's. " +
-	"Searching: join a role's two or three names in one query with OR " +
-	"(title:SRE OR title:\"site reliability\"); put location, work mode, seniority and skills " +
-	"in filters, never in the query; if few results come back, loosen one constraint at a " +
-	"time and say which. Present jobs as a table of title, company, location, posted date " +
-	"and link, naming the source. "
+// Account initialization describes identity, capabilities and result states. The
+// optional workflow lives in the packaged skill; permissions remain enforced by tools.
+const accountServerInstructions = "This server acts as the signed-in freehire account that approved the connection. " +
+	"Catalogue tools read public postings; personal tools read and change that account's " +
+	"saved jobs, applications and alerts. Geography filters form a union. "
 
-const accountAutoApplyInstructions = "Automatic applications: auto_apply_start begins one; follow it with auto_apply_get, whose " +
-	"next_step says what to do. When it stops on questions, ask the person all of them as one " +
-	"numbered list, save their answers in the form's language with answer_bank_save or " +
-	"screening_answers_set, then call auto_apply_retry. When it reaches " +
-	"pending_review, show the person what will be sent and record their decision with " +
-	"auto_apply_review. Answers you save are sent to employers in the person's name — never " +
-	"invent one. "
+const accountAutoApplyInstructions = "auto_apply_start, auto_apply_get, auto_apply_retry and auto_apply_review " +
+	"manage attempts, questions and pending_review. Saved answers may be sent to employers. "
 
-const accountAlertInstructions = "Job alerts are saved searches over any filters, delivered by email, Telegram, the app or a " +
-	"webhook, never to this chat. Before subscribe, run the same search with search_jobs so the " +
-	"person sees what they will get; to change an alert, read its search from list_subscriptions " +
-	"and pass update_subscription only what changes; to hold one, pause it rather than " +
-	"unsubscribe; subscription_updates reads what alerts matched."
+const accountAlertInstructions = "list_subscriptions and subscription_updates read alerts and matches. " +
+	"Alerts go to the account's configured channels."
 
 // NewAccountServer builds the per-request signed-in MCP server for one resolved
 // user. tools is the caller's assistantDiscoveryTools() + assistantTrackingTools()
-// — the same capabilities the in-app assistant already has, reused rather than
-// reimplemented so a tool result here and in the assistant can never disagree.
-func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.Server {
+// — the same capabilities the in-app assistant already has. reader adds the catalogue
+// tools it does not own; nil omits them for focused account-tool tests.
+func NewAccountServer(tools []assistant.Tool, userID int64, origin string, reader Reader) *mcp.Server {
 	server := mcp.NewServer(Identity("freehire-account", Version, origin),
 		&mcp.ServerOptions{
 			Instructions: accountInstructions(tools),
@@ -64,6 +41,10 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.
 		})
 	instrumentAccount(server)
 	server.AddReceivingMiddleware(countRejectedToolCalls("account"))
+
+	if reader != nil {
+		registerCatalogueTools(server, reader, "account")
+	}
 
 	for _, t := range tools {
 		server.AddTool(&mcp.Tool{
@@ -152,7 +133,7 @@ const AccountUserIDHeader = "X-Freehire-Account-User-Id"
 // trusts AccountUserIDHeader entirely — a request reaching it with no valid
 // value there is this package's own wiring bug, not a caller's, so it answers
 // 500 rather than 401.
-func AccountHandler(tools []assistant.Tool, origin string) http.Handler {
+func AccountHandler(tools []assistant.Tool, origin string, reader Reader) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID, err := strconv.ParseInt(r.Header.Get(AccountUserIDHeader), 10, 64)
 		if err != nil {
@@ -160,7 +141,12 @@ func AccountHandler(tools []assistant.Tool, origin string) http.Handler {
 			return
 		}
 		mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
-			return NewAccountServer(tools, userID, origin)
+			return NewAccountServer(
+				tools,
+				userID,
+				origin,
+				reader,
+			)
 		}, &mcp.StreamableHTTPOptions{Stateless: true}).ServeHTTP(w, r)
 	})
 }

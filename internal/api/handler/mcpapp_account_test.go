@@ -20,7 +20,12 @@ func mcpAccountApp(assistants *assistantHandlers) *fiber.App {
 	// so the zero-value middleware needs no fake here.
 	mw := middleware{}
 	api := app.Group("/api/v1")
-	mountMCPAccount(api, mw, assistants, testMCPOrigin, nil)
+	mountMCPAccount(
+		api,
+		mw,
+		assistants,
+		&mcpappHandlers{origin: testMCPOrigin},
+	)
 	return app
 }
 
