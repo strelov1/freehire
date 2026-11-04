@@ -82,6 +82,8 @@ func ErrorCode(err error) string {
 			return "invalid_request"
 		case 401:
 			return "unauthenticated"
+		case 402:
+			return "payment_required"
 		case 403:
 			return "permission_denied"
 		case 404:

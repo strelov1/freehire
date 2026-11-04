@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/application/autoapply"
 	"github.com/strelov1/freehire/internal/candidate/answerbank"
 	"github.com/strelov1/freehire/internal/ingest/screeninganswers"
@@ -52,6 +53,9 @@ const agentsMayApplyOff = "auto-apply by connected agents is turned off for this
 	"Ask the person to turn on \"Let connected agents apply for me\" on freehire, under " +
 	"Account → Integrations → API keys (/my/integrations/api-keys), then try again"
 
+// errAgentsMayApplyOff carries 403 so the refusal is counted as permission_denied, not as ours.
+var errAgentsMayApplyOff = fiber.NewError(fiber.StatusForbidden, agentsMayApplyOff)
+
 // requireAgentsMayApply refuses unless the account switched agents_may_apply on.
 func (h *assistantHandlers) requireAgentsMayApply(ctx context.Context, userID int64) error {
 	if agentsMayApplyWaived(ctx) {
@@ -62,21 +66,24 @@ func (h *assistantHandlers) requireAgentsMayApply(ctx context.Context, userID in
 		return err
 	}
 	if !allowed {
-		return errors.New(agentsMayApplyOff)
+		return errAgentsMayApplyOff
 	}
 	return nil
 }
 
-// toolError turns what the shared methods return into a sentence an agent can act on. A
-// fiber.Error already is one; pgx.ErrNoRows from a slug lookup is the one bare error they
-// return that means something to the caller.
+// toolError turns what the shared methods return into a sentence an agent can act on, and
+// keeps its kind: a *fiber.Error already reads as its message, and its status is what the MCP
+// metrics and logs classify a refusal by (observability.ErrorCode). Rebuilding each one as a
+// bare error counted every refusal as internal_error. pgx.ErrNoRows from a slug lookup and the
+// plan's refusals are the bare errors they return that mean something to the caller.
 func toolError(err error) error {
-	if errors.Is(err, pgx.ErrNoRows) {
-		return errors.New("no job with this slug")
-	}
-	var fe *fiber.Error
-	if errors.As(err, &fe) {
-		return errors.New(fe.Message)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return fiber.NewError(fiber.StatusNotFound, "no job with this slug")
+	case errors.Is(err, plan.ErrPaymentRequired):
+		return fiber.NewError(fiber.StatusPaymentRequired, err.Error())
+	case errors.Is(err, plan.ErrRefused):
+		return fiber.NewError(fiber.StatusTooManyRequests, err.Error())
 	}
 	return err
 }

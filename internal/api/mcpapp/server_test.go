@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/strelov1/freehire/internal/ingest/applyform"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // The whole server, driven through the SDK's in-memory transport — the same thing ChatGPT
@@ -369,5 +371,25 @@ func TestListFilterAcceptsASingleValue(t *testing.T) {
 	// null is no filter, not a one-item list holding "".
 	if got.Cities != nil {
 		t.Errorf("cities = %q, want nil for null", got.Cities)
+	}
+}
+
+// A query with more OR alternatives than the engine takes is the caller's to fix, so the agent
+// is told what to change; it used to read "freehire could not answer this request".
+func TestTooManyAlternativesTellsTheAgentWhatToChange(t *testing.T) {
+	r := readerThatFinds(t)
+	r.searchJobs = func(context.Context, SearchInput) (SearchJobsResult, error) {
+		return SearchJobsResult{}, fmt.Errorf("search: %w", search.ErrTooManyAlternatives)
+	}
+	res, err := connect(t, r).CallTool(context.Background(), &mcp.CallToolParams{Name: toolSearchJobs, Arguments: map[string]any{"query": "a OR b OR c OR d OR e OR f"}})
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	text := res.Content[0].(*mcp.TextContent).Text
+	if !res.IsError || !strings.Contains(text, "5 OR alternatives") {
+		t.Errorf("result = %v %q", res.IsError, text)
+	}
+	if code := resultErrorCode(res); code != "invalid_request" {
+		t.Errorf("error_code = %q, want invalid_request", code)
 	}
 }
