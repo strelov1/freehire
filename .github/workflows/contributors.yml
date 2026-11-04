@@ -73,7 +73,7 @@ jobs:
         # zizmor: ignore[artipacked] — the credential is persisted on purpose:
         # commit-contributors.sh pushes the branch with it, and nothing else in this
         # job runs code it did not check out itself.
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: useblacksmith/checkout@v1 # v7.0.1
         with:
           # The token the later push carries. Without it the push would go out as
           # GITHUB_TOKEN and the pull request would never get its checks.
