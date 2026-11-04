@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gofiber/fiber/v2"
+
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/application/appevent"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
@@ -189,7 +191,7 @@ func (h *assistantHandlers) myJobsTool() assistant.Tool {
 // invented rather than one a search returned.
 func trackingToolError(slug string, err error) error {
 	if errors.Is(err, jobtracking.ErrJobNotFound) {
-		return fmt.Errorf("no vacancy with slug %q — use the public_slug from a search result", slug)
+		return fiber.NewError(fiber.StatusNotFound, fmt.Sprintf("no vacancy with slug %q — use the public_slug from a search result", slug))
 	}
 	return err
 }
