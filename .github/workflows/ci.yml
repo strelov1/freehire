@@ -697,7 +697,12 @@ jobs:
             exit 1
           fi
 
-  web:
+  web-jobs:
+    name: web-${{ matrix.task }}
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [checks, tests]
     runs-on: ubuntu-latest
     # Not gated on design-system: web consumes the package's *source* (its
     # "svelte" export is ./src/index.ts) plus the two committed dist/tokens-*.css,
@@ -734,10 +739,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Type checking prepares .svelte-kit in the checks job; tests need their own copy.
+      - name: Sync SvelteKit for tests
+        if: matrix.task == 'tests'
+        run: pnpm exec svelte-kit sync
+
       - name: Lint
+        if: matrix.task == 'checks'
         run: pnpm run lint
 
       - name: Type check
+        if: matrix.task == 'checks'
         run: pnpm run check
 
       # docs/API.md and docs/API.internal.md (the external and internal-audience
@@ -757,6 +769,7 @@ jobs:
       # generator too, but as a Vite SSR error — the type check says what is actually
       # wrong first.
       - name: Assert docs/API.md and docs/API.internal.md match their source
+        if: matrix.task == 'checks'
         run: |
           pnpm run gen:api-docs
           if [ -n "$(git status --porcelain -- ../docs/API.md ../docs/API.internal.md)" ]; then
@@ -768,6 +781,7 @@ jobs:
           echo 'docs/API.md and docs/API.internal.md match web/src/lib/docs/api-spec.ts.'
 
       - name: API docs generator smoke test
+        if: matrix.task == 'checks'
         run: pnpm run gen:api-docs:smoke
 
       # web/src/lib/docs/generated/api-reference.openapi.json is the OpenAPI document
@@ -780,6 +794,7 @@ jobs:
       # `artifacts` job): that file is deliberately narrow for the GPT Actions
       # importer's own limits, this one is the whole public API surface.
       - name: Assert the generated OpenAPI references match their source
+        if: matrix.task == 'checks'
         run: |
           pnpm run gen:openapi
           if [ -n "$(git status --porcelain -- src/lib/docs/generated/api-reference.openapi.json src/lib/docs/generated/api-reference.internal.openapi.json)" ]; then
@@ -791,20 +806,23 @@ jobs:
           echo 'Both generated OpenAPI references match web/src/lib/docs/api-spec.ts.'
 
       - name: OpenAPI generator smoke test
+        if: matrix.task == 'checks'
         run: pnpm run gen:openapi:smoke
 
       # Same `minimal` gate as web/static/openapi.yaml in the `artifacts` job: can a
       # client generator read this at all.
       - name: Validate the generated OpenAPI references
+        if: matrix.task == 'checks'
         run: |
           npx --yes @redocly/cli@2.49.0 lint src/lib/docs/generated/api-reference.openapi.json --extends=minimal
           npx --yes @redocly/cli@2.49.0 lint src/lib/docs/generated/api-reference.internal.openapi.json --extends=minimal
 
       - name: Unit tests with coverage
+        if: matrix.task == 'tests'
         run: pnpm run test:coverage
 
       - name: Upload web coverage
-        if: always()
+        if: always() && matrix.task == 'tests'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-coverage
@@ -812,4 +830,16 @@ jobs:
           if-no-files-found: ignore
 
       - name: Build
+        if: matrix.task == 'checks'
         run: pnpm run build
+
+  # Keep the required check stable while build checks and the full test suite run in parallel.
+  web:
+    needs: web-jobs
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every web task to pass
+        env:
+          RESULT: ${{ needs.web-jobs.result }}
+        run: test "$RESULT" = success
