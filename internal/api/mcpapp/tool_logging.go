@@ -81,7 +81,7 @@ func resultErrorCode(result *mcp.CallToolResult) string {
 	code, _ := diagnostics["error_code"].(string)
 	// Only codes authored here may enter the log; a result's text is private.
 	switch code {
-	case "canceled", "deadline_exceeded", "not_found", "invalid_request", "unauthenticated", "permission_denied", "conflict", "rate_limited", "unavailable", "database_error", "internal_error":
+	case "canceled", "deadline_exceeded", "not_found", "invalid_request", "unauthenticated", "payment_required", "permission_denied", "conflict", "rate_limited", "unavailable", "database_error", "internal_error":
 		return code
 	default:
 		return "internal_error"

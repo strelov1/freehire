@@ -8,6 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/strelov1/freehire/internal/platform/observability"
+	"github.com/strelov1/freehire/internal/search/search"
 )
 
 // Version is what this server reports itself as. It is the app's version, not the
@@ -205,6 +206,9 @@ func toolResult[T any](out T, err error) (*mcp.CallToolResult, T, error) {
 	if errors.As(err, &notFound) {
 		message = notFound.Error() + "; search for it instead"
 	}
+	if errors.Is(err, search.ErrTooManyAlternatives) {
+		message = "the query has more than 5 OR alternatives; split them into several searches of at most 5 each and combine the results"
+	}
 	return &mcp.CallToolResult{
 		Meta:    mcp.Meta{diagnosticsMetaKey: map[string]any{"error_code": publicErrorCode(err)}},
 		IsError: true,
@@ -216,6 +220,9 @@ func publicErrorCode(err error) string {
 	var notFound NotFoundError
 	if errors.As(err, &notFound) {
 		return "not_found"
+	}
+	if errors.Is(err, search.ErrTooManyAlternatives) {
+		return "invalid_request"
 	}
 	return observability.ErrorCode(err)
 }
