@@ -165,20 +165,19 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 	return s.repo.UpsertSettings(ctx, userID, in)
 }
 
-// resolveIntervalHours decides the interval to store. An out-of-range value is
-// refused only when the interval is what the rule uses. Otherwise — the field
-// omitted (zero, from a client that predates it, on what is a full-replacement
-// write), or a stray value beside another frequency — the account's stored
-// interval is kept, so a save that never mentioned it cannot reset a chosen six
-// hours to one.
+// resolveIntervalHours decides the interval to store. The value sent is read only
+// when the rule uses the interval: there it is stored, or refused when out of
+// range. Otherwise — another frequency, or the field omitted (zero, from a client
+// that predates it, on what is a full-replacement write) — the account's stored
+// interval is kept, so a save that is not about the interval cannot reset a
+// chosen six hours to one.
 func (s *Service) resolveIntervalHours(ctx context.Context, userID int64, in Settings) (int, error) {
 	h := in.DigestIntervalHours
-	inRange := h >= notify.MinIntervalHours && h <= notify.MaxIntervalHours
-	if inRange {
+	if in.DigestFrequency == notify.FrequencyInterval && h != 0 {
+		if h < notify.MinIntervalHours || h > notify.MaxIntervalHours {
+			return 0, ErrInvalidInterval
+		}
 		return h, nil
-	}
-	if h != 0 && in.DigestFrequency == notify.FrequencyInterval {
-		return 0, ErrInvalidInterval
 	}
 	current, err := s.repo.GetSettings(ctx, userID)
 	if err != nil {

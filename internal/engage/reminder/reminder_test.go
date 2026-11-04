@@ -395,3 +395,18 @@ func TestUpdateSettings_StrayIntervalBesideDailyKeepsTheStoredOne(t *testing.T) 
 		t.Errorf("stored %d, want the existing 4", got.DigestIntervalHours)
 	}
 }
+
+// An in-range value beside another frequency is not read either: switching to daily
+// and back must find the interval the person chose, not whatever the save carried.
+func TestUpdateSettings_InRangeIntervalBesideDailyKeepsTheStoredOne(t *testing.T) {
+	repo := &fakeRepo{settings: Settings{DigestIntervalHours: 6}}
+	digestTime := 9 * time.Hour
+	got, err := newService(repo).UpdateSettings(context.Background(), 1,
+		Settings{DigestFrequency: notify.FrequencyDaily, DigestTime: &digestTime, DigestIntervalHours: 1})
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if got.DigestIntervalHours != 6 {
+		t.Errorf("stored %d, want the existing 6", got.DigestIntervalHours)
+	}
+}
