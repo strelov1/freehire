@@ -664,8 +664,7 @@ type Querier interface {
 	ClearProviderCooldowns(ctx context.Context, provider string) (int64, error)
 	// Clear a batch of jobs' embed provenance (closed-job path). Run in the same transaction
 	// as DeleteSemanticEntriesBatch and DeleteJobSemanticChunks (see that query).
-	// job_semantic_chunks is the only stored vector; the legacy jobs.semantic_embedding column
-	// is being dropped (migrations/pending-semantic-embedding-drop).
+	// job_semantic_chunks is the only stored vector (jobs.semantic_embedding was dropped in 0235).
 	ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error
 	// Forget a credential the gateway no longer recognises, so the next call mints a
 	// replacement. Conditional on the value we believe is stored: a concurrent call may have
