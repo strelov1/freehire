@@ -63,6 +63,7 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.
 			},
 		})
 	instrumentAccount(server)
+	server.AddReceivingMiddleware(countRejectedToolCalls("account"))
 
 	for _, t := range tools {
 		server.AddTool(&mcp.Tool{
