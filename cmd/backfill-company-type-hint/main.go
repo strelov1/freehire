@@ -9,8 +9,7 @@
 // ON CONFLICT-guarded, so re-running this before that drain completes costs nothing).
 //
 // Enrichment writes are not pushed to search_outbox, so the corrected values only reach
-// Meilisearch on the next full rebuild — follow the drain with a full `make reindex`,
-// the same gap cmd/backfill-clearance documents.
+// Meilisearch on the next full rebuild — follow the drain with a full `make reindex`.
 //
 // Needs DATABASE_URL.
 package main

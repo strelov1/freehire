@@ -1,8 +1,7 @@
 //go:build integration
 
-// Integration tests for the cmd/backfill-clearance queries. The pass is designed to be
-// stopped and re-run at will, and that property rests entirely on the UPDATE's IS
-// DISTINCT FROM guard — a SQL behaviour, so only a real Postgres can confirm it.
+// Integration tests for the nullable requires_clearance column: NULL until stated, and
+// kept across a failed detail fetch — SQL behaviour only a real Postgres can confirm.
 // Run with: go test -tags=integration ./internal/platform/db/
 package db
 
