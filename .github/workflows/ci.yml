@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [checks, unit, integration]
+        task: [checks, unit, integration-handler, integration-db, integration-cmd, integration-rest]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -131,11 +131,26 @@ jobs:
           mkdir -p coverage
           go test ./... -coverprofile=coverage/unit.out -covermode=atomic
 
+      # Separate the two largest packages and the command workers from the rest.
+      # The selector sends every new package to rest unless it matches a named group.
+      - name: Select integration packages
+        if: startsWith(matrix.task, 'integration-')
+        env:
+          SHARD: ${{ matrix.task }}
+        run: bash .github/scripts/integration-packages.sh "$SHARD" > "$RUNNER_TEMP/integration-packages.txt"
+
       - name: Integration tests
-        if: matrix.task == 'integration'
+        if: startsWith(matrix.task, 'integration-')
+        env:
+          SHARD: ${{ matrix.task }}
         run: |
+          mapfile -t packages < "$RUNNER_TEMP/integration-packages.txt"
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "No integration packages selected for $SHARD" >&2
+            exit 1
+          fi
           mkdir -p coverage
-          go test -tags=integration ./... -coverprofile=coverage/integration.out -covermode=atomic
+          go test -tags=integration "${packages[@]}" -coverprofile="coverage/$SHARD.out" -covermode=atomic
 
       - name: Upload Go coverage
         if: always() && matrix.task != 'checks'
