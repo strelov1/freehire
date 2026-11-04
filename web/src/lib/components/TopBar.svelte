@@ -5,7 +5,6 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { signinUrl } from '#lib/signin.js';
   import HeaderSearch from './HeaderSearch.svelte';
-  import { ROLE_PLACEHOLDER } from '#lib/placeholderRoles.js';
   import HeaderMenu from './HeaderMenu.svelte';
   import BrandMark from './BrandMark.svelte';
   import { isApiReferenceRoute, isWideHeaderRoute } from '#lib/shellLayout.js';
@@ -25,12 +24,11 @@
   // to select between two components that shared everything but that one behaviour and
   // drifted apart in the parts they shared.
   //
-  // The companies box rotates nothing: the roles the jobs box cycles through would be
-  // answering a question it does not ask.
+  // Keep header hints static; animated role examples belong only to the homepage hero.
   const searchWording = $derived(
     page.url.pathname === '/companies'
       ? { placeholder: 'Search companies…', label: 'Search companies' }
-      : { placeholder: ROLE_PLACEHOLDER, label: 'Search jobs' },
+      : { placeholder: 'Search jobs…', label: 'Search jobs' },
   );
 
   // The homepage is the one exception: its whole content is a large centred copy of
