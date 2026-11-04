@@ -122,6 +122,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 				Resources: &mcp.ResourceCapabilities{},
 			},
 		})
+	Instrument(server, "freehire", Version)
 
 	addPrompts(server)
 	addWidget(server)

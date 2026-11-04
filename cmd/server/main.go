@@ -20,6 +20,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	recovermiddleware "github.com/gofiber/fiber/v2/middleware/recover"
+	posthog "github.com/posthog/posthog-go"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,6 +29,7 @@ import (
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/ai/speech"
 	"github.com/strelov1/freehire/internal/api/handler"
+	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/api/ojcp"
 	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/api/realtime"
@@ -102,6 +104,17 @@ func runServer(cfg config.Settings) error {
 	rateTiers, err := handler.RateTiersFromEnv(os.Getenv, cfg.StrictAnonLimits())
 	if err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	// MCP analytics is optional and env-gated: no token => the MCP servers run uninstrumented.
+	// Close flushes the batch the client still holds, so it must outlive the HTTP server.
+	if cfg.PostHogProjectToken != "" {
+		ph, err := posthog.NewWithConfig(cfg.PostHogProjectToken, posthog.Config{Endpoint: cfg.PostHogHost})
+		if err != nil {
+			return fmt.Errorf("posthog: %w", err)
+		}
+		defer func() { _ = ph.Close() }()
+		mcpapp.EnableAnalytics(ph)
 	}
 
 	// One signal-bound context drives both startup and shutdown: it cancels the pool

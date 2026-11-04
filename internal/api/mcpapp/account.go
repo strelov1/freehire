@@ -62,6 +62,7 @@ func NewAccountServer(tools []assistant.Tool, userID int64, origin string) *mcp.
 				Tools:   &mcp.ToolCapabilities{},
 			},
 		})
+	instrumentAccount(server)
 
 	for _, t := range tools {
 		server.AddTool(&mcp.Tool{
