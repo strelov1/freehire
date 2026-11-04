@@ -1,9 +1,14 @@
 package mcpapp
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 // Page bounds. A model asking for five hundred results would spend the whole turn's context
@@ -30,28 +35,28 @@ type SearchInput struct {
 	// exists; the engine has understood them since freehire#3270.
 	Query string `json:"query,omitempty" jsonschema:"free text, matched against title, company, description and location. Operators: double quotes require every quoted word in any order (not a phrase); -word excludes; uppercase OR between terms matches any alternative (at most 5), e.g. golang OR rust; title: at the start of an alternative matches it in the title only, e.g. title:\"product owner\" OR title:produktchef"`
 
-	Countries []string `json:"countries,omitempty" jsonschema:"ISO 3166-1 alpha-2 codes, e.g. DE, BR"`
-	Cities    []string `json:"cities,omitempty"`
+	Countries stringList `json:"countries,omitempty" jsonschema:"ISO 3166-1 alpha-2 codes, e.g. DE, BR"`
+	Cities    stringList `json:"cities,omitempty"`
 	// WorkMode is a list rather than a flag because "remote or hybrid" is a thing people
 	// ask for and a boolean cannot express it.
-	WorkMode []string `json:"work_mode,omitempty" jsonschema:"any of remote, hybrid, onsite"`
+	WorkMode stringList `json:"work_mode,omitempty" jsonschema:"any of remote, hybrid, onsite"`
 	// Regions are where the role can be done FROM, which is what a remote candidate asks
 	// ("remote, LATAM"). They union with countries and cities, as on the website. The list is
 	// the whole of vocab.RegionValues, held there by a test like seniority's.
-	Regions []string `json:"regions,omitempty" jsonschema:"any of global, north_america, latam, eu, uk, mena, africa, apac, cis"`
+	Regions stringList `json:"regions,omitempty" jsonschema:"any of global, north_america, latam, eu, uk, mena, africa, apac, cis"`
 
 	// The listed values are the WHOLE of vocab.SeniorityValues, held there by
 	// TestSeniorityDescriptionNamesEveryLevel. It is a description, not an enum, so a level
 	// missing from it is still accepted — and invisible to the agent reading the schema,
 	// which is how `c_level` went unaskable here.
-	Seniority []string `json:"seniority,omitempty" jsonschema:"any of intern, junior, middle, senior, lead, staff, principal, c_level"`
-	Category  []string `json:"category,omitempty" jsonschema:"role family, e.g. backend, frontend, devops, data"`
-	Skills    []string `json:"skills,omitempty" jsonschema:"technologies, e.g. go, kubernetes, react"`
+	Seniority stringList `json:"seniority,omitempty" jsonschema:"any of intern, junior, middle, senior, lead, staff, principal, c_level"`
+	Category  stringList `json:"category,omitempty" jsonschema:"role family, e.g. backend, frontend, devops, data"`
+	Skills    stringList `json:"skills,omitempty" jsonschema:"technologies, e.g. go, kubernetes, react"`
 	// RequireAllSkills turns skills from "any of" into "all of" — "Go AND Kubernetes" is a
 	// different question from "Go OR Kubernetes", and a person means one of them.
-	RequireAllSkills bool     `json:"require_all_skills,omitempty" jsonschema:"true: every listed skill must be present, not just one"`
-	ExcludeSkills    []string `json:"exclude_skills,omitempty" jsonschema:"technologies the posting must not ask for, e.g. php"`
-	EmploymentType   []string `json:"employment_type,omitempty" jsonschema:"any of full_time, part_time, contract, internship"`
+	RequireAllSkills bool       `json:"require_all_skills,omitempty" jsonschema:"true: every listed skill must be present, not just one"`
+	ExcludeSkills    stringList `json:"exclude_skills,omitempty" jsonschema:"technologies the posting must not ask for, e.g. php"`
+	EmploymentType   stringList `json:"employment_type,omitempty" jsonschema:"any of full_time, part_time, contract, internship"`
 
 	// SalaryMin is a floor, expressed in SalaryCurrency. A floor without a currency is
 	// ambiguous across a catalogue holding both, so the two travel together.
@@ -60,13 +65,13 @@ type SearchInput struct {
 
 	// VisaSponsorship is a POINTER because false and absent differ: false means "sponsorship
 	// is not needed", which is not a filter at all, while absent means nothing was said.
-	VisaSponsorship *bool    `json:"visa_sponsorship,omitempty"`
-	EnglishLevel    []string `json:"english_level,omitempty" jsonschema:"CEFR levels, e.g. B2, C1"`
-	Relocation      []string `json:"relocation,omitempty" jsonschema:"any of supported (the employer helps you move), required (the role needs you to move), not_supported"`
+	VisaSponsorship *bool      `json:"visa_sponsorship,omitempty"`
+	EnglishLevel    stringList `json:"english_level,omitempty" jsonschema:"CEFR levels, e.g. B2, C1"`
+	Relocation      stringList `json:"relocation,omitempty" jsonschema:"any of supported (the employer helps you move), required (the role needs you to move), not_supported"`
 
-	CompanySlugs        []string `json:"company_slugs,omitempty" jsonschema:"employer identifiers, as carried by a result's company_slug"`
-	ExcludeCompanySlugs []string `json:"exclude_company_slugs,omitempty" jsonschema:"employers to leave out, as carried by a result's company_slug"`
-	Sources             []string `json:"sources,omitempty" jsonschema:"job boards to restrict to"`
+	CompanySlugs        stringList `json:"company_slugs,omitempty" jsonschema:"employer identifiers, as carried by a result's company_slug"`
+	ExcludeCompanySlugs stringList `json:"exclude_company_slugs,omitempty" jsonschema:"employers to leave out, as carried by a result's company_slug"`
+	Sources             stringList `json:"sources,omitempty" jsonschema:"job boards to restrict to"`
 
 	PostedWithinDays int `json:"posted_within_days,omitempty"`
 
@@ -85,10 +90,10 @@ func (in SearchInput) WantsSemantic() bool { return in.Semantic != nil && *in.Se
 // one: an employer has far fewer facets worth asking about, and a wide schema here would
 // cost tokens on every turn to answer questions nobody puts to it.
 type CompanySearchInput struct {
-	Query     string   `json:"query,omitempty" jsonschema:"free text, matched against the employer's name"`
-	Countries []string `json:"countries,omitempty" jsonschema:"ISO 3166-1 alpha-2 codes the employer hires in"`
-	Limit     int      `json:"limit,omitempty"`
-	Offset    int      `json:"offset,omitempty"`
+	Query     string     `json:"query,omitempty" jsonschema:"free text, matched against the employer's name"`
+	Countries stringList `json:"countries,omitempty" jsonschema:"ISO 3166-1 alpha-2 codes the employer hires in"`
+	Limit     int        `json:"limit,omitempty"`
+	Offset    int        `json:"offset,omitempty"`
 }
 
 // JobDetailInput and CompanyDetailInput are the two single-item reads. They exist as named
@@ -99,7 +104,7 @@ type JobDetailInput struct {
 }
 
 type CheckJobsOpenInput struct {
-	Slugs []string `json:"slugs" jsonschema:"posting identifiers, as carried by search results' slug; up to 50 are checked per call"`
+	Slugs stringList `json:"slugs" jsonschema:"posting identifiers, as carried by search results' slug; up to 50 are checked per call"`
 }
 
 // ResearchQuery and ResearchID are the inputs of search and fetch, whose shapes ChatGPT's
@@ -221,4 +226,35 @@ func setPositive(v url.Values, param string, value int) {
 	if value > 0 {
 		v.Set(param, strconv.Itoa(value))
 	}
+}
+
+// stringList is a list filter that also accepts a single bare value. Models routinely send a
+// one-item list as a string (work_mode: "remote"), and schema validation refused the whole
+// call: on 2026-11-04 that was every failed search_jobs call in an hour. stringListSchema
+// publishes both shapes, so the SDK validates before UnmarshalJSON sees either.
+type stringList []string
+
+func (l *stringList) UnmarshalJSON(data []byte) error {
+	var one string
+	if err := json.Unmarshal(data, &one); err == nil {
+		*l = stringList{one}
+		return nil
+	}
+	return json.Unmarshal(data, (*[]string)(l))
+}
+
+var stringListSchema = &jsonschema.Schema{
+	Types: []string{"null", "array", "string"},
+	Items: &jsonschema.Schema{Type: "string"},
+}
+
+// inputSchema infers a tool's input schema with stringList published as a string or a list.
+func inputSchema[In any]() *jsonschema.Schema {
+	schema, err := jsonschema.For[In](&jsonschema.ForOptions{
+		TypeSchemas: map[reflect.Type]*jsonschema.Schema{reflect.TypeFor[stringList](): stringListSchema},
+	})
+	if err != nil {
+		panic(fmt.Sprintf("mcpapp: input schema for %T: %v", *new(In), err))
+	}
+	return schema
 }
