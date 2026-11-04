@@ -34,12 +34,7 @@ export const PLACEHOLDER_ROLES: Category[] = [
   'product',
 ];
 
-/** The fixed prefix and the words that follow it, for the jobs search box.
- *
- *  A constant, not a factory. The labels are a pure lookup over a frozen list, so every
- *  call would return an equal object with a new identity — and a caller that recomputes
- *  it (the header re-derives its wording on every navigation) would hand the box a
- *  "changed" prop, restarting the animation's pending delay on each page change. */
+/** The fixed prefix and animated role examples for the homepage search box. */
 export const ROLE_PLACEHOLDER: { prefix: string; roles: string[] } = {
   prefix: ROLE_PREFIX,
   roles: PLACEHOLDER_ROLES.map(categoryLabel),
