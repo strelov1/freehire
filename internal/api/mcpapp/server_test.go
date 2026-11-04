@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -339,5 +340,34 @@ func TestIdentityCarriesTheLogoWhenTheOriginIsKnown(t *testing.T) {
 	bare := Identity("freehire", Version, "")
 	if bare.WebsiteURL != "" || len(bare.Icons) != 0 {
 		t.Errorf("with no origin: WebsiteURL = %q, icons = %v; want neither", bare.WebsiteURL, bare.Icons)
+	}
+}
+
+// Models routinely send a one-item list filter as a bare string (work_mode: "remote"); on
+// 2026-11-04 every such search_jobs call was refused by schema validation. A bare value must
+// read as a one-item list, and a list must still work.
+func TestListFilterAcceptsASingleValue(t *testing.T) {
+	var got SearchInput
+	r := readerThatFinds(t)
+	r.searchJobs = func(_ context.Context, in SearchInput) (SearchJobsResult, error) {
+		got = in
+		return SearchJobsResult{}, nil
+	}
+	session := connect(t, r)
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: toolSearchJobs,
+		Arguments: map[string]any{"work_mode": "remote", "countries": []string{"DE", "PL"}, "cities": nil}})
+	if err != nil {
+		t.Fatalf("call: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("a bare string was refused: %v", res.Content)
+	}
+	if !slices.Equal(got.WorkMode, []string{"remote"}) || !slices.Equal(got.Countries, []string{"DE", "PL"}) {
+		t.Errorf("work_mode = %v, countries = %v", got.WorkMode, got.Countries)
+	}
+	// null is no filter, not a one-item list holding "".
+	if got.Cities != nil {
+		t.Errorf("cities = %q, want nil for null", got.Cities)
 	}
 }
