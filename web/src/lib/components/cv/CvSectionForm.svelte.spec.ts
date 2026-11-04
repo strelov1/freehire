@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 
 import { blankExperience, emptyDocument } from '#lib/cv.js';
-import type { Document } from '#lib/generated/contracts.js';
+import { type Document, MaxExperience } from '#lib/generated/contracts.js';
 import CvSectionForm from './CvSectionForm.svelte';
 
 // $state, as the workspace holds it: the form edits the bound document's rows in place, which
@@ -23,6 +23,15 @@ describe('CvSectionForm', () => {
     render(CvSectionForm, { doc: docWith(['Older role']), title: 'CV' });
     await fireEvent.click(screen.getByRole('button', { name: /Add role/ }));
     expect(roleValues()).toEqual(['', 'Older role']);
+  });
+
+  it('refuses an Add at the section limit instead of letting the save drop the oldest role', async () => {
+    const roles = Array.from({ length: MaxExperience }, (_, i) => `Role ${i + 1}`);
+    render(CvSectionForm, { doc: docWith(roles), title: 'CV' });
+    const add = screen.getByRole('button', { name: /Add role/ }) as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+    await fireEvent.click(add);
+    expect(roleValues()).toEqual(roles);
   });
 
   it('marks a role as current: the end date gives way to "Present"', async () => {
