@@ -42,6 +42,13 @@ describe('matchFilterSearch', () => {
 });
 
 describe('jobFilterSearchItems', () => {
+  it('offers Hide viewed only to an eligible viewer, found by its aliases', () => {
+    const enabled = jobFilterSearchItems({ hideSeen: true });
+    expect(matchFilterSearch(enabled, 'viewed').some((h) => h.action === 'hide-seen')).toBe(true);
+    expect(jobFilterSearchItems().some((h) => h.action === 'hide-seen')).toBe(false);
+    expect(jobFilterSearchItems({ hideSeen: true, railKeys: ['salary'] }).some((h) => h.action === 'hide-seen')).toBe(false);
+  });
+
   it('offers Hiring again only in an eligible Company pane, including former-employer aliases', () => {
     const enabled = jobFilterSearchItems({ formerEmployers: true });
     expect(matchFilterSearch(enabled, 'former employers').some((h) => h.action === 'former-employers')).toBe(true);

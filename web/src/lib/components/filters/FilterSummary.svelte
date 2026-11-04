@@ -86,6 +86,10 @@
       push('Hiring again', [
         { key: 'former_employers', text: 'Your former employers', exclude: false, remove: () => store.setFormerEmployers(false) },
       ]);
+    // Same server-side rule as above. Without a chip the sidebar reads "No filters yet"
+    // while viewed jobs are being left out, and there is nothing to click to bring them back.
+    if (f.hideSeen && isAuthenticated())
+      push('Viewed', [{ key: 'hide_seen', text: 'Hidden', exclude: false, remove: () => store.setHideSeen(false) }]);
     facetGroup('english_level', 'English');
     facetGroup('posting_language', 'Job language');
     facetGroup('relocation', 'Relocation');
