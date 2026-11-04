@@ -445,11 +445,15 @@ type SearchParams struct {
 	// LiteralQuery treats stored text as words, without the user-query DSL or
 	// Meilisearch's phrase/exclusion syntax. Similar jobs pass an employer's title.
 	LiteralQuery bool
-	Query        string
-	Filter       any
-	Sort         []string
-	Limit        int
-	Offset       int
+	// PhraseQuery sends Query as one Meilisearch phrase: its words adjacent and in
+	// order, with no typo tolerance — "W-2", "contract to hire". A backfill gathering
+	// candidates for a term needs that; as separate words "W-2" matches every "2".
+	PhraseQuery bool
+	Query       string
+	Filter      any
+	Sort        []string
+	Limit       int
+	Offset      int
 	// Vector, when set, ranks results by cosine against it using SkillEmbedder rather
 	// than by text relevance — the match sort. It composes with Filter: the engine
 	// applies both in one query, so the facets need no separate pass and pagination
@@ -576,7 +580,9 @@ const semanticRatio = 0.7
 func (c *Client) Search(ctx context.Context, p SearchParams) (SearchResult, error) {
 	p.Filter = withOpenJobs(p.Filter)
 	alts := []Alternative{{Text: literalSearchText(p.Query)}}
-	if !p.LiteralQuery {
+	if p.PhraseQuery {
+		alts = []Alternative{{Text: `"` + literalSearchText(p.Query) + `"`}}
+	} else if !p.LiteralQuery {
 		var err error
 		alts, err = ParseQuery(p.Query)
 		if err != nil {
@@ -722,10 +728,10 @@ func facetSettings() *meilisearch.Settings {
 			// StringFacets, so the settings-before-binary warning above applies, and a
 			// full rebuild must follow the backfill-derive that fills existing rows.
 			"perks",
-			// engagement is the jobs text[] column beside it (internal/dict/engagement,
-			// the IR35 status today), a multi-value facet enrolled through StringFacets:
-			// the same settings-before-binary order, and the same rebuild after the
-			// backfill-derive that fills existing rows.
+			// engagement is the jobs text[] column beside it (internal/dict/engagement:
+			// IR35, W-2, B2B, CLT...), a multi-value facet enrolled through StringFacets,
+			// with the same settings-before-binary order. Existing rows reach the index
+			// through cmd/backfill-engagement, which queues them for the drain.
 			"engagement",
 			// apply_questions is the captured application form's required-question
 			// count (jobview.Job.ApplyQuestions), attached at index time from apply_forms

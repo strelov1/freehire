@@ -3577,6 +3577,10 @@ type Querier interface {
 	// a range scan; starts_with()/a default-collation LIKE would seq-scan the whole source (37s
 	// over greenhouse's ~300k rows). board_pattern is "<escaped board>:%", built by the repository.
 	JobsExistForBoard(ctx context.Context, arg JobsExistForBoardParams) (bool, error)
+	// Title, description and the stored engagement terms for a named set of ids, for
+	// cmd/backfill-engagement. By primary key: the candidates come from the search index,
+	// so the pass reads only the bodies that mention a term instead of de-TOASTing the table.
+	JobsForEngagementByIDs(ctx context.Context, ids []int64) ([]JobsForEngagementByIDsRow, error)
 	// Title, location, description and the currently-stored countries/regions for a named set
 	// of ids, for cmd/backfill-remote-region-restriction.
 	//
@@ -7491,6 +7495,13 @@ type Querier interface {
 	// clear in only one of them is precisely the gap a code review found.
 	SetGmailStatus(ctx context.Context, arg SetGmailStatusParams) error
 	SetGmailSynced(ctx context.Context, arg SetGmailSyncedParams) error
+	// Write one row's engagement terms, for cmd/backfill-engagement, and queue an open row
+	// for the search drain in the same statement: the column is not in content_hash, so
+	// nothing else would carry the new value to the index short of a full rebuild.
+	//
+	// The IS DISTINCT FROM guard makes the pass idempotent: a row already carrying the
+	// derived terms is neither rewritten nor queued, so a re-run writes nothing.
+	SetJobEngagement(ctx context.Context, arg SetJobEngagementParams) (SetJobEngagementRow, error)
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from
 	// UpsertJob (the ingest full-upsert path) so ingest and enrichment stay decoupled.

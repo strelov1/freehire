@@ -77,6 +77,11 @@ type Job struct {
 	EmploymentType     string
 	Skills             []string
 	ExperienceYearsMin *int
+	// Engagement is the legal terms the platform states in a structured field
+	// (vocab.EngagementValues) — a Brazilian board's "Tipo de contrato" picklist naming
+	// CLT or PJ. The pipeline unions it with what internal/dict/engagement reads from the
+	// text, since a picklist and a description can each name a term the other omits.
+	Engagement []string
 	// IsTechHint is a structured "confirmed technical" signal, set only by an adapter
 	// whose crawl scope itself guarantees a posting is technical — e.g. a source that
 	// crawls exclusively a platform's own dedicated IT category board, rather than a

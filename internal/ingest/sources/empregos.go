@@ -355,6 +355,7 @@ func (p empregosPosting) job() Job {
 		Description:    p.body(),
 		WorkMode:       empregosWorkMode(p.WorkplaceTypes),
 		EmploymentType: empregosEmploymentType(p.ContractForm),
+		Engagement:     brazilRegimeEngagement(p.ContractForm),
 	}
 	j.Remote = j.WorkMode == "remote"
 	var places []string

@@ -2703,6 +2703,46 @@ func (q *Queries) JobDescriptionsByIDs(ctx context.Context, ids []int64) ([]JobD
 	return items, nil
 }
 
+const jobsForEngagementByIDs = `-- name: JobsForEngagementByIDs :many
+SELECT id, title, description, engagement FROM jobs
+WHERE id = ANY($1::bigint[])
+`
+
+type JobsForEngagementByIDsRow struct {
+	ID          int64    `json:"id"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Engagement  []string `json:"engagement"`
+}
+
+// Title, description and the stored engagement terms for a named set of ids, for
+// cmd/backfill-engagement. By primary key: the candidates come from the search index,
+// so the pass reads only the bodies that mention a term instead of de-TOASTing the table.
+func (q *Queries) JobsForEngagementByIDs(ctx context.Context, ids []int64) ([]JobsForEngagementByIDsRow, error) {
+	rows, err := q.db.Query(ctx, jobsForEngagementByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []JobsForEngagementByIDsRow{}
+	for rows.Next() {
+		var i JobsForEngagementByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Engagement,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const jobsForGeographyRecheckByIDs = `-- name: JobsForGeographyRecheckByIDs :many
 SELECT id, title, location, description, countries, regions FROM jobs
 WHERE id = ANY($1::bigint[])
@@ -5884,6 +5924,47 @@ func (q *Queries) SelectStaleRegisteredCandidates(ctx context.Context, arg Selec
 		return nil, err
 	}
 	return items, nil
+}
+
+const setJobEngagement = `-- name: SetJobEngagement :one
+WITH updated AS (
+    UPDATE jobs j
+    SET engagement = COALESCE($1::text[], '{}')
+    WHERE j.id = $2
+      AND j.engagement IS DISTINCT FROM COALESCE($1::text[], '{}')
+    RETURNING j.id, j.closed_at, COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+enqueued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT u.id, u.eff_posted_at FROM updated u WHERE u.closed_at IS NULL
+    ON CONFLICT (job_id) DO NOTHING
+    RETURNING job_id
+)
+SELECT (SELECT count(*) FROM updated)::bigint AS updated_count,
+       (SELECT count(*) FROM enqueued)::bigint AS enqueued_count
+`
+
+type SetJobEngagementParams struct {
+	Engagement []string `json:"engagement"`
+	JobID      int64    `json:"job_id"`
+}
+
+type SetJobEngagementRow struct {
+	UpdatedCount  int64 `json:"updated_count"`
+	EnqueuedCount int64 `json:"enqueued_count"`
+}
+
+// Write one row's engagement terms, for cmd/backfill-engagement, and queue an open row
+// for the search drain in the same statement: the column is not in content_hash, so
+// nothing else would carry the new value to the index short of a full rebuild.
+//
+// The IS DISTINCT FROM guard makes the pass idempotent: a row already carrying the
+// derived terms is neither rewritten nor queued, so a re-run writes nothing.
+func (q *Queries) SetJobEngagement(ctx context.Context, arg SetJobEngagementParams) (SetJobEngagementRow, error) {
+	row := q.db.QueryRow(ctx, setJobEngagement, arg.Engagement, arg.JobID)
+	var i SetJobEngagementRow
+	err := row.Scan(&i.UpdatedCount, &i.EnqueuedCount)
+	return i, err
 }
 
 const setJobEnrichment = `-- name: SetJobEnrichment :exec

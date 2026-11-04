@@ -470,6 +470,8 @@ func genVocab() string {
 	// cannot offer a value the dictionary never writes.
 	b.WriteString(emitVocab("Engagement", "ENGAGEMENT_VALUES", vocab.EngagementValues))
 	b.WriteString(emitMap("EngagementLabels", "ENGAGEMENT_LABELS", engagement.Labels()))
+	// The market each term belongs to, so the chips group by it.
+	b.WriteString(emitMap("EngagementMarkets", "ENGAGEMENT_MARKETS", engagement.Markets()))
 	// The ghost criterion vocabulary. Generated for the same reason the mail signals are,
 	// with a sharper edge: the job page draws one gauge segment per criterion the payload
 	// says fired, and the rows accounting for them come from the SPA's own list. A

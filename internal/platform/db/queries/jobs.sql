@@ -3514,3 +3514,33 @@ SELECT d.job_id FROM search_delete_outbox d
 LEFT JOIN jobs j ON j.id = d.job_id
 WHERE d.job_id = ANY(sqlc.arg(job_ids)::bigint[])
   AND (j.id IS NULL OR j.closed_at IS NOT NULL);
+
+-- name: JobsForEngagementByIDs :many
+-- Title, description and the stored engagement terms for a named set of ids, for
+-- cmd/backfill-engagement. By primary key: the candidates come from the search index,
+-- so the pass reads only the bodies that mention a term instead of de-TOASTing the table.
+SELECT id, title, description, engagement FROM jobs
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
+
+-- name: SetJobEngagement :one
+-- Write one row's engagement terms, for cmd/backfill-engagement, and queue an open row
+-- for the search drain in the same statement: the column is not in content_hash, so
+-- nothing else would carry the new value to the index short of a full rebuild.
+--
+-- The IS DISTINCT FROM guard makes the pass idempotent: a row already carrying the
+-- derived terms is neither rewritten nor queued, so a re-run writes nothing.
+WITH updated AS (
+    UPDATE jobs j
+    SET engagement = COALESCE(sqlc.arg(engagement)::text[], '{}')
+    WHERE j.id = sqlc.arg(job_id)
+      AND j.engagement IS DISTINCT FROM COALESCE(sqlc.arg(engagement)::text[], '{}')
+    RETURNING j.id, j.closed_at, COALESCE(j.posted_at, j.created_at) AS eff_posted_at
+),
+enqueued AS (
+    INSERT INTO search_outbox (job_id, job_posted_at)
+    SELECT u.id, u.eff_posted_at FROM updated u WHERE u.closed_at IS NULL
+    ON CONFLICT (job_id) DO NOTHING
+    RETURNING job_id
+)
+SELECT (SELECT count(*) FROM updated)::bigint AS updated_count,
+       (SELECT count(*) FROM enqueued)::bigint AS enqueued_count;

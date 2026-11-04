@@ -113,7 +113,7 @@ type Fields struct {
 	// internal/dict/perks.
 	Perks []string
 	// Engagement names the legal terms the posting states it engages on (vocab.
-	// EngagementValues — today the UK's IR35 status), served as the multi-value
+	// EngagementValues — IR35, W-2, B2B, CLT, ГПХ...), served as the multi-value
 	// `engagement` facet. Empty means not stated — see internal/dict/engagement.
 	Engagement []string
 
