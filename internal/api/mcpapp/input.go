@@ -235,8 +235,13 @@ func setPositive(v url.Values, param string, value int) {
 type stringList []string
 
 func (l *stringList) UnmarshalJSON(data []byte) error {
-	var one string
-	if err := json.Unmarshal(data, &one); err == nil {
+	// Only a JSON string is one value: null must stay "no filter", and json.Unmarshal would
+	// read it into a string as "" without an error.
+	if len(data) > 0 && data[0] == '"' {
+		var one string
+		if err := json.Unmarshal(data, &one); err != nil {
+			return err
+		}
 		*l = stringList{one}
 		return nil
 	}

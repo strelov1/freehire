@@ -356,7 +356,7 @@ func TestListFilterAcceptsASingleValue(t *testing.T) {
 	session := connect(t, r)
 
 	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: toolSearchJobs,
-		Arguments: map[string]any{"work_mode": "remote", "countries": []string{"DE", "PL"}}})
+		Arguments: map[string]any{"work_mode": "remote", "countries": []string{"DE", "PL"}, "cities": nil}})
 	if err != nil {
 		t.Fatalf("call: %v", err)
 	}
@@ -365,5 +365,9 @@ func TestListFilterAcceptsASingleValue(t *testing.T) {
 	}
 	if !slices.Equal(got.WorkMode, []string{"remote"}) || !slices.Equal(got.Countries, []string{"DE", "PL"}) {
 		t.Errorf("work_mode = %v, countries = %v", got.WorkMode, got.Countries)
+	}
+	// null is no filter, not a one-item list holding "".
+	if got.Cities != nil {
+		t.Errorf("cities = %q, want nil for null", got.Cities)
 	}
 }
