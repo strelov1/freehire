@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/observability"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
 	"github.com/strelov1/freehire/internal/platform/pgerr"
 )
@@ -78,6 +79,7 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 	q := r.q.WithTx(tx)
 
 	var userID int64
+	createdAccount := false
 
 	existing, err := q.GetUserByEmail(ctx, email)
 	switch {
@@ -117,6 +119,7 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 			return 0, err
 		}
 		userID = created.ID
+		createdAccount = true
 	default:
 		return 0, err
 	}
@@ -139,6 +142,9 @@ func (r *QueriesRepository) LinkOrCreateByEmail(
 		return 0, err
 	}
 
+	if createdAccount {
+		observability.RecordRegistration()
+	}
 	return userID, nil
 }
 
@@ -161,6 +167,7 @@ func (r *QueriesRepository) CreateUser(ctx context.Context, email, passwordHash 
 	if err != nil {
 		return User{}, err
 	}
+	observability.RecordRegistration()
 	return User{ID: row.ID, Email: row.Email, Role: row.Role, BetaTester: row.BetaTester,
 		EmailVerified: row.EmailVerified, HasPassword: true,
 		CreatedAt: pgconv.TimePtr(row.CreatedAt), Timezone: pgconv.TextPtr(row.Timezone),
