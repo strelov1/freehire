@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/search/savedsearch"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -24,7 +25,7 @@ func TestApplyAlertSearch_DropsUnknownValuesAndRefusesUnknownNames(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := encodeSavedQuery(vals); got != "q=rust&salary_min=80000&skills=go&work_mode=remote" {
+	if got := savedsearch.EncodeQuery(vals); got != "q=rust&salary_min=80000&skills=go&work_mode=remote" {
 		t.Errorf("query = %q", got)
 	}
 	if strings.Join(ignored, " ") != "skills=golangg work_mode=sometimes" {
@@ -38,12 +39,12 @@ func TestApplyAlertSearch_DropsUnknownValuesAndRefusesUnknownNames(t *testing.T)
 // An update replaces only what it names: new filters replace the facets but keep the
 // text, the salary bound and what only the website sets; a 0 bound clears it.
 func TestApplyAlertSearch_PartialUpdate(t *testing.T) {
-	base := parseSavedQuery("q=backend&skills=go,rust&salary_min=80000&skills_exclude=php&visa_sponsorship=true")
+	base := savedsearch.ParseQuery("q=backend&skills=go,rust&salary_min=80000&skills_exclude=php&visa_sponsorship=true")
 	vals, _, err := applyAlertSearch(base, alertSearchArgs{Filters: &assistantFilterArgs{"seniority": {"senior"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := encodeSavedQuery(vals); got != "q=backend&salary_min=80000&seniority=senior&skills_exclude=php&visa_sponsorship=true" {
+	if got := savedsearch.EncodeQuery(vals); got != "q=backend&salary_min=80000&seniority=senior&skills_exclude=php&visa_sponsorship=true" {
 		t.Errorf("filters update = %q", got)
 	}
 	vals, _, _ = applyAlertSearch(base, alertSearchArgs{SalaryMin: ptr(0)})
@@ -59,25 +60,6 @@ func TestAlertSearchOf_IsTheShapeTheToolsTake(t *testing.T) {
 	}
 	if len(got.Other) != 1 || got.Other["skills_exclude"] != "php" {
 		t.Errorf("other = %v, want only the website-only exclusion", got.Other)
-	}
-}
-
-func TestSameSelection_IgnoresOrderListFormAndSort(t *testing.T) {
-	if !sameSelection("skills=go,rust&company_slug=stripe", "company_slug=stripe&skills=rust&skills=go&sort=posted_at:desc") {
-		t.Error("the same selection written two ways must compare equal")
-	}
-	if sameSelection("skills=go", "skills=go,rust") {
-		t.Error("different value sets must not compare equal")
-	}
-}
-
-func TestFilterSummaryAndAlertName(t *testing.T) {
-	if got := filterSummary("skills=go,rust&q=backend&company_slug=stripe"); got != `"backend" · company_slug: stripe · skills: go, rust` {
-		t.Errorf("summary = %q", got)
-	}
-	long := alertName("q=" + strings.Repeat("x", 200))
-	if n := len([]rune(long)); n != alertNameMaxRunes {
-		t.Errorf("long name has %d runes, want %d", n, alertNameMaxRunes)
 	}
 }
 

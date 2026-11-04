@@ -144,7 +144,7 @@ func (h *jobsHandlers) openJobTotal(ctx context.Context) int64 {
 // exists still answers with its posting when its shortcode names exactly one, so the
 // response's public_slug may differ from the one asked for — the page redirects on that.
 func (h *jobsHandlers) GetJob(c *fiber.Ctx) error {
-	job, err := h.jobBySlugOrCode(c.Context(), c.Params("slug"))
+	job, err := jobBySlugOrCode(c.Context(), h.queries, c.Params("slug"))
 	if err != nil {
 		// RenderError maps pgx.ErrNoRows to 404, anything else to 500.
 		return err
@@ -322,11 +322,17 @@ func (h *jobsHandlers) roleClusterCounts(c *fiber.Ctx, rows []db.Job) map[cluste
 	return out
 }
 
+// jobSlugReader is what resolving a job slug reads. *db.Queries satisfies it.
+type jobSlugReader interface {
+	GetJobBySlug(ctx context.Context, publicSlug string) (db.Job, error)
+	ListJobsBySlugCode(ctx context.Context, code string) ([]db.Job, error)
+}
+
 // jobBySlugOrCode resolves stale links by identity. Collision recovery URLs carry
 // the full hash; legacy links resolve only among original short-format URLs.
 // Genuine shortcode ambiguity still answers pgx.ErrNoRows rather than guessing.
-func (h *jobsHandlers) jobBySlugOrCode(ctx context.Context, slug string) (db.Job, error) {
-	job, err := h.queries.GetJobBySlug(ctx, slug)
+func jobBySlugOrCode(ctx context.Context, q jobSlugReader, slug string) (db.Job, error) {
+	job, err := q.GetJobBySlug(ctx, slug)
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return job, err
 	}
@@ -334,7 +340,7 @@ func (h *jobsHandlers) jobBySlugOrCode(ctx context.Context, slug string) (db.Job
 	if !ok {
 		return job, err
 	}
-	jobs, err := h.queries.ListJobsBySlugCode(ctx, code)
+	jobs, err := q.ListJobsBySlugCode(ctx, code)
 	if err != nil {
 		return db.Job{}, err
 	}
