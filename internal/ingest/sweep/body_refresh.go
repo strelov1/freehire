@@ -72,6 +72,61 @@ func BodyRefreshFor(days, slice string, now time.Time) (BodyRefresh, error) {
 	return BodyRefresh{
 		Cutoff: now.AddDate(0, 0, -n),
 		Slices: slices,
-		Slot:   int64(now.YearDay()) % slices,
+		Slot:   sliceOfDay(now, slices),
 	}, nil
+}
+
+// deadlineReadLive is the day the application deadline read by freehire#4052 was live.
+var deadlineReadLive = time.Date(2026, 11, 4, 0, 0, 0, 0, time.UTC)
+
+// detailFieldAdded names the hydrating providers whose adapter learned to read a new field from
+// the posting's DETAIL, with the day that reading was live. Such a fix reaches new postings on
+// the next crawl and stored ones never, because a stored posting's detail is not fetched again:
+// freehire#4052 taught these five to read the application deadline, and every posting they
+// already held went on showing none (freehire#4124).
+//
+// Add an entry when an adapter fix changes what its detail yields, having checked that a
+// seventh of the provider's stored postings fits its bound (see detailRereadSlices). The write
+// stamps hydrated_at past the date, so a posting read once leaves the re-read whether or not the
+// source states the field. An entry past detailRereadWindow does nothing and can be deleted. A
+// fix to what the LISTING yields is not repaired this way; that remains INGEST_REFETCH_ALL's job.
+var detailFieldAdded = map[string]time.Time{
+	"ess":      deadlineReadLive,
+	"infostud": deadlineReadLive,
+	"mojposao": deadlineReadLive,
+	"nsz":      deadlineReadLive,
+	"optius":   deadlineReadLive,
+}
+
+// detailRereadSlices spreads a detailFieldAdded re-read over a week. The slice is what keeps the
+// re-read from closing live postings: a withheld row is offered as new, and one an adapter leaves
+// unread past its maxNewPerRun gets no liveness refresh that run, so the backlog of a run must fit
+// the bound. Open postings against the bound, measured 2026-11-04: ess 4,212 / 1,200, infostud
+// 3,762 / 1,000, mojposao 2,348 / 1,200, optius 1,342 / 400, nsz 590 / 1,200. A seventh of each
+// fits, and a row outside today's slice is refreshed as usual.
+const detailRereadSlices = 7
+
+// detailRereadWindow ends a re-read after three passes over the catalogue. Not every row can
+// leave by being read: a detail that keeps failing, or a posting the listing gate turns away, is
+// never stamped and would otherwise come back every week for as long as the source lists it.
+const detailRereadWindow = 3 * detailRereadSlices * 24 * time.Hour
+
+// WithDetailReread applies provider's detailFieldAdded entry while it is inside
+// detailRereadWindow. A provider with BODY_REFRESH_DAYS set keeps that policy: it re-reads the
+// same rows on the operator's own cadence.
+func (b BodyRefresh) WithDetailReread(provider string, now time.Time) BodyRefresh {
+	added, ok := detailFieldAdded[provider]
+	if !ok || b.Enabled() || now.After(added.Add(detailRereadWindow)) {
+		return b
+	}
+	return BodyRefresh{
+		Cutoff: added,
+		Slices: detailRereadSlices,
+		Slot:   sliceOfDay(now, detailRereadSlices),
+	}
+}
+
+// sliceOfDay is the slice a run takes: the one named by the day of the year.
+func sliceOfDay(now time.Time, slices int64) int64 {
+	return int64(now.YearDay()) % slices
 }

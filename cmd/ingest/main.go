@@ -132,6 +132,7 @@ func run() int {
 		log.Printf("config: %v", err)
 		return 1
 	}
+	bodies = bodies.WithDetailReread(provider, time.Now())
 	if bodies.Enabled() {
 		log.Printf("ingest: re-reading stored bodies older than %s, slice %d of %d",
 			bodies.Cutoff.Format(time.DateOnly), bodies.Slot, bodies.Slices)
