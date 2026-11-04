@@ -84,7 +84,7 @@ func freeworkFixture(path string, v any) error {
 }
 
 func newTestFreeWork(f *freeworkFake) freework {
-	return freework{get: f, limiter: noWait{}, maxNewPerRun: freeworkMaxNewPerRun, maxPages: freeworkMaxPages, deadlineMargin: freeworkDeadlineMargin}
+	return freework{get: f, maxNewPerRun: freeworkMaxNewPerRun, maxPages: freeworkMaxPages, deadlineMargin: freeworkDeadlineMargin}
 }
 
 func TestFreeWorkHydratesNewPostingsAndRefreshesSeenOnes(t *testing.T) {

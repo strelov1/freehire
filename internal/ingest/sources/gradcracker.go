@@ -368,7 +368,7 @@ func parseGradcrackerCard(article *html.Node) (gradcrackerCard, bool) {
 	if h2 := firstByTag(article, "h2"); h2 != nil {
 		if a := firstByTag(h2, "a"); a != nil {
 			c.URL = gradcrackerAbsURL(Attr(a, "href"))
-			c.Title = gradcrackerText(textContent(a))
+			c.Title = collapseSpace(textContent(a))
 		}
 	}
 	m := gradcrackerPostingMatch(c.URL)
@@ -378,16 +378,16 @@ func parseGradcrackerCard(article *html.Node) (gradcrackerCard, bool) {
 	c.Type, c.ID = m[1], m[2]
 	if fig := firstByTag(article, "figure"); fig != nil {
 		if img := firstByTag(fig, "img"); img != nil {
-			c.Company = gradcrackerText(Attr(img, "alt"))
+			c.Company = collapseSpace(Attr(img, "alt"))
 		}
 	}
 	if h3 := firstByTag(article, "h3"); h3 != nil {
-		c.Disciplines = strings.TrimSuffix(gradcrackerText(textContent(h3)), ".")
+		c.Disciplines = strings.TrimSuffix(collapseSpace(textContent(h3)), ".")
 	}
 	walk(article, func(n *html.Node) bool {
 		if n.Type == html.ElementNode && n.Data == "dt" {
 			if dd := nextElement(n); dd != nil && dd.Data == "dd" {
-				c.Facts = append(c.Facts, gradcrackerFact{Label: gradcrackerText(textContent(n)), Value: gradcrackerText(textContent(dd))})
+				c.Facts = append(c.Facts, gradcrackerFact{Label: collapseSpace(textContent(n)), Value: collapseSpace(textContent(dd))})
 			}
 			return false
 		}
@@ -455,7 +455,3 @@ func gradcrackerBody(root *html.Node) (string, bool) {
 	}
 	return strings.TrimSpace(innerHTML(body)), true
 }
-
-// gradcrackerText collapses whitespace runs: the cards are server-rendered with deep
-// indentation inside every element.
-func gradcrackerText(s string) string { return strings.Join(strings.Fields(s), " ") }

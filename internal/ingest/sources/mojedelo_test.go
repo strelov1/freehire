@@ -88,7 +88,7 @@ func (f *mojedeloFake) postingRequests() int {
 
 func newTestMojeDelo(f *mojedeloFake) mojedelo {
 	s := NewMojeDelo(f).(mojedelo)
-	s.limiter = noWait{}
+	s.http = f
 	return s
 }
 

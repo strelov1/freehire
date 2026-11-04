@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"golang.org/x/time/rate"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )
@@ -32,7 +31,6 @@ import (
 // first, within a per-run budget; the rest are refreshed by identity.
 type itjobs struct {
 	http         HTMLGetter
-	limiter      waiter
 	maxNewPerRun int
 	maxPages     int
 	// deadlineMargin is how much of the run's deadline hydration leaves to the pipeline: a
@@ -67,8 +65,7 @@ const (
 // NewITJobs builds the adapter over the given client.
 func NewITJobs(c HTMLGetter) Source {
 	return itjobs{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(itjobsRequestInterval), 1),
+		http:           pacedHTMLGetter(c, itjobsRequestInterval, 1),
 		maxNewPerRun:   itjobsMaxNewPerRun,
 		maxPages:       itjobsMaxPages,
 		deadlineMargin: itjobsDeadlineMargin,
@@ -191,12 +188,6 @@ func (s itjobs) list(ctx context.Context) ([]itjobsCard, error) {
 	seen := make(map[int64]bool)
 	var out []itjobsCard
 	for page := 1; page <= s.maxPages; page++ {
-		if err := s.limiter.Wait(ctx); err != nil {
-			if page == 1 {
-				return nil, err
-			}
-			break
-		}
 		u := itjobsListURL
 		if page > 1 {
 			u = fmt.Sprintf("%s?page=%d", itjobsListURL, page)
@@ -259,9 +250,9 @@ func itjobsCardFrom(heading *html.Node) (itjobsCard, bool) {
 	if err != nil || id <= 0 {
 		return itjobsCard{}, false
 	}
-	c := itjobsCard{id: id, url: itjobsBaseURL + href, title: itjobsClean(textContent(a))}
+	c := itjobsCard{id: id, url: itjobsBaseURL + href, title: collapseSpace(textContent(a))}
 	if name := firstByClass(heading.Parent, "list-name"); name != nil {
-		c.company = itjobsClean(textContent(name))
+		c.company = collapseSpace(textContent(name))
 	}
 	if details := firstByClass(heading.Parent, "list-details"); details != nil {
 		facts := itjobsDetailFacts(details)
@@ -291,7 +282,7 @@ func itjobsDetailFacts(details *html.Node) map[string]string {
 				}
 			}
 		case n.Type == html.TextNode && key != "":
-			if v := itjobsClean(n.Data); v != "" {
+			if v := collapseSpace(n.Data); v != "" {
 				facts[key] = v
 				key = ""
 			}
@@ -299,9 +290,6 @@ func itjobsDetailFacts(details *html.Node) map[string]string {
 	}
 	return facts
 }
-
-// itjobsClean collapses whitespace, the &nbsp; padding the site puts around every fact included.
-func itjobsClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // itjobsBaseJob is the body-less Job a card alone supports: the identity, and the facts the gate
 // judges on.
@@ -324,7 +312,7 @@ func itjobsBaseJob(c itjobsCard) Job {
 func itjobsJoinPlaces(places []string) string {
 	var out []string
 	for _, p := range places {
-		if p = itjobsClean(p); p != "" && !slices.Contains(out, p) {
+		if p = collapseSpace(p); p != "" && !slices.Contains(out, p) {
 			out = append(out, p)
 		}
 	}
@@ -357,9 +345,6 @@ type itjobsLD struct {
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410) or a page carrying no usable posting; an error is the absence of an answer.
 func (s itjobs) detail(ctx context.Context, c itjobsCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
 		var se *StatusError
@@ -382,7 +367,7 @@ func (s itjobs) detail(ctx context.Context, c itjobsCard) (Job, bool, error) {
 // title, employer or body.
 func itjobsJob(ld itjobsLD, c itjobsCard) (Job, bool) {
 	j := itjobsBaseJob(c)
-	if t := itjobsClean(ld.Title); t != "" {
+	if t := collapseSpace(ld.Title); t != "" {
 		j.Title = t
 	}
 	if co := strings.TrimSpace(ld.HiringOrganization.Name); co != "" {
@@ -410,9 +395,7 @@ func itjobsJob(ld itjobsLD, c itjobsCard) (Job, bool) {
 	if len(places) > 0 {
 		j.Location = itjobsJoinPlaces(places)
 	}
-	if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
 	j.WorkMode = itjobsWorkMode(c.workModel, ld.JobLocationType)
 	j.Remote = j.WorkMode == "remote"
 	j.EmploymentType = itjobsEmploymentType(ld.EmploymentType)

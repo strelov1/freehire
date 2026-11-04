@@ -94,7 +94,7 @@ func (f *optiusFake) postingRequests() int {
 
 func newTestOptius(f *optiusFake) optius {
 	s := NewOptius(f).(optius)
-	s.limiter = noWait{}
+	s.http = f
 	return s
 }
 

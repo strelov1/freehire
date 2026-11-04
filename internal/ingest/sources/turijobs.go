@@ -366,9 +366,7 @@ func turijobsJob(ld turijobsLD, p turijobsPosting) (Job, bool) {
 		}
 	}
 	j.Location = strings.Join(places, "; ")
-	if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
 	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
 		j.WorkMode, j.Remote = "remote", true
 	}

@@ -201,9 +201,5 @@ func (s tencent) detail(ctx context.Context, e CompanyEntry, p tencentPost) (Job
 // tencentDate parses the en-us LastUpdateTime, "October 15,2026" — the posting's last update,
 // the only date the site states.
 func tencentDate(s string) *time.Time {
-	t, err := time.Parse("January 2,2006", strings.TrimSpace(s))
-	if err != nil {
-		return nil
-	}
-	return &t
+	return parseLayout("January 2,2006", strings.TrimSpace(s))
 }

@@ -28,7 +28,6 @@ import (
 // answered), so the catalogue is cut into slices small enough to arrive in ONE answer each.
 type empregos struct {
 	http         JSONPoster
-	limiter      waiter
 	leafMax      int
 	maxNewPerRun int
 }
@@ -81,8 +80,7 @@ var empregosZone = time.FixedZone("BRT", -3*3600)
 // largest answer (see empregosLeafMax).
 func NewEmpregos(c JSONPoster) Source {
 	return empregos{
-		http:         c,
-		limiter:      rate.NewLimiter(rate.Every(empregosRequestInterval), 1),
+		http:         rateLimitedJSONPoster{inner: c, limiter: rate.NewLimiter(rate.Every(empregosRequestInterval), 1)},
 		leafMax:      empregosLeafMax,
 		maxNewPerRun: empregosMaxNewPerRun,
 	}
@@ -317,9 +315,6 @@ func empregosDescribe(filters []empregosFilter) string {
 
 // search asks for the first page of a slice through the run's limiter.
 func (s empregos) search(ctx context.Context, filters []empregosFilter, size int) (empregosResponse, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return empregosResponse{}, err
-	}
 	if filters == nil {
 		filters = []empregosFilter{} // the API wants [], not null
 	}

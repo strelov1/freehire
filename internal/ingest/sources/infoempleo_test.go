@@ -64,7 +64,7 @@ func (f *infoempleoFake) postingRequests() int {
 
 func newTestInfoempleo(f *infoempleoFake) infoempleo {
 	s := NewInfoempleo(f).(infoempleo)
-	s.limiter = noWait{}
+	s.http = f
 	return s
 }
 

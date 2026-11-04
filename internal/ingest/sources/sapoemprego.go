@@ -316,9 +316,7 @@ func sapoempregoJob(ld sapoempregoLD, sum sapoempregoSummary, p sapoempregoPosti
 	if code := location.NormalizeCountry(strings.TrimSpace(addr.Country)); code != "" {
 		j.Countries = []string{code}
 	}
-	if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
 	j.WorkMode = sapoempregoWorkMode(ld.JobLocationType, sum.workhome)
 	j.Remote = j.WorkMode == "remote"
 	j.EmploymentType = sapoempregoEmploymentType(ld.EmploymentType)

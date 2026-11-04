@@ -228,7 +228,7 @@ func (s pracuj) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(ext
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(postings))
 		for _, p := range postings {
-			companies = append(companies, pracujClean(p.Company))
+			companies = append(companies, collapseSpace(p.Company))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -319,7 +319,7 @@ func (s pracuj) list(ctx context.Context) ([]pracujPosting, error) {
 		for _, page := range pages {
 			for _, p := range page {
 				if p.GroupID == "" || len(p.Offers) == 0 || pracujOfferURL(p.Offers[0]) == "" ||
-					pracujClean(p.Title) == "" || pracujClean(p.Company) == "" {
+					collapseSpace(p.Title) == "" || collapseSpace(p.Company) == "" {
 					continue
 				}
 				if prev, ok := byID[p.GroupID]; ok {
@@ -458,8 +458,6 @@ func pracujOfferRetryable(err error) bool {
 	return !errors.Is(err, errPracujRateLimited) && pracujRetryable(err)
 }
 
-func pracujClean(s string) string { return strings.Join(strings.Fields(s), " ") }
-
 // pracujOfferURL is an offer's page on the site's own host, or "" for anything else.
 func pracujOfferURL(o pracujListedOffer) string {
 	u := strings.TrimSpace(o.URL)
@@ -476,9 +474,9 @@ func pracujBaseJob(p pracujPosting) Job {
 	j := Job{
 		ExternalID:        p.GroupID,
 		URL:               pracujOfferURL(p.Offers[0]),
-		Title:             pracujClean(p.Title),
-		Company:           pracujClean(p.Company),
-		Location:          pracujClean(p.Offers[0].Workplace),
+		Title:             collapseSpace(p.Title),
+		Company:           collapseSpace(p.Company),
+		Location:          collapseSpace(p.Offers[0].Workplace),
 		IsTechHint:        p.tech,
 		FallbackCountries: []string{"pl"},
 	}
@@ -624,10 +622,10 @@ func (s pracuj) detail(ctx context.Context, p pracujPosting) (Job, bool, error) 
 func pracujJob(o pracujOffer, p pracujPosting) (Job, bool) {
 	a := o.Attributes
 	j := pracujBaseJob(p)
-	if t := pracujClean(a.Title); t != "" {
+	if t := collapseSpace(a.Title); t != "" {
 		j.Title = t
 	}
-	if co := pracujClean(a.Employer); co != "" {
+	if co := collapseSpace(a.Employer); co != "" {
 		j.Company = co
 	}
 	body := pracujBody(o.Sections)
@@ -640,7 +638,7 @@ func pracujJob(o pracujOffer, p pracujPosting) (Job, bool) {
 	}
 	j.Location, j.Countries = pracujPlace(o)
 	if j.Location == "" {
-		j.Location = pracujClean(p.Offers[0].Workplace)
+		j.Location = collapseSpace(p.Offers[0].Workplace)
 	}
 	if t := parseRFC3339(strings.TrimSpace(o.Publication.Initial)); t != nil {
 		j.PostedAt = NotFuture(t)
@@ -689,9 +687,9 @@ func pracujPlace(o pracujOffer) (string, []string) {
 			continue
 		}
 		if w.Inland != nil && strings.TrimSpace(w.Inland.Location.Name) != "" {
-			loc = pracujClean(w.Inland.Location.Name)
+			loc = collapseSpace(w.Inland.Location.Name)
 		} else {
-			loc = pracujClean(w.Display)
+			loc = collapseSpace(w.Display)
 		}
 	}
 	return loc, countries
@@ -703,7 +701,7 @@ func pracujPlace(o pracujOffer) (string, []string) {
 func pracujWorkMode(modes []string) string {
 	set := map[string]bool{}
 	for _, m := range modes {
-		m = strings.ToLower(pracujClean(m))
+		m = strings.ToLower(collapseSpace(m))
 		switch {
 		case m == "home-office" || strings.HasPrefix(m, "praca zdalna"):
 			set["remote"] = true
@@ -841,7 +839,7 @@ func pracujPayParagraph(contracts []pracujContract) string {
 		if hi != lo {
 			amount += "–" + strconv.Itoa(hi)
 		}
-		line := fmt.Sprintf("%s PLN %s / %s (%s)", amount, pracujClean(c.Salary.Kind.Name), pracujClean(c.Salary.TimeUnit.LongForm.Name), pracujClean(c.Name))
+		line := fmt.Sprintf("%s PLN %s / %s (%s)", amount, collapseSpace(c.Salary.Kind.Name), collapseSpace(c.Salary.TimeUnit.LongForm.Name), collapseSpace(c.Name))
 		lines = append(lines, "<li>"+html.EscapeString(line)+"</li>")
 	}
 	if len(lines) == 0 {
@@ -858,7 +856,7 @@ func pracujBody(sections []pracujSection) string {
 	var render func(secs []pracujSection, depth int)
 	render = func(secs []pracujSection, depth int) {
 		for _, sec := range secs {
-			if t := pracujClean(sec.Title); t != "" {
+			if t := collapseSpace(sec.Title); t != "" {
 				tag := "h2"
 				if depth > 0 {
 					tag = "h3"

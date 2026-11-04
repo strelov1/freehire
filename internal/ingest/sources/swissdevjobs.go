@@ -112,7 +112,7 @@ func (s swissdevjobs) FetchNewGated(ctx context.Context, _ CompanyEntry, seen fu
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(rows))
 		for _, r := range rows {
-			companies = append(companies, swissdevjobsClean(r.Company))
+			companies = append(companies, collapseSpace(r.Company))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -173,7 +173,7 @@ func (s swissdevjobs) list(ctx context.Context) ([]swissdevjobsJob, error) {
 	}
 	var out []swissdevjobsJob
 	for _, r := range rows {
-		if r.Paused || r.ID == "" || r.Slug == "" || swissdevjobsClean(r.Name) == "" || swissdevjobsClean(r.Company) == "" {
+		if r.Paused || r.ID == "" || r.Slug == "" || collapseSpace(r.Name) == "" || collapseSpace(r.Company) == "" {
 			continue
 		}
 		out = append(out, r)
@@ -189,9 +189,9 @@ func swissdevjobsBaseJob(r swissdevjobsJob) Job {
 	job := Job{
 		ExternalID:        r.ID,
 		URL:               r.url(),
-		Title:             swissdevjobsClean(r.Name),
-		Company:           swissdevjobsClean(r.Company),
-		Location:          swissdevjobsClean(r.City),
+		Title:             collapseSpace(r.Name),
+		Company:           collapseSpace(r.Company),
+		Location:          collapseSpace(r.City),
 		PostedAt:          NotFuture(parseRFC3339(r.ActiveFrom)),
 		WorkMode:          swissdevjobsWorkMode(r.Workplace),
 		EmploymentType:    swissdevjobsEmploymentType(r.JobType),
@@ -351,5 +351,3 @@ func swissdevjobsSeniority(l string) string {
 	}
 	return ""
 }
-
-func swissdevjobsClean(s string) string { return strings.Join(strings.Fields(s), " ") }

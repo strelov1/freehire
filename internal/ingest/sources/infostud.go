@@ -32,7 +32,6 @@ import (
 // host's robots.txt, so it is not used.
 type infostud struct {
 	http           TextGetter
-	limiter        waiter
 	maxNewPerRun   int
 	maxPages       int
 	deadlineMargin time.Duration
@@ -63,8 +62,7 @@ const (
 // NewInfostud builds the adapter over the given client.
 func NewInfostud(c TextGetter) Source {
 	return infostud{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(infostudRequestInterval), 1),
+		http:           rateLimitedTextGetter{inner: c, limiter: rate.NewLimiter(rate.Every(infostudRequestInterval), 1)},
 		maxNewPerRun:   infostudMaxNewPerRun,
 		maxPages:       infostudMaxPages,
 		deadlineMargin: infostudDeadlineMargin,
@@ -169,7 +167,7 @@ func (s infostud) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(cards))
 		for _, c := range cards {
-			companies = append(companies, infostudClean(c.Company))
+			companies = append(companies, collapseSpace(c.Company))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -244,9 +242,6 @@ func (s infostud) list(ctx context.Context) ([]infostudCard, error) {
 		if page > s.maxPages {
 			return nil, fmt.Errorf("infostud: listing still not exhausted after %d pages", s.maxPages)
 		}
-		if err := s.limiter.Wait(ctx); err != nil {
-			return nil, err
-		}
 		body, err := s.http.GetText(ctx, fmt.Sprintf(infostudListURL, page))
 		if err != nil {
 			return nil, fmt.Errorf("infostud: listing page %d: %w", page, err)
@@ -271,7 +266,7 @@ func (s infostud) list(ctx context.Context) ([]infostudCard, error) {
 			break
 		}
 		for _, c := range r.Jobs.Primary {
-			if c.ID <= 0 || seen[c.ID] || infostudClean(c.Title) == "" || infostudClean(c.Company) == "" {
+			if c.ID <= 0 || seen[c.ID] || collapseSpace(c.Title) == "" || collapseSpace(c.Company) == "" {
 				continue
 			}
 			seen[c.ID] = true
@@ -293,8 +288,6 @@ func infostudNextData(page string, v any) error {
 	return nil
 }
 
-func infostudClean(s string) string { return strings.Join(strings.Fields(s), " ") }
-
 // infostudPostingURL is the posting's page. Only the trailing id is read — any two slugs answer
 // the same page — so the stored URL is the one the search names when it names one.
 func infostudPostingURL(c infostudCard) string {
@@ -311,8 +304,8 @@ func infostudBaseJob(c infostudCard) Job {
 	return Job{
 		ExternalID:        strconv.FormatInt(c.ID, 10),
 		URL:               infostudPostingURL(c),
-		Title:             infostudClean(c.Title),
-		Company:           infostudClean(c.Company),
+		Title:             collapseSpace(c.Title),
+		Company:           collapseSpace(c.Company),
 		Location:          infostudPlace(c.Location),
 		WorkMode:          mode,
 		Remote:            mode == "remote",
@@ -339,7 +332,7 @@ func infostudWorkMode(fromHome, hybrid bool) string {
 func infostudPlace(s string) string {
 	var parts []string
 	for _, p := range strings.Split(s, "|") {
-		p = infostudClean(p)
+		p = collapseSpace(p)
 		switch strings.ToLower(p) {
 		case "", "hibrid", "terenski rad", "rad od kuće", "rad od kuce":
 			continue
@@ -374,9 +367,6 @@ func sortInfostudFreshestFirst(cards []infostudCard) {
 // is gone (404, or a status other than "live") or carries no body; an error is the absence of an
 // answer.
 func (s infostud) detail(ctx context.Context, c infostudCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	body, err := s.http.GetText(ctx, infostudPostingURL(c))
 	if err != nil {
 		var se *StatusError
@@ -437,10 +427,10 @@ func infostudDeadline(s string) (time.Time, bool) {
 // title, employer or body — an ad published only as an image carries no text.
 func infostudJob(p infostudPosting, c infostudCard) (Job, bool) {
 	j := infostudBaseJob(c)
-	if t := infostudClean(p.Title); t != "" {
+	if t := collapseSpace(p.Title); t != "" {
 		j.Title = t
 	}
-	if co := infostudClean(p.Company); co != "" {
+	if co := collapseSpace(p.Company); co != "" {
 		j.Company = co
 	}
 	body := strings.TrimSpace(infostudDropHidden(p.TextAd))
@@ -452,7 +442,7 @@ func infostudJob(p infostudPosting, c infostudCard) (Job, bool) {
 		// The figure is net or gross as the poster chose, and the Job has no field for it; the
 		// site's own label ("neto 900 - 1.400 EUR (mesečno)") keeps it in view.
 		if p.SalaryLabel != nil {
-			if label := infostudClean(*p.SalaryLabel); label != "" {
+			if label := collapseSpace(*p.SalaryLabel); label != "" {
 				body = "<p>Plata: " + label + "</p>" + body
 			}
 		}
@@ -473,7 +463,7 @@ func infostudJob(p infostudPosting, c infostudCard) (Job, bool) {
 	if p.PrimaryCategory != nil {
 		j.IsTechHint = infostudTechCategory(p.PrimaryCategory.ID)
 	}
-	if p.WorkingHours != nil && strings.EqualFold(infostudClean(p.WorkingHours.Name), "nepuno radno vreme") {
+	if p.WorkingHours != nil && strings.EqualFold(collapseSpace(p.WorkingHours.Name), "nepuno radno vreme") {
 		j.EmploymentType = "part_time"
 	}
 	// The posting page's own date wins; the card's is the same day when both are present.

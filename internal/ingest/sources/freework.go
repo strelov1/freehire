@@ -27,7 +27,6 @@ import (
 // budget; the rest are refreshed by identity.
 type freework struct {
 	get            JSONGetter
-	limiter        waiter
 	maxNewPerRun   int
 	maxPages       int
 	deadlineMargin time.Duration
@@ -65,8 +64,7 @@ const (
 // NewFreeWork builds the adapter over the given client.
 func NewFreeWork(c HTTPClient) Source {
 	return freework{
-		get:            c,
-		limiter:        rate.NewLimiter(rate.Every(freeworkRequestInterval), 1),
+		get:            rateLimitedJSONGetter{inner: c, limiter: rate.NewLimiter(rate.Every(freeworkRequestInterval), 1)},
 		maxNewPerRun:   freeworkMaxNewPerRun,
 		maxPages:       freeworkMaxPages,
 		deadlineMargin: freeworkDeadlineMargin,
@@ -139,7 +137,7 @@ func (s freework) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(cards))
 		for _, c := range cards {
-			companies = append(companies, freeworkClean(c.Company.Name))
+			companies = append(companies, collapseSpace(c.Company.Name))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -213,9 +211,6 @@ func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
 	kept := make(map[int64]bool)   // the ids yielded, each once
 	var out []freeworkCard
 	for page := 1; page <= s.maxPages; page++ {
-		if err := s.limiter.Wait(ctx); err != nil {
-			return nil, err
-		}
 		var cards []freeworkCard
 		if err := s.get.GetJSON(ctx, fmt.Sprintf(freeworkListURL, page, freeworkPageSize), &cards); err != nil {
 			return nil, fmt.Errorf("freework: listing page %d: %w", page, err)
@@ -232,7 +227,7 @@ func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
 				listed[c.ID] = true
 				fresh++
 			}
-			if kept[c.ID] || strings.TrimSpace(c.Slug) == "" || freeworkClean(c.Title) == "" || freeworkClean(c.Company.Name) == "" {
+			if kept[c.ID] || strings.TrimSpace(c.Slug) == "" || collapseSpace(c.Title) == "" || collapseSpace(c.Company.Name) == "" {
 				continue
 			}
 			kept[c.ID] = true
@@ -244,8 +239,6 @@ func (s freework) list(ctx context.Context) ([]freeworkCard, error) {
 	}
 	return nil, fmt.Errorf("freework: listing still not exhausted after %d pages", s.maxPages)
 }
-
-func freeworkClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // freeworkPostingURL is the posting's public page. The page is addressed by the posting slug
 // under its job family's slug; the listing does not carry the family, and the site redirects any
@@ -263,9 +256,9 @@ func freeworkBaseJob(c freeworkCard) Job {
 	j := Job{
 		ExternalID: strconv.FormatInt(c.ID, 10),
 		URL:        freeworkPostingURL("", c.Slug),
-		Title:      freeworkClean(c.Title),
-		Company:    freeworkClean(c.Company.Name),
-		Location:   freeworkClean(c.Location.Label),
+		Title:      collapseSpace(c.Title),
+		Company:    collapseSpace(c.Company.Name),
+		Location:   collapseSpace(c.Location.Label),
 	}
 	if code := strings.ToLower(strings.TrimSpace(c.Location.CountryCode)); len(code) == 2 {
 		j.Countries = []string{code}
@@ -274,9 +267,7 @@ func freeworkBaseJob(c freeworkCard) Job {
 		j.WorkMode = freeworkWorkMode(*c.RemoteMode)
 		j.Remote = j.WorkMode == "remote"
 	}
-	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(c.PublishedAt)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseRFC3339(strings.TrimSpace(c.PublishedAt))
 	return j
 }
 
@@ -284,9 +275,6 @@ func freeworkBaseJob(c freeworkCard) Job {
 // gone (404/410, or a status other than "published") or carries no usable body; an error is the
 // absence of an answer.
 func (s freework) detail(ctx context.Context, c freeworkCard) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	var d freeworkDetail
 	if err := s.get.GetJSON(ctx, fmt.Sprintf(freeworkDetailURL, c.Slug), &d); err != nil {
 		var se *StatusError
@@ -306,10 +294,10 @@ func (s freework) detail(ctx context.Context, c freeworkCard) (Job, bool, error)
 // title, employer or body.
 func freeworkJob(d freeworkDetail, c freeworkCard) (Job, bool) {
 	j := freeworkBaseJob(c)
-	if t := freeworkClean(d.Title); t != "" {
+	if t := collapseSpace(d.Title); t != "" {
 		j.Title = t
 	}
-	if co := freeworkClean(d.Company.Name); co != "" {
+	if co := collapseSpace(d.Company.Name); co != "" {
 		j.Company = co
 	}
 	body := strings.TrimSpace(d.Description)
@@ -327,7 +315,7 @@ func freeworkJob(d freeworkDetail, c freeworkCard) (Job, bool) {
 		family = strings.TrimSpace(d.Job.Slug)
 	}
 	j.URL = freeworkPostingURL(family, c.Slug)
-	if l := freeworkClean(d.Location.Label); l != "" {
+	if l := collapseSpace(d.Location.Label); l != "" {
 		j.Location = l
 	}
 	if code := strings.ToLower(strings.TrimSpace(d.Location.CountryCode)); len(code) == 2 {

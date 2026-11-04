@@ -210,7 +210,7 @@ func (s mojposao) FetchNewGated(ctx context.Context, e CompanyEntry, seen func(e
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(cards))
 		for _, c := range cards {
-			companies = append(companies, mojposaoClean(c.Organization.Name))
+			companies = append(companies, collapseSpace(c.Organization.Name))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -313,7 +313,7 @@ func (s mojposao) list(ctx context.Context, m mojposaoMarket) ([]mojposaoCard, e
 				if c.Organization.Name == "" {
 					c.Organization = g.Organization
 				}
-				if c.ID == "" || seen[c.ID] || mojposaoClean(c.Title) == "" || mojposaoClean(c.Organization.Name) == "" {
+				if c.ID == "" || seen[c.ID] || collapseSpace(c.Title) == "" || collapseSpace(c.Organization.Name) == "" {
 					continue
 				}
 				seen[c.ID] = true
@@ -323,8 +323,6 @@ func (s mojposao) list(ctx context.Context, m mojposaoMarket) ([]mojposaoCard, e
 	}
 	return out, nil
 }
-
-func mojposaoClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // mojposaoPostingURL is the posting's public page. The page resolves by the id; the slug is the
 // site's own.
@@ -341,9 +339,9 @@ func mojposaoBaseJob(c mojposaoCard, m mojposaoMarket) Job {
 	j := Job{
 		ExternalID:        c.ID,
 		URL:               mojposaoPostingURL(m, c.ID, c.Slug),
-		Title:             mojposaoClean(c.Title),
-		Company:           mojposaoClean(c.Organization.Name),
-		Location:          mojposaoClean(c.Location),
+		Title:             collapseSpace(c.Title),
+		Company:           collapseSpace(c.Organization.Name),
+		Location:          collapseSpace(c.Location),
 		FallbackCountries: []string{m.country},
 	}
 	if t, ok := mojposaoTime(c.PublishedAt); ok {
@@ -378,10 +376,10 @@ func (s mojposao) detail(ctx context.Context, m mojposaoMarket, c mojposaoCard) 
 // employer or body.
 func mojposaoJob(d mojposaoDetail, c mojposaoCard, m mojposaoMarket) (Job, bool) {
 	j := mojposaoBaseJob(c, m)
-	if t := mojposaoClean(d.Title); t != "" {
+	if t := collapseSpace(d.Title); t != "" {
 		j.Title = t
 	}
-	if co := mojposaoClean(d.Organization.Name); co != "" {
+	if co := collapseSpace(d.Organization.Name); co != "" {
 		j.Company = co
 	}
 	j.Description = mojposaoBody(d)
@@ -391,7 +389,7 @@ func mojposaoJob(d mojposaoDetail, c mojposaoCard, m mojposaoMarket) (Job, bool)
 	if d.Slug != "" {
 		j.URL = mojposaoPostingURL(m, c.ID, d.Slug)
 	}
-	if place := mojposaoClean(d.Location.Summary); place != "" {
+	if place := collapseSpace(d.Location.Summary); place != "" {
 		j.Location = place
 	}
 	j.Countries = mojposaoCountries(d)

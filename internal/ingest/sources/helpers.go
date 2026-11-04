@@ -359,3 +359,6 @@ func headedSection(heading, body string) string {
 	}
 	return "<h3>" + heading + "</h3>" + body
 }
+
+// collapseSpace trims s and folds every whitespace run into a single space.
+func collapseSpace(s string) string { return strings.Join(strings.Fields(s), " ") }

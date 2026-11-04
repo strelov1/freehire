@@ -394,7 +394,7 @@ func talentsoftDims(root *html.Node) []talentsoftDim {
 		d.values = append(d.values, talentsoftDimValue{id: id, count: count})
 	}
 	count := func(label string) (int, bool) {
-		m := talentsoftFacetCount.FindStringSubmatch(talentsoftClean(label))
+		m := talentsoftFacetCount.FindStringSubmatch(collapseSpace(label))
 		if m == nil {
 			return 0, false
 		}
@@ -528,13 +528,13 @@ func talentsoftRows(base *url.URL, root *html.Node) []talentsoftPosting {
 		if id == "" {
 			return false
 		}
-		p := talentsoftPosting{id: id, url: u, title: talentsoftClean(textContent(link))}
+		p := talentsoftPosting{id: id, url: u, title: collapseSpace(textContent(link))}
 		if desc := firstByClass(n, "ts-offer-list-item__description"); desc != nil {
 			for c := desc.FirstChild; c != nil; c = c.NextSibling {
 				if c.Type != html.ElementNode || c.Data != "li" {
 					continue
 				}
-				item := talentsoftClean(textContent(c))
+				item := collapseSpace(textContent(c))
 				if item == "" {
 					continue
 				}
@@ -656,7 +656,7 @@ func talentsoftField(root *html.Node, id string) string {
 	if n == nil {
 		return ""
 	}
-	return talentsoftClean(textContent(n))
+	return collapseSpace(textContent(n))
 }
 
 // talentsoftArea cleans the geographic-area path ("Europe, France, Ile-de-France, Essonne (91)"),
@@ -698,6 +698,3 @@ func talentsoftEmploymentType(labels []string) string {
 		return ""
 	}
 }
-
-// talentsoftClean folds every whitespace run, non-breaking spaces included, to one space.
-func talentsoftClean(s string) string { return strings.Join(strings.Fields(s), " ") }

@@ -66,7 +66,7 @@ func (f *itjobsFake) postingRequests() []string {
 
 func newTestITJobs(f *itjobsFake) itjobs {
 	s := NewITJobs(f).(itjobs)
-	s.limiter = noWait{}
+	s.http = f
 	return s
 }
 

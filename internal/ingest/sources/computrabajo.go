@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"golang.org/x/net/html"
-	"golang.org/x/time/rate"
 
 	"github.com/strelov1/freehire/internal/dict/location"
 )
@@ -33,7 +32,6 @@ import (
 // bought from the posting page for postings the catalogue lacks, within a per-run budget.
 type computrabajo struct {
 	http           HTMLGetter
-	limiter        waiter
 	maxNewPerRun   int
 	deadlineMargin time.Duration
 }
@@ -58,8 +56,7 @@ const (
 // User-Agent, so the registry hands it the browser-compatible form (compatibleUASource).
 func NewComputrabajo(c HTMLGetter) Source {
 	return computrabajo{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(computrabajoRequestInterval), 1),
+		http:           pacedHTMLGetter(c, computrabajoRequestInterval, 1),
 		maxNewPerRun:   computrabajoMaxNewPerRun,
 		deadlineMargin: computrabajoDeadlineMargin,
 	}
@@ -191,9 +188,6 @@ func (s computrabajo) nearDeadline(ctx context.Context) bool {
 // it did not.
 func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoCard, error) {
 	base := computrabajoBase(country)
-	if err := s.limiter.Wait(ctx); err != nil {
-		return nil, err
-	}
 	// Page 1 of the national listing redirects home; page 2 carries the same filter.
 	root, err := s.http.GetHTML(ctx, base+"/ofertas-de-trabajo/?p=2")
 	if err != nil {
@@ -213,9 +207,6 @@ func (s computrabajo) list(ctx context.Context, country string) ([]computrabajoC
 		}
 		rank := 0
 		for page := 1; page <= pages; page++ {
-			if err := s.limiter.Wait(ctx); err != nil {
-				return nil, err
-			}
 			u := base + p.path
 			if page > 1 {
 				u += "?p=" + strconv.Itoa(page)
@@ -372,25 +363,25 @@ func computrabajoCardFrom(n *html.Node, base string) (computrabajoCard, bool) {
 	if m == nil {
 		return computrabajoCard{}, false
 	}
-	c := computrabajoCard{id: m[1], url: base + path, title: computrabajoClean(textContent(a))}
+	c := computrabajoCard{id: m[1], url: base + path, title: collapseSpace(textContent(a))}
 	walk(n, func(x *html.Node) bool {
 		if x.Type != html.ElementNode {
 			return true
 		}
 		if x.Data == "a" && hasAttr(x, "offer-grid-article-company-url") {
-			c.company = computrabajoClean(textContent(x))
+			c.company = collapseSpace(textContent(x))
 			return false
 		}
 		if x.Data == "p" && HasClass(x, "fc_aux") {
-			c.ageHours = computrabajoAge(computrabajoClean(textContent(x)))
+			c.ageHours = computrabajoAge(collapseSpace(textContent(x)))
 			return false
 		}
 		if x.Data == "span" && HasClass(x, "dIB") {
 			switch {
 			case firstByClass(x, "i_salary") != nil:
-				c.salary = computrabajoClean(textContent(x))
+				c.salary = collapseSpace(textContent(x))
 			case computrabajoHasIcon(x, "i_home"):
-				c.workMode = computrabajoClean(textContent(x))
+				c.workMode = collapseSpace(textContent(x))
 			}
 			return false
 		}
@@ -401,7 +392,7 @@ func computrabajoCardFrom(n *html.Node, base string) (computrabajoCard, bool) {
 		for q := p.NextSibling; q != nil; q = q.NextSibling {
 			if q.Type == html.ElementNode && q.Data == "p" && HasClass(q, "fs16") {
 				if span := firstByTag(q, "span"); span != nil {
-					c.place = computrabajoClean(textContent(span))
+					c.place = collapseSpace(textContent(span))
 				}
 				break
 			}
@@ -438,8 +429,6 @@ func hasAttr(n *html.Node, name string) bool {
 	}
 	return false
 }
-
-func computrabajoClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // computrabajoBaseJob is the body-less Job a card alone supports: the identity, and the facts the
 // gate judges on.
@@ -478,9 +467,6 @@ type computrabajoLD struct {
 // detail reads one posting page. ok=false with a nil error is the site's answer that the posting
 // is gone (404/410) or a page carrying no posting body; an error is the absence of an answer.
 func (s computrabajo) detail(ctx context.Context, c computrabajoCard, country string) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	root, err := s.http.GetHTML(ctx, c.url)
 	if err != nil {
 		var se *StatusError
@@ -517,15 +503,13 @@ func (s computrabajo) detail(ctx context.Context, c computrabajoCard, country st
 	}
 	var ld computrabajoLD
 	if ldJobPosting(root, &ld) {
-		if name := computrabajoClean(ld.HiringOrganization.Name); name != "" {
+		if name := collapseSpace(ld.HiringOrganization.Name); name != "" {
 			j.Company = name
 		}
 		if code := location.NormalizeCountry(strings.TrimSpace(ld.JobLocation.Address.Country)); code != "" {
 			j.Countries = []string{code}
 		}
-		if t, err := time.Parse("2006-01-02", strings.TrimSpace(ld.DatePosted)); err == nil {
-			j.PostedAt = NotFuture(&t)
-		}
+		j.PostedAt = parseDate(strings.TrimSpace(ld.DatePosted))
 	}
 	return j, true, nil
 }
@@ -562,23 +546,23 @@ func computrabajoBody(offer *html.Node) (body string, tags []string, years int) 
 		case n.Data == "div" && HasClass(n, "mbB"):
 			walk(n, func(x *html.Node) bool {
 				if x.Type == html.ElementNode && x.Data == "span" && HasClass(x, "tag") {
-					tags = append(tags, computrabajoClean(textContent(x)))
+					tags = append(tags, collapseSpace(textContent(x)))
 					return false
 				}
 				return true
 			})
 		case n.Data == "p" && HasClass(n, "mbB"):
 			// The closing "Palabras clave: ..." line is the site's search keywords, not the posting.
-			if !strings.HasPrefix(computrabajoClean(textContent(n)), "Palabras clave:") {
+			if !strings.HasPrefix(collapseSpace(textContent(n)), "Palabras clave:") {
 				b.WriteString("<p>" + innerHTML(n) + "</p>")
 			}
-		case n.Data == "p" && computrabajoClean(textContent(n)) == "Requerimientos":
+		case n.Data == "p" && collapseSpace(textContent(n)) == "Requerimientos":
 			b.WriteString("<h3>Requerimientos</h3>")
 		case n.Data == "ul" && HasClass(n, "disc"):
 			b.WriteString("<ul>" + innerHTML(n) + "</ul>")
 			walk(n, func(x *html.Node) bool {
 				if x.Type == html.ElementNode && x.Data == "li" {
-					if m := computrabajoYears.FindStringSubmatch(computrabajoClean(textContent(x))); m != nil {
+					if m := computrabajoYears.FindStringSubmatch(collapseSpace(textContent(x))); m != nil {
 						years, _ = strconv.Atoi(m[1])
 					}
 					return false

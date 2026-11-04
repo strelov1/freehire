@@ -29,7 +29,6 @@ import (
 // budget.
 type mojedelo struct {
 	http           HeaderJSONGetter
-	limiter        waiter
 	maxNewPerRun   int
 	deadlineMargin time.Duration
 }
@@ -71,8 +70,7 @@ var mojedeloHeaders = map[string]string{
 // NewMojeDelo builds the adapter over the given client.
 func NewMojeDelo(c HeaderJSONGetter) Source {
 	return mojedelo{
-		http:           c,
-		limiter:        rate.NewLimiter(rate.Every(mojedeloRequestInterval), 1),
+		http:           rateLimitedHeaderJSONGetter{inner: c, limiter: rate.NewLimiter(rate.Every(mojedeloRequestInterval), 1)},
 		maxNewPerRun:   mojedeloMaxNewPerRun,
 		deadlineMargin: mojedeloDeadlineMargin,
 	}
@@ -159,7 +157,7 @@ func (s mojedelo) FetchNewGated(ctx context.Context, _ CompanyEntry, seen func(e
 	if gate.Covered != nil {
 		companies := make([]string, 0, len(items))
 		for _, it := range items {
-			companies = append(companies, mojedeloClean(it.Company.Name))
+			companies = append(companies, collapseSpace(it.Company.Name))
 		}
 		covered = gate.Covered(companies)
 	}
@@ -230,9 +228,6 @@ func (s mojedelo) list(ctx context.Context) ([]mojedeloItem, error) {
 		if page == mojedeloMaxPages {
 			return nil, fmt.Errorf("mojedelo: search runs past %d pages", mojedeloMaxPages)
 		}
-		if err := s.limiter.Wait(ctx); err != nil {
-			return nil, err
-		}
 		var res mojedeloSearch
 		if err := s.http.GetJSONWithHeaders(ctx, fmt.Sprintf(mojedeloSearchURL, mojedeloPageSize, page*mojedeloPageSize), mojedeloHeaders, &res); err != nil {
 			return nil, fmt.Errorf("mojedelo: search page %d: %w", page+1, err)
@@ -244,7 +239,7 @@ func (s mojedelo) list(ctx context.Context) ([]mojedeloItem, error) {
 		read += len(res.Data.Items)
 		for _, it := range res.Data.Items {
 			id := strings.TrimSpace(it.ID)
-			if id == "" || seen[id] || mojedeloClean(it.Title) == "" || mojedeloHiddenEmployer(it) {
+			if id == "" || seen[id] || collapseSpace(it.Title) == "" || mojedeloHiddenEmployer(it) {
 				continue
 			}
 			seen[id] = true
@@ -265,39 +260,35 @@ func (s mojedelo) list(ctx context.Context) ([]mojedeloItem, error) {
 // marks itself with anonymizedCompany; filing it under that name would invent one employer
 // collecting every anonymous posting.
 func mojedeloHiddenEmployer(it mojedeloItem) bool {
-	return it.AnonymizedCompany != nil || it.Company == nil || mojedeloClean(it.Company.Name) == ""
+	return it.AnonymizedCompany != nil || it.Company == nil || collapseSpace(it.Company.Name) == ""
 }
-
-func mojedeloClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // mojedeloBaseJob is the body-less Job a search row alone supports: the identity, and the facts
 // the gate judges on.
 func mojedeloBaseJob(it mojedeloItem) Job {
 	id := strings.TrimSpace(it.ID)
-	title := mojedeloClean(it.Title)
+	title := collapseSpace(it.Title)
 	j := Job{
 		ExternalID: id,
 		URL:        fmt.Sprintf(mojedeloPageURL, normalize.Slug(title), id),
 		Title:      title,
-		Company:    mojedeloClean(it.Company.Name),
+		Company:    collapseSpace(it.Company.Name),
 		WorkMode:   mojedeloWorkMode(it.WorkModes),
 	}
 	j.Remote = j.WorkMode == "remote"
 	// The town is the place; a posting without one (most abroad) states it in free text.
 	if it.Town != nil {
-		j.Location = mojedeloClean(it.Town.Translation)
+		j.Location = collapseSpace(it.Town.Translation)
 	}
 	if j.Location == "" {
-		j.Location = mojedeloClean(it.JobLocationInput)
+		j.Location = collapseSpace(it.JobLocationInput)
 	}
 	if it.Country != nil {
 		if code := location.NormalizeCountry(strings.TrimSpace(it.Country.CountryCode)); code != "" {
 			j.Countries = []string{code}
 		}
 	}
-	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(it.StartDate)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseRFC3339(strings.TrimSpace(it.StartDate))
 	return j
 }
 
@@ -322,9 +313,6 @@ func mojedeloWorkMode(modes []mojedeloNamed) string {
 // detail reads one posting's resource. ok=false with a nil error is the site's answer that the
 // posting is gone (404/410, or no longer published); an error is the absence of an answer.
 func (s mojedelo) detail(ctx context.Context, it mojedeloItem) (Job, bool, error) {
-	if err := s.limiter.Wait(ctx); err != nil {
-		return Job{}, false, err
-	}
 	var res mojedeloJob
 	if err := s.http.GetJSONWithHeaders(ctx, fmt.Sprintf(mojedeloJobURL, strings.TrimSpace(it.ID)), mojedeloHeaders, &res); err != nil {
 		var se *StatusError

@@ -378,9 +378,7 @@ func spainjobsJob(ld spainjobsLD, p spainjobsPosting, applyURL string) (Job, boo
 		}
 	}
 	j.Location = strings.Join(places, "; ")
-	if t, err := time.Parse(time.RFC3339, strings.TrimSpace(ld.DatePosted)); err == nil {
-		j.PostedAt = NotFuture(&t)
-	}
+	j.PostedAt = parseRFC3339(strings.TrimSpace(ld.DatePosted))
 	if strings.EqualFold(strings.TrimSpace(ld.JobLocationType), "TELECOMMUTE") {
 		j.WorkMode, j.Remote = "remote", true
 	}

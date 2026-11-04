@@ -196,9 +196,5 @@ func arbeitsagenturLocation(locs []arbeitsagenturLokation) string {
 
 // arbeitsagenturDate parses the "2006-01-02" publish date.
 func arbeitsagenturDate(s string) *time.Time {
-	t, err := time.Parse("2006-01-02", strings.TrimSpace(s))
-	if err != nil {
-		return nil
-	}
-	return &t
+	return parseDate(strings.TrimSpace(s))
 }

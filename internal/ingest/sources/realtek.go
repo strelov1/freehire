@@ -114,7 +114,7 @@ func (s realtek) FetchNew(ctx context.Context, e CompanyEntry, seen func(externa
 	}
 	jobs := fetchDetails(list, defaultDetailWorkers, func(p realtekPost) (Job, bool) {
 		if seen(p.OppID) {
-			return Job{ExternalID: p.OppID, URL: realtekJobURL + p.OppID, Title: realtekTitle(p.Title), Company: e.Company, SeenRefresh: true}, true
+			return Job{ExternalID: p.OppID, URL: realtekJobURL + p.OppID, Title: collapseSpace(p.Title), Company: e.Company, SeenRefresh: true}, true
 		}
 		return s.detail(ctx, e, p)
 	})
@@ -167,7 +167,7 @@ func (s realtek) detail(ctx context.Context, e CompanyEntry, p realtekPost) (Job
 	if !r.Pass || r.Data == nil || r.Data.Title == nil || r.Data.Requirement == nil {
 		return Job{}, false
 	}
-	title := realtekTitle(firstNonEmpty(*r.Data.Title, p.Title))
+	title := collapseSpace(firstNonEmpty(*r.Data.Title, p.Title))
 	body := plainTextToHTML(*r.Data.Requirement)
 	if title == "" || body == "" {
 		return Job{}, false
@@ -191,5 +191,3 @@ func (s realtek) detail(ctx context.Context, e CompanyEntry, p realtekPost) (Job
 	}
 	return job, true
 }
-
-func realtekTitle(s string) string { return strings.Join(strings.Fields(s), " ") }

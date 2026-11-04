@@ -246,9 +246,7 @@ func (s instahyre) withPage(ctx context.Context, base Job) (Job, error) {
 	if base.Location == "" {
 		base.Location = strings.Join(places, "; ")
 	}
-	if t, err := time.Parse("2006-01-02", strings.TrimSpace(p.DatePosted)); err == nil {
-		base.PostedAt = NotFuture(&t)
-	}
+	base.PostedAt = parseDate(strings.TrimSpace(p.DatePosted))
 	switch strings.ToUpper(strings.TrimSpace(p.EmploymentType)) {
 	case "FULL_TIME":
 		base.EmploymentType = "full_time"

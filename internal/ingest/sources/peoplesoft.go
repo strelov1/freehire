@@ -394,9 +394,5 @@ func parsePeopleSoftPosting(root *html.Node, r peoplesoftRow) (Job, bool) {
 // peoplesoftDate reads the list's "Posted" date. Every tenant measured renders M/D/YYYY; any
 // other shape is left unread rather than guessed at, since 03/04 reads two ways.
 func peoplesoftDate(s string) *time.Time {
-	t, err := time.Parse("1/2/2006", strings.TrimSpace(s))
-	if err != nil {
-		return nil
-	}
-	return &t
+	return parseLayout("1/2/2006", strings.TrimSpace(s))
 }

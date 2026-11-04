@@ -58,7 +58,7 @@ func infostudFixture(name string) string {
 
 func newInfostudTest(f *infostudFake) infostud {
 	s := NewInfostud(f).(infostud)
-	s.limiter = noWait{}
+	s.http = f
 	return s
 }
 

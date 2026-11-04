@@ -337,7 +337,7 @@ type jobschCard struct {
 	InitialPublication string           `json:"initialPublicationDate"`
 }
 
-func (c jobschCard) company() string { return jobschClean(c.Company.Name) }
+func (c jobschCard) company() string { return collapseSpace(c.Company.Name) }
 
 // job is the body-less Job a card supports: enough for the gate, and for a posting the gate turns
 // away.
@@ -345,7 +345,7 @@ func (c jobschCard) job(p jobschPosting) Job {
 	return Job{
 		ExternalID:        p.id,
 		URL:               p.url(),
-		Title:             jobschClean(c.Title),
+		Title:             collapseSpace(c.Title),
 		Company:           c.company(),
 		Location:          jobschLocationLabel(c.Locations, c.Place),
 		PostedAt:          NotFuture(parseRFC3339(c.InitialPublication)),
@@ -483,8 +483,8 @@ type jobschSalary struct {
 // is never read again. An anonymous posting (a recruiter's "for a client", ~1%) names no
 // employer, and filing it would build one bogus company out of many.
 func jobschDetail(v jobschVacancy, p jobschPosting) (Job, bool) {
-	title := jobschClean(v.Title)
-	company := jobschClean(v.Company.Name)
+	title := collapseSpace(v.Title)
+	company := collapseSpace(v.Company.Name)
 	body := sanitizeHTML(v.Text)
 	if !v.Active || title == "" || company == "" || strings.TrimSpace(body) == "" {
 		return Job{}, false
@@ -583,10 +583,10 @@ func jobschEmploymentType(ids []string, grades []int) string {
 // "AG" read as countries to the location dictionary, and the structured country already says
 // where the posting is.
 func jobschLocationLabel(locs []jobschLocation, place string) string {
-	if l := distinctJoin(locs, "; ", func(l jobschLocation) string { return jobschClean(l.City) }); l != "" {
+	if l := distinctJoin(locs, "; ", func(l jobschLocation) string { return collapseSpace(l.City) }); l != "" {
 		return l
 	}
-	return jobschClean(place)
+	return collapseSpace(place)
 }
 
 func jobschCountries(locs []jobschLocation) []string {
@@ -596,8 +596,6 @@ func jobschCountries(locs []jobschLocation) []string {
 	}
 	return countriesFromCodes(codes)
 }
-
-func jobschClean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // jobschState decodes one of the page's state assignments ("      __INIT__ = {...};") into v. The
 // value is a JavaScript object literal: JSON except that a missing field is written as a bare
