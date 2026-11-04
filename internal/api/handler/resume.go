@@ -23,6 +23,7 @@ import (
 	"github.com/strelov1/freehire/internal/identity/userprofile"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/llm"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 // resumeHandlers serves the résumé/CV surfaces: skill extraction, stored-résumé
@@ -368,6 +369,8 @@ func (h *resumeHandlers) deriveResumeArtifacts(userID int64, text string, upload
 // swallowed, so the upload and the deterministic extractors are untouched. Runs on its
 // own timeout context (the request's is gone once the upload responded).
 func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uploadedAt *time.Time) {
+	success := false
+	defer func() { observability.RecordCVExtraction(success) }()
 	if h.structuredExtractor == nil || !h.structuredExtractor.Enabled() {
 		log.Printf("resume structured: user %d: skipped — extractor disabled (LLM or PII detector unset)", userID)
 		if uploadedAt != nil {
@@ -400,6 +403,7 @@ func (h *resumeHandlers) extractStructuredResume(userID int64, text string, uplo
 		_ = h.resume.MarkExtractFailed(ctx, userID, "persist failed", *uploadedAt)
 		return
 	}
+	success = true
 	h.importExperience(ctx, userID, st, uploadedAt.UTC().Format(time.RFC3339))
 }
 

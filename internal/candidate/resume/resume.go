@@ -27,6 +27,7 @@ import (
 	"github.com/strelov1/freehire/internal/dict/location"
 	"github.com/strelov1/freehire/internal/platform/blobstore"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/observability"
 )
 
 // pdftotextBin is the poppler binary used to extract résumé PDF text, overridable via
@@ -146,11 +147,14 @@ func (s *Store) Put(ctx context.Context, userID int64, contentType string, data 
 	}
 	key := blobstore.ResumeKey(userID)
 	if err := s.blobs.Put(ctx, key, contentType, bytes.NewReader(data), int64(len(data))); err != nil {
+		observability.RecordCVUpload(false)
 		return Meta{}, err
 	}
 	if err := s.repo.Set(ctx, userID, key); err != nil {
+		observability.RecordCVUpload(false)
 		return Meta{}, err
 	}
+	observability.RecordCVUpload(true)
 	return s.Status(ctx, userID)
 }
 
