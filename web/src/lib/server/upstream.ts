@@ -13,8 +13,16 @@ import { ApiError } from '#lib/api.js';
  *
  *  Anything else still becomes a 500. A genuine defect should look like one. */
 export function rethrowUpstream(e: unknown): never {
-  if (e instanceof ApiError && (e.status === 429 || e.status === 503)) {
-    error(e.status, e.status === 429 ? 'Too many requests' : 'Service unavailable');
+  if (e instanceof ApiError) {
+    switch (e.status) {
+      case 429:
+        return error(429, 'Too many requests');
+      case 503:
+        return error(503, 'Service unavailable');
+      case 504:
+        // createApi uses 504 when the SSR deadline aborts an unanswered request.
+        return error(504, 'Gateway timeout');
+    }
   }
   throw e;
 }
