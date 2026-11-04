@@ -20,24 +20,28 @@ var cvExtractions = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help: "Background CV extraction attempts (including retries), by outcome.",
 }, []string{"outcome"})
 
+// Initialize both outcomes so an idle product and missing telemetry are distinguishable.
 func init() {
-	// An idle product must expose zeros, so no events and no telemetry are distinguishable.
 	for _, outcome := range []string{"success", "error"} {
 		cvUploads.WithLabelValues(outcome)
 		cvExtractions.WithLabelValues(outcome)
 	}
 }
 
+// RecordRegistration records a new account after its creation commits.
 func RecordRegistration() { registrations.Inc() }
 
+// RecordCVUpload records whether a validated CV storage attempt persisted the file and pointer.
 func RecordCVUpload(success bool) {
 	cvUploads.WithLabelValues(productOutcome(success)).Inc()
 }
 
+// RecordCVExtraction records a background extraction outcome, including retries.
 func RecordCVExtraction(success bool) {
 	cvExtractions.WithLabelValues(productOutcome(success)).Inc()
 }
 
+// productOutcome bounds label cardinality to the two server-defined outcomes.
 func productOutcome(success bool) string {
 	if success {
 		return "success"

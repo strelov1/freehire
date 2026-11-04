@@ -28,6 +28,7 @@ func (f failingReadbackRepo) Get(context.Context, int64) (db.GetUserResumeRow, e
 	return db.GetUserResumeRow{}, errors.New("readback failed after saving")
 }
 
+// uploadCount reads the same process registry that the metrics listener exports.
 func uploadCount(t *testing.T, outcome string) float64 {
 	t.Helper()
 	families, err := prometheus.DefaultGatherer.Gather()
@@ -49,6 +50,7 @@ func uploadCount(t *testing.T, outcome string) float64 {
 	return 0
 }
 
+// A metadata read failure cannot undo an upload whose object and pointer were saved.
 func TestUploadMetricsCountPersistenceEvenWhenReadbackFails(t *testing.T) {
 	before := uploadCount(t, "success")
 	store := New(newFakeBlobs(), failingReadbackRepo{newFakeRepo()})
@@ -60,6 +62,7 @@ func TestUploadMetricsCountPersistenceEvenWhenReadbackFails(t *testing.T) {
 	}
 }
 
+// Disabled storage is a deliberate mode, not a failed persistence attempt.
 func TestUploadMetricsExcludeDisabledStorage(t *testing.T) {
 	before := uploadCount(t, "error")
 	if _, err := New(nil, nil).Put(context.Background(), 1, "text/plain", nil); !errors.Is(err, ErrStorageDisabled) {
@@ -70,6 +73,7 @@ func TestUploadMetricsExcludeDisabledStorage(t *testing.T) {
 	}
 }
 
+// An object without a saved pointer must not be reported as a successful upload.
 func TestUploadMetricsRequireBothObjectAndPointer(t *testing.T) {
 	for _, tt := range []struct {
 		name      string

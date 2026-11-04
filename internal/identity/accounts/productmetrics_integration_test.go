@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// registrations reads the process counter without resetting other tests' telemetry.
 func registrations(t *testing.T) float64 {
 	t.Helper()
 	families, err := prometheus.DefaultGatherer.Gather()
@@ -23,6 +24,7 @@ func registrations(t *testing.T) float64 {
 	return 0
 }
 
+// Existing identity links and rolled-back accounts must not inflate the signup count.
 func TestRegistrationMetricsExcludeOAuthLinksAndRolledBackCreates(t *testing.T) {
 	pool := startPostgres(t)
 	repo := oauthRepo(pool)
