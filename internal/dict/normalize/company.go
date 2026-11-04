@@ -259,7 +259,11 @@ func dropSeat(name string) string {
 	if loc == nil {
 		return name
 	}
-	words := strings.FieldsFunc(dropApostrophes(name[:loc[0]]), isWordBreak)
+	// isWordBreak keeps '.' and '/' inside a word, so a lone "/" arrives here as a word of its
+	// own, and "SCAN / d.o.o., Preddvor" must still count as one name word.
+	words := slices.DeleteFunc(strings.FieldsFunc(dropApostrophes(name[:loc[0]]), isWordBreak), func(w string) bool {
+		return !strings.ContainsFunc(w, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) })
+	})
 	next := ""
 	for len(words) > 0 && IsLegalFormBefore(words[len(words)-1], next) {
 		next = words[len(words)-1]

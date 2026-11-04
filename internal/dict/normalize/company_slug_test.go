@@ -148,6 +148,7 @@ func TestCompanySlug(t *testing.T) {
 		{"one-word name keeps its seat: bass", "Bass d.o.o., Celje", "bass-d-o-o-celje"},
 		{"one-word name keeps its seat: spaced form", "ACME, d. o. o., Ljubljana", "acme-d-o-o-ljubljana"},
 		{"a legal form is not a name word", "Housing Co., d.o.o., Ljubljana", "housing-co-d-o-o-ljubljana"},
+		{"punctuation is not a name word", "SCAN / d.o.o., Preddvor", "scan-d-o-o-preddvor"},
 		{"spaced d. d. before the seat", "Krka, tovarna zdravil, d. d., Novo mesto", "krka-tovarna-zdravil"},
 		{"d.o.o. before the seat", "TERME KRKA, d.o.o., Novo mesto", "terme-krka"},
 		{"spaced d. o. o. before the seat", "Adria Mobil, d. o. o., Novo mesto", "adria-mobil"},
