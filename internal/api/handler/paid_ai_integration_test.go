@@ -105,6 +105,10 @@ func TestPaidAIFitStreamRefusesFree(t *testing.T) {
 	userID, token := assistantUser(t, pool, iss, "paid-gate-fit@example.test", false)
 	req := httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/jobs/any-job/fit/stream", nil)
 	req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+	// The SPA's EventSource shape: a same-origin cookie request stamps Fetch Metadata,
+	// and the route refuses a cookie request without it. The 402 under test is the
+	// paid-AI gate's answer, which runs before the handler's own refusal.
+	req.Header.Set(headerSecFetchSite, secFetchSiteSameOrigin)
 	resp, err := app.Test(req, 10000)
 	if err != nil {
 		t.Fatalf("stream request: %v", err)

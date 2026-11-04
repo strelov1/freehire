@@ -1281,14 +1281,15 @@ type OauthAuthAttempt struct {
 }
 
 type OauthAuthorizationCode struct {
-	ID            int64              `json:"id"`
-	CodeHash      string             `json:"code_hash"`
-	ClientID      string             `json:"client_id"`
-	UserID        int64              `json:"user_id"`
-	RedirectUri   string             `json:"redirect_uri"`
-	CodeChallenge string             `json:"code_challenge"`
-	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ID                 int64              `json:"id"`
+	CodeHash           string             `json:"code_hash"`
+	ClientID           string             `json:"client_id"`
+	UserID             int64              `json:"user_id"`
+	RedirectUri        string             `json:"redirect_uri"`
+	CodeChallenge      string             `json:"code_challenge"`
+	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	IssuedTokenVersion pgtype.Int4        `json:"issued_token_version"`
 }
 
 type OauthClient struct {

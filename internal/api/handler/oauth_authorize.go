@@ -9,6 +9,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/oauth2server"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/platform/pgconv"
@@ -121,6 +124,17 @@ func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Redirect(h.oauthSignInURL(params), fiber.StatusFound)
 	}
+	// Bind the code to the generation the approving SESSION carries — the tv
+	// claim the auth middleware already validated against the account on the way
+	// in — never a fresh read of users.token_version. A revocation that lands
+	// between that validation and this insert leaves the code bound to the dead
+	// generation, so it dies with the sessions that bump revokes instead of
+	// capturing the new one. Read via SessionVersion rather than re-parsing:
+	// Parse is what issued the id this handler acts on, and the two must agree.
+	version, err := auth.SessionVersion(c)
+	if err != nil {
+		return fmt.Errorf("read session generation for user %d: %w", userID, err)
+	}
 
 	redirect := func(vals url.Values) error {
 		loc, err := url.Parse(params.RedirectURI)
@@ -145,12 +159,13 @@ func (h *authHandlers) OAuthAuthorizeSubmit(c *fiber.Ctx) error {
 	}
 	expiresAt := time.Now().Add(authorizationCodeTTL)
 	err = h.queries.CreateOAuthAuthorizationCode(c.Context(), db.CreateOAuthAuthorizationCodeParams{
-		CodeHash:      hash,
-		ClientID:      params.ClientID,
-		UserID:        userID,
-		RedirectUri:   params.RedirectURI,
-		CodeChallenge: params.CodeChallenge,
-		ExpiresAt:     pgconv.Timestamptz(&expiresAt),
+		CodeHash:           hash,
+		ClientID:           params.ClientID,
+		UserID:             userID,
+		RedirectUri:        params.RedirectURI,
+		CodeChallenge:      params.CodeChallenge,
+		IssuedTokenVersion: pgtype.Int4{Int32: version, Valid: true},
+		ExpiresAt:          pgconv.Timestamptz(&expiresAt),
 	})
 	if err != nil {
 		return fmt.Errorf("persist authorization code for user %d: %w", userID, err)

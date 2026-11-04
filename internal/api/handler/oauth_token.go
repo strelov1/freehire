@@ -58,10 +58,14 @@ func (h *authHandlers) OAuthToken(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "code_verifier does not match code_challenge")
 	}
 
-	version, err := h.queries.GetUserTokenVersion(c.Context(), row.UserID)
-	if err != nil {
-		return fmt.Errorf("read token version for user %d: %w", row.UserID, err)
-	}
+	// The grant is stamped with the generation the CONSUMED code was bound to —
+	// the consent-time session generation, already re-validated against the
+	// account's CURRENT one by the consume's latch — never a fresh read of
+	// users.token_version. A revocation landing between this consume and the
+	// grant INSERT below therefore leaves the grant on the dead generation,
+	// where AuthenticateOAuthGrant refuses it: a consumed code can never be
+	// upgraded to the generation that revocation minted.
+	version := row.IssuedTokenVersion.Int32
 
 	token, hash, err := oauth2server.GenerateAccessToken()
 	if err != nil {

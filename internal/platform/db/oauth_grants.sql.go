@@ -36,16 +36,22 @@ func (q *Queries) AuthenticateOAuthGrant(ctx context.Context, accessTokenHash st
 }
 
 const consumeOAuthAuthorizationCode = `-- name: ConsumeOAuthAuthorizationCode :one
-DELETE FROM oauth_authorization_codes
-WHERE code_hash = $1 AND expires_at > now()
-RETURNING client_id, user_id, redirect_uri, code_challenge
+DELETE FROM oauth_authorization_codes c
+USING users u
+WHERE c.code_hash = $1
+  AND c.expires_at > now()
+  AND c.user_id = u.id
+  AND c.issued_token_version = u.token_version
+RETURNING c.client_id, c.user_id, c.redirect_uri, c.code_challenge,
+          c.issued_token_version
 `
 
 type ConsumeOAuthAuthorizationCodeRow struct {
-	ClientID      string `json:"client_id"`
-	UserID        int64  `json:"user_id"`
-	RedirectUri   string `json:"redirect_uri"`
-	CodeChallenge string `json:"code_challenge"`
+	ClientID           string      `json:"client_id"`
+	UserID             int64       `json:"user_id"`
+	RedirectUri        string      `json:"redirect_uri"`
+	CodeChallenge      string      `json:"code_challenge"`
+	IssuedTokenVersion pgtype.Int4 `json:"issued_token_version"`
 }
 
 // Redeem a code for its grant-building fields, deleting it in the same statement
@@ -53,6 +59,15 @@ type ConsumeOAuthAuthorizationCodeRow struct {
 // reported exactly like an unknown one. expires_at is enforced here rather than
 // left to the caller, for the same reason AuthenticateAPIKey enforces its own
 // expiry: no call site can forget the check.
+//
+// The generation latch is part of the redemption, not a check beside it: the
+// code's issued_token_version must equal the account's CURRENT
+// users.token_version (the same comparison AuthenticateOAuthGrant applies to
+// grants), and the row is deleted ONLY when it holds. A code left pending over
+// a revocation is therefore refused AND left standing dead — no retry revives
+// it, and it never upgrades into a grant of the new generation. 0 (the legacy
+// sentinel) and NULL (old-binary rollout writes) never match a live account,
+// so those codes are dead for the same reason.
 func (q *Queries) ConsumeOAuthAuthorizationCode(ctx context.Context, codeHash string) (ConsumeOAuthAuthorizationCodeRow, error) {
 	row := q.db.QueryRow(ctx, consumeOAuthAuthorizationCode, codeHash)
 	var i ConsumeOAuthAuthorizationCodeRow
@@ -61,28 +76,38 @@ func (q *Queries) ConsumeOAuthAuthorizationCode(ctx context.Context, codeHash st
 		&i.UserID,
 		&i.RedirectUri,
 		&i.CodeChallenge,
+		&i.IssuedTokenVersion,
 	)
 	return i, err
 }
 
 const createOAuthAuthorizationCode = `-- name: CreateOAuthAuthorizationCode :exec
 INSERT INTO oauth_authorization_codes
-    (code_hash, client_id, user_id, redirect_uri, code_challenge, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+    (code_hash, client_id, user_id, redirect_uri, code_challenge, issued_token_version, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateOAuthAuthorizationCodeParams struct {
-	CodeHash      string             `json:"code_hash"`
-	ClientID      string             `json:"client_id"`
-	UserID        int64              `json:"user_id"`
-	RedirectUri   string             `json:"redirect_uri"`
-	CodeChallenge string             `json:"code_challenge"`
-	ExpiresAt     pgtype.Timestamptz `json:"expires_at"`
+	CodeHash           string             `json:"code_hash"`
+	ClientID           string             `json:"client_id"`
+	UserID             int64              `json:"user_id"`
+	RedirectUri        string             `json:"redirect_uri"`
+	CodeChallenge      string             `json:"code_challenge"`
+	IssuedTokenVersion pgtype.Int4        `json:"issued_token_version"`
+	ExpiresAt          pgtype.Timestamptz `json:"expires_at"`
 }
 
 // Record a freshly minted authorization code after the user approves consent.
 // code_challenge is stored verbatim (S256 of the client's verifier); the token
 // exchange recomputes and compares it, never trusting the client's say-so twice.
+// issued_token_version is the generation the approving SESSION was minted under
+// (the tv claim, already validated against the account at request entry) — never
+// a fresh read of users.token_version, so a revocation landing between the
+// session check and this insert cannot capture its new generation. 0 is the
+// unknown-generation sentinel (generations start at 1): dead on arrival, the
+// fail-closed shape legacy rows take after 0233. NULL — what the old binary
+// writes during rollout — never satisfies the exchange's equality latch either.
+// squawk-ignore prefer-bigint-over-int -- mirrors users.token_version (int, 0041_account_security.sql), which this column is compared against
 func (q *Queries) CreateOAuthAuthorizationCode(ctx context.Context, arg CreateOAuthAuthorizationCodeParams) error {
 	_, err := q.db.Exec(ctx, createOAuthAuthorizationCode,
 		arg.CodeHash,
@@ -90,6 +115,7 @@ func (q *Queries) CreateOAuthAuthorizationCode(ctx context.Context, arg CreateOA
 		arg.UserID,
 		arg.RedirectUri,
 		arg.CodeChallenge,
+		arg.IssuedTokenVersion,
 		arg.ExpiresAt,
 	)
 	return err
