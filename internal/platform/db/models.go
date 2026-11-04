@@ -989,7 +989,6 @@ type Job struct {
 	SemanticEmbeddedHash  pgtype.Text        `json:"semantic_embedded_hash"`
 	DuplicateOf           pgtype.Int8        `json:"duplicate_of"`
 	IsTech                pgtype.Bool        `json:"is_tech"`
-	SemanticEmbedding     []float32          `json:"semantic_embedding"`
 	SalaryMinManual       pgtype.Int4        `json:"salary_min_manual"`
 	SalaryMaxManual       pgtype.Int4        `json:"salary_max_manual"`
 	SalaryCurrencyManual  string             `json:"salary_currency_manual"`

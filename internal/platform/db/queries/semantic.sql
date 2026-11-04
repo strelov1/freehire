@@ -115,19 +115,14 @@ LEFT JOIN unnest(sqlc.arg(input_hashes)::text[]) WITH ORDINALITY AS h(input_hash
 WHERE j.id = ids.id;
 
 -- name: ClearSemanticEmbeddedBatch :exec
--- Clear a batch of jobs' embed provenance AND null the legacy jobs.semantic_embedding
--- column (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch
--- and DeleteJobSemanticChunks (see that query). Nothing writes semantic_embedding on
--- the open-job path anymore — job_semantic_chunks is the queryable representation now
--- (see openspec/changes/drop-hybrid-search-pgvector-similar) — but this still nulls it
--- on close: cheap, and it keeps a closed job's row free of a stale value from before
--- that write was removed, without needing a one-off backfill to clean up the column.
--- The column itself stays (dropping it is a separate, later change).
+-- Clear a batch of jobs' embed provenance (closed-job path). Run in the same transaction
+-- as DeleteSemanticEntriesBatch and DeleteJobSemanticChunks (see that query).
+-- job_semantic_chunks is the only stored vector; the legacy jobs.semantic_embedding column
+-- is being dropped (migrations/pending-semantic-embedding-drop).
 UPDATE jobs
 SET semantic_embedded_model      = NULL,
     semantic_embedded_hash       = NULL,
-    semantic_embedded_input_hash = NULL,
-    semantic_embedding           = NULL
+    semantic_embedded_input_hash = NULL
 WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
 -- name: DeleteSemanticEntriesBatch :exec
