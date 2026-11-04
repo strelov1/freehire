@@ -151,12 +151,11 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 	if in.DigestFrequency == notify.FrequencyDaily && in.DigestTime == nil {
 		return Settings{}, ErrMissingDigestTime
 	}
-	if in.DigestIntervalHours == 0 {
-		in.DigestIntervalHours = notify.DefaultIntervalHours
+	hours, err := s.resolveIntervalHours(ctx, userID, in)
+	if err != nil {
+		return Settings{}, err
 	}
-	if in.DigestIntervalHours < notify.MinIntervalHours || in.DigestIntervalHours > notify.MaxIntervalHours {
-		return Settings{}, ErrInvalidInterval
-	}
+	in.DigestIntervalHours = hours
 	if (in.QuietHoursStart == nil) != (in.QuietHoursEnd == nil) {
 		return Settings{}, ErrIncompleteQuietHours
 	}
@@ -164,6 +163,31 @@ func (s *Service) UpdateSettings(ctx context.Context, userID int64, in Settings)
 		return Settings{}, err
 	}
 	return s.repo.UpsertSettings(ctx, userID, in)
+}
+
+// resolveIntervalHours decides the interval to store. An out-of-range value is
+// refused only when the interval is what the rule uses. Otherwise — the field
+// omitted (zero, from a client that predates it, on what is a full-replacement
+// write), or a stray value beside another frequency — the account's stored
+// interval is kept, so a save that never mentioned it cannot reset a chosen six
+// hours to one.
+func (s *Service) resolveIntervalHours(ctx context.Context, userID int64, in Settings) (int, error) {
+	h := in.DigestIntervalHours
+	inRange := h >= notify.MinIntervalHours && h <= notify.MaxIntervalHours
+	if inRange {
+		return h, nil
+	}
+	if h != 0 && in.DigestFrequency == notify.FrequencyInterval {
+		return 0, ErrInvalidInterval
+	}
+	current, err := s.repo.GetSettings(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	if current.DigestIntervalHours < notify.MinIntervalHours || current.DigestIntervalHours > notify.MaxIntervalHours {
+		return notify.DefaultIntervalHours, nil
+	}
+	return current.DigestIntervalHours, nil
 }
 
 // checkPushDevice refuses push when it is being added and the account has no

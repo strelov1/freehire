@@ -120,6 +120,11 @@ ON CONFLICT (subscription_id, job_id) DO NOTHING;
 WITH claimable AS (
     SELECT m.subscription_id, m.job_id
     FROM subscriptions s
+    -- Joined BEFORE the lateral so the interval gate below references only relations
+    -- that exist under it: the planner then applies the gate at this join, and the
+    -- lateral's FOR UPDATE never locks a non-due subscription's rows only for them to
+    -- be filtered out afterwards.
+    LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
     CROSS JOIN LATERAL (
         SELECT mm.subscription_id, mm.job_id
         FROM subscription_matches mm
@@ -133,7 +138,6 @@ WITH claimable AS (
         LIMIT sqlc.arg(per_subscription)
         FOR UPDATE SKIP LOCKED
     ) m
-    LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
     WHERE s.active
       -- An 'interval' subscription (the default: no settings row reads as one, at one
       -- hour) is claimed only once its interval has elapsed since the last digest. The

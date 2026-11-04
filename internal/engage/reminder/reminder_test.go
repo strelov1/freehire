@@ -366,3 +366,32 @@ func TestUpdateSettings_IntervalBounds(t *testing.T) {
 		}
 	}
 }
+
+// PUT is a full replacement, so a client that predates digest_interval_hours sends
+// zero; that must not reset an interval the person chose.
+func TestUpdateSettings_OmittedIntervalKeepsTheStoredOne(t *testing.T) {
+	repo := &fakeRepo{settings: Settings{DigestFrequency: notify.FrequencyInterval, DigestIntervalHours: 6}}
+	got, err := newService(repo).UpdateSettings(context.Background(), 1,
+		Settings{DigestFrequency: notify.FrequencyInterval})
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if got.DigestIntervalHours != 6 {
+		t.Errorf("stored %d, want the existing 6", got.DigestIntervalHours)
+	}
+}
+
+// The interval is not read beside another frequency, so a stray value there is not
+// a reason to refuse the save; the stored interval is kept.
+func TestUpdateSettings_StrayIntervalBesideDailyKeepsTheStoredOne(t *testing.T) {
+	repo := &fakeRepo{settings: Settings{DigestIntervalHours: 4}}
+	digestTime := 9 * time.Hour
+	got, err := newService(repo).UpdateSettings(context.Background(), 1,
+		Settings{DigestFrequency: notify.FrequencyDaily, DigestTime: &digestTime, DigestIntervalHours: 24})
+	if err != nil {
+		t.Fatalf("want no error, got %v", err)
+	}
+	if got.DigestIntervalHours != 4 {
+		t.Errorf("stored %d, want the existing 4", got.DigestIntervalHours)
+	}
+}
