@@ -392,15 +392,6 @@ type tailorJob struct {
 // whole conversation, before the agent had done anything.
 const tailorDescriptionLimit = 6000
 
-// clipRunes bounds a string on a rune boundary, so a multi-byte character is never cut in half.
-func clipRunes(s string, max int) string {
-	r := []rune(s)
-	if len(r) <= max {
-		return s
-	}
-	return strings.TrimSpace(string(r[:max])) + "…"
-}
-
 // TailorContext serves the cached fit analysis for a tailored CV, projected to the tailoring
 // reasoning context. Cookie or API key. 409 when the CV is not a tailored copy (no bound
 // vacancy) or has no cached analysis; never calls the LLM.

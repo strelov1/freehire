@@ -147,11 +147,11 @@ type Atom struct {
 // vacancy side has never heard of — an out-of-vocabulary tag would be evidence nothing
 // could ever match.
 func (a *Atom) Sanitize() {
-	a.Claim = clip(a.Claim, maxClaimRunes)
-	a.Context = clip(a.Context, maxContextRunes)
-	a.SourceRef = clip(a.SourceRef, maxShortRunes)
-	a.Metrics = orEmpty(limit(nonEmpty(mapStrings(a.Metrics, maxShortRunes)), maxMetrics))
-	a.Skills = orEmpty(limit(skilltag.Canonicalize(a.Skills, skilltag.WithResumeAcronyms()), maxSkills))
+	a.Claim = llm.TrimTruncateRunes(a.Claim, maxClaimRunes)
+	a.Context = llm.TrimTruncateRunes(a.Context, maxContextRunes)
+	a.SourceRef = llm.TrimTruncateRunes(a.SourceRef, maxShortRunes)
+	a.Metrics = orEmpty(llm.Limit(llm.NonEmpty(mapStrings(a.Metrics, maxShortRunes)), maxMetrics))
+	a.Skills = orEmpty(llm.Limit(skilltag.Canonicalize(a.Skills, skilltag.WithResumeAcronyms()), maxSkills))
 }
 
 // Validate reports the first reason this atom cannot be persisted. It runs after
@@ -168,14 +168,14 @@ func (a Atom) Validate() error {
 
 // Sanitize bounds every string on the employment.
 func (e *Employment) Sanitize() {
-	e.Company = clip(e.Company, maxShortRunes)
-	e.Role = clip(e.Role, maxShortRunes)
-	e.Location = clip(e.Location, maxShortRunes)
+	e.Company = llm.TrimTruncateRunes(e.Company, maxShortRunes)
+	e.Role = llm.TrimTruncateRunes(e.Role, maxShortRunes)
+	e.Location = llm.TrimTruncateRunes(e.Location, maxShortRunes)
 	e.Start = perioddate.Sanitize(e.Start)
 	e.End = perioddate.Sanitize(e.End)
-	e.Summary = clip(e.Summary, maxSummaryRunes)
-	e.Link = clip(e.Link, maxShortRunes)
-	e.Stack = orEmpty(limit(skilltag.Canonicalize(e.Stack, skilltag.WithResumeAcronyms()), maxSkills))
+	e.Summary = llm.TrimTruncateRunes(e.Summary, maxSummaryRunes)
+	e.Link = llm.TrimTruncateRunes(e.Link, maxShortRunes)
+	e.Stack = orEmpty(llm.Limit(skilltag.Canonicalize(e.Stack, skilltag.WithResumeAcronyms()), maxSkills))
 }
 
 // Validate reports the first reason this employment cannot be persisted.
@@ -213,25 +213,11 @@ func ClaimKey(claim string) string {
 
 // --- small helpers (mirror internal/candidate/cv) ---
 
-// clip trims s and truncates to at most max runes on a rune boundary, trimming again so
-// a mid-word cut never leaves a trailing space.
-func clip(s string, max int) string {
-	return llm.TrimTruncateRunes(s, max)
-}
-
-// limit returns at most n elements of s (nil-safe, preserves order).
-func limit[T any](s []T, n int) []T {
-	if len(s) > n {
-		return s[:n]
-	}
-	return s
-}
-
 // mapStrings clips each string to max runes.
 func mapStrings(in []string, max int) []string {
 	out := make([]string, len(in))
 	for i, v := range in {
-		out[i] = clip(v, max)
+		out[i] = llm.TrimTruncateRunes(v, max)
 	}
 	return out
 }
@@ -246,15 +232,4 @@ func orEmpty(s []string) []string {
 		return []string{}
 	}
 	return s
-}
-
-// nonEmpty drops blank strings, preserving order; returns nil when nothing remains.
-func nonEmpty(in []string) []string {
-	var out []string
-	for _, v := range in {
-		if v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
 }
