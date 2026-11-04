@@ -76,8 +76,9 @@ def read_changes(base, head, repo=Path(".")):
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            timeout=60,
         )
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         print("Cannot determine changed files; selecting the full CI suite.", file=sys.stderr)
         return None
     return [os.fsdecode(path) for path in result.stdout.split(b"\0") if path]

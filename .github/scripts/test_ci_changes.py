@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from ci_changes import Scope, classify, read_changes
 
@@ -68,7 +69,7 @@ class GitChangesTests(unittest.TestCase):
         self.git("config", "commit.gpgsign", "false")
 
     def git(self, *args):
-        return subprocess.check_output(["git", "-C", str(self.repo), *args], text=True).strip()
+        return subprocess.check_output(["git", "-C", str(self.repo), *args], text=True, timeout=30).strip()
 
     def write(self, path, text):
         target = self.repo / path
@@ -112,12 +113,17 @@ class GitChangesTests(unittest.TestCase):
             with self.subTest(base=base), contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(classify(read_changes(base, head, self.repo)), Scope(True, True))
 
+    def test_diff_timeout_falls_back_to_full(self):
+        with patch("ci_changes.subprocess.run", side_effect=subprocess.TimeoutExpired("git", 60)):
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(classify(read_changes("a" * 40, "b" * 40, self.repo)), Scope(True, True))
+
     def test_cli_only_emits_static_github_output_fields(self):
         self.write("README.md", "before\n")
         base = self.commit()
         self.write("README.md", "after\n")
         head = self.commit()
-        result = subprocess.run([sys.executable, str(Path(__file__).with_name("ci_changes.py")), "--base", base, "--head", head], cwd=self.repo, capture_output=True, text=True, check=True)
+        result = subprocess.run([sys.executable, str(Path(__file__).with_name("ci_changes.py")), "--base", base, "--head", head], cwd=self.repo, capture_output=True, text=True, check=True, timeout=30)
         outputs = dict(line.split("=", 1) for line in result.stdout.splitlines())
         self.assertEqual(outputs, {"backend_tasks": json.dumps(["unit"]), "web": "false"})
 
