@@ -1,4 +1,5 @@
 import { error } from '@sveltejs/kit';
+import { ApiError } from '#lib/api.js';
 import { serverApi } from '#lib/server/api.js';
 import { pageExists, pageOffset, pageWithinWindow, parsePage } from '#lib/pagination.js';
 import type { PageServerLoad } from './$types';
@@ -31,7 +32,13 @@ export const load: PageServerLoad = async ({ url, fetch, request }) => {
   // keeps requests carrying a session private (see #lib/httpCache).
   const personal = params.get('former_employers') === 'true' || params.get('hide_seen') === 'true';
   const cookie = personal ? request.headers.get('cookie') : null;
-  const initial = await serverApi(fetch, cookie).searchJobs(params, LIMIT, pageOffset(pageNumber));
+  const initial = await serverApi(fetch, cookie)
+    .searchJobs(params, LIMIT, pageOffset(pageNumber))
+    .catch((cause: unknown) => {
+      // Search validates the URL's query. A refusal is a bad request, not a broken page.
+      if (cause instanceof ApiError && cause.status === 400) error(400, cause.message);
+      throw cause;
+    });
   // See the collections loader: a page past the last one the matches fill is an
   // empty, self-canonical 200 — a soft 404 dressed as a listing. Page 1 always
   // stands, so a filter combination nothing matches still renders the feed's own
