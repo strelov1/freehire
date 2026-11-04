@@ -88,19 +88,14 @@ const clearSemanticEmbeddedBatch = `-- name: ClearSemanticEmbeddedBatch :exec
 UPDATE jobs
 SET semantic_embedded_model      = NULL,
     semantic_embedded_hash       = NULL,
-    semantic_embedded_input_hash = NULL,
-    semantic_embedding           = NULL
+    semantic_embedded_input_hash = NULL
 WHERE id = ANY($1::bigint[])
 `
 
-// Clear a batch of jobs' embed provenance AND null the legacy jobs.semantic_embedding
-// column (closed-job path). Run in the same transaction as DeleteSemanticEntriesBatch
-// and DeleteJobSemanticChunks (see that query). Nothing writes semantic_embedding on
-// the open-job path anymore — job_semantic_chunks is the queryable representation now
-// (see openspec/changes/drop-hybrid-search-pgvector-similar) — but this still nulls it
-// on close: cheap, and it keeps a closed job's row free of a stale value from before
-// that write was removed, without needing a one-off backfill to clean up the column.
-// The column itself stays (dropping it is a separate, later change).
+// Clear a batch of jobs' embed provenance (closed-job path). Run in the same transaction
+// as DeleteSemanticEntriesBatch and DeleteJobSemanticChunks (see that query).
+// job_semantic_chunks is the only stored vector; the legacy jobs.semantic_embedding column
+// is being dropped (migrations/pending-semantic-embedding-drop).
 func (q *Queries) ClearSemanticEmbeddedBatch(ctx context.Context, ids []int64) error {
 	_, err := q.db.Exec(ctx, clearSemanticEmbeddedBatch, ids)
 	return err
@@ -202,7 +197,7 @@ func (q *Queries) EnqueuePendingSemanticJobs(ctx context.Context, targetModel st
 }
 
 const getJobsByIDs = `-- name: GetJobsByIDs :many
-SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, semantic_embedding, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
+SELECT id, source, external_id, url, title, company, location, remote, description, posted_at, created_at, updated_at, company_slug, enrichment, enriched_at, enrichment_version, public_slug, last_seen_at, closed_at, countries, regions, work_mode, liveness_strikes, skills, seniority, category, created_by, updated_by, posting_language, employment_type, education_level, experience_years_min, collections, content_hash, english_level, cities, view_count, applied_count, role_fingerprint, semantic_embedded_model, semantic_embedded_hash, duplicate_of, is_tech, salary_min_manual, salary_max_manual, salary_currency_manual, salary_period_manual, upvote_count, downvote_count, ats_absent_at, closed_reason, is_private, salary_min_source, salary_max_source, salary_currency_source, salary_period_source, company_slug_folded, duplicate_of_aggregator, duplicate_of_role, duplicate_of_fuzzy, requires_clearance, requirements_derived, hydrated_at, ai_interview_reports, metros, semantic_embedded_input_hash, via_recruiter, clearance_levels, equity, perks, application_deadline, engagement
 FROM jobs
 WHERE id = ANY($1::bigint[])
 `
@@ -264,7 +259,6 @@ func (q *Queries) GetJobsByIDs(ctx context.Context, ids []int64) ([]Job, error) 
 			&i.SemanticEmbeddedHash,
 			&i.DuplicateOf,
 			&i.IsTech,
-			&i.SemanticEmbedding,
 			&i.SalaryMinManual,
 			&i.SalaryMaxManual,
 			&i.SalaryCurrencyManual,

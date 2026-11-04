@@ -116,21 +116,6 @@ func TestIntegration_EmbedWorkerDrainsQueue(t *testing.T) {
 		t.Errorf("closed job stamp model = %v, want NULL (cleared)", model)
 	}
 
-	// The OLD jobs.semantic_embedding column is no longer WRITTEN by this pipeline at
-	// all (job_semantic_chunks is the sole representation now) — the open job's column
-	// stays untouched/NULL, it was never populated to begin with. The closed job was
-	// seeded (seedPreviouslyEmbedded) with a legacy vector from a simulated prior run
-	// under the old pipeline, specifically to prove ClearSemanticEmbeddedBatch's
-	// close-path clear still nulls out any such pre-existing value even though nothing
-	// writes new ones anymore — that clear is still real, needed behavior. The column
-	// itself stays in the schema (dropping it is a separate, later change).
-	if l := jobVectorLen(t, pool, openID); l != 0 {
-		t.Errorf("open job semantic_embedding length = %d, want 0/NULL (no longer written)", l)
-	}
-	if l := jobVectorLen(t, pool, closedID); l != 0 {
-		t.Errorf("closed job semantic_embedding length = %d, want 0/NULL (cleared from its seeded legacy value)", l)
-	}
-
 	// Outbox drained.
 	var n int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM semantic_outbox").Scan(&n); err != nil {
@@ -442,35 +427,18 @@ func seedJobWithDescription(t *testing.T, pool *pgxpool.Pool, ext, title, descri
 	return id
 }
 
-// seedPreviouslyEmbedded stamps a job's provenance (model + content_hash) and gives it
-// a legacy vector directly via SQL, as if a prior embed run had already processed it —
+// seedPreviouslyEmbedded stamps a job's provenance (model + content_hash) directly via
+// SQL, as if a prior embed run had already processed it —
 // so the enqueue's staleness/removal predicate picks it up as "previously embedded, now
 // closed" without needing to drive it through a real IndexOpen call first.
 func seedPreviouslyEmbedded(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id int64) {
 	t.Helper()
-	vec := make([]float32, vectorWidth)
 	if _, err := pool.Exec(ctx,
-		`UPDATE jobs SET semantic_embedded_model = $1, semantic_embedded_hash = content_hash,
-		                 semantic_embedding = $2
-		 WHERE id = $3`,
-		search.CurrentEmbedderModel(), vec, id); err != nil {
+		`UPDATE jobs SET semantic_embedded_model = $1, semantic_embedded_hash = content_hash
+		 WHERE id = $2`,
+		search.CurrentEmbedderModel(), id); err != nil {
 		t.Fatalf("seed previously-embedded job: %v", err)
 	}
-}
-
-// jobVectorLen returns the length of a job's persisted semantic_embedding, or 0 when
-// the column is NULL (no vector).
-func jobVectorLen(t *testing.T, pool *pgxpool.Pool, id int64) int {
-	t.Helper()
-	var n *int
-	if err := pool.QueryRow(context.Background(),
-		"SELECT array_length(semantic_embedding, 1) FROM jobs WHERE id = $1", id).Scan(&n); err != nil {
-		t.Fatalf("read vector length: %v", err)
-	}
-	if n == nil {
-		return 0
-	}
-	return *n
 }
 
 func jobStamp(t *testing.T, pool *pgxpool.Pool, id int64) (model, hash *string) {
