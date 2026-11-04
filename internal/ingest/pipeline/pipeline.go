@@ -951,11 +951,14 @@ func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.J
 			source, externalID := jobIdentity(e, j)
 			body, err := l.StoredDescription(ctx, source, externalID)
 			if err != nil {
-				// Saving anyway would derive from no body over a stored one; the next crawl retries.
+				// Saving anyway would derive from no body over a stored one; the next crawl
+				// retries. The posting was listed, so its liveness is refreshed through the
+				// covered-refresh path — otherwise the post-run sweep could close a live row.
 				t.st.Skipped++
 				if t.firstErr == nil {
 					t.firstErr = err
 				}
+				t.refreshIDs = append(t.refreshIDs, externalID)
 				return
 			}
 			j.Description = body

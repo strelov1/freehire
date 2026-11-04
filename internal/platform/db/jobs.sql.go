@@ -7418,6 +7418,7 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- body (job.Draft.BodyFromCatalogue): nothing was read, so the stamp stays.
     hydrated_at  = CASE WHEN $40::boolean THEN jobs.hydrated_at ELSE now() END,
     updated_at   = now()
+WHERE NOT $40::boolean OR jobs.description = EXCLUDED.description
 RETURNING jobs.id, jobs.source, jobs.external_id, jobs.url, jobs.title, jobs.company, jobs.location, jobs.remote, jobs.description, jobs.posted_at, jobs.created_at, jobs.updated_at, jobs.company_slug, jobs.enrichment, jobs.enriched_at, jobs.enrichment_version, jobs.public_slug, jobs.last_seen_at, jobs.closed_at, jobs.countries, jobs.regions, jobs.work_mode, jobs.liveness_strikes, jobs.skills, jobs.seniority, jobs.category, jobs.created_by, jobs.updated_by, jobs.posting_language, jobs.employment_type, jobs.education_level, jobs.experience_years_min, jobs.collections, jobs.content_hash, jobs.english_level, jobs.cities, jobs.view_count, jobs.applied_count, jobs.role_fingerprint, jobs.semantic_embedded_model, jobs.semantic_embedded_hash, jobs.duplicate_of, jobs.is_tech, jobs.semantic_embedding, jobs.salary_min_manual, jobs.salary_max_manual, jobs.salary_currency_manual, jobs.salary_period_manual, jobs.upvote_count, jobs.downvote_count, jobs.ats_absent_at, jobs.closed_reason, jobs.is_private, jobs.salary_min_source, jobs.salary_max_source, jobs.salary_currency_source, jobs.salary_period_source, jobs.company_slug_folded, jobs.duplicate_of_aggregator, jobs.duplicate_of_role, jobs.duplicate_of_fuzzy, jobs.requires_clearance, jobs.requirements_derived, jobs.hydrated_at, jobs.ai_interview_reports, jobs.metros, jobs.semantic_embedded_input_hash, jobs.via_recruiter, jobs.clearance_levels, jobs.equity, jobs.perks, jobs.application_deadline, jobs.engagement,
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
     -- The deadline rides the search document without changing the global content-hash
@@ -7501,6 +7502,9 @@ type UpsertJobRow struct {
 // at insert and is the row's stable public identity. Re-ingest of the same
 // (source, external_id) must not rewrite it, so external links stay valid even
 // if the slug builder changes later (that would be a deliberate migration).
+// A substituted body was read before this statement took the row lock. If another write stored
+// a newer body in between, writing the facets of the older one over it would regress the row,
+// so the update is refused (no row returned) and the next crawl retries the posting.
 func (q *Queries) UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJobRow, error) {
 	row := q.db.QueryRow(ctx, upsertJob,
 		arg.Source,

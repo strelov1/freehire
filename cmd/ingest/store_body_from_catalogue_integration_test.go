@@ -67,3 +67,37 @@ func TestSave_BodyFromCatalogueLeavesHydratedAt(t *testing.T) {
 		t.Errorf("hydrated_at = %v, want stamped for a body the crawl read", after)
 	}
 }
+
+// The substituted body was read before the write's transaction. A newer body stored in between
+// must win: the write is refused and the newer body and its facets stay.
+func TestSave_BodyFromCatalogueRefusesToOverwriteANewerBody(t *testing.T) {
+	pool := testdb.Pool(t)
+	ctx := context.Background()
+	store := newDBStore(pool, 1, nil, nil, defaultSeenPolicy())
+	const id = "acme:body-from-catalogue-race"
+	if err := store.Save(ctx, cheapPosting(id, "Backend Engineer")); err != nil {
+		t.Fatalf("first Save: %v", err)
+	}
+	lookedUp := loadJob(t, pool, id).Description
+	const newer = "<p>We now build services in Python on PostgreSQL.</p>"
+	if _, err := pool.Exec(ctx, `UPDATE jobs SET description = $2 WHERE source = 'lever' AND external_id = $1`, id, newer); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := job.New(job.Draft{
+		Input: jobderive.Input{
+			Source: "lever", ExternalID: id, Title: "Senior Backend Engineer", Company: "Acme",
+			Location: "Berlin, Germany", Description: lookedUp,
+		},
+		URL:               "https://jobs.lever.co/acme/" + id,
+		BodyFromCatalogue: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(ctx, stale); err == nil {
+		t.Error("Save succeeded over a newer body, want it refused")
+	}
+	if got := loadJob(t, pool, id).Description; got != newer {
+		t.Errorf("description = %q, want the newer body kept", got)
+	}
+}

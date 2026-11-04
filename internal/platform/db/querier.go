@@ -8441,6 +8441,9 @@ type Querier interface {
 	// at insert and is the row's stable public identity. Re-ingest of the same
 	// (source, external_id) must not rewrite it, so external links stay valid even
 	// if the slug builder changes later (that would be a deliberate migration).
+	// A substituted body was read before this statement took the row lock. If another write stored
+	// a newer body in between, writing the facets of the older one over it would regress the row,
+	// so the update is refused (no row returned) and the next crawl retries the posting.
 	UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJobRow, error)
 	// Schedule a one-shot reminder for a saved job, or replace the pending one if the
 	// job is re-saved with a new choice. The arbiter is the partial unique index on

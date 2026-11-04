@@ -75,4 +75,8 @@ func TestSaveSkipsAnEmptyBodyWhenTheStoredOneCannotBeRead(t *testing.T) {
 	if len(store.saved) != 0 || stats.Total().Skipped != 1 {
 		t.Errorf("saved = %d, skipped = %d; want the posting skipped, nothing saved", len(store.saved), stats.Total().Skipped)
 	}
+	// Still listed, so its liveness is refreshed, or the sweep could close a live posting.
+	if got := store.refreshed["greenhouse"]; !slices.Equal(got, []string{"acme:1"}) {
+		t.Errorf("refreshed = %v, want the skipped posting's liveness refreshed", got)
+	}
 }

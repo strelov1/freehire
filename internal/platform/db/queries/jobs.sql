@@ -519,6 +519,10 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- body (job.Draft.BodyFromCatalogue): nothing was read, so the stamp stays.
     hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN jobs.hydrated_at ELSE now() END,
     updated_at   = now()
+-- A substituted body was read before this statement took the row lock. If another write stored
+-- a newer body in between, writing the facets of the older one over it would regress the row,
+-- so the update is refused (no row returned) and the next crawl retries the posting.
+WHERE NOT sqlc.arg(body_from_catalogue)::boolean OR jobs.description = EXCLUDED.description
 RETURNING sqlc.embed(jobs),
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
     -- The deadline rides the search document without changing the global content-hash
