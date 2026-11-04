@@ -60,7 +60,7 @@ env:
 
 jobs:
   collect:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Check the token is configured
         id: token

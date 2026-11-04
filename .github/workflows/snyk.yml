@@ -54,7 +54,7 @@ jobs:
   # Reads the secret in the one place an `if:` cannot: a step's `env`. Emits a plain
   # string, not the credential, so the scan job can branch on it through `needs`.
   credentials:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       configured: ${{ steps.probe.outputs.configured }}
     steps:
@@ -87,7 +87,7 @@ jobs:
   snyk:
     needs: credentials
     if: needs.credentials.outputs.configured == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

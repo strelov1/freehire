@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,7 +114,7 @@ jobs:
   # and the API description integrations are built against. A mistake in any of them is
   # discovered by whoever is on the receiving end.
   artifacts:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -164,7 +164,7 @@ jobs:
   # through. Its own job because it needs the whole history (the merge base) and the
   # jobs beside it are shallow on purpose.
   api-breaking:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -194,7 +194,7 @@ jobs:
   scrapling-fetch:
     # services/scrapling-fetch: the self-hosted fetch tier on host2. Its tests fake both
     # Scrapling fetchers, so they run on plain Python without a browser.
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: services/scrapling-fetch
@@ -216,7 +216,7 @@ jobs:
         run: python -m pytest -q
 
   docs:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -262,7 +262,7 @@ jobs:
   # consequence — that one needs both packages installed and the design system built, so on
   # a Dependabot PR it is minutes of CI away from a message that never names the cause.
   shared-deps:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -288,7 +288,7 @@ jobs:
   # verifies the checksum against the transparency log on its own, so the pin is the whole
   # supply-chain story — no second digest to keep in step with the version.
   workflows:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -332,7 +332,7 @@ jobs:
   # What it catches is cumulative rather than urgent: a file that stopped being imported,
   # a dependency nobody removed. That can wait for the pull request.
   dead-code:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -391,7 +391,7 @@ jobs:
   # runs in parallel with the integration suite instead of extending it, and because
   # "dead-code-go" names what failed without opening the log.
   dead-code-go:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -438,7 +438,7 @@ jobs:
   # answers to the same question, and the drift between them would look exactly like
   # stale generated code.
   sqlc:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -475,7 +475,7 @@ jobs:
   # `go run ./cmd/gen-contracts` needs no toolchain of its own — tygo is a library here,
   # not a binary — so unlike sqlc there is no version to pin in two places.
   contracts:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -513,7 +513,7 @@ jobs:
   #
   # Read .squawk.toml for why the invocation is split in two passes.
   migrations:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -545,7 +545,7 @@ jobs:
         run: pnpm check:sql
 
   design-system:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: design-system
@@ -629,7 +629,7 @@ jobs:
           fi
 
   web:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # Not gated on design-system: web consumes the package's *source* (its
     # "svelte" export is ./src/index.ts) plus the two committed dist/tokens-*.css,
     # so nothing here waits on that job's build.
