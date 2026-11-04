@@ -1,7 +1,15 @@
 <script lang="ts">
   import { Plus, Trash2 } from '@lucide/svelte';
   import { Button, Input } from '#lib/ui/index.js';
-  import type { Document } from '#lib/generated/contracts.js';
+  import {
+    type Document,
+    MaxCertifications,
+    MaxEducation,
+    MaxExperience,
+    MaxLanguages,
+    MaxProjects,
+    MaxSkillGroups,
+  } from '#lib/generated/contracts.js';
   import {
     blankExperience,
     blankEducation,
@@ -26,12 +34,28 @@
   }: { doc: Document; title: string } = $props();
   const uid = $props.id();
 
-  // Section row helpers: append a blank row / drop one by index. `doc` is reassigned (a bound
-  // prop), so the structural change flows back to the host's state.
+  type Section = 'experience' | 'education' | 'skills' | 'languages' | 'projects' | 'certifications';
+  const sectionMax: Record<Section, number> = {
+    experience: MaxExperience,
+    education: MaxEducation,
+    skills: MaxSkillGroups,
+    languages: MaxLanguages,
+    projects: MaxProjects,
+    certifications: MaxCertifications,
+  };
+
+  // Section row helpers: add a blank row at the TOP (next to the Add button, and where the newest
+  // role belongs on a CV) / drop one by index. `doc` is reassigned (a bound prop), so the
+  // structural change flows back to the host's state.
+  //
+  // A section at its ceiling refuses the Add instead: Sanitize keeps only the first max rows,
+  // and with new rows on top the one it would drop is the candidate's oldest real entry.
+  const full = (key: Section) => (doc[key]?.length ?? 0) >= sectionMax[key];
   const push =
-    <T,>(key: keyof Document, make: () => T) =>
+    <T,>(key: Section, make: () => T) =>
     () => {
-      doc = { ...doc, [key]: [...((doc[key] as T[] | undefined) ?? []), make()] };
+      if (full(key)) return;
+      doc = { ...doc, [key]: [make(), ...((doc[key] as T[] | undefined) ?? [])] };
     };
   const removeAt = (key: keyof Document, i: number) => {
     doc = { ...doc, [key]: ((doc[key] as unknown[] | undefined) ?? []).filter((_, idx) => idx !== i) };
@@ -77,7 +101,7 @@
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">Experience</h2>
-      <Button variant="outline" size="sm" onclick={push('experience', blankExperience)}>
+      <Button variant="outline" size="sm" onclick={push('experience', blankExperience)} disabled={full('experience')}>
         <Plus class="mr-1 h-4 w-4" /> Add role
       </Button>
     </div>
@@ -87,11 +111,21 @@
           <div class="grid flex-1 gap-3 sm:grid-cols-2 [&>*]:w-full">
             <Input bind:value={entry.role} data-path="experience[{i}].role" placeholder="Role" aria-label="Role {i + 1}: role" />
             <Input bind:value={entry.company} data-path="experience[{i}].company" placeholder="Company" aria-label="Role {i + 1}: company" />
-            <Input bind:value={entry.location} data-path="experience[{i}].location" placeholder="Location" aria-label="Role {i + 1}: location" />
-            <div class="grid grid-cols-2 gap-3 [&>*]:w-full">
+            <Input bind:value={entry.location} data-path="experience[{i}].location" placeholder="Location" aria-label="Role {i + 1}: location" class="sm:col-span-2" />
+            <!-- Dates get a full row: a native month control needs room for its digits and its
+                 calendar button, and squeezed into a quarter of the row neither was clickable. -->
+            <div class="grid grid-cols-2 gap-3 sm:col-span-2 [&>*]:w-full">
               <PeriodDateInput bind:value={entry.start} placeholder="Start" label="Role {i + 1}: start" />
-              <PeriodDateInput bind:value={entry.end} placeholder="End" label="Role {i + 1}: end" />
+              {#if entry.current}
+                <p class="flex h-9 items-center text-sm text-muted-foreground">Present</p>
+              {:else}
+                <PeriodDateInput bind:value={entry.end} placeholder="End" label="Role {i + 1}: end" />
+              {/if}
             </div>
+            <label class="flex items-center gap-2 text-sm sm:col-span-2">
+              <input type="checkbox" bind:checked={entry.current} class="h-4 w-4" />
+              <span class="text-muted-foreground">I currently work here</span>
+            </label>
           </div>
           <Button variant="ghost" size="icon" aria-label="Remove role" onclick={() => removeAt('experience', i)}>
             <Trash2 class="h-4 w-4" />
@@ -114,7 +148,7 @@
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">Education</h2>
-      <Button variant="outline" size="sm" onclick={push('education', blankEducation)}>
+      <Button variant="outline" size="sm" onclick={push('education', blankEducation)} disabled={full('education')}>
         <Plus class="mr-1 h-4 w-4" /> Add education
       </Button>
     </div>
@@ -123,8 +157,8 @@
         <div class="grid flex-1 gap-3 sm:grid-cols-2 [&>*]:w-full">
           <Input bind:value={entry.institution} data-path="education[{i}].institution" placeholder="Institution" aria-label="Education {i + 1}: institution" />
           <Input bind:value={entry.degree} data-path="education[{i}].degree" placeholder="Degree" aria-label="Education {i + 1}: degree" />
-          <Input bind:value={entry.field} data-path="education[{i}].field" placeholder="Field" aria-label="Education {i + 1}: field of study" />
-          <div class="grid grid-cols-2 gap-3 [&>*]:w-full">
+          <Input bind:value={entry.field} data-path="education[{i}].field" placeholder="Field" aria-label="Education {i + 1}: field of study" class="sm:col-span-2" />
+          <div class="grid grid-cols-2 gap-3 sm:col-span-2 [&>*]:w-full">
             <PeriodDateInput bind:value={entry.start} placeholder="Start" label="Education {i + 1}: start" />
             <PeriodDateInput bind:value={entry.end} placeholder="End" label="Education {i + 1}: end" />
           </div>
@@ -140,7 +174,7 @@
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">Skills</h2>
-      <Button variant="outline" size="sm" onclick={push('skills', blankSkillGroup)}>
+      <Button variant="outline" size="sm" onclick={push('skills', blankSkillGroup)} disabled={full('skills')}>
         <Plus class="mr-1 h-4 w-4" /> Add group
       </Button>
     </div>
@@ -161,7 +195,7 @@
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">Languages</h2>
-      <Button variant="outline" size="sm" onclick={push('languages', blankLanguage)}>
+      <Button variant="outline" size="sm" onclick={push('languages', blankLanguage)} disabled={full('languages')}>
         <Plus class="mr-1 h-4 w-4" /> Add language
       </Button>
     </div>
@@ -180,7 +214,7 @@
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">Projects</h2>
-      <Button variant="outline" size="sm" onclick={push('projects', blankProject)}>
+      <Button variant="outline" size="sm" onclick={push('projects', blankProject)} disabled={full('projects')}>
         <Plus class="mr-1 h-4 w-4" /> Add project
       </Button>
     </div>
@@ -202,7 +236,7 @@
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <h2 class="text-lg font-semibold">Certifications</h2>
-      <Button variant="outline" size="sm" onclick={push('certifications', blankCertification)}>
+      <Button variant="outline" size="sm" onclick={push('certifications', blankCertification)} disabled={full('certifications')}>
         <Plus class="mr-1 h-4 w-4" /> Add certification
       </Button>
     </div>

@@ -1194,6 +1194,42 @@ seeding from the extracted résumé, and PDF rendering behind a Renderer interfa
 */
 
 /**
+ * The section ceilings Sanitize truncates to, exported (and generated into the web
+ * contracts) so the editor can refuse an Add past them instead of letting Sanitize drop
+ * a row silently.
+ */
+export const MaxExperience = 30;
+/**
+ * Field bounds for untrusted CV content. The Document is user-editable and — in the
+ * follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
+ * and the prompt-injection guard (same invariant as enrich/resumeextract).
+ */
+export const MaxEducation = 20;
+/**
+ * Field bounds for untrusted CV content. The Document is user-editable and — in the
+ * follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
+ * and the prompt-injection guard (same invariant as enrich/resumeextract).
+ */
+export const MaxSkillGroups = 20;
+/**
+ * Field bounds for untrusted CV content. The Document is user-editable and — in the
+ * follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
+ * and the prompt-injection guard (same invariant as enrich/resumeextract).
+ */
+export const MaxLanguages = 20;
+/**
+ * Field bounds for untrusted CV content. The Document is user-editable and — in the
+ * follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
+ * and the prompt-injection guard (same invariant as enrich/resumeextract).
+ */
+export const MaxProjects = 30;
+/**
+ * Field bounds for untrusted CV content. The Document is user-editable and — in the
+ * follow-up tailoring phase — fed to an LLM, so Sanitize is both the persistence guard
+ * and the prompt-injection guard (same invariant as enrich/resumeextract).
+ */
+export const MaxCertifications = 30;
+/**
  * DefaultMaxBullets is the per-experience / per-project bullet ceiling when
  * CV_MAX_BULLETS is unset. Writers must refuse growth past MaxBullets rather
  * than let Sanitize drop trailing content silently.

@@ -27,13 +27,16 @@ const (
 	maxBulletRunes   = 600
 	maxShortRunes    = 200 // role, company, degree, field, dates, language name/level, links, names
 
-	maxExperience     = 30
-	maxEducation      = 20
-	maxSkillGroups    = 20
+	// The section ceilings Sanitize truncates to, exported (and generated into the web
+	// contracts) so the editor can refuse an Add past them instead of letting Sanitize drop
+	// a row silently.
+	MaxExperience     = 30
+	MaxEducation      = 20
+	MaxSkillGroups    = 20
 	maxSkillItems     = 60
-	maxLanguages      = 20
-	maxProjects       = 30
-	maxCertifications = 30
+	MaxLanguages      = 20
+	MaxProjects       = 30
+	MaxCertifications = 30
 	maxLinks          = 20
 
 	// DefaultMaxBullets is the per-experience / per-project bullet ceiling when
@@ -284,12 +287,12 @@ func (d *Document) Sanitize() {
 
 	d.Summary = clip(d.Summary, maxSummaryRunes)
 
-	d.Experience = limit(mapEntries(d.Experience, sanitizeExperience), maxExperience)
-	d.Education = limit(mapEntries(d.Education, sanitizeEducation), maxEducation)
-	d.Skills = limit(mapEntries(d.Skills, sanitizeSkillGroup), maxSkillGroups)
-	d.Languages = limit(mapEntries(d.Languages, sanitizeLanguage), maxLanguages)
-	d.Projects = limit(mapEntries(d.Projects, sanitizeProject), maxProjects)
-	d.Certifications = limit(mapEntries(d.Certifications, sanitizeCertification), maxCertifications)
+	d.Experience = limit(mapEntries(d.Experience, sanitizeExperience), MaxExperience)
+	d.Education = limit(mapEntries(d.Education, sanitizeEducation), MaxEducation)
+	d.Skills = limit(mapEntries(d.Skills, sanitizeSkillGroup), MaxSkillGroups)
+	d.Languages = limit(mapEntries(d.Languages, sanitizeLanguage), MaxLanguages)
+	d.Projects = limit(mapEntries(d.Projects, sanitizeProject), MaxProjects)
+	d.Certifications = limit(mapEntries(d.Certifications, sanitizeCertification), MaxCertifications)
 }
 
 func sanitizeExperience(e ExperienceItem) (ExperienceItem, bool) {
