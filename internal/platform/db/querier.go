@@ -7859,6 +7859,9 @@ type Querier interface {
 	// refresh token's 365-day life is measured from the sign-in and is not extended by a renewal,
 	// so a stale obtained_at would make the warning arrive after the deadline it is warning about.
 	StoreSocialToken(ctx context.Context, arg StoreSocialTokenParams) error
+	// The body a stored posting keeps. Ingest reads it for a posting whose detail fetch came back
+	// empty, so the facets it derives are those of the body UpsertJob preserves, not of nothing.
+	StoredJobDescription(ctx context.Context, arg StoredJobDescriptionParams) (string, error)
 	// Record one message as belonging to a job the caller named, as a SUGGESTION they still
 	// confirm. It is the only write the recall path makes.
 	//
@@ -8438,6 +8441,9 @@ type Querier interface {
 	// at insert and is the row's stable public identity. Re-ingest of the same
 	// (source, external_id) must not rewrite it, so external links stay valid even
 	// if the slug builder changes later (that would be a deliberate migration).
+	// A substituted body was read before this statement took the row lock. If another write stored
+	// a newer body in between, writing the facets of the older one over it would regress the row,
+	// so the update is refused (no row returned) and the next crawl retries the posting.
 	UpsertJob(ctx context.Context, arg UpsertJobParams) (UpsertJobRow, error)
 	// Schedule a one-shot reminder for a saved job, or replace the pending one if the
 	// job is re-saved with a new choice. The arbiter is the partial unique index on

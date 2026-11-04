@@ -63,6 +63,12 @@ type Draft struct {
 	// still constructed once and never mutated — a setter would let any caller re-key a
 	// company, which is a decision the merge worker owns.
 	CanonicalCompanySlug string
+
+	// BodyFromCatalogue marks a Description the pipeline took from the stored row because the
+	// crawl brought none (a failed detail fetch). The facets are derived from it so they match
+	// the body the write keeps, but it was not READ, so the write must not stamp hydrated_at —
+	// that would drop a stale body out of BODY_REFRESH_DAYS' re-read set without re-reading it.
+	BodyFromCatalogue bool
 }
 
 // Fields is the readable projection of a Job: a plain DTO exposing every field for
@@ -81,6 +87,8 @@ type Fields struct {
 	Description         string
 	PostedAt            *time.Time
 	ApplicationDeadline *time.Time
+	// BodyFromCatalogue: see Draft.BodyFromCatalogue.
+	BodyFromCatalogue bool
 
 	// deterministic dictionary facets
 	Countries []string
@@ -206,6 +214,7 @@ func New(d Draft) (Job, error) {
 		Location:            in.Location,
 		Remote:              d.Remote,
 		Description:         d.Description,
+		BodyFromCatalogue:   d.BodyFromCatalogue,
 		PostedAt:            d.PostedAt,
 		ApplicationDeadline: d.ApplicationDeadline,
 
@@ -272,6 +281,7 @@ func (f Fields) UpsertParams() db.UpsertJobParams {
 		Location:            f.Location,
 		Remote:              f.Remote,
 		Description:         f.Description,
+		BodyFromCatalogue:   f.BodyFromCatalogue,
 		PostedAt:            pgconv.Timestamptz(f.PostedAt),
 		ApplicationDeadline: pgconv.Date(f.ApplicationDeadline),
 		Countries:           f.Countries,

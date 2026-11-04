@@ -728,7 +728,7 @@ func TestRunNormalizesAndNamespaces(t *testing.T) {
 func TestNormalizeJobParsesGeographyFromLocation(t *testing.T) {
 	e := sources.CompanyEntry{Company: "Acme", Provider: "greenhouse", Board: "acme"}
 
-	geoJob, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote - Germany"}, nil)
+	geoJob, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote - Germany"}, nil, false)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
 	}
@@ -740,7 +740,7 @@ func TestNormalizeJobParsesGeographyFromLocation(t *testing.T) {
 	// A bare "Remote" resolves no country and no region: it states nothing about where
 	// it is open to, so it stays in the "region not specified" bucket, not global (its
 	// remoteness stays on WorkMode; see location.Parse).
-	bareJob, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"}, nil)
+	bareJob, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"}, nil, false)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
 	}
@@ -755,7 +755,7 @@ func TestNormalizeJobPrefersAdapterWorkModeOverParser(t *testing.T) {
 
 	// The adapter states hybrid structurally; the location text would parse as
 	// remote. The structured signal wins.
-	structured, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote", WorkMode: "hybrid"}, nil)
+	structured, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Dev", Company: "Acme", Location: "Remote", WorkMode: "hybrid"}, nil, false)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
 	}
@@ -764,7 +764,7 @@ func TestNormalizeJobPrefersAdapterWorkModeOverParser(t *testing.T) {
 	}
 
 	// No structured signal: the parser fills from the location text.
-	parsed, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"}, nil)
+	parsed, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Dev", Company: "Acme", Location: "Remote"}, nil, false)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
 	}
@@ -780,7 +780,7 @@ func TestNormalizeJobPrefersAdapterWorkModeOverParser(t *testing.T) {
 func TestNormalizeJobPassesIsTechHint(t *testing.T) {
 	e := sources.CompanyEntry{Company: "Acme", Provider: "profession", Board: "itdev"}
 
-	hinted, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Yard Coordinator", Company: "Acme", IsTechHint: true}, nil)
+	hinted, err := normalizeJob(e, sources.Job{ExternalID: "1", Title: "Yard Coordinator", Company: "Acme", IsTechHint: true}, nil, false)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
 	}
@@ -788,7 +788,7 @@ func TestNormalizeJobPassesIsTechHint(t *testing.T) {
 		t.Errorf("IsTech = %v, want true (adapter's structured IsTechHint wins)", got)
 	}
 
-	unhinted, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Yard Coordinator", Company: "Acme"}, nil)
+	unhinted, err := normalizeJob(e, sources.Job{ExternalID: "2", Title: "Yard Coordinator", Company: "Acme"}, nil, false)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
 	}
@@ -916,7 +916,7 @@ func TestNormalizeJobDerivesSkills(t *testing.T) {
 			Title: "Backend Engineer", Company: "Acme", ExternalID: "1",
 			Description: "<p>Build services in Golang with PostgreSQL and Kubernetes.</p>",
 		},
-		nil,
+		nil, false,
 	)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)
@@ -931,7 +931,7 @@ func TestNormalizeJobDerivesClassification(t *testing.T) {
 	dj, err := normalizeJob(
 		sources.CompanyEntry{Provider: "greenhouse", Board: "acme", Company: "Acme"},
 		sources.Job{ExternalID: "1", Title: "Senior Backend Engineer", Description: "x"},
-		nil,
+		nil, false,
 	)
 	if err != nil {
 		t.Fatalf("normalizeJob: %v", err)

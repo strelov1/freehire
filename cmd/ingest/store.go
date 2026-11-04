@@ -146,6 +146,7 @@ func persist(ctx context.Context, qtx *db.Queries, p db.UpsertJobParams) (writte
 		IsTech:               p.IsTech,
 		Engagement:           p.Engagement,
 		ApplicationDeadline:  p.ApplicationDeadline,
+		BodyFromCatalogue:    p.BodyFromCatalogue,
 	})
 	if err == nil {
 		return cheapWrite(cheap), nil
@@ -545,6 +546,18 @@ func (s *dbStore) reopenAndRederive(ctx context.Context, source, externalID stri
 		}
 	}
 	return touched.CompanySlug, tx.Commit(ctx)
+}
+
+var _ pipeline.StoredBodyLookup = (*dbStore)(nil)
+
+// StoredDescription returns the body stored for a posting, "" when there is no row. Implements
+// pipeline.StoredBodyLookup.
+func (s *dbStore) StoredDescription(ctx context.Context, source, externalID string) (string, error) {
+	body, err := s.q.StoredJobDescription(ctx, db.StoredJobDescriptionParams{Source: source, ExternalID: externalID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return body, err
 }
 
 // RecordCompanyWebsite stores a posting's stated employer website on its company row

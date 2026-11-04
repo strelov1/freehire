@@ -106,6 +106,16 @@ type SeenLookup interface {
 	ExistingExternalIDs(ctx context.Context, source, board string) (map[string]bool, error)
 }
 
+// StoredBodyLookup is the optional Store capability behind an empty posting body: the body the
+// catalogue already holds for that identity ("" when none). A detail fetch that fails yields
+// an empty description, and UpsertJob keeps the stored one — so deriving the facets, the
+// content hash and the role fingerprint from the empty text would write a row whose facets
+// describe no body at all (measured on paylocity 2026-11-04: 36 of 42 reopened rows had lost
+// their skills, posting language or employment type that way).
+type StoredBodyLookup interface {
+	StoredDescription(ctx context.Context, source, externalID string) (string, error)
+}
+
 // CompanyWebsiteRecorder is the optional Store capability behind sources.Job.CompanyWebsite:
 // record the employer's own website on its company row when none is known yet. It is a
 // capability for the same reason CompanyDescriptionFiller is: only the ingest dbStore has a
@@ -935,7 +945,27 @@ func (r Runner) ingestOne(ctx context.Context, e sources.CompanyEntry, j sources
 // SeenRefresh and Removed branches stay on the caller, which is why neither reaches the
 // filter's candidate denominator.
 func (r Runner) saveOne(ctx context.Context, e sources.CompanyEntry, j sources.Job, covered aggregatorCoverage, canon companyCanonical, t *boardTally) {
-	dj, err := normalizeJob(e, j, canon)
+	fromCatalogue := false
+	if j.Description == "" {
+		if l, ok := r.Store.(StoredBodyLookup); ok {
+			source, externalID := jobIdentity(e, j)
+			body, err := l.StoredDescription(ctx, source, externalID)
+			if err != nil {
+				// Saving anyway would derive from no body over a stored one; the next crawl
+				// retries. The posting was listed, so its liveness is refreshed through the
+				// covered-refresh path — otherwise the post-run sweep could close a live row.
+				t.st.Skipped++
+				if t.firstErr == nil {
+					t.firstErr = err
+				}
+				t.refreshIDs = append(t.refreshIDs, externalID)
+				return
+			}
+			j.Description = body
+			fromCatalogue = body != ""
+		}
+	}
+	dj, err := normalizeJob(e, j, canon, fromCatalogue)
 	if err != nil {
 		t.st.Skipped++
 		if t.firstErr == nil {
@@ -1571,13 +1601,14 @@ func jobIdentity(e sources.CompanyEntry, j sources.Job) (source, externalID stri
 // dictionary facets internally — so ingest, the moderator write path, and Telegram
 // extraction all produce identical facets from the one door. It returns
 // job.ErrInvalidDraft for a posting with no title/identity, which the caller skips.
-func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical) (job.Job, error) {
+func normalizeJob(e sources.CompanyEntry, j sources.Job, canon companyCanonical, bodyFromCatalogue bool) (job.Job, error) {
 	source, externalID := jobIdentity(e, j)
 	return job.New(job.Draft{
 		// Empty unless the registry re-keys this employer, and empty is what Draft reads as
 		// "keep what jobderive derived". Resolving here, at construction, is what makes the
 		// slug saveOne gates on the same value it stores.
 		CanonicalCompanySlug: canonicalCompanySlug(canon, j.Company),
+		BodyFromCatalogue:    bodyFromCatalogue,
 		Input: jobderive.Input{
 			Source:             source,
 			ExternalID:         externalID,

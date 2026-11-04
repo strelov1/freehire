@@ -182,6 +182,11 @@ SELECT public_slug, is_private, duplicate_of, closed_at, last_seen_at
 FROM jobs
 WHERE public_slug = ANY(sqlc.arg('slugs')::text[]);
 
+-- name: StoredJobDescription :one
+-- The body a stored posting keeps. Ingest reads it for a posting whose detail fetch came back
+-- empty, so the facets it derives are those of the body UpsertJob preserves, not of nothing.
+SELECT description FROM jobs WHERE source = sqlc.arg(source) AND external_id = sqlc.arg(external_id);
+
 -- name: GetJobBySourceExternalID :one
 -- Load a job by its dedup identity (source, external_id) — the key the Job
 -- aggregate's repository loads by, mirroring the CloseJobBySourceExternalID key.
@@ -510,9 +515,14 @@ ON CONFLICT (source, external_id) DO UPDATE SET
     -- The write carried a body, so the row's stored text is as fresh as this crawl. See the
     -- column's migration (0144) for why this is not updated_at, and RefreshUnchangedJob for
     -- the other half: a body that came back byte-identical takes that statement, and stamps
-    -- it there.
-    hydrated_at  = now(),
+    -- it there. body_from_catalogue is true when the pipeline filled an empty fetch with the stored
+    -- body (job.Draft.BodyFromCatalogue): nothing was read, so the stamp stays.
+    hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN jobs.hydrated_at ELSE now() END,
     updated_at   = now()
+-- A substituted body was read before this statement took the row lock. If another write stored
+-- a newer body in between, writing the facets of the older one over it would regress the row,
+-- so the update is refused (no row returned) and the next crawl retries the posting.
+WHERE NOT sqlc.arg(body_from_catalogue)::boolean OR jobs.description = EXCLUDED.description
 RETURNING sqlc.embed(jobs),
     NOT COALESCE((SELECT existed FROM existing), false) AS inserted,
     -- The deadline rides the search document without changing the global content-hash
@@ -626,7 +636,9 @@ WHERE source = sqlc.arg(source) AND company = '' AND external_id LIKE sqlc.arg(b
 -- Like last_seen_at it is in no index, so the update stays heap-only.
 UPDATE jobs
 SET last_seen_at = now(),
-    hydrated_at  = now()
+    -- Not when the "identical" body is the stored one the pipeline substituted for a failed
+    -- fetch (job.Draft.BodyFromCatalogue): that body was not read.
+    hydrated_at  = CASE WHEN sqlc.arg(body_from_catalogue)::boolean THEN hydrated_at ELSE now() END
 WHERE source = sqlc.arg(source)
   AND external_id = sqlc.arg(external_id)
   AND content_hash = sqlc.arg(content_hash)
