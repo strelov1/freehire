@@ -26,12 +26,13 @@
   }: { doc: Document; title: string } = $props();
   const uid = $props.id();
 
-  // Section row helpers: append a blank row / drop one by index. `doc` is reassigned (a bound
-  // prop), so the structural change flows back to the host's state.
+  // Section row helpers: add a blank row at the TOP (next to the Add button, and where the newest
+  // role belongs on a CV) / drop one by index. `doc` is reassigned (a bound prop), so the
+  // structural change flows back to the host's state.
   const push =
     <T,>(key: keyof Document, make: () => T) =>
     () => {
-      doc = { ...doc, [key]: [...((doc[key] as T[] | undefined) ?? []), make()] };
+      doc = { ...doc, [key]: [make(), ...((doc[key] as T[] | undefined) ?? [])] };
     };
   const removeAt = (key: keyof Document, i: number) => {
     doc = { ...doc, [key]: ((doc[key] as unknown[] | undefined) ?? []).filter((_, idx) => idx !== i) };
@@ -87,11 +88,21 @@
           <div class="grid flex-1 gap-3 sm:grid-cols-2 [&>*]:w-full">
             <Input bind:value={entry.role} data-path="experience[{i}].role" placeholder="Role" aria-label="Role {i + 1}: role" />
             <Input bind:value={entry.company} data-path="experience[{i}].company" placeholder="Company" aria-label="Role {i + 1}: company" />
-            <Input bind:value={entry.location} data-path="experience[{i}].location" placeholder="Location" aria-label="Role {i + 1}: location" />
-            <div class="grid grid-cols-2 gap-3 [&>*]:w-full">
+            <Input bind:value={entry.location} data-path="experience[{i}].location" placeholder="Location" aria-label="Role {i + 1}: location" class="sm:col-span-2" />
+            <!-- Dates get a full row: a native month control needs room for its digits and its
+                 calendar button, and squeezed into a quarter of the row neither was clickable. -->
+            <div class="grid grid-cols-2 gap-3 sm:col-span-2 [&>*]:w-full">
               <PeriodDateInput bind:value={entry.start} placeholder="Start" label="Role {i + 1}: start" />
-              <PeriodDateInput bind:value={entry.end} placeholder="End" label="Role {i + 1}: end" />
+              {#if entry.current}
+                <p class="flex h-9 items-center text-sm text-muted-foreground">Present</p>
+              {:else}
+                <PeriodDateInput bind:value={entry.end} placeholder="End" label="Role {i + 1}: end" />
+              {/if}
             </div>
+            <label class="flex items-center gap-2 text-sm sm:col-span-2">
+              <input type="checkbox" bind:checked={entry.current} class="h-4 w-4" />
+              <span class="text-muted-foreground">I currently work here</span>
+            </label>
           </div>
           <Button variant="ghost" size="icon" aria-label="Remove role" onclick={() => removeAt('experience', i)}>
             <Trash2 class="h-4 w-4" />
@@ -123,8 +134,8 @@
         <div class="grid flex-1 gap-3 sm:grid-cols-2 [&>*]:w-full">
           <Input bind:value={entry.institution} data-path="education[{i}].institution" placeholder="Institution" aria-label="Education {i + 1}: institution" />
           <Input bind:value={entry.degree} data-path="education[{i}].degree" placeholder="Degree" aria-label="Education {i + 1}: degree" />
-          <Input bind:value={entry.field} data-path="education[{i}].field" placeholder="Field" aria-label="Education {i + 1}: field of study" />
-          <div class="grid grid-cols-2 gap-3 [&>*]:w-full">
+          <Input bind:value={entry.field} data-path="education[{i}].field" placeholder="Field" aria-label="Education {i + 1}: field of study" class="sm:col-span-2" />
+          <div class="grid grid-cols-2 gap-3 sm:col-span-2 [&>*]:w-full">
             <PeriodDateInput bind:value={entry.start} placeholder="Start" label="Education {i + 1}: start" />
             <PeriodDateInput bind:value={entry.end} placeholder="End" label="Education {i + 1}: end" />
           </div>
