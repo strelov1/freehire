@@ -7503,7 +7503,12 @@ type Querier interface {
 	// nothing else would carry the new value to the index short of a full rebuild.
 	//
 	// The IS DISTINCT FROM guard makes the pass idempotent: a row already carrying the
-	// derived terms is neither rewritten nor queued, so a re-run writes nothing.
+	// derived terms is neither rewritten nor queued, so a re-run writes nothing — which is
+	// also why the write must not lose its queue entry. updated_at moves, so cmd/reindex's
+	// post-swap purge keeps an entry for a row it read before this write; and an entry already
+	// pending is RE-STAMPED (a new id and created_at, its lease kept) rather than left alone,
+	// the UpsertApplyForm rule: a drain that already claimed the old id finishes only that old
+	// generation, and the new one stays pending.
 	SetJobEngagement(ctx context.Context, arg SetJobEngagementParams) (SetJobEngagementRow, error)
 	// Targeted enrichment write used by the enrichment command: set only the payload
 	// and the provenance stamp, touching no raw source field. Kept separate from

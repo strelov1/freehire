@@ -3532,10 +3532,16 @@ WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 -- nothing else would carry the new value to the index short of a full rebuild.
 --
 -- The IS DISTINCT FROM guard makes the pass idempotent: a row already carrying the
--- derived terms is neither rewritten nor queued, so a re-run writes nothing.
+-- derived terms is neither rewritten nor queued, so a re-run writes nothing — which is
+-- also why the write must not lose its queue entry. updated_at moves, so cmd/reindex's
+-- post-swap purge keeps an entry for a row it read before this write; and an entry already
+-- pending is RE-STAMPED (a new id and created_at, its lease kept) rather than left alone,
+-- the UpsertApplyForm rule: a drain that already claimed the old id finishes only that old
+-- generation, and the new one stays pending.
 WITH updated AS (
     UPDATE jobs j
-    SET engagement = COALESCE(sqlc.arg(engagement)::text[], '{}')
+    SET engagement = COALESCE(sqlc.arg(engagement)::text[], '{}'),
+        updated_at = now()
     WHERE j.id = sqlc.arg(job_id)
       AND j.engagement IS DISTINCT FROM COALESCE(sqlc.arg(engagement)::text[], '{}')
     RETURNING j.id, j.closed_at, COALESCE(j.posted_at, j.created_at) AS eff_posted_at
@@ -3543,7 +3549,7 @@ WITH updated AS (
 enqueued AS (
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT u.id, u.eff_posted_at FROM updated u WHERE u.closed_at IS NULL
-    ON CONFLICT (job_id) DO NOTHING
+    ON CONFLICT (job_id) DO UPDATE SET id = DEFAULT, created_at = now()
     RETURNING job_id
 )
 SELECT (SELECT count(*) FROM updated)::bigint AS updated_count,
