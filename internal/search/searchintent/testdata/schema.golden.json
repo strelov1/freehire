@@ -1,0 +1,427 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "ai_archetype": {
+      "items": {
+        "enum": [
+          "rag_app_builder",
+          "agent_builder",
+          "cloud_ml_platform_engineer",
+          "ml_trainer_researcher",
+          "fullstack_ai_engineer",
+          "devops_infra_engineer"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "category": {
+      "items": {
+        "enum": [
+          "software_engineering",
+          "backend",
+          "frontend",
+          "fullstack",
+          "mobile",
+          "devops",
+          "sre",
+          "network_engineering",
+          "it_support",
+          "data_engineering",
+          "data_science",
+          "data_analytics",
+          "ml_ai",
+          "ai_engineering",
+          "qa",
+          "security",
+          "hardware",
+          "embedded",
+          "blockchain",
+          "architecture",
+          "design",
+          "creative",
+          "engineering_design",
+          "industrial_engineering",
+          "occupational_safety",
+          "product",
+          "project_management",
+          "healthcare",
+          "skilled_trades",
+          "retail",
+          "hospitality",
+          "logistics",
+          "education",
+          "personal_services",
+          "administration",
+          "social_services",
+          "science",
+          "manufacturing",
+          "public_safety",
+          "marketing",
+          "sales",
+          "support",
+          "business_analysis",
+          "solutions_engineering",
+          "developer_relations",
+          "technical_writing",
+          "recruiting",
+          "hr",
+          "finance",
+          "legal",
+          "operations",
+          "customer_success",
+          "other"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "cities": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "collections": {
+      "items": {
+        "enum": [
+          "yc",
+          "techstars",
+          "a16z-portfolio",
+          "a16z-speedrun",
+          "sequoia",
+          "accel",
+          "greylock",
+          "usv",
+          "bond",
+          "lightspeed",
+          "index-ventures",
+          "softbank-vision-fund",
+          "founders-fund",
+          "european",
+          "ai",
+          "mag7",
+          "bigtech",
+          "unicorn",
+          "fortune500",
+          "eastern-roots",
+          "indian-roots",
+          "ai-native",
+          "uk-skilled-worker-sponsor",
+          "nl-recognised-sponsor",
+          "us-h1b-sponsor",
+          "ca-lmia-employer",
+          "ie-permit-employer",
+          "dk-fast-track-company"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "company_size": {
+      "items": {
+        "enum": [
+          "1-10",
+          "11-50",
+          "51-200",
+          "201-500",
+          "501-1000",
+          "1000+"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "company_type": {
+      "items": {
+        "enum": [
+          "product",
+          "startup",
+          "outsource",
+          "outstaff",
+          "agency",
+          "inhouse",
+          "government"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "countries": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "domains": {
+      "items": {
+        "enum": [
+          "fintech",
+          "crypto",
+          "ecommerce",
+          "gambling",
+          "gamedev",
+          "media",
+          "travel",
+          "healthcare",
+          "edtech",
+          "govtech",
+          "devtools",
+          "cybersecurity",
+          "ai",
+          "hrtech",
+          "adtech",
+          "proptech",
+          "logistics",
+          "mobility",
+          "climatetech",
+          "other"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "education_level": {
+      "items": {
+        "enum": [
+          "none",
+          "bachelor",
+          "master",
+          "phd"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "employment_type": {
+      "items": {
+        "enum": [
+          "full_time",
+          "part_time",
+          "contract",
+          "internship",
+          "fellowship"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "english_level": {
+      "items": {
+        "enum": [
+          "none",
+          "a1",
+          "a2",
+          "b1",
+          "b2",
+          "c1",
+          "c2",
+          "native"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "exclude": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cities": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "company_type": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "countries": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "domains": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "regions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "role_type": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "category",
+        "cities",
+        "company_type",
+        "countries",
+        "domains",
+        "regions",
+        "role_type",
+        "skills"
+      ],
+      "type": "object"
+    },
+    "experience_years_max": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "string"
+    },
+    "posted_within_days": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "string"
+    },
+    "query": {
+      "type": "string"
+    },
+    "regions": {
+      "items": {
+        "enum": [
+          "global",
+          "north_america",
+          "latam",
+          "eu",
+          "uk",
+          "mena",
+          "africa",
+          "apac",
+          "cis"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "relocation": {
+      "items": {
+        "enum": [
+          "not_supported",
+          "supported",
+          "required"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "role_type": {
+      "items": {
+        "enum": [
+          "people_manager"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "salary_min": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "string"
+    },
+    "salary_period": {
+      "items": {
+        "enum": [
+          "year",
+          "month",
+          "day",
+          "hour"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "seniority": {
+      "items": {
+        "enum": [
+          "intern",
+          "junior",
+          "middle",
+          "senior",
+          "lead",
+          "staff",
+          "principal",
+          "c_level"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "skills": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "visa_sponsorship": {
+      "type": "boolean"
+    },
+    "work_mode": {
+      "items": {
+        "enum": [
+          "remote",
+          "hybrid",
+          "onsite"
+        ],
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "ai_archetype",
+    "category",
+    "cities",
+    "collections",
+    "company_size",
+    "company_type",
+    "countries",
+    "domains",
+    "education_level",
+    "employment_type",
+    "english_level",
+    "exclude",
+    "experience_years_max",
+    "posted_within_days",
+    "query",
+    "regions",
+    "relocation",
+    "role_type",
+    "salary_min",
+    "salary_period",
+    "seniority",
+    "skills",
+    "summary",
+    "visa_sponsorship",
+    "work_mode"
+  ],
+  "type": "object"
+}

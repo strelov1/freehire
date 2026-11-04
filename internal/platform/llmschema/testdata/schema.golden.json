@@ -1,0 +1,80 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "address": {
+      "additionalProperties": false,
+      "properties": {
+        "city": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "city"
+      ],
+      "type": "object"
+    },
+    "jobs": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "level": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "title"
+        ],
+        "type": "object"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "nickname": {
+      "enum": [
+        "a",
+        "b",
+        null
+      ],
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tags": {
+      "items": {
+        "enum": [
+          "x"
+        ],
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "years": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "address",
+    "jobs",
+    "name",
+    "nickname",
+    "tags",
+    "years"
+  ],
+  "type": "object"
+}

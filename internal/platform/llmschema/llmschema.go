@@ -18,7 +18,7 @@ import (
 	"reflect"
 	"slices"
 
-	"github.com/invopop/jsonschema"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 // Schema is a JSON Schema document, shaped for transport as the `schema` member of a
@@ -41,15 +41,14 @@ func Of[T any](overrides ...Override) (Schema, error) {
 		return nil, fmt.Errorf("llmschema: contract type must be a struct, got %s", k)
 	}
 
-	reflector := jsonschema.Reflector{
-		// A flat document keeps the strict pass local: with $defs and $ref the same
-		// nested type could be reached through several paths, and a shared definition
-		// would have to be strict for all of them at once.
-		DoNotReference: true,
-		ExpandedStruct: true,
+	// For inlines nested types (no $defs/$ref), which keeps the strict pass local:
+	// a shared definition would have to be strict for all paths reaching it at once.
+	reflected, err := jsonschema.For[T](nil)
+	if err != nil {
+		return nil, fmt.Errorf("llmschema: reflect schema: %w", err)
 	}
 
-	raw, err := json.Marshal(reflector.Reflect(zero))
+	raw, err := json.Marshal(reflected)
 	if err != nil {
 		return nil, fmt.Errorf("llmschema: marshal reflected schema: %w", err)
 	}
@@ -59,9 +58,9 @@ func Of[T any](overrides ...Override) (Schema, error) {
 		return nil, fmt.Errorf("llmschema: decode reflected schema: %w", err)
 	}
 
-	// Metadata the reflector adds about itself; a response format carries the schema alone.
-	delete(schema, "$schema")
-	delete(schema, "$id")
+	// The reflector marks every slice and pointer nullable; invopop-style output left
+	// that to the strict pass, which re-adds null only for optional fields.
+	dropNull(schema)
 
 	if err := strict(schema); err != nil {
 		return nil, err
@@ -210,6 +209,29 @@ func strict(node map[string]any) error {
 	node["additionalProperties"] = false
 
 	return nil
+}
+
+// dropNull removes "null" from every type list in the tree, collapsing a one-element
+// list back to a plain string.
+func dropNull(node map[string]any) {
+	if types, ok := node["type"].([]any); ok {
+		kept := slices.DeleteFunc(slices.Clone(types), func(t any) bool { return t == "null" })
+		if len(kept) == 1 {
+			node["type"] = kept[0]
+		} else if len(kept) > 1 {
+			node["type"] = kept
+		}
+	}
+	if props, ok := node["properties"].(map[string]any); ok {
+		for _, child := range props {
+			if prop, ok := child.(map[string]any); ok {
+				dropNull(prop)
+			}
+		}
+	}
+	if items, ok := node["items"].(map[string]any); ok {
+		dropNull(items)
+	}
 }
 
 // rejectOpenObject fails on an object node the strict pass cannot close: one whose

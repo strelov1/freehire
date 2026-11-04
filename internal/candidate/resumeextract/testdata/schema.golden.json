@@ -1,0 +1,266 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "certifications": {
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "education": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "degree": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "institution": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "year": {
+            "additionalProperties": false,
+            "properties": {
+              "month": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "year": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "month",
+              "year"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "degree",
+          "institution",
+          "year"
+        ],
+        "type": "object"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "experience": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "company": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "current": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "end": {
+            "additionalProperties": false,
+            "properties": {
+              "month": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "year": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "month",
+              "year"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "highlights": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stack": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "start": {
+            "additionalProperties": false,
+            "properties": {
+              "month": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "year": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "month",
+              "year"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "company",
+          "current",
+          "end",
+          "highlights",
+          "location",
+          "stack",
+          "start",
+          "summary",
+          "title"
+        ],
+        "type": "object"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "headline": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "languages": {
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "projects": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "highlights": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "link": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "highlights",
+          "link",
+          "name"
+        ],
+        "type": "object"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "skills": {
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "summary": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "total_years": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "certifications",
+    "education",
+    "experience",
+    "headline",
+    "languages",
+    "projects",
+    "skills",
+    "summary",
+    "total_years"
+  ],
+  "type": "object"
+}
