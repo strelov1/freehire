@@ -46,3 +46,38 @@ func histogramCount(t *testing.T, surface, tool string) uint64 {
 	}
 	return m.GetHistogram().GetSampleCount()
 }
+
+// A call the SDK refuses before any handler runs — arguments failing the schema, a tool that
+// does not exist — is counted once as rejected, and a caller-chosen name never becomes a label.
+func TestRejectedToolCallIsCounted(t *testing.T) {
+	invalid := mcpToolCalls.WithLabelValues("public", toolSearchJobs, "rejected", "invalid_request")
+	unknown := mcpToolCalls.WithLabelValues("public", "unknown", "rejected", "invalid_request")
+	ran := mcpToolCalls.WithLabelValues("public", toolSearchJobs, "success", "")
+	beforeInvalid, beforeUnknown, beforeRan := testutil.ToFloat64(invalid), testutil.ToFloat64(unknown), testutil.ToFloat64(ran)
+
+	session := connect(t, readerThatFinds(t))
+	_, _ = session.CallTool(context.Background(), &mcp.CallToolParams{Name: toolSearchJobs, Arguments: map[string]any{"limit": "ten"}})
+	_, _ = session.CallTool(context.Background(), &mcp.CallToolParams{Name: "jane@example.com", Arguments: map[string]any{}})
+
+	if got := testutil.ToFloat64(invalid) - beforeInvalid; got != 1 {
+		t.Errorf("schema-refused search_jobs counted %v times, want 1", got)
+	}
+	if got := testutil.ToFloat64(unknown) - beforeUnknown; got != 1 {
+		t.Errorf("unknown tool counted %v times as unknown, want 1", got)
+	}
+	if got := testutil.ToFloat64(ran) - beforeRan; got != 0 {
+		t.Errorf("a refused call was also counted as a success %v times", got)
+	}
+	ch := make(chan prometheus.Metric, 1024)
+	mcpToolCalls.Collect(ch)
+	close(ch)
+	for m := range ch {
+		var out dto.Metric
+		_ = m.Write(&out)
+		for _, l := range out.GetLabel() {
+			if l.GetName() == "tool" && l.GetValue() == "jane@example.com" {
+				t.Error("a caller-chosen tool name became a label")
+			}
+		}
+	}
+}

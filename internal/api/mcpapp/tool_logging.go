@@ -3,6 +3,7 @@ package mcpapp
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -35,6 +36,9 @@ var mcpToolDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 // A start without a finish identifies a call that is still running or was lost
 // when the process exited. Neither errors nor arguments are safe to log here.
 func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolResult, error) {
+	if ran, ok := ctx.Value(handlerRanKey{}).(*bool); ok {
+		*ran = true
+	}
 	logger := observability.RequestLogger(ctx).With("surface", surface, "tool", name, "call_id", toolCallSequence.Add(1))
 	started := time.Now()
 	logger.InfoContext(ctx, "mcp tool started")
@@ -87,6 +91,7 @@ func resultErrorCode(result *mcp.CallToolResult) string {
 func addLoggedTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, Out]) {
 	// Capture the registered name so a caller cannot inject a name into the log.
 	name := tool.Name
+	registerTool(name)
 	mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
 		finish := observeTool(ctx, "public", name)
 		// A panic deliberately leaves the start unmatched; do not recover it or log
@@ -98,10 +103,51 @@ func addLoggedTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.
 }
 
 func loggedAccountTool(name string, handler mcp.ToolHandler) mcp.ToolHandler {
+	registerTool(name)
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		finish := observeTool(ctx, "account", name)
 		result, err := handler(ctx, req)
 		finish(result, err)
 		return result, err
+	}
+}
+
+// registeredTools holds every tool name a server registered, the only names allowed into a
+// metric label: a tools/call request names its tool, and that string is the caller's.
+var registeredTools sync.Map
+
+func registerTool(name string) { registeredTools.Store(name, struct{}{}) }
+
+func toolLabel(name string) string {
+	if _, ok := registeredTools.Load(name); ok {
+		return name
+	}
+	return "unknown"
+}
+
+type handlerRanKey struct{}
+
+// countRejectedToolCalls counts the tools/call requests the SDK answers without running a
+// handler: arguments failing the input schema, or a tool that does not exist. observeTool sees
+// only calls that reach a handler, and a refused call is exactly what an agent hits when it
+// misreads the schema (work_mode: "remote" on 2026-11-04). It marks the context, observeTool
+// flips the mark, and only an unflipped call is counted here, so no call is counted twice.
+func countRejectedToolCalls(surface string) mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			call, ok := req.(*mcp.CallToolRequest)
+			if method != "tools/call" || !ok {
+				return next(ctx, method, req)
+			}
+			ran := new(bool)
+			started := time.Now()
+			res, err := next(context.WithValue(ctx, handlerRanKey{}, ran), method, req)
+			if !*ran {
+				name := toolLabel(call.Params.Name)
+				mcpToolCalls.WithLabelValues(surface, name, "rejected", "invalid_request").Inc()
+				mcpToolDuration.WithLabelValues(surface, name).Observe(time.Since(started).Seconds())
+			}
+			return res, err
+		}
 	}
 }

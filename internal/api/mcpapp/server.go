@@ -123,6 +123,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 			},
 		})
 	Instrument(server, "freehire", Version)
+	server.AddReceivingMiddleware(countRejectedToolCalls("public"))
 
 	addPrompts(server)
 	addWidget(server)
