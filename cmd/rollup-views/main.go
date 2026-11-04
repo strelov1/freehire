@@ -107,6 +107,17 @@ func run() int {
 	return exit
 }
 
+// reportFiles reports this pass in files, the unit both figures can share: every file
+// read, and all of them as changed only if the pass applied any view. Reading logs and
+// applying nothing is the case worth seeing; the view count itself is in the log line.
+func reportFiles(nFiles, nViews int) {
+	changed := 0
+	if nViews > 0 {
+		changed = nFiles
+	}
+	worker.ReportWork(int64(nFiles), int64(changed))
+}
+
 // process applies every not-yet-processed file, skipping those already in the
 // cursor. It returns how many files it applied and the total views added.
 func process(ctx context.Context, pool *pgxpool.Pool, files []viewlog.LogFile) (nFiles, nViews int, err error) {
