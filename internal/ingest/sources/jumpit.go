@@ -47,6 +47,10 @@ const (
 	jumpitRequestBurst    = 2
 )
 
+// jumpitBrokenRunMinWanted is how many new postings, all unread, make a run broken rather than
+// merely unlucky.
+const jumpitBrokenRunMinWanted = 5
+
 // jumpitZone is the zone the platform's naive timestamps are written in (KST, no DST).
 var jumpitZone = time.FixedZone("KST", 9*60*60)
 
@@ -161,11 +165,16 @@ func (s jumpit) list(ctx context.Context) ([]jumpitListing, error) {
 }
 
 // hydrate buys a posting's detail only for a posting the catalogue lacks. A detail that could
-// not be read defers that posting to a later run rather than storing it body-less (a stored
-// row is seen and would never be hydrated again). Once the API refuses one request (403/429)
-// the rest of the run's hydration is deferred too: the refusal is about the IP, and every
-// further request would only prolong it.
+// not be read is yielded as an Unreadable identity rather than dropped: a posting offered for
+// re-reading (INGEST_REFETCH_ALL, BODY_REFRESH_DAYS) is stored already, and silently losing its
+// identity would let the source-wide sweep close a live posting. A new posting is never stored
+// body-less, so it stays unseen and is tried again on the next run. A 404/410 is the platform
+// saying the posting is gone and is simply not yielded. Once the API refuses one request
+// (403/429) the rest of the run's detail requests are cancelled and those postings are Unreadable
+// too: the refusal is about the IP, and every further request would only prolong it.
 func (s jumpit) hydrate(ctx context.Context, list []jumpitListing, seen func(string) bool) ([]Job, error) {
+	hctx, stop := context.WithCancel(ctx)
+	defer stop()
 	var refused atomic.Bool
 	var wanted, read atomic.Int64
 	jobs := fetchDetails(list, defaultDetailWorkers, func(l jumpitListing) (Job, bool) {
@@ -175,29 +184,33 @@ func (s jumpit) hydrate(ctx context.Context, list []jumpitListing, seen func(str
 			return Job{ExternalID: id, URL: url, Title: l.Title, Company: l.CompanyName, SeenRefresh: true}, true
 		}
 		wanted.Add(1)
+		unreadable := unreadableDetail(id, url, l.CompanyName)
 		if refused.Load() {
-			return Job{}, false
+			return unreadable, true
 		}
 		var d jumpitDetailResponse
-		if err := s.http.GetJSON(ctx, fmt.Sprintf(jumpitDetailURL, l.ID), &d); err != nil {
+		if err := s.http.GetJSON(hctx, fmt.Sprintf(jumpitDetailURL, l.ID), &d); err != nil {
 			if isRateLimited(err) && !refused.Swap(true) {
 				log.Printf("jumpit: detail requests refused (%v); deferring the rest of this run's hydration", err)
+				stop()
 			}
-			if detailUnreadable(err) {
-				log.Printf("jumpit: detail %d failed; deferring: %v", l.ID, err)
+			if !detailUnreadable(err) {
+				return Job{}, false // 404/410: the posting is gone
 			}
-			return Job{}, false
+			log.Printf("jumpit: detail %d failed; deferring: %v", l.ID, err)
+			return unreadable, true
 		}
 		job, ok := parseJumpitPosting(d.Result, l)
 		if !ok {
 			log.Printf("jumpit: detail %d carries no usable posting; deferring", l.ID)
-			return Job{}, false
+			return unreadable, true
 		}
 		read.Add(1)
 		return job, true
 	})
-	// A crawl that listed new postings and read none of them is broken, not quiet.
-	if wanted.Load() > 0 && read.Load() == 0 {
+	// A crawl that listed several new postings and read none of them is broken, not quiet. One
+	// unreadable posting is not: it must not discard the liveness refresh of the rest.
+	if wanted.Load() >= jumpitBrokenRunMinWanted && read.Load() == 0 {
 		return nil, fmt.Errorf("jumpit: listed %d new postings and read none of their details", wanted.Load())
 	}
 	return jobs, nil

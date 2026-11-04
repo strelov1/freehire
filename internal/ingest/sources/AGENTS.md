@@ -125,7 +125,7 @@ Source ingest: the provider registry and its adapters, entry validation, the per
 - **The body is six plain-text fields**, rendered under the posting page's own headings (주요업무, 자격요건, 우대사항, 복지 및 혜택, 채용절차 및 기타 지원 유의사항, 기업/서비스 소개). There is no salary and no work-arrangement field.
 - **`newcomer` means open to new graduates.** Those rows carry `minCareer` 0 and `maxCareer` 0 (62 of 792), so the minimum experience is 0; every other row states its minimum.
 - **A missing posting answers 400 `Entity Not Found` (`C003`), not 404.** A new posting whose detail fails is deferred to the next run either way, never stored body-less.
-- **Paced at 1 req/s (`jumpitRequestInterval`), unmeasured.** No request was refused while the adapter was written. A cold run is one listing request plus ~800 details (~14 min); steady state is the listing plus new postings. The first 403/429 defers the rest of the run's hydration.
+- **Paced at 1 req/s (`jumpitRequestInterval`), unmeasured.** No request was refused while the adapter was written. A cold run is one listing request plus ~800 details (~14 min); steady state is the listing plus new postings. The first 403/429 cancels the rest of the run's detail requests. A detail that cannot be read (a refusal, a timeout, a 5xx) is yielded as an Unreadable identity, so a stored posting offered for re-reading is not lost to the source-wide sweep; a 404/410 is simply not yielded.
 
 **Tech in Asia traps** (`techinasia`; live-verified 2026-10-15):
 

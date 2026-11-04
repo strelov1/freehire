@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -280,5 +281,36 @@ func TestJumpitFailsWhenItReadsNoneOfWhatItListed(t *testing.T) {
 	}
 	if _, err := (jumpit{http: f}).Fetch(context.Background(), CompanyEntry{}); err == nil || !strings.Contains(err.Error(), "read none") {
 		t.Fatalf("err = %v, want the listed-but-unread failure", err)
+	}
+}
+
+func TestJumpitKeepsTheIdentityOfAnUnreadableDetail(t *testing.T) {
+	f := newJumpitFake(t)
+	f.errs = map[string]error{}
+	bad, gone := jumpitFixtureIDs[0], jumpitFixtureIDs[1]
+	badURL, goneURL := fmt.Sprintf(jumpitDetailURL, bad), fmt.Sprintf(jumpitDetailURL, gone)
+	f.errs[badURL] = &StatusError{Method: "GET", Code: 503, URL: badURL}
+	f.errs[goneURL] = &StatusError{Method: "GET", Code: 404, URL: goneURL}
+
+	jobs, err := (jumpit{http: f}).Fetch(context.Background(), CompanyEntry{})
+	if err != nil {
+		t.Fatalf("one unreadable posting must not fail the crawl: %v", err)
+	}
+	var unreadable, hydrated int
+	for _, j := range jobs {
+		switch {
+		case j.ExternalID == strconv.FormatInt(gone, 10):
+			t.Errorf("a 404 posting is gone and must not be yielded: %+v", j)
+		case j.Unreadable:
+			if j.ExternalID != strconv.FormatInt(bad, 10) {
+				t.Errorf("unexpected unreadable %s", j.ExternalID)
+			}
+			unreadable++
+		case j.Description != "":
+			hydrated++
+		}
+	}
+	if unreadable != 1 || hydrated != len(jumpitFixtureIDs)-2 {
+		t.Errorf("unreadable = %d, hydrated = %d", unreadable, hydrated)
 	}
 }
