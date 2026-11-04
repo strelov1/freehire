@@ -514,7 +514,7 @@ func (s *dbStore) Touch(ctx context.Context, source, externalID string) (string,
 // signal: a re-derive that failed after a committed reopen would never be retried. The row is
 // locked by the touch, so the derive reads the version it writes over. The company slug and
 // fingerprint stay as stored: moving them needs the companies reconcile only backfill-derive
-// runs. The row is requeued after the write with a re-stamp, superseding the touch's own entry.
+// runs. The row is requeued with a re-stamp, superseding the touch's own entry.
 func (s *dbStore) reopenAndRederive(ctx context.Context, source, externalID string) (string, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -540,9 +540,11 @@ func (s *dbStore) reopenAndRederive(ctx context.Context, source, externalID stri
 			if err := qtx.UpdateJobDerived(ctx, params); err != nil {
 				return "", err
 			}
-			if err := qtx.RequeueSearchOutbox(ctx, touched.ID); err != nil {
-				return "", err
-			}
+		}
+		// Unconditionally: the touch's own enqueue is DO NOTHING, which leaves a dead-lettered
+		// entry dead and the reopened posting out of search.
+		if err := qtx.RequeueSearchOutbox(ctx, touched.ID); err != nil {
+			return "", err
 		}
 	}
 	return touched.CompanySlug, tx.Commit(ctx)
