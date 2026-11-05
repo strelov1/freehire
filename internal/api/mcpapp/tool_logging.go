@@ -88,15 +88,6 @@ func resultErrorCode(result *mcp.CallToolResult) string {
 	}
 }
 
-func addLoggedTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, Out]) {
-	addLoggedToolForSurface(
-		server,
-		"public",
-		tool,
-		handler,
-	)
-}
-
 func addLoggedToolForSurface[In, Out any](
 	server *mcp.Server,
 	surface string,
