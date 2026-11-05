@@ -271,7 +271,7 @@ func TestAnAgentViewBehindTrustedAuthenticationIsCountedAsItsAccount(t *testing.
 		return c.SendStatus(fiber.StatusOK)
 	})
 	for _, secret := range []string{"trusted-auth-service", "forged"} {
-		req := httptest.NewRequest("GET", "/agent", nil)
+		req := httptest.NewRequestWithContext(t.Context(), "GET", "/agent", nil)
 		req.Header.Set(fiber.HeaderXForwardedFor, "203.0.113.42")
 		req.Header.Set(authIntrospectionSecretHeader, secret)
 		req.Header.Set("X-FH-Auth-User", "9")
