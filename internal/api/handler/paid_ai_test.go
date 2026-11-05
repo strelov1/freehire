@@ -107,7 +107,6 @@ func gatedApp(t *testing.T, plans paidEntitlement) *fiber.App {
 		key: signedIn, cvKey: signedIn, cookie: signedIn, optional: signedIn,
 		autoApplyGate: signedIn,
 		paidAI:        paidAIGate(plans),
-		throttler:     newTestThrottler(t),
 	}
 	api := app.Group("/api/v1")
 	(&matchHandlers{}).register(api, mw)

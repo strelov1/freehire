@@ -55,7 +55,7 @@ const appliedOnLayout = "2006-01-02"
 // CreateGhostReport files the caller's claim about the job named by :slug. The slug is
 // resolved before any write (a miss is a 404 via RenderError); an unparseable or
 // out-of-range date is a 400; an unproven address is a 403; a closed job or a claim the
-// caller already has is a 409; past the daily cap is a 429.
+// caller already has is a 409.
 func (h *ghostReportHandlers) CreateGhostReport(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -114,8 +114,6 @@ func ghostReportError(err error) error {
 		return fiber.NewError(fiber.StatusConflict, "this job is already closed")
 	case errors.Is(err, ghostreport.ErrDuplicate):
 		return fiber.NewError(fiber.StatusConflict, "you have already reported this job")
-	case errors.Is(err, ghostreport.ErrRateLimited):
-		return fiber.NewError(fiber.StatusTooManyRequests, "too many reports today")
 	case errors.Is(err, ghostreport.ErrNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "no report to withdraw")
 	default:

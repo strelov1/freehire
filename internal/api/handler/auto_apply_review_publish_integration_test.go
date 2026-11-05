@@ -86,7 +86,7 @@ func TestPostAutoApplyReview_PublishesReviewDecidedEvent(t *testing.T) {
 	pool := startPostgres(t)
 	truncateAutoApplyTailorTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	app, h, _ := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "", nil)
+	app, h, _ := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "")
 	events := &fakeEventPublisher{}
 	h.events = events
 
@@ -114,7 +114,7 @@ func TestPostAutoApplyReview_PublishFailureDoesNotChangeTheResponse(t *testing.T
 	pool := startPostgres(t)
 	truncateAutoApplyTailorTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	app, h, _ := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "", nil)
+	app, h, _ := newAutoApplyTailorAppFull(pool, iss, &turnModel{}, plan.DefaultConfig(), "")
 	events := &fakeEventPublisher{err: errors.New("inngest event api unreachable")}
 	h.events = events
 

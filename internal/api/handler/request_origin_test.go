@@ -422,7 +422,7 @@ func TestLoginServedHostOrigin(t *testing.T) {
 }
 
 func TestAuthHandlerIncludesConfiguredServedOrigins(t *testing.T) {
-	h := newAuthHandlers(nil, nil, nil, auth.NewIssuer("test-secret", time.Hour), false,
+	h := newAuthHandlers(nil, nil, auth.NewIssuer("test-secret", time.Hour), false,
 		[]string{".freehire.me"}, nil, testFrontendOrigin, nil, []string{"apply.freehire.me"})
 	if !originAllowed("https://apply.freehire.me", h.browserOrigins) {
 		t.Fatal("configured served origin omitted from handler")

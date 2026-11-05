@@ -3,9 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"math"
-	"strconv"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -304,8 +301,7 @@ type buddyInviteBody struct {
 	Body   string `json:"body"`
 }
 
-// Invite starts a pending buddy conversation. Over the daily cap it answers 429 with the moment
-// the next invitation becomes possible, in both the body and Retry-After.
+// Invite starts a pending buddy conversation.
 func (h *buddyHandlers) Invite(c *fiber.Ctx) error {
 	userID, err := requireUserID(c)
 	if err != nil {
@@ -316,15 +312,6 @@ func (h *buddyHandlers) Invite(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "handle and body are required")
 	}
 	conv, err := h.buddy.Invite(c.Context(), userID, in.Handle, in.Body)
-	var limit *buddy.InvitationLimitError
-	if errors.As(err, &limit) {
-		wait := max(int(math.Ceil(time.Until(limit.RetryAt).Seconds())), 1)
-		c.Set(fiber.HeaderRetryAfter, strconv.Itoa(wait))
-		return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
-			"error":    "invitation limit reached",
-			"retry_at": limit.RetryAt.UTC().Format(time.RFC3339),
-		})
-	}
 	if err != nil {
 		return buddyError(err)
 	}

@@ -24,7 +24,7 @@ func TestPublicStreamsCloseOnServerShutdown(t *testing.T) {
 			mount: func(app *fiber.App) {
 				b := recentfeed.NewBroadcaster(1)
 				b.Publish(recentfeed.Entry{Kind: recentfeed.KindSingle, Title: "Engineer"})
-				h := newRecentFeedHandlers(b, nil)
+				h := newRecentFeedHandlers(b)
 				h.pingInterval = time.Hour
 				app.Get("/stream", h.StreamRecentJobs)
 			},
@@ -32,7 +32,7 @@ func TestPublicStreamsCloseOnServerShutdown(t *testing.T) {
 		{
 			name: "embedding progress",
 			mount: func(app *fiber.App) {
-				h := newEmbedProgressHandlers(&fakeProgress{current: queuedProgress(10)}, nil)
+				h := newEmbedProgressHandlers(&fakeProgress{current: queuedProgress(10)})
 				h.pingInterval = time.Hour
 				app.Get("/stream", h.Stream)
 			},

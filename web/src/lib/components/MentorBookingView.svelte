@@ -41,7 +41,7 @@
 
   // How often an open page re-asks for the slots. Derived, not chosen: the endpoint caches
   // a computed window for one minute, so a faster poll is answered from the same entry and
-  // spends the visitor's share of a rate limit for an identical answer. cal.com polls every
+  // repeats an identical read. cal.com polls every
   // five minutes and holds a reservation system besides; we need neither, because the
   // database refuses the second booking outright.
   const REFRESH_MS = 60_000;

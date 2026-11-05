@@ -35,15 +35,6 @@ import (
 // thorough account, short enough that one entry can't bloat a company page.
 const maxBodyRunes = 5000
 
-// DefaultFeedbackWindow/DefaultFeedbackCap bound how many NEW companies one user
-// can review per window — the same shape and magnitude as
-// community.DefaultThreadWindow/Cap, since both are "post original content"
-// actions. An edit-by-resubmit never counts against this (see checkRate).
-const (
-	DefaultFeedbackWindow = 24 * time.Hour
-	DefaultFeedbackCap    = 10
-)
-
 // Sentinel errors, mapped to HTTP statuses by the handler.
 var (
 	// ErrCompanyNotFound is a slug that names no existing company (404).
@@ -58,8 +49,6 @@ var (
 	ErrBodyTooLong = errors.New("companyfeedback: body is too long")
 	// ErrNotFound is a review id naming no row (404).
 	ErrNotFound = errors.New("companyfeedback: not found")
-	// ErrRateLimited is a user over their new-review window cap (429).
-	ErrRateLimited = errors.New("companyfeedback: rate limit exceeded")
 	// ErrInvalidReportReason is a report reason outside
 	// vocab.CompanyFeedbackReportReasonValues (400).
 	ErrInvalidReportReason = errors.New("companyfeedback: invalid report reason")
@@ -102,61 +91,22 @@ type PersonaSource interface {
 	PersonaFor(ctx context.Context, userID int64) (string, error)
 }
 
-// Config tunes the new-review rate limit. Zero values fall back to the
-// Default* constants in New.
-type Config struct {
-	Window time.Duration
-	Cap    int
-}
-
 // Service applies feedback writes against Postgres.
 type Service struct {
 	q        *db.Queries
 	pool     *pgxpool.Pool
 	personas PersonaSource
-	cfg      Config
-	now      func() time.Time
 }
 
-// New builds a Service over the shared queries, pool (drives the per-write
-// transaction), and persona source, filling any zero Config field with its
-// default.
-func New(q *db.Queries, pool *pgxpool.Pool, personas PersonaSource, cfg Config) *Service {
-	if cfg.Window == 0 {
-		cfg.Window = DefaultFeedbackWindow
-	}
-	if cfg.Cap == 0 {
-		cfg.Cap = DefaultFeedbackCap
-	}
-	return &Service{q: q, pool: pool, personas: personas, cfg: cfg, now: time.Now}
-}
-
-// checkRate rejects a new review once the caller is at or over their window
-// cap. An edit-by-resubmit never inserts a company_feedback row (see
-// CountRecentCompanyFeedback's doc comment), so the count this reads only
-// grows on genuinely new rows — a first review of a company, or a review in a
-// category the caller has not used on it yet. Callers only need to invoke it
-// when Upsert is about to create, not update, a row.
-func (s *Service) checkRate(ctx context.Context, userID int64) error {
-	n, err := s.q.CountRecentCompanyFeedback(ctx, db.CountRecentCompanyFeedbackParams{
-		UserID:    pgtype.Int8{Int64: userID, Valid: true},
-		CreatedAt: pgtype.Timestamptz{Time: s.now().Add(-s.cfg.Window), Valid: true},
-	})
-	if err != nil {
-		return err
-	}
-	if n >= int64(s.cfg.Cap) {
-		return ErrRateLimited
-	}
-	return nil
+// New builds a Service over shared queries, transactions, and the persona source.
+func New(q *db.Queries, pool *pgxpool.Pool, personas PersonaSource) *Service {
+	return &Service{q: q, pool: pool, personas: personas}
 }
 
 // Upsert validates and writes the caller's feedback in one category on a
 // company (inserting or overwriting their existing entry in that category in
 // place), minting their persona if needed, and recomputes the company's
-// materialized counters in the same transaction. A brand-new review (the
-// caller has none yet in this category on this company) is subject to
-// checkRate; editing an existing one never is — see checkRate's doc comment.
+// materialized counters in the same transaction.
 func (s *Service) Upsert(ctx context.Context, userID int64, slug string, rating int16, feedbackType, body string) (Feedback, Summary, error) {
 	if rating < 1 || rating > 5 {
 		return Feedback{}, Summary{}, ErrInvalidRating
@@ -172,18 +122,6 @@ func (s *Service) Upsert(ctx context.Context, userID int64, slug string, rating 
 		return Feedback{}, Summary{}, ErrBodyTooLong
 	}
 	if err := s.requireCompany(ctx, slug); err != nil {
-		return Feedback{}, Summary{}, err
-	}
-
-	_, err := s.q.GetMyCompanyFeedback(ctx, db.GetMyCompanyFeedbackParams{
-		UserID: pgtype.Int8{Int64: userID, Valid: true}, CompanySlug: slug, FeedbackType: feedbackType,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		// A genuinely new review: throttle it.
-		if err := s.checkRate(ctx, userID); err != nil {
-			return Feedback{}, Summary{}, err
-		}
-	} else if err != nil {
 		return Feedback{}, Summary{}, err
 	}
 

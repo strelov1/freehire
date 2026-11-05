@@ -5,50 +5,31 @@ import (
 	"errors"
 	"log"
 	"strings"
-	"time"
 )
 
 // maxHandleAttempts bounds handle-collision retries when minting a persona. The base
 // space is large, so a couple of retries is astronomically sufficient.
 const maxHandleAttempts = 8
 
-// Config tunes rate limits and page size. Zero values fall back to the Default*
-// constants in New.
+// Config sets the listing page size; zero uses the default in New.
 type Config struct {
-	ThreadWindow time.Duration
-	ThreadCap    int
-	ReplyWindow  time.Duration
-	ReplyCap     int
-	PageSize     int32
+	PageSize int32
 }
 
 // Service is the community use case: it validates input, enforces anonymity by
-// minting personas, rate-limits per user, and orchestrates persistence.
+// minting personas, and orchestrates persistence.
 type Service struct {
 	repo     Repository
 	subjects SubjectChecker
 	cfg      Config
-	now      func() time.Time
 }
 
 // New constructs a Service, filling any zero Config field with its default.
 func New(repo Repository, subjects SubjectChecker, cfg Config) *Service {
-	if cfg.ThreadWindow == 0 {
-		cfg.ThreadWindow = DefaultThreadWindow
-	}
-	if cfg.ThreadCap == 0 {
-		cfg.ThreadCap = DefaultThreadCap
-	}
-	if cfg.ReplyWindow == 0 {
-		cfg.ReplyWindow = DefaultReplyWindow
-	}
-	if cfg.ReplyCap == 0 {
-		cfg.ReplyCap = DefaultReplyCap
-	}
 	if cfg.PageSize == 0 {
 		cfg.PageSize = 30
 	}
-	return &Service{repo: repo, subjects: subjects, cfg: cfg, now: time.Now}
+	return &Service{repo: repo, subjects: subjects, cfg: cfg}
 }
 
 // PageSize is how many rows one listing page holds. Exposed because the caller
@@ -61,8 +42,7 @@ func validSubjectType(t string) bool {
 	return t == SubjectCompany || t == SubjectJob
 }
 
-// CreateThread opens a thread on a subject: validate the subject and body, enforce
-// the per-user rate limit, mint the author's persona, and insert. The returned
+// CreateThread validates the subject and body, mints the author's persona, and inserts. The returned
 // Thread carries the persona handle, never the author's user id.
 func (s *Service) CreateThread(ctx context.Context, in CreateThreadInput) (Thread, error) {
 	if !validSubjectType(in.SubjectType) {
@@ -83,10 +63,6 @@ func (s *Service) CreateThread(ctx context.Context, in CreateThreadInput) (Threa
 	}
 	if !exists {
 		return Thread{}, ErrSubjectNotFound
-	}
-
-	if err := s.checkRate(ctx, in.UserID, s.repo.CountRecentThreads, s.cfg.ThreadWindow, s.cfg.ThreadCap); err != nil {
-		return Thread{}, err
 	}
 
 	persona, err := s.persona(ctx, in.UserID)
@@ -135,8 +111,8 @@ func (s *Service) ListReplies(ctx context.Context, threadID int64, cur Cursor) (
 	return s.repo.ListReplies(ctx, threadID, cur, s.cfg.PageSize)
 }
 
-// Reply posts a reply to an open thread: validate the body and thread, enforce the
-// per-user rate limit, mint the persona, insert, and bump the denormalized count.
+// Reply validates the body and open thread, mints the persona, inserts the reply,
+// and bumps the denormalized count.
 // parentReplyID is 0 for a top-level reply, or another reply's id to nest under it.
 func (s *Service) Reply(ctx context.Context, threadID, parentReplyID, userID int64, body string) (Reply, error) {
 	body = strings.TrimSpace(body)
@@ -150,10 +126,6 @@ func (s *Service) Reply(ctx context.Context, threadID, parentReplyID, userID int
 	}
 	if thread.Status == StatusClosed {
 		return Reply{}, ErrThreadClosed
-	}
-
-	if err := s.checkRate(ctx, userID, s.repo.CountRecentReplies, s.cfg.ReplyWindow, s.cfg.ReplyCap); err != nil {
-		return Reply{}, err
 	}
 
 	persona, err := s.persona(ctx, userID)
@@ -212,16 +184,4 @@ func (s *Service) persona(ctx context.Context, userID int64) (Persona, error) {
 		return Persona{}, err
 	}
 	return Persona{}, ErrHandleTaken
-}
-
-// checkRate rejects the action when the user is at or over the cap within the window.
-func (s *Service) checkRate(ctx context.Context, userID int64, count func(context.Context, int64, time.Time) (int64, error), window time.Duration, limit int) error {
-	n, err := count(ctx, userID, s.now().Add(-window))
-	if err != nil {
-		return err
-	}
-	if n >= int64(limit) {
-		return ErrRateLimited
-	}
-	return nil
 }

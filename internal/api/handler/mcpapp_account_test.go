@@ -16,8 +16,6 @@ const testMCPOrigin = "https://freehire.example"
 
 func mcpAccountApp(assistants *assistantHandlers) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	// A nil throttler fails open (ratelimit.Middleware's documented behavior),
-	// so the zero-value middleware needs no fake here.
 	mw := middleware{}
 	api := app.Group("/api/v1")
 	mountMCPAccount(

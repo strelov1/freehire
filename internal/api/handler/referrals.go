@@ -159,7 +159,7 @@ func toIncomingRequestResponse(r referral.Request) incomingRequestResponse {
 }
 
 // referralError maps the referral sentinels to HTTP statuses. Validation failures are 422,
-// authorization is 403, missing targets 404, the cap is 429, and conflicts (duplicate,
+// authorization is 403, missing targets 404, and conflicts (duplicate,
 // not-pending, not-open) are 409; anything else falls through to RenderError as 500.
 func referralError(err error) error {
 	switch {
@@ -177,8 +177,6 @@ func referralError(err error) error {
 		return fiber.NewError(fiber.StatusNotFound, "referral request not found")
 	case errors.Is(err, referral.ErrCompanyNotFound):
 		return fiber.NewError(fiber.StatusNotFound, "we don't have that company")
-	case errors.Is(err, referral.ErrDailyCapReached):
-		return fiber.NewError(fiber.StatusTooManyRequests, "daily referral request limit reached")
 	case errors.Is(err, referral.ErrCompanyNotEligible):
 		return fiber.NewError(fiber.StatusConflict, "this company has no referral available")
 	case errors.Is(err, referral.ErrAlreadyOffered):

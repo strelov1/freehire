@@ -31,7 +31,6 @@ import (
 	"github.com/strelov1/freehire/internal/api/handler"
 	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/api/ojcp"
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/api/realtime"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
@@ -101,10 +100,6 @@ func runServer(cfg config.Settings) error {
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
-	rateTiers, err := handler.RateTiersFromEnv(os.Getenv, cfg.StrictAnonLimits())
-	if err != nil {
-		return fmt.Errorf("invalid configuration: %w", err)
-	}
 
 	// MCP analytics is optional and env-gated: no token => the MCP servers run uninstrumented.
 	// Close flushes the batch the client still holds, so it must outlive the HTTP server.
@@ -129,16 +124,13 @@ func runServer(cfg config.Settings) error {
 	}
 	defer pool.Close()
 
-	// Redis is a required dependency, like Postgres — it backs the shared rate
-	// limiter (internal/api/ratelimit) with no in-memory fallback mode. A malformed
-	// REDIS_URL is fatal at startup rather than degrading rate limiting silently.
+	// Redis backs the shared application caches.
 	redisOpts, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		return fmt.Errorf("redis: %w", err)
 	}
 	redisClient := redis.NewClient(redisOpts)
 	defer func() { _ = redisClient.Close() }()
-	throttler := ratelimit.NewRedisThrottler(redisClient)
 
 	app := fiber.New(fiber.Config{
 		AppName:      "hire",
@@ -165,19 +157,10 @@ func runServer(cfg config.Settings) error {
 		// Fiber renders errors here, after the middleware chain has unwound, so the counter
 		// in observability.HTTPMetrics cannot see them.
 		ErrorHandler: observability.CountErrors(handler.RenderError),
-		// The app sits behind the in-network nginx proxy (web/nginx.conf). Key c.IP()
-		// (and thus the rate limiter) on X-Real-IP, which nginx OVERWRITES with the real
-		// peer — a single value the client cannot spoof. X-Forwarded-For is deliberately
-		// NOT used here: Fiber returns the whole (client-appendable) XFF list, so a
-		// spoofed prefix would mint a fresh limiter key per request and evade the limit.
-		// The header is only honoured when the immediate peer is a trusted private range
-		// (the nginx container); a direct public caller is not trusted.
-		ProxyHeader:             "X-Real-IP", // Fiber has no constant for this header
+		// Only private reverse proxies may assert the visitor's address.
+		ProxyHeader:             "X-Real-IP",
 		EnableTrustedProxyCheck: true,
-		// Shared with internal/api/ratelimit, which does not count a peer we trust to
-		// assert someone else's address — chiefly our own SSR, which reaches the
-		// API over loopback. One definition so the two cannot disagree.
-		TrustedProxies: ratelimit.TrustedCIDRs,
+		TrustedProxies:          []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.1/32"},
 	})
 
 	// Counting responses sits OUTSIDE recover.New on purpose: recover converts a panic into a
@@ -395,12 +378,9 @@ func runServer(cfg config.Settings) error {
 	handler.Register(app, handler.Config{
 		Pool:                        pool,
 		AgentViews:                  agentViews,
-		Throttler:                   throttler,
 		Cache:                       cache.NewRedisCache(redisClient),
 		FrontendOrigin:              cfg.FrontendOrigin,
-		PublicAnonStrict:            cfg.StrictAnonLimits(),
-		VerifiedBotSecret:           cfg.VerifiedBotSecret,
-		RateTiers:                   rateTiers,
+		AuthIntrospectionSecret:     cfg.AuthIntrospectionSecret,
 		JWTSecret:                   cfg.JWTSecret,
 		JWTTTL:                      cfg.JWTTTL,
 		CookieSecure:                cfg.CookieSecure,

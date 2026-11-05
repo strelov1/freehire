@@ -37,9 +37,7 @@ func newEmailPrefsApp(queries *db.Queries) *fiber.App {
 	h := newEmailPrefsHandlers(emailprefs.NewService(queries, prefsSecret))
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	// A cookie gate that refuses everyone: these cases exercise the token-opened
-	// routes, not the signed-in ones. The throttler is nil because register builds
-	// its limiter from it and ratelimit tolerates that — throttling is not what is
-	// under test here.
+	// routes, not the signed-in ones.
 	h.register(app.Group("/api/v1"), middleware{
 		cookie: func(c *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusUnauthorized, "unauthorized")

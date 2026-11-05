@@ -5,13 +5,11 @@ import (
 	"errors"
 	"net/url"
 	"sort"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/identity/accounts"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/identity/auth/mobileauth"
@@ -88,25 +86,21 @@ func (h *authHandlers) registerV2(api fiber.Router, mw middleware) {
 		return c.Next()
 	}
 	g := api.Group("/auth", noStore)
-	exchangeLimit := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("oauth-v2-exchange"), 20, time.Minute)
-	passwordIPLimit := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("password-reauth-ip"), 20, time.Minute)
-	passwordUserLimit := ratelimit.Middleware(h.throttler, ratelimit.KeyByUserOrIP("password-reauth-user"), 5, time.Minute)
 	// The same-repository web bundle calls password reauthentication before
 	// protected mutations even during a schema-first rollout where mobile v2 is
 	// still disabled. Keeping this one issuance route available prevents that
 	// compatibility deploy from breaking password and API-key management.
-	g.Post("/reauth/password", passwordIPLimit, mw.cookie, passwordUserLimit, h.PasswordReauthV2)
+	g.Post("/reauth/password", mw.cookie, h.PasswordReauthV2)
 	if !h.authV2Enabled {
 		return
 	}
 	g.Get("/providers", h.ListProvidersV2)
-	startLimit := ratelimit.Middleware(h.throttler, ratelimit.KeyByIP("oauth-v2-start"), 20, time.Minute)
-	g.Get("/oauth/:provider/start", startLimit, mw.optionalCookie, h.OAuthStartV2)
+	g.Get("/oauth/:provider/start", mw.optionalCookie, h.OAuthStartV2)
 	g.Get("/oauth/:provider/callback", h.OAuthCallbackV2)
 	g.Post("/oauth/:provider/callback", h.OAuthCallbackV2)
-	g.Post("/oauth/exchange", exchangeLimit, mw.optionalCookie, h.OAuthExchangeV2)
-	g.Post("/apple/attempt", startLimit, mw.optionalCookie, h.AppleAttemptV2)
-	g.Post("/apple/exchange", exchangeLimit, mw.optionalCookie, h.AppleExchangeV2)
+	g.Post("/oauth/exchange", mw.optionalCookie, h.OAuthExchangeV2)
+	g.Post("/apple/attempt", mw.optionalCookie, h.AppleAttemptV2)
+	g.Post("/apple/exchange", mw.optionalCookie, h.AppleExchangeV2)
 	g.Get("/identities", mw.cookie, h.ListIdentitiesV2)
 	g.Delete("/identities/:provider", mw.cookie, h.UnlinkIdentityV2)
 }

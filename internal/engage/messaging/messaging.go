@@ -192,9 +192,6 @@ type Repository interface {
 	ConversationFor(ctx context.Context, userID, conversationID int64) (ConversationRow, bool, error)
 	// Participants lists a conversation's accounts and their personas.
 	Participants(ctx context.Context, conversationID int64) ([]Participant, error)
-	// StartedSince is how many conversations of the kind userID started after since, and
-	// when the oldest of them was started (the zero time when there are none).
-	StartedSince(ctx context.Context, kind string, userID int64, since time.Time) (int, time.Time, error)
 	// Blocked reports a block between the two accounts in either direction.
 	Blocked(ctx context.Context, a, b int64) (bool, error)
 	// Answer moves a pending conversation to status (open or declined) on behalf of a

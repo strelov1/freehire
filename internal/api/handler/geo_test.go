@@ -9,7 +9,6 @@ import (
 func geoApp() *fiber.App {
 	h := newGeoHandlers()
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	// A nil throttler fails open, so this exercises the handler and not the limiter.
 	h.register(app, middleware{})
 	return app
 }

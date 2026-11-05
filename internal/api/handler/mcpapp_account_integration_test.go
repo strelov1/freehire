@@ -55,8 +55,8 @@ func TestMCPAccountEndToEnd(t *testing.T) {
 
 	assistants := &assistantHandlers{
 		queries:    queries,
-		dictionary: &dictionaryHandlers{pool: pool, queries: queries},
-		problems:   problemreport.New(pool, queries),
+		dictionary: &dictionaryHandlers{queries: queries},
+		problems:   problemreport.New(queries),
 		tracking:   &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})

@@ -426,9 +426,6 @@ type Querier interface {
 	// Bounded to future mocks cancelled in the last day: an announcement lost to a crash is not
 	// worth sending weeks later.
 	ClaimBuddyMockCancelNotices(ctx context.Context, actorID int64) ([]pgtype.UUID, error)
-	// The daily cap: claims one of a user's 20 writes for the UTC day, and returns no row
-	// once they are spent, which the caller turns into a 429.
-	ClaimDictionaryGapWrite(ctx context.Context, arg ClaimDictionaryGapWriteParams) (int32, error)
 	// Take up to max_runs due runs, exactly once each, from the HEAVY pool only. See
 	// ClaimDueLightRuns for the sibling that claims from the other pool: the scheduler calls
 	// both every tick, each against its own budget (ingestsched.DefaultHeavyCap /
@@ -500,7 +497,6 @@ type Querier interface {
 	// lease predicate reclaims entries whose worker died (stale claimed_at), so no
 	// separate reaper process is needed.
 	ClaimEnrichmentBatch(ctx context.Context, arg ClaimEnrichmentBatchParams) ([]ClaimEnrichmentBatchRow, error)
-	ClaimProblemReportWrite(ctx context.Context, arg ClaimProblemReportWriteParams) (int32, error)
 	// Claim-and-delete a bounded batch, oldest first, joined to jobs for the fields the
 	// feed displays. company_slug rides along beside company: recentfeed.Group buckets a
 	// same-company burst by the slug (the canonical company key — see AGENTS.md, "Company
@@ -1169,10 +1165,6 @@ type Querier interface {
 	// from the job ledger and then ADDED by the caller: the budget belongs to the engine,
 	// and a company page costs it exactly what a job page does.
 	CountCompanySearchPingsSince(ctx context.Context, arg CountCompanySearchPingsSinceParams) (int64, error)
-	// How many conversations of the kind starter_id started after since, and when the oldest
-	// of them was started (NULL when there are none): that instant plus the window is when a
-	// slot frees up.
-	CountConversationsStartedSince(ctx context.Context, arg CountConversationsStartedSinceParams) (CountConversationsStartedSinceRow, error)
 	// How many pending matches a digest will COVER without carrying: the subscription's
 	// pending matches strictly older than the oldest one the claim took. The claim reads
 	// newest first, so these are exactly the ones that did not fit; the digest counts them in
@@ -1215,10 +1207,6 @@ type Querier interface {
 	CountEmptyFeedProviderJobs(ctx context.Context, arg CountEmptyFeedProviderJobsParams) (int64, error)
 	// The spam bound's count: confirmed mocks the member is a guest in that have not started.
 	CountFutureBuddyMocksAsGuest(ctx context.Context, guestUserID int64) (int64, error)
-	// How many claims this account has filed since a cutoff, for the daily cap. Counts
-	// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
-	// exists to bound, so forgiving it would leave the cap trivially bypassable.
-	CountGhostReportsSince(ctx context.Context, arg CountGhostReportsSinceParams) (int64, error)
 	// How many rewards this referrer has already earned, for the per-referrer ceiling. Counts
 	// granted rows only: an attribution that never paid costs nothing and must not use up a slot.
 	CountGrantedInviteRewards(ctx context.Context, referrerID int64) (int64, error)
@@ -1249,32 +1237,11 @@ type Querier interface {
 	// rows cascade away with a deleted posting, so it never counts these; this is added
 	// to its "all"/"applied"/"board" totals by the caller.
 	CountOrphanedApplications(ctx context.Context, userID int64) (int64, error)
-	// How many new reviews (new company, or a new category on an already-reviewed
-	// company) this user has left since `since` — the rate-limit check backing
-	// companyfeedback.Service.checkRate (mirrors community.CountRecentThreads). An
-	// edit-by-resubmit never inserts a new row (the ON CONFLICT DO UPDATE branch
-	// leaves created_at untouched), so this only grows on genuinely new rows.
-	CountRecentCompanyFeedback(ctx context.Context, arg CountRecentCompanyFeedbackParams) (int64, error)
-	// How many reports this user has filed since `since` — the rate-limit check, mirroring
-	// CountRecentCompanyFeedback. A revival takes the ON CONFLICT branch and leaves
-	// created_at untouched, so this only grows on genuinely new rows.
-	CountRecentCompanyProcessReports(ctx context.Context, arg CountRecentCompanyProcessReportsParams) (int64, error)
-	CountRecentRepliesByUser(ctx context.Context, arg CountRecentRepliesByUserParams) (int64, error)
-	// Rate-limit count: threads a user opened since a cutoff. Served by
-	// threads_author_created_idx.
-	CountRecentThreadsByUser(ctx context.Context, arg CountRecentThreadsByUserParams) (int64, error)
 	// How many distinct jobs the caller first analyzed within the window (created_at is the
 	// first-analysis time — see UpsertUserJobAnalysis). This is the fit-analysis quota
 	// meter: the PK guarantees one row per (user, job), so the row count is the distinct-job
 	// count. A recompute does not add a row, so it never consumes quota.
 	CountRecentUserJobAnalyses(ctx context.Context, arg CountRecentUserJobAnalysesParams) (int64, error)
-	// How many requests a seeker has created since a cutoff — the per-day cap check.
-	CountReferralRequestsSince(ctx context.Context, arg CountReferralRequestsSinceParams) (int64, error)
-	// How many reports this account has filed since a cutoff, for the daily cap
-	// (ghost_reports.CountGhostReportsSince's counterpart for this queue). Counts every status,
-	// not just pending: a report already resolved or dismissed still consumed the reporter's
-	// daily allowance, so excluding it would let a decided report be re-filed for free.
-	CountReportsFiledSince(ctx context.Context, arg CountReportsFiledSinceParams) (int64, error)
 	// How many saved searches a user has — the per-user cap is enforced against this in
 	// the service before a create.
 	CountSavedSearches(ctx context.Context, userID int64) (int64, error)
@@ -2954,7 +2921,7 @@ type Querier interface {
 	// exists, so this never returns no-rows on that path.
 	GetUsageDayForUpdate(ctx context.Context, arg GetUsageDayForUpdateParams) (int64, error)
 	// How far the account's paid plans reach, for its own key-management page: the API product
-	// names the plan sold for reading, and all four decide the rate its keys get.
+	// names the plan sold for reading; the other fields describe account entitlements.
 	GetUserAPIEntitlement(ctx context.Context, id int64) (GetUserAPIEntitlementRow, error)
 	// The user's cached CV ATS qualitative review (content-quality + findings), or NULL
 	// when none has been computed. Derived only — never the raw CV text.
@@ -6771,11 +6738,9 @@ type Querier interface {
 	// what stops a group repeated inside one verbose title from outranking a real
 	// cluster. A second count(DISTINCT id) would only add a per-group sort.
 	ResidualTitleGroups(ctx context.Context, arg ResidualTitleGroupsParams) ([]ResidualTitleGroupsRow, error)
-	// Resolve a presented token to its owner, the key's scope and how far the owner's paid
-	// plans reach, for the public-read rate limiter. Read-only on purpose: unlike
-	// AuthenticateAPIKey it does NOT touch last_used_at, because it runs on the hottest reads on
-	// the site and its answer is cached. No row means unknown, revoked or expired.
-	ResolveAPIKeyTier(ctx context.Context, tokenHash string) (ResolveAPIKeyTierRow, error)
+	// Read-only credential identity and entitlements for trusted infrastructure.
+	// No row means unknown, revoked or expired; introspection never changes last_used_at.
+	ResolveAPIKeyIdentity(ctx context.Context, tokenHash string) (ResolveAPIKeyIdentityRow, error)
 	// The canonical slug for each folded key in the batch — one round trip per board run, not
 	// one per posting. pipeline.Runner folds the run's distinct company slugs, asks this once,
 	// and hands the ONE resulting map to both the aggregator-coverage gate and the upsert, so
@@ -6793,11 +6758,9 @@ type Querier interface {
 	ResolveCompanySlugAliases(ctx context.Context, foldedKeys []string) ([]ResolveCompanySlugAliasesRow, error)
 	// Mark a report handled. An already resolved report keeps its first resolver and time.
 	ResolveConversationReport(ctx context.Context, arg ResolveConversationReportParams) (int64, error)
-	// ResolveAPIKeyTier's twin for an MCP or CLI access token: its owner and how far the owner's
-	// paid plans reach, for the public-read rate limiter. The same liveness rule as
-	// AuthenticateOAuthGrant, and read-only for the same reason ResolveAPIKeyTier is. No row
-	// covers unknown, expired and revoked alike.
-	ResolveOAuthGrantTier(ctx context.Context, accessTokenHash string) (ResolveOAuthGrantTierRow, error)
+	// Read-only credential identity and entitlements with the same liveness rules as
+	// AuthenticateOAuthGrant, including the account's current session generation.
+	ResolveOAuthGrantIdentity(ctx context.Context, accessTokenHash string) (ResolveOAuthGrantIdentityRow, error)
 	// Mark a sent request contacted or declined, recording the acting referrer and time. The
 	// status='sent' guard makes it race-safe: whichever referrer acts first wins; a second
 	// attempt matches no row (mapped to "already resolved").

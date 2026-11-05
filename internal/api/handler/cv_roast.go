@@ -4,11 +4,9 @@ import (
 	"errors"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/candidate/atscheck"
 	"github.com/strelov1/freehire/internal/candidate/cvsection"
 	"github.com/strelov1/freehire/internal/job/verdict"
@@ -70,7 +68,7 @@ type roastResponse struct {
 // Withholding the model review is also the page's whole offer: the deterministic score
 // names what is wrong, and signing in is what rewrites it.
 //
-// Public on purpose and rate-limited by IP at the route (see resume.go's register).
+// Public on purpose: it reads a CV without storing it.
 func (h *resumeHandlers) RoastCV(c *fiber.Ctx) error {
 	// Refused before readResumeUpload ever runs: this route has no account behind it, and
 	// Fiber decompresses an encoded body without a ceiling. See refuseEncodedBody.
@@ -131,24 +129,3 @@ func (h *resumeHandlers) roleFacet(c *fiber.Ctx, roleFilter any) (search.FacetRe
 // errSearchUnavailable stands for "no facet backend" so roleFacet has one error kind
 // for both of its failures and the caller needs no nil check of its own.
 var errSearchUnavailable = errors.New("search is not available")
-
-// cvRoastPerHour bounds the public roast per IP. The work is a pdftotext subprocess
-// plus three facet queries — not free, and not a model call either, so this is sized to
-// stop a scraper rather than to ration something scarce.
-//
-// Per HOUR rather than per minute, on purpose: someone fixing their CV genuinely
-// re-uploads it several times in a row, and that is the behaviour the page wants. A
-// per-minute ceiling would punish exactly the visitor who is getting value.
-//
-// This bounds request COUNT per IP, not aggregate concurrency — it does nothing against
-// many IPs at once, each under its own allowance. See design.md's "Rate limit" section
-// for what one allowed request costs in memory/disk/CPU and why that gap is knowingly
-// left open rather than addressed here.
-const cvRoastPerHour = 10
-
-// cvRoastLimiter bounds the public roast by source address. There is no authenticated
-// caller to key by — that is what public means — and the route mounts no auth gate, so
-// KeyByIP is not a fallback here, it is the only thing there is.
-func cvRoastLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return ratelimit.Middleware(throttler, ratelimit.KeyByIP("cvroast"), cvRoastPerHour, time.Hour)
-}

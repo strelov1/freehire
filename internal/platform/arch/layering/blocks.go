@@ -286,7 +286,7 @@ var blocks = map[string][]string{
 	// that branch on error codes, this one renders ours for a language model that reads
 	// prose. Both are adapters over the same Reader the handlers satisfy, which is why they
 	// sit in the same block rather than one reaching for the other.
-	"api": {"atsapply", "candidateprofile", "handler", "mcpapp", "ogimage", "ojcp", "ojcpmcp", "ratelimit", "realtime"},
+	"api": {"atsapply", "candidateprofile", "handler", "mcpapp", "ogimage", "ojcp", "ojcpmcp", "realtime"},
 }
 
 // Assignment is the flattened package → block view the move script drives from.

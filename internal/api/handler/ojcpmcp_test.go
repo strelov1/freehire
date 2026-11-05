@@ -107,34 +107,9 @@ func TestManifestIsServedUnderTheAPIPath(t *testing.T) {
 	}
 }
 
-func TestManifestDeclaresTheLimitTheRoutesEnforce(t *testing.T) {
-	// The spec makes a declared rate limit binding. Declaring one figure and enforcing
-	// another is a conformance failure nothing else in this repo would notice.
-	h := newOJCPHandlers(&fakeSearcher{}, fakeOJCPStore{}, "https://freehire.me", nil)
-
-	limits := h.manifest().RateLimits
-	if limits == nil {
-		t.Fatal("rate_limits is absent; the routes do enforce one")
-	}
-	if want := agentSearchPerMinute / 60; limits.AnonymousRPS != want {
-		t.Errorf("anonymous_rps = %d, want %d — the limiter's own budget", limits.AnonymousRPS, want)
-	}
-}
-
-// Under strict the anonymous budget includes a DAILY cap, which no per-second figure can
-// state honestly: the sustained rate it allows rounds to zero, and declaring the minute's
-// rate would invite traffic the day refuses. So nothing is declared rather than a lie.
-func TestManifestDeclaresNoRateUnderStrict(t *testing.T) {
-	h := newOJCPHandlers(&fakeSearcher{}, fakeOJCPStore{}, "https://freehire.me", nil)
-	h.anonStrict = true
-	if limits := h.manifest().RateLimits; limits != nil {
-		t.Fatalf("rate_limits = %+v under strict, want none declared", limits)
-	}
-}
-
 func TestEveryErrorCodeHasAnHTTPStatus(t *testing.T) {
 	// Walks the codes this package may emit, from ojcp's own list rather than a copy written
-	// here — a hand-written list would only prove somebody typed the same five twice.
+	// here — a hand-written list would only prove somebody typed the same codes twice.
 	for _, code := range ojcp.ErrorCodes() {
 		if ojcpHTTPStatus(code) == 0 {
 			t.Errorf("error code %q has no HTTP status", code)
@@ -158,46 +133,6 @@ func TestAnUnmappedErrorCodeIsNeverServedAsSuccess(t *testing.T) {
 	}
 	if status < 400 {
 		t.Errorf("status = %d, want a failure status", status)
-	}
-}
-
-func TestARateLimitRefusalReachesAnAgentInTheStandardsEnvelope(t *testing.T) {
-	// The one refusal an agent is most likely to meet, and it was answered in this API's own
-	// `{"error": msg}` shape — with no field for the `retry_after_seconds` the schema makes
-	// mandatory alongside `rate_limited`.
-	refuse := func(c *fiber.Ctx) error {
-		c.Set("Retry-After", "30")
-		return fiber.NewError(fiber.StatusTooManyRequests, "too many requests, please try again later")
-	}
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/probe", ojcpRateLimited(refuse), func(c *fiber.Ctx) error { return c.JSON(fiber.Map{}) })
-
-	status, body := doGet(t, app, "/probe")
-
-	if status != fiber.StatusTooManyRequests {
-		t.Fatalf("status = %d, want 429", status)
-	}
-	if body["error_code"] != "rate_limited" {
-		t.Errorf("error_code = %v, want rate_limited (the standard's own shape)", body["error_code"])
-	}
-	if body["retry_after_seconds"] != float64(30) {
-		t.Errorf("retry_after_seconds = %v, want the seconds the limiter already set", body["retry_after_seconds"])
-	}
-}
-
-func TestARateLimitRefusalNeverTellsAnAgentToRetryImmediately(t *testing.T) {
-	// A missing or unparseable Retry-After must not become zero: "retry now" is the one
-	// answer that turns a refusal into a loop.
-	refuse := func(*fiber.Ctx) error {
-		return fiber.NewError(fiber.StatusTooManyRequests, "too many requests")
-	}
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Get("/probe", ojcpRateLimited(refuse), func(c *fiber.Ctx) error { return c.JSON(fiber.Map{}) })
-
-	_, body := doGet(t, app, "/probe")
-
-	if seconds, _ := body["retry_after_seconds"].(float64); seconds < 1 {
-		t.Errorf("retry_after_seconds = %v, want at least one second", body["retry_after_seconds"])
 	}
 }
 

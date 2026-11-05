@@ -223,9 +223,8 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	api.Delete("/assistant/sessions/:id", mw.key, h.DeleteAssistantSession)
 	api.Post("/assistant/sessions/:id/messages", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantMessage)
 	// Read a PDF to attach to the next message. No model call, so no paidAI gate: it only
-	// extracts, and the turn that carries the text is what is metered. The limiter mounts
-	// after the gate so it keys by user (see the handler AGENTS.md).
-	api.Post("/assistant/attachments", mw.key, perCallerLimiter(attachmentExtractionsPerHour), h.PostAssistantAttachment)
+	// extracts, and the turn that carries the text is what is metered.
+	api.Post("/assistant/attachments", mw.key, h.PostAssistantAttachment)
 	api.Post("/assistant/sessions/:id/cancel", mw.key, h.CancelAssistantTurn)
 	// Buy this tailoring session another ceiling's worth of turns. Separate from starting
 	// a session because it is a distinct decision the candidate makes with what they know
@@ -238,10 +237,7 @@ func (h *assistantHandlers) register(api fiber.Router, mw middleware) {
 	api.Post("/assistant/sessions/:id/retry", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantRetry)
 	// Voice mode: mint one call's credential, then append each completed spoken turn
 	// as it finishes. The audio itself never transits here — see PostAssistantVoiceToken.
-	// The limiter guards call STARTS, the same shape as speech's transcriptionsPerHour;
-	// it is not a substitute for the client-side call-duration cap, which guards one
-	// call's length.
-	api.Post("/assistant/sessions/:id/voice-token", mw.key, perCallerLimiter(voiceTokensPerHour), mw.paidAI(plan.FeatureAssistant), h.PostAssistantVoiceToken)
+	api.Post("/assistant/sessions/:id/voice-token", mw.key, mw.paidAI(plan.FeatureAssistant), h.PostAssistantVoiceToken)
 	api.Post("/assistant/sessions/:id/voice-turns", mw.key, h.PostAssistantVoiceTurn)
 	// Cookie-only: an unattended run rewrites a CV, and the browser is the only place
 	// the candidate can watch it happen and undo it.

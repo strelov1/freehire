@@ -37,9 +37,7 @@ var windowedListRoutes = []struct {
 	}, "/api/v1/companies/acme/feedback", maxPageWindow},
 }
 
-// mountWindowed builds an app from a real register. The throttler is nil, which
-// ratelimit.Middleware treats as "no backend configured" and fails open, so the limiter can
-// never be what refuses a request here — the window has to be.
+// mountWindowed exercises pagination bounds through the real route registration.
 func mountWindowed(register func(fiber.Router, middleware)) *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Use(recover.New())

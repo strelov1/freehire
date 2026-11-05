@@ -13,6 +13,7 @@ import (
 	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/api/ojcpmcp"
 	"github.com/strelov1/freehire/internal/application/agentview"
+	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/db"
 	"github.com/strelov1/freehire/internal/search/search"
 )
@@ -258,28 +259,35 @@ func TestAnOJCPMCPCallThroughTheMountedRouteIsRecorded(t *testing.T) {
 	}
 }
 
-func TestAnAgentViewBehindAVerifiedKeyIsCountedAsItsAccount(t *testing.T) {
-	// The public gate verifies a presented key for its rate budget; the view scope must
-	// reuse that identity, or every account behind one address and client counts as one.
+func TestAnAgentViewBehindTrustedAuthenticationIsCountedAsItsAccount(t *testing.T) {
 	sink := &recordingSink{}
-	g := newTestGate(&checkRecorder{}, paidKeys(), false, "")
 	app := fiber.New(fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor})
-	app.Get("/agent", g.limiter(agentSearchBudget), agentViews(sink, agentview.SurfaceAgentAPI),
-		func(c *fiber.Ctx) error {
-			agentview.Record(c.Context(), agentview.KindSearch, []int64{1})
-			return c.SendStatus(fiber.StatusOK)
-		})
-
-	gateGet(t, app, "/agent", bearer(unpaidToken))
-	gateGet(t, app, "/agent", bearer(unknownToken))
-
+	app.Use(externalCaller("trusted-auth-service"))
+	app.Get("/agent", agentViews(sink, agentview.SurfaceAgentAPI), func(c *fiber.Ctx) error {
+		if _, authenticated := auth.UserID(c); authenticated {
+			t.Error("attribution must not authenticate a request")
+		}
+		agentview.Record(c.Context(), agentview.KindSearch, []int64{1})
+		return c.SendStatus(fiber.StatusOK)
+	})
+	for _, secret := range []string{"trusted-auth-service", "forged"} {
+		req := httptest.NewRequest("GET", "/agent", nil)
+		req.Header.Set(fiber.HeaderXForwardedFor, "203.0.113.42")
+		req.Header.Set(authIntrospectionSecretHeader, secret)
+		req.Header.Set("X-FH-Auth-User", "9")
+		response, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+	}
 	if len(sink.got) != 2 {
-		t.Fatalf("events = %d, want 2", len(sink.got))
+		t.Fatalf("events=%d want2", len(sink.got))
 	}
 	if got := sink.got[0].Viewer; got != "user:9" {
-		t.Errorf("verified key viewer = %q, want user:9", got)
+		t.Errorf("verified viewer=%q want user:9", got)
 	}
-	if got := sink.got[1].Viewer; !strings.HasPrefix(got, "ip:"+gateIP) {
-		t.Errorf("unknown key viewer = %q, want the address", got)
+	if got := sink.got[1].Viewer; !strings.HasPrefix(got, "ip:203.0.113.42") {
+		t.Errorf("forged proof viewer=%q want address", got)
 	}
 }

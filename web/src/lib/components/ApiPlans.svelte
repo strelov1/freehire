@@ -5,16 +5,9 @@
   import { isAuthenticated } from '#lib/auth.svelte.js';
   import { formatMinorUnits } from '#lib/money.js';
   import { promptSignIn } from '#lib/signin.js';
-  import RateLimitLadder from './RateLimitLadder.svelte';
-  import type { PlansMatrix, PublicPrice } from '#lib/types.js';
+  import type { PublicPrice } from '#lib/types.js';
 
-  // The API product: access to the public read API for software, sold apart from the plans
-  // above. Its figures come from the same response as theirs, so the page cannot quote a
-  // limit the rate limiter does not enforce.
-  // `limits` is optional: a backend that predates the API product sends none, and the section
-  // then stays out of the page rather than taking the plans above it down.
-  const { prices, limits }: { prices: PublicPrice[]; limits?: PlansMatrix['api_limits'] } =
-    $props();
+  const { prices }: { prices: PublicPrice[] } = $props();
 
   // One card per tier, and only for a tier that is actually sold: the monthly price when there
   // is one, otherwise whatever interval the deployment offers.
@@ -25,7 +18,6 @@
   const apiPrice = $derived(pick('api'));
   const dataPrice = $derived(pick('api_data'));
 
-  const count = (n: number) => n.toLocaleString('en-US');
   const money = (p: PublicPrice) => formatMinorUnits(p.amount_cents, p.currency);
 
   // Which plan's checkout is opening, so only its own button says so.
@@ -46,14 +38,12 @@
   }
 
   const cards = $derived.by(() => {
-    if (!limits) return [];
     return [
       apiPrice && {
         price: apiPrice,
         name: 'API',
         blurb: 'For a job board, a bot or an agent that reads the catalogue.',
         perks: [
-          `${count(limits.api_per_minute)} requests a minute, no daily cap`,
           'Every search filter, every field, company data',
           'Store and show the postings in your product, under the data licence',
         ],
@@ -63,7 +53,6 @@
         name: 'Data',
         blurb: 'For mirroring the catalogue at volume.',
         perks: [
-          `${count(limits.data_per_minute)} requests a minute, no daily cap`,
           'Everything in API',
           'Bulk catalogue files — coming soon',
         ],
@@ -72,16 +61,13 @@
   });
 </script>
 
-{#if limits && cards.length > 0}
+{#if cards.length > 0}
   <section id="api" class="flex scroll-mt-20 flex-col gap-6">
     <header class="flex flex-col items-center gap-2 text-center">
       <h2 class="text-2xl font-semibold tracking-tight">API</h2>
       <p class="max-w-2xl text-balance text-muted-foreground">
-        The read API is free without a key, up to {count(limits.anonymous_per_minute)} requests a
-        minute{#if limits.anonymous_per_day > 0}&nbsp;and {count(limits.anonymous_per_day)} a day{/if}
-        per address. A full-access key moves the budget to your account, and Pro and Ultra raise it.
-        For the most, and for the right to use the data in a commercial product, pick a plan and send
-        its key as
+        The read API is free for personal and non-commercial use. An API plan licenses
+        the data for use in your product. Send a full-access key as
         <code class="text-sm">Authorization: Bearer</code>.
       </p>
     </header>
@@ -125,9 +111,6 @@
     </div>
     {#if error}
       <p class="text-center text-sm text-destructive" role="alert">{error}</p>
-    {/if}
-    {#if limits.tiers?.length}
-      <RateLimitLadder tiers={limits.tiers} />
     {/if}
     <p class="text-center text-sm text-muted-foreground">
       What the API carries and who it is for is on the <a

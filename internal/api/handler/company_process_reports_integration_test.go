@@ -23,8 +23,8 @@ import (
 	"github.com/strelov1/freehire/internal/platform/db"
 )
 
-func newProcessReportApp(queries *db.Queries, pool *pgxpool.Pool, iss *auth.Issuer, cfg processreport.Config) *fiber.App {
-	h := newCompanyProcessReportHandlers(processreport.New(queries, pool, cfg))
+func newProcessReportApp(queries *db.Queries, pool *pgxpool.Pool, iss *auth.Issuer) *fiber.App {
+	h := newCompanyProcessReportHandlers(processreport.New(queries, pool))
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	mw := middleware{cookie: auth.RequireAuth(iss, testVersions)}
 	h.register(app.Group("/api/v1"), mw)
@@ -101,7 +101,7 @@ func TestCompanyProcessReportEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
-	app := newProcessReportApp(queries, pool, iss, processreport.Config{})
+	app := newProcessReportApp(queries, pool, iss)
 
 	const path = "/api/v1/companies/acme-ai/process-reports"
 	const filed = `{"kind":"ai_interview"}`
@@ -161,43 +161,5 @@ func TestCompanyProcessReportEndpoints(t *testing.T) {
 	// a retraction is not a way to file repeatedly.
 	if got := processResult(t, app, fiber.MethodPost, path, cookie, filed, fiber.StatusCreated); got.Count != 1 {
 		t.Fatalf("count after revival = %d, want 1", got.Count)
-	}
-}
-
-func TestCompanyProcessReportRateLimit(t *testing.T) {
-	pool := startPostgres(t)
-	ctx := context.Background()
-	queries := db.New(pool)
-
-	var userID int64
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (email) VALUES ('prolific@example.test') RETURNING id`).Scan(&userID); err != nil {
-		t.Fatalf("seed user: %v", err)
-	}
-	for _, slug := range []string{"rate-one", "rate-two"} {
-		if _, err := pool.Exec(ctx,
-			`INSERT INTO companies (slug, name) VALUES ($1, $1)`, slug); err != nil {
-			t.Fatalf("seed company %s: %v", slug, err)
-		}
-	}
-
-	iss := auth.NewIssuer("test-secret", time.Hour)
-	cookie, err := iss.Issue(userID, testTokenVersion)
-	if err != nil {
-		t.Fatalf("issue token: %v", err)
-	}
-	// Cap of one, so the second company is refused. The shipped default is far looser —
-	// the cap exists so one account cannot label the catalogue, not to ration honest
-	// reporting.
-	app := newProcessReportApp(queries, pool, iss, processreport.Config{Window: time.Hour, Cap: 1})
-
-	const filed = `{"kind":"ai_interview"}`
-	if got := processStatus(t, app, fiber.MethodPost,
-		"/api/v1/companies/rate-one/process-reports", cookie, filed); got != fiber.StatusCreated {
-		t.Fatalf("first: want 201, got %d", got)
-	}
-	if got := processStatus(t, app, fiber.MethodPost,
-		"/api/v1/companies/rate-two/process-reports", cookie, filed); got != fiber.StatusTooManyRequests {
-		t.Fatalf("over the cap: want 429, got %d", got)
 	}
 }

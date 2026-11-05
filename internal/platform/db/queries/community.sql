@@ -147,11 +147,3 @@ WHERE r.thread_id = $1
        OR (r.created_at = sqlc.arg(cursor_created_at) AND r.id > sqlc.arg(cursor_id)))
 ORDER BY r.created_at ASC, r.id ASC
 LIMIT sqlc.arg(page_limit);
-
--- name: CountRecentThreadsByUser :one
--- Rate-limit count: threads a user opened since a cutoff. Served by
--- threads_author_created_idx.
-SELECT count(*) FROM threads WHERE author_user_id = $1 AND created_at > $2;
-
--- name: CountRecentRepliesByUser :one
-SELECT count(*) FROM thread_replies WHERE author_user_id = $1 AND created_at > $2;

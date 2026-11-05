@@ -37,7 +37,7 @@ func (h *contributionHandlers) register(api fiber.Router, mw middleware) {
 	// anything can read it and recording the board behind it either way. There is deliberately
 	// no second "contribute a board" endpoint — a link pasted on the website, in the bot, in
 	// the extension or in the CLI must get the same answer, and two endpoints would drift.
-	api.Post("/jobs/resolve", mw.key, mw.outboundFetch, h.ResolveJob)
+	api.Post("/jobs/resolve", mw.key, h.ResolveJob)
 
 	// The caller reads their own contributions; the credit balance rides on /auth/me.
 	api.Get("/me/contributions", mw.key, h.ListMyContributions)
