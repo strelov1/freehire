@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testCSVURL = "https://assets.publishing.service.gov.uk/media/abc/SP_-_Worker_and_Temporary_Worker_Web_Register_-_2026-06-30.csv"
@@ -182,5 +183,55 @@ func TestParseUKSponsors_RejectsAnEmptyRegister(t *testing.T) {
 	// register — returning no rows would reconcile the credential off every company.
 	if _, err := ParseUKSponsors([]byte("Organisation Name,Town/City,County,Type & Rating,Route\n")); err == nil {
 		t.Error("ParseUKSponsors accepted a register with no rows")
+	}
+}
+
+func TestGetRetriesRateLimit(t *testing.T) {
+	defer func(w time.Duration) { rateLimitWait = w }(rateLimitWait)
+	rateLimitWait = time.Millisecond
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls < 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	body, err := get(context.Background(), srv.Client(), srv.URL)
+	if err != nil || string(body) != "ok" || calls != 3 {
+		t.Fatalf("get = %q, %v after %d calls; want ok after 3", body, err, calls)
+	}
+}
+
+func TestGetGivesUpOnPersistentRateLimit(t *testing.T) {
+	defer func(w time.Duration) { rateLimitWait = w }(rateLimitWait)
+	rateLimitWait = time.Millisecond
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	if _, err := get(context.Background(), srv.Client(), srv.URL); err == nil || calls != rateLimitAttempts {
+		t.Fatalf("err = %v after %d calls; want an error after %d", err, calls, rateLimitAttempts)
+	}
+}
+
+func TestGetDoesNotRetryOtherErrors(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	if _, err := get(context.Background(), srv.Client(), srv.URL); err == nil || calls != 1 {
+		t.Fatalf("err = %v after %d calls; want one call and an error", err, calls)
 	}
 }
