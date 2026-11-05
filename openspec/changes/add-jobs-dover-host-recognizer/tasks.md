@@ -13,14 +13,21 @@
       vendor's `/startup-jobs` listing, and a second segment that is not a UUID are all
       declined.
 
-## 2. Adapter
+## 2. Adapter and link-source resolver
 
-- [x] 2.1 No adapter change in the final design: boards are slugs, so the existing
+- [x] 2.1 No ingest-adapter change in the final design: boards are slugs, so the existing
       `careers-page-slug` resolve path is the supported one (an interim uuid-shortcut was
       removed in review round 1 — the link uuid is a posting id, not the client id).
 - [x] 2.2 Test: a `jobs.dover.com`-spelled board crawls through the slug lookup and yields
       correct `/apply/<slug>/<jobId>` URLs (`TestDoverFetchNewJobsDoverBoardCrawlsThroughSlug`,
       fixture = live Deepspatial resolution).
+- [x] 2.3 Add `internal/ingest/linksource/dover.go`: direct per-job resolution off the
+      detail endpoint (client_name naming, slug-namespaced external id), registered in
+      `linksource.All` — the review-round-2 findings (shell-provenance reward risk,
+      unknown-employer conversion) are answered by resolving the vacancy directly instead of
+      writing an unverified board row.
+- [x] 2.4 Tests: client-record naming + slug-namespaced id against live fixtures; Match
+      declines the shell, `/startup-jobs`, and a non-UUID second segment.
 
 ## 3. Validation
 

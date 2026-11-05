@@ -1,18 +1,28 @@
 ## ADDED Requirements
 
-### Requirement: A jobs.dover.com-spelled board crawls through the slug path
+### Requirement: A jobs.dover.com link resolves as a single vacancy
 
-The system SHALL crawl a board spelled by a `jobs.dover.com` link exactly like any other
-Dover board: the board id is the company's slug, the adapter resolves it through the existing
-`careers-page-slug` lookup before listing, and every posting it yields carries the platform's
-own apply-URL shape `https://app.dover.com/apply/<slug>/<job-id>`. The adapter SHALL NOT
-trust any uuid a harvested link carried as a client identity — such a uuid may be a posting
-id (the submitted Deepspatial link's is), and the slug lookup is both the supported address
-path and the existence check the host's marketing shell cannot provide.
+The link-source registry SHALL resolve a `jobs.dover.com/<Org>/<uuid>` link directly through
+Dover's public posting-detail endpoint — the endpoint the ingest adapter already hydrates
+with — instead of falling back to a full board fetch. The employer SHALL be named from the
+posting's own client record (`client_name`), never from a humanized link segment, and the
+resolved posting SHALL be namespaced under the canonical slug the careers API reports for
+that company (`careers-page-slug/<client_name>`), so a link-imported row and a crawl of the
+board the contribution flow files this link under dedup to one posting. The registry SHALL
+NOT trust the link's uuid as a client identity: it is the posting id (the submitted
+Deepspatial link's uuid is a posting of client `1aeeba55-…`, live-verified 2026-11-05).
 
-#### Scenario: A jobs.dover.com-spelled board crawls like an app.dover.com board
+#### Scenario: The submitted Deepspatial link resolves under the company's identity
 
-- **WHEN** the adapter crawls the board `Deepspatial`, filed from a
-  `jobs.dover.com/Deepspatial/<uuid>` link, whose slug resolves to client `1aeeba55-…`
-- **THEN** it lists `careers-page/1aeeba55-…/jobs` and yields postings whose URLs are
-  `https://app.dover.com/apply/Deepspatial/<job-id>`
+- **WHEN** the link-source registry resolves
+  `https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d`
+- **THEN** the vacancy carries company `Deepspatial` from the posting's client record and
+  external id `deepspatial:a5546acf-45c3-44ff-bedd-a4314fd0f37d`, matching the identity a
+  crawl of the `deepspatial` board writes
+
+#### Scenario: Non-job shapes are declined
+
+- **WHEN** a `jobs.dover.com` link without a UUID-shaped second segment (the marketing shell
+  or the vendor's `/startup-jobs` listing) reaches the registry
+- **THEN** the Dover adapter does not match it, leaving the link to the ordinary resolver
+  chain

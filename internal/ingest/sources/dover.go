@@ -224,7 +224,25 @@ type doverDetailResponse struct {
 	VisaSupport             bool              `json:"visa_support"`
 	Active                  bool              `json:"active"`
 	IsPrivate               bool              `json:"is_private"`
+
+	// Client identity fields, populated on the same endpoint (verified live 2026-11-05: the
+	// submitted jobs.dover.com link's detail carries client_id/client_name/client_domain; the
+	// canonical slug comes from careers-page-slug/<client_name>, which answers either case of
+	// the name with the lower-case slug). DoverJobDetail reuses this struct for the link-source
+	// resolver, which needs the company's own naming and slug off the posting rather than a
+	// humanized link segment.
+	ClientID     string `json:"client_id"`
+	ClientName   string `json:"client_name"`
+	ClientDomain string `json:"client_domain"`
+	// ClientSlug is NOT in the detail response; the link-source resolver fills it from
+	// careers-page-slug/<client_name> (lower-case canonical slug, e.g. "deepspatial").
+	ClientSlug string `json:"-"`
 }
+
+// DoverJobDetail is the exported view of a posting detail for the link-source resolver
+// (internal/ingest/linksource/dover.go): the same payload the board adapter hydrates with,
+// plus the client identity the response carries.
+type DoverJobDetail = doverDetailResponse
 
 // detail fetches one posting's full detail, returning ok=false when the request fails (in which
 // case the caller falls back to the list-only job — see FetchNew).
@@ -247,6 +265,32 @@ func (d doverDetailResponse) toJob(e CompanyEntry, url string) Job {
 		URL:            url,
 		Title:          strings.TrimSpace(d.Title),
 		Company:        e.Company,
+		Description:    description,
+		WorkMode:       mode,
+		Remote:         mode == "remote",
+		Countries:      doverCountriesFromLocations(d.Locations),
+		EmploymentType: doverEmploymentType(d.Compensation.EmploymentType),
+	}
+	if d.Compensation.OpenToSharingComp && (d.Compensation.LowerBound != nil || d.Compensation.UpperBound != nil) {
+		job.SalaryMin = d.Compensation.LowerBound
+		job.SalaryMax = d.Compensation.UpperBound
+		job.SalaryCurrency = d.Compensation.CurrencyCode
+		job.SalaryPeriod = "year"
+	}
+	return job
+}
+
+// ToJob maps a detail fetched OUTSIDE a board crawl (the link-source resolver) onto a Job,
+// naming the employer from the posting's own client record instead of a catalogue entry — the
+// company fields the board-crawl mapping takes from CompanyEntry, plus the same compensation /
+// location / employment-type mapping.
+func (d doverDetailResponse) ToJob() Job {
+	mode := workplaceTypeMode(d.WorkplaceType)
+	description := sanitizeHTML(d.UserProvidedDescription) + doverDescriptionExtras(d.Compensation, d.VisaSupport)
+	job := Job{
+		ExternalID:     d.ID,
+		Title:          strings.TrimSpace(d.Title),
+		Company:        strings.TrimSpace(d.ClientName),
 		Description:    description,
 		WorkMode:       mode,
 		Remote:         mode == "remote",
