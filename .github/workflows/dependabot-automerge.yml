@@ -33,12 +33,20 @@ jobs:
       # update-type is the HIGHEST semver change in a grouped PR, so a group
       # containing even one major update must still be reviewed manually.
       # GitHub waits for main's required checks; never use --admin here.
+      #
+      # A merge done with GITHUB_TOKEN starts no push workflows, so main gets no CI run
+      # for that commit and autodeploy, which reads push runs, steps over it until a later
+      # merge. DEPENDABOT_AUTOMERGE_TOKEN avoids that: a fine-grained PAT for this repository
+      # (contents + pull-requests, write), stored under Actions secrets. GitHub withholds
+      # secrets from a Dependabot pull_request_target run only when Dependabot created the
+      # base ref, which `branches: [main]` above rules out. If the secret is absent or not
+      # readable, the fallback still merges, with that delay.
       - name: Enable auto-merge for minor and patch updates
         if: >-
           steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
           steps.metadata.outputs.update-type == 'version-update:semver-patch'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_AUTOMERGE_TOKEN || github.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: gh pr merge --auto --squash --match-head-commit "$HEAD_SHA" "$PR_URL"
