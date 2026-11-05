@@ -132,7 +132,7 @@
   let codeError = $state<string | null>(null);
 
   // What the code is worth, checked without spending it. Deliberately a button rather than
-  // something that fires as you type: the route is rate limited server-side, and firing on
+  // something that fires as you type: firing on
   // every keystroke would spend a real caller's budget rendering "not available" over and
   // over while they are still typing.
   async function checkCode() {
@@ -487,7 +487,7 @@
   </div>
 
   {#if plans}
-    <ApiPlans prices={plans.prices} limits={plans.api_limits} />
+    <ApiPlans prices={plans.prices} />
   {/if}
 
   <!-- Said plainly rather than buried: what a subscription does and does not commit anyone

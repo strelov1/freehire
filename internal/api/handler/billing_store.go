@@ -8,7 +8,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/identity/billing"
 )
 
@@ -16,16 +15,6 @@ import (
 // webhook's, because a person is waiting on this one: a paywall that has already taken their
 // money and is now spinning is worse than one that says "a moment" and lets them retry.
 const storeSyncTimeout = 8 * time.Second
-
-// storeSyncLimit and storeSyncWindow bound how often one caller can make us call RevenueCat.
-//
-// Generous enough for the real pattern — buy, land back in the app, ask once, maybe retry
-// twice while the store settles — and far too tight to be worth pointing at us. The route is
-// authenticated, so the budget is per account rather than per address.
-const (
-	storeSyncLimit  = 10
-	storeSyncWindow = time.Minute
-)
 
 // registerStore mounts the App Store and Google Play routes, or mounts nothing.
 //
@@ -38,10 +27,9 @@ func (h *billingHandlers) registerStore(api fiber.Router, mw middleware) {
 	// Unauthenticated, and authenticated by RevenueCat's HMAC instead — the same arrangement
 	// as Stripe's webhook, over a different header with a different window.
 	api.Post("/billing/revenuecat/webhook", webhookFor(h.store))
-	// Cookie only, and rate-limited: this is the one route a caller can use to make the
+	// Cookie only: this is the one route a caller can use to make the
 	// server call a third party on demand.
 	api.Post("/billing/revenuecat/sync", mw.cookie,
-		ratelimit.Middleware(mw.throttler, ratelimit.KeyByUserOrIP("billing_sync"), storeSyncLimit, storeSyncWindow),
 		h.SyncStore)
 }
 

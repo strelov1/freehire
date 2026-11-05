@@ -18,7 +18,7 @@ func mountMCP(
 ) {
 	granted := adaptor.HTTPHandler(mcpapp.MixedHandler(mcpAccountTools(assistants, catalogue.origin), catalogue.origin, catalogue))
 	keyed := adaptor.HTTPHandler(mcpapp.MixedHandler(mcpKeyTools(assistants, catalogue.origin), catalogue.origin, catalogue))
-	api.All("/mcp", chatAgentLimiter(mw.public),
+	api.All("/mcp",
 		mcpAuthenticate(assistants, catalogue.origin, mcpapp.MixedResourceMetadataPath, true),
 		agentViews(catalogue.agentViews, agentview.SurfaceMCP), func(c *fiber.Ctx) error {
 			if viaKey, _ := c.Locals(localsMCPAccountViaKey).(bool); viaKey {

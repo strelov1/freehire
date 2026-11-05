@@ -4,16 +4,12 @@ import (
 	"context"
 	"io"
 	"log"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/google/uuid"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/identity/auth"
 )
 
 // transcriber is internal/ai/speech seen from here. An interface rather than the
@@ -40,37 +36,12 @@ func newSpeechHandlers(stt transcriber, plans *plan.Store) *speechHandlers {
 	return &speechHandlers{stt: stt, plans: plans}
 }
 
-// transcriptionsPerHour bounds how many recordings one caller may transcribe per
-// hour. It bounds the RATE; the daily dictation allowance bounds the volume, and the two
-// are not interchangeable — a burst of sixty in a minute and sixty spread over a day are
-// different problems. Sixty is far past anyone dictating into a chat and far below
-// anything worth doing with a stolen session.
-const transcriptionsPerHour = 60
-
-// perCallerLimiter throttles per authenticated caller rather than per address — an IP
-// key is lifted by any rotating proxy pool, and the cost being defended here is a
-// metered upstream. Mounted AFTER the auth gate so the user id is resolved. Shared
-// with voice mode's token-minting endpoint (assistant_interview_voice.go), which
-// meters a different upstream behind the same per-caller shape.
-func perCallerLimiter(max int) fiber.Handler {
-	return limiter.New(limiter.Config{
-		Max:        max,
-		Expiration: time.Hour,
-		KeyGenerator: func(c *fiber.Ctx) string {
-			if id, ok := auth.UserID(c); ok {
-				return "user:" + strconv.FormatInt(id, 10)
-			}
-			return "ip:" + c.IP()
-		},
-	})
-}
-
 func (h *speechHandlers) register(api fiber.Router, mw middleware) {
 	// The same gate as POST /assistant/sessions/:id/messages. The microphone lives in
 	// the composer that posts messages, so a client allowed to send one is allowed to
 	// transcribe for it; a narrower rule here would leave the control dead in the
 	// extension's side panel for no gain.
-	api.Post("/speech/transcriptions", mw.key, perCallerLimiter(transcriptionsPerHour), mw.paidAI(plan.FeatureDictation), h.PostTranscription)
+	api.Post("/speech/transcriptions", mw.key, mw.paidAI(plan.FeatureDictation), h.PostTranscription)
 }
 
 // maxAudioUpload bounds one recording. At the ~32 kbit/s the browser's opus encoder
@@ -104,9 +75,7 @@ func (h *speechHandlers) PostTranscription(c *fiber.Ctx) error {
 		return err
 	}
 	// Charged before the audio goes upstream, and given back below if nothing usable comes
-	// out. The rate limiter above bounds how FAST a caller may ask; this bounds how much
-	// they may have in a day — and the two answer differently on purpose, 429 against 402,
-	// because one clears in seconds and the other clears tomorrow.
+	// out. This charge bounds how much the caller may transcribe in a day.
 	charge, refused, err := h.chargeTranscription(c, userID)
 	if refused {
 		return err

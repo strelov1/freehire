@@ -438,10 +438,7 @@ func TestRoastCV_UndecodablePDFIsA400NotA500(t *testing.T) {
 	}
 }
 
-// TestRoastCV_IsMountedPublicAndLimited drives the real register, not a bare app: the
-// route being public is the point, and a limiter that is correct in isolation and
-// unmounted in place is exactly the defect public_read_limit_test.go exists for.
-func TestRoastCV_IsMountedPublicAndLimited(t *testing.T) {
+func TestRoastCV_IsMountedPublic(t *testing.T) {
 	h := &resumeHandlers{facets: &recordingFacetCounter{res: search.FacetResult{Total: 10}}}
 	app := fiber.New(fiber.Config{
 		ErrorHandler: RenderError,
@@ -451,10 +448,9 @@ func TestRoastCV_IsMountedPublicAndLimited(t *testing.T) {
 		return fiber.NewError(fiber.StatusUnauthorized, "auth middleware ran")
 	}
 	h.register(app.Group("/api/v1"), middleware{
-		paidAI:    markPaidAI,
-		cookie:    refuse,
-		key:       refuse,
-		throttler: newOneShotThrottler(),
+		paidAI: markPaidAI,
+		cookie: refuse,
+		key:    refuse,
 	})
 
 	post := func() int {
@@ -472,9 +468,6 @@ func TestRoastCV_IsMountedPublicAndLimited(t *testing.T) {
 
 	if got := post(); got != fiber.StatusOK {
 		t.Fatalf("first call = %d, want 200 — the route must need no session and no key", got)
-	}
-	if got := post(); got != fiber.StatusTooManyRequests {
-		t.Errorf("second call = %d, want 429 — the limiter is not mounted", got)
 	}
 }
 

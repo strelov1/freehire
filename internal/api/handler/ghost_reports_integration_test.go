@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/job/ghostreport"
@@ -206,44 +205,4 @@ func TestGhostReportsEndToEnd(t *testing.T) {
 		}
 	})
 
-	// The cap counts retracted rows too: filing and withdrawing in a loop is exactly the
-	// pattern it exists to bound, so forgiving that would leave it trivially bypassable.
-	t.Run("past the daily cap is a 429", func(t *testing.T) {
-		var already int
-		if err := pool.QueryRow(ctx,
-			`SELECT count(*) FROM ghost_reports WHERE user_id = $1 AND created_at >= now() - interval '1 day'`,
-			verifiedID).Scan(&already); err != nil {
-			t.Fatalf("count filed today: %v", err)
-		}
-		remaining := ghostreport.DailyCap - already
-		if remaining < 1 {
-			t.Fatalf("the cap is already full before this subtest (filed %d)", already)
-		}
-
-		slugs := seedGhostJobs(t, pool, remaining+1)
-		for i, slug := range slugs[:remaining] {
-			if got := post(slug, verifiedCookie, body).StatusCode; got != fiber.StatusCreated {
-				t.Fatalf("filling the cap at %d of %d: status = %d, want 201", i+1, remaining, got)
-			}
-		}
-		if got := post(slugs[remaining], verifiedCookie, body).StatusCode; got != fiber.StatusTooManyRequests {
-			t.Errorf("status = %d, want 429 at exactly the cap", got)
-		}
-	})
-}
-
-// seedGhostJobs inserts n open jobs and returns their slugs.
-func seedGhostJobs(t *testing.T, pool *pgxpool.Pool, n int) []string {
-	t.Helper()
-	slugs := make([]string, n)
-	for i := range slugs {
-		slugs[i] = fmt.Sprintf("ghost-cap-job-%04d", i)
-		if _, err := pool.Exec(context.Background(),
-			`INSERT INTO jobs (source, external_id, url, title, public_slug)
-			 VALUES ('test', $1, 'http://example.test/cap', 'Cap Dev', $2)`,
-			"ghost-cap-"+slugs[i], slugs[i]); err != nil {
-			t.Fatalf("seed cap job %d: %v", i, err)
-		}
-	}
-	return slugs
 }

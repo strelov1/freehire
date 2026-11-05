@@ -37,22 +37,11 @@ func newCompanyFeedbackHandlers(svc *companyfeedback.Service) *companyFeedbackHa
 	return &companyFeedbackHandlers{feedback: svc}
 }
 
-// registerPublic mounts the one route anyone may read, with the public-read limiter FIRST on
-// its chain. Split from register for the same reason mentorshipHandlers splits its own: the
-// limiter guard drives every GET a register mounts and requires the limiter to lead each
-// chain, which the cookie-gated and moderator reads below cannot satisfy — auth has to run
-// first there. Keeping them in one register would mean weakening the guard or throttling an
-// authenticated read by IP, and both are worse than a second method.
-//
-// The limiter itself is new. This was the one public list registered with none at all, which
-// made it the cheapest unthrottled way to make this process work: the handler fires three
-// queries per request (the company existence check, the page, and the count). Cheap per query
-// is not free per request, and the budget is shared with the other public reads precisely so
-// a caller cannot spend it twice.
+// registerPublic mounts pseudonymous feedback reads without requiring sign-in.
 func (h *companyFeedbackHandlers) registerPublic(api fiber.Router, mw middleware) {
 	// Only pseudonymous persona handles are ever exposed, never a user id, so feedback is
 	// browsable without signing in.
-	api.Get("/companies/:slug/feedback", publicReadLimiter(mw.public), h.ListFeedback)
+	api.Get("/companies/:slug/feedback", h.ListFeedback)
 }
 
 func (h *companyFeedbackHandlers) register(api fiber.Router, mw middleware) {
@@ -151,8 +140,6 @@ func companyFeedbackError(err error) error {
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "body is required")
 	case errors.Is(err, companyfeedback.ErrBodyTooLong):
 		return fiber.NewError(fiber.StatusUnprocessableEntity, "feedback is too long")
-	case errors.Is(err, companyfeedback.ErrRateLimited):
-		return fiber.NewError(fiber.StatusTooManyRequests, "you've reviewed a lot of companies today — try again tomorrow")
 	default:
 		return err
 	}

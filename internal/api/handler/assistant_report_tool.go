@@ -17,8 +17,8 @@ import (
 const reportJobToolName = "report_job"
 
 // reportMCPTools is the one tool a person's agent uses to flag a posting. It files through
-// the same service as POST /jobs/:slug/reports, so the daily cap, the one-open-report-per-
-// job rule and the moderator queue apply unchanged: an agent cannot do here what the
+// the same service as POST /jobs/:slug/reports, so the one-open-report-per-job rule
+// and the moderator queue apply unchanged: an agent cannot do here what the
 // person could not do on the job page.
 //
 // MCP only, not the in-app assistant: that surface already sits next to the page's own
@@ -31,8 +31,7 @@ func (h *assistantHandlers) reportMCPTools() []assistant.Tool {
 		Description: "File a report on a vacancy that looks fake, spam, a scam, irrelevant, or that never " +
 			"answers. It goes to freehire's moderators, who review it by hand; it does not hide the job " +
 			"or change the user's own board. Only report when the user asks for it, or after you have " +
-			"told them what you will send and they agreed. One open report per job per user; a user " +
-			"can file 20 a day.",
+			"told them what you will send and they agreed. One open report per job per user.",
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -86,8 +85,6 @@ func reportToolError(err error) error {
 	switch {
 	case errors.Is(err, report.ErrDuplicateOpen):
 		return errors.New("the user already has an open report for this job; a moderator has not decided it yet")
-	case errors.Is(err, report.ErrRateLimited):
-		return errors.New("the user has reached today's limit of reports; try again tomorrow")
 	default:
 		return err
 	}

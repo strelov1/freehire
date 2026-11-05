@@ -101,4 +101,3 @@ Four packages split this surface — keep the split:
 ## Limitations
 
 - No magic-link sign-in, no identity unlinking (the repository seam exists, the UI doesn't).
-- The rate limiter on credential endpoints fails open on Redis errors (`internal/api/ratelimit`, Redis-backed GCRA — a Redis outage means no throttling, only log warnings).

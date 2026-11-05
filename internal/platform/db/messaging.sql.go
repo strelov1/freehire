@@ -137,33 +137,6 @@ func (q *Queries) ClaimUnread(ctx context.Context, arg ClaimUnreadParams) (int64
 	return conversation_id, err
 }
 
-const countConversationsStartedSince = `-- name: CountConversationsStartedSince :one
-SELECT count(*)::bigint AS started, min(created_at)::timestamptz AS oldest
-FROM conversations
-WHERE starter_id = $1 AND kind = $2 AND created_at > $3
-`
-
-type CountConversationsStartedSinceParams struct {
-	StarterID int64              `json:"starter_id"`
-	Kind      string             `json:"kind"`
-	Since     pgtype.Timestamptz `json:"since"`
-}
-
-type CountConversationsStartedSinceRow struct {
-	Started int64              `json:"started"`
-	Oldest  pgtype.Timestamptz `json:"oldest"`
-}
-
-// How many conversations of the kind starter_id started after since, and when the oldest
-// of them was started (NULL when there are none): that instant plus the window is when a
-// slot frees up.
-func (q *Queries) CountConversationsStartedSince(ctx context.Context, arg CountConversationsStartedSinceParams) (CountConversationsStartedSinceRow, error) {
-	row := q.db.QueryRow(ctx, countConversationsStartedSince, arg.StarterID, arg.Kind, arg.Since)
-	var i CountConversationsStartedSinceRow
-	err := row.Scan(&i.Started, &i.Oldest)
-	return i, err
-}
-
 const getConversationByPairKey = `-- name: GetConversationByPairKey :one
 SELECT id, kind, pair_key, starter_id, status, created_at, accepted_at, closed_at FROM conversations WHERE kind = $1 AND pair_key = $2
 `

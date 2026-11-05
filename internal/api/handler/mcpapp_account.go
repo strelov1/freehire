@@ -36,13 +36,9 @@ func mountMCPAccount(
 	keyed := adaptor.HTTPHandler(mcpapp.AccountHandler(
 		mcpKeyTools(assistants, catalogue.origin), catalogue.origin, catalogue,
 	))
-	// Same reasoning as the public /mcp mount: agentSearchLimiter bounds how
-	// hard a machine may ask, applied here too since every tool still reaches
-	// the catalogue and the tracking board. Authentication runs as a real
-	// Fiber middleware, ahead of the adapted raw http.Handler, so an
-	// unexpected failure authenticating the token (not merely an unknown one)
-	// is reported the normal way — see mcpAccountAuthenticate.
-	api.All("/mcp/account", chatAgentLimiter(mw.public), mcpAccountAuthenticate(assistants, catalogue.origin),
+	// HTTP admission is enforced by the operations gateway. Authentication stays
+	// in Fiber so credential-store failures use the normal error pipeline.
+	api.All("/mcp/account", mcpAccountAuthenticate(assistants, catalogue.origin),
 		agentViews(catalogue.agentViews, agentview.SurfaceMCPAccount),
 		func(c *fiber.Ctx) error {
 			if viaKey, _ := c.Locals(localsMCPAccountViaKey).(bool); viaKey {

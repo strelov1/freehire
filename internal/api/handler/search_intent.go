@@ -2,44 +2,14 @@ package handler
 
 import (
 	"errors"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/identity/auth"
 	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/search/searchintent"
 )
-
-// searchIntentsPerHour bounds how many interpretations one caller may run per hour.
-//
-// Each one is a model call on their own gateway credential, and the refine round makes
-// a second. The number is set well above deliberate use — describing a search, refining
-// it twice and starting over is a handful of calls, and someone genuinely exploring
-// might do that a dozen times in a sitting — while still bounding a script pointed at
-// the endpoint. It is not a credit budget: this spends tokens, not AI credits.
-const searchIntentsPerHour = 40
-
-// guestSearchIntentsPerHour bounds how many interpretations one signed-out address may
-// run per hour. Lower than the member budget: a guest spends the SERVICE credential, an
-// address is a weaker identity than an account, and ten is still a describe, two
-// refinements and a couple of fresh starts. A first guess; revisit against the
-// search-intent spend once guests have used it for a week.
-const guestSearchIntentsPerHour = 10
-
-// searchIntentLimiter throttles the interpretation endpoint with two separate budgets: a
-// signed-in caller per user (an IP key is lifted by any rotating proxy pool, the reason
-// matchAnalysisLimiter gives), a guest per address, since there is no one else to key
-// by. Mounted after mw.optional so the id is resolved. The member key is the one this
-// limiter has always used, so a deploy resets nobody's count.
-func searchIntentLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return memberOrGuestLimiter(
-		ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("searchintent"), searchIntentsPerHour, time.Hour),
-		ratelimit.Middleware(throttler, ratelimit.KeyByIP("searchintent-guest"), guestSearchIntentsPerHour, time.Hour),
-	)
-}
 
 // intentHandlers serves the search-interpretation endpoint. It is transport only: it
 // reads the caller, builds the request, binds the model client to that caller's own
@@ -71,13 +41,13 @@ func (h *intentHandlers) register(api fiber.Router, mw middleware) {
 	// visitor first finds the catalogue, and asking them to sign in before they have seen
 	// it hid the feature from exactly the people it is for. A signed-in caller is unchanged
 	// — their own credential, their own per-user budget; a guest is answered on the service
-	// credential under a per-address budget (searchIntentLimiter). An integration that
+	// credential. An integration that
 	// wants filters still has the documented facet vocabulary and /agent/jobs/search.
 	//
 	// Deliberately NOT behind mw.paidAI: the interpretation is one of the model calls every
 	// account gets (plan.WithFreeAI, marked in the handler). It is a short call on a cheap
-	// model, bounded by the limiter. Every call answered 402 to free on 2026-10-19.
-	api.Post("/search/interpret", mw.optional, searchIntentLimiter(mw.throttler), h.InterpretSearch)
+	// model. Every call answered 402 to free on 2026-10-19.
+	api.Post("/search/interpret", mw.optional, h.InterpretSearch)
 }
 
 // interpretRequest is what the dialog posts: a description, optionally refining a

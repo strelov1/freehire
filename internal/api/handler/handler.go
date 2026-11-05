@@ -20,7 +20,6 @@ import (
 	"github.com/strelov1/freehire/internal/ai/speech"
 	"github.com/strelov1/freehire/internal/api/atsapply"
 	"github.com/strelov1/freehire/internal/api/ojcp"
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/api/realtime"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/application/gmailsync"
@@ -190,17 +189,6 @@ type middleware struct {
 	// leaves, so forgetting it on a new route is a 500 in that route's first test rather
 	// than model spend nobody paid for.
 	paidAI func(plan.Feature) fiber.Handler
-	// outboundFetch throttles every endpoint that makes the server fetch a
-	// caller-supplied URL, so one user's budget is spent across them rather than
-	// granted once per route.
-	outboundFetch fiber.Handler
-	// throttler backs every other per-route rate limiter built inside a feature
-	// handler's own register method (mail recall, photo upload, JD resolve, match
-	// analysis) — the same shared instance outboundFetch and the auth routes use.
-	throttler ratelimit.Throttler
-	// public is the rate limiter of every public read route (public_gate.go), mounted through
-	// publicReadLimiter / agentSearchLimiter.
-	public *publicGate
 }
 
 // pageParamsBounded reads and clamps the shared limit/offset pagination query params, with
@@ -237,7 +225,7 @@ func pageParamsBounded(c *fiber.Ctx, fallback, ceiling int) (limit, offset int) 
 // 100 up to ~180,000, eight requests at a time. Each one pinned a pooled connection for over
 // two minutes; ten of them exhausted the pool (defaultMaxConns = 10), every other endpoint
 // queued behind them — /api/v1/threads was served in 15m41s — and nginx answered 504 to
-// 14,007 requests over 54 minutes. The per-IP rate limiter did not help and could not: it
+// 14,007 requests over 54 minutes. Request frequency does not bound query cost: it
 // bounds requests per minute, and this endpoint's COST PER REQUEST is what the caller
 // controls (see public_read_limit.go, whose budgets are split "by cost, not by path" — a
 // split that assumes a path HAS a fixed cost).
@@ -358,7 +346,7 @@ func ignoredJobValues(c *fiber.Ctx) map[string][]string {
 }
 
 // Config is the dependency bundle Register wires onto the app: the DB pool, the
-// required rate-limit Throttler, the single browser origin allowed cross-origin
+// single browser origin allowed cross-origin
 // (FrontendOrigin), the token-issuer settings (JWTSecret/JWTTTL), the HTTPS-only
 // cookie flag (CookieSecure), the enabled OAuth providers, and the optional
 // search client (nil disables search).
@@ -367,34 +355,24 @@ type Config struct {
 	// AgentViews receives the postings served to agents (internal/application/agentview).
 	// Optional: nil records nothing.
 	AgentViews agentview.Sink
-	// Throttler backs every rate-limited route in the API (internal/api/ratelimit).
-	// Required — there is no degraded/nil mode, unlike the optional dependencies
-	// below.
-	Throttler ratelimit.Throttler
 	// Cache holds values that are expensive to compute and identical for every
 	// caller — today the catalogue-scale snapshot (internal/ingest/catalogstats). Optional:
 	// nil degrades the figures it backs to their approximations, exactly as an
 	// unreachable backend does.
-	Cache          cache.Cache
-	FrontendOrigin string
-	// PublicAnonStrict and VerifiedBotSecret configure the public-read gate (public_gate.go):
-	// the strict anonymous budgets, and the Cloudflare verified-bot exemption.
-	PublicAnonStrict  bool
-	VerifiedBotSecret string
-	// RateTiers is every public-read rate tier's budget (RateTiersFromEnv); nil is the
-	// shipped ladder.
-	RateTiers           RateTiers
-	JWTSecret           string
-	JWTTTL              time.Duration
-	CookieSecure        bool
-	CookieDomains       []string
-	OAuthRegistry       *oauth.Registry
-	AuthV2Enabled       bool
-	MobileAuthCallbacks map[string]string
-	RecentAuthTTL       time.Duration
-	AppleNative         *appleauth.Client
-	AppleGrantKeys      *appleauth.KeyRing
-	Search              *search.Client
+	Cache                   cache.Cache
+	FrontendOrigin          string
+	AuthIntrospectionSecret string
+	JWTSecret               string
+	JWTTTL                  time.Duration
+	CookieSecure            bool
+	CookieDomains           []string
+	OAuthRegistry           *oauth.Registry
+	AuthV2Enabled           bool
+	MobileAuthCallbacks     map[string]string
+	RecentAuthTTL           time.Duration
+	AppleNative             *appleauth.Client
+	AppleGrantKeys          *appleauth.KeyRing
+	Search                  *search.Client
 	// Suggest answers the search box's completions from the dictionary index
 	// (cmd/build-suggestions writes it). Nil disables /suggest with a 503, the same
 	// shape as an unconfigured search — the rest of the site is unaffected, and the
@@ -533,12 +511,6 @@ type Config struct {
 // allowlist is not credentialed — it only permits non-credentialed cross-origin
 // reads of the public endpoints.
 func Register(app *fiber.App, cfg Config) {
-	if cfg.RateTiers == nil {
-		cfg.RateTiers = DefaultRateTiers()
-	}
-	// One ladder for the gate, /plans and the API-keys page alike, so none of them can state a
-	// cap the others do not apply.
-	cfg.RateTiers = cfg.RateTiers.inForce(cfg.PublicAnonStrict)
 	queries := db.New(cfg.Pool)
 	a := &API{
 		pool:         cfg.Pool,
@@ -546,10 +518,12 @@ func Register(app *fiber.App, cfg Config) {
 		issuer:       auth.NewIssuer(cfg.JWTSecret, cfg.JWTTTL),
 		browserTools: browsertools.New(),
 	}
-	authH := newAuthHandlers(queries, cfg.Pool, cfg.Throttler, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
+	app.Use(externalCaller(cfg.AuthIntrospectionSecret))
+	app.Get("/internal/auth/introspect", newAuthIntrospection(queries, a.issuer, cfg.AuthIntrospectionSecret))
+
+	authH := newAuthHandlers(queries, cfg.Pool, a.issuer, cfg.CookieSecure, cfg.CookieDomains, cfg.OAuthRegistry, cfg.FrontendOrigin, cfg.ExtensionRedirectAllowlist,
 		cfg.ServedHosts)
 	authH.authV2Enabled = cfg.AuthV2Enabled
-	authH.rateTiers = cfg.RateTiers
 	authH.mobileCallbacks = cfg.MobileAuthCallbacks
 	authH.mobileAuth = mobileauth.NewStore(cfg.Pool)
 	authH.recentAuth = recentauth.NewStore(cfg.Pool, cfg.RecentAuthTTL)
@@ -575,22 +549,22 @@ func Register(app *fiber.App, cfg Config) {
 	postingURLs := sources.NewPostingURLResolver(ingestClient)
 	jobsH := newJobsHandlers(queries, moderationSvc, postingURLs, cfg.Cache)
 	statsH := newStatsHandlers(queries, cfg.Cache, cfg.Pool)
-	recentFeedH := newRecentFeedHandlers(cfg.RecentJobsFeed, cfg.Throttler)
+	recentFeedH := newRecentFeedHandlers(cfg.RecentJobsFeed)
 	// A nil *Sampler in an interface is not a nil interface, so the 503 path needs the
 	// conversion skipped, not done.
 	var embedProgressSrc embedProgressSource
 	if cfg.EmbedProgress != nil {
 		embedProgressSrc = cfg.EmbedProgress
 	}
-	embedProgressH := newEmbedProgressHandlers(embedProgressSrc, cfg.Throttler)
+	embedProgressH := newEmbedProgressHandlers(embedProgressSrc)
 	ogH := newOGHandlers(queries, cfg.Cache)
 	votesH := newVoteHandlers(queries, cfg.Pool)
 	communityH := newCommunityHandlers(queries)
 	// Feedback reuses communityH's persona minting (via the communityPersonas
 	// adapter) so a user's pseudonym stays the same one discussion threads show,
 	// which is why it is constructed after communityH rather than alongside it.
-	companyProcessReportH := newCompanyProcessReportHandlers(processreport.New(queries, cfg.Pool, processreport.Config{}))
-	companyFeedbackH := newCompanyFeedbackHandlers(companyfeedback.New(queries, cfg.Pool, communityPersonas{svc: communityH.community}, companyfeedback.Config{}))
+	companyProcessReportH := newCompanyProcessReportHandlers(processreport.New(queries, cfg.Pool))
+	companyFeedbackH := newCompanyFeedbackHandlers(companyfeedback.New(queries, cfg.Pool, communityPersonas{svc: communityH.community}))
 	// Contributions detect the ATS board from the URL alone (network-free, board.go), with a
 	// network fallback (boardresolve) that fetches a company careers page and detects an
 	// embedded ATS — so vanity-domain links (company.com/careers?gh_jid=…) resolve too.
@@ -689,7 +663,7 @@ func Register(app *fiber.App, cfg Config) {
 	// here rather than passed to a constructor that already takes ten arguments.
 	authH.withInvites(promoSvc)
 	// Public: a pricing page that needs an account cannot do a pricing page's job.
-	plansH := newPlansHandlers(cfg.Plan, billingSvc, cfg.PublicAnonStrict, cfg.RateTiers)
+	plansH := newPlansHandlers(cfg.Plan, billingSvc)
 	matchH := newMatchHandlers(queries, profileSvc, resumeStore, matchAnalyzer, plans)
 	// The CV store is shared: the CV surface owns the write path, referrals render from it
 	// and autofill reads the base CV's contact header out of it. AGENTS.md puts shared
@@ -785,7 +759,6 @@ func Register(app *fiber.App, cfg Config) {
 	// same catalogue, or the two answers drift.
 	ojcpH := newOJCPHandlers(jobSearch, queries, cfg.FrontendOrigin, atsapply.SubmittableProviders())
 	ojcpH.signer = cfg.OJCPSigner
-	ojcpH.anonStrict = cfg.PublicAnonStrict
 	ojcpH.semantic = semantic
 	ojcpH.agentViews = cfg.AgentViews
 	// The ChatGPT app's MCP surface. A SECOND MCP server beside the OJCP one, over the same
@@ -844,7 +817,7 @@ func Register(app *fiber.App, cfg Config) {
 	// disagree. The tailoring bootstrap mints its conversations through the same
 	// store, which is why the CV handlers get it back. It also takes the browser-tool
 	// hub, which a browsing session reads the caller's open page through.
-	dictionaryH := &dictionaryHandlers{pool: cfg.Pool, queries: queries}
+	dictionaryH := &dictionaryHandlers{queries: queries}
 	assistantH := newAssistantHandlers(
 		queries,
 		assistantModels{
@@ -861,7 +834,7 @@ func Register(app *fiber.App, cfg Config) {
 		cvH,
 		profileH,
 		dictionaryH,
-		problemreport.New(cfg.Pool, queries),
+		problemreport.New(queries),
 		a.browserTools,
 		inboxH,
 		bank,
@@ -1045,15 +1018,8 @@ func Register(app *fiber.App, cfg Config) {
 	// Optional cookie auth, never a key: it is what lets a candidate's own click be recognised
 	// and excluded, and a leaked API key must not be able to attribute or hide one.
 	//
-	// Rate-limited because it is the only unauthenticated WRITE in the app: one visit is one
-	// click row plus a stamp on the CV. Two things it bounds. Anyone holding a PDF can loop its
-	// link and fabricate the one number the feature exists to report — a count nobody can forge
-	// is the whole point. And the token is a public company slug plus five random characters, so
-	// the space is small enough that an unthrottled guesser would find live links and be handed a
-	// candidate's personal URL, one 302 at a time.
 	tracerH := newTracerHandlers(queries, cfg.TracerLinkSalt)
-	tracerLimiter := ratelimit.Middleware(cfg.Throttler, ratelimit.KeyByIP("tracer"), 60, time.Minute)
-	app.Get("/cv/:token", tracerLimiter, auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
+	app.Get("/cv/:token", auth.OptionalCookieAuth(a.issuer, queries), tracerH.Redirect)
 
 	api := app.Group("/api/v1")
 
@@ -1067,7 +1033,7 @@ func Register(app *fiber.App, cfg Config) {
 	// handlers resolve it to the internal id before writing user_jobs.
 	keyAuth := auth.RequireAuthOrKey(a.issuer, a.queries, apiKeys{a.queries})
 	cvKeyAuth := auth.RequireAuthOrScopedKey(a.issuer, a.queries, apiKeys{a.queries}, auth.ScopeCV)
-	autoApplyGate := autoApplyOrchestratorGate(cfg.AutoApplyOrchestratorSecret, keyAuth, cfg.Throttler)
+	autoApplyGate := autoApplyOrchestratorGate(cfg.AutoApplyOrchestratorSecret, keyAuth)
 	// cookieAuth is the single cookie-only gate (RequireAuth) for the
 	// browser-convenience surfaces below — key management, saved searches, the CV
 	// builder, the inbox, subscriptions — where a leaked API key must not act.
@@ -1086,14 +1052,6 @@ func Register(app *fiber.App, cfg Config) {
 		optionalCookie: auth.OptionalCookieAuth(a.issuer, a.queries),
 		moderator:      requireModerator,
 		paidAI:         paidAIGate(entitlementOf(plans)),
-		outboundFetch:  contributionLimiter(cfg.Throttler),
-		throttler:      cfg.Throttler,
-		public: newPublicGate(cfg.Throttler, queries, publicGateConfig{
-			Strict:    cfg.PublicAnonStrict,
-			Tiers:     cfg.RateTiers,
-			BotSecret: cfg.VerifiedBotSecret,
-			Origin:    strings.TrimRight(cfg.FrontendOrigin, "/"),
-		}),
 	}
 
 	// The email preference centre. Its three public routes are unauthenticated on
@@ -1130,7 +1088,6 @@ func Register(app *fiber.App, cfg Config) {
 	companiesH.register(api, mw)
 	(&companyRelationHandlers{
 		relations: companyrelation.New(cfg.Pool),
-		throttler: cfg.Throttler,
 	}).register(api, mw)
 	geoH.register(api, mw)
 

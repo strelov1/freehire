@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/strelov1/freehire/internal/ai/plan"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -29,12 +30,18 @@ import (
 // shape).
 //
 // Mount order the assertions encode: register mounts these routes as
-// [mw.key, runLimit, mw.paidAI, h.StreamMatchAnalysis], and the handler performs the
-// Sec-Fetch-Site refusal itself — so a DENIED request has already paid the limiter's
-// bookkeeping and the paid-AI gate's entitlement read (one plan lookup per refused
+// [mw.key, mw.paidAI, h.StreamMatchAnalysis], and the handler performs the
+// Sec-Fetch-Site refusal itself — so a DENIED request has already reached the
+// paid-AI gate’s entitlement read (one plan lookup per refused
 // request) before the 403 lands. What a denial never reaches is everything after the
 // handler's first line: the job read, the reservation, the credential mint, the chain,
 // the cache.
+
+type noAPIKeys struct{}
+
+func (noAPIKeys) AuthenticateAPIKey(context.Context, string) (auth.APIKeyIdentity, error) {
+	return auth.APIKeyIdentity{}, pgx.ErrNoRows
+}
 
 // keyAuthFor builds the real cookie-or-key gate over the shared token-version stub.
 func keyAuthFor(iss *auth.Issuer) fiber.Handler {

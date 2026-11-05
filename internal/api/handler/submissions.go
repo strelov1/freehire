@@ -46,10 +46,9 @@ func (h *submissionHandlers) register(api fiber.Router, mw middleware) {
 	// (cookie or API key) and reads their own queue; the review actions (the pending
 	// queue, approve, reject) are moderator-gated. Approval mints a live job — the same
 	// path CreateJob uses — so an approved submission is indistinguishable from a
-	// hand-curated one. Prefill makes the same class of outbound request /jobs/resolve
-	// does, so it sits behind the same throttle.
+	// hand-curated one.
 	api.Post("/submissions", mw.key, h.CreateSubmission)
-	api.Post("/submissions/prefill", mw.key, mw.outboundFetch, h.PrefillSubmission)
+	api.Post("/submissions/prefill", mw.key, h.PrefillSubmission)
 	api.Get("/me/submissions", mw.key, h.ListMySubmissions)
 	api.Get("/submissions", mw.key, mw.moderator, h.ListPendingSubmissions)
 	api.Post("/submissions/:id/approve", mw.key, mw.moderator, h.ApproveSubmission)

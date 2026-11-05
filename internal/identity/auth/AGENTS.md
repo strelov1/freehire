@@ -10,7 +10,6 @@ Auth primitives: bcrypt password hashing, JWT cookie transport, API-key hashing/
 - `users.password_hash` is **nullable** — passwordless sign-in creates accounts with no password; password login rejects a null hash with a generic `401`.
 - `email` is the canonical account key (`UNIQUE (lower(email))`); external providers link via `user_identities`.
 - `JWT_SECRET` is required at server startup (fail-fast in `cmd/server`); `COOKIE_SECURE=true` for HTTPS (default false for http://localhost dev).
-- Credential endpoints are throttled by a Redis-backed GCRA rate limiter (`internal/api/ratelimit`, keyed on client IP, no in-memory fallback; it fails open on Redis errors) — `login` 10/min, `register` 5/min.
 - **API keys are hashed at rest:** the row stores only the `HashAPIKey(token)` SHA-256 (i.e. `SHA-256(token)`) plus a short non-secret `token_prefix` (enough to tell keys apart in a list); the plaintext (minted by `GenerateAPIKey`) is shown exactly once at create time and is unrecoverable.
 - **Key management is cookie-only (`RequireAuth`)** — a leaked key must not be able to create, list, or revoke keys.
 - **Minting a key requires a proven address.** `CreateAPIKey` is an `INSERT ... SELECT ... WHERE users.email_verified`; no row means `403`. The gate lives in the statement because registration hands out a session before the address is proven, so a squatter on someone else's email could otherwise walk away with a never-expiring, full-scope credential.

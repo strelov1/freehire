@@ -67,8 +67,8 @@ func testMCPEndToEnd(t *testing.T, endpoint string) {
 
 	assistants := &assistantHandlers{
 		queries:    queries,
-		dictionary: &dictionaryHandlers{pool: pool, queries: queries},
-		problems:   problemreport.New(pool, queries),
+		dictionary: &dictionaryHandlers{queries: queries},
+		problems:   problemreport.New(queries),
 		tracking:   &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
 	sink := &recordingSink{}

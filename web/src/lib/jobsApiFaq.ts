@@ -13,17 +13,17 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'Do I pay per job, per record or per request?',
     answer:
-      'None of those. A plan is a flat monthly price with a per-minute request rate and no daily cap, and every request returns full postings — up to 100 per page — so the size of the catalogue you read does not change the bill.',
+      'None of those. A plan has a flat monthly price, and every request returns full postings — up to 100 per page — so the size of the catalogue you read does not change the bill.',
   },
   {
     question: 'What is the difference between the API and Data plans?',
     answer:
-      'The rate. API allows 1,200 requests a minute per account, Data 6,000. Both carry the same fields, filters, company data and licence. Bulk catalogue files are coming to the Data plan; until they ship, Data is the higher rate.',
+      'Both carry the same fields, filters, company data and commercial-use licence. Bulk catalogue files are planned for the Data plan and are not available yet.',
   },
   {
     question: 'Which plan fits research or skills analytics?',
     answer:
-      'Usually the API plan. Analytics reads the catalogue once and then keeps up with what changed, which fits well inside 1,200 requests a minute. Take Data when you need to re-read large slices of the catalogue often. If your project needs something neither plan has yet, write to hello@freehire.me — we add features on request.',
+      'The API plan includes the fields, filters and licence needed for research and skills analytics. If your project needs something it does not offer, write to hello@freehire.me — we add features on request.',
   },
   {
     question: 'Can I keep historical postings and train models on them?',
@@ -33,12 +33,12 @@ export const JOBS_API_FAQ: FaqItem[] = [
   {
     question: 'Is there a free tier?',
     answer:
-      'Yes: the read API answers without a key, limited per address, for personal and non-commercial use. A full-access key moves the budget from your address to your account, and Pro and Ultra raise it; the rate table on this page lists every tier. It is the same API, so you can build against it for free and switch to a plan when you go live.',
+      'Yes: the read API answers without a key for personal and non-commercial use. It is the same API, so you can build against it for free and switch to a plan when you go live.',
   },
   {
     question: 'How do I authenticate?',
     answer:
-      'Create a full-access key on your API keys page and send it as an Authorization: Bearer header. All keys of an account — and its signed-in MCP and CLI connections — share one budget, sized by the account’s tier, and every response carries X-RateLimit-Limit, X-RateLimit-Remaining and X-RateLimit-Reset so you can pace yourself.',
+      'Create a full-access key on your API keys page and send it as an Authorization: Bearer header. Signed-in MCP and CLI connections can also authenticate through OAuth.',
   },
   {
     question: 'How fresh is the data, and do closed jobs disappear?',

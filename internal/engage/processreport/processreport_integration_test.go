@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -36,14 +35,14 @@ func insertUser(t *testing.T, pool *pgxpool.Pool, email string) int64 {
 	return id
 }
 
-func newTestService(t *testing.T, cfg Config) (*Service, *pgxpool.Pool) {
+func newTestService(t *testing.T) (*Service, *pgxpool.Pool) {
 	t.Helper()
 	pool := testdb.Pool(t)
 	if _, err := pool.Exec(context.Background(),
 		`TRUNCATE company_process_reports, search_outbox, jobs, companies, users RESTART IDENTITY CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
-	return New(db.New(pool), pool, cfg), pool
+	return New(db.New(pool), pool), pool
 }
 
 // storedCount is the company's materialized counter, read straight from the column —
@@ -100,7 +99,7 @@ func jobCount(t *testing.T, pool *pgxpool.Pool, externalID string) int32 {
 // disagree with the company page about a fact filed a second ago. A scheduled sync
 // would leave exactly that gap, so the write does it.
 func TestFileSyncsTheCountOntoTheCompanysJobs(t *testing.T) {
-	svc, pool := newTestService(t, Config{})
+	svc, pool := newTestService(t)
 	insertCompany(t, pool, "synced-co")
 	seedJob(t, pool, "synced-co", "job-one")
 	seedJob(t, pool, "synced-co", "job-two")
@@ -132,7 +131,7 @@ func TestFileSyncsTheCountOntoTheCompanysJobs(t *testing.T) {
 }
 
 func TestFileRaisesTheLabelOnOneReport(t *testing.T) {
-	svc, pool := newTestService(t, Config{})
+	svc, pool := newTestService(t)
 	insertCompany(t, pool, "acme-ai")
 	user := insertUser(t, pool, "one@example.com")
 
@@ -151,7 +150,7 @@ func TestFileRaisesTheLabelOnOneReport(t *testing.T) {
 }
 
 func TestFileTwiceIsAlreadyReported(t *testing.T) {
-	svc, pool := newTestService(t, Config{})
+	svc, pool := newTestService(t)
 	insertCompany(t, pool, "dupe-co")
 	user := insertUser(t, pool, "dupe@example.com")
 	ctx := context.Background()
@@ -168,7 +167,7 @@ func TestFileTwiceIsAlreadyReported(t *testing.T) {
 }
 
 func TestRetractLowersTheCountAndRefileRevives(t *testing.T) {
-	svc, pool := newTestService(t, Config{})
+	svc, pool := newTestService(t)
 	insertCompany(t, pool, "revive-co")
 	user := insertUser(t, pool, "revive@example.com")
 	ctx := context.Background()
@@ -205,7 +204,7 @@ func TestRetractLowersTheCountAndRefileRevives(t *testing.T) {
 }
 
 func TestRetractingWhatWasNeverFiled(t *testing.T) {
-	svc, pool := newTestService(t, Config{})
+	svc, pool := newTestService(t)
 	insertCompany(t, pool, "quiet-co")
 	user := insertUser(t, pool, "quiet@example.com")
 
@@ -215,7 +214,7 @@ func TestRetractingWhatWasNeverFiled(t *testing.T) {
 }
 
 func TestUnknownKindIsRejectedBeforeAnyWrite(t *testing.T) {
-	svc, pool := newTestService(t, Config{})
+	svc, pool := newTestService(t)
 	insertCompany(t, pool, "checked-co")
 	user := insertUser(t, pool, "checker@example.com")
 
@@ -229,7 +228,7 @@ func TestUnknownKindIsRejectedBeforeAnyWrite(t *testing.T) {
 }
 
 func TestUnknownCompanyIsNotFound(t *testing.T) {
-	svc, pool := newTestService(t, Config{})
+	svc, pool := newTestService(t)
 	user := insertUser(t, pool, "lost@example.com")
 
 	if _, err := svc.File(context.Background(), user, "no-such-company", "ai_interview"); !errors.Is(err, ErrCompanyNotFound) {
@@ -238,7 +237,7 @@ func TestUnknownCompanyIsNotFound(t *testing.T) {
 }
 
 func TestDistinctReportersAccumulate(t *testing.T) {
-	svc, pool := newTestService(t, Config{})
+	svc, pool := newTestService(t)
 	insertCompany(t, pool, "crowd-co")
 	ctx := context.Background()
 
@@ -251,29 +250,5 @@ func TestDistinctReportersAccumulate(t *testing.T) {
 		if want := int32(i + 1); count != want {
 			t.Fatalf("count after %d reports = %d, want %d", i+1, count, want)
 		}
-	}
-}
-
-func TestRateLimitRefusesOverTheCap(t *testing.T) {
-	svc, pool := newTestService(t, Config{Window: time.Hour, Cap: 2})
-	for _, slug := range []string{"co-one", "co-two", "co-three"} {
-		insertCompany(t, pool, slug)
-	}
-	user := insertUser(t, pool, "prolific@example.com")
-	ctx := context.Background()
-
-	if _, err := svc.File(ctx, user, "co-one", "ai_interview"); err != nil {
-		t.Fatalf("first: %v", err)
-	}
-	if _, err := svc.File(ctx, user, "co-two", "ai_interview"); err != nil {
-		t.Fatalf("second: %v", err)
-	}
-	// The cap exists so one account cannot label the catalogue; honest reporting will
-	// not reach it at the shipped default.
-	if _, err := svc.File(ctx, user, "co-three", "ai_interview"); !errors.Is(err, ErrRateLimited) {
-		t.Fatalf("third: want ErrRateLimited, got %v", err)
-	}
-	if got := storedCount(t, pool, "co-three"); got != 0 {
-		t.Fatalf("refused report still counted: %d", got)
 	}
 }

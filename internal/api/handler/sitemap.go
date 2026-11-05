@@ -60,34 +60,13 @@ func newSitemapHandlers(jobs, companies sitemapLister, freshJobs freshSitemapLis
 	return &sitemapHandlers{jobs: jobs, companies: companies, freshJobs: freshJobs}
 }
 
-// register mounts the five public sitemap reads behind the shared public-read budget.
-//
-// They carried no limiter at all until the deep-offset change, which is the same omission
-// GET /companies/:slug/feedback carried and the reason both are now a documented rule:
-// an unauthenticated list registered without a limiter is a defect whatever its query
-// costs. The four /documents-backed reads are cheap per request — the pages come from
-// Meilisearch, not from a table scan, and their cost is flat in the offset — but "cheap"
-// is not "free", and an unthrottled route is simply the door a throttled caller walks
-// through instead (the argument jobsHandlers.register already makes about /jobs versus
-// /jobs/search).
-//
-// The fresh read is the one whose cost is NOT flat: it sorts, so it rises with depth —
-// 1.3s to 2.6-4.9s end to end across its four chunks, and once 8.5s cold. It is admitted to the same
-// budget on the strength of its own bound rather than on the paragraph above — a
-// per-minute budget says nothing about an endpoint whose per-request work the caller
-// sets (the lesson pageParamsWindowed records from 2026-09-14), so what makes 600/min
-// safe here is that freshSitemapMaxOffset caps that work at a measured figure. See the
-// constant.
-//
-// A real crawler is unaffected: it fetches a sitemap chunk at a time, minutes apart, and
-// 600/min is three orders of magnitude above that.
+// register mounts the five public sitemap reads.
 func (h *sitemapHandlers) register(api fiber.Router, mw middleware) {
-	readLimit := publicReadLimiter(mw.public)
-	api.Get("/jobs/sitemap", readLimit, h.JobSitemap)
-	api.Get("/jobs/sitemap/fresh", readLimit, h.FreshJobSitemap)
-	api.Get("/jobs/sitemap/boundaries", readLimit, h.JobSitemapBoundaries)
-	api.Get("/companies/sitemap", readLimit, h.CompanySitemap)
-	api.Get("/companies/sitemap/boundaries", readLimit, h.CompanySitemapBoundaries)
+	api.Get("/jobs/sitemap", h.JobSitemap)
+	api.Get("/jobs/sitemap/fresh", h.FreshJobSitemap)
+	api.Get("/jobs/sitemap/boundaries", h.JobSitemapBoundaries)
+	api.Get("/companies/sitemap", h.CompanySitemap)
+	api.Get("/companies/sitemap/boundaries", h.CompanySitemapBoundaries)
 }
 
 // sitemapMaxURLs is the sitemap-protocol per-file cap — the hard ceiling an

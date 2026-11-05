@@ -26,7 +26,6 @@ import (
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
 	"github.com/strelov1/freehire/internal/ai/plan"
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/candidate/cv"
 	"github.com/strelov1/freehire/internal/candidate/cvedit"
@@ -54,7 +53,7 @@ func newAutoApplyTailorApp(pool *pgxpool.Pool, iss *auth.Issuer, model assistant
 // API key), exactly as before the shared-secret gate existed. Tests exercising the shared
 // secret itself use newAutoApplyTailorAppWithOrchestratorSecret instead.
 func newAutoApplyTailorAppWithPlanConfig(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model, planCfg plan.Config) (*fiber.App, *assistantHandlers) {
-	app, h, _ := newAutoApplyTailorAppFull(pool, iss, model, planCfg, "", nil)
+	app, h, _ := newAutoApplyTailorAppFull(pool, iss, model, planCfg, "")
 	return app, h
 }
 
@@ -62,12 +61,12 @@ func newAutoApplyTailorAppWithPlanConfig(pool *pgxpool.Pool, iss *auth.Issuer, m
 // orchestrator secret configured, so a request presenting it authenticates as the trusted
 // orchestrator rather than as any entry's own owner — see resolveAutoApplyEntry and
 // openspec/changes/auto-apply-inngest-orchestration/design.md.
-func newAutoApplyTailorAppWithOrchestratorSecret(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model, secret string, throttler ratelimit.Throttler) (*fiber.App, *assistantHandlers) {
-	app, h, _ := newAutoApplyTailorAppFull(pool, iss, model, plan.DefaultConfig(), secret, throttler)
+func newAutoApplyTailorAppWithOrchestratorSecret(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model, secret string) (*fiber.App, *assistantHandlers) {
+	app, h, _ := newAutoApplyTailorAppFull(pool, iss, model, plan.DefaultConfig(), secret)
 	return app, h
 }
 
-func newAutoApplyTailorAppFull(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model, planCfg plan.Config, orchestratorSecret string, throttler ratelimit.Throttler) (*fiber.App, *assistantHandlers, middleware) {
+func newAutoApplyTailorAppFull(pool *pgxpool.Pool, iss *auth.Issuer, model assistant.Model, planCfg plan.Config, orchestratorSecret string) (*fiber.App, *assistantHandlers, middleware) {
 	queries := db.New(pool)
 	bank := experience.NewStore(experience.NewQueriesRepository(queries))
 	plans := plan.NewStore(queries, pool, planCfg)
@@ -108,7 +107,7 @@ func newAutoApplyTailorAppFull(pool *pgxpool.Pool, iss *auth.Issuer, model assis
 		paidAI:        markPaidAI,
 		cookie:        auth.RequireAuth(iss, testVersions),
 		key:           keyAuth,
-		autoApplyGate: autoApplyOrchestratorGate(orchestratorSecret, keyAuth, throttler),
+		autoApplyGate: autoApplyOrchestratorGate(orchestratorSecret, keyAuth),
 	}
 	h.register(api, mw)
 	h.cv.register(api, mw)

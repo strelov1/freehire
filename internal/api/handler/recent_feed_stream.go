@@ -7,25 +7,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/job/recentfeed"
 )
-
-// recentFeedConnectsPerMinute bounds how often one IP may OPEN a new connection to
-// the feed. It does not cap total concurrently-open connections from an IP that
-// opens them slowly — this endpoint has no session/credential to key a stricter
-// limit on — but it blocks the cheap abuse shape (a reconnect loop or a burst of
-// parallel opens) the same way every other IP-scoped limiter in this package does.
-const recentFeedConnectsPerMinute = 20
-
-// recentFeedLimiter bounds new connections to StreamRecentJobs — see
-// recentFeedConnectsPerMinute. This is the first public, unauthenticated,
-// indefinitely-held connection endpoint in the API: unlike a plain request it
-// costs a live goroutine, ticker, and Broadcaster subscription for as long as it
-// stays open.
-func recentFeedLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	return ratelimit.Middleware(throttler, ratelimit.KeyByIP("recent-feed"), recentFeedConnectsPerMinute, time.Minute)
-}
 
 // recentFeedHandlers serves the homepage's live "recently added jobs" feed —
 // a cosmetic, unauthenticated signal that the catalogue is actively growing, fed
@@ -43,21 +26,17 @@ type recentFeedHandlers struct {
 	// a test can shrink it, the same reason sseStream.keepalive takes its interval
 	// as an argument instead of using the constant inline.
 	pingInterval time.Duration
-	// throttler backs the per-IP connect-rate limit on this route. Nil in a
-	// fixture that never exercises it; register still works (Middleware handles a
-	// nil throttler no differently than any other IP-limited route in this file).
-	throttler ratelimit.Throttler
 }
 
-func newRecentFeedHandlers(broadcaster *recentfeed.Broadcaster, throttler ratelimit.Throttler) *recentFeedHandlers {
-	return &recentFeedHandlers{broadcaster: broadcaster, pingInterval: sseKeepalive, throttler: throttler}
+func newRecentFeedHandlers(broadcaster *recentfeed.Broadcaster) *recentFeedHandlers {
+	return &recentFeedHandlers{broadcaster: broadcaster, pingInterval: sseKeepalive}
 }
 
 func (h *recentFeedHandlers) register(api fiber.Router) {
 	// Public, unauthenticated: the homepage is shown to signed-out visitors, and the
 	// feed carries nothing user-specific — the same posture as the other public
 	// reads statsHandlers serves.
-	api.Get("/feed/recent", recentFeedLimiter(h.throttler), h.StreamRecentJobs)
+	api.Get("/feed/recent", h.StreamRecentJobs)
 }
 
 // StreamRecentJobs streams the homepage's live feed over Server-Sent Events. On

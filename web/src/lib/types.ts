@@ -145,38 +145,12 @@ export interface PlansMatrix {
   features: { feature: string; free: PlanTierAllowance; pro: PlanTierAllowance; ultra: PlanTierAllowance }[];
   prices: PublicPrice[];
   enforced: string[];
-  /** What the API product's plans allow on the public read API, read from the same
-   *  constants the rate limiter enforces. `anonymous_per_day` is 0 while there is no daily
-   *  cap for callers without a key. */
-  api_limits: {
-    anonymous_per_minute: number;
-    anonymous_per_day: number;
-    api_per_minute: number;
-    data_per_minute: number;
-    /** The whole rate ladder, lowest first. Optional: a backend that predates it sends none. */
-    tiers?: RateTierLimit[];
-  };
 }
 
-/** A rung of the public read API's rate ladder. */
-export type RateTier = 'anonymous' | 'free' | 'pro' | 'ultra' | 'api' | 'api_data';
-
-/** One rung's budget; `per_day` 0 is no daily cap. */
-export interface RateTierLimit {
-  tier: RateTier;
-  per_minute: number;
-  per_day: number;
-}
-
-/** The caller's API standing (`GET /api/v1/me/api-plan`). An empty `tier` means the account
- *  does not hold the API product; `rate_tier` is the rung its full-scope keys and access
- *  tokens stand on, and `per_minute`/`per_day` that rung's budget (`per_day` 0 is no cap). */
+/** The caller's paid API product entitlement (`GET /api/v1/me/api-plan`). */
 export interface ApiPlan {
   tier: '' | 'api' | 'api_data';
   until?: string;
-  rate_tier: Exclude<RateTier, 'anonymous'>;
-  per_minute: number;
-  per_day: number;
 }
 
 /** One charge as the receipt list shows it (`GET /api/v1/billing/subscription`).
