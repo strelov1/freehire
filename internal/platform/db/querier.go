@@ -3679,10 +3679,9 @@ type Querier interface {
 	// fail.
 	//
 	// The day in progress is EXCLUDED, and that predicate is the point of this query
-	// rather than a refinement of it. A plain max(day) reads TODAY: that same run reaches
-	// into the live log and lands a few dozen rows on the current day, so when the digest
-	// runs the freshest day is a stub whose best
-	// posting has one view. Nothing clears MinPageUniques, the run reports a quiet day and
+	// rather than a refinement of it. A plain max(day) reads TODAY: the rotated file
+	// that run reads spans midnight and lands a few dozen rows on the current day, so when
+	// the digest runs the freshest day is a stub whose best posting has one view. Nothing clears MinPageUniques, the run reports a quiet day and
 	// exits 0, and the completed day beside it is never published, because tomorrow's
 	// max(day) is fresher still. Measured on 2026-09-06: day 09-05 held 207020 rows and 38
 	// postings above the floor, day 09-06 held 34 rows and a maximum of one view; three

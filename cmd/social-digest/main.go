@@ -102,8 +102,6 @@ func run() int {
 		return renderOnly(digest, publishers)
 	}
 
-	log.Printf("social-digest: publishing %d postings for %s to %d channel(s)",
-		len(digest.Items), digest.Day.Format(socialdigest.DayLayout), len(publishers))
 	if err := svc.Dispatch(ctx, digest, publishers); err != nil {
 		log.Printf("social-digest: %v", err)
 		return 1

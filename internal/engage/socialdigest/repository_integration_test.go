@@ -132,7 +132,7 @@ func TestLatestViewDayPicksTheNewest(t *testing.T) {
 }
 
 // The regression this query exists to prevent, and the reason it is not a plain
-// max(day). cmd/rollup-views reaches into the live log, so it lands a handful of rows on the day still in progress. Reading
+// max(day). a rotated file cmd/rollup-views reads spans midnight, so it lands a handful of rows on the day still in progress. Reading
 // that stub as "the freshest day" makes every digest a quiet day: nothing in a few
 // hours of traffic clears MinPageUniques, the run exits 0, and the completed day beside
 // it is lost for good, because tomorrow's max(day) is fresher still.
