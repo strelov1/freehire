@@ -221,8 +221,8 @@ WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
         AND j.last_seen_at >  $4::timestamptz - make_interval(secs => w.secs)
         AND j.last_seen_at <= $5::timestamptz - make_interval(secs => w.secs))
   )
-ON CONFLICT (job_id) DO UPDATE
-    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
+ORDER BY j.id
+ON CONFLICT (job_id) DO NOTHING
 `
 
 type EnqueueSearchTimeCrossingsParams struct {
@@ -247,6 +247,12 @@ type EnqueueSearchTimeCrossingsParams struct {
 // A posting crosses at created_at + age (or last_seen_at + window), hence the bands below.
 // One sequential pass over the open rows: last_seen_at is deliberately in no index (the
 // liveness touch must stay heap-only), so the caller runs this a few times a day.
+// DO NOTHING and id order, unlike the per-row writers' re-stamp: this one statement upserts
+// thousands of entries while every ingest transaction upserts its own, and the re-stamp's row
+// locks taken in scan order deadlocked against them on its first prod run (2026-11-05). An
+// entry already queued is pushed from the row as it stands when claimed. A wave already in
+// flight at the crossing misses it and deletes its entry; the caller's next run re-covers the
+// last hour of this window for exactly that case (cmd/reindex timeCrossingsOverlap).
 func (q *Queries) EnqueueSearchTimeCrossings(ctx context.Context, arg EnqueueSearchTimeCrossingsParams) (int64, error) {
 	result, err := q.db.Exec(ctx, enqueueSearchTimeCrossings,
 		arg.UnseenSeconds,

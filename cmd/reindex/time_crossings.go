@@ -20,6 +20,15 @@ import (
 // instant the last run covered up to, not a company: see migration 0241.
 const timeCrossingsPass = "search-time-crossings"
 
+// timeCrossingsOverlap is how far each run reaches back into the window the last one covered.
+// The enqueue skips a job whose entry is already queued, and a drain wave holding that entry
+// may have built its document just before the crossing; the wave then deletes the entry and
+// the crossing is lost. A wave holds an entry for at most its lease (SEARCH_DRAIN_LEASE_SECONDS,
+// 900s on fsn), so a crossing lost that way happened within that long before the run, and an
+// hour of overlap re-queues it on the next run. The overlap's only cost is a second, skipped
+// insert for whatever crossed in that hour.
+const timeCrossingsOverlap = time.Hour
+
 // firstTimeCrossingsBand is how far back the very first run looks, when no cursor exists.
 // Until this pass shipped, the daily full rebuild re-derived every document, so a day is
 // what that rebuild last left uncovered.
@@ -43,9 +52,11 @@ func enqueueTimeCrossings(ctx context.Context, q timeCrossingsStore, now time.Ti
 	case err != nil:
 		return fmt.Errorf("read cursor: %w", err)
 	default:
-		if since, err = time.Parse(time.RFC3339Nano, stored); err != nil {
+		last, err := time.Parse(time.RFC3339Nano, stored)
+		if err != nil {
 			return fmt.Errorf("parse cursor %q: %w", stored, err)
 		}
+		since = last.Add(-timeCrossingsOverlap)
 	}
 	if !since.Before(now) {
 		return nil

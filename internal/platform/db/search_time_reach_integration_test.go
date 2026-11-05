@@ -180,6 +180,41 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		}
 	})
 
+	// What cmd/reindex's overlap exists for: a crossing skipped because a drain wave held the
+	// job's entry is queued by the next run, whose window reaches back over it.
+	t.Run("a crossing skipped under an in-flight wave is caught by the overlapping next run", func(t *testing.T) {
+		reset(t)
+		id := insertChunkTestJob(t, pool, "held-aged", "acme")
+		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = now() WHERE id = $2", ts(-15*24*time.Hour-10*time.Minute), id)
+		clearOutbox(t, pool)
+		exec(t, "INSERT INTO search_outbox (job_id, job_posted_at, claimed_at) VALUES ($1, now(), now())", id)
+		var held int64
+		if err := pool.QueryRow(ctx, "SELECT id FROM search_outbox WHERE job_id = $1", id).Scan(&held); err != nil {
+			t.Fatal(err)
+		}
+		run := func(since, until time.Duration) {
+			t.Helper()
+			if _, err := q.EnqueueSearchTimeCrossings(ctx, EnqueueSearchTimeCrossingsParams{
+				Sources: []string{"test"}, UnseenSeconds: []int64{14 * 24 * 3600},
+				AgeDays: []int32{15, 90}, PostedAgeDays: []int32{15},
+				Since: ts(since), Until: ts(until),
+			}); err != nil {
+				t.Fatalf("enqueue: %v", err)
+			}
+		}
+		run(-time.Hour, -time.Minute) // covers the crossing, meets the held entry
+		if err := q.DeleteSearchOutboxEntries(ctx, []int64{held}); err != nil {
+			t.Fatal(err)
+		}
+		if got := searchOutboxCount(t, pool, id); got != 0 {
+			t.Fatalf("entries left once the wave completed = %d, want 0: the first run must not have re-stamped the held entry", got)
+		}
+		run(-time.Minute-time.Hour, 0) // the next run: its cursor minus the overlap
+		if got := searchOutboxCount(t, pool, id); got != 1 {
+			t.Errorf("crossing queued %d times after the overlapping run, want 1", got)
+		}
+	})
+
 	t.Run("a view-count rollup queues the job it counted", func(t *testing.T) {
 		reset(t)
 		id := insertChunkTestJob(t, pool, "viewed", "acme")
