@@ -37,9 +37,10 @@ jobs:
       # A merge done with GITHUB_TOKEN starts no push workflows, so main gets no CI run
       # for that commit and autodeploy, which reads push runs, steps over it until a later
       # merge. DEPENDABOT_AUTOMERGE_TOKEN avoids that: a fine-grained PAT for this repository
-      # (contents + pull-requests, write), stored under Dependabot secrets because that is
-      # the only store a Dependabot-triggered run can read. Until it exists, the fallback
-      # still merges, with that delay.
+      # (contents + pull-requests, write), stored under Actions secrets. GitHub withholds
+      # secrets from a Dependabot pull_request_target run only when Dependabot created the
+      # base ref, which `branches: [main]` above rules out. If the secret is absent or not
+      # readable, the fallback still merges, with that delay.
       - name: Enable auto-merge for minor and patch updates
         if: >-
           steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
