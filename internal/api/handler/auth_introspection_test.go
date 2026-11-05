@@ -92,7 +92,7 @@ func TestAuthIntrospectionCredentialsAndTrust(t *testing.T) {
 			store := &introspectionFixture{keyHash: keyHash, grantHash: grantHash, scope: tc.scope, version: tc.version, failed: tc.failed}
 			app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 			app.Get("/internal/auth/introspect", newAuthIntrospection(store, issuer, "secret"))
-			req := httptest.NewRequest("GET", "/internal/auth/introspect", nil)
+			req := httptest.NewRequestWithContext(context.Background(), "GET", "/internal/auth/introspect", nil)
 			req.Header.Set(authIntrospectionSecretHeader, tc.secret)
 			req.Header.Set("X-FH-Auth-User", "999")
 			if tc.token != "" {
@@ -133,7 +133,7 @@ func TestAuthIntrospectionCredentialsAndTrust(t *testing.T) {
 func TestAuthIntrospectionDisabled(t *testing.T) {
 	app := fiber.New()
 	app.Get("/identity", newAuthIntrospection(nil, nil, ""))
-	resp, err := app.Test(httptest.NewRequest("GET", "/identity", nil))
+	resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), "GET", "/identity", nil))
 	if err != nil {
 		t.Fatal(err)
 	}

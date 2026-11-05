@@ -119,7 +119,8 @@ It is the **harness** surface, not "the agent surface": there are two agents on 
 
 The OAuth account MCP also exposes `suggest_dictionary_term`. It reuses
 `dictionaryHandlers.recordTerm`, including dictionary alias checks and the website's
-transactional per-user UTC-day budget. It only records a request for review, never
+atomic queue upsert. Request admission belongs to the operations gateway. It only
+records a request for review, never
 installs a filter. Agents submit a term the user wanted but the dictionary cannot
 resolve, without a separate suggestion request; zero search results alone do not
 prove a dictionary gap. Like the cookie-only dictionary endpoint, it is unavailable to
@@ -143,12 +144,12 @@ its own two bounds:
 | `GET /assistant/sessions/:id` | one conversation with its stored transcript, for replay |
 | `DELETE /assistant/sessions/:id` | remove a conversation and its transcript |
 | `POST /assistant/sessions/:id/messages` | run one turn, streamed as named SSE events; the body may carry up to three `attachments` (`{name, text}`) beside `text` |
-| `POST /assistant/attachments` | read one PDF (multipart `file`) and return its text for the next message — stores nothing, makes no model call, per-caller limited |
+| `POST /assistant/attachments` | read one PDF (multipart `file`) and return its text for the next message — stores nothing and makes no model call |
 | `POST /assistant/sessions/:id/retry` | resume after a failed turn without appending another user message (same SSE stream) |
 | `POST /assistant/sessions/:id/cancel` | stop a running turn (owner-scoped — see below) |
 | `POST /assistant/sessions/:id/extend` | buy a tailoring session another ceiling's worth of turns, out of the day's tailoring allowance; 409 on any other preset |
 | `POST /assistant/sessions/:id/opening` | the assistant speaks first in a rehearsal or debrief, under a server-side brief; an already-answered opening is a 409 |
-| `POST /assistant/sessions/:id/voice-token` | mint one voice call's credential (per-caller limited) |
+| `POST /assistant/sessions/:id/voice-token` | mint one voice call's credential |
 | `POST /assistant/sessions/:id/voice-turns` | append a completed spoken turn to the transcript |
 | `POST /assistant/sessions/:id/autopilot` | run the tailoring pass unattended — same stream, server-owned brief and ceiling (**cookie-only**) |
 
