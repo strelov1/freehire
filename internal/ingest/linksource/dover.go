@@ -23,11 +23,13 @@ import (
 // was a5546acf-… (live-verified 2026-11-05), so trusting that uuid as anything but the
 // posting id was exactly the defect review caught in the recognizer's first design.
 type dover struct {
-	http Client
+	http    Client
+	catalog BoardCatalog
 }
 
-// NewDover builds the Dover link-source adapter.
-func NewDover(c Client) Source { return dover{http: c} }
+// NewDover builds the Dover link-source adapter. catalog supplies the stored spelling of a
+// board the crawl already reads (see Resolve); a nil one falls back to the link's spelling.
+func NewDover(c Client, catalog BoardCatalog) Source { return dover{http: c, catalog: catalog} }
 
 func (dover) Source() string { return "dover" }
 
@@ -68,8 +70,8 @@ func (dover) Match(u *url.URL) bool {
 // Resolve reads the posting's public detail endpoint and maps it, mirroring the ingest dover
 // adapter's detail mapping (compensation, locations, employment type) with the company taken
 // from the posting's own client_name. The external id is the API's own posting id namespaced
-// by the link's Org spelling — the board the contribution flow and the crawl file this posting
-// under — keeping link-imported and board-crawled rows of one posting deduped.
+// by the board as the catalogue stores it — the spelling the crawl writes — keeping
+// link-imported and board-crawled rows of one posting deduped.
 //
 // A posting the platform says is GONE (a 404 detail) is a skip — ok=false, not an error, the
 // same "not on the board anymore" answer the ashby resolver yields; every other failure
@@ -104,11 +106,7 @@ func (d dover) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 	// any pair, so nothing on the host proves the Org segment names the company that owns this
 	// posting — the careers API does, by resolving Org to the same client the detail names. A
 	// link pairing one company's Org with another's posting would otherwise file that posting
-	// under a board whose crawl never writes it. The link's Org spelling is also the spelling
-	// the contribution flow files the board under and the crawl adapter namespaces postings by
-	// (verbatim capture, pipeline jobIdentity = Namespace(board, id)), so the resolver
-	// namespaces by that SAME spelling — resolving through the client's own slug instead would
-	// fork the dedup key and file one posting twice. A posting with no id, client id or client
+	// under a board whose crawl never writes it. A posting with no id, client id or client
 	// name, an unresolvable slug, or a slug owned by another client is a skip: a posting with
 	// no verifiable company is not a vacancy to store.
 	if resp.ID == "" || resp.ClientID == "" || resp.ClientName == "" {
@@ -133,10 +131,26 @@ func (d dover) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 		return sources.Job{}, false, nil // Org names another company — not this posting's board
 	}
 
+	// The crawl namespaces by the board string verbatim (pipeline jobIdentity =
+	// Namespace(board, id)), and neither the link nor the API settles that spelling: the
+	// catalogue holds both `careerflow` and `Stimuler` while the API answers any case with a
+	// lower-case slug. So the stored board wins, as in ResolveOnBoard, and a board the
+	// catalogue does not know keeps the spelling the recognizer would file it under.
+	board := org
+	if d.catalog != nil {
+		stored, found, err := d.catalog.Entry(ctx, d.Source(), org)
+		if err != nil {
+			return sources.Job{}, false, err
+		}
+		if found {
+			board = stored.Board
+		}
+	}
+
 	job := resp.ToJob()
 	// resp.ID, not the link's spelling: the API accepts any case of the uuid and answers with
 	// the lower-case id the crawl stores, so an upper-case link cannot fork the dedup key.
-	job.ExternalID = externalid.Namespace(org, resp.ID)
+	job.ExternalID = externalid.Namespace(board, resp.ID)
 	job.URL = raw
 	return job, true, nil
 }

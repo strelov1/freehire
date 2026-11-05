@@ -6,8 +6,9 @@ The link-source registry SHALL resolve a `jobs.dover.com/<Org>/<uuid>` link dire
 Dover's public posting-detail endpoint — the endpoint the ingest adapter already hydrates
 with — instead of falling back to a full board fetch. The employer SHALL be named from the
 posting's own client record (`client_name`), never from a humanized link segment. The
-resolved posting SHALL be namespaced by the link's Org segment spelling — the exact board
-spelling the recognizer files the link under and the crawl pipeline namespaces rows by — so a
+resolved posting SHALL be namespaced by the board as the catalogue stores it — the spelling the
+crawl pipeline namespaces rows by — or, when the catalogue has no such board or is not available
+to the caller, by the link's Org spelling, which the recognizer would file it under — so a
 link-imported row and a crawl of that board dedup to one posting; the careers API's slug
 lookup (`careers-page-slug/<Org>`) SHALL gate the resolve as the OWNERSHIP check (the host's
 shell serves any slug, so the host proves shape only): the lookup's client id SHALL equal the
@@ -25,6 +26,11 @@ live-verified 2026-11-05).
 - **THEN** the vacancy carries company `Deepspatial` from the posting's client record and
   external id `Deepspatial:a5546acf-45c3-44ff-bedd-a4314fd0f37d`, matching the identity a
   crawl of the `Deepspatial` board writes
+
+#### Scenario: A link spells a catalogued board differently
+
+- **WHEN** the catalogue stores the board as `deepspatial` and the link spells it `Deepspatial`
+- **THEN** the external id is `deepspatial:<posting id>`, the row a crawl of that board writes
 
 #### Scenario: An Org that does not own the posting is declined
 

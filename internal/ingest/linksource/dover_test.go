@@ -2,9 +2,12 @@ package linksource
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/strelov1/freehire/internal/ingest/sources"
 )
 
 // doverDetailJSON mirrors the posting detail endpoint as the live API answered it for the
@@ -26,16 +29,15 @@ const doverDetailJSON = `{
 
 // TestDoverResolvesCompanyFromClientRecord pins the acceptance case behind the review
 // findings: the submitted jobs.dover.com link resolves under the company's own identity —
-// employer name from the posting's client record (NOT a humanized link segment), external id
-// namespaced by the link's Org spelling — so a link-imported row and a crawl of the board the
-// contribution flow files this link under dedup to one posting.
+// employer name from the posting's client record (NOT a humanized link segment), and an
+// external id a crawl of the board this link would be filed under also writes.
 func TestDoverResolvesCompanyFromClientRecord(t *testing.T) {
 	const link = "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d?utm_source=telegram"
 	c := (&fakeClient{}).
 		route("inbound/application-portal-job/a5546acf-45c3-44ff-bedd-a4314fd0f37d", doverDetailJSON, "").
 		route("careers-page-slug/Deepspatial", `{"id":"1aeeba55-65e0-4803-b70f-fac7ca8a20c7","slug":"deepspatial","name":"Deepspatial"}`, "")
 
-	job, ok, err := NewDover(c).Resolve(context.Background(), link)
+	job, ok, err := NewDover(c, nil).Resolve(context.Background(), link)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -45,9 +47,8 @@ func TestDoverResolvesCompanyFromClientRecord(t *testing.T) {
 	if job.Company != "Deepspatial" {
 		t.Errorf("Company = %q, want the client record's name", job.Company)
 	}
-	// Namespaced by the LINK's Org spelling — the exact spelling the contribution flow files
-	// the board under and the crawl pipeline namespaces rows by (Namespace(board, id)) — so
-	// a link-imported row and a crawl of that board dedup to one posting.
+	// With no catalogue entry, namespaced by the LINK's Org spelling — the spelling the
+	// contribution flow would file the board under and a crawl would then namespace rows by.
 	if job.ExternalID != "Deepspatial:a5546acf-45c3-44ff-bedd-a4314fd0f37d" {
 		t.Errorf("ExternalID = %q, want org-spelling-namespaced posting uuid", job.ExternalID)
 	}
@@ -64,7 +65,7 @@ func TestDoverResolvesCompanyFromClientRecord(t *testing.T) {
 // own pages are declined outright, and a matched shape whose posting the API does not know
 // is a skip (ok=false), not an error.
 func TestDoverDeclinesNonJobShapes(t *testing.T) {
-	ls := NewDover(&fakeClient{}) // no routes: any fetch would error the resolve
+	ls := NewDover(&fakeClient{}, nil) // no routes: any fetch would error the resolve
 	declined := []string{
 		"https://jobs.dover.com/Deepspatial",
 		"https://jobs.dover.com/Deepspatial/not-a-uuid",
@@ -101,19 +102,19 @@ func TestDoverSkipsGoneAndInactivePostings(t *testing.T) {
 
 	gone := &fakeClient{}
 	gone.routeErr(api, &statusErr{code: 404})
-	if _, ok, err := NewDover(gone).Resolve(context.Background(), link); err != nil || ok {
+	if _, ok, err := NewDover(gone, nil).Resolve(context.Background(), link); err != nil || ok {
 		t.Errorf("404 detail: ok=%v err=%v, want ok=false, nil error", ok, err)
 	}
 
 	inactive := (&fakeClient{}).
 		route(api, strings.ReplaceAll(doverDetailJSON, `"active":true`, `"active":false`), "").
 		route("careers-page-slug/Deepspatial", `{"slug":"deepspatial"}`, "")
-	if _, ok, err := NewDover(inactive).Resolve(context.Background(), link); err != nil || ok {
+	if _, ok, err := NewDover(inactive, nil).Resolve(context.Background(), link); err != nil || ok {
 		t.Errorf("inactive detail: ok=%v err=%v, want ok=false, nil error", ok, err)
 	}
 
 	transport := &fakeClient{} // no routes: the fetch fails with a plain error
-	if _, ok, err := NewDover(transport).Resolve(context.Background(), link); err == nil || ok {
+	if _, ok, err := NewDover(transport, nil).Resolve(context.Background(), link); err == nil || ok {
 		t.Errorf("transport failure: ok=%v err=%v, want ok=false, non-nil error", ok, err)
 	}
 }
@@ -121,7 +122,7 @@ func TestDoverSkipsGoneAndInactivePostings(t *testing.T) {
 // TestDoverDeclinesMalformedUUID pins the uuid gate: a 36-character segment that is not the
 // canonical 8-4-4-4-12 hex spelling is not matched, same as the recognizer declines it.
 func TestDoverDeclinesMalformedUUID(t *testing.T) {
-	ls := NewDover(&fakeClient{})
+	ls := NewDover(&fakeClient{}, nil)
 	for _, link := range []string{
 		"https://jobs.dover.com/Deepspatial/zzzzzzzz-45c3-44ff-bedd-a4314fd0f37d",
 		"https://jobs.dover.com/Deepspatial/a5546acf45c344ffbedda4314fd0f37d00000000",
@@ -145,21 +146,21 @@ func TestDoverRejectsEmptyClientIdentityAndUnknownSlug(t *testing.T) {
 	noName := (&fakeClient{}).
 		route(api, strings.ReplaceAll(doverDetailJSON, `"client_name":"Deepspatial"`, `"client_name":""`), "").
 		route("careers-page-slug/", `{"slug":""}`, "")
-	if _, ok, err := NewDover(noName).Resolve(context.Background(), link); err != nil || ok {
+	if _, ok, err := NewDover(noName, nil).Resolve(context.Background(), link); err != nil || ok {
 		t.Errorf("empty client_name: ok=%v err=%v, want ok=false, nil error", ok, err)
 	}
 
 	noSlug := (&fakeClient{}).
 		route(api, doverDetailJSON, "").
 		route("careers-page-slug/Deepspatial", `{"id":"1aeeba55-65e0-4803-b70f-fac7ca8a20c7","slug":"","name":"Deepspatial"}`, "")
-	if _, ok, err := NewDover(noSlug).Resolve(context.Background(), link); err != nil || ok {
+	if _, ok, err := NewDover(noSlug, nil).Resolve(context.Background(), link); err != nil || ok {
 		t.Errorf("empty slug: ok=%v err=%v, want ok=false, nil error", ok, err)
 	}
 
 	unknownSlug := &fakeClient{}
 	unknownSlug.routeErr("careers-page-slug/", &statusErr{code: 404})
 	unknownSlug.route(api, doverDetailJSON, "")
-	if _, ok, err := NewDover(unknownSlug).Resolve(context.Background(), link); err != nil || ok {
+	if _, ok, err := NewDover(unknownSlug, nil).Resolve(context.Background(), link); err != nil || ok {
 		t.Errorf("unknown slug: ok=%v err=%v, want ok=false, nil error", ok, err)
 	}
 }
@@ -172,7 +173,7 @@ func TestDoverDeclinesOrgOwnedByAnotherClient(t *testing.T) {
 	c := (&fakeClient{}).
 		route("inbound/application-portal-job/a5546acf-45c3-44ff-bedd-a4314fd0f37d", doverDetailJSON, "").
 		route("careers-page-slug/Acme", `{"id":"99999999-0000-4000-8000-000000000000","slug":"acme","name":"Acme"}`, "")
-	if _, ok, err := NewDover(c).Resolve(context.Background(), link); err != nil || ok {
+	if _, ok, err := NewDover(c, nil).Resolve(context.Background(), link); err != nil || ok {
 		t.Errorf("Org of another client: ok=%v err=%v, want ok=false, nil error", ok, err)
 	}
 }
@@ -184,11 +185,45 @@ func TestDoverNamespacesTheAPIPostingID(t *testing.T) {
 	c := (&fakeClient{}).
 		route("inbound/application-portal-job/A5546ACF-45C3-44FF-BEDD-A4314FD0F37D", doverDetailJSON, "").
 		route("careers-page-slug/Deepspatial", `{"id":"1aeeba55-65e0-4803-b70f-fac7ca8a20c7","slug":"deepspatial","name":"Deepspatial"}`, "")
-	job, ok, err := NewDover(c).Resolve(context.Background(), link)
+	job, ok, err := NewDover(c, nil).Resolve(context.Background(), link)
 	if err != nil || !ok {
 		t.Fatalf("Resolve: ok=%v err=%v", ok, err)
 	}
 	if job.ExternalID != "Deepspatial:a5546acf-45c3-44ff-bedd-a4314fd0f37d" {
 		t.Errorf("ExternalID = %q, want the API's lower-case posting id", job.ExternalID)
+	}
+}
+
+// TestDoverNamespacesByTheStoredBoard pins the dedup key against the catalogue: the crawl writes
+// the board as stored, so a link spelling it differently must land on that row, not beside it.
+// A catalogue that cannot answer is a retriable failure rather than a guess at the spelling.
+func TestDoverNamespacesByTheStoredBoard(t *testing.T) {
+	const link = "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d"
+	client := func() *fakeClient {
+		return (&fakeClient{}).
+			route("inbound/application-portal-job/a5546acf-45c3-44ff-bedd-a4314fd0f37d", doverDetailJSON, "").
+			route("careers-page-slug/Deepspatial", `{"id":"1aeeba55-65e0-4803-b70f-fac7ca8a20c7","slug":"deepspatial","name":"Deepspatial"}`, "")
+	}
+
+	stored := fakeCatalog{entry: sources.CompanyEntry{Provider: "dover", Board: "deepspatial"}}
+	job, ok, err := NewDover(client(), stored).Resolve(context.Background(), link)
+	if err != nil || !ok {
+		t.Fatalf("Resolve: ok=%v err=%v", ok, err)
+	}
+	if job.ExternalID != "deepspatial:a5546acf-45c3-44ff-bedd-a4314fd0f37d" {
+		t.Errorf("ExternalID = %q, want the stored board's spelling", job.ExternalID)
+	}
+
+	job, ok, err = NewDover(client(), fakeCatalog{}).Resolve(context.Background(), link)
+	if err != nil || !ok {
+		t.Fatalf("Resolve with an unknown board: ok=%v err=%v", ok, err)
+	}
+	if job.ExternalID != "Deepspatial:a5546acf-45c3-44ff-bedd-a4314fd0f37d" {
+		t.Errorf("ExternalID = %q, want the link's spelling for an unknown board", job.ExternalID)
+	}
+
+	boom := errors.New("catalogue down")
+	if _, ok, err := NewDover(client(), fakeCatalog{err: boom}).Resolve(context.Background(), link); !errors.Is(err, boom) || ok {
+		t.Errorf("catalogue failure: ok=%v err=%v, want the error propagated", ok, err)
 	}
 }
