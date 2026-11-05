@@ -131,6 +131,8 @@ SELECT
     j.company_slug,
     j.location,
     j.remote,
+    j.seniority,
+    j.category,
     v.page_uniques
 FROM job_daily_views v
 JOIN jobs j ON j.id = v.job_id
@@ -158,6 +160,8 @@ type TopPageViewedJobsForDayRow struct {
 	CompanySlug string `json:"company_slug"`
 	Location    string `json:"location"`
 	Remote      bool   `json:"remote"`
+	Seniority   string `json:"seniority"`
+	Category    string `json:"category"`
 	PageUniques int32  `json:"page_uniques"`
 }
 
@@ -180,8 +184,8 @@ type TopPageViewedJobsForDayRow struct {
 // a tech job" is not a good enough reason to put it in front of people. The same
 // predicate gates enrichment spend (internal/platform/db/queries/enrichment.sql).
 //
-// OVER-FETCHES on purpose. The caller drops rows for the company cap and the
-// quarantine, so a LIMIT of exactly ten would return fewer than ten publishable
+// OVER-FETCHES on purpose. The caller drops rows for the day's theme, the company cap and
+// the quarantine, so a LIMIT of exactly ten would return fewer than ten publishable
 // postings on any day where one company had a good morning.
 func (q *Queries) TopPageViewedJobsForDay(ctx context.Context, arg TopPageViewedJobsForDayParams) ([]TopPageViewedJobsForDayRow, error) {
 	rows, err := q.db.Query(ctx, topPageViewedJobsForDay, arg.Day, arg.Lim)
@@ -200,6 +204,8 @@ func (q *Queries) TopPageViewedJobsForDay(ctx context.Context, arg TopPageViewed
 			&i.CompanySlug,
 			&i.Location,
 			&i.Remote,
+			&i.Seniority,
+			&i.Category,
 			&i.PageUniques,
 		); err != nil {
 			return nil, err

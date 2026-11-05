@@ -56,8 +56,8 @@ WHERE day < (now() AT TIME ZONE 'utc')::date;
 -- a tech job" is not a good enough reason to put it in front of people. The same
 -- predicate gates enrichment spend (internal/platform/db/queries/enrichment.sql).
 --
--- OVER-FETCHES on purpose. The caller drops rows for the company cap and the
--- quarantine, so a LIMIT of exactly ten would return fewer than ten publishable
+-- OVER-FETCHES on purpose. The caller drops rows for the day's theme, the company cap and
+-- the quarantine, so a LIMIT of exactly ten would return fewer than ten publishable
 -- postings on any day where one company had a good morning.
 SELECT
     j.id,
@@ -67,6 +67,8 @@ SELECT
     j.company_slug,
     j.location,
     j.remote,
+    j.seniority,
+    j.category,
     v.page_uniques
 FROM job_daily_views v
 JOIN jobs j ON j.id = v.job_id

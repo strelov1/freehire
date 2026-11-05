@@ -123,7 +123,7 @@ func (p *LinkedInPublisher) Render(d Digest) (string, error) {
 // text on its own line, and cutting mid-string would publish a link that goes nowhere. A short
 // list is a smaller loss than a broken link.
 func (p *LinkedInPublisher) payload(d Digest) linkedInPayload {
-	header := "Most viewed on freehire — " + d.Day.Format("2 January 2006")
+	header := d.Title()
 
 	var b strings.Builder
 	b.WriteString(escapeLinkedInText(header))

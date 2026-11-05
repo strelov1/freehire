@@ -21,6 +21,16 @@ already publishes.
   third posting yields its place and the list comes out full; truncating first would
   leave a hole nothing refills. Quarantine is checked before the cap is counted, so a
   quarantined posting does not spend its company's place.
+- `ThemeFor(day)` / `SelectThemed` — which top the day runs. **The post rotates by the
+  weekday of the day it describes: remote on Tuesday, entry-level on Wednesday, data and AI
+  on Friday, the plain list otherwise.** A function of the day and not stored state, so every
+  channel, retry and `-day` replay agrees, and the ledger needs no column. A theme narrows
+  who competes and never changes the ranking, so every heading can say "most viewed". A theme
+  that cannot fill `MinThemeItems` publishes the plain list under the plain heading, and
+  `Digest.Theme` records the one actually used. **The rotation adds no posts**: still one a
+  day per channel, and the quarantine holds across themes, so a posting does not reappear
+  under the next heading. `MinThemeItems` and the weekday table are guesses until dry runs
+  have been read (`-dry-run -day <a Tuesday>`).
 - `ResolveDay(latest, hasData, now)` — the day is **discovered**, not computed from
   the clock. `cmd/rollup-views` fires at 02:30 UTC and reads the *rotated* access log,
   so whether its freshest complete day is yesterday or the day before depends on when

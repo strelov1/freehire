@@ -124,6 +124,18 @@ func TestServiceBuild(t *testing.T) {
 		assertIDs(t, got.Items, []int64{1, 2})
 	})
 
+	t.Run("the day's theme decides the list and its heading", func(t *testing.T) {
+		repo := newFakeRepo(append([]Posting{posting(100, "office", 500)}, remotePostings(MinThemeItems)...)...)
+		got, err := New(repo, fixedNow("2026-09-09")).Build(ctx, day("2026-09-08")) // a Tuesday
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Theme.Heading != themeRemote.Heading {
+			t.Errorf("theme = %q, want %q", got.Theme.Heading, themeRemote.Heading)
+		}
+		assertIDs(t, got.Items, []int64{1, 2, 3, 4, 5})
+	})
+
 	t.Run("an explicit day bypasses the freshness lookup entirely", func(t *testing.T) {
 		repo := newFakeRepo(posting(1, "alpha", 90))
 		repo.latestErr = errors.New("must not be called")

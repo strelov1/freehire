@@ -7637,8 +7637,8 @@ type Querier interface {
 	// a tech job" is not a good enough reason to put it in front of people. The same
 	// predicate gates enrichment spend (internal/platform/db/queries/enrichment.sql).
 	//
-	// OVER-FETCHES on purpose. The caller drops rows for the company cap and the
-	// quarantine, so a LIMIT of exactly ten would return fewer than ten publishable
+	// OVER-FETCHES on purpose. The caller drops rows for the day's theme, the company cap and
+	// the quarantine, so a LIMIT of exactly ten would return fewer than ten publishable
 	// postings on any day where one company had a good morning.
 	TopPageViewedJobsForDay(ctx context.Context, arg TopPageViewedJobsForDayParams) ([]TopPageViewedJobsForDayRow, error)
 	// Mark a session as the most recently active, so the rail's order follows real use.

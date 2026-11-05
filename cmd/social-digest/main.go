@@ -1,5 +1,5 @@
-// Command social-digest publishes the day's ten most-viewed postings to the social
-// channels that are configured. One run builds one day's list and exits; schedule it
+// Command social-digest publishes the day's ten most-viewed postings, rotating through
+// themed tops by weekday, to the social channels that are configured. One run builds one day's list and exits; schedule it
 // once a day, after cmd/rollup-views has produced the day it will read.
 //
 //	./social-digest -dry-run                 # render the post, send nothing

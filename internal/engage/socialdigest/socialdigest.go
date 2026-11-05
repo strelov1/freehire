@@ -53,12 +53,18 @@ const (
 	// not one, because cmd/rollup-views missing a single night is ordinary noise.
 	StaleAfterDays = 3
 
+	// MinThemeItems is the shortest list a themed day may publish. Below it the day
+	// falls back to the plain most-viewed list: three postings under a heading reads as
+	// a theme that ran out, and an empty themed day would silently cost a post the plain
+	// list could have filled.
+	MinThemeItems = 5
+
 	// CandidateLimit is how many rows the candidate query fetches. The rules below
-	// drop rows, so fetching exactly Size would return fewer than Size publishable
-	// postings on any day one company had a good morning. Generous on purpose — the
-	// query is one indexed day's worth of rows and the cost of over-fetching is
-	// nothing next to publishing a short list.
-	CandidateLimit = 200
+	// drop rows, and a theme keeps only a share of what is left, so the pool has to reach
+	// well past Size. Generous on purpose — the query is one indexed day's worth of rows
+	// and the cost of over-fetching is nothing next to publishing a short list. It was
+	// 200 until themes: a theme's postings sit anywhere in the day's ranking.
+	CandidateLimit = 1000
 )
 
 // DayLayout is how a digest day is written wherever it is shown to a person — in a
@@ -77,6 +83,8 @@ type Posting struct {
 	CompanySlug string
 	Location    string
 	Remote      bool
+	Seniority   string
+	Category    string
 
 	// PageUniques is the distinct visitors who opened this posting's page on the
 	// digest's day. The bot-filtered signal; the only one safe to rank on.
@@ -91,6 +99,14 @@ type Digest struct {
 	// stub of the day in progress, and LatestViewDay is what excludes it.
 	Day   time.Time
 	Items []Posting
+	// Theme is the top this list actually is, which on a thin day is ThemeMostViewed
+	// whatever the calendar named. Publishers read their heading from it.
+	Theme Theme
+}
+
+// Title is the post's heading, one wording for every channel.
+func (d Digest) Title() string {
+	return d.Theme.Heading + " on freehire — " + d.Day.Format("2 January 2006")
 }
 
 // Empty reports whether this digest has nothing to say.
