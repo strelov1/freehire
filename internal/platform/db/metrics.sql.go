@@ -478,6 +478,58 @@ func (q *Queries) NotifyBacklogMetrics(ctx context.Context) ([]NotifyBacklogMetr
 	return items, nil
 }
 
+const notifyDigestVolumeMetrics = `-- name: NotifyDigestVolumeMetrics :one
+WITH per_user AS (
+    SELECT user_id, count(*) AS n
+    FROM user_notifications
+    WHERE kind = 'subscription_digest' AND created_at > now() - interval '24 hours'
+    GROUP BY user_id
+)
+SELECT
+    COALESCE(sum(n), 0)::bigint AS digests,
+    count(*)::bigint AS recipients,
+    COALESCE(max(n), 0)::bigint AS max_per_user,
+    (count(*) FILTER (WHERE n > 24))::bigint AS users_over_daily_cap,
+    (SELECT count(*) FROM saved_searches
+     WHERE derived_from_profile AND updated_at > now() - interval '1 hour')::bigint AS profile_alerts_rewritten_1h
+FROM per_user
+`
+
+type NotifyDigestVolumeMetricsRow struct {
+	Digests                  int64 `json:"digests"`
+	Recipients               int64 `json:"recipients"`
+	MaxPerUser               int64 `json:"max_per_user"`
+	UsersOverDailyCap        int64 `json:"users_over_daily_cap"`
+	ProfileAlertsRewritten1h int64 `json:"profile_alerts_rewritten_1h"`
+}
+
+// How many subscription digests reached people in the last 24 hours, and how hard the
+// busiest recipients were hit. The backlog above says whether digests go OUT; this says
+// whether too MANY do, which nothing measured until a user complained (2026-11-05): a
+// server-side rewrite of 578 profile alerts widened them, and one person got 43 digests in
+// a day. The 24 in users_over_daily_cap is the per-subscription ceiling of the hourly
+// default; a user above it is getting more than one subscription's worth.
+//
+// profile_alerts_rewritten_1h counts profile-derived saved searches whose query moved in
+// the last hour. A user edits one at a time; hundreds in an hour is a mass rewrite, the
+// step that started the 2026-11-04 flood.
+//
+// Per user, not per subscription or channel: the complaint is about one inbox. Measured on
+// prod 2026-11-05 (16k digests, 1.5k recipients): 25ms warm, on
+// user_notifications_user_id_created_at_idx.
+func (q *Queries) NotifyDigestVolumeMetrics(ctx context.Context) (NotifyDigestVolumeMetricsRow, error) {
+	row := q.db.QueryRow(ctx, notifyDigestVolumeMetrics)
+	var i NotifyDigestVolumeMetricsRow
+	err := row.Scan(
+		&i.Digests,
+		&i.Recipients,
+		&i.MaxPerUser,
+		&i.UsersOverDailyCap,
+		&i.ProfileAlertsRewritten1h,
+	)
+	return i, err
+}
+
 const providerIngestHealth = `-- name: ProviderIngestHealth :many
 SELECT
     b.provider,

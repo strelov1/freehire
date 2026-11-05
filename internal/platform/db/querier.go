@@ -5812,6 +5812,21 @@ type Querier interface {
 	// per-match work on subscription_matches_pending_matched_idx; measured on prod 2026-10-22
 	// (~40k pending matches, 64 pending subscriptions): 34ms.
 	NotifyBacklogMetrics(ctx context.Context) ([]NotifyBacklogMetricsRow, error)
+	// How many subscription digests reached people in the last 24 hours, and how hard the
+	// busiest recipients were hit. The backlog above says whether digests go OUT; this says
+	// whether too MANY do, which nothing measured until a user complained (2026-11-05): a
+	// server-side rewrite of 578 profile alerts widened them, and one person got 43 digests in
+	// a day. The 24 in users_over_daily_cap is the per-subscription ceiling of the hourly
+	// default; a user above it is getting more than one subscription's worth.
+	//
+	// profile_alerts_rewritten_1h counts profile-derived saved searches whose query moved in
+	// the last hour. A user edits one at a time; hundreds in an hour is a mass rewrite, the
+	// step that started the 2026-11-04 flood.
+	//
+	// Per user, not per subscription or channel: the complaint is about one inbox. Measured on
+	// prod 2026-11-05 (16k digests, 1.5k recipients): 25ms warm, on
+	// user_notifications_user_id_created_at_idx.
+	NotifyDigestVolumeMetrics(ctx context.Context) (NotifyDigestVolumeMetricsRow, error)
 	// Record one confident job-mail sighting for a sender domain, returning its running
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.

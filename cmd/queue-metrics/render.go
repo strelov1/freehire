@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/strelov1/freehire/internal/platform/db"
 )
 
 // queueMetrics is one outbox queue's measurement. oldestAgeSeconds is the age of the
@@ -101,6 +103,9 @@ type snapshot struct {
 	// by construction, which is why it is published apart instead of mixed in.
 	notifyDeliverable   notifyBacklog
 	notifyUndeliverable notifyBacklog
+	// notifyVolume is the other direction: not whether digests go out, but whether too
+	// many reach one person (NotifyDigestVolumeMetrics).
+	notifyVolume db.NotifyDigestVolumeMetricsRow
 
 	newestJob time.Time
 	// providers is also the fleet: freehire_boards_total is their sum, so the two board
@@ -167,6 +172,20 @@ func render(s snapshot) string {
 		"Age of the oldest undelivered subscription match, by whether its channel can be delivered.")
 	for _, n := range notify {
 		fmt.Fprintf(&b, "freehire_notify_oldest_pending_age_seconds{deliverable=%q} %.3f\n", n.label, n.oldestAgeSeconds)
+	}
+	v := s.notifyVolume
+	for _, g := range []struct {
+		name, help string
+		value      int64
+	}{
+		{"freehire_notify_digests_24h", "Subscription digests delivered in the last 24 hours.", v.Digests},
+		{"freehire_notify_digest_recipients_24h", "Users who received at least one subscription digest in the last 24 hours.", v.Recipients},
+		{"freehire_notify_digests_max_per_user_24h", "Most subscription digests one user received in the last 24 hours.", v.MaxPerUser},
+		{"freehire_notify_users_over_daily_cap_24h", "Users who received more than 24 subscription digests in the last 24 hours.", v.UsersOverDailyCap},
+		{"freehire_notify_profile_alerts_rewritten_1h", "Profile-derived saved searches whose query changed in the last hour.", v.ProfileAlertsRewritten1h},
+	} {
+		writeHeader(&b, g.name, g.help)
+		fmt.Fprintf(&b, "%s %d\n", g.name, g.value)
 	}
 
 	// An empty fleet still publishes four explicit zeros: an absent series is how the
