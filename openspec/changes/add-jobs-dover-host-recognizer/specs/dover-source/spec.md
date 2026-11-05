@@ -7,8 +7,8 @@ Dover's public posting-detail endpoint — the endpoint the ingest adapter alrea
 with — instead of falling back to a full board fetch. The employer SHALL be named from the
 posting's own client record (`client_name`), never from a humanized link segment. The
 resolved posting SHALL be namespaced by the board as the catalogue stores it — the spelling the
-crawl pipeline namespaces rows by — or, when the catalogue has no such board or is not available
-to the caller, by the link's Org spelling, which the recognizer would file it under — so a
+crawl pipeline namespaces rows by — or, when the catalogue has no such board, by the link's Org
+spelling, which the recognizer would file it under — so a
 link-imported row and a crawl of that board dedup to one posting; the careers API's slug
 lookup (`careers-page-slug/<Org>`) SHALL gate the resolve as the OWNERSHIP check (the host's
 shell serves any slug, so the host proves shape only): the lookup's client id SHALL equal the

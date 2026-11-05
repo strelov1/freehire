@@ -227,3 +227,27 @@ func TestDoverNamespacesByTheStoredBoard(t *testing.T) {
 		t.Errorf("catalogue failure: ok=%v err=%v, want the error propagated", ok, err)
 	}
 }
+
+// TestDoverRegistriesThatResolveCarryTheCatalogue pins the wiring: both registries that resolve
+// links hand the Dover adapter the catalogue, so neither can file a posting beside the crawl's.
+func TestDoverRegistriesThatResolveCarryTheCatalogue(t *testing.T) {
+	const link = "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d"
+	c := (&fakeClient{}).
+		route("inbound/application-portal-job/a5546acf-45c3-44ff-bedd-a4314fd0f37d", doverDetailJSON, "").
+		route("careers-page-slug/Deepspatial", `{"id":"1aeeba55-65e0-4803-b70f-fac7ca8a20c7","slug":"deepspatial","name":"Deepspatial"}`, "")
+	stored := fakeCatalog{entry: sources.CompanyEntry{Provider: "dover", Board: "deepspatial"}}
+	u, _ := url.Parse(link)
+
+	for name, reg := range map[string][]Source{
+		"AllWithCatalog": AllWithCatalog(c, stored),
+		"ImportRegistry": ImportRegistry(c, nil, stored),
+	} {
+		job, ok, err := Find(reg, u).Resolve(context.Background(), link)
+		if err != nil || !ok {
+			t.Fatalf("%s: Resolve: ok=%v err=%v", name, ok, err)
+		}
+		if job.ExternalID != "deepspatial:a5546acf-45c3-44ff-bedd-a4314fd0f37d" {
+			t.Errorf("%s: ExternalID = %q, want the stored board's spelling", name, job.ExternalID)
+		}
+	}
+}

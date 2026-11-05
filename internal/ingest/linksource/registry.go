@@ -49,11 +49,11 @@ type PerLinkSource interface {
 
 // All assembles the registered link-source adapters, sharing one HTTP client. Adding a
 // destination is a new adapter plus one line here.
-func All(c Client) []Source { return hostScoped(c, nil) }
+func All(c Client) []Source { return AllWithCatalog(c, nil) }
 
-// hostScoped is the host-scoped adapter list; the catalogue lets the ones that namespace an id
-// by board read the board's stored spelling.
-func hostScoped(c Client, catalog BoardCatalog) []Source {
+// AllWithCatalog is All for a caller that RESOLVES links rather than only matching them: the
+// catalogue lets the adapters that namespace an id by board read the board's stored spelling.
+func AllWithCatalog(c Client, catalog BoardCatalog) []Source {
 	return []Source{
 		NewHabrCareer(c),
 		NewRemoteYeah(c),
@@ -82,7 +82,7 @@ func hostScoped(c Client, catalog BoardCatalog) []Source {
 // where every outbound link would then look like a vacancy. Here the URL is a deliberate
 // input, which is what makes a last-resort resolver safe.
 func ImportRegistry(c Client, ingest map[string]sources.Source, catalog BoardCatalog) []Source {
-	reg := hostScoped(c, catalog)
+	reg := AllWithCatalog(c, catalog)
 	reg = append(reg, NewBoardCoverage(ingest, catalog))
 	return append(reg, NewGeneric(c))
 }
