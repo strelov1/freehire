@@ -410,8 +410,10 @@ func (h *searchHandlers) nameCompanies(ctx context.Context, top []companyFacetVa
 // company_slug facet was requested; the company distribution travels as the
 // ordered, named TopCompanies rather than inside Facets.
 type facetPayload struct {
-	Total          int64                       `json:"total"`
-	Facets         map[string]map[string]int64 `json:"facets"`
+	Total  int64                       `json:"total"`
+	Facets map[string]map[string]int64 `json:"facets"`
+	// More counts the values an MCP facets answer left out per facet; never set on the HTTP endpoint.
+	More           map[string]int              `json:"more,omitempty"`
 	Stats          map[string]search.FacetStat `json:"stats"`
 	CompaniesTotal *int64                      `json:"companies_total,omitempty"`
 	TopCompanies   []companyFacetValue         `json:"top_companies,omitempty"`

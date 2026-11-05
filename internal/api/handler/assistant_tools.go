@@ -115,22 +115,40 @@ func assistantFacetNames() []string {
 // call before filtering, so its filter values and skill slugs are the market's own
 // rather than invented.
 func (h *assistantHandlers) facetsTool() assistant.Tool {
+	return h.facets(true)
+}
+
+// mcpFacetHead is how many of each filter's most common values the MCP facets lists.
+const mcpFacetHead = 25
+
+// facets builds the facets tool. full lists every value for the in-app assistant, whose turn
+// caps a tool result. An MCP client caps nothing and keeps every answer in its context,
+// where the whole vocabulary ran to ~125 KB (2026-11-05) — metros, cities, skills and
+// sources hold up to 1,200 values each — so MCP lists each filter's head with a count of
+// the rest, and one filter whole when the caller names it.
+func (h *assistantHandlers) facets(full bool) assistant.Tool {
+	description := "List the live filter vocabulary: every filter's valid values with a vacancy count each, " +
+		"plus numeric ranges. Call this BEFORE filtering a search, and take skill slugs from its `skills` " +
+		"distribution — never invent a filter value."
+	properties := map[string]any{
+		"filters": assistantFilterSchema("Narrow the vocabulary to a slice of the market (e.g. one category)."),
+	}
+	if !full {
+		description = fmt.Sprintf("List the live filter vocabulary: each filter's %d most common values with a vacancy "+
+			"count each, how many further values each filter has (`more`), and numeric ranges. Name one filter in "+
+			"`facet` to get all of its values. Filter values are the market's own; an invented one matches nothing.", mcpFacetHead)
+		properties["facet"] = map[string]any{"type": "string", "description": "Return only this filter, with all of its values (e.g. skills, cities, metros)."}
+	}
 	return assistant.Tool{
-		Name:   "facets",
-		Title:  "List search filter values",
-		Effect: assistant.EffectReads,
-		Description: "List the live filter vocabulary: every filter's valid values with a vacancy count each, " +
-			"plus numeric ranges. Call this BEFORE filtering a search, and take skill slugs from its `skills` " +
-			"distribution — never invent a filter value.",
-		Schema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"filters": assistantFilterSchema("Narrow the vocabulary to a slice of the market (e.g. one category)."),
-			},
-		},
+		Name:        "facets",
+		Title:       "List search filter values",
+		Effect:      assistant.EffectReads,
+		Description: description,
+		Schema:      map[string]any{"type": "object", "properties": properties},
 		Run: func(ctx context.Context, _ int64, raw json.RawMessage) (any, error) {
 			var in struct {
 				Filters assistantFilterArgs `json:"filters"`
+				Facet   string              `json:"facet"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
@@ -149,9 +167,55 @@ func (h *assistantHandlers) facetsTool() assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
-			return facetView(res), nil
+			view := facetView(res)
+			if full {
+				return view, nil
+			}
+			return facetHead(view, strings.TrimSpace(in.Facet))
 		},
 	}
+}
+
+// facetHead trims a facet view for an MCP client: only the named facet, whole, or else
+// every facet's mcpFacetHead most common values with the rest counted in More.
+func facetHead(view facetPayload, only string) (facetPayload, error) {
+	if only != "" {
+		dist, ok := view.Facets[only]
+		if !ok {
+			names := make([]string, 0, len(view.Facets))
+			for name := range view.Facets {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+			return facetPayload{}, fmt.Errorf("unknown facet %q; valid facets are: %s", only, strings.Join(names, ", "))
+		}
+		return facetPayload{Total: view.Total, Facets: map[string]map[string]int64{only: dist}}, nil
+	}
+	for name, dist := range view.Facets {
+		if len(dist) <= mcpFacetHead {
+			continue
+		}
+		values := make([]string, 0, len(dist))
+		for value := range dist {
+			values = append(values, value)
+		}
+		sort.Slice(values, func(i, j int) bool {
+			if dist[values[i]] != dist[values[j]] {
+				return dist[values[i]] > dist[values[j]]
+			}
+			return values[i] < values[j]
+		})
+		head := make(map[string]int64, mcpFacetHead)
+		for _, value := range values[:mcpFacetHead] {
+			head[value] = dist[value]
+		}
+		view.Facets[name] = head
+		if view.More == nil {
+			view.More = map[string]int{}
+		}
+		view.More[name] = len(dist) - mcpFacetHead
+	}
+	return view, nil
 }
 
 // searchJobsTool searches the catalogue with a keyword and facet filters, hitting

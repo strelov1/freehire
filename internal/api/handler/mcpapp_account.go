@@ -77,9 +77,13 @@ func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool 
 	all := append(assistants.assistantDiscoveryTools(), assistants.assistantTrackingTools()...)
 	all = append(all, assistants.reportMCPTools()...)
 	all = append(all, assistants.subscriptionMCPTools(origin)...)
+	// An MCP client keeps every result in its context, so it gets the bounded variants.
 	for i, t := range all {
-		if t.Name == "search_jobs" {
-			all[i] = assistants.searchJobs(false) // an MCP client keeps every result in its context
+		switch t.Name {
+		case "search_jobs":
+			all[i] = assistants.searchJobs(false)
+		case "facets":
+			all[i] = assistants.facets(false)
 		}
 	}
 	return slices.DeleteFunc(all, func(t assistant.Tool) bool { return t.Name == presentJobsToolName })

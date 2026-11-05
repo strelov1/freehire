@@ -257,6 +257,57 @@ func TestFacetsToolReturnsTheVocabulary(t *testing.T) {
 	}
 }
 
+// An MCP client keeps every answer in its context, and the whole vocabulary ran to ~125 KB
+// (2026-11-05): four long tails of up to 1,200 values each. The MCP facets lists each
+// filter's head with a count of the rest, and returns one filter whole on request.
+func TestMCPFacetsListsTheHeadAndOneFilterWholeOnRequest(t *testing.T) {
+	skills := map[string]int64{}
+	for i := range 40 {
+		skills[fmt.Sprintf("skill-%02d", i)] = int64(100 - i)
+	}
+	fc := &stubFacets{res: search.FacetResult{
+		Total:  120,
+		Facets: map[string]map[string]int64{"skills": skills, "enrichment.seniority": {"senior": 60}},
+	}}
+	a := assistantWith(&searchHandlers{facets: fc}, nil)
+	tool := toolByName(t, mcpKeyTools(a, testMCPOrigin), "facets")
+
+	out, err := tool.Run(context.Background(), 3, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("facets: %v", err)
+	}
+	head := out.(facetPayload)
+	if got := len(head.Facets["skills"]); got != mcpFacetHead {
+		t.Errorf("skills lists %d values, want the %d most common", got, mcpFacetHead)
+	}
+	if _, ok := head.Facets["skills"]["skill-00"]; !ok {
+		t.Errorf("skills = %v, want the most common value kept", head.Facets["skills"])
+	}
+	if head.More["skills"] != 40-mcpFacetHead || head.More["seniority"] != 0 {
+		t.Errorf("more = %v, want skills' hidden count and nothing for a short filter", head.More)
+	}
+
+	out, err = tool.Run(context.Background(), 3, json.RawMessage(`{"facet":"skills"}`))
+	if err != nil {
+		t.Fatalf("facets skills: %v", err)
+	}
+	whole := out.(facetPayload)
+	if len(whole.Facets) != 1 || len(whole.Facets["skills"]) != 40 || len(whole.More) != 0 {
+		t.Errorf("facet=skills returned %v (more %v), want only skills with all 40 values", whole.Facets, whole.More)
+	}
+
+	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"facet":"vibe"}`)); err == nil ||
+		!strings.Contains(err.Error(), "vibe") || !strings.Contains(err.Error(), "skills") {
+		t.Errorf("error = %v, want an unknown facet refused, naming it and the valid ones", err)
+	}
+
+	// The in-app assistant's own copy still lists everything.
+	full, _ := toolByName(t, a.assistantDiscoveryTools(), "facets").Run(context.Background(), 3, json.RawMessage(`{}`))
+	if got := len(full.(facetPayload).Facets["skills"]); got != 40 {
+		t.Errorf("in-app facets lists %d skills, want all 40", got)
+	}
+}
+
 func TestMarketFitToolRequiresSkills(t *testing.T) {
 	a := assistantWith(&searchHandlers{facets: &stubFacets{}}, &resumeHandlers{facets: &stubFacets{}})
 	tool := toolByName(t, a.assistantDiscoveryTools(), "market_fit")
