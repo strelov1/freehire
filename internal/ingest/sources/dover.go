@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"regexp"
 	"strings"
 )
 
@@ -18,12 +17,6 @@ const doverBaseURL = "https://app.dover.com/api/v1"
 // doverListPageSize is the listing page size; the API accepts a large value (300 observed live)
 // and returns a "next" URL when more remain.
 const doverListPageSize = 300
-
-// doverClientIDPattern is the platform's client-id shape, the second segment of a
-// jobs.dover.com board pair ("Deepspatial/a5546acf-…"); resolveClientID uses it to tell such a
-// pair from a plain app.dover.com slug (which may legally carry a slash-free uuid shape too,
-// hence the found-from-Cut guard rather than a bare MatchString).
-var doverClientIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // doverMaxPages bounds pagination so a server that never empties its "next" link cannot loop
 // forever; the same structural cap manatal.go uses for the identical next-URL-walk shape.
@@ -99,15 +92,14 @@ func (s dover) FetchNew(ctx context.Context, e CompanyEntry, seen func(externalI
 	}), nil
 }
 
-// resolveClientID resolves a board's Dover slug to the platform's internal client id. A board
-// harvested off jobs.dover.com arrives as the pair "<slug>/<client uuid>" — the uuid IS the
-// client id, the exact identity the listing endpoint pages under — so it is used directly and
-// costs no lookup (and no dependence on the slug still resolving, which the marketing shell
-// serves for ANY slug and thus cannot prove).
+// resolveClientID resolves a board's Dover slug to the platform's internal client id. Dover
+// boards all carry the company's slug — whether harvested off app.dover.com's apply/listing
+// paths or off jobs.dover.com, whose board link is /<slug>/<uuid> where the uuid may be the
+// client id OR a posting id (on the submitted Deepspatial link it is a posting id: its client
+// is 1aeeba55-…, live-verified 2026-11-05) — so there is no uuid shortcut: the slug lookup is
+// the one supported address path, and it doubles as the existence check the jobs.dover.com
+// marketing shell (which serves ANY slug) cannot provide.
 func (s dover) resolveClientID(ctx context.Context, slug string) (string, error) {
-	if _, id, found := strings.Cut(slug, "/"); found && doverClientIDPattern.MatchString(id) {
-		return id, nil
-	}
 	var resp struct {
 		ID string `json:"id"`
 	}

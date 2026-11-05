@@ -516,11 +516,16 @@ var atsBoards = []struct{ host, source, mode string }{
 	// boards host, so a deny-list mode would mint a board out of every unrelated page it serves.
 	{"app.dover.com", "dover", modeAllowedFirstSegment},
 	// jobs.dover.com is Dover's public job-board host, served by the same search-builder SPA the
-	// apply pages are: it addresses a company's board at /<Org>/<client-id>, where the first
-	// segment is the company's Dover slug and the second the client UUID the careers API lists
-	// under (jobs.dover.com/Deepspatial/a5546acf-…, found in the board-submission queue 2026-11-05).
-	// Only the two-segment shape with a UUID in second position names a board — a bare /<Org> is
-	// a marketing shell served for ANY slug (see pathPatternBoards).
+	// apply pages are: a company's board is addressed at /<Org>/<uuid>, where the first segment
+	// is the company's Dover slug — the SAME identity the app.dover.com /apply and /jobs paths
+	// use — and the UUID-shaped second segment is only the shape that proves the link names a
+	// board at all (jobs.dover.com/Deepspatial/a5546acf-…, found in the board-submission queue
+	// 2026-11-05). That uuid may be the client id OR a posting id — the shell serves any pair
+	// to the browser — so it is verified where it is provable, at the API (see the adapter), and
+	// the BOARD is the slug alone: folding the uuid in would mint one board per posting and
+	// strand listings under ids the careers API does not resolve (the a5546acf link itself is a
+	// posting link: its client is 1aeeba55-…). A bare /<Org> is a marketing shell served for ANY
+	// slug and stays declined (see pathPatternBoards).
 	{"jobs.dover.com", "dover", modePathPattern},
 	// HigherMe: app.higherme.com is the whole product too (sign-in, the employer console, the
 	// candidate profile), and its posting URL /jobs/<id> names a POSTING, not a brand — the
@@ -629,16 +634,21 @@ type pathPattern struct {
 //   - fold lower-cases the capture: the one exception to the verbatim rule, for a platform whose
 //     catalogue holds every board lower-case.
 var pathPatternBoards = map[string]pathPattern{
-	// Dover's public job-board host (see the host row above): the board is the two-segment
-	// "/<Org>/<client uuid>", the exact address the careers API resolves and lists under —
-	// careers-page-slug/<Org> returns the company, careers-page/<uuid>/jobs its postings
-	// (verified live 2026-11-05). The UUID shape in second position is what separates a board
-	// from the SPA's other pages: a bare /<Org> is a marketing shell served for ANY slug, and
-	// the vendor's own /startup-jobs listing carries no second segment at all. A posting link
-	// keeps a trailing slug, which the pattern leaves out of the capture; the canonical
-	// collapses to the two-segment board address, so a posting and its listing map to one board.
+	// Dover's public job-board host (see the host row above): the BOARD is the first segment
+	// alone — the company's Dover slug, the same spelling the app.dover.com apply and listing
+	// paths use — captured only when a UUID-shaped second segment proves the link names a
+	// board. The uuid itself is NOT the board and NOT assumed to be the client id: on the
+	// submitted link it is a posting id (careers-page-slug/Deepspatial → client 1aeeba55-…;
+	// careers-page/a5546acf-…/jobs 404s; both verified live 2026-11-05), so folding it in would
+	// mint one board per posting and strand the crawl under an id the API does not resolve.
+	// What the shell cannot prove is the slug's EXISTENCE — it answers any slug — so existence
+	// is verified where it is provable, at the API, exactly as every other candidate board is.
+	// A bare /<Org> and the vendor's /startup-jobs listing carry no UUID segment and are
+	// declined by the pattern; a trailing posting slug is left out of the capture, and the
+	// canonical collapses to the /<Org> board address, so a posting link and its listing map to
+	// one board.
 	"jobs.dover.com": {
-		path:    regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9-]*/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:/|$)`),
+		path:    regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9-]*)/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?:/|$)`),
 		listing: "/%s",
 	},
 	// ClearCompany, which has served HRM Direct's tenants since ~2026-10-21
