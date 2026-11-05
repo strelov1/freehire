@@ -37,8 +37,12 @@ func run() int {
 
 func drain(ctx context.Context, region string, store emailevents.Store) int {
 	queueURL := os.Getenv("EMAIL_EVENTS_QUEUE_URL")
-	if queueURL == "" || region == "" {
+	if queueURL == "" {
 		return 0
+	}
+	if region == "" {
+		log.Print("email-events: EMAIL_EVENTS_QUEUE_URL is set but AWS_REGION is not")
+		return 1
 	}
 	src, err := emailevents.NewSQSSource(ctx, region, queueURL)
 	if err != nil {

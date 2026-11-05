@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -125,15 +126,26 @@ func (c *Client) WithEngagementTracking(configurationSet string) *Client {
 	return &Client{ses: c.ses, trackingSet: configurationSet}
 }
 
-// CheckEngagementTracking reports whether SES knows the configuration set. A send naming one
-// it does not know is rejected, which would fail a whole audience, so a sender checks once
-// before its first letter. Without a set there is nothing to check.
+// trackingCheckTimeout bounds CheckEngagementTracking: the workers calling it have no deadline
+// of their own, and a stalled check must not hold up everything else they deliver.
+const trackingCheckTimeout = 10 * time.Second
+
+// CheckEngagementTracking reports whether SES will send through the configuration set. A send
+// naming a set it does not know, or one with sending disabled, is rejected, which would fail a
+// whole audience, so a sender checks once before its first letter. Without a set there is
+// nothing to check.
 func (c *Client) CheckEngagementTracking(ctx context.Context) error {
 	if c.trackingSet == "" {
 		return nil
 	}
-	if _, err := c.ses.GetConfigurationSet(ctx, &sesv2.GetConfigurationSetInput{ConfigurationSetName: aws.String(c.trackingSet)}); err != nil {
+	ctx, cancel := context.WithTimeout(ctx, trackingCheckTimeout)
+	defer cancel()
+	out, err := c.ses.GetConfigurationSet(ctx, &sesv2.GetConfigurationSetInput{ConfigurationSetName: aws.String(c.trackingSet)})
+	if err != nil {
 		return fmt.Errorf("emailnotify: configuration set %s: %w", c.trackingSet, err)
+	}
+	if out.SendingOptions != nil && !out.SendingOptions.SendingEnabled {
+		return fmt.Errorf("emailnotify: configuration set %s has sending disabled", c.trackingSet)
 	}
 	return nil
 }

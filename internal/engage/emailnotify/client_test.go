@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 
 	"github.com/strelov1/freehire/internal/engage/emailprefs"
 )
@@ -16,9 +17,13 @@ type fakeSES struct {
 	in     *sesv2.SendEmailInput
 	err    error
 	setErr error
+	setOut *sesv2.GetConfigurationSetOutput
 }
 
 func (f *fakeSES) GetConfigurationSet(context.Context, *sesv2.GetConfigurationSetInput, ...func(*sesv2.Options)) (*sesv2.GetConfigurationSetOutput, error) {
+	if f.setOut != nil {
+		return f.setOut, f.setErr
+	}
 	return &sesv2.GetConfigurationSetOutput{}, f.setErr
 }
 
@@ -224,6 +229,10 @@ func TestClient_CheckEngagementTracking(t *testing.T) {
 	}
 	if err := (&Client{ses: missing}).WithEngagementTracking("engagement").CheckEngagementTracking(context.Background()); err == nil {
 		t.Error("an unknown set passed the check")
+	}
+	disabled := &fakeSES{setOut: &sesv2.GetConfigurationSetOutput{SendingOptions: &types.SendingOptions{SendingEnabled: false}}}
+	if err := (&Client{ses: disabled}).WithEngagementTracking("engagement").CheckEngagementTracking(context.Background()); err == nil {
+		t.Error("a set with sending disabled passed the check")
 	}
 	if err := (&Client{ses: &fakeSES{}}).WithEngagementTracking("engagement").CheckEngagementTracking(context.Background()); err != nil {
 		t.Errorf("known set: %v", err)
