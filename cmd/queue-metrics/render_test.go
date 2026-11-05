@@ -96,7 +96,7 @@ freehire_notify_digests_max_per_user_24h 140
 # HELP freehire_notify_users_over_daily_cap_24h Users who received more than 24 subscription digests in the last 24 hours.
 # TYPE freehire_notify_users_over_daily_cap_24h gauge
 freehire_notify_users_over_daily_cap_24h 15
-# HELP freehire_notify_profile_alerts_rewritten_1h Profile-derived saved searches whose query changed in the last hour.
+# HELP freehire_notify_profile_alerts_rewritten_1h Profile-derived saved searches created earlier and updated in the last hour.
 # TYPE freehire_notify_profile_alerts_rewritten_1h gauge
 freehire_notify_profile_alerts_rewritten_1h 578
 # HELP freehire_boards_total Ingest boards by health state.

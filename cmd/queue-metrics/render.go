@@ -182,7 +182,7 @@ func render(s snapshot) string {
 		{"freehire_notify_digest_recipients_24h", "Users who received at least one subscription digest in the last 24 hours.", v.Recipients},
 		{"freehire_notify_digests_max_per_user_24h", "Most subscription digests one user received in the last 24 hours.", v.MaxPerUser},
 		{"freehire_notify_users_over_daily_cap_24h", "Users who received more than 24 subscription digests in the last 24 hours.", v.UsersOverDailyCap},
-		{"freehire_notify_profile_alerts_rewritten_1h", "Profile-derived saved searches whose query changed in the last hour.", v.ProfileAlertsRewritten1h},
+		{"freehire_notify_profile_alerts_rewritten_1h", "Profile-derived saved searches created earlier and updated in the last hour.", v.ProfileAlertsRewritten1h},
 	} {
 		writeHeader(&b, g.name, g.help)
 		fmt.Fprintf(&b, "%s %d\n", g.name, g.value)

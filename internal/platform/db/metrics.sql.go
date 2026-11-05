@@ -491,7 +491,8 @@ SELECT
     COALESCE(max(n), 0)::bigint AS max_per_user,
     (count(*) FILTER (WHERE n > 24))::bigint AS users_over_daily_cap,
     (SELECT count(*) FROM saved_searches
-     WHERE derived_from_profile AND updated_at > now() - interval '1 hour')::bigint AS profile_alerts_rewritten_1h
+     WHERE derived_from_profile AND updated_at > now() - interval '1 hour'
+       AND created_at <= now() - interval '1 hour')::bigint AS profile_alerts_rewritten_1h
 FROM per_user
 `
 
@@ -510,9 +511,12 @@ type NotifyDigestVolumeMetricsRow struct {
 // a day. The 24 in users_over_daily_cap is the per-subscription ceiling of the hourly
 // default; a user above it is getting more than one subscription's worth.
 //
-// profile_alerts_rewritten_1h counts profile-derived saved searches whose query moved in
-// the last hour. A user edits one at a time; hundreds in an hour is a mass rewrite, the
-// step that started the 2026-11-04 flood.
+// profile_alerts_rewritten_1h counts profile-derived saved searches UPDATED in the last
+// hour that existed before it — a creation is not a rewrite, so onboarding does not
+// read as one. updated_at also moves on a rename, which this cannot tell apart; a
+// profile alert is named "My profile" and almost never renamed, so the count is the
+// query rewrites in practice. A user edits one at a time; hundreds in an hour is a mass
+// rewrite, the step that started the 2026-11-04 flood.
 //
 // Per user, not per subscription or channel: the complaint is about one inbox. Measured on
 // prod 2026-11-05 (16k digests, 1.5k recipients): 25ms warm, on
