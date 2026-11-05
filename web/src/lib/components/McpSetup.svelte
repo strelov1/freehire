@@ -2,40 +2,15 @@
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import { siClaude, siCursor } from 'simple-icons';
-  import { CHATGPT_APP_URL, OPENAI_MARK } from '#lib/appLinks.js';
+  import { CHATGPT_APP_URL, MCP_PATH, OPENAI_MARK } from '#lib/appLinks.js';
   import { sourceLogoUrl } from '#lib/logo.js';
   import { announce } from '#lib/announce.svelte.js';
   import { glyphColorFor } from '#lib/markColor.js';
   import { EntityLogo } from '#lib/ui/index.js';
 
-  // Pick an assistant, then follow its steps — the setup half of /mcp, shared with the
-  // onboarding tour. `compact` drops the section frame and the agent prompt for a narrow column;
-  // `initialMode` lets a signed-in surface open on the account connector.
-  let {
-    compact = false,
-    initialMode = 'anonymous',
-    iconsOnly = false,
-  }: { compact?: boolean; initialMode?: 'anonymous' | 'account'; iconsOnly?: boolean } = $props();
-
-  // The two hosted MCP servers. They are separate on purpose: a host only offers
-  // sign-in when the server answers 401, so the anonymous one can never lead to the
-  // account one — the visitor picks which connector they are adding, here.
-  type Mode = 'anonymous' | 'account';
-  const servers = $derived({
-    anonymous: {
-      url: `${page.url.origin}/api/v1/mcp`,
-      label: 'No sign-in',
-      desc: 'Search jobs and employers, read postings, salary ranges and market breakdowns. Read-only.',
-    },
-    account: {
-      url: `${page.url.origin}/api/v1/mcp/account`,
-      label: 'With your account',
-      desc: 'Search jobs and employers, plus your profile, your skills against the market, and saving, applying and moving jobs on your board.',
-    },
-  });
-  // svelte-ignore state_referenced_locally
-  let mode = $state<Mode>(initialMode);
-  const url = $derived(servers[mode].url);
+  // One hosted connection for public search and optional OAuth account access.
+  let { compact = false, iconsOnly = false }: { compact?: boolean; iconsOnly?: boolean } = $props();
+  const url = $derived(`${page.url.origin}${MCP_PATH}`);
 
   // One tile per host. `domain` is what the logo proxy resolves the mark from — by
   // name alone "Cursor" or "Grok" is ambiguous. `directory` is a one-click install from the host's own directory, drawn in that
@@ -62,11 +37,11 @@
       id: 'claude',
       label: 'Claude',
       domain: 'claude.ai',
-      // Our Claude listing is the account connector, so it signs the visitor in.
+      // Keep the original directory listing when connecting an account.
       directory: {
-        url: 'https://claude.ai/directory/freehire-account',
+        url: 'https://claude.ai/directory/freehire',
         brand: siClaude,
-        note: 'One click, signs in with freehire',
+        note: 'Open the freehire listing',
       },
       steps: [
         'Open Settings, then Connectors.',
@@ -80,16 +55,16 @@
       label: 'ChatGPT',
       domain: 'chatgpt.com',
       mono: true,
-      // The published app is the no-sign-in connector; the steps below still add either one.
+      // Public search and personal access use the same original app.
       directory: {
         url: CHATGPT_APP_URL,
         brand: OPENAI_MARK,
         note: 'One click, search with no sign-in',
       },
       steps: [
-        'Open Settings, then Apps & Connectors.',
-        'Under Advanced settings, turn on Developer mode.',
-        'Choose Create, name it freehire, and paste the address.',
+        'Open Plugins and choose Add, then Add custom MCP server.',
+        'Name it freehire and paste the address.',
+        'Choose OAuth or no authentication, then connect with or without an account.',
         'In a new chat, pick freehire from the + menu and ask a job question.',
       ],
     },
@@ -154,7 +129,7 @@
   ];
   // A link from elsewhere (the homepage icons) names the host to open on; anything unknown falls back to Claude.
   const requestedHost = page.url.searchParams.get('host');
-  let host = $state(hosts.some((h) => h.id === requestedHost) ? (requestedHost as string) : 'claude');
+  let host = $state(hosts.find((h) => h.id === requestedHost)?.id ?? 'claude');
   const selected = $derived(hosts.find((h) => h.id === host));
 
   // One copy confirmation at a time, keyed by the text that was copied.
@@ -207,7 +182,7 @@
     {/each}
   </nav>
 {:else}
-<!-- Setup: which assistant, then which connector. Every host's panel stays in the
+<!-- Setup: one address, with instructions for each assistant. Every host's panel stays in the
      HTML, `hidden` when unselected, so crawlers and agents read all of them. -->
 <section class={compact ? '' : 'rounded-2xl border border-border bg-secondary/20 p-5 sm:p-8'}>
   <div class={['flex flex-wrap items-end justify-between gap-3', compact && 'min-h-14']}>
@@ -290,33 +265,17 @@
       </div>
 
       <div class="max-w-2xl">
-      <div class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Connector">
-        {#each Object.entries(servers) as [id, server] (id)}
-          <button
-            type="button"
-            aria-pressed={mode === id}
-            onclick={() => (mode = id as Mode)}
-            class={[
-              'rounded-full border px-3 py-1 text-sm font-medium transition-colors',
-              mode === id
-                ? 'border-foreground bg-foreground text-background'
-                : 'border-border text-muted-foreground hover:text-foreground',
-            ]}
-          >
-            {server.label}
-          </button>
-        {/each}
-      </div>
-      <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{servers[mode].desc}</p>
+      <p class="mt-4 text-sm leading-relaxed text-muted-foreground">
+        One connection for public search and your account. Search jobs, employers and market data without signing in.
+        Sign in with OAuth to use your profile, saved jobs, tracking and alerts.
+      </p>
 
       <div class="mt-4 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
         <code class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">{url}</code>
         {@render copyButton(url, 'connector address')}
       </div>
       <p class="mt-2 text-xs text-muted-foreground">
-        {mode === 'account'
-          ? 'No API key. You approve the connection once and can revoke it any time.'
-          : 'No account and no API key. Read-only.'}
+        No API key needed. Approve account access in your browser and revoke it from Connected devices at any time.
       </p>
 
       <div class="mt-5">
@@ -343,23 +302,24 @@
             <pre class="overflow-x-auto p-4 font-mono text-sm leading-relaxed">{text}</pre>
           </figure>
         {/if}
-        {#if mode === 'account'}
-          <p class="mt-5 text-sm leading-relaxed text-muted-foreground">
-            {#if h.id === 'codex'}
-              Run <code>codex mcp login freehire</code> to open the freehire sign-in page and approve the connection.
-            {:else}
-              The first time it is used, your assistant opens a freehire sign-in page and asks you to approve the
-              connection.
-            {/if}
-          </p>
-        {/if}
+        <p class="mt-5 text-sm leading-relaxed text-muted-foreground">
+          {#if h.id === 'codex'}
+            For personal tools, run <code>codex mcp login freehire</code> and approve the connection in your browser.
+          {:else if h.id === 'claude-code'}
+            For personal tools, run <code>claude mcp login freehire</code>, or use <code>/mcp</code> inside Claude Code
+            and choose Authenticate for freehire. Public search works before you sign in.
+          {:else}
+            For personal tools, use your assistant's sign-in or authentication control and approve the freehire
+            connection in your browser. Keep the same server address.
+          {/if}
+        </p>
       </div>
       </div>
     </div>
   {/each}
 
   {#if !compact}
-    {@const agentPrompt = `Add the freehire MCP server to ${selected?.label ?? 'this assistant'}. Its address is ${url} (streamable HTTP transport).${mode === 'account' ? ' It signs in through a freehire page that I will approve in my browser.' : ''} When it is connected, run one job search to confirm it works, then tell me it is ready.`}
+    {@const agentPrompt = `Add the freehire MCP server to ${selected?.label ?? 'this assistant'}. Its address is ${url} (streamable HTTP transport). Public search works without an account. For personal tools, start OAuth sign-in and let me approve access in my browser. Keep this same server address. When it is connected, run one job search to confirm it works, then tell me it is ready.`}
     <div class="mt-8 max-w-2xl">
       <h3 class="text-sm font-medium">Or copy this and send it to your agent</h3>
       <figure class="mt-3 overflow-hidden rounded-xl border border-border bg-secondary/60 shadow-sm">

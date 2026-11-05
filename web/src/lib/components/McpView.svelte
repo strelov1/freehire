@@ -1,10 +1,11 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { MCP_CATALOG_PITCH } from '#lib/mcpCopy.js';
   import { SectionLabel } from '#lib/ui/index.js';
   import AssistantSetup from './AssistantSetup.svelte';
 
   // Things to ask, grouped by what the visitor is after. Each one is answerable by
-  // the anonymous server's tools alone, except the last group, which needs the account.
+  // public tools alone, except the last group, which needs OAuth on the same connection.
   const prompts = [
     {
       title: 'Find jobs',
@@ -36,8 +37,8 @@
       Search jobs right inside your AI assistant.
     </h1>
     <p class="mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground">
-      Free. No freehire account needed to search — sign in only if you want the assistant to save and track jobs for
-      you.
+      {MCP_CATALOG_PITCH} Find your next role inside Claude, ChatGPT or your coding assistant.
+      Start without an account, then connect with OAuth to save your shortlist, track applications and manage alerts.
     </p>
   </div>
 </section>
@@ -69,7 +70,8 @@
     <li>Without sign-in it cannot see or change anything of yours.</li>
     <li>
       With your account it reads your profile and tracked jobs, and saves, marks applied or moves jobs on your board —
-      never another person's.
+      never another person's. It can also manage alerts, suggest missing dictionary terms and report problems.
+      Automatic applications require your permission, a supported employer form and review before submission.
     </li>
   </ul>
   <p class="mt-8 text-sm leading-relaxed text-muted-foreground">
