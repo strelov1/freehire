@@ -6,8 +6,15 @@ FROM ghcr.io/d4vinci/scrapling@sha256:1d876879813759959bc4ba6fbb1ce8247ebbc2b67e
 COPY app.py engines.py pool.py main.py /service/
 WORKDIR /service
 
-# The base image installs its browsers under /root/.cache/ms-playwright, so the browser has
-# to run as root; the container, not the user inside it, is the boundary here.
-# hadolint ignore=DL3002
-USER root
+# Relocate the base image's installed browsers out of /root. They remain root-owned and
+# read-only to the service; Playwright's per-session profiles and caches live under /tmp.
+RUN mv /root/.cache/ms-playwright /opt/ms-playwright \
+    && chmod -R a+rX /opt/ms-playwright \
+    && groupadd --gid 10001 fetch \
+    && useradd --uid 10001 --gid fetch --no-create-home --home-dir /tmp --shell /usr/sbin/nologin fetch
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    HOME=/tmp \
+    XDG_CACHE_HOME=/tmp/.cache \
+    PYTHONDONTWRITEBYTECODE=1
+USER 10001:10001
 ENTRYPOINT ["/app/.venv/bin/python", "/service/main.py"]

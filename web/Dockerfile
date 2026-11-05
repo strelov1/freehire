@@ -1,7 +1,7 @@
 # Production image for the freehire web frontend (SvelteKit SSR, adapter-node).
 #
 # A single public container keeps everything same-origin for the SameSite=Lax
-# auth cookie: nginx listens on :80 and routes
+# auth cookie: nginx listens on :8080 and routes
 #   - /api, /health  -> the Go backend (app:8080)
 #   - everything else -> the Node SSR server (127.0.0.1:3000)
 # The Node server fetches the Go API server-to-server via API_INTERNAL_URL.
@@ -51,6 +51,7 @@ COPY --from=build /src/build ./build
 COPY --from=build /src/node_modules ./node_modules
 COPY --from=build /src/package.json ./package.json
 COPY web/nginx.conf /etc/nginx/http.d/default.conf
+COPY web/nginx-main.conf /etc/nginx/nginx.conf
 COPY web/docker-entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
@@ -62,5 +63,9 @@ ENV API_INTERNAL_URL=http://app:8080
 ENV PROTOCOL_HEADER=x-forwarded-proto
 ENV HOST_HEADER=x-forwarded-host
 
-EXPOSE 80
+ENV HOME=/tmp/freehire-web/home
+
+# Code and nginx templates stay root-owned; only runtime scratch belongs to Node/nginx.
+USER node
+EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
