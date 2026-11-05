@@ -11,8 +11,7 @@
 -- FOR EACH ROW with a WHEN filter, so an update that touches none of these columns — the
 -- overwhelming majority, every liveness touch included — costs one comparison and no call.
 -- duplicate_of chains (up to 8 deep, the same bound DuplicateClosureGeoFor walks), so the
--- walk climbs to the canonical root; only an open root is queued, the shape every other
--- writer of search_outbox uses.
+-- walk climbs to the canonical root; only an open, public root is queued.
 CREATE OR REPLACE FUNCTION public.jobs_enqueue_duplicate_owner() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -25,11 +24,11 @@ BEGIN
     END IF;
 
     WITH RECURSIVE up AS (
-        SELECT j.id, j.duplicate_of, j.closed_at, j.posted_at, j.created_at, 0 AS depth
+        SELECT j.id, j.duplicate_of, j.closed_at, j.is_private, j.posted_at, j.created_at, 0 AS depth
         FROM jobs j
         WHERE j.id = ANY(owners)
         UNION ALL
-        SELECT j.id, j.duplicate_of, j.closed_at, j.posted_at, j.created_at, up.depth + 1
+        SELECT j.id, j.duplicate_of, j.closed_at, j.is_private, j.posted_at, j.created_at, up.depth + 1
         FROM up
         JOIN jobs j ON j.id = up.duplicate_of
         WHERE up.depth < 8
@@ -37,8 +36,11 @@ BEGIN
     INSERT INTO search_outbox (job_id, job_posted_at)
     SELECT DISTINCT id, COALESCE(posted_at, created_at)
     FROM up
-    WHERE duplicate_of IS NULL AND closed_at IS NULL
-    ON CONFLICT (job_id) DO NOTHING;
+    WHERE duplicate_of IS NULL AND closed_at IS NULL AND NOT is_private
+    -- Re-stamped, not DO NOTHING: the owner's entry may be claimed by a drain wave that read
+    -- the row before this change, and that wave's completion deletes the entry by id.
+    ON CONFLICT (job_id) DO UPDATE
+        SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;
 
     RETURN NULL;
 END;

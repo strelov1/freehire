@@ -637,7 +637,9 @@ RETURNING jobs.id, jobs.source, jobs.company_slug, jobs.duplicate_of, jobs.is_pr
     SELECT id, eff_posted_at FROM refreshed
     WHERE duplicate_of IS NULL AND NOT is_private
       AND prev_seen_at < sqlc.arg(withheld_if_seen_before)::timestamptz
-    ON CONFLICT (job_id) DO NOTHING
+    -- Re-stamped: a drain wave holding this entry may be removing the document right now.
+    ON CONFLICT (job_id) DO UPDATE
+        SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )
 SELECT id, source, company_slug, duplicate_of FROM refreshed;
 
@@ -2363,7 +2365,8 @@ WITH existing AS MATERIALIZED (
     WHERE t.closed_at IS NULL AND e.closed_at IS NULL AND NOT e.is_private
       AND e.duplicate_of IS NULL
       AND e.last_seen_at < sqlc.arg(withheld_if_seen_before)::timestamptz
-    ON CONFLICT (job_id) DO NOTHING
+    ON CONFLICT (job_id) DO UPDATE
+        SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 )
 -- A touch writes no content, so a posting closed under an older dictionary would reopen
 -- carrying it. With allow_reopen false a touch that WOULD reopen writes nothing and reports

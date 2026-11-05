@@ -119,30 +119,61 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		}
 	})
 
+	// The drain completes a wave by deleting its claimed entries BY ID. A re-seen posting whose
+	// entry a wave already holds must survive that, or the wave that is removing its document
+	// leaves nothing behind to restore it.
+	t.Run("a re-seen posting survives the completion of a wave holding its entry", func(t *testing.T) {
+		reset(t)
+		id := insertChunkTestJob(t, pool, "held", "acme")
+		exec(t, "UPDATE jobs SET last_seen_at = $1 WHERE id = $2", ts(-20*24*time.Hour), id)
+		clearOutbox(t, pool)
+		exec(t, "INSERT INTO search_outbox (job_id, job_posted_at, claimed_at) VALUES ($1, now(), now())", id)
+		var heldEntry int64
+		if err := pool.QueryRow(ctx, "SELECT id FROM search_outbox WHERE job_id = $1", id).Scan(&heldEntry); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := q.TouchJob(ctx, TouchJobParams{
+			Source: "test", ExternalID: "held", WithheldIfSeenBefore: ts(-14 * 24 * time.Hour),
+		}); err != nil {
+			t.Fatalf("touch: %v", err)
+		}
+		if err := q.DeleteSearchOutboxEntries(ctx, []int64{heldEntry}); err != nil {
+			t.Fatalf("complete wave: %v", err)
+		}
+		if got := searchOutboxCount(t, pool, id); got != 1 {
+			t.Errorf("entries left after the wave completed = %d, want 1", got)
+		}
+	})
+
 	t.Run("the time-crossings pass queues exactly the postings that crossed", func(t *testing.T) {
 		reset(t)
 		crossedAge := insertChunkTestJob(t, pool, "aged", "acme")
 		young := insertChunkTestJob(t, pool, "young", "acme")
 		wentUnseen := insertChunkTestJob(t, pool, "unseen", "acme")
 		otherSource := insertChunkTestJob(t, pool, "other", "acme")
+		// Re-posted long after it was first seen: fake freshness ends 15 days after posted_at.
+		repostedFresh := insertChunkTestJob(t, pool, "reposted", "acme")
 		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = now() WHERE id = $2", ts(-15*24*time.Hour-time.Hour), crossedAge)
 		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = now() WHERE id = $2", ts(-10*24*time.Hour), young)
 		exec(t, "UPDATE jobs SET created_at = $1, last_seen_at = $1 WHERE id = $2", ts(-14*24*time.Hour-time.Hour), wentUnseen)
 		exec(t, "UPDATE jobs SET source = 'nowindow', created_at = $1, last_seen_at = $1 WHERE id = $2", ts(-14*24*time.Hour-time.Hour), otherSource)
+		exec(t, "UPDATE jobs SET created_at = $1, posted_at = $2, last_seen_at = now() WHERE id = $3",
+			ts(-100*24*time.Hour), ts(-15*24*time.Hour-time.Hour), repostedFresh)
 		clearOutbox(t, pool)
 
 		n, err := q.EnqueueSearchTimeCrossings(ctx, EnqueueSearchTimeCrossingsParams{
 			Sources: []string{"test"}, UnseenSeconds: []int64{14 * 24 * 3600},
-			AgeDays: []int32{15, 90},
-			Since:   ts(-2 * time.Hour), Until: ts(0),
+			AgeDays: []int32{15, 90}, PostedAgeDays: []int32{15},
+			Since: ts(-2 * time.Hour), Until: ts(0),
 		})
 		if err != nil {
 			t.Fatalf("enqueue: %v", err)
 		}
-		if n != 2 {
-			t.Errorf("queued %d postings, want 2", n)
+		if n != 3 {
+			t.Errorf("queued %d postings, want 3", n)
 		}
-		for id, want := range map[int64]int{crossedAge: 1, young: 0, wentUnseen: 1, otherSource: 0} {
+		for id, want := range map[int64]int{crossedAge: 1, young: 0, wentUnseen: 1, otherSource: 0, repostedFresh: 1} {
 			if got := searchOutboxCount(t, pool, id); got != want {
 				t.Errorf("job %d queued %d, want %d", id, got, want)
 			}
@@ -162,6 +193,17 @@ func TestSearchReachWithoutRebuild(t *testing.T) {
 		})
 		if got := searchOutboxCount(t, pool, id); got != 1 {
 			t.Errorf("job queued %d after a view, want 1", got)
+		}
+
+		private := insertChunkTestJob(t, pool, "private", "acme")
+		exec(t, "UPDATE jobs SET is_private = true WHERE id = $1", private)
+		q.ApplyDailyAgentView(ctx, []ApplyDailyAgentViewParams{{Day: day, JobID: private, Delta: 1}}).Exec(func(_ int, err error) {
+			if err != nil {
+				t.Fatalf("apply agent view: %v", err)
+			}
+		})
+		if got := searchOutboxCount(t, pool, private); got != 0 {
+			t.Errorf("private job queued %d after a view, want 0", got)
 		}
 	})
 }

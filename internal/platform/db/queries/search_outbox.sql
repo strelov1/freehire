@@ -155,7 +155,8 @@ ON CONFLICT (job_id) DO UPDATE
 -- Queue the open canonical postings whose search document changed in the window
 -- (since, until] through the passage of time alone, with no write to the row:
 --   * their age crossed one of age_days — the reality class turns at fixed ages
---     (jobreality.AgeCrossingDays);
+--     (jobreality.AgeCrossingDays) — or their posted_at age crossed one of posted_age_days,
+--     where the fake-freshness flag turns (jobreality.PostedAgeCrossingDays);
 --   * their source's unseen window ran out (search.Withheld), so the drain must take the
 --     document out. sources/unseen_seconds is that per-source map; a source absent from it
 --     is never withheld on this ground.
@@ -176,8 +177,14 @@ WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
         WHERE j.created_at >  sqlc.arg(since)::timestamptz - make_interval(days => d.days)
           AND j.created_at <= sqlc.arg(until)::timestamptz - make_interval(days => d.days)
     )
+    OR EXISTS (
+        SELECT 1 FROM unnest(sqlc.arg(posted_age_days)::int[]) AS d(days)
+        WHERE j.posted_at >  sqlc.arg(since)::timestamptz - make_interval(days => d.days)
+          AND j.posted_at <= sqlc.arg(until)::timestamptz - make_interval(days => d.days)
+    )
     OR (w.secs IS NOT NULL
         AND j.last_seen_at >  sqlc.arg(since)::timestamptz - make_interval(secs => w.secs)
         AND j.last_seen_at <= sqlc.arg(until)::timestamptz - make_interval(secs => w.secs))
   )
-ON CONFLICT (job_id) DO NOTHING;
+ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;

@@ -2267,7 +2267,8 @@ type Querier interface {
 	// Queue the open canonical postings whose search document changed in the window
 	// (since, until] through the passage of time alone, with no write to the row:
 	//   * their age crossed one of age_days — the reality class turns at fixed ages
-	//     (jobreality.AgeCrossingDays);
+	//     (jobreality.AgeCrossingDays) — or their posted_at age crossed one of posted_age_days,
+	//     where the fake-freshness flag turns (jobreality.PostedAgeCrossingDays);
 	//   * their source's unseen window ran out (search.Withheld), so the drain must take the
 	//     document out. sources/unseen_seconds is that per-source map; a source absent from it
 	//     is never withheld on this ground.

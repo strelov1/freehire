@@ -104,3 +104,10 @@ func Classify(in Input) Result {
 func AgeCrossingDays() []int32 {
 	return []int32{freshWindowDays + 1, oldAgeDays}
 }
+
+// PostedAgeCrossingDays are the ages, in whole days since PostedAt, at which Classify's
+// evidence changes with nothing else moving: IsFakeFreshness turns off once the posted date
+// is older than freshWindowDays.
+func PostedAgeCrossingDays() []int32 {
+	return []int32{freshWindowDays + 1}
+}

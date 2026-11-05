@@ -91,7 +91,9 @@ func (s *dbStore) Complete(ctx context.Context, entry enrich.Claimed, payload js
 	}
 	// The enrichment.* facets (seniority, salary, category...) live in the search document,
 	// so the job goes back on the drain; without it they reached search only at a full rebuild.
-	if err := qtx.EnqueueSearchOutbox(ctx, entry.JobID); err != nil {
+	// Requeue, not Enqueue: ingest queued a new job minutes ago, and if the drain has that
+	// entry claimed, a DO NOTHING enqueue would be deleted with it, facets unpushed.
+	if err := qtx.RequeueSearchOutbox(ctx, entry.JobID); err != nil {
 		return fmt.Errorf("enqueue search outbox: %w", err)
 	}
 	if err := qtx.DeleteEnrichmentEntry(ctx, entry.OutboxID); err != nil {

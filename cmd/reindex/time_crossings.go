@@ -63,6 +63,7 @@ func enqueueTimeCrossings(ctx context.Context, q timeCrossingsStore, now time.Ti
 		Sources:       names,
 		UnseenSeconds: secs,
 		AgeDays:       jobreality.AgeCrossingDays(),
+		PostedAgeDays: jobreality.PostedAgeCrossingDays(),
 		Since:         pgtype.Timestamptz{Time: since, Valid: true},
 		Until:         pgtype.Timestamptz{Time: now, Valid: true},
 	})

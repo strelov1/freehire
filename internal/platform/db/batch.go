@@ -27,12 +27,13 @@ WITH ins AS (
 upd AS (
     UPDATE jobs SET view_count = view_count + $3
     WHERE id = $2
-    RETURNING id, COALESCE(posted_at, created_at) AS eff_posted_at, closed_at, duplicate_of
+    RETURNING id, COALESCE(posted_at, created_at) AS eff_posted_at, closed_at, duplicate_of, is_private
 )
 INSERT INTO search_outbox (job_id, job_posted_at)
 SELECT id, eff_posted_at FROM upd
-WHERE closed_at IS NULL AND duplicate_of IS NULL
-ON CONFLICT (job_id) DO NOTHING
+WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
+ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 `
 
 type ApplyDailyAgentViewBatchResults struct {
@@ -98,12 +99,13 @@ WITH ins AS (
 upd AS (
     UPDATE jobs SET view_count = view_count + $3
     WHERE id = $2
-    RETURNING id, COALESCE(posted_at, created_at) AS eff_posted_at, closed_at, duplicate_of
+    RETURNING id, COALESCE(posted_at, created_at) AS eff_posted_at, closed_at, duplicate_of, is_private
 )
 INSERT INTO search_outbox (job_id, job_posted_at)
 SELECT id, eff_posted_at FROM upd
-WHERE closed_at IS NULL AND duplicate_of IS NULL
-ON CONFLICT (job_id) DO NOTHING
+WHERE closed_at IS NULL AND duplicate_of IS NULL AND NOT is_private
+ON CONFLICT (job_id) DO UPDATE
+    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL
 `
 
 type ApplyDailyViewBatchResults struct {
