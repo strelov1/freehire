@@ -39,8 +39,12 @@ func Instrument(server *mcp.Server, name, version string) {
 }
 
 func instrumentAccount(server *mcp.Server) {
+	instrumentPrivate(server, "freehire-account")
+}
+
+func instrumentPrivate(server *mcp.Server, name string) {
 	if sinks := serverAnalytics.Load(); sinks != nil {
-		instrument(server, sinks.account, "freehire-account", Version,
+		instrument(server, sinks.account, name, Version,
 			posthogmcpsdk.WithCaptureParameters(false),
 			posthogmcpsdk.WithCaptureResponses(false))
 	}

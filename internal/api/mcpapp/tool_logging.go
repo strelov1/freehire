@@ -21,7 +21,7 @@ var toolCallSequence atomic.Uint64
 // resultErrorCode's closed list or observability.ErrorCode — never from request data.
 var mcpToolCalls = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "freehire_mcp_tool_calls_total",
-	Help: "MCP tool calls by surface (public, account), tool, outcome and error code.",
+	Help: "MCP tool calls by surface (public, account, mixed), tool, outcome and error code.",
 }, []string{"surface", "tool", "outcome", "error_code"})
 
 // The buckets reach 60s because an account tool can drive a model or a browser.
@@ -103,6 +103,12 @@ func addLoggedToolForSurface[In, Out any](
 	tool *mcp.Tool,
 	handler mcp.ToolHandlerFor[In, Out],
 ) {
+	if surface == "mixed" {
+		if tool.Meta == nil {
+			tool.Meta = mcp.Meta{}
+		}
+		tool.Meta["securitySchemes"] = []map[string]any{{"type": "noauth"}}
+	}
 	// Capture the registered name so a caller cannot inject a name into the log.
 	name := tool.Name
 	registerTool(name)
@@ -120,9 +126,13 @@ func addLoggedToolForSurface[In, Out any](
 }
 
 func loggedAccountTool(name string, handler mcp.ToolHandler) mcp.ToolHandler {
+	return loggedTool("account", name, handler)
+}
+
+func loggedTool(surface, name string, handler mcp.ToolHandler) mcp.ToolHandler {
 	registerTool(name)
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		finish := observeTool(ctx, "account", name)
+		finish := observeTool(ctx, surface, name)
 		result, err := handler(ctx, req)
 		finish(result, err)
 		return result, err

@@ -106,11 +106,24 @@ const localsMCPAccountViaKey = "mcpAccount.viaKey"
 // it a client must guess the well-known path, and one that does not guess has
 // no way to connect at all.
 func mcpAccountAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber.Handler {
-	challenge := `Bearer resource_metadata="` + frontendOrigin + `/.well-known/oauth-protected-resource"`
+	return mcpAuthenticate(assistants, frontendOrigin, "/.well-known/oauth-protected-resource", false)
+}
+
+func mcpAuthenticate(
+	assistants *assistantHandlers,
+	frontendOrigin string,
+	metadataPath string,
+	allowAnonymous bool,
+) fiber.Handler {
+	challenge := `Bearer resource_metadata="` + strings.TrimSuffix(frontendOrigin, "/") + metadataPath + `"`
 	return func(c *fiber.Ctx) error {
 		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "unknown"})
+		c.Request().Header.Del(mcpapp.AccountUserIDHeader)
 		const prefix = "Bearer "
 		authorization := c.Get(fiber.HeaderAuthorization)
+		if authorization == "" && allowAnonymous {
+			return c.Next()
+		}
 		if !strings.HasPrefix(authorization, prefix) {
 			observability.LogAuthFailure(c, fiber.StatusUnauthorized, "missing_bearer_token")
 			c.Set(fiber.HeaderWWWAuthenticate, challenge)

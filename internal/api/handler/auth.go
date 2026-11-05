@@ -289,6 +289,7 @@ func (h *authHandlers) register(api fiber.Router, mw middleware) {
 	// itself would never be reached.
 	api.Get("/oauth/metadata/authorization-server", h.OAuthAuthorizationServerMetadata)
 	api.Get("/oauth/metadata/protected-resource", h.OAuthProtectedResourceMetadata)
+	api.Get("/oauth/metadata/protected-resource/mcp", h.OAuthMixedResourceMetadata)
 	// Authorize step: GET shows consent (sessionless visitors are sent to sign
 	// in first), POST acts on the decision. optionalCookie on GET for the same
 	// reason the extension flow uses it on its own GET — see oauth_authorize.go.
