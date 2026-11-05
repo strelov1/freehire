@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/strelov1/freehire/internal/ai/assistant"
+	"github.com/strelov1/freehire/internal/api/mcpapp"
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
@@ -115,22 +116,39 @@ func assistantFacetNames() []string {
 // call before filtering, so its filter values and skill slugs are the market's own
 // rather than invented.
 func (h *assistantHandlers) facetsTool() assistant.Tool {
+	return h.facets(true)
+}
+
+// facets builds the facets tool. full lists every value for the in-app assistant, whose turn
+// caps a tool result. An MCP client caps nothing and keeps every answer in its context,
+// where the whole vocabulary ran to ~125 KB (2026-11-05) — metros, cities, skills and
+// sources hold up to 1,200 values each — so MCP answers with the filter names and how many
+// values each has, and lists one filter's values when the caller names it.
+func (h *assistantHandlers) facets(full bool) assistant.Tool {
+	description := "List the live filter vocabulary: every filter's valid values with a vacancy count each, " +
+		"plus numeric ranges. Call this BEFORE filtering a search, and take skill slugs from its `skills` " +
+		"distribution — never invent a filter value."
+	properties := map[string]any{
+		"filters": assistantFilterSchema("Narrow the vocabulary to a slice of the market (e.g. one category)."),
+	}
+	if !full {
+		description = "List the live filter vocabulary. Without `facet`: every filter's name with how many values it " +
+			"has, plus numeric ranges. With `facet`: that filter's values with a vacancy count each, optionally only " +
+			"those containing `contains`. Filter values are the market's own; an invented one matches nothing."
+		properties["facet"] = map[string]any{"type": "string", "description": "A filter name to list the values of, e.g. skills, cities, metros."}
+		properties["contains"] = map[string]any{"type": "string", "description": "With facet: keep only values containing this text, e.g. berlin; for skills a known alias also finds its value, e.g. golang finds go."}
+	}
 	return assistant.Tool{
-		Name:   "facets",
-		Title:  "List search filter values",
-		Effect: assistant.EffectReads,
-		Description: "List the live filter vocabulary: every filter's valid values with a vacancy count each, " +
-			"plus numeric ranges. Call this BEFORE filtering a search, and take skill slugs from its `skills` " +
-			"distribution — never invent a filter value.",
-		Schema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"filters": assistantFilterSchema("Narrow the vocabulary to a slice of the market (e.g. one category)."),
-			},
-		},
+		Name:        "facets",
+		Title:       "List search filter values",
+		Effect:      assistant.EffectReads,
+		Description: description,
+		Schema:      map[string]any{"type": "object", "properties": properties},
 		Run: func(ctx context.Context, _ int64, raw json.RawMessage) (any, error) {
 			var in struct {
-				Filters assistantFilterArgs `json:"filters"`
+				Filters  assistantFilterArgs `json:"filters"`
+				Facet    string              `json:"facet"`
+				Contains string              `json:"contains"`
 			}
 			if err := assistant.DecodeArgs(raw, &in); err != nil {
 				return nil, err
@@ -142,16 +160,87 @@ func (h *assistantHandlers) facetsTool() assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
+			facet := strings.TrimSpace(in.Facet)
+			attrs := facetAttributes()
+			if !full && facet != "" {
+				// Count only the named facet: one attribute costs Meili a fraction of all of them.
+				if !listableFacet(facet) {
+					return nil, fmt.Errorf("unknown facet %q; valid facets are: %s", facet, strings.Join(listableFacets(), ", "))
+				}
+				attrs = facetAttributes(facet)
+			}
 			res, err := h.search.facets.FacetCounts(ctx, search.FacetParams{
 				Filter: search.FilterFromValues(vals),
-				Facets: facetAttributes(),
+				Facets: attrs,
 			})
 			if err != nil {
 				return nil, err
 			}
-			return facetView(res), nil
+			view := facetView(res)
+			if full {
+				return view, nil
+			}
+			return facetIndex(view, facet, in.Contains), nil
 		},
 	}
+}
+
+// listableFacet reports whether the MCP facets can list a facet's values by name: every
+// public facet but the company one, whose distribution is millions long.
+func listableFacet(name string) bool {
+	_, isString := search.StringFacets[name]
+	_, isExtra := facetExtraParams[name]
+	return (isString || isExtra) && name != companyFacetParam
+}
+
+// listableFacets is every name listableFacet accepts, sorted so the error a model reads is stable.
+func listableFacets() []string {
+	names := make([]string, 0, len(search.StringFacets)+len(facetExtraParams))
+	for name := range search.StringFacets {
+		if listableFacet(name) {
+			names = append(names, name)
+		}
+	}
+	for name := range facetExtraParams {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// facetIndex is the MCP facets answer: the filter names with how many values each has, or
+// the named filter's values matching contains — or its range, for a numeric filter.
+func facetIndex(view facetPayload, facet, contains string) map[string]any {
+	if facet == "" {
+		// Every value-bearing facet is named, with 0 when none of the matching postings carries
+		// it, so a narrow filter does not hide that the facet exists. Numeric ones are in stats.
+		sizes := map[string]int{}
+		for _, name := range listableFacets() {
+			if !facetExtraParams[name].statOnly {
+				sizes[name] = 0
+			}
+		}
+		for name, dist := range view.Facets {
+			sizes[name] = len(dist)
+		}
+		return map[string]any{"total": view.Total, "filters": sizes, "stats": view.Stats}
+	}
+	if facetExtraParams[facet].statOnly {
+		// A numeric facet has a range, not values; none when no matching posting states it.
+		var stats *search.FacetStat
+		if stat, ok := view.Stats[facet]; ok {
+			stats = &stat
+		}
+		return map[string]any{"total": view.Total, "facet": facet, "stats": stats}
+	}
+	match := mcpapp.ContainsMatcher(facet, contains)
+	values := map[string]int64{}
+	for value, count := range view.Facets[facet] {
+		if match(value) {
+			values[value] = count
+		}
+	}
+	return map[string]any{"total": view.Total, "facet": facet, "values": values}
 }
 
 // searchJobsTool searches the catalogue with a keyword and facet filters, hitting

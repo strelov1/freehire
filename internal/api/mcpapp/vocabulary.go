@@ -65,7 +65,7 @@ func FilterValues(in FilterValuesInput, counts map[string]map[string]int64) Filt
 		return out
 	}
 
-	match := containsMatcher(facet, in.Contains)
+	match := ContainsMatcher(facet, in.Contains)
 	for value, count := range counts[facet] {
 		if match(value) {
 			out.Values = append(out.Values, FacetCount{Value: value, Count: int(count)})
@@ -86,11 +86,11 @@ func FilterValues(in FilterValuesInput, counts map[string]map[string]int64) Filt
 	return out
 }
 
-// containsMatcher keeps a value when it contains the text, case-folded. For skills it also
+// ContainsMatcher keeps a value when it contains the text, case-folded. For skills it also
 // keeps the canonical the text resolves to: the search reads "golang" as "go", and a
 // model that asked about golang must be shown the value it will find postings under — a
 // substring match alone would offer "golang-migrate" and hide "go".
-func containsMatcher(facet, contains string) func(string) bool {
+func ContainsMatcher(facet, contains string) func(string) bool {
 	needle := strings.ToLower(strings.TrimSpace(contains))
 	if needle == "" {
 		return func(string) bool { return true }

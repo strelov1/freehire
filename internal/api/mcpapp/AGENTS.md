@@ -86,6 +86,10 @@ catalogue the keyword hits are the answer anyway.
   whose own copy rehydrates; `mcpKeyTools` (which `mcpAccountTools` builds on, so OAuth
   grants and API keys alike) serves `searchJobs(false)` instead — the index preview clipped
   to the same 400 runes. Before 2026-11-05 it served the rehydrating copy, ~130 KB a call.
+  `facets` follows the same split: `facets(false)` answers with the filter names and how many
+  values each has, and lists one filter's values when named in `facet` (narrowed by
+  `contains`, which shares `ContainsMatcher` with `list_filter_values`). The whole vocabulary
+  was ~125 KB, and `list_filter_values` does not cover every facet, metros among them.
 - **Publish a link we cannot vouch for.** `official_job_url` is filled only for a provider in
   `sources.EmployerURLProviders()` — an ATS or a company's own careers site. That set is
   resolved ONCE, in `NewProjector`, and the shape of the API is why: the rule used to be a
