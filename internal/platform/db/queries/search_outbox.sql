@@ -186,5 +186,10 @@ WHERE j.closed_at IS NULL AND j.duplicate_of IS NULL AND NOT j.is_private
         AND j.last_seen_at >  sqlc.arg(since)::timestamptz - make_interval(secs => w.secs)
         AND j.last_seen_at <= sqlc.arg(until)::timestamptz - make_interval(secs => w.secs))
   )
-ON CONFLICT (job_id) DO UPDATE
-    SET id = DEFAULT, created_at = now(), attempts = 0, last_error = '', failed_at = NULL;
+-- DO NOTHING and id order, unlike the per-row writers' re-stamp: this one statement upserts
+-- thousands of entries while every ingest transaction upserts its own, and the re-stamp's row
+-- locks taken in scan order deadlocked against them on its first prod run (2026-11-05). An
+-- entry already queued is pushed from the row as it stands when claimed; only a wave already
+-- in flight at the crossing misses it, and that document is minutes early, not wrong for long.
+ORDER BY j.id
+ON CONFLICT (job_id) DO NOTHING;
