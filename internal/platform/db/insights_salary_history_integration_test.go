@@ -67,10 +67,10 @@ func TestInsightsSalaryBandsReadTheEffectiveSalary(t *testing.T) {
 	if err := q.DeleteAllInsightsSalaryStats(ctx); err != nil {
 		t.Fatalf("delete salary: %v", err)
 	}
-	if _, err := q.RebuildInsightsSalaryStatsGlobal(ctx, 1); err != nil {
+	if _, err := materializeInsightsSalaryStatsGlobal(q)(ctx, 1); err != nil {
 		t.Fatalf("rebuild salary global: %v", err)
 	}
-	if _, err := q.RebuildInsightsSalaryStatsByCountry(ctx, 1); err != nil {
+	if _, err := materializeInsightsSalaryStatsByCountry(q)(ctx, 1); err != nil {
 		t.Fatalf("rebuild salary by country: %v", err)
 	}
 
@@ -171,7 +171,7 @@ func TestInsightsSalaryMonthlyRollup(t *testing.T) {
 	if err := q.DeleteAllInsightsSalaryMonthly(ctx); err != nil {
 		t.Fatalf("delete monthly: %v", err)
 	}
-	if _, err := q.RebuildInsightsSalaryMonthly(ctx, 30); err != nil {
+	if _, err := materializeInsightsSalaryMonthly(q)(ctx, 30); err != nil {
 		t.Fatalf("rebuild monthly: %v", err)
 	}
 	rows, err := q.ListInsightsSalaryHistory(ctx, "backend")
@@ -242,13 +242,13 @@ func TestEffectiveSalaryMidpointDoesNotOverflow(t *testing.T) {
 	if err := q.DeleteAllInsightsSalaryStats(ctx); err != nil {
 		t.Fatalf("delete salary: %v", err)
 	}
-	if _, err := q.RebuildInsightsSalaryStatsGlobal(ctx, 1); err != nil {
+	if _, err := materializeInsightsSalaryStatsGlobal(q)(ctx, 1); err != nil {
 		t.Errorf("rebuild salary bands: %v", err)
 	}
 	if err := q.DeleteAllInsightsSalaryMonthly(ctx); err != nil {
 		t.Fatalf("delete monthly: %v", err)
 	}
-	if _, err := q.RebuildInsightsSalaryMonthly(ctx, 1); err != nil {
+	if _, err := materializeInsightsSalaryMonthly(q)(ctx, 1); err != nil {
 		t.Errorf("rebuild salary history: %v", err)
 	}
 }

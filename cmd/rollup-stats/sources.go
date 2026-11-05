@@ -30,11 +30,11 @@ const sourceFacetTimeout = 15 * time.Second
 // Rides along after the rollups have committed, like the catalogue-scale snapshot beside
 // it: a separate concern with its own failure mode, so it neither joins their transaction
 // nor changes this run's exit code. Every failure here is logged and swallowed.
-func rebuildSourceStats(ctx context.Context, pool *pgxpool.Pool, meiliURL, meiliKey string) {
+func rebuildSourceStats(ctx context.Context, reader, pool *pgxpool.Pool, meiliURL, meiliKey string) {
 	// ONE report for every ending. The pass has five ways to fail and deciding what to say
 	// at each `return` is how a worker ends up with one exit path that says nothing — the
 	// lesson backfill-derive's vanishing cursor taught twice in an evening.
-	published, err := publishSourceStats(ctx, pool, meiliURL, meiliKey)
+	published, err := publishSourceStats(ctx, reader, pool, meiliURL, meiliKey)
 	if err != nil {
 		log.Printf("rollup-stats: source snapshot not published: %v", err)
 		return
@@ -43,10 +43,10 @@ func rebuildSourceStats(ctx context.Context, pool *pgxpool.Pool, meiliURL, meili
 }
 
 // publishSourceStats does the work and returns how many sources it wrote.
-func publishSourceStats(ctx context.Context, pool *pgxpool.Pool, meiliURL, meiliKey string) (int, error) {
+func publishSourceStats(ctx context.Context, reader, pool *pgxpool.Pool, meiliURL, meiliKey string) (int, error) {
 	q := db.New(pool)
 
-	agg, err := q.AggregateOpenJobsBySource(ctx)
+	agg, err := db.New(reader).AggregateOpenJobsBySource(ctx)
 	if err != nil {
 		return 0, err
 	}

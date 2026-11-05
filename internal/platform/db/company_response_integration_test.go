@@ -78,7 +78,7 @@ func TestRebuildInsightsCompanyResponse_CountsObservableApplications(t *testing.
 		t.Fatalf("record reply event: %v", err)
 	}
 
-	if _, err := q.RebuildInsightsCompanyResponse(ctx); err != nil {
+	if _, err := materializeInsightsCompanyResponse(q)(ctx); err != nil {
 		t.Fatalf("RebuildInsightsCompanyResponse: %v", err)
 	}
 	got, err := q.GetCompanyResponse(ctx, "respco")
@@ -111,7 +111,7 @@ func TestRebuildInsightsCompanyResponse_ExcludesUnobservableApplicationsFromBoth
 		}
 	}
 
-	if _, err := q.RebuildInsightsCompanyResponse(ctx); err != nil {
+	if _, err := materializeInsightsCompanyResponse(q)(ctx); err != nil {
 		t.Fatalf("RebuildInsightsCompanyResponse: %v", err)
 	}
 	got, err := q.GetCompanyResponse(ctx, "gateco")
@@ -131,7 +131,7 @@ func TestRebuildInsightsCompanyResponse_CompanyWithNoObservableApplicationsHasNo
 	ctx := context.Background()
 
 	seedResponseJob(t, q, "quiet-1", "quietco")
-	if _, err := q.RebuildInsightsCompanyResponse(ctx); err != nil {
+	if _, err := materializeInsightsCompanyResponse(q)(ctx); err != nil {
 		t.Fatalf("RebuildInsightsCompanyResponse: %v", err)
 	}
 	if _, err := q.GetCompanyResponse(ctx, "quietco"); err == nil {
@@ -148,7 +148,7 @@ func rebuildAnswered(t *testing.T, q *Queries, slug string) (applications, answe
 	if err := q.DeleteAllInsightsCompanyResponse(ctx); err != nil {
 		t.Fatalf("clear: %v", err)
 	}
-	if _, err := q.RebuildInsightsCompanyResponse(ctx); err != nil {
+	if _, err := materializeInsightsCompanyResponse(q)(ctx); err != nil {
 		t.Fatalf("rebuild: %v", err)
 	}
 	row, err := q.GetCompanyResponse(ctx, slug)
@@ -286,7 +286,7 @@ func TestRebuildInsightsCompanyResponse_DeletionAndRelink(t *testing.T) {
 		if err := q.DeleteAllInsightsCompanyResponse(ctx); err != nil {
 			t.Fatalf("clear: %v", err)
 		}
-		if _, err := q.RebuildInsightsCompanyResponse(ctx); err != nil {
+		if _, err := materializeInsightsCompanyResponse(q)(ctx); err != nil {
 			t.Fatalf("rebuild: %v", err)
 		}
 		row, err := q.GetCompanyResponse(ctx, slug)
@@ -361,7 +361,7 @@ func TestRebuildInsightsCompanyResponse_MedianSurvivesPrunedPostings(t *testing.
 		if err := q.DeleteAllInsightsCompanyResponse(ctx); err != nil {
 			t.Fatalf("clear: %v", err)
 		}
-		if _, err := q.RebuildInsightsCompanyResponse(ctx); err != nil {
+		if _, err := materializeInsightsCompanyResponse(q)(ctx); err != nil {
 			t.Fatalf("rebuild: %v", err)
 		}
 		row, err := q.GetCompanyResponse(ctx, "medianco")

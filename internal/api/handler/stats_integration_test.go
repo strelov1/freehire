@@ -35,7 +35,7 @@ func rebuildRollup(t *testing.T, pool *pgxpool.Pool) {
 	if err := q.DeleteAllJobDailyStats(ctx); err != nil {
 		t.Fatalf("delete rollup: %v", err)
 	}
-	if _, err := q.RebuildJobDailyStats(ctx); err != nil {
+	if _, err := materializeJobDailyStats(q)(ctx); err != nil {
 		t.Fatalf("rebuild rollup: %v", err)
 	}
 }

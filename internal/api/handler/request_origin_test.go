@@ -76,6 +76,9 @@ func (f fakeDBTX) Query(context.Context, string, ...any) (pgx.Rows, error) {
 func (f fakeDBTX) QueryRow(context.Context, string, ...any) pgx.Row {
 	return fakeRow{answer: f.ScanAnswer}
 }
+func (f fakeDBTX) CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error) {
+	return 0, errors.New("fakeDBTX: CopyFrom not expected")
+}
 func (f fakeDBTX) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults {
 	return nil
 }

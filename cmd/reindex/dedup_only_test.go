@@ -20,7 +20,10 @@ func (f failingDBTX) Exec(context.Context, string, ...any) (pgconn.CommandTag, e
 }
 func (f failingDBTX) Query(context.Context, string, ...any) (pgx.Rows, error) { return nil, f.err }
 func (f failingDBTX) QueryRow(context.Context, string, ...any) pgx.Row        { return errRow{cause: f.err} }
-func (f failingDBTX) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults  { return nil }
+func (f failingDBTX) CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error) {
+	return 0, f.err
+}
+func (f failingDBTX) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults { return nil }
 
 // errRow is the pgx.Row a failing QueryRow hands back. Its field is named apart from
 // failingDBTX's so the two are not the same shape — nothing here is a conversion.
