@@ -1074,7 +1074,7 @@ func Register(app *fiber.App, cfg Config) {
 	// Before jobsH for the same reason searchH is: /ojcp/v1/jobs/:slug is a literal path,
 	// not a slug.
 	ojcpH.register(api, mw)
-	mcpappH.register(api, mw)
+	mountMCP(api, mw, assistantH, mcpappH)
 	// The signed-in MCP server (freehire#3114): bearer-gated by an MCP OAuth
 	// grant, reusing assistantH's own tool set so this surface and the in-app
 	// assistant can never disagree about what a tool does.

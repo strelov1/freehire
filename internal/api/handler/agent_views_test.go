@@ -291,3 +291,25 @@ func TestAnAgentViewBehindTrustedAuthenticationIsCountedAsItsAccount(t *testing.
 		t.Errorf("forged proof viewer=%q want address", got)
 	}
 }
+
+func TestVerifiedMCPAccountIdentityIsRecorded(t *testing.T) {
+	sink := &recordingSink{}
+	app := fiber.New()
+	app.Get("/x", func(c *fiber.Ctx) error {
+		c.Locals(localsMCPUserID, int64(42))
+		return c.Next()
+	}, agentViews(sink, agentview.SurfaceMCP), func(c *fiber.Ctx) error {
+		agentview.Record(c.Context(), agentview.KindDetail, []int64{7})
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+	req := httptest.NewRequestWithContext(t.Context(), fiber.MethodGet, "/x", nil)
+	req.Header.Set(mcpapp.AccountUserIDHeader, "99")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if len(sink.got) != 1 || sink.got[0].Viewer != "user:42" {
+		t.Fatalf("events=%+v, want verified account instead of caller header or IP", sink.got)
+	}
+}

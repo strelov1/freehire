@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -73,21 +72,6 @@ func newMCPAppHandlers(s searcher, cs companySearcher, store mcpappStore, origin
 		h.attachReality = realityAttacher(q)
 	}
 	return h
-}
-
-func (h *mcpappHandlers) register(api fiber.Router, mw middleware) {
-	// `All` because MCP's streamable transport uses POST to call and GET to open the
-	// server-to-client stream.
-	//
-	// The path is /api/v1/mcp and cannot be a bare /mcp: nginx routes /api/ here and
-	// everything else to the SPA, so a route at a bare path never receives a request. That
-	// was found the only way it could be — deployed, with the OJCP manifest answering 404
-	// at its well-known path while the API path beside it answered 200.
-	//
-	// Public and unauthenticated like the other job reads, under the same agent-search rate
-	// limit the OJCP endpoints use. A separate figure here would be a second answer to "how
-	// hard may a machine ask", with nothing deciding which one is right.
-	api.All("/mcp", agentViews(h.agentViews, agentview.SurfaceMCP), adaptor.HTTPHandler(mcpapp.Handler(h, h.origin)))
 }
 
 // SearchJobs answers `search_jobs`.
