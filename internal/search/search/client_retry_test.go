@@ -18,20 +18,30 @@ import (
 // the transient engine 503 that caused the retry. NewClient therefore disables
 // the SDK's retry loop; this test pins both halves of that decision.
 //
-// The stub engine answers the first POST with 503 and would answer any retry.
+// The stub engine answers a nonempty POST with 503 and an empty retry with
+// the incident's 400 missing_payload.
 
 // TestNewClientDisablesSDKRetry pins that NewClient's SDK has retries DISABLED:
 // a request meeting a retryable 503 must surface the 503 itself in ONE attempt,
 // not be re-sent (a re-send would go out with an empty body and produce the
 // incident's 400 missing_payload).
 func TestNewClientDisablesSDKRetry(t *testing.T) {
-	var posts int
+	var bodies []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("stub got %s, want POST", r.Method)
 		}
-		posts++
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		bodies = append(bodies, string(body))
 		w.Header().Set("Content-Type", "application/json")
+		if len(body) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"message":"A json payload is missing.","code":"missing_payload","type":"invalid_request"}`)
+			return
+		}
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = io.WriteString(w, `{"message":"engine overloaded","code":"unavailable","type":"internal"}`)
 	}))
@@ -43,8 +53,8 @@ func TestNewClientDisablesSDKRetry(t *testing.T) {
 	if err == nil {
 		t.Fatal("a 503 from the engine surfaced no error")
 	}
-	if posts != 1 {
-		t.Errorf("engine saw %d POSTs, want exactly 1 (SDK retry must be disabled): bodies re-sent after a consumed buffer arrive empty and read as 400 missing_payload", posts)
+	if len(bodies) != 1 {
+		t.Errorf("engine saw %d POSTs, want exactly 1 (SDK retry must be disabled): bodies re-sent after a consumed buffer arrive empty and read as 400 missing_payload", len(bodies))
 	}
 	var me *meilisearch.Error
 	if !errors.As(err, &me) {
