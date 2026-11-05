@@ -128,8 +128,11 @@ func TestMCPSearchJobsCarriesOnlyTheOpeningOfEachDescription(t *testing.T) {
 	if !strings.Contains(string(payload), "go-dev-acme") {
 		t.Errorf("result = %s, want the slug get_job reads by", payload)
 	}
-	if !strings.Contains(tool.Description, "get_job") {
-		t.Errorf("description = %q, want it to send the agent to get_job for the text", tool.Description)
+	// The Claude directory policy keeps cross-tool guidance out of a tool's description.
+	for _, other := range mcpKeyTools(a, testMCPOrigin) {
+		if other.Name != tool.Name && strings.Contains(tool.Description, other.Name) {
+			t.Errorf("description names %s: %q", other.Name, tool.Description)
+		}
 	}
 }
 

@@ -82,9 +82,10 @@ catalogue the keyword hits are the answer anyway.
   bodies is what it is for. Here ten of those in one turn is the context window spent on
   text the model reduces to a line each. `summaryMaxChars` bounds the preview here rather
   than trusting the caller, because the bound is a property of this tool and not of whoever
-  filled the field. The signed-in server's `search_jobs` is the in-app assistant's tool, which
-  does rehydrate; `mcpKeyTools` swaps in its MCP variant (`searchJobs(false)`, the same 400
-  runes) — it served ~130 KB a call until 2026-11-05.
+  filled the field. The signed-in server takes its `search_jobs` from the in-app assistant,
+  whose own copy rehydrates; `mcpKeyTools` (which `mcpAccountTools` builds on, so OAuth
+  grants and API keys alike) serves `searchJobs(false)` instead — the index preview clipped
+  to the same 400 runes. Before 2026-11-05 it served the rehydrating copy, ~130 KB a call.
 - **Publish a link we cannot vouch for.** `official_job_url` is filled only for a provider in
   `sources.EmployerURLProviders()` — an ATS or a company's own careers site. That set is
   resolved ONCE, in `NewProjector`, and the shape of the API is why: the rule used to be a

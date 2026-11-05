@@ -173,9 +173,11 @@ func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
 		"description as markdown and its public_slug — link a vacancy as https://freehire.me/jobs/<public_slug>. " +
 		"Take filter names and values from the facets tool."
 	if !full {
-		description = "Search open vacancies by keyword and facet filters. Every result carries the opening " +
-			"of its description as markdown and its public_slug; read a vacancy in full with get_job. " +
-			"Link a vacancy as https://freehire.me/jobs/<public_slug>. Take filter names and values from the facets tool."
+		// No other tool is named here: the Claude directory policy keeps cross-tool guidance
+		// out of tool descriptions (see mcpapp's TestNoToolDescriptionDirectsTheModelToAnotherTool).
+		description = "Search open vacancies by keyword and facet filters. Every result carries the first " +
+			"400 characters of its description as markdown and its public_slug. " +
+			"Link a vacancy as https://freehire.me/jobs/<public_slug>."
 	}
 	return assistant.Tool{
 		Name:        "search_jobs",
