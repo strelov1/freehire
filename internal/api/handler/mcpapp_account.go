@@ -88,6 +88,9 @@ func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool 
 // API key rather than an OAuth grant, so the mount serves it mcpKeyTools.
 const localsMCPAccountViaKey = "mcpAccount.viaKey"
 
+// localsMCPUserID carries the validated identity to Fiber consumers such as agentViews.
+const localsMCPUserID = "mcp.userID"
+
 // mcpAccountAuthenticate resolves the Authorization: Bearer token to a user id
 // and stamps it onto the request as mcpapp.AccountUserIDHeader, overwriting
 // whatever a caller sent there — nothing downstream of this middleware ever
@@ -162,6 +165,7 @@ func mcpAuthenticate(
 		}
 
 		c.Request().Header.Set(mcpapp.AccountUserIDHeader, strconv.FormatInt(userID, 10))
+		c.Locals(localsMCPUserID, userID)
 		return c.Next()
 	}
 }

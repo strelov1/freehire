@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/application/jobtracking"
 	"github.com/strelov1/freehire/internal/engage/problemreport"
 	"github.com/strelov1/freehire/internal/identity/auth"
@@ -69,14 +71,18 @@ func testMCPEndToEnd(t *testing.T, endpoint string) {
 		problems:   problemreport.New(pool, queries),
 		tracking:   &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
+	sink := &recordingSink{}
+	catalogue := newMCPAppHandlers(nil, nil, queries, testMCPOrigin)
+	catalogue.agentViews = sink
+	seedApplyFormJob(t, queries, "mcp-viewer", "mcp-viewer")
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	api := app.Group("/api/v1")
-	mountMCP(api, middleware{}, assistants, newMCPAppHandlers(nil, nil, queries, testMCPOrigin))
+	mountMCP(api, middleware{}, assistants, catalogue)
 	mountMCPAccount(
 		api,
 		middleware{},
 		assistants,
-		newMCPAppHandlers(nil, nil, queries, testMCPOrigin),
+		catalogue,
 	)
 
 	server := httptest.NewServer(adaptor.FiberApp(app))
@@ -116,6 +122,7 @@ func testMCPEndToEnd(t *testing.T, endpoint string) {
 		}
 		defer func() { _ = session.Close() }()
 		assertAccountCatalogue(t, session)
+		assertMCPViewer(t, session, sink, userID)
 		res, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 			Name:      suggestDictionaryTermToolName,
 			Arguments: map[string]any{"kind": "specialization", "term": "Unlisted Quasar Specialist"},
@@ -241,13 +248,17 @@ func testMCPByAPIKey(t *testing.T, endpoint string) {
 		queries:  queries,
 		tracking: &trackingHandlers{tracking: jobtracking.New(jobtracking.NewQueriesRepository(queries, pool))},
 	}
+	sink := &recordingSink{}
+	catalogue := newMCPAppHandlers(nil, nil, queries, testMCPOrigin)
+	catalogue.agentViews = sink
+	seedApplyFormJob(t, queries, "mcp-viewer", "mcp-viewer")
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	mountMCP(app.Group("/api/v1"), middleware{}, assistants, newMCPAppHandlers(nil, nil, queries, testMCPOrigin))
+	mountMCP(app.Group("/api/v1"), middleware{}, assistants, catalogue)
 	mountMCPAccount(
 		app.Group("/api/v1"),
 		middleware{},
 		assistants,
-		newMCPAppHandlers(nil, nil, queries, testMCPOrigin),
+		catalogue,
 	)
 	server := httptest.NewServer(adaptor.FiberApp(app))
 	defer server.Close()
@@ -282,6 +293,7 @@ func testMCPByAPIKey(t *testing.T, endpoint string) {
 	}
 	defer func() { _ = session.Close() }()
 	assertAccountCatalogue(t, session)
+	assertMCPViewer(t, session, sink, userID)
 
 	listed, err := session.ListTools(ctx, nil)
 	if err != nil {
@@ -348,5 +360,16 @@ func assertAccountCatalogue(t *testing.T, session *mcp.ClientSession) {
 	}
 	if len(states.Jobs) != 1 || states.Jobs[0].Status != "not_found" {
 		t.Fatalf("catalogue state = %+v, want missing posting", states)
+	}
+}
+
+func assertMCPViewer(t *testing.T, session *mcp.ClientSession, sink *recordingSink, userID int64) {
+	t.Helper()
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "get_job", Arguments: map[string]any{"slug": "mcp-viewer"}})
+	if err != nil || result.IsError {
+		t.Fatalf("get_job for viewer recording: %+v %v", result, err)
+	}
+	if len(sink.got) != 1 || sink.got[0].Viewer != "user:"+strconv.FormatInt(userID, 10) || sink.got[0].Kind != agentview.KindDetail {
+		t.Fatalf("MCP events=%+v, want one detail recorded as verified account %d", sink.got, userID)
 	}
 }

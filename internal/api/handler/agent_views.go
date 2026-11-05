@@ -17,7 +17,7 @@ import (
 // the SDK — so Fiber handlers and MCP tools reach it alike. A nil sink records nothing.
 //
 // The viewer is the account when one is known — a signed-in caller, or on /mcp/account
-// the header mcpAccountAuthenticate has already overwritten with a verified id, or the owner
+// the verified identity from MCP authentication, or the owner
 // of a full-scope API key the public gate verified — and
 // otherwise the client IP (c.IP(), already resolved from the trusted proxy's X-Real-IP)
 // with the User-Agent.
@@ -27,6 +27,9 @@ func agentViews(sink agentview.Sink, surface string) fiber.Handler {
 			return c.Next()
 		}
 		userID, _ := auth.UserID(c)
+		if userID == 0 {
+			userID, _ = c.Locals(localsMCPUserID).(int64)
+		}
 		if userID == 0 {
 			userID, _ = c.Locals(localsGateKeyUser).(int64)
 		}
