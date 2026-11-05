@@ -17,6 +17,7 @@ import (
 	"github.com/strelov1/freehire/internal/application/agentview"
 	"github.com/strelov1/freehire/internal/job/jobview"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/llm"
 	"github.com/strelov1/freehire/internal/search/search"
 )
 
@@ -49,6 +50,33 @@ func (h *assistantHandlers) assistantDiscoveryTools() []assistant.Tool {
 // vocabulary the `facets` tool reports, so the agent can only filter on values it
 // has seen.
 type assistantFilterArgs map[string][]string
+
+// UnmarshalJSON also reads a bare string as a one-value list. Models routinely send
+// work_mode: "remote"; the strict decode failed the whole call before searching, which on
+// 2026-11-05 was every internal_error search_jobs on the account MCP server (~57/day).
+// The schema keeps publishing lists only, so no model provider is handed a union type.
+func (f *assistantFilterArgs) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	out := make(assistantFilterArgs, len(raw))
+	for name, value := range raw {
+		var list []string
+		if len(value) > 0 && value[0] == '"' {
+			var one string
+			if err := json.Unmarshal(value, &one); err != nil {
+				return err
+			}
+			list = []string{one}
+		} else if err := json.Unmarshal(value, &list); err != nil {
+			return fmt.Errorf("filter %q: give a string or a list of strings from the facets tool, got %s", name, value)
+		}
+		out[name] = list
+	}
+	*f = out
+	return nil
+}
 
 // values renders the filter as the query form the search layer already parses,
 // rejecting any facet outside the published vocabulary. An unknown facet is an
@@ -130,13 +158,32 @@ func (h *assistantHandlers) facetsTool() assistant.Tool {
 // the same index the public search does and rehydrating each result's full
 // description so the agent screens a whole set in one call.
 func (h *assistantHandlers) searchJobsTool() assistant.Tool {
+	return h.searchJobs(true)
+}
+
+// mcpSearchExcerptRunes bounds the description each MCP search result carries.
+const mcpSearchExcerptRunes = 400
+
+// searchJobs builds search_jobs. full rehydrates each result's whole description for the
+// in-app assistant, whose turn caps a tool result. An MCP client caps nothing and keeps
+// every answer in its context, where ten full descriptions ran to ~130 KB (2026-11-05),
+// so MCP gets the opening of each from the index preview and reads the rest via get_job.
+func (h *assistantHandlers) searchJobs(full bool) assistant.Tool {
+	description := "Search open vacancies by keyword and facet filters. Every result carries its full " +
+		"description as markdown and its public_slug — link a vacancy as https://freehire.me/jobs/<public_slug>. " +
+		"Take filter names and values from the facets tool."
+	if !full {
+		// No other tool is named here: the Claude directory policy keeps cross-tool guidance
+		// out of tool descriptions (see mcpapp's TestNoToolDescriptionDirectsTheModelToAnotherTool).
+		description = "Search open vacancies by keyword and facet filters. Every result carries the first " +
+			"400 characters of its description as markdown and its public_slug. " +
+			"Link a vacancy as https://freehire.me/jobs/<public_slug>."
+	}
 	return assistant.Tool{
-		Name:   "search_jobs",
-		Title:  "Search jobs",
-		Effect: assistant.EffectReads,
-		Description: "Search open vacancies by keyword and facet filters. Every result carries its full " +
-			"description as markdown and its public_slug — link a vacancy as https://freehire.me/jobs/<public_slug>. " +
-			"Take filter names and values from the facets tool.",
+		Name:        "search_jobs",
+		Title:       "Search jobs",
+		Effect:      assistant.EffectReads,
+		Description: description,
 		Schema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -181,13 +228,18 @@ func (h *assistantHandlers) searchJobsTool() assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
-			if err := h.search.hydrateDescriptions(ctx, res.Hits); err != nil {
-				return nil, err
+			if full {
+				if err := h.search.hydrateDescriptions(ctx, res.Hits); err != nil {
+					return nil, err
+				}
 			}
 			agentview.Record(ctx, agentview.KindSearch, hitIDs(res.Hits))
 			jobs := make([]jobview.Job, len(res.Hits))
 			for i, hit := range res.Hits {
 				hit.Description = formatDescription(hit.Description, "markdown")
+				if !full {
+					hit.Description = llm.ClipRunesEllipsis(hit.Description, mcpSearchExcerptRunes)
+				}
 				jobs[i] = hit.Job
 			}
 			return map[string]any{"total": res.Total, "limit": limit, "offset": offset, "jobs": jobs}, nil

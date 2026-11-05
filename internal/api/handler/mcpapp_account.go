@@ -77,6 +77,11 @@ func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool 
 	all := append(assistants.assistantDiscoveryTools(), assistants.assistantTrackingTools()...)
 	all = append(all, assistants.reportMCPTools()...)
 	all = append(all, assistants.subscriptionMCPTools(origin)...)
+	for i, t := range all {
+		if t.Name == "search_jobs" {
+			all[i] = assistants.searchJobs(false) // an MCP client keeps every result in its context
+		}
+	}
 	return slices.DeleteFunc(all, func(t assistant.Tool) bool { return t.Name == presentJobsToolName })
 }
 
