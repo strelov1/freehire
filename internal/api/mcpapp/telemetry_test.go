@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/prometheus/client_golang/prometheus"
@@ -137,6 +138,18 @@ func TestClientAttributionUsesFirstRecognizedSignal(t *testing.T) {
 				t.Fatalf("client=%q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// The User-Agent reaches clientFamily through Fiber's adaptor as a string over fasthttp's
+// reused request buffer. A family that aliases it becomes a metric label whose bytes change
+// under the registry: the next scrape then finds duplicates and /metrics answers 500.
+func TestClientFamilyDoesNotAliasItsInput(t *testing.T) {
+	buffer := []byte("codex-cli/1.0")
+	got := clientFamily(unsafe.String(&buffer[0], len(buffer)))
+	copy(buffer, "nodetest/9.99")
+	if got != "codex" {
+		t.Fatalf("family changed with the request buffer: %q", got)
 	}
 }
 
