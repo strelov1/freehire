@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -117,6 +118,8 @@ type part struct {
 // and finalizes every claimed match in it. A subscription whose own reads fail is
 // released and counted, and the rest of the message still goes out.
 func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[int64]*subscriptionClaim, stats *Stats) {
+	// The claim's UPDATE ... RETURNING has no order, so the sections get one here.
+	slices.Sort(subIDs)
 	parts := make([]*part, 0, len(subIDs))
 	for _, subID := range subIDs {
 		info, err := r.store.GetSubscriptionForDelivery(ctx, subID)

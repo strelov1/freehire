@@ -155,7 +155,8 @@ func (d Digest) SearchPath(utmSource string) string {
 }
 
 // Message is what one send delivers: every digest one person is due on one
-// channel, newest subscription first. A person with seven alerts gets one message
+// channel, oldest subscription first (by id, so a mail's sections keep their order
+// from one message to the next). A person with seven alerts gets one message
 // carrying seven digests, not seven messages — the per-subscription cadence let a
 // user with several alerts receive 25-59 mails a day (measured 2026-11-05). A
 // webhook is the exception: its receiver is a program reading one saved search's

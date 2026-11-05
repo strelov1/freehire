@@ -185,3 +185,17 @@ func TestDeliver_DailyNewAlertWaitsForTomorrow(t *testing.T) {
 		t.Errorf("messages=%d deferred=%d, want 0 and 1 (already mailed today)", len(notifier.messages), stats.Deferred)
 	}
 }
+
+// The claim returns rows in no defined order; a message's sections are by subscription
+// id regardless, so a person's mail keeps its shape from one hour to the next.
+func TestDeliver_SectionsAreInSubscriptionOrder(t *testing.T) {
+	store := bundleStore()
+	store.claimed = []db.ClaimSubscriptionMatchesRow{store.claimed[3], store.claimed[0], store.claimed[1]} // 3, 1, 2
+	notifier := &fakeNotifier{}
+	if _, err := New(store, &fakeSearcher{}, notifier, DefaultConfig()).Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := digestNames(notifier.messages[0]); !slices.Equal(got, []string{"Go", "Rust", "My profile"}) {
+		t.Errorf("sections = %v, want [Go Rust My profile]", got)
+	}
+}

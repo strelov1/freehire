@@ -98,19 +98,39 @@ func (n *Notifier) render(m notify.Message) string {
 		heading, viewAll string
 		d                notify.Digest
 	}
-	parts := make([]part, len(m.Digests))
+	parts := make([]part, 0, len(m.Digests))
 	// Reserve room for every widest possible tail up front (d.Total is its worst-case
 	// count), so appending the actual tails can never push past the limit.
+	//
+	// Headings and tails are mandatory, so with enough alerts they alone would overflow
+	// the limit and Telegram would refuse the message on every retry. The sections that
+	// do not fit fold into one closing line instead, reserved first so it always fits.
+	folded := foldedLine(m.Total(), len(m.Digests), n.jobBaseURL)
 	reserve := 0
+	used := UTF16Len(b.String())
 	for i, d := range m.Digests {
 		p := part{d: d, viewAll: n.viewAllURL(d, searchTailLen)}
 		if len(m.Digests) > 1 {
 			p.heading = fmt.Sprintf("\n<b>%s</b> · %s\n", html.EscapeString(d.SavedSearchName), notify.JobCount(d.Total))
 		}
-		reserve += UTF16Len(p.heading) + UTF16Len(moreLine(d.Total, p.viewAll))
-		parts[i] = p
+		cost := UTF16Len(p.heading) + UTF16Len(moreLine(d.Total, p.viewAll))
+		if i < len(m.Digests)-1 && used+reserve+cost+UTF16Len(folded) > MaxMessageLen ||
+			i == len(m.Digests)-1 && used+reserve+cost > MaxMessageLen {
+			break
+		}
+		reserve += cost
+		parts = append(parts, p)
 	}
-	used := UTF16Len(b.String())
+	var foldedJobs int
+	for _, d := range m.Digests[len(parts):] {
+		foldedJobs += d.Total
+	}
+	if rest := len(m.Digests) - len(parts); rest > 0 {
+		folded = foldedLine(foldedJobs, rest, n.jobBaseURL)
+		reserve += UTF16Len(folded)
+	} else {
+		folded = ""
+	}
 	for _, p := range parts {
 		b.WriteString(p.heading)
 		reserve -= UTF16Len(p.heading) + UTF16Len(moreLine(p.d.Total, p.viewAll))
@@ -132,7 +152,15 @@ func (n *Notifier) render(m notify.Message) string {
 			used += UTF16Len(tail)
 		}
 	}
+	b.WriteString(folded)
 	return b.String()
+}
+
+// foldedLine is the closing line standing for the alerts a message had no room to
+// list: their job count and how many there are, linking to the notification centre,
+// which keeps a page per alert.
+func foldedLine(jobs, alerts int, baseURL string) string {
+	return fmt.Sprintf("\n\n<a href=\"%s/my/notifications\">+ %s in %d more job alert%s</a>", baseURL, notify.JobCount(jobs), alerts, notify.Plural(alerts))
 }
 
 // jobLine renders one digest job on a single line: a bullet linking to the

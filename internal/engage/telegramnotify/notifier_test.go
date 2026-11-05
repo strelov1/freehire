@@ -381,3 +381,25 @@ func TestNotifier_RenderBundleStaysWithinTheMessageLimit(t *testing.T) {
 		t.Errorf("every alert needs its heading and tail:\n%s", got)
 	}
 }
+
+// Fifty alerts' headings and tails alone exceed the limit; the sections that do not
+// fit fold into one closing line rather than making Telegram refuse the message.
+func TestNotifier_RenderFoldsAlertsThatDoNotFit(t *testing.T) {
+	n := NewNotifier(NewClient("t"), "https://freehire.me")
+	var m notify.Message
+	for i := range 50 {
+		m.Digests = append(m.Digests, notify.Digest{
+			SavedSearchName: strings.Repeat("long alert name ", 6) + strconv.Itoa(i),
+			Total:           200, SearchQuery: strings.Repeat("q", 900),
+			Jobs: []notify.DigestJob{{Title: "Job", Slug: "job"}},
+		})
+	}
+	got := n.render(m)
+
+	if l := UTF16Len(got); l > MaxMessageLen {
+		t.Fatalf("message is %d UTF-16 units, limit %d", l, MaxMessageLen)
+	}
+	if !strings.Contains(got, "more job alerts</a>") || !strings.Contains(got, "/my/notifications\">") {
+		t.Errorf("want a folded closing line for the alerts that did not fit:\n%s", got[len(got)-300:])
+	}
+}
