@@ -125,3 +125,33 @@ func TestDoverDeclinesMalformedUUID(t *testing.T) {
 		}
 	}
 }
+
+// TestDoverRejectsEmptyClientIdentityAndSlugMismatch pins the identity gates: an empty
+// client_name or an empty slug from the lookup is a skip (never a ":<id>" external id or a
+// blank company), and a slug that disagrees with normalize.CompanySlug of the client name
+// fails loudly rather than silently forking the dedup key the crawl path uses.
+func TestDoverRejectsEmptyClientIdentityAndSlugMismatch(t *testing.T) {
+	const link = "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d"
+	const api = "inbound/application-portal-job/a5546acf-45c3-44ff-bedd-a4314fd0f37d"
+
+	noName := (&fakeClient{}).
+		route(api, strings.ReplaceAll(doverDetailJSON, `"client_name":"Deepspatial"`, `"client_name":""`), "").
+		route("careers-page-slug/", `{"slug":""}`, "")
+	if _, ok, err := NewDover(noName).Resolve(context.Background(), link); err != nil || ok {
+		t.Errorf("empty client_name: ok=%v err=%v, want ok=false, nil error", ok, err)
+	}
+
+	noSlug := (&fakeClient{}).
+		route(api, doverDetailJSON, "").
+		route("careers-page-slug/Deepspatial", `{"id":"1aeeba55-65e0-4803-b70f-fac7ca8a20c7","slug":"","name":"Deepspatial"}`, "")
+	if _, ok, err := NewDover(noSlug).Resolve(context.Background(), link); err != nil || ok {
+		t.Errorf("empty slug: ok=%v err=%v, want ok=false, nil error", ok, err)
+	}
+
+	mismatch := (&fakeClient{}).
+		route(api, doverDetailJSON, "").
+		route("careers-page-slug/Deepspatial", `{"id":"1aeeba55-65e0-4803-b70f-fac7ca8a20c7","slug":"different-company","name":"Deepspatial"}`, "")
+	if _, ok, err := NewDover(mismatch).Resolve(context.Background(), link); err == nil || ok {
+		t.Errorf("slug mismatch: ok=%v err=%v, want ok=false, non-nil error", ok, err)
+	}
+}
