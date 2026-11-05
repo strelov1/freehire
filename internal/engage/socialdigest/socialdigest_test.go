@@ -15,7 +15,7 @@ func day(s string) time.Time {
 }
 
 func TestResolveDay(t *testing.T) {
-	now := day("2026-09-04").Add(13 * time.Hour) // 13:00 UTC, when the timer fires
+	now := day("2026-09-04").Add(13 * time.Hour) // a run in the afternoon
 
 	t.Run("freshest available day is used", func(t *testing.T) {
 		got, err := ResolveDay(day("2026-09-03"), true, now)

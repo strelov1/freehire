@@ -25,11 +25,31 @@ RETURNING *;
 -- so the caller can rename, overwrite the filters, or both in one call. An empty
 -- query string is a real value (not NULL), so "save the unfiltered view" is honored.
 -- No matching owner-scoped row returns no row (the handler maps that to 404).
+--
+-- A changed query drops its subscriptions' pending matches in the same statement: they
+-- answered the OLD query, and without this the next digest delivers them, including jobs
+-- below a minimum skill match the edit just added. DELETE rather than expired_at, because
+-- the ledger's unique key would otherwise stop a job the new query also matches from being
+-- recorded again. A leased row is left alone, since a send already holds it. last_searched_at
+-- stays: clearing it would re-read a page of postings the subscriber was never owed.
+WITH dropped AS (
+    DELETE FROM subscription_matches m
+    USING subscriptions s, saved_searches ss
+    WHERE m.subscription_id = s.id
+      AND s.saved_search_id = ss.id
+      AND ss.id = sqlc.arg('id')
+      AND ss.user_id = sqlc.arg('user_id')
+      AND ss.query <> sqlc.narg('query')
+      AND m.notified_at IS NULL
+      AND m.claimed_at IS NULL
+      AND m.failed_at IS NULL
+      AND m.expired_at IS NULL
+)
 UPDATE saved_searches
 SET name       = COALESCE(sqlc.narg('name'), name),
     query      = COALESCE(sqlc.narg('query'), query),
     updated_at = now()
-WHERE id = sqlc.arg('id') AND user_id = sqlc.arg('user_id')
+WHERE saved_searches.id = sqlc.arg('id') AND saved_searches.user_id = sqlc.arg('user_id')
 RETURNING *;
 
 -- name: DeleteSavedSearch :execrows

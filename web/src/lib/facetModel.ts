@@ -589,6 +589,16 @@ export function savedSearchQuery(f: JobFilters): string {
   return filtersToParams({ ...f, sort: null, hideSeen: false, formerEmployers: false }).toString();
 }
 
+/** Whether a saved query can carry alerts: mirrors the server's search.Narrows, which
+ *  refuses a subscription to a query that selects the whole catalogue. Only what the
+ *  digest matcher's search reads counts, so a minimum skill match alone does not: the
+ *  matcher applies it after a search that would have returned everything. */
+export function queryNarrows(query: string): boolean {
+  const f = filtersFromParams(new URLSearchParams(query));
+  if (f.q.trim() !== '') return true;
+  return activeFilterCount({ ...f, minSkillMatch: null, hideSeen: false, formerEmployers: false }) > 0;
+}
+
 // ---- per-value sign transitions (pure: FacetState -> FacetState) ----
 
 /** Which set a value currently belongs to. */

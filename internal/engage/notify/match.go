@@ -362,7 +362,7 @@ const minSkillMatchParam = "min_skill_match"
 // minSkillMatch reads the query's threshold; 0 means none. It accepts what the web filter
 // model accepts (1-100), so a value the job list ignores cannot empty a digest.
 func minSkillMatch(vals url.Values) int {
-	n, err := strconv.Atoi(vals.Get(minSkillMatchParam))
+	n, err := strconv.Atoi(strings.TrimSpace(vals.Get(minSkillMatchParam)))
 	if err != nil || n < 1 || n > 100 {
 		return 0
 	}

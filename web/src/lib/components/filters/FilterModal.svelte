@@ -18,7 +18,7 @@
   import { promptSignIn } from '#lib/signin.js';
   import { profileStore } from '#lib/profile.svelte.js';
   import { notifications } from '#lib/notifications.svelte.js';
-  import { emptyFilters, appliesWorkModeRemoteAnywhere, workModeRemoteLabel, type FilterStore, type JobFilters } from '#lib/filters.js';
+  import { emptyFilters, appliesWorkModeRemoteAnywhere, queryNarrows, savedSearchQuery, workModeRemoteLabel, type FilterStore, type JobFilters } from '#lib/filters.js';
   import { StagedFilters } from '#lib/stagedFilters.svelte.js';
   import { SHORT_APPLICATION_MAX } from '#lib/jobFacts.js';
   import { RAIL, RAIL_SECTIONS, type RailEntry, type RailSection } from '#lib/filterSections.js';
@@ -144,7 +144,7 @@
 
   // The footer nudge shows only when the My-filters tab exists (so the jump lands
   // somewhere), Telegram alerts are available, and there's a search worth saving.
-  const showSaveNudge = $derived(hasSavedTab && notifications.telegram.enabled && staged.active > 0);
+  const showSaveNudge = $derived(hasSavedTab && notifications.telegram.enabled && queryNarrows(savedSearchQuery(staged.value)));
 
   // The "My filters" (saved searches) tab. It heads the rail on the full job modal, but
   // not when the caller restricts the rail to a facet subset (e.g. the profile modal),
