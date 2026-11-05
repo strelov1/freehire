@@ -186,16 +186,29 @@ that ignores `_meta.ui` sees exactly what it saw before.
 
 - **It is hand-written HTML, not a `web/` build, on purpose** — see
   `openspec/changes/archive/2026-10-20-chatgpt-app-widgets/design.md`. If it ever grows
-  forms, sign-in or its own requests, that is the point to move it.
+  independent sign-in, complex forms or direct network requests, that is the point to
+  move it. Saving and stage controls use the host bridge and existing tools, not
+  another HTTP client or credential store.
 - **The URI is the page's hash.** Hosts cache by URI; editing the file changes it. Never
   hard-code the URI anywhere else.
 - **Wire data lives only in `result`, `job` and `req`** inside the page.
   `TestTheWidgetReadsOnlyFieldsTheWireShapeHas` greps those names and checks every field
   against `wire.go`, so a renamed field fails the build instead of rendering as nothing.
   Reading wire data through any other name blinds it.
-- **Text only, no requests.** `TestTheWidgetCannotInjectMarkupOrMakeRequests` bans
+- **Safe text, no direct network requests.** `TestTheWidgetCannotInjectMarkupOrMakeRequests` bans
   `innerHTML` and friends and every network API; the CSP admits only
   `https://logo.freehire.me` images. A URL is used only when it is `https:`.
+- **Account actions are explicit host-mediated calls.** `Save job` calls `save_job`;
+  choosing a stage does nothing until `Update stage` calls `track_job`. Only the
+  selected slug and stage are sent, never notes. Controls require the host's
+  `serverTools` capability and never handle credentials. OAuth challenges point
+  back to the assistant's sign-in controls.
+- **Success needs a server confirmation.** The returned tracking record must have
+  a valid job id and saved timestamp or the exact requested stage. An unknown
+  result or timeout disables retry until the person checks their tracking board;
+  a confirmed refusal permits an explicit retry. Pending calls stay locked across
+  result re-renders. `web/scripts/mcp-widget.test.mjs` drives the real embedded
+  page's DOM and host protocol, including failure and source-spoofing cases.
 - **Only a tool whose result the page can draw may name it** — a host draws the widget for
   every tool that does.
 - **The handshake's field names are the specification's** (`appInfo`, not `clientInfo`),

@@ -41,6 +41,16 @@
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; }
   .btn { display: inline-block; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--fh-border); color: var(--fh-fg); text-decoration: none; font-size: 13px; font-weight: 500; cursor: pointer; background: transparent; font-family: inherit; }
   .btn.primary { background: var(--fh-fg); color: var(--fh-bg); border-color: var(--fh-fg); }
+  .btn:focus-visible, select:focus-visible { outline: 2px solid var(--fh-fg); outline-offset: 3px; }
+  .btn:disabled, select:disabled { cursor: default; opacity: 0.6; }
+  .account-actions { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--fh-border); }
+  .account-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .stage-label { color: var(--fh-muted-fg); font-size: 12px; }
+  .stage-select { min-width: 0; max-width: 100%; padding: 6px 8px; border: 1px solid var(--fh-border); border-radius: 6px; background: var(--fh-bg); color: var(--fh-fg); font: inherit; }
+  .action-status { margin: 8px 0 0; font-size: 12px; color: var(--fh-muted-fg); overflow-wrap: anywhere; }
+  .action-status:empty { display: none; }
+  .account-actions[data-state="confirmed"] .action-status { color: var(--fh-good); }
+  .account-actions[data-state="failed"] .action-status, .account-actions[data-state="unknown"] .action-status { color: var(--fh-bad); }
   .source { margin-left: auto; color: var(--fh-muted-fg); font-size: 12px; }
   .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
   .badge { padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; font-size: 12px; }
@@ -67,12 +77,15 @@
 // - Wire data lives only in variables named `result`, `job` and `req`, so the field guard
 //   can find every field the page reads and check it against wire.go.
 // - Values are inserted as text, never as markup; a URL is used only when it is https.
-// - No request of its own: everything drawn arrives in the tool result.
+// - No direct network access: account actions go through the host's approved MCP connection.
 (function () {
   const root = document.getElementById("root");
   const SKILLS_SHOWN = 5;
   let hostCapabilities = {};
   let nextId = 1;
+  let lastToolResult;
+  const actionStates = new Map();
+  const STAGES = ["preparing", "applied", "screening", "responded", "interview", "offer", "accepted", "rejected", "withdrawn", "expired"];
 
   // ---- the bridge: JSON-RPC over postMessage to the host -------------------------------
 
@@ -80,14 +93,20 @@
   // "*" is deliberate, and what the official ext-apps PostMessageTransport sends with. The
   // page runs in a sandboxed frame and cannot know its host's origin (ChatGPT's and Claude's
   // differ, and neither is ours to list), while the recipient is fixed: window.parent, the
-  // frame's own embedder. What goes out is the handshake, the frame size and a public job
-  // URL to open — nothing a third party could not read off the posting itself. Incoming
+  // frame's own embedder. Tracking actions carry only a posting slug and chosen stage,
+  // never credentials or notes. Incoming
   // messages are the side that needs a check, and get one: event.source must be the parent.
   function send(message) { window.parent.postMessage(message, "*"); }
-  function request(method, params) {
+  function request(method, params, timeout) {
     const id = nextId++;
-    send({ jsonrpc: "2.0", id: id, method: method, params: params });
-    return new Promise(function (resolve, reject) { pending.set(id, { resolve: resolve, reject: reject }); });
+    return new Promise(function (resolve, reject) {
+      const timer = timeout ? setTimeout(function () {
+        pending.delete(id);
+        reject(new Error("The host did not confirm the request in time."));
+      }, timeout) : undefined;
+      pending.set(id, { resolve: resolve, reject: reject, timer: timer });
+      send({ jsonrpc: "2.0", id: id, method: method, params: params });
+    });
   }
   function notify(method, params) { send({ jsonrpc: "2.0", method: method, params: params || {} }); }
 
@@ -98,6 +117,7 @@
     if (message.id !== undefined && pending.has(message.id)) {
       const waiter = pending.get(message.id);
       pending.delete(message.id);
+      clearTimeout(waiter.timer);
       if (message.error) waiter.reject(message.error); else waiter.resolve(message.result);
       return;
     }
@@ -161,6 +181,7 @@
     hostCapabilities = (init && init.hostCapabilities) || {};
     applyHostContext(init && init.hostContext);
     start();
+    if (lastToolResult) render(lastToolResult);
   }, start);
 
   // ChatGPT also hands the result to the page directly, before any bridge message.
@@ -208,15 +229,18 @@
   }
 
   function render(toolResult) {
-    root.replaceChildren();
     if (!toolResult) return;
     if (toolResult.isError) {
+      root.replaceChildren();
       const first = (toolResult.content || [])[0];
       root.append(el("p", "empty", first && first.text ? first.text : "freehire could not answer this request."));
       return;
     }
     const result = toolResult.structuredContent;
-    if (!result) return;
+    if (!result || (!Array.isArray(result.jobs) && typeof result.description !== "string")) return;
+    lastToolResult = toolResult;
+    for (const state of actionStates.values()) state.views = [];
+    root.replaceChildren();
     if (Array.isArray(result.jobs)) renderList(result);
     else if (typeof result.description === "string") renderDetail(result);
   }
@@ -311,9 +335,122 @@
     if (employer) actions.append(link("Employer's posting", employer, false));
     if (job.source) actions.append(el("span", "source", "via " + job.source));
     body.append(actions);
+    if (hostCapabilities.serverTools && typeof job.slug === "string" && job.slug.trim()) {
+      body.append(accountActions(job));
+    }
 
     node.append(body);
     return node;
+  }
+
+  // The host proxies these calls using its approved connection. No credential or
+  // network request belongs in the iframe, and changing a stage never sends notes.
+  function accountActions(job) {
+    let state = actionStates.get(job.slug);
+    if (!state) {
+      state = { phase: "idle", saved: false, selectedStage: "", message: "", views: [] };
+      actionStates.set(job.slug, state);
+    }
+    const panel = el("section", "account-actions");
+    panel.setAttribute("aria-label", "Your tracking for " + job.title);
+    const controls = el("div", "account-controls");
+    const save = el("button", "btn", "Save job");
+    save.type = "button";
+    const stageLabel = el("label", "stage-label", "Track stage ");
+    const stage = el("select", "stage-select");
+    stage.setAttribute("aria-label", "Application stage for " + job.title);
+    const placeholder = el("option", "", "Choose stage");
+    placeholder.value = "";
+    stage.append(placeholder);
+    for (const value of STAGES) {
+      const option = el("option", "", label(value));
+      option.value = value;
+      stage.append(option);
+    }
+    stage.value = state.selectedStage;
+    stageLabel.append(stage);
+    const update = el("button", "btn", "Update stage");
+    update.type = "button";
+    controls.append(save, stageLabel, update);
+    const status = el("p", "action-status");
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    panel.append(controls, status);
+
+    function renderState() {
+      const busy = state.phase === "saving" || state.phase === "updating";
+      const locked = busy || state.phase === "unknown";
+      panel.dataset.state = state.phase;
+      panel.setAttribute("aria-busy", String(busy));
+      save.disabled = locked || state.saved;
+      save.textContent = state.phase === "saving" ? "Saving..." : state.saved ? "Saved" : "Save job";
+      stage.disabled = locked;
+      update.disabled = locked || !state.selectedStage;
+      update.textContent = state.phase === "updating" ? "Updating..." : "Update stage";
+      status.textContent = state.message;
+    }
+
+    function refresh() {
+      for (const view of state.views) view();
+    }
+
+    function unknown() {
+      state.phase = "unknown";
+      state.message = "We could not confirm this change. Check your freehire board before trying again.";
+      refresh();
+    }
+
+    function run(name, args) {
+      if (state.phase === "saving" || state.phase === "updating" || state.phase === "unknown") return;
+      state.phase = name === "save_job" ? "saving" : "updating";
+      state.message = name === "save_job" ? "Saving to your freehire board..." : "Updating your application stage...";
+      refresh();
+      request("tools/call", { name: name, arguments: args }, 30000).then(function (reply) {
+        if (!reply || typeof reply !== "object" || !Array.isArray(reply.content)) { unknown(); return; }
+        const challenges = reply._meta && reply._meta["mcp/www_authenticate"];
+        if (Array.isArray(challenges) && challenges.some(function (value) { return typeof value === "string" && value.startsWith("Bearer "); })) {
+          state.phase = "auth";
+          state.message = "Sign in to freehire using your assistant's connection settings, then try again.";
+          refresh();
+          return;
+        }
+        if (reply.isError) {
+          const text = (reply.content || []).find(function (item) { return item && item.type === "text" && typeof item.text === "string"; });
+          state.phase = "failed";
+          state.message = text ? text.text.slice(0, 280) : "freehire could not make this change. Try again when the problem is resolved.";
+          refresh();
+          return;
+        }
+        let account = reply.structuredContent;
+        if (!account) {
+          const text = (reply.content || []).find(function (item) { return item && item.type === "text" && typeof item.text === "string"; });
+          try { account = text && JSON.parse(text.text); } catch (error) { unknown(); return; }
+        }
+        if (!account || !Number.isSafeInteger(account.job_id) || account.job_id < 1) { unknown(); return; }
+        if (name === "save_job") {
+          if (typeof account.saved_at !== "string" || !Number.isFinite(Date.parse(account.saved_at))) { unknown(); return; }
+          state.saved = true;
+          state.message = "Saved to your freehire board.";
+        } else {
+          if (account.stage !== args.stage) { unknown(); return; }
+          state.message = "Stage updated to " + label(account.stage) + ".";
+        }
+        state.phase = "confirmed";
+        refresh();
+      }).catch(unknown);
+    }
+
+    state.views.push(renderState);
+    save.addEventListener("click", function () { run("save_job", { slug: job.slug }); });
+    stage.addEventListener("change", function () {
+      state.selectedStage = STAGES.includes(stage.value) ? stage.value : "";
+      refresh();
+    });
+    update.addEventListener("click", function () {
+      if (state.selectedStage) run("track_job", { slug: job.slug, stage: state.selectedStage });
+    });
+    refresh();
+    return panel;
   }
 
   // logo is the company's mark from our proxy, or its initial when the proxy has none.
