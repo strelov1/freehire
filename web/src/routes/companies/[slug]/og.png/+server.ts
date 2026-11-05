@@ -20,15 +20,17 @@ export const GET: RequestHandler = async ({ params, fetch }) => {
   // with the entity fetch instead of behind it (mirrors the company-detail loader).
   const openJobsFacets = new URLSearchParams({ company_slug: params.slug });
   const openJobsPromise = api.searchJobs(openJobsFacets, 1, 0);
+  // Mark it handled now: when the API stalls it can reject while getCompany is still
+  // pending, and an unhandled rejection takes down the whole SSR worker. Promise.all
+  // below still sees the failure.
+  openJobsPromise.catch(() => {});
 
   let company;
   try {
     ({ company } = await api.getCompany(params.slug, 1, 0));
   } catch (e) {
-    // Mark the in-flight search handled so it isn't an unhandled rejection. A slug
-    // a merge retired follows the detail page to the absorbing company's image; a
-    // missing company surfaces the 404 (no image).
-    openJobsPromise.catch(() => {});
+    // A slug a merge retired follows the detail page to the absorbing company's
+    // image; a missing company surfaces the 404 (no image).
     if (e instanceof MovedError) redirect(301, `/companies/${e.canonicalSlug}/og.png`);
     if (e instanceof ApiError && e.status === 404) error(404, 'Company not found');
     throw e;
