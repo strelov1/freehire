@@ -196,7 +196,11 @@ export const handle = sequence(
 const reportError: HandleServerError = (input) => {
   if (input.kind !== 'unknown' && input.error.status >= 400 && input.error.status < 500) return;
   if (otelEndpoint) {
-    telemetry?.capture(input.error, { route: input.event.route.id, method: input.event.request.method });
+    telemetry?.capture(input.error, {
+      route: input.event.route.id,
+      method: input.event.request.method,
+      kitError: input.kind !== 'unknown',
+    });
     return;
   }
   console.error((input.error as Error | undefined)?.stack ?? input.error);

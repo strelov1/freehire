@@ -83,7 +83,12 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
   const seen = new Set<string>();
   let windowStart = Date.now();
   return {
-    capture(error: unknown, context: { route?: string | null; method?: string } = {}) {
+    // `kitError`: the caller vouches this is SvelteKit's { status, message } and not an
+    // arbitrary object (a rejection reason may look the same and carry personal data).
+    capture(
+      error: unknown,
+      context: { route?: string | null; method?: string; kitError?: boolean } = {},
+    ) {
       try {
         if (isTransientNoise(error)) return;
         if (
@@ -100,7 +105,7 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
           ["string", "number", "boolean", "bigint"].includes(typeof error)
         )
           rawMessage = String(error);
-        else if (isHttpError(error)) {
+        else if (context.kitError && isHttpError(error)) {
           // SvelteKit hands handleError an App.Error ({ status, message }), not an Error;
           // its message is the literal a load passed to error(), so it is safe to report.
           const detail = error.message;

@@ -224,10 +224,12 @@ it("reports SvelteKit HttpErrors by status and message, with the route that thre
   });
   // The shape SvelteKit passes to handleError for an app or framework error.
   const unavailable = { status: 503, message: "Service unavailable" };
-  telemetry?.capture(unavailable, { route: "/jobs/[slug]", method: "GET" });
+  telemetry?.capture(unavailable, { route: "/jobs/[slug]", method: "GET", kitError: true });
   // The same failure on another route is a separate event, not a duplicate.
-  telemetry?.capture(unavailable, { route: "/companies/[slug]", method: "GET" });
-  telemetry?.capture({ status: 500 });
+  telemetry?.capture(unavailable, { route: "/companies/[slug]", method: "GET", kitError: true });
+  telemetry?.capture({ status: 500 }, { kitError: true });
+  // A look-alike rejection reason the caller did not vouch for stays opaque.
+  telemetry?.capture({ status: 500, message: "Applicant private" });
   await telemetry?.flush();
   const records = exporter.getFinishedLogRecords();
   expect(records.map((record) => record.attributes)).toEqual([
@@ -239,6 +241,10 @@ it("reports SvelteKit HttpErrors by status and message, with the route that thre
     }),
     expect.objectContaining({ "http.route": "/companies/[slug]" }),
     expect.objectContaining({ "exception.message": "HTTP 500" }),
+    expect.objectContaining({
+      "exception.type": "object",
+      "exception.message": "Non-Error exception",
+    }),
   ]);
   expect(records[2]?.attributes).not.toHaveProperty("http.route");
   await telemetry?.shutdown();
