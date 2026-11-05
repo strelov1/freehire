@@ -74,7 +74,7 @@ func run() int {
 		if ses, err := emailnotify.NewClient(ctx, cfg.AWSRegion); err != nil {
 			log.Printf("notify: email channel disabled: %v", err)
 		} else {
-			router[notify.ChannelEmail] = emailnotify.NewNotifier(ses, cfg.NotifyEmailFrom, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
+			router[notify.ChannelEmail] = emailnotify.NewNotifier(ses.WithEngagementTracking(cfg.SESEngagementConfigurationSet), cfg.NotifyEmailFrom, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
 		}
 	}
 	searcher := search.NewClient(cfg.MeiliURL, cfg.MeiliKey)

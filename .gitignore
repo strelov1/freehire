@@ -33,6 +33,7 @@ hire
 /backfill-telegram-prefilter
 /billing-sync
 /broadcast
+/email-events
 /cal-sync
 /capture-apply-form
 /classify-mail

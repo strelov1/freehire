@@ -249,6 +249,9 @@ type Settings struct {
 	// sender address (e.g. notifications@freehire.me).
 	AWSRegion       string
 	NotifyEmailFrom string
+	// SESEngagementConfigurationSet is the SES configuration set publishing opens, clicks
+	// and delivery outcomes for campaigns and digests. Empty tracks nothing.
+	SESEngagementConfigurationSet string
 
 	// DiscordDigestWebhookURL is the incoming-webhook URL cmd/social-digest posts the
 	// daily "most viewed" list to. Optional and silently disabling, like the rest of
@@ -488,6 +491,8 @@ func Load() Settings {
 
 		AWSRegion:       os.Getenv("AWS_REGION"),
 		NotifyEmailFrom: os.Getenv("NOTIFY_EMAIL_FROM"),
+
+		SESEngagementConfigurationSet: os.Getenv("SES_ENGAGEMENT_CONFIGURATION_SET"),
 
 		DiscordDigestWebhookURL: os.Getenv("DISCORD_DIGEST_WEBHOOK_URL"),
 

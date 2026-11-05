@@ -704,6 +704,22 @@ type EmailClassificationOutbox struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+type EmailEvent struct {
+	MessageID  string             `json:"message_id"`
+	Type       string             `json:"type"`
+	Campaign   string             `json:"campaign"`
+	Variant    string             `json:"variant"`
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+}
+
+type EmailEventDaily struct {
+	Day      pgtype.Date `json:"day"`
+	Campaign string      `json:"campaign"`
+	Variant  string      `json:"variant"`
+	Type     string      `json:"type"`
+	Count    int64       `json:"count"`
+}
+
 type EnrichmentOutbox struct {
 	ID            int64              `json:"id"`
 	JobID         int64              `json:"job_id"`

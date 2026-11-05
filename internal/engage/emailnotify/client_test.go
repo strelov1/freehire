@@ -161,3 +161,53 @@ func deref(p *string) string {
 	}
 	return *p
 }
+
+func trackedMessage() Message {
+	return Message{
+		From: "from@freehire.me", To: "to@acme.com", Subject: "Subj", HTML: "<b>hi</b>", Text: "hi",
+		Group: emailprefs.GroupEssential, Campaign: "launch", Variant: "a",
+	}
+}
+
+func TestClient_TracksACampaignThroughTheConfigurationSet(t *testing.T) {
+	fake := &fakeSES{}
+	c := (&Client{ses: fake}).WithEngagementTracking("engagement")
+
+	if err := c.Send(context.Background(), trackedMessage()); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if got := fake.in.ConfigurationSetName; got == nil || *got != "engagement" {
+		t.Fatalf("ConfigurationSetName = %v, want engagement", got)
+	}
+	tags := map[string]string{}
+	for _, tag := range fake.in.EmailTags {
+		tags[*tag.Name] = *tag.Value
+	}
+	if tags["campaign"] != "launch" || tags["variant"] != "a" {
+		t.Errorf("tags = %v, want campaign=launch variant=a", tags)
+	}
+}
+
+func TestClient_TracksNothingWithoutBothCampaignAndSet(t *testing.T) {
+	cases := map[string]struct {
+		client  func(*fakeSES) *Client
+		message Message
+	}{
+		"no configuration set": {func(f *fakeSES) *Client { return &Client{ses: f} }, trackedMessage()},
+		"no campaign": {
+			func(f *fakeSES) *Client { return (&Client{ses: f}).WithEngagementTracking("engagement") },
+			Message{From: "from@freehire.me", To: "to@acme.com", Subject: "Subj", HTML: "h", Text: "t", Group: emailprefs.GroupEssential},
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fake := &fakeSES{}
+			if err := tc.client(fake).Send(context.Background(), tc.message); err != nil {
+				t.Fatalf("Send: %v", err)
+			}
+			if fake.in.ConfigurationSetName != nil || len(fake.in.EmailTags) != 0 {
+				t.Errorf("mail was tracked: set=%v tags=%v", fake.in.ConfigurationSetName, fake.in.EmailTags)
+			}
+		})
+	}
+}

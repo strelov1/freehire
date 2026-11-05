@@ -1332,7 +1332,7 @@ type Querier interface {
 	CountBoardHealthRegions(ctx context.Context, arg CountBoardHealthRegionsParams) (int64, error)
 	// How many people a campaign would reach right now. Read before sending: a campaign
 	// is irreversible and goes to everyone, so the number is worth seeing first.
-	CountBroadcastCandidates(ctx context.Context, campaign string) (int64, error)
+	CountBroadcastCandidates(ctx context.Context, arg CountBroadcastCandidatesParams) (int64, error)
 	// Exact open-job and company totals for the published catalogue-scale snapshot
 	// (internal/ingest/catalogstats). Deliberately the opposite trade to EstimateOpenJobs below:
 	// this is a full scan and belongs only in the scheduled rollup worker, never on a
@@ -3937,7 +3937,10 @@ type Querier interface {
 	// makes the WRITE idempotent, and both are needed because two runs can overlap.
 	ListBookingsDueForReminder(ctx context.Context, arg ListBookingsDueForReminderParams) ([]ListBookingsDueForReminderRow, error)
 	// Audience reader and ledger writer for one-off campaigns (internal/engage/broadcast).
-	// Everyone who can be mailed and has not received this campaign yet.
+	// Everyone who can be mailed and has not received this campaign yet. A non-empty half ('a' or
+	// 'b') narrows that to one side of a split: hashed with the campaign's name, so the same
+	// people are not always on the same side, and stable within a campaign, so a capped batch
+	// continued later stays on its side.
 	//
 	// No signup window, unlike the onboarding queries: a campaign is addressed to the
 	// whole audience by definition, and the launch it announces matters as much to
@@ -6226,6 +6229,10 @@ type Querier interface {
 	// a fact worth keeping, it simply has no application to be paired with and never enters
 	// the response ratio, which counts only replies that answer an `applied` event.
 	RecordEmailApplicationEvent(ctx context.Context, arg RecordEmailApplicationEventParams) error
+	// Queries behind the engagement ledger (internal/engage/emailevents, cmd/email-events).
+	// First sighting wins. SQS delivers at least once and a person can open a letter ten times;
+	// neither should change a rate.
+	RecordEmailEvent(ctx context.Context, arg RecordEmailEventParams) error
 	// Count a failed attempt: bump attempts, record the error, and decide whether to
 	// dead-letter (set failed_at). The lease (claimed_at) is intentionally left in place —
 	// its expiry gates the retry to a later run and doubles as the crash reaper, so a
@@ -6948,6 +6955,9 @@ type Querier interface {
 	// cannot type, and the surplus is bounded: a page holds few distinct companies, and a
 	// fingerprint belonging to another of them simply has no rows.
 	RoleClusterCountsFor(ctx context.Context, arg RoleClusterCountsForParams) ([]RoleClusterCountsForRow, error)
+	// One bounded batch of events past retention, moved into the daily counts in a single
+	// statement, so a crash can neither lose a count nor add it twice.
+	RollUpExpiredEmailEvents(ctx context.Context, arg RollUpExpiredEmailEventsParams) (int64, error)
 	SampleLivenessAuditJobs(ctx context.Context, arg SampleLivenessAuditJobsParams) ([]SampleLivenessAuditJobsRow, error)
 	SampleRemoteAuditJobs(ctx context.Context, arg SampleRemoteAuditJobsParams) ([]SampleRemoteAuditJobsRow, error)
 	// Save (bookmark) a job for a user. Idempotent and independent of a prior view:

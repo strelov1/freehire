@@ -67,6 +67,14 @@ type Message struct {
 	// Attachments switch SES from its simple path to a raw RFC 5322 message. Almost
 	// every mail is body-only; today only a mentorship calendar invitation is not.
 	Attachments []Attachment
+
+	// Campaign names the letter for engagement tracking. Empty, as on anything a person
+	// is waiting for, the mail goes out with no open pixel and no rewritten links. Set
+	// only on campaigns and digests. SES restricts tag values to ASCII letters, digits,
+	// '_', '-' and '.'.
+	Campaign string
+	// Variant is the side of a split test the letter belongs to. Empty outside one.
+	Variant string
 }
 
 // validate refuses a message that cannot be sent honestly.
@@ -104,6 +112,16 @@ func (m Message) unsubscribeHeaders() []types.MessageHeader {
 // the render logic it serves lives in the callers and is covered by their tests.
 type Client struct {
 	ses sesAPI
+	// trackingSet is the SES configuration set that publishes engagement events. Empty
+	// tracks nothing, whatever a message's Campaign says.
+	trackingSet string
+}
+
+// WithEngagementTracking returns the Client with the SES configuration set that
+// publishes opens, clicks, deliveries, bounces and complaints. Only the workers sending
+// campaigns and digests call it; every other worker's client cannot track by construction.
+func (c *Client) WithEngagementTracking(configurationSet string) *Client {
+	return &Client{ses: c.ses, trackingSet: configurationSet}
 }
 
 // NewClient builds a Client from AWS config resolved via the default chain
@@ -142,9 +160,11 @@ func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &sesv2.SendEmailInput{
+		in := &sesv2.SendEmailInput{
 			Content: &types.EmailContent{Raw: &types.RawMessage{Data: raw}},
-		}, nil
+		}
+		c.track(in, m)
+		return in, nil
 	}
 	in := &sesv2.SendEmailInput{
 		FromEmailAddress: aws.String(m.From),
@@ -163,5 +183,19 @@ func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 	if m.ReplyTo != "" {
 		in.ReplyToAddresses = []string{m.ReplyTo}
 	}
+	c.track(in, m)
 	return in, nil
+}
+
+// track routes a campaign's mail through the configuration set and tags it, which is all
+// the event consumer (internal/engage/emailevents) learns about the letter.
+func (c *Client) track(in *sesv2.SendEmailInput, m Message) {
+	if c.trackingSet == "" || m.Campaign == "" {
+		return
+	}
+	in.ConfigurationSetName = aws.String(c.trackingSet)
+	in.EmailTags = []types.MessageTag{{Name: aws.String("campaign"), Value: aws.String(m.Campaign)}}
+	if m.Variant != "" {
+		in.EmailTags = append(in.EmailTags, types.MessageTag{Name: aws.String("variant"), Value: aws.String(m.Variant)})
+	}
 }

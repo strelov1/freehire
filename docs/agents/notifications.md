@@ -344,3 +344,24 @@ Bot API — check which one you're in.
   pass's digests are skipped, and the ledger redelivers them on the next pass only if they
   were never marked notified — and only while they are fresh: an outage longer than the
   freshness window loses what it held back, by design.
+
+## Engagement tracking
+
+Campaigns (`cmd/broadcast`) and the saved-search digest (`cmd/notify`) can be measured; nothing
+else can. A message is tracked only when it names a `Campaign` and its client was given a
+configuration set (`WithEngagementTracking`, from `SES_ENGAGEMENT_CONFIGURATION_SET`), so account,
+security and application mail cannot pick up an open pixel by accident.
+
+- **The flow:** SES configuration set → SNS → SQS (`EMAIL_EVENTS_QUEUE_URL`) → `cmd/email-events`,
+  the same SNS → SQS shape as inbound mail, with no public endpoint to authenticate.
+- **No person in the ledger.** `email_events` holds a message id, campaign, variant, type and time,
+  first sighting per message and type. The consumer does not decode the recipient, IP or link.
+- **Retention:** 90 days, then `email_event_daily` counts only.
+- **Opens overcount.** Apple Mail Privacy Protection and security scanners fetch the pixel without a
+  person reading anything, typically soon after delivery. Judge send times by clicks.
+- **Comparing two send times:** run `./broadcast -campaign <name> -half a` at one time and
+  `-half b` at the other. The sides are hashed with the campaign name and stable across runs. Then:
+
+```sql
+SELECT variant, type, count(*) FROM email_events WHERE campaign = '<name>' GROUP BY 1, 2 ORDER BY 1, 2;
+```

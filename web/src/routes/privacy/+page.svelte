@@ -13,7 +13,7 @@
 
   // Static effective date — freehire has no Date.now-driven content, and a hard
   // date is what a privacy policy needs. Bump this whenever the policy changes.
-  const lastUpdated = 'November 3, 2026';
+  const lastUpdated = 'November 5, 2026';
 </script>
 
 <Seo
@@ -302,6 +302,22 @@
         your account. Moderators can read a conversation only when someone reports it. Deleting
         your account deletes your buddy membership, conversations, messages, blocks, and hidden
         application marks.
+      </p>
+    </section>
+
+    <section class="flex flex-col gap-3">
+      <h2 class="text-xl font-semibold tracking-tight">Email engagement</h2>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        Our announcements and saved-search digests can contain a small tracking image, and their
+        links can pass through a redirect, so we can tell whether a letter was delivered, opened or
+        clicked. We use this to judge which letters are useful and when to send them. Account,
+        security and application mail is not tracked this way.
+      </p>
+      <p class="text-sm leading-relaxed text-muted-foreground">
+        Each event records the campaign, the type of event and its time against a message
+        identifier. We do not store your address or account with it, and we keep it for 90 days,
+        after which only daily totals remain. Amazon Web Services processes these events as our
+        email provider. You can stop these letters with the unsubscribe link in any of them.
       </p>
     </section>
 

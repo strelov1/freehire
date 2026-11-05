@@ -66,8 +66,9 @@ func NewMailer(sender emailnotify.Sender, from, replyTo, baseURL string, links *
 	}
 }
 
-// Send delivers one campaign to one recipient.
-func (m *Mailer) Send(ctx context.Context, c Campaign, userID int64, to string) error {
+// Send delivers one campaign to one recipient. half is the side of a split test the
+// recipient is on, empty outside one.
+func (m *Mailer) Send(ctx context.Context, c Campaign, half string, userID int64, to string) error {
 	var body bytes.Buffer
 	if err := c.body.Execute(&body, m.assets()); err != nil {
 		return fmt.Errorf("broadcast: rendering %s: %w", c.Name, err)
@@ -87,6 +88,7 @@ func (m *Mailer) Send(ctx context.Context, c Campaign, userID int64, to string) 
 		From: m.from, To: to, ReplyTo: m.replyTo, Subject: c.Subject,
 		HTML: html, Text: c.text(m.baseURL) + emailprefs.TextFooter(unsubscribe),
 		Group: emailprefs.GroupNews, UnsubscribeURL: unsubscribe,
+		Campaign: c.Name, Variant: half,
 	})
 }
 
