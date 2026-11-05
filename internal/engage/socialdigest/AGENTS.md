@@ -74,9 +74,12 @@ already publishes.
   be one transaction across an HTTP boundary, so one order has to lose. Recording
   first risks a day silently never published; recording after risks one duplicate
   post. A duplicate is visible and recoverable; a silent gap is neither.
-- **An empty digest is a quiet day, not a failure** — publish nothing, exit zero.
-  `ErrNoViewData` and `ErrStaleViewData` are the other thing: the pipeline is broken
-  and must not be published over.
+- **An empty digest is a quiet day, not a failure** — publish nothing, exit zero. It now
+  means only that the quarantine took everything above the floor. `ErrNoViewData`,
+  `ErrStaleViewData` and `ErrThinViewData` (nothing clears the floor at all, which is a
+  stub day) are the other thing: the pipeline is broken or behind, the run exits non-zero
+  and nothing is published. It cannot see a day the rollup has half finished: that still
+  clears the floor, which is why the timer has to follow the rollup.
 - **A channel with no credential is not configured**, so it is absent from the
   publisher list rather than present and disabled — the same degradation as the rest
   of this worker fleet.

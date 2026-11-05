@@ -167,6 +167,13 @@ var (
 	// StaleAfterDays allows. Publishing a list this old would be worse than publishing
 	// nothing, because nobody would notice.
 	ErrStaleViewData = errors.New("socialdigest: view data is stale")
+
+	// ErrThinViewData means no posting on the day clears MinPageUniques at all, before
+	// the quarantine has dropped anything. That is an unfinished rollup and not a quiet
+	// day: over the 21 days to 2026-11-04 the fewest postings above the floor was 143, and
+	// the one time it read zero the day was a stub, because the digest ran before
+	// cmd/rollup-views had reached it. Exiting 0 there lost the post with nothing failing.
+	ErrThinViewData = errors.New("socialdigest: no posting clears the view floor, so the rollup has not reached this day")
 )
 
 // ResolveDay picks the day to build a digest for.
