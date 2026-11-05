@@ -190,6 +190,21 @@ func (s *fakeStore) ClaimSubscriptionMatches(context.Context, db.ClaimSubscripti
 		}
 		rows[i] = c
 	}
+	// Like the SQL, a row unscripted on the point carries the owner's newest stamp on
+	// the channel, read from the delivery rows.
+	for i := range rows {
+		if rows[i].PersonLastSentAt.Valid {
+			continue
+		}
+		for _, o := range rows {
+			if o.UserID != rows[i].UserID || o.Channel != rows[i].Channel {
+				continue
+			}
+			if t := s.delivery[o.SubscriptionID].LastDigestSentAt; t.Valid && (!rows[i].PersonLastSentAt.Valid || t.Time.After(rows[i].PersonLastSentAt.Time)) {
+				rows[i].PersonLastSentAt = t
+			}
+		}
+	}
 	return rows, nil
 }
 

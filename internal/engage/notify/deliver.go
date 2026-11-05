@@ -54,7 +54,7 @@ func (r *Runner) deliver(ctx context.Context, stats *Stats) error {
 	for _, c := range claimed {
 		sc, seen := claims[c.SubscriptionID]
 		if !seen {
-			sc = &subscriptionClaim{oldest: c}
+			sc = &subscriptionClaim{oldest: c, personLastSent: c.PersonLastSentAt}
 			claims[c.SubscriptionID] = sc
 			key := keyOf(c)
 			if _, ok := messages[key]; !ok {
@@ -154,9 +154,10 @@ func (r *Runner) deliverMessage(ctx context.Context, subIDs []int64, claims map[
 	stamped := info.DigestFrequency != FrequencyInstant
 	tz := info.Timezone.String
 	if daily {
-		// The newest stamp among the parts is when this person last got the day's
-		// digest: a sent message stamps every subscription it carried.
-		if !deliverywindow.DigestDue(r.now(), tz, pgconv.DurationPtr(info.DigestTime), lastSent(parts)) {
+		// When this person was last mailed on this channel, across ALL their alerts on
+		// it (the claim reads it): a sent message stamps every subscription it carried,
+		// and a new alert must wait for tomorrow's digest rather than send its own.
+		if !deliverywindow.DigestDue(r.now(), tz, pgconv.DurationPtr(info.DigestTime), pgconv.TimePtr(parts[0].claim.personLastSent)) {
 			releaseAll()
 			stats.Deferred++
 			return
@@ -355,18 +356,6 @@ func (r *Runner) finalize(ctx context.Context, p *part, stamped bool) {
 			log.Printf("notify: mark digest sent for subscription %d: %v", p.subID, err)
 		}
 	}
-}
-
-// lastSent is the newest last-digest stamp among the parts, or nil when none of
-// them has been sent yet.
-func lastSent(parts []*part) *time.Time {
-	var newest *time.Time
-	for _, p := range parts {
-		if t := pgconv.TimePtr(p.info.LastDigestSentAt); t != nil && (newest == nil || t.After(*newest)) {
-			newest = t
-		}
-	}
-	return newest
 }
 
 func subIDsOf(parts []*part) []int64 {
@@ -576,6 +565,9 @@ type subscriptionClaim struct {
 	jobIDs []int64
 	oldest db.ClaimSubscriptionMatchesRow
 	full   bool
+	// personLastSent is when the subscription's owner was last sent a message on its
+	// channel (ClaimSubscriptionMatches) — the same for every subscription of a message.
+	personLastSent pgtype.Timestamptz
 }
 
 // add appends one claimed row. The claim is newest first in SQL, but UPDATE ...

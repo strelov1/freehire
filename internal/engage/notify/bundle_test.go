@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -153,4 +154,34 @@ func (s *missingDeliveryStore) GetSubscriptionForDelivery(ctx context.Context, i
 		return db.GetSubscriptionForDeliveryRow{}, errors.New("read failed")
 	}
 	return s.fakeStore.GetSubscriptionForDelivery(ctx, id)
+}
+
+// A `daily` person mailed this morning by alert A must not get a second digest when
+// alert B, never sent, matches in the afternoon: the claim's person-level stamp
+// decides, not B's own empty one.
+func TestDeliver_DailyNewAlertWaitsForTomorrow(t *testing.T) {
+	sentThisMorning := pgtype.Timestamptz{Time: time.Date(2026, 8, 14, 9, 5, 0, 0, time.UTC), Valid: true}
+	store := &fakeStore{
+		claimed: []db.ClaimSubscriptionMatchesRow{
+			{SubscriptionID: 2, JobID: 10, UserID: 42, Channel: ChannelEmail, PersonLastSentAt: sentThisMorning},
+		},
+		delivery: map[int64]db.GetSubscriptionForDeliveryRow{
+			2: {
+				ID: 2, UserID: 42, Channel: ChannelEmail, AccountEmail: "a@example.test", SavedSearchName: "B",
+				DigestFrequency: FrequencyDaily, DigestTime: pgTime(9, 0), Timezone: pgtype.Text{String: "UTC", Valid: true},
+			},
+		},
+		digestJobs: map[int64]db.GetJobsForDigestRow{10: {ID: 10}},
+	}
+	notifier := &fakeNotifier{}
+	r := New(store, &fakeSearcher{}, notifier, DefaultConfig())
+	r.now = func() time.Time { return time.Date(2026, 8, 14, 14, 0, 0, 0, time.UTC) }
+
+	stats, err := r.Run(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notifier.messages) != 0 || stats.Deferred != 1 {
+		t.Errorf("messages=%d deferred=%d, want 0 and 1 (already mailed today)", len(notifier.messages), stats.Deferred)
+	}
 }

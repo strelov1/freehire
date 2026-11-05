@@ -5,6 +5,7 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // The interval frequency's elapsed-interval gate lives in ClaimSubscriptionMatches, so a
@@ -160,5 +161,10 @@ func TestClaimSubscriptionMatches_IntervalGateIsPerPersonAndChannel(t *testing.T
 	}
 	if c := got[due[2]]; c.UserID != elapsed || c.Channel != "email" {
 		t.Errorf("claim row = user %d channel %q, want user %d email (the notifier groups on them)", c.UserID, c.Channel, elapsed)
+	}
+	// The never-sent subscription carries the PERSON's stamp, which is what times a
+	// `daily` message in Go.
+	if c := got[due[3]]; !c.PersonLastSentAt.Valid || time.Since(c.PersonLastSentAt.Time) < time.Hour {
+		t.Errorf("new subscription's person stamp = %+v, want the sibling's ~61 minutes ago", c.PersonLastSentAt)
 	}
 }

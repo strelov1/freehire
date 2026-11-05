@@ -118,13 +118,24 @@ ON CONFLICT (subscription_id, job_id) DO NOTHING;
 -- pass and takes them out of the pending set, so the predicate stays the plain pending one
 -- the partial index subscription_matches_pending_matched_idx is built on.
 WITH claimable AS (
-    SELECT m.subscription_id, m.job_id, s.user_id, s.channel
+    SELECT m.subscription_id, m.job_id, s.user_id, s.channel, pl.last_sent AS person_last_sent_at
     FROM subscriptions s
     -- Joined BEFORE the lateral so the interval gate below references only relations
     -- that exist under it: the planner then applies the gate at this join, and the
     -- lateral's FOR UPDATE never locks a non-due subscription's rows only for them to
     -- be filtered out afterwards.
     LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
+    -- When this person was last written to on this channel: the newest stamp among
+    -- their active subscriptions on it (a sent message stamps every subscription it
+    -- carried). A webhook keeps its own. Returned too, because the Go side times a
+    -- `daily` message by it — the claimed subscriptions alone would read a brand-new
+    -- alert as "never sent today" and mail a second digest the same day.
+    CROSS JOIN LATERAL (
+        SELECT max(o.last_digest_sent_at) AS last_sent
+        FROM subscriptions o
+        WHERE o.user_id = s.user_id AND o.channel = s.channel AND o.active
+          AND (s.channel <> 'webhook' OR o.id = s.id)
+    ) pl
     CROSS JOIN LATERAL (
         SELECT mm.subscription_id, mm.job_id
         FROM subscription_matches mm
@@ -159,10 +170,7 @@ WITH claimable AS (
       -- A webhook is sent one subscription at a time (its receiver is a program reading
       -- one saved search), so it keeps its own stamp.
       AND (COALESCE(ns.digest_frequency, 'interval') <> 'interval'
-           OR COALESCE((SELECT max(o.last_digest_sent_at)
-                        FROM subscriptions o
-                        WHERE o.user_id = s.user_id AND o.channel = s.channel AND o.active
-                          AND (s.channel <> 'webhook' OR o.id = s.id)), '-infinity')
+           OR COALESCE(pl.last_sent, '-infinity')
               <= now() - make_interval(hours => COALESCE(ns.digest_interval_hours, 1)::int))
     -- A backstop, not the working bound: per_subscription x active subscriptions is what
     -- a pass normally claims. This only caps a pathological subscription count.
@@ -172,7 +180,7 @@ UPDATE subscription_matches m
 SET claimed_at = now()
 FROM claimable c
 WHERE m.subscription_id = c.subscription_id AND m.job_id = c.job_id
-RETURNING m.subscription_id, m.job_id, m.matched_at, c.user_id, c.channel;
+RETURNING m.subscription_id, m.job_id, m.matched_at, c.user_id, c.channel, c.person_last_sent_at::timestamptz AS person_last_sent_at;
 
 -- name: ExpireStaleSubscriptionMatches :execrows
 -- Take up to batch_size STALE matches out of the pending set by stamping expired_at: a
