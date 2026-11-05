@@ -13,8 +13,13 @@ import (
 // fakeSES records the SendEmail input and returns a configurable error, so the
 // Client adapter is verified without a live AWS call.
 type fakeSES struct {
-	in  *sesv2.SendEmailInput
-	err error
+	in     *sesv2.SendEmailInput
+	err    error
+	setErr error
+}
+
+func (f *fakeSES) GetConfigurationSet(context.Context, *sesv2.GetConfigurationSetInput, ...func(*sesv2.Options)) (*sesv2.GetConfigurationSetOutput, error) {
+	return &sesv2.GetConfigurationSetOutput{}, f.setErr
 }
 
 func (f *fakeSES) SendEmail(_ context.Context, in *sesv2.SendEmailInput, _ ...func(*sesv2.Options)) (*sesv2.SendEmailOutput, error) {
@@ -209,5 +214,18 @@ func TestClient_TracksNothingWithoutBothCampaignAndSet(t *testing.T) {
 				t.Errorf("mail was tracked: set=%v tags=%v", fake.in.ConfigurationSetName, fake.in.EmailTags)
 			}
 		})
+	}
+}
+
+func TestClient_CheckEngagementTracking(t *testing.T) {
+	missing := &fakeSES{setErr: errors.New("not found")}
+	if err := (&Client{ses: missing}).CheckEngagementTracking(context.Background()); err != nil {
+		t.Errorf("no set configured: %v, want nothing to check", err)
+	}
+	if err := (&Client{ses: missing}).WithEngagementTracking("engagement").CheckEngagementTracking(context.Background()); err == nil {
+		t.Error("an unknown set passed the check")
+	}
+	if err := (&Client{ses: &fakeSES{}}).WithEngagementTracking("engagement").CheckEngagementTracking(context.Background()); err != nil {
+		t.Errorf("known set: %v", err)
 	}
 }

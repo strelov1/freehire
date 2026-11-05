@@ -78,7 +78,8 @@ func run() int {
 	}
 	links := emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin)
 	mailer := broadcast.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, links)
-	tracked := broadcast.NewMailer(ses.WithEngagementTracking(cfg.SESEngagementConfigurationSet), cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, links)
+	trackedSES := ses.WithEngagementTracking(cfg.SESEngagementConfigurationSet)
+	tracked := broadcast.NewMailer(trackedSES, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, links)
 	runner := broadcast.New(db.New(pool), tracked, int32(*maxPerRun))
 
 	// A single address, for looking at the letter in a real client. The ledger is
@@ -110,6 +111,12 @@ func run() int {
 		return 0
 	}
 
+	// Before anything goes out: a run records its failures, and a recorded recipient is never
+	// mailed again, so an unknown set would spend the whole audience on rejected sends.
+	if err := trackedSES.CheckEngagementTracking(ctx); err != nil {
+		log.Printf("broadcast: %v", err)
+		return 1
+	}
 	stats, err := runner.Run(ctx, campaign)
 	if err != nil {
 		log.Printf("broadcast: %v", err)

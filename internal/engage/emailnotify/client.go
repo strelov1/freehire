@@ -30,6 +30,7 @@ var ErrNoWayOut = errors.New("emailnotify: a silenceable mail with no unsubscrib
 // in its place. *sesv2.Client satisfies it.
 type sesAPI interface {
 	SendEmail(ctx context.Context, in *sesv2.SendEmailInput, optFns ...func(*sesv2.Options)) (*sesv2.SendEmailOutput, error)
+	GetConfigurationSet(ctx context.Context, in *sesv2.GetConfigurationSetInput, optFns ...func(*sesv2.Options)) (*sesv2.GetConfigurationSetOutput, error)
 }
 
 // Message is one email. It replaced three near-identical send methods — plain,
@@ -122,6 +123,19 @@ type Client struct {
 // campaigns and digests call it; every other worker's client cannot track by construction.
 func (c *Client) WithEngagementTracking(configurationSet string) *Client {
 	return &Client{ses: c.ses, trackingSet: configurationSet}
+}
+
+// CheckEngagementTracking reports whether SES knows the configuration set. A send naming one
+// it does not know is rejected, which would fail a whole audience, so a sender checks once
+// before its first letter. Without a set there is nothing to check.
+func (c *Client) CheckEngagementTracking(ctx context.Context) error {
+	if c.trackingSet == "" {
+		return nil
+	}
+	if _, err := c.ses.GetConfigurationSet(ctx, &sesv2.GetConfigurationSetInput{ConfigurationSetName: aws.String(c.trackingSet)}); err != nil {
+		return fmt.Errorf("emailnotify: configuration set %s: %w", c.trackingSet, err)
+	}
+	return nil
 }
 
 // NewClient builds a Client from AWS config resolved via the default chain

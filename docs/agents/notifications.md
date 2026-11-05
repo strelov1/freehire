@@ -356,7 +356,11 @@ security and application mail cannot pick up an open pixel by accident.
   the same SNS → SQS shape as inbound mail, with no public endpoint to authenticate.
 - **No person in the ledger.** `email_events` holds a message id, campaign, variant, type and time,
   first sighting per message and type. The consumer does not decode the recipient, IP or link.
-- **Retention:** 90 days, then `email_event_daily` counts only.
+- **Retention:** 90 days, then `email_event_daily` counts only. Events for mail sent longer ago
+  than that are dropped, since the sighting that would deduplicate them may be gone.
+- **A set SES does not know is caught before sending.** `CheckEngagementTracking` needs
+  `ses:GetConfigurationSet`. `cmd/broadcast` refuses to start, because recorded failures would
+  spend the audience; `cmd/notify` falls back to untracked mail, because a digest is retried.
 - **Opens overcount.** Apple Mail Privacy Protection and security scanners fetch the pixel without a
   person reading anything, typically soon after delivery. Judge send times by clicks.
 - **Comparing two send times:** run `./broadcast -campaign <name> -half a` at one time and

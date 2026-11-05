@@ -25,21 +25,29 @@ func run() int {
 	defer cleanup()
 	store := db.New(pool)
 
-	var stats emailevents.Stats
-	if queueURL := os.Getenv("EMAIL_EVENTS_QUEUE_URL"); queueURL != "" && cfg.AWSRegion != "" {
-		src, err := emailevents.NewSQSSource(ctx, cfg.AWSRegion, queueURL)
-		if err != nil {
-			log.Printf("email-events: %v", err)
-			return 1
-		}
-		stats, err = emailevents.Drain(ctx, src, store)
-		log.Printf("email-events: recorded=%d ignored=%d failed=%d", stats.Recorded, stats.Ignored, stats.Failed)
-		if err != nil {
-			log.Printf("email-events: %v", err)
-			return 1
-		}
-	}
+	exit := drain(ctx, cfg.AWSRegion, store)
+	// After the drain, and whatever became of it: a queue fault must not hold rows past
+	// the retention the privacy policy promises.
 	if err := emailevents.RollUp(ctx, store, time.Now()); err != nil {
+		log.Printf("email-events: %v", err)
+		return 1
+	}
+	return exit
+}
+
+func drain(ctx context.Context, region string, store emailevents.Store) int {
+	queueURL := os.Getenv("EMAIL_EVENTS_QUEUE_URL")
+	if queueURL == "" || region == "" {
+		return 0
+	}
+	src, err := emailevents.NewSQSSource(ctx, region, queueURL)
+	if err != nil {
+		log.Printf("email-events: %v", err)
+		return 1
+	}
+	stats, err := emailevents.Drain(ctx, src, store, time.Now())
+	log.Printf("email-events: recorded=%d ignored=%d failed=%d", stats.Recorded, stats.Ignored, stats.Failed)
+	if err != nil {
 		log.Printf("email-events: %v", err)
 		return 1
 	}

@@ -29,7 +29,7 @@ func TestDecode_ReadsAnEventBothWrappedAndRaw(t *testing.T) {
 		OccurredAt: pgtype.Timestamptz{Time: time.Date(2026, 11, 10, 15, 30, 0, 0, time.UTC), Valid: true},
 	}
 	for name, body := range map[string]string{"sns": snsWrapped(t, openEvent), "raw": openEvent} {
-		got, err := decode(body)
+		got, _, err := decode(body)
 		if err != nil {
 			t.Fatalf("%s: decode: %v", name, err)
 		}
@@ -44,7 +44,7 @@ func TestDecode_ReadsAnEventBothWrappedAndRaw(t *testing.T) {
 }
 
 func TestDecode_SendFallsOnTheMailTimestamp(t *testing.T) {
-	got, err := decode(`{"eventType":"Send","mail":{"messageId":"m","timestamp":"2026-11-10T14:00:00Z","tags":{"campaign":["c"]}},"send":{}}`)
+	got, _, err := decode(`{"eventType":"Send","mail":{"messageId":"m","timestamp":"2026-11-10T14:00:00Z","tags":{"campaign":["c"]}},"send":{}}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestDecode_IgnoresWhatTheLedgerDoesNotTrack(t *testing.T) {
 		"no campaign tag": `{"eventType":"Open","mail":{"messageId":"m","tags":{}}}`,
 		"untracked type":  `{"eventType":"Rendering Failure","mail":{"messageId":"m","tags":{"campaign":["c"]}}}`,
 	} {
-		if _, err := decode(body); !errors.Is(err, errIgnored) {
+		if _, _, err := decode(body); !errors.Is(err, errIgnored) {
 			t.Errorf("%s: err = %v, want errIgnored", name, err)
 		}
 	}
@@ -105,6 +105,22 @@ func (f *fakeStore) RollUpExpiredEmailEvents(_ context.Context, arg db.RollUpExp
 	return n, nil
 }
 
+// drainTime is shortly after openEvent's mail went out.
+var drainTime = time.Date(2026, 11, 11, 0, 0, 0, 0, time.UTC)
+
+func TestDrain_DropsEventsForMailPastRetention(t *testing.T) {
+	src := &fakeSource{batches: [][]Received{{{Body: openEvent, AckHandle: "late"}}}}
+	store := &fakeStore{}
+
+	stats, err := Drain(context.Background(), src, store, drainTime.Add(Retention))
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if stats.Ignored != 1 || len(store.recorded) != 0 || len(src.acked) != 1 {
+		t.Errorf("stats = %+v, recorded %d, acked %v; want it dropped and acked", stats, len(store.recorded), src.acked)
+	}
+}
+
 func TestDrain_RecordsAndAcksEverythingItCannotUseEither(t *testing.T) {
 	src := &fakeSource{batches: [][]Received{{
 		{Body: openEvent, AckHandle: "good"},
@@ -113,7 +129,7 @@ func TestDrain_RecordsAndAcksEverythingItCannotUseEither(t *testing.T) {
 	}}}
 	store := &fakeStore{}
 
-	stats, err := Drain(context.Background(), src, store)
+	stats, err := Drain(context.Background(), src, store, drainTime)
 	if err != nil {
 		t.Fatalf("Drain: %v", err)
 	}
@@ -127,7 +143,7 @@ func TestDrain_RecordsAndAcksEverythingItCannotUseEither(t *testing.T) {
 
 func TestDrain_LeavesAFailedWriteOnTheQueue(t *testing.T) {
 	src := &fakeSource{batches: [][]Received{{{Body: openEvent, AckHandle: "good"}}}}
-	if _, err := Drain(context.Background(), src, &fakeStore{err: errors.New("db down")}); err == nil {
+	if _, err := Drain(context.Background(), src, &fakeStore{err: errors.New("db down")}, drainTime); err == nil {
 		t.Fatal("Drain: want an error")
 	}
 	if len(src.acked) != 0 {

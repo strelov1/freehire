@@ -70,13 +70,14 @@ type occurrence struct {
 // errIgnored marks a well-formed record the ledger has no use for.
 var errIgnored = errors.New("emailevents: not a tracked event")
 
-// decode unwraps the SNS envelope, when there is one, and reads the SES event in it.
-func decode(body string) (db.RecordEmailEventParams, error) {
+// decode unwraps the SNS envelope, when there is one, and reads the SES event in it. Besides
+// the row it returns when the mail was sent, which the row does not keep.
+func decode(body string) (db.RecordEmailEventParams, time.Time, error) {
 	var envelope struct {
 		Message string `json:"Message"`
 	}
 	if err := json.Unmarshal([]byte(body), &envelope); err != nil {
-		return db.RecordEmailEventParams{}, fmt.Errorf("emailevents: envelope: %w", err)
+		return db.RecordEmailEventParams{}, time.Time{}, fmt.Errorf("emailevents: envelope: %w", err)
 	}
 	payload := body
 	if envelope.Message != "" {
@@ -84,14 +85,14 @@ func decode(body string) (db.RecordEmailEventParams, error) {
 	}
 	var e sesEvent
 	if err := json.Unmarshal([]byte(payload), &e); err != nil {
-		return db.RecordEmailEventParams{}, fmt.Errorf("emailevents: event: %w", err)
+		return db.RecordEmailEventParams{}, time.Time{}, fmt.Errorf("emailevents: event: %w", err)
 	}
 	if e.Mail.MessageID == "" {
-		return db.RecordEmailEventParams{}, errors.New("emailevents: event names no message")
+		return db.RecordEmailEventParams{}, time.Time{}, errors.New("emailevents: event names no message")
 	}
 	campaign := first(e.Mail.Tags["campaign"])
 	if campaign == "" {
-		return db.RecordEmailEventParams{}, errIgnored
+		return db.RecordEmailEventParams{}, time.Time{}, errIgnored
 	}
 
 	// A send has no timestamp of its own; it falls on the mail's, as any other event does
@@ -101,7 +102,7 @@ func decode(body string) (db.RecordEmailEventParams, error) {
 		"send": {}, "delivery": e.Delivery, "open": e.Open, "click": e.Click, "bounce": e.Bounce, "complaint": e.Complaint,
 	}[eventType]
 	if !tracked {
-		return db.RecordEmailEventParams{}, errIgnored
+		return db.RecordEmailEventParams{}, time.Time{}, errIgnored
 	}
 	at := seen.Timestamp
 	if at.IsZero() {
@@ -113,7 +114,7 @@ func decode(body string) (db.RecordEmailEventParams, error) {
 		Campaign:   campaign,
 		Variant:    first(e.Mail.Tags["variant"]),
 		OccurredAt: pgtype.Timestamptz{Time: at, Valid: true},
-	}, nil
+	}, e.Mail.Timestamp, nil
 }
 
 func first(values []string) string {
@@ -132,10 +133,14 @@ type Stats struct {
 
 // Drain moves the queue into the ledger until it is empty or the per-run bound is reached.
 //
+// Events for mail sent longer ago than Retention are dropped. The first sighting that would
+// deduplicate them may already be rolled up, and no row of a mail that young has been, so
+// this keeps "one per message and type" true in the daily counts too.
+//
 // A record that cannot be decoded is acked: it will read the same on every redelivery. A
 // failed insert is not, so SQS redelivers it, and it ends the run, because the next write is
 // going to the same unavailable database.
-func Drain(ctx context.Context, src Source, store Store) (Stats, error) {
+func Drain(ctx context.Context, src Source, store Store, now time.Time) (Stats, error) {
 	var stats Stats
 	for stats.Recorded+stats.Ignored+stats.Failed < maxDrainPerRun {
 		batch, err := src.Receive(ctx)
@@ -146,9 +151,9 @@ func Drain(ctx context.Context, src Source, store Store) (Stats, error) {
 			return stats, nil
 		}
 		for _, m := range batch {
-			event, err := decode(m.Body)
+			event, sentAt, err := decode(m.Body)
 			switch {
-			case errors.Is(err, errIgnored):
+			case errors.Is(err, errIgnored), err == nil && sentAt.Before(now.Add(-Retention)):
 				stats.Ignored++
 			case err != nil:
 				log.Printf("emailevents: dropping a record: %v", err)
