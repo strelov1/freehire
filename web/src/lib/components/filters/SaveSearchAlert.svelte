@@ -60,6 +60,9 @@
   });
 
   const matched = $derived(matchedSavedSearch(query, savedSearches.items));
+  // A search edited down to one that no longer narrows keeps its subscriptions, so its
+  // controls stay: they are how the subscriber turns the alert off. Only a new one is out.
+  const subscribed = $derived(notifications.subscriptions.some((s) => s.saved_search_id === matched?.id));
 
   // Save the current filters (auth-gated). Standalone: no alert channel involved — once
   // it lands, `matched` flips and the channel toggles / manage link render.
@@ -99,8 +102,8 @@
       <Bookmark class={saveBig ? 'size-[1.15rem]' : 'size-4'} aria-hidden="true" />
       {busy ? 'Saving…' : 'Save filter'}
     </Button>
-  {:else if !queryNarrows(query)}
-    <p class="text-sm text-muted-foreground">Add another filter to get alerts: a skill match alone covers every job.</p>
+  {:else if !queryNarrows(query) && !subscribed}
+    <p class="text-sm text-muted-foreground">Add a filter to get alerts: this search covers every job.</p>
   {:else if alerts === 'manage'}
     <Button
       variant="secondary"

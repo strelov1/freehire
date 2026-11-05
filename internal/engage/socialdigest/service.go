@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"slices"
 	"strings"
 	"time"
@@ -86,12 +87,14 @@ func (s *Service) Dispatch(ctx context.Context, d Digest, publishers []Publisher
 			continue
 		}
 		if done {
+			log.Printf("social-digest: %s already has %s, skipping", p.Name(), d.Day.Format(DayLayout))
 			continue
 		}
 		if err := p.Publish(ctx, d); err != nil {
 			failures = append(failures, fmt.Errorf("%s: publish: %w", p.Name(), err))
 			continue
 		}
+		log.Printf("social-digest: published %d postings for %s to %s", len(d.Items), d.Day.Format(DayLayout), p.Name())
 		// Written immediately after the publish, and deliberately not before it. The
 		// two cannot be one transaction across an HTTP boundary, so one of the orders
 		// has to lose: recording first risks a day that is silently never published,

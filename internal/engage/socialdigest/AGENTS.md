@@ -39,7 +39,7 @@ already publishes.
 
   **Two places decide the day, and this is only the second.** What "latest" means is
   settled in SQL: `LatestJobViewDay` excludes the day in PROGRESS (`WHERE day < (now()
-  AT TIME ZONE 'utc')::date`), because the rollup reaches into the live log and lands a
+  AT TIME ZONE 'utc')::date`), because a rotated file spans midnight and lands a
   few dozen rows on the current day — so a plain `max(day)` reads a stub whose best
   posting has one view. Nothing clears `MinPageUniques`, the run reports a quiet day
   and exits 0, and the finished day beside it is lost for good. That cost three digests
