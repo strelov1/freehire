@@ -281,10 +281,13 @@ func withoutFailed(scope []collections.Collection, failed []resolveFailure) []co
 // for us-h1b-sponsor: uscis.gov's Akamai answers 403 to a direct request, to one through
 // SOURCES_PROXY_URL, to the rotating pool, and even from a residential IP (2026-11-05). Only
 // a Chrome TLS fingerprint from a proxy exit IP passes, which is the Scrapling tier's http
-// mode with its proxy. Membership is opt-in; every other collection stays on the direct
-// client.
+// mode with its proxy. ca-lmia-employer joined the same day: open.canada.ca rate-limits per
+// IP and answered 429 to about half of a slow, retried sequence from one address, while the
+// proxy's fresh exit IP per request got 6 of 6. Membership is opt-in; every other collection
+// stays on the direct client.
 var proxiedCollectionSlugs = map[string]struct{}{
-	"us-h1b-sponsor": {},
+	"us-h1b-sponsor":   {},
+	"ca-lmia-employer": {},
 }
 
 // clientFor picks direct or proxied for a collection. A nil proxied — meaning no

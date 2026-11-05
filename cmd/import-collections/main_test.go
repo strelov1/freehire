@@ -403,9 +403,12 @@ func TestClientFor_UsesDirectWhenNoProxyConfigured(t *testing.T) {
 }
 
 func TestClientFor_UsesProxiedForAnAllowlistedSlug(t *testing.T) {
+	// Both registers refuse a plain client from our hosts (see proxiedCollectionSlugs).
 	direct, proxied := &http.Client{}, &http.Client{}
-	if got := clientFor("us-h1b-sponsor", direct, proxied); got != proxied {
-		t.Error("clientFor did not route the allowlisted slug through the proxy")
+	for _, slug := range []string{"us-h1b-sponsor", "ca-lmia-employer"} {
+		if got := clientFor(slug, direct, proxied); got != proxied {
+			t.Errorf("clientFor did not route %s through the proxy", slug)
+		}
 	}
 }
 
