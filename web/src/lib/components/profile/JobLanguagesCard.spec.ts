@@ -27,11 +27,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('job language preferences', () => {
-  it('adds another language and updates the profile-derived alert after saving', async () => {
+  it('supports click-only selection and updates the profile-derived alert after saving', async () => {
     const changed = vi.fn();
     render(JobLanguagesCard, { onProfileChanged: changed });
     await fireEvent.focus(screen.getByRole('combobox'));
-    await fireEvent.mouseDown(await screen.findByRole('option', { name: 'Russian' }));
+    await fireEvent.click(await screen.findByRole('option', { name: 'Russian' }));
     await waitFor(() => expect(mock.update).toHaveBeenCalledWith(['en', 'ru']));
     await waitFor(() => expect(changed).toHaveBeenCalledOnce());
   });
@@ -49,7 +49,7 @@ describe('job language preferences', () => {
     const changed = vi.fn();
     render(JobLanguagesCard, { onProfileChanged: changed });
     await fireEvent.focus(screen.getByRole('combobox'));
-    await fireEvent.mouseDown(await screen.findByRole('option', { name: 'Russian' }));
+    await fireEvent.click(await screen.findByRole('option', { name: 'Russian' }));
     await screen.findByText(/Couldn.t save|Could not save/);
     expect(changed).not.toHaveBeenCalled();
   });

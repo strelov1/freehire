@@ -40,6 +40,7 @@
     pick: (option) => toggle(option.value),
   });
 
+  /** Resolve a posting-language code in the account locale. */
   function languageLabel(code: string): string {
     return languageNames.of(code) ?? dynamicLabel('posting_language', code);
   }
@@ -50,6 +51,7 @@
     return region && /^[A-Z]{2}$/.test(region) ? region.toLowerCase() : undefined;
   }
 
+  /** Load the available choices from the unfiltered live job-language facet. */
   async function loadLanguages() {
     loadFailed = false;
     loading = true;
@@ -66,6 +68,7 @@
   }
   onMount(() => { void loadLanguages(); });
 
+  /** Persist one selection change, then refresh profile-derived search alerts. */
   function toggle(value: string) {
     if (status.saving) return;
     nav.close();
@@ -128,7 +131,14 @@
             tabindex="-1"
             aria-selected={selected.includes(option.value)}
             onmouseenter={() => (nav.active = i)}
-            onmousedown={(event) => { event.preventDefault(); toggle(option.value); }}
+            onmousedown={(event) => event.preventDefault()}
+            onclick={() => toggle(option.value)}
+            onkeydown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggle(option.value);
+              }
+            }}
             class="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent {nav.active === i ? 'bg-accent' : ''}"
           >
             <span aria-hidden="true">
