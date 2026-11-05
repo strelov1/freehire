@@ -83,6 +83,8 @@ type RunOptions struct {
 	BatchSize    int
 	LeaseSeconds int
 	MaxAttempts  int
+	// Stop, when set, is asked before each wave of Drain; true ends the run cleanly.
+	Stop func() bool
 	// CallTimeout bounds a single batch's (or fallback item's) index operation; 0
 	// means no per-call timeout.
 	CallTimeout time.Duration

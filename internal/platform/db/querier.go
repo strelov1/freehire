@@ -2085,6 +2085,11 @@ type Querier interface {
 	// and leaving it out is what keeps the rebuild's lookup map to the rows that need it. The
 	// LATERAL tags each member's countries/regions/cities into one unnested stream (no cartesian
 	// across the three arrays, no repeat self-join), and blanks are dropped by the FILTER.
+	//
+	// The DISTINCT runs in a subquery, ahead of the aggregate, for what it costs: array_agg(DISTINCT)
+	// sorts every unnested value, about 160M rows on prod against a few million distinct ones, and
+	// that sort spilled to disk for over four hours of a rebuild (2026-11-05). A hash aggregate over
+	// the distinct values does the same work in memory, and the answer is unchanged.
 	DuplicateClosureGeoAll(ctx context.Context) ([]DuplicateClosureGeoAllRow, error)
 	// The duplicate-closure geography union for a SPECIFIC set of owner ids, so an incremental
 	// index push can widen a whole wave's rows in one query instead of one call per job.
