@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"regexp"
 
-	"github.com/strelov1/freehire/internal/dict/normalize"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/platform/externalid"
 )
@@ -38,6 +37,18 @@ func (dover) Source() string { return "dover" }
 // this resolver files the posting under the client record the detail response carries (see
 // Resolve), so employer naming cannot drift from the link's spelling.
 var doverJobPath = regexp.MustCompile(`^/[^/]+/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(?:/[^/]+)?$`)
+
+// doverOrgPath is the same shape doverJobPath matches; doverOrg re-captures the Org segment
+// from an already-matched path for the existence lookup.
+var doverOrgPath = regexp.MustCompile(`^/([^/]+)/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?:/[^/]+)?$`)
+
+// doverOrg extracts the Org segment of a matched jobs.dover.com path.
+func doverOrg(path string) string {
+	if m := doverOrgPath.FindStringSubmatch(path); len(m) == 2 {
+		return m[1]
+	}
+	return ""
+}
 
 // statusCoder is satisfied by sources.StatusError without this package importing its type:
 // the same local-interface shape sources itself uses for callers it imports (see
@@ -86,18 +97,26 @@ func (d dover) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 		return sources.Job{}, false, nil // not a live vacancy — skip, as the board crawl drops it
 	}
 
-	// The canonical board slug the contribution flow files this company under comes from the
-	// slug lookup (the detail response names the company but not its slug); both spellings of
-	// the name answer with the same lower-case slug (verified live 2026-11-05). An empty slug
-	// or client name fails the resolve rather than storing a ":<id>" external id that dedups
-	// against nothing — the absence of an answer is not an answer.
-	var slugResp struct {
-		Slug string `json:"slug"`
-	}
+	// The slug lookup is the EXISTENCE check: the jobs.dover.com shell answers any slug and
+	// any pair, so nothing on the host proves the Org segment names a real company — the
+	// careers API does. The link's Org spelling is also the spelling the contribution flow
+	// files the board under and the crawl adapter namespaces postings by (verbatim capture,
+	// pipeline jobIdentity = Namespace(board, id)), so the resolver namespaces by that SAME
+	// spelling — resolving through the client's own slug instead would fork the dedup key
+	// and file one posting twice. An empty client name or an unresolvable slug is a skip: a
+	// posting with no verifiable company is not a vacancy to store.
 	if resp.ClientName == "" {
 		return sources.Job{}, false, nil // a posting with no client identity is not storable
 	}
-	if err := d.http.GetJSON(ctx, "https://app.dover.com/api/v1/careers-page-slug/"+url.PathEscape(resp.ClientName), &slugResp); err != nil {
+	org := doverOrg(u.Path)
+	var slugResp struct {
+		Slug string `json:"slug"`
+	}
+	if err := d.http.GetJSON(ctx, "https://app.dover.com/api/v1/careers-page-slug/"+url.PathEscape(org), &slugResp); err != nil {
+		var se statusCoder
+		if errors.As(err, &se) && se.StatusCode() == 404 {
+			return sources.Job{}, false, nil // the shell's slug names no company — not a retryable failure
+		}
 		return sources.Job{}, false, err
 	}
 	if slugResp.Slug == "" {
@@ -105,19 +124,7 @@ func (d dover) Resolve(ctx context.Context, raw string) (sources.Job, bool, erro
 	}
 
 	job := resp.ToJob()
-	// Namespaced by the slug the CRAWL path namespaces by: the contribution flow stores the
-	// board as the link spelled it (verbatim capture), the adapter crawls that spelling, and
-	// the pipeline derives each posting's dedup key from the board string — so the identity
-	// here must be normalize.CompanySlug of the same name the board row is filed under.
-	// normalize.CompanySlug lower-cases and drops legal-form tails, which for Dover clients
-	// ("Deepspatial") lands on the platform's own lower-case slug — the spelling this
-	// lookup returns, asserted against it below so a future divergence fails loudly here
-	// instead of silently forking the dedup key.
-	namespaced := normalize.CompanySlug(resp.ClientName)
-	if namespaced != slugResp.Slug {
-		return sources.Job{}, false, fmt.Errorf("dover: client %q slug %q disagrees with its own name", resp.ClientName, slugResp.Slug)
-	}
-	job.ExternalID = externalid.Namespace(namespaced, id)
+	job.ExternalID = externalid.Namespace(org, id)
 	job.URL = raw
 	return job, true, nil
 }

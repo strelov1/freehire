@@ -45,8 +45,11 @@ func TestDoverResolvesCompanyFromClientRecord(t *testing.T) {
 	if job.Company != "Deepspatial" {
 		t.Errorf("Company = %q, want the client record's name", job.Company)
 	}
-	if job.ExternalID != "deepspatial:a5546acf-45c3-44ff-bedd-a4314fd0f37d" {
-		t.Errorf("ExternalID = %q, want slug-namespaced posting uuid", job.ExternalID)
+	// Namespaced by the LINK's Org spelling — the exact spelling the contribution flow files
+	// the board under and the crawl pipeline namespaces rows by (Namespace(board, id)) — so
+	// a link-imported row and a crawl of that board dedup to one posting.
+	if job.ExternalID != "Deepspatial:a5546acf-45c3-44ff-bedd-a4314fd0f37d" {
+		t.Errorf("ExternalID = %q, want org-spelling-namespaced posting uuid", job.ExternalID)
 	}
 	if job.URL != link {
 		t.Errorf("URL = %q, want the submitted link kept", job.URL)
@@ -126,11 +129,11 @@ func TestDoverDeclinesMalformedUUID(t *testing.T) {
 	}
 }
 
-// TestDoverRejectsEmptyClientIdentityAndSlugMismatch pins the identity gates: an empty
+// TestDoverRejectsEmptyClientIdentityAndUnknownSlug pins the identity gates: an empty
 // client_name or an empty slug from the lookup is a skip (never a ":<id>" external id or a
-// blank company), and a slug that disagrees with normalize.CompanySlug of the client name
-// fails loudly rather than silently forking the dedup key the crawl path uses.
-func TestDoverRejectsEmptyClientIdentityAndSlugMismatch(t *testing.T) {
+// blank company), and a slug the careers API does not resolve (the shell serves any Org
+// spelling) is likewise a skip, not a retriable error.
+func TestDoverRejectsEmptyClientIdentityAndUnknownSlug(t *testing.T) {
 	const link = "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d"
 	const api = "inbound/application-portal-job/a5546acf-45c3-44ff-bedd-a4314fd0f37d"
 
@@ -148,10 +151,10 @@ func TestDoverRejectsEmptyClientIdentityAndSlugMismatch(t *testing.T) {
 		t.Errorf("empty slug: ok=%v err=%v, want ok=false, nil error", ok, err)
 	}
 
-	mismatch := (&fakeClient{}).
-		route(api, doverDetailJSON, "").
-		route("careers-page-slug/Deepspatial", `{"id":"1aeeba55-65e0-4803-b70f-fac7ca8a20c7","slug":"different-company","name":"Deepspatial"}`, "")
-	if _, ok, err := NewDover(mismatch).Resolve(context.Background(), link); err == nil || ok {
-		t.Errorf("slug mismatch: ok=%v err=%v, want ok=false, non-nil error", ok, err)
+	unknownSlug := &fakeClient{}
+	unknownSlug.routeErr("careers-page-slug/", &statusErr{code: 404})
+	unknownSlug.route(api, doverDetailJSON, "")
+	if _, ok, err := NewDover(unknownSlug).Resolve(context.Background(), link); err != nil || ok {
+		t.Errorf("unknown slug: ok=%v err=%v, want ok=false, nil error", ok, err)
 	}
 }
