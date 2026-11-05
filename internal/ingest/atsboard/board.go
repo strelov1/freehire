@@ -515,6 +515,18 @@ var atsBoards = []struct{ host, source, mode string }{
 	// allowedFirstSegments) — app.dover.com is Dover's whole product SPA, not a dedicated
 	// boards host, so a deny-list mode would mint a board out of every unrelated page it serves.
 	{"app.dover.com", "dover", modeAllowedFirstSegment},
+	// jobs.dover.com is Dover's public job-board host, served by the same search-builder SPA the
+	// apply pages are: a company's board is addressed at /<Org>/<uuid>, where the first segment
+	// is the company's Dover slug — the SAME identity the app.dover.com /apply and /jobs paths
+	// use — and the UUID-shaped second segment is only the shape that proves the link names a
+	// board at all (jobs.dover.com/Deepspatial/a5546acf-…, found in the board-submission queue
+	// 2026-11-05). That uuid may be the client id OR a posting id — the shell serves any pair
+	// to the browser — so it is verified where it is provable, at the API (see the adapter), and
+	// the BOARD is the slug alone: folding the uuid in would mint one board per posting and
+	// strand listings under ids the careers API does not resolve (the a5546acf link itself is a
+	// posting link: its client is 1aeeba55-…). A bare /<Org> is a marketing shell served for ANY
+	// slug and stays declined (see pathPatternBoards).
+	{"jobs.dover.com", "dover", modePathPattern},
 	// HigherMe: app.higherme.com is the whole product too (sign-in, the employer console, the
 	// candidate profile), and its posting URL /jobs/<id> names a POSTING, not a brand — the
 	// brand behind a posting is only in the posting's API record. Only the brand's career page,
@@ -602,6 +614,12 @@ type pathPattern struct {
 	path, reject, paramPattern  *regexp.Regexp
 	param, listing              string
 	hostBoard, tenantHost, fold bool
+	// exactHost pins the entry to the apex host itself: matchHost suffix-matches every
+	// subdomain of a dotted apex, and an entry whose pattern reads the WHOLE host as one
+	// company's board (jobs.dover.com) must not fire for a tenant-looking subdomain —
+	// foo.jobs.dover.com is not Dover's board host, and recognizing it would mint a board out
+	// of a hostname this platform never serves.
+	exactHost bool
 }
 
 // pathPatternBoards holds, per modePathPattern host entry, the path pattern whose one capture
@@ -621,7 +639,35 @@ type pathPattern struct {
 //     match, held to paramPattern after folding to lower case.
 //   - fold lower-cases the capture: the one exception to the verbatim rule, for a platform whose
 //     catalogue holds every board lower-case.
+//
+// doverBoardPath is jobs.dover.com's board shape: "/<Org slug>/<posting uuid>" with at most
+// one optional trailing slug segment. The slug gate is [A-Za-z0-9][A-Za-z0-9-]* (no empty
+// segment, no leading/trailing-hyphen fuzziness worth honoring), the uuid gate is the exact
+// canonical 8-4-4-4-12 hex spelling — the same shape atsboard's own guid-style gates use
+// elsewhere — and the pattern is anchored at BOTH ends: a deeper path (/…/<uuid>/a/b) is not
+// a board link the platform serves, so it is declined rather than captured with junk. The
+// capture is the SLUG alone (see the host row and the jobs.dover.com entry below).
+var doverBoardPath = regexp.MustCompile(`^/([A-Za-z0-9][A-Za-z0-9-]*)/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?:/[A-Za-z0-9][A-Za-z0-9-]*)?$`)
+
 var pathPatternBoards = map[string]pathPattern{
+	// Dover's public job-board host (see the host row above): the BOARD is the first segment
+	// alone — the company's Dover slug, the same spelling the app.dover.com apply and listing
+	// paths use — captured only when a UUID-shaped second segment proves the link names a
+	// board. The uuid itself is NOT the board and NOT assumed to be the client id: on the
+	// submitted link it is a posting id (careers-page-slug/Deepspatial → client 1aeeba55-…;
+	// careers-page/a5546acf-…/jobs 404s; both verified live 2026-11-05), so folding it in would
+	// mint one board per posting and strand the crawl under an id the API does not resolve.
+	// What the shell cannot prove is the slug's EXISTENCE — it answers any slug — so existence
+	// is verified where it is provable, at the API, exactly as every other candidate board is.
+	// A bare /<Org> and the vendor's /startup-jobs listing carry no UUID segment and are
+	// declined by the pattern; a trailing posting slug is left out of the capture, and the
+	// canonical collapses to the /<Org> board address, so a posting link and its listing map to
+	// one board.
+	"jobs.dover.com": {
+		path:      doverBoardPath,
+		listing:   "/%s",
+		exactHost: true,
+	},
 	// ClearCompany, which has served HRM Direct's tenants since ~2026-10-21
 	// (internal/ingest/sources/hrmdirect.go): the career page is /<board>, a posting is that page
 	// with ?jobId=<guid>, and the old <board>.hrmdirect.com redirects through /<board>/redirect.
@@ -1244,6 +1290,19 @@ func Recognize(rawURL string) (source, board, canonical string, ok bool) {
 		p, configured := pathPatternBoards[apex]
 		if !configured || p.path == nil || p.listing == "" {
 			return "", "", "", false
+		}
+		if p.exactHost && !strings.EqualFold(u.Hostname(), apex) {
+			// u.Hostname(), not the www.-trimmed host (case-folded, as hostnames are
+			// case-insensitive): the gate pins the entry to the exact host the platform
+			// serves, and www.jobs.dover.com is NOT that host — Dover does not
+			// serve boards there, so recognizing it would mint boards off a hostname the shell
+			// cannot back. (The trim is fine for every other mode, whose apexes are the SURFACE
+			// family — www.<board>.teamtailor.com is a real tenant host — but an exact-host entry
+			// names one literal host.)
+			return "", "", "", false
+		}
+		if p.exactHost {
+			u.Host = apex // one board, one canonical: the link's host spelling is not identity
 		}
 		if m := p.path.FindStringSubmatch(u.Path); len(m) == 2 && m[1] != "" {
 			board = m[1]
