@@ -255,3 +255,40 @@ func TestDoverNoExtraTextWithoutEquityOrVisa(t *testing.T) {
 		t.Errorf("Description = %q, want no equity/visa text when neither fact is stated", job.Description)
 	}
 }
+
+// TestDoverFetchNewUsesPairBoardUUIDDirectly pins the jobs.dover.com board shape: a board
+// harvested off the public job-board host arrives as "<Org>/<client uuid>", and the adapter
+// must list under that uuid DIRECTLY — no careers-page-slug lookup, which answers 404 for a
+// pair (and the marketing shell behind it serves any slug, so the lookup would prove nothing).
+func TestDoverFetchNewUsesPairBoardUUIDDirectly(t *testing.T) {
+	fake := &routedHTTP{}
+	fake.route("careers-page/a5546acf-45c3-44ff-bedd-a4314fd0f37d/jobs", doverListingPage(doverJobPublished, ""))
+	fake.route("inbound/application-portal-job/f9fd123e-e7ff-4bcc-a16a-bb8c47e591b5", doverDetail("f9fd123e-e7ff-4bcc-a16a-bb8c47e591b5"))
+
+	jobs, err := NewDover(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", Company: "Deepspatial"}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 job, got %d: %+v", len(jobs), jobs)
+	}
+	// No careers-page-slug route is registered: had the adapter resolved the pair's slug, the
+	// lookup would have failed the crawl instead of returning the listing.
+}
+
+// TestDoverFetchNewPlainSlugStillResolves pins the other half: an app.dover.com board keeps
+// resolving its slug, including one that happens to look like a bare uuid without a pair slash.
+func TestDoverFetchNewPlainSlugStillResolves(t *testing.T) {
+	fake := &routedHTTP{}
+	fake.route("careers-page-slug/qompyl", doverSlugResp)
+	fake.route("careers-page/72c2afbf-36e4-4eec-8d78-5d2600498018/jobs", doverListingPage(doverJobPublished, ""))
+	fake.route("inbound/application-portal-job/f9fd123e-e7ff-4bcc-a16a-bb8c47e591b5", doverDetail("f9fd123e-e7ff-4bcc-a16a-bb8c47e591b5"))
+
+	jobs, err := NewDover(fake).(HydratingSource).FetchNew(context.Background(), CompanyEntry{Board: "qompyl", Company: "Qompyl"}, func(string) bool { return false })
+	if err != nil {
+		t.Fatalf("FetchNew: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("want 1 job, got %d: %+v", len(jobs), jobs)
+	}
+}

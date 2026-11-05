@@ -595,6 +595,14 @@ func TestRecognize(t *testing.T) {
 		{"greenhouse ai opt-out form carries no board", "http://app4.greenhouse.io/ai_opt_out_request/job_post/6178374004/ai_opt_out", "", "", "", false},
 		{"greenhouse ai opt-out form bare", "https://my.greenhouse.io/ai_opt_out_request", "", "", "", false},
 
+		// jobs.dover.com: the public job-board host, same dover source. Only the two-segment
+		// /<Org>/<client-uuid> shape names a board; the canonical collapses to that two-segment
+		// board address, so a posting link and the listing map to one board.
+		{"dover job board link", "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", "dover", "Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", true},
+		{"dover job board with posting path", "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d/some-posting-slug", "dover", "Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", true},
+		{"dover job board bare org is a marketing shell", "https://jobs.dover.com/Deepspatial", "", "", "", false},
+		{"dover job board vendor listing carries no tenant", "https://jobs.dover.com/startup-jobs", "", "", "", false},
+		{"dover job board non-uuid second segment declined", "https://jobs.dover.com/Deepspatial/not-a-uuid", "", "", "", false},
 		// Dover: app.dover.com is the whole product SPA (dashboard, /crm, /docs/api, login), not a
 		// dedicated boards host, so only an ALLOWED leading segment ("apply"/"jobs") carries a
 		// board — everything else is declined outright, the inverse of every deny-list
