@@ -101,9 +101,9 @@ func readOnly() *mcp.ToolAnnotations {
 
 func newServer(r Reader, origin string) *mcp.Server {
 	server := mcp.NewServer(mcpapp.Identity("freehire-ojcp", ojcp.Version, origin), nil)
-	mcpapp.Instrument(server, "freehire-ojcp", ojcp.Version)
+	mcpapp.ObserveServer(server, "ojcp")
 
-	mcp.AddTool(server, &mcp.Tool{
+	mcpapp.AddObservedTool(server, "ojcp", &mcp.Tool{
 		Name:         toolSearchJobs,
 		Annotations:  readOnly(),
 		OutputSchema: searchJobsOutputSchema,
@@ -119,7 +119,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return nil, out, toolError(err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	mcpapp.AddObservedTool(server, "ojcp", &mcp.Tool{
 		Name:         toolGetJobDetail,
 		Annotations:  readOnly(),
 		OutputSchema: jobDetailOutputSchema,
@@ -129,7 +129,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return nil, out, toolError(err)
 	})
 
-	mcp.AddTool(server, &mcp.Tool{
+	mcpapp.AddObservedTool(server, "ojcp", &mcp.Tool{
 		Name:        toolGetEmployerContext,
 		Annotations: readOnly(),
 		Description: "Read what is known about an employer, by the ojcp_employer_id a " +
