@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://www.coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        Follow the root AGENTS.md and the applicable directory AGENTS.md files.
+        Review connected code, callers, and tests before reporting a finding.
+        Prioritize correctness, security, data integrity, and behavior under the
+        load documented in the repository, then performance and simplicity.
+        Every finding must identify a concrete input or reachable situation,
+        explain the resulting failure or maintenance cost, and point to the
+        responsible lines. Verify assumptions against the current code.
+        Propose the smallest idiomatic fix that fully addresses the problem.
+        Flag risky behavior without a meaningful test that would catch its
+        failure. Prefer behavior tests over tests that mirror implementation.
+        Report duplication or unnecessary abstractions only with a concrete
+        example and a simpler replacement. Keep cleanup tied to the change.
+        Treat documented shortcut limits as deliberate decisions unless the
+        expected load already exceeds them. Skip style-only preferences and
+        speculative concerns without evidence.
+        Explain findings in plain English: what the code does, what goes wrong,
+        how to fix it, and what happens if it remains unchanged.
