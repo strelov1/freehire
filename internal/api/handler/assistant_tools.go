@@ -160,9 +160,18 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 			if err != nil {
 				return nil, err
 			}
+			facet := strings.TrimSpace(in.Facet)
+			attrs := facetAttributes()
+			if !full && facet != "" {
+				// Count only the named facet: one attribute costs Meili a fraction of all of them.
+				if !listableFacet(facet) {
+					return nil, fmt.Errorf("unknown facet %q; valid facets are: %s", facet, strings.Join(listableFacets(), ", "))
+				}
+				attrs = facetAttributes(facet)
+			}
 			res, err := h.search.facets.FacetCounts(ctx, search.FacetParams{
 				Filter: search.FilterFromValues(vals),
-				Facets: facetAttributes(),
+				Facets: attrs,
 			})
 			if err != nil {
 				return nil, err
@@ -171,38 +180,55 @@ func (h *assistantHandlers) facets(full bool) assistant.Tool {
 			if full {
 				return view, nil
 			}
-			return facetIndex(view, strings.TrimSpace(in.Facet), in.Contains)
+			return facetIndex(view, facet, in.Contains), nil
 		},
 	}
 }
 
+// listableFacet reports whether the MCP facets can list a facet's values by name: every
+// public facet but the company one, whose distribution is millions long.
+func listableFacet(name string) bool {
+	_, isString := search.StringFacets[name]
+	_, isExtra := facetExtraParams[name]
+	return (isString || isExtra) && name != companyFacetParam
+}
+
+// listableFacets is every name listableFacet accepts, sorted so the error a model reads is stable.
+func listableFacets() []string {
+	names := make([]string, 0, len(search.StringFacets)+len(facetExtraParams))
+	for name := range search.StringFacets {
+		if listableFacet(name) {
+			names = append(names, name)
+		}
+	}
+	for name := range facetExtraParams {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // facetIndex is the MCP facets answer: the filter names with how many values each has, or
-// the named filter's values matching contains.
-func facetIndex(view facetPayload, facet, contains string) (map[string]any, error) {
+// the named filter's values matching contains — or its range, for a numeric filter.
+func facetIndex(view facetPayload, facet, contains string) map[string]any {
 	if facet == "" {
 		sizes := make(map[string]int, len(view.Facets))
 		for name, dist := range view.Facets {
 			sizes[name] = len(dist)
 		}
-		return map[string]any{"total": view.Total, "filters": sizes, "stats": view.Stats}, nil
+		return map[string]any{"total": view.Total, "filters": sizes, "stats": view.Stats}
 	}
-	dist, ok := view.Facets[facet]
-	if !ok {
-		names := make([]string, 0, len(view.Facets))
-		for name := range view.Facets {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		return nil, fmt.Errorf("unknown facet %q; valid facets are: %s", facet, strings.Join(names, ", "))
+	if stat, ok := view.Stats[facet]; ok {
+		return map[string]any{"total": view.Total, "facet": facet, "stats": stat}
 	}
 	match := mcpapp.ContainsMatcher(facet, contains)
-	values := make(map[string]int64, len(dist))
-	for value, count := range dist {
+	values := map[string]int64{}
+	for value, count := range view.Facets[facet] {
 		if match(value) {
 			values[value] = count
 		}
 	}
-	return map[string]any{"total": view.Total, "facet": facet, "values": values}, nil
+	return map[string]any{"total": view.Total, "facet": facet, "values": values}
 }
 
 // searchJobsTool searches the catalogue with a keyword and facet filters, hitting

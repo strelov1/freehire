@@ -267,6 +267,7 @@ func TestMCPFacetsNamesTheFiltersAndListsOneOnRequest(t *testing.T) {
 			"skills":               {"go": 40, "golang-migrate": 3, "python": 30},
 			"enrichment.seniority": {"senior": 60},
 		},
+		Stats: map[string]search.FacetStat{"enrichment.salary_min": {Min: 1000, Max: 9000}},
 	}}
 	a := assistantWith(&searchHandlers{facets: fc}, nil)
 	tool := toolByName(t, mcpKeyTools(a, testMCPOrigin), "facets")
@@ -287,8 +288,12 @@ func TestMCPFacetsNamesTheFiltersAndListsOneOnRequest(t *testing.T) {
 		t.Errorf("index = %s, want no values without a facet", payload)
 	}
 
+	fc.gotP = nil
 	if got := run(`{"facet":"skills"}`)["values"].(map[string]int64); len(got) != 3 {
 		t.Errorf("facet=skills values = %v, want all three", got)
+	}
+	if asked := fc.gotP[0].Facets; len(asked) != 1 || asked[0] != "skills" {
+		t.Errorf("facet=skills asked the index for %v, want only the skills attribute", asked)
 	}
 	// "golang" is an alias of "go": the alias finds the value the search filters by.
 	got := run(`{"facet":"skills","contains":"golang"}`)["values"].(map[string]int64)
@@ -296,6 +301,16 @@ func TestMCPFacetsNamesTheFiltersAndListsOneOnRequest(t *testing.T) {
 		t.Errorf("contains=golang values = %v, want go (by alias) and golang-migrate (by text)", got)
 	}
 
+	if got := run(`{"facet":"salary_min"}`)["stats"].(search.FacetStat); got.Max != 9000 {
+		t.Errorf("facet=salary_min stats = %+v, want the numeric range", got)
+	}
+
+	for _, unlisted := range []string{"vibe", "company_slug"} {
+		_, err := tool.Run(context.Background(), 3, json.RawMessage(`{"facet":"`+unlisted+`"}`))
+		if err == nil || !strings.Contains(err.Error(), unlisted) || !strings.Contains(err.Error(), "salary_min") {
+			t.Errorf("facet=%s error = %v, want it refused, naming it and the valid ones", unlisted, err)
+		}
+	}
 	if _, err := tool.Run(context.Background(), 3, json.RawMessage(`{"facet":"vibe"}`)); err == nil ||
 		!strings.Contains(err.Error(), "vibe") || !strings.Contains(err.Error(), "skills") {
 		t.Errorf("error = %v, want an unknown facet refused, naming it and the valid ones", err)
