@@ -76,10 +76,11 @@ provider's review. The guide includes custom-connection instructions.
 Saving a job or marking it applied changes your tracking board. Neither action
 sends anything to an employer.
 
-If you explicitly ask for an automatic application, freehire can prepare one for
-a supported employer form. You review the prepared application before approving
-submission. This workflow needs account access and is subject to your plan and
-allowance.
+For automatic applications, connect with OAuth and enable **Let connected agents
+apply for me** under **Account → Integrations → API keys**. Then explicitly ask
+your assistant to prepare an application on a supported employer form. You review
+the prepared application before approving submission. This workflow is subject to
+your plan and allowance.
 
 The account tools also let an agent suggest a missing skill, specialization or
 industry for the dictionary, and report a failed operation. An empty search alone

@@ -16,7 +16,7 @@ export const AGENTS_FAQ: FaqItem[] = [
   },
   {
     question: 'Can my assistant submit applications for me?',
-    answer: 'Saving a job or marking it applied updates your tracking board and does not submit anything to an employer. With OAuth, you can explicitly ask the assistant to prepare an automatic application on a supported employer form. You review the prepared application before approving submission. Availability depends on your plan and allowance. The browser extension can also fill a form for you to review and send.',
+    answer: 'Saving a job or marking it applied updates your tracking board and does not submit anything to an employer. For automatic applications, connect with OAuth and enable “Let connected agents apply for me” under Account → Integrations → API keys. Then explicitly ask the assistant to prepare an application on a supported employer form. You review the prepared application before approving submission. Availability depends on your plan and allowance. The browser extension can also fill a form for you to review and send.',
   },
   {
     question: 'Does each option use the same tracking board?',

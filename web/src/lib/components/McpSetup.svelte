@@ -62,6 +62,7 @@
         note: 'One click, search with no sign-in',
       },
       steps: [
+        'The directory listing above and a custom connection are separate install options. Custom connections require your ChatGPT workspace to allow adding MCP servers and using the tools you need.',
         'Open Plugins and choose Add, then Add custom MCP server.',
         'Name it freehire and paste the address.',
         'Choose OAuth or no authentication, then connect with or without an account.',
