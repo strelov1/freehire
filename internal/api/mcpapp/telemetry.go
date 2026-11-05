@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -81,6 +82,8 @@ func metadataForCall(req *mcp.CallToolRequest) *callMetadata {
 	return out
 }
 
+var clientFamilies = []string{"chatgpt", "claude", "cursor", "codex", "vscode", "zed"}
+
 func clientFamily(names ...string) string {
 	fallback := "unknown"
 	for _, name := range names {
@@ -95,9 +98,10 @@ func clientFamily(names ...string) string {
 			return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 		})
 		for _, word := range words {
-			switch word {
-			case "chatgpt", "claude", "cursor", "codex", "vscode", "zed":
-				return word
+			// Return the literal, never word: that shares memory with the header, which
+			// fasthttp reuses for the next request, and this value becomes a metric label.
+			if i := slices.Index(clientFamilies, word); i >= 0 {
+				return clientFamilies[i]
 			}
 		}
 	}
