@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -138,6 +139,20 @@ type fakeStore struct {
 	// deliver with no row in hand and still observe what the send path does
 	// about it afterwards.
 	recordNotificationErrOnce error
+
+	// searched records every MarkSubscriptionsSearched call; the stamp is also
+	// written onto the matching active rows, so a second pass reads it back.
+	searched []db.MarkSubscriptionsSearchedParams
+}
+
+func (s *fakeStore) MarkSubscriptionsSearched(_ context.Context, a db.MarkSubscriptionsSearchedParams) error {
+	s.searched = append(s.searched, a)
+	for i := range s.active {
+		if slices.Contains(a.Ids, s.active[i].ID) {
+			s.active[i].LastSearchedAt = a.SearchedAt
+		}
+	}
+	return nil
 }
 
 func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSubscriptionsRow, error) {

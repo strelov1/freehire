@@ -52,12 +52,32 @@ WHERE id = $1 AND user_id = $2;
 -- account never opened the settings page, which is not the same as opting out. Same
 -- reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
 -- inner join — see migration 0153 for why one column could not answer both.
-SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query
+--
+-- It also carries the delivery-timing context (the same COALESCE defaults as
+-- GetSubscriptionForDelivery and ClaimSubscriptionMatches) and the two stamps the
+-- worker uses to skip a search whose result could not be sent this pass — see
+-- notify.searchDue.
+SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query,
+       s.last_digest_sent_at, s.last_searched_at,
+       u.timezone AS timezone,
+       COALESCE(ns.digest_frequency, 'interval')::text AS digest_frequency,
+       COALESCE(ns.digest_interval_hours, 1)::int AS digest_interval_hours,
+       ns.digest_time AS digest_time,
+       ns.quiet_hours_start AS quiet_hours_start,
+       ns.quiet_hours_end AS quiet_hours_end
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
+JOIN users u ON u.id = s.user_id
 LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
 WHERE s.active
   AND (s.channel <> 'email' OR COALESCE(ns.alerts_email_enabled, true));
+
+-- name: MarkSubscriptionsSearched :exec
+-- Stamp the subscriptions whose saved search the matching stage just ran and
+-- recorded. searched_at is the instant the pass STARTED, not now(): the next
+-- search pages back to it, so a posting indexed while this pass ran is covered.
+UPDATE subscriptions SET last_searched_at = sqlc.arg(searched_at)
+WHERE id = ANY(sqlc.arg(ids)::bigint[]);
 
 -- name: RecordSubscriptionMatches :execrows
 -- Record that a batch of (subscription, job) pairs matched, one round trip for
