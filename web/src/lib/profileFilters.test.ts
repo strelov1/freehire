@@ -466,3 +466,17 @@ describe('filtersFromProfile remote-anywhere flattening', () => {
     expect(p.has('work_mode_remote_anywhere')).toBe(false);
   });
 });
+
+describe('profile job languages', () => {
+  it('includes either chosen language in the shared feed and alert query', () => {
+    const p = filtersToParams(filtersFromProfile({ ...mkProfile([], []), job_languages: ['en', 'ru'] }));
+    expect(p.get('posting_language')).toBe('en,ru');
+  });
+
+  it('keeps every language when no preference is set or the choice is cleared', () => {
+    for (const job_languages of [undefined, []]) {
+      const p = filtersToParams(filtersFromProfile({ ...mkProfile([], []), job_languages }));
+      expect(p.has('posting_language')).toBe(false);
+    }
+  });
+});

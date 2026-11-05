@@ -72,6 +72,7 @@ class ProfileStore extends UserResource<UserProfile | null> {
     excludedSources: string[],
     excludedCompanies: string[],
     location: LocationPreferences | null,
+    jobLanguages: string[] = this.#profile?.job_languages ?? [],
   ): Promise<UserProfile> {
     const row = await api.saveProfile(
       specializations,
@@ -81,6 +82,7 @@ class ProfileStore extends UserResource<UserProfile | null> {
       excludedSources,
       excludedCompanies,
       location,
+      jobLanguages,
     );
     this.#profile = row;
     this.markLoaded();
@@ -179,6 +181,15 @@ class ProfileStore extends UserResource<UserProfile | null> {
     });
   }
 
+  /** Save preferred posting languages through the same queue as other profile edits. */
+  updateJobLanguages(jobLanguages: string[]): Promise<UserProfile> {
+    return this.#queue(() => {
+      const current = this.#profile;
+      if (!current) return Promise.reject(new Error('No profile to edit.'));
+      return this.#saveFrom(current, { job_languages: jobLanguages });
+    });
+  }
+
   /** Re-save the profile with an edited location-preferences block — what the Location
    *  view writes on every change. Rejects when there is no profile. */
   updateLocation(location: LocationPreferences | null): Promise<UserProfile> {
@@ -228,6 +239,7 @@ class ProfileStore extends UserResource<UserProfile | null> {
         | 'excluded_sources'
         | 'excluded_companies'
         | 'location_preferences'
+        | 'job_languages'
       >
     >,
   ): Promise<UserProfile> {
@@ -240,6 +252,7 @@ class ProfileStore extends UserResource<UserProfile | null> {
       next.excluded_sources,
       next.excluded_companies,
       next.location_preferences,
+      next.job_languages ?? [],
     );
   }
 }

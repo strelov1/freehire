@@ -1809,6 +1809,7 @@ type UserProfile struct {
 	Seniorities         []string           `json:"seniorities"`
 	ExcludedSources     []string           `json:"excluded_sources"`
 	ExcludedCompanies   []string           `json:"excluded_companies"`
+	JobLanguages        []string           `json:"job_languages"`
 }
 
 type UserPushToken struct {
