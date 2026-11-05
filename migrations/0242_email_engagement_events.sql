@@ -14,6 +14,14 @@ CREATE TABLE email_events (
 -- The retention pass walks rows by age.
 CREATE INDEX email_events_occurred_at_idx ON email_events (occurred_at);
 
+-- Which side of a split test an account is on for a campaign. Hashed with the campaign so
+-- the same people are not always on the same side, and stable, so a capped batch continued
+-- later stays on its side. The one place the rule lives: the audience queries and any later
+-- analysis all read it from here.
+CREATE FUNCTION broadcast_half(campaign text, user_id bigint) RETURNS text
+LANGUAGE sql IMMUTABLE PARALLEL SAFE
+AS $$ SELECT CASE WHEN hashint8extended(user_id, hashtext(campaign)) < 0 THEN 'a' ELSE 'b' END $$;
+
 -- What outlives the 90-day retention of email_events: counts with no message in them.
 CREATE TABLE email_event_daily (
     day      date   NOT NULL,

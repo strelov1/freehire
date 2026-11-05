@@ -145,6 +145,7 @@ func (c *Client) Send(ctx context.Context, m Message) error {
 	if err != nil {
 		return err
 	}
+	c.track(in, m)
 	if _, err := c.ses.SendEmail(ctx, in); err != nil {
 		return fmt.Errorf("emailnotify: ses send to %s: %w", m.To, err)
 	}
@@ -160,11 +161,9 @@ func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 		if err != nil {
 			return nil, err
 		}
-		in := &sesv2.SendEmailInput{
+		return &sesv2.SendEmailInput{
 			Content: &types.EmailContent{Raw: &types.RawMessage{Data: raw}},
-		}
-		c.track(in, m)
-		return in, nil
+		}, nil
 	}
 	in := &sesv2.SendEmailInput{
 		FromEmailAddress: aws.String(m.From),
@@ -183,7 +182,6 @@ func (c *Client) input(m Message) (*sesv2.SendEmailInput, error) {
 	if m.ReplyTo != "" {
 		in.ReplyToAddresses = []string{m.ReplyTo}
 	}
-	c.track(in, m)
 	return in, nil
 }
 

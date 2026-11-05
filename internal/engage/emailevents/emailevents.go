@@ -94,24 +94,16 @@ func decode(body string) (db.RecordEmailEventParams, error) {
 		return db.RecordEmailEventParams{}, errIgnored
 	}
 
-	var at time.Time
+	// A send has no timestamp of its own; it falls on the mail's, as any other event does
+	// if it arrives without one.
 	eventType := strings.ToLower(e.EventType)
-	switch eventType {
-	case "send":
-		at = e.Mail.Timestamp
-	case "delivery":
-		at = e.Delivery.Timestamp
-	case "open":
-		at = e.Open.Timestamp
-	case "click":
-		at = e.Click.Timestamp
-	case "bounce":
-		at = e.Bounce.Timestamp
-	case "complaint":
-		at = e.Complaint.Timestamp
-	default:
+	seen, tracked := map[string]occurrence{
+		"send": {}, "delivery": e.Delivery, "open": e.Open, "click": e.Click, "bounce": e.Bounce, "complaint": e.Complaint,
+	}[eventType]
+	if !tracked {
 		return db.RecordEmailEventParams{}, errIgnored
 	}
+	at := seen.Timestamp
 	if at.IsZero() {
 		at = e.Mail.Timestamp
 	}

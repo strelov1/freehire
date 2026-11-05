@@ -59,6 +59,7 @@ func run() int {
 		return 2
 	}
 	campaign, ok := broadcast.Lookup(*campaignName)
+	campaign.Half = *half
 	if !ok {
 		log.Printf("broadcast: unknown campaign %q; known: %s",
 			*campaignName, strings.Join(broadcast.Names(), ", "))
@@ -75,11 +76,14 @@ func run() int {
 		log.Printf("broadcast: ses: %v", err)
 		return 1
 	}
-	mailer := broadcast.NewMailer(ses.WithEngagementTracking(cfg.SESEngagementConfigurationSet), cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin))
-	runner := broadcast.New(db.New(pool), mailer, int32(*maxPerRun)).OnHalf(*half)
+	links := emailprefs.NewLinks(cfg.JWTSecret, cfg.FrontendOrigin)
+	mailer := broadcast.NewMailer(ses, cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, links)
+	tracked := broadcast.NewMailer(ses.WithEngagementTracking(cfg.SESEngagementConfigurationSet), cfg.NotifyEmailFrom, cfg.OnboardingReplyTo, cfg.FrontendOrigin, links)
+	runner := broadcast.New(db.New(pool), tracked, int32(*maxPerRun))
 
 	// A single address, for looking at the letter in a real client. The ledger is
-	// left alone: inspecting a campaign must not consume anybody's one delivery.
+	// left alone: inspecting a campaign must not consume anybody's one delivery, and it
+	// goes out untracked, so it cannot count toward the campaign's rates.
 	if *only != "" {
 		// The mail carries a real unsubscribe link for a real account, so -to needs
 		// to say whose. Sending a campaign whose only working control belongs to
@@ -88,7 +92,7 @@ func run() int {
 			log.Print("broadcast: -to also needs -to-user, the account id the address belongs to")
 			return 2
 		}
-		if err := mailer.Send(ctx, campaign, *half, *onlyUser, *only); err != nil {
+		if err := mailer.Send(ctx, campaign, *onlyUser, *only); err != nil {
 			log.Printf("broadcast: %v", err)
 			return 1
 		}

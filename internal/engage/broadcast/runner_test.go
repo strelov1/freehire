@@ -143,7 +143,7 @@ func TestSend_LinksBackThroughTheConfiguredOrigin(t *testing.T) {
 		sender := &fakeSender{}
 		m := broadcast.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://preview.test", testLinks("https://preview.test"))
 		c := campaign(t, name)
-		if err := m.Send(context.Background(), c, "", 1, "someone@example.com"); err != nil {
+		if err := m.Send(context.Background(), c, 1, "someone@example.com"); err != nil {
 			t.Fatalf("Send %s: %v", c.Name, err)
 		}
 
@@ -168,7 +168,7 @@ func TestSend_LinksBackThroughTheConfiguredOrigin(t *testing.T) {
 func TestSend_InterviewBuddiesLinksTheLanding(t *testing.T) {
 	sender := &fakeSender{}
 	m := broadcast.NewMailer(sender, "notifications@freehire.me", "ilya@example.test", "https://preview.test", testLinks("https://preview.test"))
-	if err := m.Send(context.Background(), campaign(t, "interview-buddies"), "", 1, "someone@example.com"); err != nil {
+	if err := m.Send(context.Background(), campaign(t, "interview-buddies"), 1, "someone@example.com"); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	sent := sender.sent[0]
@@ -193,8 +193,9 @@ func TestRun_TagsMailWithCampaignAndLimitsToHalf(t *testing.T) {
 	store := &fakeStore{ids: []int64{1}}
 	sender := &fakeSender{}
 	c := campaign(t, "discord-invite")
+	c.Half = "b"
 
-	if _, err := newRunner(store, sender, 10).OnHalf("b").Run(context.Background(), c); err != nil {
+	if _, err := newRunner(store, sender, 10).Run(context.Background(), c); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if store.lastQuery.Half != "b" {

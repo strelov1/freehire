@@ -25,13 +25,14 @@ func run() int {
 	defer cleanup()
 	store := db.New(pool)
 
+	var stats emailevents.Stats
 	if queueURL := os.Getenv("EMAIL_EVENTS_QUEUE_URL"); queueURL != "" && cfg.AWSRegion != "" {
 		src, err := emailevents.NewSQSSource(ctx, cfg.AWSRegion, queueURL)
 		if err != nil {
 			log.Printf("email-events: %v", err)
 			return 1
 		}
-		stats, err := emailevents.Drain(ctx, src, store)
+		stats, err = emailevents.Drain(ctx, src, store)
 		log.Printf("email-events: recorded=%d ignored=%d failed=%d", stats.Recorded, stats.Ignored, stats.Failed)
 		if err != nil {
 			log.Printf("email-events: %v", err)
@@ -42,5 +43,5 @@ func run() int {
 		log.Printf("email-events: %v", err)
 		return 1
 	}
-	return 0
+	return worker.ExitCode(stats.Failed, 0)
 }

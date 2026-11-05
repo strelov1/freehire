@@ -19,8 +19,7 @@ WHERE u.email_verified
       SELECT 1 FROM broadcast_emails be
       WHERE be.user_id = u.id AND be.campaign = $1
   )
-  AND ($2::text = '' OR
-       (hashtextextended($1::text || ':' || u.id::text, 0) & 1) = CASE $2::text WHEN 'a' THEN 0 ELSE 1 END)
+  AND $2::text IN ('', broadcast_half($1::text, u.id))
 `
 
 type CountBroadcastCandidatesParams struct {
@@ -48,8 +47,7 @@ WHERE u.email_verified
       SELECT 1 FROM broadcast_emails be
       WHERE be.user_id = u.id AND be.campaign = $1
   )
-  AND ($2::text = '' OR
-       (hashtextextended($1::text || ':' || u.id::text, 0) & 1) = CASE $2::text WHEN 'a' THEN 0 ELSE 1 END)
+  AND $2::text IN ('', broadcast_half($1::text, u.id))
 ORDER BY u.created_at
 LIMIT $3::int
 `
@@ -67,9 +65,7 @@ type ListBroadcastCandidatesRow struct {
 
 // Audience reader and ledger writer for one-off campaigns (internal/engage/broadcast).
 // Everyone who can be mailed and has not received this campaign yet. A non-empty half ('a' or
-// 'b') narrows that to one side of a split: hashed with the campaign's name, so the same
-// people are not always on the same side, and stable within a campaign, so a capped batch
-// continued later stays on its side.
+// 'b') narrows that to one side of a split test.
 //
 // No signup window, unlike the onboarding queries: a campaign is addressed to the
 // whole audience by definition, and the launch it announces matters as much to

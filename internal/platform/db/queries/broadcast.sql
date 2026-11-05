@@ -2,9 +2,7 @@
 
 -- name: ListBroadcastCandidates :many
 -- Everyone who can be mailed and has not received this campaign yet. A non-empty half ('a' or
--- 'b') narrows that to one side of a split: hashed with the campaign's name, so the same
--- people are not always on the same side, and stable within a campaign, so a capped batch
--- continued later stays on its side.
+-- 'b') narrows that to one side of a split test.
 --
 -- No signup window, unlike the onboarding queries: a campaign is addressed to the
 -- whole audience by definition, and the launch it announces matters as much to
@@ -31,8 +29,7 @@ WHERE u.email_verified
       SELECT 1 FROM broadcast_emails be
       WHERE be.user_id = u.id AND be.campaign = sqlc.arg(campaign)
   )
-  AND (sqlc.arg(half)::text = '' OR
-       (hashtextextended(sqlc.arg(campaign)::text || ':' || u.id::text, 0) & 1) = CASE sqlc.arg(half)::text WHEN 'a' THEN 0 ELSE 1 END)
+  AND sqlc.arg(half)::text IN ('', broadcast_half(sqlc.arg(campaign)::text, u.id))
 ORDER BY u.created_at
 LIMIT sqlc.arg(max_rows)::int;
 
@@ -48,8 +45,7 @@ WHERE u.email_verified
       SELECT 1 FROM broadcast_emails be
       WHERE be.user_id = u.id AND be.campaign = sqlc.arg(campaign)
   )
-  AND (sqlc.arg(half)::text = '' OR
-       (hashtextextended(sqlc.arg(campaign)::text || ':' || u.id::text, 0) & 1) = CASE sqlc.arg(half)::text WHEN 'a' THEN 0 ELSE 1 END);
+  AND sqlc.arg(half)::text IN ('', broadcast_half(sqlc.arg(campaign)::text, u.id));
 
 -- name: RecordBroadcastEmail :exec
 -- Closes out one (user, campaign) whether or not the send worked.

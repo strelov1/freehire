@@ -177,7 +177,7 @@ func campaignSample(name, title, campaignName, baseURL string) (Sample, error) {
 			return fmt.Errorf("campaign %q is not registered", campaignName)
 		}
 		return broadcast.NewMailer(c, "notifications@freehire.me", "ilya@freehire.me", baseURL, previewLinks(baseURL)).
-			Send(context.Background(), campaign, "", previewUserID, "someone@example.com")
+			Send(context.Background(), campaign, previewUserID, "someone@example.com")
 	})
 }
 
