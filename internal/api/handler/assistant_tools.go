@@ -218,8 +218,13 @@ func facetIndex(view facetPayload, facet, contains string) map[string]any {
 		}
 		return map[string]any{"total": view.Total, "filters": sizes, "stats": view.Stats}
 	}
-	if stat, ok := view.Stats[facet]; ok {
-		return map[string]any{"total": view.Total, "facet": facet, "stats": stat}
+	if facetExtraParams[facet].statOnly {
+		// A numeric facet has a range, not values; none when no matching posting states it.
+		var stats *search.FacetStat
+		if stat, ok := view.Stats[facet]; ok {
+			stats = &stat
+		}
+		return map[string]any{"total": view.Total, "facet": facet, "stats": stats}
 	}
 	match := mcpapp.ContainsMatcher(facet, contains)
 	values := map[string]int64{}

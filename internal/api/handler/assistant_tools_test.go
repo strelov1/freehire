@@ -301,8 +301,12 @@ func TestMCPFacetsNamesTheFiltersAndListsOneOnRequest(t *testing.T) {
 		t.Errorf("contains=golang values = %v, want go (by alias) and golang-migrate (by text)", got)
 	}
 
-	if got := run(`{"facet":"salary_min"}`)["stats"].(search.FacetStat); got.Max != 9000 {
+	if got := run(`{"facet":"salary_min"}`)["stats"].(*search.FacetStat); got == nil || got.Max != 9000 {
 		t.Errorf("facet=salary_min stats = %+v, want the numeric range", got)
+	}
+	// No matching posting states a salary_max: still a numeric answer, with no range.
+	if got := run(`{"facet":"salary_max"}`); got["stats"].(*search.FacetStat) != nil || got["values"] != nil {
+		t.Errorf("facet=salary_max = %v, want stats with no range and no values", got)
 	}
 
 	for _, unlisted := range []string{"vibe", "company_slug"} {
