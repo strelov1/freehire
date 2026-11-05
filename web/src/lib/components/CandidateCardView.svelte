@@ -41,10 +41,11 @@ right. The panel follows the card in the DOM so a narrow screen reads the card f
       the point, so no "name" is passed to Avatar — a member without a photo falls through
       to the same plain silhouette, never a colour/initials avatar, which would invent an
       identity marker this card is not supposed to carry. -->
-      <Avatar src={photoSrc} size="lg" class="size-14 shrink-0 bg-secondary" fallbackIcon={personIcon} />
-      {#snippet personIcon()}
-        <User class="size-6" aria-hidden="true" />
-      {/snippet}
+      <Avatar src={photoSrc} size="lg" class="size-14 shrink-0 bg-secondary">
+        {#snippet fallbackIcon()}
+          <User class="size-6" aria-hidden="true" />
+        {/snippet}
+      </Avatar>
       <div class="flex min-w-0 flex-1 flex-col gap-1">
         <h1 class="text-2xl font-semibold tracking-tight">{heading}</h1>
         <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -74,7 +75,7 @@ right. The panel follows the card in the DOM so a narrow screen reads the card f
   </div>
 
   {#if card.skills.length}
-    <aside class="order-last w-full shrink-0 lg:order-first lg:w-80">
+    <aside class="w-full shrink-0 lg:order-first lg:w-80">
       <div class="sticky top-20 flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
         <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skills</p>
         <div class="flex flex-wrap gap-1.5">
