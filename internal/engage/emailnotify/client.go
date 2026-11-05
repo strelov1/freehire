@@ -71,7 +71,7 @@ type Message struct {
 	Attachments []Attachment
 
 	// Campaign names the letter for engagement tracking. Empty, as on anything a person
-	// is waiting for, the mail goes out with no open pixel and no rewritten links. Set
+	// is waiting for, the mail goes out with no rewritten links. Set
 	// only on campaigns and digests. SES restricts tag values to ASCII letters, digits,
 	// '_', '-' and '.'.
 	Campaign string
@@ -120,7 +120,7 @@ type Client struct {
 }
 
 // WithEngagementTracking returns the Client with the SES configuration set that
-// publishes opens, clicks, deliveries, bounces and complaints. Only the workers sending
+// publishes clicks, deliveries, bounces and complaints. Only the workers sending
 // campaigns and digests call it; every other worker's client cannot track by construction.
 func (c *Client) WithEngagementTracking(configurationSet string) *Client {
 	return &Client{ses: c.ses, trackingSet: configurationSet}
