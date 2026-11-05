@@ -248,3 +248,30 @@ func run() int {
 ## Saying what a run did
 
 A worker's duration and exit status say that it ran, not whether it was worth running or where the time went. `worker.ReportWork(processed, changed)` and `worker.Stage(name)` publish that into the same per-run metrics file (`freehire_worker_last_run_items_{processed,changed}`, `freehire_worker_stage_seconds`). Both are optional: a worker that calls neither publishes none of these series. The freehire-ops **Freehire Scheduled Jobs** dashboard reads them, beside what each run cost the host. Use them in any long or heavy worker.
+
+## Analytics reader
+
+`AnalyticsPool` is the separate, read-only connection used by the statistics
+workers. With `ANALYTICS_DATABASE_URL` configured it requires a physical standby
+and waits up to one minute for a primary WAL fence before beginning work. An
+unavailable, paused or incorrectly configured replica fails the run; it never
+fails over to primary reads. Without this variable, local development opens a
+separate read-only primary session. The writer remains unchanged. Reader queries
+are bounded to thirty minutes, idle transactions to one minute, and two pool
+connections. Rollups compute their complete results before opening the primary
+publication transaction; failures preserve the previous published snapshot.
+
+The analytics standby needs `hot_standby_feedback=on` to protect active
+aggregates from primary vacuum cleanup. Statements retain tuples only for their
+own bounded read transaction; do not hold one snapshot across the entire run.
+Keep replay delay bounded and monitor replica lag and snapshot freshness:
+repeated recovery conflicts must fail the worker and alert on stale results.
+Production service units must require the analytics environment file. An unset
+URL logs a warning and uses the development reader on the primary.
+
+Company/day aggregates are materialized before primary publication so slow
+analytics reads cannot pin the primary publication transaction. Size worker
+memory for the retained history and enforce a service memory limit; an exhausted
+reader leaves the previous snapshot intact. If this dataset exceeds that budget,
+spool the computed snapshot before publication rather than streaming a long
+standby query inside the primary transaction.

@@ -63,14 +63,6 @@ UPDATE companies SET
 WHERE slug = $1
 RETURNING feedback_count, feedback_rating_avg;
 
--- name: CountRecentCompanyFeedback :one
--- How many new reviews (new company, or a new category on an already-reviewed
--- company) this user has left since `since` — the rate-limit check backing
--- companyfeedback.Service.checkRate (mirrors community.CountRecentThreads). An
--- edit-by-resubmit never inserts a new row (the ON CONFLICT DO UPDATE branch
--- leaves created_at untouched), so this only grows on genuinely new rows.
-SELECT count(*) FROM company_feedback WHERE user_id = $1 AND created_at >= $2;
-
 -- name: GetCompanyFeedbackSlug :one
 -- The company_slug for a review id, read (unlocked) BEFORE HideCompanyFeedback so
 -- Service.Hide can take LockCompanyForVote before it touches the feedback row —

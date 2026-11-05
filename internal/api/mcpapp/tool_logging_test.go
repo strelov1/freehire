@@ -132,10 +132,13 @@ func TestToolLogsSpanActualExecutionAndExcludePayloads(t *testing.T) {
 				t.Fatal("missing execution duration")
 			}
 			_, _ = session.CallTool(t.Context(), &mcp.CallToolParams{Name: private})
-			select {
-			case line := <-records:
-				t.Fatalf("unregistered tool produced a log: %s", line)
-			default:
+			unknownStart, unknownFinish := nextToolLog(t, records), nextToolLog(t, records)
+			if unknownStart["tool"] != "unknown" || unknownFinish["tool"] != "unknown" || unknownFinish["outcome"] != "rejected" {
+				t.Fatalf("unknown tool was not safely classified: %v", unknownFinish)
+			}
+			raw, _ := json.Marshal([]map[string]any{unknownStart, unknownFinish})
+			if strings.Contains(string(raw), private) {
+				t.Fatalf("unregistered tool name leaked: %s", raw)
 			}
 			for _, record := range []map[string]any{start, finish} {
 				raw, _ := json.Marshal(record)

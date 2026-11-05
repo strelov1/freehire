@@ -122,3 +122,29 @@ func TestDrainReapsOnceAcrossWaves(t *testing.T) {
 		t.Fatalf("reap calls=%v, pending=%d", store.reapCalls, len(store.pending))
 	}
 }
+
+// A rebuild reaching its bulk load has to stop a run already working through a backlog.
+func TestDrainStopsBetweenWavesWhenAsked(t *testing.T) {
+	var waves int
+	store := queuedIndexStore(1, 2, 3, 4, 5, 6)
+	runner := Runner{Store: store, Indexer: indexBatchFunc(func(context.Context, []db.Job) error {
+		waves++
+		return nil
+	})}
+	deletions := DeletionRunner{Store: newFakeDeleteStore(), Deleter: deleteBatchFunc(func(context.Context, []int64) error {
+		return nil
+	})}
+	opts := deleteOptions()
+	opts.MaxPerRun = 0
+	opts.Stop = func() bool { return waves >= 1 }
+	indexed, _, err := Drain(context.Background(), runner, deletions, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if waves != 1 || indexed.Claimed == 0 {
+		t.Fatalf("waves = %d claimed = %d, want one wave before stopping", waves, indexed.Claimed)
+	}
+	if len(store.pending) == 0 {
+		t.Fatal("what was not reached must stay queued")
+	}
+}

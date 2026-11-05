@@ -1,0 +1,92 @@
+---
+title: One MCP connection for search and your freehire account
+date: 2026-11-05
+summary: 'Public search and personal tools now share one freehire MCP address. Search without an account, then connect with OAuth to save jobs, track applications and manage alerts.'
+type: changelog
+tags:
+  - mcp
+  - agents
+  - api
+draft: false
+---
+
+Search 4.9 million unique open jobs from your AI assistant, then save the ones
+worth pursuing. freehire now uses one hosted MCP address for public search and
+personal tools:
+
+```text
+https://freehire.me/api/v1/mcp
+```
+
+You can ask your assistant for remote Go jobs, look up an employer or compare
+salary ranges without signing in. When you want to save a shortlist or read your
+tracked jobs, connect your freehire account through OAuth. The server address
+stays the same.
+
+Previously, setup asked you to choose between a public connector and a separate
+account connector. That choice made a simple request awkward: find some jobs,
+then save the ones worth pursuing. A single connection now supports both parts.
+
+The [catalogue snapshot](https://freehire.me/api/v1/stats/catalog) on 5 November
+2026 contains 4,990,891 unique open jobs, 684,916 company profiles, 437 sources
+and 178 ATS platforms. These are catalogue figures, not a promise that every
+company currently has an open role.
+
+## Search first, connect your account when you need it
+
+Public tools search jobs and employers, read postings, check recorded posting
+availability and return salary and hiring statistics. They need no freehire
+account or API key.
+
+After you approve OAuth access, your assistant can read your profile and tracking
+board, save jobs, update application stages and manage job alerts. Those changes
+appear in the same account you use on the website. You can revoke the connection
+from **Connected devices** in your account.
+
+For example, start with:
+
+> Find remote backend Go roles in Europe.
+
+Then ask:
+
+> Save the best three to my board.
+
+Your assistant needs account access for the second request. If it does not open
+sign-in automatically, use its authentication control. You keep the same server.
+
+## The same address in Claude, ChatGPT and coding agents
+
+The [MCP setup guide](/mcp) has instructions for each assistant. For Claude Code:
+
+```sh
+claude mcp add --transport http freehire https://freehire.me/api/v1/mcp
+```
+
+When you want personal tools, run `claude mcp login freehire`. In Codex, add the
+same URL with `codex mcp add freehire --url https://freehire.me/api/v1/mcp`, then
+run `codex mcp login freehire` to connect your account. Approve access in your
+browser. You do not need to copy a token into the configuration.
+
+ChatGPT supports public search and account access through the same Freehire
+connection. Tool availability in a directory listing also depends on the
+provider's review. The guide includes custom-connection instructions.
+
+## Tracking and sending an application are different actions
+
+Saving a job or marking it applied changes your tracking board. Neither action
+sends anything to an employer.
+
+For automatic applications, connect with OAuth and enable **Let connected agents
+apply for me** under **Account → Integrations → API keys**. Then explicitly ask
+your assistant to prepare an application on a supported employer form. You review
+the prepared application before approving submission. This workflow is subject to
+your plan and allowance.
+
+The account tools also let an agent suggest a missing skill, specialization or
+industry for the dictionary, and report a failed operation. An empty search alone
+is not evidence that a dictionary term is missing. Problem reports should omit
+secrets and personal documents.
+
+Existing `/api/v1/mcp/account` connections remain supported during migration.
+Use the unified address for new connections. You do not need to remove a working
+connection just to continue searching.

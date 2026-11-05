@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
@@ -26,15 +25,7 @@ type Settings struct {
 	DatabaseURL     string
 	FrontendOrigin  string
 
-	// PublicAnonLimits selects the anonymous public-read budgets: "" keeps each route's
-	// previous per-minute budget, "strict" applies the shared 120/min + 2,000/day per IP
-	// (openspec/changes/commercial-api-paid-keys). Any other value fails Validate — a typo
-	// here would otherwise look exactly like a deliberate "keep the old limits".
-	PublicAnonLimits string
-	// VerifiedBotSecret is the value a Cloudflare Transform Rule puts in X-FH-Verified-Bot for
-	// a request Cloudflare verified as a known bot; such a request skips the anonymous
-	// public-read budgets. Empty disables the exemption.
-	VerifiedBotSecret string
+	AuthIntrospectionSecret string
 
 	// JWT settings for the auth surface. JWTSecret has no default: it is read
 	// as-is and the server fails fast when it is empty (see cmd/server). Only
@@ -107,7 +98,7 @@ type Settings struct {
 	MeiliURL string
 	MeiliKey string
 
-	// RedisURL backs the shared rate limiter (internal/api/ratelimit). Unlike Meili,
+	// RedisURL backs shared application caches. Unlike Meili,
 	// Redis is a required dependency — there is no optional/disabled mode — so
 	// this only has a localhost default, the same posture as DatabaseURL.
 	RedisURL string
@@ -237,12 +228,6 @@ type Settings struct {
 	// another that is not reversible by walking the address space, and a hash that only looks
 	// anonymous is worse than no count at all.
 	TracerLinkSalt string
-
-	// PostHog backs MCP analytics for the MCP servers (one $mcp_tool_call per tool call).
-	// Optional: an empty PostHogProjectToken disables it entirely. PostHogHost is the
-	// ingestion host of the project's region (https://eu.i.posthog.com for EU cloud).
-	PostHogProjectToken string
-	PostHogHost         string
 
 	// Telegram bot for outbound notifications (filter subscriptions). Optional:
 	// an empty TelegramBotToken disables the feature — the linking endpoints and
@@ -420,33 +405,32 @@ const defaultAssistantMaxPrompt = 8000
 // Load reads configuration from the environment, falling back to sensible defaults.
 func Load() Settings {
 	s := Settings{
-		Env:                   env("ENV", "development"),
-		LLM:                   LoadLLM(),
-		Port:                  env("PORT", "8080"),
-		MetricsPort:           os.Getenv("METRICS_PORT"),
-		AgentViewLogDir:       os.Getenv("AGENT_VIEW_LOG_DIR"),
-		DatabaseURL:           env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
-		FrontendOrigin:        env("FRONTEND_ORIGIN", "http://localhost:5173"),
-		PublicAnonLimits:      strings.TrimSpace(os.Getenv("PUBLIC_ANON_LIMITS")),
-		VerifiedBotSecret:     strings.TrimSpace(os.Getenv("VERIFIED_BOT_SECRET")),
-		JWTSecret:             os.Getenv("JWT_SECRET"),
-		JWTTTL:                envDuration("JWT_TTL", 30*24*time.Hour),
-		CookieSecure:          envBool("COOKIE_SECURE", false),
-		CookieDomains:         splitDomains(os.Getenv("COOKIE_DOMAIN")),
-		OAuth:                 loadOAuth(),
-		AuthV2Enabled:         envBool("AUTH_V2_ENABLED", false),
-		MobileAuthCallbacks:   parseNamedValues(os.Getenv("MOBILE_AUTH_CALLBACKS")),
-		AppleNativeClientID:   strings.TrimSpace(os.Getenv("APPLE_NATIVE_CLIENT_ID")),
-		OJCPSigningKeyFile:    strings.TrimSpace(os.Getenv("OJCP_SIGNING_KEY_FILE")),
-		AppleGrantActiveKeyID: strings.TrimSpace(os.Getenv("APPLE_GRANT_ACTIVE_KEY_ID")),
-		AppleGrantKeys:        parseKeyRing(os.Getenv("APPLE_GRANT_KEYS")),
-		RecentAuthTTL:         envDuration("RECENT_AUTH_TTL", 10*time.Minute),
-		GmailTokenKey:         decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
-		MailboxDomain:         os.Getenv("MAILBOX_DOMAIN"),
-		TypesafeAPIKey:        os.Getenv("TYPESAFE_API_KEY"),
-		MeiliURL:              env("MEILI_URL", "http://localhost:7700"),
-		MeiliKey:              os.Getenv("MEILI_MASTER_KEY"),
-		RedisURL:              env("REDIS_URL", "redis://localhost:6379/0"),
+		Env:                     env("ENV", "development"),
+		LLM:                     LoadLLM(),
+		Port:                    env("PORT", "8080"),
+		MetricsPort:             os.Getenv("METRICS_PORT"),
+		AgentViewLogDir:         os.Getenv("AGENT_VIEW_LOG_DIR"),
+		DatabaseURL:             env("DATABASE_URL", "postgres://hire:hire@localhost:5432/hire?sslmode=disable"),
+		FrontendOrigin:          env("FRONTEND_ORIGIN", "http://localhost:5173"),
+		AuthIntrospectionSecret: strings.TrimSpace(os.Getenv("AUTH_INTROSPECTION_SECRET")),
+		JWTSecret:               os.Getenv("JWT_SECRET"),
+		JWTTTL:                  envDuration("JWT_TTL", 30*24*time.Hour),
+		CookieSecure:            envBool("COOKIE_SECURE", false),
+		CookieDomains:           splitDomains(os.Getenv("COOKIE_DOMAIN")),
+		OAuth:                   loadOAuth(),
+		AuthV2Enabled:           envBool("AUTH_V2_ENABLED", false),
+		MobileAuthCallbacks:     parseNamedValues(os.Getenv("MOBILE_AUTH_CALLBACKS")),
+		AppleNativeClientID:     strings.TrimSpace(os.Getenv("APPLE_NATIVE_CLIENT_ID")),
+		OJCPSigningKeyFile:      strings.TrimSpace(os.Getenv("OJCP_SIGNING_KEY_FILE")),
+		AppleGrantActiveKeyID:   strings.TrimSpace(os.Getenv("APPLE_GRANT_ACTIVE_KEY_ID")),
+		AppleGrantKeys:          parseKeyRing(os.Getenv("APPLE_GRANT_KEYS")),
+		RecentAuthTTL:           envDuration("RECENT_AUTH_TTL", 10*time.Minute),
+		GmailTokenKey:           decodeKey(os.Getenv("GMAIL_TOKEN_KEY")),
+		MailboxDomain:           os.Getenv("MAILBOX_DOMAIN"),
+		TypesafeAPIKey:          os.Getenv("TYPESAFE_API_KEY"),
+		MeiliURL:                env("MEILI_URL", "http://localhost:7700"),
+		MeiliKey:                os.Getenv("MEILI_MASTER_KEY"),
+		RedisURL:                env("REDIS_URL", "redis://localhost:6379/0"),
 
 		AutoApplyOrchestratorSecret: os.Getenv("AUTO_APPLY_ORCHESTRATOR_SECRET"),
 		InngestEventAPIURL:          os.Getenv("INNGEST_EVENT_API_URL"),
@@ -498,9 +482,6 @@ func Load() Settings {
 			MaxSignalInsightRunes: envInt("MATCH_ANALYSIS_MAX_SIGNAL_INSIGHT_RUNES", 0),
 		},
 
-		PostHogProjectToken: os.Getenv("POSTHOG_PROJECT_TOKEN"),
-		PostHogHost:         env("POSTHOG_HOST", "https://eu.i.posthog.com"),
-
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:   os.Getenv("TELEGRAM_BOT_USERNAME"),
 		TelegramWebhookSecret: os.Getenv("TELEGRAM_WEBHOOK_SECRET"),
@@ -533,9 +514,6 @@ func Load() Settings {
 	return s
 }
 
-// StrictAnonLimits reports PUBLIC_ANON_LIMITS=strict, the one value besides empty it accepts.
-func (s Settings) StrictAnonLimits() bool { return s.PublicAnonLimits == "strict" }
-
 // Validate checks that the configuration values are safe to boot the auth surface with.
 // The JWT secret check runs in every environment, not just production: HS256 security
 // rests entirely on secret entropy, so a short secret is brute-forceable offline against
@@ -547,8 +525,8 @@ func (s Settings) Validate() error {
 	if strings.HasPrefix(s.FrontendOrigin, "https://") && !s.CookieSecure {
 		return errors.New("COOKIE_SECURE must be true when using HTTPS origin")
 	}
-	if s.PublicAnonLimits != "" && !s.StrictAnonLimits() {
-		return fmt.Errorf("PUBLIC_ANON_LIMITS must be empty or \"strict\", got %q", s.PublicAnonLimits)
+	if s.AuthIntrospectionSecret != "" && len(s.AuthIntrospectionSecret) < 32 {
+		return errors.New("AUTH_INTROSPECTION_SECRET must be at least 32 bytes")
 	}
 	if len(s.JWTSecret) < 32 {
 		return errors.New("JWT_SECRET is required and must be at least 32 bytes")

@@ -90,7 +90,7 @@ func TestInsightsCompanyRollupVelocityAndRunningOpen(t *testing.T) {
 	if err := q.DeleteAllInsightsCompanyStats(ctx); err != nil {
 		t.Fatalf("delete company stats: %v", err)
 	}
-	if _, err := q.RebuildInsightsCompanyStats(ctx); err != nil {
+	if _, err := materializeInsightsCompanyStats(q)(ctx); err != nil {
 		t.Fatalf("rebuild company stats: %v", err)
 	}
 

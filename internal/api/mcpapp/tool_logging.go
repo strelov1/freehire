@@ -2,11 +2,13 @@ package mcpapp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -15,13 +17,12 @@ import (
 
 var toolCallSequence atomic.Uint64
 
-// mcpToolCalls and mcpToolDuration put MCP traffic in Grafana on our own Prometheus: the
-// PostHog product-analytics quota can drop $mcp_tool_call for weeks. Every label is bounded:
+// mcpToolCalls and mcpToolDuration put MCP traffic in Grafana. Every label is bounded:
 // surface and tool come from registrations, outcome from the switch below, error_code from
 // resultErrorCode's closed list or observability.ErrorCode — never from request data.
 var mcpToolCalls = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "freehire_mcp_tool_calls_total",
-	Help: "MCP tool calls by surface (public, account), tool, outcome and error code.",
+	Help: "MCP tool calls by surface (public, account, mixed, ojcp), tool, outcome and error code.",
 }, []string{"surface", "tool", "outcome", "error_code"})
 
 // The buckets reach 60s because an account tool can drive a model or a browser.
@@ -36,13 +37,21 @@ var mcpToolDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 // A start without a finish identifies a call that is still running or was lost
 // when the process exited. Neither errors nor arguments are safe to log here.
 func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolResult, error) {
-	if ran, ok := ctx.Value(handlerRanKey{}).(*bool); ok {
-		*ran = true
+	if state, ok := ctx.Value(handlerRanKey{}).(*callState); ok {
+		state.ran = true
+		return func(_ *mcp.CallToolResult, err error) { state.err = err }
 	}
 	logger := observability.RequestLogger(ctx).With("surface", surface, "tool", name, "call_id", toolCallSequence.Add(1))
+	if metadata, ok := ctx.Value(callMetadataKey{}).(*callMetadata); ok {
+		logger = logger.With("client", metadata.client, "conversation_id", metadata.conversation)
+	}
 	started := time.Now()
 	logger.InfoContext(ctx, "mcp tool started")
 	return func(result *mcp.CallToolResult, err error) {
+		metadata, _ := ctx.Value(callMetadataKey{}).(*callMetadata)
+		if err == nil && metadata != nil {
+			err = metadata.state.err
+		}
 		outcome := "success"
 		switch {
 		case errors.Is(err, context.DeadlineExceeded), errors.Is(ctx.Err(), context.DeadlineExceeded):
@@ -55,8 +64,15 @@ func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolRe
 			outcome = "tool_error"
 		}
 		code := observability.ErrorCode(err)
+		var protocolError *jsonrpc.Error
+		if errors.As(err, &protocolError) && protocolError.Code == jsonrpc.CodeInvalidParams {
+			code = "invalid_request"
+		}
 		if outcome == "canceled" || outcome == "deadline_exceeded" {
 			code = outcome
+		}
+		if metadata != nil && !metadata.state.ran {
+			outcome, code = "rejected", "invalid_request"
 		}
 		if result != nil && result.IsError {
 			if code == "" {
@@ -70,7 +86,24 @@ func observeTool(ctx context.Context, surface, name string) func(*mcp.CallToolRe
 		elapsed := time.Since(started)
 		mcpToolCalls.WithLabelValues(surface, name, outcome, code).Inc()
 		mcpToolDuration.WithLabelValues(surface, name).Observe(elapsed.Seconds())
-		logger.InfoContext(ctx, "mcp tool finished", "outcome", outcome, "error_code", code, "duration_ms", elapsed.Milliseconds())
+		attrs := []any{"outcome", outcome, "error_code", code, "duration_ms", elapsed.Milliseconds()}
+		if metadata != nil {
+			mcpClientCalls.WithLabelValues(surface, metadata.client).Inc()
+			if outcome == "success" && metadata.reportCategory != "" {
+				mcpProblemReports.WithLabelValues(surface, metadata.reportCategory).Inc()
+				attrs = append(attrs, "report_category", metadata.reportCategory)
+			}
+		}
+		if result != nil {
+			if encoded, encodeErr := json.Marshal(result); encodeErr == nil {
+				mcpResponseBytes.WithLabelValues(surface, name).Observe(float64(len(encoded)))
+				attrs = append(attrs, "response_bytes", len(encoded))
+			}
+			if outcome == "success" {
+				attrs = append(attrs, observeSearchQuality(surface, name, result)...)
+			}
+		}
+		logger.InfoContext(ctx, "mcp tool finished", attrs...)
 	}
 }
 
@@ -88,21 +121,19 @@ func resultErrorCode(result *mcp.CallToolResult) string {
 	}
 }
 
-func addLoggedTool[In, Out any](server *mcp.Server, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, Out]) {
-	addLoggedToolForSurface(
-		server,
-		"public",
-		tool,
-		handler,
-	)
-}
-
-func addLoggedToolForSurface[In, Out any](
+// AddObservedTool registers a typed tool with local execution diagnostics.
+func AddObservedTool[In, Out any](
 	server *mcp.Server,
 	surface string,
 	tool *mcp.Tool,
 	handler mcp.ToolHandlerFor[In, Out],
 ) {
+	if surface == "mixed" {
+		if tool.Meta == nil {
+			tool.Meta = mcp.Meta{}
+		}
+		tool.Meta["securitySchemes"] = []map[string]any{{"type": "noauth"}}
+	}
 	// Capture the registered name so a caller cannot inject a name into the log.
 	name := tool.Name
 	registerTool(name)
@@ -120,9 +151,13 @@ func addLoggedToolForSurface[In, Out any](
 }
 
 func loggedAccountTool(name string, handler mcp.ToolHandler) mcp.ToolHandler {
+	return loggedTool("account", name, handler)
+}
+
+func loggedTool(surface, name string, handler mcp.ToolHandler) mcp.ToolHandler {
 	registerTool(name)
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		finish := observeTool(ctx, "account", name)
+		finish := observeTool(ctx, surface, name)
 		result, err := handler(ctx, req)
 		finish(result, err)
 		return result, err
@@ -144,26 +179,25 @@ func toolLabel(name string) string {
 
 type handlerRanKey struct{}
 
-// countRejectedToolCalls counts the tools/call requests the SDK answers without running a
-// handler: arguments failing the input schema, or a tool that does not exist. observeTool sees
-// only calls that reach a handler, and a refused call is exactly what an agent hits when it
-// misreads the schema (work_mode: "remote" on 2026-11-04). It marks the context, observeTool
-// flips the mark, and only an unflipped call is counted here, so no call is counted twice.
-func countRejectedToolCalls(surface string) mcp.Middleware {
+// ObserveServer records final SDK outcomes, including validation failures before and
+// after a handler. It needs no external analytics client.
+func ObserveServer(server *mcp.Server, surface string) {
+	server.AddReceivingMiddleware(toolCallMiddleware(surface))
+}
+
+func toolCallMiddleware(surface string) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			call, ok := req.(*mcp.CallToolRequest)
 			if method != "tools/call" || !ok {
 				return next(ctx, method, req)
 			}
-			ran := new(bool)
-			started := time.Now()
-			res, err := next(context.WithValue(ctx, handlerRanKey{}, ran), method, req)
-			if !*ran {
-				name := toolLabel(call.Params.Name)
-				mcpToolCalls.WithLabelValues(surface, name, "rejected", "invalid_request").Inc()
-				mcpToolDuration.WithLabelValues(surface, name).Observe(time.Since(started).Seconds())
-			}
+			metadata := metadataForCall(call)
+			ctx = context.WithValue(ctx, callMetadataKey{}, metadata)
+			finish := observeTool(ctx, surface, toolLabel(call.Params.Name))
+			res, err := next(context.WithValue(ctx, handlerRanKey{}, &metadata.state), method, req)
+			result, _ := res.(*mcp.CallToolResult)
+			finish(result, err)
 			return res, err
 		}
 	}

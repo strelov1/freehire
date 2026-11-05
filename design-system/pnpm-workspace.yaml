@@ -12,6 +12,10 @@ strictDepBuilds: false
 # path when `from` is unset, letting a crafted stylesheet exfiltrate
 # arbitrary local .map files. Pulled in transitively by vite (Storybook builder).
 overrides:
+  # GHSA-g3hv-75wg-m249: glob preprocessing amplification, fixed in 11.0.1.
+  # ESLint, typescript-eslint and glob still request 10.x; this deliberately
+  # crosses a major version to remove the vulnerable build-time copies.
+  'minimatch@>=7.0.0 <11.0.1': 11.0.1
   postcss@<8.5.23: 8.5.23
   # The same floor web/pnpm-workspace.yaml carries and for the same
   # advisories — see that file for which ones and why the bump is

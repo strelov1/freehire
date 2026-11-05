@@ -27,7 +27,7 @@ func TestPostAutoApplyTailor_OrchestratorSecretResolvesEntryOwner(t *testing.T) 
 	pool := startPostgres(t)
 	truncateAutoApplyTailorTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	app, _ := newAutoApplyTailorAppWithOrchestratorSecret(pool, iss, &turnModel{}, testOrchestratorSecret, nil)
+	app, _ := newAutoApplyTailorAppWithOrchestratorSecret(pool, iss, &turnModel{}, testOrchestratorSecret)
 
 	userID, _ := autoApplyTailorUser(t, pool, iss, "orch-owner@example.test")
 	job := insertAutoApplyJob(t, pool, "orch-reviewed")
@@ -54,7 +54,7 @@ func TestPostAutoApplyTailor_NoCredentialsIsUnauthorizedEvenWithSecretConfigured
 	pool := startPostgres(t)
 	truncateAutoApplyTailorTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	app, _ := newAutoApplyTailorAppWithOrchestratorSecret(pool, iss, &turnModel{}, testOrchestratorSecret, nil)
+	app, _ := newAutoApplyTailorAppWithOrchestratorSecret(pool, iss, &turnModel{}, testOrchestratorSecret)
 
 	userID, _ := autoApplyTailorUser(t, pool, iss, "nocred@example.test")
 	job := insertAutoApplyJob(t, pool, "nocred")
@@ -75,7 +75,7 @@ func TestPostAutoApplyTailor_WrongSecretIsUnauthorized(t *testing.T) {
 	pool := startPostgres(t)
 	truncateAutoApplyTailorTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	app, _ := newAutoApplyTailorAppWithOrchestratorSecret(pool, iss, &turnModel{}, testOrchestratorSecret, nil)
+	app, _ := newAutoApplyTailorAppWithOrchestratorSecret(pool, iss, &turnModel{}, testOrchestratorSecret)
 
 	userID, _ := autoApplyTailorUser(t, pool, iss, "wrongsecret@example.test")
 	job := insertAutoApplyJob(t, pool, "wrongsecret")
@@ -100,7 +100,7 @@ func TestPostAutoApplyTailor_HumanCredentialStillOwnershipScopedWithSecretConfig
 	pool := startPostgres(t)
 	truncateAutoApplyTailorTables(t, pool)
 	iss := auth.NewIssuer("test-secret", time.Hour)
-	app, _ := newAutoApplyTailorAppWithOrchestratorSecret(pool, iss, &turnModel{}, testOrchestratorSecret, nil)
+	app, _ := newAutoApplyTailorAppWithOrchestratorSecret(pool, iss, &turnModel{}, testOrchestratorSecret)
 
 	owner, _ := autoApplyTailorUser(t, pool, iss, "human-owner@example.test")
 	_, otherCookie := autoApplyTailorUser(t, pool, iss, "human-other@example.test")
@@ -112,84 +112,5 @@ func TestPostAutoApplyTailor_HumanCredentialStillOwnershipScopedWithSecretConfig
 	defer resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("status = %d, want 404 for a foreign queue entry — the secret's presence in config must not weaken ownership for a cookie caller", resp.StatusCode)
-	}
-}
-
-// The process-wide rate limit applies ONLY to system-caller (secret-authenticated)
-// requests: oneShotThrottler admits the first use of a key and refuses every later one, so
-// a second secret-authenticated call in the same test must trip it.
-func TestPostAutoApplyTailor_OrchestratorSecretIsRateLimitedProcessWide(t *testing.T) {
-	pool := startPostgres(t)
-	truncateAutoApplyTailorTables(t, pool)
-	iss := auth.NewIssuer("test-secret", time.Hour)
-	th := newOneShotThrottler()
-	app, _ := newAutoApplyTailorAppWithOrchestratorSecret(pool, iss, &turnModel{}, testOrchestratorSecret, th)
-
-	userID, _ := autoApplyTailorUser(t, pool, iss, "limited@example.test")
-	job := insertAutoApplyJob(t, pool, "limited")
-	queueID := insertAutoApplyQueueRow(t, pool, userID, job)
-	if _, err := pool.Exec(context.Background(),
-		`UPDATE auto_apply_queue SET review_decision = 'declined', reviewed_at = now(), blocked_at = now() WHERE id = $1`,
-		queueID); err != nil {
-		t.Fatalf("mark reviewed: %v", err)
-	}
-
-	doSecretRequest := func() int {
-		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", nil)
-		req.Header.Set(fiber.HeaderAuthorization, "Bearer "+testOrchestratorSecret)
-		resp, err := app.Test(req, 10_000)
-		if err != nil {
-			t.Fatalf("request: %v", err)
-		}
-		defer resp.Body.Close()
-		return resp.StatusCode
-	}
-
-	if got := doSecretRequest(); got != fiber.StatusConflict {
-		t.Fatalf("first request status = %d, want 409 (within budget, reaches the already-reviewed check)", got)
-	}
-	if got := doSecretRequest(); got != fiber.StatusTooManyRequests {
-		t.Fatalf("second request status = %d, want 429 — the process-wide budget is spent", got)
-	}
-}
-
-// A human-authenticated request never touches the orchestrator's own rate limit — an
-// exhausted secret budget must not leak into the ownership-scoped path.
-func TestPostAutoApplyTailor_HumanCredentialUnaffectedByExhaustedOrchestratorLimiter(t *testing.T) {
-	pool := startPostgres(t)
-	truncateAutoApplyTailorTables(t, pool)
-	iss := auth.NewIssuer("test-secret", time.Hour)
-	th := newOneShotThrottler()
-	app, _ := newAutoApplyTailorAppWithOrchestratorSecret(pool, iss, &turnModel{}, testOrchestratorSecret, th)
-
-	// Spend the one-shot orchestrator budget with an unrelated entry.
-	spentOwner, _ := autoApplyTailorUser(t, pool, iss, "spent-owner@example.test")
-	insertBaseCV(t, pool, spentOwner)
-	spentJob := insertAutoApplyJob(t, pool, "spent-job")
-	spentQueueID := insertAutoApplyQueueRow(t, pool, spentOwner, spentJob)
-	spendReq := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost, "/api/v1/me/auto-apply/"+strconv.FormatInt(spentQueueID, 10)+"/tailor", nil)
-	spendReq.Header.Set(fiber.HeaderAuthorization, "Bearer "+testOrchestratorSecret)
-	spendResp, err := app.Test(spendReq, 10_000)
-	if err != nil {
-		t.Fatalf("spend request: %v", err)
-	}
-	spendResp.Body.Close()
-
-	// A cookie-authenticated request for its OWNER's own entry must still be refused only
-	// for the reasons ownership-scoped auth already enforces (foreign entry → 404), never
-	// for a rate limit that was never applied to it.
-	owner, _ := autoApplyTailorUser(t, pool, iss, "human-owner-2@example.test")
-	_, otherCookie := autoApplyTailorUser(t, pool, iss, "human-other-2@example.test")
-	job := insertAutoApplyJob(t, pool, "human-foreign-2")
-	queueID := insertAutoApplyQueueRow(t, pool, owner, job)
-
-	resp := autoApplyRequest(t, app, fiber.MethodPost,
-		"/api/v1/me/auto-apply/"+strconv.FormatInt(queueID, 10)+"/tailor", otherCookie, nil)
-	defer resp.Body.Close()
-	if resp.StatusCode == fiber.StatusTooManyRequests {
-		t.Fatalf("status = 429 — a human caller must never share the orchestrator's own rate-limit budget")
-	}
-	if resp.StatusCode != fiber.StatusNotFound {
-		t.Fatalf("status = %d, want 404 (ownership, unaffected by the spent orchestrator budget)", resp.StatusCode)
 	}
 }

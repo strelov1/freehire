@@ -88,9 +88,3 @@ ON CONFLICT (job_id) DO NOTHING;
 SELECT kind FROM company_process_reports
  WHERE user_id = $1 AND company_slug = $2 AND retracted_at IS NULL
  ORDER BY kind;
-
--- name: CountRecentCompanyProcessReports :one
--- How many reports this user has filed since `since` — the rate-limit check, mirroring
--- CountRecentCompanyFeedback. A revival takes the ON CONFLICT branch and leaves
--- created_at untouched, so this only grows on genuinely new rows.
-SELECT count(*) FROM company_process_reports WHERE user_id = $1 AND created_at >= $2;

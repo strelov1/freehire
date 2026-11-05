@@ -16,10 +16,10 @@ beforeEach(async () => {
   profileStore.reset();
   saveProfile.mockReset().mockImplementation(async (
     specializations, skills, seniorities, excluded_skills,
-    excluded_sources, excluded_companies, location_preferences,
+    excluded_sources, excluded_companies, location_preferences, job_languages,
   ) => ({
     ...emptyProfile, specializations, skills, seniorities, excluded_skills,
-    excluded_sources, excluded_companies, location_preferences,
+    excluded_sources, excluded_companies, location_preferences, job_languages,
   }));
   await profileStore.save(['backend'], ['go'], [], [], [], [], null);
   saveProfile.mockClear();
@@ -57,5 +57,31 @@ describe('profile CV merge', () => {
     expect(profileStore.profile?.specializations).toEqual(roles);
     expect(profileStore.profile?.skills).toEqual(['go', 'rust']);
     expect(result).toEqual({ addedSkills: 1, addedSpecializations: 0, droppedSpecializations: 1 });
+  });
+});
+
+describe('profile job language saves', () => {
+  it('preserves languages while skills, roles and location change', async () => {
+    await profileStore.updateJobLanguages(['en', 'ru']);
+    await profileStore.addSkill('rust');
+    await profileStore.updateSpecializations(['devops']);
+    await profileStore.updateLocation(null);
+    expect(profileStore.profile?.job_languages).toEqual(['en', 'ru']);
+    expect(profileStore.profile?.skills).toEqual(['go', 'rust']);
+    expect(profileStore.profile?.specializations).toEqual(['devops']);
+  });
+
+  it('clears languages without discarding the rest of the profile', async () => {
+    await profileStore.updateJobLanguages(['en']);
+    await profileStore.updateJobLanguages([]);
+    expect(profileStore.profile?.job_languages).toEqual([]);
+    expect(profileStore.profile?.skills).toEqual(['go']);
+  });
+
+  it('keeps the saved languages if the update fails', async () => {
+    await profileStore.updateJobLanguages(['en']);
+    saveProfile.mockRejectedValueOnce(new Error('offline'));
+    await expect(profileStore.updateJobLanguages(['ru'])).rejects.toThrow('offline');
+    expect(profileStore.profile?.job_languages).toEqual(['en']);
   });
 });

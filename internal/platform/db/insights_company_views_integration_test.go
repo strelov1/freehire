@@ -32,7 +32,7 @@ func rebuildViews(t *testing.T, ctx context.Context, q *Queries) {
 	if err := q.DeleteAllInsightsCompanyViews(ctx); err != nil {
 		t.Fatalf("delete views: %v", err)
 	}
-	if _, err := q.RebuildInsightsCompanyViews(ctx); err != nil {
+	if _, err := materializeInsightsCompanyViews(q)(ctx); err != nil {
 		t.Fatalf("rebuild views: %v", err)
 	}
 }

@@ -595,6 +595,20 @@ func TestRecognize(t *testing.T) {
 		{"greenhouse ai opt-out form carries no board", "http://app4.greenhouse.io/ai_opt_out_request/job_post/6178374004/ai_opt_out", "", "", "", false},
 		{"greenhouse ai opt-out form bare", "https://my.greenhouse.io/ai_opt_out_request", "", "", "", false},
 
+		// jobs.dover.com: the public job-board host, same dover source and SAME board spelling
+		// as app.dover.com — the board is the first segment alone; the UUID second segment only
+		// proves the link names a board (it may be a posting id, so it is not folded in). The
+		// canonical collapses to the /<Org> board address, which is the same board an
+		// app.dover.com link spells as /jobs/<Org>.
+		{"dover job board link", "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", "dover", "Deepspatial", "https://jobs.dover.com/Deepspatial", true},
+		{"dover job board mixed-case host", "https://JOBS.Dover.COM/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", "dover", "Deepspatial", "https://jobs.dover.com/Deepspatial", true},
+		{"dover job board with posting path", "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d/some-posting-slug", "dover", "Deepspatial", "https://jobs.dover.com/Deepspatial", true},
+		{"dover job board bare org is a marketing shell", "https://jobs.dover.com/Deepspatial", "", "", "", false},
+		{"dover job board vendor listing carries no tenant", "https://jobs.dover.com/startup-jobs", "", "", "", false},
+		{"dover job board non-uuid second segment declined", "https://jobs.dover.com/Deepspatial/not-a-uuid", "", "", "", false},
+		{"dover job board extra segments declined", "https://jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d/slug/extra", "", "", "", false},
+		{"dover job board subdomain declined", "https://foo.jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", "", "", "", false},
+		{"dover job board www host declined", "https://www.jobs.dover.com/Deepspatial/a5546acf-45c3-44ff-bedd-a4314fd0f37d", "", "", "", false},
 		// Dover: app.dover.com is the whole product SPA (dashboard, /crm, /docs/api, login), not a
 		// dedicated boards host, so only an ALLOWED leading segment ("apply"/"jobs") carries a
 		// board — everything else is declined outright, the inverse of every deny-list

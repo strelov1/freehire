@@ -16,7 +16,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/candidate/resume"
 	"github.com/strelov1/freehire/internal/identity/auth"
 )
@@ -26,12 +25,12 @@ import (
 // stateless: PDF/text -> skilltag), so a bare API with an issuer is enough.
 func resumeApp(t *testing.T) (*fiber.App, string) {
 	t.Helper()
-	return resumeAppWith(t, &resumeHandlers{}, nil)
+	return resumeAppWith(t, &resumeHandlers{})
 }
 
-// resumeAppWith is resumeApp over a given handler and throttler. Requests may carry an
+// resumeAppWith is resumeApp over a given handler. Requests may carry an
 // X-Forwarded-For, which the app believes, so a test can speak as distinct addresses.
-func resumeAppWith(t *testing.T, h *resumeHandlers, throttler ratelimit.Throttler) (*fiber.App, string) {
+func resumeAppWith(t *testing.T, h *resumeHandlers) (*fiber.App, string) {
 	t.Helper()
 	iss := auth.NewIssuer("test-secret", time.Hour)
 	token, err := iss.Issue(1, testTokenVersion)
@@ -41,11 +40,10 @@ func resumeAppWith(t *testing.T, h *resumeHandlers, throttler ratelimit.Throttle
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError, ProxyHeader: fiber.HeaderXForwardedFor})
 	cookie := auth.RequireAuth(iss, testVersions)
 	h.register(app, middleware{
-		optional:  auth.OptionalAuth(iss, testVersions, nil),
-		cookie:    cookie,
-		key:       cookie,
-		paidAI:    markPaidAI,
-		throttler: throttler,
+		optional: auth.OptionalAuth(iss, testVersions, nil),
+		cookie:   cookie,
+		key:      cookie,
+		paidAI:   markPaidAI,
 	})
 	return app, token
 }
@@ -107,7 +105,7 @@ func decodeSkills(t *testing.T, resp *http.Response) []string {
 func TestExtractResumeProfile_GuestIsServedAndNothingStored(t *testing.T) {
 	blobs := newFakeResumeBlobs()
 	repo := &fakeResumeRepo{}
-	app, _ := resumeAppWith(t, &resumeHandlers{resume: resume.New(blobs, repo)}, nil)
+	app, _ := resumeAppWith(t, &resumeHandlers{resume: resume.New(blobs, repo)})
 
 	resp := postResumeJSON(t, app, `{"text":"Experienced with PostgreSQL, Kubernetes and Docker."}`, "")
 	defer resp.Body.Close()
@@ -128,7 +126,7 @@ func TestExtractResumeProfile_GuestIsServedAndNothingStored(t *testing.T) {
 // A signed-in caller is unchanged: with storage configured, the upload is stored.
 func TestExtractResumeProfile_SignedInStillStores(t *testing.T) {
 	blobs := newFakeResumeBlobs()
-	app, token := resumeAppWith(t, &resumeHandlers{resume: resume.New(blobs, &fakeResumeRepo{})}, nil)
+	app, token := resumeAppWith(t, &resumeHandlers{resume: resume.New(blobs, &fakeResumeRepo{})})
 
 	resp := postResumeJSON(t, app, `{"text":"Experienced with PostgreSQL."}`, token)
 	defer resp.Body.Close()
@@ -137,42 +135,6 @@ func TestExtractResumeProfile_SignedInStillStores(t *testing.T) {
 	}
 	if len(blobs.objs) != 1 {
 		t.Errorf("stored %d objects for a signed-in caller, want 1", len(blobs.objs))
-	}
-}
-
-// A guest spends a per-IP budget of 20 an hour; a signed-in caller behind the same
-// address does not draw on it.
-func TestExtractResumeProfile_GuestsAreLimitedPerIP(t *testing.T) {
-	app, token := resumeAppWith(t, &resumeHandlers{}, newTestThrottler(t))
-	post := func(ip, token string) int {
-		req := httptest.NewRequestWithContext(context.Background(), fiber.MethodPost,
-			"/me/resume/extract", strings.NewReader(`{"text":"Go and PostgreSQL"}`))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(fiber.HeaderXForwardedFor, ip)
-		if token != "" {
-			req.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
-		}
-		resp, err := app.Test(req, -1)
-		if err != nil {
-			t.Fatalf("Test: %v", err)
-		}
-		defer resp.Body.Close()
-		return resp.StatusCode
-	}
-
-	for i := 1; i <= guestResumeExtractsPerHour; i++ {
-		if got := post("203.0.113.7", ""); got != fiber.StatusOK {
-			t.Fatalf("guest call %d = %d, want 200", i, got)
-		}
-	}
-	if got := post("203.0.113.7", ""); got != fiber.StatusTooManyRequests {
-		t.Fatalf("guest call %d = %d, want 429", guestResumeExtractsPerHour+1, got)
-	}
-	if got := post("203.0.113.8", ""); got != fiber.StatusOK {
-		t.Fatalf("a guest on another address = %d, want 200 — the budget is per IP", got)
-	}
-	if got := post("203.0.113.7", token); got != fiber.StatusOK {
-		t.Fatalf("a signed-in caller behind the exhausted address = %d, want 200", got)
 	}
 }
 

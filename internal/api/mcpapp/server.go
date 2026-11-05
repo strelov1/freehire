@@ -91,9 +91,13 @@ func Handler(r Reader, origin string) http.Handler {
 }
 
 func newServer(r Reader, origin string) *mcp.Server {
+	return newCatalogueServer(r, origin, serverInstructions, "public")
+}
+
+func newCatalogueServer(r Reader, origin, instructions, surface string) *mcp.Server {
 	server := mcp.NewServer(Identity("freehire", Version, origin),
 		&mcp.ServerOptions{
-			Instructions:      serverInstructions,
+			Instructions:      instructions,
 			CompletionHandler: completePromptArgument,
 			// Lists are fixed for this per-request server. The SDK otherwise
 			// advertises listChanged and accepts subscriptions that never update.
@@ -104,13 +108,12 @@ func newServer(r Reader, origin string) *mcp.Server {
 				Resources: &mcp.ResourceCapabilities{},
 			},
 		})
-	Instrument(server, "freehire", Version)
-	server.AddReceivingMiddleware(countRejectedToolCalls("public"))
+	ObserveServer(server, surface)
 
 	addPrompts(server)
 	addWidget(server)
 
-	addLoggedTool(server, &mcp.Tool{
+	AddObservedTool(server, surface, &mcp.Tool{
 		Name:  toolSearchJobs,
 		Title: "Search jobs",
 		Description: "Search freehire's catalogue of IT job postings. Use for any question " +
@@ -129,7 +132,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.SearchJobs(ctx, in))
 	})
 
-	addLoggedTool(server, &mcp.Tool{
+	AddObservedTool(server, surface, &mcp.Tool{
 		Name:  toolGetJob,
 		Title: "Read one job posting",
 		Description: "Read one posting in full by the slug a search result carries: the whole " +
@@ -142,7 +145,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.JobDetail(ctx, in.Slug))
 	})
 
-	addLoggedTool(server, &mcp.Tool{
+	AddObservedTool(server, surface, &mcp.Tool{
 		Name:  toolGetCompany,
 		Title: "Read one employer",
 		Description: "Read what freehire holds about one employer by the slug a result " +
@@ -153,7 +156,7 @@ func newServer(r Reader, origin string) *mcp.Server {
 		return toolResult(r.CompanyDetail(ctx, in.Slug))
 	})
 
-	registerCatalogueTools(server, r, "public")
+	registerCatalogueTools(server, r, surface)
 
 	return server
 }

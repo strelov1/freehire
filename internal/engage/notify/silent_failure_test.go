@@ -105,7 +105,7 @@ func TestMatch_CancellationStopsInsteadOfCountingEveryQueryFailed(t *testing.T) 
 	}
 }
 
-// deliverOne's two reads happen before anything is sent and release the claim on
+// deliverMessage's two reads happen before anything is sent and release the claim on
 // failure, so they burn no attempt and leave no dead letter. Without a counter a pass
 // that could not read a single subscription printed `delivered=0 failed=0` and exited 0,
 // which reads as an idle queue.

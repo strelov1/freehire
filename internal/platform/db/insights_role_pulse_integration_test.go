@@ -36,7 +36,7 @@ func rebuildRolePulse(t *testing.T, ctx context.Context, q *Queries) {
 		t.Fatalf("delete pulse: %v", err)
 	}
 	now := time.Now().UTC()
-	if _, err := q.RebuildInsightsRolePulse(ctx, RebuildInsightsRolePulseParams{
+	if _, err := materializeInsightsRolePulse(q)(ctx, ComputeInsightsRolePulseParams{
 		WindowStart: pgtype.Timestamptz{Time: now.AddDate(0, 0, -30), Valid: true},
 		PriorStart:  pgtype.Timestamptz{Time: now.AddDate(0, 0, -60), Valid: true},
 	}); err != nil {

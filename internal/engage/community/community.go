@@ -1,8 +1,8 @@
 // Package community is the anonymous discussion-thread use case: a signed-in user
 // starts a topic attached to a subject (a company or a vacancy) and any signed-in
 // user replies. Authors are shown only through a stable pseudonymous persona — the
-// real user_id is the private key the handle hides behind, used for moderation and
-// rate limiting but never sent to a client.
+// real user_id is the private key the handle hides behind, used for moderation but
+// never sent to a client.
 //
 // The subject is polymorphic: (SubjectType, subject_ref) where subject_ref is the
 // subject's public slug. The primitive is deliberately decoupled from what it
@@ -30,15 +30,6 @@ const (
 	StatusClosed = "closed"
 )
 
-// Per-user rate-limit defaults over a rolling window. Threads and replies are free
-// but spam-resistant; tune as usage shows.
-const (
-	DefaultThreadWindow = 24 * time.Hour
-	DefaultThreadCap    = 10
-	DefaultReplyWindow  = time.Hour
-	DefaultReplyCap     = 30
-)
-
 // Sentinel errors, mapped to HTTP statuses by the handler.
 var (
 	// ErrUnsupportedSubject is a subject_type other than company or job (400).
@@ -56,8 +47,6 @@ var (
 	ErrEmptyBody = errors.New("community: body is required")
 	// ErrEmptyTitle is a thread submitted with no title (422).
 	ErrEmptyTitle = errors.New("community: title is required")
-	// ErrRateLimited is a user over their thread or reply window cap (429).
-	ErrRateLimited = errors.New("community: rate limit exceeded")
 	// ErrPersonaNotFound is returned by Repository.GetPersona when a user has no
 	// persona yet — the service mints one and retries.
 	ErrPersonaNotFound = errors.New("community: persona not found")
@@ -164,9 +153,6 @@ type Repository interface {
 	InsertReply(ctx context.Context, threadID, parentReplyID, authorUserID int64, body string) (Reply, error)
 	IncrementReplyCount(ctx context.Context, threadID int64) error
 	ListReplies(ctx context.Context, threadID int64, cur Cursor, limit int32) ([]Reply, error)
-
-	CountRecentThreads(ctx context.Context, userID int64, since time.Time) (int64, error)
-	CountRecentReplies(ctx context.Context, userID int64, since time.Time) (int64, error)
 }
 
 // SubjectChecker reports whether a subject slug names an existing company or job.

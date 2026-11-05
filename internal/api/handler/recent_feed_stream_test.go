@@ -44,7 +44,7 @@ func TestRecentFeedStream_ReplaysBacklogThenLivePublish(t *testing.T) {
 		CompanyName: "Acme", JobSlug: "acme-sbe",
 	})
 
-	h := newRecentFeedHandlers(b, newTestThrottler(t))
+	h := newRecentFeedHandlers(b)
 	h.pingInterval = 10 * time.Millisecond // detect the test's connection close quickly
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/feed/recent", h.StreamRecentJobs)
@@ -97,7 +97,7 @@ func TestRecentFeedStream_ReplaysBacklogThenLivePublish(t *testing.T) {
 }
 
 func TestRecentFeedStream_NilBroadcasterIsServiceUnavailable(t *testing.T) {
-	h := newRecentFeedHandlers(nil, newTestThrottler(t))
+	h := newRecentFeedHandlers(nil)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/feed/recent", h.StreamRecentJobs)
 

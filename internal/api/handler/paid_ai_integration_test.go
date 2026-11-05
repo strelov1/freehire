@@ -97,9 +97,8 @@ func TestPaidAIFitStreamRefusesFree(t *testing.T) {
 	plans := plan.NewStore(queries, pool, plan.DefaultConfig())
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	(&matchHandlers{}).register(app.Group("/api/v1"), middleware{
-		paidAI:    paidAIGate(entitlementOf(plans)),
-		key:       auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
-		throttler: newTestThrottler(t),
+		paidAI: paidAIGate(entitlementOf(plans)),
+		key:    auth.RequireAuthOrKey(iss, testVersions, apiKeys{queries}),
 	})
 
 	userID, token := assistantUser(t, pool, iss, "paid-gate-fit@example.test", false)

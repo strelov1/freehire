@@ -13,13 +13,24 @@ import (
 
 const claimSubscriptionMatches = `-- name: ClaimSubscriptionMatches :many
 WITH claimable AS (
-    SELECT m.subscription_id, m.job_id
+    SELECT m.subscription_id, m.job_id, s.user_id, s.channel, pl.last_sent AS person_last_sent_at
     FROM subscriptions s
     -- Joined BEFORE the lateral so the interval gate below references only relations
     -- that exist under it: the planner then applies the gate at this join, and the
     -- lateral's FOR UPDATE never locks a non-due subscription's rows only for them to
     -- be filtered out afterwards.
     LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
+    -- When this person was last written to on this channel: the newest stamp among
+    -- their active subscriptions on it (a sent message stamps every subscription it
+    -- carried). A webhook keeps its own. Returned too, because the Go side times a
+    -- ` + "`" + `daily` + "`" + ` message by it — the claimed subscriptions alone would read a brand-new
+    -- alert as "never sent today" and mail a second digest the same day.
+    CROSS JOIN LATERAL (
+        SELECT max(o.last_digest_sent_at) AS last_sent
+        FROM subscriptions o
+        WHERE o.user_id = s.user_id AND o.channel = s.channel AND o.active
+          AND (s.channel <> 'webhook' OR o.id = s.id)
+    ) pl
     CROSS JOIN LATERAL (
         SELECT mm.subscription_id, mm.job_id
         FROM subscription_matches mm
@@ -36,16 +47,25 @@ WITH claimable AS (
     WHERE s.active
       -- An 'interval' subscription (the default: no settings row reads as one, at one
       -- hour) is claimed only once its interval has elapsed since the last digest. The
-      -- gate lives HERE rather than beside the quiet-hours check in deliverOne because a
+      -- gate lives HERE rather than beside the quiet-hours check in deliverMessage because a
       -- subscription that is not due would otherwise be claimed and released on every
       -- five-minute pass: measured on prod 2026-11-04 at ~23k matches an hour, that is
       -- ~12 lease-and-release writes per pending match for nothing. This predicate is the
       -- only definition of "interval elapsed" — the Go side does not repeat it. The
       -- defaults must agree with GetSubscriptionForDelivery's COALESCE and the column
       -- defaults (migration 0233).
+      --
+      -- The interval is the PERSON's, per channel, not each subscription's: the caller
+      -- sends one message per (user, channel) carrying every due subscription, and
+      -- stamps all of them, so the newest stamp among a person's subscriptions on the
+      -- channel is when they were last written to. Gating each subscription on its own
+      -- stamp let a user with seven alerts receive seven mails an hour (2026-11-05:
+      -- 15 users over 24 a day, one at 59). Measuring the group also keeps a NEW
+      -- subscription (no stamp yet) from firing on its own between the hourly mails.
+      -- A webhook is sent one subscription at a time (its receiver is a program reading
+      -- one saved search), so it keeps its own stamp.
       AND (COALESCE(ns.digest_frequency, 'interval') <> 'interval'
-           OR s.last_digest_sent_at IS NULL
-           OR s.last_digest_sent_at
+           OR COALESCE(pl.last_sent, '-infinity')
               <= now() - make_interval(hours => COALESCE(ns.digest_interval_hours, 1)::int))
     -- A backstop, not the working bound: per_subscription x active subscriptions is what
     -- a pass normally claims. This only caps a pathological subscription count.
@@ -55,7 +75,7 @@ UPDATE subscription_matches m
 SET claimed_at = now()
 FROM claimable c
 WHERE m.subscription_id = c.subscription_id AND m.job_id = c.job_id
-RETURNING m.subscription_id, m.job_id, m.matched_at
+RETURNING m.subscription_id, m.job_id, m.matched_at, c.user_id, c.channel, c.person_last_sent_at::timestamptz AS person_last_sent_at
 `
 
 type ClaimSubscriptionMatchesParams struct {
@@ -65,9 +85,12 @@ type ClaimSubscriptionMatchesParams struct {
 }
 
 type ClaimSubscriptionMatchesRow struct {
-	SubscriptionID int64              `json:"subscription_id"`
-	JobID          int64              `json:"job_id"`
-	MatchedAt      pgtype.Timestamptz `json:"matched_at"`
+	SubscriptionID   int64              `json:"subscription_id"`
+	JobID            int64              `json:"job_id"`
+	MatchedAt        pgtype.Timestamptz `json:"matched_at"`
+	UserID           int64              `json:"user_id"`
+	Channel          string             `json:"channel"`
+	PersonLastSentAt pgtype.Timestamptz `json:"person_last_sent_at"`
 }
 
 // Lease pending, live matches for active subscriptions by stamping claimed_at,
@@ -108,7 +131,14 @@ func (q *Queries) ClaimSubscriptionMatches(ctx context.Context, arg ClaimSubscri
 	items := []ClaimSubscriptionMatchesRow{}
 	for rows.Next() {
 		var i ClaimSubscriptionMatchesRow
-		if err := rows.Scan(&i.SubscriptionID, &i.JobID, &i.MatchedAt); err != nil {
+		if err := rows.Scan(
+			&i.SubscriptionID,
+			&i.JobID,
+			&i.MatchedAt,
+			&i.UserID,
+			&i.Channel,
+			&i.PersonLastSentAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -162,7 +192,7 @@ INSERT INTO subscriptions (user_id, saved_search_id, channel, destination)
 SELECT ss.user_id, ss.id, $1, $2
 FROM saved_searches ss
 WHERE ss.id = $3 AND ss.user_id = $4
-RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at, last_digest_sent_at
+RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at, last_digest_sent_at, last_searched_at
 `
 
 type CreateSubscriptionParams struct {
@@ -195,6 +225,7 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 		&i.StartAt,
 		&i.CreatedAt,
 		&i.LastDigestSentAt,
+		&i.LastSearchedAt,
 	)
 	return i, err
 }
@@ -472,21 +503,37 @@ func (q *Queries) GetSubscriptionForDelivery(ctx context.Context, id int64) (Get
 }
 
 const listActiveSubscriptions = `-- name: ListActiveSubscriptions :many
-SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query
+SELECT s.id, s.user_id, s.channel, s.destination, s.start_at, ss.query,
+       s.last_digest_sent_at, s.last_searched_at,
+       u.timezone AS timezone,
+       COALESCE(ns.digest_frequency, 'interval')::text AS digest_frequency,
+       COALESCE(ns.digest_interval_hours, 1)::int AS digest_interval_hours,
+       ns.digest_time AS digest_time,
+       ns.quiet_hours_start AS quiet_hours_start,
+       ns.quiet_hours_end AS quiet_hours_end
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
+JOIN users u ON u.id = s.user_id
 LEFT JOIN notification_settings ns ON ns.user_id = s.user_id
 WHERE s.active
   AND (s.channel <> 'email' OR COALESCE(ns.alerts_email_enabled, true))
 `
 
 type ListActiveSubscriptionsRow struct {
-	ID          int64              `json:"id"`
-	UserID      int64              `json:"user_id"`
-	Channel     string             `json:"channel"`
-	Destination pgtype.Text        `json:"destination"`
-	StartAt     pgtype.Timestamptz `json:"start_at"`
-	Query       string             `json:"query"`
+	ID                  int64              `json:"id"`
+	UserID              int64              `json:"user_id"`
+	Channel             string             `json:"channel"`
+	Destination         pgtype.Text        `json:"destination"`
+	StartAt             pgtype.Timestamptz `json:"start_at"`
+	Query               string             `json:"query"`
+	LastDigestSentAt    pgtype.Timestamptz `json:"last_digest_sent_at"`
+	LastSearchedAt      pgtype.Timestamptz `json:"last_searched_at"`
+	Timezone            pgtype.Text        `json:"timezone"`
+	DigestFrequency     string             `json:"digest_frequency"`
+	DigestIntervalHours int32              `json:"digest_interval_hours"`
+	DigestTime          pgtype.Time        `json:"digest_time"`
+	QuietHoursStart     pgtype.Time        `json:"quiet_hours_start"`
+	QuietHoursEnd       pgtype.Time        `json:"quiet_hours_end"`
 }
 
 // Every active subscription with the data the matching worker needs: the saved
@@ -506,6 +553,11 @@ type ListActiveSubscriptionsRow struct {
 // account never opened the settings page, which is not the same as opting out. Same
 // reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
 // inner join — see migration 0153 for why one column could not answer both.
+//
+// It also carries the delivery-timing context (the same COALESCE defaults as
+// GetSubscriptionForDelivery and ClaimSubscriptionMatches) and the two stamps the
+// worker uses to skip a search whose result could not be sent this pass — see
+// notify.searchDue.
 func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error) {
 	rows, err := q.db.Query(ctx, listActiveSubscriptions)
 	if err != nil {
@@ -522,6 +574,14 @@ func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubs
 			&i.Destination,
 			&i.StartAt,
 			&i.Query,
+			&i.LastDigestSentAt,
+			&i.LastSearchedAt,
+			&i.Timezone,
+			&i.DigestFrequency,
+			&i.DigestIntervalHours,
+			&i.DigestTime,
+			&i.QuietHoursStart,
+			&i.QuietHoursEnd,
 		); err != nil {
 			return nil, err
 		}
@@ -653,7 +713,7 @@ func (q *Queries) ListSubscriptionUpdates(ctx context.Context, arg ListSubscript
 }
 
 const listSubscriptions = `-- name: ListSubscriptions :many
-SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.active, s.start_at, s.created_at, s.last_digest_sent_at, ss.name AS saved_search_name, ss.query AS saved_search_query
+SELECT s.id, s.user_id, s.saved_search_id, s.channel, s.destination, s.active, s.start_at, s.created_at, s.last_digest_sent_at, s.last_searched_at, ss.name AS saved_search_name, ss.query AS saved_search_query
 FROM subscriptions s
 JOIN saved_searches ss ON ss.id = s.saved_search_id
 WHERE s.user_id = $1
@@ -670,6 +730,7 @@ type ListSubscriptionsRow struct {
 	StartAt          pgtype.Timestamptz `json:"start_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
+	LastSearchedAt   pgtype.Timestamptz `json:"last_searched_at"`
 	SavedSearchName  string             `json:"saved_search_name"`
 	SavedSearchQuery string             `json:"saved_search_query"`
 }
@@ -695,6 +756,7 @@ func (q *Queries) ListSubscriptions(ctx context.Context, userID int64) ([]ListSu
 			&i.StartAt,
 			&i.CreatedAt,
 			&i.LastDigestSentAt,
+			&i.LastSearchedAt,
 			&i.SavedSearchName,
 			&i.SavedSearchQuery,
 		); err != nil {
@@ -813,6 +875,24 @@ func (q *Queries) MarkMatchesNotified(ctx context.Context, arg MarkMatchesNotifi
 	return result.RowsAffected(), nil
 }
 
+const markSubscriptionsSearched = `-- name: MarkSubscriptionsSearched :exec
+UPDATE subscriptions SET last_searched_at = $1
+WHERE id = ANY($2::bigint[])
+`
+
+type MarkSubscriptionsSearchedParams struct {
+	SearchedAt pgtype.Timestamptz `json:"searched_at"`
+	Ids        []int64            `json:"ids"`
+}
+
+// Stamp the subscriptions whose saved search the matching stage just ran and
+// recorded. searched_at is the instant the pass STARTED, not now(): the next
+// search pages back to it, so a posting indexed while this pass ran is covered.
+func (q *Queries) MarkSubscriptionsSearched(ctx context.Context, arg MarkSubscriptionsSearchedParams) error {
+	_, err := q.db.Exec(ctx, markSubscriptionsSearched, arg.SearchedAt, arg.Ids)
+	return err
+}
+
 const recordMatchDeliveryFailure = `-- name: RecordMatchDeliveryFailure :exec
 UPDATE subscription_matches
 SET attempts   = attempts + 1,
@@ -912,7 +992,7 @@ const setSubscriptionActive = `-- name: SetSubscriptionActive :one
 UPDATE subscriptions
 SET active = $1
 WHERE id = $2 AND user_id = $3
-RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at, last_digest_sent_at
+RETURNING id, user_id, saved_search_id, channel, destination, active, start_at, created_at, last_digest_sent_at, last_searched_at
 `
 
 type SetSubscriptionActiveParams struct {
@@ -936,6 +1016,7 @@ func (q *Queries) SetSubscriptionActive(ctx context.Context, arg SetSubscription
 		&i.StartAt,
 		&i.CreatedAt,
 		&i.LastDigestSentAt,
+		&i.LastSearchedAt,
 	)
 	return i, err
 }

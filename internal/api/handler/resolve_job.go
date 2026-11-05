@@ -36,7 +36,7 @@ const (
 )
 
 // ResolveJob is the HTTP door onto the shared intake sequence (see intakeService), used by the
-// website, the browser extension and the CLI. Authenticated, and rate limited with board
+// website, the browser extension and the CLI. Authenticated, alongside board
 // contributions because both make the server fetch a user-supplied URL.
 //
 // Four outcomes, one shape:

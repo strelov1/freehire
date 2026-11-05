@@ -27,7 +27,7 @@ func TestProblemToolFailsClosedAndIsOAuthOnly(t *testing.T) {
 			t.Fatalf("unavailable tool claimed success: %+v %v", result, err)
 		}
 	}
-	h.problems = problemreport.New(nil, nil)
+	h.problems = problemreport.New(nil)
 	if _, err := tool.Run(t.Context(), 0, json.RawMessage(`{"category":"other","goal":"test","expected":"success","actual":"failure"}`)); err == nil {
 		t.Fatal("tool accepted missing identity")
 	}

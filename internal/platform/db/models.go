@@ -1598,6 +1598,7 @@ type Subscription struct {
 	StartAt          pgtype.Timestamptz `json:"start_at"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	LastDigestSentAt pgtype.Timestamptz `json:"last_digest_sent_at"`
+	LastSearchedAt   pgtype.Timestamptz `json:"last_searched_at"`
 }
 
 type SubscriptionMatch struct {
@@ -1809,6 +1810,7 @@ type UserProfile struct {
 	Seniorities         []string           `json:"seniorities"`
 	ExcludedSources     []string           `json:"excluded_sources"`
 	ExcludedCompanies   []string           `json:"excluded_companies"`
+	JobLanguages        []string           `json:"job_languages"`
 }
 
 type UserPushToken struct {

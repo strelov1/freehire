@@ -1,14 +1,11 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/strelov1/freehire/internal/api/ratelimit"
 	"github.com/strelov1/freehire/internal/ingest/jdresolve"
 )
 
@@ -23,33 +20,7 @@ func newJDResolveHandlers(resolver *jdresolve.Resolver) *jdResolveHandlers {
 }
 
 func (h *jdResolveHandlers) register(api fiber.Router, mw middleware) {
-	api.Post("/me/jd/resolve", mw.cookie, jdURLLimiter(mw.throttler), h.Resolve)
-}
-
-// jdURLLimiterPerHour bounds how many outbound-fetching url requests one user may submit
-// to this endpoint per hour — sized the same as contributionsPerHour since the underlying
-// risk (an unbounded endpoint fetching a caller-supplied URL is an outbound-fetch amplifier
-// and a timing oracle for public hosts) is identical. A DEDICATED limiter, not
-// contributionLimiter itself: job_slug and text requests make no outbound fetch at all, so
-// sharing /jobs/resolve's counter would throttle a tailoring session that never once
-// touched the network, and vice versa.
-const jdURLLimiterPerHour = contributionsPerHour
-
-// jdURLLimiter throttles only the url branch: it reads the already-buffered body (cheap,
-// and it does not consume it — c.BodyParser in Resolve reads it again the normal way) and
-// skips rate-limiting entirely when it names no url, so a job_slug or pasted-text request
-// never spends this budget. A body that fails to parse here is not limited either; Resolve's
-// own BodyParser call rejects it as a 400 right after, unmetered. This skip is route-specific
-// and doesn't generalize into ratelimit.Middleware, so it stays a thin wrapper around it.
-func jdURLLimiter(throttler ratelimit.Throttler) fiber.Handler {
-	limitURLBranch := ratelimit.Middleware(throttler, ratelimit.KeyByUserOrIP("jdresolve"), jdURLLimiterPerHour, time.Hour)
-	return func(c *fiber.Ctx) error {
-		var in jdResolveRequest
-		if err := json.Unmarshal(c.Body(), &in); err != nil || strings.TrimSpace(in.URL) == "" {
-			return c.Next()
-		}
-		return limitURLBranch(c)
-	}
+	api.Post("/me/jd/resolve", mw.cookie, h.Resolve)
 }
 
 // jdResolveRequest is exactly one of JobSlug/URL/Text. Title/Company are optional hints

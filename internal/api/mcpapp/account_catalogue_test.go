@@ -81,7 +81,7 @@ func TestAccountCatalogueToolsAreCallableAndRemainReadOnly(t *testing.T) {
 
 func TestAccountCatalogueDoesNotExportPayloadsToAnalytics(t *testing.T) {
 	const private = "private-account-search@example.invalid"
-	flush := recordPostHog(t)
+	records := captureToolLogs(t)
 	reader := readerThatFinds(t)
 	reader.searchCompanies = func(context.Context, CompanySearchInput) (SearchCompaniesResult, error) {
 		return SearchCompaniesResult{Total: 1, Companies: []CompanySummary{{Name: private}}}, nil
@@ -92,9 +92,11 @@ func TestAccountCatalogueDoesNotExportPayloadsToAnalytics(t *testing.T) {
 	if got.Companies[0].Name != private {
 		t.Fatal("the test call did not return the sensitive payload")
 	}
-	events := flush()
-	if !strings.Contains(events, "$mcp_tool_call") {
-		t.Fatal("analytics captured no tool event")
+	start, finish := nextToolLog(t, records), nextToolLog(t, records)
+	encoded, _ := json.Marshal([]map[string]any{start, finish})
+	events := string(encoded)
+	if finish["tool"] != "search_companies" || finish["outcome"] != "success" {
+		t.Fatalf("missing local analytics: %s", events)
 	}
 	if strings.Contains(events, private) {
 		t.Fatal("an account catalogue query or response leaked into analytics")

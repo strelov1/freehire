@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -54,7 +53,7 @@ func queuedProgress(n int64) embedprogress.Progress {
 
 func TestEmbedProgress_JSON(t *testing.T) {
 	src := &fakeProgress{current: queuedProgress(123)}
-	h := newEmbedProgressHandlers(src, newTestThrottler(t))
+	h := newEmbedProgressHandlers(src)
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/stats/embeddings", h.Progress)
 
@@ -79,7 +78,7 @@ func TestEmbedProgress_JSON(t *testing.T) {
 // stream test for why app.Test cannot read it).
 func TestEmbedProgress_StreamSendsCurrentThenEachSample(t *testing.T) {
 	src := &fakeProgress{current: queuedProgress(500)}
-	h := newEmbedProgressHandlers(src, newTestThrottler(t))
+	h := newEmbedProgressHandlers(src)
 	h.pingInterval = 10 * time.Millisecond
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/stats/embeddings/stream", h.Stream)
@@ -126,34 +125,11 @@ func TestEmbedProgress_StreamSendsCurrentThenEachSample(t *testing.T) {
 	}
 }
 
-func TestEmbedProgress_StreamConnectsAreLimitedPerIP(t *testing.T) {
-	h := newEmbedProgressHandlers(&fakeProgress{}, newTestThrottler(t))
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	h.register(app.Group("/api/v1"))
-
-	limited := false
-	for i := 0; i < embedProgressConnectsPerMinute+1; i++ {
-		// HEAD-free probe: a limited request is refused before the stream opens, so
-		// app.Test returns for it; an admitted one streams, so give it a short budget.
-		resp, err := app.Test(httptest.NewRequestWithContext(context.Background(), fiber.MethodGet, "/api/v1/stats/embeddings/stream", nil), 50)
-		if err != nil {
-			continue // an admitted stream outlived the budget
-		}
-		if resp.StatusCode == fiber.StatusTooManyRequests {
-			limited = true
-		}
-		resp.Body.Close()
-	}
-	if !limited {
-		t.Errorf("%d connects from one IP were all admitted, want the last refused with 429", embedProgressConnectsPerMinute+1)
-	}
-}
-
 // Before the sampler's first reading the document is all null; sending it would wipe
 // the figures the page already rendered on the server.
 func TestEmbedProgress_StreamSkipsAnUnsampledDocument(t *testing.T) {
 	src := &fakeProgress{} // nothing sampled yet
-	h := newEmbedProgressHandlers(src, newTestThrottler(t))
+	h := newEmbedProgressHandlers(src)
 	h.pingInterval = 10 * time.Millisecond
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/stats/embeddings/stream", h.Stream)

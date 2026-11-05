@@ -28,7 +28,7 @@ func (q *Queries) DeleteUserProfile(ctx context.Context, userID int64) (int64, e
 }
 
 const getUserProfile = `-- name: GetUserProfile :one
-SELECT user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies FROM user_profiles
+SELECT user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies, job_languages FROM user_profiles
 WHERE user_id = $1
 `
 
@@ -48,6 +48,7 @@ func (q *Queries) GetUserProfile(ctx context.Context, userID int64) (UserProfile
 		&i.Seniorities,
 		&i.ExcludedSources,
 		&i.ExcludedCompanies,
+		&i.JobLanguages,
 	)
 	return i, err
 }
@@ -87,8 +88,8 @@ func (q *Queries) ListUserProfileSkillSets(ctx context.Context, userIds []int64)
 }
 
 const upsertUserProfile = `-- name: UpsertUserProfile :one
-INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies, location_preferences)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies, location_preferences, job_languages)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'::text[]))
 ON CONFLICT (user_id) DO UPDATE
 SET specializations      = EXCLUDED.specializations,
     skills               = EXCLUDED.skills,
@@ -97,8 +98,9 @@ SET specializations      = EXCLUDED.specializations,
     excluded_sources     = EXCLUDED.excluded_sources,
     excluded_companies   = EXCLUDED.excluded_companies,
     location_preferences = EXCLUDED.location_preferences,
+    job_languages        = EXCLUDED.job_languages,
     updated_at           = now()
-RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies
+RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies, job_languages
 `
 
 type UpsertUserProfileParams struct {
@@ -110,6 +112,7 @@ type UpsertUserProfileParams struct {
 	ExcludedSources     []string        `json:"excluded_sources"`
 	ExcludedCompanies   []string        `json:"excluded_companies"`
 	LocationPreferences json.RawMessage `json:"location_preferences"`
+	JobLanguages        []string        `json:"job_languages"`
 }
 
 // Create-or-replace the user's one profile. The PRIMARY KEY (user_id) makes this an
@@ -128,6 +131,7 @@ func (q *Queries) UpsertUserProfile(ctx context.Context, arg UpsertUserProfilePa
 		arg.ExcludedSources,
 		arg.ExcludedCompanies,
 		arg.LocationPreferences,
+		arg.JobLanguages,
 	)
 	var i UserProfile
 	err := row.Scan(
@@ -141,6 +145,7 @@ func (q *Queries) UpsertUserProfile(ctx context.Context, arg UpsertUserProfilePa
 		&i.Seniorities,
 		&i.ExcludedSources,
 		&i.ExcludedCompanies,
+		&i.JobLanguages,
 	)
 	return i, err
 }
@@ -154,9 +159,10 @@ SET specializations      = $2,
     excluded_sources     = $6,
     excluded_companies   = $7,
     location_preferences = $8,
+    job_languages        = $10,
     updated_at           = now()
 WHERE user_id = $1 AND updated_at = $9
-RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies
+RETURNING user_id, skills, created_at, updated_at, specializations, location_preferences, excluded_skills, seniorities, excluded_sources, excluded_companies, job_languages
 `
 
 type UpsertUserProfileIfUnchangedParams struct {
@@ -169,6 +175,7 @@ type UpsertUserProfileIfUnchangedParams struct {
 	ExcludedCompanies   []string           `json:"excluded_companies"`
 	LocationPreferences json.RawMessage    `json:"location_preferences"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	JobLanguages        []string           `json:"job_languages"`
 }
 
 // Same write as UpsertUserProfile, guarded on the row's updated_at still matching what the
@@ -188,6 +195,7 @@ func (q *Queries) UpsertUserProfileIfUnchanged(ctx context.Context, arg UpsertUs
 		arg.ExcludedCompanies,
 		arg.LocationPreferences,
 		arg.UpdatedAt,
+		arg.JobLanguages,
 	)
 	var i UserProfile
 	err := row.Scan(
@@ -201,6 +209,7 @@ func (q *Queries) UpsertUserProfileIfUnchanged(ctx context.Context, arg UpsertUs
 		&i.Seniorities,
 		&i.ExcludedSources,
 		&i.ExcludedCompanies,
+		&i.JobLanguages,
 	)
 	return i, err
 }

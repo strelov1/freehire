@@ -173,6 +173,7 @@ func recordResponse(c *fiber.Ctx) {
 	// handler, and a timer started later in the chain would still have caught it, but a
 	// future wait in the middleware chain itself would not.
 	httpDuration.WithLabelValues(route).Observe(time.Since(c.Context().Time()).Seconds())
+	observeOJCPResponse(c, route)
 	RecordRequest(status)
 }
 

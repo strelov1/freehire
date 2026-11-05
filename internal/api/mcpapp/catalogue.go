@@ -9,7 +9,7 @@ import (
 // registerCatalogueTools adds the catalogue reads the signed-in assistant does not own.
 // Its search_jobs, get_job and get_company retain their account-specific schemas.
 func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
-	addLoggedToolForSurface(
+	AddObservedTool(
 		server,
 		surface,
 		&mcp.Tool{
@@ -25,7 +25,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	addLoggedToolForSurface(
+	AddObservedTool(
 		server,
 		surface,
 		&mcp.Tool{
@@ -43,7 +43,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	addLoggedToolForSurface(
+	AddObservedTool(
 		server,
 		surface,
 		&mcp.Tool{
@@ -59,7 +59,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	addLoggedToolForSurface(
+	AddObservedTool(
 		server,
 		surface,
 		&mcp.Tool{
@@ -75,7 +75,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	addLoggedToolForSurface(
+	AddObservedTool(
 		server,
 		surface,
 		&mcp.Tool{
@@ -91,7 +91,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	addLoggedToolForSurface(
+	AddObservedTool(
 		server,
 		surface,
 		&mcp.Tool{
@@ -107,7 +107,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	addLoggedToolForSurface(
+	AddObservedTool(
 		server,
 		surface,
 		&mcp.Tool{
@@ -123,7 +123,7 @@ func registerCatalogueTools(server *mcp.Server, r Reader, surface string) {
 		},
 	)
 
-	addLoggedToolForSurface(
+	AddObservedTool(
 		server,
 		surface,
 		&mcp.Tool{

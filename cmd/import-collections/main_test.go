@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/strelov1/freehire/internal/job/collections"
 	"github.com/strelov1/freehire/internal/platform/db"
+	"github.com/strelov1/freehire/internal/platform/scraplingfetch"
 )
 
 // plan matches each collection's candidates against existing companies and emits a
@@ -401,9 +403,12 @@ func TestClientFor_UsesDirectWhenNoProxyConfigured(t *testing.T) {
 }
 
 func TestClientFor_UsesProxiedForAnAllowlistedSlug(t *testing.T) {
+	// Both registers refuse a plain client from our hosts (see proxiedCollectionSlugs).
 	direct, proxied := &http.Client{}, &http.Client{}
-	if got := clientFor("us-h1b-sponsor", direct, proxied); got != proxied {
-		t.Error("clientFor did not route the allowlisted slug through the proxy")
+	for _, slug := range []string{"us-h1b-sponsor", "ca-lmia-employer"} {
+		if got := clientFor(slug, direct, proxied); got != proxied {
+			t.Errorf("clientFor did not route %s through the proxy", slug)
+		}
 	}
 }
 
@@ -417,6 +422,7 @@ func TestClientFor_UsesDirectForANonAllowlistedSlug(t *testing.T) {
 }
 
 func TestProxiedClient_ReturnsNilWhenSOURCES_PROXY_URLIsUnset(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "")
 	t.Setenv("SOURCES_PROXY_URL", "")
 	got, err := proxiedClient(fetchTimeout)
 	if err != nil {
@@ -428,6 +434,7 @@ func TestProxiedClient_ReturnsNilWhenSOURCES_PROXY_URLIsUnset(t *testing.T) {
 }
 
 func TestProxiedClient_BuildsAClientWhenSOURCES_PROXY_URLIsSet(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "")
 	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
 	got, err := proxiedClient(fetchTimeout)
 	if err != nil {
@@ -439,6 +446,7 @@ func TestProxiedClient_BuildsAClientWhenSOURCES_PROXY_URLIsSet(t *testing.T) {
 }
 
 func TestProxiedClient_ErrorsOnAnUnparseableSOURCES_PROXY_URL(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "")
 	t.Setenv("SOURCES_PROXY_URL", "not a url")
 	if _, err := proxiedClient(fetchTimeout); err == nil {
 		t.Error("proxiedClient accepted an invalid SOURCES_PROXY_URL")
@@ -540,5 +548,49 @@ func TestWithoutFailed_LeavesAFailedCollectionsTagsAlone(t *testing.T) {
 	p := planScoped(rows, map[string][]collections.Record{"uk": {{Name: "Monzo"}}}, narrowed)
 	if len(p.writes) != 0 {
 		t.Errorf("writes = %+v, want none — adyen's nl tag must survive the outage", p.writes)
+	}
+}
+
+func TestProxiedClient_PrefersTheScraplingTier(t *testing.T) {
+	var got struct {
+		Mode  string `json:"mode"`
+		Proxy bool   `json:"proxy"`
+	}
+	svc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(`{"status":200,"url":"https://www.uscis.gov/","headers":{},"body":""}`))
+	}))
+	defer svc.Close()
+	t.Setenv("SCRAPLING_FETCH_URL", svc.URL)
+	t.Setenv("SCRAPLING_FETCH_TOKEN", "token")
+	t.Setenv("SOURCES_PROXY_URL", "http://user:pass@proxy.example:8080")
+
+	client, err := proxiedClient(fetchTimeout)
+	if err != nil {
+		t.Fatalf("proxiedClient: %v", err)
+	}
+	if _, ok := client.Transport.(*scraplingfetch.Transport); !ok {
+		t.Fatalf("proxiedClient transport = %T, want the Scrapling tier", client.Transport)
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://www.uscis.gov/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("get through the Scrapling tier: %v", err)
+	}
+	_ = resp.Body.Close()
+	// uscis.gov refuses the Scrapling tier without its proxy too, so both options matter.
+	if got.Mode != "http" || !got.Proxy {
+		t.Errorf("Scrapling request mode=%q proxy=%v, want mode=http proxy=true", got.Mode, got.Proxy)
+	}
+}
+
+func TestProxiedClient_ErrorsOnScraplingWithoutAToken(t *testing.T) {
+	t.Setenv("SCRAPLING_FETCH_URL", "http://127.0.0.1:8098")
+	t.Setenv("SCRAPLING_FETCH_TOKEN", "")
+	if _, err := proxiedClient(fetchTimeout); err == nil {
+		t.Error("proxiedClient accepted SCRAPLING_FETCH_URL without a token")
 	}
 }

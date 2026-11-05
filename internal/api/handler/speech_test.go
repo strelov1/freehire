@@ -241,34 +241,6 @@ func TestTranscription_UpstreamFailureIs502(t *testing.T) {
 	}
 }
 
-func TestTranscription_ThrottlesOneCallerRatherThanOneAddress(t *testing.T) {
-	stt := &fakeTranscriber{text: "ok"}
-	iss := auth.NewIssuer("test-secret", time.Hour)
-	token, err := iss.Issue(1, testTokenVersion)
-	if err != nil {
-		t.Fatalf("issue token: %v", err)
-	}
-	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
-	app.Post("/speech/transcriptions", auth.RequireAuth(iss, testVersions), perCallerLimiter(2), markPaidAI(unmeteredAI),
-		(&speechHandlers{stt: stt}).PostTranscription)
-
-	for attempt := 1; attempt <= 3; attempt++ {
-		body, ctype := audioUpload(t, []byte("OpusOpus"), "a.webm")
-		resp := doTranscription(t, app, body, ctype, token)
-		resp.Body.Close()
-		want := fiber.StatusOK
-		if attempt == 3 {
-			want = fiber.StatusTooManyRequests
-		}
-		if resp.StatusCode != want {
-			t.Errorf("attempt %d status = %d, want %d", attempt, resp.StatusCode, want)
-		}
-	}
-	if stt.calls != 2 {
-		t.Errorf("the gateway was called %d time(s), want 2 — the throttled request must not reach it", stt.calls)
-	}
-}
-
 // The microphone sits in the composer that posts messages, so anything allowed to
 // post a message is allowed to transcribe for it: the same gate as
 // POST /assistant/sessions/:id/messages, and not the narrower cookie-only one.

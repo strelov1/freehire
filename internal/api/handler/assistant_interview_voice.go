@@ -20,14 +20,6 @@ type realtimeMinter interface {
 	CallsURL() string
 }
 
-// voiceTokensPerHour bounds how many calls one caller may start per hour. A mint is
-// one credential per call, not per minute of audio, but Realtime audio bills at
-// several times STT's per-minute rate (see design.md's Risks/Trade-offs) — the
-// client-side call-duration cap bounds one call's length, and this bounds how many
-// calls a script can start in the first place. Twenty is far past anyone rehearsing
-// and far below anything worth doing with a stolen session.
-const voiceTokensPerHour = 20
-
 // PostAssistantVoiceToken mints a short-lived Realtime API client secret for a
 // hands-free voice call on an existing `interview` session. The audio itself never
 // reaches this server: the browser takes the returned secret to the gateway's own

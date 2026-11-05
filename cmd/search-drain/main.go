@@ -61,6 +61,7 @@ func run() int {
 		MaxAttempts:  dcfg.MaxAttempts,
 		CallTimeout:  dcfg.CallTimeout,
 		MaxPerRun:    dcfg.MaxPerRun,
+		Stop:         func() bool { return worker.Paused(ctx, cfg.RedisURL, worker.SearchDrainJob) },
 	}
 
 	// Alternate one wave of each queue so an indexing backlog cannot hold up

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // The GOV.UK register of licensed sponsors. The CSV is republished each month at a
@@ -119,19 +120,44 @@ func ParseUKSponsors(data []byte) ([]Record, error) {
 	return records, nil
 }
 
-// get fetches a URL and returns its body, treating any non-200 as an error.
+// rateLimitWait is the pause before the first retry of a 429; it doubles per retry.
+// open.canada.ca answers about every second request of a quick burst with 429
+// (measured 2026-11-05), which failed the whole ca-lmia-employer import.
+var rateLimitWait = 2 * time.Second
+
+const rateLimitAttempts = 4
+
+// get fetches a URL and returns its body, treating any non-200 as an error. A 429 is
+// retried after a growing pause, since it says "later", not "no".
 func get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
+	wait := rateLimitWait
+	for attempt := 1; ; attempt++ {
+		body, status, err := getOnce(ctx, client, url)
+		if status != http.StatusTooManyRequests || attempt == rateLimitAttempts {
+			return body, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(wait):
+		}
+		wait *= 2
+	}
+}
+
+func getOnce(ctx context.Context, client *http.Client, url string) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s: status %d", url, resp.StatusCode)
+		return nil, resp.StatusCode, fmt.Errorf("%s: status %d", url, resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	return body, resp.StatusCode, err
 }

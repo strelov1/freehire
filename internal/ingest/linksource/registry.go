@@ -49,7 +49,11 @@ type PerLinkSource interface {
 
 // All assembles the registered link-source adapters, sharing one HTTP client. Adding a
 // destination is a new adapter plus one line here.
-func All(c Client) []Source {
+func All(c Client) []Source { return AllWithCatalog(c, nil) }
+
+// AllWithCatalog is All for a caller that RESOLVES links rather than only matching them: the
+// catalogue lets the adapters that namespace an id by board read the board's stored spelling.
+func AllWithCatalog(c Client, catalog BoardCatalog) []Source {
 	return []Source{
 		NewHabrCareer(c),
 		NewRemoteYeah(c),
@@ -58,6 +62,7 @@ func All(c Client) []Source {
 		NewAshby(c),
 		NewLever(c),
 		NewWorkable(c),
+		NewDover(c, catalog),
 		NewBairesDev(c),
 	}
 }
@@ -77,7 +82,7 @@ func All(c Client) []Source {
 // where every outbound link would then look like a vacancy. Here the URL is a deliberate
 // input, which is what makes a last-resort resolver safe.
 func ImportRegistry(c Client, ingest map[string]sources.Source, catalog BoardCatalog) []Source {
-	reg := All(c)
+	reg := AllWithCatalog(c, catalog)
 	reg = append(reg, NewBoardCoverage(ingest, catalog))
 	return append(reg, NewGeneric(c))
 }

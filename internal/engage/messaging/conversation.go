@@ -3,7 +3,6 @@ package messaging
 import (
 	"context"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -39,12 +38,6 @@ func (s *Service) Start(ctx context.Context, r StartRequest) (Conversation, erro
 // kind that must tell "already talking" apart from its own limits before starting.
 func (s *Service) ConversationByPairKey(ctx context.Context, kind, pairKey string) (ConversationRow, bool, error) {
 	return s.repo.ConversationByPairKey(ctx, kind, pairKey)
-}
-
-// StartedSince is how many conversations of the kind userID started after since, and
-// when the oldest of them was started — what a kind's rolling start cap is built on.
-func (s *Service) StartedSince(ctx context.Context, kind string, userID int64, since time.Time) (int, time.Time, error) {
-	return s.repo.StartedSince(ctx, kind, userID, since)
 }
 
 // Blocked reports a block between the two accounts in either direction. Blocks are

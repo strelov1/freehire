@@ -83,7 +83,12 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
   const seen = new Set<string>();
   let windowStart = Date.now();
   return {
-    capture(error: unknown) {
+    // `kitError`: the caller vouches this is SvelteKit's { status, message } and not an
+    // arbitrary object (a rejection reason may look the same and carry personal data).
+    capture(
+      error: unknown,
+      context: { route?: string | null; method?: string; kitError?: boolean } = {},
+    ) {
       try {
         if (isTransientNoise(error)) return;
         if (
@@ -92,12 +97,23 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         )
           return;
         let rawMessage = "Non-Error exception";
-        if (error instanceof Error) rawMessage = error.message;
-        else if (
+        let type: string = typeof error;
+        if (error instanceof Error) {
+          rawMessage = error.message;
+          type = error.name;
+        } else if (
           ["string", "number", "boolean", "bigint"].includes(typeof error)
         )
           rawMessage = String(error);
-        const type = error instanceof Error ? error.name : typeof error;
+        else if (context.kitError && isHttpError(error)) {
+          // SvelteKit hands handleError an App.Error ({ status, message }), not an Error;
+          // its message is the literal a load passed to error(), so it is safe to report.
+          const detail = error.message;
+          rawMessage = `HTTP ${error.status}${typeof detail === "string" ? `: ${detail}` : ""}`;
+          type = "HttpError";
+        }
+        const route = context.route ? sanitize(context.route, 256) : "";
+        const method = context.method ? sanitize(context.method, 16) : "";
         const message = sanitize(rawMessage, 1024);
         const stack = sanitize(
           error instanceof Error ? error.stack || "" : "",
@@ -106,12 +122,13 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
         // Preserve a sanitized local copy before delivery bounds can drop an event.
         if (options.logToConsole) {
           try {
-            console.error(stack || `${sanitize(type, 128)}: ${message}`);
+            const where = method || route ? ` [${[method, route].filter(Boolean).join(" ")}]` : "";
+            console.error(`${stack || `${sanitize(type, 128)}: ${message}`}${where}`);
           } catch {
             /* Continue exporting if local logging fails. */
           }
         }
-        const key = `${message}\n${stack}`;
+        const key = `${route}\n${message}\n${stack}`;
         const now = Date.now();
         if (now - windowStart >= 60_000) {
           windowStart = now;
@@ -128,6 +145,8 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
             "exception.type": sanitize(type, 128),
             "exception.message": message,
             "exception.stacktrace": stack,
+            ...(route && { "http.route": route }),
+            ...(method && { "http.request.method": method }),
           },
         });
       } catch {
@@ -149,6 +168,16 @@ export function createErrorTelemetry(options: ErrorTelemetryOptions) {
       }
     },
   };
+}
+
+function isHttpError(
+  error: unknown,
+): error is { status: number; message?: unknown } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    typeof (error as { status?: unknown }).status === "number"
+  );
 }
 
 type ErrorTelemetry = ReturnType<typeof createErrorTelemetry>;

@@ -30,7 +30,6 @@ const plans: PlansMatrix = {
   prices: [price('pro', 'price_pro'), price('ultra', 'price_ultra')],
   features: [],
   enforced: [],
-  api_limits: { anonymous_per_minute: 120, anonymous_per_day: 2000, api_per_minute: 1200, data_per_minute: 6000 },
 };
 
 // Typed by hand rather than as `PageData`, which declares `plans` as `null`: the loader's
@@ -98,7 +97,7 @@ describe('/pricing — the local-card warning', () => {
 });
 
 describe('/pricing — the API plans', () => {
-  it('lists both API plans with the limits the server enforces', async () => {
+  it('lists both API plans and their commercial-use licence', async () => {
     edgePlaces(null);
     renderPricing({
       ...plans,
@@ -106,9 +105,7 @@ describe('/pricing — the API plans', () => {
     });
     expect(await screen.findByRole('heading', { name: 'API', level: 3 })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Data', level: 3 })).toBeTruthy();
-    expect(screen.getByText('1,200 requests a minute, no daily cap')).toBeTruthy();
-    expect(screen.getByText('6,000 requests a minute, no daily cap')).toBeTruthy();
-    expect(screen.getByText(/up to 120 requests a minute/)).toBeTruthy();
+    expect(screen.getByText(/An API plan licenses the data for use in your product/)).toBeTruthy();
   });
 
   it('shows no API section when the product is not sold', async () => {

@@ -366,37 +366,6 @@ func TestBuddyInviteErrors(t *testing.T) {
 	env.want(http.StatusConflict, http.MethodPost, url, "a", map[string]any{"handle": hb, "body": "again"})
 }
 
-func TestBuddyInviteLimit(t *testing.T) {
-	names := []string{"a"}
-	for i := range buddy.DailyInvitationCap + 1 {
-		names = append(names, "p"+strconv.Itoa(i))
-	}
-	env := newBuddyEnv(t, names...)
-	env.join("a")
-	handles := make([]string, 0, len(names)-1)
-	for _, n := range names[1:] {
-		handles = append(handles, env.join(n))
-	}
-	url := "/api/v1/me/buddies/invite"
-	for _, h := range handles[:buddy.DailyInvitationCap] {
-		env.want(http.StatusCreated, http.MethodPost, url, "a", map[string]any{"handle": h, "body": "hi"})
-	}
-	code, out, hdr := env.do(http.MethodPost, url, "a", map[string]any{"handle": handles[buddy.DailyInvitationCap], "body": "hi"})
-	if code != http.StatusTooManyRequests {
-		t.Fatalf("status %d body %v, want 429", code, out)
-	}
-	at, err := time.Parse(time.RFC3339, out["retry_at"].(string))
-	if err != nil || !at.After(time.Now()) {
-		t.Fatalf("retry_at = %v (%v)", out["retry_at"], err)
-	}
-	if secs, err := strconv.Atoi(hdr.Get("Retry-After")); err != nil || secs < 1 {
-		t.Fatalf("Retry-After = %q", hdr.Get("Retry-After"))
-	}
-	if out["error"] == nil {
-		t.Fatalf("429 body carries no error: %v", out)
-	}
-}
-
 func TestBuddyReportAndModeration(t *testing.T) {
 	env := newBuddyEnv(t, "a", "b", "mod")
 	env.join("a")

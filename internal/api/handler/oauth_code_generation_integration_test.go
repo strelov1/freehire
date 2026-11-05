@@ -73,6 +73,9 @@ func (r *revokingDBTX) Exec(ctx context.Context, sql string, args ...any) (pgcon
 func (r *revokingDBTX) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
 	return r.pool.Query(ctx, sql, args...)
 }
+func (r *revokingDBTX) CopyFrom(ctx context.Context, table pgx.Identifier, columns []string, rows pgx.CopyFromSource) (int64, error) {
+	return r.pool.CopyFrom(ctx, table, columns, rows)
+}
 func (r *revokingDBTX) SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults {
 	return r.pool.SendBatch(ctx, b)
 }
@@ -275,6 +278,9 @@ func (i *issuingDBTX) QueryRow(ctx context.Context, sql string, args ...any) pgx
 		}
 	}
 	return i.pool.QueryRow(ctx, sql, args...)
+}
+func (i *issuingDBTX) CopyFrom(ctx context.Context, table pgx.Identifier, columns []string, rows pgx.CopyFromSource) (int64, error) {
+	return i.pool.CopyFrom(ctx, table, columns, rows)
 }
 func (i *issuingDBTX) SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults {
 	return i.pool.SendBatch(ctx, b)

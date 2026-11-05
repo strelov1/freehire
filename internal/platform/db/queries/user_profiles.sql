@@ -11,8 +11,8 @@ WHERE user_id = $1;
 -- bump updated_at. All fields are already normalized by the service; seniorities,
 -- excluded_skills, excluded_sources and excluded_companies may be empty;
 -- location_preferences is a validated JSONB block or NULL (no preferences).
-INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies, location_preferences)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO user_profiles (user_id, specializations, skills, seniorities, excluded_skills, excluded_sources, excluded_companies, location_preferences, job_languages)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE(sqlc.arg(job_languages)::text[], '{}'::text[]))
 ON CONFLICT (user_id) DO UPDATE
 SET specializations      = EXCLUDED.specializations,
     skills               = EXCLUDED.skills,
@@ -21,6 +21,7 @@ SET specializations      = EXCLUDED.specializations,
     excluded_sources     = EXCLUDED.excluded_sources,
     excluded_companies   = EXCLUDED.excluded_companies,
     location_preferences = EXCLUDED.location_preferences,
+    job_languages        = EXCLUDED.job_languages,
     updated_at           = now()
 RETURNING *;
 
@@ -39,6 +40,7 @@ SET specializations      = $2,
     excluded_sources     = $6,
     excluded_companies   = $7,
     location_preferences = $8,
+    job_languages        = $10,
     updated_at           = now()
 WHERE user_id = $1 AND updated_at = $9
 RETURNING *;

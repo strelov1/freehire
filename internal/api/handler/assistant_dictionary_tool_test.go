@@ -45,13 +45,6 @@ func TestDictionaryMCPUsesWebsiteValidation(t *testing.T) {
 	if err != nil || got != (dictionaryRecordBody{RequestCount: 3, Status: "pending"}) || calls != 1 {
 		t.Fatalf("result=%#v err=%v calls=%d", got, err, calls)
 	}
-	h.dictionary.write = func(context.Context, int64, string, string, string) (int32, string, error) {
-		return 0, "", errGapCap
-	}
-	_, err = tool.Run(t.Context(), 42, json.RawMessage(`{"kind":"skill","term":"Unlisted-Quasar-Tech"}`))
-	if err == nil || !strings.Contains(err.Error(), "daily dictionary gap cap") {
-		t.Fatalf("cap = %v", err)
-	}
 	failure := errors.New("store unavailable")
 	h.dictionary.write = func(context.Context, int64, string, string, string) (int32, string, error) {
 		return 0, "", failure

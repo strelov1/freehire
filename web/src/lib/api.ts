@@ -1771,8 +1771,8 @@ export function createApi(
     return requestData<CheckoutSession>(`/api/v1/billing/checkout${q}`);
   }
 
-  /** Check what a promo code is worth without spending it. Rate limited server-side, and
-   *  every refusal about the code itself is the same 404 — telling "no such code" apart
+  /** Check what a promo code is worth without spending it. Every refusal about the code
+   *  itself is the same 404 — telling "no such code" apart
    *  from "out of seats" would make this an oracle for guessing them. */
   async function promoPreview(code: string): Promise<{ percent_off: number }> {
     // jsonBody and not a hand-built init: it carries the Content-Type the server's body
@@ -2141,6 +2141,7 @@ export function createApi(
     excludedSources: string[],
     excludedCompanies: string[],
     location: LocationPreferences | null,
+    jobLanguages: string[] = [],
   ): Promise<UserProfile> {
     return requestData<UserProfile>(
       '/api/v1/me/profile',
@@ -2152,6 +2153,7 @@ export function createApi(
         excluded_sources: excludedSources,
         excluded_companies: excludedCompanies,
         location_preferences: location,
+        job_languages: jobLanguages,
       }),
     );
   }
@@ -2359,7 +2361,7 @@ export function createApi(
    *  PDF `File` sent as multipart, or pasted text sent as JSON) through the same size
    *  check and the same `resumeInit` builder. `category` overrides the role the market
    *  reading is measured against; omitted, the server infers it from the CV's own
-   *  headline. Public route, rate-limited by IP server-side. */
+   *  headline. This route is public. */
   async function roastCv(input: File | string, category?: string): Promise<RoastResponse> {
     if (input instanceof File && input.size > RESUME_MAX_BYTES) {
       throw new ApiError(

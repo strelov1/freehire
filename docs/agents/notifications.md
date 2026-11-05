@@ -75,8 +75,8 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   split: `GetNudgeForDelivery` reads `notification_settings.channels` live, which IS an
   account property.
 - **A saved-search digest has three frequencies, and the default is an hourly batch.**
-  `notification_settings.digest_frequency` is `interval` (at most one digest per
-  subscription every `digest_interval_hours`, 1-23), `instant` (every pass that finds
+  `notification_settings.digest_frequency` is `interval` (at most one message per
+  person and channel every `digest_interval_hours`, 1-23), `instant` (every pass that finds
   something) or `daily` (once a local day at `digest_time`). `interval` at one hour is the
   column default, what an account with NO settings row reads as, and since migration 0233
   what every stored `instant` was moved to — measured 2026-11-04, `instant` meant a p90 of
@@ -91,6 +91,21 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   `interval` and `daily` stamp `subscriptions.last_digest_sent_at` after a send. The
   interval is measured from that stamp, so on a five-minute timer an hourly digest lands
   every 60-65 minutes rather than on the hour.
+- **One message per person and channel, carrying a digest per due subscription.**
+  `deliver` groups the claim by `(user_id, channel)` (`ClaimSubscriptionMatches` returns
+  both) and sends one `notify.Message`: one mail with a section per alert, one Telegram
+  message, one push counting the alerts. A message of one digest renders exactly as a
+  digest always did. Before this the cadence was per SUBSCRIPTION, so a person with seven
+  alerts got seven mails an hour — measured 2026-11-05, 15 users over 24 a day, the top
+  one at 59 — and a bulk rewrite of 578 profile alerts on 2026-11-03 put 580 people over
+  24 in one day. The interval gate therefore reads the person's NEWEST
+  `last_digest_sent_at` on the channel, and a sent message stamps every subscription it
+  carried; a new subscription waits for the person's next message instead of firing on
+  its own. **A webhook is the exception**: its receiver is a program reading one saved
+  search per payload, so it stays one subscription per message and keeps its own stamp.
+  The notification centre still records one row per saved search, so each section's
+  "View all" opens its own page. `freehire_notify_users_over_daily_cap_24h` (cmd/queue-metrics)
+  is the gauge that says whether this holds.
 - **A reminder's `fire_at` is rounded forward to the account's notification hour**
   (`notification_settings.digest_time` in the account's timezone; 09:00 and UTC when
   unset). Grouping alone would have bought the reminder engine almost nothing: `fire_at`
@@ -177,16 +192,35 @@ Telegram, and mobile push), each with its own small `Notifier`/`Router` pair:
   subscriptions sharing a saved-search query so the search index is hit once regardless of
   how many people subscribed to it. A per-subscription loop would multiply index load by
   subscriber count.
+- **A query is searched only when its digest could go out** (`notify.searchDue`). Grouping
+  buys little in practice — measured 2026-11-05, 2,451 active subscriptions carried 2,332
+  distinct queries — so the real cost was the cadence: every five-minute pass ran all
+  ~2,100 of them while an hourly digest can use one search an hour, and Meilisearch was
+  the busiest process on the host (~4 cores, ~530 MB/s read). A person's subscriptions
+  (user and channel; a webhook alone) are searched together: `instant` every pass;
+  `interval` once the interval since the last message has elapsed, outside quiet hours,
+  and then once per interval while nothing is found; `daily` when `DigestDue` says the
+  day's digest is due, hourly while it stays due. The result is that a posting is found
+  no later than one interval after it appears and sent in that same pass — the latency
+  the interval already promised. `subscriptions.last_searched_at` (migration 0239) holds
+  when a subscription was last searched, stamped with the pass's START, and a search
+  after a gap **pages back** to it (less `matchLag`, an hour, for the drain's indexing
+  delay; at most `maxMatchPages`), so the gap loses nothing a five-minute scan would
+  have recorded. A never-searched subscription is always due and reads one page. The
+  run log's `skipped_queries` and `searches` (index requests, counting pages) are what
+  measure it. **Carry-over sends are the one seam**: a message released earlier (a
+  failed send, a relinked chat) can go out on a pass that did not search, and what was
+  indexed since the last search then waits for the next due pass.
 - **A saved search's minimum skill match is applied per subscriber, after the search.**
   `min_skill_match` is a web filter the search never reads: the percent depends on the reader, so
   `Runner.match` computes it per (hit, subscription) pair against the subscriber's live
   `user_profiles.skills`, with the same formula as the job list (`computeClientMatch`). It can
-  only thin the `MatchLimit` window: on a broad query, jobs clearing the threshold but older than
-  that window are not reached. A query carrying only this param does not narrow the catalogue, so
+  only thin the pages the search read: on a broad query, jobs clearing the threshold but beyond
+  those pages are not reached. A query carrying only this param does not narrow the catalogue, so
   a subscription to it is refused like any other unfiltered search (`search.Narrows`).
 - **Avoid-skills is enforced as a per-subscriber post-filter, not folded into the shared search.**
   `Runner.match` batch-fetches every active subscriber's live `user_profiles.excluded_skills` once
-  per pass (`Store.ListUserProfilesExcludedSkills`) and `matchQuery` skips a `(hit, subscription)`
+  per pass (`Store.ListUserProfileSkillSets`) and `matchQuery` skips a `(hit, subscription)`
   pair whose job carries a skill that subscriber currently avoids — evaluated against the *live*
   preference, not whatever `skills_exclude` (if any) got frozen into the saved search's own query
   string at creation time. Do not move this into the Meilisearch `Filter`: that would make the

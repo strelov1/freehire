@@ -999,3 +999,46 @@ func (g limitedHireClickGetter) GetJSON(ctx context.Context, url string, v any) 
 	defer func() { <-g.sem }()
 	return g.inner.GetJSON(ctx, url, v)
 }
+
+// recruiting.ultipro.com (and the other UKG Pro Recruiting hosts) front every board with one
+// nginx edge that 403s the project's own User-Agent outright — see crawlerUASource — and the
+// adapter re-fetches every posting's detail page on every run (the listing carries only a brief
+// description; it is not a HydratingSource), so a run's request volume is listings + postings,
+// all against that one shared edge. No rate-triggered refusal has been observed (80 sequential
+// detail requests at 8-way concurrency measured 2026-11-05 all answered 200), so the pace is
+// precautionary in the ADP sense: under-shooting only lengthens a run, while over-shooting
+// risks teaching an edge that already filters this hard to drop the Googlebot string too. Tune
+// from observed convergence (board_health unhealthy count for this provider).
+const (
+	ukgRequestInterval = 200 * time.Millisecond // ~5 req/s
+	ukgRequestBurst    = 2
+)
+
+// rateLimitedUKGHTTP paces both of the adapter's request kinds — the listing JSON POST and the
+// detail-page GET — through one limiter, since both hit the same shared edge.
+type rateLimitedUKGHTTP struct {
+	inner   ukgHTTP
+	limiter waiter
+}
+
+func (g rateLimitedUKGHTTP) PostJSON(ctx context.Context, url string, body, v any) error {
+	if err := g.limiter.Wait(ctx); err != nil {
+		return err
+	}
+	return g.inner.PostJSON(ctx, url, body, v)
+}
+
+func (g rateLimitedUKGHTTP) GetHTML(ctx context.Context, url string) (*html.Node, error) {
+	if err := g.limiter.Wait(ctx); err != nil {
+		return nil, err
+	}
+	return g.inner.GetHTML(ctx, url)
+}
+
+// pacedUKGHTTP wraps c with a fresh limiter at ukg's rate, shared across one registry build.
+func pacedUKGHTTP(c ukgHTTP) ukgHTTP {
+	return rateLimitedUKGHTTP{
+		inner:   c,
+		limiter: rate.NewLimiter(rate.Every(ukgRequestInterval), ukgRequestBurst),
+	}
+}

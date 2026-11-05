@@ -744,6 +744,7 @@ export function filtersFromProfile(profile: UserProfile): JobFilters {
   const seed = (values: string[]) => values.reduce(facetAdd, emptyFacet());
   const f = emptyFilters();
   f.facets.category = seed(profile.specializations);
+  f.facets.posting_language = seed(profile.job_languages ?? []);
   // The selected levels are included, together with the postings that carry no level at
   // all — most of the catalogue, which an include alone would drop. Including rather than
   // excluding the rest is what makes "Apply my profile" show the levels the user picked

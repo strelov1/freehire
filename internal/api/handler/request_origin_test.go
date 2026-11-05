@@ -76,6 +76,9 @@ func (f fakeDBTX) Query(context.Context, string, ...any) (pgx.Rows, error) {
 func (f fakeDBTX) QueryRow(context.Context, string, ...any) pgx.Row {
 	return fakeRow{answer: f.ScanAnswer}
 }
+func (f fakeDBTX) CopyFrom(context.Context, pgx.Identifier, []string, pgx.CopyFromSource) (int64, error) {
+	return 0, errors.New("fakeDBTX: CopyFrom not expected")
+}
 func (f fakeDBTX) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults {
 	return nil
 }
@@ -422,7 +425,7 @@ func TestLoginServedHostOrigin(t *testing.T) {
 }
 
 func TestAuthHandlerIncludesConfiguredServedOrigins(t *testing.T) {
-	h := newAuthHandlers(nil, nil, nil, auth.NewIssuer("test-secret", time.Hour), false,
+	h := newAuthHandlers(nil, nil, auth.NewIssuer("test-secret", time.Hour), false,
 		[]string{".freehire.me"}, nil, testFrontendOrigin, nil, []string{"apply.freehire.me"})
 	if !originAllowed("https://apply.freehire.me", h.browserOrigins) {
 		t.Fatal("configured served origin omitted from handler")

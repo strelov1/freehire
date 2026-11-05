@@ -86,20 +86,16 @@ func (h *matchHandlers) register(api fiber.Router, mw middleware) {
 	api.Get("/jobs/:slug/match", mw.key, h.JobMatch)
 	// Ad-hoc skill match for a job posting scraped off any page (title + text),
 	// no catalog job required — powers the browser extension's on-any-page card.
-	api.Post("/me/match-text", mw.key, matchTextLimiter(mw.throttler), h.MatchText)
-	// The on-demand LLM match analysis (GET cached / POST run / SSE stream). The two routes
-	// that actually drive the prompt chain share ONE limiter instance, so the budget is per
-	// user and not per route — a limiter per mount would hand the stream, the POST, and each
-	// deprecated alias a fresh allowance of the same user's quota.
-	runLimit := matchAnalysisLimiter(mw.throttler)
+	api.Post("/me/match-text", mw.key, h.MatchText)
+	// The on-demand LLM match analysis (GET cached / POST run / SSE stream).
 	api.Get("/jobs/:slug/match-analysis", mw.key, h.GetMatchAnalysis)
-	api.Post("/jobs/:slug/match-analysis", mw.key, runLimit, mw.paidAI(plan.FeatureFit), h.PostMatchAnalysis)
-	api.Get("/jobs/:slug/match-analysis/stream", mw.key, runLimit, mw.paidAI(plan.FeatureFit), h.StreamMatchAnalysis)
+	api.Post("/jobs/:slug/match-analysis", mw.key, mw.paidAI(plan.FeatureFit), h.PostMatchAnalysis)
+	api.Get("/jobs/:slug/match-analysis/stream", mw.key, mw.paidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 	// Deprecated pre-rename aliases (was "fit") — kept so existing API-key clients and the
 	// CLI don't break; they hit the same handlers. Remove once callers have migrated.
 	api.Get("/jobs/:slug/fit", mw.key, h.GetMatchAnalysis)
-	api.Post("/jobs/:slug/fit", mw.key, runLimit, mw.paidAI(plan.FeatureFit), h.PostMatchAnalysis)
-	api.Get("/jobs/:slug/fit/stream", mw.key, runLimit, mw.paidAI(plan.FeatureFit), h.StreamMatchAnalysis)
+	api.Post("/jobs/:slug/fit", mw.key, mw.paidAI(plan.FeatureFit), h.PostMatchAnalysis)
+	api.Get("/jobs/:slug/fit/stream", mw.key, mw.paidAI(plan.FeatureFit), h.StreamMatchAnalysis)
 	// analyses lists the jobs the caller has run the AI fit analysis on.
 	api.Get("/me/tracking/analyses", mw.key, h.ListMyAnalyses)
 }

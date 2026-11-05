@@ -50,7 +50,7 @@ func TestInsightsCompaniesEndpoint(t *testing.T) {
 	if err := q.DeleteAllInsightsCompanyGrowth(ctx); err != nil {
 		t.Fatalf("delete growth: %v", err)
 	}
-	if _, err := q.RebuildInsightsCompanyGrowth(ctx, prev); err != nil {
+	if _, err := materializeInsightsCompanyGrowth(q)(ctx, prev); err != nil {
 		t.Fatalf("rebuild growth: %v", err)
 	}
 

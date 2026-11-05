@@ -11,6 +11,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/strelov1/freehire/internal/ingest/boardcatalog"
 	"github.com/strelov1/freehire/internal/ingest/linksource"
 	"github.com/strelov1/freehire/internal/ingest/sources"
 	"github.com/strelov1/freehire/internal/ingest/telegram"
@@ -62,11 +63,12 @@ func run() int {
 
 	extractor := telegram.NewLangChainExtractor(client)
 
+	catalog := boardcatalog.NewQueriesRepository(db.New(pool))
 	runner := telegram.ExtractRunner{
 		Extractor: extractor,
 		Store:     newExtractStore(pool),
 		Kinds:     kinds,
-		Links:     linkResolver{reg: linksource.All(sources.NewClient())},
+		Links:     linkResolver{reg: linksource.AllWithCatalog(sources.NewClient(), catalog)},
 	}
 
 	stats, err := runner.Run(ctx)

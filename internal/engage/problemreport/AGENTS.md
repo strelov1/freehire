@@ -1,9 +1,9 @@
 # Problem reports
 
 Account-bound operation failures and missing capabilities, reported through OAuth MCP.
-This package validates and sanitizes concise summaries, then commits one UTC-day quota
-write and an open queue upsert in one transaction. Repeats consume quota and increment
-request_count; only the same account and normalized sanitized content deduplicate.
+This package validates and sanitizes concise summaries, then atomically upserts an
+open queue entry. Repeats increment request_count; only the same account and
+normalized sanitized content deduplicate. Request frequency policy belongs to ops.
 Resolved/dismissed reports do not deduplicate new reports.
 
 The database is private operator data. Never put report summaries, tool arguments,

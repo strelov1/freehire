@@ -15,6 +15,10 @@ strictDepBuilds: false
 # jumped to 1.x/2.x, and @sveltejs/kit has never declared support past 0.6/0.7 —
 # an unbounded override would silently ride a major bump its own tests never ran.
 overrides:
+  # GHSA-g3hv-75wg-m249: glob preprocessing can amplify attacker-controlled
+  # patterns. ESLint and typescript-eslint still request minimatch 10.x;
+  # the first fixed release is 11.0.1, so this is a deliberate major override.
+  'minimatch@>=7.0.0 <11.0.1': 11.0.1
   cookie@<0.7.0: 0.7.2
   # GHSA-6g55-p6wh-862q: postcss reads an attacker-controlled sourceMappingURL
   # path when `from` is unset, letting a crafted stylesheet exfiltrate

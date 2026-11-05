@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -49,9 +48,6 @@ type ojcpHandlers struct {
 	// signer signs the manifest and publishes the key that verifies it. Nil means this
 	// deployment has no signing key: the manifest goes out unsigned and no key set exists.
 	signer *ojcp.Signer
-	// anonStrict is PUBLIC_ANON_LIMITS=strict: the anonymous budget on these routes then
-	// carries a daily cap, which the manifest's per-second field cannot state (see manifest).
-	anonStrict bool
 	// semantic answers an agent's opt-in semantic search; shared with /agent/jobs/search.
 	semantic semanticSearch
 	// origin is the site's address; the MCP server builds its icon and website link from it.
@@ -84,30 +80,27 @@ func newOJCPHandlers(s searcher, store ojcpStore, origin string, submittable map
 }
 
 func (h *ojcpHandlers) register(api fiber.Router, mw middleware) {
-	// Public and unauthenticated, like the other job reads. The rate limit is the same
-	// agent-search one: these calls cost what /agent/jobs/search costs, and the manifest
-	// declares that figure — a limit declared and not enforced breaks a MUST in the spec.
-	limit := ojcpRateLimited(agentSearchLimiter(mw.public))
+	// Public and unauthenticated, like the other job reads.
 	views := agentViews(h.agentViews, agentview.SurfaceOJCP)
-	api.Post("/ojcp/v1/search", limit, views, h.OJCPSearchJobs)
-	api.Get("/ojcp/v1/jobs/:slug", limit, views, h.OJCPJobDetail)
-	api.Get("/ojcp/v1/employers/:slug", limit, h.OJCPEmployerContext)
+	api.Post("/ojcp/v1/search", views, h.OJCPSearchJobs)
+	api.Get("/ojcp/v1/jobs/:slug", views, h.OJCPJobDetail)
+	api.Get("/ojcp/v1/employers/:slug", h.OJCPEmployerContext)
 
 	// The MCP transport, mounted through Fiber's own adapter for a net/http handler. It
 	// serves the SAME methods the three routes above call, so the two cannot answer one
 	// question differently. `All` because MCP's streamable transport uses POST to call and
 	// GET to open the server-to-client stream.
-	api.All("/ojcp/mcp", limit, views, adaptor.HTTPHandler(ojcpmcp.Handler(h, h.origin)))
+	api.All("/ojcp/mcp", views, adaptor.HTTPHandler(ojcpmcp.Handler(h, h.origin)))
 
 	// The manifest, rendered. It is served to an agent at /.well-known/ojcp.json, which the
 	// SPA proxies to this route — nginx sends /api/ here and everything else to the Node
 	// process, so a route at the well-known path itself would never receive a request. That
 	// was found the only way it could be: deployed, with the API path answering 200 and the
 	// manifest answering 404.
-	api.Get("/ojcp/manifest", limit, h.OJCPManifest)
+	api.Get("/ojcp/manifest", h.OJCPManifest)
 	// The key set the manifest's signature verifies against, proxied by the SPA to
 	// /.well-known/ojcp-keys.json for the same reason the manifest is.
-	api.Get("/ojcp/keys", limit, h.OJCPKeys)
+	api.Get("/ojcp/keys", h.OJCPKeys)
 }
 
 // OJCPManifest answers with this deployment's manifest.
@@ -132,34 +125,13 @@ func (h *ojcpHandlers) OJCPKeys(c *fiber.Ctx) error {
 	return c.JSON(h.signer.KeySet(), "application/jwk-set+json")
 }
 
-// manifest describes this deployment. Both binding claims are DERIVED rather than written
-// out: `tools` comes from what the MCP server actually registered, and `rate_limits` from
-// the same constant the limiter on these routes enforces — the spec makes a declared limit
-// a MUST, so the two must not be able to disagree.
+// manifest derives its tool list from the MCP server registration.
 func (h *ojcpHandlers) manifest() ojcp.Manifest {
 	return ojcp.NewManifest(ojcp.ManifestConfig{
-		Origin: h.projector.Origin,
-		Tools:  ojcpmcp.ToolNames(),
-		// The manifest's only rate field is per SECOND, while the limiter holds a per-MINUTE
-		// bucket — so this is the sustained average, and a burst well above it is allowed
-		// before the bucket empties. The error is deliberately in the safe direction: an agent
-		// pacing at the declared figure never meets a 429, which is what the declaration is
-		// for. Declaring the burst instead would invite a rate we refuse.
-		AnonymousRPS:   h.declaredAnonymousRPS(),
+		Origin:         h.projector.Origin,
+		Tools:          ojcpmcp.ToolNames(),
 		ApplyPathTypes: ojcp.ApplyPathTypes,
 	})
-}
-
-// declaredAnonymousRPS is the per-second figure the manifest may honestly declare, or 0 to
-// declare none. Under strict the anonymous budget is 120 a minute AND 2,000 a day: the
-// sustained rate a day allows rounds to zero, and declaring the minute's 2/s would invite a
-// pace the daily cap refuses after a quarter of an hour — breaking the MUST in the other
-// direction. Declaring nothing is the one statement that stays true.
-func (h *ojcpHandlers) declaredAnonymousRPS() int {
-	if h.anonStrict {
-		return 0
-	}
-	return agentSearchPerMinute / 60
 }
 
 // OJCPSearchJobs answers `search_jobs`.
@@ -181,7 +153,11 @@ func (h *ojcpHandlers) OJCPSearchJobs(c *fiber.Ctx) error {
 		}
 		return err
 	}
-	return c.JSON(resp)
+	if err := c.JSON(resp); err != nil {
+		return err
+	}
+	observeOJCPRESTSearch(resp)
+	return nil
 }
 
 // SearchJobs answers `search_jobs` with no transport around it. Both transports call it, so
@@ -387,38 +363,6 @@ func (h *ojcpHandlers) EmployerContext(ctx context.Context, employerID string) (
 	return ojcp.EmployerContextFrom(company), nil
 }
 
-// ojcpRateLimited wraps the shared rate limiter so a refusal reaches an agent in the
-// STANDARD's error envelope rather than this API's own `{"error": msg}`.
-//
-// Without it, `ojcpError`'s promise that an OJCP client never receives this API's shape by
-// accident was false for the one refusal an agent is most likely to meet — and the schema
-// makes `retry_after_seconds` mandatory alongside `rate_limited`, which our own body has no
-// field for. The seconds come from the `Retry-After` header the limiter has already set, so
-// the two cannot disagree.
-func ojcpRateLimited(limiter fiber.Handler) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		err := limiter(c)
-
-		var fe *fiber.Error
-		if errors.As(err, &fe) && fe.Code == fiber.StatusTooManyRequests {
-			return c.Status(fiber.StatusTooManyRequests).
-				JSON(ojcp.NewRateLimitError(retryAfterSeconds(c)))
-		}
-		return err
-	}
-}
-
-// retryAfterSeconds reads back the header the limiter set. A value it did not set, or one
-// that will not parse, falls back to a second rather than to zero: the schema wants a real
-// delay, and "retry immediately" is the one answer that turns a refusal into a loop.
-func retryAfterSeconds(c *fiber.Ctx) int {
-	seconds, err := strconv.Atoi(c.GetRespHeader("Retry-After"))
-	if err != nil || seconds < 1 {
-		return 1
-	}
-	return seconds
-}
-
 // ojcpError renders a failure in the standard's envelope with the matching HTTP status.
 // Every failure on this surface goes through it, so an OJCP client never receives this
 // API's own error shape by accident.
@@ -440,8 +384,6 @@ func ojcpHTTPStatus(code string) int {
 		return fiber.StatusBadRequest
 	case ojcp.ErrorJobNotFound, ojcp.ErrorEmployerNotFound:
 		return fiber.StatusNotFound
-	case ojcp.ErrorRateLimited:
-		return fiber.StatusTooManyRequests
 	case ojcp.ErrorProviderError:
 		return fiber.StatusServiceUnavailable
 	default:

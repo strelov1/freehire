@@ -1,11 +1,12 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { MCP_CATALOG_PITCH } from '#lib/mcpCopy.js';
   import { Button } from '#lib/ui/index.js';
   import { CHATGPT_APP_URL, OPENAI_MARK } from '#lib/appLinks.js';
   import { glyphColorFor } from '#lib/markColor.js';
 
-  // The older custom GPT over the REST API. Still published, and still the one way to
-  // track from ChatGPT with an API key instead of an OAuth connector.
+  // The older custom GPT over the REST API. Still published, and still an alternative
+  // for tracking from ChatGPT with an API key instead of OAuth.
   const GPT_URL = 'https://chatgpt.com/g/g-6a5281b64948819193bf3a1021e075da-freehire';
 
   // What the app answers, one line each. Every row is a tool the published app's
@@ -17,6 +18,7 @@
     { title: 'Similar roles', body: 'Ask for more like the one you picked — the same neighbours the job page shows.' },
     { title: 'Salary ranges', body: 'What a role pays by seniority, from postings that state a salary.' },
     { title: 'Market breakdowns', body: 'Which skills, countries and work modes a search turns up most.' },
+    { title: 'Your search progress', body: 'Connect with OAuth to read your profile, save jobs, update tracking and manage alerts.' },
   ];
 </script>
 
@@ -37,9 +39,9 @@
         </h1>
 
         <p class="reveal mt-7 max-w-xl text-lg leading-relaxed text-muted-foreground" style="--d:160ms">
-          freehire is in ChatGPT's app directory. Add it in one click and ask for jobs in plain language —
-          ChatGPT searches the live <code class="font-mono text-foreground">freehire</code> catalogue and shows
-          the results as cards. Free, and no freehire account needed.
+          {MCP_CATALOG_PITCH} Ask ChatGPT for roles that match your stack, location and salary expectations,
+          and explore the results as job cards. Search without a freehire account, then connect with OAuth
+          to save your shortlist and keep track of your applications.
         </p>
 
         <div class="reveal mt-9 flex flex-wrap items-center gap-3" style="--d:240ms">
@@ -125,18 +127,15 @@
       </li>
     </ol>
 
-    <!-- The app is read-only, so this is where saving and applying live. -->
+    <!-- Personal tools use OAuth on the same MCP connection as public search. -->
     <h2 class="mt-10 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Save and track</h2>
     <p class="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-      The app reads the catalogue and changes nothing of yours. To have ChatGPT save jobs, mark them applied
-      and move stages on your
-      <a href={resolve('/my/tracking')} class="font-medium text-foreground underline-offset-4 hover:underline"
-        >Tracking</a
-      >
-      board, add the account connector instead — it signs in with freehire the first time it is used. The
-      <a href={resolve('/mcp')} class="font-medium text-foreground underline-offset-4 hover:underline"
-        >setup guide</a
-      > walks through it.
+      Use the same freehire connection to save jobs and update your
+      <a href={resolve('/my/tracking')} class="font-medium text-foreground underline-offset-4 hover:underline">Tracking</a>
+      board. When ChatGPT asks for access, sign in with freehire and approve the connection.
+      Public search works without an account. Personal tools use OAuth and do not need an API key.
+      The <a href={resolve('/mcp')} class="font-medium text-foreground underline-offset-4 hover:underline">setup guide</a>
+      also covers custom connections to the same MCP address.
     </p>
     <p class="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">
       Prefer an API key? The older

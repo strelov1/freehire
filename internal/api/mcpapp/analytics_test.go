@@ -1,92 +1,31 @@
 package mcpapp
 
 import (
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"regexp"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	posthog "github.com/posthog/posthog-go"
-
 	"github.com/strelov1/freehire/internal/ai/assistant"
 )
 
-// recordPostHog enables analytics against a fake ingestion host and returns a function that
-// flushes the client and returns everything it sent.
-func recordPostHog(t *testing.T) func() string {
-	t.Helper()
-	var mu sync.Mutex
-	var bodies []string
-	ingest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body io.Reader = r.Body
-		if r.Header.Get("Content-Encoding") == "gzip" {
-			zr, err := gzip.NewReader(r.Body)
-			if err != nil {
-				t.Errorf("gzip: %v", err)
-				return
-			}
-			body = zr
+// Local analytics must not retain personal fields from headers, names or error text.
+func TestFailedAccountCallLogsOnlySafeMetadata(t *testing.T) {
+	for _, mixed := range []bool{false, true} {
+		name := "account"
+		if mixed {
+			name = "mixed"
 		}
-		raw, _ := io.ReadAll(body)
-		mu.Lock()
-		bodies = append(bodies, string(raw))
-		mu.Unlock()
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(ingest.Close)
-
-	client, err := posthog.NewWithConfig("phc_test", posthog.Config{Endpoint: ingest.URL})
-	if err != nil {
-		t.Fatal(err)
-	}
-	EnableAnalytics(client)
-	t.Cleanup(func() { serverAnalytics.Store(nil) })
-
-	return func() string {
-		if err := client.Close(); err != nil {
-			t.Fatalf("close: %v", err)
-		}
-		mu.Lock()
-		defer mu.Unlock()
-		return strings.Join(bodies, "\n")
+		t.Run(name, func(t *testing.T) { testPrivateCallTelemetry(t, mixed) })
 	}
 }
 
-// A tool call on the public server reaches PostHog as $mcp_tool_call, named after this
-// server, once the client is closed — which is what the server's shutdown does.
-func TestToolCallIsReportedToPostHog(t *testing.T) {
-	sent := recordPostHog(t)
-
-	session := connect(t, readerThatFinds(t))
-	if _, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      toolSearchJobs,
-		Arguments: map[string]any{"query": "golang"},
-	}); err != nil {
-		t.Fatalf("call: %v", err)
-	}
-
-	got := sent()
-	for _, want := range []string{`"$mcp_tool_call"`, `"$mcp_tool_name":"` + toolSearchJobs + `"`, `"$mcp_server_name":"freehire"`} {
-		if !strings.Contains(got, want) {
-			t.Errorf("PostHog payload lacks %s; got %s", want, got)
-		}
-	}
-}
-
-// A failed account call is reported with the server's own metadata only: the personal data
-// a caller can put in its User-Agent, its client name, its Mcp-Session-Id or a tool's error
-// text never leaves, nor does the tool name of a call to a tool that does not exist,
-// and no $exception or $mcp_unknown_tool event is sent.
-func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
-	sent := recordPostHog(t)
+func testPrivateCallTelemetry(t *testing.T, mixed bool) {
+	records := captureToolLogs(t)
 	const email = "jane@example.com"
 
 	tool := assistant.Tool{
@@ -96,7 +35,11 @@ func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 			return nil, errors.New("applicant " + email + " answered 'visa: H1B'")
 		},
 	}
-	server := httptest.NewServer(AccountHandler([]assistant.Tool{tool}, "", nil))
+	handler := AccountHandler([]assistant.Tool{tool}, "", nil)
+	if mixed {
+		handler = MixedHandler([]assistant.Tool{tool}, "", readerThatFinds(t))
+	}
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
 	header := http.Header{}
@@ -120,27 +63,21 @@ func TestFailedAccountCallSendsOnlyServerMetadata(t *testing.T) {
 	if !res.IsError {
 		t.Fatal("want an error result")
 	}
-	// A tool that does not exist is named by the caller, so its event must not leave either.
+	// A caller-authored tool name must be normalized before it enters telemetry.
 	_, _ = session.CallTool(context.Background(), &mcp.CallToolParams{Name: "visa_H1B", Arguments: map[string]any{}})
 
-	got := sent()
-	for _, want := range []string{`"$mcp_tool_call"`, `"$mcp_server_name":"freehire-account"`, `"$mcp_tool_name":"failing"`, `"$mcp_is_error":true`} {
-		if !strings.Contains(got, want) {
-			t.Errorf("PostHog payload lacks %s; got %s", want, got)
-		}
+	events := []map[string]any{}
+	for range 4 {
+		events = append(events, nextToolLog(t, records))
 	}
-	// The server is stateless, so go-sdk ignores a caller-sent Mcp-Session-Id and the SDK
-	// generates ses_<UUIDv7>. Were the header honoured (MCPGODEBUG=allowsessionsinstateless=1),
-	// the session and distinct id would be a non-cryptographic hash of it: ses_ + 32 hex digits.
-	minted := regexp.MustCompile(`"\$session_id":"(ses_[0-9a-f-]{36})"`).FindStringSubmatch(got)
-	if minted == nil {
-		t.Errorf("want a generated $session_id, not one derived from the caller; got %s", got)
-	} else if !strings.Contains(got, `"distinct_id":"`+minted[1]+`"`) {
-		t.Errorf("distinct_id is not the generated session %s; got %s", minted[1], got)
+	encoded, _ := json.Marshal(events)
+	got := string(encoded)
+	if events[1]["tool"] != "failing" || events[1]["outcome"] != "tool_error" || events[3]["tool"] != "unknown" || events[3]["outcome"] != "rejected" {
+		t.Fatalf("missing local analytics: %s", got)
 	}
-	for _, leak := range []string{email, "H1B", `"$exception"`, `"$mcp_error_message"`, `"$mcp_client_user_agent"`, `"$mcp_client_name"`, `"$mcp_unknown_tool"`} {
+	for _, leak := range []string{email, "H1B", "visa_H1B"} {
 		if strings.Contains(got, leak) {
-			t.Errorf("PostHog payload carries %s; got %s", leak, got)
+			t.Errorf("private payload leaked: %s", got)
 		}
 	}
 }
@@ -154,15 +91,4 @@ func (w withHeaders) RoundTrip(r *http.Request) (*http.Response, error) {
 		r.Header[key] = values
 	}
 	return http.DefaultTransport.RoundTrip(r)
-}
-
-// Without EnableAnalytics the server sends nothing and still answers.
-func TestToolCallWithoutAnalytics(t *testing.T) {
-	session := connect(t, readerThatFinds(t))
-	if _, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      toolSearchJobs,
-		Arguments: map[string]any{"query": "golang"},
-	}); err != nil {
-		t.Fatalf("call: %v", err)
-	}
 }

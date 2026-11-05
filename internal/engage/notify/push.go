@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/strelov1/freehire/internal/engage/pushnotify"
 )
@@ -27,22 +28,26 @@ func NewPushNotifier(tokens PushTokenLister, transport pushnotify.Notifier) *Pus
 // slug as deep-link data so the mobile app can open it directly; a digest of
 // more than one job carries no deep-link data, matching the "Push digest
 // content and deep link" requirement.
-func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, d Digest) error {
-	title, body, _ := renderDigest(d)
-
-	var data map[string]string
-	if d.Total == 1 {
-		data = map[string]string{"slug": d.Jobs[0].Slug}
+//
+// A message of several digests is still ONE push: its title counts the alerts
+// and its body the jobs, since a banner has no room to name each search.
+func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, m Message) error {
+	if len(m.Digests) == 1 {
+		title, body, slug := renderDigest(m.Digests[0])
+		var data map[string]string
+		if slug != "" {
+			data = map[string]string{"slug": slug}
+		}
+		return n.push.Send(ctx, dest, title, body, data)
 	}
-
-	return n.push.Send(ctx, dest, title, body, data)
+	return n.push.Send(ctx, dest, fmt.Sprintf("%d job alerts", len(m.Digests)), JobCount(m.Total()), nil)
 }
 
 // renderDigest renders a digest into its short, human-readable copy: a title,
 // a body summarizing the match count, and — only when the digest matched
 // exactly one job — that job's slug (empty otherwise). This is the single
 // source of the digest's push copy; the notification-center recording in
-// deliverOne reuses it rather than re-deriving the same wording, adding only
+// deliverMessage reuses it rather than re-deriving the same wording, adding only
 // the note an Overflowed digest's page needs.
 //
 // The title names the saved search that fired: it is what distinguishes one
@@ -54,7 +59,7 @@ func (n *PushNotifier) Send(ctx context.Context, _ string, dest string, d Digest
 func renderDigest(d Digest) (title, body, slug string) {
 	title = d.SavedSearchName
 	body = JobCount(d.Total)
-	if d.Total == 1 {
+	if d.Total == 1 && len(d.Jobs) == 1 {
 		slug = d.Jobs[0].Slug
 	}
 	return title, body, slug

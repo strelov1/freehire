@@ -53,58 +53,18 @@ info:
     `searchCities` remains useful for discovering or disambiguating a city.
     Unknown values are not an error; they simply match nothing.
 
-    ## Rate limits
+    ## API plans
 
-    These endpoints need no key, which is not the same as being free. Without a
-    key, one per-address budget applies, shared by every public read —
-    `searchJobs`, `agentSearchJobs`, `getJobFacets`, `getJob`, `getSimilarJobs`,
-    `searchCompanies`, `getCompany` and `searchCities`: **120 requests per minute
-    and 2,000 per day**. `GET /plans` reports the figures in force
-    (`api_limits`).
-
-    ### Keyed tiers
-
-    Send a full-access key as `Authorization: Bearer fhk_…` — or the access
-    token of a signed-in MCP or CLI connection, `fhm_…` — and the budget is per
-    account rather than per address, shared by all of its full-access keys and
-    tokens and by every endpoint above. Its size is the account's tier (an embed
-    key is budgeted like no key):
-
-    | Tier | Per minute | Per day |
-    |---|---|---|
-    | No key (per address) | 120 | 2,000 |
-    | Free account | 600 | 10,000 |
-    | Pro | 800 | 30,000 |
-    | Ultra | 1,000 | 100,000 |
-    | [API plan](https://freehire.me/jobs-api) | 1,200 | no cap |
-    | [Data plan](https://freehire.me/jobs-api) | 6,000 | no cap |
-
-    These are the figures a deployment ships with; `GET /plans` reports the ones
-    in force (`api_limits.tiers`). An API plan also licenses the data for use in
-    your own product — see the
+    The read API is available without a key for personal and non-commercial use.
+    An API plan licenses the data for use in your product — see the
     [data licence](https://freehire.me/terms#data-licence).
-
-    Every response carries where you stand, so you never have to discover the
-    ceiling by hitting it:
-
-    * `X-RateLimit-Limit` — the ceiling in force.
-    * `X-RateLimit-Remaining` — requests left in the current window. The limiter
-      is a leaky bucket, not a counter, so this can trail your own request count
-      by one; treat it as a reading to pace against, not an exact ledger.
-    * `X-RateLimit-Reset` — whole seconds until your budget is full again.
-
-    Over the limit is `429` with `Retry-After` in whole seconds, alongside the
-    same three headers. **Read `X-RateLimit-Remaining` and slow down before you
-    are refused** — that is the whole reason it is sent on success too.
-
-    Rarely, a response carries no `X-RateLimit-*` at all. That means the limiter
-    could not run and let the request through rather than failing it; treat it as
-    "unknown", not as "unlimited".
+    A full-access API key (`fhk_…`) or OAuth access token (`fhm_…`) identifies
+    your account when sent as `Authorization: Bearer <token>`.
 
     ## Please say who you are
 
     Not required, not validated, and nothing behaves differently without it —
-    every caller gets the same budget and the same answers. It is a request.
+    every caller gets the same answers. It is a request.
 
     Send a `User-Agent` naming your project:
 
@@ -1063,7 +1023,7 @@ components:
       scheme: bearer
       description: |
         A full-access API key (`fhk_…`) from https://freehire.me/my/integrations/api-keys. Optional:
-        it raises the rate limit to the account's API plan and changes nothing else.
+        it identifies the account for authenticated requests.
   responses:
     Error:
       description: Error response.

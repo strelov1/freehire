@@ -39,12 +39,10 @@ WHERE token_hash = $1
   AND (expires_at IS NULL OR expires_at > now())
 RETURNING user_id, scope, id;
 
--- name: ResolveAPIKeyTier :one
--- Resolve a presented token to its owner, the key's scope and how far the owner's paid
--- plans reach, for the public-read rate limiter. Read-only on purpose: unlike
--- AuthenticateAPIKey it does NOT touch last_used_at, because it runs on the hottest reads on
--- the site and its answer is cached. No row means unknown, revoked or expired.
-SELECT k.user_id, k.scope, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
+-- name: ResolveAPIKeyIdentity :one
+-- Read-only credential identity and entitlements for trusted infrastructure.
+-- No row means unknown, revoked or expired; introspection never changes last_used_at.
+SELECT k.user_id, k.scope, k.expires_at, u.api_until_stripe, u.api_data_until_stripe, u.pro_until, u.ultra_until
 FROM api_keys k
 JOIN users u ON u.id = k.user_id
 WHERE k.token_hash = $1
@@ -52,7 +50,7 @@ WHERE k.token_hash = $1
 
 -- name: GetUserAPIEntitlement :one
 -- How far the account's paid plans reach, for its own key-management page: the API product
--- names the plan sold for reading, and all four decide the rate its keys get.
+-- names the plan sold for reading; the other fields describe account entitlements.
 SELECT api_until_stripe, api_data_until_stripe, pro_until, ultra_until
 FROM users
 WHERE id = $1;

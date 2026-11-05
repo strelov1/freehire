@@ -426,9 +426,6 @@ type Querier interface {
 	// Bounded to future mocks cancelled in the last day: an announcement lost to a crash is not
 	// worth sending weeks later.
 	ClaimBuddyMockCancelNotices(ctx context.Context, actorID int64) ([]pgtype.UUID, error)
-	// The daily cap: claims one of a user's 20 writes for the UTC day, and returns no row
-	// once they are spent, which the caller turns into a 429.
-	ClaimDictionaryGapWrite(ctx context.Context, arg ClaimDictionaryGapWriteParams) (int32, error)
 	// Take up to max_runs due runs, exactly once each, from the HEAVY pool only. See
 	// ClaimDueLightRuns for the sibling that claims from the other pool: the scheduler calls
 	// both every tick, each against its own budget (ingestsched.DefaultHeavyCap /
@@ -500,7 +497,6 @@ type Querier interface {
 	// lease predicate reclaims entries whose worker died (stale claimed_at), so no
 	// separate reaper process is needed.
 	ClaimEnrichmentBatch(ctx context.Context, arg ClaimEnrichmentBatchParams) ([]ClaimEnrichmentBatchRow, error)
-	ClaimProblemReportWrite(ctx context.Context, arg ClaimProblemReportWriteParams) (int32, error)
 	// Claim-and-delete a bounded batch, oldest first, joined to jobs for the fields the
 	// feed displays. company_slug rides along beside company: recentfeed.Group buckets a
 	// same-company burst by the slug (the canonical company key — see AGENTS.md, "Company
@@ -1087,6 +1083,191 @@ type Querier interface {
 	// its current content for restoration before forgetting the removal. Missing or
 	// closed jobs need no restoration, and private/repost rows must not be published.
 	CompleteSearchDeleteOutbox(ctx context.Context, ids []int64) error
+	// Compute on the read connection; publish the result separately on the writer.
+	// One row per company with its current open-count and the open-count as of @prev_ts,
+	// from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
+	// insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
+	// uses open-as-of @prev_ts. Companies open at neither point are dropped (HAVING) to
+	// keep the table lean.
+	ComputeInsightsCompanyGrowth(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsCompanyGrowthRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Median days from created_at to closed_at over each company's canonical postings
+	// closed in the last 180 days. Only closures that say the POSTING is over count: it
+	// dropped off a board we crawl (unseen), the source reported it taken down
+	// (feed_removed), the liveness probe read its source page as expired twice
+	// (probe_expired), or the employer closed it here (employer_closed). Not expired —
+	// that is the age rule for sources with no close signal, which closes at 45 days
+	// whatever the employer did, so it would publish our cutoff as the company's speed.
+	// board_unreachable and feed_empty measure our crawler, board_retired,
+	// source_misattributed and moderated our own decisions, '' is unknown. 180 days so the
+	// figure describes how the company hires now, not over its whole history.
+	// Every rollup that measures a real close reads this same list;
+	// insights_close_rule_test.go fails if one of them drifts from it.
+	ComputeInsightsCompanyLifetime(ctx context.Context, asOf pgtype.Timestamptz) ([]ComputeInsightsCompanyLifetimeRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// One row per company with an OBSERVABLE application: the applicant has a connected
+	// mailbox, so a reply would have been seen. Applications from people we cannot observe
+	// are excluded from BOTH sides of the ratio — counting them in the denominator would
+	// report our own blind spot as the employer's silence, which is the same mistake the
+	// job-level signal's mailbox gate exists to prevent.
+	// Both sides come from application_events, not from live mail. Reading the emails table
+	// made the served rate a function of the candidate's inbox hygiene: it counted messages
+	// WHERE deleted_at IS NULL, so someone clearing old mail made an employer that had
+	// answered them look silent, on a public page, about a named company. The ledger records
+	// that the reply arrived; what later became of the message is not the employer's doing.
+	// "Answered" is any live employer_reply event. Not a stage advance: a stage is what the
+	// candidate recorded, and a company that replied to somebody who never updated their
+	// board still replied. A retracted event does not count — it belongs to another employer.
+	// The reply is paired to its application through application_id, never through job_id.
+	// job_id is ON DELETE SET NULL, so once a posting is deleted both sides read NULL, the pair reduces
+	// to NULL = NULL — never true — and an employer that answered is served as silent: the
+	// distortion this rollup was moved onto the ledger to remove, arriving by a different
+	// route. Pairing on (user_id, company_slug) instead would survive the deletion by
+	// crediting one reply to every application that user made to that employer, which is
+	// worse than losing it.
+	// An event with no application_id is left out of BOTH sides rather than counted and never
+	// answerable. Only rows written before the carry-over can be in that state, and
+	// cmd/backfill-applications is what empties it.
+	// The median covers answered applications only and is therefore right-censored; the
+	// serving layer reports the unanswered count beside it so the number is never read as
+	// "employers reply in six days" when most of the sample was never replied to. Replies
+	// dated before their application (an application reconstructed from a later message, or
+	// clock skew) still count as answered but are kept out of the median, where they would
+	// contribute a negative duration.
+	ComputeInsightsCompanyResponse(ctx context.Context) ([]ComputeInsightsCompanyResponseRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Per-(company, day) hiring velocity with a running open count, from the retained
+	// jobs lifecycle. Each canonical, attributable job (company_slug <> '' AND
+	// duplicate_of IS NULL) emits an added event on its created_at (UTC) day and, if
+	// closed, a removed event on its closed_at (UTC) day; the inner aggregate collapses
+	// those to one row per (company_slug, day), and the window SUM over (added - removed)
+	// ordered by day yields open = cumulative(added) - cumulative(removed) as of that day
+	// (a job is created no later than it closes, so this equals the point-in-time open
+	// count). Only a company's activity days get a row.
+	// Per-company open/growth scalar (backs the /insights/companies leaderboard)
+	ComputeInsightsCompanyStats(ctx context.Context) ([]ComputeInsightsCompanyStatsRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// page_uniques summed over each company's postings for the last 30 days and the 30
+	// before. page_uniques, never uniques: uniques fuses unfiltered API reads — mostly
+	// crawlers — with page opens. Duplicates are NOT filtered out: a view of a repost is
+	// still attention paid to the company. One visitor counts once per posting per day, so
+	// the sum is posting-views, not distinct people; the page says so.
+	ComputeInsightsCompanyViews(ctx context.Context) ([]ComputeInsightsCompanyViewsRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// One column per country: a posting contributes once to each country it lists, and a
+	// posting with none reaches the '' bucket only.
+	ComputeInsightsRoleCountryStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsRoleCountryStatsByCountryRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// The all-countries column ('' bucket): one count per posting, however many countries
+	// it lists — grouping by category alone is what keeps a two-country posting from
+	// counting twice here. Unlike insights_role_stats it needs no seniority and counts
+	// only canonical, public postings (see migration 0214 for both).
+	ComputeInsightsRoleCountryStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsRoleCountryStatsGlobalRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Three figures per category over canonical, public postings, each for the last 30 days
+	// and the 30 before (openspec/changes/insights-role-pulse/design.md has the prod
+	// measurements behind every choice below).
+	// COMPETITION is page views over exposure. Views are job_daily_views.page_uniques, never
+	// uniques (AGENTS.md "View counts"). Exposure is the posting-days a posting was OPEN ON
+	// FREEHIRE inside the window: from created_at, not from LEAST(posted_at, created_at) —
+	// the one figure in this file where first-seen is the right date, because nobody can view
+	// a posting here before we found it, and the existence rule would charge a backlog posting
+	// for weeks it was not on the site. A view on a day the posting was already closed is not
+	// counted, so numerator and denominator are the same population. Both windows end on the
+	// freshest COMPLETE views day (before today, UTC) rather than on now(): cmd/rollup-views
+	// usually lands a day after it ends, and a now()-anchored window would set 29 days of
+	// views against 30 of exposure.
+	// TIME TO CLOSE is the median days from existence to close over closes that describe the
+	// POSTING: unseen, feed_removed, probe_expired, employer_closed. Not expired (a 45-day age
+	// rule — its median is 45 by construction), feed_empty or board_unreachable (our crawler's
+	// health), board_retired, moderated or source_misattributed (our own decisions), or ''
+	// (closed before reasons were recorded). A close dated before existence is left out, as
+	// ComputeInsightsCompanyLifetime does.
+	// INFLOW counts postings whose existence date falls in the last 30 days — the header's
+	// rule, applied to "new" instead of "open at the start" — and deliberately has NO earlier
+	// window. Measured 2026-10-30, the comparison was dominated by our own coverage growth:
+	// a board first crawled this month shows its earlier postings only if they were still
+	// open when we found it, so healthcare read +155% while stable-coverage categories
+	// (devops, data_engineering) moved -1% and -20%; neither a stable-employer panel nor a
+	// discovered-within-N-days rule removed it (the latter made healthcare +392%).
+	ComputeInsightsRolePulse(ctx context.Context, arg ComputeInsightsRolePulseParams) ([]ComputeInsightsRolePulseRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// The denominator every share in insights_role_skill_stats divides by: the role's
+	// open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of
+	// the eligible postings carry none, so dividing by the role's open count would fold
+	// our own tagging gap into every published share — and because that gap differs per
+	// role, two roles' shares would stop being comparable.
+	// Takes NO @min_sample, deliberately. The floor selects which SKILLS are published;
+	// applied here it would delete the denominator of a share that did clear the floor,
+	// leaving a numerator with nothing to divide by.
+	// The NOT is_private clause must stay in step with the distribution's: a numerator
+	// and a denominator counting different populations is a share that is quietly wrong
+	// rather than visibly broken.
+	ComputeInsightsRoleSkillSample(ctx context.Context) ([]ComputeInsightsRoleSkillSampleRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// The skill distribution WITHIN one role. Same shape as
+	// ComputeInsightsRoleStatsByCountry's `FROM jobs, unnest(countries)` above — a job
+	// contributes once per skill it carries — so its cost is one already measured in
+	// production, and `skills` is a small text[] rather than the TOASTed description.
+	// Open postings only: a closed posting's skills describe a vacancy nobody can apply
+	// to. No growth column, unlike the sibling rollups: "docker is up 4% within senior
+	// backend" is a second question, and answering it would need a prior-window pass
+	// over the same unnest.
+	ComputeInsightsRoleSkillStats(ctx context.Context, minSample int32) ([]ComputeInsightsRoleSkillStatsRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Per-country role demand: a job contributes once to each of its countries.
+	ComputeInsightsRoleStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsRoleStatsByCountryRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Country-agnostic ('' bucket) role demand. open_count = jobs open now
+	// (closed_at IS NULL); open_count_prev = jobs open as of @prev_ts. The inner
+	// aggregate is wrapped so the "non-zero in either window" filter names the counts
+	// once instead of repeating the FILTER expressions in a HAVING.
+	ComputeInsightsRoleStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsRoleStatsGlobalRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// The salary history: effective-salary percentiles per (category, currency, period,
+	// month a posting was PUBLISHED), the current month and the eleven before it. Open and
+	// closed postings alike — a posting closed since still records what was offered that
+	// month — and canonical, public ones only. A month a posting belongs to is its
+	// existence date (see the file header), so one found in June but published in March
+	// counts in March. Months under @min_sample are not stored: a line through a handful
+	// of postings a month is noise drawn as a trend.
+	ComputeInsightsSalaryMonthly(ctx context.Context, arg ComputeInsightsSalaryMonthlyParams) ([]ComputeInsightsSalaryMonthlyRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Per-country salary bands (same CUBE of role scope, country from unnest).
+	ComputeInsightsSalaryStatsByCountry(ctx context.Context, minSample int32) ([]ComputeInsightsSalaryStatsByCountryRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Country-agnostic salary bands. CUBE(category, seniority) emits every scope the
+	// endpoint can ask for — the exact (category, seniority) band, the category-only
+	// band (seniority ''), the seniority-only band (category ''), and the overall band
+	// (both '') — all per (currency, period), which is never aggregated across. The
+	// figure per job is its EFFECTIVE salary (jobs_effective_salary, migration 0216:
+	// manual, else source, else enrichment — the min/max midpoint or whichever bound is
+	// present). Only bands at/above @min_sample are stored.
+	ComputeInsightsSalaryStatsGlobal(ctx context.Context, minSample int32) ([]ComputeInsightsSalaryStatsGlobalRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Per-category skill demand (country '' bucket).
+	ComputeInsightsSkillStatsByCategory(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsSkillStatsByCategoryRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Per-country skill demand (category '' bucket).
+	ComputeInsightsSkillStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsSkillStatsByCountryRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Country- and category-agnostic skill demand (both '' buckets).
+	ComputeInsightsSkillStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) ([]ComputeInsightsSkillStatsGlobalRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// Faceted added/removed-per-day rollup from a SINGLE scan of jobs: a CROSS JOIN
+	// LATERAL expands each job into its events instead of the previous 8 separate
+	// full-table scans (one per facet axis × added/removed), which at catalogue scale
+	// dominated the recompute. Per job the lateral emits: added events on the
+	// created_at day and (if closed) removed events on the closed_at day, across the
+	// 'all', category, seniority, and country (unnest) axes. Days are UTC calendar
+	// dates; the outer GROUP BY aggregates per (day, facet_kind, facet_value).
+	ComputeInsightsVelocityDaily(ctx context.Context) ([]ComputeInsightsVelocityDailyRow, error)
+	// Compute on the read connection; publish the result separately on the writer.
+	// counts jobs by their created_at day; `removed` counts jobs by their CURRENT
+	// closed_at day (NULL = still open, excluded). Days are UTC calendar dates
+	// (AT TIME ZONE 'UTC') so buckets are stable regardless of session timezone. The
+	// FULL OUTER JOIN yields one row per day that saw either an add or a removal.
+	ComputeJobDailyStats(ctx context.Context, asOf pgtype.Timestamptz) ([]ComputeJobDailyStatsRow, error)
 	// Records that the claimant consumed the code mailed to work_email. COALESCE keeps the
 	// first confirmation time; scoped to status='pending' like ActivateCompanyAccount.
 	ConfirmCompanyAccountEmail(ctx context.Context, userID int64) (CompanyAccount, error)
@@ -1111,6 +1292,22 @@ type Querier interface {
 	// Whether this (feature, ref) was already charged. True means the caller is retrying,
 	// reconnecting, or recomputing work already paid for, and must not be charged again.
 	ConsumptionExists(ctx context.Context, arg ConsumptionExistsParams) (bool, error)
+	CopyInsightsCompanyGrowth(ctx context.Context, arg []CopyInsightsCompanyGrowthParams) (int64, error)
+	CopyInsightsCompanyLifetime(ctx context.Context, arg []CopyInsightsCompanyLifetimeParams) (int64, error)
+	CopyInsightsCompanyResponse(ctx context.Context, arg []CopyInsightsCompanyResponseParams) (int64, error)
+	CopyInsightsCompanyStats(ctx context.Context, arg []CopyInsightsCompanyStatsParams) (int64, error)
+	CopyInsightsCompanyViews(ctx context.Context, arg []CopyInsightsCompanyViewsParams) (int64, error)
+	CopyInsightsRoleCountryStats(ctx context.Context, arg []CopyInsightsRoleCountryStatsParams) (int64, error)
+	CopyInsightsRolePulse(ctx context.Context, arg []CopyInsightsRolePulseParams) (int64, error)
+	CopyInsightsRoleSkillSample(ctx context.Context, arg []CopyInsightsRoleSkillSampleParams) (int64, error)
+	CopyInsightsRoleSkillStats(ctx context.Context, arg []CopyInsightsRoleSkillStatsParams) (int64, error)
+	CopyInsightsRoleStats(ctx context.Context, arg []CopyInsightsRoleStatsParams) (int64, error)
+	CopyInsightsSalaryMonthly(ctx context.Context, arg []CopyInsightsSalaryMonthlyParams) (int64, error)
+	CopyInsightsSalaryStats(ctx context.Context, arg []CopyInsightsSalaryStatsParams) (int64, error)
+	CopyInsightsSkillStats(ctx context.Context, arg []CopyInsightsSkillStatsParams) (int64, error)
+	CopyInsightsVelocityDaily(ctx context.Context, arg []CopyInsightsVelocityDailyParams) (int64, error)
+	// Bulk publication of results computed on the analytics read connection.
+	CopyJobDailyStats(ctx context.Context, arg []CopyJobDailyStatsParams) (int64, error)
 	// How many turns a session has run, counted as the candidate's own messages.
 	//
 	// This is what both metered questions about a session are asked against: whether a
@@ -1169,10 +1366,6 @@ type Querier interface {
 	// from the job ledger and then ADDED by the caller: the budget belongs to the engine,
 	// and a company page costs it exactly what a job page does.
 	CountCompanySearchPingsSince(ctx context.Context, arg CountCompanySearchPingsSinceParams) (int64, error)
-	// How many conversations of the kind starter_id started after since, and when the oldest
-	// of them was started (NULL when there are none): that instant plus the window is when a
-	// slot frees up.
-	CountConversationsStartedSince(ctx context.Context, arg CountConversationsStartedSinceParams) (CountConversationsStartedSinceRow, error)
 	// How many pending matches a digest will COVER without carrying: the subscription's
 	// pending matches strictly older than the oldest one the claim took. The claim reads
 	// newest first, so these are exactly the ones that did not fit; the digest counts them in
@@ -1215,10 +1408,6 @@ type Querier interface {
 	CountEmptyFeedProviderJobs(ctx context.Context, arg CountEmptyFeedProviderJobsParams) (int64, error)
 	// The spam bound's count: confirmed mocks the member is a guest in that have not started.
 	CountFutureBuddyMocksAsGuest(ctx context.Context, guestUserID int64) (int64, error)
-	// How many claims this account has filed since a cutoff, for the daily cap. Counts
-	// retracted rows too: filing and withdrawing in a loop is exactly the pattern the cap
-	// exists to bound, so forgiving it would leave the cap trivially bypassable.
-	CountGhostReportsSince(ctx context.Context, arg CountGhostReportsSinceParams) (int64, error)
 	// How many rewards this referrer has already earned, for the per-referrer ceiling. Counts
 	// granted rows only: an attribution that never paid costs nothing and must not use up a slot.
 	CountGrantedInviteRewards(ctx context.Context, referrerID int64) (int64, error)
@@ -1249,32 +1438,11 @@ type Querier interface {
 	// rows cascade away with a deleted posting, so it never counts these; this is added
 	// to its "all"/"applied"/"board" totals by the caller.
 	CountOrphanedApplications(ctx context.Context, userID int64) (int64, error)
-	// How many new reviews (new company, or a new category on an already-reviewed
-	// company) this user has left since `since` — the rate-limit check backing
-	// companyfeedback.Service.checkRate (mirrors community.CountRecentThreads). An
-	// edit-by-resubmit never inserts a new row (the ON CONFLICT DO UPDATE branch
-	// leaves created_at untouched), so this only grows on genuinely new rows.
-	CountRecentCompanyFeedback(ctx context.Context, arg CountRecentCompanyFeedbackParams) (int64, error)
-	// How many reports this user has filed since `since` — the rate-limit check, mirroring
-	// CountRecentCompanyFeedback. A revival takes the ON CONFLICT branch and leaves
-	// created_at untouched, so this only grows on genuinely new rows.
-	CountRecentCompanyProcessReports(ctx context.Context, arg CountRecentCompanyProcessReportsParams) (int64, error)
-	CountRecentRepliesByUser(ctx context.Context, arg CountRecentRepliesByUserParams) (int64, error)
-	// Rate-limit count: threads a user opened since a cutoff. Served by
-	// threads_author_created_idx.
-	CountRecentThreadsByUser(ctx context.Context, arg CountRecentThreadsByUserParams) (int64, error)
 	// How many distinct jobs the caller first analyzed within the window (created_at is the
 	// first-analysis time — see UpsertUserJobAnalysis). This is the fit-analysis quota
 	// meter: the PK guarantees one row per (user, job), so the row count is the distinct-job
 	// count. A recompute does not add a row, so it never consumes quota.
 	CountRecentUserJobAnalyses(ctx context.Context, arg CountRecentUserJobAnalysesParams) (int64, error)
-	// How many requests a seeker has created since a cutoff — the per-day cap check.
-	CountReferralRequestsSince(ctx context.Context, arg CountReferralRequestsSinceParams) (int64, error)
-	// How many reports this account has filed since a cutoff, for the daily cap
-	// (ghost_reports.CountGhostReportsSince's counterpart for this queue). Counts every status,
-	// not just pending: a report already resolved or dismissed still consumed the reporter's
-	// daily allowance, so excluding it would let a decided report be re-filed for free.
-	CountReportsFiledSince(ctx context.Context, arg CountReportsFiledSinceParams) (int64, error)
 	// How many saved searches a user has — the per-user cap is enforced against this in
 	// the service before a create.
 	CountSavedSearches(ctx context.Context, userID int64) (int64, error)
@@ -1468,9 +1636,6 @@ type Querier interface {
 	// First half of the atomic rebuild: clear the snapshot. Run in the same transaction
 	// as the InsertFacetStat loop so a reader never sees an empty or partial table.
 	DeleteAllFacetStats(ctx context.Context) error
-	// ---------------------------------------------------------------------------
-	// Per-company open/growth scalar (backs the /insights/companies leaderboard)
-	// ---------------------------------------------------------------------------
 	DeleteAllInsightsCompanyGrowth(ctx context.Context) error
 	// ---------------------------------------------------------------------------
 	// Per-company posting lifetime (backs the company page's Hiring tab)
@@ -1530,7 +1695,7 @@ type Querier interface {
 	// ---------------------------------------------------------------------------
 	DeleteAllInsightsVelocityDaily(ctx context.Context) error
 	// First half of the atomic rebuild: clear the rollup. Run in the same transaction
-	// as RebuildJobDailyStats so readers never see an empty table and reopen-orphaned
+	// as ComputeJobDailyStats so readers never see an empty table and reopen-orphaned
 	// days (a day that had only closures, now reopened) are dropped rather than left
 	// stale.
 	DeleteAllJobDailyStats(ctx context.Context) error
@@ -1920,6 +2085,11 @@ type Querier interface {
 	// and leaving it out is what keeps the rebuild's lookup map to the rows that need it. The
 	// LATERAL tags each member's countries/regions/cities into one unnested stream (no cartesian
 	// across the three arrays, no repeat self-join), and blanks are dropped by the FILTER.
+	//
+	// The DISTINCT runs in a subquery, ahead of the aggregate, for what it costs: array_agg(DISTINCT)
+	// sorts every unnested value, about 160M rows on prod against a few million distinct ones, and
+	// that sort spilled to disk for over four hours of a rebuild (2026-11-05). A hash aggregate over
+	// the distinct values does the same work in memory, and the answer is unchanged.
 	DuplicateClosureGeoAll(ctx context.Context) ([]DuplicateClosureGeoAllRow, error)
 	// The duplicate-closure geography union for a SPECIFIC set of owner ids, so an incremental
 	// index push can widen a whole wave's rows in one query instead of one call per job.
@@ -2653,7 +2823,7 @@ type Querier interface {
 	// Global and per-user application response rate (the reply-rate benchmark)
 	// ---------------------------------------------------------------------------
 	// The all-companies response rate, summed from the same per-company observable and
-	// answered counts RebuildInsightsCompanyResponse already computed. Every company's row
+	// answered counts ComputeInsightsCompanyResponse already computed. Every company's row
 	// contributes regardless of whether it individually clears its own ten-application
 	// sample gate (see company-hiring-signal) — that gate protects what is safe to publish
 	// about one NAMED employer, not what may contribute to an aggregate across all of them.
@@ -2954,7 +3124,7 @@ type Querier interface {
 	// exists, so this never returns no-rows on that path.
 	GetUsageDayForUpdate(ctx context.Context, arg GetUsageDayForUpdateParams) (int64, error)
 	// How far the account's paid plans reach, for its own key-management page: the API product
-	// names the plan sold for reading, and all four decide the rate its keys get.
+	// names the plan sold for reading; the other fields describe account entitlements.
 	GetUserAPIEntitlement(ctx context.Context, id int64) (GetUserAPIEntitlementRow, error)
 	// The user's cached CV ATS qualitative review (content-quality + findings), or NULL
 	// when none has been computed. Derived only — never the raw CV text.
@@ -3047,7 +3217,7 @@ type Querier interface {
 	// unlike the per-company/global figures, this is not read from a periodic rollup, since
 	// it is scoped to one user and cheap to compute on every request (served by
 	// application_events_user_occurred_idx). Same observable/answered definitions as
-	// RebuildInsightsCompanyResponse: observable requires a connected mailbox, answered
+	// ComputeInsightsCompanyResponse: observable requires a connected mailbox, answered
 	// requires a non-retracted employer_reply event. A caller with no connected mailbox has
 	// zero observable applications — not a separate case, just the same predicate producing
 	// zero — which is what lets the serving layer's sample gate double as the "no mailbox"
@@ -3553,6 +3723,11 @@ type Querier interface {
 	// account never opened the settings page, which is not the same as opting out. Same
 	// reading as broadcast.sql and onboarding.sql, and the opposite of nudges.sql's
 	// inner join — see migration 0153 for why one column could not answer both.
+	//
+	// It also carries the delivery-timing context (the same COALESCE defaults as
+	// GetSubscriptionForDelivery and ClaimSubscriptionMatches) and the two stamps the
+	// worker uses to skip a search whose result could not be sent this pass — see
+	// notify.searchDue.
 	ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error)
 	// The channels cmd/tg-ingest crawls and cmd/tg-extract reads a kind from. Ordered by
 	// name so a run's channel order is stable and its log diffable.
@@ -5535,6 +5710,10 @@ type Querier interface {
 	// each — the sibling half of RejectAndBlockHost. Scoped to status='pending' like the
 	// single-row Mark* queries, so a row already decided by the time this runs is left alone.
 	MarkSubmissionsRejectedByIDs(ctx context.Context, arg MarkSubmissionsRejectedByIDsParams) ([]JobSubmission, error)
+	// Stamp the subscriptions whose saved search the matching stage just ran and
+	// recorded. searched_at is the instant the pass STARTED, not now(): the next
+	// search pages back to it, so a posting indexed while this pass ran is covered.
+	MarkSubscriptionsSearched(ctx context.Context, arg MarkSubscriptionsSearchedParams) error
 	// Completion: the post was processed (jobs written, or no vacancy found). Run in
 	// the same transaction as the extracted jobs' UpsertJob calls.
 	MarkTelegramPostExtracted(ctx context.Context, arg MarkTelegramPostExtractedParams) error
@@ -5647,6 +5826,24 @@ type Querier interface {
 	// per-match work on subscription_matches_pending_matched_idx; measured on prod 2026-10-22
 	// (~40k pending matches, 64 pending subscriptions): 34ms.
 	NotifyBacklogMetrics(ctx context.Context) ([]NotifyBacklogMetricsRow, error)
+	// How many subscription digests reached people in the last 24 hours, and how hard the
+	// busiest recipients were hit. The backlog above says whether digests go OUT; this says
+	// whether too MANY do, which nothing measured until a user complained (2026-11-05): a
+	// server-side rewrite of 578 profile alerts widened them, and one person got 43 digests in
+	// a day. The 24 in users_over_daily_cap is the per-subscription ceiling of the hourly
+	// default; a user above it is getting more than one subscription's worth.
+	//
+	// profile_alerts_rewritten_1h counts profile-derived saved searches UPDATED in the last
+	// hour that existed before it — a creation is not a rewrite, so onboarding does not
+	// read as one. updated_at also moves on a rename, which this cannot tell apart; a
+	// profile alert is named "My profile" and almost never renamed, so the count is the
+	// query rewrites in practice. A user edits one at a time; hundreds in an hour is a mass
+	// rewrite, the step that started the 2026-11-04 flood.
+	//
+	// Per user, not per subscription or channel: the complaint is about one inbox. Measured on
+	// prod 2026-11-05 (16k digests, 1.5k recipients): 25ms warm, on
+	// user_notifications_user_id_created_at_idx.
+	NotifyDigestVolumeMetrics(ctx context.Context) (NotifyDigestVolumeMetricsRow, error)
 	// Record one confident job-mail sighting for a sender domain, returning its running
 	// count. The classifier calls this whenever it confidently labels an email as
 	// application mail, so a recurring unknown ATS domain accrues hits toward promotion.
@@ -5842,182 +6039,6 @@ type Querier interface {
 	// resubmitting a profile that was never withdrawn match no row, which the repository
 	// maps to ErrProfileNotWithdrawn after confirming the profile exists at all.
 	ReactivateMentorProfile(ctx context.Context, userID int64) (Mentor, error)
-	// One row per company with its current open-count and the open-count as of @prev_ts,
-	// from a single scan of jobs over canonical rows only (same count(*) FILTER idiom as
-	// insights_role_stats). open_count uses closed_at IS NULL (open now); open_count_prev
-	// uses open-as-of @prev_ts. Companies open at neither point are dropped (HAVING) to
-	// keep the table lean.
-	RebuildInsightsCompanyGrowth(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
-	// Median days from created_at to closed_at over each company's canonical postings
-	// closed in the last 180 days. Only closures that say the POSTING is over count: it
-	// dropped off a board we crawl (unseen), the source reported it taken down
-	// (feed_removed), the liveness probe read its source page as expired twice
-	// (probe_expired), or the employer closed it here (employer_closed). Not expired —
-	// that is the age rule for sources with no close signal, which closes at 45 days
-	// whatever the employer did, so it would publish our cutoff as the company's speed.
-	// board_unreachable and feed_empty measure our crawler, board_retired,
-	// source_misattributed and moderated our own decisions, '' is unknown. 180 days so the
-	// figure describes how the company hires now, not over its whole history.
-	//
-	// Every rollup that measures a real close reads this same list;
-	// insights_close_rule_test.go fails if one of them drifts from it.
-	RebuildInsightsCompanyLifetime(ctx context.Context) (int64, error)
-	// One row per company with an OBSERVABLE application: the applicant has a connected
-	// mailbox, so a reply would have been seen. Applications from people we cannot observe
-	// are excluded from BOTH sides of the ratio — counting them in the denominator would
-	// report our own blind spot as the employer's silence, which is the same mistake the
-	// job-level signal's mailbox gate exists to prevent.
-	//
-	// Both sides come from application_events, not from live mail. Reading the emails table
-	// made the served rate a function of the candidate's inbox hygiene: it counted messages
-	// WHERE deleted_at IS NULL, so someone clearing old mail made an employer that had
-	// answered them look silent, on a public page, about a named company. The ledger records
-	// that the reply arrived; what later became of the message is not the employer's doing.
-	//
-	// "Answered" is any live employer_reply event. Not a stage advance: a stage is what the
-	// candidate recorded, and a company that replied to somebody who never updated their
-	// board still replied. A retracted event does not count — it belongs to another employer.
-	//
-	// The reply is paired to its application through application_id, never through job_id.
-	// job_id is ON DELETE SET NULL, so once a posting is deleted both sides read NULL, the pair reduces
-	// to NULL = NULL — never true — and an employer that answered is served as silent: the
-	// distortion this rollup was moved onto the ledger to remove, arriving by a different
-	// route. Pairing on (user_id, company_slug) instead would survive the deletion by
-	// crediting one reply to every application that user made to that employer, which is
-	// worse than losing it.
-	//
-	// An event with no application_id is left out of BOTH sides rather than counted and never
-	// answerable. Only rows written before the carry-over can be in that state, and
-	// cmd/backfill-applications is what empties it.
-	//
-	// The median covers answered applications only and is therefore right-censored; the
-	// serving layer reports the unanswered count beside it so the number is never read as
-	// "employers reply in six days" when most of the sample was never replied to. Replies
-	// dated before their application (an application reconstructed from a later message, or
-	// clock skew) still count as answered but are kept out of the median, where they would
-	// contribute a negative duration.
-	RebuildInsightsCompanyResponse(ctx context.Context) (int64, error)
-	// Per-(company, day) hiring velocity with a running open count, from the retained
-	// jobs lifecycle. Each canonical, attributable job (company_slug <> '' AND
-	// duplicate_of IS NULL) emits an added event on its created_at (UTC) day and, if
-	// closed, a removed event on its closed_at (UTC) day; the inner aggregate collapses
-	// those to one row per (company_slug, day), and the window SUM over (added - removed)
-	// ordered by day yields open = cumulative(added) - cumulative(removed) as of that day
-	// (a job is created no later than it closes, so this equals the point-in-time open
-	// count). Only a company's activity days get a row.
-	RebuildInsightsCompanyStats(ctx context.Context) (int64, error)
-	// page_uniques summed over each company's postings for the last 30 days and the 30
-	// before. page_uniques, never uniques: uniques fuses unfiltered API reads — mostly
-	// crawlers — with page opens. Duplicates are NOT filtered out: a view of a repost is
-	// still attention paid to the company. One visitor counts once per posting per day, so
-	// the sum is posting-views, not distinct people; the page says so.
-	RebuildInsightsCompanyViews(ctx context.Context) (int64, error)
-	// One column per country: a posting contributes once to each country it lists, and a
-	// posting with none reaches the '' bucket only.
-	RebuildInsightsRoleCountryStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
-	// The all-countries column ('' bucket): one count per posting, however many countries
-	// it lists — grouping by category alone is what keeps a two-country posting from
-	// counting twice here. Unlike insights_role_stats it needs no seniority and counts
-	// only canonical, public postings (see migration 0214 for both).
-	RebuildInsightsRoleCountryStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
-	// Three figures per category over canonical, public postings, each for the last 30 days
-	// and the 30 before (openspec/changes/insights-role-pulse/design.md has the prod
-	// measurements behind every choice below).
-	//
-	// COMPETITION is page views over exposure. Views are job_daily_views.page_uniques, never
-	// uniques (AGENTS.md "View counts"). Exposure is the posting-days a posting was OPEN ON
-	// FREEHIRE inside the window: from created_at, not from LEAST(posted_at, created_at) —
-	// the one figure in this file where first-seen is the right date, because nobody can view
-	// a posting here before we found it, and the existence rule would charge a backlog posting
-	// for weeks it was not on the site. A view on a day the posting was already closed is not
-	// counted, so numerator and denominator are the same population. Both windows end on the
-	// freshest COMPLETE views day (before today, UTC) rather than on now(): cmd/rollup-views
-	// usually lands a day after it ends, and a now()-anchored window would set 29 days of
-	// views against 30 of exposure.
-	//
-	// TIME TO CLOSE is the median days from existence to close over closes that describe the
-	// POSTING: unseen, feed_removed, probe_expired, employer_closed. Not expired (a 45-day age
-	// rule — its median is 45 by construction), feed_empty or board_unreachable (our crawler's
-	// health), board_retired, moderated or source_misattributed (our own decisions), or ''
-	// (closed before reasons were recorded). A close dated before existence is left out, as
-	// RebuildInsightsCompanyLifetime does.
-	//
-	// INFLOW counts postings whose existence date falls in the last 30 days — the header's
-	// rule, applied to "new" instead of "open at the start" — and deliberately has NO earlier
-	// window. Measured 2026-10-30, the comparison was dominated by our own coverage growth:
-	// a board first crawled this month shows its earlier postings only if they were still
-	// open when we found it, so healthcare read +155% while stable-coverage categories
-	// (devops, data_engineering) moved -1% and -20%; neither a stable-employer panel nor a
-	// discovered-within-N-days rule removed it (the latter made healthcare +392%).
-	RebuildInsightsRolePulse(ctx context.Context, arg RebuildInsightsRolePulseParams) (int64, error)
-	// The denominator every share in insights_role_skill_stats divides by: the role's
-	// open postings that carry AT LEAST ONE tagged skill. Measured 2026-09-18, 11% of
-	// the eligible postings carry none, so dividing by the role's open count would fold
-	// our own tagging gap into every published share — and because that gap differs per
-	// role, two roles' shares would stop being comparable.
-	//
-	// Takes NO @min_sample, deliberately. The floor selects which SKILLS are published;
-	// applied here it would delete the denominator of a share that did clear the floor,
-	// leaving a numerator with nothing to divide by.
-	// The NOT is_private clause must stay in step with the distribution's: a numerator
-	// and a denominator counting different populations is a share that is quietly wrong
-	// rather than visibly broken.
-	RebuildInsightsRoleSkillSample(ctx context.Context) (int64, error)
-	// The skill distribution WITHIN one role. Same shape as
-	// RebuildInsightsRoleStatsByCountry's `FROM jobs, unnest(countries)` above — a job
-	// contributes once per skill it carries — so its cost is one already measured in
-	// production, and `skills` is a small text[] rather than the TOASTed description.
-	//
-	// Open postings only: a closed posting's skills describe a vacancy nobody can apply
-	// to. No growth column, unlike the sibling rollups: "docker is up 4% within senior
-	// backend" is a second question, and answering it would need a prior-window pass
-	// over the same unnest.
-	RebuildInsightsRoleSkillStats(ctx context.Context, minSample int32) (int64, error)
-	// Per-country role demand: a job contributes once to each of its countries.
-	RebuildInsightsRoleStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
-	// Country-agnostic ('' bucket) role demand. open_count = jobs open now
-	// (closed_at IS NULL); open_count_prev = jobs open as of @prev_ts. The inner
-	// aggregate is wrapped so the "non-zero in either window" filter names the counts
-	// once instead of repeating the FILTER expressions in a HAVING.
-	RebuildInsightsRoleStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
-	// The salary history: effective-salary percentiles per (category, currency, period,
-	// month a posting was PUBLISHED), the current month and the eleven before it. Open and
-	// closed postings alike — a posting closed since still records what was offered that
-	// month — and canonical, public ones only. A month a posting belongs to is its
-	// existence date (see the file header), so one found in June but published in March
-	// counts in March. Months under @min_sample are not stored: a line through a handful
-	// of postings a month is noise drawn as a trend.
-	RebuildInsightsSalaryMonthly(ctx context.Context, minSample int32) (int64, error)
-	// Per-country salary bands (same CUBE of role scope, country from unnest).
-	RebuildInsightsSalaryStatsByCountry(ctx context.Context, minSample int32) (int64, error)
-	// Country-agnostic salary bands. CUBE(category, seniority) emits every scope the
-	// endpoint can ask for — the exact (category, seniority) band, the category-only
-	// band (seniority ''), the seniority-only band (category ''), and the overall band
-	// (both '') — all per (currency, period), which is never aggregated across. The
-	// figure per job is its EFFECTIVE salary (jobs_effective_salary, migration 0216:
-	// manual, else source, else enrichment — the min/max midpoint or whichever bound is
-	// present). Only bands at/above @min_sample are stored.
-	RebuildInsightsSalaryStatsGlobal(ctx context.Context, minSample int32) (int64, error)
-	// Per-category skill demand (country '' bucket).
-	RebuildInsightsSkillStatsByCategory(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
-	// Per-country skill demand (category '' bucket).
-	RebuildInsightsSkillStatsByCountry(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
-	// Country- and category-agnostic skill demand (both '' buckets).
-	RebuildInsightsSkillStatsGlobal(ctx context.Context, prevTs pgtype.Timestamptz) (int64, error)
-	// Faceted added/removed-per-day rollup from a SINGLE scan of jobs: a CROSS JOIN
-	// LATERAL expands each job into its events instead of the previous 8 separate
-	// full-table scans (one per facet axis × added/removed), which at catalogue scale
-	// dominated the recompute. Per job the lateral emits: added events on the
-	// created_at day and (if closed) removed events on the closed_at day, across the
-	// 'all', category, seniority, and country (unnest) axes. Days are UTC calendar
-	// dates; the outer GROUP BY aggregates per (day, facet_kind, facet_value).
-	RebuildInsightsVelocityDaily(ctx context.Context) (int64, error)
-	// Second half of the atomic rebuild: recompute every active day from jobs. `added`
-	// counts jobs by their created_at day; `removed` counts jobs by their CURRENT
-	// closed_at day (NULL = still open, excluded). Days are UTC calendar dates
-	// (AT TIME ZONE 'UTC') so buckets are stable regardless of session timezone. The
-	// FULL OUTER JOIN yields one row per day that saw either an add or a removal.
-	RebuildJobDailyStats(ctx context.Context) (int64, error)
 	// The quarantine set: postings that appeared in a digest in the days [since, before),
 	// in ANY channel. Across channels on purpose — the list is the editorial unit and the
 	// channel is only how it is delivered, so a posting shown on Discord yesterday should
@@ -6771,11 +6792,9 @@ type Querier interface {
 	// what stops a group repeated inside one verbose title from outranking a real
 	// cluster. A second count(DISTINCT id) would only add a per-group sort.
 	ResidualTitleGroups(ctx context.Context, arg ResidualTitleGroupsParams) ([]ResidualTitleGroupsRow, error)
-	// Resolve a presented token to its owner, the key's scope and how far the owner's paid
-	// plans reach, for the public-read rate limiter. Read-only on purpose: unlike
-	// AuthenticateAPIKey it does NOT touch last_used_at, because it runs on the hottest reads on
-	// the site and its answer is cached. No row means unknown, revoked or expired.
-	ResolveAPIKeyTier(ctx context.Context, tokenHash string) (ResolveAPIKeyTierRow, error)
+	// Read-only credential identity and entitlements for trusted infrastructure.
+	// No row means unknown, revoked or expired; introspection never changes last_used_at.
+	ResolveAPIKeyIdentity(ctx context.Context, tokenHash string) (ResolveAPIKeyIdentityRow, error)
 	// The canonical slug for each folded key in the batch — one round trip per board run, not
 	// one per posting. pipeline.Runner folds the run's distinct company slugs, asks this once,
 	// and hands the ONE resulting map to both the aggregator-coverage gate and the upsert, so
@@ -6793,11 +6812,9 @@ type Querier interface {
 	ResolveCompanySlugAliases(ctx context.Context, foldedKeys []string) ([]ResolveCompanySlugAliasesRow, error)
 	// Mark a report handled. An already resolved report keeps its first resolver and time.
 	ResolveConversationReport(ctx context.Context, arg ResolveConversationReportParams) (int64, error)
-	// ResolveAPIKeyTier's twin for an MCP or CLI access token: its owner and how far the owner's
-	// paid plans reach, for the public-read rate limiter. The same liveness rule as
-	// AuthenticateOAuthGrant, and read-only for the same reason ResolveAPIKeyTier is. No row
-	// covers unknown, expired and revoked alike.
-	ResolveOAuthGrantTier(ctx context.Context, accessTokenHash string) (ResolveOAuthGrantTierRow, error)
+	// Read-only credential identity and entitlements with the same liveness rules as
+	// AuthenticateOAuthGrant, including the account's current session generation.
+	ResolveOAuthGrantIdentity(ctx context.Context, accessTokenHash string) (ResolveOAuthGrantIdentityRow, error)
 	// Mark a sent request contacted or declined, recording the acting referrer and time. The
 	// status='sent' guard makes it race-safe: whichever referrer acts first wins; a second
 	// attempt matches no row (mapped to "already resolved").

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/url"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -80,7 +81,7 @@ type fakeStore struct {
 	webhookFailureResult db.RecordWebhookDeliveryFailureRow
 	webhookFailureErr    error
 
-	// deliveryErr and digestJobsErr fail the two reads deliverOne makes before it can
+	// deliveryErr and digestJobsErr fail the two reads deliverMessage makes before it can
 	// send anything. Neither burns a delivery attempt, so the counter is the only trace
 	// they leave.
 	deliveryErr   error
@@ -141,6 +142,20 @@ type fakeStore struct {
 	// deliver with no row in hand and still observe what the send path does
 	// about it afterwards.
 	recordNotificationErrOnce error
+
+	// searched records every MarkSubscriptionsSearched call; the stamp is also
+	// written onto the matching active rows, so a second pass reads it back.
+	searched []db.MarkSubscriptionsSearchedParams
+}
+
+func (s *fakeStore) MarkSubscriptionsSearched(_ context.Context, a db.MarkSubscriptionsSearchedParams) error {
+	s.searched = append(s.searched, a)
+	for i := range s.active {
+		if slices.Contains(a.Ids, s.active[i].ID) {
+			s.active[i].LastSearchedAt = a.SearchedAt
+		}
+	}
+	return nil
 }
 
 func (s *fakeStore) ListActiveSubscriptions(context.Context) ([]db.ListActiveSubscriptionsRow, error) {
@@ -181,9 +196,35 @@ func (s *fakeStore) RecordSubscriptionMatches(_ context.Context, a db.RecordSubs
 	return n, nil
 }
 
+// ClaimSubscriptionMatches returns the scripted claim. A row that names no owner
+// stands for a subscription of its own person (UserID = SubscriptionID), so a case
+// written before messages were bundled per person still sends one per subscription;
+// the bundling cases set UserID and Channel explicitly.
 func (s *fakeStore) ClaimSubscriptionMatches(context.Context, db.ClaimSubscriptionMatchesParams) ([]db.ClaimSubscriptionMatchesRow, error) {
 	s.calls = append(s.calls, "claim")
-	return s.claimed, nil
+	rows := make([]db.ClaimSubscriptionMatchesRow, len(s.claimed))
+	for i, c := range s.claimed {
+		if c.UserID == 0 {
+			c.UserID = c.SubscriptionID
+		}
+		rows[i] = c
+	}
+	// Like the SQL, a row unscripted on the point carries the owner's newest stamp on
+	// the channel, read from the delivery rows.
+	for i := range rows {
+		if rows[i].PersonLastSentAt.Valid {
+			continue
+		}
+		for _, o := range rows {
+			if o.UserID != rows[i].UserID || o.Channel != rows[i].Channel {
+				continue
+			}
+			if t := s.delivery[o.SubscriptionID].LastDigestSentAt; t.Valid && (!rows[i].PersonLastSentAt.Valid || t.Time.After(rows[i].PersonLastSentAt.Time)) {
+				rows[i].PersonLastSentAt = t
+			}
+		}
+	}
+	return rows, nil
 }
 
 func (s *fakeStore) ExpireStaleSubscriptionMatches(_ context.Context, a db.ExpireStaleSubscriptionMatchesParams) (int64, error) {
@@ -330,12 +371,15 @@ func (s *fakeStore) RecordWebhookDeliveryFailure(_ context.Context, a db.RecordW
 type fakeNotifier struct {
 	err  error
 	sent []Digest
+	// messages is every send as the channel received it; sent flattens their digests.
+	messages []Message
 }
 
-// Send records the digest even when it fails, so a test can assert what the
+// Send records the message even when it fails, so a test can assert what the
 // channel was handed on the failure path too.
-func (n *fakeNotifier) Send(_ context.Context, _, _ string, d Digest) error {
-	n.sent = append(n.sent, d)
+func (n *fakeNotifier) Send(_ context.Context, _, _ string, m Message) error {
+	n.messages = append(n.messages, m)
+	n.sent = append(n.sent, m.Digests...)
 	return n.err
 }
 
@@ -349,8 +393,8 @@ type failAfterNotifier struct {
 	sent    []Digest
 }
 
-func (n *failAfterNotifier) Send(_ context.Context, _, _ string, d Digest) error {
-	n.sent = append(n.sent, d)
+func (n *failAfterNotifier) Send(_ context.Context, _, _ string, m Message) error {
+	n.sent = append(n.sent, m.Digests...)
 	if len(n.sent) > n.succeed {
 		return n.err
 	}
@@ -1150,7 +1194,7 @@ func deliverySubscription() map[int64]db.GetSubscriptionForDeliveryRow {
 
 // ErrRecipientGone means different things on different channels: a Telegram bot
 // that was blocked, or (per the webhook channel's own mapping, see
-// internal/engage/webhooknotify) a destination that answered 410 Gone. deliverOne
+// internal/engage/webhooknotify) a destination that answered 410 Gone. deliverMessage
 // must dispatch the "forget this recipient" side effect by channel — a webhook's
 // 410 must disable the webhook config, never the user's unrelated Telegram link.
 func TestDeliver_RecipientGoneOnWebhookDisablesWebhookNotTelegram(t *testing.T) {
@@ -1626,7 +1670,7 @@ func TestDeliver_RecipientGoneSoftSkipsEvenIfUnlinkFails(t *testing.T) {
 	}
 }
 
-// An interval subscription reaching deliverOne has already passed the claim's
+// An interval subscription reaching deliverMessage has already passed the claim's
 // elapsed-interval gate, so it sends and stamps last_digest_sent_at — the stamp is
 // what the NEXT claim measures the interval from.
 func TestDeliverOne_IntervalDeliversAndStampsLastSent(t *testing.T) {

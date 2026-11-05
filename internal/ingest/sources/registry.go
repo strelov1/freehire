@@ -375,7 +375,11 @@ func All(c HTTPClient) map[string]Source {
 		NewScalis(c),
 		NewVouch(c),
 		NewRecruitingSolutions(c),
-		NewUKG(c),
+		// UKG Pro Recruiting's edge 403s the project's bare User-Agent on every path (the
+		// listing API included) while serving a recognised crawler string — see crawlerUASource —
+		// and the adapter re-fetches every posting's detail page per run, so it is paced too
+		// (pacedUKGHTTP, one bucket for the listing POST and the detail GETs).
+		crawlerUASource(c, func(h ukgHTTP) Source { return NewUKG(pacedUKGHTTP(h)) }),
 		// UKG Ready (formerly Kronos Workforce Ready) — a different UKG product from the one
 		// NewUKG crawls, on its own regional pod hosts.
 		NewUKGReady(c),
@@ -1260,6 +1264,19 @@ func compatibleUASource[T any](c HTTPClient, build func(T) Source) Source {
 		return build(zero)
 	}
 	return build(any(NewCompatibleUAClient()).(T))
+}
+
+// crawlerUASource is compatibleUASource for an edge that refuses every self-identifying
+// string but serves a recognised search-crawler one (UKG Pro Recruiting: its nginx 403s
+// "freehire/0.1 (+https://freehire.me)" on the listing API and the detail pages alike, while
+// the Googlebot string and a plain browser string are both served — measured live 2026-11-05).
+// See crawlerUserAgent for the line this does not cross.
+func crawlerUASource[T any](c HTTPClient, build func(T) Source) Source {
+	if c == nil {
+		var zero T
+		return build(zero)
+	}
+	return build(any(newCrawlerUAClient()).(T))
 }
 
 // reg indexes sources by provider key. A duplicate key means two adapters claim the

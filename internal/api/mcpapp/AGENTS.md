@@ -1,19 +1,21 @@
 # internal/api/mcpapp
 
-The MCP server freehire's ChatGPT app is built on. Read-only, anonymous, mounted at
-`/api/v1/mcp`.
+The canonical MCP at `/api/v1/mcp` combines anonymous catalogue reads with
+OAuth account tools (`mixed.go`). Anonymous and OAuth sessions discover the same
+38 tools; personal calls without authentication return `mcp/www_authenticate`
+before business code runs. Per-tool `_meta.securitySchemes` declares access.
 
-A second, authenticated server (`account.go`) lives in this package too, mounted at
-`/api/v1/mcp/account` (freehire#3114): it acts as the signed-in account that approved an
-OAuth grant, reusing the in-app assistant's own tools — including writes (save, mark
-applied, set a stage/note) — rather than reimplementing them. It also receives the anonymous
-server's `Reader` for the catalogue tools the assistant does not own: company search,
-posting liveness, similar jobs, salary and market statistics, filter values, and research
-`search`/`fetch`. Their registrations live in `catalogue.go`; account `search_jobs`,
-`get_job` and `get_company` retain their existing schemas and user context.
-Authentication for it is a Fiber middleware in
-`internal/api/handler/mcpapp_account.go`, ahead of this package's own code — see
-`AccountUserIDHeader`'s doc comment in `account.go` for why.
+The eleven catalogue tools retain their public schemas, previews and widgets.
+The strict bearer-only `/api/v1/mcp/account` alias (`account.go`) retains its
+legacy account `search_jobs`, `get_job` and `get_company` schemas. Both reuse the
+in-app assistant's personal handlers and the catalogue `Reader`; avoid changing
+one endpoint's schemas to match the other.
+
+Fiber authentication in `internal/api/handler/mcpapp_account.go` clears external
+`AccountUserIDHeader` values before resolving credentials, including anonymous
+requests. Invalid credentials fail closed instead of falling back to anonymous.
+The canonical URL has path-specific protected-resource metadata; the root
+well-known document continues to identify the account alias for existing clients.
 
 It also admits a **full-scope API key** (`fhk_…`), the mirror of REST admitting an OAuth
 grant wherever a key goes. That is how the local npm server (`freehire-mcp`), which holds a
@@ -184,16 +186,32 @@ that ignores `_meta.ui` sees exactly what it saw before.
 
 - **It is hand-written HTML, not a `web/` build, on purpose** — see
   `openspec/changes/archive/2026-10-20-chatgpt-app-widgets/design.md`. If it ever grows
-  forms, sign-in or its own requests, that is the point to move it.
+  independent sign-in, complex forms or direct network requests, that is the point to
+  move it. Saving and stage controls use the host bridge and existing tools, not
+  another HTTP client or credential store.
 - **The URI is the page's hash.** Hosts cache by URI; editing the file changes it. Never
   hard-code the URI anywhere else.
 - **Wire data lives only in `result`, `job` and `req`** inside the page.
   `TestTheWidgetReadsOnlyFieldsTheWireShapeHas` greps those names and checks every field
   against `wire.go`, so a renamed field fails the build instead of rendering as nothing.
   Reading wire data through any other name blinds it.
-- **Text only, no requests.** `TestTheWidgetCannotInjectMarkupOrMakeRequests` bans
+- **Safe text, no direct network requests.** `TestTheWidgetCannotInjectMarkupOrMakeRequests` bans
   `innerHTML` and friends and every network API; the CSP admits only
   `https://logo.freehire.me` images. A URL is used only when it is `https:`.
+- **Account actions are explicit host-mediated calls.** `Save job` calls `save_job`;
+  choosing a stage does nothing until `Update stage` calls `track_job`. Only the
+  selected slug and stage are sent, never notes. Controls require the host's
+  `serverTools` capability and never handle credentials. OAuth challenges point
+  back to the assistant's sign-in controls.
+- **Success needs a server confirmation.** The returned tracking record must have
+  a valid job id and saved timestamp or the exact requested stage. An unknown
+  result or timeout locks writes until the person explicitly confirms their tracking
+  board shows no change and chooses `I checked, allow retry`. Unlocking never sends
+  a request: Save or Update still needs its own click. Timed-out request ids are
+  removed, so late replies cannot confirm a new operation. A confirmed refusal
+  permits an explicit retry. Pending calls stay locked across
+  result re-renders. `web/scripts/mcp-widget.test.mjs` drives the real embedded
+  page's DOM and host protocol, including failure and source-spoofing cases.
 - **Only a tool whose result the page can draw may name it** — a host draws the widget for
   every tool that does.
 - **The handshake's field names are the specification's** (`appInfo`, not `clientInfo`),

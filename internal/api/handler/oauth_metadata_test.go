@@ -14,6 +14,7 @@ func oauthMetadataApp() *fiber.App {
 	app := fiber.New(fiber.Config{ErrorHandler: RenderError})
 	app.Get("/api/v1/oauth/metadata/authorization-server", h.OAuthAuthorizationServerMetadata)
 	app.Get("/api/v1/oauth/metadata/protected-resource", h.OAuthProtectedResourceMetadata)
+	app.Get("/api/v1/oauth/metadata/protected-resource/mcp", h.OAuthMixedResourceMetadata)
 	return app
 }
 
@@ -66,5 +67,27 @@ func TestOAuthProtectedResourceMetadata(t *testing.T) {
 	}
 	if out.Resource == "" || len(out.AuthorizationServers) == 0 {
 		t.Errorf("out = %+v", out)
+	}
+}
+
+func TestOAuthMixedResourceMetadata(t *testing.T) {
+	app := oauthMetadataApp()
+	for path, want := range map[string]string{
+		"/api/v1/oauth/metadata/protected-resource":     "https://freehire.me/api/v1/mcp/account",
+		"/api/v1/oauth/metadata/protected-resource/mcp": "https://freehire.me/api/v1/mcp",
+	} {
+		resp, err := app.Test(httptest.NewRequestWithContext(t.Context(), "GET", path, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out protectedResourceMetadata
+		err = json.NewDecoder(resp.Body).Decode(&out)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out.Resource != want || len(out.AuthorizationServers) != 1 || out.AuthorizationServers[0] != "https://freehire.me" {
+			t.Fatalf("%s: %+v", path, out)
+		}
 	}
 }

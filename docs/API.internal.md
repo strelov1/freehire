@@ -10,7 +10,7 @@ Base URL: `https://freehire.me/api/v1`
 - [Response envelope](#response-envelope)
 - [Pagination](#pagination)
 - [Errors](#errors)
-- [Rate limits and API plans](#rate-limits-and-api-plans)
+- [API plans](#api-plans)
 - [Authentication model](#authentication-model)
 - [External vs internal endpoints](#external-vs-internal-endpoints)
 - [What is not here](#what-is-not-here)
@@ -64,28 +64,15 @@ Pagination is bounded on **every** list endpoint: `offset + limit` may not excee
 
 The bound is a refusal rather than a clamp, deliberately: a clamped page would answer 200 carrying rows you did not ask for, and a client walking pages would loop over the same page forever without being able to tell. A 400 means "there is no such page", which is the truth.
 
-It applies whichever store answers the endpoint, and it is not the same thing as the rate limit. A rate limit bounds requests per minute; on an endpoint whose `offset` you choose, the work per request is also yours to choose — so a client inside its request budget can still be asking for far more work than the budget implies. Both bounds exist and neither substitutes for the other.
-
 ## Errors
 
 Errors use standard HTTP status codes: 400 (bad request / invalid value), 401 (missing or invalid credentials), 403 (authenticated but not allowed, e.g. a non-moderator), 404 (no such job, company, or owned resource), and 503 (search temporarily unavailable). The body is always `{ "error": ... }`.
 
-## Rate limits and API plans
+## API plans
 
-The public read endpoints answer without a key, limited per address — for personal and non-commercial use. Showing the postings in a product you offer to others needs an API plan. `GET /plans` reports the figures in force as `api_limits`; every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`, and a refusal is `429` with `Retry-After`.
+The public read endpoints answer without a key for personal and non-commercial use. Showing the postings in a product you offer to others needs an [API plan](https://freehire.me/jobs-api), under the [data licence](https://freehire.me/terms#data-licence).
 
-With a full-access key the budget is per account instead, shared by all of its full-access keys and by the access tokens of its signed-in MCP and CLI connections, and its size is the account's tier: Pro and Ultra raise it, and the [API and Data plans](https://freehire.me/jobs-api) raise it further. By default the API and Data plans have no daily cap, and Data has the highest per-minute limit. An embed key is budgeted like no key. Send the key as `Authorization: Bearer <token>`. An API plan also licenses the data for use in your own product, under the [data licence](https://freehire.me/terms#data-licence).
-
-The budgets in force on freehire.me. Every public REST read draws on the same one (the ChatGPT app keeps its own); `api_limits.tiers` in `GET /plans` lists the figures in force.
-
-| Tier | Per minute | Per day |
-|---|---|---|
-| No key (per address) | 120 | 2,000 |
-| Free account | 600 | 10,000 |
-| Pro | 800 | 30,000 |
-| Ultra | 1,000 | 100,000 |
-| [API](https://freehire.me/jobs-api) | 1,200 | no cap |
-| [Data](https://freehire.me/jobs-api) | 6,000 | no cap |
+Send a full-access key as `Authorization: Bearer <token>`, or use the OAuth access token of a signed-in MCP or CLI connection.
 
 ## Authentication model
 
@@ -253,7 +240,7 @@ curl "https://freehire.me/api/v1/companies/acme/feedback/mine" -b cookies.txt
 
 Create or overwrite your feedback in one category on a company.
 
-One entry per (user, category): posting again in the same `feedback_type` overwrites your existing review rather than adding a second one. The response's nested `company` field is the freshly recomputed rating count/average, so you can update your own view of the company without a second fetch. `422` on an empty body, `429` past the daily review cap.
+One entry per (user, category): posting again in the same `feedback_type` overwrites your existing review rather than adding a second one. The response's nested `company` field is the freshly recomputed rating count/average, so you can update your own view of the company without a second fetch. `422` on an empty body.
 
 **Path parameters**
 
@@ -401,7 +388,7 @@ curl -X POST "https://freehire.me/api/v1/company-feedback/5/hide" -b cookies.txt
 
 ## Authentication
 
-Register/login set the session cookie and return the user. Logout clears it. `me` resolves the caller (cookie or API key). OAuth sign-in is a redirect flow. Credential endpoints are rate-limited.
+Register/login set the session cookie and return the user. Logout clears it. `me` resolves the caller (cookie or API key). OAuth sign-in is a redirect flow.
 
 ### `POST /auth/verify/request`
 
@@ -499,7 +486,7 @@ Per-user tracking, addressed by the job slug. All accept the session cookie or a
 
 Re-read your own store subscription now.
 
-For a mobile client that has just completed an App Store or Google Play purchase. The purchase finishes on the device before the provider’s webhook reaches us, and if that delivery is lost the provider stops retrying after 80 minutes — so without this route a paid subscriber can be left looking at a paywall. It names nobody: the account is the session’s, and a user id in the request is ignored. Rate-limited per caller, and absent entirely where the store provider is unconfigured. `status` is `synced` when the plan was written, or `no_subscription` when RevenueCat holds nothing for this account; a 503 means the provider could not be reached and the hourly reconciler will finish the job.
+For a mobile client that has just completed an App Store or Google Play purchase. The purchase finishes on the device before the provider’s webhook reaches us, and if that delivery is lost the provider stops retrying after 80 minutes — so without this route a paid subscriber can be left looking at a paywall. It names nobody: the account is the session’s, and a user id in the request is ignored. Absent entirely where the store provider is unconfigured. `status` is `synced` when the plan was written, or `no_subscription` when RevenueCat holds nothing for this account; a 503 means the provider could not be reached and the hourly reconciler will finish the job.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/billing/revenuecat/sync" -b cookies.txt
@@ -775,6 +762,7 @@ The whole profile is replaced on each save. An unknown specialization (must be a
 | --- | --- | --- | --- |
 | `specializations` | string[] | yes | One or more job categories (max 5). (e.g. `["backend"]`) |
 | `skills` | string[] | yes | Canonical skill tokens (non-empty). (e.g. `["go","postgresql"]`) |
+| `job_languages` | string[] | no | Preferred vacancy languages as two-letter codes (max 200); empty or omitted means any language. (e.g. `["en","ru"]`) |
 | `location_preferences` | object | no | Optional location block (`work_modes`, `remote`, `base`, `relocation`); omit or null to clear. |
 
 ```bash
@@ -1506,7 +1494,7 @@ curl -X DELETE "https://freehire.me/api/v1/me/push-tokens" \
 
 Send a test push to all of your own registered devices.
 
-Never targets another user or a caller-supplied destination — only your own registered tokens. Rate-limited to 20/hour, since each call fans out one outbound send per device.
+Never targets another user or a caller-supplied destination — only your own registered tokens. Each call fans out one outbound send per device.
 
 ```bash
 curl -X POST "https://freehire.me/api/v1/me/push-tokens/test" -b cookies.txt
@@ -1701,7 +1689,7 @@ Turning a URL in the wild into something freehire knows about. One intake sequen
 
 Turn a URL, pasted text, or an existing job into one usable by CV tailoring.
 
-Exactly one of `job_slug`, `url`, or `text` is required. A recognized URL resolves through the same ATS-aware registry `/jobs/resolve` uses (a network fetch — only the `url` form is rate-limited); an unrecognized URL falls back to a generic scrape; pasted text is stored as a private, unlisted job. Returns the slug the tailor workspace should open — an existing job, or a freshly created private one. `404` for an unknown `job_slug`, `422` for a URL nothing could read.
+Exactly one of `job_slug`, `url`, or `text` is required. A recognized URL resolves through the same ATS-aware registry `/jobs/resolve` uses (a network fetch); an unrecognized URL falls back to a generic scrape; pasted text is stored as a private, unlisted job. Returns the slug the tailor workspace should open — an existing job, or a freshly created private one. `404` for an unknown `job_slug`, `422` for a URL nothing could read.
 
 **Body**
 
@@ -2470,7 +2458,7 @@ The one image the CV templates that print a portrait compose in. Cookie-only thr
 
 Upload (or replace) your headshot.
 
-Multipart upload of the `file` part — JPEG, PNG, or WebP, capped at 8 MB and rate-limited to 12 uploads/hour. Replaces any existing headshot. `501` when object storage is not configured, `400` for an undecodable, unsupported, or oversized image.
+Multipart upload of the `file` part — JPEG, PNG, or WebP, capped at 8 MB and replaces any existing headshot. `501` when object storage is not configured, `400` for an undecodable, unsupported, or oversized image.
 
 ```bash
 curl -X PUT "https://freehire.me/api/v1/me/photo" -b cookies.txt -F "file=@headshot.jpg"

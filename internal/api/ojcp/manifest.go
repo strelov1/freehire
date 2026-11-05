@@ -11,10 +11,7 @@ import "strings"
 // everything else to the Node process, so a Go route at the well-known path itself would
 // never receive a request.
 //
-// Two of its claims are binding: `tools` says what this server answers, and
-// `rate_limits` says what it enforces — the spec makes a declared limit a MUST. A
-// hand-edited file drifts from the router silently; a rendered one can be asserted against
-// the router in a test.
+// Its tool list comes from the router so the manifest cannot advertise a tool it does not serve.
 type Manifest struct {
 	OJCPVersion string   `json:"ojcp_version"`
 	Provider    Provider `json:"provider"`
@@ -24,7 +21,6 @@ type Manifest struct {
 	FeedEndpoints  *FeedEndpoints `json:"feed_endpoints,omitempty"`
 	MCPEndpoint    string         `json:"mcp_endpoint,omitempty"`
 	Auth           *ManifestAuth  `json:"auth,omitempty"`
-	RateLimits     *RateLimits    `json:"rate_limits,omitempty"`
 	ApplyPathTypes []string       `json:"apply_paths,omitempty"`
 	// Signature is set by Signer.Sign and absent on a deployment with no signing key.
 	Signature *Signature `json:"signature,omitempty"`
@@ -50,20 +46,12 @@ type ManifestAuth struct {
 	Required bool `json:"required"`
 }
 
-// RateLimits is what this deployment enforces, per second. Declaring a figure we do not
-// honour breaks a MUST, so it is derived from the same configuration the limiter reads.
-type RateLimits struct {
-	AnonymousRPS int `json:"anonymous_rps"`
-}
-
 // ManifestConfig is what a deployment must supply to describe itself.
 type ManifestConfig struct {
 	// Origin is the absolute site origin the endpoints are served from.
 	Origin string
 	// Tools is what the transports actually registered.
 	Tools []string
-	// AnonymousRPS is the rate this deployment enforces on the OJCP routes.
-	AnonymousRPS int
 	// ApplyPathTypes are the application mechanisms postings here can carry.
 	ApplyPathTypes []string
 }
@@ -85,9 +73,6 @@ func NewManifest(cfg ManifestConfig) Manifest {
 		Tools:          cfg.Tools,
 		Auth:           &ManifestAuth{Required: false},
 		ApplyPathTypes: cfg.ApplyPathTypes,
-	}
-	if cfg.AnonymousRPS > 0 {
-		m.RateLimits = &RateLimits{AnonymousRPS: cfg.AnonymousRPS}
 	}
 	if origin != "" {
 		m.FeedEndpoints = &FeedEndpoints{

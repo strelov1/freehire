@@ -36,13 +36,9 @@ func mountMCPAccount(
 	keyed := adaptor.HTTPHandler(mcpapp.AccountHandler(
 		mcpKeyTools(assistants, catalogue.origin), catalogue.origin, catalogue,
 	))
-	// Same reasoning as the public /mcp mount: agentSearchLimiter bounds how
-	// hard a machine may ask, applied here too since every tool still reaches
-	// the catalogue and the tracking board. Authentication runs as a real
-	// Fiber middleware, ahead of the adapted raw http.Handler, so an
-	// unexpected failure authenticating the token (not merely an unknown one)
-	// is reported the normal way — see mcpAccountAuthenticate.
-	api.All("/mcp/account", chatAgentLimiter(mw.public), mcpAccountAuthenticate(assistants, catalogue.origin),
+	// HTTP admission is enforced by the operations gateway. Authentication stays
+	// in Fiber so credential-store failures use the normal error pipeline.
+	api.All("/mcp/account", mcpAccountAuthenticate(assistants, catalogue.origin),
 		agentViews(catalogue.agentViews, agentview.SurfaceMCPAccount),
 		func(c *fiber.Ctx) error {
 			if viaKey, _ := c.Locals(localsMCPAccountViaKey).(bool); viaKey {
@@ -88,6 +84,9 @@ func mcpKeyTools(assistants *assistantHandlers, origin string) []assistant.Tool 
 // API key rather than an OAuth grant, so the mount serves it mcpKeyTools.
 const localsMCPAccountViaKey = "mcpAccount.viaKey"
 
+// localsMCPUserID carries the validated identity to Fiber consumers such as agentViews.
+const localsMCPUserID = "mcp.userID"
+
 // mcpAccountAuthenticate resolves the Authorization: Bearer token to a user id
 // and stamps it onto the request as mcpapp.AccountUserIDHeader, overwriting
 // whatever a caller sent there — nothing downstream of this middleware ever
@@ -106,11 +105,24 @@ const localsMCPAccountViaKey = "mcpAccount.viaKey"
 // it a client must guess the well-known path, and one that does not guess has
 // no way to connect at all.
 func mcpAccountAuthenticate(assistants *assistantHandlers, frontendOrigin string) fiber.Handler {
-	challenge := `Bearer resource_metadata="` + frontendOrigin + `/.well-known/oauth-protected-resource"`
+	return mcpAuthenticate(assistants, frontendOrigin, "/.well-known/oauth-protected-resource", false)
+}
+
+func mcpAuthenticate(
+	assistants *assistantHandlers,
+	frontendOrigin string,
+	metadataPath string,
+	allowAnonymous bool,
+) fiber.Handler {
+	challenge := `Bearer resource_metadata="` + strings.TrimSuffix(frontendOrigin, "/") + metadataPath + `"`
 	return func(c *fiber.Ctx) error {
 		observability.IdentifyRequest(c, observability.RequestIdentity{Kind: "unknown"})
+		c.Request().Header.Del(mcpapp.AccountUserIDHeader)
 		const prefix = "Bearer "
 		authorization := c.Get(fiber.HeaderAuthorization)
+		if authorization == "" && allowAnonymous {
+			return c.Next()
+		}
 		if !strings.HasPrefix(authorization, prefix) {
 			observability.LogAuthFailure(c, fiber.StatusUnauthorized, "missing_bearer_token")
 			c.Set(fiber.HeaderWWWAuthenticate, challenge)
@@ -149,6 +161,7 @@ func mcpAccountAuthenticate(assistants *assistantHandlers, frontendOrigin string
 		}
 
 		c.Request().Header.Set(mcpapp.AccountUserIDHeader, strconv.FormatInt(userID, 10))
+		c.Locals(localsMCPUserID, userID)
 		return c.Next()
 	}
 }
