@@ -71,9 +71,7 @@ func (d *fakeDeleter) DeleteBatch(ctx context.Context, jobIDs []int64) error {
 		case <-ctx.Done():
 			// What the SDK actually hands back, rather than the context's own error:
 			// *meilisearch.Error implements no Unwrap (search/client.go says so itself),
-			// so a guard that reads the ERROR cannot see the context ending — and the
-			// case it misses is the deadline landing inside the SDK's retry window,
-			// which engages on 502/503/504, i.e. exactly when it is needed.
+			// so a guard that reads the ERROR cannot see the context ending.
 			return errors.New("meilisearch: communication error")
 		}
 	}
