@@ -284,6 +284,13 @@ func TestMCPFacetsNamesTheFiltersAndListsOneOnRequest(t *testing.T) {
 	if sizes := index["filters"].(map[string]int); sizes["skills"] != 3 || sizes["seniority"] != 1 {
 		t.Errorf("filters = %v, want each public filter name with its number of values", sizes)
 	}
+	sizes := index["filters"].(map[string]int)
+	if n, ok := sizes["metros"]; !ok || n != 0 {
+		t.Errorf("filters = %v, want metros named with 0 although no matching posting carries one", sizes)
+	}
+	if _, ok := sizes["salary_min"]; ok {
+		t.Errorf("filters = %v, want numeric facets left to stats", sizes)
+	}
 	if payload, _ := json.Marshal(index); strings.Contains(string(payload), "python") {
 		t.Errorf("index = %s, want no values without a facet", payload)
 	}

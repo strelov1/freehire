@@ -212,7 +212,14 @@ func listableFacets() []string {
 // the named filter's values matching contains — or its range, for a numeric filter.
 func facetIndex(view facetPayload, facet, contains string) map[string]any {
 	if facet == "" {
-		sizes := make(map[string]int, len(view.Facets))
+		// Every value-bearing facet is named, with 0 when none of the matching postings carries
+		// it, so a narrow filter does not hide that the facet exists. Numeric ones are in stats.
+		sizes := map[string]int{}
+		for _, name := range listableFacets() {
+			if !facetExtraParams[name].statOnly {
+				sizes[name] = 0
+			}
+		}
 		for name, dist := range view.Facets {
 			sizes[name] = len(dist)
 		}
