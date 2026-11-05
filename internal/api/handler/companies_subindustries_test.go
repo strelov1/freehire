@@ -14,15 +14,19 @@ import (
 )
 
 // fakeSubindustries counts loads and holds each one until release is closed, so concurrent
-// callers really are in flight together.
+// callers really are in flight together. started, when set, receives once per load.
 type fakeSubindustries struct {
 	calls   atomic.Int32
+	started chan struct{}
 	release chan struct{}
 	err     error
 }
 
 func (f *fakeSubindustries) load(context.Context) ([]db.CompanySubindustriesRow, error) {
 	f.calls.Add(1)
+	if f.started != nil {
+		f.started <- struct{}{}
+	}
 	<-f.release
 	if f.err != nil {
 		return nil, f.err
@@ -34,23 +38,33 @@ func (f *fakeSubindustries) load(context.Context) ([]db.CompanySubindustriesRow,
 // scan of companies. N concurrent callers inside the TTL must cost one query, and the
 // next query must come only after the TTL.
 func TestSubindustryCacheSharesOneLoadUntilExpiry(t *testing.T) {
-	fake := &fakeSubindustries{release: make(chan struct{})}
+	fake := &fakeSubindustries{started: make(chan struct{}, 64), release: make(chan struct{})}
 	now := time.Date(2026, 11, 5, 11, 0, 0, 0, time.UTC)
 	s := &subindustryCache{load: fake.load, now: func() time.Time { return now }}
 
 	const n = 50
-	var wg sync.WaitGroup
+	var wg, launched sync.WaitGroup
 	errs := make(chan error, n)
 	for range n {
 		wg.Add(1)
+		launched.Add(1)
 		go func() {
 			defer wg.Done()
+			launched.Done()
 			facets, err := s.get(context.Background())
 			if err == nil && (len(facets) != 1 || facets[0] != (subindustryFacet{Value: "Payments", Count: 2})) {
 				err = errors.New("unexpected facets")
 			}
 			errs <- err
 		}()
+	}
+	// Hold the first load open while every caller reaches get: nothing is cached yet, so a
+	// caller that did not join the flight would start a load of its own and be counted here.
+	launched.Wait()
+	<-fake.started
+	time.Sleep(50 * time.Millisecond)
+	if got := fake.calls.Load(); got != 1 {
+		t.Fatalf("loads started while one was in flight = %d, want 1", got)
 	}
 	close(fake.release)
 	wg.Wait()
